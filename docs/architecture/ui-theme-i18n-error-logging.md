@@ -1,6 +1,6 @@
 # UI、主题、国际化、错误与日志横切架构
 
-更新日期：2026-06-15
+更新日期：2026-07-17
 
 本文定义 OpenNeko 中 UI 公共层、统一主题、国际化、错误处理、日志和诊断的横切边界。它不描述某个创作领域的页面设计，也不记录迁移状态；具体领域 UI 仍放在对应包内，只有跨包复用和跨运行平面的约束放在这里。
 
@@ -39,7 +39,7 @@
 | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | Button、IconButton、Badge、Dialog、Select、Slider、Tabs、Toolbar、Tooltip 等无业务原语 | Agent Header/Input/ModelSelector、Timeline 具体业务面板、Canvas 专属节点 UI |
 | CreativeWorkbenchShell、CreativeLeftRail、MainPanelControlLayer 等创作工具壳           | 某领域的具体工具状态、命令协议、Engine command 组装                         |
-| ViewportShell、OverlayRenderer、frame metadata bridge                                  | 具体 Scene/Puppet/Video 业务状态机                                          |
+| ViewportShell、OverlayRenderer、frame metadata bridge                                  | 具体 Canvas/Cut/Preview 媒体状态机                                          |
 | KeyboardBoundary、keyboard dispatcher、focus CSS                                       | 功能包快捷键业务命令和编辑器状态                                            |
 | 通用 property panel、number slider、timeline ruler、tree view                          | 领域 schema、文件格式、素材实体业务                                         |
 
@@ -51,7 +51,7 @@
 - `@neko/ui` 不调用 `acquireVsCodeApi`，不拥有 command bus、postMessage protocol、Engine client 或 Agent runtime。
 - `@neko/ui` 组件只接收 props/callbacks/typed data，不主动读取全局 package state。
 - 被多个 Webview 复用且无领域语义的控件可以进入 `@neko/ui`；只在一个领域成立的交互留在领域包。
-- Cut、Canvas、Audio、Model、Sketch 等被动状态优先投影到 VS Code native StatusBar，避免在 Webview topbar 重复一套状态栏。
+- Cut、Canvas、Preview、Assets、Tools 等被动状态优先投影到 VS Code native StatusBar，避免在 Webview topbar 重复一套状态栏。
 - Agent 聊天输入、模型选择、会话模式、媒体模型栏等 Agent-first 交互留在 `neko-agent` Webview，不迁入 `@neko/ui`。
 
 ## 统一主题
@@ -159,7 +159,7 @@ package module
 - 每个包建立一个 root logger，模块使用 `getLogger('ModuleName')` 或 `logger.child('SubSource')`。
 - Extension 激活时用 `createVSCodeLogger` 替换 root logger，并通过 `watchLogLevel` 热更新级别。
 - Webview 默认可用 console transport，但日志级别应保守；高频帧、指针移动、音频包、stream packet 不应逐条 info/debug。
-- 日志 source 使用稳定层级，例如 `NekoModel:Viewport`、`NekoPreview:DocumentProvider`。
+- 日志 source 使用稳定层级，例如 `NekoCut:Timeline`、`NekoPreview:DocumentProvider`。
 - `error` 级别记录 Error 对象或结构化 data；不要只记录字符串。
 - 禁止记录 secret、provider key、token、完整用户 prompt、完整文件内容、base64、大 buffer 和未脱敏本地路径。
 - 需要给 UI 展示的问题走 diagnostic/error handler，不靠用户打开日志理解。

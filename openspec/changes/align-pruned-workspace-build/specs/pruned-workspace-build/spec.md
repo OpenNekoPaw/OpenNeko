@@ -42,6 +42,11 @@ Root build, compile, package, quality, and smoke orchestration MUST NOT invoke a
 - **WHEN** test discovery, quality guardrails, and Webview functional scenario selection run
 - **THEN** every declared package path resolves to a retained workspace package and no removed product directory is scanned or compiled
 
+#### Scenario: Read stable architecture documentation
+
+- **WHEN** a contributor follows the stable `docs/` navigation and architecture documents
+- **THEN** the documents identify only the retained product roots, packages, and Media Engine capabilities as current, while superseded Home, Workbench Core, and Market designs are explicitly historical
+
 ### Requirement: Installation metadata contains only retained extensions
 
 The VS Code extension pack and release-channel metadata MUST contain exactly the retained product extensions, including the pruned Rust Media Engine, and no removed product identifier.

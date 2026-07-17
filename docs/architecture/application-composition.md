@@ -1,66 +1,57 @@
-# Application Composition Roots
+# 应用组合根
 
-Status: Accepted target architecture under active OpenSpec migration
-Date: 2026-07-14
-Change: `restructure-client-applications-and-retire-desktop-shell`
+状态：Accepted
 
-## Purpose
+更新日期：2026-07-17
+对应变更：`align-pruned-workspace-build`
 
-OpenNeko separates installable product applications from reusable platform and domain packages. Application directories own composition, host lifecycle, product manifests, packaging, and release entry points. They do not own domain implementations.
+OpenNeko 将可安装产品与可复用平台、领域包分开。当前只有两个产品组合根：终端客户端和 VS Code 客户端。应用目录拥有宿主生命周期、产品清单、打包和发布入口，不拥有领域实现。
 
-## Ownership Matrix
+## 当前组合根
 
-| Layer | Target root | Owns | Must not own |
+| 层级 | Canonical root | 拥有 | 不得拥有 |
 | --- | --- | --- | --- |
-| OpenNeko Home | `apps/neko-home` | Electron lifecycle, Home navigation/composition, global project/resource/Agent/task projections, lightweight Engine Core connection, professional-tool handoff, Home packaging and functional fixtures | Project editor state, Scene/Timeline truth, domain authoring implementations, VSCode adapters, professional viewport truth |
-| OpenNeko TUI | `apps/neko-tui` | Canonical executable, terminal lifecycle, application command routing, Workspace selection, Node/headless host composition, TUI packaging | AgentSession semantics, domain capability implementations, React/Webview UI, VSCode/Electron adapters |
-| OpenNeko for VSCode | `apps/neko-vscode` | Product/Extension Pack manifest, product composition, Home handoff entry, packaging, release and application acceptance | Domain Extensions, Custom Editors, Webview roots, domain commands/providers |
-| Neko Studio | reserved; no product root in the current migration | Future native professional application composition after an accepted change proves Engine-native viewport and layout requirements | A successful build/start/release path before productization; dependency on the retired Desktop shell |
-| Shared platform | `packages/neko-types`, `packages/neko-host`, `packages/neko-workbench-core`, `packages/neko-client`, `packages/neko-content`, `packages/neko-ui` | Host-neutral contracts, host primitive ports, Workbench contribution contracts, Engine client, content semantics, reusable UI | Application lifecycle, product manifests, domain implementations, imports from `apps/*` |
-| Domain packages | `packages/neko-agent`, `packages/neko-canvas`, `packages/neko-cut`, `packages/neko-story`, `packages/neko-assets`, and peers | Domain core, authoring, validation, capability providers, domain host adapters and public UI roots | Product composition, imports from `apps/*`, parallel application-local domain implementations |
-| Engine | `packages/neko-engine` | Binary media, Scene/runtime computation, devices, ML, viewport/output truth, host runtimes | Product navigation, application UI, project/editor ownership in TypeScript |
+| OpenNeko TUI | `apps/neko-tui` | 终端生命周期、workspace 选择、命令路由、Node/headless 组合、TUI 打包 | AgentSession 语义、领域 capability 实现、React/Webview UI、VS Code adapter |
+| OpenNeko for VS Code | `apps/neko-vscode` | Extension Pack 清单、保留扩展组合、VSIX 打包和发布验收 | 领域 Extension、Custom Editor、Webview root、领域命令/provider 实现 |
+| 共享平台 | `packages/neko-types`、`packages/neko-host`、`packages/neko-client`、`packages/neko-content`、`packages/neko-proto`、`packages/neko-ui`、`packages/neko-entity`、`packages/neko-search` | host-neutral contract、Engine client、内容语义、共享 UI、实体与搜索服务 | 产品生命周期、产品清单、领域实现、对 `apps/*` 的依赖 |
+| 保留领域包 | `packages/neko-agent`、`packages/neko-assets`、`packages/neko-canvas`、`packages/neko-cut`、`packages/neko-preview`、`packages/neko-tools` | 领域 core、authoring、validation、capability、包自有 host adapter 和 UI root | 产品组合、对 `apps/*` 的依赖、平行应用级领域实现 |
+| Media Engine | `packages/neko-engine` | 媒体探测、编解码、音频处理、GPU 媒体处理、文件与 Range、timeline、stream、effect、color、preview、task/health 运行时 | 产品导航、应用 UI、项目编辑器事实、Scene/Puppet/Model/ML/Device/Live runtime |
 
-## Dependency Direction
+## 依赖方向
 
 ```text
 apps/*
-  -> documented public package entries
+  -> package public entries
   -> host/platform/domain contracts
   -> Engine client / Proto
 
 packages/* -X-> apps/*
 ```
 
-Applications may use local relative imports within their own root. They must not reach into `packages/*/src`, feature-package internal directories, or another application. Reusable packages must never import application implementation.
+- 应用内可以使用本应用根下的相对导入，但不得进入 `packages/*/src` 或其他应用内部目录。
+- 共享包和领域包不得导入应用实现。
+- 每个领域 surface 仍由 owning package 提供；TUI 和 VS Code 只选择其公共 adapter/projection，不复制领域逻辑。
+- `@neko/host/application` 是通用应用身份和 handoff 契约，不会仅凭一个 identity 创建或授权产品组合根。
 
-Each domain surface remains package-owned. Home, TUI, VSCode, and a future Studio select an appropriate public adapter or projection; they do not copy Canvas, Cut, Story, Agent, Assets, Market, Skills, or content behavior.
+## 产品矩阵
 
-## Application Matrix
+| 产品 | 当前职责 | 真实宿主验证 |
+| --- | --- | --- |
+| OpenNeko TUI | Agent-first 终端与 headless authoring 入口 | 聚焦 TUI build/test 和真实 Agent evaluation |
+| OpenNeko for VS Code | Engine、Tools、Preview、Assets、Agent、Cut、Canvas 的发布组合 | Extension build/package、Extension Development Host、聚焦 Webview functional scenario |
 
-| Product | Current priority | Primary scope | Canonical real-host validation |
-| --- | --- | --- | --- |
-| Home | Active | Global/personal workspace, lightweight creation and management | Electron application functional suite |
-| TUI | Active | Terminal/headless operation and real Agent path | Deterministic tests plus focused Agent Evaluation |
-| OpenNeko for VSCode | Active | Project-bound professional editing and code-centric workflows | Extension Development Host plus focused Webview functional suite |
-| Studio | Deferred | Native Scene/media professional editing | Future accepted OpenSpec; no current product entry |
+Home、Desktop/Studio、Market、Auth、Live、Model、Puppet、Sketch、Story/Scene、Dashboard 和 Device 不是当前产品根或发布入口。不得用 alias、兼容包、空命令或成功 no-op 恢复它们；未来重新产品化必须有新的已接受 OpenSpec 变更、明确 owner 和真实宿主验收。
 
-The applications remain in the same monorepo and mainline history but expose independently addressable build, test, package, and release tasks. A shared contract change validates its producer and affected application consumers in the same revision.
+## 生命周期与错误语义
 
-## Canonical Entry Rule
+- TUI 和 VS Code 分别拥有自己的可变运行时状态、配置投影、异步任务和资源句柄。
+- 领域 operation/event 必须携带其 canonical instance identity；不得回退到“当前 active”实例。
+- 缺失 package adapter、未知 product id、未注册 handler 或被移除的入口必须 fail-visible。
+- Engine 进程、N-API、HTTP 和 stream 的发现、授权、取消与释放由宿主组合层负责；Webview 不拥有这些生命周期。
 
-Each active product has exactly one successful product entry. Migration may keep an old entry only until the replacement passes its real-host and data-preservation gates. The migration boundary then deletes or poisons the old entry; permanent forwarding aliases and dual release paths are forbidden.
+## 验证约束
 
-Source-directory movement does not authorize changing durable application identity. Settings, conversations, project registry, credentials, trust state, installed packages, generated artifacts, and rebuildable caches require an explicit reuse, migration, rebuild, or rejection policy.
-
-## Application Contract Ownership
-
-`@neko/host/application` owns the minimal host-neutral application contract:
-
-- supported application and instance identity;
-- startup/handoff diagnostics;
-- explicit `workspaceId`-bound professional-tool handoff;
-- application storage migration inventory categories and dispositions.
-
-Home, TUI, and VSCode are callers and concrete host implementations. The contract lives for one application instance, rejects unknown versions and identities, and never infers the current project, Workspace, window, or editor. Electron IPC, VSCode commands, terminal process state, AgentSession, project authoring, Tool Registry, and Engine runtime handles remain outside `@neko/host`.
-
-Concrete Electron code was not extracted into a shared package during this audit because Home is its only accepted current product owner. Existing host primitive ports are the only proven multi-host boundary; a second real native host is required before extracting an Electron/Tauri implementation abstraction.
+- 根构建、发布、质量和 smoke 编排只包含保留产品与扩展。
+- VS Code Extension Pack 与 release channels 必须恰好包含 Engine、Tools、Preview、Assets、Agent、Cut 和 Canvas。
+- `workspace:*` 依赖必须唯一解析；应用边界检查必须阻止 package-to-app 和跨应用内部导入。
+- 运行态验收必须使用对应真实宿主；普通浏览器不能替代 VS Code Extension Development Host。

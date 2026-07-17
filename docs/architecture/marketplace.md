@@ -1,6 +1,13 @@
-# Marketplace 与 Registry
+# Marketplace 与 Registry（历史）
 
-更新日期：2026-06-15
+状态：Removed product / Historical
+
+更新日期：2026-07-17
+取代变更：`align-pruned-workspace-build`
+
+Market、Market Core、Registry 客户端、安装管理 UI 和 marketplace-only Agent/TUI 命令已从当前 workspace 删除。本文仅保留历史产品设计背景，不是 package、命令、build、release 或数据迁移入口。当前只保留可移植 Agent Skill 能力；未来重新引入 marketplace 必须通过新的 OpenSpec 明确产品 owner、trust、凭据和真实宿主验收。
+
+以下内容描述被移除方案，不构成当前实现约束。
 
 Marketplace 是 OpenNeko 的横切分发、安装和信任边界。它服务 Skill、preset、shader、素材包、模型包、插件等能力，但不属于任何单一创作领域。
 

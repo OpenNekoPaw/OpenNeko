@@ -1,78 +1,58 @@
 # Proto 与 Wire Contract
 
-更新日期：2026-06-15
+状态：Accepted
 
-本文定义 OpenNeko 的跨层类型契约、Engine wire contract、生成类型和项目格式之间的关系。Proto 是跨语言通信的单一事实来源；nk\* 文件格式是持久项目数据的领域事实来源。
+更新日期：2026-07-17
 
-## 设计目标
-
-- 避免 TypeScript、Rust、Webview 和 Extension 各自手写平行协议。
-- 让 Engine action、stream descriptor、scene command、timeline diff 等跨语言结构从一个契约源演化。
-- 区分 wire contract、持久项目格式和 UI projection。
+Proto 与 Rust Host API 是跨语言通信的契约来源；Canvas `.nkc`、Cut `.nkv` 等项目格式是持久领域事实来源。两者不能混用，也不能由 Webview/Extension 各自维护平行 DTO。
 
 ## 契约层级
 
 ```text
-neko-proto
-  diff.proto
-  scene.proto
-  timeline.proto
-        |
-        v
-generated TypeScript / Rust DTOs
-        |
-        v
-EngineClient wire normalizers
-        |
-        v
-Extension/Webview/Agent projected DTOs
-        |
-        v
-domain project formats
-  .nkv .nkc .nkm .nks .nkp .nka .fountain
+Proto / Rust Host API media contracts
+  -> generated TypeScript / Rust DTOs
+  -> @neko/neko-client wire normalizers
+  -> Extension / Webview / Agent projections
+  -> owning domain project formats (.nkc / .nkv)
 ```
+
+当前 Engine wire surface 只覆盖保留媒体能力：文件授权与 Range、probe/capture、audio/video、timeline、stream、effect、color、preview/export 和 task/health。Scene、Puppet、Model、ML、Device、Live 和 panoramic contract 已移除，不能作为兼容字段、路由或成功 no-op 保留。
+
+## Contract 类型
+
+| 类型 | 例子 | 权威 | 持久化 |
+| --- | --- | --- | --- |
+| Engine wire | media action、file token、Range response、stream descriptor、timeline operation | Proto / Rust Host API 与生成类型 | 否 |
+| Client projection | normalized Engine response、stream/session handle | `@neko/neko-client` | 否 |
+| Host/Webview message | package-owned typed intent、status、diagnostic | owning package contract | 仅可恢复 UI state 可短期保存 |
+| Project format | `.nkc`、`.nkv` | Canvas/Cut codec 与 schema | 是 |
+| Resource identity | `ResourceRef`、document source ref、Asset/Entity ID | shared/domain service | 是 |
 
 ## 不变量
 
-- 涉及 Engine 通信、Scene、Timeline、Viewport、stream descriptor 或跨语言结构时，优先从 proto 生成类型或复用已有生成类型。
-- `@neko/neko-client` 负责 wire normalization；功能包不重复写解析器。
-- UI projection 可以裁剪字段，但不能改变 wire contract 的语义。
-- 持久项目格式保存可移植事实和引用，不保存 runtime handle。
-- nk\* 项目格式使用 JSON 文本、schema/validator/migrator 和显式版本迁移。
-- `.fountain` 作为行业标准剧本格式保留，结构化扩展通过兼容语法和 Story 层投影。
-
-## Wire Contract 与项目格式
-
-| 类型              | 例子                                                 | 权威                               | 是否持久             |
-| ----------------- | ---------------------------------------------------- | ---------------------------------- | -------------------- |
-| Wire contract     | Scene command、RenderStreamDescriptor、Timeline diff | `neko-proto` / generated types     | 否                   |
-| Client projection | normalized Engine response、stream handle            | `@neko/neko-client`                | 否                   |
-| UI projection     | Webview message DTO、presenter view model            | package contract                   | 仅 UI 状态可短期保存 |
-| Project format    | `.nkv`, `.nkc`, `.nkm`, `.nks`, `.nkp`, `.nka`       | Format SDK / domain package        | 是                   |
-| Resource identity | `ResourceRef`, asset/entity ID, locator              | `@neko/shared` and domain services | 是                   |
+- 功能包不得手写与 Proto/Host API 平行的 Engine request/response parser。
+- `@neko/neko-client` 负责 wire normalization，不拥有权限、项目事实或 UI fallback。
+- UI projection 可以裁剪字段，但不能改变 action、identity、error 或 lifecycle 语义。
+- runtime handle、token、端口、URL、blob、Webview URI 和 stream id 不写入项目格式。
+- 未知 action、schema/version、缺失字段和陈旧 instance identity 必须明确失败。
+- 新路径测试同时断言结果与 handler/adapter 路径，并证明旧 route 未参与。
 
 ## 变更顺序
 
-跨层能力的推荐顺序：
+1. 定义或更新 Proto/Host API/descriptor 与错误 contract；
+2. 生成 TypeScript/Rust 类型并检查生成物一致性；
+3. 在 Engine Kernel/runtime 实现 canonical handler；
+4. 更新 HTTP/N-API/CLI 中适用的 host surface；
+5. 更新 `@neko/neko-client` normalizer 和窄接口；
+6. 在 Extension/Agent/Webview 消费最小投影；
+7. 确需持久化时，再更新 owning domain schema/migrator。
 
-1. 定义或扩展 proto / shared contract。
-2. 生成类型并补 wire normalizer。
-3. 在 Engine client 暴露窄接口。
-4. 在 Extension Host 接权限、资源和生命周期。
-5. 在 Webview 或 Agent 中消费投影。
-6. 如需持久化，再进入领域格式和迁移器。
+涉及只在 TypeScript Host 内运行的项目文件或 UI intent，不需要为了形式创建 Proto；只有真实跨语言/跨进程 wire 边界才进入 Proto/Host API。
 
-## 与创作领域的关系
+## 验证
 
-领域文档不定义 wire contract，只描述如何消费契约。例如模型创作可以说明 Route A 使用哪些 stream/control descriptor，但具体 descriptor 语义归本文和 Engine runtime 文档。
-
-## 吸收的稳定主题
-
-本设计吸收以下历史主题的稳定部分：
-
-- format strategy
-- proto generated scene/timeline/diff contracts
-- EngineClient wire normalization
-- unified viewport protocol
-- viewport stream control boundary
-- structured data persistence
+- Proto/生成物一致性与 Rust/TypeScript compile；
+- Engine Host API unknown-action、invalid-payload 和 removed-action 测试；
+- HTTP/N-API/CLI 生产者测试与 `EngineClient` 消费者契约测试；
+- token、Range、stream/session identity 和 dispose/cancel 路径测试；
+- project-format 测试证明 runtime 字段未被持久化。

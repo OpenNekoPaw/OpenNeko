@@ -1,56 +1,57 @@
-# 客户端产物目标与职责边界
+# 客户端目标与职责边界
 
-状态：Accepted  
-更新日期：2026-07-14
+状态：Accepted
 
-OpenNeko 当前只有三个产品构建根：OpenNeko Home、OpenNeko TUI 和 OpenNeko for VSCode。它们共享 Agent runtime、领域 capability、Host adapter ports、Engine client 与 Rust Engine，但服务不同目标；产品 composition 位于 `apps/*`，可复用实现位于 `packages/*`。
+更新日期：2026-07-17
+对应变更：`align-pruned-workspace-build`
 
-## 目标总览
-
-| 产物 | Canonical root | 核心身份 | 目标 | 非目标 |
-| --- | --- | --- | --- | --- |
-| OpenNeko Home | `apps/neko-home` | Agent 与 AIGC 管理中心 | 类 Codex 的多会话导航、队列/取消/恢复、生成任务/产物/溯源/诊断及专业工具交接 | 专业 timeline、canvas、scene、code 或 media 编辑器 |
-| OpenNeko TUI | `apps/neko-tui` | Agent 与模型验证实验台 | 真实 Agent、模型、Skill/Tool、消融、回归和结构化 Evaluation 证据 | 图形化创作编辑、VSCode/Webview/Electron 依赖 |
-| OpenNeko for VSCode | `apps/neko-vscode` | 插件化专业创作客户端 | 聚合领域 Extension/Custom Editor，完成创作、编辑、预览、编排与发布 | 在 Extension Pack 中实现领域 runtime 或复制 Engine 权威计算 |
-
-旧 `neko-desktop` 编辑器壳已退出产品结构并删除。未来 native Studio 必须通过独立 OpenSpec 重新定义产品目标、Engine-native viewport 和宿主边界，不得依赖或恢复旧壳。
-
-## OpenNeko Home
-
-Home 管理多个独立 Agent session/runtime。每个实例独立拥有配置投影、消息队列、任务、日志、异步工作和资源句柄；当前选择只决定 UI 投影，不能成为运行时状态 owner。
-
-Home 同时投影 AIGC creation task/run、进度、诊断、生成输出、provenance、validation、retry/cancel 和 promotion/handoff。Task、Run、Resource 与 Artifact 使用稳定身份；cache path、preview URL 和 Webview URI 不得成为持久身份。需要精确编辑时，Home 通过公共契约交接给 OpenNeko for VSCode 或未来已注册的专业工具。
-
-权威验收使用真实 Electron application functional suite，覆盖 typed IPC、实例隔离、陈旧身份拒绝、后台任务连续性、重启恢复、生成产物和专业工具交接。
+OpenNeko 当前只维护 TUI 和 VS Code 两个客户端目标。二者复用 host-neutral contract、领域服务和同一套 Media Engine 契约，但分别拥有宿主生命周期与验收路径。
 
 ## OpenNeko TUI
 
-TUI 的 Commander 命令、Ink UI、terminal presentation、Node host composition、debug automation、executable、构建、测试与发布全部由 `apps/neko-tui` 拥有。host-neutral AgentSession、provider/platform 与共享契约继续由对应公共 package 拥有；已删除的 `@neko/cli` 不提供 facade 或兼容入口。
+TUI 是 Agent-first 的终端与 headless authoring 入口。
 
-TUI 优先服务路径级 Agent 验证、模型/preset 对比、prompt/Skill 消融、真实 API smoke、batch suite、replay 和结构化报告。图像、音频、视频和工程对象表现为稳定引用、摘要、诊断和可保存产物，而不是交互式 GUI。
+拥有：
 
-权威验收由确定性测试与聚焦真实 Agent Evaluation 共同组成，并必须证明 app executable 命中公共 entry、package-local executable 没有参与。
+- 终端生命周期、workspace 选择、命令路由和输出投影；
+- Node/headless host adapter 与应用级依赖注入；
+- TUI 可执行物、打包和验收。
 
-## OpenNeko for VSCode
+不拥有：
 
-`apps/neko-vscode` 只拥有 `neko.neko-suite` Extension Pack identity、成员 extension IDs、VSIX 打包、Marketplace/release metadata 和应用级验收。Story、Canvas、Cut、Preview、Model、Sketch、Puppet、Audio、Assets、Market、Dashboard、Search 与 Agent 的 runtime、Extension 和 Webview 仍由各领域包拥有。
+- AgentSession、Skill、provider 或领域 capability 的核心语义；
+- VS Code API、React/Webview 或扩展清单；
+- 被移除 Market 命令、registry 安装或兼容入口。
 
-VSCode 客户端必须遵守 Webview CSP、resource projection、Range/codec、focus 和 Extension/Webview 生命周期边界。媒体、Scene、Puppet、Audio、Device、ML、导出和专业 viewport 真值属于 Rust Engine；Extension Pack 不提供平行实现。
+## OpenNeko for VS Code
 
-权威验收包括 VSIX manifest/identity、隔离 profile 安装，以及 Extension Development Host 中的聚焦 Webview functional 场景和 runtime-error gate。
+VS Code 客户端是保留图形功能的产品组合根，发布面固定为 Engine、Tools、Preview、Assets、Agent、Cut 和 Canvas。
 
-## 共享边界
+拥有：
 
-- `apps/*` 拥有 product identity、composition、lifecycle、build、test、package 和 release selection。
-- `packages/*` 拥有 host-neutral/shared contracts、Agent runtime、领域实现、Extension/Webview 和 Engine client；terminal product composition 由 `apps/neko-tui` 独占。
-- `packages/*` 不得依赖 `apps/*`；apps 只能消费 documented public package entries。
-- `packages/neko-workbench-core` 保留为 host-neutral Workbench contribution 与 Plugin Host manifest 契约层。它不属于任何单个 app，也不拥有具体 UI、Extension activation、Electron window、TUI output 或 Engine connection。
-- 持久项目事实只能保存 portable refs、stable ResourceRef、asset/entity id、workspace-relative path 或领域格式；不得保存 cache/runtime projection identity。
+- Extension Pack manifest、release channels、VSIX 打包和产品级验收；
+- 保留扩展的组合与发布元数据。
 
-## 相关文档
+各功能 Extension/Webview、命令、provider、Custom Editor 和领域状态继续由 owning package 维护。`apps/neko-vscode` 不复制这些实现。
 
-- [`application-composition.md`](application-composition.md)
-- [`package-boundaries.md`](package-boundaries.md)
-- [`adr-neko-workbench-core-plugin-host.md`](adr-neko-workbench-core-plugin-host.md)
-- [`engine-runtime.md`](engine-runtime.md)
-- [`agent.md`](agent.md)
+VS Code Webview 只消费 Extension Host 授权的资源、Engine descriptor 和短生命周期 token。媒体探测、Range、seek、转码、timeline、stream、effect、color 与导出真值属于 Rust Media Engine；Webview 不直接发现或启动 Engine。
+
+## 已移除目标
+
+Home/Electron Desktop/Studio 不再是当前客户端根。Market、Auth、Live、Model、Puppet、Sketch、Story/Scene、Dashboard 和 Device 也不在发布组合中。旧文档若保留这些设计，必须标为 Historical/Superseded，不能作为实现、构建或测试入口。
+
+## 共享与组合边界
+
+- `@neko/shared`、`@neko/host`、`@neko/neko-client`、`@neko/proto`、`@neko/content`、`@neko/entity`、`@neko/search` 提供 host-neutral 能力。
+- `@neko/ui` 只提供浏览器/React 公共原语，不拥有 contribution registry、产品生命周期或宿主权限。
+- 不存在 Workbench Core 或 Market Core 组合层；保留功能包直接暴露 package-owned adapter，应用根只做显式组合。
+- 跨客户端共享可变单例、active-state 切换或应用间内部导入都不是允许的复用方式。
+
+## 验证重点
+
+| 客户端 | 最低验证 |
+| --- | --- |
+| TUI | 聚焦 build/test；涉及 Agent 行为时运行真实脚本 evaluation |
+| VS Code | 保留扩展 build/package、manifest/release 校验；涉及 Webview 时运行 Extension Development Host functional scenario |
+
+相关边界见 [`application-composition.md`](application-composition.md)、[`package-boundaries.md`](package-boundaries.md) 和 [`engine-runtime.md`](engine-runtime.md)。

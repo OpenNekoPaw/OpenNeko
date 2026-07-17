@@ -1,15 +1,13 @@
 # 文档索引
 
-本文是 `docs/` 的导航入口。根目录 `README_CN.md` / `README.md` 介绍项目，根目录 `ARCHITECTURE_CN.md` / `ARCHITECTURE.md` 是系统架构总览；`docs/` 承载更细的架构、领域、调研和状态资料。
+本文是 `docs/` 的导航入口。根目录 `README_CN.md` / `README.md` 介绍项目和当前能力；`docs/` 承载稳定架构、领域、调研和状态资料。
 
 ## 发现路径
 
 | 想了解                        | 先读                                                                       |
 | ----------------------------- | -------------------------------------------------------------------------- |
 | 项目定位和包分组              | [`../README_CN.md`](../README_CN.md)                                       |
-| 系统分层和硬约束              | [`../ARCHITECTURE_CN.md`](../ARCHITECTURE_CN.md)                           |
-| 当前任务队列                  | [`../TODO_CN.md`](../TODO_CN.md)                                           |
-| 长期产品方向                  | [`../ROADMAP_CN.md`](../ROADMAP_CN.md)                                     |
+| 系统分层和硬约束              | [`architecture/README.md`](architecture/README.md)                         |
 | 仓库工作规则                  | [`../AGENTS.md`](../AGENTS.md)                                             |
 | 子包边界、UI 层和公共代码规范 | [`architecture/package-boundaries.md`](architecture/package-boundaries.md) |
 | 系统级架构决策                | [`architecture/README.md`](architecture/README.md)                         |
@@ -28,8 +26,8 @@
 | 调研分析   | `docs/research/`               | 市场、竞品、技术 spike、UX 观察和推理                |
 | 状态快照   | `docs/status/`                 | 带日期的 gap、迁移、健康度和审计快照，不承载任务推进 |
 | 开发中变更 | `openspec/changes/`            | 尚未固化的需求、设计、任务和规格变更                 |
-| 任务队列   | `TODO_CN.md` / `TODO.md`       | 当前排队事项和轻量行动项，不承载设计正文             |
-| 产品路线   | `ROADMAP_CN.md` / `ROADMAP.md` | 方向性目标和优先级，不承诺具体发布节奏               |
+| 任务队列   | 根目录 TODO（存在时）          | 当前排队事项和轻量行动项，不承载设计正文             |
+| 产品路线   | 根目录 Roadmap（存在时）       | 方向性目标和优先级，不承诺具体发布节奏               |
 | 质量输入   | `quality/`                     | 供脚本和 CI 消费的 JSON 台账、规则数据和门禁输入     |
 | 包私有实现 | `packages/<pkg>/docs/`         | 只服务某个包的配置、实现和维护说明                   |
 
@@ -42,8 +40,8 @@
 - 只是观察、对比或推理：写入 `docs/research/`，并标注日期和来源。
 - 只是当前观察、进度或缺口：写入 `docs/status/`，并标注快照日期；需要推进的行动项转入 OpenSpec、TODO 或 Roadmap。
 - 仍在设计或实施中：优先写入 `openspec/changes/`。
-- 只是当前排队事项：写入根目录 `TODO_CN.md` / `TODO.md`。
-- 只是方向性产品目标：写入根目录 `ROADMAP_CN.md` / `ROADMAP.md`。
+- 只是当前排队事项：写入仓库采用的根目录 TODO；没有现存入口时先按仓库治理补齐导航。
+- 只是方向性产品目标：写入仓库采用的根目录 Roadmap；没有现存入口时先按仓库治理补齐导航。
 - 供脚本或 CI 消费的机器可读质量数据：写入 `quality/`。
 - 只影响一个包的维护者：写入 `packages/<pkg>/docs/`。
 

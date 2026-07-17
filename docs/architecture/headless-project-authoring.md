@@ -1,93 +1,65 @@
-# Headless Project Authoring Boundary
+# 无 UI 项目创作边界
 
-Neko `nk*` project files are durable creative facts. Host-originated writes to those facts must be executable without an open Webview, visible custom editor, or UI snapshot. Webviews remain important interactive projections, but they are not the production executor for Agent, Assets, TUI, Electron, or background authoring.
+状态：Accepted
+更新日期：2026-07-17
 
-This boundary extends the Canvas headless authoring model to other project-file packages such as Cut, Sketch, Audio, and Model.
+Neko 项目文件是持久创作事实。来自 Agent、Assets、TUI、VS Code command 或后台任务的写入必须在没有打开 Webview、可见 Custom Editor 或 UI snapshot 时仍可执行。Webview 是交互投影，不是后台 authoring executor。
 
-## Operation Classes
+当前保留且适用此边界的编辑领域是 Canvas 与 Cut。未来其他项目格式进入 workspace 时，必须通过新的 contract 和测试加入，不能复用已移除 Sketch、Audio、Model、Puppet 或 Story 的旧命令。
 
-Every package command, API, Agent capability, or transfer target that touches editor state must declare one of these classes:
+## Operation 分类
 
-| Class | Meaning | UI requirement |
+| Class | 含义 | UI 要求 |
 | --- | --- | --- |
-| `document-authoring` | Writes durable `nk*` project facts such as clips, layers, tracks, model project data, Canvas nodes, or stable source refs. | Must work through package authoring service without requiring an open Webview. |
-| `interactive-editor` | Depends on focused editor state, selection, viewport, keyboard focus, active stream, Engine runtime state, or live preview session. | May require an active editor, but must fail visibly when the editor/runtime is unavailable. |
-| `projection-only` | Displays preview, progress, status, runtime image, waveform, viewport pixels, or diagnostics without changing durable project facts. | Must not claim durable save/import success. |
+| `document-authoring` | 写入 Canvas node、Cut clip/timeline、稳定 source ref 等持久项目事实 | 必须经 owning package authoring service 执行，不要求打开 Webview |
+| `interactive-editor` | 依赖焦点、选择、viewport、playhead、键盘或实时 stream | 可以要求 active editor，但缺失时必须明确失败 |
+| `projection-only` | 展示预览、进度、状态、波形、画面或 diagnostic | 不得报告持久保存/导入成功 |
 
-If a feature has both durable and interactive meanings, split the contracts. For example, importing a generated clip into `.nkv` is `document-authoring`; selecting a clip in the currently focused timeline is `interactive-editor`.
+一个需求同时有持久与交互语义时必须拆分 contract。例如把生成片段写入 `.nkv` 是 `document-authoring`；选中当前时间线中的片段是 `interactive-editor`。
 
-## Canonical Authoring Entry Points
+## Canonical authoring path
 
-Each migrated package owns a package-local authoring service or typed API:
-
-- Cut: `.nkv` load/create/mutate/save.
-- Sketch: `.nks` load/create/mutate/save and durable layer/source insertion.
-- Audio: `.nka` `documentUri` load/mutate/save even when the editor cache is cold.
-- Model: `.nkm` asset import and durable project fact updates.
-
-Shared code owns only client-neutral contracts: target, result, diagnostics, operation classification, static guard helpers, and test poison helpers. Domain edit planning remains in the owning package.
-
-Canonical command/API names should expose the boundary. Prefer names such as `neko.<domain>.authoring.<operation>` or a typed package API with the same semantics. Old UI-shaped command IDs, such as `neko.cut.importGeneratedClip`, `neko.sketch.importAsset`, and `neko.model.importAsset`, must not be default Agent/Assets durable-write targets.
-
-Old command IDs may only be:
-
-- removed;
-- retained as UI-only wrappers that call canonical authoring first;
-- retained as fail-closed migration diagnostics.
-
-They must not post Webview mutations and report durable success.
-
-## Migrated Package Paths
-
-| Package | Canonical document-authoring path | Legacy/default-success path |
+| 包 | Canonical path | 禁止路径 |
 | --- | --- | --- |
-| Canvas | `CanvasProjectAuthoringService`, Canvas authoring tools, `NekoCanvasAPI.importAsset()` and storyboard APIs | Webview-private node mutation as Agent/Assets executor is not allowed. |
-| Cut | `CutProjectAuthoringService`; `neko.cut.authoring.importGeneratedClip`, `neko.cut.authoring.addSourceToTimeline`, `neko.cut.authoring.importStoryboard`, `neko.cut.authoring.importCanvasDraft` | `neko.cut.importGeneratedClip`, Webview `importGeneratedClip` / storyboard import messages, and hidden timeline-editor prerequisites are removed from production authoring. |
-| Sketch | `SketchProjectAuthoringService`; `neko.sketch.authoring.importImageSource` | `neko.sketch.importAsset`, queued file import, and `.neko/temp` sketch projects are removed from production authoring. |
-| Audio | `AudioProjectSessionGateway.resolveSession(documentUri)`, `linkAudioSource`, and `applyOperation` | Agent/project edits must not require an already-open `_projectDataCache` entry or Webview `agent:*` postMessage. |
-| Model | `ModelProjectAuthoringService`; `neko.model.authoring.importAsset` | `neko.model.importAsset`, queued model import, and temp-project/open-editor import prerequisites are removed from production authoring. |
+| Canvas | `CanvasProjectAuthoringService`、Canvas authoring capability、`NekoCanvasAPI` 的持久写入 API | 用 Webview 私有 node mutation 充当 Agent/Assets/TUI executor |
+| Cut | `CutProjectAuthoringService` 与 `neko.cut.authoring.*` 命令/API | 先打开隐藏 editor、发送 Webview import message、依赖当前 timeline 才报告写入成功 |
 
-VS Code custom editor save/save-as may still request a Webview snapshot when the user is actively editing that Webview. That is an interactive editor lifecycle save, not a host-originated Agent/Assets/TUI/Electron durable authoring executor.
+共享层只拥有 client-neutral target、result、diagnostic、operation classification 和测试 poison helper。领域 edit planning、codec、source policy 与项目 mutation 留在 owning package。
 
-## Target And Reveal Policy
+旧 UI-shaped command 只能被删除、作为调用 canonical authoring 的薄 UI wrapper，或作为 fail-closed migration diagnostic；不得向 Webview 发送 mutation 后报告持久成功。
 
-Durable authoring target resolution is explicit:
+## Target 与 reveal
 
-1. `target.documentUri` writes that project file.
-2. `target.kind: "active"` may use a safe active document for the same package.
-3. `target.kind: "new"` may create a project file only when the operation allows create-new.
-4. Missing or ambiguous targets return diagnostics.
+持久写入目标必须显式解析：
 
-Opening or focusing an editor is a post-write adapter action controlled by `reveal`. A successful write with `reveal: false` keeps closed editors closed. `reveal: true` may open/focus the editor after the project facts are saved; reveal failure is separate from write failure.
+1. `target.documentUri` 写入指定项目文件；
+2. `target.kind: "active"` 只能选择同一领域的安全 active document；
+3. `target.kind: "new"` 只在 operation 明确允许时创建文件；
+4. 缺失、陈旧或歧义目标返回 typed diagnostic。
 
-## Client Adapters
+`reveal` 是写入后的 adapter 行为，不是写入前置条件。`reveal: false` 成功后保持关闭；`reveal: true` 可以在保存后打开/聚焦 editor，且 reveal 失败必须与 write 失败分开报告。
 
-VSCode, TUI, Electron, Agent, Assets, and package APIs all adapt to the same package authoring services.
+## Client adapter
 
-- VSCode adapters own command registration, `vscode.Uri` conversion, custom editor reveal, and open-Webview synchronization.
-- TUI adapters own text diagnostics and filesystem/workspace target selection, without Webview assumptions.
-- Electron adapters own native window reveal and desktop file picker integration.
-- Agent adapters own capability schema, skill guidance, lifecycle approval, and diagnostic projection.
+- VS Code adapter：command 注册、`vscode.Uri` 转换、Custom Editor reveal 和已打开 Webview 同步。
+- TUI adapter：文本 diagnostic 与 filesystem/workspace target 选择，不假设 Webview。
+- Agent adapter：capability schema、审批/生命周期和 diagnostic projection。
+- Assets adapter：把稳定 Asset/Entity/Resource identity 投影为 owning package authoring request。
 
-The authoring core must not import VSCode window APIs, Webview panels, React, DOM, terminal UI components, or Electron window state.
+Authoring core 不导入 VS Code window API、Webview panel、React、DOM 或终端 UI。TUI 不直接改写 package JSON；VS Code 不通过打开隐藏 editor 制造成功条件；所有 adapter 都使用相同的 `target`、`source`、`reveal` 和 `provenance` 语义。
 
-Client adapters may choose different presentation behavior, but they must pass the same structured `target`, `source`, `reveal`, and `provenance` semantics. TUI cannot reimplement package JSON mutation because it lacks the package source policy and codec rules; Electron cannot use native window reveal as proof of a write; VS Code commands cannot open a hidden editor to make the mutation possible. All three must report package diagnostics when authoring is unavailable.
+## Source identity
 
-## Source Identity
+持久事实可以保存 stable `ResourceRef`、`ContentFileSourceRef`、asset/entity ID、workspace-relative path、`${VAR}/path` 或 project-owned JSON。不得保存 Webview URI、blob URL、cache/temp path、Engine token、stream id、Range URL、preview URL 或未晋升的生成缓存产物。
 
-Source-bearing authoring requests must use shared content access, the owning generated-output or Asset identity, and project-file source policy before save.
+Canvas Board 的二进制生成媒体必须先提交到项目拥有的稳定生成目录并取得 durable identity；未指定目标时只能使用定义好的 workspace board，不能从 active/recent UI 状态、conversation binding 或 runtime group 猜测写入目标。
 
-Durable facts may store stable refs, `ContentFileSourceRef`, `ContentDocumentSourceRef`, `ResourceRef`, asset/entity IDs, workspace-relative paths, `${VAR}/path`, or project-owned JSON. They must not persist Webview URIs, blob URLs, cache paths, temp paths, Engine tokens, stream IDs, range URLs, preview URLs, or unpromoted generated cache artifacts.
+## 验证
 
-For Canvas Board delivery, Markdown, durable file references, and creator-visible generated outputs may author as ordinary persistent nodes. Generated binary media must first be committed under `neko/generated/<kind>/` with stable lifecycle/`ResourceRef`; Asset promotion is optional and creates a distinct identity. With no explicit target the Canvas projector writes only `neko/boards/workspace.nkc`; explicit targets name an ordinary `.nkc`. Active/recent documents, conversation binding, runtime Group IDs, cache paths, and Webview projections must be rejected by the durable authoring path.
-
-## Validation
-
-Acceptance must prove the path, not only the outcome:
-
-- no active Webview needed for document-authoring;
-- save/reopen recovers project facts;
-- old UI-bound routes are removed, poisoned, or asserted unused;
-- core services have no UI dependency imports;
-- open editors synchronize after host writes;
-- runtime-only commands fail visibly without required editor/runtime state.
+- `document-authoring` 在没有 active Webview 时成功；
+- save/reopen 能恢复持久事实；
+- 旧 UI-bound route 被删除、poison 或断言未使用；
+- core service 没有 UI/host import；
+- 已打开 editor 能在 host write 后同步；
+- runtime-only command 在缺失 editor/runtime 时明确失败；
+- 路径断言证明 canonical service 被命中，legacy handler 未参与。

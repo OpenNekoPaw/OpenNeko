@@ -1,7 +1,9 @@
 # ADR: Neko Workbench Core 与 Plugin Host 边界
 
-状态：Accepted  
+状态：Superseded / Historical（2026-07-17）
 日期：2026-07-08
+
+取代说明：`align-pruned-workspace-build` 已删除 `@neko/workbench-core`、Desktop/Home 产品根和相关 Plugin Host 目标。本文仅保留历史设计背景，不是当前 package、build、release 或 adapter 入口。现行边界见 [`application-composition.md`](application-composition.md) 与 [`package-boundaries.md`](package-boundaries.md)。
 
 ## 背景
 

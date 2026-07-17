@@ -1,6 +1,6 @@
 # 架构文档
 
-`docs/architecture/` 用于记录系统级架构约束、ADR 和跨领域不变量。根目录 [`../../ARCHITECTURE_CN.md`](../../ARCHITECTURE_CN.md) 是当前系统架构总览；本目录承载更细的决策记录和专题说明。
+`docs/architecture/` 用于记录系统级架构约束、ADR 和跨领域不变量。根目录 [`../../README_CN.md`](../../README_CN.md) 介绍项目和当前能力；本目录是当前系统架构、决策记录和专题说明的稳定入口。
 
 ## 放入本目录
 
@@ -31,19 +31,17 @@
 | [`adr-code-debt-redundancy-governance.md`](adr-code-debt-redundancy-governance.md)                                 | 重复、冗余、兼容桥和 fallback 代码的分类、清理优先级与验证规则                        |
 | [`adr-code-review-quality-gates.md`](adr-code-review-quality-gates.md)                                             | 代码审查、风险分级、验证矩阵和功能偏离检查                                            |
 | [`adr-local-metadata-store-sqlite.md`](adr-local-metadata-store-sqlite.md)                                         | 用户级 SQLite 本地元数据 Store、项目事实和缓存索引边界                                |
-| [`adr-neko-workbench-core-plugin-host.md`](adr-neko-workbench-core-plugin-host.md)                                 | Neko Workbench Core、Plugin Host、VSCode 设计参考和 Desktop Host Adapter 边界         |
-| [`application-composition.md`](application-composition.md)                                                       | Home、TUI、OpenNeko for VSCode 与延后 Studio 的应用 composition root 和依赖方向          |
+| [`application-composition.md`](application-composition.md)                                                       | TUI、OpenNeko for VS Code 两个应用 composition root 和依赖方向                       |
 | [`adr-unified-markdown-resource-rendering.md`](adr-unified-markdown-resource-rendering.md)                         | Canvas MCP 式能力、Markdown 扩展语法、资源增强渲染和 Send to Canvas 边界              |
 | [`adr-canvas-cut-playback-route-and-timeline-boundary.md`](adr-canvas-cut-playback-route-and-timeline-boundary.md) | Canvas 预览路线矩阵、Cut 剪辑时间线、Agent 顺序感知和跨包协议边界                     |
 | [`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md)                   | 创作领域面板与共享 UI 原语的复用边界                                                  |
 | [`agent.md`](agent.md)                                                                                             | Agent-first、execution mode、skill/prompt/tool/provider 控制面和宿主分层              |
-| [`asset-library.md`](asset-library.md)                                                                             | 素材库、Asset/Variant/File、导入来源、市场安装和素材搜索投影                          |
-| [`auth.md`](auth.md)                                                                                               | 用户凭据、workspace policy、Webview auth bridge 和 session 边界                       |
+| [`asset-library.md`](asset-library.md)                                                                             | 素材库、Asset/Variant/File、显式导入、外部包 trust 和素材搜索投影                    |
+| [`auth.md`](auth.md)                                                                                               | 无独立 Auth 产品时的用户凭据、workspace policy、host adapter 和 session 边界           |
 | [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)                                                 | 缓存、文件读写服务、路径变量、ContentAccess 和 Webview 投影                           |
-| [`client-targets.md`](client-targets.md)                                                                           | Home、TUI、OpenNeko for VSCode 的产品目标、职责边界和验证重点                            |
-| [`engine-runtime.md`](engine-runtime.md)                                                                           | Rust Engine runtime、GPU/0-copy、2D/3D/Live2D、ECS/OOP 与数据路径                     |
+| [`client-targets.md`](client-targets.md)                                                                           | TUI、OpenNeko for VS Code 的产品目标、职责边界和验证重点                              |
+| [`engine-runtime.md`](engine-runtime.md)                                                                           | 裁剪后的 Rust Media Engine、Host API、文件/Range、编解码和数据路径                    |
 | [`headless-project-authoring.md`](headless-project-authoring.md)                                                   | `.nk*` 持久项目写入的无 UI authoring 边界、operation 分类、canonical 入口和客户端适配 |
-| [`marketplace.md`](marketplace.md)                                                                                 | Marketplace/Registry、manifest、install target 和 trust 边界                          |
 | [`package-boundaries.md`](package-boundaries.md)                                                                   | 子包边界、UI 层、公共代码、Extension/Webview/Engine 约束和验证命令                    |
 | [`proto-and-wire-contracts.md`](proto-and-wire-contracts.md)                                                       | Proto、wire contract、生成类型、UI projection 和项目格式关系                          |
 | [`ui-theme-i18n-error-logging.md`](ui-theme-i18n-error-logging.md)                                                 | UI 公共层、主题 token、国际化、错误处理、日志和诊断边界                               |
@@ -54,7 +52,9 @@
 
 | 文档                                                                                     | 取代说明                                                                                                                                                                                                |
 | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`adr-neko-desktop-apphost-resource-viewport-boundary.md`](adr-neko-desktop-apphost-resource-viewport-boundary.md) | Desktop 产品壳已删除；host-neutral 契约由 application composition、package boundaries 与 Workbench Core ADR 接续 |
+| [`adr-neko-desktop-apphost-resource-viewport-boundary.md`](adr-neko-desktop-apphost-resource-viewport-boundary.md) | Desktop 产品壳已删除；当前边界由 application composition、package boundaries 与 Media Engine 文档接续 |
+| [`adr-neko-workbench-core-plugin-host.md`](adr-neko-workbench-core-plugin-host.md) | Workbench Core 与 Desktop Plugin Host 已随产品裁剪删除；仅保留为历史设计背景 |
+| [`marketplace.md`](marketplace.md) | Market/Registry 客户端、Market Core 和安装面已删除；仅保留为历史产品设计背景 |
 | [`adr-markdown-storyboard-draft-protocol.md`](adr-markdown-storyboard-draft-protocol.md) | 已被 [`adr-unified-markdown-resource-rendering.md`](adr-unified-markdown-resource-rendering.md) 和 Canvas `canvas.ingestMarkdown` / Creative Table profile 方案取代；仅保留为历史背景，不作为新实现入口 |
 
 机器可读的质量门禁输入放在 [`../../quality/`](../../quality/)，例如代码债务台账和 Agent 边界 LCD register；本目录只保留人类可读的架构决策和规则说明。
