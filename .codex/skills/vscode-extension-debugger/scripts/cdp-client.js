@@ -3,7 +3,7 @@
  * CDP Client - Chrome DevTools Protocol client for VS Code Extension debugging
  *
  * Usage:
- *   node cdp-client.js <command> [options]
+ *   node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js <command> [options]
  *
  * Commands:
  *   list                    - List all debug targets

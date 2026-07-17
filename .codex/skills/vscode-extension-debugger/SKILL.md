@@ -42,7 +42,7 @@ The CDP client script at `scripts/cdp-client.js` provides all debugging capabili
 To find debug targets:
 
 ```bash
-node ~/.claude/skills/vscode-extension-debugger/scripts/cdp-client.js list
+node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js list
 ```
 
 Output shows all available targets:
@@ -60,7 +60,7 @@ From the list output, identify the relevant target:
 
 **Get DOM Snapshot:**
 ```bash
-node ~/.claude/skills/vscode-extension-debugger/scripts/cdp-client.js snapshot <targetId>
+node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js snapshot <targetId>
 ```
 
 Returns:
@@ -70,24 +70,24 @@ Returns:
 
 **Take Screenshot:**
 ```bash
-node ~/.claude/skills/vscode-extension-debugger/scripts/cdp-client.js screenshot <targetId> /tmp/screenshot.png
+node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js screenshot <targetId> /tmp/screenshot.png
 ```
 
 Note: Screenshots only work on top-level pages, not iframes. To capture webview content, screenshot the parent VS Code window.
 
 **Execute JavaScript:**
 ```bash
-node ~/.claude/skills/vscode-extension-debugger/scripts/cdp-client.js eval <targetId> "document.title"
+node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js eval <targetId> "document.title"
 ```
 
 For webview iframe content:
 ```bash
-node ~/.claude/skills/vscode-extension-debugger/scripts/cdp-client.js eval <parentPageId> "document.getElementById('active-frame').contentDocument.body.innerText"
+node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js eval <parentPageId> "document.getElementById('active-frame').contentDocument.body.innerText"
 ```
 
 **Monitor Console:**
 ```bash
-node ~/.claude/skills/vscode-extension-debugger/scripts/cdp-client.js console <targetId>
+node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js console <targetId>
 ```
 
 ## Limitations

@@ -274,7 +274,6 @@ function skillCandidates(skill) {
     candidates.push(resolve(repoRoot, '.codex/skills', skill, 'SKILL.md'));
     candidates.push(resolve(codexHome, 'skills', skill, 'SKILL.md'));
     candidates.push(resolve(home, '.codex/skills', skill, 'SKILL.md'));
-    candidates.push(resolve(repoRoot, 'skills', skill, 'SKILL.md'));
     candidates.push(resolve(resolvedSkill, 'SKILL.md'));
   }
 
