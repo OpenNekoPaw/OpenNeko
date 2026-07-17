@@ -91,23 +91,31 @@ export function CanvasToolbar({
         ownedKeys: ['Enter', 'Escape', 'Space', 'Tab', 'ArrowUp', 'ArrowDown'],
       })}
     >
-      <ToolbarButton
-        data-canvas-toolbar-action="select-tool"
-        data-canvas-toolbar-kind="tool-mode"
-        icon={<SelectToolIcon />}
-        title={`${t('toolbar.selectTool')} (V)`}
-        active={isSelectMode}
-        onClick={onSelectTool}
-      />
+      <div
+        aria-label={t('toolbar.navigationMode')}
+        className="canvas-toolbar-mode-group"
+        data-active-mode={isPanMode ? 'pan' : 'select'}
+        data-canvas-toolbar-mode-group="navigation"
+        role="group"
+      >
+        <ToolbarButton
+          data-canvas-toolbar-action="select-tool"
+          data-canvas-toolbar-kind="tool-mode"
+          icon={<SelectToolIcon />}
+          title={`${t('toolbar.selectTool')} (V)`}
+          active={isSelectMode}
+          onClick={onSelectTool}
+        />
 
-      <ToolbarButton
-        data-canvas-toolbar-action="toggle-pan-mode"
-        data-canvas-toolbar-kind="tool-mode"
-        icon={<HandToolIcon />}
-        title={`${t('toolbar.handTool') ?? '移动工具'} (H)`}
-        active={isPanMode}
-        onClick={onTogglePanMode}
-      />
+        <ToolbarButton
+          data-canvas-toolbar-action="toggle-pan-mode"
+          data-canvas-toolbar-kind="tool-mode"
+          icon={<HandToolIcon />}
+          title={`${t('toolbar.handTool')} (H)`}
+          active={isPanMode}
+          onClick={onTogglePanMode}
+        />
+      </div>
 
       {onToggleNodeLibrary && (
         <>

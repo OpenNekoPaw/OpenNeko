@@ -9,6 +9,7 @@ export const zhCN = {
   'toolbar.addScene': '添加故事板场景',
   'toolbar.addNode': '添加节点',
   'toolbar.selectTool': '选择工具',
+  'toolbar.navigationMode': '画布导航模式',
   'toolbar.autoArrange': '自动整理',
   'toolbar.autoArrangeChoice': '{subsystem} · {strategy}',
   'autoArrange.strategy.grid': '网格',

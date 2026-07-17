@@ -9,6 +9,7 @@ export const en = {
   'toolbar.addScene': 'Add storyboard scene',
   'toolbar.addNode': 'Add Node',
   'toolbar.selectTool': 'Select Tool',
+  'toolbar.navigationMode': 'Canvas navigation mode',
   'toolbar.autoArrange': 'Auto Arrange',
   'toolbar.autoArrangeChoice': '{subsystem} · {strategy}',
   'autoArrange.strategy.grid': 'Grid',

@@ -24,7 +24,7 @@ Canvas Webview 目前把 `CanvasToolbar` 传给通用工作台 shell 的 `leftRa
 
 ### 1. 工具栏归属 Canvas surface，而不是工作台 rail
 
-`CanvasToolbar` 将在 `canvas-main-surface-inner` 内通过绝对定位宿主渲染。宿主占据左侧上下安全边距并垂直居中子项，工具栏本身 `height: auto`、`max-height: 100%`，因此既不参与画布布局，也不随画布拉伸。继续使用现有 `VerticalToolbar` 是为了保留按钮、tooltip 和无障碍行为；Canvas 作用域样式负责专属定位、药丸外观和圆形激活轮廓，并关闭共享 primitive 的左侧激活指示条，避免同时出现两种选中强调。按钮继续保留 36px 点击热区，激活态通过 30px 内嵌圆呈现，以主题派生背景、描边和前景色建立对比，不修改共享 primitive。Canvas 自动化标记同步收敛为 `data-canvas-toolbar-*`，不再保留工作台 rail 语义。
+`CanvasToolbar` 将在 `canvas-main-surface-inner` 内通过绝对定位宿主渲染。宿主占据左侧上下安全边距并垂直居中子项，工具栏本身 `height: auto`、`max-height: 100%`，因此既不参与画布布局，也不随画布拉伸。继续使用现有 `VerticalToolbar` 是为了保留按钮、tooltip 和无障碍行为；Canvas 作用域样式负责专属定位、药丸外观和圆形激活轮廓，并关闭共享 primitive 的左侧激活指示条，避免同时出现两种选中强调。按钮继续保留 36px 点击热区，激活态通过 30px 内嵌圆呈现，以主题派生背景、描边和前景色建立对比，不修改共享 primitive。选择与平移作为互斥导航模式，由 Canvas 专属 `role="group"` 容器提供共享的纵向分段药丸底板；两个按钮之间不插入分隔线，只有当前模式保留内嵌圆高亮，从而和独立 action 区分。Canvas 自动化标记同步收敛为 `data-canvas-toolbar-*`，不再保留工作台 rail 语义。
 
 备选方案是扩展通用 shell 的 rail 变体，但该浮层不承担通用工作台布局职责，会把 Canvas 交互需求泄漏到共享层，因此不采用。
 

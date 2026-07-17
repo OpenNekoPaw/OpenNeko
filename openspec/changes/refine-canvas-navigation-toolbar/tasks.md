@@ -29,3 +29,4 @@
 - [x] 5.2 Render active toolbar buttons with a circular outline and verify the final Extension Host presentation
 - [x] 5.3 Remove the Canvas toolbar's redundant left-edge active indicator and re-verify the selected state
 - [x] 5.4 Inset the visible active circle within the existing hit target, strengthen its theme-derived contrast, and verify the final selected state
+- [x] 5.5 Group Select and Hand into one segmented pill, preserve the inset active circle, and verify the mutual-exclusion presentation

@@ -78,7 +78,11 @@ describe('CanvasToolbar', () => {
     const handButton = host.querySelector<HTMLButtonElement>(
       '[data-canvas-toolbar-action="toggle-pan-mode"]',
     );
+    const modeGroup = host.querySelector<HTMLElement>('[data-canvas-toolbar-mode-group]');
 
+    expect(modeGroup?.getAttribute('role')).toBe('group');
+    expect(modeGroup?.getAttribute('aria-label')).toBe('Canvas navigation mode');
+    expect(Array.from(modeGroup?.children ?? [])).toEqual([selectButton, handButton]);
     expect(selectButton?.getAttribute('aria-label')).toBe('Select Tool (V)');
     expect(selectButton?.getAttribute('aria-pressed')).toBe('true');
     expect(selectButton?.getAttribute('data-canvas-toolbar-kind')).toBe('tool-mode');

@@ -19,6 +19,14 @@ The Canvas Webview SHALL render its primary tool actions as a vertically centere
 - **AND** theme-derived background, outline, and foreground colors provide contrast from inactive buttons
 - **AND** no separate left-edge indicator is rendered
 
+#### Scenario: Mutually exclusive navigation modes form one visual control
+
+- **WHEN** the user inspects the Select and Hand tools
+- **THEN** both buttons are enclosed by one shared segmented pill surface
+- **AND** the shared surface visually distinguishes the mutually exclusive mode pair from independent toolbar actions
+- **AND** only the active mode receives the inset circular highlight
+- **AND** no separator is rendered between the two mode buttons
+
 #### Scenario: Toolbar remains usable in a short viewport
 
 - **WHEN** the visible Canvas height is smaller than the toolbar's natural height plus safety margins
