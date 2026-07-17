@@ -125,12 +125,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function inferDocumentType(value: unknown): 'pdf' | 'docx' | 'epub' | 'cbz' | 'file' {
+function inferDocumentType(
+  value: unknown,
+): 'pdf' | 'docx' | 'epub' | 'cbz' | 'markdown' | 'text' | 'file' {
   if (
     value === 'pdf' ||
     value === 'docx' ||
     value === 'epub' ||
     value === 'cbz' ||
+    value === 'markdown' ||
+    value === 'text' ||
     value === 'file'
   ) {
     return value;

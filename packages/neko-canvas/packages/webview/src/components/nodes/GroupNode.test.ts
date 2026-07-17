@@ -40,6 +40,7 @@ describe('GroupNode', () => {
     expect(markup).toContain('data-spatial-group-collapse-toggle="group"');
     expect(markup).toContain('data-node-drag-allow="true"');
     expect(markup).toContain('References');
+    expect(markup).toContain('>x1<');
     expect(markup).not.toContain('Child content must render as its own Canvas node.');
     expect(markup).not.toContain('data-group-review-surface');
   });

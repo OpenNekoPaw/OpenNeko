@@ -41,6 +41,7 @@ export function createStoryboardNodeTypeDescriptors(): NodeTypeDescriptorRegistr
       tagColor: '#0ea5e9',
       defaultSize: { width: 660, height: 400 },
       presentation: 'structured',
+      fullscreenPresentation: 'workbench',
     },
     shot: {
       type: 'shot',
@@ -50,6 +51,7 @@ export function createStoryboardNodeTypeDescriptors(): NodeTypeDescriptorRegistr
       tagColor: '#ef4444',
       defaultSize: { width: 220, height: 200 },
       presentation: 'structured',
+      fullscreenPresentation: 'shot-workbench',
     },
     scene: {
       type: 'scene',
@@ -59,6 +61,7 @@ export function createStoryboardNodeTypeDescriptors(): NodeTypeDescriptorRegistr
       tagColor: '#10b981',
       defaultSize: { width: 640, height: 400 },
       presentation: 'structured',
+      fullscreenPresentation: 'workbench',
     },
     gallery: {
       type: 'gallery',
@@ -68,6 +71,7 @@ export function createStoryboardNodeTypeDescriptors(): NodeTypeDescriptorRegistr
       tagColor: '#8b5cf6',
       defaultSize: { width: 290, height: 360 },
       presentation: 'structured',
+      fullscreenPresentation: 'workbench',
     },
     script: {
       type: 'script',
@@ -104,6 +108,7 @@ export function createStoryboardNodeTypeDescriptors(): NodeTypeDescriptorRegistr
       tagColor: '#6366f1',
       defaultSize: { width: 260, height: 180 },
       presentation: 'structured',
+      fullscreenPresentation: 'workbench',
     },
     project: {
       type: 'project',

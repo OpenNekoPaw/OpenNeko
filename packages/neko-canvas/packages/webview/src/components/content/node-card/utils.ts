@@ -177,13 +177,15 @@ export function readRenderableAssetPath(node: CanvasNode): string | undefined {
   if (typeof runtimeAssetPath === 'string' && runtimeAssetPath.length > 0) {
     return runtimeAssetPath;
   }
-  return readAssetPath(node);
+  return readAssetPath(node) ?? readGeneratedAssetPath(data);
 }
 
 export function readPersistentAssetPath(node: CanvasNode): string | undefined {
   const data = readRecord(node.data);
   const assetPath = data['assetPath'];
-  return typeof assetPath === 'string' && assetPath.length > 0 ? assetPath : undefined;
+  return typeof assetPath === 'string' && assetPath.length > 0
+    ? assetPath
+    : readGeneratedAssetPath(data);
 }
 
 export function readDocumentResourceEntryPath(node: CanvasNode): string | undefined {
@@ -207,12 +209,39 @@ export function readReferenceImageResourceRef(
 
 export function readResourceRef(node: CanvasNode): ResourceRef | undefined {
   const data = readRecord(node.data);
-  return isResourceRef(data['resourceRef']) ? data['resourceRef'] : undefined;
+  if (isResourceRef(data['resourceRef'])) return data['resourceRef'];
+  for (const key of ['generatedAsset', 'generatedVideoAsset'] as const) {
+    const asset = readRecord(data[key]);
+    if (isResourceRef(asset['resourceRef'])) return asset['resourceRef'];
+  }
+  return undefined;
+}
+
+export function readMaterialMediaType(node: CanvasNode): 'image' | 'video' | 'audio' | undefined {
+  const data = readRecord(node.data);
+  const explicit = data['mediaType'];
+  if (explicit === 'image' || explicit === 'video' || explicit === 'audio') return explicit;
+  if (hasGeneratedAssetIdentity(data['generatedAsset'])) return 'image';
+  if (hasGeneratedAssetIdentity(data['generatedVideoAsset'])) return 'video';
+  return undefined;
 }
 
 export function readReferenceResourceRef(node: CanvasNode): ResourceRef | undefined {
   const data = readRecord(node.data);
   return isResourceRef(data['referenceResourceRef']) ? data['referenceResourceRef'] : undefined;
+}
+
+function readGeneratedAssetPath(data: Record<string, unknown>): string | undefined {
+  for (const key of ['generatedAsset', 'generatedVideoAsset'] as const) {
+    const path = readString(data[key], 'path');
+    if (path) return path;
+  }
+  return undefined;
+}
+
+function hasGeneratedAssetIdentity(value: unknown): boolean {
+  const asset = readRecord(value);
+  return Boolean(readString(asset, 'path') || isResourceRef(asset['resourceRef']));
 }
 
 export function readDocumentResourceStatus(node: CanvasNode): DocumentResourceStatus | undefined {

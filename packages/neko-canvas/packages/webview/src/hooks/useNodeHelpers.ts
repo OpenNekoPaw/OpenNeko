@@ -13,8 +13,10 @@ import type {
   ContainerChildPlacement,
   DocumentArchiveResourceRef,
   DocumentCanvasNode,
+  DroppedTextCanvasAsset,
   NkProjectType,
   ResourceRef,
+  TextCanvasNode,
 } from '@neko/shared';
 import { GALLERY_PRESET_CONFIGS } from '@neko/shared';
 import { t } from '../i18n';
@@ -34,6 +36,7 @@ export interface UseNodeHelpersOptions {
 
 export interface UseNodeHelpersReturn {
   addTextAt: (pos: { x: number; y: number }) => void;
+  addImportedTextAt: (pos: { x: number; y: number }, asset: DroppedTextCanvasAsset) => void;
   addMediaAt: (
     pos: { x: number; y: number },
     mediaType: 'image' | 'video' | 'audio',
@@ -72,6 +75,19 @@ export interface UseNodeHelpersReturn {
   ) => void;
 }
 
+export function createImportedTextNodeData(asset: DroppedTextCanvasAsset): TextCanvasNode['data'] {
+  return {
+    content: asset.content,
+    format: asset.format,
+    title: asset.title || asset.name,
+    provenance: {
+      importMode: 'snapshot',
+      sourcePath: asset.path,
+      sourceName: asset.name,
+    },
+  };
+}
+
 // =============================================================================
 // Hook
 // =============================================================================
@@ -91,6 +107,22 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
         }),
       );
       reportAction('addNode', 'Add text note');
+    },
+    [addNode, nodeCount, reportAction],
+  );
+
+  const addImportedTextAt = useCallback(
+    (pos: { x: number; y: number }, asset: DroppedTextCanvasAsset) => {
+      addNode(
+        buildCanvasNode({
+          type: 'text',
+          position: pos,
+          zIndex: nodeCount,
+          data: createImportedTextNodeData(asset),
+          preset: 'text.basic',
+        }),
+      );
+      reportAction('addNode', 'Import text snapshot', asset.name);
     },
     [addNode, nodeCount, reportAction],
   );
@@ -281,8 +313,9 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
       title = 'Document',
       docType: DocumentCanvasNode['data']['docType'] = 'pdf',
     ) => {
-      const w = 220,
-        h = 280;
+      const textLike = docType === 'markdown' || docType === 'text';
+      const w = textLike ? 420 : 220,
+        h = textLike ? 360 : 280;
       addNode({
         type: 'document',
         position: { x: pos.x - w / 2, y: pos.y - h / 2 },
@@ -374,6 +407,7 @@ export function useNodeHelpers(options: UseNodeHelpersOptions): UseNodeHelpersRe
 
   return {
     addTextAt,
+    addImportedTextAt,
     addMediaAt,
     addShotAt,
     addSceneGroupAt,

@@ -1,4 +1,8 @@
-export { InlineMarkdownEditor, isCompletionTrigger, isValidCompletionEdit } from './inline-markdown-editor';
+export {
+  InlineMarkdownEditor,
+  isCompletionTrigger,
+  isValidCompletionEdit,
+} from './inline-markdown-editor';
 export type { InlineMarkdownEditorProps } from './inline-markdown-editor';
 export { MarkdownCompletionPopover } from './markdown-completion-popover';
 export type { MarkdownCompletionPopoverProps } from './markdown-completion-popover';
@@ -13,11 +17,9 @@ export { MarkdownInlineText } from './markdown-inline-text';
 export type { MarkdownInlineTextProps } from './markdown-inline-text';
 export { MarkdownPreview } from './markdown-preview';
 export type { MarkdownPreviewProps } from './markdown-preview';
-export {
-  createProjectionOptions,
-  projectMarkdownForUi,
-  validateSemanticSpans,
-} from './projection';
+export { MarkdownDocumentView } from './markdown-document-view';
+export type { MarkdownDocumentViewProps } from './markdown-document-view';
+export { createProjectionOptions, projectMarkdownForUi, validateSemanticSpans } from './projection';
 export {
   createMarkdownRenderableTokens,
   renderDefaultMarkdownToken,

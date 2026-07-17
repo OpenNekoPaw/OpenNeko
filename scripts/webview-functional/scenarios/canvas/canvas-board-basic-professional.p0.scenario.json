@@ -65,7 +65,7 @@
       "id": "open-node-library",
       "operation": "click",
       "selector": {
-        "css": "[data-creative-left-rail-action=\"toggle-right-node-tree\"]",
+        "css": "[data-canvas-toolbar-action=\"toggle-right-node-tree\"]",
         "auditedSelectorReason": "The Canvas left rail exposes the right-node-tree visibility action through its stable workbench action identity."
       }
     },

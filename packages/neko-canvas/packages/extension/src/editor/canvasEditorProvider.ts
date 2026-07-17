@@ -47,6 +47,7 @@ import {
   inferCanvasDroppedAssetKind,
   inferCanvasMediaType,
   inferCanvasModelType,
+  inferCanvasTextFileFormat,
   inferNkProjectType,
   isDocumentArchiveResourceRef,
   isResourceRef,
@@ -80,6 +81,7 @@ import {
   validateCanvasBoardRef,
   isCanvasCreativeAiActionId,
   isCanvasStoryboardPromptState,
+  isCanvasTextDocumentReadRequest,
   createCreativeAiDiagnostic,
 } from '@neko/shared';
 import type {
@@ -148,6 +150,7 @@ import type {
   ScriptScene,
   NarrativeGraphSnapshot,
   PreviewToCanvasMessage,
+  CanvasTextDocumentReadResult,
 } from '@neko/shared';
 import type { CanvasChangeEvent, ShapeConfig } from '../api';
 import type { CanvasOutlineProvider, CanvasOutlineData } from '../views/canvasOutlineProvider';
@@ -157,6 +160,8 @@ import type { PlaybackHandle, PlaybackMediaType } from '@neko/neko-client';
 import { getLogger } from '../utils/logger';
 import { handleError } from '../utils/errorHandler';
 import { createCanvasDocumentEntryReader } from '../services/documentEntryReader';
+import { readCanvasTextDocumentProjection } from '../services/textDocumentProjection';
+import { resolveCanvasPickerAssetKind } from '../services/canvasSourceSelection';
 import {
   createCanvasPlaybackPlanFromCanvasData,
   createNarrativeGraphSnapshotFromCanvasData,
@@ -2904,24 +2909,14 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       }
       case 'openMediaPreview': {
         // Open media in neko-preview's customEditor.
-        const resourceRef = isResourceRef(message.resourceRef) ? message.resourceRef : undefined;
-        const assetPath = this.resolveDocumentResourceAssetPath(
-          message.assetPath as string | undefined,
-        );
         const mediaTypeHint = message.mediaType as string | undefined;
-        if (!assetPath && !resourceRef) break;
 
         try {
-          const fsPath = resourceRef
-            ? await this.resolveResourceRefLocalPreviewPath(
-                resourceRef,
-                'neko-canvas.open-media-preview',
-              )
-            : await this.resolveCanvasMediaLocalFilePath(
-                assetPath!,
-                document.uri,
-                'neko-canvas.open-media-preview',
-              );
+          const fsPath = await this.resolveCanvasMaterialLocalFilePath(
+            message,
+            document.uri,
+            'neko-canvas.open-media-preview',
+          );
           const fileUri = vscode.Uri.file(fsPath);
 
           const ext = fsPath.split('.').pop()?.toLowerCase() ?? '';
@@ -2947,6 +2942,55 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           }
         } catch (error) {
           logger.error(`Failed to open media preview: ${error}`);
+          void handleError(error instanceof Error ? error : new Error(String(error)), {
+            showToUser: true,
+          });
+        }
+        break;
+      }
+
+      case 'saveCanvasMaterialToAssetLibrary': {
+        try {
+          const fsPath = await this.resolveCanvasMaterialLocalFilePath(
+            message,
+            document.uri,
+            'neko-canvas.save-material-to-asset-library',
+          );
+          await vscode.commands.executeCommand('neko.assets.importFile', vscode.Uri.file(fsPath));
+          void vscode.window.showInformationMessage(
+            vscode.l10n.t('neko.canvas.material.save.success', path.basename(fsPath)),
+          );
+        } catch (error) {
+          logger.error(`Failed to save Canvas material to asset library: ${error}`);
+          void handleError(error instanceof Error ? error : new Error(String(error)), {
+            showToUser: true,
+          });
+        }
+        break;
+      }
+
+      case 'editCanvasImage': {
+        try {
+          if (message.mediaType !== 'image') {
+            throw new Error('Canvas image editing requires an image material.');
+          }
+          const fsPath = await this.resolveCanvasMaterialLocalFilePath(
+            message,
+            document.uri,
+            'neko-canvas.edit-image-material',
+          );
+          const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(fsPath));
+          await vscode.commands.executeCommand('neko.sketch.editImage', {
+            base64: Buffer.from(bytes).toString('base64'),
+            name: path.basename(fsPath),
+            context: {
+              source: 'canvas',
+              sourceNodeId: typeof message.nodeId === 'string' ? message.nodeId : undefined,
+              metadata: { mediaType: 'image' },
+            },
+          });
+        } catch (error) {
+          logger.error(`Failed to edit Canvas image material: ${error}`);
           void handleError(error instanceof Error ? error : new Error(String(error)), {
             showToUser: true,
           });
@@ -3473,6 +3517,41 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             error: 'neko-story not available',
           });
         }
+        break;
+      }
+
+      case 'textDocument:read': {
+        if (!isCanvasTextDocumentReadRequest(message)) {
+          logger.warn('Rejected invalid Canvas textDocument:read message');
+          break;
+        }
+
+        let result: CanvasTextDocumentReadResult;
+        try {
+          const resolvedPath = await this.resolveAssetPath(message.docPath, document.uri);
+          result = await readCanvasTextDocumentProjection(message, resolvedPath, {
+            stat: async (filePath) => {
+              const stat = await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+              return {
+                size: stat.size,
+                isFile: (stat.type & vscode.FileType.File) !== 0,
+              };
+            },
+            readFile: (filePath) => vscode.workspace.fs.readFile(vscode.Uri.file(filePath)),
+          });
+        } catch {
+          result = {
+            type: 'textDocument:readResult',
+            requestId: message.requestId,
+            nodeId: message.nodeId,
+            docPath: message.docPath,
+            docType: message.docType,
+            status: 'error',
+            code: 'read-failed',
+            error: 'The text source path could not be resolved.',
+          };
+        }
+        await webviewPanel.webview.postMessage(result);
         break;
       }
 
@@ -4131,6 +4210,27 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     );
   }
 
+  private async resolveCanvasMaterialLocalFilePath(
+    message: Record<string, unknown>,
+    documentUri: vscode.Uri,
+    caller: string,
+  ): Promise<string> {
+    const documentResourceRef = isDocumentArchiveResourceRef(message.documentResourceRef)
+      ? message.documentResourceRef
+      : undefined;
+    const resourceRef = this.resolvePreviewResourceRef(message.resourceRef, documentResourceRef);
+    if (resourceRef) {
+      return this.resolveResourceRefLocalPreviewPath(resourceRef, caller);
+    }
+    const assetPath = this.resolveDocumentResourceAssetPath(
+      typeof message.assetPath === 'string' ? message.assetPath : undefined,
+    );
+    if (assetPath) {
+      return this.resolveCanvasMediaLocalFilePath(assetPath, documentUri, caller);
+    }
+    throw new Error('Canvas material action requires a stable resource reference or asset path.');
+  }
+
   private resolvePreviewResourceRef(
     resourceRef: unknown,
     documentResourceRef?: DocumentArchiveResourceRef,
@@ -4379,7 +4479,31 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     if (!request) {
       return;
     }
-    const sourceRequest = await this.resolveCanvasProjectSourceAddRequest(request, documentUri);
+    let sourceRequest: ProjectSourceAddRequest | undefined;
+    try {
+      sourceRequest = await this.resolveCanvasProjectSourceAddRequest(request, documentUri);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Canvas source selection failed.';
+      void vscode.window.showWarningMessage(message);
+      await postProjectSourceAddResult(
+        {
+          requestId: request.requestId,
+          ok: false,
+          diagnostics: [
+            createProjectFileDiagnostic({
+              code: 'unsupported-canvas-source-selection',
+              message,
+              recoverability: 'retry',
+            }),
+          ],
+        },
+        {
+          postMessage: (result) => webview.postMessage(result),
+          logger,
+        },
+      );
+      return;
+    }
     if (!sourceRequest) {
       await postProjectSourceAddResult(this.createCanvasProjectSourceAddCancelledResult(request), {
         postMessage: (message) => webview.postMessage(message),
@@ -4438,9 +4562,13 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           'All Files': ['*'],
         };
       case 'script':
-        return { Scripts: ['fountain', 'nks', 'story'], 'All Files': ['*'] };
+      case 'text':
+        return { 'Text Files': ['md', 'markdown', 'txt', 'log', 'fountain', 'nks', 'story'] };
       case 'document':
-        return { Documents: ['pdf', 'docx', 'epub', 'cbz'], 'All Files': ['*'] };
+        return {
+          Documents: ['pdf', 'docx', 'epub', 'cbz'],
+          'All Files': ['*'],
+        };
       case 'model':
         return { Models: ['safetensors', 'ckpt', 'pt', 'pth', 'bin'], 'All Files': ['*'] };
       case 'canvas':
@@ -4452,7 +4580,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           Images: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'],
           Videos: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v'],
           Audio: ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'],
-          Scripts: ['fountain', 'nks', 'story'],
+          'Text Files': ['md', 'markdown', 'txt', 'log', 'fountain', 'nks', 'story'],
           Documents: ['pdf', 'docx', 'epub', 'cbz'],
           Models: ['safetensors', 'ckpt', 'pt', 'pth', 'bin'],
           'Neko Canvas': ['nkc'],
@@ -4488,8 +4616,13 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   ): ProjectSourceAddRequest {
     const fileName =
       path.basename(uri.fsPath) || readCanvasProjectSourceAddFileName(options.request);
-    const assetKind = readCanvasProjectSourceAddAssetKind(options.request, fileName);
+    const requestedAssetKind = readCanvasProjectSourceAddAssetKind(
+      options.request,
+      readCanvasProjectSourceAddFileName(options.request),
+    );
+    const assetKind = resolveCanvasPickerAssetKind(requestedAssetKind, fileName);
     const mediaType = assetKind === 'media' ? inferCanvasMediaType(fileName) : undefined;
+    const textFormat = assetKind === 'text' ? inferCanvasTextFileFormat(fileName) : undefined;
     const docType = assetKind === 'document' ? inferCanvasDocumentType(fileName) : undefined;
     const modelType = assetKind === 'model' ? inferCanvasModelType(fileName) : undefined;
     const projectType = assetKind === 'project' ? inferNkProjectType(fileName) : undefined;
@@ -4500,6 +4633,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       name: fileName,
       title: fileName.replace(/\.[^.]+$/, '') || fileName,
       ...(mediaType ? { mediaType } : {}),
+      ...(textFormat ? { textFormat } : {}),
       ...(docType ? { docType } : {}),
       ...(modelType ? { modelType } : {}),
       ...(projectType ? { projectType } : {}),
@@ -4512,7 +4646,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       role:
         assetKind === 'project'
           ? 'project'
-          : assetKind === 'document' || assetKind === 'script'
+          : assetKind === 'document' || assetKind === 'script' || assetKind === 'text'
             ? 'document'
             : assetKind === 'model'
               ? 'model'
@@ -4583,6 +4717,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
 
           const runtimeSourcePath = ingest.outputPath ?? request.sourcePath;
           let runtimeAssetPath: string | undefined;
+          let textContent: string | undefined;
           if (descriptor.mediaType && runtimeSourcePath) {
             runtimeAssetPath = await this.projectCanvasMediaLocalFile(
               webview,
@@ -4590,6 +4725,40 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
               documentUri,
               'neko-canvas.project-add-source',
             );
+          }
+          if (descriptor.textFormat) {
+            if (!runtimeSourcePath) {
+              return {
+                ...ingest,
+                status: 'failed',
+                error: 'Canvas text import did not produce a readable source path.',
+              };
+            }
+            const resolvedTextPath = path.isAbsolute(runtimeSourcePath)
+              ? runtimeSourcePath
+              : await this.resolveAssetPath(runtimeSourcePath, documentUri);
+            const textResult = await readCanvasTextDocumentProjection(
+              {
+                type: 'textDocument:read',
+                requestId: request.requestId,
+                nodeId: `text-import:${request.requestId}`,
+                docPath: descriptor.fileName,
+                docType: descriptor.textFormat === 'markdown' ? 'markdown' : 'text',
+              },
+              resolvedTextPath,
+              {
+                stat: async (filePath) => {
+                  const stat = await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+                  return { size: stat.size, isFile: stat.type === vscode.FileType.File };
+                },
+                readFile: async (filePath) =>
+                  vscode.workspace.fs.readFile(vscode.Uri.file(filePath)),
+              },
+            );
+            if (textResult.status === 'error') {
+              return { ...ingest, status: 'failed', error: textResult.error };
+            }
+            textContent = textResult.text;
           }
 
           return {
@@ -4599,6 +4768,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
               ...(request.metadata ?? {}),
               ...descriptor.metadata,
               ...(runtimeAssetPath ? { runtimeAssetPath } : {}),
+              ...(textContent !== undefined ? { textContent } : {}),
             },
           };
         },
@@ -6190,6 +6360,8 @@ function readCanvasProjectSourceAddMediaType(
 function readCanvasProjectSourceAddDescriptor(request: ProjectSourceAddRequest):
   | {
       readonly mediaType?: 'image' | 'video' | 'audio';
+      readonly fileName: string;
+      readonly textFormat?: 'plain' | 'markdown';
       readonly metadata: Record<string, unknown>;
     }
   | undefined {
@@ -6198,12 +6370,14 @@ function readCanvasProjectSourceAddDescriptor(request: ProjectSourceAddRequest):
   if (!assetKind) return undefined;
 
   const mediaType = readCanvasProjectSourceAddMediaType(request);
+  const textFormat = assetKind === 'text' ? inferCanvasTextFileFormat(fileName) : undefined;
   const title = fileName.replace(/\.[^.]+$/, '') || fileName;
   const metadata: Record<string, unknown> = {
     canvasAssetKind: assetKind,
     name: fileName,
     title,
     ...(mediaType ? { mediaType } : {}),
+    ...(textFormat ? { textFormat } : {}),
   };
 
   if (assetKind === 'document') {
@@ -6223,7 +6397,9 @@ function readCanvasProjectSourceAddDescriptor(request: ProjectSourceAddRequest):
   }
 
   return {
+    fileName,
     ...(mediaType ? { mediaType } : {}),
+    ...(textFormat ? { textFormat } : {}),
     metadata,
   };
 }
@@ -6235,6 +6411,7 @@ function readCanvasProjectSourceAddAssetKind(
   const metadataKind = request.metadata?.['canvasAssetKind'];
   if (
     metadataKind === 'media' ||
+    metadataKind === 'text' ||
     metadataKind === 'script' ||
     metadataKind === 'document' ||
     metadataKind === 'model' ||

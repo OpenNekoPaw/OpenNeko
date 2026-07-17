@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
-import { InlineMarkdownEditor, MarkdownInlineText } from '@neko/ui/markdown';
+import { InlineMarkdownEditor, MarkdownDocumentView, MarkdownInlineText } from '@neko/ui/markdown';
 import type {
   CanvasAuthoringDiagnostic,
   CanvasAuthoringPromptFieldProjection,
@@ -35,11 +35,23 @@ import {
   projectCanvasShotPrompt,
   writeFieldBinding,
 } from '@neko/shared';
-import { CameraIcon, CloseIcon, EditIcon, PlayIcon } from '@neko/shared/icons';
+import {
+  CameraIcon,
+  CloseIcon,
+  EditIcon,
+  PlayIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+} from '@neko/shared/icons';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { ContainerRenderer } from '../content/ContainerRenderer';
 import { ContainerActionBar, readNumber, readString } from '../content/node-card';
 import { createBuiltInNodeTypeDescriptors } from '../nodes/nodeTypeDescriptors';
+import {
+  resolveNodeFullscreenPresentation,
+  type NodeFullscreenPresentation,
+} from '../nodes/nodeTypeDescriptor';
+import { resolveNodeDisplayTitle } from '../content/nodeDisplayTitle';
 import {
   createBuiltInCanvasNodePresetRegistry,
   getCanvasNodePreset,
@@ -54,15 +66,12 @@ import {
 import { t } from '../../i18n';
 
 const PRESET_REGISTRY = createBuiltInCanvasNodePresetRegistry();
+const NODE_TYPE_DESCRIPTORS = createBuiltInNodeTypeDescriptors();
 const CONTENT_OVERLAY_BACKDROP_Z_INDEX = 20000;
 const CONTENT_OVERLAY_PANEL_Z_INDEX = 20001;
-
-const NODE_TYPE_I18N_KEY: Partial<Record<string, string>> = {
-  annotation: 'node.note',
-  scene: 'node.sceneGroup',
-  text: 'node.newText',
-  'canvas-embed': 'node.canvasEmbed',
-};
+const IMAGE_VIEWER_ZOOM_MIN = 0.25;
+const IMAGE_VIEWER_ZOOM_MAX = 4;
+const IMAGE_VIEWER_ZOOM_STEP = 0.25;
 
 const STORYBOARD_PROMPT_BLOCKS = [
   {
@@ -187,12 +196,39 @@ export function ContentOverlay({
   const updateNodeData = useCanvasStore((s) => s.updateNodeData);
   const node = useMemo(() => nodes.find((n) => n.id === nodeId), [nodes, nodeId]);
 
+  useEffect(() => {
+    if (!node) return undefined;
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [node, onClose]);
+
   if (!node) return null;
 
-  const content = resolveOverlayContent(node);
-  if (!content) return null;
+  const fullscreenPresentation = resolveNodeFullscreenPresentation(
+    NODE_TYPE_DESCRIPTORS[node.type],
+    node,
+  );
+  const content = fullscreenPresentation ? resolveOverlayContent(node) : undefined;
 
-  const overlay = (
+  const overlay =
+    fullscreenPresentation === 'image-viewer' && content ? (
+      <ImageViewerOverlay
+        node={node}
+        content={content}
+        allNodes={nodes}
+        selectedNodeIds={selectedNodeIds}
+        onUpdateData={updateNodeData}
+        onSelectNode={selectNode}
+        onRemoveChild={removeChildFromContainer}
+        onClose={onClose}
+      />
+    ) : (
     <>
       <div
         className="fixed inset-0"
@@ -203,6 +239,7 @@ export function ContentOverlay({
         className="fixed inset-4 flex flex-col overflow-hidden rounded-xl"
         data-content-overlay-root="true"
         data-content-overlay-panel="true"
+        data-content-overlay-presentation={fullscreenPresentation ?? 'unsupported'}
         {...getKeyboardBoundaryMetadata({
           scope: 'modal',
           ownerId: `content-overlay:${node.id}`,
@@ -216,7 +253,7 @@ export function ContentOverlay({
         }}
       >
         <OverlayHeader node={node} onClose={onClose} />
-        {node.type === 'shot' ? (
+        {fullscreenPresentation === 'shot-workbench' && content ? (
           <ShotCreatorOverlayBody
             node={node}
             content={content}
@@ -237,7 +274,19 @@ export function ContentOverlay({
             onCandidateDelete={onCandidateDelete}
             onCandidateInspect={onCandidateInspect}
           />
-        ) : (
+        ) : fullscreenPresentation === 'visual-stage' && content ? (
+          <VisualStageOverlayBody
+            node={node}
+            content={content}
+            allNodes={nodes}
+            selectedNodeIds={selectedNodeIds}
+            onUpdateData={updateNodeData}
+            onSelectNode={selectNode}
+            onRemoveChild={removeChildFromContainer}
+          />
+        ) : fullscreenPresentation === 'text-document' ? (
+          <TextDocumentOverlayBody node={node} onUpdateData={updateNodeData} />
+        ) : fullscreenPresentation === 'workbench' && content ? (
           <OverlayBody
             node={node}
             content={content}
@@ -247,26 +296,164 @@ export function ContentOverlay({
             onSelectNode={selectNode}
             onRemoveChild={removeChildFromContainer}
           />
+        ) : (
+          <UnsupportedOverlayBody node={node} presentation={fullscreenPresentation} />
         )}
       </div>
     </>
-  );
+    );
 
   return typeof document === 'undefined' ? overlay : createPortal(overlay, document.body);
 }
 
+function ImageViewerOverlay({
+  node,
+  content,
+  allNodes,
+  selectedNodeIds,
+  onUpdateData,
+  onSelectNode,
+  onRemoveChild,
+  onClose,
+}: {
+  node: CanvasNode;
+  content: ContainerSection;
+  allNodes: CanvasNode[];
+  selectedNodeIds: readonly string[];
+  onUpdateData?: (nodeId: string, data: Record<string, unknown>) => void;
+  onSelectNode?: (nodeId: string, multi?: boolean) => void;
+  onRemoveChild?: (containerId: string, childId: string) => void;
+  onClose: () => void;
+}) {
+  const [zoom, setZoom] = useState(1);
+  const renderContext = useOverlayRenderContext({
+    node,
+    allNodes,
+    selectedNodeIds,
+    onUpdateData,
+    onSelectNode,
+    onRemoveChild,
+    contentChrome: 'full-bleed',
+  });
+
+  useEffect(() => {
+    setZoom(1);
+  }, [node.id]);
+
+  const updateZoom = useCallback((nextZoom: number) => {
+    setZoom(clampImageViewerZoom(nextZoom));
+  }, []);
+  const zoomPercent = Math.round(zoom * 100);
+  const stageScale = Math.max(1, zoom);
+  const baseLayerPercent = zoom > 1 ? 100 / zoom : 100;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={resolveNodeDisplayTitle(node)}
+      className="fixed inset-0 overflow-hidden"
+      data-content-overlay-root="true"
+      data-content-overlay-panel="true"
+      data-content-overlay-frame="frameless"
+      data-content-overlay-presentation="image-viewer"
+      data-image-viewer-overlay="true"
+      {...getKeyboardBoundaryMetadata({
+        scope: 'modal',
+        ownerId: `content-overlay:${node.id}`,
+        priority: 40,
+        ownedKeys: ['Enter', 'Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'],
+      })}
+      style={{
+        zIndex: CONTENT_OVERLAY_PANEL_Z_INDEX,
+        backgroundColor: 'rgba(18,18,20,0.96)',
+        backdropFilter: 'blur(12px)',
+      }}
+    >
+      <div
+        className="h-full w-full overflow-auto overscroll-contain"
+        data-image-viewer-scroll-region="true"
+      >
+        <div
+          className="flex min-h-full min-w-full items-center justify-center p-12 pb-24"
+          data-image-viewer-zoom-stage={zoomPercent}
+          style={{ width: `${stageScale * 100}%`, height: `${stageScale * 100}%` }}
+        >
+          <div
+            className="flex min-h-0 min-w-0 origin-center flex-col"
+            data-image-viewer-zoom-layer="true"
+            style={{
+              width: `${baseLayerPercent}%`,
+              height: `${baseLayerPercent}%`,
+              transform: `scale(${zoom})`,
+            }}
+          >
+            <ContainerRenderer section={content} context={renderContext} />
+          </div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        aria-label={t('action.close')}
+        className="absolute right-5 top-5 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-white shadow-lg backdrop-blur transition-colors hover:bg-black/65"
+        data-image-viewer-close="true"
+        onClick={onClose}
+      >
+        <CloseIcon size={17} strokeWidth={1.9} />
+      </button>
+
+      <div
+        className="absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/60 p-1.5 text-white shadow-xl backdrop-blur"
+        data-image-viewer-zoom-controls="true"
+      >
+        <button
+          type="button"
+          aria-label={t('action.zoomOut')}
+          className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35"
+          disabled={zoom <= IMAGE_VIEWER_ZOOM_MIN}
+          onClick={() => updateZoom(zoom - IMAGE_VIEWER_ZOOM_STEP)}
+        >
+          <ZoomOutIcon size={16} strokeWidth={1.9} />
+        </button>
+        <button
+          type="button"
+          aria-label={t('action.resetZoom')}
+          className="min-w-14 rounded-full px-2 py-1 text-xs font-medium tabular-nums transition-colors hover:bg-white/15"
+          data-image-viewer-zoom-percent={zoomPercent}
+          onClick={() => updateZoom(1)}
+        >
+          {zoomPercent}%
+        </button>
+        <button
+          type="button"
+          aria-label={t('action.zoomIn')}
+          className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35"
+          disabled={zoom >= IMAGE_VIEWER_ZOOM_MAX}
+          onClick={() => updateZoom(zoom + IMAGE_VIEWER_ZOOM_STEP)}
+        >
+          <ZoomInIcon size={16} strokeWidth={1.9} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function clampImageViewerZoom(zoom: number): number {
+  return Math.min(IMAGE_VIEWER_ZOOM_MAX, Math.max(IMAGE_VIEWER_ZOOM_MIN, zoom));
+}
+
 function OverlayHeader({ node, onClose }: { node: CanvasNode; onClose: () => void }) {
-  const descriptors = useMemo(() => createBuiltInNodeTypeDescriptors(), []);
-  const descriptor = descriptors[node.type];
+  const descriptor = NODE_TYPE_DESCRIPTORS[node.type];
   const tagLabel = descriptor?.tagLabel ?? node.type.toUpperCase();
   const tagColor = descriptor?.tagColor ?? '#6b7280';
 
-  const key = NODE_TYPE_I18N_KEY[node.type] ?? `node.${node.type}`;
-  const title = node.preview?.title ?? t(key) ?? node.id;
+  const title = resolveNodeDisplayTitle(node);
 
   return (
     <div
       className="flex flex-shrink-0 items-center gap-3 px-4 py-3"
+      data-content-overlay-header="true"
       style={{ borderBottom: '1px solid var(--node-divider)' }}
     >
       <span
@@ -283,12 +470,138 @@ function OverlayHeader({ node, onClose }: { node: CanvasNode; onClose: () => voi
       </span>
       <button
         type="button"
+        aria-label={t('action.close')}
         className="flex-shrink-0 rounded px-2 py-1 text-sm hover:bg-white/10"
         style={{ color: 'var(--node-fg-secondary)' }}
         onClick={onClose}
       >
         <CloseIcon size={13} strokeWidth={1.9} />
       </button>
+    </div>
+  );
+}
+
+function TextDocumentOverlayBody({
+  node,
+  onUpdateData,
+}: {
+  node: CanvasNode;
+  onUpdateData?: (nodeId: string, data: Record<string, unknown>) => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+
+  useEffect(() => {
+    setIsEditing(false);
+  }, [node.id]);
+
+  if (node.type !== 'text' && node.type !== 'annotation') {
+    return <UnsupportedOverlayBody node={node} presentation="text-document" />;
+  }
+
+  const content = node.data.content;
+  const format = node.type === 'text' ? (node.data.format ?? 'plain') : 'plain';
+
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-100"
+      data-text-document-overlay={format}
+      data-text-document-mode={isEditing ? 'edit' : 'preview'}
+    >
+      <div className="flex flex-shrink-0 items-center justify-end border-b border-slate-200 bg-white px-4 py-2">
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+          aria-pressed={isEditing}
+          onClick={() => setIsEditing((value) => !value)}
+        >
+          <EditIcon size={13} strokeWidth={1.9} />
+          {isEditing ? t('action.previewShort') : t('action.editShort')}
+        </button>
+      </div>
+      <div
+        className="min-h-0 flex-1 overflow-auto px-4 py-5 sm:px-8"
+        data-content-overlay-scroll-region="true"
+      >
+        <div className="mx-auto min-h-full w-full max-w-[1120px] overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+          {isEditing ? (
+            <textarea
+              className="min-h-[calc(100vh-11rem)] w-full resize-none border-0 bg-white px-6 py-5 font-mono text-sm leading-6 text-slate-900 outline-none"
+              value={content}
+              aria-label={resolveNodeDisplayTitle(node)}
+              data-text-document-editor={format}
+              onChange={(event) => onUpdateData?.(node.id, { content: event.target.value })}
+            />
+          ) : format === 'markdown' ? (
+            <article
+              className="min-h-full px-6 py-5 text-slate-900 sm:px-10 sm:py-8"
+              data-text-document-preview="markdown"
+            >
+              <MarkdownDocumentView value={content} />
+            </article>
+          ) : (
+            <pre
+              className="min-h-full whitespace-pre-wrap break-words px-6 py-5 font-sans text-sm leading-6 text-slate-900 sm:px-10 sm:py-8"
+              data-text-document-preview="plain"
+            >
+              {content}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VisualStageOverlayBody({
+  node,
+  content,
+  allNodes,
+  selectedNodeIds,
+  onUpdateData,
+  onSelectNode,
+  onRemoveChild,
+}: {
+  node: CanvasNode;
+  content: ContainerSection;
+  allNodes: CanvasNode[];
+  selectedNodeIds: readonly string[];
+  onUpdateData?: (nodeId: string, data: Record<string, unknown>) => void;
+  onSelectNode?: (nodeId: string, multi?: boolean) => void;
+  onRemoveChild?: (containerId: string, childId: string) => void;
+}) {
+  const renderContext = useOverlayRenderContext({
+    node,
+    allNodes,
+    selectedNodeIds,
+    onUpdateData,
+    onSelectNode,
+    onRemoveChild,
+    contentChrome: 'full-bleed',
+  });
+
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-hidden bg-neutral-900"
+      data-visual-stage-overlay="true"
+    >
+      <ContainerRenderer section={content} context={renderContext} />
+    </div>
+  );
+}
+
+function UnsupportedOverlayBody({
+  node,
+  presentation,
+}: {
+  node: CanvasNode;
+  presentation: NodeFullscreenPresentation | undefined;
+}) {
+  return (
+    <div
+      className="flex min-h-0 flex-1 items-center justify-center bg-slate-100 p-8 text-sm text-slate-600"
+      data-content-overlay-unsupported={presentation ?? node.type}
+    >
+      {t('content.overlayUnavailable')}
     </div>
   );
 }
@@ -310,37 +623,15 @@ function OverlayBody({
   onSelectNode?: (nodeId: string, multi?: boolean) => void;
   onRemoveChild?: (containerId: string, childId: string) => void;
 }) {
-  const handleUpdateBinding = useCallback(
-    (update: FieldBindingUpdate) => {
-      const binding: FieldBinding = { path: update.path as FieldBinding['path'] };
-      const result = writeFieldBinding(node.data, binding, update.value);
-      if (result.changed && isRecord(result.data)) {
-        onUpdateData?.(node.id, result.data);
-      }
-    },
-    [node, onUpdateData],
-  );
-
-  const renderContext: NodeContentRenderContext = {
+  const renderContext = useOverlayRenderContext({
     node,
     allNodes,
-    selectedNodeIds: [...selectedNodeIds],
-    isSelected: true,
-    isExpanded: true,
-    layout: {
-      width: Math.max(720, node.size.width),
-      height: Math.max(420, node.size.height),
-      density: 'expanded',
-      surface: 'overlay',
-      overflow: 'scroll',
-    },
-    depth: 0,
-    previewSurfaceKind: 'overlay',
-    onUpdateBinding: handleUpdateBinding,
-    onUpdateNodeData: onUpdateData,
+    selectedNodeIds,
+    onUpdateData,
     onSelectNode,
     onRemoveChild,
-  };
+    contentChrome: 'contained',
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
@@ -354,10 +645,63 @@ function OverlayBody({
         className="flex min-h-0 flex-1 flex-col overflow-auto"
         data-content-overlay-scroll-region="true"
       >
-        <ContainerRenderer section={content} context={renderContext} />
+        <div className="mx-auto flex min-h-0 w-full max-w-[1440px] flex-col">
+          <ContainerRenderer section={content} context={renderContext} />
+        </div>
       </div>
     </div>
   );
+}
+
+function useOverlayRenderContext({
+  node,
+  allNodes,
+  selectedNodeIds,
+  onUpdateData,
+  onSelectNode,
+  onRemoveChild,
+  contentChrome,
+}: {
+  node: CanvasNode;
+  allNodes: CanvasNode[];
+  selectedNodeIds: readonly string[];
+  onUpdateData?: (nodeId: string, data: Record<string, unknown>) => void;
+  onSelectNode?: (nodeId: string, multi?: boolean) => void;
+  onRemoveChild?: (containerId: string, childId: string) => void;
+  contentChrome: NonNullable<NodeContentRenderContext['contentChrome']>;
+}): NodeContentRenderContext {
+  const handleUpdateBinding = useCallback(
+    (update: FieldBindingUpdate) => {
+      const binding: FieldBinding = { path: update.path as FieldBinding['path'] };
+      const result = writeFieldBinding(node.data, binding, update.value);
+      if (result.changed && isRecord(result.data)) {
+        onUpdateData?.(node.id, result.data);
+      }
+    },
+    [node, onUpdateData],
+  );
+
+  return {
+    node,
+    allNodes,
+    selectedNodeIds: [...selectedNodeIds],
+    isSelected: true,
+    isExpanded: true,
+    layout: {
+      width: Math.max(720, node.size.width),
+      height: Math.max(420, node.size.height),
+      density: 'expanded',
+      surface: 'overlay',
+      overflow: 'scroll',
+    },
+    depth: 0,
+    contentChrome,
+    previewSurfaceKind: 'overlay',
+    onUpdateBinding: handleUpdateBinding,
+    onUpdateNodeData: onUpdateData,
+    onSelectNode,
+    onRemoveChild,
+  };
 }
 
 function ShotCreatorOverlayBody({

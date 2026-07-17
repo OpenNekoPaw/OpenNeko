@@ -145,6 +145,9 @@ function createArtifactNode(
         ...(request.artifact.documentResourceRef
           ? { documentResourceRef: request.artifact.documentResourceRef }
           : {}),
+        ...(request.artifact.generationContext
+          ? { generationContext: request.artifact.generationContext }
+          : {}),
         provenance,
       },
     };
@@ -192,11 +195,21 @@ function nextZIndex(nodes: readonly CanvasNode[]): number {
 function inferDocumentType(
   title: string,
   mimeType: string | undefined,
-): 'pdf' | 'docx' | 'epub' | 'cbz' | 'file' {
+): 'pdf' | 'docx' | 'epub' | 'cbz' | 'markdown' | 'text' | 'file' {
   const normalized = title.toLowerCase();
   if (mimeType === 'application/pdf' || normalized.endsWith('.pdf')) return 'pdf';
   if (normalized.endsWith('.docx')) return 'docx';
   if (normalized.endsWith('.epub')) return 'epub';
   if (normalized.endsWith('.cbz')) return 'cbz';
+  if (
+    mimeType === 'text/markdown' ||
+    normalized.endsWith('.md') ||
+    normalized.endsWith('.markdown')
+  ) {
+    return 'markdown';
+  }
+  if (mimeType?.startsWith('text/') || normalized.endsWith('.txt') || normalized.endsWith('.log')) {
+    return 'text';
+  }
   return 'file';
 }

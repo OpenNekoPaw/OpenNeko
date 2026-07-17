@@ -10,6 +10,10 @@ import { CanvasGrid } from './CanvasGrid';
 import { CanvasViewport } from './CanvasViewport';
 import { renderCanvasNode } from './nodes';
 import type { NodeRendererRegistry } from './nodes';
+import type {
+  ScriptIndexRuntimeState,
+  TextDocumentRuntimeProjection,
+} from './nodes/nodeRendererTypes';
 import type { NodeTypeDescriptorRegistry } from './nodes/nodeTypeDescriptor';
 import { ConnectionLayer, InlineConnectionEditor } from './connections';
 import { useViewportTransform } from '../hooks/useViewportTransform';
@@ -24,6 +28,7 @@ import {
   type CanvasInteractionPhase,
 } from '../utils/renderRefreshTiering';
 import { SelectionContextToolbar } from './selection/SelectionContextToolbar';
+import { SelectionMaterialGenerationBar } from './selection/SelectionMaterialGenerationBar';
 import { resolveCanvasDropContainer } from '../utils/containerMembership';
 
 // =============================================================================
@@ -74,6 +79,7 @@ export interface InfiniteCanvasProps {
   // ── ScriptNode callbacks ───────────────────────────────────────────────────
   /** Called to load scene TOC from neko-story */
   onScriptLoadScenes?: (nodeId: string, scriptPath: string) => void;
+  scriptIndexStates?: Readonly<Record<string, ScriptIndexRuntimeState>>;
   /** Called when user opens a script file */
   onScriptOpen?: (scriptPath: string) => void;
   /** Called when user navigates to a linked SceneGroupNode */
@@ -82,6 +88,8 @@ export interface InfiniteCanvasProps {
   // ── DocumentNode callbacks ─────────────────────────────────────────────────
   /** Called when user opens a document */
   onDocumentOpen?: (docPath: string) => void;
+  onDocumentLoadText?: (nodeId: string, docPath: string, docType: 'markdown' | 'text') => void;
+  documentTextProjections?: Readonly<Record<string, TextDocumentRuntimeProjection>>;
   /** Called when user opens an embedded canvas */
   onCanvasEmbedOpen?: (canvasPath: string) => void;
 
@@ -120,9 +128,12 @@ export function InfiniteCanvas({
   isPanMode = false,
   isSpacePanActive = false,
   onScriptLoadScenes,
+  scriptIndexStates,
   onScriptOpen,
   onScriptNavigateToScene,
   onDocumentOpen,
+  onDocumentLoadText,
+  documentTextProjections,
   onCanvasEmbedOpen,
   onModelCheckInstalled,
   onRemoveContainerChild,
@@ -383,6 +394,7 @@ export function InfiniteCanvas({
   return (
     <div
       ref={containerRef}
+      data-canvas-viewport-root="true"
       className="relative w-full h-full overflow-hidden select-none"
       style={{ cursor: getCursor() }}
       {...getKeyboardBoundaryMetadata({
@@ -412,6 +424,7 @@ export function InfiniteCanvas({
         marqueeHandlers.onMouseUp(e);
       }}
       onMouseLeave={viewportHandlers.onMouseLeave}
+      onContextMenu={viewportHandlers.onContextMenu}
     >
       {isGridVisible && (
         <CanvasGrid viewport={viewport} width={containerSize.width} height={containerSize.height} />
@@ -479,9 +492,12 @@ export function InfiniteCanvas({
               ? 'shell'
               : 'full',
             onScriptLoadScenes,
+            scriptIndexState: scriptIndexStates?.[node.id],
             onScriptOpen,
             onScriptNavigateToScene,
             onDocumentOpen,
+            onDocumentLoadText,
+            documentTextProjection: documentTextProjections?.[node.id],
             onCanvasEmbedOpen,
             onModelCheckInstalled,
             onRemoveContainerChild,
@@ -493,6 +509,13 @@ export function InfiniteCanvas({
       </CanvasViewport>
 
       <SelectionContextToolbar
+        nodes={nodes}
+        selectedNodeIds={selectedNodeIds}
+        viewport={viewport}
+        viewportSize={containerSize}
+        hidden={transformingNodeIds.length > 0 || isMarqueeSelecting}
+      />
+      <SelectionMaterialGenerationBar
         nodes={nodes}
         selectedNodeIds={selectedNodeIds}
         viewport={viewport}

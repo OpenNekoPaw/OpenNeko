@@ -576,7 +576,7 @@ function renderVisualPreview({
       <img
         src={url}
         alt={source.title ?? source.id}
-        className={getVisualPreviewImageClassName(surfaceKind)}
+        className={getVisualPreviewImageClassName(surfaceKind, chrome)}
       />
     </div>
   );
@@ -597,7 +597,13 @@ function getVisualPreviewFrameClassName(
   return base;
 }
 
-function getVisualPreviewImageClassName(surfaceKind: PlaybackSurfaceKind): string {
+function getVisualPreviewImageClassName(
+  surfaceKind: PlaybackSurfaceKind,
+  chrome: NonNullable<PreviewRendererProps['chrome']>,
+): string {
+  if (surfaceKind === 'overlay' && chrome === 'full-bleed') {
+    return 'h-full max-h-full w-full object-contain';
+  }
   if (surfaceKind === 'overlay') {
     return 'max-h-[52vh] w-full object-contain';
   }

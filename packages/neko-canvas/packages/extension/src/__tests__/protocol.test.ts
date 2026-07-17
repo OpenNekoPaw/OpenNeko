@@ -307,6 +307,27 @@ describe('canvasEditorProvider message contracts', () => {
       expect(providerSource).toContain("target: 'local-path'");
     });
 
+    it('material edit and AssetLibrary actions reuse one authorized local-path resolver', () => {
+      const actions = providerSource.slice(
+        providerSource.indexOf("case 'openMediaPreview':"),
+        providerSource.indexOf("case 'preview:resolveVariant':"),
+      );
+      const resolver = providerSource.slice(
+        providerSource.indexOf('private async resolveCanvasMaterialLocalFilePath('),
+        providerSource.indexOf('private resolvePreviewResourceRef('),
+      );
+
+      expect(actions).toContain("case 'saveCanvasMaterialToAssetLibrary':");
+      expect(actions).toContain("case 'editCanvasImage':");
+      expect(actions).toContain("'neko.assets.importFile'");
+      expect(actions).toContain("'neko.sketch.editImage'");
+      expect(actions).toContain('vscode.workspace.fs.readFile');
+      expect(resolver).toContain('this.resolvePreviewResourceRef(');
+      expect(resolver).toContain('this.resolveResourceRefLocalPreviewPath(');
+      expect(resolver).toContain('this.resolveCanvasMediaLocalFilePath(');
+      expect(resolver).not.toContain('this.resolveAssetPath(');
+    });
+
     it('media playback actions resolve ResourceRef through content access', () => {
       expect(providerSource).toContain("case 'media:probe'");
       expect(providerSource).toContain("'neko-canvas.media-probe'");
@@ -939,8 +960,8 @@ describe('canvasEditorProvider message contracts', () => {
         providerSource.indexOf("case 'openMediaPreview':"),
         providerSource.indexOf("case 'preview:resolveVariant':"),
       );
-      expect(openMediaPreviewBranch).toContain('this.resolveCanvasMediaLocalFilePath(');
-      expect(openMediaPreviewBranch).not.toContain('await this.resolveAssetPath(assetPath!');
+      expect(openMediaPreviewBranch).toContain('this.resolveCanvasMaterialLocalFilePath(');
+      expect(openMediaPreviewBranch).not.toContain('await this.resolveAssetPath(');
       const captureFrameBranch = providerSource.slice(
         providerSource.indexOf("case 'media:captureFrame':"),
         providerSource.indexOf("case 'media:requestPanoramicThumbnail':"),

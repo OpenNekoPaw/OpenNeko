@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
   CANVAS_WORKSPACE_BOARD_PATH,
+  createGeneratedAssetWorkspaceProjectionRequest,
   resolveCanvasWorkspaceBoardDocumentUri,
   validateCanvasWorkspaceProjectionRequest,
   validateCanvasWorkspaceProjectionResult,
   type CanvasWorkspaceProjectionRequest,
 } from '../canvas-workspace-board';
+import { createGeneratedAssetRevisionRef } from '../generated-asset-lifecycle';
+import type { GeneratedImage } from '../generated-asset';
 import type { ResourceRef } from '../resource-cache';
 
 const generatedRef: ResourceRef = {
@@ -104,6 +107,64 @@ describe('Canvas Workspace Board projection contract', () => {
     expect(JSON.stringify(input)).not.toContain('conversationId');
     expect(JSON.stringify(input)).not.toContain('binding');
     expect(JSON.stringify(input)).not.toContain('scopeKind');
+  });
+
+  it('projects portable generated-material prompt and model provenance', () => {
+    const asset: GeneratedImage = {
+      type: 'generated-image',
+      id: 'shot-1',
+      path: '/workspace/project/neko/generated/image/shot-1.png',
+      mimeType: 'image/png',
+      generatedAt: '2026-07-15T00:00:00.000Z',
+      prompt: 'A silent megastructure under hard light',
+      model: 'image-model-v2',
+      sourceNodeId: 'shot-node-1',
+      width: 2048,
+      height: 1152,
+      ratio: '16:9',
+      lifecycle: createGeneratedAssetRevisionRef({
+        assetId: 'shot-1',
+        contentDigest: 'sha256:shot-1',
+        mediaKind: 'image',
+        mimeType: 'image/png',
+        generation: { taskId: 'task-1', providerId: 'image-provider', modelId: 'image-model-v2' },
+      }),
+    };
+
+    const projection = createGeneratedAssetWorkspaceProjectionRequest(
+      asset,
+      'file:///workspace/project/',
+    );
+
+    expect(projection.artifact).toMatchObject({
+      kind: 'image',
+      generationContext: {
+        prompt: 'A silent megastructure under hard light',
+        model: 'image-model-v2',
+        sourceNodeId: 'shot-node-1',
+        generatedAt: '2026-07-15T00:00:00.000Z',
+        aspectRatio: '16:9',
+        width: 2048,
+        height: 1152,
+      },
+    });
+    expect(validateCanvasWorkspaceProjectionRequest(projection)).toEqual([]);
+  });
+
+  it('rejects unknown or runtime generation-context fields', () => {
+    const invalid = request({
+      artifact: {
+        ...request().artifact,
+        generationContext: {
+          prompt: 'Valid prompt',
+          cachePath: '.neko/.cache/generated/shot-1.png',
+        },
+      } as CanvasWorkspaceProjectionRequest['artifact'],
+    });
+
+    expect(validateCanvasWorkspaceProjectionRequest(invalid).map(({ code }) => code)).toContain(
+      'runtime-value-forbidden',
+    );
   });
 
   it('poisons active, recent, conversation, scope, runtime, and cache fields', () => {

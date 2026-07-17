@@ -5,12 +5,14 @@ import type { NodeHeaderBadge } from './NodeHeader';
 import { ContainerRenderer } from './ContainerRenderer';
 import type { NodeContentRenderContext } from './types';
 import { createBuiltInNodeTypeDescriptors } from '../nodes/nodeTypeDescriptors';
+import { resolveNodeFullscreenPresentation } from '../nodes/nodeTypeDescriptor';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { getGlobalVSCodeApi } from '../../utils/vscode';
 import { t } from '../../i18n';
 import { resolveCanvasStatusLabel } from '../../i18n/canvasValueLabels';
 import { ContainerActionBar, readDocumentResourceRef, readResourceRef } from './node-card';
-import { resolveResourceRefDisplayName } from '../../utils/resourceDisplayName';
+import { FileIcon } from '@neko/shared/icons';
+import { resolveNodeDisplayTitle } from './nodeDisplayTitle';
 
 export interface NodeShellProps {
   section: ContainerSection;
@@ -26,6 +28,7 @@ export function NodeShell({ section, context, isCollapsed, onToggleCollapse }: N
   const { node } = context;
   const descriptor = context.nodeTypeDescriptors?.[node.type] ?? descriptors[node.type];
   const presentation = descriptor?.presentation ?? 'structured';
+  const fullscreenPresentation = resolveNodeFullscreenPresentation(descriptor, node);
   const contentChrome =
     presentation === 'foundational' && context.layout.surface === 'canvas'
       ? 'full-bleed'
@@ -34,7 +37,8 @@ export function NodeShell({ section, context, isCollapsed, onToggleCollapse }: N
 
   const tagLabel = descriptor?.tagLabel ?? node.type.toUpperCase();
   const tagColor = descriptor?.tagColor ?? '#6b7280';
-  const title = resolveNodeTitle(node, preview?.title);
+  const title = resolveNodeDisplayTitle(node);
+  const headerSource = resolveNodeHeaderSource(node);
   const badges = resolveNodeHeaderBadges(node, (preview?.badges ?? []) as NodeHeaderBadge[]);
 
   const assetInfo = useMemo(() => getNodeAssetInfo(node), [node]);
@@ -80,8 +84,10 @@ export function NodeShell({ section, context, isCollapsed, onToggleCollapse }: N
         isCollapsed={isCollapsed}
         onToggleCollapse={onToggleCollapse}
         onOpenPreview={assetInfo ? handleOpenPreview : undefined}
-        onExpand={presentation === 'foundational' ? undefined : () => openContentOverlay(node.id)}
+        onExpand={fullscreenPresentation ? () => openContentOverlay(node.id) : undefined}
         presentation={presentation}
+        source={headerSource}
+        icon={headerSource === 'file' ? <FileIcon size={16} strokeWidth={1.7} /> : undefined}
       />
       {!isCollapsed && (
         <div className={bodyClassName} data-node-drag-block="true">
@@ -193,29 +199,7 @@ function getNodeAssetInfo(node: NodeShellProps['context']['node']): NodeAssetInf
   return undefined;
 }
 
-const NODE_TYPE_I18N_KEY: Partial<Record<string, string>> = {
-  annotation: 'node.note',
-  scene: 'node.sceneGroup',
-  text: 'node.newText',
-  'canvas-embed': 'node.canvasEmbed',
-};
-
-function resolveNodeTitle(
-  node: NodeShellProps['context']['node'],
-  previewTitle: string | undefined,
-): string {
-  const resourceRef = readResourceRef(node);
-  if (resourceRef) {
-    return resolveResourceRefDisplayName(resourceRef);
-  }
-  if (previewTitle) {
-    return extractFilename(previewTitle);
-  }
-  const key = NODE_TYPE_I18N_KEY[node.type] ?? `node.${node.type}`;
-  return t(key) || node.id;
-}
-
-function extractFilename(path: string): string {
-  const lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-  return lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+function resolveNodeHeaderSource(node: NodeShellProps['context']['node']): 'file' | undefined {
+  if (node.type !== 'text') return undefined;
+  return node.data.provenance?.['importMode'] === 'snapshot' ? 'file' : undefined;
 }

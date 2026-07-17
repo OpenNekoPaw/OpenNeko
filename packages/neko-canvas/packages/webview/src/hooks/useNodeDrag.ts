@@ -101,6 +101,9 @@ export function shouldStartNodeDrag(event: MouseEvent): boolean {
 }
 
 export function getNodeDragStartDecision(event: MouseEvent): NodeDragStartDecision {
+  if (event.button !== 0) {
+    return { canStart: false, stopPropagation: false };
+  }
   if (!isElement(event.target)) {
     return { canStart: true, stopPropagation: false };
   }

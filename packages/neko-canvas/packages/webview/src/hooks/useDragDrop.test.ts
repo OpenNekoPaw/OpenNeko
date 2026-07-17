@@ -88,6 +88,19 @@ describe('useDragDrop add-source contract', () => {
       }),
     );
     expect(getCanvasFilePickerDefaultName('canvas-embed')).toBe('canvas.nkc');
+    expect(getCanvasFilePickerDefaultName('text')).toBe('text.txt');
+
+    const futureScriptRequest = createCanvasFilePickerAddSourceInput('script', { x: 1, y: 2 });
+    expect(futureScriptRequest).toEqual(
+      expect.objectContaining({
+        browserFile: { name: 'script.fountain' },
+        target: { role: 'document' },
+        metadata: expect.objectContaining({
+          canvasAssetKind: 'text',
+          textFormat: 'plain',
+        }),
+      }),
+    );
   });
 
   it('applies the first canonical sourceAdded response without requiring a second add', async () => {
@@ -180,6 +193,75 @@ describe('useDragDrop add-source contract', () => {
     } finally {
       globalThis.window = previousWindow;
     }
+  });
+
+  it('creates one typed text snapshot asset from Markdown and Fountain add-source results', () => {
+    const addMediaAt = vi.fn();
+    const onDropAssets = vi.fn();
+
+    for (const [name, format, content] of [
+      ['notes.md', 'markdown', '# Notes'],
+      ['pilot.fountain', 'plain', 'INT. ROOM - DAY'],
+    ] as const) {
+      applyCanvasAddSourceResult({
+        result: {
+          requestId: `add-${name}`,
+          ok: true,
+          durablePath: `assets/${name}`,
+          diagnostics: [],
+          ingest: {
+            status: 'ready',
+            request: {
+              mode: 'link',
+              destination: { kind: 'project', directory: 'assets', copyMode: 'link' },
+            },
+            source: { kind: 'file', path: `assets/${name}` },
+            contractedPath: `assets/${name}`,
+            metadata: {
+              canvasAssetKind: 'text',
+              name,
+              title: name.replace(/\.[^.]+$/, ''),
+              textFormat: format,
+              textContent: content,
+            },
+          },
+        },
+        sourceNameHint: name,
+        dropPosition: { x: 10, y: 20 },
+        addMediaAt,
+        onDropAssets,
+      });
+    }
+
+    expect(addMediaAt).not.toHaveBeenCalled();
+    expect(onDropAssets).toHaveBeenNthCalledWith(
+      1,
+      [
+        {
+          kind: 'text',
+          path: 'assets/notes.md',
+          name: 'notes.md',
+          title: 'notes',
+          format: 'markdown',
+          content: '# Notes',
+        },
+      ],
+      { x: 10, y: 20 },
+    );
+    expect(onDropAssets).toHaveBeenNthCalledWith(
+      2,
+      [
+        {
+          kind: 'text',
+          path: 'assets/pilot.fountain',
+          name: 'pilot.fountain',
+          title: 'pilot',
+          format: 'plain',
+          content: 'INT. ROOM - DAY',
+        },
+      ],
+      { x: 10, y: 20 },
+    );
   });
 
   it('builds create-asset requests for native media files without blob URLs', () => {

@@ -4,6 +4,15 @@ import { describe, expect, it } from 'vitest';
 import { getNodeDragStartDecision, shouldStartNodeDrag } from './useNodeDrag';
 
 describe('shouldStartNodeDrag', () => {
+  it('allows non-left buttons to bubble to viewport pan gestures', () => {
+    const target = document.createElement('div');
+
+    expect(getNodeDragStartDecision(mouseDown(target, 10, 10, 2))).toEqual({
+      canStart: false,
+      stopPropagation: false,
+    });
+  });
+
   it('allows dragging from ordinary node chrome', () => {
     const target = document.createElement('div');
     Object.defineProperty(target, 'clientWidth', { value: 200 });
@@ -88,10 +97,10 @@ describe('shouldStartNodeDrag', () => {
   });
 });
 
-function mouseDown(target: Element, clientX: number, clientY: number): MouseEvent {
+function mouseDown(target: Element, clientX: number, clientY: number, button = 0): MouseEvent {
   const event = new MouseEvent('mousedown', {
     bubbles: true,
-    button: 0,
+    button,
     clientX,
     clientY,
   });

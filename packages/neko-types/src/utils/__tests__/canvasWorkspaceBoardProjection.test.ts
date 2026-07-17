@@ -45,6 +45,12 @@ describe('planCanvasWorkspaceBoardProjection', () => {
         title: 'Shot 1',
         mediaType: 'image',
         resourceRef: generatedRef,
+        generationContext: {
+          prompt: 'A silent megastructure under hard light',
+          model: 'image-model-v2',
+          sourceNodeId: 'shot-node-1',
+          aspectRatio: '16:9',
+        },
         provenance: expect.objectContaining({
           projectionId: 'projection:shot-1',
           revision: 'generated:sha256:shot-1',
@@ -136,6 +142,12 @@ function request(
       title: 'Shot 1',
       mimeType: 'image/png',
       resourceRef: generatedRef,
+      generationContext: {
+        prompt: 'A silent megastructure under hard light',
+        model: 'image-model-v2',
+        sourceNodeId: 'shot-node-1',
+        aspectRatio: '16:9',
+      },
     },
     ...overrides,
   };

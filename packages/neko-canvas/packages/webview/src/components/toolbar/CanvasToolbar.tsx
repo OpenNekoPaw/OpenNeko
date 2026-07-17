@@ -1,23 +1,17 @@
 /**
- * CanvasToolbar - Left vertical toolbar
+ * CanvasToolbar - Floating vertical canvas toolbar
  *
  * Provides quick access to:
  * - Select / Hand tools
  * - Right node tree/library panel toggle
  * - Undo / Redo
  * - Playback workspace surfaces
- * - Canvas settings
  *
  * Uses shared ToolbarButton for consistent active state and hover styling.
  */
 
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
-import {
-  ToolbarButton,
-  ToolbarSeparator,
-  ToolbarSpacer,
-  VerticalToolbar,
-} from '@neko/ui/primitives';
+import { ToolbarButton, ToolbarSeparator, VerticalToolbar } from '@neko/ui/primitives';
 import { useHistoryStore } from '../../stores/historyStore';
 import { t } from '../../i18n';
 import {
@@ -29,7 +23,6 @@ import {
   PackageIcon,
   RightPanelIcon,
   RightPanelOffIcon,
-  SettingsIcon,
 } from '@neko/ui/icons';
 import type { PlaybackWorkspacePane } from '../../stores/playbackStore';
 
@@ -48,16 +41,13 @@ export interface CanvasToolbarProps {
   /** Node tree/library panel visibility */
   isNodeLibraryVisible?: boolean;
   onToggleNodeLibrary?: () => void;
-  /** Playback workspace surface visibility, controlled from the left rail. */
+  /** Playback workspace surface visibility, controlled from the floating toolbar. */
   workspaceSurfaceState?: Readonly<Record<PlaybackToolbarSurfacePane, boolean>>;
   onToggleWorkspaceSurface?: (pane: PlaybackToolbarSurfacePane) => void;
   /** Opens the Extension Host-owned rendered export picker */
   onOpenExport?: () => void;
   /** Opens the Extension Host-owned no-engine project package flow */
   onOpenPackage?: () => void;
-  /** Canvas settings panel visibility */
-  isCanvasSettingsVisible?: boolean;
-  onToggleCanvasSettings?: () => void;
   /** Hand tool (drag-to-pan) mode */
   isPanMode?: boolean;
   onTogglePanMode?: () => void;
@@ -78,8 +68,6 @@ export function CanvasToolbar({
   onToggleWorkspaceSurface,
   onOpenExport,
   onOpenPackage,
-  isCanvasSettingsVisible = false,
-  onToggleCanvasSettings,
   isPanMode = false,
   onTogglePanMode,
 }: CanvasToolbarProps) {
@@ -88,15 +76,12 @@ export function CanvasToolbar({
   const nodeLibraryTitle = isNodeLibraryVisible
     ? t('toolbar.hideRightNodeTree')
     : t('toolbar.showRightNodeTree');
-  const settingsTitle = isCanvasSettingsVisible
-    ? t('settings.hideCanvasSettings')
-    : t('toolbar.canvasSettings');
   const canControlPlaybackPanes =
     workspaceSurfaceState !== undefined && onToggleWorkspaceSurface !== undefined;
 
   return (
     <VerticalToolbar
-      className="canvas-left-toolbar relative z-20"
+      className="canvas-floating-toolbar relative z-20"
       width={48}
       aria-label={t('toolbar.leftRail')}
       {...getKeyboardBoundaryMetadata({
@@ -107,8 +92,8 @@ export function CanvasToolbar({
       })}
     >
       <ToolbarButton
-        data-creative-left-rail-action="select-tool"
-        data-creative-left-rail-kind="tool-mode"
+        data-canvas-toolbar-action="select-tool"
+        data-canvas-toolbar-kind="tool-mode"
         icon={<SelectToolIcon />}
         title={`${t('toolbar.selectTool')} (V)`}
         active={isSelectMode}
@@ -116,8 +101,8 @@ export function CanvasToolbar({
       />
 
       <ToolbarButton
-        data-creative-left-rail-action="toggle-pan-mode"
-        data-creative-left-rail-kind="tool-mode"
+        data-canvas-toolbar-action="toggle-pan-mode"
+        data-canvas-toolbar-kind="tool-mode"
         icon={<HandToolIcon />}
         title={`${t('toolbar.handTool') ?? '移动工具'} (H)`}
         active={isPanMode}
@@ -130,9 +115,9 @@ export function CanvasToolbar({
           <ToolbarButton
             aria-controls="canvas-right-node-tree-panel"
             aria-expanded={isNodeLibraryVisible}
-            data-creative-left-rail-action="toggle-right-node-tree"
-            data-creative-left-rail-kind="visibility-toggle"
-            data-creative-left-rail-target="right-panel"
+            data-canvas-toolbar-action="toggle-right-node-tree"
+            data-canvas-toolbar-kind="visibility-toggle"
+            data-canvas-toolbar-target="right-panel"
             icon={
               isNodeLibraryVisible ? <RightPanelIcon size={18} /> : <RightPanelOffIcon size={18} />
             }
@@ -146,8 +131,8 @@ export function CanvasToolbar({
       <ToolbarSeparator />
 
       <ToolbarButton
-        data-creative-left-rail-action="undo"
-        data-creative-left-rail-kind="common-action"
+        data-canvas-toolbar-action="undo"
+        data-canvas-toolbar-kind="common-action"
         icon={<UndoIcon size={18} />}
         title={`${t('toolbar.undo')} (⌘Z)`}
         onClick={onUndo}
@@ -155,8 +140,8 @@ export function CanvasToolbar({
       />
 
       <ToolbarButton
-        data-creative-left-rail-action="redo"
-        data-creative-left-rail-kind="common-action"
+        data-canvas-toolbar-action="redo"
+        data-canvas-toolbar-kind="common-action"
         icon={<RedoIcon size={18} />}
         title={`${t('toolbar.redo')} (⇧⌘Z)`}
         onClick={onRedo}
@@ -170,9 +155,9 @@ export function CanvasToolbar({
           <ToolbarButton
             aria-controls="canvas-playback-stage-pane"
             aria-expanded={workspaceSurfaceState.stage}
-            data-creative-left-rail-action="toggle-playback-stage-pane"
-            data-creative-left-rail-kind="visibility-toggle"
-            data-creative-left-rail-target="playback-stage"
+            data-canvas-toolbar-action="toggle-playback-stage-pane"
+            data-canvas-toolbar-kind="visibility-toggle"
+            data-canvas-toolbar-target="playback-stage"
             icon={<PlayIcon size={18} />}
             title={
               workspaceSurfaceState.stage
@@ -185,9 +170,9 @@ export function CanvasToolbar({
           <ToolbarButton
             aria-controls="canvas-playback-route-pane"
             aria-expanded={workspaceSurfaceState.route}
-            data-creative-left-rail-action="toggle-playback-route-pane"
-            data-creative-left-rail-kind="visibility-toggle"
-            data-creative-left-rail-target="playback-route"
+            data-canvas-toolbar-action="toggle-playback-route-pane"
+            data-canvas-toolbar-kind="visibility-toggle"
+            data-canvas-toolbar-target="playback-route"
             icon={<LayersIcon size={18} />}
             title={
               workspaceSurfaceState.route
@@ -204,8 +189,8 @@ export function CanvasToolbar({
 
       {onOpenExport && (
         <ToolbarButton
-          data-creative-left-rail-action="open-export"
-          data-creative-left-rail-kind="common-action"
+          data-canvas-toolbar-action="open-export"
+          data-canvas-toolbar-kind="common-action"
           icon={<DownloadIcon size={18} />}
           title={t('toolbar.export')}
           onClick={onOpenExport}
@@ -214,32 +199,11 @@ export function CanvasToolbar({
 
       {onOpenPackage && (
         <ToolbarButton
-          data-creative-left-rail-action="open-package"
-          data-creative-left-rail-kind="common-action"
+          data-canvas-toolbar-action="open-package"
+          data-canvas-toolbar-kind="common-action"
           icon={<PackageIcon size={18} />}
           title={t('toolbar.package')}
           onClick={onOpenPackage}
-        />
-      )}
-
-      {onToggleCanvasSettings && (
-        <>
-          <ToolbarSpacer />
-          <ToolbarSeparator />
-        </>
-      )}
-
-      {onToggleCanvasSettings && (
-        <ToolbarButton
-          aria-controls="canvas-settings-panel"
-          aria-expanded={isCanvasSettingsVisible}
-          data-creative-left-rail-action="toggle-canvas-settings"
-          data-creative-left-rail-kind="visibility-toggle"
-          data-creative-left-rail-target="canvas-settings"
-          icon={<SettingsIcon size={18} />}
-          title={settingsTitle}
-          active={isCanvasSettingsVisible}
-          onClick={onToggleCanvasSettings}
         />
       )}
     </VerticalToolbar>

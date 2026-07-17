@@ -231,6 +231,46 @@ describe('useVSCodeMessages keyboard action guards', () => {
     });
   });
 
+  it('delivers only valid typed text document projection results', () => {
+    const onTextDocumentReadResult = vi.fn();
+
+    act(() => {
+      root.render(
+        <VSCodeMessageHarness
+          action={action}
+          isComposingRef={isComposingRef}
+          options={{ onTextDocumentReadResult }}
+        />,
+      );
+    });
+
+    act(() => {
+      postHostMessage({
+        type: 'textDocument:readResult',
+        requestId: 'read-1',
+        nodeId: 'document-1',
+        docPath: 'assets/notes.md',
+        docType: 'markdown',
+        status: 'ready',
+        text: '# Notes',
+      });
+      postHostMessage({
+        type: 'textDocument:readResult',
+        requestId: '',
+        nodeId: 'document-1',
+        docPath: 'assets/notes.md',
+        docType: 'markdown',
+        status: 'ready',
+        text: 'invalid',
+      });
+    });
+
+    expect(onTextDocumentReadResult).toHaveBeenCalledOnce();
+    expect(onTextDocumentReadResult).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: 'read-1', text: '# Notes' }),
+    );
+  });
+
   it('creates canvas connections from host node operation requests', () => {
     const vscode = createVSCodeApi();
     const createConnection = vi.fn(() => ({

@@ -18,6 +18,7 @@ import type { CanvasNodeDraft } from '../../utils/canvasPresetRegistry';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { clampNodeSize, resolveNodeMinSize } from '../../utils/nodeSizing';
 import { createBuiltInNodeTypeDescriptors } from '../nodes/nodeTypeDescriptors';
+import { resolveNodeFullscreenPresentation } from '../nodes/nodeTypeDescriptor';
 
 export type DefaultNodeRenderer = (context: NodeRendererContext) => React.ReactNode;
 
@@ -128,10 +129,9 @@ function ComposableNodeContent({
     onSelectNode: context.onSelect,
     onRemoveChild: context.onRemoveContainerChild,
   };
-  const presentation =
-    context.nodeTypeDescriptors?.[node.type]?.presentation ??
-    NODE_TYPE_DESCRIPTORS[node.type]?.presentation ??
-    'structured';
+  const descriptor = context.nodeTypeDescriptors?.[node.type] ?? NODE_TYPE_DESCRIPTORS[node.type];
+  const presentation = descriptor?.presentation ?? 'structured';
+  const fullscreenPresentation = resolveNodeFullscreenPresentation(descriptor, node);
 
   return (
     <BaseNode
@@ -151,7 +151,8 @@ function ComposableNodeContent({
       autoSizeContent={false}
       renderHeight={isCollapsed ? COLLAPSED_NODE_RENDER_HEIGHT : undefined}
       presentation={presentation}
-      onActivate={presentation === 'foundational' ? openContentOverlay : undefined}
+      opaqueSurface={node.type === 'text'}
+      onActivate={fullscreenPresentation ? openContentOverlay : undefined}
     >
       <NodeShell
         section={content}

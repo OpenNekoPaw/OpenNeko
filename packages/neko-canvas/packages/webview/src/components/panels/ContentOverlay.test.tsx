@@ -43,6 +43,240 @@ describe('ContentOverlay', () => {
     reactHost.remove();
   });
 
+  it('renders Markdown text as a formatted fullscreen document and keeps the resource title', () => {
+    const node = {
+      ...buildCanvasNode({
+        type: 'text',
+        position: { x: 0, y: 0 },
+        zIndex: 0,
+        preset: 'text.basic',
+        data: {
+          title: 'production-notes.md',
+          content: '# Production Notes\n\n- first\n- second',
+          format: 'markdown',
+        },
+      }),
+      id: 'markdown-fullscreen',
+    } as CanvasNode;
+
+    useCanvasStore.setState({
+      canvasData: createCanvasData([node]),
+      selection: { nodeIds: [node.id], connectionIds: [] },
+    });
+
+    act(() => {
+      root.render(<ContentOverlay nodeId={node.id} onClose={() => undefined} />);
+    });
+
+    expect(
+      host.querySelector('[data-content-overlay-presentation="text-document"]'),
+    ).not.toBeNull();
+    expect(host.querySelector('[data-text-document-preview="markdown"]')).not.toBeNull();
+    expect(host.querySelector('[data-text-document-preview="plain"]')).toBeNull();
+    expect(host.querySelector('textarea')).toBeNull();
+    expect(host.querySelector('h1')?.textContent).toBe('Production Notes');
+    expect(host.textContent).toContain('production-notes.md');
+  });
+
+  it('renders plain text literally and switches to explicit editing', () => {
+    const node = {
+      ...buildCanvasNode({
+        type: 'text',
+        position: { x: 0, y: 0 },
+        zIndex: 0,
+        preset: 'text.basic',
+        data: {
+          content: '# Fountain-style literal\n\nINT. HALL - NIGHT',
+          format: 'plain',
+          provenance: { sourceName: 'scene.fountain', importMode: 'snapshot' },
+        },
+      }),
+      id: 'plain-fullscreen',
+    } as CanvasNode;
+
+    useCanvasStore.setState({
+      canvasData: createCanvasData([node]),
+      selection: { nodeIds: [node.id], connectionIds: [] },
+    });
+
+    act(() => {
+      root.render(<ContentOverlay nodeId={node.id} onClose={() => undefined} />);
+    });
+
+    expect(host.querySelector('[data-text-document-preview="plain"]')?.textContent).toContain(
+      '# Fountain-style literal',
+    );
+    expect(host.querySelector('h1')).toBeNull();
+    expect(host.textContent).toContain('scene.fountain');
+
+    const editButton = Array.from(host.querySelectorAll('button')).find(
+      (button) => button.textContent?.trim() === 'Edit',
+    );
+    act(() => {
+      editButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const editor = host.querySelector<HTMLTextAreaElement>('[data-text-document-editor="plain"]');
+    expect(editor?.value).toContain('INT. HALL - NIGHT');
+    act(() => {
+      if (!editor) return;
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(editor, 'EXT. ROOF - DAWN');
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(
+      (useCanvasStore.getState().canvasData?.nodes[0]?.data as Record<string, unknown>)['content'],
+    ).toBe('EXT. ROOF - DAWN');
+  });
+
+  it('renders image media in a frameless viewer with bounded zoom controls and close action', () => {
+    const onClose = vi.fn();
+    const node = {
+      ...buildCanvasNode({
+        type: 'media',
+        position: { x: 0, y: 0 },
+        zIndex: 0,
+        preset: 'media.basic',
+        data: {
+          assetPath: 'assets/portrait.png',
+          runtimeAssetPath: 'data:image/png;base64,portrait',
+          mediaType: 'image',
+          title: 'portrait.png',
+        },
+      }),
+      id: 'media-fullscreen',
+    } as CanvasNode;
+
+    useCanvasStore.setState({
+      canvasData: createCanvasData([node]),
+      selection: { nodeIds: [node.id], connectionIds: [] },
+    });
+
+    act(() => {
+      root.render(<ContentOverlay nodeId={node.id} onClose={onClose} />);
+    });
+
+    const viewer = host.querySelector<HTMLElement>(
+      '[data-content-overlay-presentation="image-viewer"]',
+    );
+    expect(viewer).not.toBeNull();
+    expect(viewer?.dataset.contentOverlayFrame).toBe('frameless');
+    expect(viewer?.className).toContain('fixed inset-0');
+    expect(host.querySelector('[data-content-overlay-header="true"]')).toBeNull();
+    expect(host.querySelector('[data-visual-stage-overlay="true"]')).toBeNull();
+    expect(host.querySelector('[data-image-viewer-zoom-controls="true"]')).not.toBeNull();
+    expect(host.querySelector('[data-image-viewer-zoom-percent="100"]')?.textContent).toBe('100%');
+    expect(host.querySelector('[data-preview-chrome="full-bleed"]')).not.toBeNull();
+    const image = host.querySelector<HTMLImageElement>('[data-preview-surface="visual"] img');
+    expect(image?.className).toContain('h-full max-h-full');
+    expect(image?.className).not.toContain('max-h-[52vh]');
+
+    const zoomIn = host.querySelector<HTMLButtonElement>('button[aria-label="Zoom in"]');
+    act(() => {
+      zoomIn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(host.querySelector('[data-image-viewer-zoom-percent="125"]')?.textContent).toBe('125%');
+    const zoomLayer = host.querySelector<HTMLElement>('[data-image-viewer-zoom-layer="true"]');
+    expect(zoomLayer?.className).toContain('flex');
+    expect(zoomLayer?.className).toContain('flex-col');
+    expect(zoomLayer?.style.transform).toBe('scale(1.25)');
+    expect(
+      host.querySelector<HTMLElement>('[data-image-viewer-zoom-stage="125"]')?.style.width,
+    ).toBe('125%');
+
+    const resetZoom = host.querySelector<HTMLButtonElement>('button[aria-label="Reset zoom"]');
+    act(() => {
+      resetZoom?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const zoomOut = host.querySelector<HTMLButtonElement>('button[aria-label="Zoom out"]');
+    for (let step = 0; step < 3; step += 1) {
+      act(() => {
+        zoomOut?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    }
+    expect(host.querySelector('[data-image-viewer-zoom-percent="25"]')?.textContent).toBe('25%');
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Zoom out"]')?.disabled).toBe(
+      true,
+    );
+
+    act(() => {
+      resetZoom?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    for (let step = 0; step < 12; step += 1) {
+      act(() => {
+        zoomIn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+    }
+    expect(host.querySelector('[data-image-viewer-zoom-percent="400"]')?.textContent).toBe(
+      '400%',
+    );
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Zoom in"]')?.disabled).toBe(
+      true,
+    );
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>('[data-image-viewer-close="true"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps non-image media on the headered visual stage without image zoom controls', () => {
+    const node = {
+      ...buildCanvasNode({
+        type: 'media',
+        position: { x: 0, y: 0 },
+        zIndex: 0,
+        preset: 'media.basic',
+        data: {
+          assetPath: 'assets/clip.mp4',
+          mediaType: 'video',
+          title: 'clip.mp4',
+        },
+      }),
+      id: 'video-fullscreen',
+    } as CanvasNode;
+
+    useCanvasStore.setState({
+      canvasData: createCanvasData([node]),
+      selection: { nodeIds: [node.id], connectionIds: [] },
+    });
+
+    act(() => {
+      root.render(<ContentOverlay nodeId={node.id} onClose={() => undefined} />);
+    });
+
+    expect(host.querySelector('[data-content-overlay-presentation="visual-stage"]')).not.toBeNull();
+    expect(host.querySelector('[data-visual-stage-overlay="true"]')).not.toBeNull();
+    expect(host.querySelector('[data-content-overlay-header="true"]')).not.toBeNull();
+    expect(host.querySelector('[data-image-viewer-zoom-controls="true"]')).toBeNull();
+  });
+
+  it('closes from Escape without persisting transient presentation state', () => {
+    const onClose = vi.fn();
+    const node = {
+      ...buildCanvasNode({
+        type: 'text',
+        position: { x: 0, y: 0 },
+        zIndex: 0,
+        preset: 'text.basic',
+        data: { content: 'Close me', format: 'plain' },
+      }),
+      id: 'escape-fullscreen',
+    } as CanvasNode;
+    useCanvasStore.setState({ canvasData: createCanvasData([node]) });
+
+    act(() => {
+      root.render(<ContentOverlay nodeId={node.id} onClose={onClose} />);
+    });
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('owns fullscreen content scrolling in the overlay body viewport', () => {
     const node = {
       ...buildCanvasNode({

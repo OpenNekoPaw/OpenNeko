@@ -11,6 +11,7 @@ import {
   type CanvasStoryboardActionIntentId,
   type CanvasStoryboardNextCreativeStateTarget,
   type CanvasViewport,
+  type TextCanvasNode,
 } from '@neko/shared';
 import { ContainerRenderer } from './ContainerRenderer';
 import { createNodeCollapseUpdate, NodeContentDispatcher } from './NodeContentDispatcher';
@@ -80,7 +81,7 @@ afterEach(() => {
 });
 
 describe('NodeContentDispatcher', () => {
-  it('renders foundational media as a full-bleed resource without inline fullscreen chrome', () => {
+  it('renders foundational media as a full-bleed resource with descriptor-owned fullscreen', () => {
     const resourceRef = createResourceRef({
       id: 'resource-cover',
       scope: 'project',
@@ -127,7 +128,9 @@ describe('NodeContentDispatcher', () => {
       'flex-1',
     );
     expect(readClassName(markup, 'data-preview-surface', 'visual')).not.toContain('border');
-    expect(markup.match(/<button/g)).toHaveLength(3);
+    expect(markup).toContain('object-cover');
+    expect(markup).toContain('aria-label="Fullscreen"');
+    expect(markup.match(/<button/g)).toHaveLength(4);
   });
 
   it('uses the default renderer when node has no content and no preset', () => {
@@ -212,6 +215,122 @@ describe('NodeContentDispatcher', () => {
     expect(markup).toContain('data-node-overflow="scroll"');
     expect(markup).toContain('flex-1 resize-none');
     expect(markup).toContain('<textarea');
+  });
+
+  it('renders Markdown text as content on Canvas and keeps the textarea in the edit overlay', () => {
+    const node: TextCanvasNode = {
+      id: 'text-markdown',
+      type: 'text',
+      position: { x: 0, y: 0 },
+      size: { width: 360, height: 240 },
+      zIndex: 1,
+      preset: 'text.basic',
+      data: { content: '## Heading\n\n- Item', format: 'markdown', title: 'Notes' },
+    };
+
+    const canvasMarkup = renderToStaticMarkup(
+      React.createElement(NodeContentDispatcher, {
+        context: createContext(node),
+        renderDefaultNode: () => React.createElement('div', null, 'Default path'),
+      }),
+    );
+    const overlayMarkup = renderToStaticMarkup(
+      React.createElement(ContainerRenderer, {
+        section: {
+          id: 'text-root',
+          layout: 'stack',
+          blocks: [
+            {
+              id: 'text-content',
+              kind: 'textarea',
+              label: 'Text',
+              binding: { path: '/content', valueType: 'string' },
+            },
+          ],
+        },
+        context: {
+          node,
+          allNodes: [node],
+          selectedNodeIds: [node.id],
+          isSelected: true,
+          isExpanded: true,
+          layout: {
+            width: 720,
+            height: 420,
+            density: 'expanded',
+            surface: 'overlay',
+            overflow: 'scroll',
+          },
+          depth: 0,
+        },
+      }),
+    );
+
+    expect(canvasMarkup).toContain('data-canvas-text-display="markdown"');
+    expect(canvasMarkup).toContain('node-card--opaque');
+    expect(canvasMarkup).toContain('node-header--foundational');
+    expect(canvasMarkup).toContain('Notes');
+    expect(canvasMarkup).toContain('<h2');
+    expect(canvasMarkup).not.toContain('<textarea');
+    expect(canvasMarkup).not.toContain('preset.text.content');
+    expect(overlayMarkup).toContain('<textarea');
+  });
+
+  it('shows imported text source identity through the canonical foundational header', () => {
+    const node: TextCanvasNode = {
+      id: 'text-imported',
+      type: 'text',
+      position: { x: 0, y: 0 },
+      size: { width: 420, height: 360 },
+      zIndex: 1,
+      preset: 'text.basic',
+      data: {
+        content: '# Imported',
+        format: 'markdown',
+        title: 'BLAME动画化企划.md',
+        provenance: {
+          importMode: 'snapshot',
+          sourcePath: 'assets/BLAME动画化企划.md',
+          sourceName: 'BLAME动画化企划.md',
+        },
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      React.createElement(NodeContentDispatcher, {
+        context: createContext(node),
+        renderDefaultNode: () => React.createElement('div', null, 'Default path'),
+      }),
+    );
+
+    expect(markup).toContain('data-node-header-source="file"');
+    expect(markup).toContain('data-node-header-icon="file"');
+    expect(markup).toContain('BLAME动画化企划.md');
+    expect(markup).not.toContain('>新文本<');
+  });
+
+  it('keeps Markdown punctuation literal for plain text nodes', () => {
+    const node: TextCanvasNode = {
+      id: 'text-plain',
+      type: 'text',
+      position: { x: 0, y: 0 },
+      size: { width: 360, height: 240 },
+      zIndex: 1,
+      preset: 'text.basic',
+      data: { content: '# Literal\n  indented', format: 'plain' },
+    };
+
+    const markup = renderToStaticMarkup(
+      React.createElement(NodeContentDispatcher, {
+        context: createContext(node),
+        renderDefaultNode: () => React.createElement('div', null, 'Default path'),
+      }),
+    );
+
+    expect(markup).toContain('data-canvas-text-display="plain"');
+    expect(markup).toContain('# Literal');
+    expect(markup).not.toContain('<h1');
+    expect(markup).not.toContain('<textarea');
   });
 
   it('clamps tiny composable nodes to their minimum render size and scrolls overflow', () => {

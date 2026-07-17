@@ -242,6 +242,62 @@ export interface CanvasNodeBase {
 /**
  * Media asset node - references a media file
  */
+export interface CanvasMaterialGenerationContext {
+  /** Prompt recorded for the generated material. Historical evidence, not editable prompt authority. */
+  readonly prompt?: string;
+  /** Effective model/provider label when the generating owner supplied one. */
+  readonly model?: string;
+  /** Upstream Canvas node that owns the editable creative prompt, when known. */
+  readonly sourceNodeId?: string;
+  /** ISO timestamp copied from the generated asset lifecycle. */
+  readonly generatedAt?: string;
+  /** Stable creator-facing generation parameters. */
+  readonly aspectRatio?: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly duration?: number;
+}
+
+const CANVAS_MATERIAL_GENERATION_CONTEXT_KEYS = new Set([
+  'prompt',
+  'model',
+  'sourceNodeId',
+  'generatedAt',
+  'aspectRatio',
+  'width',
+  'height',
+  'duration',
+]);
+
+export function isCanvasMaterialGenerationContext(
+  value: unknown,
+): value is CanvasMaterialGenerationContext {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  if (Object.keys(record).some((key) => !CANVAS_MATERIAL_GENERATION_CONTEXT_KEYS.has(key))) {
+    return false;
+  }
+  for (const key of ['prompt', 'model', 'sourceNodeId', 'generatedAt', 'aspectRatio'] as const) {
+    const candidate = record[key];
+    if (
+      candidate !== undefined &&
+      (typeof candidate !== 'string' || candidate.trim().length === 0)
+    ) {
+      return false;
+    }
+  }
+  for (const key of ['width', 'height', 'duration'] as const) {
+    const candidate = record[key];
+    if (
+      candidate !== undefined &&
+      (typeof candidate !== 'number' || !Number.isFinite(candidate) || candidate <= 0)
+    ) {
+      return false;
+    }
+  }
+  return Object.keys(record).length > 0;
+}
+
 export interface MediaCanvasNode extends CanvasNodeBase {
   type: 'media';
   data: {
@@ -265,6 +321,8 @@ export interface MediaCanvasNode extends CanvasNodeBase {
     title?: string;
     /** Stable projection lineage. Runtime locations are forbidden. */
     provenance?: CanvasSerializableRecord;
+    /** Portable generation provenance shown by Canvas material action surfaces. */
+    generationContext?: CanvasMaterialGenerationContext;
     /** Duration in seconds (for video/audio) */
     duration?: number;
   };
@@ -663,7 +721,7 @@ export interface DocumentCanvasNode extends CanvasNodeBase {
   data: {
     /** Portable source path. Empty when a stable resource reference owns the source. */
     docPath: string;
-    docType: 'pdf' | 'docx' | 'epub' | 'cbz' | 'file';
+    docType: 'pdf' | 'docx' | 'epub' | 'cbz' | 'markdown' | 'text' | 'file';
     title: string;
     mimeType?: string;
     documentResourceRef?: DocumentArchiveResourceRef;
@@ -672,6 +730,115 @@ export interface DocumentCanvasNode extends CanvasNodeBase {
     thumbnailData?: string;
     provenance?: CanvasSerializableRecord;
   };
+}
+
+export type CanvasTextDocumentType = Extract<
+  DocumentCanvasNode['data']['docType'],
+  'markdown' | 'text'
+>;
+
+export const CANVAS_TEXT_DOCUMENT_MAX_BYTES = 1_000_000;
+
+export interface CanvasTextDocumentReadRequest {
+  readonly type: 'textDocument:read';
+  readonly requestId: string;
+  readonly nodeId: string;
+  readonly docPath: string;
+  readonly docType: CanvasTextDocumentType;
+}
+
+export type CanvasTextDocumentReadErrorCode =
+  | 'invalid-request'
+  | 'unsupported-type'
+  | 'not-found'
+  | 'not-a-file'
+  | 'too-large'
+  | 'invalid-utf8'
+  | 'read-failed';
+
+export type CanvasTextDocumentReadResult =
+  | {
+      readonly type: 'textDocument:readResult';
+      readonly requestId: string;
+      readonly nodeId: string;
+      readonly docPath: string;
+      readonly docType: CanvasTextDocumentType;
+      readonly status: 'ready';
+      readonly text: string;
+    }
+  | {
+      readonly type: 'textDocument:readResult';
+      readonly requestId: string;
+      readonly nodeId: string;
+      readonly docPath: string;
+      readonly docType: CanvasTextDocumentType;
+      readonly status: 'error';
+      readonly code: CanvasTextDocumentReadErrorCode;
+      readonly error: string;
+    };
+
+export function isCanvasTextDocumentType(value: unknown): value is CanvasTextDocumentType {
+  return value === 'markdown' || value === 'text';
+}
+
+export function isCanvasTextDocumentReadRequest(
+  value: unknown,
+): value is CanvasTextDocumentReadRequest {
+  if (!isCanvasTextDocumentMessageRecord(value)) return false;
+  const message = value;
+  return (
+    message['type'] === 'textDocument:read' &&
+    typeof message['requestId'] === 'string' &&
+    message['requestId'].length > 0 &&
+    typeof message['nodeId'] === 'string' &&
+    message['nodeId'].length > 0 &&
+    typeof message['docPath'] === 'string' &&
+    message['docPath'].length > 0 &&
+    isCanvasTextDocumentType(message['docType'])
+  );
+}
+
+export function isCanvasTextDocumentReadResult(
+  value: unknown,
+): value is CanvasTextDocumentReadResult {
+  if (!isCanvasTextDocumentMessageRecord(value)) return false;
+  const message = value;
+  if (
+    message['type'] !== 'textDocument:readResult' ||
+    typeof message['requestId'] !== 'string' ||
+    message['requestId'].length === 0 ||
+    typeof message['nodeId'] !== 'string' ||
+    message['nodeId'].length === 0 ||
+    typeof message['docPath'] !== 'string' ||
+    message['docPath'].length === 0 ||
+    !isCanvasTextDocumentType(message['docType'])
+  ) {
+    return false;
+  }
+  if (message['status'] === 'ready') return typeof message['text'] === 'string';
+  return (
+    message['status'] === 'error' &&
+    isCanvasTextDocumentReadErrorCode(message['code']) &&
+    typeof message['error'] === 'string'
+  );
+}
+
+function isCanvasTextDocumentReadErrorCode(
+  value: unknown,
+): value is CanvasTextDocumentReadErrorCode {
+  return (
+    value === 'invalid-request' ||
+    value === 'unsupported-type' ||
+    value === 'not-found' ||
+    value === 'not-a-file' ||
+    value === 'too-large' ||
+    value === 'invalid-utf8' ||
+    value === 'read-failed'
+  );
+}
+
+function isCanvasTextDocumentMessageRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**

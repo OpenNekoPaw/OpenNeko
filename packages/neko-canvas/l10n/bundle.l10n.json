@@ -12,6 +12,7 @@
   "neko.canvas.addToAssetLibrary.noFile": "No file selected.",
   "neko.canvas.addToAssetLibrary.success": "Added {0} to asset library.",
   "neko.canvas.asset.import.success": "Imported {0} asset(s).",
+  "neko.canvas.material.save.success": "Saved {0} to the asset library.",
   "neko.canvas.preview.title": "Canvas Preview",
   "neko.canvas.preview.statusWaitingGraph": "Waiting for Canvas graph...",
   "neko.canvas.preview.ariaStage": "Canvas playback stage",

@@ -1,6 +1,6 @@
 /**
  * useViewportTransform - Viewport transformation hook
- * Handles pan (drag) and zoom (wheel) operations
+ * Handles pan (drag and wheel) and explicit modifier-wheel zoom operations
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -17,6 +17,9 @@ export const MIN_ZOOM = 0.05;
 export const MAX_ZOOM = 16;
 /** 滚轮缩放灵敏度 */
 const ZOOM_WHEEL_SENSITIVITY = 0.001;
+const RIGHT_BUTTON = 2;
+const RIGHT_DRAG_THRESHOLD_PX = 4;
+const WHEEL_LINE_HEIGHT_PX = 16;
 
 // =============================================================================
 // Types
@@ -47,6 +50,7 @@ export interface UseViewportTransformReturn {
     onMouseMove: (e: React.MouseEvent) => void;
     onMouseUp: () => void;
     onMouseLeave: () => void;
+    onContextMenu: (e: React.MouseEvent) => void;
   };
   panTo: (position: { x: number; y: number }) => void;
   zoomTo: (zoom: number, center?: { x: number; y: number }) => void;
@@ -80,16 +84,28 @@ export function useViewportTransform(
     startPan: { x: 0, y: 0 },
     startViewport: { pan: { x: 0, y: 0 }, zoom: 1 },
   });
+  const rightPanStartRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressContextMenuRef = useRef(false);
 
   // Mouse down - start panning
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Pan with: middle mouse button, space + left click, or hand tool mode
-      const shouldPan = e.button === 1 || (e.button === 0 && (isSpacePanActive || isPanMode));
+      // Pan with: right/middle mouse button, space + left click, or hand tool mode.
+      const shouldPan =
+        e.button === RIGHT_BUTTON ||
+        e.button === 1 ||
+        (e.button === 0 && (isSpacePanActive || isPanMode));
 
       if (!shouldPan) return;
 
       e.preventDefault();
+
+      if (e.button === RIGHT_BUTTON) {
+        rightPanStartRef.current = { x: e.clientX, y: e.clientY };
+        suppressContextMenuRef.current = false;
+      } else {
+        rightPanStartRef.current = null;
+      }
 
       setState({
         isPanning: true,
@@ -107,6 +123,15 @@ export function useViewportTransform(
 
       const deltaX = e.clientX - state.startPan.x;
       const deltaY = e.clientY - state.startPan.y;
+
+      const rightPanStart = rightPanStartRef.current;
+      if (
+        rightPanStart &&
+        Math.hypot(e.clientX - rightPanStart.x, e.clientY - rightPanStart.y) >=
+          RIGHT_DRAG_THRESHOLD_PX
+      ) {
+        suppressContextMenuRef.current = true;
+      }
 
       onViewportChange({
         pan: {
@@ -132,7 +157,15 @@ export function useViewportTransform(
     }
   }, [state.isPanning]);
 
-  // Wheel - zoom (manual binding to avoid passive listener issue)
+  const onContextMenu = useCallback((e: React.MouseEvent) => {
+    if (!suppressContextMenuRef.current) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    suppressContextMenuRef.current = false;
+  }, []);
+
+  // Wheel - pan by default, zoom only for explicit modifier/pinch gestures.
   const viewportRef = useRef(viewport);
   viewportRef.current = viewport;
 
@@ -146,11 +179,27 @@ export function useViewportTransform(
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
 
+      const vp = viewportRef.current;
+
+      if (!e.ctrlKey && !e.metaKey) {
+        let deltaX = normalizeWheelDelta(e.deltaX, e.deltaMode, container.clientHeight);
+        let deltaY = normalizeWheelDelta(e.deltaY, e.deltaMode, container.clientHeight);
+        if (e.shiftKey && deltaX === 0) {
+          deltaX = deltaY;
+          deltaY = 0;
+        }
+        onViewportChangeRef.current({
+          pan: {
+            x: vp.pan.x - deltaX,
+            y: vp.pan.y - deltaY,
+          },
+        });
+        return;
+      }
+
       const rect = container.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
-
-      const vp = viewportRef.current;
       const delta = -e.deltaY * ZOOM_WHEEL_SENSITIVITY;
       const newZoom = Math.max(minZoom, Math.min(maxZoom, vp.zoom * (1 + delta)));
 
@@ -235,10 +284,17 @@ export function useViewportTransform(
       onMouseMove,
       onMouseUp,
       onMouseLeave,
+      onContextMenu,
     },
     panTo,
     zoomTo,
     fitContent,
     resetViewport,
   };
+}
+
+function normalizeWheelDelta(delta: number, deltaMode: number, pageHeight: number): number {
+  if (deltaMode === 1) return delta * WHEEL_LINE_HEIGHT_PX;
+  if (deltaMode === 2) return delta * pageHeight;
+  return delta;
 }

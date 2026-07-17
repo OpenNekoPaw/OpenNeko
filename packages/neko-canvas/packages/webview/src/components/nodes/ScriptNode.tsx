@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import type { ScriptCanvasNode, CanvasViewport } from '@neko/shared';
 import { FileIcon } from '@neko/shared/icons';
 import { BaseNode } from './BaseNode';
+import type { ScriptIndexRuntimeState } from './nodeRendererTypes';
 import { normalizeScriptScenes } from '../../utils/scriptScenes';
 
 // =============================================================================
@@ -35,6 +36,7 @@ export interface ScriptNodeProps {
   onUpdateData?: (nodeId: string, data: Partial<ScriptCanvasNode['data']>) => void;
   /** Called to load scenes from neko-story */
   onLoadScenes?: (nodeId: string, scriptPath: string) => void;
+  indexState?: ScriptIndexRuntimeState;
   /** Called when user clicks "open script" button */
   onOpenScript?: (scriptPath: string) => void;
   /** Called when user clicks a scene row (navigate to SceneGroupNode) */
@@ -44,20 +46,6 @@ export interface ScriptNodeProps {
 // =============================================================================
 // Component
 // =============================================================================
-
-/** Height of header + footer chrome in px */
-const CHROME_HEIGHT = 56;
-/** Approximate height of a single scene row in px */
-const SCENE_ROW_HEIGHT = 28;
-/** Height of the "+N scenes…" overflow indicator */
-const OVERFLOW_ROW_HEIGHT = 24;
-/** Absolute minimum visible scene rows */
-const MIN_VISIBLE_SCENES = 2;
-
-function computeMaxVisibleScenes(nodeHeight: number): number {
-  const available = nodeHeight - CHROME_HEIGHT - OVERFLOW_ROW_HEIGHT;
-  return Math.max(MIN_VISIBLE_SCENES, Math.floor(available / SCENE_ROW_HEIGHT));
-}
 
 export function ScriptNode({
   node,
@@ -70,23 +58,22 @@ export function ScriptNode({
   onResizeEnd,
   onConnectionStart,
   onLoadScenes,
+  indexState,
   onOpenScript,
   onNavigateToScene,
 }: ScriptNodeProps) {
   const { scriptPath, scriptTitle, linkedSceneGroupId } = node.data;
   const scenes = normalizeScriptScenes(node.data.scenes);
+  const runtimeState: ScriptIndexRuntimeState =
+    indexState ?? (scenes.length > 0 ? { status: 'ready' } : { status: 'idle' });
 
-  // Request scene TOC on mount if not yet loaded
   useEffect(() => {
-    if (scenes.length === 0 && scriptPath) {
+    if (runtimeState.status === 'idle' && scriptPath) {
       onLoadScenes?.(node.id, scriptPath);
     }
-  }, [node.id, scriptPath, scenes.length, onLoadScenes]);
+  }, [node.id, onLoadScenes, runtimeState.status, scriptPath]);
 
   const fileName = scriptPath.split('/').pop() ?? scriptPath;
-  const maxVisible = computeMaxVisibleScenes(node.size.height);
-  const visibleScenes = scenes.slice(0, maxVisible);
-  const hiddenCount = scenes.length - visibleScenes.length;
 
   return (
     <BaseNode
@@ -99,54 +86,30 @@ export function ScriptNode({
       onResize={onResize}
       onResizeEnd={onResizeEnd}
       onConnectionStart={onConnectionStart}
+      presentation="foundational"
+      opaqueSurface
+      onActivate={scriptPath ? () => onOpenScript?.(scriptPath) : undefined}
     >
-      <div className="flex flex-col h-full text-xs">
-        {/* ── Header ── */}
-        <div
-          className="flex items-center gap-2 px-2 py-1.5 flex-shrink-0"
-          style={{
-            borderBottom: '1px solid var(--node-divider)',
-            backgroundColor: 'var(--node-header-bg)',
-          }}
-        >
+      <div className="flex h-full min-h-0 flex-col text-xs" data-script-node-layout="low-chrome">
+        <div className="flex min-w-0 flex-shrink-0 items-center gap-2 px-1 pb-1">
           <span style={{ color: 'var(--node-fg-secondary)' }} aria-hidden="true">
             <FileIcon size={14} strokeWidth={1.8} />
           </span>
           <span className="flex-1 truncate font-medium" style={{ color: 'var(--node-fg)' }}>
             {scriptTitle || fileName}
           </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenScript?.(scriptPath);
-            }}
-            style={{
-              fontSize: 9,
-              padding: '1px 5px',
-              borderRadius: 3,
-              border: '1px solid var(--node-border)',
-              backgroundColor: 'transparent',
-              color: 'var(--neko-fg-secondary)',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            打开
-          </button>
         </div>
 
-        {/* ── Scene list (TOC) ── */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {scenes.length === 0 ? (
-            <div
-              className="flex-1 flex items-center justify-center"
-              style={{ color: 'var(--node-fg-secondary)', opacity: 0.5 }}
-            >
-              加载中…
-            </div>
+        <div className="min-h-0 flex-1 overflow-auto px-1 py-1" data-node-drag-block="true">
+          {runtimeState.status === 'idle' || runtimeState.status === 'loading' ? (
+            <ScriptState message="正在读取剧本…" />
+          ) : runtimeState.status === 'error' ? (
+            <ScriptState message={runtimeState.error} tone="error" />
+          ) : runtimeState.status === 'empty' ? (
+            <ScriptState message="剧本中没有可索引的场景。" />
           ) : (
-            <div className="flex flex-col divide-y" style={{ borderColor: 'var(--node-divider)' }}>
-              {visibleScenes.map((scene) => (
+            <div className="flex flex-col gap-0.5">
+              {scenes.map((scene) => (
                 <button
                   key={scene.id}
                   className="flex items-center gap-2 px-2 py-1.5 text-left hover:bg-white/5 transition-colors"
@@ -169,30 +132,25 @@ export function ScriptNode({
                   </span>
                 </button>
               ))}
-              {hiddenCount > 0 && (
-                <div
-                  className="px-2 py-1"
-                  style={{ color: 'var(--node-fg-secondary)', textAlign: 'center' }}
-                >
-                  +{hiddenCount} 个场景…
-                </div>
-              )}
             </div>
           )}
         </div>
-
-        {/* ── Footer ── */}
-        <div
-          className="px-2 py-1 flex items-center justify-between flex-shrink-0"
-          style={{
-            borderTop: '1px solid var(--node-divider)',
-            backgroundColor: 'var(--node-header-bg)',
-          }}
-        >
-          <span style={{ color: 'var(--node-fg-secondary)' }}>SCRIPT</span>
-          <span style={{ color: 'var(--node-fg-secondary)' }}>{scenes.length} 场</span>
-        </div>
       </div>
     </BaseNode>
+  );
+}
+
+function ScriptState({ message, tone = 'muted' }: { message: string; tone?: 'muted' | 'error' }) {
+  return (
+    <div
+      className="flex h-full min-h-20 items-center justify-center px-3 text-center"
+      style={{
+        color: tone === 'error' ? 'var(--danger-fg)' : 'var(--node-fg-secondary)',
+        opacity: tone === 'error' ? 1 : 0.7,
+      }}
+      data-script-index-state={tone}
+    >
+      {message}
+    </div>
   );
 }

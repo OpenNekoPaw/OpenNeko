@@ -1,4 +1,5 @@
 import React from 'react';
+import { MarkdownDocumentView } from '@neko/ui/markdown';
 import {
   isResourceRef,
   parseDocumentArchiveResourceRef,
@@ -85,6 +86,36 @@ function renderInputBlock(context: BlockRendererContext): React.ReactNode {
 
 function renderTextareaBlock(context: BlockRendererContext): React.ReactNode {
   const value = getBlockValue(context);
+  if (context.node.type === 'text' && context.layout.surface === 'canvas') {
+    const content = toInputValue(value);
+    const nodeStyle = context.node.data.style;
+    const style: React.CSSProperties = {
+      fontSize: nodeStyle?.fontSize,
+      fontWeight: nodeStyle?.fontWeight,
+      color: nodeStyle?.color,
+      backgroundColor: nodeStyle?.backgroundColor,
+      textAlign: nodeStyle?.textAlign,
+      lineHeight: nodeStyle?.lineHeight,
+      padding: nodeStyle?.padding ?? 8,
+    };
+    return context.node.data.format === 'markdown' ? (
+      <div
+        className="min-h-0 flex-1 overflow-auto select-text"
+        style={style}
+        data-canvas-text-display="markdown"
+      >
+        <MarkdownDocumentView value={content} />
+      </div>
+    ) : (
+      <div
+        className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words select-text text-xs leading-snug"
+        style={style}
+        data-canvas-text-display="plain"
+      >
+        {content}
+      </div>
+    );
+  }
   return (
     <label className="flex min-h-0 flex-1 basis-0 flex-col gap-1 text-xs text-[var(--node-fg-secondary)]">
       {context.block.label && <span>{resolveLabel(context.block.label)}</span>}

@@ -16,10 +16,6 @@ describe('Canvas creative workbench layout boundary', () => {
     resolve(__dirname, 'components/panels/NodeLibraryPanel.tsx'),
     'utf8',
   );
-  const canvasSettingsPanelSource = readFileSync(
-    resolve(__dirname, 'components/panels/CanvasSettingsPanel.tsx'),
-    'utf8',
-  );
   const cssSource = readFileSync(resolve(__dirname, 'index.css'), 'utf8');
   const baseNodeSource = readFileSync(resolve(__dirname, 'components/nodes/BaseNode.tsx'), 'utf8');
   const canvasStoreSource = readFileSync(resolve(__dirname, 'stores/canvasStore.ts'), 'utf8');
@@ -40,7 +36,11 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/import \{ CreativeWorkbenchShell \} from '@neko\/ui\/workbench'/);
     expect(appSource).toMatch(/<CreativeWorkbenchShell/);
     expect(appSource).toMatch(/mainKind="canvas"/);
-    expect(appSource).toMatch(/leftRail=\{\s*<CanvasToolbar/);
+    expect(appSource).not.toMatch(/leftRail=\{/);
+    expect(appSource).toMatch(/className="canvas-floating-toolbar-host"/);
+    expect(appSource.indexOf('<CanvasToolbar')).toBeGreaterThan(
+      appSource.indexOf('className="canvas-main-surface-inner"'),
+    );
     expect(appSource).toMatch(/mainClassName="canvas-main-panel"/);
     expect(appSource).toMatch(/className="canvas-main-surface"/);
     expect(appSource).toMatch(/<InfiniteCanvas/);
@@ -123,6 +123,7 @@ describe('Canvas creative workbench layout boundary', () => {
     for (const token of [
       '<MiniMap',
       '<ZoomControls',
+      '<CanvasToolbar',
       '<FloatingPanelHost',
       '<GenerationPromptPanel',
       '<ContentOverlay',
@@ -131,9 +132,34 @@ describe('Canvas creative workbench layout boundary', () => {
     }
     expect(appSource).toMatch(/id="canvas-hud-controls"/);
     expect(appSource).toMatch(/isHudVisible && \(/);
-    expect(appSource).toMatch(/<CanvasSettingsPanel/);
-    expect(canvasSettingsPanelSource).toMatch(/id="canvas-settings-panel"/);
-    expect(appSource).toMatch(/isCanvasSettingsVisible && \(/);
+    expect(appSource).not.toMatch(/<CanvasSettingsPanel/);
+    expect(appSource).not.toMatch(/isCanvasSettingsVisible/);
+  });
+
+  it('styles the left toolbar as a bounded theme-colored pill with inset active circles', () => {
+    expect(cssSource).toMatch(
+      /\.canvas-floating-toolbar-host\s*\{[^}]*left:\s*16px;[^}]*bottom:\s*16px;/s,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-floating-toolbar\.neko-vtoolbar\s*\{[^}]*height:\s*auto;[^}]*max-height:\s*100%;/s,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-floating-toolbar\.neko-vtoolbar\s*\{[^}]*border-radius:\s*999px;[^}]*background:\s*var\(--toolbar-bg\);/s,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-floating-toolbar \.neko-toolbar-btn\s*\{[^}]*width:\s*36px;[^}]*height:\s*36px;[^}]*border-radius:\s*999px;/s,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-floating-toolbar \.neko-toolbar-btn\.active::before,[\s\S]*content:\s*none;[\s\S]*display:\s*none;/,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-floating-toolbar \.neko-toolbar-btn\.active\s*\{[^}]*color:\s*var\(--neko-accent\);[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-floating-toolbar \.neko-toolbar-btn\.active::after\s*\{[^}]*inset:\s*3px;[^}]*border:[^}]*var\(--neko-accent\)[^}]*border-radius:\s*999px;[^}]*background:[^}]*var\(--neko-accent\)[^}]*box-shadow:[^}]*var\(--neko-accent-glow\);/s,
+    );
+    expect(appSource).toMatch(/data-canvas-toolbar-host="left"/);
+    expect(appSource).not.toMatch(/data-canvas-toolbar-host="right"/);
   });
 
   it('routes Shot overlay AI buttons through typed Canvas creative actions', () => {
@@ -180,15 +206,15 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).not.toMatch(/scopeNavigation\.boardCount/);
   });
 
-  it('keeps playback workspace visibility controls in the left toolbar', () => {
+  it('keeps playback workspace visibility controls in the floating toolbar', () => {
     expect(appSource).not.toMatch(/<PlaybackControllerHost/);
-    expect(toolbarSource).not.toMatch(/data-creative-left-rail-action="reveal-playback-workspace"/);
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="reveal-playback-workspace"/);
     expect(toolbarSource).not.toMatch(
-      /data-creative-left-rail-action="toggle-playback-canvas-pane"/,
+      /data-canvas-toolbar-action="toggle-playback-canvas-pane"/,
     );
-    expect(toolbarSource).toMatch(/data-creative-left-rail-action="toggle-playback-stage-pane"/);
-    expect(toolbarSource).toMatch(/data-creative-left-rail-action="toggle-playback-route-pane"/);
-    expect(toolbarSource).not.toMatch(/data-creative-left-rail-action="hide-playback-workspace"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-playback-stage-pane"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-playback-route-pane"/);
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="hide-playback-workspace"/);
     expect(toolbarSource).toMatch(/icon=\{<PlayIcon size=\{18\} \/>\}/);
     expect(toolbarSource).toMatch(
       /type PlaybackToolbarSurfacePane = Exclude<PlaybackWorkspacePane, 'canvas'>/,
@@ -216,12 +242,12 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/route: pane === 'route'/);
   });
 
-  it('keeps left toolbar actions grouped by canvas workflow frequency', () => {
-    expect(toolbarSource).toMatch(/data-creative-left-rail-action="select-tool"/);
-    expect(toolbarSource).toMatch(/data-creative-left-rail-kind="tool-mode"/);
-    expect(toolbarSource).toMatch(/data-creative-left-rail-action="toggle-pan-mode"/);
-    expect(toolbarSource).toMatch(/data-creative-left-rail-action="toggle-canvas-settings"/);
-    expect(toolbarSource).toMatch(/aria-controls="canvas-settings-panel"/);
+  it('keeps floating toolbar actions grouped by canvas workflow frequency', () => {
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-action="select-tool"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-kind="tool-mode"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-pan-mode"/);
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="toggle-canvas-settings"/);
+    expect(toolbarSource).not.toMatch(/aria-controls="canvas-settings-panel"/);
 
     const orderedActions = [
       'select-tool',
@@ -233,24 +259,21 @@ describe('Canvas creative workbench layout boundary', () => {
       'toggle-playback-route-pane',
       'open-export',
       'open-package',
-      'toggle-canvas-settings',
     ];
     const positions = orderedActions.map((action) =>
-      toolbarSource.indexOf(`data-creative-left-rail-action="${action}"`),
+      toolbarSource.indexOf(`data-canvas-toolbar-action="${action}"`),
     );
     expect(positions.every((position) => position > -1)).toBe(true);
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
-    expect(toolbarSource.indexOf('<ToolbarSpacer />')).toBeLessThan(
-      toolbarSource.indexOf('data-creative-left-rail-action="toggle-canvas-settings"'),
-    );
-    expect(toolbarSource).not.toMatch(/data-creative-left-rail-action="toggle-hud-controls"/);
+    expect(toolbarSource).not.toMatch(/ToolbarSpacer/);
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="toggle-hud-controls"/);
   });
 
-  it('keeps grid visibility as a canvas view setting instead of a separate rail action', () => {
-    expect(toolbarSource).not.toMatch(/data-creative-left-rail-action="toggle-grid"/);
-    expect(appSource).toMatch(/const \[isGridVisible, setIsGridVisible\] = useState\(true\)/);
+  it('keeps grid visible by default without a hidden settings mount path', () => {
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="toggle-grid"/);
+    expect(appSource).toMatch(/const isGridVisible = true/);
     expect(appSource).toMatch(/isGridVisible=\{isGridVisible\}/);
-    expect(appSource).toMatch(/onGridVisibleChange=\{setIsGridVisible\}/);
+    expect(appSource).not.toMatch(/onGridVisibleChange=/);
     expect(infiniteCanvasSource).toMatch(/isGridVisible\?: boolean/);
     expect(infiniteCanvasSource).toMatch(/isGridVisible = true/);
     expect(infiniteCanvasSource).toMatch(/\{isGridVisible && \(/);
@@ -281,8 +304,6 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/label: t\('rightDock\.mode\.professional'\)/);
     expect(appSource).not.toMatch(/isNodeTreeVisible=\{isRightNodeTreeVisible\}/);
     expect(appSource).not.toMatch(/nodeTreeMode=\{rightDockMode\}/);
-    expect(canvasSettingsPanelSource).not.toMatch(/settings\.nodeTree/);
-    expect(canvasSettingsPanelSource).not.toMatch(/canvas-right-node-tree-panel/);
     expect(appSource).not.toMatch(/BASIC_CANVAS_SUBSYSTEM_IDS/);
     expect(appSource).toMatch(/basicNodeLibraryDescriptors/);
     expect(appSource).toMatch(
@@ -315,20 +336,20 @@ describe('Canvas creative workbench layout boundary', () => {
   });
 
   it('marks primary canvas tools and visibility toggles by responsibility', () => {
-    expect(toolbarSource).toMatch(/data-creative-left-rail-action="toggle-pan-mode"/);
-    expect(toolbarSource).not.toMatch(/data-creative-left-rail-action="open-add-node-popover"/);
-    expect(toolbarSource).not.toMatch(/data-creative-left-rail-action="import-file"/);
-    expect(toolbarSource).not.toMatch(/data-creative-left-rail-action="reveal-playback-workspace"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-pan-mode"/);
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="open-add-node-popover"/);
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="import-file"/);
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="reveal-playback-workspace"/);
     expect(toolbarSource).not.toMatch(
-      /data-creative-left-rail-action="toggle-playback-canvas-pane"/,
+      /data-canvas-toolbar-action="toggle-playback-canvas-pane"/,
     );
-    expect(toolbarSource).toMatch(/data-creative-left-rail-action="toggle-playback-stage-pane"/);
-    expect(toolbarSource).toMatch(/data-creative-left-rail-action="toggle-playback-route-pane"/);
-    expect(toolbarSource).not.toMatch(/data-creative-left-rail-action="hide-playback-workspace"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-playback-stage-pane"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-playback-route-pane"/);
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="hide-playback-workspace"/);
     expect(toolbarSource).toMatch(/onToggleWorkspaceSurface/);
     expect(toolbarSource).toMatch(/workspaceSurfaceState/);
-    expect(toolbarSource).toMatch(/data-creative-left-rail-action="open-export"/);
-    expect(toolbarSource).toMatch(/data-creative-left-rail-action="open-package"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-action="open-export"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-action="open-package"/);
     expect(toolbarSource).not.toMatch(/onRevealPlaybackWorkspace/);
     expect(toolbarSource).not.toMatch(/aria-controls="canvas-playback-canvas-pane"/);
     expect(toolbarSource).toMatch(/aria-controls="canvas-playback-stage-pane"/);
@@ -341,9 +362,9 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(
       /reportAction\('openPackage', t\('toolbar\.package'\), undefined, canvasData\)/,
     );
-    expect(toolbarSource).toMatch(/data-creative-left-rail-action="toggle-right-node-tree"/);
-    expect(toolbarSource).toMatch(/data-creative-left-rail-kind="visibility-toggle"/);
-    expect(toolbarSource).toMatch(/data-creative-left-rail-target="right-panel"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-right-node-tree"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-kind="visibility-toggle"/);
+    expect(toolbarSource).toMatch(/data-canvas-toolbar-target="right-panel"/);
     expect(toolbarSource).not.toMatch(/aria-controls="canvas-hud-controls"/);
     expect(toolbarSource).toMatch(/aria-controls="canvas-right-node-tree-panel"/);
   });

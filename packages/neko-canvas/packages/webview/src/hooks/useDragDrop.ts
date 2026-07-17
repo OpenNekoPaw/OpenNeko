@@ -18,6 +18,7 @@ import {
   inferCanvasDroppedAssetKind,
   inferCanvasMediaType,
   inferCanvasModelType,
+  inferCanvasTextFileFormat,
   inferNkProjectType,
   type ProjectSourceAddClient,
   type ProjectSourceAddClientInput,
@@ -368,6 +369,8 @@ export function getCanvasFilePickerDefaultName(nodeType: CanvasNodeType | undefi
   switch (nodeType) {
     case 'media':
       return 'media';
+    case 'text':
+      return 'text.txt';
     case 'script':
       return 'script.fountain';
     case 'document':
@@ -384,7 +387,8 @@ export function getCanvasFilePickerDefaultName(nodeType: CanvasNodeType | undefi
 }
 
 function readCanvasAddSourceMetadata(result: ProjectSourceAddResult): {
-  readonly canvasAssetKind?: 'media' | 'script' | 'document' | 'model' | 'canvas' | 'project';
+  readonly canvasAssetKind?:
+    'media' | 'text' | 'script' | 'document' | 'model' | 'canvas' | 'project';
   readonly mediaType?: 'image' | 'video' | 'audio';
   readonly runtimeAssetPath?: string;
   readonly name?: string;
@@ -392,6 +396,8 @@ function readCanvasAddSourceMetadata(result: ProjectSourceAddResult): {
   readonly docType?: string;
   readonly modelType?: string;
   readonly projectType?: string;
+  readonly textFormat?: string;
+  readonly textContent?: string;
 } {
   const metadata = result.ingest?.metadata;
   const canvasAssetKind = metadata?.['canvasAssetKind'];
@@ -402,6 +408,8 @@ function readCanvasAddSourceMetadata(result: ProjectSourceAddResult): {
   const docType = metadata?.['docType'];
   const modelType = metadata?.['modelType'];
   const projectType = metadata?.['projectType'];
+  const textFormat = metadata?.['textFormat'];
+  const textContent = metadata?.['textContent'];
   return {
     ...(isCanvasAddSourceAssetKind(canvasAssetKind) ? { canvasAssetKind } : {}),
     ...(mediaType === 'image' || mediaType === 'video' || mediaType === 'audio'
@@ -413,6 +421,8 @@ function readCanvasAddSourceMetadata(result: ProjectSourceAddResult): {
     ...(typeof docType === 'string' ? { docType } : {}),
     ...(typeof modelType === 'string' ? { modelType } : {}),
     ...(typeof projectType === 'string' ? { projectType } : {}),
+    ...(typeof textFormat === 'string' ? { textFormat } : {}),
+    ...(typeof textContent === 'string' ? { textContent } : {}),
   };
 }
 
@@ -483,12 +493,27 @@ function createCanvasDroppedAssetFromAddSourceResult(input: {
         : {}),
     };
   }
+  if (kind === 'text') {
+    const format = input.metadata.textFormat;
+    const content = input.metadata.textContent;
+    if ((format !== 'plain' && format !== 'markdown') || typeof content !== 'string') {
+      return undefined;
+    }
+    return { kind: 'text', path: input.durablePath, name, title, format, content };
+  }
   if (kind === 'script') {
     return { kind: 'script', path: input.durablePath, name, title };
   }
   if (kind === 'document') {
     const docType = input.metadata.docType;
-    if (docType !== 'pdf' && docType !== 'docx' && docType !== 'epub' && docType !== 'cbz') {
+    if (
+      docType !== 'pdf' &&
+      docType !== 'docx' &&
+      docType !== 'epub' &&
+      docType !== 'cbz' &&
+      docType !== 'markdown' &&
+      docType !== 'text'
+    ) {
       return undefined;
     }
     return { kind: 'document', path: input.durablePath, name, title, docType };
@@ -549,6 +574,9 @@ function createCanvasAddSourceMetadata(input: {
     ...(assetKind === 'document'
       ? { docType: inferCanvasDocumentType(input.fileName) ?? undefined }
       : {}),
+    ...(assetKind === 'text'
+      ? { textFormat: inferCanvasTextFileFormat(input.fileName) ?? undefined }
+      : {}),
     ...(assetKind === 'model'
       ? { modelType: inferCanvasModelType(input.fileName) ?? undefined }
       : {}),
@@ -587,8 +615,10 @@ function readCanvasAssetKindForNodeType(
   switch (nodeType) {
     case 'media':
       return 'media';
+    case 'text':
+      return 'text';
     case 'script':
-      return 'script';
+      return 'text';
     case 'document':
       return 'document';
     case 'model':
@@ -608,6 +638,8 @@ function readCanvasSourceRoleForNodeType(
   switch (nodeType) {
     case 'script':
       return 'document';
+    case 'text':
+      return 'document';
     case 'document':
       return 'document';
     case 'model':
@@ -625,9 +657,10 @@ function readCanvasSourceRoleForNodeType(
 
 function isCanvasAddSourceAssetKind(
   value: unknown,
-): value is 'media' | 'script' | 'document' | 'model' | 'canvas' | 'project' {
+): value is 'media' | 'text' | 'script' | 'document' | 'model' | 'canvas' | 'project' {
   return (
     value === 'media' ||
+    value === 'text' ||
     value === 'script' ||
     value === 'document' ||
     value === 'model' ||

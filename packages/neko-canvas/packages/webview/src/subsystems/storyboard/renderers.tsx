@@ -35,6 +35,7 @@ export function createStoryboardNodeRendererRegistry(): NodeRendererRegistry {
     script: ({
       node,
       onScriptLoadScenes,
+      scriptIndexState,
       onScriptOpen,
       onScriptNavigateToScene,
       ...commonProps
@@ -44,16 +45,25 @@ export function createStoryboardNodeRendererRegistry(): NodeRendererRegistry {
         node={node as ScriptCanvasNode}
         {...commonProps}
         onLoadScenes={onScriptLoadScenes}
+        indexState={scriptIndexState}
         onOpenScript={onScriptOpen}
         onNavigateToScene={onScriptNavigateToScene}
       />
     ),
-    document: ({ node, onDocumentOpen, ...commonProps }) => (
+    document: ({
+      node,
+      onDocumentOpen,
+      onDocumentLoadText,
+      documentTextProjection,
+      ...commonProps
+    }) => (
       <DocumentNode
         key={node.id}
         node={node as DocumentCanvasNode}
         {...commonProps}
         onOpenDocument={onDocumentOpen}
+        onLoadText={onDocumentLoadText}
+        textProjection={documentTextProjection}
       />
     ),
     'canvas-embed': ({ node, onCanvasEmbedOpen, ...commonProps }) => (

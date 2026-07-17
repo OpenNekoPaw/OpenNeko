@@ -23,6 +23,7 @@ import {
   SHOT_NODE_PORTS,
   STORYBOARD_NODE_PORTS,
   getDefaultPorts,
+  isCanvasMaterialGenerationContext,
   isCanvasNodeType,
 } from '../types/canvas';
 import type {
@@ -924,6 +925,9 @@ function createNodeFromSpec(input: {
           ...(isRecord(data['provenance'])
             ? { provenance: toCanvasSerializableRecord(data['provenance']) }
             : {}),
+          ...(isCanvasMaterialGenerationContext(data['generationContext'])
+            ? { generationContext: data['generationContext'] }
+            : {}),
           ...(typeof data['duration'] === 'number' ? { duration: data['duration'] } : {}),
         },
       };
@@ -1740,12 +1744,16 @@ function inferMediaType(value: unknown): 'image' | 'video' | 'audio' {
   return value === 'video' || value === 'audio' ? value : 'image';
 }
 
-function inferDocumentType(value: unknown): 'pdf' | 'docx' | 'epub' | 'cbz' | 'file' {
+function inferDocumentType(
+  value: unknown,
+): 'pdf' | 'docx' | 'epub' | 'cbz' | 'markdown' | 'text' | 'file' {
   if (
     value === 'pdf' ||
     value === 'docx' ||
     value === 'epub' ||
     value === 'cbz' ||
+    value === 'markdown' ||
+    value === 'text' ||
     value === 'file'
   ) {
     return value;

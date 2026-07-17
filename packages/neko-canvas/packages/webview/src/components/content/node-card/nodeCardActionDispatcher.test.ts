@@ -44,6 +44,7 @@ describe('node card action dispatcher', () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: 'openMediaPreview',
       assetPath: 'assets/ref.png',
+      nodeId: 'media-1',
       mediaType: 'image',
     });
   });
@@ -72,6 +73,7 @@ describe('node card action dispatcher', () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: 'openMediaPreview',
       assetPath: 'https://file+.vscode-resource.vscode-cdn.net/cache/page-1.jpg',
+      nodeId: 'media-doc',
       mediaType: 'image',
       documentResourceRef,
     });
@@ -111,9 +113,35 @@ describe('node card action dispatcher', () => {
     expect(postMessage).toHaveBeenCalledWith({
       type: 'openMediaPreview',
       assetPath: 'https://file+.vscode-resource.vscode-cdn.net/cache/page-1.jpg',
+      nodeId: 'media-doc',
       mediaType: 'image',
       documentResourceRef,
       resourceRef,
+    });
+  });
+
+  it('dispatches image edit and AssetLibrary promotion with stable material identity', () => {
+    const postMessage = vi.fn();
+    const node = createNode('media-1', 'media', {
+      assetPath: 'assets/ref.png',
+      mediaType: 'image',
+    });
+    const ctx = createNodeActionContext({ node, postMessage });
+
+    NODE_CARD_ACTION_DISPATCHER['edit-media'](ctx);
+    NODE_CARD_ACTION_DISPATCHER['save-to-asset-library'](ctx);
+
+    expect(postMessage).toHaveBeenNthCalledWith(1, {
+      type: 'editCanvasImage',
+      nodeId: 'media-1',
+      assetPath: 'assets/ref.png',
+      mediaType: 'image',
+    });
+    expect(postMessage).toHaveBeenNthCalledWith(2, {
+      type: 'saveCanvasMaterialToAssetLibrary',
+      nodeId: 'media-1',
+      assetPath: 'assets/ref.png',
+      mediaType: 'image',
     });
   });
 

@@ -11,7 +11,7 @@
  */
 
 import type React from 'react';
-import type { CanvasNodeType } from '@neko/shared';
+import type { CanvasNode, CanvasNodeType } from '@neko/shared';
 
 // =============================================================================
 // Types
@@ -23,6 +23,21 @@ export interface NodeDefaultSize {
 }
 
 export type NodePresentation = 'foundational' | 'spatial-container' | 'structured';
+
+export type NodeFullscreenPresentation =
+  | 'image-viewer'
+  | 'visual-stage'
+  | 'text-document'
+  | 'workbench'
+  | 'shot-workbench';
+
+export type NodeFullscreenPresentationResolver = (
+  node: CanvasNode,
+) => NodeFullscreenPresentation | undefined;
+
+export type NodeFullscreenPresentationDeclaration =
+  | NodeFullscreenPresentation
+  | NodeFullscreenPresentationResolver;
 
 export interface NodeTypeDescriptor {
   /** Canvas node type (matches CanvasNodeType union) */
@@ -39,6 +54,8 @@ export interface NodeTypeDescriptor {
   defaultSize: NodeDefaultSize;
   /** Renderer chrome policy. Presentation never becomes persisted Canvas data. */
   presentation: NodePresentation;
+  /** Optional fullscreen capability. A resolver may select a viewer from durable node material. */
+  fullscreenPresentation?: NodeFullscreenPresentationDeclaration;
 }
 
 /**
@@ -60,4 +77,12 @@ export function getNodeLabel(
 ): string {
   const descriptor = registry[type];
   return descriptor ? t(descriptor.labelKey) : type;
+}
+
+export function resolveNodeFullscreenPresentation(
+  descriptor: NodeTypeDescriptor | undefined,
+  node: CanvasNode,
+): NodeFullscreenPresentation | undefined {
+  const declaration = descriptor?.fullscreenPresentation;
+  return typeof declaration === 'function' ? declaration(node) : declaration;
 }

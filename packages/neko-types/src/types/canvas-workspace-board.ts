@@ -2,6 +2,7 @@ import type { DocumentArchiveResourceRef } from './document-reading';
 import { validateDurableResourceRef } from './durable-resource-ref';
 import type { GeneratedAsset, GeneratedAssetMediaKind } from './generated-asset';
 import type { ResourceRef } from './resource-cache';
+import { isCanvasMaterialGenerationContext, type CanvasMaterialGenerationContext } from './canvas';
 
 export const CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION = 1 as const;
 export const CANVAS_WORKSPACE_BOARD_PATH = 'neko/boards/workspace.nkc' as const;
@@ -39,6 +40,7 @@ export type CanvasWorkspaceProjectionArtifact =
       readonly mimeType?: string;
       readonly resourceRef?: ResourceRef;
       readonly documentResourceRef?: DocumentArchiveResourceRef;
+      readonly generationContext?: CanvasMaterialGenerationContext;
     };
 
 export interface CanvasWorkspaceProjectionRequest {
@@ -89,6 +91,7 @@ export function createGeneratedAssetWorkspaceProjectionRequest(
   if (!asset.lifecycle) {
     throw new Error(`Generated output ${asset.id} has no durable lifecycle reference.`);
   }
+  const generationContext = createCanvasMaterialGenerationContext(asset);
   return {
     version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     target: { workspaceUri },
@@ -108,8 +111,42 @@ export function createGeneratedAssetWorkspaceProjectionRequest(
       title: asset.prompt?.trim() || `Generated ${asset.lifecycle.mediaKind}`,
       mimeType: asset.mimeType,
       resourceRef: asset.lifecycle.resourceRef,
+      ...(generationContext ? { generationContext } : {}),
     },
   };
+}
+
+function createCanvasMaterialGenerationContext(
+  asset: GeneratedAsset,
+): CanvasMaterialGenerationContext | undefined {
+  const prompt = asset.prompt?.trim();
+  const model = asset.model?.trim();
+  const sourceNodeId = asset.sourceNodeId?.trim();
+  const shared = {
+    ...(prompt ? { prompt } : {}),
+    ...(model ? { model } : {}),
+    ...(sourceNodeId ? { sourceNodeId } : {}),
+    ...(asset.generatedAt.trim() ? { generatedAt: asset.generatedAt.trim() } : {}),
+  };
+  const context: CanvasMaterialGenerationContext =
+    asset.type === 'generated-image'
+      ? {
+          ...shared,
+          ...(asset.ratio.trim() ? { aspectRatio: asset.ratio.trim() } : {}),
+          ...(asset.width > 0 ? { width: asset.width } : {}),
+          ...(asset.height > 0 ? { height: asset.height } : {}),
+        }
+      : asset.type === 'generated-video'
+        ? {
+            ...shared,
+            ...(asset.width > 0 ? { width: asset.width } : {}),
+            ...(asset.height > 0 ? { height: asset.height } : {}),
+            ...(asset.duration > 0 ? { duration: asset.duration } : {}),
+          }
+        : asset.type === 'generated-audio'
+          ? { ...shared, ...(asset.duration > 0 ? { duration: asset.duration } : {}) }
+          : shared;
+  return isCanvasMaterialGenerationContext(context) ? context : undefined;
 }
 
 const PROJECTION_KINDS = new Set<CanvasWorkspaceProjectionKind>([
@@ -219,6 +256,19 @@ export function validateCanvasWorkspaceProjectionRequest(
         'unsupported-projection-kind',
         'Canvas Workspace Board projection kind is unsupported.',
         ['provenance', 'kind'],
+      ),
+    );
+  }
+  if (
+    request.artifact.kind !== 'markdown' &&
+    request.artifact.generationContext !== undefined &&
+    !isCanvasMaterialGenerationContext(request.artifact.generationContext)
+  ) {
+    diagnostics.push(
+      diagnostic(
+        'runtime-value-forbidden',
+        'Canvas generated material context must contain only portable prompt, model, source, time, and numeric generation metadata.',
+        ['artifact', 'generationContext'],
       ),
     );
   }

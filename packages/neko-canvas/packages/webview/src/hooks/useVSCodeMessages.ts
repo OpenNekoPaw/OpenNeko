@@ -26,9 +26,11 @@ import type {
   ProjectedCanvasStatus,
   ProjectionSourceChangeEvent,
   CanvasHostAppliedDocumentMessage,
+  CanvasTextDocumentReadResult,
 } from '@neko/shared';
 import {
   isCanvasNodeType,
+  isCanvasTextDocumentReadResult,
   isJsonPointerPath,
   isProjectFileSnapshotRequestMessage,
   PROJECT_FILE_SNAPSHOT_RESPONSE,
@@ -78,7 +80,8 @@ export interface UseVSCodeMessagesOptions {
   /** Called when a typed Canvas creative AI action is accepted or rejected by the host. */
   onCanvasCreativeAiActionResult?: (payload: CanvasCreativeAiActionResultPayload) => void;
   /** Called when scene TOC is available for a ScriptNode */
-  onScriptIndexResult?: (nodeId: string, scenes: ScriptScene[]) => void;
+  onScriptIndexResult?: (nodeId: string, scenes: ScriptScene[], error?: string) => void;
+  onTextDocumentReadResult?: (result: CanvasTextDocumentReadResult) => void;
   /** Called when model install status is known */
   onModelInstalledResult?: (nodeId: string, installedVersion: string | null) => void;
   /** Called when cut syncs minimal operational metadata back into canvas */
@@ -200,6 +203,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
     onGenerationProgress,
     onCanvasCreativeAiActionResult,
     onScriptIndexResult,
+    onTextDocumentReadResult,
     onModelInstalledResult,
     onTimelineSync,
     getNodes,
@@ -238,6 +242,8 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
   onCanvasCreativeAiActionResultRef.current = onCanvasCreativeAiActionResult;
   const onScriptIndexResultRef = useRef(onScriptIndexResult);
   onScriptIndexResultRef.current = onScriptIndexResult;
+  const onTextDocumentReadResultRef = useRef(onTextDocumentReadResult);
+  onTextDocumentReadResultRef.current = onTextDocumentReadResult;
   const onModelInstalledResultRef = useRef(onModelInstalledResult);
   onModelInstalledResultRef.current = onModelInstalledResult;
   const onTimelineSyncRef = useRef(onTimelineSync);
@@ -388,7 +394,13 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
             onScriptIndexResultRef.current?.(
               message.nodeId as string,
               normalizeScriptScenes(message.scenes),
+              typeof message.error === 'string' ? message.error : undefined,
             );
+            break;
+          case 'textDocument:readResult':
+            if (isCanvasTextDocumentReadResult(message)) {
+              onTextDocumentReadResultRef.current?.(message);
+            }
             break;
           case 'modelInstalledResult':
             onModelInstalledResultRef.current?.(

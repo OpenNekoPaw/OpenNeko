@@ -80,6 +80,8 @@ export interface BaseNodeProps {
   /** Optional visual-only height override. Does not change persisted node.size. */
   renderHeight?: number;
   presentation?: NodePresentation;
+  /** Keeps readable content visually separate from the Canvas grid without adding card chrome. */
+  opaqueSurface?: boolean;
   renderZIndex?: number;
   onActivate?: (nodeId: string) => void;
 }
@@ -256,6 +258,7 @@ export function BaseNode({
   minSize,
   renderHeight,
   presentation = 'structured',
+  opaqueSurface = false,
   renderZIndex,
   onActivate,
 }: BaseNodeProps) {
@@ -489,6 +492,7 @@ export function BaseNode({
         className={clsx(
           'node-card w-full h-full overflow-hidden',
           `node-card--${presentation}`,
+          opaqueSurface && 'node-card--opaque',
           'transition-colors duration-150',
           (isSelected || isPlaybackActive) && 'selected',
           isPlaybackActive && !isSelected && 'ring-2 ring-[var(--node-selected)] ring-offset-2',

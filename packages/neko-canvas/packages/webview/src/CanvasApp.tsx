@@ -25,6 +25,7 @@ import type {
   CanvasStoryboardPromptBlockKind,
   CanvasStoryboardPromptState,
   CanvasSubsystemId,
+  CanvasTextDocumentType,
   CanvasViewport,
   GeneratedImageVersion,
   ProjectedCanvasStatus,
@@ -46,7 +47,6 @@ import { CanvasToolbar } from './components/toolbar/CanvasToolbar';
 import { PlaybackWorkspace } from './components/playback/PlaybackWorkspace';
 import { NodeLibraryPanel } from './components/panels/NodeLibraryPanel';
 import { FloatingPanelHost } from './components/panels/FloatingPanelHost';
-import { CanvasSettingsPanel } from './components/panels/CanvasSettingsPanel';
 import { MIN_ZOOM, MAX_ZOOM } from './hooks';
 import { useNodeExpand } from './hooks/useNodeExpand';
 import { useVSCodeMessages } from './hooks/useVSCodeMessages';
@@ -80,6 +80,10 @@ import { createStoryboardNodeTypeDescriptors } from './subsystems/storyboard/des
 import { createBasicNodeLibraryDescriptors } from './subsystems/basicNodeLibraryCatalog';
 import type { FloatingPanelDefinition } from './subsystems';
 import type { NodeTypeDescriptorRegistry } from './components/nodes/nodeTypeDescriptor';
+import type {
+  ScriptIndexRuntimeState,
+  TextDocumentRuntimeProjection,
+} from './components/nodes/nodeRendererTypes';
 import { DEFAULT_RUNTIME_VIEWPORT } from './stores/runtimeViewportStore';
 import {
   screenToCanvas as screenToCanvasMath,
@@ -97,6 +101,7 @@ import {
 import { resolveCanvasRenderRefreshDecision } from './utils/renderRefreshTiering';
 import { t } from './i18n';
 import { getLogger } from './utils/logger';
+import { applyTextDocumentReadResult } from './utils/textDocumentRuntime';
 
 // =============================================================================
 // Constants & VSCode API
@@ -203,9 +208,7 @@ function buildGenerationPanelPromptState(
   params: GenerationParams,
 ): CanvasStoryboardPromptState {
   const storyboardPrompt = readRecordValue(node.data, 'storyboardPrompt');
-  const current = isCanvasStoryboardPromptState(storyboardPrompt)
-    ? storyboardPrompt
-    : undefined;
+  const current = isCanvasStoryboardPromptState(storyboardPrompt) ? storyboardPrompt : undefined;
   const blockKind: CanvasStoryboardPromptBlockKind = params.generateVideo ? 'video' : 'image';
   const existingDocument =
     blockKind === 'video'
@@ -344,9 +347,15 @@ export function CanvasApp() {
   const [creativeAiActionResults, setCreativeAiActionResults] = useState<
     Record<string, CanvasCreativeAiActionStatusState>
   >({});
-  const [isHudVisible, setIsHudVisible] = useState(true);
-  const [isGridVisible, setIsGridVisible] = useState(true);
-  const [isCanvasSettingsVisible, setIsCanvasSettingsVisible] = useState(false);
+  const [scriptIndexStates, setScriptIndexStates] = useState<
+    Record<string, ScriptIndexRuntimeState>
+  >({});
+  const [documentTextProjections, setDocumentTextProjections] = useState<
+    Record<string, TextDocumentRuntimeProjection>
+  >({});
+  const textDocumentRequestSequenceRef = useRef(0);
+  const isHudVisible = true;
+  const isGridVisible = true;
   // Minimap width tracks ZoomControls width for alignment
   const zoomControlsRef = useRef<HTMLDivElement | null>(null);
   const [zoomControlsElement, setZoomControlsElement] = useState<HTMLDivElement | null>(null);
@@ -574,6 +583,7 @@ export function CanvasApp() {
 
   const {
     addTextAt,
+    addImportedTextAt,
     addMediaAt,
     addShotAt,
     addSceneGroupAt,
@@ -615,6 +625,9 @@ export function CanvasApp() {
               ...(asset.runtimeAssetPath ? { runtimeAssetPath: asset.runtimeAssetPath } : {}),
             });
             break;
+          case 'text':
+            addImportedTextAt(dropPos, asset);
+            break;
           case 'script':
             addScriptAt(dropPos, asset.path, asset.title);
             break;
@@ -637,6 +650,7 @@ export function CanvasApp() {
     [
       addCanvasEmbedAt,
       addDocumentAt,
+      addImportedTextAt,
       addMediaAt,
       addModelAt,
       addProjectAt,
@@ -851,8 +865,22 @@ export function CanvasApp() {
         },
       }));
     },
-    onScriptIndexResult: (nodeId, scenes) => {
+    onScriptIndexResult: (nodeId, scenes, error) => {
+      if (error) {
+        setScriptIndexStates((current) => ({
+          ...current,
+          [nodeId]: { status: 'error', error },
+        }));
+        return;
+      }
+      setScriptIndexStates((current) => ({
+        ...current,
+        [nodeId]: { status: scenes.length > 0 ? 'ready' : 'empty' },
+      }));
       updateNodeData(nodeId, { scenes });
+    },
+    onTextDocumentReadResult: (result) => {
+      setDocumentTextProjections((current) => applyTextDocumentReadResult(current, result));
     },
     onModelInstalledResult: (nodeId, installedVersion) => {
       updateNodeData(nodeId, { installedVersion: installedVersion ?? undefined });
@@ -1209,6 +1237,10 @@ export function CanvasApp() {
   }, [selectedNodeIds, nodes]);
 
   const handleScriptLoadScenes = useCallback((nodeId: string, scriptPath: string) => {
+    setScriptIndexStates((current) => ({
+      ...current,
+      [nodeId]: { status: 'loading' },
+    }));
     vscode?.postMessage({ type: 'getScriptIndex', nodeId, scriptPath });
   }, []);
 
@@ -1236,6 +1268,24 @@ export function CanvasApp() {
   const handleDocumentOpen = useCallback((docPath: string) => {
     vscode?.postMessage({ type: 'openDocument', docPath });
   }, []);
+
+  const handleDocumentLoadText = useCallback(
+    (nodeId: string, docPath: string, docType: CanvasTextDocumentType) => {
+      const requestId = `canvas-text:${nodeId}:${++textDocumentRequestSequenceRef.current}`;
+      setDocumentTextProjections((current) => ({
+        ...current,
+        [nodeId]: { status: 'loading', requestId, docPath, docType },
+      }));
+      vscode?.postMessage({
+        type: 'textDocument:read',
+        requestId,
+        nodeId,
+        docPath,
+        docType,
+      });
+    },
+    [],
+  );
 
   const handleCanvasEmbedOpen = useCallback((canvasPath: string) => {
     vscode?.postMessage({ type: 'openDocument', docPath: canvasPath });
@@ -1358,17 +1408,12 @@ export function CanvasApp() {
       closeContentOverlay();
       return true;
     }
-    if (isCanvasSettingsVisible) {
-      setIsCanvasSettingsVisible(false);
-      return true;
-    }
     return false;
   }, [
     closeContentOverlay,
     closeGenerationPanel,
     contentOverlayState.visible,
     generationPanelState.visible,
-    isCanvasSettingsVisible,
   ]);
 
   // =========================================================================
@@ -1781,28 +1826,6 @@ export function CanvasApp() {
         bodyClassName="canvas-workbench-body"
         mainClassName="canvas-main-panel"
         mainKind="canvas"
-        leftRail={
-          <CanvasToolbar
-            onUndo={undo}
-            onRedo={redo}
-            isSelectMode={interactionTool === 'select'}
-            onSelectTool={selectInteractionTool}
-            isNodeLibraryVisible={isRightNodeTreeVisible}
-            onToggleNodeLibrary={() => setIsRightNodeTreeVisible((visible) => !visible)}
-            workspaceSurfaceState={workspaceSurfaceState}
-            onToggleWorkspaceSurface={handleToggleWorkspaceSurface}
-            onOpenExport={() => {
-              reportAction('openExport', t('toolbar.export'));
-            }}
-            onOpenPackage={() => {
-              reportAction('openPackage', t('toolbar.package'), undefined, canvasData);
-            }}
-            isCanvasSettingsVisible={isCanvasSettingsVisible}
-            onToggleCanvasSettings={() => setIsCanvasSettingsVisible((visible) => !visible)}
-            isPanMode={isPanMode}
-            onTogglePanMode={togglePanMode}
-          />
-        }
         main={
           <PlaybackWorkspace
             className="canvas-main-surface"
@@ -1848,9 +1871,12 @@ export function CanvasApp() {
                   onCanvasClick={handleCanvasClick}
                   onMarqueeSelect={handleMarqueeSelect}
                   onScriptLoadScenes={handleScriptLoadScenes}
+                  scriptIndexStates={scriptIndexStates}
                   onScriptOpen={handleScriptOpen}
                   onScriptNavigateToScene={handleScriptNavigateToScene}
                   onDocumentOpen={handleDocumentOpen}
+                  onDocumentLoadText={handleDocumentLoadText}
+                  documentTextProjections={documentTextProjections}
                   onCanvasEmbedOpen={handleCanvasEmbedOpen}
                   onModelCheckInstalled={handleModelCheckInstalled}
                   onRemoveContainerChild={handleRemoveContainerChild}
@@ -1860,6 +1886,27 @@ export function CanvasApp() {
                   isSpacePanActive={isSpacePanActive}
                   isGridVisible={isGridVisible}
                 />
+
+                <div className="canvas-floating-toolbar-host" data-canvas-toolbar-host="left">
+                  <CanvasToolbar
+                    onUndo={undo}
+                    onRedo={redo}
+                    isSelectMode={interactionTool === 'select'}
+                    onSelectTool={selectInteractionTool}
+                    isNodeLibraryVisible={isRightNodeTreeVisible}
+                    onToggleNodeLibrary={() => setIsRightNodeTreeVisible((visible) => !visible)}
+                    workspaceSurfaceState={workspaceSurfaceState}
+                    onToggleWorkspaceSurface={handleToggleWorkspaceSurface}
+                    onOpenExport={() => {
+                      reportAction('openExport', t('toolbar.export'));
+                    }}
+                    onOpenPackage={() => {
+                      reportAction('openPackage', t('toolbar.package'), undefined, canvasData);
+                    }}
+                    isPanMode={isPanMode}
+                    onTogglePanMode={togglePanMode}
+                  />
+                </div>
 
                 {nodes.length === 0 && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -1921,20 +1968,6 @@ export function CanvasApp() {
                 )}
 
                 <FloatingPanelHost panels={floatingPanels} />
-
-                {canvasData && isCanvasSettingsVisible && (
-                  <CanvasSettingsPanel
-                    canvasData={canvasData}
-                    viewportZoom={viewport.zoom}
-                    nodeTypeSummary={nodeTypeSummary}
-                    activeSubsystemIds={activeSubsystemIds}
-                    isGridVisible={isGridVisible}
-                    onGridVisibleChange={setIsGridVisible}
-                    isHudVisible={isHudVisible}
-                    onHudVisibleChange={setIsHudVisible}
-                    onClose={() => setIsCanvasSettingsVisible(false)}
-                  />
-                )}
 
                 <GenerationPromptPanel
                   visible={generationPanelState.visible}

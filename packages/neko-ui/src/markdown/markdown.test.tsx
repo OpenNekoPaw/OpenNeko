@@ -9,6 +9,7 @@ import {
   MarkdownDiagnostics,
   MarkdownGenerationPromptParts,
   MarkdownInlineText,
+  MarkdownDocumentView,
   MarkdownPreview,
   createMarkdownRenderableTokens,
   isValidCompletionEdit,
@@ -146,6 +147,45 @@ describe('@neko/ui markdown primitives', () => {
     expect(host.querySelector('[data-markdown-inline-text="true"]')).not.toBeNull();
     expect(host.querySelector('[data-markdown-semantic-span="true"]')).not.toBeNull();
     expect(host.querySelector('[data-markdown-diagnostic="missing-resource"]')).not.toBeNull();
+  });
+
+  it('renders a normalized Markdown document without executing or fetching embedded content', () => {
+    act(() => {
+      root.render(
+        <MarkdownDocumentView
+          value={
+            '# Heading\n\n- **Bold**\n\n<script>alert(1)</script>\n\n[unsafe](javascript:alert(1)) ![cover](./cover.png)'
+          }
+        />,
+      );
+    });
+
+    expect(host.querySelector('h1')?.textContent).toBe('Heading');
+    expect(host.querySelector('strong')?.textContent).toBe('Bold');
+    expect(host.querySelector('script')).toBeNull();
+    expect(host.querySelector('[data-markdown-html-inert="true"]')?.textContent).toContain(
+      '<script>',
+    );
+    expect(host.querySelector('[data-markdown-unsafe-link="true"]')?.textContent).toBe('unsafe');
+    expect(host.querySelector('a[href^="javascript:"]')).toBeNull();
+    expect(host.querySelector('img')).toBeNull();
+    expect(host.querySelector('[data-markdown-image-placeholder="true"]')?.textContent).toContain(
+      'cover',
+    );
+  });
+
+  it('keeps safe external links navigable and renders GFM tables', () => {
+    act(() => {
+      root.render(
+        <MarkdownDocumentView
+          value={'[Open](https://example.com)\n\n| A | B |\n| - | - |\n| 1 | 2 |'}
+        />,
+      );
+    });
+
+    expect(host.querySelector('a')?.getAttribute('href')).toBe('https://example.com');
+    expect(host.querySelectorAll('table th')).toHaveLength(2);
+    expect(host.querySelectorAll('table td')).toHaveLength(2);
   });
 
   it('renders generation prompt parts as shared semantic chips', () => {

@@ -16,7 +16,6 @@ vi.mock('@neko/ui/icons', () => ({
   RightPanelOffIcon: ({ size = 16 }: { size?: number }) => (
     <span data-icon="right-panel-off">{size}</span>
   ),
-  SettingsIcon: ({ size = 16 }: { size?: number }) => <span data-icon="settings">{size}</span>,
   UndoIcon: ({ size = 16 }: { size?: number }) => <span data-icon="undo">{size}</span>,
 }));
 
@@ -38,22 +37,22 @@ describe('CanvasToolbar', () => {
     host.remove();
   });
 
-  it('renders as the shared left vertical toolbar surface', () => {
+  it('renders as the shared floating vertical toolbar surface', () => {
     act(() => {
       root.render(<CanvasToolbar onUndo={() => undefined} onRedo={() => undefined} />);
     });
 
     expect(host.querySelector('.neko-vtoolbar')).not.toBeNull();
-    expect(host.querySelector('.canvas-left-toolbar')?.getAttribute('aria-label')).toBe(
+    expect(host.querySelector('.canvas-floating-toolbar')?.getAttribute('aria-label')).toBe(
       'Canvas tools',
     );
     expect(host.querySelectorAll('.neko-toolbar-btn').length).toBeGreaterThan(0);
-    expect(host.querySelector('[data-creative-left-rail-action="select-tool"]')).not.toBeNull();
-    expect(host.querySelector('[data-creative-left-rail-action="toggle-pan-mode"]')).not.toBeNull();
+    expect(host.querySelector('[data-canvas-toolbar-action="select-tool"]')).not.toBeNull();
+    expect(host.querySelector('[data-canvas-toolbar-action="toggle-pan-mode"]')).not.toBeNull();
     expect(
-      host.querySelector('[data-creative-left-rail-action="open-add-node-popover"]'),
+      host.querySelector('[data-canvas-toolbar-action="open-add-node-popover"]'),
     ).toBeNull();
-    expect(host.querySelector('[data-creative-left-rail-action="import-file"]')).toBeNull();
+    expect(host.querySelector('[data-canvas-toolbar-action="import-file"]')).toBeNull();
   });
 
   it('switches between select and hand tool modes from the first toolbar group', () => {
@@ -74,18 +73,18 @@ describe('CanvasToolbar', () => {
     });
 
     const selectButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="select-tool"]',
+      '[data-canvas-toolbar-action="select-tool"]',
     );
     const handButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="toggle-pan-mode"]',
+      '[data-canvas-toolbar-action="toggle-pan-mode"]',
     );
 
     expect(selectButton?.getAttribute('aria-label')).toBe('Select Tool (V)');
     expect(selectButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(selectButton?.getAttribute('data-creative-left-rail-kind')).toBe('tool-mode');
+    expect(selectButton?.getAttribute('data-canvas-toolbar-kind')).toBe('tool-mode');
     expect(handButton?.getAttribute('aria-label')).toBe('Hand Tool (H)');
     expect(handButton?.getAttribute('aria-pressed')).toBe('false');
-    expect(handButton?.getAttribute('data-creative-left-rail-kind')).toBe('tool-mode');
+    expect(handButton?.getAttribute('data-canvas-toolbar-kind')).toBe('tool-mode');
 
     act(() => {
       selectButton?.click();
@@ -95,7 +94,7 @@ describe('CanvasToolbar', () => {
     expect(onTogglePanMode).toHaveBeenCalledTimes(1);
   });
 
-  it('controls the right node tree panel from the left toolbar', () => {
+  it('controls the right node tree panel from the floating toolbar', () => {
     const onToggleNodeLibrary = vi.fn();
 
     act(() => {
@@ -110,14 +109,14 @@ describe('CanvasToolbar', () => {
     });
 
     const toggleButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="toggle-right-node-tree"]',
+      '[data-canvas-toolbar-action="toggle-right-node-tree"]',
     );
     expect(toggleButton?.getAttribute('aria-label')).toBe('Hide right node tree');
     expect(toggleButton?.getAttribute('aria-controls')).toBe('canvas-right-node-tree-panel');
     expect(toggleButton?.getAttribute('aria-expanded')).toBe('true');
     expect(toggleButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(toggleButton?.getAttribute('data-creative-left-rail-kind')).toBe('visibility-toggle');
-    expect(toggleButton?.getAttribute('data-creative-left-rail-target')).toBe('right-panel');
+    expect(toggleButton?.getAttribute('data-canvas-toolbar-kind')).toBe('visibility-toggle');
+    expect(toggleButton?.getAttribute('data-canvas-toolbar-target')).toBe('right-panel');
 
     act(() => {
       toggleButton?.click();
@@ -136,7 +135,7 @@ describe('CanvasToolbar', () => {
     });
 
     const collapsedButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="toggle-right-node-tree"]',
+      '[data-canvas-toolbar-action="toggle-right-node-tree"]',
     );
     expect(collapsedButton?.getAttribute('aria-label')).toBe('Show right node tree');
     expect(collapsedButton?.getAttribute('aria-expanded')).toBe('false');
@@ -159,16 +158,16 @@ describe('CanvasToolbar', () => {
     });
 
     const exportButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="open-export"]',
+      '[data-canvas-toolbar-action="open-export"]',
     );
     const packageButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="open-package"]',
+      '[data-canvas-toolbar-action="open-package"]',
     );
     expect(exportButton?.getAttribute('aria-label')).toBe('Export');
-    expect(exportButton?.getAttribute('data-creative-left-rail-kind')).toBe('common-action');
+    expect(exportButton?.getAttribute('data-canvas-toolbar-kind')).toBe('common-action');
     expect(exportButton?.querySelector('[data-icon="download"]')).not.toBeNull();
     expect(packageButton?.getAttribute('aria-label')).toBe('Package');
-    expect(packageButton?.getAttribute('data-creative-left-rail-kind')).toBe('common-action');
+    expect(packageButton?.getAttribute('data-canvas-toolbar-kind')).toBe('common-action');
     expect(packageButton?.querySelector('[data-icon="package"]')).not.toBeNull();
 
     act(() => {
@@ -194,13 +193,13 @@ describe('CanvasToolbar', () => {
     });
 
     const canvasButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="toggle-playback-canvas-pane"]',
+      '[data-canvas-toolbar-action="toggle-playback-canvas-pane"]',
     );
     const stageButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="toggle-playback-stage-pane"]',
+      '[data-canvas-toolbar-action="toggle-playback-stage-pane"]',
     );
     const routeButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="toggle-playback-route-pane"]',
+      '[data-canvas-toolbar-action="toggle-playback-route-pane"]',
     );
 
     expect(canvasButton).toBeNull();
@@ -213,10 +212,10 @@ describe('CanvasToolbar', () => {
     expect(routeButton?.getAttribute('aria-pressed')).toBe('true');
     expect(routeButton?.getAttribute('aria-label')).toBe('Hide route matrix');
     expect(
-      host.querySelector('[data-creative-left-rail-action="reveal-playback-workspace"]'),
+      host.querySelector('[data-canvas-toolbar-action="reveal-playback-workspace"]'),
     ).toBeNull();
     expect(
-      host.querySelector('[data-creative-left-rail-action="hide-playback-workspace"]'),
+      host.querySelector('[data-canvas-toolbar-action="hide-playback-workspace"]'),
     ).toBeNull();
 
     act(() => {
@@ -242,10 +241,10 @@ describe('CanvasToolbar', () => {
     });
 
     const stageButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="toggle-playback-stage-pane"]',
+      '[data-canvas-toolbar-action="toggle-playback-stage-pane"]',
     );
     const routeButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="toggle-playback-route-pane"]',
+      '[data-canvas-toolbar-action="toggle-playback-route-pane"]',
     );
 
     expect(stageButton).not.toBeNull();
@@ -259,7 +258,7 @@ describe('CanvasToolbar', () => {
     expect(onToggleWorkspaceSurface.mock.calls).toEqual([['stage'], ['route']]);
   });
 
-  it('places frequent canvas actions in functional groups and keeps settings at the bottom', () => {
+  it('places frequent canvas actions in functional groups without a settings action', () => {
     act(() => {
       root.render(
         <CanvasToolbar
@@ -273,8 +272,6 @@ describe('CanvasToolbar', () => {
           onToggleWorkspaceSurface={() => undefined}
           onOpenExport={() => undefined}
           onOpenPackage={() => undefined}
-          isCanvasSettingsVisible={false}
-          onToggleCanvasSettings={() => undefined}
           isPanMode={true}
           onTogglePanMode={() => undefined}
         />,
@@ -282,8 +279,8 @@ describe('CanvasToolbar', () => {
     });
 
     const actions = Array.from(
-      host.querySelectorAll<HTMLButtonElement>('[data-creative-left-rail-action]'),
-    ).map((button) => button.getAttribute('data-creative-left-rail-action'));
+      host.querySelectorAll<HTMLButtonElement>('[data-canvas-toolbar-action]'),
+    ).map((button) => button.getAttribute('data-canvas-toolbar-action'));
 
     expect(actions).toEqual([
       'select-tool',
@@ -295,41 +292,23 @@ describe('CanvasToolbar', () => {
       'toggle-playback-route-pane',
       'open-export',
       'open-package',
-      'toggle-canvas-settings',
     ]);
 
-    expect(actions.slice(-1)).toEqual(['toggle-canvas-settings']);
-    expect(host.querySelector('[data-creative-left-rail-action="toggle-hud-controls"]')).toBeNull();
+    expect(
+      host.querySelector('[data-canvas-toolbar-action="toggle-canvas-settings"]'),
+    ).toBeNull();
+    expect(host.querySelector('[data-canvas-toolbar-action="toggle-hud-controls"]')).toBeNull();
   });
 
-  it('controls the canvas settings panel from the bottom visibility cluster', () => {
-    const onToggleCanvasSettings = vi.fn();
-
+  it('does not expose the removed canvas settings entry', () => {
     act(() => {
-      root.render(
-        <CanvasToolbar
-          onUndo={() => undefined}
-          onRedo={() => undefined}
-          isCanvasSettingsVisible={true}
-          onToggleCanvasSettings={onToggleCanvasSettings}
-        />,
-      );
+      root.render(<CanvasToolbar onUndo={() => undefined} onRedo={() => undefined} />);
     });
 
-    const settingsButton = host.querySelector<HTMLButtonElement>(
-      '[data-creative-left-rail-action="toggle-canvas-settings"]',
-    );
-    expect(settingsButton?.getAttribute('aria-label')).toBe('Hide Canvas Settings');
-    expect(settingsButton?.getAttribute('aria-controls')).toBe('canvas-settings-panel');
-    expect(settingsButton?.getAttribute('aria-expanded')).toBe('true');
-    expect(settingsButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(settingsButton?.getAttribute('data-creative-left-rail-kind')).toBe('visibility-toggle');
-    expect(settingsButton?.getAttribute('data-creative-left-rail-target')).toBe('canvas-settings');
-    expect(settingsButton?.querySelector('[data-icon="settings"]')).not.toBeNull();
-
-    act(() => {
-      settingsButton?.click();
-    });
-    expect(onToggleCanvasSettings).toHaveBeenCalledTimes(1);
+    expect(
+      host.querySelector('[data-canvas-toolbar-action="toggle-canvas-settings"]'),
+    ).toBeNull();
+    expect(host.querySelector('[aria-controls="canvas-settings-panel"]')).toBeNull();
+    expect(host.querySelector('[data-icon="settings"]')).toBeNull();
   });
 });

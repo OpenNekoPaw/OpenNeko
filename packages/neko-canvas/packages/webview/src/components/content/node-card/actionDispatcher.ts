@@ -7,6 +7,8 @@ import type {
 import {
   readDocumentPath,
   readDocumentResourceRef,
+  readPersistentAssetPath,
+  readMaterialMediaType,
   readRecord,
   readRenderableAssetPath,
   readResourceRef,
@@ -28,16 +30,15 @@ export const NODE_CARD_ACTION_DISPATCHER: NodeCardActionDispatcher = {
 
   'open-media-preview': (ctx) => {
     const assetPath = readRenderableAssetPath(ctx.node);
-    if (!assetPath) {
-      return;
-    }
     const documentResourceRef = readDocumentResourceRef(ctx.node);
     const resourceRef = readResourceRef(ctx.node);
+    if (!assetPath && !documentResourceRef && !resourceRef) return;
 
     ctx.postMessage({
       type: 'openMediaPreview',
-      assetPath,
-      mediaType: readString(ctx.node.data, 'mediaType'),
+      assetPath: assetPath ?? '',
+      nodeId: ctx.nodeId,
+      mediaType: readMaterialMediaType(ctx.node),
       ...(documentResourceRef ? { documentResourceRef } : {}),
       ...(resourceRef ? { resourceRef } : {}),
     });
@@ -47,8 +48,12 @@ export const NODE_CARD_ACTION_DISPATCHER: NodeCardActionDispatcher = {
     ctx.canvasStore.openContentOverlay(ctx.nodeId);
   },
 
-  edit: (ctx) => {
-    ctx.canvasStore.selectNodes([ctx.nodeId]);
+  'edit-media': (ctx) => {
+    postMaterialHostAction(ctx, 'editCanvasImage');
+  },
+
+  'save-to-asset-library': (ctx) => {
+    postMaterialHostAction(ctx, 'saveCanvasMaterialToAssetLibrary');
   },
 
   duplicate: (ctx) => {
@@ -84,6 +89,24 @@ export const NODE_CARD_ACTION_DISPATCHER: NodeCardActionDispatcher = {
     ctx.postMessage({ type: 'openDocument', docPath });
   },
 };
+
+function postMaterialHostAction(
+  ctx: Parameters<NodeCardActionDispatcher['edit-media']>[0],
+  type: 'editCanvasImage' | 'saveCanvasMaterialToAssetLibrary',
+): void {
+  const assetPath = readPersistentAssetPath(ctx.node);
+  const documentResourceRef = readDocumentResourceRef(ctx.node);
+  const resourceRef = readResourceRef(ctx.node);
+  if (!assetPath && !documentResourceRef && !resourceRef) return;
+  ctx.postMessage({
+    type,
+    nodeId: ctx.nodeId,
+    assetPath: assetPath ?? '',
+    mediaType: readMaterialMediaType(ctx.node),
+    ...(documentResourceRef ? { documentResourceRef } : {}),
+    ...(resourceRef ? { resourceRef } : {}),
+  });
+}
 
 export const CONTAINER_ACTION_DISPATCHER: ContainerActionDispatcher = {
   'assign-selected-children': (ctx) => {

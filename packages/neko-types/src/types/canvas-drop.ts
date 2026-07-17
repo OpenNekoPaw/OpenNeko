@@ -1,12 +1,9 @@
-import type { DocumentCanvasNode, ModelCanvasNode } from './canvas';
+import type { DocumentCanvasNode, ModelCanvasNode, TextCanvasNode } from './canvas';
 
 export type CanvasDroppedAssetKind =
-  | 'media'
-  | 'script'
-  | 'document'
-  | 'model'
-  | 'canvas'
-  | 'project';
+  'media' | 'text' | 'script' | 'document' | 'model' | 'canvas' | 'project';
+
+export type CanvasTextFileFormat = NonNullable<TextCanvasNode['data']['format']>;
 
 export type NkProjectType = 'nkv' | 'nka' | 'nkm' | 'nkp';
 
@@ -26,6 +23,15 @@ export interface DroppedScriptCanvasAsset {
   name: string;
   path: string;
   title: string;
+}
+
+export interface DroppedTextCanvasAsset {
+  kind: 'text';
+  name: string;
+  path: string;
+  title: string;
+  content: string;
+  format: CanvasTextFileFormat;
 }
 
 export interface DroppedDocumentCanvasAsset {
@@ -62,6 +68,7 @@ export interface DroppedProjectAsset {
 
 export type CanvasDroppedAsset =
   | DroppedMediaCanvasAsset
+  | DroppedTextCanvasAsset
   | DroppedScriptCanvasAsset
   | DroppedDocumentCanvasAsset
   | DroppedModelCanvasAsset
@@ -90,12 +97,24 @@ const MEDIA_EXTENSIONS: Record<string, DroppedMediaCanvasAsset['mediaType']> = {
   flac: 'audio',
 };
 
-const SCRIPT_EXTENSIONS = new Set(['fountain', 'nks', 'story']);
+const TEXT_EXTENSIONS: Record<string, CanvasTextFileFormat> = {
+  md: 'markdown',
+  markdown: 'markdown',
+  txt: 'plain',
+  log: 'plain',
+  fountain: 'plain',
+  nks: 'plain',
+  story: 'plain',
+};
 const DOCUMENT_EXTENSIONS: Record<string, DroppedDocumentCanvasAsset['docType']> = {
   pdf: 'pdf',
   docx: 'docx',
   epub: 'epub',
   cbz: 'cbz',
+  md: 'markdown',
+  markdown: 'markdown',
+  txt: 'text',
+  log: 'text',
 };
 const MODEL_EXTENSIONS = new Set(['safetensors', 'ckpt', 'pt', 'pth', 'bin']);
 const CANVAS_EXTENSIONS = new Set(['nkc']);
@@ -121,6 +140,10 @@ export function inferCanvasDocumentType(
   fileName: string,
 ): DroppedDocumentCanvasAsset['docType'] | null {
   return DOCUMENT_EXTENSIONS[getFileExtension(fileName)] ?? null;
+}
+
+export function inferCanvasTextFileFormat(fileName: string): CanvasTextFileFormat | null {
+  return TEXT_EXTENSIONS[getFileExtension(fileName)] ?? null;
 }
 
 export function inferCanvasModelType(
@@ -152,8 +175,8 @@ export function inferCanvasDroppedAssetKind(fileName: string): CanvasDroppedAsse
   if (inferCanvasMediaType(fileName)) {
     return 'media';
   }
-  if (SCRIPT_EXTENSIONS.has(getFileExtension(fileName))) {
-    return 'script';
+  if (inferCanvasTextFileFormat(fileName)) {
+    return 'text';
   }
   if (inferCanvasDocumentType(fileName)) {
     return 'document';

@@ -58,6 +58,24 @@ describe('nodeFactory gallery container', () => {
 });
 
 describe('nodeFactory composable presets', () => {
+  it('preserves explicit Markdown and plain-text document kinds', () => {
+    const markdown = buildCanvasNode({
+      type: 'document',
+      position: { x: 0, y: 0 },
+      zIndex: 0,
+      data: { docPath: 'assets/notes.md', docType: 'markdown', title: 'notes.md' },
+    });
+    const text = buildCanvasNode({
+      type: 'document',
+      position: { x: 0, y: 0 },
+      zIndex: 1,
+      data: { docPath: 'assets/notes.txt', docType: 'text', title: 'notes.txt' },
+    });
+
+    expect(markdown.type === 'document' && markdown.data.docType).toBe('markdown');
+    expect(text.type === 'document' && text.data.docType).toBe('text');
+  });
+
   it('preserves Canvas-owned Markdown table review metadata', () => {
     const node = buildCanvasNode({
       type: 'table',

@@ -157,7 +157,7 @@ export function GroupNode({
             className="spatial-group-count"
             aria-label={t('group.childCount', { count: childNodes.length })}
           >
-            {childNodes.length}
+            x{childNodes.length}
           </span>
         </div>
         {childNodes.length === 0 && !collapsed && (

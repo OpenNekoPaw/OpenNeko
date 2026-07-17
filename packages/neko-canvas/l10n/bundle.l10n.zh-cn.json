@@ -12,6 +12,7 @@
   "neko.canvas.addToAssetLibrary.noFile": "未选择文件。",
   "neko.canvas.addToAssetLibrary.success": "已将 {0} 添加到素材库。",
   "neko.canvas.asset.import.success": "已导入 {0} 个素材。",
+  "neko.canvas.material.save.success": "已将 {0} 存入素材库。",
   "neko.canvas.preview.title": "画布预览",
   "neko.canvas.preview.statusWaitingGraph": "等待画布图数据...",
   "neko.canvas.preview.ariaStage": "画布播放舞台",

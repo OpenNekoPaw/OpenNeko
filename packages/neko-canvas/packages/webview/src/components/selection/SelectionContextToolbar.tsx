@@ -8,6 +8,7 @@ import {
   LayersIcon,
   MoreHorizontalIcon,
   OpenIcon,
+  PackageIcon,
   PlayIcon,
   RefreshIcon,
   TrashIcon,
@@ -37,6 +38,8 @@ import type {
   NodeCardActionId,
 } from '../content/node-card';
 import { createBuiltInNodeTypeDescriptors } from '../nodes/nodeTypeDescriptors';
+import { resolveNodeFullscreenPresentation } from '../nodes/nodeTypeDescriptor';
+import { resolveCanvasMaterialPresentation } from './materialPresentation';
 
 interface SelectionContextToolbarProps {
   readonly nodes: readonly CanvasNode[];
@@ -58,7 +61,7 @@ interface ToolbarAction {
 
 const POLICY_REGISTRY = createBuiltInNodeCardPolicyRegistry();
 const NODE_TYPE_DESCRIPTORS = createBuiltInNodeTypeDescriptors();
-const MAX_PRIMARY_ACTIONS = 3;
+const MAX_PRIMARY_ACTIONS = 5;
 
 export function SelectionContextToolbar({
   nodes,
@@ -181,49 +184,102 @@ function resolveToolbarActions(
         parentId ? allNodes.find((candidate) => candidate.id === parentId) : undefined,
       )
       .filter((action) => action.id !== 'remove' || Boolean(parentId)) ?? [];
-  const nodeActions = [
-    createNodeAction(
-      node,
-      parentId,
-      {
-        id: 'edit',
-        label: 'action.editShort',
-        position: 'bottom',
-        visibleWhen: 'always',
-      },
-      previewSource,
-    ),
-    ...policyActions.map((action) => createNodeAction(node, parentId, action, previewSource)),
-    createNodeAction(
-      node,
-      parentId,
-      {
-        id: 'duplicate',
-        label: 'action.duplicateShort',
-        position: 'bottom',
-        visibleWhen: 'always',
-      },
-      previewSource,
-    ),
-    ...(NODE_TYPE_DESCRIPTORS[node.type]?.presentation === 'foundational'
-      ? [
+  const material = resolveCanvasMaterialPresentation(node, allNodes);
+  const materialActions = material
+    ? [
+        ...(material.canEditImage
+          ? [
+              createNodeAction(
+                node,
+                parentId,
+                {
+                  id: 'edit-media',
+                  label: 'action.editShort',
+                  position: 'bottom',
+                  visibleWhen: 'always',
+                },
+                previewSource,
+              ),
+            ]
+          : []),
+        ...(material.canPreview
+          ? [
+              createNodeAction(
+                node,
+                parentId,
+                {
+                  id: 'open-media-preview',
+                  label: 'action.openPreview',
+                  position: 'bottom',
+                  visibleWhen: 'always',
+                },
+                previewSource,
+              ),
+            ]
+          : []),
+        createNodeAction(
+          node,
+          parentId,
           {
-            ...createNodeAction(
-              node,
-              parentId,
-              {
-                id: 'open-content-overlay',
-                label: 'action.fullscreen',
-                position: 'bottom',
-                visibleWhen: 'always',
-              },
-              previewSource,
-            ),
-            overflowOnly: true,
+            id: 'duplicate',
+            label: 'action.duplicateShort',
+            position: 'bottom',
+            visibleWhen: 'always',
           },
+          previewSource,
+        ),
+        ...(material.canPromoteToAssetLibrary
+          ? [
+              createNodeAction(
+                node,
+                parentId,
+                {
+                  id: 'save-to-asset-library',
+                  label: 'action.saveToAssetLibrary',
+                  position: 'bottom',
+                  visibleWhen: 'always',
+                },
+                previewSource,
+              ),
+            ]
+          : []),
+      ]
+    : [];
+  const nodeActions = [
+    ...(material
+      ? materialActions
+      : policyActions.map((action) => createNodeAction(node, parentId, action, previewSource))),
+    ...(!material
+      ? [
+          createNodeAction(
+            node,
+            parentId,
+            {
+              id: 'duplicate',
+              label: 'action.duplicateShort',
+              position: 'bottom',
+              visibleWhen: 'always',
+            },
+            previewSource,
+          ),
         ]
       : []),
-    createDeleteAction([node.id]),
+    ...(resolveNodeFullscreenPresentation(NODE_TYPE_DESCRIPTORS[node.type], node)
+      ? [
+          createNodeAction(
+            node,
+            parentId,
+            {
+              id: 'open-content-overlay',
+              label: 'action.fullscreen',
+              position: 'bottom',
+              visibleWhen: 'always',
+            },
+            previewSource,
+          ),
+        ]
+      : []),
+    { ...createDeleteAction([node.id]), overflowOnly: true },
   ];
   const containerActions = node.container
     ? resolveContainerActions(
@@ -392,11 +448,13 @@ function nodeActionIcon(actionId: NodeCardActionId): ReactNode {
       return <OpenIcon size={14} />;
     case 'duplicate':
       return <CopyIcon size={14} />;
+    case 'save-to-asset-library':
+      return <PackageIcon size={14} />;
     case 'generate':
       return <RefreshIcon size={14} />;
     case 'remove':
       return <TrashIcon size={14} />;
-    case 'edit':
+    case 'edit-media':
       return <EditIcon size={14} />;
   }
 }
