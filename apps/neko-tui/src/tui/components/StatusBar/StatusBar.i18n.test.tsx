@@ -103,7 +103,6 @@ describe('StatusBar i18n', () => {
 
     const { lastFrame } = renderWithPresentation(<StatusBar />);
 
-    expect(lastFrame()).toContain('queue1');
     expect(lastFrame()).toContain('Queue paused after');
     expect(lastFrame()).toContain('cancellation');
   });

@@ -38,23 +38,14 @@ describe('ChatView runtime viewport', () => {
       'en',
       runtime,
     );
-    await waitForInkUpdate();
-
-    expect(view.lastFrame()).toContain('message-5');
+    await expect.poll(() => view.lastFrame()).toContain('message-5');
     expect(view.lastFrame()).not.toContain('message-1');
 
     runtime.conversation.stores.ui.getState().scrollUp(4);
-    await waitForInkUpdate();
-
-    expect(view.lastFrame()).toContain('message-3');
+    await expect.poll(() => view.lastFrame()).toContain('message-3');
     expect(view.lastFrame()).not.toContain('message-5');
 
     runtime.conversation.stores.ui.getState().scrollToBottom();
-    await waitForInkUpdate();
-    expect(view.lastFrame()).toContain('message-5');
+    await expect.poll(() => view.lastFrame()).toContain('message-5');
   });
 });
-
-async function waitForInkUpdate(): Promise<void> {
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-}

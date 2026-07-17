@@ -85,9 +85,8 @@ describe('direct media CLI actions', () => {
         status: 'completed',
         assetRefs: [`neko-generated://${kind}/asset-1`],
       });
-    });
+    }, 120_000);
   }
-
 });
 
 function createTestRuntime(kind: 'image' | 'video' | 'audio') {

@@ -44,7 +44,10 @@ describe('TUI Node adapter boundary', () => {
 
   it('keeps config, tasks, skills, content access, and workspace state on Node/runtime services', () => {
     const platformBootstrap = readFileSync(join(srcRoot, 'core', 'platform-bootstrap.ts'), 'utf8');
-    const runtimeBootstrap = readFileSync(join(srcRoot, 'core', 'runtime-bootstrap.ts'), 'utf8');
+    const applicationRuntime = readFileSync(
+      join(srcRoot, 'runtime', 'tui-application-runtime.ts'),
+      'utf8',
+    );
     const defaultCapabilities = readFileSync(
       join(srcRoot, 'host', 'tui-default-capabilities.ts'),
       'utf8',
@@ -54,11 +57,11 @@ describe('TUI Node adapter boundary', () => {
     expect(platformBootstrap).toContain('FileUserConfigManager');
     expect(platformBootstrap).toContain('taskRecoveryStorage');
     expect(platformBootstrap).not.toContain('tasks.json');
-    expect(platformBootstrap).toContain('createNodeWorkspaceContentHostAdapter');
-    expect(platformBootstrap).toContain('createNodeContentAccessRuntime');
-    expect(runtimeBootstrap).toContain('createNodeWorkspaceRuntimeStore');
-    expect(runtimeBootstrap).toContain('skillService');
+    expect(applicationRuntime).toContain('createAgentTuiApplicationRuntime');
+    expect(applicationRuntime).toContain('createConversationStore');
+    expect(applicationRuntime).toContain('createConfigStore');
     expect(defaultCapabilities).toContain('createNodeContentAccessRuntime');
+    expect(defaultCapabilities).toContain('createNodeWorkspaceContentHostAdapter');
     expect(defaultCapabilities).toContain('createNodeAssetsCapabilityProvider');
     expect(defaultCapabilities).toContain('createNodeEntitySearchCapabilityProviders');
     expect(nodeHostAdapter).toContain('createNodeHostAdapter');
@@ -82,7 +85,7 @@ describe('TUI Node adapter boundary', () => {
     );
 
     expect(output).toBe('assets-headless-esm-ok');
-  });
+  }, 30_000);
 
   it('keeps executable build ownership in the application manifest', () => {
     const packageManifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as {

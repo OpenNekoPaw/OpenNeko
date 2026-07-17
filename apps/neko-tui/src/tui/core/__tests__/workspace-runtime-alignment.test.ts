@@ -122,6 +122,7 @@ function createUserConfig(): UnifiedConfig {
         name: 'explicit-user',
         displayName: 'Explicit User',
         type: 'generic',
+        protocolProfile: 'openai-chat',
         apiUrl: 'https://ai.example.test/v1',
         apiKey: 'sk-test',
         enabled: true,

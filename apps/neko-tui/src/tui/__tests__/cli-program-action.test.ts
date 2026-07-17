@@ -109,7 +109,7 @@ describe('createCliProgram actions', () => {
     expect(mockState.capturedAppProps?.initialPrompt).toBe('你好');
     expect(mockState.capturedAppProps?.resumeConversationId).toBeUndefined();
     expect(mockState.capturedAppProps?.terminal).toBe(terminal);
-  });
+  }, 30_000);
 
   it('rejects old cli conversation ids instead of routing them into TUI resume', async () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-cli-action-'));

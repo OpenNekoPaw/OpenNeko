@@ -10,9 +10,8 @@ import {
   presentQueuedContinuation,
   presentResourceCacheGcFailure,
   presentResumeFallback,
-  presentSkillActivationRejected,
+  presentSkillInvocationRejected,
   presentTaskResultContinuation,
-  presentTaskResultObservationDiagnostic,
   presentWorkspaceContentDiagnostic,
 } from './runtime-presentation';
 import { CLI_TERMINAL_MESSAGE_SOURCE } from './terminal-messages';
@@ -115,8 +114,8 @@ describe('runtime presentation', () => {
     expect(presentResumeFallback('conv-原文', presentation)).toBe(
       '未找到对话“conv-原文”；将开始新对话。',
     );
-    expect(presentSkillActivationRejected('skill-原文', presentation)).toBe(
-      '未能激活 Skill“skill-原文”。',
+    expect(presentSkillInvocationRejected('skill-原文', presentation)).toBe(
+      'Skill“skill-原文”不可用。',
     );
   });
 
@@ -130,19 +129,5 @@ describe('runtime presentation', () => {
     expect(
       presentMediaResultPersistenceFailure(new Error('provider 原文'), createPresentation('zh-cn')),
     ).toBe('保存媒体任务结果 URL 失败：provider 原文');
-  });
-
-  it('uses task-observation codes and stable IDs instead of the shared English message', () => {
-    expect(
-      presentTaskResultObservationDiagnostic(
-        {
-          code: 'recording-failed',
-          taskId: 'task-42',
-          message: 'legacy English must not appear',
-          error: new Error('database 原文'),
-        },
-        createPresentation('zh-cn'),
-      ),
-    ).toBe('记录任务 task-42 的结果失败：database 原文');
   });
 });

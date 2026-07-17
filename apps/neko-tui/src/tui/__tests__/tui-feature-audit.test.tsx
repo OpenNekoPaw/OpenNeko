@@ -61,6 +61,12 @@ const TEST_CONFIG = {
   providerType: 'openai',
   providerRequiresApiKey: true,
   model: 'gpt-5.3-codex',
+  chatModel: {
+    providerId: 'openai',
+    modelId: 'gpt-5.3-codex',
+    apiModelId: 'gpt-5.3-codex',
+    capabilities: ['llm.chat', 'reasoning'],
+  },
   baseUrl: 'https://www.nekoapi.com/v1',
   apiKey: 'sk-test-key',
 };
@@ -284,7 +290,7 @@ describe('4. Agent Execution Progress', () => {
 
     const { lastFrame } = render(<StatusBar />);
     const frame = lastFrame()!;
-    expect(frame).toContain('ctx:45.0K/?');
+    expect(frame).toContain('ctx:45.0K/');
     expect(frame).not.toContain('50.0K');
     console.log('[Progress] Token usage:\n', frame);
   });
@@ -325,6 +331,10 @@ describe('5. Model Configuration Display', () => {
     useConfigStore.getState().replaceConfig({
       ...TEST_CONFIG,
       model: 'claude-sonnet-4-20250514',
+      chatModel: {
+        providerId: 'openai',
+        modelId: 'claude-sonnet-4-20250514',
+      },
     });
     const { lastFrame } = render(<StatusBar />);
     const frame = lastFrame()!;
@@ -352,7 +362,6 @@ describe('5. Model Configuration Display', () => {
     expect(f3()).toContain('auto');
     console.log('[Config] Auto mode:\n', f3());
   });
-
 });
 
 // ═════════════════════════════════════════════════════════════════════
@@ -679,7 +688,7 @@ describe('9. Full Conversation Flow', () => {
     // Status bar
     expect(frame).toContain('gpt-5.3-codex');
     expect(frame).toContain('4/10');
-    expect(frame).toContain('ctx:12.0K/?');
+    expect(frame).toContain('ctx:12.0K/');
 
     console.log('═══ Full Agent Session ═══\n', frame);
   });

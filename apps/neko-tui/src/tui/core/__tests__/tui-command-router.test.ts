@@ -826,13 +826,12 @@ describe('handleTuiControlCommand', () => {
     expect(send.error).toBe('Artifact send is not available for this session.');
   });
 
-  it('routes marketplace help through the localized canonical presenter', async () => {
+  it('rejects the removed marketplace command visibly', async () => {
     const result = await handleTuiControlCommand('/market', createContext({ uiLocale: 'zh-cn' }));
 
     expect(result.source).toBe('tui-router');
-    expect(result.output).toContain('Neko 市场 — CLI 命令：');
-    expect(result.output).toContain('/market search <query>');
-    expect(result.output).not.toContain('Search for packages');
+    expect(result.output).toBeUndefined();
+    expect(result.error).toContain('/market');
   });
 
   it('routes config updates through the canonical callback and localized presenter', async () => {

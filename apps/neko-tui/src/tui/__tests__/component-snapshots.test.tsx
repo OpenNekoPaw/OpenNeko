@@ -54,6 +54,12 @@ function resetStores(): void {
     provider: 'openai',
     providerType: 'openai',
     providerRequiresApiKey: true,
+    chatModel: {
+      providerId: 'openai',
+      modelId: 'gpt-5.3-codex',
+      apiModelId: 'gpt-5.3-codex',
+      capabilities: ['llm.chat', 'reasoning'],
+    },
   });
 }
 

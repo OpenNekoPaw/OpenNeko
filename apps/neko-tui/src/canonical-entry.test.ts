@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -20,10 +20,8 @@ describe('OpenNeko TUI canonical application entry', () => {
   it('keeps supported callers on the app executable and poisons old executable references', () => {
     const repoRoot = resolve(__dirname, '../../..');
     const rootPackage = readFileSync(resolve(repoRoot, 'package.json'), 'utf8');
-    const workflow = readFileSync(
-      resolve(repoRoot, '.github/workflows/agent-evaluation.yml'),
-      'utf8',
-    );
+    const workflowDirectory = resolve(repoRoot, '.github/workflows');
+    const workflowNames = readdirSync(workflowDirectory).filter((name) => /\.ya?ml$/u.test(name));
     const ablationPlan = readFileSync(
       resolve(repoRoot, 'scripts/agent-eval/ablation/plans/media-production-guidance.json'),
       'utf8',
@@ -36,8 +34,13 @@ describe('OpenNeko TUI canonical application entry', () => {
       resolve(repoRoot, 'scripts/agent-eval/runner/run-v2-case.mjs'),
       'utf8',
     );
-    const callers = [rootPackage, workflow, ablationPlan, protocolSmoke, suiteRunner].join('\n');
+    const debugLaunch = readFileSync(
+      resolve(repoRoot, 'scripts/agent-eval/runner/tui-debug-launch.mjs'),
+      'utf8',
+    );
+    const callers = [rootPackage, ablationPlan, protocolSmoke, suiteRunner, debugLaunch].join('\n');
 
+    expect(workflowNames).not.toContain('agent-evaluation.yml');
     expect(callers).toContain('@neko/app-tui');
     expect(callers).toContain('apps/neko-tui/dist/main.js');
     expect(callers).not.toContain('packages/neko-agent/packages/cli-tui/dist/cli.js');
