@@ -23,7 +23,10 @@ export async function runStep(step, context) {
       }
       return context.webview.dispatchKey(step.key);
     case 'host-command':
-      return context.host.execute('execute-command', { command: step.command, args: step.args ?? [] });
+      return context.host.execute('execute-command', {
+        command: step.command,
+        args: step.args ?? [],
+      });
     case 'open-file':
       return context.host.execute('open-file', { path: step.path });
     case 'read-workspace':
@@ -34,8 +37,6 @@ export async function runStep(step, context) {
       return context.host.execute('save-active', {});
     case 'reload':
       return context.host.execute('reload-window', {});
-    case 'restart-host':
-      return context.host.execute('restart-host', {});
     case 'hide-reveal':
       return context.host.execute('hide-reveal', {});
     case 'close-reopen':
@@ -69,7 +70,9 @@ export async function waitForState(session, selector, state, timeoutMs) {
 
 async function interact(session, selector, body) {
   const elementExpression = createSelectorExpression(selector);
-  const result = await session.evaluate(`(() => { const element = ${elementExpression}; if (!element) return false; ${body} })()`);
+  const result = await session.evaluate(
+    `(() => { const element = ${elementExpression}; if (!element) return false; ${body} })()`,
+  );
   if (result !== true) {
     throw new Error(`Element not found for selector ${JSON.stringify(selector)}`);
   }
@@ -136,7 +139,9 @@ async function resolveInteractionTarget(session, selector) {
     })()`,
   );
   if (!target || typeof target.x !== 'number' || typeof target.y !== 'number') {
-    throw new Error(`Visible interaction target not found for selector ${JSON.stringify(selector)}`);
+    throw new Error(
+      `Visible interaction target not found for selector ${JSON.stringify(selector)}`,
+    );
   }
   return target;
 }

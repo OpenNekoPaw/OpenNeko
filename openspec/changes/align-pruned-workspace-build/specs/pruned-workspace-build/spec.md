@@ -37,6 +37,11 @@ Root build, compile, package, quality, and smoke orchestration MUST NOT invoke a
 - **WHEN** `Debug Dev (All)` invokes its pre-launch build with no dev-only packages configured
 - **THEN** the build succeeds, forwards each retained Turbo filter as a separate argument, and opens the repository-owned synthetic debug workspace
 
+#### Scenario: Validate test and scenario metadata
+
+- **WHEN** test discovery, quality guardrails, and Webview functional scenario selection run
+- **THEN** every declared package path resolves to a retained workspace package and no removed product directory is scanned or compiled
+
 ### Requirement: Installation metadata contains only retained extensions
 
 The VS Code extension pack and release-channel metadata MUST contain exactly the retained product extensions, including the pruned Rust Media Engine, and no removed product identifier.

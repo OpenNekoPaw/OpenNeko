@@ -44,8 +44,8 @@ describe('webview runtime error policy', () => {
   it('records host information while retaining host errors as failures', () => {
     const result = classifyRuntimeEvents(
       [
-        { source: 'electron-main', applicationId: 'home', level: 'info', message: 'DevTools listening' },
-        { source: 'electron-main', applicationId: 'home', level: 'error', message: 'main process failed' },
+        { source: 'extension-host', level: 'info', message: 'Extension host ready' },
+        { source: 'extension-host', level: 'error', message: 'Extension host failed' },
       ],
       policy,
     );
@@ -175,7 +175,7 @@ describe('webview runtime error policy', () => {
           level: 'error',
           message:
             "WebSocket connection to 'ws://127.0.0.1:55030/v1/streams/strm_editor-v_0000' failed: ",
-          url: 'https://file+.vscode-resource.vscode-cdn.net/workspace/packages/neko-model/dist/webview/assets/index.js',
+          url: 'https://file+.vscode-resource.vscode-cdn.net/workspace/packages/neko-canvas/dist/webview/assets/index.js',
         },
         {
           source: 'console',

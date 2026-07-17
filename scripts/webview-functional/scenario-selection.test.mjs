@@ -48,20 +48,7 @@ describe('functional P0 scenario selection', () => {
       'scripts/webview-functional/scenarios/preview/preview-docx-node-host.p0.scenario.json',
       'scripts/webview-functional/scenarios/preview/preview-epub-node-host.p0.scenario.json',
       'scripts/webview-functional/scenarios/preview/preview-pdf-node-host.p0.scenario.json',
-      'scripts/webview-functional/scenarios/story/story-edit-diagnostic-save-reopen.p0.scenario.json',
     ]);
-  });
-
-  it('selects Home Electron scenarios for changes under the application root', async () => {
-    assert.deepEqual(
-      await selectFunctionalScenarios(['apps/neko-home/src/renderer/App.tsx'], {
-        host: 'electron',
-      }),
-      [
-        'scripts/webview-functional/scenarios/home/home-resources-agent-restart.p0.scenario.json',
-        'scripts/webview-functional/scenarios/home/home-startup-engine-unavailable-handoff.p0.scenario.json',
-      ],
-    );
   });
 
   it('returns an explicit empty selection for unrelated research prose', async () => {

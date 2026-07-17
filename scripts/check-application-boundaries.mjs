@@ -277,31 +277,31 @@ function runSelfTest() {
   const cases = [
     {
       name: 'application public package import passes',
-      file: 'apps/neko-home/src/main.ts',
+      file: 'apps/neko-vscode/src/main.ts',
       content: "import { createHost } from '@neko/host';\n",
       expected: [],
     },
     {
       name: 'application relative package import fails',
-      file: 'apps/neko-home/src/main.ts',
+      file: 'apps/neko-vscode/src/main.ts',
       content: "import { x } from '../../../packages/neko-agent/src/x';\n",
       expected: ['applications-use-public-package-entries'],
     },
     {
       name: 'application internal package import fails',
-      file: 'apps/neko-home/src/main.ts',
+      file: 'apps/neko-vscode/src/main.ts',
       content: "import { x } from '@neko-agent/webview/src/internal';\n",
       expected: ['applications-must-not-import-feature-internals'],
     },
     {
       name: 'package application import fails',
       file: 'packages/neko-host/src/index.ts',
-      content: "export { start } from '../../../apps/neko-home/src/main';\n",
+      content: "export { start } from '../../../apps/neko-vscode/src/main';\n",
       expected: ['packages-must-not-depend-on-applications'],
     },
     {
       name: 'application cross import fails',
-      file: 'apps/neko-home/src/main.ts',
+      file: 'apps/neko-vscode/src/main.ts',
       content: "import { start } from '../../apps/neko-tui/src/main';\n",
       expected: ['applications-must-not-import-other-applications'],
     },

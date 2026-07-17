@@ -13,7 +13,6 @@ import {
   writeFunctionalReport,
 } from './report.mjs';
 import { VSCodeFunctionalHost } from './vscode-host.mjs';
-import { ElectronApplicationFunctionalHost } from './electron-app-host.mjs';
 
 const FUNCTIONAL_CONTROLLER_EXTENSION_ID = 'neko-test.neko-webview-functional-controller';
 
@@ -94,7 +93,6 @@ export async function runScenario(scenario, options) {
       });
       if (
         step.operation === 'reload' ||
-        step.operation === 'restart-host' ||
         step.operation === 'hide-reveal' ||
         step.operation === 'close-reopen'
       ) {
@@ -104,14 +102,17 @@ export async function runScenario(scenario, options) {
 
     const observations = [
       ...(prerequisiteRuntime?.observations ?? []),
-      ...await host.observations(),
+      ...(await host.observations()),
     ];
     const runtimeEvents = [
       ...(prerequisiteRuntime?.runtimeEvents ?? []),
       ...host.runtimeEvents,
       ...host.sessions.flatMap((session) => session.events),
     ];
-    runtimeClassification = classifyRuntimeEvents(runtimeEvents, createRuntimeErrorPolicy(scenario));
+    runtimeClassification = classifyRuntimeEvents(
+      runtimeEvents,
+      createRuntimeErrorPolicy(scenario),
+    );
     for (const assertion of scenario.assertions) {
       const assertionStartedAt = Date.now();
       const value = await runAssertion(assertion, {
@@ -147,15 +148,22 @@ export async function runScenario(scenario, options) {
   } catch (error) {
     runError = error;
     failureClassification = error.failureClassification ?? inferFailureClassification(error);
-    status = failureClassification === 'infrastructure' ? 'infrastructure-fail' :
-      failureClassification === 'configuration' ? 'configuration-invalid' : 'case-fail';
+    status =
+      failureClassification === 'infrastructure'
+        ? 'infrastructure-fail'
+        : failureClassification === 'configuration'
+          ? 'configuration-invalid'
+          : 'case-fail';
     if (host) {
       const runtimeEvents = [
         ...(prerequisiteRuntime?.runtimeEvents ?? []),
         ...host.runtimeEvents,
         ...host.sessions.flatMap((session) => session.events),
       ];
-      runtimeClassification = classifyRuntimeEvents(runtimeEvents, createRuntimeErrorPolicy(scenario));
+      runtimeClassification = classifyRuntimeEvents(
+        runtimeEvents,
+        createRuntimeErrorPolicy(scenario),
+      );
       if (host.webview && scenario.evidence.domSnapshot) {
         artifacts.domSnapshot = await host.webview.captureDomSnapshot().catch(() => undefined);
       }
@@ -178,7 +186,9 @@ export async function runScenario(scenario, options) {
   }
 
   const completedAt = new Date().toISOString();
-  const outputRoot = resolve(options.outputRoot ?? join(options.repoRoot, 'reports/webview-functional'));
+  const outputRoot = resolve(
+    options.outputRoot ?? join(options.repoRoot, 'reports/webview-functional'),
+  );
   await mkdir(outputRoot, { recursive: true });
   const report = createFunctionalReport({
     scenario,
@@ -248,13 +258,10 @@ export async function runScenario(scenario, options) {
 function createRuntimeErrorPolicy(scenario) {
   return {
     ...scenario.errorPolicy,
-    developmentExtensionIds:
-      scenario.host === 'vscode'
-        ? [
-            ...scenario.extensions.map((extension) => extension.id),
-            FUNCTIONAL_CONTROLLER_EXTENSION_ID,
-          ]
-        : [],
+    developmentExtensionIds: [
+      ...scenario.extensions.map((extension) => extension.id),
+      FUNCTIONAL_CONTROLLER_EXTENSION_ID,
+    ],
   };
 }
 
@@ -282,16 +289,6 @@ export async function startHostWithInfrastructureRetry(
 }
 
 function createHost(scenario, fixture, options) {
-  if (scenario.host === 'electron') {
-    return new ElectronApplicationFunctionalHost({
-      scenario,
-      repoRoot: options.repoRoot,
-      runRoot: fixture.runRoot,
-      fixtureRoot: fixture.fixtureRoot,
-      startupTimeoutMs: options.startupTimeoutMs ?? 60000,
-      environment: options.environment ?? {},
-    });
-  }
   return new VSCodeFunctionalHost({
     scenario,
     repoRoot: options.repoRoot,
@@ -316,7 +313,8 @@ function inferFailureClassification(error) {
 function artifactPath(key) {
   if (key === 'domSnapshot') return 'dom/webview.html';
   if (key === 'screenshot') return 'screenshots/final.png';
-  if (key.startsWith('stepScreenshot:')) return `screenshots/${key.slice('stepScreenshot:'.length)}.png`;
+  if (key.startsWith('stepScreenshot:'))
+    return `screenshots/${key.slice('stepScreenshot:'.length)}.png`;
   return `evidence/${key}.txt`;
 }
 

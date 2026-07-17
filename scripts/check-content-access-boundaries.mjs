@@ -12,9 +12,6 @@ const checkedRoots = [
   'packages/neko-cut/packages/extension/src',
   'packages/neko-preview/packages/extension/src',
   'packages/neko-assets/src',
-  'packages/neko-audio/packages/extension/src',
-  'packages/neko-model/packages/extension/src',
-  'packages/neko-sketch/packages/extension/src',
   'packages/neko-tools/packages/extension/src',
 ];
 
@@ -24,9 +21,6 @@ const featurePackageRoots = [
   'packages/neko-cut/packages/extension/src',
   'packages/neko-preview/packages/extension/src',
   'packages/neko-assets/src',
-  'packages/neko-audio/packages/extension/src',
-  'packages/neko-model/packages/extension/src',
-  'packages/neko-sketch/packages/extension/src',
   'packages/neko-tools/packages/extension/src',
 ];
 
@@ -42,10 +36,7 @@ const blockedSymbols = [
   'createDefaultLocalResourceAccessService',
 ];
 
-const durableGeneratedCachePathPatterns = [
-  '.neko/.cache/generated',
-  '.neko/.cache/resources',
-];
+const durableGeneratedCachePathPatterns = ['.neko/.cache/generated', '.neko/.cache/resources'];
 
 const generatedCacheDiagnosticTestMarkers = [
   'rejects promoted generated outputs in cache scope',
@@ -53,9 +44,7 @@ const generatedCacheDiagnosticTestMarkers = [
   'ingest-cache-output',
 ];
 
-const allowedFiles = new Set([
-  'packages/neko-agent/packages/extension/src/__mocks__/vscode.ts',
-]);
+const allowedFiles = new Set(['packages/neko-agent/packages/extension/src/__mocks__/vscode.ts']);
 
 if (process.argv.includes('--self-test')) {
   runSelfTest();
@@ -236,10 +225,7 @@ function* walk(root) {
 }
 
 function isTestFile(file) {
-  return (
-    /(?:^|\/)__tests__\//.test(file) ||
-    /\.(?:test|spec)\.[cm]?[tj]sx?$/.test(file)
-  );
+  return /(?:^|\/)__tests__\//.test(file) || /\.(?:test|spec)\.[cm]?[tj]sx?$/.test(file);
 }
 
 function lineForIndex(content, index) {

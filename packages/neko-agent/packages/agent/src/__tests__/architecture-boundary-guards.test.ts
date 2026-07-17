@@ -50,8 +50,9 @@ describe('agent architecture boundary guards', () => {
     const manifest = JSON.parse(
       readFileSync(join(packageRoot, 'platform/package.json'), 'utf-8'),
     ) as { dependencies?: Record<string, string> };
-    expect(Object.keys(manifest.dependencies ?? {}).filter((name) => name.startsWith('@ai-sdk/')))
-      .toEqual([]);
+    expect(
+      Object.keys(manifest.dependencies ?? {}).filter((name) => name.startsWith('@ai-sdk/')),
+    ).toEqual([]);
   });
 
   it('keeps retired experiment command, exports, markers, and runtime branches absent', () => {
@@ -576,7 +577,10 @@ describe('agent architecture boundary guards', () => {
     }
 
     const canvasExecutorSource = readFileSync(
-      join(workspaceRoot, 'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts'),
+      join(
+        workspaceRoot,
+        'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
+      ),
       'utf-8',
     );
     for (const forbiddenLlmDetail of [
@@ -739,7 +743,9 @@ describe('agent architecture boundary guards', () => {
       'hooks/executor-hooks-factory.ts',
     ]
       .filter((relativePath) => existsSync(join(agentSrc, relativePath)))
-      .map((relativePath) => stripTypeScriptComments(readFileSync(join(agentSrc, relativePath), 'utf-8')))
+      .map((relativePath) =>
+        stripTypeScriptComments(readFileSync(join(agentSrc, relativePath), 'utf-8')),
+      )
       .join('\n');
     const forbiddenPermissionToolNames = [
       'GetTimelineInfo',
@@ -1142,17 +1148,8 @@ describe('agent architecture boundary guards', () => {
         new Set(removedCreativeSkillNames),
       ],
       [
-        'packages/neko-skills/src/builtins/builtin-skills.test.ts',
-        new Set(removedRuntimeIdentities),
-      ],
-      ['packages/neko-skills/src/builtins/creative-media.ts', new Set(['generated-shot-assembly'])],
-      [
-        'packages/neko-skills/src/quality/__tests__/quality-review-validation.test.ts',
+        'packages/neko-agent/packages/extension/src/capabilities/quality/__tests__/quality-review-validation.test.ts',
         new Set(removedQualityToolNames),
-      ],
-      [
-        'packages/neko-skills/src/subagent/__tests__/creative-presets.test.ts',
-        new Set(['QualityCheckConsistency']),
       ],
       [
         'packages/neko-cut/packages/extension/src/services/cutAgentSkillInvocation.test.ts',
@@ -1499,7 +1496,6 @@ describe('agent architecture boundary guards', () => {
       ...listFiles(agentTypesSrc),
       ...listFiles(extensionSrc),
       ...listFiles(webviewSrc),
-      ...listFiles(join(workspaceRoot, 'packages/neko-skills/src')),
     ]
       .filter((file) => file.endsWith('.ts') || file.endsWith('.tsx'))
       .filter((file) => !isTestFile(file))
@@ -1691,13 +1687,11 @@ describe('agent architecture boundary guards', () => {
 
   it('poisons global creative model matrices and executable Prompt-example catalogs', () => {
     const platformSrc = join(packageRoot, 'platform/src');
-    const nekoSkillsSrc = join(workspaceRoot, 'packages/neko-skills/src');
     const sourceFiles = [
       ...listFiles(agentSrc),
       ...listFiles(agentTypesSrc),
       ...listFiles(extensionSrc),
       ...listFiles(platformSrc),
-      ...listFiles(nekoSkillsSrc),
     ]
       .filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file))
       .map((file) => ({
@@ -1737,14 +1731,12 @@ describe('agent architecture boundary guards', () => {
   });
 
   it('poisons retired IDC stage, persona, run, and executable-plan runtime paths', () => {
-    const nekoSkillsSrc = join(workspaceRoot, 'packages/neko-skills/src');
     const productionFiles = [
       ...listFiles(agentSrc),
       ...listFiles(agentTypesSrc),
       ...listFiles(extensionSrc),
       ...listFiles(webviewSrc),
       ...listFiles(tuiSrc),
-      ...listFiles(nekoSkillsSrc),
     ]
       .filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file))
       .map((file) => ({
@@ -1764,9 +1756,6 @@ describe('agent architecture boundary guards', () => {
       join(agentSrc, 'skill/stage-guardian.ts'),
       join(agentSrc, 'skill/stage-persona-binding.ts'),
       join(agentSrc, 'skill/stage-tracker.ts'),
-      join(nekoSkillsSrc, 'builtins/creation-persona.ts'),
-      join(nekoSkillsSrc, 'builtins/execution-persona.ts'),
-      join(nekoSkillsSrc, 'builtins/iteration-persona.ts'),
     ]
       .filter((file) => existsSync(file))
       .map((file) => relative(workspaceRoot, file).replace(/\\/g, '/'));
@@ -1899,7 +1888,6 @@ describe('agent architecture boundary guards', () => {
 
     expect(violations).toEqual([]);
   });
-
 });
 
 function readSourceFiles(dir: string, include: (file: string) => boolean): string {

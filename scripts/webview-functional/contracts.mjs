@@ -3,7 +3,7 @@ import { isAbsolute, normalize, sep } from 'node:path';
 export const SCENARIO_SCHEMA_VERSION = 'neko.webview-functional.scenario.v1';
 export const REPORT_SCHEMA_VERSION = 'neko.webview-functional.report.v1';
 
-const HOST_KINDS = Object.freeze(['vscode', 'electron']);
+const HOST_KINDS = Object.freeze(['vscode']);
 const SCENARIO_TIERS = Object.freeze(['p0', 'p1', 'p2']);
 const STEP_OPERATIONS = Object.freeze([
   'wait-visible',
@@ -19,7 +19,6 @@ const STEP_OPERATIONS = Object.freeze([
   'read-diagnostics',
   'save',
   'reload',
-  'restart-host',
   'hide-reveal',
   'close-reopen',
   'screenshot',
@@ -75,10 +74,10 @@ export function validateScenario(input) {
     minLength: 1,
   });
   validateFixture(scenario.fixture);
-  validateExtensions(scenario.extensions, scenario.host);
+  validateExtensions(scenario.extensions);
   validatePrerequisites(scenario.prerequisites);
   validateActivation(scenario.activation);
-  validateTarget(scenario.target, scenario.host);
+  validateTarget(scenario.target);
   validateSteps(scenario.steps);
   validateAssertions(scenario.assertions);
   validateErrorPolicy(scenario.errorPolicy);
@@ -125,13 +124,7 @@ function validateFixture(input) {
   }
 }
 
-function validateExtensions(input, host) {
-  if (host === 'electron') {
-    if (input !== undefined && (!Array.isArray(input) || input.length > 0)) {
-      throw new Error('Electron scenarios must not declare VS Code extension development paths');
-    }
-    return;
-  }
+function validateExtensions(input) {
   if (!Array.isArray(input) || input.length === 0) {
     throw new Error('VS Code scenarios must declare at least one extension');
   }
@@ -204,7 +197,7 @@ function validateActivation(input) {
   }
 }
 
-function validateTarget(input, host) {
+function validateTarget(input) {
   const target = requireRecord(input, 'scenario.target');
   rejectUnknownFields(
     target,
@@ -212,11 +205,7 @@ function validateTarget(input, host) {
     'scenario.target',
   );
   requireEnum(target.type, ['page', 'iframe'], 'scenario.target.type');
-  if (host === 'vscode') {
-    requireIdentifier(target.extensionId, 'scenario.target.extensionId');
-  } else if (target.extensionId !== undefined) {
-    throw new Error('Electron targets must not declare extensionId');
-  }
+  requireIdentifier(target.extensionId, 'scenario.target.extensionId');
   for (const field of ['viewType', 'titleIncludes', 'urlIncludes']) {
     if (target[field] !== undefined) {
       requireNonEmptyString(target[field], `scenario.target.${field}`);
@@ -260,7 +249,14 @@ function validateSteps(input) {
 }
 
 function validateStepFields(step, path) {
-  const selectorOperations = new Set(['wait-visible', 'click', 'drag', 'input', 'select', 'wait-state']);
+  const selectorOperations = new Set([
+    'wait-visible',
+    'click',
+    'drag',
+    'input',
+    'select',
+    'wait-state',
+  ]);
   if (selectorOperations.has(step.operation) && step.selector === undefined) {
     throw new Error(`${path}.selector is required for ${step.operation}`);
   }
@@ -299,7 +295,11 @@ function validateStepFields(step, path) {
   if (step.operation === 'wait-state') {
     const state = requireRecord(step.state, `${path}.state`);
     rejectUnknownFields(state, ['kind', 'value'], `${path}.state`);
-    requireEnum(state.kind, ['visible', 'hidden', 'text', 'value', 'enabled'], `${path}.state.kind`);
+    requireEnum(
+      state.kind,
+      ['visible', 'hidden', 'text', 'value', 'enabled'],
+      `${path}.state.kind`,
+    );
     if (['text', 'value'].includes(state.kind)) {
       requireNonEmptyString(state.value, `${path}.state.value`);
     }
@@ -410,7 +410,10 @@ function validateErrorPolicy(input) {
     'scenario.errorPolicy',
   );
   requireStringArray(policy.knownBenignWarningIds, 'scenario.errorPolicy.knownBenignWarningIds');
-  requireStringArray(policy.expectedDiagnosticCodes, 'scenario.errorPolicy.expectedDiagnosticCodes');
+  requireStringArray(
+    policy.expectedDiagnosticCodes,
+    'scenario.errorPolicy.expectedDiagnosticCodes',
+  );
   if (typeof policy.failOnConsoleWarning !== 'boolean') {
     throw new Error('scenario.errorPolicy.failOnConsoleWarning must be a boolean');
   }

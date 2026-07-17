@@ -7,7 +7,6 @@ const repoRoot = resolve(import.meta.dirname, '../..');
 const extensionEntries = [
   'packages/neko-engine/packages/extension/src/extension.ts',
   'packages/neko-cut/packages/extension/src/extension.ts',
-  'packages/neko-story/packages/extension/src/extension.ts',
   'packages/neko-canvas/packages/extension/src/extension.ts',
 ];
 

@@ -8,17 +8,9 @@ const RUNTIME_ERROR_SOURCES = Object.freeze([
   'csp',
   'resource',
   'extension-host',
-  'electron-main',
-  'electron-preload',
 ]);
 
-const LEVELLED_OBSERVATION_SOURCES = new Set([
-  'console',
-  'log',
-  'extension-host',
-  'electron-main',
-  'electron-preload',
-]);
+const LEVELLED_OBSERVATION_SOURCES = new Set(['console', 'log', 'extension-host']);
 
 export function classifyRuntimeEvents(events, policy) {
   const classified = events.map((event) => classifyRuntimeEvent(event, policy));
@@ -153,9 +145,7 @@ function classifyDevelopmentExtensionMarketplace404(event, policy) {
   } catch {
     return undefined;
   }
-  const match = url.pathname.match(
-    /^\/_apis\/public\/gallery\/vscode\/([^/]+)\/([^/]+)\/latest$/u,
-  );
+  const match = url.pathname.match(/^\/_apis\/public\/gallery\/vscode\/([^/]+)\/([^/]+)\/latest$/u);
   if (url.protocol !== 'https:' || url.hostname !== 'marketplace.visualstudio.com' || !match) {
     return undefined;
   }

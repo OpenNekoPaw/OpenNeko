@@ -9,17 +9,11 @@ const migratedExtensionFiles = [
   'packages/neko-canvas/packages/extension/src',
   'packages/neko-cut/packages/extension/src',
   'packages/neko-tools/packages/extension/src',
-  'packages/neko-story/packages/extension/src',
-  'packages/neko-model/packages/extension/src',
   'packages/neko-preview/packages/extension/src',
-  'packages/neko-audio/packages/extension/src',
-  'packages/neko-live/packages/extension/src',
 ] as const;
 
 const allowedLocalResourceRootFiles = new Set([
   'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-  'packages/neko-model/packages/extension/src/editor/ModelEditorProvider.ts',
-  'packages/neko-story/packages/extension/src/panels/PreviewPanel.ts',
   'packages/neko-tools/packages/extension/src/asset-diff/editor/AssetVariantDiffEditorProvider.ts',
   'packages/neko-agent/packages/extension/src/services/localResourceAccess.ts',
 ]);

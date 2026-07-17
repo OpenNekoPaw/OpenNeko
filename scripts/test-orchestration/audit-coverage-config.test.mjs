@@ -6,7 +6,7 @@ describe('coverage owner config audit', () => {
   it('requires every canonical test owner to use explicit shared coverage', async () => {
     const result = await auditCoverageConfigs();
     assert.equal(result.ok, true);
-    assert.ok(result.owners > 30);
+    assert.equal(result.owners, 24);
   });
 
   it('fails visibly for an unknown owner config', async () => {

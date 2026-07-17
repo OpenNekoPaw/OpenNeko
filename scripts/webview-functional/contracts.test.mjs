@@ -28,12 +28,10 @@ describe('webview functional scenario contract', () => {
     scenario.steps[0].selector = {
       css: '.agent-bubble-user',
       name: 'Functional host message',
-      auditedSelectorReason: 'Message rows repeat, so the scenario narrows the stable class by text.',
+      auditedSelectorReason:
+        'Message rows repeat, so the scenario narrows the stable class by text.',
     };
-    assert.equal(
-      validateScenario(scenario).steps[0].selector.name,
-      'Functional host message',
-    );
+    assert.equal(validateScenario(scenario).steps[0].selector.name, 'Functional host message');
   });
 
   it('accepts a bounded declarative drag and rejects missing or empty deltas', () => {
@@ -76,15 +74,11 @@ describe('webview functional scenario contract', () => {
     assert.equal(validateScenario(scenario).prerequisites[0].state, 'ready');
   });
 
-  it('accepts the generic Electron host without VS Code extensions', () => {
+  it('rejects scenarios for the removed Electron product host', () => {
     const scenario = createScenario();
-    scenario.ownerPackage = '@neko/app-home';
     scenario.host = 'electron';
-    scenario.extensions = [];
-    scenario.activation = { kind: 'launch' };
-    scenario.target = { type: 'page', titleIncludes: 'OpenNeko Home' };
 
-    assert.equal(validateScenario(scenario).host, 'electron');
+    assert.throws(() => validateScenario(scenario), /scenario\.host must be one of/u);
   });
 
   it('accepts structured Engine command result assertions and rejects ambiguous sources', () => {
@@ -144,9 +138,7 @@ function createScenario() {
       extensionId: 'neko.neko-agent',
       viewType: 'neko.aiAssistant',
     },
-    steps: [
-      { id: 'wait-input', operation: 'wait-visible', selector: { testId: 'chat-input' } },
-    ],
+    steps: [{ id: 'wait-input', operation: 'wait-visible', selector: { testId: 'chat-input' } }],
     assertions: [
       { id: 'host-message', kind: 'observation', event: 'agent.message.received' },
       { id: 'errors', kind: 'runtime-errors', expected: [] },

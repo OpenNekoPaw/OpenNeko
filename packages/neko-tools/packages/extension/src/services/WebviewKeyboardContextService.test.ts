@@ -77,12 +77,10 @@ describe('WebviewKeyboardContextService', () => {
     service.dispose();
   });
 
-  it('is no longer required for Canvas or Model webview-owned editing keybindings', () => {
+  it('is no longer required for Canvas webview-owned editing keybindings', () => {
     const canvasManifest = readPackageManifest('packages/neko-canvas/package.json');
-    const modelManifest = readPackageManifest('packages/neko-model/package.json');
 
     expect(canvasManifest.contributes?.keybindings ?? []).toEqual([]);
-    expect(modelManifest.contributes?.keybindings ?? []).toEqual([]);
     for (const commandId of [
       'neko.canvas.deleteSelected',
       'neko.canvas.escape',
@@ -90,16 +88,8 @@ describe('WebviewKeyboardContextService', () => {
       'neko.canvas.undo',
       'neko.canvas.redo',
       'neko.canvas.generateSelected',
-      'neko.model.deleteSelected',
-      'neko.model.escape',
-      'neko.model.selectAll',
-      'neko.model.undo',
-      'neko.model.redo',
-      'neko.model.resetView',
     ]) {
-      expect(hasCommand(canvasManifest, commandId) || hasCommand(modelManifest, commandId)).toBe(
-        true,
-      );
+      expect(hasCommand(canvasManifest, commandId)).toBe(true);
     }
   });
 });
@@ -110,8 +100,7 @@ function getRegisteredCommandHandler<THandler extends (...args: never[]) => unkn
   return vi
     .mocked(vscode.commands.registerCommand)
     .mock.calls.find(([registeredCommand]) => registeredCommand === command)?.[1] as
-    | THandler
-    | undefined;
+    THandler | undefined;
 }
 
 function createLogger() {

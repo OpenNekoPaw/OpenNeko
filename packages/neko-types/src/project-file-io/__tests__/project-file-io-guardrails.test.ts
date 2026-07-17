@@ -24,11 +24,7 @@ describe('project file I/O guardrails', () => {
 
   it('keeps migrated nk* editor persistence on the shared project file store', () => {
     const migratedFiles = [
-      'packages/neko-puppet/packages/extension/src/editor/puppetEditorProvider.ts',
-      'packages/neko-model/packages/extension/src/editor/ModelDocument.ts',
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-      'packages/neko-audio/packages/extension/src/providers/AudioProjectProvider.ts',
-      'packages/neko-sketch/packages/extension/src/editor/sketchEditorProvider.ts',
       'packages/neko-cut/packages/extension/src/services/ProjectSessionService.ts',
     ];
 
@@ -40,14 +36,9 @@ describe('project file I/O guardrails', () => {
 
   it('keeps migrated nk* save lifecycles on the shared save session', () => {
     const sessionFiles = [
-      'packages/neko-puppet/packages/extension/src/editor/puppetEditorProvider.ts',
-      'packages/neko-model/packages/extension/src/editor/ModelDocument.ts',
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-      'packages/neko-audio/packages/extension/src/providers/AudioProjectProvider.ts',
-      'packages/neko-sketch/packages/extension/src/editor/sketchEditorProvider.ts',
       'packages/neko-cut/packages/extension/src/editor/video/cutProjectFilePersistence.ts',
       'packages/neko-cut/packages/extension/src/services/ProjectSessionService.ts',
-      'packages/neko-puppet/packages/extension/src/commands/index.ts',
     ];
 
     for (const file of sessionFiles) {
@@ -76,38 +67,9 @@ describe('project file I/O guardrails', () => {
 
   it('prevents migrated editor paths from reintroducing direct nk* JSON persistence', () => {
     const forbiddenByFile: Record<string, readonly RegExp[]> = {
-      'packages/neko-puppet/packages/extension/src/editor/puppetEditorProvider.ts': [
-        /JSON\.parse\(json\)\s+as\s+NkpProjectData/,
-        /workspace\.fs\.writeFile\(document\.uri,\s*Buffer\.from\(json/,
-      ],
-      'packages/neko-model/packages/extension/src/editor/ModelDocument.ts': [
-        /JSON\.parse\(text\)\s+as\s+NkmProjectData/,
-        /workspace\.fs\.writeFile\(this\.uri/,
-        /workspace\.fs\.writeFile\(targetUri/,
-      ],
-      'packages/neko-model/packages/extension/src/editor/ModelEditorProvider.ts': [
-        /JSON\.parse\(new TextDecoder\(\)\.decode\(nkmData\)\)/,
-        /JSON\.stringify\(project,\s*null,\s*2\)/,
-        /client\.saveProject\(/,
-        /createModelProjectImportPlan/,
-      ],
-      'packages/neko-model/packages/extension/src/importModelAsset.ts': [
-        /projectModelSrc/,
-        /path\.relative\(documentDir/,
-      ],
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts': [
         /content\.trim\(\)\s*\?\s*loadNkc\(content\)/,
         /workspace\.fs\.writeFile\(targetUri,\s*Buffer\.from\(content/,
-      ],
-      'packages/neko-audio/packages/extension/src/providers/AudioProjectProvider.ts': [
-        /const raw = await vscode\.workspace\.fs\.readFile\(nkaUri\)/,
-        /loadNka\(Buffer\.from\(raw\)\.toString/,
-        /workspace\.fs\.writeFile\(document\.uri,\s*Buffer\.from\(content/,
-      ],
-      'packages/neko-sketch/packages/extension/src/editor/sketchEditorProvider.ts': [
-        /JSON\.parse\(content\)\s+as\s+NksDocument/,
-        /JSON\.stringify\(data,\s*null,\s*2\)/,
-        /workspace\.fs\.writeFile\(document\.uri,\s*Buffer\.from\(content/,
       ],
     };
 
@@ -121,32 +83,9 @@ describe('project file I/O guardrails', () => {
 
   it('keeps open/load project paths read-only until an explicit save/import request', () => {
     const readOnlyMethods: Record<string, readonly string[]> = {
-      'packages/neko-puppet/packages/extension/src/editor/puppetEditorProvider.ts': [
-        'openCustomDocument',
-        'loadMoc3FromProject',
-        'loadLive2dBundleFromProject',
-      ],
-      'packages/neko-model/packages/extension/src/editor/ModelDocument.ts': [
-        'loadNkmProject',
-        'resolveNkmProjectModelSource',
-      ],
-      'packages/neko-model/packages/extension/src/editor/ModelEditorProvider.ts': [
-        'openCustomDocument',
-        'loadProjectInEngine',
-        'tryLoadModelFromProject',
-        'readNkmSceneProfile',
-      ],
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts': [
         'openCustomDocument',
         'loadCanvasProject',
-      ],
-      'packages/neko-audio/packages/extension/src/providers/AudioProjectProvider.ts': [
-        'openCustomDocument',
-        'loadProjectWithStore',
-      ],
-      'packages/neko-sketch/packages/extension/src/editor/sketchEditorProvider.ts': [
-        'openCustomDocument',
-        'loadSketchProject',
       ],
     };
 
@@ -174,13 +113,6 @@ describe('project file I/O guardrails', () => {
     const saveContracts: Record<string, RegExp> = {
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts':
         /projectFileSession\.save\(/,
-      'packages/neko-sketch/packages/extension/src/editor/sketchEditorProvider.ts':
-        /saveSketchProject\(/,
-      'packages/neko-audio/packages/extension/src/providers/AudioProjectProvider.ts':
-        /saveProjectWithStore\(/,
-      'packages/neko-puppet/packages/extension/src/editor/puppetEditorProvider.ts':
-        /projectFileSession\.save\(/,
-      'packages/neko-model/packages/extension/src/editor/ModelDocument.ts': /saveNkmProject\(/,
     };
 
     for (const [file, requiredPattern] of Object.entries(saveContracts)) {
@@ -198,32 +130,12 @@ describe('project file I/O guardrails', () => {
       readSource('packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts'),
       'Canvas save must request a live Webview snapshot before ProjectFileSaveSession.save',
     ).toMatch(/requestCanvasProjectSnapshot\(/);
-    expect(
-      readSource('packages/neko-sketch/packages/extension/src/editor/sketchEditorProvider.ts'),
-      'Sketch save must request a live Webview snapshot before ProjectFileSaveSession.save',
-    ).toMatch(/requestWebviewProjectSnapshot<NksDocument>/);
-    expect(
-      readSource('packages/neko-audio/packages/extension/src/providers/AudioProjectProvider.ts'),
-      'Audio save helper must write through ProjectFileSaveSession',
-    ).toMatch(/_projectFileSession\.save\(/);
   });
 
   it('keeps migrated editor source acquisition on the canonical project:addSource path', () => {
     const migratedProductionFiles = [
-      'packages/neko-audio/packages/webview/src/hooks/useDragDrop.ts',
-      'packages/neko-audio/packages/webview/src/shared/types.ts',
-      'packages/neko-audio/packages/extension/src/providers/AudioProjectProvider.ts',
       'packages/neko-canvas/packages/webview/src/hooks/useDragDrop.ts',
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-      'packages/neko-model/packages/webview/src/types/index.ts',
-      'packages/neko-model/packages/extension/src/editor/ModelEditorProvider.ts',
-      'packages/neko-puppet/packages/webview/src/PuppetApp.tsx',
-      'packages/neko-puppet/packages/webview/src/types/index.ts',
-      'packages/neko-puppet/packages/webview/src/components/empty-state/PuppetEmptyState.tsx',
-      'packages/neko-puppet/packages/extension/src/editor/puppetEditorProvider.ts',
-      'packages/neko-sketch/packages/webview/src/App.tsx',
-      'packages/neko-sketch/packages/webview/src/types/index.ts',
-      'packages/neko-sketch/packages/extension/src/editor/sketchEditorProvider.ts',
     ];
 
     const forbiddenLegacyPatterns = [
@@ -251,11 +163,7 @@ describe('project file I/O guardrails', () => {
     }
 
     const durableWebviewSourceAddFiles = [
-      'packages/neko-audio/packages/webview/src/hooks/useDragDrop.ts',
       'packages/neko-canvas/packages/webview/src/hooks/useDragDrop.ts',
-      'packages/neko-puppet/packages/webview/src/PuppetApp.tsx',
-      'packages/neko-puppet/packages/webview/src/components/empty-state/PuppetEmptyState.tsx',
-      'packages/neko-sketch/packages/webview/src/App.tsx',
     ];
     for (const file of durableWebviewSourceAddFiles) {
       expect(
@@ -265,16 +173,8 @@ describe('project file I/O guardrails', () => {
     }
 
     const canonicalSourceAddFiles = [
-      'packages/neko-audio/packages/webview/src/hooks/useDragDrop.ts',
-      'packages/neko-audio/packages/extension/src/providers/AudioProjectProvider.ts',
       'packages/neko-canvas/packages/webview/src/hooks/useDragDrop.ts',
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-      'packages/neko-model/packages/webview/src/types/index.ts',
-      'packages/neko-model/packages/extension/src/editor/ModelEditorProvider.ts',
-      'packages/neko-puppet/packages/webview/src/PuppetApp.tsx',
-      'packages/neko-puppet/packages/extension/src/editor/puppetEditorProvider.ts',
-      'packages/neko-sketch/packages/webview/src/App.tsx',
-      'packages/neko-sketch/packages/extension/src/editor/sketchEditorProvider.ts',
     ];
     for (const file of canonicalSourceAddFiles) {
       expect(readSource(file), `${file} should use the canonical add-source protocol`).toMatch(
@@ -284,39 +184,6 @@ describe('project file I/O guardrails', () => {
   });
 
   it('keeps picker/import source acquisition on the canonical add-source path', () => {
-    const sketchSource = readSource(
-      'packages/neko-sketch/packages/extension/src/editor/sketchEditorProvider.ts',
-    );
-    expect(sketchSource).not.toContain("case 'file:import'");
-    expect(sketchSource).toContain('handleSketchFilePickerSourceAdd(');
-    expect(sketchSource).toContain('createSketchFilePickerSourceAddRequest(');
-    expect(sketchSource).not.toContain('importFileUri(uri');
-
-    const sketchKeyboardSource = readSource(
-      'packages/neko-sketch/packages/webview/src/utils/keyboard-dispatcher.ts',
-    );
-    expect(sketchKeyboardSource).not.toContain("type: 'file:import'");
-    expect(sketchKeyboardSource).toContain("type: 'project:addSource'");
-
-    const audioSource = readSource(
-      'packages/neko-audio/packages/extension/src/providers/AudioProjectProvider.ts',
-    );
-    expect(audioSource).not.toContain('project:importAudio');
-    expect(audioSource).toContain('handleAudioProjectFilePickerSourceAdd(');
-    expect(audioSource).toContain('createAudioProjectSourceAddRequest(uri, document.uri');
-
-    const modelSource = readSource(
-      'packages/neko-model/packages/extension/src/editor/ModelEditorProvider.ts',
-    );
-    expect(modelSource).not.toContain("case 'model:import'");
-    expect(modelSource).toContain('handleModelFilePickerSourceAdd(');
-
-    const puppetSource = readSource(
-      'packages/neko-puppet/packages/extension/src/editor/puppetEditorProvider.ts',
-    );
-    expect(puppetSource).not.toContain("case 'puppet:import'");
-    expect(puppetSource).toContain('handlePuppetFilePickerSourceAdd(');
-
     const canvasSource = readSource(
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
     );
@@ -398,26 +265,6 @@ function extractMethodBody(source: string, methodName: string): string {
       depth -= 1;
       if (depth === 0) {
         return source.slice(braceIndex + 1, index);
-      }
-    }
-  }
-  return '';
-}
-
-function extractCaseBody(source: string, caseName: string): string {
-  const caseIndex = source.indexOf(`case '${caseName}'`);
-  if (caseIndex < 0) return '';
-  const bodyStart = source.indexOf('{', caseIndex);
-  if (bodyStart < 0) return '';
-
-  let depth = 0;
-  for (let index = bodyStart; index < source.length; index += 1) {
-    const char = source[index];
-    if (char === '{') depth += 1;
-    if (char === '}') {
-      depth -= 1;
-      if (depth === 0) {
-        return source.slice(bodyStart + 1, index);
       }
     }
   }
