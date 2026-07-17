@@ -165,8 +165,7 @@ describe('Schema ↔ TypeScript drift detection', () => {
         if (allOf && allOf.length > 1) {
           const specificDef = allOf[1] as Record<string, unknown>;
           const properties = specificDef['properties'] as
-            | Record<string, Record<string, unknown>>
-            | undefined;
+            Record<string, Record<string, unknown>> | undefined;
           const typeConst = properties?.['type']?.['const'] as string | undefined;
           if (typeConst) {
             schemaTypes.push(typeConst);

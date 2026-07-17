@@ -24,13 +24,7 @@ export type ProjectFileDiagnosticCode =
 export type ProjectFileDiagnosticSeverity = 'info' | 'warning' | 'error';
 
 export type ProjectFileDiagnosticRecoverability =
-  | 'retry'
-  | 'relink'
-  | 'create-asset'
-  | 'configure'
-  | 'readonly'
-  | 'manual'
-  | 'none';
+  'retry' | 'relink' | 'create-asset' | 'configure' | 'readonly' | 'manual' | 'none';
 
 export type ProjectFileDiagnosticValue =
   | string

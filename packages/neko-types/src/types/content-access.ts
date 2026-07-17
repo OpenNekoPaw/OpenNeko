@@ -27,11 +27,7 @@ export type ContentAccessIntent =
   | 'verify';
 
 export type ContentAccessTarget =
-  | 'webview-uri'
-  | 'local-path'
-  | 'bytes'
-  | 'engine-source'
-  | 'runtime-stream';
+  'webview-uri' | 'local-path' | 'bytes' | 'engine-source' | 'runtime-stream';
 
 export type ContentIngestMode =
   | 'add'
@@ -46,10 +42,7 @@ export type ContentIngestMode =
 export type ContentAccessQualityMode = 'source' | 'draft-proxy';
 
 export type ContentAccessMaterializationPolicy =
-  | 'never'
-  | 'if-missing'
-  | 'refresh'
-  | 'require-existing';
+  'never' | 'if-missing' | 'refresh' | 'require-existing';
 
 export type ContentAccessStatus =
   | 'ready'
@@ -65,13 +58,7 @@ export type ContentAccessStatus =
   | 'failed';
 
 export type ContentAccessSourceKind =
-  | 'resource'
-  | 'document'
-  | 'asset'
-  | 'file'
-  | 'media-library'
-  | 'generated-asset'
-  | 'runtime';
+  'resource' | 'document' | 'asset' | 'file' | 'media-library' | 'generated-asset' | 'runtime';
 
 export type ContentRuntimeRefKind =
   | 'cache-path'
@@ -217,11 +204,7 @@ export interface ContentAccessProvider {
 }
 
 export type ContentIngestDestinationKind =
-  | 'project'
-  | 'media-library'
-  | 'generated-assets'
-  | 'export-output'
-  | 'cache';
+  'project' | 'media-library' | 'generated-assets' | 'export-output' | 'cache';
 
 export interface ContentIngestDestinationPolicy {
   readonly kind: ContentIngestDestinationKind;

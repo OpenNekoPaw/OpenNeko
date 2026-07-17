@@ -180,8 +180,7 @@ export async function createProjectSnapshotPackage(
     sourcePath: request.sourceUri.fsPath,
     sourceDir: path.dirname(request.sourceUri.fsPath),
     contentAccess:
-      request.contentAccess ??
-      (await createDefaultPackageContentAccessService(request.sourceUri)),
+      request.contentAccess ?? (await createDefaultPackageContentAccessService(request.sourceUri)),
   });
 
   const manifest = {
@@ -630,7 +629,9 @@ function resolvePackageWorkspaceRoot(baseDir: string): string | undefined {
 
 async function isVSCodeFile(filePath: string): Promise<boolean> {
   try {
-    return (await vscode.workspace.fs.stat(vscode.Uri.file(filePath))).type === vscode.FileType.File;
+    return (
+      (await vscode.workspace.fs.stat(vscode.Uri.file(filePath))).type === vscode.FileType.File
+    );
   } catch {
     return false;
   }

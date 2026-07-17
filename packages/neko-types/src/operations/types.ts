@@ -275,9 +275,7 @@ export interface ElementSplitKeepRightOperation {
 }
 
 export type ElementSplitOperation =
-  | ElementSplitAtOperation
-  | ElementSplitKeepLeftOperation
-  | ElementSplitKeepRightOperation;
+  ElementSplitAtOperation | ElementSplitKeepLeftOperation | ElementSplitKeepRightOperation;
 
 // =============================================================================
 // Shape Operations（9 种 → 覆盖 15 个 action）
@@ -475,9 +473,7 @@ export interface KeyframeUpdateOperation {
 }
 
 export type KeyframeOperation =
-  | KeyframeAddOperation
-  | KeyframeRemoveOperation
-  | KeyframeUpdateOperation;
+  KeyframeAddOperation | KeyframeRemoveOperation | KeyframeUpdateOperation;
 
 // =============================================================================
 // Clipboard Operations（1 种）

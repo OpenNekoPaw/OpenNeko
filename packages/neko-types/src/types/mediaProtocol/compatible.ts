@@ -147,10 +147,7 @@ export interface BezierMaskShape {
 
 /** Union of all mask shape types */
 export type CompositeMaskShape =
-  | RectMaskShape
-  | EllipseMaskShape
-  | PolygonMaskShape
-  | BezierMaskShape;
+  RectMaskShape | EllipseMaskShape | PolygonMaskShape | BezierMaskShape;
 
 // =============================================================================
 // Composite Transition (for paired layers)

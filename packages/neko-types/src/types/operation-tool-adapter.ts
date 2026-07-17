@@ -10,13 +10,7 @@ import type { Tool } from './tool';
 export { createDomainRouter } from './domain-routing';
 
 export type OperationToolDomain =
-  | 'timeline'
-  | 'canvas'
-  | 'sketch'
-  | 'audio'
-  | 'model'
-  | 'puppet'
-  | 'project';
+  'timeline' | 'canvas' | 'sketch' | 'audio' | 'model' | 'puppet' | 'project';
 
 export type OperationToolRisk = 'low' | 'medium' | 'high' | 'unknown';
 

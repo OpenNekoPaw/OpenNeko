@@ -35,9 +35,9 @@ describe('canvas authoring contracts', () => {
   });
 
   it('rejects runtime-only resource identities in authoring results', () => {
-    expect(isRuntimeOnlyCanvasAuthoringResourceIdentityValue('vscode-webview://panel/image.png')).toBe(
-      true,
-    );
+    expect(
+      isRuntimeOnlyCanvasAuthoringResourceIdentityValue('vscode-webview://panel/image.png'),
+    ).toBe(true);
     expect(isRuntimeOnlyCanvasAuthoringResourceIdentityValue('blob:vscode/preview')).toBe(true);
     expect(isRuntimeOnlyCanvasAuthoringResourceIdentityValue('assets/cover.png')).toBe(false);
 
@@ -188,11 +188,26 @@ describe('canvas authoring contracts', () => {
     expect(validation.diagnostics).toEqual([
       expect.objectContaining({ code: 'malformed-field-profile', target: 'namespace' }),
       expect.objectContaining({ code: 'malformed-field-descriptor', target: 'fields[0].id' }),
-      expect.objectContaining({ code: 'unsupported-field-value-type', target: 'fields[0].valueType' }),
-      expect.objectContaining({ code: 'unsupported-field-cardinality', target: 'fields[0].cardinality' }),
-      expect.objectContaining({ code: 'unsupported-prompt-span-behavior', target: 'fields[0].promptSpan.behavior' }),
-      expect.objectContaining({ code: 'unsupported-prompt-alignment-state', target: 'fields[0].promptSpan.alignmentState' }),
-      expect.objectContaining({ code: 'missing-capability-binding', target: 'fields[0].capabilityBinding' }),
+      expect.objectContaining({
+        code: 'unsupported-field-value-type',
+        target: 'fields[0].valueType',
+      }),
+      expect.objectContaining({
+        code: 'unsupported-field-cardinality',
+        target: 'fields[0].cardinality',
+      }),
+      expect.objectContaining({
+        code: 'unsupported-prompt-span-behavior',
+        target: 'fields[0].promptSpan.behavior',
+      }),
+      expect.objectContaining({
+        code: 'unsupported-prompt-alignment-state',
+        target: 'fields[0].promptSpan.alignmentState',
+      }),
+      expect.objectContaining({
+        code: 'missing-capability-binding',
+        target: 'fields[0].capabilityBinding',
+      }),
     ]);
   });
 

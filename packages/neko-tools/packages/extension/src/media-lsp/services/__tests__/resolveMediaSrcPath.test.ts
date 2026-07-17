@@ -53,8 +53,8 @@ describe('resolveMediaSrcPath', () => {
   });
 
   it('fails visibly when a media-library variable is not provided by shared content policy', async () => {
-    await expect(resolveMediaSrcPath('/workspace/project/scenes', '${MISSING}/a.mp4')).rejects.toThrow(
-      'Path variable MISSING is not defined.',
-    );
+    await expect(
+      resolveMediaSrcPath('/workspace/project/scenes', '${MISSING}/a.mp4'),
+    ).rejects.toThrow('Path variable MISSING is not defined.');
   });
 });

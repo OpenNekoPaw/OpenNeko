@@ -168,11 +168,9 @@ describe('VSCodeLocalResourceAccessService', () => {
       ],
     });
 
-    const result = await service.toWebviewUri(
-      webview as never,
-      '/workspace/assets/image.png',
-      { caller: 'vscode-resource-projection' },
-    );
+    const result = await service.toWebviewUri(webview as never, '/workspace/assets/image.png', {
+      caller: 'vscode-resource-projection',
+    });
 
     expect(result).toEqual({
       ok: true,

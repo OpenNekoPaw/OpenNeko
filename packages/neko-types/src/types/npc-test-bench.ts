@@ -47,11 +47,7 @@ export type NpcEvaluationDimension =
   | 'profile-improvement';
 export type NpcEvaluationSeverity = 'info' | 'warning' | 'error';
 export type NpcEvaluationSuggestionKind =
-  | 'entity-metadata'
-  | 'relationship'
-  | 'profile-fact'
-  | 'knowledge-boundary'
-  | 'dialogue-sample';
+  'entity-metadata' | 'relationship' | 'profile-fact' | 'knowledge-boundary' | 'dialogue-sample';
 export type NpcEvaluationSuggestionStatus = 'suggested' | 'accepted' | 'rejected' | 'applied';
 
 export type NpcSerializableValue =

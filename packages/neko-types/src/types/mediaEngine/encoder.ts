@@ -34,13 +34,7 @@ export type EncoderPreset = 'ultrafast' | 'fast' | 'medium' | 'slow' | 'veryslow
  * Encoder state
  */
 export type EncoderState =
-  | 'idle'
-  | 'initializing'
-  | 'encoding'
-  | 'finalizing'
-  | 'completed'
-  | 'error'
-  | 'cancelled';
+  'idle' | 'initializing' | 'encoding' | 'finalizing' | 'completed' | 'error' | 'cancelled';
 
 // =============================================================================
 // Encoder Configuration

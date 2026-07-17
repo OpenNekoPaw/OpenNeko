@@ -16,10 +16,7 @@ export interface ProjectedCanvasData extends CanvasData {
 }
 
 export type ProjectedCanvasSyncState =
-  | 'clean'
-  | 'regenerating'
-  | 'source-changed'
-  | 'writeback-error';
+  'clean' | 'regenerating' | 'source-changed' | 'writeback-error';
 
 export interface ProjectedCanvasStatus {
   readonly state: ProjectedCanvasSyncState;
@@ -30,11 +27,7 @@ export interface ProjectedCanvasStatus {
 }
 
 export type ProjectionWriteBackOperation =
-  | 'bind'
-  | 'unbind'
-  | 'update-alias'
-  | 'update-weight'
-  | 'update-field';
+  'bind' | 'unbind' | 'update-alias' | 'update-weight' | 'update-field';
 
 export interface ProjectionWriteBack {
   readonly operation: ProjectionWriteBackOperation;

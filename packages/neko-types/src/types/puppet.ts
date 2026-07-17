@@ -14,16 +14,12 @@ export type PuppetFormat = 'moc3' | 'native';
 export type NkpAnimationModel = 'moc3-parameter' | 'bone-blendshape';
 
 export type NkpPuppetRuntimeAdapterId =
-  | 'neko-puppet-native'
-  | 'live2d-moc3-compat'
-  | 'live2d-cubism';
+  'neko-puppet-native' | 'live2d-moc3-compat' | 'live2d-cubism';
 
 export type NkpPuppetRuntimeAdapterStatus = 'available' | 'unavailable' | 'compatibility';
 
 export type NkpPuppetRuntimeDiagnosticCode =
-  | 'cubism-adapter-unavailable'
-  | 'legacy-moc3-compatibility'
-  | 'wrong-domain-field';
+  'cubism-adapter-unavailable' | 'legacy-moc3-compatibility' | 'wrong-domain-field';
 
 export interface NkpPuppetRuntimeDiagnostic {
   readonly code: NkpPuppetRuntimeDiagnosticCode;
@@ -47,11 +43,7 @@ export type NkpImportSourceKind = 'psd' | 'png' | 'live2d-bundle' | 'moc3' | 'ge
 export type NkpBlendShapeStandard = 'arkit_52' | 'vrm' | 'custom';
 
 export type NkpRigTemplate =
-  | 'humanoid_full'
-  | 'humanoid_upper'
-  | 'humanoid_chibi'
-  | 'quadruped'
-  | 'custom';
+  'humanoid_full' | 'humanoid_upper' | 'humanoid_chibi' | 'quadruped' | 'custom';
 
 export type NkpVec2 = readonly [number, number];
 export type NkpVec4 = readonly [number, number, number, number];
@@ -115,8 +107,7 @@ export interface NkpBone2D {
 }
 
 export type NkpIkSolver2D =
-  | { readonly type: 'twoBone' }
-  | { readonly type: 'ccd'; readonly maxIterations?: number };
+  { readonly type: 'twoBone' } | { readonly type: 'ccd'; readonly maxIterations?: number };
 
 export interface NkpIkConstraint2D {
   readonly id: string;

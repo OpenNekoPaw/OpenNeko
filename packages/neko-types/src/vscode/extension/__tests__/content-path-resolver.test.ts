@@ -61,11 +61,11 @@ describe('content-path-resolver', () => {
       resolveHostContentMediaPath('${MISSING}/comic.epub', {
         workspaceRoot: '/workspace/project',
         getExtension: createAssetsExtensionGetter({
-        mediaLibraryRoots: [],
-        pathVariables: [],
+          mediaLibraryRoots: [],
+          pathVariables: [],
+        }),
+        fileExists: () => false,
       }),
-      fileExists: () => false,
-    }),
     ).rejects.toThrow('Path variable MISSING is not defined.');
   });
 
@@ -86,11 +86,11 @@ describe('content-path-resolver', () => {
       resolveHostContentMediaPath('/outside/comic.epub', {
         workspaceRoot: '/workspace/project',
         getExtension: createAssetsExtensionGetter({
-        mediaLibraryRoots: ['/library/books'],
-        pathVariables: [['BOOKS', '/library/books']],
+          mediaLibraryRoots: ['/library/books'],
+          pathVariables: [['BOOKS', '/library/books']],
+        }),
+        fileExists: (filePath) => filePath === '/outside/comic.epub',
       }),
-      fileExists: (filePath) => filePath === '/outside/comic.epub',
-    }),
     ).rejects.toThrow('outside authorized roots');
   });
 });

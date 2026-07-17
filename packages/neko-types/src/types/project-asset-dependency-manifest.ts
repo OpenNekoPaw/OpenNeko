@@ -40,9 +40,7 @@ export interface ProjectWorkspaceAssetDependency extends ProjectAssetDependencyB
 }
 
 export type ProjectAssetDependency =
-  | ProjectImportAssetDependency
-  | ProjectMarketAssetDependency
-  | ProjectWorkspaceAssetDependency;
+  ProjectImportAssetDependency | ProjectMarketAssetDependency | ProjectWorkspaceAssetDependency;
 
 export interface ProjectAssetDependencyManifest {
   readonly version: 1;

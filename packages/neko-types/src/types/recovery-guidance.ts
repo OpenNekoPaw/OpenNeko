@@ -1,11 +1,7 @@
 import type { RiskAssessment } from './decision-rationale';
 
 export type RecoveryGuidanceRecommendationKind =
-  | 'retry'
-  | 'adjust-prompt'
-  | 'switch-model'
-  | 'accept-current'
-  | 'ask-user';
+  'retry' | 'adjust-prompt' | 'switch-model' | 'accept-current' | 'ask-user';
 
 export interface RecoveryGuidanceRecommendation {
   readonly id: string;

@@ -5,12 +5,6 @@ import { projectMarkdownForUi } from './projection';
 export function useMarkdownProjection(input: MarkdownProjectionInput): MarkdownProjectionResult {
   return useMemo(
     () => projectMarkdownForUi(input),
-    [
-      input.value,
-      input.profile,
-      input.projectionOptions,
-      input.semanticSpans,
-      input.diagnostics,
-    ],
+    [input.value, input.profile, input.projectionOptions, input.semanticSpans, input.diagnostics],
   );
 }

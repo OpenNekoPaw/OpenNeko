@@ -12,12 +12,7 @@
  * Download state for compatible mode
  */
 export type DownloadStateType =
-  | 'idle'
-  | 'downloading'
-  | 'extracting'
-  | 'verifying'
-  | 'completed'
-  | 'error';
+  'idle' | 'downloading' | 'extracting' | 'verifying' | 'completed' | 'error';
 
 // =============================================================================
 // Download Protocol Messages

@@ -12,29 +12,15 @@ import type {
 } from './canvas-creative-scope';
 
 export type StorySceneVideoReadinessStatus =
-  | 'unknown'
-  | 'needs-input'
-  | 'ready'
-  | 'in-progress'
-  | 'done'
-  | 'skipped'
-  | 'failed';
+  'unknown' | 'needs-input' | 'ready' | 'in-progress' | 'done' | 'skipped' | 'failed';
 
 export type StoryCreatorStatus = 'pending' | 'processing' | 'attention' | 'done' | 'skipped';
 
 export type StoryCharacterVisualStatus =
-  | 'unknown'
-  | 'bound'
-  | 'generated'
-  | 'missing'
-  | 'unresolved'
-  | 'stale';
+  'unknown' | 'bound' | 'generated' | 'missing' | 'unresolved' | 'stale';
 
 export type StoryCharacterMatchSource =
-  | 'dialogue-character'
-  | 'registry-mention'
-  | 'manual'
-  | 'unknown';
+  'dialogue-character' | 'registry-mention' | 'manual' | 'unknown';
 
 export type StoryLocalizedTextParams = Readonly<Record<string, string | number>>;
 

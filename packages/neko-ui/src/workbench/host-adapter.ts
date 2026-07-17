@@ -21,10 +21,7 @@ export interface CreativeHostRuntimeProjection {
 }
 
 export interface CreativeHostIntentHandler {
-  (
-    action: CreativeHostIntentAction,
-    payload?: Readonly<Record<string, unknown>>,
-  ): void;
+  (action: CreativeHostIntentAction, payload?: Readonly<Record<string, unknown>>): void;
 }
 
 export interface CreativeHostAdapterSurfaceProps {

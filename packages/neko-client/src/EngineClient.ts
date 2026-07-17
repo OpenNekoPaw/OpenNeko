@@ -226,8 +226,7 @@ export class EngineClient {
     });
     if (response.status === 'error') return null;
     const data = response.data as
-      | { data?: string; base64?: string; dataBase64?: string }
-      | undefined;
+      { data?: string; base64?: string; dataBase64?: string } | undefined;
     const encoded = data?.data ?? data?.base64 ?? data?.dataBase64;
     return encoded ? base64ToArrayBuffer(encoded) : null;
   }
@@ -580,7 +579,10 @@ export class EngineClient {
     return resolved;
   }
 
-  private resolveOptionalLocalSource(source: string | undefined, label: string): string | undefined {
+  private resolveOptionalLocalSource(
+    source: string | undefined,
+    label: string,
+  ): string | undefined {
     return source === undefined ? undefined : this.resolveLocalFileSource(source, label);
   }
 

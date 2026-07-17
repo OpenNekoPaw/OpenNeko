@@ -305,7 +305,11 @@ export class H264StreamClient {
     const decodeStart = this.decodeStartTimes.get(frame.timestamp);
     this.decodeStartTimes.delete(frame.timestamp);
     if (decodeStart !== undefined) {
-      this.decodeTimeSamples = appendSample(this.decodeTimeSamples, now - decodeStart, this.maxSamples);
+      this.decodeTimeSamples = appendSample(
+        this.decodeTimeSamples,
+        now - decodeStart,
+        this.maxSamples,
+      );
     }
     const receivedAt = this.pendingFrames.get(frame.timestamp);
     this.pendingFrames.delete(frame.timestamp);
@@ -326,8 +330,7 @@ export class H264StreamClient {
     this.stats = {
       ...this.stats,
       framesDropped: this.stats.framesDropped + 1,
-      framesDroppedBeforeDecode:
-        this.stats.framesDroppedBeforeDecode + (beforeDecode ? 1 : 0),
+      framesDroppedBeforeDecode: this.stats.framesDroppedBeforeDecode + (beforeDecode ? 1 : 0),
     };
   }
 

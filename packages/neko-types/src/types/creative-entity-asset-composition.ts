@@ -65,17 +65,10 @@ export interface CreativeEntitySourceMetadata {
 }
 
 export type CreativeEntityCandidateStatus =
-  | 'open'
-  | 'confirmed'
-  | 'rejected'
-  | 'dismissed'
-  | 'merged';
+  'open' | 'confirmed' | 'rejected' | 'dismissed' | 'merged';
 
 export type CreativeEntityCandidateIdentityBasis =
-  | 'user-named'
-  | 'placeholder'
-  | 'visual'
-  | 'asset';
+  'user-named' | 'placeholder' | 'visual' | 'asset';
 
 export interface CreativeEntityCandidateProvenance {
   readonly providerId: string;
@@ -137,13 +130,7 @@ export type CreativeEntityLifecycleAction =
 
 export interface CreativeEntityChangedRef {
   readonly kind:
-    | 'entity'
-    | 'candidate'
-    | 'binding'
-    | 'requirement'
-    | 'visual-draft'
-    | 'provider'
-    | 'store';
+    'entity' | 'candidate' | 'binding' | 'requirement' | 'visual-draft' | 'provider' | 'store';
   readonly id: string;
   readonly entityRef?: CreativeEntityRef;
   readonly factRef?: string;
@@ -231,26 +218,14 @@ export interface CreativeEntitySyncSuggestion {
 }
 
 export type EntityAssetBindingRole =
-  | 'portrait'
-  | 'reference'
-  | 'puppet-bone'
-  | 'live2d'
-  | 'live3d'
-  | 'voice'
-  | 'motion'
-  | 'style';
+  'portrait' | 'reference' | 'puppet-bone' | 'live2d' | 'live3d' | 'voice' | 'motion' | 'style';
 
 export type EntityAssetBindingStatus = 'suggested' | 'confirmed' | 'rejected';
 
 export type EntityAssetBindingAvailability = 'active' | 'orphaned' | 'archived';
 
 export type EntityAssetBindingSource =
-  | 'user'
-  | 'importer'
-  | 'story'
-  | 'canvas'
-  | 'agent'
-  | 'matcher';
+  'user' | 'importer' | 'story' | 'canvas' | 'agent' | 'matcher';
 
 export interface EntityAssetBinding {
   readonly id: string;
@@ -273,14 +248,7 @@ export interface EntityAssetBindingFile {
 }
 
 export type RepresentationKind =
-  | 'portrait'
-  | 'reference'
-  | 'puppet-bone'
-  | 'live2d'
-  | 'live3d'
-  | 'voice'
-  | 'motion'
-  | 'video';
+  'portrait' | 'reference' | 'puppet-bone' | 'live2d' | 'live3d' | 'voice' | 'motion' | 'video';
 
 export type RepresentationTarget = 'story' | 'canvas' | 'agent' | 'live' | 'cut';
 
@@ -422,11 +390,7 @@ export interface VisualIdentityDraftFile {
 export type EntityAssetRequirementSource = 'story' | 'canvas' | 'agent' | 'live';
 
 export type EntityAssetRequirementStatus =
-  | 'missing'
-  | 'suggested'
-  | 'generated'
-  | 'bound'
-  | 'dismissed';
+  'missing' | 'suggested' | 'generated' | 'bound' | 'dismissed';
 
 export interface EntityAssetRequirement {
   readonly id: string;

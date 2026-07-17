@@ -63,10 +63,7 @@ describe('@neko/ui positioned context menu', () => {
         <PositionedContextMenu
           x={12}
           y={24}
-          items={[
-            { label: 'Rename', shortcut: 'Enter', onClick: vi.fn() },
-            { separator: true },
-          ]}
+          items={[{ label: 'Rename', shortcut: 'Enter', onClick: vi.fn() }, { separator: true }]}
           onClose={vi.fn()}
         />,
       );

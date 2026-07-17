@@ -7,17 +7,10 @@ const WINDOWS_UNC_PATTERN = /^\\\\/;
 const WORKSPACE_VARIABLES = new Set(['WORKSPACE', 'PROJECT']);
 
 export type WorkspaceMediaPathKind =
-  | 'empty'
-  | 'remote-url'
-  | 'variable'
-  | 'absolute-local'
-  | 'workspace-relative';
+  'empty' | 'remote-url' | 'variable' | 'absolute-local' | 'workspace-relative';
 
 export type WorkspaceMediaPathCandidateReason =
-  | 'absolute-local'
-  | 'workspace-relative'
-  | 'workspace-variable'
-  | 'custom-variable';
+  'absolute-local' | 'workspace-relative' | 'workspace-variable' | 'custom-variable';
 
 export type WorkspaceMediaPathDiagnosticCode =
   | 'missing-context'
@@ -104,10 +97,7 @@ export interface ResolveWorkspaceMediaPathAsyncInput {
 }
 
 export type WorkspaceMediaPathContractionFormat =
-  | 'remote-url'
-  | 'workspace-relative'
-  | 'variable'
-  | 'absolute-local';
+  'remote-url' | 'workspace-relative' | 'variable' | 'absolute-local';
 
 export interface WorkspaceMediaPathContractionResult {
   readonly path: string;

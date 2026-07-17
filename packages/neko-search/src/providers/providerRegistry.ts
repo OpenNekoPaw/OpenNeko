@@ -33,11 +33,7 @@ export interface ProjectSearchProviderRegistryOptions {
 export interface StorySearchProjection {
   readonly id: string;
   readonly kind:
-    | 'story-scene'
-    | 'story-section'
-    | 'script-role'
-    | 'creative-entity'
-    | 'entity-candidate';
+    'story-scene' | 'story-section' | 'script-role' | 'creative-entity' | 'entity-candidate';
   readonly label: string;
   readonly projectRoot: string;
   readonly source: ProjectSearchSourceRef;

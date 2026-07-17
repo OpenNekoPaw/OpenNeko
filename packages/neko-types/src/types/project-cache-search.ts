@@ -54,13 +54,7 @@ export type ProjectIndexFreshness = 'fresh' | 'stale' | 'building' | 'partial' |
 export type ProjectSemanticCoverageStatus = 'fresh' | 'stale' | 'missing' | 'partial' | 'failed';
 
 export type ProjectSemanticCoverageAnalysisKind =
-  | 'ocr'
-  | 'asr'
-  | 'subtitle'
-  | 'vision'
-  | 'entity-mention'
-  | 'character-observation'
-  | 'storyboard';
+  'ocr' | 'asr' | 'subtitle' | 'vision' | 'entity-mention' | 'character-observation' | 'storyboard';
 
 export type ProjectSemanticCoverageStaleReason =
   | 'provider-version'
@@ -74,29 +68,15 @@ export type ProjectSemanticCoverageStaleReason =
   | 'provider-failed';
 
 export type ProjectIndexPartitionStatus =
-  | 'idle'
-  | 'loading'
-  | 'ready'
-  | 'building'
-  | 'stale'
-  | 'failed';
+  'idle' | 'loading' | 'ready' | 'building' | 'stale' | 'failed';
 
 export type ProjectSearchFreshnessPolicy = 'allow-stale' | 'fresh-only';
 
 export type ProjectSearchMode =
-  | 'mention'
-  | 'global'
-  | 'asset-picker'
-  | 'entity-picker'
-  | 'document'
-  | 'agent-tool';
+  'mention' | 'global' | 'asset-picker' | 'entity-picker' | 'document' | 'agent-tool';
 
 export type ProjectSearchScopeKind =
-  | 'project'
-  | 'workspace'
-  | 'media-library'
-  | 'document'
-  | 'current-file';
+  'project' | 'workspace' | 'media-library' | 'document' | 'current-file';
 
 export interface ProjectSearchScope {
   readonly kind: ProjectSearchScopeKind;
@@ -142,19 +122,10 @@ export type ProjectIndexUpdateReason =
   | 'cache-rebuild';
 
 export type ProjectSemanticIndexingWorkKind =
-  | 'sidecar-projection'
-  | 'ledger-projection'
-  | 'ocr'
-  | 'asr'
-  | 'embedding'
-  | 'perception-refresh';
+  'sidecar-projection' | 'ledger-projection' | 'ocr' | 'asr' | 'embedding' | 'perception-refresh';
 
 export type ProjectSemanticIndexingTrigger =
-  | 'project-open'
-  | 'idle'
-  | 'import'
-  | 'on-demand'
-  | 'manual-refresh';
+  'project-open' | 'idle' | 'import' | 'on-demand' | 'manual-refresh';
 
 export interface ProjectSearchSourceRef {
   readonly partition: ProjectSearchPartitionKind;

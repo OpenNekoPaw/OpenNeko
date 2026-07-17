@@ -119,14 +119,7 @@ export const DEFAULT_CURVES_ADJUSTMENT: CurvesAdjustment = {
 
 /** HSL color ranges for selective color adjustment */
 export type HSLColorRange =
-  | 'red'
-  | 'orange'
-  | 'yellow'
-  | 'green'
-  | 'cyan'
-  | 'blue'
-  | 'purple'
-  | 'magenta';
+  'red' | 'orange' | 'yellow' | 'green' | 'cyan' | 'blue' | 'purple' | 'magenta';
 
 /** HSL adjustment for a specific color range */
 export interface HSLRangeAdjustment {

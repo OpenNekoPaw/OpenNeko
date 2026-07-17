@@ -257,13 +257,10 @@ describe('@neko/ui TreeView', () => {
       root.render(
         <TreeView
           height={96}
-          items={Array.from(
-            { length: 20 },
-            (_, index): TreeViewItem => ({
-              id: `item-${index}`,
-              label: `Item ${index}`,
-            }),
-          )}
+          items={Array.from({ length: 20 }, (_, index): TreeViewItem => ({
+            id: `item-${index}`,
+            label: `Item ${index}`,
+          }))}
           virtualization={{ threshold: 200 }}
         />,
       );
@@ -328,13 +325,10 @@ describe('@neko/ui TreeView', () => {
   });
 
   it('uses virtualization for 500 visible items while preserving selected state', () => {
-    const items = Array.from(
-      { length: 500 },
-      (_, index): TreeViewItem => ({
-        id: `item-${index}`,
-        label: `Item ${index}`,
-      }),
-    );
+    const items = Array.from({ length: 500 }, (_, index): TreeViewItem => ({
+      id: `item-${index}`,
+      label: `Item ${index}`,
+    }));
 
     act(() => {
       root.render(

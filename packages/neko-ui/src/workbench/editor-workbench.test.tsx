@@ -51,12 +51,24 @@ describe('editor workbench shell primitives', () => {
     expect(host.querySelector('[data-neko-editor-workbench="true"]')).not.toBeNull();
     expect(host.querySelector('[data-workbench-layout="docked-editor"]')).not.toBeNull();
     expect(host.querySelector('.neko-editor-workbench-title [data-testid="title"]')).not.toBeNull();
-    expect(host.querySelector('.neko-editor-workbench-activity [data-testid="activity"]')).not.toBeNull();
-    expect(host.querySelector('.neko-editor-workbench-sidebar [data-testid="sidebar"]')).not.toBeNull();
-    expect(host.querySelector('.neko-editor-workbench-editor [data-testid="editor"]')).not.toBeNull();
-    expect(host.querySelector('.neko-editor-workbench-secondary-sidebar [data-testid="secondary"]')).not.toBeNull();
-    expect(host.querySelector('.neko-editor-workbench-bottom [data-testid="bottom"]')).not.toBeNull();
-    expect(host.querySelector('.neko-editor-workbench-status [data-testid="status"]')).not.toBeNull();
+    expect(
+      host.querySelector('.neko-editor-workbench-activity [data-testid="activity"]'),
+    ).not.toBeNull();
+    expect(
+      host.querySelector('.neko-editor-workbench-sidebar [data-testid="sidebar"]'),
+    ).not.toBeNull();
+    expect(
+      host.querySelector('.neko-editor-workbench-editor [data-testid="editor"]'),
+    ).not.toBeNull();
+    expect(
+      host.querySelector('.neko-editor-workbench-secondary-sidebar [data-testid="secondary"]'),
+    ).not.toBeNull();
+    expect(
+      host.querySelector('.neko-editor-workbench-bottom [data-testid="bottom"]'),
+    ).not.toBeNull();
+    expect(
+      host.querySelector('.neko-editor-workbench-status [data-testid="status"]'),
+    ).not.toBeNull();
   });
 
   it('omits hidden docked side zones from the workbench shell', () => {
@@ -83,7 +95,9 @@ describe('editor workbench shell primitives', () => {
     expect(host.querySelector('.neko-editor-workbench-activity')).toBeNull();
     expect(host.querySelector('.neko-editor-workbench-sidebar')).toBeNull();
     expect(host.querySelector('.neko-editor-workbench-secondary-sidebar')).toBeNull();
-    expect(host.querySelector('.neko-editor-workbench-editor [data-testid="editor"]')).not.toBeNull();
+    expect(
+      host.querySelector('.neko-editor-workbench-editor [data-testid="editor"]'),
+    ).not.toBeNull();
   });
 
   it('renders reusable activity buttons, tabs, cards, thumbnails, and status chrome', () => {
@@ -144,14 +158,18 @@ describe('editor workbench shell primitives', () => {
     });
 
     expect(host.querySelectorAll('.neko-workbench-activity-button')).toHaveLength(2);
-    expect(host.querySelector('.neko-workbench-activity-button[data-active="true"]')).not.toBeNull();
+    expect(
+      host.querySelector('.neko-workbench-activity-button[data-active="true"]'),
+    ).not.toBeNull();
     expect(host.querySelectorAll('[role="tab"]')).toHaveLength(2);
     expect(host.querySelector('.neko-workbench-panel-header__title')?.textContent).toBe('Explorer');
     expect(host.querySelector('.neko-workbench-list-card[data-selected="true"]')).not.toBeNull();
     expect(host.querySelector('.neko-workbench-thumbnail-strip__item')).not.toBeNull();
     expect(host.querySelector('.neko-workbench-status-bar')?.textContent).toContain('trusted');
     expect(
-      host.querySelector('.neko-workbench-webview-runtime-frame[data-neko-webview-runtime="agent"] [data-testid="agent-root"]'),
+      host.querySelector(
+        '.neko-workbench-webview-runtime-frame[data-neko-webview-runtime="agent"] [data-testid="agent-root"]',
+      ),
     ).not.toBeNull();
 
     act(() => {

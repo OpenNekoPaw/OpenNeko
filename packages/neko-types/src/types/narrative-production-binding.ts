@@ -71,9 +71,7 @@ export interface NarrativeProductionBinding {
 }
 
 export type NarrativeProductionBindingDiagnosticCode =
-  | 'invalid-production-binding'
-  | 'missing-target-narrative-node'
-  | 'non-durable-production-binding';
+  'invalid-production-binding' | 'missing-target-narrative-node' | 'non-durable-production-binding';
 
 export interface NarrativeProductionBindingDiagnostic {
   readonly code: NarrativeProductionBindingDiagnosticCode;

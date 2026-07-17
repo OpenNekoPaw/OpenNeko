@@ -12,13 +12,7 @@
  * Muxer state
  */
 export type MuxerState =
-  | 'idle'
-  | 'initializing'
-  | 'muxing'
-  | 'finalizing'
-  | 'completed'
-  | 'error'
-  | 'cancelled';
+  'idle' | 'initializing' | 'muxing' | 'finalizing' | 'completed' | 'error' | 'cancelled';
 
 // =============================================================================
 // Muxer Configuration

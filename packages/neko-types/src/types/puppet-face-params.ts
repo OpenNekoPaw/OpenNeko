@@ -12,13 +12,7 @@
 
 /** Face parameter category for grouping sliders */
 export type PuppetFaceCategory =
-  | 'face_shape'
-  | 'eyes'
-  | 'eyebrows'
-  | 'nose'
-  | 'mouth'
-  | 'ears'
-  | 'expression';
+  'face_shape' | 'eyes' | 'eyebrows' | 'nose' | 'mouth' | 'ears' | 'expression';
 
 /** Category display metadata */
 export interface PuppetFaceCategoryMeta {

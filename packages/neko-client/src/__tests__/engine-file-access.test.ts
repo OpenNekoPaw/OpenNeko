@@ -22,17 +22,20 @@ describe('media engine file access', () => {
   it('reads bounded media bytes through a scoped token', async () => {
     const unregisterFile = vi.fn(async (_token: string) => undefined);
     const registerFile = vi.fn(async (_input: unknown) => ({
-        token: 'media-token',
-        fileSizeBytes: 3,
-        mimeType: 'video/mp4',
-        purpose: 'media-decode',
-        rangeUrl: '/v1/files/media-token',
-      }));
+      token: 'media-token',
+      fileSizeBytes: 3,
+      mimeType: 'video/mp4',
+      purpose: 'media-decode',
+      rangeUrl: '/v1/files/media-token',
+    }));
     const engine = {
       registerFile,
       readFileRange: vi.fn(async () => new Uint8Array([1, 2, 3]).buffer),
       unregisterFile,
-      async withRegisteredFile(input: unknown, task: (registered: Awaited<ReturnType<typeof registerFile>>) => Promise<unknown>) {
+      async withRegisteredFile(
+        input: unknown,
+        task: (registered: Awaited<ReturnType<typeof registerFile>>) => Promise<unknown>,
+      ) {
         const registered = await registerFile(input);
         try {
           return await task(registered);

@@ -43,7 +43,9 @@ export function MarkdownCompletionPopover({
           }}
         >
           <span className="truncate font-medium">{item.label}</span>
-          {item.detail ? <span className="truncate text-[10px] opacity-70">{item.detail}</span> : null}
+          {item.detail ? (
+            <span className="truncate text-[10px] opacity-70">{item.detail}</span>
+          ) : null}
         </button>
       ))}
     </div>

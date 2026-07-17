@@ -11,10 +11,7 @@
 // =============================================================================
 
 export type EngineCharacterDataBlockKind =
-  | 'morph-sparse-delta'
-  | 'skin-weight-atlas'
-  | 'blend-shape'
-  | 'auxiliary-geometry';
+  'morph-sparse-delta' | 'skin-weight-atlas' | 'blend-shape' | 'auxiliary-geometry';
 
 export type EngineCharacterOverrideOperation = 'set' | 'remove' | 'reset';
 
@@ -29,12 +26,7 @@ export type EngineCharacterCommandType =
   | 'override-reset';
 
 export type EngineCharacterRegionBindingKind =
-  | 'morphControl'
-  | 'materialSlot'
-  | 'bone'
-  | 'submesh'
-  | 'primitive'
-  | 'mask';
+  'morphControl' | 'materialSlot' | 'bone' | 'submesh' | 'primitive' | 'mask';
 
 export type EngineSceneCommandType =
   | 'transform'
@@ -100,22 +92,10 @@ export type EngineVertexBrushPatchEncoding = 'f32-delta' | 'f16-delta' | 'quanti
 export type EngineCameraRefKind = 'sceneCamera' | 'editorCamera';
 
 export type EngineViewportRenderMode =
-  | 'pbr'
-  | 'wireframe'
-  | 'unlit'
-  | 'normal'
-  | 'depth'
-  | 'lightComplexity'
-  | 'shadowAtlas'
-  | 'clay';
+  'pbr' | 'wireframe' | 'unlit' | 'normal' | 'depth' | 'lightComplexity' | 'shadowAtlas' | 'clay';
 
 export type EngineViewportDebugView =
-  | 'albedo'
-  | 'roughness'
-  | 'metallic'
-  | 'ao'
-  | 'uv'
-  | 'overdraw';
+  'albedo' | 'roughness' | 'metallic' | 'ao' | 'uv' | 'overdraw';
 
 export type EngineSceneColorSpace = 'srgb' | 'rec709' | 'p3';
 
@@ -124,11 +104,7 @@ export type EngineToneMapping = 'aces' | 'reinhard' | 'none';
 export type EngineViewportMaterialOverrideKind = 'none' | 'clay' | 'matcap';
 
 export type EngineViewportWorkMode =
-  | 'edit-parametric'
-  | 'edit-free'
-  | 'pose'
-  | 'render-preview'
-  | 'lookdev';
+  'edit-parametric' | 'edit-free' | 'pose' | 'render-preview' | 'lookdev';
 
 export type EngineH264Container = 'h264-annexb' | 'h264-avcc';
 

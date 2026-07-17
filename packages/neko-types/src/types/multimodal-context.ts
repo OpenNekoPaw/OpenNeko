@@ -9,13 +9,7 @@ import type { AgentObservationModality } from './agent-observation';
  */
 
 export type MultimodalPanelKind =
-  | 'timeline'
-  | 'canvas'
-  | 'model-2d'
-  | 'model-3d'
-  | 'xr'
-  | 'asset-browser'
-  | 'unknown';
+  'timeline' | 'canvas' | 'model-2d' | 'model-3d' | 'xr' | 'asset-browser' | 'unknown';
 
 export type SelectionKind =
   | 'timeline-clip'

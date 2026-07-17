@@ -327,19 +327,10 @@ export interface MissingInstallTargetContributor {
 }
 
 export type InstalledPackageStatus =
-  | 'active'
-  | 'expiring-soon'
-  | 'expired'
-  | 'incompatible'
-  | 'deprecated';
+  'active' | 'expiring-soon' | 'expired' | 'incompatible' | 'deprecated';
 
 export type LargeAssetInstallState =
-  | 'not-owned'
-  | 'owned'
-  | 'manifest-only'
-  | 'proxy'
-  | 'partial'
-  | 'full';
+  'not-owned' | 'owned' | 'manifest-only' | 'proxy' | 'partial' | 'full';
 
 export interface InstalledLargeAssetState {
   state: LargeAssetInstallState;

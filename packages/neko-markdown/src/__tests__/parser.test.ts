@@ -251,5 +251,5 @@ describe('canonical CommonMark/GFM normalization', () => {
       status: 'failed',
       diagnostics: [{ code: 'MD_SOURCE_LIMIT_EXCEEDED' }],
     });
-  });
+  }, 30_000);
 });

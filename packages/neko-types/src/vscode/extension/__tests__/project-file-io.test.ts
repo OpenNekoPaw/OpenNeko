@@ -109,15 +109,13 @@ describe('ProjectFileSaveSession', () => {
   });
 
   it('writes project document saves in-place by default to avoid visible delete/add churn', async () => {
-    const save = vi.fn(
-      async (request: unknown): Promise<ProjectFileSaveResponse> => ({
-        ok: true,
-        filePath: '/workspace/project/edit.nkv',
-        document: (request as { document: { title: string } }).document,
-        diagnostics: [],
-        written: true,
-      }),
-    );
+    const save = vi.fn(async (request: unknown): Promise<ProjectFileSaveResponse> => ({
+      ok: true,
+      filePath: '/workspace/project/edit.nkv',
+      document: (request as { document: { title: string } }).document,
+      diagnostics: [],
+      written: true,
+    }));
     const session = new ProjectFileSaveSession<{ title: string }>({
       formatId: 'nkv',
       store: { save } as never,
@@ -143,15 +141,13 @@ describe('ProjectFileSaveSession', () => {
       debug: vi.fn(),
       warn: vi.fn(),
     };
-    const save = vi.fn(
-      async (request: unknown): Promise<ProjectFileSaveResponse> => ({
-        ok: true,
-        filePath: '/workspace/project/edit.nkc',
-        document: (request as { document: { title: string } }).document,
-        diagnostics: [],
-        written: true,
-      }),
-    );
+    const save = vi.fn(async (request: unknown): Promise<ProjectFileSaveResponse> => ({
+      ok: true,
+      filePath: '/workspace/project/edit.nkc',
+      document: (request as { document: { title: string } }).document,
+      diagnostics: [],
+      written: true,
+    }));
     const session = new ProjectFileSaveSession<{ title: string }>({
       formatId: 'nkc',
       store: { save } as never,
@@ -177,15 +173,13 @@ describe('ProjectFileSaveSession', () => {
   });
 
   it('allows callers to override the default atomic write policy', async () => {
-    const save = vi.fn(
-      async (request: unknown): Promise<ProjectFileSaveResponse> => ({
-        ok: true,
-        filePath: '/workspace/project/edit.nka',
-        document: (request as { document: { title: string } }).document,
-        diagnostics: [],
-        written: true,
-      }),
-    );
+    const save = vi.fn(async (request: unknown): Promise<ProjectFileSaveResponse> => ({
+      ok: true,
+      filePath: '/workspace/project/edit.nka',
+      document: (request as { document: { title: string } }).document,
+      diagnostics: [],
+      written: true,
+    }));
     const session = new ProjectFileSaveSession<{ title: string }>({
       formatId: 'nka',
       store: { save } as never,
@@ -240,19 +234,17 @@ describe('ProjectFileSaveSession', () => {
   });
 
   it('throws formatted diagnostics when the store blocks save', async () => {
-    const save = vi.fn(
-      async (): Promise<ProjectFileSaveResponse> => ({
-        ok: false,
-        filePath: '/workspace/project/edit.nkv',
-        diagnostics: [
-          createProjectFileDiagnostic({
-            code: 'non-portable-path',
-            message: 'Source clip.src is an absolute local path.',
-          }),
-        ],
-        written: false,
-      }),
-    );
+    const save = vi.fn(async (): Promise<ProjectFileSaveResponse> => ({
+      ok: false,
+      filePath: '/workspace/project/edit.nkv',
+      diagnostics: [
+        createProjectFileDiagnostic({
+          code: 'non-portable-path',
+          message: 'Source clip.src is an absolute local path.',
+        }),
+      ],
+      written: false,
+    }));
     const session = new ProjectFileSaveSession<{ title: string }>({
       formatId: 'nkv',
       store: { save } as never,

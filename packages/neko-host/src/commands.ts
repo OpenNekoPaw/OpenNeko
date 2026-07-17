@@ -24,12 +24,7 @@ export interface NekoCommandContext {
 }
 
 export type NekoWorkspaceCommandMediaType =
-  | 'video'
-  | 'audio'
-  | 'image'
-  | 'sequence'
-  | 'text'
-  | 'document';
+  'video' | 'audio' | 'image' | 'sequence' | 'text' | 'document';
 
 export interface NekoWorkspaceSearchFilesPayload {
   readonly filter: string;

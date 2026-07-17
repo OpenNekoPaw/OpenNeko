@@ -16,6 +16,12 @@ export default defineConfig({
         'packages/extension/src/**/*.{ts,tsx}',
         'packages/webview/src/**/*.{ts,tsx}',
       ],
+      thresholds: {
+        lines: 13,
+        branches: 11,
+        functions: 16,
+        statements: 12,
+      },
     }),
   },
 });

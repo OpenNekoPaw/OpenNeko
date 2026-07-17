@@ -7,15 +7,7 @@
 // =============================================================================
 
 export type TrackType =
-  | 'video'
-  | 'audio'
-  | 'text'
-  | 'effect'
-  | 'subtitle'
-  | 'shape'
-  | 'scene3d'
-  | 'puppet'
-  | 'media';
+  'video' | 'audio' | 'text' | 'effect' | 'subtitle' | 'shape' | 'scene3d' | 'puppet' | 'media';
 
 /**
  * 媒体类型（用于素材分类）

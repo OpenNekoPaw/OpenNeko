@@ -59,19 +59,10 @@ export interface CanvasPlaybackMetadata {
 }
 
 export type CanvasPlaybackUnitKind =
-  | 'node'
-  | 'container'
-  | 'media'
-  | 'shot'
-  | 'scene'
-  | 'narrative';
+  'node' | 'container' | 'media' | 'shot' | 'scene' | 'narrative';
 
 export type CanvasPlaybackRenderMode =
-  | 'select-node'
-  | 'inline-preview'
-  | 'story-preview'
-  | 'media-playback'
-  | 'narrative-preview';
+  'select-node' | 'inline-preview' | 'story-preview' | 'media-playback' | 'narrative-preview';
 
 export interface CanvasPlaybackUnit {
   readonly id: string;
@@ -128,13 +119,7 @@ export interface CanvasPlaybackDiagnostic {
 }
 
 export type CanvasPlaybackRouteSourceKind =
-  | 'entry'
-  | 'auto-entry'
-  | 'selection'
-  | 'container'
-  | 'scene'
-  | 'component'
-  | 'single-unit';
+  'entry' | 'auto-entry' | 'selection' | 'container' | 'scene' | 'component' | 'single-unit';
 
 export interface CanvasPlaybackRouteCandidate {
   readonly id: string;

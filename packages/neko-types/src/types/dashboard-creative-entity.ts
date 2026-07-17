@@ -52,12 +52,7 @@ export type DashboardCreativeEntityKind = CreativeEntityKind | 'action';
 export type DashboardCreativeEntityLifecycleStatus = CreativeEntityStatus | 'merged' | 'unknown';
 
 export type DashboardCreativeEntitySourceKind =
-  | 'registry'
-  | 'script'
-  | 'asset'
-  | 'generated'
-  | 'requirement'
-  | 'mixed';
+  'registry' | 'script' | 'asset' | 'generated' | 'requirement' | 'mixed';
 
 export type DashboardCreativeEntityAction =
   | 'open-source'
@@ -102,10 +97,7 @@ export type DashboardCharacterRoleWorkflowScopeKind =
   | 'validation-artifact';
 
 export type DashboardCharacterRoleWorkflowResultKind =
-  | 'agent-conversation'
-  | 'structured-report'
-  | 'suggestions'
-  | 'delegated-command';
+  'agent-conversation' | 'structured-report' | 'suggestions' | 'delegated-command';
 
 export type DashboardCreativeEntityEventType = 'added' | 'updated' | 'removed' | 'refreshed';
 
@@ -122,15 +114,10 @@ export type DashboardCreativeEntityOccurrenceSource =
 export type DashboardCreativeEntityOccurrenceRole = 'definition' | 'reference';
 
 export type DashboardCreativeEntitySyncSuggestionKind =
-  | 'asset-metadata'
-  | 'generated-asset-registration'
-  | 'binding-mismatch';
+  'asset-metadata' | 'generated-asset-registration' | 'binding-mismatch';
 
 export type DashboardCreativeEntitySyncSuggestionStatus =
-  | 'suggested'
-  | 'applied'
-  | 'ignored'
-  | 'unavailable';
+  'suggested' | 'applied' | 'ignored' | 'unavailable';
 
 export interface DashboardCreativeEntityRef {
   readonly source: string;

@@ -56,12 +56,7 @@ export interface CharacterAssetExportResult {
 }
 
 export type NativePuppetExportTarget =
-  | 'nkp'
-  | 'nkentity'
-  | 'spine-json'
-  | 'spritesheet'
-  | 'lottie'
-  | 'character-pack';
+  'nkp' | 'nkentity' | 'spine-json' | 'spritesheet' | 'lottie' | 'character-pack';
 
 export interface NativePuppetExportDiagnostic {
   readonly code: string;

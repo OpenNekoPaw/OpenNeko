@@ -115,12 +115,7 @@ export interface BezierShape extends BaseShape {
  * Union of all shape types
  */
 export type Shape =
-  | RectangleShape
-  | EllipseShape
-  | PolygonShape
-  | StarShape
-  | LineShape
-  | BezierShape;
+  RectangleShape | EllipseShape | PolygonShape | StarShape | LineShape | BezierShape;
 
 // -----------------------------------------------------------------------------
 // Shape Style Properties

@@ -119,8 +119,7 @@ export function resolveGenerationParams(
   project: Partial<GenerationParams> | undefined,
   market: Partial<GenerationModelConfig> | undefined,
   system:
-    | { params?: Partial<GenerationParams>; models?: Partial<GenerationModelConfig> }
-    | undefined,
+    { params?: Partial<GenerationParams>; models?: Partial<GenerationModelConfig> } | undefined,
   llm: string,
 ): ResolvedGenerationParams {
   const resolveModel = (

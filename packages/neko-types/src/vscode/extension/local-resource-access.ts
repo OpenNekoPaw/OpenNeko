@@ -22,8 +22,7 @@ export type LocalResourceRootInput = vscode.Uri | LocalResourceRoot;
 export interface LocalResourceRootProvider {
   readonly id: string;
   readonly getRoots: () =>
-    | Promise<readonly LocalResourceRootInput[]>
-    | readonly LocalResourceRootInput[];
+    Promise<readonly LocalResourceRootInput[]> | readonly LocalResourceRootInput[];
 }
 
 export interface LocalResourceAccessLogger {
@@ -263,8 +262,7 @@ export function createStaticLocalResourceRootProvider(
 
 export function createWorkspaceLocalResourceRootProvider(
   getWorkspaceFolders: () =>
-    | readonly { readonly uri: vscode.Uri }[]
-    | undefined = getDefaultWorkspaceFolders,
+    readonly { readonly uri: vscode.Uri }[] | undefined = getDefaultWorkspaceFolders,
 ): LocalResourceRootProvider {
   return {
     id: 'workspace',
@@ -298,8 +296,7 @@ export function createExtensionCacheLocalResourceRootProvider(
 
 export function createWorkspaceCacheLocalResourceRootProvider(
   getWorkspaceFolders: () =>
-    | readonly { readonly uri: vscode.Uri }[]
-    | undefined = getDefaultWorkspaceFolders,
+    readonly { readonly uri: vscode.Uri }[] | undefined = getDefaultWorkspaceFolders,
 ): LocalResourceRootProvider {
   return {
     id: 'workspace-neko-cache',

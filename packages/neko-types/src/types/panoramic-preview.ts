@@ -13,10 +13,7 @@ export const OPEN_PANORAMIC_VIDEO_COMMAND = 'neko.preview.openPanoramicVideo';
 export type PanoramicPreviewKind = 'image' | 'video';
 export type PanoramicPreviewRouteConfidence = 'explicit' | 'high';
 export type PanoramicPreviewRouteSignal =
-  | 'extension'
-  | 'gpano-metadata'
-  | 'trusted-filename'
-  | 'manual';
+  'extension' | 'gpano-metadata' | 'trusted-filename' | 'manual';
 
 export interface PanoramicPreviewRoute {
   readonly kind: PanoramicPreviewKind;

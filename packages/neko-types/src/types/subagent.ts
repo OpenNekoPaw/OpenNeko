@@ -23,11 +23,7 @@ export type SubAgentUIStatus =
  * SubAgent type (specialized or general)
  */
 export type SubAgentUIType =
-  | 'code-search'
-  | 'file-explorer'
-  | 'test-runner'
-  | 'document-writer'
-  | 'general';
+  'code-search' | 'file-explorer' | 'test-runner' | 'document-writer' | 'general';
 
 // =============================================================================
 // SubAgent Info (for UI display)

@@ -4,24 +4,11 @@
 
 /** Effect category */
 export type EffectCategory =
-  | 'blur'
-  | 'sharpen'
-  | 'distort'
-  | 'stylize'
-  | 'color'
-  | 'generate'
-  | 'keying'
-  | 'utility';
+  'blur' | 'sharpen' | 'distort' | 'stylize' | 'color' | 'generate' | 'keying' | 'utility';
 
 /** Effect parameter type */
 export type EffectParameterType =
-  | 'number'
-  | 'boolean'
-  | 'color'
-  | 'select'
-  | 'point'
-  | 'angle'
-  | 'range';
+  'number' | 'boolean' | 'color' | 'select' | 'point' | 'angle' | 'range';
 
 /** Effect parameter value */
 export type EffectParameterValue = number | boolean | string | [number, number];

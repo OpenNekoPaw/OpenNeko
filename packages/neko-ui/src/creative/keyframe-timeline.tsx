@@ -6,11 +6,7 @@ import { KeyframeDiamond } from './keyframe-diamond';
 import { TimelineRuler } from './timeline-ruler';
 
 export type KeyframeTimelineEasing =
-  | 'linear'
-  | 'ease-in-cubic'
-  | 'ease-out-cubic'
-  | 'ease-in-out-cubic'
-  | (string & {});
+  'linear' | 'ease-in-cubic' | 'ease-out-cubic' | 'ease-in-out-cubic' | (string & {});
 
 export interface KeyframeTimelineKeyframe {
   readonly id: string;

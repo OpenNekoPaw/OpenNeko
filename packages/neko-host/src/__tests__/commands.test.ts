@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  NEKO_COMMANDS,
-  NekoCommandExecutionError,
-  createNekoCommandRegistry,
-} from '../commands';
+import { NEKO_COMMANDS, NekoCommandExecutionError, createNekoCommandRegistry } from '../commands';
 
 describe('neko host command registry', () => {
   it('executes registered neko.* commands through the host adapter', async () => {

@@ -10,13 +10,7 @@ export type JsonPointerPath = '' | `/${string}`;
 export type FieldBindingMode = 'read' | 'write' | 'readwrite';
 
 export type FieldValueType =
-  | 'string'
-  | 'number'
-  | 'boolean'
-  | 'array'
-  | 'object'
-  | 'asset'
-  | 'unknown';
+  'string' | 'number' | 'boolean' | 'array' | 'object' | 'asset' | 'unknown';
 
 export interface FieldBinding {
   /** JSON Pointer-style path into the owning node.data object. */
@@ -36,13 +30,7 @@ export interface FieldBinding {
 export type CanvasContentVisibility = 'always' | 'selected' | 'expanded' | 'hover';
 
 export type CanvasContentLayout =
-  | 'stack'
-  | 'row'
-  | 'grid'
-  | 'table'
-  | 'gallery'
-  | 'overlay'
-  | 'custom';
+  'stack' | 'row' | 'grid' | 'table' | 'gallery' | 'overlay' | 'custom';
 
 export type CanvasBlockKind =
   | 'text'
@@ -247,15 +235,7 @@ export interface PlaybackCapability {
 }
 
 export type DelegateTarget =
-  | 'preview'
-  | 'model'
-  | 'cut'
-  | 'audio'
-  | 'document'
-  | 'sketch'
-  | 'puppet'
-  | 'project'
-  | 'external';
+  'preview' | 'model' | 'cut' | 'audio' | 'document' | 'sketch' | 'puppet' | 'project' | 'external';
 
 export interface DelegateAction {
   id: string;

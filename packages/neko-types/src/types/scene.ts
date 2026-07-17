@@ -56,9 +56,7 @@ export type {
 export const CURRENT_CHARACTER_SCHEMA_VERSION = 1;
 
 export type CharacterSchemaCompatibilityStatus =
-  | 'current'
-  | 'unsupported-version'
-  | 'unsupported-future';
+  'current' | 'unsupported-version' | 'unsupported-future';
 
 export interface CharacterSchemaCompatibility {
   status: CharacterSchemaCompatibilityStatus;

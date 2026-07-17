@@ -10,19 +10,10 @@ export type PreviewAssetKind = 'image' | 'video' | 'audio' | 'document' | 'unkno
 export type PreviewManifestStatus = 'ready' | 'requires-proxy' | 'stream-required' | 'unsupported';
 
 export type PreviewProjectionType =
-  | 'flat'
-  | 'equirectangular'
-  | 'cylindrical'
-  | 'cubemap'
-  | 'fisheye'
-  | 'unknown';
+  'flat' | 'equirectangular' | 'cylindrical' | 'cubemap' | 'fisheye' | 'unknown';
 
 export type PreviewProjectionConfidence =
-  | 'explicit'
-  | 'manual'
-  | 'trusted-filename'
-  | 'heuristic'
-  | 'none';
+  'explicit' | 'manual' | 'trusted-filename' | 'heuristic' | 'none';
 
 export type PreviewDynamicRange = 'sdr' | 'hdr' | 'unknown';
 
@@ -31,14 +22,7 @@ export type PreviewToneMapping = 'none' | 'aces' | 'reinhard' | 'filmic';
 export type PanoramaViewMode = 'sphere' | 'flat' | 'little-planet' | 'cylindrical';
 
 export type PreviewVariantRole =
-  | 'source'
-  | 'proxy'
-  | 'thumbnail'
-  | 'fov-crop'
-  | 'tile'
-  | 'stream'
-  | 'screenshot'
-  | 'unsupported';
+  'source' | 'proxy' | 'thumbnail' | 'fov-crop' | 'tile' | 'stream' | 'screenshot' | 'unsupported';
 
 export interface PreviewDimensions {
   readonly width: number;

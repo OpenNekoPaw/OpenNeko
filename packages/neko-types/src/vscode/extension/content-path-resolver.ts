@@ -91,7 +91,7 @@ export async function createHostContentMediaPathContext(
   ]);
   const owningWorkspaceRoot = documentFsPath
     ? findOwningWorkspaceRoot(documentFsPath, workspaceRoots)
-    : workspaceRoot ?? workspaceRoots[0];
+    : (workspaceRoot ?? workspaceRoots[0]);
   const pathVariables = new Map(policy.pathVariables);
   if (owningWorkspaceRoot) {
     pathVariables.set('WORKSPACE', owningWorkspaceRoot);

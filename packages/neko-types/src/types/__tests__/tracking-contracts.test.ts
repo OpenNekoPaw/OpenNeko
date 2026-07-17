@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type {
-  DisposableLike,
-  TrackingData,
-  TrackingServiceApi,
-  TrackingStatus,
-} from '../../index';
+import type { DisposableLike, TrackingData, TrackingServiceApi, TrackingStatus } from '../../index';
 
 function expectJsonSerializable(value: unknown): void {
   expect(JSON.parse(JSON.stringify(value))).toEqual(value);

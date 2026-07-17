@@ -12,27 +12,11 @@ export type ViewportDomain = 'viewport' | 'scene';
 export type ViewportCommandSource = 'user' | 'agent' | 'script' | 'system' | 'replay';
 export type ViewportSceneType = '2d' | '3d' | 'live';
 export type ViewportControlConnectionState =
-  | 'disconnected'
-  | 'connecting'
-  | 'connected'
-  | 'reconnecting'
-  | 'degraded'
-  | 'closed';
+  'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'degraded' | 'closed';
 export type ViewportCommandLifecycleState =
-  | 'queued'
-  | 'sent'
-  | 'ack'
-  | 'error'
-  | 'timeout'
-  | 'superseded'
-  | 'resyncing';
+  'queued' | 'sent' | 'ack' | 'error' | 'timeout' | 'superseded' | 'resyncing';
 export type ViewportMetadataFreshnessState =
-  | 'fresh'
-  | 'missing'
-  | 'delayed'
-  | 'stale'
-  | 'superseded'
-  | 'ack-before-frame';
+  'fresh' | 'missing' | 'delayed' | 'stale' | 'superseded' | 'ack-before-frame';
 export type ViewportDegradedReason =
   | 'control-disconnected'
   | 'control-reconnecting'
@@ -236,12 +220,7 @@ export interface ViewportOverlayDescriptor<
 }
 
 export type ViewportToolbarItemKind =
-  | 'button'
-  | 'toggle'
-  | 'select'
-  | 'slider'
-  | 'separator'
-  | 'custom';
+  'button' | 'toggle' | 'select' | 'slider' | 'separator' | 'custom';
 
 export interface ViewportToolbarOption {
   readonly id: string;

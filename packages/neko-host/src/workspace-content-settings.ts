@@ -8,10 +8,7 @@ import type {
 import type { NekoHostPorts } from './ports';
 
 export const WORKSPACE_CONTENT_SETTINGS_SEGMENTS = ['neko', 'settings.json'] as const;
-export const WORKSPACE_CONTENT_LOCAL_SETTINGS_SEGMENTS = [
-  '.neko',
-  'settings.local.json',
-] as const;
+export const WORKSPACE_CONTENT_LOCAL_SETTINGS_SEGMENTS = ['.neko', 'settings.local.json'] as const;
 
 export interface HostWorkspacePathVariableInput {
   readonly workspaceRoot: string;
@@ -128,10 +125,7 @@ export async function loadHostWorkspaceContentSnapshot(input: {
     };
   }
 
-  const settingsPath = input.host.paths.join(
-    workspaceRoot,
-    ...WORKSPACE_CONTENT_SETTINGS_SEGMENTS,
-  );
+  const settingsPath = input.host.paths.join(workspaceRoot, ...WORKSPACE_CONTENT_SETTINGS_SEGMENTS);
   const localSettingsPath = input.host.paths.join(
     workspaceRoot,
     ...WORKSPACE_CONTENT_LOCAL_SETTINGS_SEGMENTS,
@@ -227,9 +221,7 @@ export function resolveWorkspaceMediaLibrariesSync(
     });
     return {
       ...resolved,
-      accessible: options.checkAccessible
-        ? options.checkAccessible(resolved.resolvedPath)
-        : false,
+      accessible: options.checkAccessible ? options.checkAccessible(resolved.resolvedPath) : false,
     };
   });
 }
@@ -263,7 +255,10 @@ export function createMediaLibraryPathVariableMap(
   return variables;
 }
 
-export function readMediaLibrarySettings(value: unknown, sourceLabel: string): MediaLibrarySettings {
+export function readMediaLibrarySettings(
+  value: unknown,
+  sourceLabel: string,
+): MediaLibrarySettings {
   if (value === undefined) {
     return {};
   }

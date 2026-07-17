@@ -6,41 +6,21 @@ export const MODEL_AI_PREVIEW_MODE_IDS = ['face', 'full-body', 'motion', 'voice-
 export type CharacterPreviewModeId = (typeof MODEL_AI_PREVIEW_MODE_IDS)[number];
 
 export type CharacterPreviewCameraPresetId =
-  | 'face-closeup'
-  | 'full-body'
-  | 'motion-review'
-  | 'voice-performance';
+  'face-closeup' | 'full-body' | 'motion-review' | 'voice-performance';
 
 export type CharacterPreviewFramingTarget =
-  | 'head-shoulders'
-  | 'full-character'
-  | 'motion-envelope'
-  | 'mouth-and-expression';
+  'head-shoulders' | 'full-character' | 'motion-envelope' | 'mouth-and-expression';
 
 export type CharacterPreviewRenderPresetId =
-  | 'face-detail'
-  | 'body-silhouette'
-  | 'motion-diagnostics'
-  | 'voice-lipsync';
+  'face-detail' | 'body-silhouette' | 'motion-diagnostics' | 'voice-lipsync';
 
 export type CharacterPreviewPlaybackRequirement = 'none' | 'animation' | 'voice-pack';
 
 export type CharacterPreviewPlaybackState =
-  | 'idle'
-  | 'loading'
-  | 'playing'
-  | 'paused'
-  | 'unavailable'
-  | 'failed'
-  | 'stopped';
+  'idle' | 'loading' | 'playing' | 'paused' | 'unavailable' | 'failed' | 'stopped';
 
 export type CharacterPreviewStateStatus =
-  | 'requested'
-  | 'pending'
-  | 'applied'
-  | 'rejected'
-  | 'resynced'
-  | 'unavailable';
+  'requested' | 'pending' | 'applied' | 'rejected' | 'resynced' | 'unavailable';
 
 export type CharacterPreviewDiagnosticCode =
   | 'missing-demo-clip'

@@ -500,10 +500,7 @@ export function validateArtifactProfileDescriptor(
     return toAgentProfileValidationResult(diagnostics);
   }
 
-  if (
-    typeof descriptor['protocol'] !== 'string' ||
-    descriptor['protocol'].trim().length === 0
-  ) {
+  if (typeof descriptor['protocol'] !== 'string' || descriptor['protocol'].trim().length === 0) {
     diagnostics.push(
       createAgentProfileDiagnostic({
         severity: 'error',
@@ -523,7 +520,12 @@ export function validateArtifactProfileDescriptor(
     descriptor,
     diagnostics,
   );
-  validateStringArrayDescriptorField(descriptor['validators'], ['validators'], descriptor, diagnostics);
+  validateStringArrayDescriptorField(
+    descriptor['validators'],
+    ['validators'],
+    descriptor,
+    diagnostics,
+  );
   validateArtifactProfileSchemaRefs(descriptor['schemaRefs'], descriptor, diagnostics);
 
   return toAgentProfileValidationResult(diagnostics);

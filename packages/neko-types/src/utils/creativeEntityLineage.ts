@@ -36,16 +36,14 @@ export function buildVisualIdentityDraftsFromGeneratedMediaLineage(
   return groupGeneratedAssetsByCharacter(
     input.assets.filter((asset) => asset.type === 'generated-image'),
   )
-    .map(
-      (group): VisualIdentityDraft => ({
-        id: buildLineageId('visual-draft', input.source, group.characterId, group.sourceRef),
-        characterId: group.characterId,
-        source: input.source,
-        prompt: group.prompts[0] ?? '',
-        generatedAssetIds: group.assetIds,
-        status: 'drafting',
-      }),
-    )
+    .map((group): VisualIdentityDraft => ({
+      id: buildLineageId('visual-draft', input.source, group.characterId, group.sourceRef),
+      characterId: group.characterId,
+      source: input.source,
+      prompt: group.prompts[0] ?? '',
+      generatedAssetIds: group.assetIds,
+      status: 'drafting',
+    }))
     .sort(compareVisualDrafts);
 }
 
@@ -57,17 +55,15 @@ export function buildEntityAssetRequirementsFromGeneratedMediaLineage(
   }
 
   return groupGeneratedAssetsByCharacter(input.assets)
-    .map(
-      (group): EntityAssetRequirement => ({
-        id: buildLineageId('asset-requirement', input.source, group.characterId, group.sourceRef),
-        entityId: group.characterId,
-        entityKind: 'character',
-        source: input.source,
-        sourceRef: group.sourceRef,
-        requiredKinds: input.requiredKinds,
-        status: 'generated',
-      }),
-    )
+    .map((group): EntityAssetRequirement => ({
+      id: buildLineageId('asset-requirement', input.source, group.characterId, group.sourceRef),
+      entityId: group.characterId,
+      entityKind: 'character',
+      source: input.source,
+      sourceRef: group.sourceRef,
+      requiredKinds: input.requiredKinds,
+      status: 'generated',
+    }))
     .sort(compareRequirements);
 }
 

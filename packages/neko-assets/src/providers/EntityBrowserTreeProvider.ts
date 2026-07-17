@@ -8,9 +8,7 @@ import {
 } from '@neko/shared';
 
 export type EntityBrowserTreeItem =
-  | EntityBrowserGroupItem
-  | EntityBrowserEntityItem
-  | EntityBrowserUnavailableItem;
+  EntityBrowserGroupItem | EntityBrowserEntityItem | EntityBrowserUnavailableItem;
 
 export type EntityBrowserTranslate = (
   message: string,

@@ -16,7 +16,11 @@ export interface EngineContentAccessAdapter {
     readonly request: ContentAccessRequest;
     readonly filePath: string;
     readonly maxBytes?: number;
-  }): Promise<{ readonly bytes: Uint8Array; readonly mimeType?: string; readonly sizeBytes: number }>;
+  }): Promise<{
+    readonly bytes: Uint8Array;
+    readonly mimeType?: string;
+    readonly sizeBytes: number;
+  }>;
   createFileLowLevelAccess(): EngineFileLowLevelAccess;
 }
 
@@ -32,8 +36,7 @@ const DEFAULT_PROVIDER_ASSET_RANGE_BYTES = 20 * 1024 * 1024;
 export function createEngineContentAccessAdapter(
   options: CreateEngineContentAccessAdapterOptions,
 ): EngineContentAccessAdapter {
-  const maxProviderAssetBytes =
-    options.maxProviderAssetBytes ?? DEFAULT_PROVIDER_ASSET_RANGE_BYTES;
+  const maxProviderAssetBytes = options.maxProviderAssetBytes ?? DEFAULT_PROVIDER_ASSET_RANGE_BYTES;
 
   async function getEngine(boundary: string): Promise<EngineClient> {
     const engine = await options.engineClientProvider.getOptionalClient();
@@ -92,9 +95,8 @@ export function createEngineContentAccessAdapter(
         task: (engine: EngineClient, token: string, size: number) => Promise<T>,
       ): Promise<T> => {
         const engine = await getEngine('media file access');
-        return engine.withRegisteredFile(
-          { filePath, purpose: 'media-decode' },
-          (registered) => task(engine, registered.token, registered.fileSizeBytes),
+        return engine.withRegisteredFile({ filePath, purpose: 'media-decode' }, (registered) =>
+          task(engine, registered.token, registered.fileSizeBytes),
         );
       };
 

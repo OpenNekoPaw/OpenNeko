@@ -338,14 +338,10 @@ export interface AudioStreamDataNotification {
  * Union type for audio stream messages from Webview to Extension
  */
 export type AudioStreamWebviewMessage =
-  | AudioStreamStartRequest
-  | AudioStreamStopRequest
-  | AudioStreamSeekRequest;
+  AudioStreamStartRequest | AudioStreamStopRequest | AudioStreamSeekRequest;
 
 /**
  * Union type for audio stream messages from Extension to Webview
  */
 export type AudioStreamExtensionMessage =
-  | AudioStreamStartedResponse
-  | AudioStreamStoppedResponse
-  | AudioStreamDataNotification;
+  AudioStreamStartedResponse | AudioStreamStoppedResponse | AudioStreamDataNotification;

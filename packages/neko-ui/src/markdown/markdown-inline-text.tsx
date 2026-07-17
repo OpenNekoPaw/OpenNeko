@@ -1,10 +1,7 @@
 import type React from 'react';
 import type { MarkdownTokenRenderer, MarkdownSemanticSpan } from './types';
 import { useMarkdownProjection } from './use-markdown-projection';
-import {
-  createMarkdownRenderableTokens,
-  renderMarkdownInlineSegments,
-} from './token-rendering';
+import { createMarkdownRenderableTokens, renderMarkdownInlineSegments } from './token-rendering';
 import { cn } from '../utils';
 
 export interface MarkdownInlineTextProps {

@@ -130,9 +130,7 @@ export interface DocumentRange {
 export type DocumentContentKind = 'text' | 'image' | 'mixed';
 
 export type DocumentArchiveResourceVersionPolicy =
-  | 'read-only-source'
-  | 'versioned-export'
-  | 'replace-reference';
+  'read-only-source' | 'versioned-export' | 'replace-reference';
 
 export const DOCUMENT_ARCHIVE_RESOURCE_VERSION_POLICIES = [
   'read-only-source',
@@ -181,13 +179,7 @@ export interface DocumentExcerpt {
 }
 
 export type DocumentManifestUnitKind =
-  | 'page'
-  | 'chapter'
-  | 'entry'
-  | 'slide'
-  | 'section'
-  | 'line'
-  | 'text-range';
+  'page' | 'chapter' | 'entry' | 'slide' | 'section' | 'line' | 'text-range';
 
 export interface DocumentManifestUnit {
   readonly kind: DocumentManifestUnitKind;

@@ -6,14 +6,7 @@
  */
 
 export type CreativeDomainId =
-  | 'timeline'
-  | 'canvas'
-  | 'sketch'
-  | 'audio'
-  | 'scene'
-  | 'puppet'
-  | 'project'
-  | 'mixed';
+  'timeline' | 'canvas' | 'sketch' | 'audio' | 'scene' | 'puppet' | 'project' | 'mixed';
 
 export type CreativeDomainSource = 'operation-tool' | 'engine-tool' | 'capability' | 'intent';
 
@@ -57,10 +50,7 @@ export interface DomainRoutePlan {
 }
 
 export type DomainRouteFailureReason =
-  | 'missing-intent-domain'
-  | 'no-capabilities'
-  | 'capability-filter-empty'
-  | 'domain-mismatch';
+  'missing-intent-domain' | 'no-capabilities' | 'capability-filter-empty' | 'domain-mismatch';
 
 export interface DomainRouteError {
   readonly reason: DomainRouteFailureReason;

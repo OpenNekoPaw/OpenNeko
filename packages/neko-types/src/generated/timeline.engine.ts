@@ -11,15 +11,7 @@
 // =============================================================================
 
 export type EngineTrackType =
-  | 'video'
-  | 'audio'
-  | 'text'
-  | 'effect'
-  | 'subtitle'
-  | 'shape'
-  | 'media'
-  | 'scene3d'
-  | 'puppet';
+  'video' | 'audio' | 'text' | 'effect' | 'subtitle' | 'shape' | 'media' | 'scene3d' | 'puppet';
 
 export type EngineBlendMode =
   | 'normal'

@@ -726,9 +726,7 @@ export interface StreamingDecodeStopRequest {
  * 流式解码请求联合类型
  */
 export type StreamingDecodeRequest =
-  | StreamingDecodeInitRequest
-  | StreamingDecodeGetFrameRequest
-  | StreamingDecodeStopRequest;
+  StreamingDecodeInitRequest | StreamingDecodeGetFrameRequest | StreamingDecodeStopRequest;
 
 /**
  * 流式解码初始化响应
@@ -783,9 +781,7 @@ export interface StreamingDecodeStopResponse {
  * 流式解码响应联合类型
  */
 export type StreamingDecodeResponse =
-  | StreamingDecodeInitResponse
-  | StreamingDecodeFrameResponse
-  | StreamingDecodeStopResponse;
+  StreamingDecodeInitResponse | StreamingDecodeFrameResponse | StreamingDecodeStopResponse;
 
 // =============================================================================
 // Export Preset Types

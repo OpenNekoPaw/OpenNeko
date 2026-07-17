@@ -247,10 +247,7 @@ export interface ToolExecuteOptions {
   trace?: AgentTraceContext;
 }
 
-export type ToolPurposeModelPurpose =
-  | 'image.understand'
-  | 'audio.understand'
-  | 'video.understand';
+export type ToolPurposeModelPurpose = 'image.understand' | 'audio.understand' | 'video.understand';
 
 export interface ToolPurposeModelImage {
   readonly data: string;
@@ -278,9 +275,7 @@ export interface ToolPurposeModelRuntime {
   readonly purpose: ToolPurposeModelPurpose;
   readonly providerId: string;
   readonly modelId: string;
-  complete(
-    input: ToolPurposeModelCompletionInput,
-  ): Promise<ToolPurposeModelCompletionResult>;
+  complete(input: ToolPurposeModelCompletionInput): Promise<ToolPurposeModelCompletionResult>;
 }
 
 /**

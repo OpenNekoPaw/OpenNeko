@@ -1,17 +1,12 @@
 export type ToolSafetyKind =
-  | 'read-only-query'
-  | 'non-destructive-mutation'
-  | 'destructive-mutation'
-  | 'confirmation-gated';
+  'read-only-query' | 'non-destructive-mutation' | 'destructive-mutation' | 'confirmation-gated';
 
 export interface ToolTargetRequirements {
   /** Stable target fields the tool needs before execution, e.g. nodeId or containerId. */
   readonly required?: readonly string[];
   /** Structured fallback sources the runtime may use when explicit targets are absent. */
   readonly allowedFallbacks?: readonly (
-    | 'selection'
-    | 'viewport-insertion'
-    | 'explicit-user-input'
+    'selection' | 'viewport-insertion' | 'explicit-user-input'
   )[];
   /** Mutation modes that must be confirmed even when a target is supplied. */
   readonly confirmationModes?: readonly string[];

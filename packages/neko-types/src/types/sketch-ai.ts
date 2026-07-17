@@ -44,13 +44,7 @@ export interface SketchAIContext {
 export type SketchAIContextScope = 'canvas' | 'layer';
 
 export type SketchAIStylePreset =
-  | 'anime'
-  | 'oil-painting'
-  | 'watercolor'
-  | 'pixel-art'
-  | 'sketch'
-  | 'comic'
-  | 'ghibli';
+  'anime' | 'oil-painting' | 'watercolor' | 'pixel-art' | 'sketch' | 'comic' | 'ghibli';
 
 export type SketchAIAutoLayerTarget = 'lineart' | 'flatcolor' | 'shadow' | 'highlight';
 

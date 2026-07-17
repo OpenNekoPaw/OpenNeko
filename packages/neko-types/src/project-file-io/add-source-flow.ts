@@ -24,8 +24,7 @@ export type ProjectSourceRejectedMessage = {
 };
 
 export type ProjectSourceAddResponseMessage =
-  | ProjectSourceAddedMessage
-  | ProjectSourceRejectedMessage;
+  ProjectSourceAddedMessage | ProjectSourceRejectedMessage;
 
 export interface ProjectSourceAddFileLike extends BrowserFileProjection {
   arrayBuffer(): Promise<ArrayBuffer>;

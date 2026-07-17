@@ -13,12 +13,7 @@
 // -- Graph Node --
 
 export type CreativeGraphNodeKind =
-  | 'entity'
-  | 'occurrence'
-  | 'asset'
-  | 'canvas-node'
-  | 'script-range'
-  | 'generated-asset';
+  'entity' | 'occurrence' | 'asset' | 'canvas-node' | 'script-range' | 'generated-asset';
 
 export interface CreativeGraphNode {
   readonly id: string;
@@ -62,11 +57,7 @@ export interface CreativeRelationEdge {
 // -- Occurrence Locator --
 
 export type OccurrenceSource =
-  | 'registry'
-  | 'script'
-  | 'canvas-node'
-  | 'asset-entity'
-  | 'generated-asset';
+  'registry' | 'script' | 'canvas-node' | 'asset-entity' | 'generated-asset';
 
 export interface OccurrenceLocator {
   readonly uri?: string;

@@ -110,7 +110,8 @@ export interface ProviderCard {
 }
 
 export interface ProviderExpressionProfileDescriptor
-  extends Omit<ProviderCard, 'profileId' | 'kind' | 'source'>,
+  extends
+    Omit<ProviderCard, 'profileId' | 'kind' | 'source'>,
     AgentProfileIdentity<'provider-expression', string> {
   readonly kind: 'provider-expression';
   readonly source: ProviderExpressionProfileSource;
@@ -316,7 +317,10 @@ export function validateProviderExpressionProfileDescriptor(
     return toAgentProfileValidationResult(diagnostics);
   }
 
-  if (typeof descriptor['providerId'] !== 'string' || !isValidProviderId(descriptor['providerId'])) {
+  if (
+    typeof descriptor['providerId'] !== 'string' ||
+    !isValidProviderId(descriptor['providerId'])
+  ) {
     diagnostics.push(
       createAgentProfileDiagnostic({
         severity: 'error',

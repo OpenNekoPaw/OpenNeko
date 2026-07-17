@@ -21,9 +21,7 @@ export interface EffectParameterAutomationTarget {
 }
 
 export type AutomationTarget =
-  | TrackVolumeAutomationTarget
-  | TrackPanAutomationTarget
-  | EffectParameterAutomationTarget;
+  TrackVolumeAutomationTarget | TrackPanAutomationTarget | EffectParameterAutomationTarget;
 
 export interface AutomationPoint {
   /** Musical position in TempoMap PPQ ticks. */

@@ -200,8 +200,7 @@ export type PerceptionCachePolicy = (typeof PERCEPTION_CACHE_POLICIES)[number];
 export type PerceptionConfidenceKind = (typeof PERCEPTION_CONFIDENCE_KINDS)[number];
 export type ComicAnimationReviewState = (typeof COMIC_ANIMATION_REVIEW_STATES)[number];
 export type CharacterStateChangeDimension =
-  | (typeof CHARACTER_STATE_CHANGE_DIMENSIONS)[number]
-  | (string & {});
+  (typeof CHARACTER_STATE_CHANGE_DIMENSIONS)[number] | (string & {});
 export type ContinuityConstraintType = (typeof CONTINUITY_CONSTRAINT_TYPES)[number];
 export type StoryContinuityIncludeFlag = (typeof STORY_CONTINUITY_INCLUDE_FLAGS)[number];
 export type BatchExecutionBuiltInTargetDomain = (typeof BATCH_EXECUTION_TARGET_DOMAINS)[number];

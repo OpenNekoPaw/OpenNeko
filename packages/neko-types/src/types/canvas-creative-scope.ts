@@ -98,9 +98,7 @@ export interface CanvasBoardIndexEntry {
 }
 
 export type CanvasBoardNavigationDiagnosticCode =
-  | 'missing-board'
-  | 'unsafe-board-ref'
-  | 'unresolved-board-ref';
+  'missing-board' | 'unsafe-board-ref' | 'unresolved-board-ref';
 
 export interface CanvasBoardNavigationDiagnostic {
   readonly code: CanvasBoardNavigationDiagnosticCode;

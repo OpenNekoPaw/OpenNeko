@@ -20,7 +20,8 @@ export const MENU_SURFACE_STYLE = {
 export const MENU_ACTION_INTERACTIVE_STYLE = {
   background:
     'var(--neko-menu-selectionBackground, var(--vscode-menu-selectionBackground, var(--button-bg, var(--neko-accent, #0a84ff))))',
-  color: 'var(--neko-menu-selectionForeground, var(--vscode-menu-selectionForeground, var(--button-fg, #ffffff)))',
+  color:
+    'var(--neko-menu-selectionForeground, var(--vscode-menu-selectionForeground, var(--button-fg, #ffffff)))',
   outline: 'none',
 } satisfies CSSProperties;
 

@@ -8,8 +8,7 @@ export interface WebviewErrorBoundaryFallbackProps {
 }
 
 export type WebviewErrorBoundaryFallback =
-  | ReactNode
-  | ((props: WebviewErrorBoundaryFallbackProps) => ReactNode);
+  ReactNode | ((props: WebviewErrorBoundaryFallbackProps) => ReactNode);
 
 export interface WebviewErrorBoundaryProps {
   readonly children: ReactNode;

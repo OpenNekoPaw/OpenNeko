@@ -859,10 +859,12 @@ describe('document access service', () => {
   });
 
   it('resolves EPUB image chapters by spine index before non-unique chapter hrefs', async () => {
-    const getChapter = vi.fn((id: string, callback: (error: Error | null, content: string) => void) => {
-      const imageName = id === 'Page_1' ? 'page-a' : 'page-b';
-      callback(null, `<html><body><img src="../image/${imageName}.jpg" /></body></html>`);
-    });
+    const getChapter = vi.fn(
+      (id: string, callback: (error: Error | null, content: string) => void) => {
+        const imageName = id === 'Page_1' ? 'page-a' : 'page-b';
+        callback(null, `<html><body><img src="../image/${imageName}.jpg" /></body></html>`);
+      },
+    );
     class FakeEpub {
       readonly flow = [
         { id: 'Page_1', href: 'html/page-a.xhtml', title: 'html/page-a.xhtml' },

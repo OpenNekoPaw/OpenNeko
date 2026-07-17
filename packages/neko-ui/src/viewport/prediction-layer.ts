@@ -15,21 +15,10 @@ export type ViewportPredictionKind =
   | (`custom:${string}` & {});
 
 export type ViewportPredictionStatus =
-  | 'active'
-  | 'committed'
-  | 'rolled-back'
-  | 'timed-out'
-  | 'invalidated';
+  'active' | 'committed' | 'rolled-back' | 'timed-out' | 'invalidated';
 
 export type ViewportPredictionTransitionReason =
-  | 'ack'
-  | 'error'
-  | 'frame'
-  | 'resync'
-  | 'timeout'
-  | 'revision'
-  | 'topology'
-  | 'manual';
+  'ack' | 'error' | 'frame' | 'resync' | 'timeout' | 'revision' | 'topology' | 'manual';
 
 export interface ViewportPredictionInput {
   readonly id?: string;

@@ -268,7 +268,9 @@ export function WorkbenchEditorTabs({
                 onSelect(tab.id);
               }}
             >
-              {tab.icon ? <span className="neko-workbench-editor-tab__icon">{tab.icon}</span> : null}
+              {tab.icon ? (
+                <span className="neko-workbench-editor-tab__icon">{tab.icon}</span>
+              ) : null}
               <span className="neko-workbench-editor-tab__label">{tab.label}</span>
               {closable && onClose ? (
                 <button
@@ -363,7 +365,9 @@ export function WorkbenchListCard({
           <h2>{label}</h2>
           {eyebrow ? <span>{eyebrow}</span> : null}
         </div>
-        {description ? <p className="neko-workbench-list-card__description">{description}</p> : null}
+        {description ? (
+          <p className="neko-workbench-list-card__description">{description}</p>
+        ) : null}
         {metadata?.length ? <WorkbenchInlineMetadata items={metadata} /> : null}
         {badges?.length ? (
           <div className="neko-workbench-list-card__badges">

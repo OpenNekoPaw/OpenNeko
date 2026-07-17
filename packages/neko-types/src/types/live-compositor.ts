@@ -22,49 +22,23 @@ export type LiveCompositorRect = [number, number, number, number];
 export type LiveCompositorAffine2D = [number, number, number, number, number, number];
 
 export type LiveCompositorSourceKind =
-  | 'solid'
-  | 'media'
-  | 'camera'
-  | 'puppet'
-  | 'model'
-  | 'scene'
-  | 'overlay'
-  | 'tracking-overlay';
+  'solid' | 'media' | 'camera' | 'puppet' | 'model' | 'scene' | 'overlay' | 'tracking-overlay';
 
 export type LiveCompositorLayerRole =
-  | 'background'
-  | 'camera'
-  | 'avatar'
-  | 'prop'
-  | 'overlay'
-  | 'diagnostic';
+  'background' | 'camera' | 'avatar' | 'prop' | 'overlay' | 'diagnostic';
 
 export type LiveCompositorBlendMode =
-  | 'normal'
-  | 'multiply'
-  | 'screen'
-  | 'overlay'
-  | 'add'
-  | 'subtract'
-  | 'alpha';
+  'normal' | 'multiply' | 'screen' | 'overlay' | 'add' | 'subtract' | 'alpha';
 
 export type LiveCompositorSourceUnavailablePolicy =
-  | 'exclude'
-  | 'substitute'
-  | 'hold-last-frame'
-  | 'diagnostic-overlay';
+  'exclude' | 'substitute' | 'hold-last-frame' | 'diagnostic-overlay';
 
 export type LiveTrackingOverlayMode = 'off' | 'landmarks' | 'skeleton' | 'bounds' | 'vectors';
 export type LiveTrackingOverlayStalePolicy = 'hide' | 'dim' | 'hold-last-frame';
 
 export type LiveOutputRouteKind = 'monitor' | 'recording' | 'obs-virtual-camera' | 'rtmp';
 export type LiveOutputRouteStatus =
-  | 'disabled'
-  | 'available'
-  | 'active'
-  | 'unavailable'
-  | 'unsupported'
-  | 'permission-required';
+  'disabled' | 'available' | 'active' | 'unavailable' | 'unsupported' | 'permission-required';
 
 export type LiveCompositorDiagnosticSeverity = 'info' | 'warning' | 'error';
 export type LiveCompositorDiagnosticCode =
@@ -78,12 +52,7 @@ export type LiveCompositorDiagnosticCode =
   | 'preview-non-authoritative';
 
 export type LiveCompositorLatencyKind =
-  | 'command-to-frame'
-  | 'tracking-to-frame'
-  | 'encode'
-  | 'decode'
-  | 'presentation'
-  | 'end-to-end';
+  'command-to-frame' | 'tracking-to-frame' | 'encode' | 'decode' | 'presentation' | 'end-to-end';
 
 export interface LiveCompositorCanvas {
   readonly width: number;

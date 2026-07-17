@@ -42,10 +42,9 @@ describe('resolvePerceptionContextPacket', () => {
       materializer: { materialize },
     });
 
-    expect(materialize).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'ctx-perception' }),
-      { workspaceRoot: '/workspace' },
-    );
+    expect(materialize).toHaveBeenCalledWith(expect.objectContaining({ id: 'ctx-perception' }), {
+      workspaceRoot: '/workspace',
+    });
     expect(packet.perceptionInputs[0]?.uri).toBe('resource://perception/input-1');
     expect(JSON.stringify(packet)).not.toContain('.neko/.cache');
   });

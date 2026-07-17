@@ -14,11 +14,7 @@ import {
 } from './source-policy';
 
 export type ProjectSourceAddKind =
-  | 'drag-drop'
-  | 'paste'
-  | 'file-picker'
-  | 'generated-output'
-  | 'programmatic';
+  'drag-drop' | 'paste' | 'file-picker' | 'generated-output' | 'programmatic';
 
 export interface BrowserFileProjection {
   readonly name: string;

@@ -2,10 +2,7 @@ import type { PerceptionEvidence } from './agent-observation';
 import type { RecoveryGuidanceRecommendation } from './recovery-guidance';
 
 export type SubagentReviewPurpose =
-  | 'quality-review'
-  | 'long-context-summary'
-  | 'asset-comparison'
-  | 'recovery-guidance-review';
+  'quality-review' | 'long-context-summary' | 'asset-comparison' | 'recovery-guidance-review';
 
 export interface SubagentReviewRequest {
   readonly id: string;
