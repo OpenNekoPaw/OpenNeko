@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { main, parseArgs, selectSuiteIds } from './ci-run.mjs';
+import { main, parseArgs, selectSuiteIds } from './local-run.mjs';
 import { discoverSuites } from './suites/discovery.mjs';
 
 const temporaryDirectories = [];
@@ -13,18 +13,18 @@ afterEach(async () => {
   );
 });
 
-describe('Agent Evaluation CI runner', () => {
-  it('parses focused and bounded nightly repetition inputs', () => {
+describe('Agent Evaluation local runner', () => {
+  it('parses focused and bounded matrix repetition inputs', () => {
     expect(parseArgs(['--mode', 'focused', '--suite', 'skill.storyboard'])).toEqual({
       mode: 'focused',
       suiteId: 'skill.storyboard',
       repetitions: 1,
     });
-    expect(parseArgs(['--mode', 'nightly', '--repetitions', '3'])).toEqual({
-      mode: 'nightly',
+    expect(parseArgs(['--mode', 'matrix', '--repetitions', '3'])).toEqual({
+      mode: 'matrix',
       repetitions: 3,
     });
-    expect(() => parseArgs(['--mode', 'nightly', '--repetitions', '21'])).toThrow('1..20');
+    expect(() => parseArgs(['--mode', 'matrix', '--repetitions', '21'])).toThrow('1..20');
   });
 
   it('maps changed Agent paths to existing focused suites and ignores unrelated docs', async () => {
@@ -79,7 +79,7 @@ describe('Agent Evaluation CI runner', () => {
   });
 
   it('writes infrastructure-blocked evidence without spawning or mocking Agent', async () => {
-    const reportRoot = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-ci-'));
+    const reportRoot = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-local-'));
     temporaryDirectories.push(reportRoot);
     const stdout = capture();
     const code = await main(
@@ -99,9 +99,9 @@ describe('Agent Evaluation CI runner', () => {
       runs: [],
       diagnostic: expect.stringContaining('credential'),
     });
-    await expect(fs.readFile(join(reportRoot, 'ci-summary.json'), 'utf8')).resolves.toContain(
-      'infrastructure-blocked',
-    );
+    await expect(
+      fs.readFile(join(reportRoot, 'local-run-summary.json'), 'utf8'),
+    ).resolves.toContain('infrastructure-blocked');
   });
 });
 

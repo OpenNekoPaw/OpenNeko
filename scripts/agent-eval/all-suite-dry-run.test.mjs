@@ -7,7 +7,7 @@ describe('all-suite key-free dry-run', () => {
       schema: 'neko.agent-eval.all-suite-dry-run.v2',
       ok: true,
       suiteCount: 23,
-      caseCount: 44,
+      caseCount: 45,
     });
   });
 });

@@ -59,7 +59,7 @@
     "check:deps": "depcruise packages/neko-types/src packages/neko-host/src packages/neko-client/src packages/neko-engine/packages/extension/src packages/neko-cut/packages/extension/src packages/neko-cut/packages/webview/src packages/neko-agent/packages/extension/src packages/neko-agent/packages/platform/src packages/neko-agent/packages/agent/src packages/neko-canvas/packages/webview/src packages/neko-preview/packages/extension/src --config",
     "check": "pnpm check:unused && pnpm check:deps",
     "check:build": "pnpm format:check && pnpm lint && pnpm build",
-    "check:test": "pnpm test:coverage && pnpm test:agent:eval",
+    "check:test": "pnpm test:coverage",
     "check:repository-quality": "pnpm check && pnpm check:quality",
     "check:ci": "pnpm check:build && pnpm check:test && pnpm check:repository-quality",
     "check:fast": "pnpm lint && pnpm test -- --run",

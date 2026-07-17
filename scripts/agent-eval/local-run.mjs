@@ -15,7 +15,7 @@ import { discoverSuites, selectSuiteCases } from './suites/discovery.mjs';
 const execFile = promisify(nodeExecFile);
 const scriptPath = fileURLToPath(import.meta.url);
 const DEFAULT_REPORT_ROOT = 'reports/agent-eval';
-const NIGHTLY_SUITES = Object.freeze([
+const MATRIX_SUITES = Object.freeze([
   'agent-runtime.single-message-tui',
   'agent-runtime.model-binding',
   'agent-runtime.prompt-composition',
@@ -50,7 +50,7 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
     const blocker = await readInfrastructureBlocker(io.env);
     if (blocker) {
       summary = {
-        schema: 'neko.agent-eval.ci-summary.v2',
+        schema: 'neko.agent-eval.local-run-summary.v2',
         mode: args.mode,
         outcome: 'infrastructure-blocked',
         selectedSuiteIds: suiteIds,
@@ -90,7 +90,7 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
     }
     const outcome = classifyRuns(runs);
     summary = {
-      schema: 'neko.agent-eval.ci-summary.v2',
+      schema: 'neko.agent-eval.local-run-summary.v2',
       mode: args.mode,
       outcome,
       repetitions: args.repetitions,
@@ -102,7 +102,7 @@ export async function main(argv = process.argv.slice(2), io = defaultIo()) {
     return exitCode(outcome);
   } catch (error) {
     summary = {
-      schema: 'neko.agent-eval.ci-summary.v2',
+      schema: 'neko.agent-eval.local-run-summary.v2',
       mode: args.mode ?? 'unknown',
       outcome: 'configuration-invalid',
       diagnostic: error instanceof Error ? error.message : String(error),
@@ -129,11 +129,11 @@ export function parseArgs(argv) {
       if (!Number.isInteger(args.repetitions) || args.repetitions < 1 || args.repetitions > 20) {
         throw new Error('--repetitions must be an integer in 1..20');
       }
-    } else throw new Error(`unknown CI Evaluation option: ${name}`);
+    } else throw new Error(`unknown local Evaluation option: ${name}`);
     index += 1;
   }
-  if (args.mode !== 'focused' && args.mode !== 'nightly') {
-    throw new Error('--mode must be focused or nightly');
+  if (args.mode !== 'focused' && args.mode !== 'matrix') {
+    throw new Error('--mode must be focused or matrix');
   }
   return args;
 }
@@ -145,7 +145,7 @@ export async function selectSuiteIds(args, suites, options = {}) {
       throw new Error(`selected suite does not exist: ${args.suiteId}`);
     return [args.suiteId];
   }
-  if (args.mode === 'nightly') return NIGHTLY_SUITES.filter((id) => available.has(id));
+  if (args.mode === 'matrix') return MATRIX_SUITES.filter((id) => available.has(id));
   if (!args.baseSha || !args.headSha) {
     throw new Error('focused selection requires --suite or both --base-sha and --head-sha');
   }
@@ -176,14 +176,14 @@ async function readChangedPaths(baseSha, headSha, injectedExecFile = execFile) {
 
 async function readInfrastructureBlocker(env) {
   if (!CREDENTIAL_ENV_NAMES.some((name) => typeof env[name] === 'string' && env[name].length > 0)) {
-    return 'No trusted Agent provider credential environment variable is available.';
+    return 'No local Agent provider credential environment variable is available.';
   }
   const configPath = resolve(os.homedir(), '.neko', 'config.toml');
   try {
     const stat = await fs.stat(configPath);
-    if (!stat.isFile()) return `Trusted Agent configuration is not a file: ${configPath}`;
+    if (!stat.isFile()) return `Local Agent configuration is not a file: ${configPath}`;
   } catch (error) {
-    if (error?.code === 'ENOENT') return `Trusted Agent configuration is missing: ${configPath}`;
+    if (error?.code === 'ENOENT') return `Local Agent configuration is missing: ${configPath}`;
     throw error;
   }
   return undefined;
@@ -207,7 +207,7 @@ function exitCode(outcome) {
 async function writeSummary(reportRoot, summary) {
   await fs.mkdir(reportRoot, { recursive: true });
   await fs.writeFile(
-    resolve(reportRoot, 'ci-summary.json'),
+    resolve(reportRoot, 'local-run-summary.json'),
     `${JSON.stringify(summary, null, 2)}\n`,
   );
 }

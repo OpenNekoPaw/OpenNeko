@@ -54,7 +54,7 @@ const config: KnipConfig = {
         'scripts/agent-eval/ablation/run.mjs',
         'scripts/agent-eval/all-suite-dry-run.mjs',
         'scripts/agent-eval/canvas-json-check.mjs',
-        'scripts/agent-eval/ci-run.mjs',
+        'scripts/agent-eval/local-run.mjs',
         'scripts/agent-eval/protocol-smoke.mjs',
         'scripts/agent-eval/validators/file-validator-cli.mjs',
         'scripts/check-canvas-playback-boundary.mjs',

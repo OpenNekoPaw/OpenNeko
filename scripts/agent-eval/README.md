@@ -133,20 +133,20 @@ gitignored `reports/agent-eval/` root is unsuitable. `--run-id` is available for
 stable local correlation. A direct `--cwd` plus `--prompt` protocol smoke is a
 diagnostic surface; it does not provide suite-level acceptance evidence.
 
-Run trusted focused selection by suite or changed revision range:
+Run a local focused selection by suite or changed revision range:
 
 ```bash
-node scripts/agent-eval/ci-run.mjs --mode focused --suite skill.storyboard
-node scripts/agent-eval/ci-run.mjs \
+node scripts/agent-eval/local-run.mjs --mode focused --suite skill.storyboard
+node scripts/agent-eval/local-run.mjs \
   --mode focused \
   --base-sha <base-sha> \
   --head-sha <head-sha>
 ```
 
-Run the configured repeated nightly matrix:
+Run the configured repeated local matrix:
 
 ```bash
-node scripts/agent-eval/ci-run.mjs --mode nightly --repetitions 3
+node scripts/agent-eval/local-run.mjs --mode matrix --repetitions 3
 ```
 
 Validate a focused ablation plan without starting the TUI or creating a
@@ -170,7 +170,7 @@ removed. Existing developer scripts must migrate to `ablation/run.mjs`; there is
 no compatibility alias. Old `.neko/experiments` output is rebuildable local
 developer data and is not imported as an acceptance baseline.
 
-Trusted real runs require an available provider credential environment variable,
+Local real runs require an available provider credential environment variable,
 network/model access, and `~/.neko/config.toml`. Missing credentials or config
 produce `infrastructure-blocked` with exit code 2; the runner does not substitute
 a mock or default success. Cases with a content rubric also require
@@ -276,18 +276,15 @@ rerun into success. Every final decision records blind order references,
 holdout/regression reports, approver, usage/cost availability and residual
 bias/overfitting risk.
 
-## CI and Retention
+## Local Execution and Retention
 
-Default pull-request CI runs `pnpm test:agent:eval` without provider secrets.
-The dedicated functional workflow runs only on trusted `main` pushes, schedules,
-or manual dispatch; it does not use `pull_request` or `pull_request_target`, so
-fork pull requests cannot reach evaluation credentials. Focused runs select
-affected suites; nightly runs retain every repetition instead of selecting the
-best sample.
+Agent Evaluation is local-only. GitHub Actions and generic CI commands do not run
+`pnpm test:agent:eval`, focused cases, repeated matrices, provider-backed behavior,
+or report uploads. Developers explicitly invoke the key-free harness or real
+runner when an Agent behavior change, review, or release requires that evidence.
 
 Raw reports are gitignored. The local retention policy is 14 days and requires
-developer cleanup; trusted-CI artifacts enforce 14-day retention. Before a
-summary or approved baseline is committed or shared, remove
+developer cleanup. Before a summary or approved baseline is committed or shared, remove
 credentials, hidden prompt bodies, raw provider configuration, unauthorized
 content, machine-specific absolute user paths, cache/runtime handles, and raw
 logs. Preserve stable suite/case/run ids, target identity/fingerprint, model and
