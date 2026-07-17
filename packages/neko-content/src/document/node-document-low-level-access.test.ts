@@ -74,14 +74,10 @@ describe('createNodeDocumentLowLevelAccess', () => {
     );
   });
 
-  it(
-    'keeps Node host access out of the browser-safe document barrel',
-    async () => {
-      const documentApi = await import('./index');
-      expect('createNodeDocumentLowLevelAccess' in documentApi).toBe(false);
-    },
-    30_000,
-  );
+  it('keeps Node host access out of the browser-safe document barrel', async () => {
+    const documentApi = await import('./index');
+    expect('createNodeDocumentLowLevelAccess' in documentApi).toBe(false);
+  }, 30_000);
 });
 
 async function writeArchive(filePath: string, entryPath: string, content: string): Promise<void> {
