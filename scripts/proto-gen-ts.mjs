@@ -22,6 +22,7 @@ import { createHash } from 'crypto';
 import { readFileSync, writeFileSync, readdirSync, mkdirSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { format, resolveConfig } from 'prettier';
 import protobuf from 'protobufjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -501,7 +502,7 @@ function formatGeneratedOutput(sections) {
 /**
  * @param {{ proto: string, package: string, output: string, enumStyleOverrides: Record<string, string>, keyConstants: Array<[string, string]>, optionalRepeatedMessages: Set<string>, nullableFields: Map<string, Set<string>> }} config
  */
-function processProto(config) {
+async function processProto(config) {
   const protoPath = resolve(PROTO_DIR, config.proto);
   const outPath = resolve(OUT_DIR, config.output);
 
@@ -594,7 +595,13 @@ function processProto(config) {
 
   // --- Write ---
   mkdirSync(dirname(outPath), { recursive: true });
-  writeFileSync(outPath, formatGeneratedOutput(output), 'utf-8');
+  const generatedOutput = formatGeneratedOutput(output);
+  const prettierConfig = await resolveConfig(outPath);
+  const formattedOutput = await format(generatedOutput, {
+    ...prettierConfig,
+    filepath: outPath,
+  });
+  writeFileSync(outPath, formattedOutput, 'utf-8');
   console.log(`  ✓ Generated ${outPath}`);
 }
 
@@ -611,7 +618,7 @@ async function main() {
   console.log(`  Discovered: ${configs.map(c => c.proto).join(', ')}`);
 
   for (const config of configs) {
-    processProto(config);
+    await processProto(config);
   }
 
   console.log(`\n✓ All ${configs.length} proto files processed`);
