@@ -123,7 +123,7 @@ impl Controller for StreamController {
                 let res_id = opts
                     .resource_id
                     .or_else(|| resource_id.map(|s| s.to_string()))
-                    .unwrap_or_else(|| format!("res_{}", &session_id));
+                    .unwrap_or_else(|| format!("res_{}", session_id));
 
                 let width = opts.width.unwrap_or(1920);
                 let height = opts.height.unwrap_or(1080);
