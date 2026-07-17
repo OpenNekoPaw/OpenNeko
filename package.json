@@ -28,7 +28,7 @@
     "lint:fix": "eslint \"packages/**/src/**/*.{ts,tsx}\" --fix",
     "lint:turbo": "turbo run lint",
     "test": "turbo run test --concurrency=2",
-    "test:coverage": "turbo run test --concurrency=2 --continue=always -- --run --coverage",
+    "test:coverage": "turbo run test --concurrency=2 --continue=always -- --coverage",
     "test:agent:mock": "pnpm --filter neko-agent run test:agent:mock",
     "test:agent:eval": "vitest --config vitest.agent-eval.config.mts --run && node scripts/agent-eval/all-suite-dry-run.mjs",
     "package:all": "turbo run package --filter='neko-*'",

@@ -42,6 +42,16 @@ Root build, compile, package, quality, and smoke orchestration MUST NOT invoke a
 - **WHEN** test discovery, quality guardrails, and Webview functional scenario selection run
 - **THEN** every declared package path resolves to a retained workspace package and no removed product directory is scanned or compiled
 
+#### Scenario: Run coverage once per owner
+
+- **WHEN** canonical coverage orchestration invokes retained test owners
+- **THEN** each package owns its run mode exactly once and forwarded coverage flags do not duplicate single-value CLI options
+
+#### Scenario: Check retained source formatting
+
+- **WHEN** the canonical formatting gate checks retained TypeScript and JSON sources
+- **THEN** every retained source passes the repository Prettier configuration
+
 #### Scenario: Read stable architecture documentation
 
 - **WHEN** a contributor follows the stable `docs/` navigation and architecture documents

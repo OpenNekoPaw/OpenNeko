@@ -105,6 +105,7 @@ jobs:
             clang \
             libclang-dev \
             libavcodec-dev \
+            libavdevice-dev \
             libavfilter-dev \
             libavformat-dev \
             libavutil-dev \
@@ -221,7 +222,7 @@ jobs:
         run: cargo test --workspace
         working-directory: packages/neko-engine
 
-# ── Rust: Dependency audit ─────────────────
+  # ── Rust: Dependency audit ─────────────────
   cargo-deny:
     name: Cargo Deny
     runs-on: ubuntu-latest
