@@ -1,113 +1,66 @@
 # OpenNeko
 
-> AIGC Content Creation IDE + Creative Agent + Media Engine, integrated into VS Code.
+> A local-first, Agent-driven, open-source content creation workspace.
 
 [中文](./README_CN.md)
 
 [![Status](https://img.shields.io/badge/Status-Alpha-orange)]()
-[![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue)]()
-[![VS Code](https://img.shields.io/badge/VS%20Code-1.128+-blue)]()
+[![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue)](./LICENSE)
 
-OpenNeko is a monorepo for AI-native content creation workflows. It brings a creative Agent, canvas, video timeline, media preview, asset management, and media analysis tools into VS Code, with a TUI for Agent and model validation.
+OpenNeko is for creators who want control over their project files, model connections, and creative workflow. Instead of being another online model aggregation platform, it lets an Agent understand a local project, invoke creative capabilities, and move generated results into a canvas, asset library, timeline, and preview tools for continued work.
 
-The architecture is contract-first:
+## Key Ideas
 
-- Webviews own UI and interaction only.
-- Extension Host owns VS Code APIs, workspace integration, permissions, and lifecycle orchestration.
-- The Rust Engine owns media codecs, GPU processing, file Range/seek, streaming, and export.
-- Protobuf, shared types, and the Engine client keep cross-layer contracts explicit.
-- Contract violations, unknown capabilities, and missing dependencies fail visibly instead of falling back to false success.
+- **Local projects first**: assets, characters, project context, and creative outputs are organized around the local workspace.
+- **Bring your own AI services**: configure external APIs, compatible APIs, or local API services without being tied to one model platform.
+- **Agent-driven creation**: the Agent can understand the current project, plan tasks, invoke tools, and help generate, analyze, and iterate content.
+- **A continuous workflow**: generated content can move into the canvas, asset library, and video timeline for editing, preview, and export.
 
-## Product Shape
+## Current Capabilities
 
-| Layer          | Responsibility                                                                                                 |
-| -------------- | -------------------------------------------------------------------------------------------------------------- |
-| Creative IDE   | Canvas, Cut, Preview, Assets, and Tools                                                                        |
-| Creative Agent | Intent understanding, Skill activation, capability discovery, planning, tool execution, rich media, and memory |
-| Media Engine   | Rust-powered codecs, audio/video processing, GPU composition, timeline playback, streaming, proxy, and export  |
+| Capability            | What it provides                                                        |
+| --------------------- | ----------------------------------------------------------------------- |
+| Creative Agent        | Project conversations, task planning, tool use, and media generation    |
+| Canvas                | Organize ideas, references, storyboards, media, and generated results   |
+| Video Timeline        | Arrange audio, video, effects, and transitions, then preview and export |
+| Assets and Characters | Manage media, characters, variants, references, and reusable packs      |
+| Preview and Tools     | Preview common media and documents, compare assets, and return feedback |
 
-## Client Targets
+Available generation and understanding features depend on your configured APIs, model access, and local services.
 
-OpenNeko currently splits product goals across two client targets:
+## Project Status
 
-| Product             | Canonical root     | Primary goal                                                                |
-| ------------------- | ------------------ | --------------------------------------------------------------------------- |
-| OpenNeko TUI        | `apps/neko-tui`    | Agent runtime, model quality, ablation, regression, and Evaluation evidence |
-| OpenNeko for VSCode | `apps/neko-vscode` | Aggregates retained domain extensions for authoring, editing, and preview   |
+OpenNeko is currently in **Alpha** and is primarily intended for source-based previews and product validation. The core creative workflow is running, while installation, upgrades, compatibility, interfaces, and project formats may still change. OpenNeko TUI is also used to validate Agents, models, Skills, and workflows.
 
-Product composition lives in `apps/*`; shared contracts, the Agent runtime, domain implementations, Extension/Webview code, and the Engine client live in `packages/*`.
+## Start From Source
 
-## Workspace Packages
-
-| Group               | Packages                                                                                |
-| ------------------- | --------------------------------------------------------------------------------------- |
-| Contracts and hosts | `neko-types`, `neko-proto`, `neko-client`, `neko-content`, `neko-host`, `neko-ui`       |
-| Agent and grounding | `neko-agent`, `neko-entity`, `neko-search`, `neko-skills`                               |
-| Creative surfaces   | `neko-canvas`, `neko-cut`, `neko-preview`, `neko-assets`, `neko-tools`, `neko-markdown` |
-| Media engine        | `neko-engine`                                                                           |
-
-## Current Focus
-
-The active focus is making the pruned core workflow stable, verifiable, and releasable:
-
-1. Converge PI Agent runtime, Skill, and capability routing on one execution path.
-2. Keep the Rust Engine authoritative for codecs, GPU work, Range/seek, streaming, and export.
-3. Connect Agent, Canvas, Cut, Preview, Assets, and Tools through stable contracts.
-4. Preserve clear Webview, Extension Host, shared-contract, and Engine responsibilities.
-5. Verify real paths through Agent Evaluation, package tests, and VS Code Webview functional tests.
-
-## Quick Start
-
-Requirements: Node.js 24+, pnpm 10, and VS Code 1.128+. Rust Engine work also requires a Rust toolchain and local FFmpeg dependencies.
+Requires Node.js 24+, pnpm 10, and VS Code 1.128+.
 
 ```bash
 pnpm install
 pnpm build
+```
+
+Common validation commands:
+
+```bash
 pnpm test
 pnpm check
 ```
 
-For Rust Engine work:
+## Project Entries
 
-```bash
-cd packages/neko-engine
-cargo test --workspace
-```
+- [OpenNeko Creative Workspace](./apps/neko-vscode/): visual creation, editing, preview, and Agent collaboration.
+- [OpenNeko TUI](./apps/neko-tui/): terminal experiments for Agents, models, Skills, and workflows.
 
-## Repository Layout
+## Documentation and Contributing
 
-| Path                         | Purpose                                                 |
-| ---------------------------- | ------------------------------------------------------- |
-| `apps/`                      | Current product build, test, package, and release roots |
-| `packages/`                  | Workspace packages and VS Code extensions               |
-| `openspec/changes/`          | Active OpenSpec changes                                 |
-| `docs/architecture/`         | System constraints, ADRs, and architecture guidance     |
-| `quality/`                   | Machine-readable quality gate inputs                    |
-| `README.md` / `README_CN.md` | Project entry points                                    |
-| `AGENTS.md`                  | Repository working rules                                |
+- [Documentation index](./docs/README.md)
+- [Active product and feature changes](./openspec/changes/)
+- [Repository development rules](./AGENTS.md)
 
-## Documentation
-
-| Need                                                | Start Here                                                   |
-| --------------------------------------------------- | ------------------------------------------------------------ |
-| Project positioning, product shape, and quick start | [README.md](./README.md)                                     |
-| Documentation navigation                            | [docs/README.md](./docs/README.md)                           |
-| System architecture and ADRs                        | [docs/architecture/README.md](./docs/architecture/README.md) |
-| Active design and implementation changes            | [openspec/changes/](./openspec/changes/)                     |
-| Machine-readable quality gate inputs                | [quality/README.md](./quality/README.md)                     |
-| Repository working rules                            | [AGENTS.md](./AGENTS.md)                                     |
-
-Stable system constraints live in `docs/architecture/`, in-flight requirements, designs, specifications, and tasks live in `openspec/changes/`, and package-private implementation notes live in `packages/<pkg>/docs/`.
-
-## Contributing
-
-Before opening a change, keep the architecture boundaries clear:
-
-1. Webview, Extension Host, Rust Engine, and shared contracts stay separated.
-2. Cross-package work starts from contracts and small interfaces.
-3. New state machines, public contracts, and failure paths need focused validation.
-4. Documentation describes current decisions and invariants, not stale code samples or implementation logs.
+Contributions grounded in real creative workflows are welcome, including reproducible issues, Skills, model integrations, creative capabilities, tests, and documentation improvements.
 
 ## License
 
-GNU Affero General Public License v3.0 or later. See [LICENSE](./LICENSE).
+OpenNeko is licensed under the GNU Affero General Public License v3.0 or later. See [LICENSE](./LICENSE).
