@@ -25,7 +25,7 @@
 - [x] 3.6 Migrate long-running generation tools to explicit purpose models that promptly return `TaskRef` and use OpenNeko durable progress/cancel/recovery/final-ResourceRef observation.
 - [x] 3.7 Prove two purpose-model tools can run concurrently and that cancellation, usage, results, and later configuration changes remain isolated by conversation/turn/run snapshot.
 - [x] 3.8 Make Ask-mode non-read Tool confirmation Timeline-owned and ordering-safe in the VS Code Webview, add a bounded fail-visible wait, and prove no media task/provider request begins before approval.
-- [x] 3.9 Make NewAPI image generation request and decode inline `b64_json` results at the owning provider boundary; classify a connection loss after synchronous submission as outcome-unknown and non-retryable, and prove neither normal materialization nor ambiguous failure automatically resubmits paid provider work.
+- [x] 3.9 Materialize NewAPI image `b64_json` or URL results at the owning provider boundary without forcing unsupported optional response parameters; classify a connection loss after synchronous submission as outcome-unknown and non-retryable, and prove neither normal materialization nor ambiguous failure automatically resubmits paid provider work.
 
 ## 4. Eliminate replaced paths
 

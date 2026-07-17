@@ -19,24 +19,43 @@ describe('MediaTaskExecutor NewAPI image materialization', () => {
     vi.unstubAllGlobals();
   });
 
-  it('materializes inline image bytes without a detached remote URL fetch', async () => {
+  it('does not require response_format and materializes the returned provider URL', async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       if (url === 'https://newapi.example.test/v1/images/generations') {
         const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-        const image =
-          body['response_format'] === 'b64_json'
-            ? { b64_json: PNG_BASE64 }
-            : { url: 'https://assets.example.test/generated.png' };
-        return new Response(JSON.stringify({ created: 1, data: [image] }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        });
+        if ('response_format' in body) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                message: "Unknown parameter: 'response_format'.",
+                type: 'invalid_request_error',
+                param: 'response_format',
+                code: 'unknown_parameter',
+              },
+            }),
+            { status: 400, headers: { 'content-type': 'application/json' } },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            created: 1,
+            data: [{ url: 'https://93.184.216.34/generated.png' }],
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        );
       }
 
-      if (url === 'https://assets.example.test/generated.png') {
-        throw Object.assign(new TypeError('fetch failed'), {
-          cause: Object.assign(new Error('other side closed'), { code: 'UND_ERR_SOCKET' }),
+      if (url === 'https://93.184.216.34/generated.png') {
+        return new Response(Buffer.from(PNG_BASE64, 'base64'), {
+          status: 200,
+          headers: {
+            'content-type': 'image/png',
+            'content-length': String(Buffer.from(PNG_BASE64, 'base64').byteLength),
+          },
         });
       }
 
@@ -69,10 +88,10 @@ describe('MediaTaskExecutor NewAPI image materialization', () => {
         },
       ],
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
-      response_format: 'b64_json',
-    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).not.toHaveProperty(
+      'response_format',
+    );
   });
 
   it('does not resubmit when the synchronous generation outcome is unknown', async () => {

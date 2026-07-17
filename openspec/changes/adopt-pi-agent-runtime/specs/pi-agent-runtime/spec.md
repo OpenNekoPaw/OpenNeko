@@ -102,12 +102,12 @@ Configured NewAPI/OneAPI-compatible endpoints, explicit protocol profiles, model
 - **WHEN** a flat media purpose selects a configured NewAPI image, video, speech, or music model
 - **THEN** the owning OpenNeko media executor uses the explicit NewAPI endpoint and returns evidence or `TaskRef` without changing the Pi main model or falling back to a chat adapter
 
-#### Scenario: Materialize a completed NewAPI image without a detached URL fetch
+#### Scenario: Materialize a completed NewAPI image through the provider boundary
 
-- **WHEN** a NewAPI image generation endpoint completes and can return the generated image as inline base64 bytes
-- **THEN** the owning NewAPI image provider requests and decodes the inline result before returning to the media task runtime, and the successful path does not depend on a generic SDK performing an unauthenticated or detached second fetch of a temporary output URL
+- **WHEN** a NewAPI image generation endpoint completes with inline base64 bytes or a result URL
+- **THEN** the owning NewAPI image provider decodes or downloads the result before returning to the media task runtime, and the successful path does not depend on a generic SDK performing an unauthenticated or detached fetch of a temporary output URL
 
-If a configured NewAPI-compatible deployment cannot return inline image bytes, its provider-owned download path MUST preserve the required authentication and transport policy, validate the response as image content, and fail with the output URL origin plus transport cause without logging credentials or signed query values. It MUST NOT silently submit the generation operation again merely because output materialization failed.
+The request MUST NOT force optional response-format parameters that the configured OpenAI-compatible image channel does not support. The provider-owned download path MUST preserve required same-origin authentication without forwarding credentials across origins, enforce transport and bounded image validation, and fail with the output URL origin plus transport cause without logging credentials or signed query values. It MUST NOT silently submit the generation operation again merely because output materialization failed.
 
 #### Scenario: NewAPI closes a synchronous image request after provider submission
 

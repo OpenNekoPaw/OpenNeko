@@ -77,7 +77,6 @@ export class NewAPIImageModel implements ImageModelV3 {
       model: this.modelId,
       prompt: options.prompt,
       n: options.n || 1,
-      response_format: 'b64_json',
     };
 
     if (options.size) {
@@ -89,8 +88,9 @@ export class NewAPIImageModel implements ImageModelV3 {
 
     // Forward ControlNet / IP-Adapter / edit fields from providerOptions.neko.
     // These are non-standard extensions — NewAPI deployments that proxy to
-    // capable backends (Flux/fal.ai) will honor them; spec-compliant proxies
-    // will ignore unknown body keys.
+    // capable backends (Flux/fal.ai) will honor them. Other OpenAI-compatible
+    // channels may reject unknown keys, so these are sent only when explicitly
+    // selected through provider options.
     // Normalize a bare base64 string (or data URL) into a `data:` URL so
     // downstream services don't have to guess the MIME.
     const toDataUrl = (value: string, mimeDefault = 'image/png'): string =>
@@ -208,7 +208,6 @@ export class NewAPIImageModel implements ImageModelV3 {
     const form = new FormData();
     form.append('model', this.modelId);
     form.append('prompt', options.prompt ?? '');
-    form.append('response_format', 'b64_json');
     if (options.n) form.append('n', String(options.n));
     if (options.size) form.append('size', options.size);
     const quality = normalizeNewAPIImageQuality(nekoExtras['quality'], this.modelId);
@@ -258,7 +257,7 @@ export class NewAPIImageModel implements ImageModelV3 {
 
     // Forward non-standard enhancement fields as extra form parts so NewAPI
     // deployments with capable backends (fal.ai Flux, replicate) keep working.
-    // Spec-compliant proxies will silently drop unknown parts.
+    // Other OpenAI-compatible channels may reject these optional parts.
     const appendStringPart = (name: string, value: unknown): void => {
       if (value === undefined || value === null) return;
       form.append(name, String(value));
