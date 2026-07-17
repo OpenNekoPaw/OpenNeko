@@ -134,10 +134,7 @@ export async function resolveMediaPath(
   options: CutMediaPathContextOptions = {},
 ): Promise<string> {
   const context = createCutWorkspaceMediaPathContext(baseDir, options);
-  return resolveHostContentMediaPath(
-    storedPath,
-    createHostContentPathOptions(context, options),
-  );
+  return resolveHostContentMediaPath(storedPath, createHostContentPathOptions(context, options));
 }
 
 export function toRelativeIfAbsolute(filePath: string, baseDir: string): string {

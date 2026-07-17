@@ -116,7 +116,9 @@ export interface NekoCanvasCapabilityProvider extends AgentCapabilityProvider {
   ): Promise<CanvasCreativeAiHostInvocationResult>;
 }
 
-export function createNekoCanvasCapabilityProvider(api: NekoCanvasAPI): NekoCanvasCapabilityProvider {
+export function createNekoCanvasCapabilityProvider(
+  api: NekoCanvasAPI,
+): NekoCanvasCapabilityProvider {
   return new NekoCanvasCapabilityProviderImpl(api);
 }
 
@@ -4585,7 +4587,6 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
 
     return localizedTools;
   }
-
 }
 
 /**

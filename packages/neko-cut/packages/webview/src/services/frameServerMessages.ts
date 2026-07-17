@@ -17,9 +17,7 @@ export interface FrameServerStreamStoppedMessage {
 }
 
 export type FrameServerMessage =
-  | FrameServerConfigMessage
-  | FrameServerStreamCreatedMessage
-  | FrameServerStreamStoppedMessage;
+  FrameServerConfigMessage | FrameServerStreamCreatedMessage | FrameServerStreamStoppedMessage;
 
 const FRAME_SERVER_MESSAGE_EVENT = 'neko-cut:frame-server-message';
 

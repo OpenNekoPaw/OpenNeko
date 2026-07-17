@@ -18,11 +18,7 @@ export interface CanvasNodePropertyAdapterResult {
 }
 
 export type CanvasNodePropertyId =
-  | 'position.x'
-  | 'position.y'
-  | 'size.width'
-  | 'size.height'
-  | 'rotation';
+  'position.x' | 'position.y' | 'size.width' | 'size.height' | 'rotation';
 
 type NodeLibraryIconGlyph =
   | 'action'

@@ -27,10 +27,7 @@ const logger = getLogger('AIActionHandler');
 // Types
 // =============================================================================
 
-type AIActionId =
-  | 'ai-auto-edit'
-  | 'ai-match-music'
-  | 'ai-remove-silence';
+type AIActionId = 'ai-auto-edit' | 'ai-match-music' | 'ai-remove-silence';
 
 interface AIActionContext {
   actionId: AIActionId;
@@ -277,5 +274,4 @@ export class AIActionHandler implements vscode.Disposable {
     }
     return null;
   }
-
 }

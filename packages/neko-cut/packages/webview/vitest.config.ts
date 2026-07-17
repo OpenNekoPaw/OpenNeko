@@ -8,7 +8,15 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     exclude: ['**/node_modules/**', '**/dist/**'],
-    coverage: sharedCoverage({ include: ['src/**/*.{ts,tsx}'] }),
+    coverage: sharedCoverage({
+      include: ['src/**/*.{ts,tsx}'],
+      thresholds: {
+        lines: 21,
+        branches: 20,
+        functions: 23,
+        statements: 22,
+      },
+    }),
   },
   resolve: {
     alias: {

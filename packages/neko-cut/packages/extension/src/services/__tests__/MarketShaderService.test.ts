@@ -257,8 +257,7 @@ describe('MarketShaderService', () => {
     const rescan = vi.spyOn(service, 'rescan').mockResolvedValue(undefined);
     await service.initialize();
     const listener = onDidMarketPackageEvent.mock.calls[0]?.[0] as
-      | ((event: unknown) => void)
-      | undefined;
+      ((event: unknown) => void) | undefined;
 
     listener?.({
       kind: 'uninstall',

@@ -48,9 +48,7 @@ interface CutAiCommandOptions {
 /**
  * Activate the extension
  */
-export async function activate(
-  context: vscode.ExtensionContext,
-): Promise<NekoCutAPI> {
+export async function activate(context: vscode.ExtensionContext): Promise<NekoCutAPI> {
   // Initialize logger → VSCode OutputChannel + Console
   const logger = createVSCodeLogger(
     'Neko Cut',
@@ -218,7 +216,6 @@ export async function activate(
         };
       },
     },
-
   };
 
   // Register the VSCode command for ai.generateVideoForClip

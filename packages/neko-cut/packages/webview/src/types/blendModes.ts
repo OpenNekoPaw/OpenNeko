@@ -23,12 +23,7 @@ import type { BlendModeType } from '@neko/shared';
  * 混合模式分类
  */
 export type BlendModeCategory =
-  | 'normal'
-  | 'darken'
-  | 'lighten'
-  | 'contrast'
-  | 'inversion'
-  | 'component';
+  'normal' | 'darken' | 'lighten' | 'contrast' | 'inversion' | 'component';
 
 // =============================================================================
 // Blend Mode Definitions with Metadata

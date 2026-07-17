@@ -31,10 +31,7 @@ export type { MenuAction, MenuItem, MenuSeparator, PositionedContextMenuProps };
 const MENU_ICON_SIZE = 13;
 const CANVAS_CONTEXT_MENU_CLASS_NAME = 'canvas-context-menu';
 
-export function ContextMenu({
-  className,
-  ...props
-}: PositionedContextMenuProps): ReactElement {
+export function ContextMenu({ className, ...props }: PositionedContextMenuProps): ReactElement {
   const menuClassName = className
     ? `${CANVAS_CONTEXT_MENU_CLASS_NAME} ${className}`
     : CANVAS_CONTEXT_MENU_CLASS_NAME;

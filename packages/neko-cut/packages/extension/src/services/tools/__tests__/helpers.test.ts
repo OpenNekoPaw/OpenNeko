@@ -285,17 +285,13 @@ describe('normalizePathsForSave', () => {
 
 describe('resolveMediaPath', () => {
   it('resolves project media from the owning workspace root', async () => {
-    const result = await resolveMediaPath(
-      'cases/clip.mp4',
-      '/workspace/b/projects/cut',
-      {
-        projectFilePath: '/workspace/b/projects/cut/project.nkv',
-        fileExists: (filePath) =>
-          filePath === '/workspace/a/cases/clip.mp4' ||
-          filePath === '/workspace/b/cases/clip.mp4' ||
-          filePath === '/workspace/b/projects/cut/cases/clip.mp4',
-      },
-    );
+    const result = await resolveMediaPath('cases/clip.mp4', '/workspace/b/projects/cut', {
+      projectFilePath: '/workspace/b/projects/cut/project.nkv',
+      fileExists: (filePath) =>
+        filePath === '/workspace/a/cases/clip.mp4' ||
+        filePath === '/workspace/b/cases/clip.mp4' ||
+        filePath === '/workspace/b/projects/cut/cases/clip.mp4',
+    });
 
     expect(result).toBe('/workspace/b/cases/clip.mp4');
   });

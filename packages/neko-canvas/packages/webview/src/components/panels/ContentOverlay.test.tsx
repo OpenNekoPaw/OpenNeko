@@ -207,9 +207,7 @@ describe('ContentOverlay', () => {
         zoomIn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       });
     }
-    expect(host.querySelector('[data-image-viewer-zoom-percent="400"]')?.textContent).toBe(
-      '400%',
-    );
+    expect(host.querySelector('[data-image-viewer-zoom-percent="400"]')?.textContent).toBe('400%');
     expect(host.querySelector<HTMLButtonElement>('button[aria-label="Zoom in"]')?.disabled).toBe(
       true,
     );

@@ -64,15 +64,7 @@ export interface AnimatableProperty {
  * 可动画属性名称
  */
 export type AnimatablePropertyName =
-  | 'x'
-  | 'y'
-  | 'scaleX'
-  | 'scaleY'
-  | 'scale'
-  | 'rotation'
-  | 'opacity'
-  | 'anchorX'
-  | 'anchorY';
+  'x' | 'y' | 'scaleX' | 'scaleY' | 'scale' | 'rotation' | 'opacity' | 'anchorX' | 'anchorY';
 
 /**
  * Element transform with animatable properties

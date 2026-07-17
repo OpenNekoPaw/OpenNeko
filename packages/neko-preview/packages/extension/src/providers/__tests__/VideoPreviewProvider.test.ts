@@ -343,8 +343,7 @@ describe('VideoPreviewProvider', () => {
 
       // Trigger the ready message to exercise the mediaInfoPromise path
       const messageHandler = panel.webview.onDidReceiveMessage.mock.calls[0]?.[0] as
-        | ((msg: Record<string, unknown>) => Promise<void>)
-        | undefined;
+        ((msg: Record<string, unknown>) => Promise<void>) | undefined;
       if (messageHandler) {
         await messageHandler({ type: 'ready' });
       }

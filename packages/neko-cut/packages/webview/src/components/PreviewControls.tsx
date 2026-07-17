@@ -19,11 +19,7 @@ import { formatTimeFull } from '../utils';
 import { PREVIEW_CONTROL_ACTION_PLACEMENTS } from './PreviewControls.presenter';
 
 export type ResolutionPreset =
-  | '720p@60fps'
-  | '1080p@30fps'
-  | '1080p@60fps'
-  | '4k@30fps'
-  | '4k@60fps';
+  '720p@60fps' | '1080p@30fps' | '1080p@60fps' | '4k@30fps' | '4k@60fps';
 
 export interface PreviewControlsProps {
   // Playback state

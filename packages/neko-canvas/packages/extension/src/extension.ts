@@ -160,9 +160,7 @@ function matchesAssetFilter(
 /**
  * Activate the extension
  */
-export async function activate(
-  context: vscode.ExtensionContext,
-): Promise<NekoCanvasAPI> {
+export async function activate(context: vscode.ExtensionContext): Promise<NekoCanvasAPI> {
   const rootLogger = createVSCodeLogger(
     'Neko Canvas',
     'NekoCanvas',
@@ -411,7 +409,6 @@ export async function activate(
       onDidChangeAssets: new vscode.EventEmitter<import('./api').AssetChangeEvent>().event,
       onDidChangeCanvas: canvasEditorProvider.onDidChangeCanvas,
     },
-
   };
 
   // Register commands
@@ -435,8 +432,8 @@ export async function activate(
         capabilityProvider.executeCanvasCreativeAiInvocation(invocation),
     ),
   );
-  void registerOptionalAgentCapabilityProvider(capabilityProvider).catch(
-    (error: unknown) => handleError(error),
+  void registerOptionalAgentCapabilityProvider(capabilityProvider).catch((error: unknown) =>
+    handleError(error),
   );
 
   return api;

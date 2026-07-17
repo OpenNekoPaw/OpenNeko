@@ -483,7 +483,7 @@ describe('canvasEditorProvider message contracts', () => {
 
     it('registers document resources so stable document refs can be materialized in Canvas', () => {
       expect(providerSource).toContain('DocumentResourceCacheProvider');
-      expect(providerSource).toContain('createCanvasEngineDocumentEntryReader()');
+      expect(providerSource).toContain('createCanvasDocumentEntryReader()');
       expect(providerSource).not.toContain('findUniqueEntryByBasename');
       expect(providerSource).toContain("preferredRole === 'source'");
       expect(providerSource).toContain("? 'page-image'");
@@ -828,7 +828,7 @@ describe('canvasEditorProvider message contracts', () => {
       expect(playbackWorkspaceSource).not.toContain('CanvasCutDraftPayload');
       expect(providerSource).toContain("case 'playback:createCutDraftFromRoute'");
       expect(providerSource).toContain('const draft = this.createCutDraftFromRoute({');
-      expect(providerSource).toContain("'neko.cut.importCanvasDraft'");
+      expect(providerSource).toContain("'neko.cut.authoring.importCanvasDraft'");
       expect(providerSource).toContain('requestedRevision < currentRevision');
       expect(providerSource).not.toContain('message.cells');
       expect(providerSource).not.toContain('message.matrix');

@@ -1,11 +1,7 @@
 import type { CreativeEntityRef } from '@neko/shared';
 
 export type ShotCharacterReferenceState =
-  | 'confirmed'
-  | 'candidate'
-  | 'ambiguous'
-  | 'orphaned'
-  | 'unlinked';
+  'confirmed' | 'candidate' | 'ambiguous' | 'orphaned' | 'unlinked';
 
 export interface ShotCharacterEntityReferenceProjection {
   readonly state: ShotCharacterReferenceState;

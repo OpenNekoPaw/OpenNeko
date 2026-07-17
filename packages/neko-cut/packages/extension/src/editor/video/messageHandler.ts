@@ -175,10 +175,7 @@ export class MessageHandler {
     params?: Record<string, unknown>;
   }): Promise<void> {
     if (!this._aiActionHandler) {
-      this._aiActionHandler = new AIActionHandler(
-        this.webview,
-        this.model.uri,
-      );
+      this._aiActionHandler = new AIActionHandler(this.webview, this.model.uri);
     }
     await this._aiActionHandler.handleAction(
       message.actionId,

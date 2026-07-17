@@ -11,9 +11,7 @@ export function createCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry {
       defaultSize: { width: 280, height: 200 },
       presentation: 'foundational',
       fullscreenPresentation: (node) =>
-        node.type === 'media' && node.data.mediaType === 'image'
-          ? 'image-viewer'
-          : 'visual-stage',
+        node.type === 'media' && node.data.mediaType === 'image' ? 'image-viewer' : 'visual-stage',
     },
     annotation: {
       type: 'annotation',

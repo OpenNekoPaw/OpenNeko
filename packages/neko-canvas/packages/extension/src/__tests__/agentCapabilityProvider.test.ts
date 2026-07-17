@@ -417,35 +417,11 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
         capability.capabilityId === 'canvas.createStoryboardFromMarkdown' ||
         capability.capabilityId === 'canvas.validateMarkdownStoryboard',
     );
-    const authoringSkill = provider
-      .getSkills?.()
-      .find((skill) => skill.name === 'canvas-authoring');
-    const authoringSkillZh = provider
-      .getSkills?.({ extensionContext: {}, locale: 'zh' })
-      .find((skill) => skill.name === 'canvas-authoring');
     const createStoryboardTool = tools.find(
       (tool) => tool.name === TOOL_NAMES_CANVAS.CANVAS_CREATE_STORYBOARD_FROM_MARKDOWN,
     );
 
-    expect(authoringSkill).toBeDefined();
-    expect(authoringSkill?.content).toContain(
-      'A completed canonical source Storyboard must already exist before explicit professional structured authoring.',
-    );
-    expect(authoringSkill?.content).toContain(
-      'A source Storyboard used for structured authoring must be visible as an assistant Markdown block or UI handoff source.',
-    );
-    expect(authoringSkill?.content).toContain(
-      'Do not use Canvas handoff to skip comic/page visual analysis or storyboard table generation.',
-    );
-    expect(authoringSkillZh?.content).toContain(
-      '明确执行专业结构化 authoring 前，必须已经存在完成的 canonical 来源 Storyboard。',
-    );
-    expect(authoringSkillZh?.content).toContain(
-      '用于结构化 authoring 的来源 Storyboard 必须是可见 assistant Markdown 块或 UI handoff 来源',
-    );
-    expect(authoringSkillZh?.content).toContain(
-      '不要用 Canvas handoff 跳过漫画/页面视觉分析或分镜表生成。',
-    );
+    expect(provider.getSkills).toBeUndefined();
     expect(createStoryboardTool?.description).toContain(
       'Prefer a typed canonical Storyboard artifact',
     );
@@ -1158,71 +1134,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
         },
       },
     });
-  });
-
-  it('provides Canvas-owned general authoring Skill without storyboard compatibility aliases', () => {
-    const provider = createNekoCanvasCapabilityProvider(createApi());
-    const skills = provider.getSkills?.() ?? [];
-    const authoringSkill = skills.find((skill) => skill.name === 'canvas-authoring');
-    const storyboardAlias = skills.find((skill) => skill.name === 'canvas-markdown-storyboard');
-
-    expect(authoringSkill).toMatchObject({
-      name: 'canvas-authoring',
-      source: 'builtin',
-      enabled: true,
-      allowedTools: expect.arrayContaining([
-        TOOL_NAMES_CANVAS.CANVAS_DESCRIBE_AUTHORING_CAPABILITIES,
-        TOOL_NAMES_CANVAS.CANVAS_GET_ACTIVE_CONTEXT,
-        TOOL_NAMES_CANVAS.CANVAS_CREATE_COMPOSITE,
-        TOOL_NAMES_CANVAS.CANVAS_CREATE_CONNECTION,
-        'canvas.createStoryboardFromMarkdown',
-      ]),
-      mediaWorkflow: expect.objectContaining({
-        validationRequirements: ['CanvasAuthoringCatalog', 'CanvasAuthoringResultEnvelope'],
-      }),
-    });
-    expect(authoringSkill?.content).toContain('Inspect the Canvas-owned authoring catalog');
-    expect(authoringSkill?.content).toContain('scene and shot nodes');
-    expect(authoringSkill?.content).toContain(
-      'Markdown is the default unspecified Storyboard result.',
-    );
-    expect(authoringSkill?.content).toContain('requires explicit user intent');
-    expect(authoringSkill?.content).toContain(
-      'Use structured scene/shot authoring only when the user explicitly asks',
-    );
-    expect(authoringSkill?.content).toContain('prompt-first');
-    expect(authoringSkill?.content).toContain('Semantic Prompt Document');
-    expect(authoringSkill?.content).toContain('videoPrompt is scene-scoped');
-    expect(authoringSkill?.content).toContain(
-      'Agent owns approval, provider calls, async task progress',
-    );
-    expect(authoringSkill?.content).not.toContain('canvas.createStoryboardFromMarkdown');
-    expect(authoringSkill?.content).not.toContain('canvas.ingestMarkdown');
-    expect(authoringSkill?.content).not.toContain('mode=create-nodes');
-    expect(authoringSkill?.content).not.toContain('profileHint=storyboard');
-    expect(storyboardAlias).toBeUndefined();
-  });
-
-  it('localizes Canvas-owned domain skills from the capability context locale', () => {
-    const provider = createNekoCanvasCapabilityProvider(createApi());
-    const skills = provider.getSkills?.({ extensionContext: {}, locale: 'zh' }) ?? [];
-    const authoringSkill = skills.find((candidate) => candidate.name === 'canvas-authoring');
-
-    expect(authoringSkill?.description).toContain('Canvas authoring');
-    expect(authoringSkill?.content).toContain('# Canvas Authoring');
-    expect(authoringSkill?.content).toContain('先查看 Canvas 拥有的 authoring catalog');
-    expect(authoringSkill?.content).toContain(
-      '未指定结构化创作的分镜探索、分析、规划、方案和初稿保持为普通 Markdown 文档内容',
-    );
-    expect(authoringSkill?.content).toContain('必须有用户明确意图');
-    expect(authoringSkill?.content).toContain('Markdown 是未指定分镜请求的默认结果');
-    expect(authoringSkill?.content).toContain('只有用户明确要求创建或更新专业结构化 Storyboard');
-    expect(authoringSkill?.content).toContain('prompt-first');
-    expect(authoringSkill?.content).not.toContain('canvas.createStoryboardFromMarkdown');
-    expect(authoringSkill?.content).not.toContain('canvas.ingestMarkdown');
-    expect(authoringSkill?.content).not.toContain('mode=create-nodes');
-    expect(skills.some((candidate) => candidate.name === 'canvas-markdown-storyboard')).toBe(false);
-    expect(authoringSkill?.content).not.toContain('Use this skill only after');
   });
 
   it('executes Markdown capability tools through the Canvas Markdown API', async () => {

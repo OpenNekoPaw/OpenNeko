@@ -26,7 +26,9 @@ export function PreviewHostAdapterSurface({
       main={
         <div className="preview-host-adapter" data-creative-panel="media-preview">
           {document.kind === 'image' && url ? <img src={url} alt={document.name} /> : null}
-          {document.kind === 'video' && url ? <video src={url} muted controls preload="metadata" /> : null}
+          {document.kind === 'video' && url ? (
+            <video src={url} muted controls preload="metadata" />
+          ) : null}
           {document.kind === 'audio' && url ? <audio src={url} controls /> : null}
           <p>{document.relativePath}</p>
         </div>

@@ -885,9 +885,7 @@ class MediaRequestProxy implements IMediaRequestProxy {
     }
 
     const response = message as
-      | MediaResponse
-      | RenderCompositeFrameResponse
-      | CompatibleGetVideoFrameResponse;
+      MediaResponse | RenderCompositeFrameResponse | CompatibleGetVideoFrameResponse;
     this.finalizeInFlightRequest(response.requestId, undefined, response as MediaResponse);
   };
 

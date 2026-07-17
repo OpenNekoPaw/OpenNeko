@@ -162,8 +162,7 @@ export class TrackAudioHandler implements IToolHandler {
     // Accept direct adjustment fields and the grouped payload produced by
     // TimelineToolBridge when expanding public element updates.
     const nested = (params as { colorCorrection?: unknown }).colorCorrection as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     const ccParams = nested ?? (params as Record<string, unknown>);
 
     const existingCC =

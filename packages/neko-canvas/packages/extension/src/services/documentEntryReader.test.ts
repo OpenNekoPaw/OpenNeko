@@ -32,14 +32,8 @@ describe('createCanvasDocumentEntryReader', () => {
     const reader = createCanvasDocumentEntryReader();
 
     await expect(
-      reader.readEntry(
-        { filePath: '${BOOKS}/comic.epub', format: 'epub' },
-        'OPS/page-1.jpg',
-      ),
+      reader.readEntry({ filePath: '${BOOKS}/comic.epub', format: 'epub' }, 'OPS/page-1.jpg'),
     ).resolves.toEqual(new Uint8Array([1, 2, 3]));
-    expect(readEntry).toHaveBeenCalledWith(
-      '/library/books/comic.epub',
-      'OPS/page-1.jpg',
-    );
+    expect(readEntry).toHaveBeenCalledWith('/library/books/comic.epub', 'OPS/page-1.jpg');
   });
 });

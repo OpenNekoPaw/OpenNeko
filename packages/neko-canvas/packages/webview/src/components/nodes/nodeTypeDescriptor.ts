@@ -25,19 +25,14 @@ export interface NodeDefaultSize {
 export type NodePresentation = 'foundational' | 'spatial-container' | 'structured';
 
 export type NodeFullscreenPresentation =
-  | 'image-viewer'
-  | 'visual-stage'
-  | 'text-document'
-  | 'workbench'
-  | 'shot-workbench';
+  'image-viewer' | 'visual-stage' | 'text-document' | 'workbench' | 'shot-workbench';
 
 export type NodeFullscreenPresentationResolver = (
   node: CanvasNode,
 ) => NodeFullscreenPresentation | undefined;
 
 export type NodeFullscreenPresentationDeclaration =
-  | NodeFullscreenPresentation
-  | NodeFullscreenPresentationResolver;
+  NodeFullscreenPresentation | NodeFullscreenPresentationResolver;
 
 export interface NodeTypeDescriptor {
   /** Canvas node type (matches CanvasNodeType union) */

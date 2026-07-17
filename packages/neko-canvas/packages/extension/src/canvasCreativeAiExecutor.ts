@@ -203,15 +203,11 @@ async function generateMedia(
           })
         : await media.generateVideo('video.generate', {
             prompt,
-            ...(typeof generation?.duration === 'number'
-              ? { duration: generation.duration }
-              : {}),
+            ...(typeof generation?.duration === 'number' ? { duration: generation.duration } : {}),
             ...(generation?.aspectRatio ? { aspectRatio: generation.aspectRatio } : {}),
             ...(actionId === 'edit-video' ? { editInstruction: prompt } : {}),
             ...(referenceImageUri ? { referenceImageUri } : {}),
-            ...(resolveFirstReferenceMediaUri(
-              request.creativeParameters?.referenceMedia?.videoRefs,
-            )
+            ...(resolveFirstReferenceMediaUri(request.creativeParameters?.referenceMedia?.videoRefs)
               ? {
                   sourceVideoUrl: resolveFirstReferenceMediaUri(
                     request.creativeParameters?.referenceMedia?.videoRefs,
@@ -276,7 +272,9 @@ async function judgeCandidate(
   input: CanvasCreativeAiExecutionInput,
   outputRefs: readonly CreativeAiOutputRef[],
   context: CanvasCreativeAiRuntimeContext,
-): Promise<{ readonly ok: true } | { readonly ok: false; diagnostics: readonly CreativeAiDiagnostic[] }> {
+): Promise<
+  { readonly ok: true } | { readonly ok: false; diagnostics: readonly CreativeAiDiagnostic[] }
+> {
   if (input.invocation.metadata?.['judgeRequired'] !== true) return { ok: true };
   const runtime = context.purposeTextRuntime;
   if (!runtime) {
@@ -364,9 +362,7 @@ function buildApplyRequest(
   };
 }
 
-function readActionId(
-  input: CanvasCreativeAiExecutionInput,
-): CanvasCreativeAiActionId | undefined {
+function readActionId(input: CanvasCreativeAiExecutionInput): CanvasCreativeAiActionId | undefined {
   const value = input.invocation.metadata?.['actionId'];
   return isCanvasCreativeAiActionId(value) ? value : undefined;
 }

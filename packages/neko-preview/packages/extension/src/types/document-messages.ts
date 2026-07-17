@@ -41,9 +41,7 @@ export interface DocumentRestoreStateMessage {
 }
 
 export type DocumentExtensionMessage =
-  | DocumentDataMessage
-  | EpubNavigateMessage
-  | DocumentRestoreStateMessage;
+  DocumentDataMessage | EpubNavigateMessage | DocumentRestoreStateMessage;
 
 // =============================================================================
 // Webview → Extension Messages

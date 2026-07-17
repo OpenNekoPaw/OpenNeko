@@ -229,78 +229,86 @@ export function ContentOverlay({
         onClose={onClose}
       />
     ) : (
-    <>
-      <div
-        className="fixed inset-0"
-        style={{ zIndex: CONTENT_OVERLAY_BACKDROP_Z_INDEX, backgroundColor: 'rgba(0,0,0,0.8)' }}
-        onClick={onClose}
-      />
-      <div
-        className="fixed inset-4 flex flex-col overflow-hidden rounded-xl"
-        data-content-overlay-root="true"
-        data-content-overlay-panel="true"
-        data-content-overlay-presentation={fullscreenPresentation ?? 'unsupported'}
-        {...getKeyboardBoundaryMetadata({
-          scope: 'modal',
-          ownerId: `content-overlay:${node.id}`,
-          priority: 40,
-          ownedKeys: ['Enter', 'Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'],
-        })}
-        style={{
-          zIndex: CONTENT_OVERLAY_PANEL_Z_INDEX,
-          backgroundColor: 'var(--node-bg)',
-          border: '1px solid var(--node-border)',
-        }}
-      >
-        <OverlayHeader node={node} onClose={onClose} />
-        {fullscreenPresentation === 'shot-workbench' && content ? (
-          <ShotCreatorOverlayBody
-            node={node}
-            content={content}
-            allNodes={nodes}
-            selectedNodeIds={selectedNodeIds}
-            onUpdateData={updateNodeData}
-            onSelectNode={selectNode}
-            onRemoveChild={removeChildFromContainer}
-            creativeAiStatus={creativeAiStatus}
-            onOptimizePrompt={onOptimizePrompt}
-            onGenerateImage={onGenerateImage}
-            onEditImage={onEditImage}
-            onGenerateVideo={onGenerateVideo}
-            onEditVideo={onEditVideo}
-            onCandidateAccept={onCandidateAccept}
-            onCandidateReject={onCandidateReject}
-            onCandidateRetry={onCandidateRetry}
-            onCandidateDelete={onCandidateDelete}
-            onCandidateInspect={onCandidateInspect}
-          />
-        ) : fullscreenPresentation === 'visual-stage' && content ? (
-          <VisualStageOverlayBody
-            node={node}
-            content={content}
-            allNodes={nodes}
-            selectedNodeIds={selectedNodeIds}
-            onUpdateData={updateNodeData}
-            onSelectNode={selectNode}
-            onRemoveChild={removeChildFromContainer}
-          />
-        ) : fullscreenPresentation === 'text-document' ? (
-          <TextDocumentOverlayBody node={node} onUpdateData={updateNodeData} />
-        ) : fullscreenPresentation === 'workbench' && content ? (
-          <OverlayBody
-            node={node}
-            content={content}
-            allNodes={nodes}
-            selectedNodeIds={selectedNodeIds}
-            onUpdateData={updateNodeData}
-            onSelectNode={selectNode}
-            onRemoveChild={removeChildFromContainer}
-          />
-        ) : (
-          <UnsupportedOverlayBody node={node} presentation={fullscreenPresentation} />
-        )}
-      </div>
-    </>
+      <>
+        <div
+          className="fixed inset-0"
+          style={{ zIndex: CONTENT_OVERLAY_BACKDROP_Z_INDEX, backgroundColor: 'rgba(0,0,0,0.8)' }}
+          onClick={onClose}
+        />
+        <div
+          className="fixed inset-4 flex flex-col overflow-hidden rounded-xl"
+          data-content-overlay-root="true"
+          data-content-overlay-panel="true"
+          data-content-overlay-presentation={fullscreenPresentation ?? 'unsupported'}
+          {...getKeyboardBoundaryMetadata({
+            scope: 'modal',
+            ownerId: `content-overlay:${node.id}`,
+            priority: 40,
+            ownedKeys: [
+              'Enter',
+              'Escape',
+              'Tab',
+              'ArrowUp',
+              'ArrowDown',
+              'ArrowLeft',
+              'ArrowRight',
+            ],
+          })}
+          style={{
+            zIndex: CONTENT_OVERLAY_PANEL_Z_INDEX,
+            backgroundColor: 'var(--node-bg)',
+            border: '1px solid var(--node-border)',
+          }}
+        >
+          <OverlayHeader node={node} onClose={onClose} />
+          {fullscreenPresentation === 'shot-workbench' && content ? (
+            <ShotCreatorOverlayBody
+              node={node}
+              content={content}
+              allNodes={nodes}
+              selectedNodeIds={selectedNodeIds}
+              onUpdateData={updateNodeData}
+              onSelectNode={selectNode}
+              onRemoveChild={removeChildFromContainer}
+              creativeAiStatus={creativeAiStatus}
+              onOptimizePrompt={onOptimizePrompt}
+              onGenerateImage={onGenerateImage}
+              onEditImage={onEditImage}
+              onGenerateVideo={onGenerateVideo}
+              onEditVideo={onEditVideo}
+              onCandidateAccept={onCandidateAccept}
+              onCandidateReject={onCandidateReject}
+              onCandidateRetry={onCandidateRetry}
+              onCandidateDelete={onCandidateDelete}
+              onCandidateInspect={onCandidateInspect}
+            />
+          ) : fullscreenPresentation === 'visual-stage' && content ? (
+            <VisualStageOverlayBody
+              node={node}
+              content={content}
+              allNodes={nodes}
+              selectedNodeIds={selectedNodeIds}
+              onUpdateData={updateNodeData}
+              onSelectNode={selectNode}
+              onRemoveChild={removeChildFromContainer}
+            />
+          ) : fullscreenPresentation === 'text-document' ? (
+            <TextDocumentOverlayBody node={node} onUpdateData={updateNodeData} />
+          ) : fullscreenPresentation === 'workbench' && content ? (
+            <OverlayBody
+              node={node}
+              content={content}
+              allNodes={nodes}
+              selectedNodeIds={selectedNodeIds}
+              onUpdateData={updateNodeData}
+              onSelectNode={selectNode}
+              onRemoveChild={removeChildFromContainer}
+            />
+          ) : (
+            <UnsupportedOverlayBody node={node} presentation={fullscreenPresentation} />
+          )}
+        </div>
+      </>
     );
 
   return typeof document === 'undefined' ? overlay : createPortal(overlay, document.body);

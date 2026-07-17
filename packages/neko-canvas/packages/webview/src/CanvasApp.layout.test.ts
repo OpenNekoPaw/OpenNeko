@@ -209,9 +209,7 @@ describe('Canvas creative workbench layout boundary', () => {
   it('keeps playback workspace visibility controls in the floating toolbar', () => {
     expect(appSource).not.toMatch(/<PlaybackControllerHost/);
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="reveal-playback-workspace"/);
-    expect(toolbarSource).not.toMatch(
-      /data-canvas-toolbar-action="toggle-playback-canvas-pane"/,
-    );
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="toggle-playback-canvas-pane"/);
     expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-playback-stage-pane"/);
     expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-playback-route-pane"/);
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="hide-playback-workspace"/);
@@ -340,9 +338,7 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="open-add-node-popover"/);
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="import-file"/);
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="reveal-playback-workspace"/);
-    expect(toolbarSource).not.toMatch(
-      /data-canvas-toolbar-action="toggle-playback-canvas-pane"/,
-    );
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="toggle-playback-canvas-pane"/);
     expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-playback-stage-pane"/);
     expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-playback-route-pane"/);
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="hide-playback-workspace"/);

@@ -11,10 +11,7 @@ export type CanvasConnectionProjectionMode = 'top-level' | 'local-container';
 export type ProjectedConnectionKind = 'direct' | 'aggregate' | 'internal' | 'hidden';
 
 export type ConnectionOrderSyncMode =
-  | 'none'
-  | 'derive-from-container'
-  | 'sync-sequence-edges'
-  | 'sync-branch-priority';
+  'none' | 'derive-from-container' | 'sync-sequence-edges' | 'sync-branch-priority';
 
 export type ConnectionProjectionDiagnosticSeverity = 'info' | 'warning' | 'error';
 

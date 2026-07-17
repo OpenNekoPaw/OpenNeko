@@ -30,6 +30,7 @@ const ROLE_TO_ENGINE_ROLE: Partial<Record<CanvasPreviewRole, PreviewVariantRole>
   'video-poster': 'thumbnail',
   'video-proxy': 'proxy',
   'audio-waveform': 'thumbnail',
+  'panorama-fov-crop': 'fov-crop',
   'model-screenshot': 'screenshot',
   'model-turntable': 'proxy',
   unavailable: 'thumbnail',

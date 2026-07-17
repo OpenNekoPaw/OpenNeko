@@ -87,8 +87,7 @@ describe('VideoEditorModel document save contract', () => {
 
     expect(applyEditMock).toHaveBeenCalledOnce();
     const edit = applyEditMock.mock.calls[0]?.[0] as
-      | { readonly replacements: readonly [{ readonly text: string }] }
-      | undefined;
+      { readonly replacements: readonly [{ readonly text: string }] } | undefined;
     expect(edit?.replacements[0]?.text).toBe(`${saveNkv(nextProject)}\n`);
   });
 

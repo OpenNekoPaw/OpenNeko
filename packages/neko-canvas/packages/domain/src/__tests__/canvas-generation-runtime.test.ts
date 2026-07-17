@@ -60,9 +60,7 @@ describe('canvas generation runtime', () => {
     expect(userContent).not.toContain('Camera: static');
     expect(userContent).not.toContain('Angle: eye-level');
 
-    expect(buildCanvasShotPromptUserContent({})).toBe(
-      'Generate an image prompt for this shot.',
-    );
+    expect(buildCanvasShotPromptUserContent({})).toBe('Generate an image prompt for this shot.');
   });
 
   it('prefers semantic storyboardPrompt over legacy generationPrompt and includes style/vfx', () => {

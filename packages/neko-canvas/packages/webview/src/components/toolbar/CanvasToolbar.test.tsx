@@ -49,9 +49,7 @@ describe('CanvasToolbar', () => {
     expect(host.querySelectorAll('.neko-toolbar-btn').length).toBeGreaterThan(0);
     expect(host.querySelector('[data-canvas-toolbar-action="select-tool"]')).not.toBeNull();
     expect(host.querySelector('[data-canvas-toolbar-action="toggle-pan-mode"]')).not.toBeNull();
-    expect(
-      host.querySelector('[data-canvas-toolbar-action="open-add-node-popover"]'),
-    ).toBeNull();
+    expect(host.querySelector('[data-canvas-toolbar-action="open-add-node-popover"]')).toBeNull();
     expect(host.querySelector('[data-canvas-toolbar-action="import-file"]')).toBeNull();
   });
 
@@ -218,9 +216,7 @@ describe('CanvasToolbar', () => {
     expect(
       host.querySelector('[data-canvas-toolbar-action="reveal-playback-workspace"]'),
     ).toBeNull();
-    expect(
-      host.querySelector('[data-canvas-toolbar-action="hide-playback-workspace"]'),
-    ).toBeNull();
+    expect(host.querySelector('[data-canvas-toolbar-action="hide-playback-workspace"]')).toBeNull();
 
     act(() => {
       stageButton?.click();
@@ -298,9 +294,7 @@ describe('CanvasToolbar', () => {
       'open-package',
     ]);
 
-    expect(
-      host.querySelector('[data-canvas-toolbar-action="toggle-canvas-settings"]'),
-    ).toBeNull();
+    expect(host.querySelector('[data-canvas-toolbar-action="toggle-canvas-settings"]')).toBeNull();
     expect(host.querySelector('[data-canvas-toolbar-action="toggle-hud-controls"]')).toBeNull();
   });
 
@@ -309,9 +303,7 @@ describe('CanvasToolbar', () => {
       root.render(<CanvasToolbar onUndo={() => undefined} onRedo={() => undefined} />);
     });
 
-    expect(
-      host.querySelector('[data-canvas-toolbar-action="toggle-canvas-settings"]'),
-    ).toBeNull();
+    expect(host.querySelector('[data-canvas-toolbar-action="toggle-canvas-settings"]')).toBeNull();
     expect(host.querySelector('[aria-controls="canvas-settings-panel"]')).toBeNull();
     expect(host.querySelector('[data-icon="settings"]')).toBeNull();
   });

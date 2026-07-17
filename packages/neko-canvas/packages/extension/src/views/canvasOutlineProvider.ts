@@ -47,13 +47,7 @@ export interface CanvasOutlineData {
 // =============================================================================
 
 type OutlineCategory =
-  | 'scenes'
-  | 'shots'
-  | 'galleries'
-  | 'media'
-  | 'annotations'
-  | 'other'
-  | 'connections';
+  'scenes' | 'shots' | 'galleries' | 'media' | 'annotations' | 'other' | 'connections';
 
 const CATEGORY_META: Record<OutlineCategory, { label: string; icon: string }> = {
   scenes: { label: '场景', icon: 'symbol-class' },

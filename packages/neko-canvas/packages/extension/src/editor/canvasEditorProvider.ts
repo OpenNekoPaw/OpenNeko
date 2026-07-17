@@ -2227,10 +2227,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     });
   }
 
-  async generateImageForNode(
-    nodeId: string,
-    _childNodeId?: string,
-  ): Promise<void> {
+  async generateImageForNode(nodeId: string, _childNodeId?: string): Promise<void> {
     const node = await this.getNode(nodeId);
     if (!node) {
       throw new Error(`Cannot generate Canvas node "${nodeId}": node not found.`);
