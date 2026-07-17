@@ -139,8 +139,8 @@ impl TextRenderer {
 
         // Set text content
         let width_limit = max_width.unwrap_or(f32::MAX);
-        buffer.set_size(&mut self.font_system, Some(width_limit), None);
-        buffer.set_text(&mut self.font_system, text, attrs, Shaping::Advanced);
+        buffer.set_size(Some(width_limit), None);
+        buffer.set_text(text, &attrs, Shaping::Advanced, None);
 
         // Shape and layout
         buffer.shape_until_scroll(&mut self.font_system, false);

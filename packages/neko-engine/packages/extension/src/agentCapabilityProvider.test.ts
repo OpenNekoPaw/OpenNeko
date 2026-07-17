@@ -65,12 +65,11 @@ describe('EngineCapabilityProvider media closure', () => {
       'analyze_loudness',
       { source: '/media/audio.wav', targetLufs: -14 },
     );
-    expect(executeCommand).toHaveBeenNthCalledWith(
-      2,
-      'neko.engine.dispatch',
-      'videos',
-      'capture',
-      { source: '/media/video.mp4', time: 1.5, format: 'jpeg', quality: 85 },
-    );
+    expect(executeCommand).toHaveBeenNthCalledWith(2, 'neko.engine.dispatch', 'videos', 'capture', {
+      source: '/media/video.mp4',
+      time: 1.5,
+      format: 'jpeg',
+      quality: 85,
+    });
   });
 });

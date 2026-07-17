@@ -497,7 +497,7 @@ impl AudioMixdown {
     }
 
     pub fn close(&mut self) {
-        for (_, source) in self.sources.iter_mut() {
+        for source in self.sources.values_mut() {
             source.decoder.close();
         }
         self.sources.clear();

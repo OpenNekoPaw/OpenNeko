@@ -54,7 +54,7 @@ uuid = { version = "1.6", features = ["v4"] }
 
 # Error handling
 thiserror = "1.0"
-anyhow = "1.0"
+anyhow = "1.0.103"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -71,7 +71,7 @@ tracy-client = { version = "0.17", default-features = false }
 bytemuck = { version = "1.14", features = ["derive"] }
 semver = "1"
 crossbeam-channel = "0.5"
-indicatif = "0.17"
+indicatif = "0.18"
 
 # Base64 encoding
 base64 = "0.22"
@@ -80,7 +80,7 @@ base64 = "0.22"
 image = { version = "0.25", default-features = false, features = ["hdr", "jpeg", "png"] }
 
 # Text rendering - font shaping, layout, rasterization
-cosmic-text = "0.12"
+cosmic-text = "0.19"
 
 # Loudness measurement - ITU-R BS.1770-4
 ebur128 = "0.1"
