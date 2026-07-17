@@ -1,0 +1,12 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 560 400"
+  role="img"
+  aria-labelledby="title description"
+>
+  <title id="title">Foundational cover</title>
+  <desc id="description">A synthetic full-bleed Canvas media fixture.</desc>
+  <rect width="560" height="400" fill="#111827" />
+  <circle cx="280" cy="190" r="112" fill="#2563eb" />
+  <path d="M150 314h260" stroke="#f8fafc" stroke-width="18" stroke-linecap="round" />
+</svg>

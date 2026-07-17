@@ -1,0 +1,42 @@
+packages:
+  - apps/*
+  - packages/*
+  - packages/*/packages/*
+  - packages/*/test-utils
+
+shamefullyHoist: true
+publicHoistPattern:
+  - '*react-markdown*'
+  - '*remark*'
+  - '*unified*'
+  - '*prism*'
+
+overrides:
+  '@vitejs/plugin-react': 4.3.4
+  '@vitest/coverage-v8': 4.1.2
+  d3-array: ^3.2.4
+  d3-shape: ^3.2.0
+  d3-selection: ^3.0.0
+  d3-transition: ^3.0.0
+  d3-interpolate: ^3.0.0
+  d3-color: ^3.1.0
+  d3-format: ^3.1.0
+  d3-path: ^3.1.0
+  vite: 6.4.2
+  vite-plugin-static-copy: 4.0.1
+  vitest: 4.1.2
+
+ignoredBuiltDependencies:
+  - esbuild
+  - sharp
+
+allowBuilds:
+  '@fission-ai/openspec': set this to true or false
+  '@vscode/vsce-sign': set this to true or false
+  core-js: set this to true or false
+  electron: true
+  es5-ext: set this to true or false
+  esbuild: set this to true or false
+  keytar: set this to true or false
+  sharp: set this to true or false
+  tesseract.js: set this to true or false

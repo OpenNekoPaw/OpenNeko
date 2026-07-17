@@ -1,0 +1,21 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "agent-runtime.prompt-composition",
+  "owner": { "kind": "agent-runtime", "id": "prompt-composition" },
+  "target": { "kind": "prompt", "id": "system-prompt-composition", "contractHash": "sha256:d388519962bae4102874ce71834d32367b27e13dbbc22f7cfd18d7c0e9971d20" },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [{ "id": "markdown", "settings": { "outputFormat": "markdown" }, "configurationHash": "sha256:f949e317ef6531bd9fa4f15b04f4cc038036365bc0a8a8f97dcb229049f0baac" }],
+  "modelProfiles": [{ "id": "configured-default", "selection": "configured-default", "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915" }],
+  "judgeProfiles": [],
+  "fixtures": [
+    { "id": "empty-workspace", "root": "shared-fixtures/empty-workspace", "source": "repository", "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081", "mutable": true },
+    { "id": "prompt-environment-workspace", "root": "shared-fixtures/prompt-environment-workspace", "source": "repository", "digest": "sha256:9c6e1e2364c8ca13c31e4389dac2ede078687a217d1861e2705e33319ed1f187", "mutable": true }
+  ],
+  "cases": [
+    { "id": "base-and-skill-fragments", "file": "cases/base-and-skill-fragments.json", "group": "canonical", "visibility": "public" },
+    { "id": "agents-md-environment-fragment", "file": "cases/agents-md-environment-fragment.json", "group": "boundary", "visibility": "public" }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": { "rawRetentionDays": 14, "trustedCiRetentionDays": 14, "committedSummary": true, "includeHistory": false }
+}

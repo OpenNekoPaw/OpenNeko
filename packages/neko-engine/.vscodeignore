@@ -1,0 +1,63 @@
+# Source code
+src/**
+scripts/**
+!scripts/package-config.json
+
+# Config & tooling
+.vscode/**
+.vscode-test/**
+.turbo/**
+.claude/**
+.serena/**
+.gitignore
+tsconfig.json
+tsconfig.*.json
+eslint.config.*
+vitest.config.*
+*.md
+
+# Docker (not needed in VSIX)
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
+
+# Test files
+tests/**
+test_*.html
+**/*.test.ts
+**/*.spec.ts
+**/__tests__/**
+coverage/**
+
+# TypeScript source
+*.ts
+!*.d.ts
+
+# Build intermediaries
+node_modules/**
+out/**
+*.map
+*.tsbuildinfo
+
+# Rust workspace (cargo sources + build artifacts)
+Cargo.lock
+Cargo.toml
+.cargo/**
+target/**
+vendor/**
+
+# Sub-packages — exclude all, then re-include runtime files
+packages/**
+!packages/host-napi/index.js
+!packages/host-napi/index.d.ts
+!packages/host-napi/neko-engine.*.node
+
+# FFmpeg dylibs (bundled by scripts/bundle-ffmpeg.js)
+!packages/host-napi/*.dylib
+!packages/host-napi/*.so*
+!packages/host-napi/*.dll
+
+# Include compiled output, ORT dylibs, and localization
+!dist/**
+!bin/**
+!l10n/**

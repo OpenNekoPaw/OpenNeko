@@ -1,0 +1,89 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "conversation-idle-continuation",
+  "suiteId": "agent-runtime.workflow-controller",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Complete a TUI turn, leave the same open conversation idle beyond its writer-lease TTL, and submit a second turn without reopening the session.",
+    "canonicalPath": [
+      "session.create",
+      "message.submit",
+      "session.waitForIdle",
+      "Pi Conversation runtime lease heartbeat",
+      "message.submit",
+      "Pi turn checkpoint"
+    ],
+    "forbiddenFallback": [
+      "automatic conversation takeover",
+      "session recreation",
+      "new unrelated conversation",
+      "legacy conversation runtime"
+    ],
+    "observables": [
+      {
+        "ref": "turn-facts",
+        "kind": "runtime-fact",
+        "description": "One TUI session and Pi Conversation runtime remain authoritative across both durable turns with no stale-lease diagnostic.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The second turn completes durably in the same open TUI conversation after an idle interval longer than the production lease TTL.",
+    "expectedFailure": "A stale writer lease, runtime/session recreation, changed conversation identity, runtime error, or non-idle terminal state fails visibly."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "first",
+      "kind": "submit",
+      "prompt": "Reply with one concise sentence confirming the first turn."
+    },
+    { "id": "first-idle", "kind": "wait-for-idle", "timeoutMs": 120000 },
+    {
+      "id": "second",
+      "kind": "submit",
+      "prompt": "Reply with one concise sentence confirming continuation after the idle interval.",
+      "delayMs": 35000
+    },
+    { "id": "second-idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "turn-facts" },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "evidenceRef": "turn-facts"
+    },
+    {
+      "id": "order",
+      "kind": "process-order",
+      "events": [
+        { "kind": "workflow-step", "stepId": "first", "method": "message.submit" },
+        { "kind": "workflow-step", "stepId": "second", "method": "message.submit" }
+      ],
+      "evidenceRef": "turn-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": [
+        "turnIdle",
+        "backgroundTasksIdle",
+        "taskResultObservationIdle",
+        "continuationQueueIdle"
+      ],
+      "evidenceRef": "turn-facts"
+    },
+    { "id": "answer", "kind": "final-answer", "mode": "non-empty", "evidenceRef": "turn-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 240000, "repetitions": 1 }
+}

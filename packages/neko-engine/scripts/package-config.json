@@ -1,0 +1,59 @@
+{
+  "ffmpegVersion": "8.1",
+  "btbnTag": "latest",
+  "btbnVersion": "8.1",
+  "ffmpegLibs": [
+    "avcodec",
+    "avfilter",
+    "avformat",
+    "avutil",
+    "swresample",
+    "swscale"
+  ],
+  "targets": {
+    "darwin-arm64": {
+      "nodeFile": "neko-engine.darwin-arm64.node",
+      "ffmpeg": {
+        "source": "homebrew",
+        "brewPrefix": "/opt/homebrew/opt/ffmpeg"
+      },
+      "ffmpegDev": {
+        "source": "homebrew",
+        "brewPrefix": "/opt/homebrew/opt/ffmpeg"
+      }
+    },
+    "darwin-x64": {
+      "nodeFile": "neko-engine.darwin-x64.node",
+      "ffmpeg": {
+        "source": "homebrew",
+        "brewPrefix": "/usr/local/opt/ffmpeg"
+      },
+      "ffmpegDev": {
+        "source": "homebrew",
+        "brewPrefix": "/usr/local/opt/ffmpeg"
+      }
+    },
+    "linux-x64": {
+      "nodeFile": "neko-engine.linux-x64-gnu.node",
+      "ffmpeg": {
+        "source": "btbn",
+        "archiveTemplate": "ffmpeg-n{btbnVersion}-{btbnTag}-linux64-gpl-shared-{btbnVersion}.tar.xz"
+      },
+      "ffmpegDev": {
+        "source": "btbn",
+        "archiveTemplate": "ffmpeg-n{ffmpegVersion}-{btbnTag}-linux64-lgpl-shared-{ffmpegVersion}.tar.xz"
+      }
+    },
+    "win32-x64": {
+      "nodeFile": "neko-engine.win32-x64-msvc.node",
+      "ffmpeg": {
+        "source": "btbn",
+        "archiveTemplate": "ffmpeg-n{btbnVersion}-{btbnTag}-win64-gpl-shared-{btbnVersion}.zip"
+      },
+      "ffmpegDev": {
+        "source": "btbn",
+        "archiveTemplate": "ffmpeg-n{ffmpegVersion}-{btbnTag}-win64-lgpl-shared-{ffmpegVersion}.zip"
+      }
+    }
+  }
+}

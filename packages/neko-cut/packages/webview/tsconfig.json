@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@neko/shared": ["../../../neko-types/src/index.ts"],
+      "@neko/shared/*": ["../../../neko-types/src/*"],
+      "@neko/ui": ["../../../neko-ui/src/index.ts"],
+      "@neko/ui/*": ["../../../neko-ui/src/*"],
+      "@neko/neko-client": ["../../../../packages/neko-client/src/index.ts"],
+      "@neko/neko-client/*": ["../../../../packages/neko-client/src/*"],
+    },
+    "ignoreDeprecations": "5.0"
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

@@ -1,0 +1,35 @@
+{
+  "fileKind": "neko.character",
+  "schemaVersion": 0,
+  "featureFlags": [],
+  "dataBlocks": [],
+  "character": {
+    "descriptor": {
+      "characterId": "legacy-character",
+      "name": "Legacy Character",
+      "schemaVersion": 0,
+      "featureFlags": []
+    },
+    "topologyVersion": 1,
+    "definition": {
+      "controls": [],
+      "expressionPresets": [],
+      "behaviorDrivers": []
+    },
+    "geometry": {
+      "baseMesh": {
+        "id": "legacy-mesh",
+        "uri": "assets/legacy.glb",
+        "kind": "mesh"
+      },
+      "morphLibrary": [],
+      "skinWeightAtlases": [],
+      "blendShapes": [],
+      "dataBlocks": []
+    },
+    "materialSlots": [],
+    "overrideLayer": {
+      "overrides": []
+    }
+  }
+}

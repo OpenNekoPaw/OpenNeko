@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <!-- glTF/glb: 3D box with open face -->
+  <path d="M2 5L8 2L14 5V11L8 14L2 11V5Z" stroke="#3B82F6" stroke-width="1.5" stroke-linejoin="round"/>
+  <polyline points="2,5 8,8 14,5" stroke="#3B82F6" stroke-width="1.5" stroke-linejoin="round"/>
+  <line x1="8" y1="8" x2="8" y2="14" stroke="#3B82F6" stroke-width="1.5"/>
+</svg>

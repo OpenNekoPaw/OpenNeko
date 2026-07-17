@@ -1,0 +1,45 @@
+{
+  "name": "@neko-agent/webview",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/assistant.js",
+  "exports": {
+    "./root": "./src/root.tsx"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@neko-agent/types": "workspace:*",
+    "@tanstack/react-virtual": "^3.13.14",
+    "@neko/markdown": "workspace:*",
+    "@neko/neko-client": "workspace:*",
+    "@neko/shared": "workspace:*",
+    "@neko/ui": "workspace:*",
+    "clsx": "^2.1.1",
+    "d3": "^7.9.0",
+    "mermaid": "^11.12.2",
+    "prism-react-renderer": "^2.4.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.16",
+    "jsdom": "^27.0.1",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.2",
+    "vite": "^6.4.2",
+    "vitest": "^4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

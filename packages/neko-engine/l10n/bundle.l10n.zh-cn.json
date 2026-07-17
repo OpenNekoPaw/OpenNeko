@@ -1,0 +1,7 @@
+{
+  "neko.engine.start.title": "连接引擎",
+  "neko.engine.stop.title": "断开引擎",
+  "neko.engine.status.title": "引擎状态",
+  "neko.engine.probe.title": "探测媒体文件",
+  "neko.engine.export.title": "导出 NKV 项目"
+}

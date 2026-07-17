@@ -1,0 +1,1103 @@
+// =============================================================================
+// Scene Proto Definition (IDL)
+//
+// Authority: docs/architecture/adr-3d-editor-rendering-architecture.md
+//
+// Purpose:
+//   Cross-language scene authoring, viewport streaming, and render metadata
+//   contracts for neko-model Route A / Route C.
+//
+// Convention:
+//   - Field names use snake_case in protobuf and become camelCase in TS output.
+//   - Message payloads that are not stable yet use JSON strings; typed payloads
+//     are introduced by later ADRs without breaking the envelope.
+// =============================================================================
+
+syntax = "proto3";
+
+package neko.scene;
+
+// =============================================================================
+// Shared primitives
+// =============================================================================
+
+message Vec2 {
+  float x = 1;
+  float y = 2;
+}
+
+message Vec3 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message Bounds3 {
+  Vec3 min = 1;
+  Vec3 max = 2;
+}
+
+message Vec4 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+  float w = 4;
+}
+
+message Quat {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+  float w = 4;
+}
+
+message ViewportResolution {
+  uint32 width = 1;
+  uint32 height = 2;
+  float pixel_ratio = 3;
+}
+
+message Transform3d {
+  Vec3 position = 1;
+  Quat rotation = 2;
+  Vec3 scale = 3;
+}
+
+message TransformPatch {
+  string node_id = 1;
+  Vec3 position = 2;
+  Quat rotation = 3;
+  Vec3 scale = 4;
+}
+
+message AssetHandle {
+  string id = 1;
+  optional string uri = 2;
+  optional string kind = 3;
+}
+
+// =============================================================================
+// Character authoring contracts
+// =============================================================================
+
+enum CharacterDataBlockKind {
+  CHARACTER_DATA_BLOCK_KIND_UNSPECIFIED = 0;
+  CHARACTER_DATA_BLOCK_KIND_MORPH_SPARSE_DELTA = 1;
+  CHARACTER_DATA_BLOCK_KIND_SKIN_WEIGHT_ATLAS = 2;
+  CHARACTER_DATA_BLOCK_KIND_BLEND_SHAPE = 3;
+  CHARACTER_DATA_BLOCK_KIND_AUXILIARY_GEOMETRY = 4;
+}
+
+enum CharacterOverrideOperation {
+  CHARACTER_OVERRIDE_OPERATION_UNSPECIFIED = 0;
+  CHARACTER_OVERRIDE_OPERATION_SET = 1;
+  CHARACTER_OVERRIDE_OPERATION_REMOVE = 2;
+  CHARACTER_OVERRIDE_OPERATION_RESET = 3;
+}
+
+enum CharacterCommandType {
+  CHARACTER_COMMAND_TYPE_UNSPECIFIED = 0;
+  CHARACTER_COMMAND_TYPE_MORPH_SET = 1;
+  CHARACTER_COMMAND_TYPE_MATERIAL_LAYER_SET = 2;
+  CHARACTER_COMMAND_TYPE_EXPRESSION_PRESET_APPLY = 3;
+  CHARACTER_COMMAND_TYPE_IK_HANDLE_SET = 4;
+  CHARACTER_COMMAND_TYPE_BONE_POSE_SET = 5;
+  CHARACTER_COMMAND_TYPE_SKELETON_BIND = 6;
+  CHARACTER_COMMAND_TYPE_OVERRIDE_APPLY = 7;
+  CHARACTER_COMMAND_TYPE_OVERRIDE_RESET = 8;
+}
+
+message CharacterDataBlockRef {
+  string block_id = 1;
+  CharacterDataBlockKind kind = 2;
+  string uri = 3;
+  optional string asset_handle_id = 4;
+  optional string checksum = 5;
+  optional string encoding = 6;
+  optional uint64 byte_offset = 7;
+  optional uint64 byte_length = 8;
+}
+
+message MaterialSlot {
+  string slot_id = 1;
+  string name = 2;
+  AssetHandle material = 3;
+  optional string role = 4;
+  optional uint32 index = 5;
+}
+
+enum CharacterRegionBindingKind {
+  CHARACTER_REGION_BINDING_KIND_UNSPECIFIED = 0;
+  CHARACTER_REGION_BINDING_KIND_MORPH_CONTROL = 1;
+  CHARACTER_REGION_BINDING_KIND_MATERIAL_SLOT = 2;
+  CHARACTER_REGION_BINDING_KIND_BONE = 3;
+  CHARACTER_REGION_BINDING_KIND_SUBMESH = 4;
+  CHARACTER_REGION_BINDING_KIND_PRIMITIVE = 5;
+  CHARACTER_REGION_BINDING_KIND_MASK = 6;
+}
+
+message CharacterRegionBinding {
+  CharacterRegionBindingKind kind = 1;
+  string target_id = 2;
+  optional float weight = 3;
+}
+
+message CharacterRegionDescriptor {
+  string region_id = 1;
+  string display_name = 2;
+  uint32 schema_version = 3;
+  repeated CharacterRegionBinding bindings = 4;
+  repeated string tags = 5;
+}
+
+message CharacterRegionDescriptorSet {
+  uint32 schema_version = 1;
+  repeated CharacterRegionDescriptor regions = 2;
+}
+
+message MorphDescriptor {
+  string morph_id = 1;
+  string display_name = 2;
+  string target_path = 3;
+  float default_weight = 4;
+  optional float min = 5;
+  optional float max = 6;
+  optional CharacterDataBlockRef sparse_delta = 7;
+  repeated string tags = 8;
+}
+
+message SkinWeightAtlas {
+  string atlas_id = 1;
+  CharacterDataBlockRef data = 2;
+  uint32 joint_count = 3;
+  uint32 vertex_count = 4;
+  optional string encoding = 5;
+}
+
+message BlendShape {
+  string blend_shape_id = 1;
+  string name = 2;
+  CharacterDataBlockRef data = 3;
+  repeated MorphWeightEntry default_weights = 4;
+}
+
+message SkeletonDescriptor {
+  string skeleton_id = 1;
+  AssetHandle skeleton = 2;
+  optional string root_bone = 3;
+  repeated string bind_joints = 4;
+}
+
+message BehaviorDriver {
+  string driver_id = 1;
+  string kind = 2;
+  string target_path = 3;
+  string params_json = 4;
+}
+
+message ExpressionPreset {
+  string preset_id = 1;
+  string display_name = 2;
+  repeated MorphWeightEntry morph_weights = 3;
+  repeated string bone_pose_ids = 4;
+  repeated string material_override_ids = 5;
+}
+
+message CharacterDescriptor {
+  string character_id = 1;
+  string name = 2;
+  uint32 schema_version = 3;
+  repeated string feature_flags = 4;
+  optional AssetHandle base_template = 5;
+  optional string template_version = 6;
+  optional string checksum = 7;
+}
+
+message CharacterDefinition {
+  repeated MorphDescriptor controls = 1;
+  repeated ExpressionPreset expression_presets = 2;
+  repeated BehaviorDriver behavior_drivers = 3;
+  optional CharacterRegionDescriptorSet region_descriptors = 4;
+}
+
+message CharacterGeometry {
+  AssetHandle base_mesh = 1;
+  optional SkeletonDescriptor skeleton = 2;
+  repeated MorphDescriptor morph_library = 3;
+  repeated SkinWeightAtlas skin_weight_atlases = 4;
+  repeated BlendShape blend_shapes = 5;
+  repeated CharacterDataBlockRef data_blocks = 6;
+}
+
+message CharacterOverrideEntry {
+  string path = 1;
+  string value_type = 2;
+  string value_json = 3;
+  CharacterOverrideOperation operation = 4;
+  optional uint64 base_revision = 5;
+}
+
+message CharacterOverrideLayer {
+  optional AssetHandle base_template = 1;
+  repeated CharacterOverrideEntry overrides = 2;
+}
+
+message LayeredCharacterDescription {
+  CharacterDescriptor descriptor = 1;
+  uint64 topology_version = 2;
+  CharacterDefinition definition = 3;
+  CharacterGeometry geometry = 4;
+  repeated MaterialSlot material_slots = 5;
+  CharacterOverrideLayer override_layer = 6;
+}
+
+message NkcCharacterFile {
+  string file_kind = 1;
+  uint32 schema_version = 2;
+  LayeredCharacterDescription character = 3;
+  repeated CharacterDataBlockRef data_blocks = 4;
+  repeated string feature_flags = 5;
+  optional string migration_manifest_uri = 6;
+  optional string checksum = 7;
+}
+
+message NkcDataBlockEntry {
+  string entry_id = 1;
+  CharacterDataBlockKind kind = 2;
+  string uri = 3;
+  string checksum = 4;
+  uint64 byte_offset = 5;
+  uint64 byte_length = 6;
+}
+
+message NkcDataBlockManifest {
+  string file_kind = 1;
+  uint32 schema_version = 2;
+  string block_id = 3;
+  string encoding = 4;
+  uint64 byte_length = 5;
+  string checksum = 6;
+  repeated NkcDataBlockEntry entries = 7;
+}
+
+message CharacterMigrationStep {
+  uint32 from_schema_version = 1;
+  uint32 to_schema_version = 2;
+  string migration_id = 3;
+  repeated string required_feature_flags = 4;
+}
+
+message CharacterMigrationManifest {
+  uint32 current_schema_version = 1;
+  repeated CharacterMigrationStep steps = 2;
+  repeated uint32 supported_legacy_versions = 3;
+}
+
+message CharacterMorphSetCommand {
+  string morph_id = 1;
+  float weight = 2;
+}
+
+message CharacterMaterialLayerCommand {
+  string slot_id = 1;
+  string params_json = 2;
+}
+
+message CharacterExpressionPresetCommand {
+  string preset_id = 1;
+  float weight = 2;
+}
+
+message CharacterIkHandleCommand {
+  string handle_id = 1;
+  Vec3 target = 2;
+  optional string space = 3;
+}
+
+message CharacterBonePoseCommand {
+  string bone_id = 1;
+  Transform3d transform = 2;
+  optional string space = 3;
+}
+
+message CharacterSkeletonBindCommand {
+  string skeleton_id = 1;
+  optional AssetHandle skeleton = 2;
+}
+
+message CharacterOverrideCommand {
+  CharacterOverrideOperation operation = 1;
+  repeated CharacterOverrideEntry entries = 2;
+}
+
+message CharacterCommand {
+  CharacterCommandType type = 1;
+  string character_id = 2;
+  optional string node_id = 3;
+  optional uint64 topology_version = 4;
+  optional CharacterMorphSetCommand morph_set = 5;
+  optional CharacterMaterialLayerCommand material_layer = 6;
+  optional CharacterExpressionPresetCommand expression_preset = 7;
+  optional CharacterIkHandleCommand ik_handle = 8;
+  optional CharacterBonePoseCommand bone_pose = 9;
+  optional CharacterSkeletonBindCommand skeleton_bind = 10;
+  optional CharacterOverrideCommand override_edit = 11;
+}
+
+// =============================================================================
+// Scene command control plane
+// =============================================================================
+
+enum SceneCommandType {
+  SCENE_COMMAND_TYPE_UNSPECIFIED = 0;
+  SCENE_COMMAND_TYPE_TRANSFORM = 1;
+  SCENE_COMMAND_TYPE_CAMERA_SET = 2;
+  SCENE_COMMAND_TYPE_CAMERA_SWITCH = 3;
+  SCENE_COMMAND_TYPE_ANIMATION_PLAY = 4;
+  SCENE_COMMAND_TYPE_ANIMATION_SEEK = 5;
+  SCENE_COMMAND_TYPE_MATERIAL_UPDATE = 6;
+  SCENE_COMMAND_TYPE_VISIBILITY_SET = 7;
+  SCENE_COMMAND_TYPE_HIERARCHY_REPARENT = 8;
+  SCENE_COMMAND_TYPE_HIERARCHY_REORDER = 9;
+  SCENE_COMMAND_TYPE_ASSET_BIND = 10;
+  SCENE_COMMAND_TYPE_NODE_ADD = 11;
+  SCENE_COMMAND_TYPE_NODE_REMOVE = 12;
+  SCENE_COMMAND_TYPE_MODELING_BEGIN_SESSION = 13;
+  SCENE_COMMAND_TYPE_MODELING_END_SESSION = 14;
+  SCENE_COMMAND_TYPE_MODELING_CANCEL_SESSION = 15;
+  SCENE_COMMAND_TYPE_MODELING_BRUSH_STROKE = 16;
+  SCENE_COMMAND_TYPE_MODELING_TOPOLOGY_OP = 17;
+  SCENE_COMMAND_TYPE_MODELING_UV_UNWRAP = 18;
+  SCENE_COMMAND_TYPE_LIGHT_UPDATE = 19;
+  SCENE_COMMAND_TYPE_CHARACTER = 20;
+  SCENE_COMMAND_TYPE_ENVIRONMENT_SET = 21;
+  SCENE_COMMAND_TYPE_ENVIRONMENT_UPDATE = 22;
+  SCENE_COMMAND_TYPE_ENVIRONMENT_CLEAR = 23;
+  SCENE_COMMAND_TYPE_VIEWPORT_SETTINGS_UPDATE = 24;
+}
+
+enum SceneCommandPhase {
+  SCENE_COMMAND_PHASE_UNSPECIFIED = 0;
+  SCENE_COMMAND_PHASE_BEGIN = 1;
+  SCENE_COMMAND_PHASE_UPDATE = 2;
+  SCENE_COMMAND_PHASE_END = 3;
+  SCENE_COMMAND_PHASE_CANCEL = 4;
+}
+
+enum SceneCommandStatus {
+  SCENE_COMMAND_STATUS_UNSPECIFIED = 0;
+  SCENE_COMMAND_STATUS_APPLIED = 1;
+  SCENE_COMMAND_STATUS_REJECTED = 2;
+  SCENE_COMMAND_STATUS_SUPERSEDED = 3;
+}
+
+message SceneCommand {
+  SceneCommandType type = 1;
+  string payload_json = 2;
+  optional uint64 topology_version = 3;
+  optional string modeling_session_id = 4;
+  optional CharacterCommand character_command = 5;
+}
+
+message SceneCommandEnvelope {
+  uint64 seq = 1;
+  optional string transaction_id = 2;
+  optional SceneCommandPhase phase = 3;
+  uint64 base_revision = 4;
+  optional string coalesce_key = 5;
+  SceneCommand command = 6;
+}
+
+message SceneCommandAck {
+  uint64 seq = 1;
+  uint64 applied_seq = 2;
+  uint64 base_revision = 3;
+  uint64 revision = 4;
+  SceneCommandStatus status = 5;
+  optional string error = 6;
+}
+
+// =============================================================================
+// Scene snapshot and delta
+// =============================================================================
+
+message AnimationClipInfo {
+  string name = 1;
+  float duration = 2;
+}
+
+message AnimationStatePatch {
+  optional string clip = 1;
+  optional float time = 2;
+  optional bool playing = 3;
+  optional bool looped = 4;
+  optional float weight = 5;
+}
+
+message MorphWeightEntry {
+  string name = 1;
+  float weight = 2;
+}
+
+message MorphWeightsPatch {
+  string node_id = 1;
+  repeated MorphWeightEntry weights = 2;
+}
+
+message MeshPrimitiveSnapshot {
+  AssetHandle mesh = 1;
+  optional AssetHandle material = 2;
+  string submesh_id = 3;
+  string primitive_id = 4;
+  optional string material_slot_id = 5;
+}
+
+message SceneNodeSnapshot {
+  string node_id = 1;
+  optional string parent_id = 2;
+  string name = 3;
+  Transform3d transform = 4;
+  repeated string children = 5;
+  bool visible = 6;
+  optional uint32 layer_mask = 7;
+  optional AssetHandle mesh = 8;
+  optional AssetHandle material = 9;
+  optional string kind = 10;
+  optional Bounds3 bounds = 11;
+  optional Bounds3 world_bounds = 12;
+  repeated MeshPrimitiveSnapshot primitives = 13;
+  optional string character_id = 14;
+  optional CharacterRegionDescriptorSet region_descriptors = 15;
+  optional LightPatch light = 16;
+}
+
+message SceneSnapshot {
+  string scene_id = 1;
+  uint64 revision = 2;
+  repeated SceneNodeSnapshot nodes = 3;
+  repeated AnimationClipInfo animations = 4;
+  optional CameraState active_camera = 5;
+  optional EnvironmentPatch environment = 6;
+}
+
+message SceneNodePatch {
+  string node_id = 1;
+  optional string parent_id = 2;
+  optional string name = 3;
+  Transform3d transform = 4;
+  optional bool visible = 5;
+  repeated string children = 6;
+  optional AssetHandle mesh = 7;
+  optional AssetHandle material = 8;
+  optional string kind = 9;
+}
+
+message HierarchyPatch {
+  string node_id = 1;
+  optional string parent_id = 2;
+  repeated string children = 3;
+  optional uint32 order = 4;
+}
+
+message VisibilityPatch {
+  string node_id = 1;
+  bool visible = 2;
+  optional uint32 layer_mask = 3;
+}
+
+message LayerPatch {
+  string node_id = 1;
+  uint32 layer_mask = 2;
+}
+
+message MaterialPatch {
+  string material_id = 1;
+  optional string node_id = 2;
+  optional string slot = 3;
+  string params_json = 4;
+}
+
+message CharacterMorphWeightsPatch {
+  string character_id = 1;
+  repeated MorphWeightEntry weights = 2;
+  uint64 topology_version = 3;
+}
+
+message CharacterMaterialPatch {
+  string character_id = 1;
+  string slot_id = 2;
+  string params_json = 3;
+  uint64 topology_version = 4;
+}
+
+message CharacterSkeletonPosePatch {
+  string character_id = 1;
+  string bone_id = 2;
+  Transform3d transform = 3;
+  uint64 topology_version = 4;
+}
+
+message CharacterOverridePatch {
+  string character_id = 1;
+  repeated CharacterOverrideEntry overrides = 2;
+  uint64 topology_version = 3;
+}
+
+message AssetReferencePatch {
+  string node_id = 1;
+  optional AssetHandle mesh = 2;
+  optional AssetHandle material = 3;
+  repeated AssetHandle textures = 4;
+}
+
+message LightPatch {
+  string node_id = 1;
+  string kind = 2;
+  Vec3 color = 3;
+  float intensity = 4;
+  optional float range = 5;
+  optional float inner_cone_angle = 6;
+  optional float outer_cone_angle = 7;
+  optional LightShadowPatch shadow = 8;
+}
+
+message LightShadowPatch {
+  bool enabled = 1;
+  optional uint32 resolution = 2;
+  optional float bias = 3;
+}
+
+enum EnvironmentMode {
+  ENVIRONMENT_MODE_UNSPECIFIED = 0;
+  ENVIRONMENT_MODE_SKYBOX = 1;
+  ENVIRONMENT_MODE_IBL = 2;
+  ENVIRONMENT_MODE_BACKGROUND_AND_IBL = 3;
+}
+
+message EnvironmentPatch {
+  string environment_id = 1;
+  optional AssetHandle source = 2;
+  EnvironmentMode mode = 3;
+  float rotation_deg = 4;
+  float intensity = 5;
+  float exposure = 6;
+  bool visible_as_background = 7;
+  optional Vec4 background_color = 8;
+}
+
+message EnvironmentDiagnostic {
+  string code = 1;
+  string severity = 2;
+  string message = 3;
+  bool retryable = 4;
+}
+
+message NodeRemoveCommand {
+  string node_id = 1;
+  optional bool cascade = 2;
+}
+
+enum SelectionKind {
+  SELECTION_KIND_UNSPECIFIED = 0;
+  SELECTION_KIND_NODE = 1;
+  SELECTION_KIND_BONE = 2;
+  SELECTION_KIND_MATERIAL_SLOT = 3;
+  SELECTION_KIND_SUBMESH = 4;
+  SELECTION_KIND_PRIMITIVE = 5;
+  SELECTION_KIND_CHARACTER_REGION = 6;
+  SELECTION_KIND_MORPH_CONTROL = 7;
+  SELECTION_KIND_ENVIRONMENT = 8;
+}
+
+message SelectionHit {
+  Vec3 world_position = 1;
+  optional Vec3 world_normal = 2;
+  optional float depth = 3;
+}
+
+message SelectionTarget {
+  SelectionKind kind = 1;
+  optional string node_id = 2;
+  optional string character_id = 3;
+  optional string bone_id = 4;
+  optional string material_slot_id = 5;
+  optional string submesh_id = 6;
+  optional string primitive_id = 7;
+  optional string region_id = 8;
+  optional string morph_id = 9;
+  optional string environment_id = 10;
+  optional SelectionHit hit = 11;
+}
+
+enum SelectionMode {
+  SELECTION_MODE_UNSPECIFIED = 0;
+  SELECTION_MODE_REPLACE = 1;
+  SELECTION_MODE_ADD = 2;
+  SELECTION_MODE_TOGGLE = 3;
+}
+
+message SelectionQuery {
+  string viewport_id = 1;
+  float x = 2;
+  float y = 3;
+  repeated SelectionKind mask = 4;
+  optional SelectionMode mode = 5;
+}
+
+message SelectionQueryResult {
+  string viewport_id = 1;
+  uint64 revision = 2;
+  repeated SelectionTarget candidates = 3;
+}
+
+message CameraPatch {
+  string camera_id = 1;
+  optional string node_id = 2;
+  optional float fov = 3;
+  optional float near = 4;
+  optional float far = 5;
+  optional float aspect = 6;
+  Transform3d transform = 7;
+}
+
+message CameraState {
+  string camera_id = 1;
+  Vec3 position = 2;
+  Vec3 target = 3;
+  Vec3 up = 4;
+  float fov = 5;
+  optional float near = 6;
+  optional float far = 7;
+}
+
+message ProjectedBounds {
+  string node_id = 1;
+  Vec2 min = 2;
+  Vec2 max = 3;
+  optional SelectionTarget target = 4;
+}
+
+message GizmoAnchor {
+  string node_id = 1;
+  Vec3 world_position = 2;
+  Vec2 screen_position = 3;
+  optional SelectionTarget target = 4;
+}
+
+message ViewportOverlayPatch {
+  string viewport_id = 1;
+  optional uint64 revision = 2;
+  repeated string selected_node_ids = 3;
+  repeated ProjectedBounds projected_bounds = 4;
+  repeated GizmoAnchor gizmo_anchors = 5;
+  optional string hovered_node_id = 6;
+  repeated SelectionTarget selected_targets = 7;
+  optional SelectionTarget hovered_target = 8;
+}
+
+enum TopologyOperation {
+  TOPOLOGY_OPERATION_UNSPECIFIED = 0;
+  TOPOLOGY_OPERATION_SUBDIVIDE = 1;
+  TOPOLOGY_OPERATION_DECIMATE = 2;
+  TOPOLOGY_OPERATION_BOOLEAN = 3;
+  TOPOLOGY_OPERATION_REMESH = 4;
+  TOPOLOGY_OPERATION_DYNAMIC_ADD = 5;
+  TOPOLOGY_OPERATION_DYNAMIC_COLLAPSE = 6;
+  TOPOLOGY_OPERATION_UV_UNWRAP = 7;
+}
+
+enum TopologyMigrationStatus {
+  TOPOLOGY_MIGRATION_STATUS_UNSPECIFIED = 0;
+  TOPOLOGY_MIGRATION_STATUS_PRESERVED = 1;
+  TOPOLOGY_MIGRATION_STATUS_MIGRATED = 2;
+  TOPOLOGY_MIGRATION_STATUS_INVALIDATED = 3;
+  TOPOLOGY_MIGRATION_STATUS_BLOCKED = 4;
+}
+
+message TopologyMigrationResult {
+  string data_kind = 1;
+  TopologyMigrationStatus status = 2;
+  optional string diagnostic = 3;
+}
+
+message TopologyChangeEvent {
+  string mesh_id = 1;
+  uint64 from_version = 2;
+  uint64 to_version = 3;
+  TopologyOperation operation = 4;
+  bool invalidates_morph_library = 5;
+  bool invalidates_skin_weights = 6;
+  bool invalidates_uv = 7;
+  uint32 vertex_count_before = 8;
+  uint32 vertex_count_after = 9;
+  optional string operation_summary = 10;
+  repeated TopologyMigrationResult migration_results = 11;
+  optional bool invalidates_tangents = 12;
+  optional bool invalidates_bounds = 13;
+  optional bool invalidates_acceleration_structure = 14;
+}
+
+enum ModelingSessionLifecycle {
+  MODELING_SESSION_LIFECYCLE_UNSPECIFIED = 0;
+  MODELING_SESSION_LIFECYCLE_BEGIN = 1;
+  MODELING_SESSION_LIFECYCLE_ACTIVE = 2;
+  MODELING_SESSION_LIFECYCLE_COMMITTED = 3;
+  MODELING_SESSION_LIFECYCLE_CANCELLED = 4;
+}
+
+enum MigrationKind {
+  MIGRATION_KIND_UNSPECIFIED = 0;
+  MIGRATION_KIND_MORPH_RETARGET = 1;
+  MIGRATION_KIND_SKIN_RETARGET = 2;
+  MIGRATION_KIND_UV_REPROJECT = 3;
+}
+
+message ModelingOperationLogEntry {
+  uint64 seq = 1;
+  string operation = 2;
+  string summary = 3;
+  uint64 topology_version = 4;
+}
+
+message ModelingSession {
+  string session_id = 1;
+  string mesh_id = 2;
+  optional string character_id = 3;
+  bool topology_mutable = 4;
+  uint64 topology_version = 5;
+  string before_hash = 6;
+  repeated string affected_flags = 7;
+  repeated ModelingOperationLogEntry op_log = 8;
+  ModelingSessionLifecycle state = 9;
+}
+
+enum VertexBrushPatchEncoding {
+  VERTEX_BRUSH_PATCH_ENCODING_UNSPECIFIED = 0;
+  VERTEX_BRUSH_PATCH_ENCODING_F32_DELTA = 1;
+  VERTEX_BRUSH_PATCH_ENCODING_F16_DELTA = 2;
+  VERTEX_BRUSH_PATCH_ENCODING_QUANTIZED_I16_DELTA = 3;
+}
+
+message VertexBrushPatch {
+  string session_id = 1;
+  string mesh_id = 2;
+  uint64 topology_version = 3;
+  string stroke_id = 4;
+  uint64 seq = 5;
+  VertexBrushPatchEncoding encoding = 6;
+  repeated uint32 sparse_indices = 7;
+  optional uint32 affected_start = 8;
+  optional uint32 affected_count = 9;
+  bytes payload = 10;
+}
+
+message ModelingSessionState {
+  string session_id = 1;
+  optional string character_id = 2;
+  bool topology_mutable = 3;
+  uint64 topology_version = 4;
+  ModelingSessionLifecycle state = 5;
+  repeated MigrationKind pending_migrations = 6;
+  optional string mesh_id = 7;
+  optional string before_hash = 8;
+  repeated ModelingOperationLogEntry op_log = 9;
+}
+
+message SceneDelta {
+  uint64 revision = 1;
+  optional uint64 applied_seq = 2;
+  repeated TransformPatch updated_transforms = 3;
+  repeated MorphWeightsPatch updated_morph_weights = 4;
+  optional AnimationStatePatch animation_state = 5;
+  repeated SceneNodePatch added_nodes = 6;
+  repeated string removed_nodes = 7;
+  repeated HierarchyPatch updated_hierarchy = 8;
+  repeated VisibilityPatch updated_visibility = 9;
+  repeated LayerPatch updated_layers = 10;
+  repeated MaterialPatch updated_materials = 11;
+  repeated AssetReferencePatch updated_asset_references = 12;
+  repeated LightPatch updated_lights = 13;
+  optional CameraState active_camera = 14;
+  repeated CameraPatch updated_cameras = 15;
+  repeated TopologyChangeEvent topology_changes = 16;
+  repeated ModelingSessionState modeling_sessions = 17;
+  optional ViewportOverlayPatch overlay = 18;
+  repeated CharacterMorphWeightsPatch updated_character_morph_weights = 19;
+  repeated CharacterMaterialPatch updated_character_materials = 20;
+  repeated CharacterSkeletonPosePatch updated_skeleton_pose = 21;
+  repeated CharacterOverridePatch character_overrides = 22;
+  optional EnvironmentPatch environment = 23;
+  repeated SelectionTarget selected_targets = 24;
+  repeated EnvironmentDiagnostic environment_diagnostics = 25;
+}
+
+// =============================================================================
+// Viewport and render stream contracts
+// =============================================================================
+
+enum CameraRefKind {
+  CAMERA_REF_KIND_UNSPECIFIED = 0;
+  CAMERA_REF_KIND_SCENE_CAMERA = 1;
+  CAMERA_REF_KIND_EDITOR_CAMERA = 2;
+}
+
+message EditorCameraRig {
+  Vec3 position = 1;
+  Vec3 target = 2;
+  Vec3 up = 3;
+  float fov = 4;
+  optional string mode = 5;
+  optional float near = 6;
+  optional float far = 7;
+}
+
+message ViewportCameraRef {
+  CameraRefKind kind = 1;
+  optional string camera_id = 2;
+  optional EditorCameraRig rig = 3;
+}
+
+enum ViewportRenderMode {
+  VIEWPORT_RENDER_MODE_UNSPECIFIED = 0;
+  VIEWPORT_RENDER_MODE_PBR = 1;
+  VIEWPORT_RENDER_MODE_WIREFRAME = 2;
+  VIEWPORT_RENDER_MODE_UNLIT = 3;
+  VIEWPORT_RENDER_MODE_NORMAL = 4;
+  VIEWPORT_RENDER_MODE_DEPTH = 5;
+  VIEWPORT_RENDER_MODE_LIGHT_COMPLEXITY = 6;
+  VIEWPORT_RENDER_MODE_SHADOW_ATLAS = 7;
+  VIEWPORT_RENDER_MODE_CLAY = 8;
+}
+
+enum ViewportDebugView {
+  VIEWPORT_DEBUG_VIEW_UNSPECIFIED = 0;
+  VIEWPORT_DEBUG_VIEW_ALBEDO = 1;
+  VIEWPORT_DEBUG_VIEW_ROUGHNESS = 2;
+  VIEWPORT_DEBUG_VIEW_METALLIC = 3;
+  VIEWPORT_DEBUG_VIEW_AO = 4;
+  VIEWPORT_DEBUG_VIEW_UV = 5;
+  VIEWPORT_DEBUG_VIEW_OVERDRAW = 6;
+}
+
+enum SceneColorSpace {
+  SCENE_COLOR_SPACE_UNSPECIFIED = 0;
+  SCENE_COLOR_SPACE_SRGB = 1;
+  SCENE_COLOR_SPACE_REC709 = 2;
+  SCENE_COLOR_SPACE_P3 = 3;
+}
+
+enum ToneMapping {
+  TONE_MAPPING_UNSPECIFIED = 0;
+  TONE_MAPPING_ACES = 1;
+  TONE_MAPPING_REINHARD = 2;
+  TONE_MAPPING_NONE = 3;
+}
+
+message ViewportPostProcess {
+  optional bool bloom = 1;
+  optional bool ssao = 2;
+  optional bool taa = 3;
+}
+
+enum ViewportMaterialOverrideKind {
+  VIEWPORT_MATERIAL_OVERRIDE_KIND_UNSPECIFIED = 0;
+  VIEWPORT_MATERIAL_OVERRIDE_KIND_NONE = 1;
+  VIEWPORT_MATERIAL_OVERRIDE_KIND_CLAY = 2;
+  VIEWPORT_MATERIAL_OVERRIDE_KIND_MATCAP = 3;
+}
+
+message ViewportMaterialOverride {
+  ViewportMaterialOverrideKind kind = 1;
+  optional Vec3 color = 2;
+  optional float roughness = 3;
+  optional float metallic = 4;
+  optional bool preserve_alpha = 5;
+}
+
+message ViewportLookDevSettings {
+  ViewportRenderMode render_mode = 1;
+  optional ViewportDebugView debug_view = 2;
+  optional ViewportMaterialOverride material_override = 3;
+  optional bool helper_passes_enabled = 4;
+  optional bool show_grid = 5;
+  optional bool show_skeleton = 6;
+  optional bool show_normals = 7;
+}
+
+message ViewportH264Settings {
+  optional uint32 gop_size = 1;
+  optional string decoder_preference = 2;
+}
+
+enum ViewportWorkMode {
+  VIEWPORT_WORK_MODE_UNSPECIFIED = 0;
+  VIEWPORT_WORK_MODE_EDIT_PARAMETRIC = 1;
+  VIEWPORT_WORK_MODE_EDIT_FREE = 2;
+  VIEWPORT_WORK_MODE_POSE = 3;
+  VIEWPORT_WORK_MODE_RENDER_PREVIEW = 4;
+  VIEWPORT_WORK_MODE_LOOKDEV = 5;
+}
+
+message ViewportDescriptor {
+  string viewport_id = 1;
+  string scene_id = 2;
+  ViewportCameraRef camera_ref = 3;
+  ViewportRenderMode render_mode = 4;
+  optional ViewportDebugView debug_view = 5;
+  ViewportResolution resolution = 6;
+  uint32 fps = 7;
+  SceneColorSpace color_space = 8;
+  ToneMapping tone_mapping = 9;
+  ViewportPostProcess post_process = 10;
+  optional uint32 layer_mask = 11;
+  ViewportWorkMode work_mode = 12;
+  optional bool helper_passes_enabled = 13;
+  optional ViewportLookDevSettings lookdev = 14;
+  optional bool allow_fps_degrade = 15;
+  optional bool allow_quality_degrade = 16;
+  optional ViewportH264Settings h264 = 17;
+}
+
+enum H264Container {
+  H264_CONTAINER_UNSPECIFIED = 0;
+  H264_CONTAINER_H264_ANNEXB = 1;
+  H264_CONTAINER_H264_AVCC = 2;
+}
+
+enum H264FrameHeader {
+  H264_FRAME_HEADER_UNSPECIFIED = 0;
+  H264_FRAME_HEADER_NEKO_H264_V1 = 1;
+}
+
+enum H264InitDataFormat {
+  H264_INIT_DATA_FORMAT_UNSPECIFIED = 0;
+  H264_INIT_DATA_FORMAT_AVCC_RECORD = 1;
+}
+
+message H264InitData {
+  H264InitDataFormat format = 1;
+  string data = 2;
+}
+
+enum AudioCodec {
+  AUDIO_CODEC_UNSPECIFIED = 0;
+  AUDIO_CODEC_PCM_F32LE = 1;
+}
+
+enum AudioFrameHeader {
+  AUDIO_FRAME_HEADER_UNSPECIFIED = 0;
+  AUDIO_FRAME_HEADER_NEKO_PCM_V1 = 1;
+}
+
+message AudioStreamDescriptor {
+  string stream_id = 1;
+  AudioCodec codec = 2;
+  AudioFrameHeader frame_header = 3;
+  uint32 sample_rate = 4;
+  uint32 channels = 5;
+  optional bool is_master_clock = 6;
+}
+
+message RenderStreamDescriptor {
+  string stream_id = 1;
+  string viewport_id = 2;
+  H264Container container = 3;
+  string codec_string = 4;
+  optional string profile = 5;
+  optional string level = 6;
+  H264FrameHeader frame_header = 7;
+  optional H264InitData init_data = 8;
+  uint32 width = 9;
+  uint32 height = 10;
+  uint32 fps = 11;
+  SceneColorSpace color_space = 12;
+  uint32 bit_depth = 13;
+  ToneMapping tone_mapping = 14;
+  optional uint32 gop_size = 15;
+  uint64 initial_revision = 16;
+  optional AudioStreamDescriptor audio_stream = 17;
+  optional string quality_tier = 18;
+  optional bool helper_passes_enabled = 19;
+  optional bool post_process_enabled = 20;
+  optional ViewportRenderMode render_mode = 21;
+  optional ViewportDebugView debug_view = 22;
+  optional ViewportLookDevSettings lookdev = 23;
+  optional uint32 coded_width = 24;
+  optional uint32 coded_height = 25;
+  optional string latency_mode = 26;
+  optional ViewportH264Settings h264 = 27;
+  optional uint32 scheduled_width = 28;
+  optional uint32 scheduled_height = 29;
+  optional float scheduled_fps = 30;
+}
+
+message RenderFrameDiagnostics {
+  optional float gpu_frame_time_ms = 1;
+  optional float encode_time_ms = 2;
+  optional string quality_tier = 3;
+  optional uint32 dropped_frames_since_last = 4;
+  optional float gpu_upload_time_ms = 5;
+  optional string render_path = 6;
+  optional uint64 iosurface_creations = 7;
+  optional uint64 texture_allocations = 8;
+  optional float render_time_ms = 9;
+  optional float convert_time_ms = 10;
+  optional float decode_time_ms = 11;
+  optional float draw_time_ms = 12;
+  optional uint32 queue_depth = 13;
+  optional float gpu_wait_time_ms = 14;
+  optional float decode_submit_to_output_ms = 15;
+  optional uint32 dropped_before_decode = 16;
+  optional uint32 decoded_dropped_before_present = 17;
+  optional float packet_to_presented_ms = 18;
+  optional float present_interval_ms = 19;
+  optional float present_fps = 20;
+  optional float packet_to_decode_submit_ms = 21;
+  optional float packet_to_decode_output_ms = 22;
+  optional float decode_output_to_presented_ms = 23;
+  optional float decode_output_lag_frames = 24;
+  optional float producer_frame_time_ms = 25;
+  optional float stream_submit_time_ms = 26;
+  optional float schedule_lag_ms = 27;
+  optional uint32 skipped_intervals = 28;
+  optional bool presentation_host_limited = 29;
+  optional uint32 webcodecs_decode_queue_size = 30;
+  optional uint32 pending_decode_frames = 31;
+  optional float decode_output_interval_ms = 32;
+  optional uint32 decode_output_burst = 33;
+  optional uint32 stream_width = 34;
+  optional uint32 stream_height = 35;
+  optional uint32 coded_width = 36;
+  optional uint32 coded_height = 37;
+  optional uint32 scheduled_width = 38;
+  optional uint32 scheduled_height = 39;
+  optional float scheduled_fps = 40;
+  optional uint32 gop_size = 41;
+  optional uint64 transport_bitrate_bps = 42;
+  optional string codec_string = 43;
+  optional string codec_profile = 44;
+  optional string codec_level = 45;
+  optional string latency_mode = 46;
+  optional bool post_process_enabled = 47;
+  optional bool helper_passes_enabled = 48;
+  optional uint32 stale_decoded_outputs_dropped = 49;
+  optional ViewportRenderMode render_mode = 50;
+}
+
+message RenderFrameMeta {
+  string stream_id = 1;
+  string viewport_id = 2;
+  uint64 frame_id = 3;
+  uint64 pts_us = 4;
+  uint64 duration_us = 5;
+  bool is_keyframe = 6;
+  uint64 scene_revision = 7;
+  uint64 applied_seq = 8;
+  optional RenderFrameDiagnostics diagnostics = 9;
+  optional string scene_id = 10;
+  double frame_timestamp = 11;
+  repeated double view_transform = 12; // 2D affine [a,b,c,d,tx,ty]
+  optional string projection_json = 13;
+  optional string active_preview_mode = 14;
+  optional double preview_playback_clock_ms = 15;
+}

@@ -1,0 +1,68 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "agent-runtime.perception-routing",
+  "owner": { "kind": "agent-runtime", "id": "perception-routing" },
+  "target": {
+    "kind": "capability",
+    "id": "perception-routing",
+    "contractHash": "sha256:a660bc6814e908a6ddc7534cf957f768e9d7d74583e4c2523949a36e62eb5e5f"
+  },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [
+    {
+      "id": "canonical-default",
+      "settings": {},
+      "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "deepseek-no-native-vision",
+      "selection": "explicit",
+      "chat": { "providerId": "deepseek-chat", "modelId": "deepseek-v4-flash" },
+      "purposes": {
+        "image.generate": { "providerId": "nekoapi-media", "modelId": "gpt-image-2" },
+        "image.understand": { "providerId": "nekoapi-chat", "modelId": "gpt-5.6-luna" }
+      },
+      "configurationHash": "sha256:122329df27a50ad4004406693380c867f40eac431286f155edd119d38981becf"
+    },
+    {
+      "id": "native-vision",
+      "selection": "explicit",
+      "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.5" },
+      "configurationHash": "sha256:930c70d9deb59dd74a0b97d009020e5aae62f04593bc76090c20986097c766fe"
+    }
+  ],
+  "judgeProfiles": [],
+  "fixtures": [
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "external-perception-when-chat-differs",
+      "file": "cases/external-perception-when-chat-differs.json",
+      "group": "canonical",
+      "visibility": "public"
+    },
+    {
+      "id": "native-vision-without-perception-tool",
+      "file": "cases/native-vision-without-perception-tool.json",
+      "group": "boundary",
+      "visibility": "public"
+    }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
+}

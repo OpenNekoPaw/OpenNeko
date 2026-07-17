@@ -1,0 +1,190 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --tools-bg: var(--neko-surface);
+  --tools-elevated: color-mix(in srgb, var(--neko-elevated, var(--tools-bg)) 92%, transparent);
+  --tools-panel: color-mix(in srgb, var(--tools-elevated) 90%, var(--tools-bg) 10%);
+  --tools-border: var(--neko-border, rgba(255, 255, 255, 0.08));
+  --tools-divider: color-mix(in srgb, var(--tools-border) 80%, transparent);
+  --tools-fg: var(--neko-fg);
+  --tools-fg-secondary: var(--neko-fg-secondary);
+  --tools-hover: var(--neko-hover, rgba(255, 255, 255, 0.06));
+  --tools-accent: var(--neko-accent, var(--vscode-button-background, #0e639c));
+  --tools-accent-fg: var(--vscode-button-foreground, #ffffff);
+  --tools-success: var(--vscode-testing-iconPassed, #22c55e);
+  --tools-warning: var(--vscode-editorWarning-foreground, #f59e0b);
+  --tools-danger: var(--vscode-testing-iconFailed, var(--neko-danger, #ef4444));
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--neko-surface);
+  color: var(--neko-fg);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.tools-card {
+  background: var(--tools-panel);
+  border: 1px solid var(--tools-border);
+  border-radius: 12px;
+}
+
+.tools-card-header {
+  background: color-mix(in srgb, var(--tools-elevated) 88%, transparent);
+  border-bottom: 1px solid var(--tools-divider);
+}
+
+.tools-button,
+.tools-button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease,
+    filter 0.15s ease;
+}
+
+.tools-button {
+  background: var(--tools-accent);
+  color: var(--tools-accent-fg);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--tools-accent) 24%, transparent);
+}
+
+.tools-button:hover {
+  filter: brightness(1.06);
+}
+
+.tools-button-secondary {
+  background: color-mix(in srgb, var(--tools-elevated) 88%, transparent);
+  color: var(--tools-fg);
+  border-color: var(--tools-border);
+}
+
+.tools-button-secondary:hover {
+  background: var(--tools-hover);
+}
+
+.tools-button:disabled,
+.tools-button-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+  box-shadow: none;
+}
+
+.tools-input,
+.tools-select {
+  background: var(--tools-elevated);
+  color: var(--tools-fg);
+  border: 1px solid var(--tools-border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.tools-input::placeholder {
+  color: var(--tools-fg-secondary);
+}
+
+.tools-input:focus,
+.tools-select:focus {
+  outline: 2px solid color-mix(in srgb, var(--tools-accent) 30%, transparent);
+  outline-offset: 1px;
+  border-color: var(--tools-accent);
+}
+
+.tools-range {
+  accent-color: var(--tools-accent);
+}
+
+.tools-divider-v {
+  width: 1px;
+  height: 24px;
+  background: var(--tools-divider);
+}
+
+.tools-overlay-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--tools-fg) 12%, transparent);
+  background: color-mix(in srgb, var(--tools-bg) 70%, transparent);
+  color: var(--tools-fg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.tools-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--tools-border);
+  background: color-mix(in srgb, var(--tools-elevated) 88%, transparent);
+  color: var(--tools-fg);
+}
+
+.tools-pill.is-success {
+  background: color-mix(in srgb, var(--tools-success) 16%, transparent);
+  color: var(--tools-success);
+  border-color: color-mix(in srgb, var(--tools-success) 28%, transparent);
+}
+
+.tools-pill.is-warning {
+  background: color-mix(in srgb, var(--tools-warning) 16%, transparent);
+  color: var(--tools-warning);
+  border-color: color-mix(in srgb, var(--tools-warning) 28%, transparent);
+}
+
+.tools-pill.is-danger {
+  background: color-mix(in srgb, var(--tools-danger) 16%, transparent);
+  color: var(--tools-danger);
+  border-color: color-mix(in srgb, var(--tools-danger) 28%, transparent);
+}
+
+.tools-tab {
+  padding: 8px 16px;
+  border-bottom: 2px solid transparent;
+  color: var(--tools-fg-secondary);
+  background: transparent;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.tools-tab:hover {
+  background: var(--tools-hover);
+  color: var(--tools-fg);
+}
+
+.tools-tab.active {
+  border-color: var(--tools-accent);
+  color: var(--tools-accent);
+}
+
+.tools-spinner {
+  border: 2px solid var(--tools-accent);
+  border-top-color: transparent;
+  border-radius: 999px;
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "missing-perception-evidence",
+  "suiteId": "skill.media-quality-review",
+  "caseGroup": "quality",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Review an asset whose structural evidence is valid but required perception evidence is unavailable.",
+    "canonicalPath": ["builtin media-quality-review Skill", "revision-bound evidence", "required evaluator coverage", "Gate decision", "repair plan"],
+    "forbiddenFallback": ["pass from structural evidence alone", "invented perception result", "asset mutation during review"],
+    "observables": [{ "ref": "quality-facts", "kind": "output-contract", "description": "Skill injection and structured quality decision with missing evidence and repair plan.", "required": true }],
+    "expectedResult": "The Skill refuses a pass, records missing perception evidence, and emits a separate repair plan.",
+    "expectedFailure": "A pass, invented evidence, missing issue, or missing repair plan fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "json",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "$media-quality-review Review this supplied evidence without calling tools: target ref asset:fixture-cat, digest sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; structural evaluator is valid; required perception evaluator is unavailable. Return only JSON with decision, issues, missingEvidence, and repairPlan. Do not pass or invent perception." },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+  ],
+  "assertions": [
+    { "id": "skill", "kind": "skill", "identity": { "name": "media-quality-review", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "media-quality-review", "fingerprint": "sha256:560715f76682c590e7f5f380954d5b1f90328a6369f9a8394ebcc4abbda92485" }, "status": "injected", "evidenceRef": "quality-facts" },
+    { "id": "output", "kind": "structured-output", "format": "json", "schemaRef": "schemas/quality-decision.json", "requiredFields": ["decision", "issues", "missingEvidence", "repairPlan"], "evidenceRef": "quality-facts" },
+    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["quality-assessment"], "evidenceRef": "quality-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 120000, "repetitions": 1 }
+}

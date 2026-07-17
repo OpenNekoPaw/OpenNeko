@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <!-- Python: intertwined snakes -->
+  <path d="M8 2C5.5 2 5 3 5 4V6H8.5V7H4C3 7 2 8 2 9.5C2 11 3 12 4 12H5.5" stroke="#3776AB" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M8 14C10.5 14 11 13 11 12V10H7.5V9H12C13 9 14 8 14 6.5C14 5 13 4 12 4H10.5" stroke="#EAB308" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="6.5" cy="4" r="0.6" fill="#3776AB"/>
+  <circle cx="9.5" cy="12" r="0.6" fill="#EAB308"/>
+</svg>

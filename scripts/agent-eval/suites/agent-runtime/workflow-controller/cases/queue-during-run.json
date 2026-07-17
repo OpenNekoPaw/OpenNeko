@@ -1,0 +1,37 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "queue-during-run",
+  "suiteId": "agent-runtime.workflow-controller",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Submit follow-up requests while an Agent turn is running and execute them in queue order.",
+    "canonicalPath": ["TUI App session owner", "message.submit", "TUI input queue", "AgentSession", "session.facts"],
+    "forbiddenFallback": ["sequential direct Agent calls", "alternate queue", "direct Agent turn runner"],
+    "observables": [{ "ref": "workflow-facts", "kind": "runtime-fact", "description": "Controller steps, queue snapshots, ordered turns, and terminal idle facts.", "required": true }],
+    "expectedResult": "The follow-up is queued during the active turn, drains in order, and the session reaches terminal idle.",
+    "expectedFailure": "A non-queued follow-up, reordered turn, incomplete queue evidence, or non-idle terminal state fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "draft", "kind": "submit", "prompt": "Write a detailed six-section production outline. Keep each section distinct." },
+    { "id": "review", "kind": "queue", "prompt": "Review the preceding outline and list exactly three concrete corrections.", "afterStepId": "draft" },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "workflow-facts" },
+    { "id": "queued", "kind": "queue-state", "stepId": "review", "status": "queued", "minPending": 1, "evidenceRef": "workflow-facts" },
+    { "id": "drained", "kind": "queue-state", "stepId": "idle", "status": "drained", "evidenceRef": "workflow-facts" },
+    { "id": "order", "kind": "process-order", "events": [
+      { "kind": "workflow-step", "stepId": "draft", "method": "message.submit" },
+      { "kind": "workflow-step", "stepId": "review", "method": "message.submit" },
+      { "kind": "turn", "role": "assistant" }
+    ], "evidenceRef": "workflow-facts" },
+    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "backgroundTasksIdle", "taskResultObservationIdle", "continuationQueueIdle"], "evidenceRef": "workflow-facts" },
+    { "id": "answer", "kind": "final-answer", "mode": "non-empty", "evidenceRef": "workflow-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

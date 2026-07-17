@@ -1,0 +1,93 @@
+[workspace]
+resolver = "2"
+members = [
+    "packages/engine-types",
+    "packages/engine-codec",
+    "packages/engine-audio",
+    "packages/engine-gpu",
+    "packages/engine-kernel",
+    "packages/host-api",
+    "packages/host-http",
+    "packages/host-napi",
+    "packages/host-cli",
+    "packages/runtime-media",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+
+[workspace.dependencies]
+# GPU - wgpu for cross-platform GPU compute
+wgpu = { version = "0.19", features = ["metal"] }
+wgpu-hal = { version = "0.19", features = ["metal"] }
+wgpu-core = { version = "0.19" }
+pollster = "0.3"
+
+# FFmpeg bindings (dynamic linking via FFMPEG_DIR)
+ffmpeg-next = { version = "8.1" }
+ffmpeg-sys-next = { version = "8.1" }
+
+# Async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "net", "io-util", "fs", "signal"] }
+
+# HTTP/WebSocket server
+axum = { version = "0.7", features = ["ws"] }
+tower-http = { version = "0.5", features = ["cors"] }
+hyper = { version = "1.0", features = ["full"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+bytes = "1.5"
+async-stream = "0.3"
+async-trait = "0.1"
+tokio-util = { version = "0.7", features = ["io"] }
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# System monitoring
+sysinfo = "0.30"
+
+# UUID generation
+uuid = { version = "1.6", features = ["v4"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Logging & Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-tracy = { version = "0.11", default-features = false, features = ["enable"] }
+tracy-client = { version = "0.17", default-features = false }
+
+# Utilities
+bytemuck = { version = "1.14", features = ["derive"] }
+semver = "1"
+crossbeam-channel = "0.5"
+indicatif = "0.17"
+
+# Base64 encoding
+base64 = "0.22"
+
+# Image encoding - pure Rust JPEG encoder
+image = { version = "0.25", default-features = false, features = ["hdr", "jpeg", "png"] }
+
+# Text rendering - font shaping, layout, rasterization
+cosmic-text = "0.12"
+
+# Loudness measurement - ITU-R BS.1770-4
+ebur128 = "0.1"
+
+[profile.release]
+lto = true
+opt-level = 3
+
+[profile.dev]
+opt-level = 1

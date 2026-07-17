@@ -1,0 +1,187 @@
+/**
+ * Player styles - shared CSS for video and audio preview
+ *
+ * Uses VSCode CSS variables for theme integration.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =======================
+   Theme Variables - macOS Design Tokens
+   ================= */
+
+:root {
+  /* Dark theme (default) */
+  --neko-glass: rgba(255, 255, 255, 0.08);
+  --neko-glass-hover: rgba(255, 255, 255, 0.12);
+  --neko-glass-active: rgba(255, 255, 255, 0.16);
+  --neko-surface: rgba(255, 255, 255, 0.05);
+  --neko-surface-hover: rgba(255, 255, 255, 0.08);
+
+  /* Unified preview variables */
+  --neko-preview-primary: #0A84FF;
+  --neko-preview-primary-hover: #409CFF;
+  --neko-preview-primary-active: #0070E0;
+  --neko-preview-text-primary: rgba(255, 255, 255, 0.9);
+  --neko-preview-text-secondary: rgba(255, 255, 255, 0.6);
+  --neko-preview-text-tertiary: rgba(255, 255, 255, 0.4);
+  --neko-preview-surface: rgba(255, 255, 255, 0.06);
+}
+
+/* Light theme override */
+body.vscode-light,
+body[data-vscode-theme-kind="vscode-light"],
+body[data-vscode-theme-kind="vscode-high-contrast-light"] {
+  --neko-glass: rgba(0, 0, 0, 0.05);
+  --neko-glass-hover: rgba(0, 0, 0, 0.08);
+  --neko-glass-active: rgba(0, 0, 0, 0.12);
+  --neko-surface: rgba(0, 0, 0, 0.03);
+  --neko-surface-hover: rgba(0, 0, 0, 0.06);
+
+  --neko-preview-primary: #007AFF;
+  --neko-preview-primary-hover: #0051D5;
+  --neko-preview-primary-active: #004FC7;
+  --neko-preview-text-primary: rgba(0, 0, 0, 0.9);
+  --neko-preview-text-secondary: rgba(0, 0, 0, 0.6);
+  --neko-preview-text-tertiary: rgba(0, 0, 0, 0.4);
+  --neko-preview-surface: rgba(0, 0, 0, 0.04);
+}
+
+/* High contrast theme override */
+body.vscode-high-contrast,
+body[data-vscode-theme-kind="vscode-high-contrast"] {
+  --neko-glass: rgba(255, 255, 255, 0.15);
+  --neko-glass-hover: rgba(255, 255, 255, 0.25);
+  --neko-glass-active: rgba(255, 255, 255, 0.35);
+  --neko-surface: rgba(255, 255, 255, 0.1);
+  --neko-surface-hover: rgba(255, 255, 255, 0.2);
+
+  --neko-preview-primary: #3794FF;
+  --neko-preview-primary-hover: #6CB0FF;
+  --neko-preview-primary-active: #1E7FE0;
+  --neko-preview-text-primary: #FFFFFF;
+  --neko-preview-text-secondary: rgba(255, 255, 255, 0.8);
+  --neko-preview-text-tertiary: rgba(255, 255, 255, 0.6);
+}
+
+/* Reset */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+	background: var(--vscode-editor-background, #1e1e1e);
+	color: var(--vscode-editor-foreground, #cccccc);
+	font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, sans-serif);
+	font-size: var(--vscode-font-size, 13px);
+}
+
+#root {
+	position: fixed;
+	inset: 0;
+	overflow: hidden;
+}
+
+/* ==========================================================================
+   Audio Player — Utility classes for features Tailwind cannot express
+   ========================================================================== */
+
+@layer components {
+	/* Gradient background with theme-derived colors */
+	.neko-audio-bg {
+		--neko-preview-bg: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 85%, #000);
+		--neko-preview-surface: color-mix(in srgb, var(--vscode-editor-background, #1e1e1e) 70%, #fff 5%);
+		--neko-preview-accent: var(--vscode-button-background, #0e639c);
+		--neko-preview-accent-hover: var(--vscode-button-hoverBackground, #1177bb);
+		--neko-preview-gradient-start: color-mix(in srgb, var(--vscode-button-background, #0e639c) 25%, var(--vscode-editor-background, #1e1e1e));
+		--neko-preview-gradient-end: var(--neko-preview-bg);
+		background: linear-gradient(180deg, var(--neko-preview-gradient-start) 0%, var(--neko-preview-gradient-end) 50%);
+	}
+
+	/* Cover placeholder gradient (uses accent color) */
+	.neko-cover-gradient {
+		background: linear-gradient(135deg,
+			color-mix(in srgb, var(--neko-preview-accent) 60%, #000) 0%,
+			color-mix(in srgb, var(--neko-preview-accent) 30%, #000) 100%);
+	}
+
+	/* Lyrics fade mask (top/bottom gradient) */
+	.neko-fade-mask {
+		-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+		mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+	}
+
+	/* Hide scrollbar but keep scrollable */
+	.neko-scrollbar-hide::-webkit-scrollbar {
+		display: none;
+	}
+	.neko-scrollbar-hide {
+		-ms-overflow-style: none;
+		scrollbar-width: none;
+	}
+
+	/* Range slider (macOS style) */
+	.neko-slider {
+		-webkit-appearance: none;
+		appearance: none;
+		height: 4px;
+		border-radius: 2px;
+		outline: none;
+		cursor: pointer;
+	}
+	.neko-slider::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: var(--neko-preview-text-primary, #fff);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+		cursor: pointer;
+	}
+	.neko-slider::-moz-range-thumb {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: var(--neko-preview-text-primary, #fff);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+		border: none;
+		cursor: pointer;
+	}
+
+	/* Progress bar track with color-mix background */
+	.neko-progress-track-bg {
+		background: color-mix(in srgb, var(--neko-preview-text-secondary, #999) 20%, transparent);
+	}
+
+	/* Speed button border with color-mix */
+	.neko-speed-border {
+		border: 1px solid color-mix(in srgb, var(--neko-preview-text-secondary, #999) 25%, transparent);
+	}
+
+	/* View tabs background with color-mix */
+	.neko-tabs-bg {
+		background: color-mix(in srgb, var(--neko-preview-text-secondary, #999) 10%, transparent);
+	}
+
+	/* Volume slider background with color-mix */
+	.neko-volume-track-bg {
+		background: color-mix(in srgb, var(--neko-preview-text-secondary, #999) 25%, transparent);
+	}
+}
+
+/* Cover pulse animation */
+@keyframes neko-cover-pulse {
+	0%, 100% { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2); }
+	50% { box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.3); }
+}

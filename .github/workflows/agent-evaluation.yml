@@ -1,0 +1,115 @@
+name: Agent Evaluation Functional
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.agents/skills/**'
+      - '.codex/skills/**'
+      - 'apps/neko-tui/**'
+      - 'packages/neko-agent/**'
+      - 'packages/neko-skills/src/builtins/**'
+      - 'scripts/agent-eval/**'
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Indexed v2 suite id for a trusted focused run
+        required: true
+        default: agent-runtime.single-message-tui
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-evaluation-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  focused:
+    name: Trusted Focused Agent Evaluation
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:agent:eval
+      - run: pnpm --filter @neko/app-tui build
+      - name: Configure trusted Agent profile
+        env:
+          NEKO_AGENT_EVAL_CONFIG_TOML: ${{ secrets.NEKO_AGENT_EVAL_CONFIG_TOML }}
+        run: |
+          if [ -n "${NEKO_AGENT_EVAL_CONFIG_TOML}" ]; then
+            mkdir -p "${HOME}/.neko"
+            printf '%s' "${NEKO_AGENT_EVAL_CONFIG_TOML}" > "${HOME}/.neko/config.toml"
+            chmod 600 "${HOME}/.neko/config.toml"
+          fi
+      - name: Run trusted focused cases
+        env:
+          NEKO_API_KEY: ${{ secrets.NEKO_AGENT_EVAL_API_KEY }}
+          NEKO_AGENT_EVAL_JUDGE_ENDPOINT: ${{ secrets.NEKO_AGENT_EVAL_JUDGE_ENDPOINT }}
+          NEKO_AGENT_EVAL_JUDGE_API_KEY: ${{ secrets.NEKO_AGENT_EVAL_JUDGE_API_KEY }}
+          NEKO_DEBUG_COMMAND: node apps/neko-tui/dist/main.js
+          SELECTED_SUITE: ${{ inputs.suite }}
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            node scripts/agent-eval/ci-run.mjs --mode focused --suite "${SELECTED_SUITE}"
+          else
+            node scripts/agent-eval/ci-run.mjs --mode focused --base-sha "${BASE_SHA}" --head-sha "${HEAD_SHA}"
+          fi
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: agent-evaluation-focused
+          path: reports/agent-eval/
+          retention-days: 14
+
+  nightly:
+    name: Trusted Nightly Agent Evaluation Matrix
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Enable Corepack
+        run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:agent:eval
+      - run: pnpm --filter @neko/app-tui build
+      - name: Configure trusted Agent profile
+        env:
+          NEKO_AGENT_EVAL_CONFIG_TOML: ${{ secrets.NEKO_AGENT_EVAL_CONFIG_TOML }}
+        run: |
+          if [ -n "${NEKO_AGENT_EVAL_CONFIG_TOML}" ]; then
+            mkdir -p "${HOME}/.neko"
+            printf '%s' "${NEKO_AGENT_EVAL_CONFIG_TOML}" > "${HOME}/.neko/config.toml"
+            chmod 600 "${HOME}/.neko/config.toml"
+          fi
+      - name: Run repeated nightly matrix
+        env:
+          NEKO_API_KEY: ${{ secrets.NEKO_AGENT_EVAL_API_KEY }}
+          NEKO_AGENT_EVAL_JUDGE_ENDPOINT: ${{ secrets.NEKO_AGENT_EVAL_JUDGE_ENDPOINT }}
+          NEKO_AGENT_EVAL_JUDGE_API_KEY: ${{ secrets.NEKO_AGENT_EVAL_JUDGE_API_KEY }}
+          NEKO_DEBUG_COMMAND: node apps/neko-tui/dist/main.js
+        run: node scripts/agent-eval/ci-run.mjs --mode nightly --repetitions 3
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: agent-evaluation-nightly
+          path: reports/agent-eval/
+          retention-days: 14

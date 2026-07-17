@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "required": ["decision", "issues", "missingEvidence", "repairPlan"],
+  "additionalProperties": false,
+  "properties": {
+    "decision": { "type": "string", "enum": ["fail", "manual-review"] },
+    "issues": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "missingEvidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "repairPlan": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+  }
+}

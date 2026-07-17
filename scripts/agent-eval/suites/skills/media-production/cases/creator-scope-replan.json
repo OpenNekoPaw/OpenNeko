@@ -1,0 +1,33 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "creator-scope-replan",
+  "suiteId": "skill.media-production",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Revise a creator-review plan after a material style, technique, cost, and delivery change without executing production side effects.",
+    "canonicalPath": ["TUI Plan execution mode", "current screenplay and plan.md", "creator feedback turn", "revised approval scope", "ordinary Markdown content"],
+    "forbiddenFallback": ["old approval reuse", "media generation", "project mutation", "Plan-to-Apply compiler", "IDC transition"],
+    "observables": [{ "ref": "replan-facts", "kind": "runtime-fact", "description": "Two canonical turns, updated approval content, no production Tool, and no retired runtime references.", "required": true }],
+    "expectedResult": "The final review marks the requested generative-video and 4K delivery change as material and requires renewed creator approval.",
+    "expectedFailure": "Executing media, treating the old approval as valid, or omitting the changed scope fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "plan-markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "initial", "kind": "submit", "prompt": "$media-production 读取 @screenplay.fountain 和 @plan.md\n先给出二维分层动画、1080p、低成本交付的创作者审批摘要，不执行任何生成或项目修改。" },
+    { "id": "initial-idle", "kind": "wait-for-idle", "timeoutMs": 180000 },
+    { "id": "material-change", "kind": "submit", "prompt": "创作者现在要求改为生成式视频，核心风格改成写实恐怖，预算提高到高档，并交付 4K 电影母版。基于当前文件修订审批范围，明确旧审批摘要失效并需要重新审批；不要执行副作用。" },
+    { "id": "final-idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "skill", "kind": "skill", "identity": { "name": "media-production", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "media-production", "fingerprint": "sha256:48049d177c8262a3f5526d15342c0696137be8516509a41c5c8f37ea02e45592" }, "status": "injected", "evidenceRef": "replan-facts" },
+    { "id": "output", "kind": "structured-output", "format": "markdown", "requiredFields": ["生成式视频", "写实恐怖", "高", "4K", "旧审批", "重新审批", "交付"], "locale": "zh-cn", "evidenceRef": "replan-facts" },
+    { "id": "no-image", "kind": "tool-call", "name": "GenerateImage", "status": "absent", "evidenceRef": "replan-facts" },
+    { "id": "no-video", "kind": "tool-call", "name": "GenerateVideo", "status": "absent", "evidenceRef": "replan-facts" },
+    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["idc-stage", "idc-run", "stage-persona", "Draft", "ExecutionPlan", "legacy-workflow-runtime"], "evidenceRef": "replan-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 360000, "repetitions": 1 }
+}

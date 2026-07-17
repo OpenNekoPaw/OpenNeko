@@ -1,0 +1,96 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "conversation-persistence-resume",
+  "suiteId": "agent-runtime.workflow-controller",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Complete a TUI turn, close its session owner, resume the same conversation, and continue with its persisted history.",
+    "canonicalPath": [
+      "message.submit",
+      "session.waitForIdle",
+      "session.dispose",
+      "session.resume",
+      "Pi Session reopen and buildContext",
+      "SQLite conversation catalog",
+      "message.submit"
+    ],
+    "forbiddenFallback": [
+      "conversations-index.json",
+      "VS Code Memento conversation authority",
+      "in-memory session reuse",
+      "new unrelated conversation"
+    ],
+    "observables": [
+      {
+        "ref": "turn-facts",
+        "kind": "runtime-fact",
+        "description": "The resumed TUI owner reports Pi Session authority, SQLite catalog, matching conversation identity, and restored history count before continuation.",
+        "required": true
+      }
+    ],
+    "expectedResult": "A new TUI App/session owner restores the same conversation from Pi Session through the user-level SQLite catalog and completes a continuation turn.",
+    "expectedFailure": "A missing catalog row, non-Pi record source, changed conversation identity, empty restored history, runtime error, or non-idle terminal state fails visibly."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "checkpoint",
+      "kind": "submit",
+      "prompt": "Reply with one concise sentence confirming that this is the persistence checkpoint."
+    },
+    { "id": "checkpoint-idle", "kind": "wait-for-idle", "timeoutMs": 120000 },
+    { "id": "resume", "kind": "resume", "conversationRef": "current" },
+    {
+      "id": "continue",
+      "kind": "submit",
+      "prompt": "Reply with one concise sentence confirming that the resumed conversation can continue."
+    },
+    { "id": "continued-idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "turn-facts" },
+    { "id": "pi-runtime", "kind": "pi-runtime", "implementation": "pi-agent-core", "transcriptAuthority": "pi-session", "productMetadataAuthority": "sqlite", "purpose": "agent.main", "workspaceLocatorKind": "virtual", "turnDurability": "durable", "evidenceRef": "turn-facts" },
+    { "id": "turn", "kind": "canonical-turn", "evidenceRef": "turn-facts" },
+    {
+      "id": "persistence",
+      "kind": "conversation-persistence",
+      "authority": "pi-session",
+      "catalog": "sqlite",
+      "databaseScope": "user-global",
+      "resumeStatus": "restored",
+      "recordSource": "pi-session",
+      "minRestoredMessages": 2,
+      "evidenceRef": "turn-facts"
+    },
+    {
+      "id": "recovered",
+      "kind": "recovery",
+      "resumeStepId": "resume",
+      "submitStepId": "continue",
+      "idleStepId": "continued-idle",
+      "evidenceRef": "turn-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": [
+        "turnIdle",
+        "backgroundTasksIdle",
+        "taskResultObservationIdle",
+        "continuationQueueIdle"
+      ],
+      "evidenceRef": "turn-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "non-empty",
+      "evidenceRef": "turn-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 240000, "repetitions": 1 }
+}

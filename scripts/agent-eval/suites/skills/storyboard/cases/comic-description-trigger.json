@@ -1,0 +1,90 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "comic-description-trigger",
+  "suiteId": "skill.storyboard",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Trigger the canonical Storyboard Skill from a comic description and produce reviewable Markdown without naming the Skill.",
+    "canonicalPath": [
+      "semantic Skill discovery",
+      "storyboard lifecycle trigger",
+      "prompt composition",
+      "flexible Markdown plan"
+    ],
+    "forbiddenFallback": [
+      "retired comic-to-storyboard Skill",
+      "Skill name-only precedence",
+      "structured Canvas Storyboard fallback"
+    ],
+    "observables": [
+      {
+        "ref": "skill-facts",
+        "kind": "runtime-fact",
+        "description": "Canonical Storyboard trigger and composition facts.",
+        "required": true
+      },
+      {
+        "ref": "output-contract",
+        "kind": "output-contract",
+        "description": "Storyboard table fields and final output.",
+        "required": true
+      },
+      {
+        "ref": "no-fallback",
+        "kind": "runtime-fact",
+        "description": "Retired Skill identity was not observed.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Semantic discovery activates only the canonical Storyboard Skill and produces reviewable Markdown with source trace and uncertainties.",
+    "expectedFailure": "Missing trigger/composition, legacy activation, or structured fallback fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "根据漫画页描述生成可审阅的 Markdown 分镜初稿，记录来源和证据限制，不要创建结构化 Canvas 节点：第1格，夜雨中的黑发青年推开废弃车站铁门并环顾空站台；第2格，他发现远处蓝色信号灯正在闪烁。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "storyboard",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "storyboard",
+        "fingerprint": "sha256:ab73de988b98b22a9b2598de923c56999abb70ef1cf4bb97c580fabd3b54d719"
+      },
+      "status": "injected",
+      "evidenceRef": "skill-facts"
+    },
+    {
+      "id": "table",
+      "kind": "structured-output",
+      "format": "table",
+      "requiredFields": ["scene", "shot", "imagePrompt", "videoPrompt"],
+      "locale": "zh-cn",
+      "evidenceRef": "output-contract"
+    },
+    {
+      "id": "fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "comic-to-storyboard",
+        "canvas.createStoryboardFromMarkdown",
+        "canvas.ingestMarkdown"
+      ],
+      "evidenceRef": "no-fallback"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

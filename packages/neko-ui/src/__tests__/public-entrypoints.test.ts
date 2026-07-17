@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+import * as creative from '../creative';
+import * as foundation from '../foundation';
+import * as hooks from '../hooks';
+import * as icons from '../icons';
+import * as keyboard from '../keyboard';
+import * as markdown from '../markdown';
+import * as primitives from '../primitives';
+import * as testUtils from '../test-utils';
+import * as ui from '../index';
+import * as viewport from '../viewport';
+import * as workbench from '../workbench';
+
+describe('@neko/ui public entrypoints', () => {
+  it('keeps existing viewport exports available through the canonical entry', () => {
+    expect(viewport.ViewportShell).toBe(ui.ViewportShell);
+    expect(viewport.OverlayRenderer).toBe(ui.OverlayRenderer);
+    expect(viewport.ViewportToolbar).toBe(ui.ViewportToolbar);
+    expect(viewport.ViewportPredictionLayer).toBe(ui.ViewportPredictionLayer);
+    expect(viewport.bridgeRenderFrameMetaToViewportFrameMeta).toBe(
+      ui.bridgeRenderFrameMetaToViewportFrameMeta,
+    );
+  });
+
+  it('exposes new UI system subpath surfaces', () => {
+    expect(primitives).toBeDefined();
+    expect(creative.DEFAULT_TREE_VIEW_VIRTUALIZATION.threshold).toBe(200);
+    expect(creative.assertNever).toBeTypeOf('function');
+    expect(creative.TimelineRuler).toBe(ui.TimelineRuler);
+    expect(creative.KeyframeTimeline).toBe(ui.KeyframeTimeline);
+    expect(creative.SeekBar).toBe(ui.SeekBar);
+    expect(creative.PanelSection).toBe(ui.PanelSection);
+    expect(creative.PropertyRow).toBe(ui.PropertyRow);
+    expect(creative.AxisGroup).toBe(ui.AxisGroup);
+    expect(creative.NumberPropertyRow).toBe(ui.NumberPropertyRow);
+    expect(creative.SliderPropertyRow).toBe(ui.SliderPropertyRow);
+    expect(creative.ColorPropertyRow).toBe(ui.ColorPropertyRow);
+    expect(creative.SelectPropertyRow).toBe(ui.SelectPropertyRow);
+    expect(creative.SchemaPropertyRow).toBe(ui.SchemaPropertyRow);
+    expect(primitives.Checkbox).toBe(ui.Checkbox);
+    expect(primitives.Switch).toBe(ui.Switch);
+    expect(primitives.Stepper).toBe(ui.Stepper);
+    expect(primitives.PositionedContextMenu).toBe(ui.PositionedContextMenu);
+    expect(primitives.buildMenuSection).toBe(ui.buildMenuSection);
+    expect(primitives.SegmentedControl).toBe(ui.SegmentedControl);
+    expect(icons.toCodiconClassName('play')).toBe('codicon codicon-play');
+    expect(hooks.useResizable).toBeTypeOf('function');
+    expect(workbench.CreativeWorkbenchShell).toBe(ui.CreativeWorkbenchShell);
+    expect(workbench.CreativeLeftRail).toBe(ui.CreativeLeftRail);
+    expect(workbench.MainPanelControlLayer).toBe(ui.MainPanelControlLayer);
+    expect(workbench.EditorWorkbenchShell).toBe(ui.EditorWorkbenchShell);
+    expect(workbench.WorkbenchActivityBar).toBe(ui.WorkbenchActivityBar);
+    expect(workbench.WorkbenchEditorTabs).toBe(ui.WorkbenchEditorTabs);
+    expect(workbench.WorkbenchListCard).toBe(ui.WorkbenchListCard);
+    expect(workbench.WorkbenchThumbnailStrip).toBe(ui.WorkbenchThumbnailStrip);
+    expect(workbench.CreativeHostAdapterFrame).toBe(ui.CreativeHostAdapterFrame);
+    expect(workbench).toHaveProperty('CreativeWorkbenchShell');
+    expect(workbench).toHaveProperty('EditorWorkbenchShell');
+    expect(workbench).toHaveProperty('CreativeHostAdapterFrame');
+    expect(ui.ResizeHandle).toBeTypeOf('function');
+    expect(testUtils.hasAccessibleName).toBeTypeOf('function');
+    expect(keyboard.KeyboardBoundary).toBe(ui.KeyboardBoundary);
+    expect(keyboard.isEditableTarget).toBe(ui.isEditableTarget);
+    expect(keyboard.useKeyboardDispatcher).toBe(ui.useKeyboardDispatcher);
+    expect(foundation.WebviewFoundationProvider).toBe(ui.WebviewFoundationProvider);
+    expect(foundation.createWebviewFoundation).toBe(ui.createWebviewFoundation);
+    expect(markdown.InlineMarkdownEditor).toBe(ui.InlineMarkdownEditor);
+    expect(markdown.MarkdownInlineText).toBe(ui.MarkdownInlineText);
+    expect(markdown.MarkdownGenerationPromptParts).toBe(ui.MarkdownGenerationPromptParts);
+    expect(markdown.MarkdownDiagnostics).toBe(ui.MarkdownDiagnostics);
+    expect(markdown.useMarkdownProjection).toBe(ui.useMarkdownProjection);
+  });
+});

@@ -1,0 +1,38 @@
+[package]
+name = "neko-host-http"
+version.workspace = true
+edition.workspace = true
+description = "HTTP/WebSocket server for Neko Engine - RESTful API and streaming"
+license.workspace = true
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+# Engine API
+neko-host-api = { path = "../host-api" }
+neko-engine-kernel = { path = "../engine-kernel" }
+neko-engine-types = { path = "../engine-types" }
+
+# HTTP framework
+axum = { workspace = true, features = ["ws"] }
+tower-http = { workspace = true, features = ["cors"] }
+
+# Async runtime
+tokio.workspace = true
+tokio-util.workspace = true
+
+# UUID generation
+uuid.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Logging
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros"] }
+tempfile = "3"
+image = { workspace = true, features = ["hdr"] }

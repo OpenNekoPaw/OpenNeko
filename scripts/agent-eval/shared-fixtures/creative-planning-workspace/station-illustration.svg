@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect id="night-sky" width="1280" height="720" fill="#101827" />
+  <g id="station-background" fill="#263244">
+    <rect x="0" y="420" width="1280" height="300" />
+    <rect x="60" y="130" width="1160" height="42" />
+    <rect x="110" y="172" width="28" height="300" />
+    <rect x="1142" y="172" width="28" height="300" />
+  </g>
+  <g id="unlit-train" fill="#18202d" stroke="#526176" stroke-width="8">
+    <rect x="655" y="245" width="515" height="250" rx="18" />
+    <rect x="700" y="290" width="155" height="125" />
+    <rect x="900" y="290" width="155" height="125" />
+  </g>
+  <g id="mara" stroke="#0b0f16" stroke-width="14" stroke-linecap="round">
+    <circle cx="360" cy="310" r="48" fill="#c8b3a7" />
+    <path d="M360 360 L350 535 M350 535 L292 650 M350 535 L410 650 M350 415 L270 500 M350 415 L425 475" />
+  </g>
+  <g id="red-umbrella" fill="#a72d3f" stroke="#0b0f16" stroke-width="10">
+    <path d="M190 300 Q300 160 430 300 Z" />
+    <path d="M310 300 L310 545 Q310 585 350 585" fill="none" />
+  </g>
+  <g id="platform-clock" fill="#d9e1ea" stroke="#101827" stroke-width="8">
+    <circle cx="565" cy="150" r="65" />
+    <path d="M565 150 L535 118 M565 150 L605 170" />
+  </g>
+  <g id="rain" stroke="#8aa7c4" stroke-width="3" opacity="0.75">
+    <path d="M90 70 L65 145 M180 40 L155 115 M290 70 L265 145 M430 35 L405 110 M735 55 L710 130 M850 40 L825 115 M1010 65 L985 140 M1190 35 L1165 110" />
+  </g>
+</svg>

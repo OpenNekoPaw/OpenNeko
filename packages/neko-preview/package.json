@@ -1,0 +1,256 @@
+{
+  "name": "neko-preview",
+  "displayName": "%neko.preview.displayName%",
+  "description": "%neko.preview.description%",
+  "version": "0.0.1",
+  "publisher": "neko",
+  "l10n": "./l10n",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neko/creative-suite"
+  },
+  "engines": {
+    "vscode": "^1.128.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "video",
+    "audio",
+    "preview",
+    "media",
+    "player",
+    "pdf",
+    "epub",
+    "cbz",
+    "docx",
+    "document"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onCommand:neko.preview.revealDocumentLocator"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "epub",
+        "extensions": [
+          ".epub"
+        ]
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "neko.videoPreview",
+        "displayName": "%neko.preview.videoPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.{mp4,mov,avi,mkv,webm,m4v,ts,flv,wmv}"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.audioPreview",
+        "displayName": "%neko.preview.audioPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.{mp3,wav,ogg,flac,aac,m4a,wma,opus}"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.preview.panoramicImage",
+        "displayName": "%neko.preview.panoramicImage.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.{jpg,jpeg,png,webp,hdr,exr}"
+          }
+        ],
+        "priority": "option"
+      },
+      {
+        "viewType": "neko.preview.panoramicVideo",
+        "displayName": "%neko.preview.panoramicVideo.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.{mp4,mov,mkv,webm,m4v}"
+          }
+        ],
+        "priority": "option"
+      },
+      {
+        "viewType": "neko.pdfPreview",
+        "displayName": "%neko.preview.pdfPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.pdf"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.cbzPreview",
+        "displayName": "%neko.preview.cbzPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.cbz"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.epubPreview",
+        "displayName": "%neko.preview.epubPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.epub"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "neko.docxPreview",
+        "displayName": "%neko.preview.docxPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.docx"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "neko.preview.openVideo",
+        "title": "%neko.preview.openVideo.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openAudio",
+        "title": "%neko.preview.openAudio.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openPdf",
+        "title": "%neko.preview.openPdf.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openCbz",
+        "title": "%neko.preview.openCbz.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openEpub",
+        "title": "%neko.preview.openEpub.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openDocx",
+        "title": "%neko.preview.openDocx.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openPanoramicImage",
+        "title": "%neko.preview.openPanoramicImage.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openPanoramicVideo",
+        "title": "%neko.preview.openPanoramicVideo.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.preview.openBestPanoramic",
+        "title": "%neko.preview.openBestPanoramic.title%",
+        "category": "Neko Preview"
+      },
+      {
+        "command": "neko.epub.goToChapter",
+        "title": "%neko.preview.goToChapter.title%",
+        "category": "Neko Preview"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "neko.epubOutline",
+          "name": "%neko.preview.epubOutline.name%",
+          "when": "neko.epubEditorActive"
+        }
+      ]
+    },
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "neko.preview.openPanoramicImage",
+          "group": "navigation@50",
+          "when": "resourceExtname =~ /\\.(jpg|jpeg|png|webp|hdr|exr)$/i"
+        },
+        {
+          "command": "neko.preview.openPanoramicVideo",
+          "group": "navigation@51",
+          "when": "resourceExtname =~ /\\.(mp4|mov|mkv|webm|m4v)$/i"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "neko.preview.openPanoramicImage",
+          "group": "navigation@50",
+          "when": "resourceExtname =~ /\\.(jpg|jpeg|png|webp|hdr|exr)$/i"
+        },
+        {
+          "command": "neko.preview.openPanoramicVideo",
+          "group": "navigation@51",
+          "when": "resourceExtname =~ /\\.(mp4|mov|mkv|webm|m4v)$/i"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "%neko.preview.config.title%",
+      "properties": {
+        "neko.preview.viewer.panoramic.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "%neko.preview.viewer.panoramic.enabled.description%"
+        },
+        "neko.preview.viewer.panoramic.video": {
+          "type": "boolean",
+          "default": true,
+          "description": "%neko.preview.viewer.panoramic.video.description%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "build": "pnpm run compile:extension && pnpm run copy:webview",
+    "compile": "pnpm run compile:webview && pnpm run compile:extension && pnpm run copy:webview",
+    "compile:extension": "esbuild ./packages/extension/src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "compile:webview": "cd packages/webview && pnpm exec vite build",
+    "copy:webview": "rm -rf dist/webview && mkdir -p dist/webview/assets && find packages/webview/dist -maxdepth 1 -name '*.html' -exec cp {} dist/webview/ \\; && (test -d packages/webview/dist/assets && cp -R packages/webview/dist/assets/. dist/webview/assets/ || true)",
+    "watch": "pnpm run compile:extension -- --watch",
+    "dev:webview": "cd packages/webview && pnpm exec vite",
+    "lint": "eslint packages/extension/src --ext ts,tsx",
+    "test": "vitest",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.125.0",
+    "@neko/content": "workspace:*",
+    "@neko/shared": "workspace:*",
+    "@neko/neko-client": "workspace:*",
+    "esbuild": "^0.19.8",
+    "typescript": "^5.3.2",
+    "vitest": "^4.1.2"
+  }
+}

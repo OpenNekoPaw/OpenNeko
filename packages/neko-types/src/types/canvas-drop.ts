@@ -1,0 +1,171 @@
+import type { DocumentCanvasNode, ModelCanvasNode } from './canvas';
+
+export type CanvasDroppedAssetKind =
+  | 'media'
+  | 'script'
+  | 'document'
+  | 'model'
+  | 'canvas'
+  | 'project';
+
+export type NkProjectType = 'nkv' | 'nka' | 'nkm' | 'nkp';
+
+export interface DroppedMediaCanvasAsset {
+  kind: 'media';
+  name: string;
+  path: string;
+  mediaType: 'image' | 'video' | 'audio';
+  /** Runtime-only safe URL for immediate webview display/playback. */
+  runtimeAssetPath?: string;
+  /** Original local file path, kept for compatibility with import payloads. */
+  originalPath?: string;
+}
+
+export interface DroppedScriptCanvasAsset {
+  kind: 'script';
+  name: string;
+  path: string;
+  title: string;
+}
+
+export interface DroppedDocumentCanvasAsset {
+  kind: 'document';
+  name: string;
+  path: string;
+  title: string;
+  docType: DocumentCanvasNode['data']['docType'];
+}
+
+export interface DroppedModelCanvasAsset {
+  kind: 'model';
+  name: string;
+  path: string;
+  modelName: string;
+  modelType: ModelCanvasNode['data']['modelType'];
+  role: ModelCanvasNode['data']['role'];
+}
+
+export interface DroppedCanvasEmbedAsset {
+  kind: 'canvas';
+  name: string;
+  path: string;
+  title: string;
+}
+
+export interface DroppedProjectAsset {
+  kind: 'project';
+  name: string;
+  path: string;
+  title: string;
+  projectType: NkProjectType;
+}
+
+export type CanvasDroppedAsset =
+  | DroppedMediaCanvasAsset
+  | DroppedScriptCanvasAsset
+  | DroppedDocumentCanvasAsset
+  | DroppedModelCanvasAsset
+  | DroppedCanvasEmbedAsset
+  | DroppedProjectAsset;
+
+const MEDIA_EXTENSIONS: Record<string, DroppedMediaCanvasAsset['mediaType']> = {
+  png: 'image',
+  jpg: 'image',
+  jpeg: 'image',
+  gif: 'image',
+  webp: 'image',
+  bmp: 'image',
+  svg: 'image',
+  mp4: 'video',
+  mov: 'video',
+  avi: 'video',
+  mkv: 'video',
+  webm: 'video',
+  m4v: 'video',
+  mp3: 'audio',
+  wav: 'audio',
+  ogg: 'audio',
+  m4a: 'audio',
+  aac: 'audio',
+  flac: 'audio',
+};
+
+const SCRIPT_EXTENSIONS = new Set(['fountain', 'nks', 'story']);
+const DOCUMENT_EXTENSIONS: Record<string, DroppedDocumentCanvasAsset['docType']> = {
+  pdf: 'pdf',
+  docx: 'docx',
+  epub: 'epub',
+  cbz: 'cbz',
+};
+const MODEL_EXTENSIONS = new Set(['safetensors', 'ckpt', 'pt', 'pth', 'bin']);
+const CANVAS_EXTENSIONS = new Set(['nkc']);
+
+const PROJECT_EXTENSIONS: Record<string, NkProjectType> = {
+  nkv: 'nkv',
+  nka: 'nka',
+  nkm: 'nkm',
+  nkp: 'nkp',
+};
+
+function getFileExtension(fileName: string): string {
+  return fileName.split('.').pop()?.toLowerCase() ?? '';
+}
+
+export function inferCanvasMediaType(
+  fileName: string,
+): DroppedMediaCanvasAsset['mediaType'] | null {
+  return MEDIA_EXTENSIONS[getFileExtension(fileName)] ?? null;
+}
+
+export function inferCanvasDocumentType(
+  fileName: string,
+): DroppedDocumentCanvasAsset['docType'] | null {
+  return DOCUMENT_EXTENSIONS[getFileExtension(fileName)] ?? null;
+}
+
+export function inferCanvasModelType(
+  fileName: string,
+): DroppedModelCanvasAsset['modelType'] | null {
+  const lowerName = fileName.toLowerCase();
+  const ext = getFileExtension(fileName);
+  if (!MODEL_EXTENSIONS.has(ext)) {
+    return null;
+  }
+
+  if (lowerName.includes('controlnet')) {
+    return 'controlnet';
+  }
+  if (lowerName.includes('vae')) {
+    return 'vae';
+  }
+  if (lowerName.includes('lora') || lowerName.includes('lycoris')) {
+    return 'lora';
+  }
+  return 'checkpoint';
+}
+
+export function inferNkProjectType(fileName: string): NkProjectType | null {
+  return PROJECT_EXTENSIONS[getFileExtension(fileName)] ?? null;
+}
+
+export function inferCanvasDroppedAssetKind(fileName: string): CanvasDroppedAssetKind | null {
+  if (inferCanvasMediaType(fileName)) {
+    return 'media';
+  }
+  if (SCRIPT_EXTENSIONS.has(getFileExtension(fileName))) {
+    return 'script';
+  }
+  if (inferCanvasDocumentType(fileName)) {
+    return 'document';
+  }
+  if (inferCanvasModelType(fileName)) {
+    return 'model';
+  }
+  if (CANVAS_EXTENSIONS.has(getFileExtension(fileName))) {
+    return 'canvas';
+  }
+  if (inferNkProjectType(fileName)) {
+    return 'project';
+  }
+  return null;
+}

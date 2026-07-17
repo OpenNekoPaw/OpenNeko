@@ -1,0 +1,103 @@
+# neko 本地工作区（缓存/本地配置，不跟踪）
+# neko/ 是 Git 跟踪的项目事实目录，不要添加到 gitignore
+.neko/
+.serena/
+.claude/
+
+# 编辑器与 IDE
+.vscode/
+.idea/
+.codex/
+# 仓库级 Agent evaluation Skill 需要进入版本控制；其余本地 Codex 状态继续忽略
+!.codex/
+.codex/*
+!.codex/skills/
+.codex/skills/*
+!.codex/skills/neko-agent-evaluation/
+!.codex/skills/neko-agent-evaluation/**
+
+# 依赖库
+node_modules/
+*.dynlib
+*.dll
+*.so
+*.dylib
+
+# 构建产物
+dist/
+out/
+build/
+*.vsix
+vsix-artifacts/
+/neko
+/neko-engine
+# Local build output of the neko-agent CLI. Previously committed by
+# accident (65MB arm64 binary); ignore new builds here. The
+# tracked copy needs a dedicated `git rm --cached` in a separate commit.
+packages/neko-agent/neko
+
+# 锁文件（pnpm-lock.yaml 必须提交，CI 依赖它）
+bun.lock
+package-lock.json
+
+# 测试
+test/
+.vscode-test/
+test-results/
+playwright-report/
+
+# 本地测试与评估运行证据（提交稳定摘要，不提交原始运行产物）
+/reports/
+
+# 本地生成产物（演示文稿、文档、媒体等）
+/outputs/
+
+# 缓存
+.npm-cache/
+.turbo/
+.parcel-cache/
+.cache/
+.tmp/
+__pycache__/
+*.py[cod]
+
+# 项目配置（敏感）
+# CLAUDE.md
+
+# 日志与缓存
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+
+# 本地 smoke / 调试证据（PR 或文档需要的截图应显式放入目标文档目录）
+smoke-artifacts/
+debug-artifacts/
+vscode-screenshot*.png
+vscode-webview-*.png
+
+# TypeScript 增量编译产物
+*.tsbuildinfo
+
+# Rust 构建产物
+target/
+*.node
+
+# 测试覆盖率
+tests/
+test/
+coverage/
+.nyc_output/
+
+# 环境变量（保留示例文件）
+.env
+.env.*
+!.env.example
+
+# Bun build artifacts
+*.bun-build
+
+# 系统杂项
+.DS_Store

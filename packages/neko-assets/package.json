@@ -1,0 +1,666 @@
+{
+  "name": "neko-assets",
+  "displayName": "Neko Assets",
+  "description": "Asset management with Git/LFS version control, cloud sync, and CI/CD auto-rendering",
+  "version": "0.0.1",
+  "publisher": "neko",
+  "l10n": "./l10n",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neko/creative-suite"
+  },
+  "engines": {
+    "vscode": "^1.128.0"
+  },
+  "categories": [
+    "Other",
+    "SCM Providers"
+  ],
+  "keywords": [
+    "assets",
+    "git-lfs",
+    "cloud-sync",
+    "version-control",
+    "ci-cd"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "extensionDependencies": [
+    "neko.neko-engine",
+    "neko.neko-tools",
+    "neko.neko-preview"
+  ],
+  "activationEvents": [
+    "onView:neko.entityInspector",
+    "onCommand:neko.assets.contractPath",
+    "onCommand:neko.assets.queryMediaLibrary",
+    "onCommand:neko.entity.getDashboardCreativeEntitySource",
+    "onCommand:neko.entity.inspectEntity",
+    "onCommand:neko.entityInspector.follow",
+    "onCommand:neko.entity.addAlias",
+    "onCommand:neko.entity.bindAsset",
+    "onCommand:neko.entity.confirmCandidate",
+    "onCommand:neko.entity.dismissCandidate",
+    "onCommand:neko.entity.getEntity",
+    "onCommand:neko.entity.getEntityDetail",
+    "onCommand:neko.entity.listCandidates",
+    "onCommand:neko.entity.listEntities",
+    "onCommand:neko.entity.mergeCandidate",
+    "onCommand:neko.entity.proposeCandidate",
+    "onCommand:neko.entity.rejectCandidate",
+    "onCommand:neko.entity.removeAlias",
+    "onCommand:neko.entity.renameEntity",
+    "onCommand:neko.entity.resolveByName",
+    "onCommand:neko.entity.setDefaultBinding",
+    "onCommand:neko.entity.triggerBindingWidgetAction",
+    "onCommand:neko.entity.updateMetadata",
+    "onCommand:neko.entity.upsertVisualDraft",
+    "onInstallKind:media.voice-pack"
+  ],
+  "main": "./dist/extension.js",
+  "exports": {
+    "./agent-headless": "./src/agentHeadlessCapabilityProvider.mts",
+    "./agent-capability": "./src/agentCapabilityProvider.ts"
+  },
+  "contributes": {
+    "neko.installTargets": [
+      {
+        "type": "media",
+        "kind": "voice-pack",
+        "activationEvent": "onInstallKind:media.voice-pack"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "neko-asset-manager",
+          "title": "%neko.assetManager.title%",
+          "icon": "$(file-media)"
+        }
+      ]
+    },
+    "views": {
+      "neko-asset-manager": [
+        {
+          "id": "neko.assetManager",
+          "name": "%neko.assetManager.assets%",
+          "contextualTitle": "%neko.assetManager.title%"
+        },
+        {
+          "id": "neko.mediaLibraries",
+          "name": "%neko.views.mediaLibraries.name%",
+          "contextualTitle": "%neko.views.mediaLibraries.contextualTitle%"
+        },
+        {
+          "id": "neko.assetHistory",
+          "name": "%neko.assetManager.history%",
+          "contextualTitle": "%neko.assetManager.historyTitle%"
+        },
+        {
+          "id": "neko.entityBrowser",
+          "name": "%neko.entityBrowser.name%",
+          "contextualTitle": "%neko.entityBrowser.contextualTitle%"
+        },
+        {
+          "id": "neko.entityInspector",
+          "name": "%neko.entityInspector.name%",
+          "contextualTitle": "%neko.entityInspector.name%",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "neko.assets.viewHistory",
+        "title": "%neko.assets.viewHistory%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.previewMedia",
+        "title": "%neko.assets.previewMedia%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.addToTimeline",
+        "title": "%neko.assets.addToTimeline%",
+        "category": "Neko Assets",
+        "icon": "$(play)"
+      },
+      {
+        "command": "neko.assets.addToCanvas",
+        "title": "%neko.assets.addToCanvas%",
+        "category": "Neko Assets",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "neko.assets.importFile",
+        "title": "%neko.assets.importFile%",
+        "category": "Neko Assets",
+        "icon": "$(add)"
+      },
+      {
+        "command": "neko.assets.validateAll",
+        "title": "%neko.assets.validateAll%",
+        "category": "Neko Assets",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "neko.assets.validateAssetDependencies",
+        "title": "%neko.assets.validateAssetDependencies%",
+        "category": "Neko Assets",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "neko.assets.exportEntity",
+        "title": "%neko.assets.exportEntity%",
+        "category": "Neko Assets",
+        "icon": "$(symbol-class)"
+      },
+      {
+        "command": "neko.assets.exportCharacterPack",
+        "title": "%neko.assets.exportCharacterPack%",
+        "category": "Neko Assets",
+        "icon": "$(package)"
+      },
+      {
+        "command": "neko.assets.relocateFile",
+        "title": "%neko.assets.relocateFile%",
+        "category": "Neko Assets",
+        "icon": "$(file-symlink-file)"
+      },
+      {
+        "command": "neko.assets.showHealthReport",
+        "title": "%neko.assets.showHealthReport%",
+        "category": "Neko Assets",
+        "icon": "$(pulse)"
+      },
+      {
+        "command": "neko.assets.addMediaLibrary",
+        "title": "%neko.assets.addMediaLibrary%",
+        "category": "Neko Assets",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "neko.assets.removeMediaLibrary",
+        "title": "%neko.assets.removeMediaLibrary%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.setLocalOverride",
+        "title": "%neko.assets.setLocalOverride%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.importFromLibrary",
+        "title": "%neko.assets.importFromLibrary%",
+        "category": "Neko Assets",
+        "icon": "$(add)"
+      },
+      {
+        "command": "neko.assets.revealFileInOS",
+        "title": "%neko.assets.revealFileInOS%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.copyFilePath",
+        "title": "%neko.assets.copyFilePath%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.copyFileReference",
+        "title": "%neko.assets.copyFileReference%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.revealMediaLibraryFile",
+        "title": "%neko.assets.revealMediaLibraryFile%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.previewMediaLibraryFile",
+        "title": "%neko.assets.previewMediaLibraryFile%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.addToTimelineFromLibrary",
+        "title": "%neko.assets.addToTimelineFromLibrary%",
+        "category": "Neko Assets",
+        "icon": "$(play)"
+      },
+      {
+        "command": "neko.assets.addToCanvasFromLibrary",
+        "title": "%neko.assets.addToCanvasFromLibrary%",
+        "category": "Neko Assets",
+        "icon": "$(layout)"
+      },
+      {
+        "command": "neko.assets.refreshMediaLibraries",
+        "title": "%neko.assets.refreshMediaLibraries%",
+        "category": "Neko Assets",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "neko.assets.searchMediaLibrary",
+        "title": "%neko.assets.searchMediaLibrary%",
+        "category": "Neko Assets",
+        "icon": "$(search)"
+      },
+      {
+        "command": "neko.assets.entity.preview",
+        "title": "%neko.assets.entity.preview%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.entity.addToTimeline",
+        "title": "%neko.assets.entity.addToTimeline%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.entity.addToCanvas",
+        "title": "%neko.assets.entity.addToCanvas%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.entity.copyReference",
+        "title": "%neko.assets.entity.copyReference%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.entity.rename",
+        "title": "%neko.assets.entity.rename%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.entity.addVariant",
+        "title": "%neko.assets.entity.addVariant%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.entity.showBindingCandidates",
+        "title": "%neko.assets.entity.showBindingCandidates%",
+        "category": "Neko Assets",
+        "icon": "$(link)"
+      },
+      {
+        "command": "neko.assets.entity.showRepresentationPackage",
+        "title": "%neko.assets.entity.showRepresentationPackage%",
+        "category": "Neko Assets",
+        "icon": "$(symbol-structure)"
+      },
+      {
+        "command": "neko.assets.entity.cancelBinding",
+        "title": "%neko.assets.entity.cancelBinding%",
+        "category": "Neko Assets",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "neko.assets.entity.delete",
+        "title": "%neko.assets.entity.delete%",
+        "category": "Neko Assets",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "neko.assets.variant.preview",
+        "title": "%neko.assets.variant.preview%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.variant.addFile",
+        "title": "%neko.assets.variant.addFile%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.variant.rename",
+        "title": "%neko.assets.variant.rename%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.variant.delete",
+        "title": "%neko.assets.variant.delete%",
+        "category": "Neko Assets",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "neko.assets.directory.reveal",
+        "title": "%neko.assets.directory.reveal%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.recentEntity.addToTimeline",
+        "title": "%neko.assets.recentEntity.addToTimeline%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.recentEntity.addToCanvas",
+        "title": "%neko.assets.recentEntity.addToCanvas%",
+        "category": "Neko Assets"
+      },
+      {
+        "command": "neko.assets.addToAgent",
+        "title": "%neko.assets.addToAgent%",
+        "category": "Neko Assets",
+        "icon": "$(comment-add)"
+      },
+      {
+        "command": "neko.entityBrowser.refresh",
+        "title": "%neko.entityBrowser.refresh%",
+        "category": "Neko Assets",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "neko.entityBrowser.inspect",
+        "title": "%neko.entityBrowser.inspect%",
+        "category": "Neko Assets",
+        "icon": "$(inspect)"
+      },
+      {
+        "command": "neko.entityBrowser.rename",
+        "title": "%neko.entityBrowser.rename%",
+        "category": "Neko Assets",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "neko.entityBrowser.editAppearance",
+        "title": "%neko.entityBrowser.editAppearance%",
+        "category": "Neko Assets",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "neko.entityBrowser.createCandidate",
+        "title": "%neko.entityBrowser.createCandidate%",
+        "category": "Neko Assets",
+        "icon": "$(add)"
+      },
+      {
+        "command": "neko.assets.inspectBoundCreativeEntity",
+        "title": "%neko.assets.inspectBoundCreativeEntity%",
+        "category": "Neko Assets",
+        "icon": "$(inspect)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "neko.assets.addMediaLibrary",
+          "when": "view == neko.mediaLibraries",
+          "group": "navigation"
+        },
+        {
+          "command": "neko.assets.refreshMediaLibraries",
+          "when": "view == neko.mediaLibraries",
+          "group": "overflow"
+        },
+        {
+          "command": "neko.assets.searchMediaLibrary",
+          "when": "view == neko.mediaLibraries",
+          "group": "overflow"
+        },
+        {
+          "command": "neko.entityBrowser.refresh",
+          "when": "view == neko.entityBrowser",
+          "group": "navigation"
+        },
+        {
+          "command": "neko.entityBrowser.createCandidate",
+          "when": "view == neko.entityBrowser",
+          "group": "navigation@2"
+        },
+        {
+          "command": "neko.assets.validateAll",
+          "when": "view == neko.assetManager",
+          "group": "navigation"
+        },
+        {
+          "command": "neko.assets.validateAssetDependencies",
+          "when": "view == neko.assetManager",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "neko.assets.removeMediaLibrary",
+          "when": "viewItem == mediaLibrary || viewItem == mediaLibrary:offline",
+          "group": "inline"
+        },
+        {
+          "command": "neko.assets.setLocalOverride",
+          "when": "viewItem == mediaLibrary || viewItem == mediaLibrary:offline",
+          "group": "1_modify"
+        },
+        {
+          "command": "neko.assets.importFromLibrary",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "inline"
+        },
+        {
+          "command": "neko.assets.previewMediaLibraryFile",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "2_preview"
+        },
+        {
+          "command": "neko.assets.addToTimelineFromLibrary",
+          "when": "viewItem =~ /^mediaLibrary:file:(video|audio|image|sequence)$/",
+          "group": "3_actions"
+        },
+        {
+          "command": "neko.assets.addToCanvasFromLibrary",
+          "when": "viewItem =~ /^mediaLibrary:file:(video|image|sequence)$/",
+          "group": "3_actions"
+        },
+        {
+          "command": "neko.assets.revealFileInOS",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "4_utils"
+        },
+        {
+          "command": "neko.assets.copyFilePath",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "4_utils"
+        },
+        {
+          "command": "neko.assets.copyFileReference",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "4_utils@2"
+        },
+        {
+          "command": "neko.assets.relocateFile",
+          "when": "viewItem == variant:hasOffline",
+          "group": "inline"
+        },
+        {
+          "command": "neko.assets.entity.preview",
+          "when": "viewItem == entity",
+          "group": "1_preview@1"
+        },
+        {
+          "command": "neko.assets.entity.addToTimeline",
+          "when": "viewItem == entity",
+          "group": "1_preview@2"
+        },
+        {
+          "command": "neko.assets.entity.addToCanvas",
+          "when": "viewItem == entity",
+          "group": "1_preview@3"
+        },
+        {
+          "command": "neko.assets.entity.copyReference",
+          "when": "viewItem == entity",
+          "group": "1_preview@4"
+        },
+        {
+          "command": "neko.assets.inspectBoundCreativeEntity",
+          "when": "viewItem == entity",
+          "group": "1_preview@5"
+        },
+        {
+          "command": "neko.assets.entity.rename",
+          "when": "viewItem == entity",
+          "group": "2_modify@1"
+        },
+        {
+          "command": "neko.assets.entity.addVariant",
+          "when": "viewItem == entity",
+          "group": "2_modify@2"
+        },
+        {
+          "command": "neko.assets.entity.showBindingCandidates",
+          "when": "viewItem == entity",
+          "group": "2_modify@3"
+        },
+        {
+          "command": "neko.assets.entity.showRepresentationPackage",
+          "when": "viewItem == entity",
+          "group": "2_modify@4"
+        },
+        {
+          "command": "neko.assets.entity.cancelBinding",
+          "when": "viewItem == entity",
+          "group": "2_modify@5"
+        },
+        {
+          "command": "neko.assets.entity.delete",
+          "when": "viewItem == entity",
+          "group": "3_delete@1"
+        },
+        {
+          "command": "neko.assets.variant.preview",
+          "when": "viewItem =~ /^variant/",
+          "group": "1_preview@1"
+        },
+        {
+          "command": "neko.assets.variant.addFile",
+          "when": "viewItem =~ /^variant/",
+          "group": "2_modify@1"
+        },
+        {
+          "command": "neko.assets.variant.rename",
+          "when": "viewItem =~ /^variant/",
+          "group": "2_modify@2"
+        },
+        {
+          "command": "neko.assets.variant.delete",
+          "when": "viewItem =~ /^variant/",
+          "group": "3_delete@1"
+        },
+        {
+          "command": "neko.assets.directory.reveal",
+          "when": "viewItem == mediaLibrary:directory",
+          "group": "4_utils@1"
+        },
+        {
+          "command": "neko.assets.recentEntity.addToTimeline",
+          "when": "viewItem == recentEntity",
+          "group": "1_preview@1"
+        },
+        {
+          "command": "neko.assets.recentEntity.addToCanvas",
+          "when": "viewItem == recentEntity",
+          "group": "1_preview@2"
+        },
+        {
+          "command": "neko.assets.addToAgent",
+          "when": "viewItem =~ /^mediaLibrary:file:/",
+          "group": "5_agent@1"
+        },
+        {
+          "command": "neko.entityBrowser.inspect",
+          "when": "viewItem == entityBrowser:entity || viewItem == entityBrowser:candidate",
+          "group": "inline"
+        },
+        {
+          "command": "neko.entityBrowser.rename",
+          "when": "viewItem == entityBrowser:entity",
+          "group": "2_modify@1"
+        },
+        {
+          "command": "neko.entityBrowser.editAppearance",
+          "when": "viewItem == entityBrowser:entity",
+          "group": "2_modify@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "neko.assets.previewMedia",
+          "when": "resourceExtname =~ /\\.(mp4|mov|avi|mkv|webm|m4v|ts|flv|wmv|mp3|wav|ogg|flac|aac|m4a|wma|opus)$/i",
+          "group": "3_nekoOps@1"
+        },
+        {
+          "command": "neko.assets.addToTimeline",
+          "when": "resourceExtname =~ /\\.(mp4|mov|avi|mkv|webm|m4v|mp3|wav|ogg|flac|aac|m4a|png|jpg|jpeg|gif|webp)$/i",
+          "group": "3_nekoOps@2"
+        },
+        {
+          "command": "neko.assets.addToCanvas",
+          "when": "resourceExtname =~ /\\.(png|jpg|jpeg|gif|webp|svg|bmp|mp4|mov|webm)$/i",
+          "group": "3_nekoOps@3"
+        },
+        {
+          "command": "neko.assets.importFile",
+          "when": "resourceExtname =~ /\\.(mp4|mov|avi|mkv|webm|m4v|mp3|wav|ogg|flac|aac|m4a|png|jpg|jpeg|gif|webp|svg|bmp|tiff)$/i",
+          "group": "3_nekoOps@4"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Neko Assets",
+      "properties": {
+        "neko.assets.cloudProvider": {
+          "type": "string",
+          "enum": [
+            "github",
+            "gitlab",
+            "s3",
+            "rclone"
+          ],
+          "default": "github",
+          "description": "Cloud storage provider"
+        },
+        "neko.assets.autoSync": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically sync assets on save"
+        },
+        "neko.assets.lfsThreshold": {
+          "type": "number",
+          "default": 1048576,
+          "description": "File size threshold (bytes) for automatic LFS tracking"
+        },
+        "neko.assets.cicdEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable CI/CD auto-rendering on push"
+        },
+        "neko.entityInspector.autoFollow": {
+          "type": "boolean",
+          "default": false,
+          "description": "%neko.entityInspector.autoFollow.description%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "watch": "pnpm run compile -- --watch",
+    "lint": "eslint src --ext ts,tsx",
+    "test": "pnpm exec vitest run",
+    "test:packages": "pnpm turbo run test --filter=@neko/asset",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@neko/asset": "workspace:*",
+    "@neko/entity": "workspace:*",
+    "@neko/host": "workspace:*",
+    "@neko/shared": "workspace:*",
+    "adm-zip": "^0.5.16"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.125.0",
+    "esbuild": "^0.19.8",
+    "typescript": "^5.3.2",
+    "vitest": "^4.1.2"
+  }
+}

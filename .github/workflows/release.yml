@@ -1,0 +1,177 @@
+# Release workflow — triggered by version tags (e.g. v0.1.0)
+#
+# Jobs:
+#   1. release-ts:     Build + test + package TS-only extensions (ubuntu)
+#   2. release-engine: Build neko-engine per platform (4x matrix)
+#   3. create-release: Collect all VSIX and create GitHub Release
+#
+# Usage:
+#   git tag v0.1.0
+#   git push origin v0.1.0
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  # ── TypeScript-only extensions (no native code) ──
+  release-ts:
+    name: Build & Package (TS extensions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build TS-only extensions (skip neko-engine compile — no Rust on ubuntu)
+      - name: Build TS extensions
+        run: pnpm compile:ts-vsix
+
+      - run: pnpm test
+
+      # Package each TS extension
+      - name: Package TS extensions
+        run: |
+          {
+            node scripts/read-package-group.mjs packages.tsExtensions
+            node scripts/read-package-group.mjs extensionPack
+          } | while IFS= read -r pkg; do
+            [ -n "$pkg" ] || continue
+            pkg_path="$pkg"
+            if [[ "$pkg_path" != */* ]]; then pkg_path="packages/$pkg_path"; fi
+            if [ -d "$pkg_path" ]; then
+              echo "📦 Packaging $pkg_path..."
+              rm -f "$pkg_path"/*.vsix
+              (cd "$pkg_path" && npx @vscode/vsce package --no-dependencies --allow-missing-repository)
+              if ! compgen -G "$pkg_path/*.vsix" > /dev/null; then
+                echo "::error::Packaging $pkg_path did not produce a new VSIX artifact."
+                exit 1
+              fi
+            fi
+          done
+
+      - name: Collect VSIX artifacts
+        run: |
+          mkdir -p release-artifacts
+          find packages apps -maxdepth 2 -name '*.vsix' -exec cp {} release-artifacts/ \;
+          if ! compgen -G "release-artifacts/*.vsix" > /dev/null; then
+            echo "::error::No TS extension VSIX artifacts were collected."
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: vsix-ts-extensions
+          path: release-artifacts/*.vsix
+          retention-days: 7
+
+  # ── neko-engine: platform-specific native builds ──
+  release-engine:
+    name: Package neko-engine (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            os: macos-14
+            rust-target: aarch64-apple-darwin
+            ffmpeg-install: brew install ffmpeg pkg-config
+          - target: darwin-x64
+            os: macos-13
+            rust-target: x86_64-apple-darwin
+            ffmpeg-install: brew install ffmpeg pkg-config
+          - target: linux-x64
+            os: ubuntu-latest
+            rust-target: x86_64-unknown-linux-gnu
+            ffmpeg-install: sudo apt-get update && sudo apt-get install -y clang libclang-dev libasound2-dev libavcodec-dev libavdevice-dev libavfilter-dev libavformat-dev libavutil-dev libssl-dev libswresample-dev libswscale-dev libudev-dev libva-dev libvulkan-dev libwayland-dev libx11-dev libxcursor-dev libxfixes-dev libxi-dev libxkbcommon-dev libxrandr-dev patchelf pkg-config
+          - target: win32-x64
+            os: windows-latest
+            rust-target: x86_64-pc-windows-msvc
+            ffmpeg-install: choco install ffmpeg-shared
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/neko-engine
+          key: release-${{ matrix.target }}
+
+      - name: Install FFmpeg
+        run: ${{ matrix.ffmpeg-install }}
+
+      - run: pnpm install --frozen-lockfile
+
+      # vendor/ is gitignored; remove the cargo config that forces vendored sources
+      - name: Remove vendor source override
+        run: rm -f packages/neko-engine/.cargo/config.toml
+        shell: bash
+
+      # Build native addon
+      - name: Build host-napi
+        working-directory: packages/neko-engine/packages/host-napi
+        run: pnpm run build:napi -- --target ${{ matrix.rust-target }}
+
+      # Package platform VSIX (ORT + FFmpeg bundling handled by script)
+      - name: Package platform VSIX
+        working-directory: packages/neko-engine
+        run: bash scripts/package-platform.sh ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: vsix-neko-engine-${{ matrix.target }}
+          path: packages/neko-engine/*.vsix
+          retention-days: 7
+
+  # ── Collect all artifacts and create release ──
+  create-release:
+    name: Create GitHub Release
+    needs: [release-ts, release-engine]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: List release artifacts
+        run: |
+          echo "## Release artifacts:" >> $GITHUB_STEP_SUMMARY
+          ls -lh release-artifacts/*.vsix | awk '{print "- " $NF " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*.vsix
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

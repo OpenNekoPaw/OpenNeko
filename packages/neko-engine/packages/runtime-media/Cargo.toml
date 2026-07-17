@@ -1,0 +1,39 @@
+[package]
+name = "neko-runtime-media"
+version.workspace = true
+edition.workspace = true
+description = "Media processing runtime for Neko Engine — probe, diff, subtitle extraction, JPEG encoding"
+license.workspace = true
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+# FFmpeg bindings (probe, subtitle, audio decode for diff)
+ffmpeg-next = { workspace = true }
+ffmpeg-sys-next = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Image I/O (JPEG encoding, image diff)
+image = { workspace = true }
+
+# Base64 encoding (cover art)
+base64 = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Shared DTOs used by JVI project files
+neko-engine-types = { path = "../engine-types" }
+
+# Byte reinterpretation (audio sample casting)
+bytemuck = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

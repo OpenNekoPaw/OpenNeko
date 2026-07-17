@@ -1,0 +1,24 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "skill.skill-creator",
+  "owner": { "kind": "skill", "id": "skill-creator" },
+  "target": { "kind": "skill", "identity": { "name": "skill-creator", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "skill-creator", "fingerprint": "sha256:6c2e87de899b872a0c16ffee63238b694d2a5b39e71b1be80c1688baa7a8089d" } },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [{ "id": "canonical-default", "settings": {}, "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a" }],
+  "modelProfiles": [{ "id": "configured-default", "selection": "configured-default", "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915" }],
+  "judgeProfiles": [],
+  "fixtures": [
+    { "id": "skill-artifact-workspace", "root": "shared-fixtures/skill-artifact-workspace", "source": "repository", "digest": "sha256:3a06d6986ea5a28c0842c557310da3fcc212fb12a29c1700014ba75186b6edd0", "mutable": true },
+    { "id": "skill-creator-workspace", "root": "shared-fixtures/skill-creator-workspace", "source": "repository", "digest": "sha256:0381786cf8d47fc13abeac44f08648aa0335032e91070309a4693392468d723d", "mutable": true },
+    { "id": "skill-existing-target-workspace", "root": "shared-fixtures/skill-existing-target-workspace", "source": "repository", "digest": "sha256:e1b31c4e29c132a314772996f271f5d551ce74460347dc52df357db66c13e69f", "mutable": true }
+  ],
+  "cases": [
+    { "id": "create-portable-skill", "file": "cases/create-portable-skill.json", "group": "artifact", "visibility": "public" },
+    { "id": "reject-invalid-skill", "file": "cases/reject-invalid-skill.json", "group": "failure", "visibility": "public" },
+    { "id": "reject-resource-traversal", "file": "cases/reject-resource-traversal.json", "group": "boundary", "visibility": "public" },
+    { "id": "reject-existing-target", "file": "cases/reject-existing-target.json", "group": "regression", "visibility": "public" }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": { "rawRetentionDays": 14, "trustedCiRetentionDays": 14, "committedSummary": true, "includeHistory": false }
+}

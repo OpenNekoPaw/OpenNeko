@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "neko.webview-functional.scenario.v1",
+  "id": "preview.pdf-node-host.p0",
+  "title": "PDF preview loads through the Node document host",
+  "ownerPackage": "neko-preview",
+  "tier": "p0",
+  "host": "vscode",
+  "platforms": ["darwin", "linux"],
+  "fixture": {
+    "workspace": "scripts/webview-functional/fixtures/preview-documents",
+    "digestFiles": ["node-preview.pdf"]
+  },
+  "extensions": [{ "id": "neko.neko-preview", "developmentPath": "packages/neko-preview" }],
+  "prerequisites": [{ "kind": "package-script", "package": "neko-preview", "script": "compile" }],
+  "activation": {
+    "kind": "open-custom-editor",
+    "path": "node-preview.pdf",
+    "viewType": "neko.pdfPreview"
+  },
+  "target": {
+    "type": "iframe",
+    "extensionId": "neko.neko-preview",
+    "viewType": "neko.pdfPreview"
+  },
+  "steps": [
+    {
+      "id": "wait-pdf-ready",
+      "operation": "wait-visible",
+      "selector": { "testId": "pdf-preview-ready" },
+      "timeoutMs": 60000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "pdf-ready",
+      "kind": "attribute",
+      "selector": { "testId": "pdf-preview-ready" },
+      "attribute": "data-page-count",
+      "expected": "1"
+    },
+    {
+      "id": "pdf-fixture-preserved",
+      "kind": "file-text",
+      "path": "node-preview.pdf",
+      "expected": { "contains": "Node PDF Preview" }
+    },
+    { "id": "no-runtime-errors", "kind": "runtime-errors", "expected": [] }
+  ],
+  "errorPolicy": {
+    "knownBenignWarningIds": [
+      "vscode-webview-local-network-access",
+      "vscode-webview-sandbox-same-origin-scripts",
+      "vscode-development-extension-marketplace-404"
+    ],
+    "expectedDiagnosticCodes": [],
+    "failOnConsoleWarning": true
+  },
+  "evidence": { "domSnapshot": true, "screenshot": true, "logs": true, "sideEffects": true },
+  "timeoutMs": 60000,
+  "tags": ["preview", "pdf", "document", "node-host", "no-engine"]
+}

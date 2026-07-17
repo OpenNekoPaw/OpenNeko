@@ -1,0 +1,35 @@
+export type CodiconName =
+  | 'add'
+  | 'check'
+  | 'circle-large-filled'
+  | 'circle-large-outline'
+  | 'chevron-down'
+  | 'chevron-left'
+  | 'chevron-right'
+  | 'chevron-up'
+  | 'close'
+  | 'cloud-download'
+  | 'edit'
+  | 'gear'
+  | 'account'
+  | 'eye'
+  | 'eye-closed'
+  | 'inbox'
+  | 'loading'
+  | 'package'
+  | 'lock'
+  | 'play'
+  | 'refresh'
+  | 'search'
+  | 'settings'
+  | 'symbol-misc'
+  | 'symbol-namespace'
+  | 'symbol-color'
+  | 'symbol-structure'
+  | 'sync'
+  | 'trash'
+  | 'unlock';
+
+export function toCodiconClassName(name: CodiconName): string {
+  return `codicon codicon-${name}`;
+}

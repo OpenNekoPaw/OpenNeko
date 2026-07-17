@@ -1,0 +1,15 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "skill.video",
+  "owner": { "kind": "skill", "id": "video" },
+  "target": { "kind": "skill", "identity": { "name": "video", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "video", "fingerprint": "sha256:a3a1cbc151f1db6078d42901a62265cc7b65a309673fb19de16611248a81e684" } },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [{ "id": "canonical-default", "settings": {}, "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a" }],
+  "modelProfiles": [{ "id": "configured-default", "selection": "configured-default", "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915" }],
+  "judgeProfiles": [],
+  "fixtures": [{ "id": "empty-workspace", "root": "shared-fixtures/empty-workspace", "source": "repository", "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081", "mutable": true }],
+  "cases": [{ "id": "generate-video", "file": "cases/generate-video.json", "group": "canonical", "visibility": "public" }],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": { "rawRetentionDays": 14, "trustedCiRetentionDays": 14, "committedSummary": true, "includeHistory": false }
+}

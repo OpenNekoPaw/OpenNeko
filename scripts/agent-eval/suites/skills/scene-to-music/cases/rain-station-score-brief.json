@@ -1,0 +1,18 @@
+{
+  "schema": "neko.agent-eval.scenario.v2", "id": "rain-station-score-brief", "suiteId": "skill.scene-to-music", "caseGroup": "canonical", "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Convert scene mood and duration into a reviewable music generation and placement brief.",
+    "canonicalPath": ["builtin scene-to-music", "scene analysis", "music prompt", "duration and placement intent"],
+    "forbiddenFallback": ["immediate generation", "unbound timeline placement"],
+    "observables": [{ "ref": "skill-facts", "kind": "runtime-fact", "description": "Scene-to-music Host identity and structured score brief.", "required": true }],
+    "expectedResult": "The brief names mood, genre/instrumentation, duration, music prompt, placement, and validation.",
+    "expectedFailure": "Missing Skill injection, duration, placement, or false generation claim fails."
+  },
+  "fixtureRefs": ["empty-workspace"], "runtimeProfileId": "markdown", "modelProfileIds": ["configured-default"],
+  "steps": [{ "id": "submit", "kind": "submit", "prompt": "$scene-to-music 为 30 秒夜雨废弃车站发现信号灯的场景制作配乐 brief，不生成音乐。必须包含情绪、类型与配器、duration、generation prompt、placement intent 和验收标准。" }, { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "skill-facts" },
+    { "id": "skill", "kind": "skill", "identity": { "name": "scene-to-music", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "scene-to-music", "fingerprint": "sha256:80333d356b26309e9ce769858ba7d5d0a74dd4addf13a722d6874d52fe98b99a" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "output", "kind": "structured-output", "format": "markdown", "requiredFields": ["情绪", "配器", "duration", "prompt", "placement", "验收"], "locale": "zh-cn", "evidenceRef": "skill-facts" }
+  ], "artifactChecks": [], "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

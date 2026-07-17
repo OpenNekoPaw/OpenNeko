@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <!-- dist folder expanded -->
+  <path d="M1.5 3H6.5L8 5H14.5V6H4L1.5 13V3Z" stroke="#F59E0B" stroke-width="1.2" stroke-linejoin="round"/>
+  <path d="M4 6H14.5L12 13H1.5L4 6Z" stroke="#F59E0B" stroke-width="1.2" stroke-linejoin="round"/>
+</svg>

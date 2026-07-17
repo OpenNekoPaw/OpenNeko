@@ -1,0 +1,63 @@
+{
+  "schemaVersion": "neko.webview-functional.scenario.v1",
+  "id": "preview.docx-node-host.p0",
+  "title": "DOCX preview loads through the Node document host",
+  "ownerPackage": "neko-preview",
+  "tier": "p0",
+  "host": "vscode",
+  "platforms": ["darwin", "linux"],
+  "fixture": {
+    "workspace": "scripts/webview-functional/fixtures/preview-documents",
+    "digestFiles": ["node-preview.docx"]
+  },
+  "extensions": [{ "id": "neko.neko-preview", "developmentPath": "packages/neko-preview" }],
+  "prerequisites": [{ "kind": "package-script", "package": "neko-preview", "script": "compile" }],
+  "activation": {
+    "kind": "open-custom-editor",
+    "path": "node-preview.docx",
+    "viewType": "neko.docxPreview"
+  },
+  "target": {
+    "type": "iframe",
+    "extensionId": "neko.neko-preview",
+    "viewType": "neko.docxPreview"
+  },
+  "steps": [
+    {
+      "id": "wait-docx-ready",
+      "operation": "wait-visible",
+      "selector": { "testId": "docx-preview-ready" },
+      "timeoutMs": 60000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "docx-text-rendered",
+      "kind": "text",
+      "selector": {
+        "css": ".docx-wrapper",
+        "auditedSelectorReason": "docx-preview owns this stable rendered document wrapper."
+      },
+      "expected": { "contains": "Node DOCX Preview" }
+    },
+    {
+      "id": "docx-fixture-preserved",
+      "kind": "file-text",
+      "path": "node-preview.docx",
+      "expected": { "contains": "Node DOCX Preview" }
+    },
+    { "id": "no-runtime-errors", "kind": "runtime-errors", "expected": [] }
+  ],
+  "errorPolicy": {
+    "knownBenignWarningIds": [
+      "vscode-webview-local-network-access",
+      "vscode-webview-sandbox-same-origin-scripts",
+      "vscode-development-extension-marketplace-404"
+    ],
+    "expectedDiagnosticCodes": [],
+    "failOnConsoleWarning": true
+  },
+  "evidence": { "domSnapshot": true, "screenshot": true, "logs": true, "sideEffects": true },
+  "timeoutMs": 60000,
+  "tags": ["preview", "docx", "document", "node-host", "no-engine"]
+}

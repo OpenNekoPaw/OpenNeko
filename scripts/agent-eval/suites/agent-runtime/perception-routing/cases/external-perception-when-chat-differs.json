@@ -1,0 +1,92 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "external-perception-when-chat-differs",
+  "suiteId": "agent-runtime.perception-routing",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Generate an image with a non-vision chat model and analyze the real result through the perception capability.",
+    "canonicalPath": [
+      "explicit non-vision chat model",
+      "Pi agent.main turn snapshot",
+      "GenerateImage",
+      "task result",
+      "stable ResourceRef",
+      "perception.image.understand",
+      "image.understand purpose snapshot"
+    ],
+    "forbiddenFallback": [
+      "guess from generation prompt",
+      "native vision assumption",
+      "unobserved task result",
+      "perception.perceive",
+      "model-authored provider or model id",
+      "absolute or cache path"
+    ],
+    "observables": [
+      {
+        "ref": "perception-facts",
+        "kind": "runtime-fact",
+        "description": "Exact main and image-understanding models, stable image resource, perception Tool call, structured evidence, usage, and final analysis facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The non-vision main model routes the stable delivered image reference through perception.image.understand using the exact image.understand purpose snapshot before analysis.",
+    "expectedFailure": "Model fallback, missing task result, absent perception call, or guessed output fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["deepseek-no-native-vision"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "生成一张猫玩红球的图片。任务完成后取得稳定 ResourceRef，调用 perception.image.understand，再基于结构化感知结果说明画面、构图、光影和质量问题；不要传 provider/model/path，也不要根据提示词猜测。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 1200000 }
+  ],
+  "assertions": [
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "modelProfileId": "deepseek-no-native-vision",
+      "evidenceRef": "perception-facts"
+    },
+    {
+      "id": "model",
+      "kind": "model",
+      "profileId": "deepseek-no-native-vision",
+      "noFallback": true,
+      "evidenceRef": "perception-facts"
+    },
+    {
+      "id": "task",
+      "kind": "task-terminal",
+      "taskType": "image_generation",
+      "status": "completed",
+      "evidenceRef": "perception-facts"
+    },
+    {
+      "id": "perception",
+      "kind": "tool-call",
+      "name": "perception.image.understand",
+      "status": "success",
+      "evidenceRef": "perception-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["猫", "画面"],
+      "evidenceRef": "perception-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 1200000, "repetitions": 1 }
+}

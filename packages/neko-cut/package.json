@@ -1,0 +1,355 @@
+{
+  "name": "neko-cut",
+  "displayName": "NekoCut",
+  "description": "Professional video editor for VSCode",
+  "version": "0.0.1",
+  "publisher": "neko",
+  "l10n": "./l10n",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neko/creative-suite"
+  },
+  "engines": {
+    "vscode": "^1.128.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "video",
+    "editor",
+    "timeline",
+    "editing"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "extensionDependencies": [
+    "neko.neko-engine",
+    "neko.neko-tools",
+    "neko.neko-preview"
+  ],
+  "activationEvents": ["onInstallType:shader"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "neko.installTargets": [
+      {
+        "type": "shader",
+        "activationEvent": "onInstallType:shader"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "neko.explorer.newProject",
+        "label": "Neko: 新建项目"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "neko.videoEditor",
+        "displayName": "Video Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.nkv"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "neko.projectOutline",
+          "name": "%neko.outline.title%",
+          "contextualTitle": "%neko.outline.contextualTitle%",
+          "icon": "$(list-tree)",
+          "when": "activeCustomEditorId == 'neko.videoEditor'"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "neko.newProject",
+        "title": "%neko.newProject.title%",
+        "category": "NekoCut"
+      },
+      {
+        "command": "neko.cut.authoring.addSourceToTimeline",
+        "title": "%neko.cut.authoring.addSourceToTimeline.title%",
+        "category": "NekoCut"
+      },
+      {
+        "command": "neko.openInEditor",
+        "title": "%neko.openInEditor.title%",
+        "category": "NekoCut"
+      },
+      {
+        "command": "neko.timeline.getInfo",
+        "title": "%neko.timeline.getInfo.title%",
+        "category": "NekoCut: Timeline"
+      },
+      {
+        "command": "neko.timeline.listElements",
+        "title": "%neko.timeline.listElements.title%",
+        "category": "NekoCut: Timeline"
+      },
+      {
+        "command": "neko.element.add",
+        "title": "%neko.element.add.title%",
+        "category": "NekoCut: Element"
+      },
+      {
+        "command": "neko.element.update",
+        "title": "%neko.element.update.title%",
+        "category": "NekoCut: Element"
+      },
+      {
+        "command": "neko.element.delete",
+        "title": "%neko.element.delete.title%",
+        "category": "NekoCut: Element"
+      },
+      {
+        "command": "neko.element.getInfo",
+        "title": "%neko.element.getInfo.title%",
+        "category": "NekoCut: Element"
+      },
+      {
+        "command": "neko.track.add",
+        "title": "%neko.track.add.title%",
+        "category": "NekoCut: Track"
+      },
+      {
+        "command": "neko.track.delete",
+        "title": "%neko.track.delete.title%",
+        "category": "NekoCut: Track"
+      },
+      {
+        "command": "neko.track.reorder",
+        "title": "%neko.track.reorder.title%",
+        "category": "NekoCut: Track"
+      },
+      {
+        "command": "neko.track.setProperties",
+        "title": "%neko.track.setProperties.title%",
+        "category": "NekoCut: Track"
+      },
+      {
+        "command": "neko.effect.list",
+        "title": "%neko.effect.list.title%",
+        "category": "NekoCut: Effect"
+      },
+      {
+        "command": "neko.effect.add",
+        "title": "%neko.effect.add.title%",
+        "category": "NekoCut: Effect"
+      },
+      {
+        "command": "neko.effect.update",
+        "title": "%neko.effect.update.title%",
+        "category": "NekoCut: Effect"
+      },
+      {
+        "command": "neko.effect.remove",
+        "title": "%neko.effect.remove.title%",
+        "category": "NekoCut: Effect"
+      },
+      {
+        "command": "neko.transition.list",
+        "title": "%neko.transition.list.title%",
+        "category": "NekoCut: Transition"
+      },
+      {
+        "command": "neko.transition.add",
+        "title": "%neko.transition.add.title%",
+        "category": "NekoCut: Transition"
+      },
+      {
+        "command": "neko.transition.remove",
+        "title": "%neko.transition.remove.title%",
+        "category": "NekoCut: Transition"
+      },
+      {
+        "command": "neko.mask.add",
+        "title": "%neko.mask.add.title%",
+        "category": "NekoCut: Mask"
+      },
+      {
+        "command": "neko.mask.update",
+        "title": "%neko.mask.update.title%",
+        "category": "NekoCut: Mask"
+      },
+      {
+        "command": "neko.mask.remove",
+        "title": "%neko.mask.remove.title%",
+        "category": "NekoCut: Mask"
+      },
+      {
+        "command": "neko.keyframe.get",
+        "title": "%neko.keyframe.get.title%",
+        "category": "NekoCut: Keyframe"
+      },
+      {
+        "command": "neko.keyframe.add",
+        "title": "%neko.keyframe.add.title%",
+        "category": "NekoCut: Keyframe"
+      },
+      {
+        "command": "neko.keyframe.update",
+        "title": "%neko.keyframe.update.title%",
+        "category": "NekoCut: Keyframe"
+      },
+      {
+        "command": "neko.keyframe.remove",
+        "title": "%neko.keyframe.remove.title%",
+        "category": "NekoCut: Keyframe"
+      },
+      {
+        "command": "neko.shape.add",
+        "title": "%neko.shape.add.title%",
+        "category": "NekoCut: Shape"
+      },
+      {
+        "command": "neko.shape.update",
+        "title": "%neko.shape.update.title%",
+        "category": "NekoCut: Shape"
+      },
+      {
+        "command": "neko.color.set",
+        "title": "%neko.color.set.title%",
+        "category": "NekoCut: Color"
+      },
+      {
+        "command": "neko.color.reset",
+        "title": "%neko.color.reset.title%",
+        "category": "NekoCut: Color"
+      },
+      {
+        "command": "neko.audio.setProperties",
+        "title": "%neko.audio.setProperties.title%",
+        "category": "NekoCut: Audio"
+      },
+      {
+        "command": "neko.animation.add",
+        "title": "%neko.animation.add.title%",
+        "category": "NekoCut: Animation"
+      },
+      {
+        "command": "neko.subtitle.add",
+        "title": "%neko.subtitle.add.title%",
+        "category": "NekoCut: Subtitle"
+      },
+      {
+        "command": "neko.subtitle.import",
+        "title": "%neko.subtitle.import.title%",
+        "category": "NekoCut: Subtitle"
+      },
+      {
+        "command": "neko.media.trim",
+        "title": "%neko.media.trim.title%",
+        "category": "NekoCut: Media"
+      },
+      {
+        "command": "neko.media.split",
+        "title": "%neko.media.split.title%",
+        "category": "NekoCut: Media"
+      },
+      {
+        "command": "neko.media.setSpeed",
+        "title": "%neko.media.setSpeed.title%",
+        "category": "NekoCut: Media"
+      },
+      {
+        "command": "neko.media.separateAudio",
+        "title": "%neko.media.separateAudio.title%",
+        "category": "NekoCut: Media"
+      },
+      {
+        "command": "neko.render.frame",
+        "title": "%neko.render.frame.title%",
+        "category": "NekoCut: Render"
+      },
+      {
+        "command": "neko.render.clip",
+        "title": "%neko.render.clip.title%",
+        "category": "NekoCut: Render"
+      },
+      {
+        "command": "neko.render.thumbnail",
+        "title": "%neko.render.thumbnail.title%",
+        "category": "NekoCut: Render"
+      },
+      {
+        "command": "neko.export.video",
+        "title": "%neko.export.video.title%",
+        "category": "NekoCut: Export"
+      },
+      {
+        "command": "neko.export.getProgress",
+        "title": "%neko.export.getProgress.title%",
+        "category": "NekoCut: Export"
+      },
+      {
+        "command": "neko.cut.previewMedia",
+        "title": "%neko.cut.previewMedia.title%",
+        "category": "NekoCut"
+      },
+      {
+        "command": "neko.cut.authoring.importGeneratedClip",
+        "title": "%neko.cut.authoring.importGeneratedClip.title%",
+        "category": "NekoCut"
+      },
+      {
+        "command": "neko.cut.authoring.importStoryboard",
+        "title": "%neko.cut.authoring.importStoryboard.title%",
+        "category": "NekoCut"
+      },
+      {
+        "command": "neko.cut.authoring.importCanvasDraft",
+        "title": "%neko.cut.authoring.importCanvasDraft.title%",
+        "category": "NekoCut"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "submenu": "neko.explorer.newProject",
+          "group": "navigation@10",
+          "when": "explorerResourceIsFolder"
+        },
+        {
+          "command": "neko.openInEditor",
+          "group": "neko@1",
+          "when": "resourceExtname == .nkv"
+        }
+      ],
+      "neko.explorer.newProject": [
+        {
+          "command": "neko.newProject",
+          "group": "1@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "pnpm run compile:extension && pnpm run copy:webview",
+    "compile:extension": "esbuild ./packages/extension/src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:sharp --format=cjs --platform=node",
+    "copy:webview": "rm -rf dist/webview && mkdir -p dist/webview/assets && cp packages/webview/dist/*.html dist/webview/ && cp -R packages/webview/dist/assets/* dist/webview/assets/",
+    "watch": "pnpm run compile:extension -- --watch",
+    "lint": "eslint packages/extension/src --ext ts,tsx",
+    "test": "vitest",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.125.0",
+    "esbuild": "^0.19.8",
+    "typescript": "^5.3.2",
+    "vitest": "^4.1.2"
+  },
+  "dependencies": {
+    "sharp": "^0.34.0"
+  }
+}

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <!-- archive: box with zipper -->
+  <rect x="2" y="2" width="12" height="12" rx="1" stroke="#78716C" stroke-width="1.2"/>
+  <line x1="2" y1="5.5" x2="14" y2="5.5" stroke="#78716C" stroke-width="1.2"/>
+  <rect x="6" y="4" width="4" height="3" rx="0.5" stroke="#78716C" stroke-width="1"/>
+  <line x1="7" y1="8.5" x2="9" y2="8.5" stroke="#78716C" stroke-width="0.8"/>
+  <line x1="7" y1="10" x2="9" y2="10" stroke="#78716C" stroke-width="0.8"/>
+  <line x1="7" y1="11.5" x2="9" y2="11.5" stroke="#78716C" stroke-width="0.8"/>
+</svg>

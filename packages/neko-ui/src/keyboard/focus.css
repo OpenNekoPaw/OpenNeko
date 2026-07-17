@@ -1,0 +1,3 @@
+body[data-neko-keyboard-focused="false"] [data-neko-shortcut-hint="true"] {
+  display: none;
+}

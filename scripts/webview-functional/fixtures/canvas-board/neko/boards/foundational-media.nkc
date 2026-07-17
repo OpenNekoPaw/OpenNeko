@@ -1,0 +1,48 @@
+{
+  "version": "2.1",
+  "name": "Foundational Media Functional Canvas",
+  "viewport": {
+    "pan": {
+      "x": 0,
+      "y": 0
+    },
+    "zoom": 1
+  },
+  "nodes": [
+    {
+      "id": "media-foundational",
+      "type": "media",
+      "position": {
+        "x": 120,
+        "y": 120
+      },
+      "size": {
+        "width": 320,
+        "height": 240
+      },
+      "zIndex": 1,
+      "data": {
+        "mediaType": "image",
+        "resourceRef": {
+          "id": "functional-resource-cover",
+          "scope": "project",
+          "provider": "workspace",
+          "kind": "media",
+          "source": {
+            "kind": "file",
+            "projectRelativePath": "assets/foundational-cover.svg"
+          },
+          "locator": {
+            "kind": "file",
+            "path": "assets/foundational-cover.svg"
+          },
+          "fingerprint": {
+            "strategy": "identity",
+            "value": "functional-foundational-cover-v1"
+          }
+        }
+      }
+    }
+  ],
+  "connections": []
+}

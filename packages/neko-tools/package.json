@@ -1,0 +1,248 @@
+{
+  "name": "neko-tools",
+  "displayName": "Neko Tools",
+  "description": "Media comparison and diff tools - Image, Video, Audio, Asset variant comparison",
+  "version": "0.0.1",
+  "publisher": "neko",
+  "l10n": "./l10n",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neko/creative-suite"
+  },
+  "engines": {
+    "vscode": "^1.128.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "diff",
+    "compare",
+    "media",
+    "image",
+    "video",
+    "audio",
+    "asset"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "themes": [
+      {
+        "label": "Neko macOS Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/neko-macos-dark-color-theme.json"
+      },
+      {
+        "label": "Neko macOS Light",
+        "uiTheme": "vs",
+        "path": "./themes/neko-macos-light-color-theme.json"
+      }
+    ],
+    "iconThemes": [
+      {
+        "id": "neko-file-icons",
+        "label": "Neko File Icons",
+        "path": "./themes/neko-file-icon-theme.json"
+      }
+    ],
+    "languages": [
+      {
+        "id": "nekotools-jvi",
+        "aliases": [
+          "NKV Timeline",
+          "nkv"
+        ],
+        "extensions": [
+          ".nkv"
+        ],
+        "icon": {
+          "light": "./themes/icons/file-timeline.svg",
+          "dark": "./themes/icons/file-timeline.svg"
+        },
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "neko-canvas-file",
+        "aliases": [
+          "Neko Canvas"
+        ],
+        "extensions": [
+          ".nkc"
+        ],
+        "icon": {
+          "light": "./themes/icons/file-canvas.svg",
+          "dark": "./themes/icons/file-canvas.svg"
+        }
+      },
+      {
+        "id": "neko-audio-file",
+        "aliases": [
+          "Neko Audio"
+        ],
+        "extensions": [
+          ".nka"
+        ],
+        "icon": {
+          "light": "./themes/icons/file-audio.svg",
+          "dark": "./themes/icons/file-audio.svg"
+        }
+      },
+      {
+        "id": "neko-sketch-file",
+        "aliases": [
+          "Neko Sketch"
+        ],
+        "extensions": [
+          ".nks"
+        ],
+        "icon": {
+          "light": "./themes/icons/file-sketch.svg",
+          "dark": "./themes/icons/file-sketch.svg"
+        }
+      },
+      {
+        "id": "neko-puppet-file",
+        "aliases": [
+          "Neko Puppet"
+        ],
+        "extensions": [
+          ".nkp",
+          ".inp"
+        ],
+        "icon": {
+          "light": "./themes/icons/file-puppet.svg",
+          "dark": "./themes/icons/file-puppet.svg"
+        }
+      },
+      {
+        "id": "neko-model-file",
+        "aliases": [
+          "Neko 3D Model"
+        ],
+        "extensions": [
+          ".nkm"
+        ],
+        "icon": {
+          "light": "./themes/icons/file-model.svg",
+          "dark": "./themes/icons/file-model.svg"
+        }
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "neko.mediaDiff",
+        "displayName": "Media Diff",
+        "selector": [
+          {
+            "filenamePattern": "*.{png,jpg,jpeg,gif,webp,bmp,svg,mp4,mov,avi,mkv,webm,m4v,mp3,wav,ogg,flac,aac,m4a,nkv}"
+          }
+        ],
+        "priority": "option"
+      },
+      {
+        "viewType": "neko.assetVariantDiff",
+        "displayName": "Asset Variant Diff",
+        "selector": [
+          {
+            "filenamePattern": "*.asset-diff"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "neko.tools.compareFiles",
+        "title": "%neko.tools.compareFiles.title%",
+        "category": "Neko Tools"
+      },
+      {
+        "command": "neko.tools.compareImages",
+        "title": "%neko.tools.compareImages.title%",
+        "category": "Neko Tools"
+      },
+      {
+        "command": "neko.tools.compareVideos",
+        "title": "%neko.tools.compareVideos.title%",
+        "category": "Neko Tools"
+      },
+      {
+        "command": "neko.tools.compareAudio",
+        "title": "%neko.tools.compareAudio.title%",
+        "category": "Neko Tools"
+      },
+      {
+        "command": "neko.tools.compareAssetVariants",
+        "title": "%neko.tools.compareAssetVariants.title%",
+        "category": "Neko Tools"
+      },
+      {
+        "command": "neko.tools.showMediaInfo",
+        "title": "%neko.tools.showMediaInfo.title%",
+        "category": "Neko Tools"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "neko.tools.compareFiles",
+          "group": "3_compare@1",
+          "when": "listMultiSelection && resourceExtname =~ /\\.(png|jpg|jpeg|gif|webp|bmp|svg|mp4|mov|avi|mkv|webm|m4v|mp3|wav|ogg|flac|aac|m4a)$/i"
+        },
+        {
+          "command": "neko.tools.showMediaInfo",
+          "group": "neko@1",
+          "when": "resourceExtname =~ /\\.(png|jpg|jpeg|gif|webp|bmp|svg|mp4|mov|avi|mkv|webm|m4v|mp3|wav|ogg|flac|aac|m4a)$/i"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Neko Tools",
+      "properties": {
+        "neko.tools.diffMode": {
+          "type": "string",
+          "enum": [
+            "side-by-side",
+            "overlay",
+            "slider"
+          ],
+          "default": "side-by-side",
+          "description": "Default diff view mode"
+        },
+        "neko.tools.showMetadata": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show metadata in diff view"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "pnpm run build:webview && pnpm run compile:extension && pnpm run copy:webview",
+    "compile:extension": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:sharp --format=cjs --platform=node --main-fields=module,main",
+    "build:webview": "cd packages/webview && pnpm run build",
+    "copy:webview": "rm -rf dist/webview && cp -R packages/webview/dist dist/webview",
+    "watch": "pnpm run compile:extension -- --watch",
+    "lint": "eslint src --ext ts,tsx",
+    "test": "vitest",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.125.0",
+    "esbuild": "^0.19.8",
+    "typescript": "^5.3.2",
+    "vitest": "^4.1.2"
+  },
+  "dependencies": {
+    "jsonc-parser": "^3.3.0",
+    "sharp": "^0.34.0"
+  }
+}

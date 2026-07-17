@@ -1,0 +1,47 @@
+{
+  "name": "neko-suite",
+  "displayName": "OpenNeko",
+  "description": "Local creative suite for media editing, previews, assets, canvas workflows, and AI assistance",
+  "version": "0.0.1",
+  "publisher": "neko",
+  "license": "AGPL-3.0-or-later",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neko/creative-suite"
+  },
+  "engines": {
+    "vscode": "^1.128.0"
+  },
+  "categories": [
+    "Extension Packs",
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "video",
+    "editor",
+    "canvas",
+    "ai",
+    "creative",
+    "filmmaking",
+    "local-first"
+  ],
+  "extensionPack": [
+    "neko.neko-engine",
+    "neko.neko-tools",
+    "neko.neko-preview",
+    "neko.neko-cut",
+    "neko.neko-canvas",
+    "neko.neko-agent",
+    "neko.neko-assets"
+  ],
+  "scripts": {
+    "vscode:prepublish": "node scripts/validate-manifest.mjs",
+    "test": "node --test tests/manifest.test.mjs",
+    "package": "vsce package --no-dependencies --allow-missing-repository"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.9.2"
+  }
+}

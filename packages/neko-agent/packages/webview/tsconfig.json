@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@neko-agent/types": ["../agent-types/src/index.ts"],
+      "@neko-agent/types/*": ["../agent-types/src/*"],
+      "@neko/markdown": ["../../../neko-markdown/src/index.ts"],
+      "@neko/markdown/*": ["../../../neko-markdown/src/*"],
+      "@neko/shared": ["../../../neko-types/src/index.ts"],
+      "@neko/shared/*": ["../../../neko-types/src/*"],
+    }
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

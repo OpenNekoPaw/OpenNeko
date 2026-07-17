@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <!-- YAML: indented key-value lines -->
+  <line x1="2" y1="4" x2="7" y2="4" stroke="#CB171E" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="4" y1="6.5" x2="10" y2="6.5" stroke="#CB171E" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="4" y1="9" x2="12" y2="9" stroke="#CB171E" stroke-width="1.2" stroke-linecap="round"/>
+  <line x1="2" y1="11.5" x2="8" y2="11.5" stroke="#CB171E" stroke-width="1.2" stroke-linecap="round"/>
+  <circle cx="2.5" cy="6.5" r="0.6" fill="#CB171E"/>
+  <circle cx="2.5" cy="9" r="0.6" fill="#CB171E"/>
+</svg>

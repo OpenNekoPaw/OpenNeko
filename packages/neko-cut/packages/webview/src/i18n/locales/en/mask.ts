@@ -1,0 +1,47 @@
+import type { MessageBundle } from '@neko/shared';
+
+export const mask = {
+  'mask.add': 'Add Mask',
+  'mask.remove': 'Remove Mask',
+  'mask.noMasks': 'No masks applied',
+  'mask.feather': 'Feather',
+  'mask.expansion': 'Expansion',
+  'mask.opacity': 'Opacity',
+  'mask.inverted': 'Inverted',
+  'mask.shape.rectangle': 'Rectangle',
+  'mask.shape.ellipse': 'Ellipse',
+  'mask.shape.polygon': 'Polygon',
+  'mask.shape.bezier': 'Bezier',
+
+  'mask.blendMode.label': 'Blend Mode',
+  'mask.blendMode.add': 'Add',
+  'mask.blendMode.subtract': 'Subtract',
+  'mask.blendMode.intersect': 'Intersect',
+  'mask.blendMode.difference': 'Difference',
+
+  'masks.title': 'Masks',
+  'masks.addMask': 'Add Mask',
+  'masks.removeMask': 'Remove Mask',
+  'masks.noMasks': 'No masks applied',
+  'masks.enabled': 'Enabled',
+  'masks.inverted': 'Inverted',
+  'masks.shape.rectangle': 'Rectangle',
+  'masks.shape.ellipse': 'Ellipse',
+  'masks.shape.polygon': 'Polygon',
+  'masks.shape.bezier': 'Bezier',
+
+  'masks.properties.feather': 'Feather',
+  'masks.properties.expansion': 'Expansion',
+  'masks.properties.opacity': 'Opacity',
+  'masks.properties.centerX': 'Center X',
+  'masks.properties.centerY': 'Center Y',
+  'masks.properties.width': 'Width',
+  'masks.properties.height': 'Height',
+  'masks.properties.rotation': 'Rotation',
+  'masks.properties.cornerRadius': 'Corner Radius',
+
+  'masks.blendMode.add': 'Add',
+  'masks.blendMode.subtract': 'Subtract',
+  'masks.blendMode.intersect': 'Intersect',
+  'masks.blendMode.difference': 'Difference',
+} as const satisfies MessageBundle;

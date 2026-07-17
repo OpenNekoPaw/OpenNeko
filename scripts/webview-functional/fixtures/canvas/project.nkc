@@ -1,0 +1,31 @@
+{
+  "version": "2.1",
+  "name": "Functional Canvas",
+  "viewport": {
+    "pan": {
+      "x": 0,
+      "y": 0
+    },
+    "zoom": 1
+  },
+  "nodes": [
+    {
+      "id": "text-1",
+      "type": "text",
+      "position": {
+        "x": 120,
+        "y": 100
+      },
+      "size": {
+        "width": 280,
+        "height": 160
+      },
+      "zIndex": 1,
+      "data": {
+        "content": "Delete me through the real Canvas UI",
+        "format": "plain"
+      }
+    }
+  ],
+  "connections": []
+}

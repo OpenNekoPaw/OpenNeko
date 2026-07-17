@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <!-- Svelte: S-curve flame -->
+  <path d="M11 3C9 1.5 6 2 5 4C4 6 5.5 7.5 8 8.5C10.5 9.5 12 11 11 13C10 15 7 15.5 5 14" stroke="#FF3E00" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="6" y1="4.5" x2="9" y2="6" stroke="#FF3E00" stroke-width="1" stroke-linecap="round"/>
+  <line x1="7" y1="10" x2="10" y2="11.5" stroke="#FF3E00" stroke-width="1" stroke-linecap="round"/>
+</svg>

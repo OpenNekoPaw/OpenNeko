@@ -1,0 +1,92 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "script-document-input",
+  "suiteId": "skill.storyboard",
+  "caseGroup": "paraphrase",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Turn a script/document excerpt into reviewable Storyboard Markdown without requiring complete production schema.",
+    "canonicalPath": [
+      "semantic Storyboard Skill discovery",
+      "script/document source interpretation",
+      "flexible Storyboard Markdown",
+      "final Markdown table"
+    ],
+    "forbiddenFallback": [
+      "structured Storyboard authoring",
+      "specialized Canvas table/scene/shot fallback",
+      "legacy storyboard compiler"
+    ],
+    "observables": [
+      {
+        "ref": "skill-facts",
+        "kind": "runtime-fact",
+        "description": "Builtin Storyboard identity and prompt composition facts.",
+        "required": true
+      },
+      {
+        "ref": "output-contract",
+        "kind": "output-contract",
+        "description": "Reviewable Markdown fields derived from the source excerpt.",
+        "required": true
+      },
+      {
+        "ref": "no-fallback",
+        "kind": "runtime-fact",
+        "description": "No structured or legacy Canvas fallback participated.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The source excerpt becomes flexible Markdown with scene/shot, visual action, camera, dialogue or sound, duration guidance, and explicit uncertainty where details are absent.",
+    "expectedFailure": "Missing Skill injection, invented authoritative source facts, or structured fallback fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "把下面的剧本/创作文档摘录整理成可审阅的 Markdown 分镜初稿。保留来源、不确定性、画面动作、机位、对白/声音与建议时长；缺失信息标注待定，不要创建结构化 Canvas 节点：\nINT. 旧书店 - 夜\n林遥推门进来，风铃轻响。她在柜台上发现一封未署名的信。\n林遥：这是留给谁的？"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "skill-facts" },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "storyboard",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "storyboard",
+        "fingerprint": "sha256:ab73de988b98b22a9b2598de923c56999abb70ef1cf4bb97c580fabd3b54d719"
+      },
+      "status": "injected",
+      "evidenceRef": "skill-facts"
+    },
+    {
+      "id": "table",
+      "kind": "structured-output",
+      "format": "table",
+      "requiredFields": ["scene", "shot", "action", "camera", "dialogue", "duration"],
+      "locale": "zh-cn",
+      "evidenceRef": "output-contract"
+    },
+    {
+      "id": "fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "canvas.createStoryboardFromMarkdown",
+        "canvas.ingestMarkdown",
+        "canvas_create_node",
+        "canvas_create_composite"
+      ],
+      "evidenceRef": "no-fallback"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

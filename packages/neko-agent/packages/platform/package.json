@@ -1,0 +1,24 @@
+{
+  "name": "@neko/platform",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "dependencies": {
+    "@neko-agent/types": "workspace:*",
+    "@neko/ai-sdk": "workspace:*",
+    "@neko/shared": "workspace:*",
+    "ai": "^6.0.134"
+  },
+  "devDependencies": {
+    "@neko/agent": "workspace:*"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./config/*": "./src/config/*.ts",
+    "./files": "./src/files/index.ts",
+    "./media": "./src/media/index.ts",
+    "./media/*": "./src/media/*.ts",
+    "./*": "./src/*"
+  },
+  "license": "AGPL-3.0-or-later"
+}

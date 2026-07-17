@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "name": "Cut functional fixture",
+  "resolution": {
+    "width": 1280,
+    "height": 720
+  },
+  "fps": 30,
+  "tracks": [
+    {
+      "id": "track-main",
+      "name": "Main Track",
+      "type": "media",
+      "elements": [],
+      "muted": false,
+      "isMain": true
+    }
+  ]
+}

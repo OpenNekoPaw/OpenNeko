@@ -1,0 +1,37 @@
+{
+  "name": "@neko/preview-webview",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    "./host-adapter": "./src/host-adapter/index.tsx"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@neko/neko-client": "workspace:*",
+    "@neko/shared": "workspace:*",
+    "@neko/ui": "workspace:*",
+    "@zip.js/zip.js": "^2.7.52",
+    "docx-preview": "^0.3.3",
+    "epubjs": "^0.3.93",
+    "pdfjs-dist": "^4.10.38",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.16",
+    "jsdom": "^27.0.1",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.2",
+    "vite": "^6.4.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

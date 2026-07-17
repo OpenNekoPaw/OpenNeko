@@ -1,0 +1,668 @@
+// =============================================================================
+// Timeline Proto Definition (IDL)
+//
+// Authority: neko-engine Rust domain model
+// Source files:
+//   - packages/neko-engine/packages/engine-kernel/src/domain/timeline.rs
+//   - packages/neko-engine/packages/engine-kernel/src/domain/transform.rs
+//   - packages/neko-engine/packages/engine-kernel/src/animation/easing.rs
+//   - packages/neko-engine/packages/engine-kernel/src/animation/keyframe.rs
+//   - packages/neko-engine/packages/engine-kernel/src/animation/interpolate.rs
+//   - packages/neko-engine/packages/engine-kernel/src/gpu/compositor.rs (BlendMode)
+//   - packages/neko-engine/packages/engine-kernel/src/gpu/transition_processor.rs (TransitionType)
+//   - packages/neko-engine/packages/types/src/common.rs (TrackType)
+//   - packages/neko-engine/packages/types/src/effects.rs (EffectParams)
+//
+// Purpose:
+//   This file serves as the single source of truth IDL document that both
+//   TS and Rust types must conform to. Currently hand-maintained; protoc/buf
+//   auto-generation is planned for a future phase.
+//
+// Convention:
+//   - Field names use camelCase (matching Rust serde rename_all = "camelCase")
+//   - Enum values use PascalCase (matching Rust enum variants)
+//   - Only engine-recognized fields are included; UI state is separate
+// =============================================================================
+
+syntax = "proto3";
+
+package neko.timeline;
+
+// =============================================================================
+// Transform (domain/transform.rs)
+// =============================================================================
+
+message Transform {
+  // Position X (pixels or normalized, depends on context)
+  float x = 1;        // default: 0.0
+  // Position Y (pixels or normalized)
+  float y = 2;        // default: 0.0
+  // Scale X (1.0 = 100%)
+  float scale_x = 3;  // default: 1.0
+  // Scale Y (1.0 = 100%)
+  float scale_y = 4;  // default: 1.0
+  // Rotation in degrees
+  float rotation = 5;  // default: 0.0
+  // Anchor point X (0.0 = left, 0.5 = center, 1.0 = right)
+  float anchor_x = 6;  // default: 0.0
+  // Anchor point Y (0.0 = top, 0.5 = center, 1.0 = bottom)
+  float anchor_y = 7;  // default: 0.0
+}
+
+// =============================================================================
+// TrackType (types/common.rs)
+// =============================================================================
+
+enum TrackType {
+  TRACK_TYPE_VIDEO = 0;
+  TRACK_TYPE_AUDIO = 1;
+  TRACK_TYPE_TEXT = 2;
+  TRACK_TYPE_EFFECT = 3;
+  TRACK_TYPE_SUBTITLE = 4;
+  TRACK_TYPE_SHAPE = 5;
+  TRACK_TYPE_MEDIA = 6;  // Alias for Video (used in JVI files)
+  TRACK_TYPE_SCENE3D = 7;
+  TRACK_TYPE_PUPPET = 8;
+}
+
+// =============================================================================
+// BlendMode (gpu/compositor.rs) — 27 modes
+// =============================================================================
+
+enum BlendMode {
+  // Basic
+  BLEND_MODE_NORMAL = 0;
+  BLEND_MODE_DISSOLVE = 1;
+  // Darken Group
+  BLEND_MODE_DARKEN = 2;
+  BLEND_MODE_MULTIPLY = 3;
+  BLEND_MODE_COLOR_BURN = 4;
+  BLEND_MODE_LINEAR_BURN = 5;
+  BLEND_MODE_DARKER_COLOR = 6;
+  // Lighten Group
+  BLEND_MODE_LIGHTEN = 7;
+  BLEND_MODE_SCREEN = 8;
+  BLEND_MODE_COLOR_DODGE = 9;
+  BLEND_MODE_LINEAR_DODGE = 10;  // Same as Add
+  BLEND_MODE_LIGHTER_COLOR = 11;
+  // Contrast Group
+  BLEND_MODE_OVERLAY = 12;
+  BLEND_MODE_SOFT_LIGHT = 13;
+  BLEND_MODE_HARD_LIGHT = 14;
+  BLEND_MODE_VIVID_LIGHT = 15;
+  BLEND_MODE_LINEAR_LIGHT = 16;
+  BLEND_MODE_PIN_LIGHT = 17;
+  BLEND_MODE_HARD_MIX = 18;
+  // Difference Group
+  BLEND_MODE_DIFFERENCE = 19;
+  BLEND_MODE_EXCLUSION = 20;
+  BLEND_MODE_SUBTRACT = 21;
+  BLEND_MODE_DIVIDE = 22;
+  // HSL Group
+  BLEND_MODE_HUE = 23;
+  BLEND_MODE_SATURATION = 24;
+  BLEND_MODE_COLOR = 25;
+  BLEND_MODE_LUMINOSITY = 26;
+}
+
+// =============================================================================
+// TransitionType (gpu/transition_processor.rs) — 18 types
+// =============================================================================
+
+enum TransitionType {
+  TRANSITION_TYPE_FADE = 0;
+  TRANSITION_TYPE_WIPE_LEFT = 1;
+  TRANSITION_TYPE_WIPE_RIGHT = 2;
+  TRANSITION_TYPE_WIPE_UP = 3;
+  TRANSITION_TYPE_WIPE_DOWN = 4;
+  TRANSITION_TYPE_IRIS_CIRCLE = 5;
+  TRANSITION_TYPE_IRIS_RECTANGLE = 6;
+  TRANSITION_TYPE_CLOCK = 7;
+  TRANSITION_TYPE_SLIDE_LEFT = 8;
+  TRANSITION_TYPE_SLIDE_RIGHT = 9;
+  TRANSITION_TYPE_ZOOM_IN = 10;
+  TRANSITION_TYPE_ZOOM_OUT = 11;
+  TRANSITION_TYPE_DISSOLVE = 12;
+  TRANSITION_TYPE_PIXELATE = 13;
+  TRANSITION_TYPE_RIPPLE = 14;
+  TRANSITION_TYPE_SWIRL = 15;
+  TRANSITION_TYPE_GLITCH = 16;
+  TRANSITION_TYPE_FLASH = 17;
+}
+
+// =============================================================================
+// EasingType (animation/easing.rs) — 30 types + CubicBezier
+// =============================================================================
+
+enum EasingType {
+  EASING_TYPE_LINEAR = 0;
+  // Quad
+  EASING_TYPE_EASE_IN_QUAD = 1;
+  EASING_TYPE_EASE_OUT_QUAD = 2;
+  EASING_TYPE_EASE_IN_OUT_QUAD = 3;
+  // Cubic
+  EASING_TYPE_EASE_IN_CUBIC = 4;
+  EASING_TYPE_EASE_OUT_CUBIC = 5;
+  EASING_TYPE_EASE_IN_OUT_CUBIC = 6;
+  // Quart
+  EASING_TYPE_EASE_IN_QUART = 7;
+  EASING_TYPE_EASE_OUT_QUART = 8;
+  EASING_TYPE_EASE_IN_OUT_QUART = 9;
+  // Quint
+  EASING_TYPE_EASE_IN_QUINT = 10;
+  EASING_TYPE_EASE_OUT_QUINT = 11;
+  EASING_TYPE_EASE_IN_OUT_QUINT = 12;
+  // Sine
+  EASING_TYPE_EASE_IN_SINE = 13;
+  EASING_TYPE_EASE_OUT_SINE = 14;
+  EASING_TYPE_EASE_IN_OUT_SINE = 15;
+  // Expo
+  EASING_TYPE_EASE_IN_EXPO = 16;
+  EASING_TYPE_EASE_OUT_EXPO = 17;
+  EASING_TYPE_EASE_IN_OUT_EXPO = 18;
+  // Circ
+  EASING_TYPE_EASE_IN_CIRC = 19;
+  EASING_TYPE_EASE_OUT_CIRC = 20;
+  EASING_TYPE_EASE_IN_OUT_CIRC = 21;
+  // Back
+  EASING_TYPE_EASE_IN_BACK = 22;
+  EASING_TYPE_EASE_OUT_BACK = 23;
+  EASING_TYPE_EASE_IN_OUT_BACK = 24;
+  // Elastic
+  EASING_TYPE_EASE_IN_ELASTIC = 25;
+  EASING_TYPE_EASE_OUT_ELASTIC = 26;
+  EASING_TYPE_EASE_IN_OUT_ELASTIC = 27;
+  // Bounce
+  EASING_TYPE_EASE_IN_BOUNCE = 28;
+  EASING_TYPE_EASE_OUT_BOUNCE = 29;
+  EASING_TYPE_EASE_IN_OUT_BOUNCE = 30;
+  // Custom cubic bezier (params stored separately)
+  EASING_TYPE_CUBIC_BEZIER = 31;
+}
+
+// =============================================================================
+// InterpolationMode (animation/interpolate.rs)
+// =============================================================================
+
+enum InterpolationMode {
+  INTERPOLATION_MODE_LINEAR = 0;
+  INTERPOLATION_MODE_STEP = 1;
+  INTERPOLATION_MODE_SMOOTH = 2;
+}
+
+// =============================================================================
+// EffectType (types/effects.rs)
+// =============================================================================
+
+enum EffectType {
+  EFFECT_TYPE_BLUR = 0;
+  EFFECT_TYPE_SHARPEN = 1;
+  EFFECT_TYPE_COLOR_CORRECTION = 2;
+  EFFECT_TYPE_BRIGHTNESS = 3;
+  EFFECT_TYPE_CONTRAST = 4;
+  EFFECT_TYPE_SATURATION = 5;
+  EFFECT_TYPE_HUE = 6;
+  EFFECT_TYPE_EXPOSURE = 7;
+  EFFECT_TYPE_GAMMA = 8;
+  EFFECT_TYPE_VIGNETTE = 9;
+  EFFECT_TYPE_CHROMATIC_ABERRATION = 10;
+  EFFECT_TYPE_FILM_GRAIN = 11;
+  EFFECT_TYPE_CUSTOM = 12;
+}
+
+// =============================================================================
+// EffectParams (types/effects.rs)
+// =============================================================================
+
+message EffectParams {
+  // Effect type
+  EffectType effect_type = 1;
+  // Effect intensity (0.0 - 1.0)
+  double intensity = 2;  // default: 1.0
+  // Effect-specific parameters (JSON blob)
+  string params_json = 3;
+  // Whether effect is enabled
+  bool enabled = 4;  // default: true
+}
+
+// =============================================================================
+// AudioProperties (domain/timeline.rs)
+// =============================================================================
+
+message AudioProperties {
+  // Volume (0.0 - 1.0)
+  double volume = 1;   // default: 1.0
+  // Pan (-1.0 = left, 0.0 = center, 1.0 = right)
+  double pan = 2;      // default: 0.0
+  // Whether audio is muted
+  bool muted = 3;      // default: false
+  // Fade in duration (seconds)
+  double fade_in = 4;  // default: 0.0
+  // Fade out duration (seconds)
+  double fade_out = 5; // default: 0.0
+  // Fade in easing curve (Phase 3)
+  EasingType fade_in_curve = 6;   // default: LINEAR
+  // Fade out easing curve (Phase 3)
+  EasingType fade_out_curve = 7;  // default: LINEAR
+  // Gain adjustment in dB (Phase 3), -20 to +20
+  double gain = 8;                // default: 0.0
+}
+
+// =============================================================================
+// Element Types (domain/timeline.rs)
+// =============================================================================
+
+message MediaElementData {
+  // Source file path
+  string src = 1;
+  // Resource ID (deterministic hash)
+  optional string resource_id = 2;
+  // Audio properties (for video with audio)
+  optional AudioProperties audio = 3;
+  // Media type (video/image)
+  optional string media_type = 4;
+  // Linked audio element ID
+  optional string linked_audio_id = 5;
+  // DEPRECATED: use AudioProperties audio field instead
+  float volume = 6;  // default: 1.0
+}
+
+message AudioElementData {
+  // Source file path
+  string src = 1;
+  // Resource ID
+  optional string resource_id = 2;
+  // Audio properties (legacy nested format)
+  optional AudioProperties audio = 3;
+  // Linked video element ID
+  optional string linked_video_id = 4;
+  // Audio settings (JVI nested format with baseValue)
+  optional AudioSettings audio_settings = 5;
+  // DEPRECATED: use AudioProperties audio field instead
+  float volume = 6;  // default: 1.0
+  // DEPRECATED: use AudioProperties audio field instead
+  float pan = 7;     // default: 0.0
+  // DEPRECATED: use AudioProperties audio field instead
+  double fade_in = 8;  // default: 0.0
+  // DEPRECATED: use AudioProperties audio field instead
+  double fade_out = 9; // default: 0.0
+}
+
+// Audio settings (JVI nested format with baseValue)
+message AudioSettings {
+  // Volume setting
+  optional AudioValue volume = 1;
+  // Pan setting
+  optional AudioValue pan = 2;
+  // Whether audio is muted
+  bool muted = 3;  // default: false
+}
+
+// Audio value with baseValue (JVI format)
+message AudioValue {
+  // Base value
+  float base_value = 1;
+}
+
+message TextElementData {
+  // Text content
+  string content = 1;
+  // Font family
+  string font_family = 2;   // default: "Arial"
+  // Font size in pixels
+  float font_size = 3;      // default: 48.0
+  // Text color (hex)
+  string color = 4;         // default: "#ffffff"
+  // Background color
+  string background_color = 5; // default: "transparent"
+  // Text alignment
+  string text_align = 6;    // default: "center"
+  // Font weight
+  string font_weight = 7;   // default: "normal"
+  // Font style
+  string font_style = 8;    // default: "normal"
+  // Text decoration (Phase 2): "none" | "underline" | "line-through"
+  string text_decoration = 9;     // default: "none"
+  // Line height multiplier (Phase 2)
+  float line_height = 10;         // default: 1.2
+  // Letter spacing in pixels (Phase 2)
+  float letter_spacing = 11;      // default: 0.0
+  // Stroke color hex (Phase 2)
+  string stroke_color = 12;       // default: "transparent"
+  // Stroke width in pixels (Phase 2)
+  float stroke_width = 13;        // default: 0.0
+  // Drop shadow (Phase 2)
+  optional TextShadow shadow = 14;
+}
+
+// Text shadow properties (Phase 2)
+message TextShadow {
+  // Shadow color
+  string color = 1;    // default: "rgba(0,0,0,0.5)"
+  // Horizontal offset
+  float offset_x = 2;  // default: 0.0
+  // Vertical offset
+  float offset_y = 3;  // default: 0.0
+  // Blur radius
+  float blur = 4;       // default: 0.0
+}
+
+message ShapeElementData {
+  // Shape type
+  string shape_type = 1;
+  // Fill color
+  string fill = 2;
+  // Stroke color
+  string stroke = 3;
+  // Stroke width
+  float stroke_width = 4;
+}
+
+message SubtitleElementData {
+  // Subtitle text
+  string text = 1;
+  // Font size
+  float font_size = 2;  // default: 48.0
+  // Text color
+  string color = 3;     // default: "#ffffff"
+  // Font family (Phase 2)
+  string font_family = 4;         // default: "Arial"
+  // Background color (Phase 2)
+  string background_color = 5;    // default: "transparent"
+  // Text alignment (Phase 2)
+  string text_align = 6;          // default: "center"
+  // Stroke color hex (Phase 2)
+  string stroke_color = 7;        // default: "transparent"
+  // Stroke width in pixels (Phase 2)
+  float stroke_width = 8;         // default: 0.0
+  // Drop shadow (Phase 2)
+  optional TextShadow shadow = 9;
+}
+
+message CameraOverride {
+  repeated float position = 1;  // [x, y, z]
+  repeated float target = 2;    // [x, y, z]
+  repeated float up = 3;        // [x, y, z] default: [0, 1, 0]
+  float fov_y = 4;              // degrees, default: 45.0
+}
+
+message Scene3DElementData {
+  string src = 1;
+  optional string camera_node_id = 2;
+  optional string animation_clip = 3;
+  bool animation_loop = 4;
+  double animation_speed = 5;  // default: 1.0
+  repeated float background_color = 6;  // [r,g,b,a]
+  optional CameraOverride camera_override = 7;
+}
+
+message PuppetElementData {
+  string src = 1;
+  optional string animation_clip = 2;
+  bool animation_loop = 3;
+  double animation_speed = 4;  // default: 1.0
+  optional string expression = 5;
+  map<string, float> parameter_overrides = 6;
+}
+
+// =============================================================================
+// Element (domain/timeline.rs)
+// =============================================================================
+
+message Element {
+  // Element ID
+  string id = 1;
+  // Element name
+  string name = 2;
+  // Element-specific data (tagged union via oneof)
+  oneof element_type {
+    MediaElementData media = 3;
+    AudioElementData audio = 4;
+    TextElementData text = 5;
+    ShapeElementData shape = 6;
+    SubtitleElementData subtitle = 7;
+    Scene3DElementData scene3d = 30;
+    PuppetElementData puppet = 31;
+  }
+  // Start time on timeline (seconds)
+  double start_time = 8;
+  // Duration on timeline (seconds)
+  double duration = 9;
+  // Trim start (seconds into source)
+  double trim_start = 10;  // default: 0.0
+  // Trim end (seconds from source end)
+  double trim_end = 11;    // default: 0.0
+  // 2D transform
+  Transform transform = 12;
+  // Opacity (0.0 - 1.0)
+  double opacity = 13;     // default: 1.0
+  // Blend mode
+  BlendMode blend_mode = 14; // default: NORMAL
+  // Applied effects
+  repeated EffectParams effects = 15;
+  // Whether element is muted
+  bool muted = 16;    // default: false
+  // Whether element is hidden
+  bool hidden = 17;   // default: false
+  // Whether element is locked
+  bool locked = 18;   // default: false
+  // Speed properties (Phase 1)
+  optional SpeedProperties speed = 19;
+  // Transition from previous element (Phase 2)
+  optional Transition transition_in = 20;
+  // Transition to next element (Phase 2)
+  optional Transition transition_out = 21;
+  // Workflow lineage (Phase 6.3) — provenance back to the canvas shot /
+  // generation task / plan that produced this element.  All fields
+  // optional; empty string = "unset".
+  optional ClipLineage lineage = 22;
+}
+
+// =============================================================================
+// ClipLineage (Phase 6.3) — Workflow Orchestration provenance
+// =============================================================================
+
+// Links a timeline element back to its creation context so users can
+// answer "where did this clip come from?" and agents can safely re-run
+// the generating flow with the same inputs.
+message ClipLineage {
+  // Source ShotCanvasNode.id (canvas shot that produced this clip).
+  // Empty string when clip was authored directly in the timeline.
+  string shot_node_id = 1;
+  // Generation task id (MediaGenerationService.generate -> taskId).
+  // Empty string when no AI generation was involved (pure render / import).
+  string generation_id = 2;
+  // NkPlan id that orchestrated the generation.
+  // Empty string when the shot was generated outside a workflow plan.
+  string plan_id = 3;
+  // RouteLevel the plan ran at (L0..L4, see agent-unified-workflow.md).
+  // Empty string when unset.
+  string route_level = 4;
+  // Unix millis — when this lineage was recorded.
+  int64 recorded_at = 5;
+}
+
+// =============================================================================
+// SpeedProperties (Phase 1)
+// =============================================================================
+
+message SpeedProperties {
+  // Playback speed (0.1 - 4.0, default: 1.0)
+  // When speed != 1.0, element.duration represents timeline duration (what viewer sees).
+  // Source media range = duration * speed.
+  double speed = 1;            // default: 1.0
+  // Whether playback is reversed
+  bool reverse = 2;            // default: false
+  // Whether to preserve audio pitch when changing speed
+  bool preserve_pitch = 3;     // default: true
+  // Time remap data (for complex speed changes)
+  optional TimeRemapData time_remap = 4;
+}
+
+message TimeRemapData {
+  // Whether time remapping is enabled
+  bool enabled = 1;
+  // Keyframes for time remapping
+  repeated TimeRemapKeyframe keyframes = 2;
+}
+
+message TimeRemapKeyframe {
+  // Unique identifier
+  string id = 1;
+  // Output time (position on timeline)
+  double output_time = 2;
+  // Input time (position in source media)
+  double input_time = 3;
+  // Easing to next keyframe
+  EasingType easing = 4;
+}
+
+// =============================================================================
+// Transition (Phase 2)
+// =============================================================================
+
+message Transition {
+  // Transition type
+  TransitionType transition_type = 1;
+  // Duration in seconds
+  double duration = 2;
+  // Easing function for progress
+  EasingType easing = 3;
+  // Edge feather/softness (0.0 - 1.0)
+  float feather = 4;  // default: 0.0
+}
+
+// =============================================================================
+// Track (domain/timeline.rs)
+// =============================================================================
+
+message Track {
+  // Track ID
+  string id = 1;
+  // Track name
+  string name = 2;
+  // Track type
+  TrackType track_type = 3;
+  // Elements in the track
+  repeated Element elements = 4;
+  // Whether track is muted
+  bool muted = 5;    // default: false
+  // Whether track is locked
+  bool locked = 6;   // default: false
+  // Whether track is hidden
+  bool hidden = 7;   // default: false
+  // Whether this is the main track
+  bool is_main = 8;  // default: false
+}
+
+// =============================================================================
+// Timeline (domain/timeline.rs)
+// =============================================================================
+
+message Timeline {
+  // Total duration in seconds
+  double duration = 1;
+  // Output resolution
+  Resolution resolution = 2;
+  // Frame rate
+  double fps = 3;
+  // Tracks in the timeline
+  repeated Track tracks = 4;
+  // Project defaults
+  optional ProjectDefaults defaults = 5;
+}
+
+message Resolution {
+  uint32 width = 1;
+  uint32 height = 2;
+}
+
+message ProjectDefaults {
+  optional TextDefaults text = 1;
+  optional TransformDefaults transform = 2;
+  optional AudioDefaults audio = 3;
+}
+
+message TextDefaults {
+  float font_size = 1;     // default: 48.0
+  string font_family = 2;  // default: "Arial"
+  string color = 3;        // default: "#ffffff"
+}
+
+message TransformDefaults {
+  float x = 1;
+  float y = 2;
+  float scale_x = 3;  // default: 1.0
+  float scale_y = 4;  // default: 1.0
+  float rotation = 5;
+}
+
+message AudioDefaults {
+  float volume = 1;    // default: 1.0
+  float pan = 2;
+  double fade_in = 3;
+  double fade_out = 4;
+}
+
+// =============================================================================
+// Animation Types (animation/keyframe.rs, animation/interpolate.rs)
+// =============================================================================
+
+message AnimatableValue {
+  oneof value {
+    double number = 1;
+    Point2D point_2d = 2;
+    Point3D point_3d = 3;
+    ColorValue color = 4;
+    bool bool_value = 5;
+  }
+}
+
+message Point2D {
+  double x = 1;
+  double y = 2;
+}
+
+message Point3D {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+message ColorValue {
+  double r = 1;
+  double g = 2;
+  double b = 3;
+  double a = 4;
+}
+
+message Keyframe {
+  // Time in seconds from clip/animation start
+  double time = 1;
+  // Value at this keyframe
+  AnimatableValue value = 2;
+  // Easing to next keyframe
+  EasingType easing = 3;
+  // Interpolation mode
+  InterpolationMode interpolation = 4;
+}
+
+message KeyframeTrack {
+  // Property name (e.g., "opacity", "positionX", "scale")
+  string property = 1;
+  // Keyframes sorted by time
+  repeated Keyframe keyframes = 2;
+  // Default value when no keyframes
+  optional AnimatableValue default_value = 3;
+}
+
+// =============================================================================
+// CubicBezier parameters (stored alongside EasingType when type = CUBIC_BEZIER)
+// =============================================================================
+
+message CubicBezierParams {
+  double x1 = 1;
+  double y1 = 2;
+  double x2 = 3;
+  double y2 = 4;
+}

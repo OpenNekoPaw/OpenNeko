@@ -1,0 +1,30 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "explicit-chat-model",
+  "suiteId": "agent-runtime.model-binding",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Run an Agent turn with an explicitly selected chat provider and model.",
+    "canonicalPath": ["flat agent.main profile", "TUI Pi runtime assembly", "Pi provider/model registration", "effective configuration facts"],
+    "forbiddenFallback": ["configured default model", "active global model", "nested purpose fallback", "Platform GenericAdapter", "mock provider"],
+    "observables": [{ "ref": "model-facts", "kind": "runtime-fact", "description": "Requested and effective provider/model identity and configuration digest.", "required": true }],
+    "expectedResult": "The actual and effective model identities match the explicit profile without fallback.",
+    "expectedFailure": "Unavailable, mismatched, or default-fallback model evidence fails as configuration or case failure."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["nekoapi-gpt-5.5"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "Reply with the exact text MODEL_BINDING_OK." },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "model-facts" },
+    { "id": "pi-runtime", "kind": "pi-runtime", "implementation": "pi-agent-core", "transcriptAuthority": "pi-session", "productMetadataAuthority": "sqlite", "purpose": "agent.main", "workspaceLocatorKind": "virtual", "turnDurability": "durable", "evidenceRef": "model-facts" },
+    { "id": "model", "kind": "model", "profileId": "nekoapi-gpt-5.5", "noFallback": true, "evidenceRef": "model-facts" },
+    { "id": "answer", "kind": "final-answer", "mode": "contains", "text": ["MODEL_BINDING_OK"], "evidenceRef": "model-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 120000, "repetitions": 1 }
+}

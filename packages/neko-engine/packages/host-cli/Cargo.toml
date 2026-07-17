@@ -1,0 +1,35 @@
+[package]
+name = "neko-host-cli"
+version.workspace = true
+edition.workspace = true
+description = "Command-line tool for neko media processing"
+license.workspace = true
+
+[[bin]]
+name = "neko-engine"
+path = "src/main.rs"
+
+[dependencies]
+neko-host-api = { path = "../host-api" }
+neko-host-http = { path = "../host-http" }
+neko-engine-types = { path = "../engine-types" }
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-tracy = { workspace = true, optional = true }
+tracy-client = { workspace = true, optional = true }
+wgpu.workspace = true
+pollster.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+bytemuck.workspace = true
+uuid.workspace = true
+indicatif.workspace = true
+
+[features]
+default = []
+tracy = ["tracing-tracy", "tracy-client"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"

@@ -1,0 +1,36 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "reject-existing-target",
+  "suiteId": "skill.skill-creator",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Reject creation over an existing portable Skill without overwriting, merging, or deleting user content.",
+    "canonicalPath": ["builtin skill-creator", "existing canonical target", "CreateSkill conflict result", "unchanged sentinel validator"],
+    "forbiddenFallback": ["overwrite", "merge", "delete and recreate", "ordinary file write", "Market identity"],
+    "observables": [
+      { "ref": "skill-facts", "kind": "runtime-fact", "description": "Builtin skill-creator injection facts.", "required": true },
+      { "ref": "tool-facts", "kind": "runtime-fact", "description": "CreateSkill skill-already-exists result facts.", "required": true },
+      { "ref": "existing-file", "kind": "post-check", "description": "The pre-existing sentinel file remains byte-identical.", "required": true }
+    ],
+    "expectedResult": "CreateSkill reports skill-already-exists and preserves the existing portable Skill exactly.",
+    "expectedFailure": "Success, fallback writing, a different error, modified content, or a new manifest fails."
+  },
+  "fixtureRefs": ["skill-existing-target-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "$skill-creator Call CreateSkill exactly once with target project and skill { name: eval-existing-target-skill, description: Evaluate canonical target conflict., body: # Replacement Must Not Commit }. Preserve the native conflict; do not overwrite, merge, remove, retry, or use another writer." },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+  ],
+  "assertions": [
+    { "id": "skill", "kind": "skill", "identity": { "name": "skill-creator", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "skill-creator", "fingerprint": "sha256:6bf26dda3f4ce05288a597f57195f7af1cf51984da89fe64813deb18d5bcf9a6" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "tool", "kind": "tool-call", "name": "CreateSkill", "status": "error", "resultIncludes": { "code": "skill-already-exists" }, "evidenceRef": "tool-facts" },
+    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["Write", "LegacyCreateSkill", "delete", "overwrite"], "evidenceRef": "tool-facts" }
+  ],
+  "artifactChecks": [
+    { "id": "existing-skill-unchanged", "kind": "file", "evidenceRef": "existing-file", "path": ".agents/skills/eval-existing-target-skill/SKILL.md", "digest": "sha256:14a981963fece2d010d7f17a6807cee32200f135301c273953854b3a1349ab06", "validatorId": "utf8-text-v1" },
+    { "id": "manifest-absent", "kind": "file-absent", "evidenceRef": "existing-file", "path": ".agents/skills/eval-existing-target-skill/manifest.json" }
+  ],
+  "budget": { "timeoutMs": 120000, "repetitions": 1 }
+}

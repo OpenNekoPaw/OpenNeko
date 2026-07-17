@@ -1,0 +1,57 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "storyboard-concept-negative",
+  "suiteId": "skill.storyboard",
+  "caseGroup": "boundary",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Answer an informational question about Storyboard terminology without starting creator authoring.",
+    "canonicalPath": ["ordinary user turn", "ordinary assistant answer"],
+    "forbiddenFallback": ["Storyboard Skill activation", "Canvas authoring", "media task"],
+    "observables": [
+      {
+        "ref": "turn-facts",
+        "kind": "runtime-fact",
+        "description": "Canonical user-to-assistant turn and non-empty answer.",
+        "required": true
+      },
+      {
+        "ref": "no-fallback",
+        "kind": "runtime-fact",
+        "description": "No Storyboard/Canvas/media authoring path participated.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The Agent gives a concise conceptual explanation and creates no creator artifact or task.",
+    "expectedFailure": "Skill activation, Canvas authoring, or media generation for this adjacent negative fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "分镜表和拍摄清单的概念区别是什么？只解释概念，不要为我创作内容。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "turn-facts" },
+    { "id": "answer", "kind": "final-answer", "mode": "non-empty", "evidenceRef": "turn-facts" },
+    {
+      "id": "fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "storyboard",
+        "canvas.createStoryboardFromMarkdown",
+        "canvas.ingestMarkdown",
+        "GenerateImage",
+        "GenerateVideo"
+      ],
+      "evidenceRef": "no-fallback"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

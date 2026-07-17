@@ -1,0 +1,29 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "agents-md-environment-fragment",
+  "suiteId": "agent-runtime.prompt-composition",
+  "caseGroup": "boundary",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Apply workspace AGENTS.md guidance as an environment-layer fragment while preserving the base prompt.",
+    "canonicalPath": ["isolated AGENTS.md fixture", "TUI session assembly", "agents-md environment fragment", "assistant marker"],
+    "forbiddenFallback": ["AGENTS.md replaces base", "fixture content omitted", "hidden prompt body projection"],
+    "observables": [{ "ref": "prompt-facts", "kind": "runtime-fact", "description": "Base/environment prompt identities and marker-bearing assistant output.", "required": true }],
+    "expectedResult": "Facts contain base and agents-md:override fragments and output follows the fixture marker instruction.",
+    "expectedFailure": "Missing base/environment fragment, replacement behavior, or absent marker fails."
+  },
+  "fixtureRefs": ["prompt-environment-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "用一句话说明当前工作区 guidance 是否生效。" },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "prompt-facts" },
+    { "id": "composition", "kind": "prompt-composition", "requiredFragments": [{ "id": "base", "source": "base" }, { "id": "agents-md:override", "source": "agents-md" }], "evidenceRef": "prompt-facts" },
+    { "id": "marker", "kind": "final-answer", "mode": "contains", "text": ["ENVIRONMENT_LAYER_OBSERVED"], "evidenceRef": "prompt-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

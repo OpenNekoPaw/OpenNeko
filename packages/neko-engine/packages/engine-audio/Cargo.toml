@@ -1,0 +1,25 @@
+[package]
+name = "neko-engine-audio"
+version.workspace = true
+edition.workspace = true
+description = "Audio infrastructure for neko-engine"
+license.workspace = true
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+neko-engine-types = { path = "../engine-types" }
+neko-engine-codec = { path = "../engine-codec" }
+
+ffmpeg-next.workspace = true
+ffmpeg-sys-next.workspace = true
+
+crossbeam-channel.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "time"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+tracing.workspace = true
+uuid.workspace = true

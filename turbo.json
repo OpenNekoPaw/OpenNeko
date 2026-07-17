@@ -1,0 +1,116 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [
+    ".github/workflows/*.yml",
+    ".dependency-cruiser.cjs",
+    "eslint.config.mjs",
+    "knip.json",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "quality/**",
+    "scripts/test-orchestration/**",
+    "tsconfig.json",
+    "vitest.shared.ts"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "out/**"],
+      "cache": true
+    },
+    "compile": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "out/**"],
+      "cache": true
+    },
+    "@neko-engine/host-napi#build:native": {
+      "dependsOn": [],
+      "outputs": ["neko-engine.*.node"],
+      "cache": false
+    },
+    "@neko-engine/host-cli#build:native": {
+      "dependsOn": [],
+      "outputs": [],
+      "cache": true
+    },
+    "neko-engine#build": {
+      "dependsOn": [
+        "@neko-engine/host-napi#build:native",
+        "@neko-engine/host-cli#build:native",
+        "^build"
+      ],
+      "outputs": ["dist/**"],
+      "cache": true
+    },
+    "neko-engine#compile": {
+      "dependsOn": ["@neko-engine/host-napi#build:native", "^build"],
+      "outputs": ["dist/**"],
+      "cache": true
+    },
+    "neko-preview#build": {
+      "dependsOn": ["@neko/preview-webview#build", "^build"],
+      "outputs": ["dist/**"],
+      "cache": true
+    },
+    "neko-tools#compile": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "out/**"],
+      "cache": true
+    },
+    "neko-cut#compile": {
+      "dependsOn": ["neko-engine#compile", "neko-tools#compile", "@neko/webview#build"],
+      "outputs": ["dist/**", "out/**"],
+      "cache": true
+    },
+    "neko-canvas#compile": {
+      "dependsOn": ["neko-engine#compile", "neko-tools#compile"],
+      "outputs": ["dist/**", "out/**"],
+      "cache": true
+    },
+    "neko-agent#compile": {
+      "dependsOn": ["neko-engine#compile", "neko-tools#compile"],
+      "outputs": ["dist/**", "out/**"],
+      "cache": true
+    },
+    "neko-assets#compile": {
+      "dependsOn": ["neko-engine#compile", "neko-tools#compile"],
+      "outputs": ["dist/**", "out/**"],
+      "cache": true
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "outputs": [],
+      "cache": true
+    },
+    "test": {
+      "outputs": ["coverage/**"],
+      "cache": false
+    },
+    "neko-assets#test": {
+      "dependsOn": ["@neko/asset#test"],
+      "outputs": ["coverage/**"],
+      "cache": false
+    },
+    "neko-canvas#test": {
+      "dependsOn": ["@neko-canvas/webview#test"],
+      "outputs": ["coverage/**"],
+      "cache": false
+    },
+    "package": {
+      "dependsOn": ["compile"],
+      "outputs": ["*.vsix"],
+      "cache": false
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}

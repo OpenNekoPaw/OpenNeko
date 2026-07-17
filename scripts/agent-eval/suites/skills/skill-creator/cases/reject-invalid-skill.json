@@ -1,0 +1,32 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "reject-invalid-skill",
+  "suiteId": "skill.skill-creator",
+  "caseGroup": "failure",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Preserve and report native rejection for an invalid portable Skill name without writing files.",
+    "canonicalPath": ["builtin skill-creator", "CreateSkill validation", "Tool error result", "contained absence check"],
+    "forbiddenFallback": ["input auto-correction", "ordinary file write", "partial Skill directory"],
+    "observables": [
+      { "ref": "skill-facts", "kind": "runtime-fact", "description": "Builtin Skill injection facts.", "required": true },
+      { "ref": "tool-facts", "kind": "runtime-fact", "description": "CreateSkill error and result observation facts.", "required": true },
+      { "ref": "artifact-absence", "kind": "post-check", "description": "Invalid target directory remains absent.", "required": true }
+    ],
+    "expectedResult": "CreateSkill rejects the invalid name and no target path exists.",
+    "expectedFailure": "A corrected input, successful fallback, missing error result, or written path fails."
+  },
+  "fixtureRefs": ["skill-artifact-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "$skill-creator Call CreateSkill once with target project and the deliberately invalid name Invalid Skill Name. Do not correct it, retry it, or use another file-writing path. Report the native error." },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+  ],
+  "assertions": [
+    { "id": "skill", "kind": "skill", "identity": { "name": "skill-creator", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "skill-creator", "fingerprint": "sha256:6bf26dda3f4ce05288a597f57195f7af1cf51984da89fe64813deb18d5bcf9a6" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "tool", "kind": "tool-call", "name": "CreateSkill", "status": "error", "evidenceRef": "tool-facts" }
+  ],
+  "artifactChecks": [{ "id": "invalid-target-absent", "kind": "file-absent", "evidenceRef": "artifact-absence", "path": ".agents/skills/Invalid Skill Name" }],
+  "budget": { "timeoutMs": 120000, "repetitions": 1 }
+}

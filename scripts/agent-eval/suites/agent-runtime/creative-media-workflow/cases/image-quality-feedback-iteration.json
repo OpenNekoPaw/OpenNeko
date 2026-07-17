@@ -1,0 +1,156 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "image-quality-feedback-iteration",
+  "suiteId": "agent-runtime.creative-media-workflow",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Execute an explicitly approved image scope, review the real output, then feed the observed review into a bounded second improvement turn.",
+    "canonicalPath": [
+      "creator-approved scope",
+      "TUI queue",
+      "Pi Agent turn",
+      "flat image.generate domain-model snapshot",
+      "GenerateImage",
+      "TaskRef",
+      "image_generation task",
+      "task result continuation",
+      "bounded TODO",
+      "assistant review",
+      "closed-loop feedback",
+      "second task",
+      "neko/generated workspace output",
+      "stable unpromoted generated-output ResourceRef",
+      "Workspace Board projection"
+    ],
+    "forbiddenFallback": [
+      "model-authored provider or model id",
+      "agent.main generation fallback",
+      "nested mediaModels routing",
+      "static second prompt",
+      "review before task result",
+      "best-run selection",
+      "mock image task",
+      "IDC stage or run",
+      "plan completion substituted for artifact delivery",
+      "pre-promotion Asset lookup or import",
+      "multi-Board resolver",
+      "runtime generated-draft projection",
+      "active Canvas fallback"
+    ],
+    "observables": [
+      {
+        "ref": "workflow-facts",
+        "kind": "runtime-fact",
+        "description": "Exact image.generate model snapshot, two TaskRefs and task rounds, feedback source digest, final ResourceRefs, ordered steps, and terminal idle facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The second turn is generated from the first assistant review, completes a second image task, retains generated-output identity, and projects outputs to the Workspace Board without Asset lookup/import.",
+    "expectedFailure": "Missing first review, static feedback, fewer than two task observations, pre-promotion Asset participation, multi-Board or runtime-draft routing, active-Canvas fallback, or incomplete idle fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["nekoapi-chat-image-purpose"],
+  "steps": [
+    {
+      "id": "round-one",
+      "kind": "submit",
+      "prompt": "我批准以下低风险制作范围：生成一张猫玩红球的图片，保留为 neko/generated 下的 generated-output 并由默认 Workspace Board 展示；不要查询或导入资产库，不要选择其他画布或创建 runtime draft。执行生成，更新近期 TODO，等待真实结果，并评审构图、动作和明显问题。"
+    },
+    { "id": "round-one-idle", "kind": "wait-for-idle", "timeoutMs": 600000 },
+    {
+      "id": "round-two",
+      "kind": "feedback",
+      "prompt": "根据上一轮真实评审重新生成改进版图片，等待结果并说明具体改进：\n${lastAssistant}",
+      "afterStepId": "round-one-idle"
+    },
+    { "id": "round-two-idle", "kind": "wait-for-idle", "timeoutMs": 600000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "workflow-facts" },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "modelProfileId": "nekoapi-chat-image-purpose",
+      "evidenceRef": "workflow-facts"
+    },
+    {
+      "id": "order",
+      "kind": "process-order",
+      "events": [
+        { "kind": "workflow-step", "stepId": "round-one", "method": "message.submit" },
+        { "kind": "task", "taskType": "image_generation", "status": "completed" },
+        { "kind": "workflow-step", "stepId": "round-two", "method": "message.submit" },
+        { "kind": "task", "taskType": "image_generation", "status": "completed" }
+      ],
+      "evidenceRef": "workflow-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": [
+        "turnIdle",
+        "backgroundTasksIdle",
+        "mediaDeliveryIdle",
+        "taskResultObservationIdle",
+        "continuationQueueIdle"
+      ],
+      "evidenceRef": "workflow-facts"
+    },
+    {
+      "id": "todo",
+      "kind": "todo-projection",
+      "maxItems": 6,
+      "atMostOneInProgress": true,
+      "requiredStatuses": ["completed"],
+      "evidenceRef": "workflow-facts"
+    },
+    {
+      "id": "artifact",
+      "kind": "artifact",
+      "artifactKind": "generated-asset",
+      "validatorStatus": "valid",
+      "evidenceRef": "workflow-facts"
+    },
+    {
+      "id": "workspace-board",
+      "kind": "workspace-board-projection",
+      "status": "projected",
+      "targetKind": "workspace",
+      "minNodeIds": 2,
+      "revisionRequired": true,
+      "diagnosticsEmpty": true,
+      "evidenceRef": "workflow-facts"
+    },
+    {
+      "id": "fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "idc-stage",
+        "idc-run",
+        "stage-persona",
+        "Draft",
+        "ExecutionPlan",
+        "legacy-workflow-runtime",
+        "ListAssets",
+        "GetAsset",
+        "ImportAsset",
+        "CanvasBoardIndexService",
+        "AgentCanvasBoardWorkRuntime",
+        "CanvasGeneratedDraftProjectionService",
+        "GeneratedDraftLayer",
+        "active-canvas"
+      ],
+      "evidenceRef": "workflow-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 1200000, "repetitions": 1 }
+}

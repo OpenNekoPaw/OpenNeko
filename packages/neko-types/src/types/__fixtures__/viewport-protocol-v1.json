@@ -1,0 +1,253 @@
+{
+  "command": {
+    "protocolVersion": 1,
+    "domain": "viewport",
+    "action": "viewport:select",
+    "sceneId": "scene-a",
+    "viewportId": "viewport-main",
+    "seq": 42,
+    "correlationId": "select-42",
+    "timestamp": 1770000000000,
+    "source": "user",
+    "baseRevision": 10,
+    "payload": {
+      "position": [120, 80],
+      "selectionMode": "replace"
+    }
+  },
+  "sceneCommand": {
+    "protocolVersion": 1,
+    "domain": "scene",
+    "action": "scene:puppet:dragBone",
+    "sceneId": "scene-a",
+    "viewportId": "viewport-main",
+    "seq": 43,
+    "correlationId": "drag-bone-43",
+    "timestamp": 1770000000016,
+    "source": "user",
+    "baseRevision": 10,
+    "payload": {
+      "boneId": "bone-head",
+      "delta": [2, -1]
+    }
+  },
+  "ackEvent": {
+    "protocolVersion": 1,
+    "domain": "viewport",
+    "event": "ack",
+    "sceneId": "scene-a",
+    "viewportId": "viewport-main",
+    "ackSeq": 42,
+    "revision": 11,
+    "timestamp": 1770000000032,
+    "status": "ack",
+    "appliedSeq": 42,
+    "payload": {
+      "selectedIds": ["node-head"],
+      "hit": {
+        "id": "node-head",
+        "kind": "bone"
+      }
+    }
+  },
+  "errorEvent": {
+    "protocolVersion": 1,
+    "domain": "scene",
+    "event": "error",
+    "sceneId": "scene-a",
+    "viewportId": "viewport-main",
+    "ackSeq": 43,
+    "revision": 10,
+    "timestamp": 1770000000034,
+    "status": "error",
+    "error": {
+      "code": "revisionConflict",
+      "message": "baseRevision 10 does not match current revision 11",
+      "retryable": true
+    },
+    "payload": {}
+  },
+  "frameMeta": {
+    "protocolVersion": 1,
+    "streamId": "stream-main",
+    "sceneId": "scene-a",
+    "viewportId": "viewport-main",
+    "frameId": 1001,
+    "ptsUs": 16666,
+    "durationUs": 16666,
+    "frameTimestamp": 1770000000048,
+    "revision": 11,
+    "sceneRevision": 11,
+    "appliedSeq": 42,
+    "viewTransform": [1, 0, 0, 1, 0, 0],
+    "diagnostics": {
+      "qualityTier": "high"
+    }
+  },
+  "metadataEvent": {
+    "protocolVersion": 1,
+    "type": "viewportMetadata",
+    "sceneId": "scene-a",
+    "viewportId": "viewport-main",
+    "revision": 11,
+    "appliedSeq": 42,
+    "timestamp": 1770000000050,
+    "transport": "scene-control",
+    "cadence": "ack-correlated",
+    "meta": {
+      "protocolVersion": 1,
+      "streamId": "stream-main",
+      "sceneId": "scene-a",
+      "viewportId": "viewport-main",
+      "frameId": 1001,
+      "ptsUs": 16666,
+      "durationUs": 16666,
+      "frameTimestamp": 1770000000048,
+      "revision": 11,
+      "sceneRevision": 11,
+      "appliedSeq": 42,
+      "viewTransform": [1, 0, 0, 1, 0, 0],
+      "diagnostics": {
+        "qualityTier": "high"
+      }
+    }
+  },
+  "controlDiagnostics": [
+    {
+      "kind": "connection",
+      "severity": "info",
+      "code": "scene-control-connected",
+      "message": "Scene control socket connected.",
+      "sceneId": "scene-a",
+      "viewportId": "viewport-main",
+      "connectionState": "connected",
+      "timestamp": 1770000000001
+    },
+    {
+      "kind": "metadata",
+      "severity": "warning",
+      "code": "ack-before-frame",
+      "message": "Command acknowledgement arrived before compatible frame metadata.",
+      "sceneId": "scene-a",
+      "viewportId": "viewport-main",
+      "streamId": "stream-main",
+      "seq": 42,
+      "correlationId": "select-42",
+      "revision": 11,
+      "appliedSeq": 42,
+      "metadataState": "ack-before-frame",
+      "degradedReason": "ack-before-frame",
+      "timestamp": 1770000000033,
+      "details": {
+        "lastFrameRevision": 10,
+        "ageMs": 34
+      }
+    },
+    {
+      "kind": "metadata",
+      "severity": "warning",
+      "code": "render-frame-meta-delayed",
+      "message": "Render frame metadata arrived after the configured metadata delay budget.",
+      "sceneId": "scene-a",
+      "viewportId": "viewport-main",
+      "streamId": "stream-main",
+      "revision": 11,
+      "appliedSeq": 42,
+      "metadataState": "delayed",
+      "degradedReason": "metadata-delayed",
+      "timestamp": 1770000000075,
+      "details": {
+        "delayMs": 120,
+        "budgetMs": 100
+      }
+    },
+    {
+      "kind": "metadata",
+      "severity": "warning",
+      "code": "render-frame-meta-stale",
+      "message": "Render frame metadata is older than the expected control acknowledgement state.",
+      "sceneId": "scene-a",
+      "viewportId": "viewport-main",
+      "streamId": "stream-main",
+      "revision": 10,
+      "appliedSeq": 41,
+      "metadataState": "stale",
+      "degradedReason": "metadata-stale",
+      "timestamp": 1770000000080,
+      "details": {
+        "expectedRevision": 11,
+        "expectedAppliedSeq": 42
+      }
+    },
+    {
+      "kind": "command",
+      "severity": "error",
+      "code": "scene-command-rejected",
+      "message": "Control command failed while video stream continued decoding.",
+      "sceneId": "scene-a",
+      "viewportId": "viewport-main",
+      "seq": 44,
+      "correlationId": "transform-44",
+      "revision": 11,
+      "appliedSeq": 42,
+      "commandState": "error",
+      "degradedReason": "command-rejected",
+      "timestamp": 1770000000090,
+      "details": {
+        "videoStillDecoding": true
+      }
+    }
+  ],
+  "overlays": [
+    {
+      "id": "overlay-bone-head",
+      "kind": "polyline",
+      "sceneId": "scene-a",
+      "viewportId": "viewport-main",
+      "coordinateSpace": "scene",
+      "revision": 11,
+      "appliedSeq": 42,
+      "zIndex": 20,
+      "authoritative": true,
+      "stalePolicy": "hide",
+      "style": {
+        "stroke": "#2f80ed",
+        "lineWidth": 2
+      },
+      "payload": {
+        "points": [
+          [0, 0],
+          [32, 0]
+        ]
+      }
+    }
+  ],
+  "toolbar": [
+    {
+      "id": "tool-select",
+      "kind": "toggle",
+      "label": "Select",
+      "icon": "mouse-pointer",
+      "action": "viewport:select",
+      "group": "tools",
+      "order": 10,
+      "toggled": true,
+      "payload": {
+        "mode": "replace"
+      }
+    },
+    {
+      "id": "tool-transform",
+      "kind": "button",
+      "label": "Transform",
+      "icon": "move-3d",
+      "action": "viewport:transform",
+      "group": "tools",
+      "order": 20,
+      "disabled": true,
+      "disabledReason": "Scene control is disconnected.",
+      "degraded": true,
+      "degradedReason": "control-disconnected"
+    }
+  ]
+}

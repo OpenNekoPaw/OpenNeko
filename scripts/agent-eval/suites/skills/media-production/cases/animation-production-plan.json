@@ -1,0 +1,32 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "animation-production-plan",
+  "suiteId": "skill.media-production",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "In Plan Mode, read an actual screenplay and create source-grounded creator review plus execution-ready animation work units without production side effects.",
+    "canonicalPath": ["TUI Plan execution mode", "screenplay.fountain evidence", "builtin media-production Skill", "creator-review Markdown", "actionable work units"],
+    "forbiddenFallback": ["overall phase summary", "invented screenplay evidence", "media generation", "IDC stage or persona", "executable-plan runtime"],
+    "observables": [{ "ref": "production-facts", "kind": "runtime-fact", "description": "Effective Plan Mode, Skill injection, current screenplay evidence, Tool absence, and structured work-unit output.", "required": true }],
+    "expectedResult": "The plan separates screenplay facts, interpretation, creator decisions, approval scope, and concrete work units tied to Mara, 23:47, the red umbrella, and the unlit train.",
+    "expectedFailure": "Generic phases, missing source details, production Tool use, or any retired IDC reference fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "plan-markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "$media-production 读取 @screenplay.fountain\n为它生成创作者可审批、可继续执行的动画化方案。必须区分来源事实、解释、创作者决策和执行动作；引用 Mara、23:47、红伞、无头灯列车等实际证据；每个工作单元写明对象、触发/跳过条件、输入、能力意图、约束、输出、验收、失败恢复、依赖和审批要求。只规划，不生成媒体或修改项目。" },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "skill", "kind": "skill", "identity": { "name": "media-production", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "media-production", "fingerprint": "sha256:48049d177c8262a3f5526d15342c0696137be8516509a41c5c8f37ea02e45592" }, "status": "injected", "evidenceRef": "production-facts" },
+    { "id": "model", "kind": "model", "profileId": "configured-default", "noFallback": true, "evidenceRef": "production-facts" },
+    { "id": "output", "kind": "structured-output", "format": "markdown", "requiredFields": ["Mara", "23:47", "红伞", "来源事实", "创作者决策", "工作单元", "触发", "验收", "失败恢复", "审批"], "locale": "zh-cn", "evidenceRef": "production-facts" },
+    { "id": "no-image", "kind": "tool-call", "name": "GenerateImage", "status": "absent", "evidenceRef": "production-facts" },
+    { "id": "no-video", "kind": "tool-call", "name": "GenerateVideo", "status": "absent", "evidenceRef": "production-facts" },
+    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["idc-stage", "idc-run", "stage-persona", "Draft", "ExecutionPlan", "legacy-workflow-runtime"], "evidenceRef": "production-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

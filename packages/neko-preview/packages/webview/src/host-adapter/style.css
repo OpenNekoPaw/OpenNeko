@@ -1,0 +1,32 @@
+.preview-host-adapter {
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 28px;
+  overflow: hidden;
+  background: #f7f8fa;
+}
+
+.preview-host-adapter img,
+.preview-host-adapter video {
+  max-width: min(920px, calc(100% - 40px));
+  max-height: calc(100% - 80px);
+  border: 1px solid #d2d9e1;
+  border-radius: 6px;
+  object-fit: contain;
+  background: #ffffff;
+}
+
+.preview-host-adapter audio {
+  width: min(720px, 80%);
+}
+
+.preview-host-adapter p {
+  margin: 0;
+  padding: 12px;
+  color: #5b6772;
+}

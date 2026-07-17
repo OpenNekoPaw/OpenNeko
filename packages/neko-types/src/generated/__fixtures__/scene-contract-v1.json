@@ -1,0 +1,627 @@
+{
+  "snapshot": {
+    "sceneId": "scene-main",
+    "revision": 40,
+    "nodes": [
+      {
+        "nodeId": "node-root",
+        "name": "Root",
+        "transform": {
+          "position": { "x": 0, "y": 1, "z": 2 },
+          "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+          "scale": { "x": 1, "y": 1, "z": 1 }
+        },
+        "children": ["node-mesh"],
+        "visible": true,
+        "kind": "group"
+      },
+      {
+        "nodeId": "node-mesh",
+        "parentId": "node-root",
+        "name": "Mesh",
+        "transform": {
+          "position": { "x": 3, "y": 4, "z": 5 },
+          "rotation": { "x": 0, "y": 0, "z": 0, "w": 1 },
+          "scale": { "x": 1, "y": 1, "z": 1 }
+        },
+        "children": [],
+        "visible": true,
+        "mesh": { "id": "mesh-main", "uri": "assets/model.glb", "kind": "mesh" },
+        "material": { "id": "mat-main", "uri": "assets/model.glb#material0", "kind": "material" },
+        "bounds": {
+          "min": { "x": -1, "y": 0, "z": -0.5 },
+          "max": { "x": 1, "y": 2, "z": 0.5 }
+        },
+        "worldBounds": {
+          "min": { "x": 2, "y": 4, "z": 4.5 },
+          "max": { "x": 4, "y": 6, "z": 5.5 }
+        },
+        "kind": "mesh"
+      }
+    ],
+    "animations": [{ "name": "Idle", "duration": 1.5 }],
+    "activeCamera": {
+      "cameraId": "camera-editor",
+      "position": { "x": 0, "y": 2, "z": 5 },
+      "target": { "x": 0, "y": 1, "z": 0 },
+      "up": { "x": 0, "y": 1, "z": 0 },
+      "fov": 45,
+      "near": 0.1,
+      "far": 1000
+    },
+    "environment": {
+      "environmentId": "env-studio",
+      "source": {
+        "id": "env-token-1",
+        "uri": "engine-file://env-token-1",
+        "kind": "ldr-panorama"
+      },
+      "mode": "background-and-ibl",
+      "rotationDeg": 15,
+      "intensity": 1.2,
+      "exposure": 0.1,
+      "visibleAsBackground": true,
+      "backgroundColor": { "x": 0.02, "y": 0.025, "z": 0.03, "w": 1 }
+    }
+  },
+  "delta": {
+    "revision": 41,
+    "appliedSeq": 7,
+    "updatedTransforms": [
+      {
+        "nodeId": "node-mesh",
+        "position": { "x": 4, "y": 4, "z": 5 }
+      }
+    ],
+    "updatedMorphWeights": [
+      {
+        "nodeId": "node-mesh",
+        "weights": [{ "name": "Smile", "weight": 0.35 }]
+      }
+    ],
+    "updatedVisibility": [{ "nodeId": "node-mesh", "visible": true, "layerMask": 1 }],
+    "updatedMaterials": [
+      {
+        "materialId": "mat-main",
+        "nodeId": "node-mesh",
+        "slot": "surface",
+        "paramsJson": "{\"roughness\":0.42}"
+      }
+    ],
+    "updatedAssetReferences": [
+      {
+        "nodeId": "node-mesh",
+        "mesh": { "id": "mesh-main", "kind": "mesh" },
+        "material": { "id": "mat-main", "kind": "material" }
+      }
+    ],
+    "updatedLights": [
+      {
+        "nodeId": "light-key",
+        "kind": "directional",
+        "color": { "x": 1, "y": 0.95, "z": 0.9 },
+        "intensity": 3,
+        "shadow": {
+          "enabled": true,
+          "resolution": 2048,
+          "bias": 0.001
+        }
+      }
+    ],
+    "updatedCameras": [
+      {
+        "cameraId": "camera-editor",
+        "nodeId": "camera-node",
+        "fov": 45
+      }
+    ],
+    "topologyChanges": [
+      {
+        "meshId": "mesh-main",
+        "fromVersion": 2,
+        "toVersion": 3,
+        "operation": "subdivide",
+        "invalidatesMorphLibrary": true,
+        "invalidatesSkinWeights": true,
+        "invalidatesUv": false,
+        "vertexCountBefore": 100,
+        "vertexCountAfter": 400,
+        "operationSummary": "subdivide mesh-main once",
+        "migrationResults": [
+          { "dataKind": "morph", "status": "migrated" },
+          { "dataKind": "skin", "status": "invalidated", "diagnostic": "joint remap required" }
+        ],
+        "invalidatesTangents": true,
+        "invalidatesBounds": true,
+        "invalidatesAccelerationStructure": true
+      }
+    ],
+    "modelingSessions": [
+      {
+        "sessionId": "session-sculpt",
+        "characterId": "character-a",
+        "topologyMutable": true,
+        "topologyVersion": 3,
+        "state": "active",
+        "pendingMigrations": ["morph-retarget", "skin-retarget"],
+        "meshId": "mesh-main",
+        "beforeHash": "sha256-before",
+        "opLog": [
+          {
+            "seq": 1,
+            "operation": "brush",
+            "summary": "inflate cheek vertices",
+            "topologyVersion": 3
+          }
+        ]
+      }
+    ],
+    "updatedCharacterMorphWeights": [
+      {
+        "characterId": "character-a",
+        "weights": [{ "name": "Smile", "weight": 0.6 }],
+        "topologyVersion": 3
+      }
+    ],
+    "updatedCharacterMaterials": [
+      {
+        "characterId": "character-a",
+        "slotId": "skin",
+        "paramsJson": "{\"baseColorFactor\":[1,0.8,0.7,1]}",
+        "topologyVersion": 3
+      }
+    ],
+    "updatedSkeletonPose": [
+      {
+        "characterId": "character-a",
+        "boneId": "head",
+        "transform": {
+          "position": { "x": 0, "y": 1.6, "z": 0 },
+          "rotation": { "x": 0, "y": 0.1, "z": 0, "w": 0.995 },
+          "scale": { "x": 1, "y": 1, "z": 1 }
+        },
+        "topologyVersion": 3
+      }
+    ],
+    "characterOverrides": [
+      {
+        "characterId": "character-a",
+        "overrides": [
+          {
+            "path": "$.geometry.morphLibrary.Smile.defaultWeight",
+            "valueType": "number",
+            "valueJson": "0.6",
+            "operation": "set",
+            "baseRevision": 40
+          }
+        ],
+        "topologyVersion": 3
+      }
+    ],
+    "overlay": {
+      "viewportId": "viewport-main",
+      "revision": 41,
+      "selectedNodeIds": ["node-mesh"],
+      "projectedBounds": [
+        {
+          "nodeId": "node-mesh",
+          "min": { "x": 10, "y": 20 },
+          "max": { "x": 110, "y": 120 },
+          "target": {
+            "kind": "materialSlot",
+            "nodeId": "node-mesh",
+            "materialSlotId": "skin"
+          }
+        }
+      ],
+      "gizmoAnchors": [
+        {
+          "nodeId": "node-mesh",
+          "worldPosition": { "x": 4, "y": 4, "z": 5 },
+          "screenPosition": { "x": 60, "y": 70 },
+          "target": {
+            "kind": "submesh",
+            "nodeId": "node-mesh",
+            "submeshId": "mesh-main:0"
+          }
+        }
+      ],
+      "selectedTargets": [
+        {
+          "kind": "materialSlot",
+          "nodeId": "node-mesh",
+          "materialSlotId": "skin",
+          "hit": {
+            "worldPosition": { "x": 4, "y": 4, "z": 5 },
+            "worldNormal": { "x": 0, "y": 1, "z": 0 },
+            "depth": 0.42
+          }
+        }
+      ],
+      "hoveredTarget": {
+        "kind": "submesh",
+        "nodeId": "node-mesh",
+        "submeshId": "mesh-main:0"
+      }
+    },
+    "environment": {
+      "environmentId": "env-studio",
+      "source": {
+        "id": "env-token-1",
+        "uri": "engine-file://env-token-1",
+        "kind": "ldr-panorama"
+      },
+      "mode": "background-and-ibl",
+      "rotationDeg": 25,
+      "intensity": 1.4,
+      "exposure": 0.2,
+      "visibleAsBackground": true,
+      "backgroundColor": { "x": 0.02, "y": 0.025, "z": 0.03, "w": 1 }
+    },
+    "selectedTargets": [
+      {
+        "kind": "characterRegion",
+        "nodeId": "node-mesh",
+        "characterId": "character-a",
+        "regionId": "face.mouth",
+        "hit": {
+          "worldPosition": { "x": 4, "y": 4.25, "z": 5 },
+          "depth": 0.4
+        }
+      }
+    ],
+    "environmentDiagnostics": [
+      {
+        "code": "environment.loadPending",
+        "severity": "info",
+        "message": "Environment loading is pending",
+        "retryable": true
+      }
+    ]
+  },
+  "deltaWithOmittedFields": {
+    "revision": 42
+  },
+  "renderFrameMeta": {
+    "streamId": "stream-main",
+    "viewportId": "viewport-main",
+    "frameId": 1001,
+    "ptsUs": 16666,
+    "durationUs": 16666,
+    "isKeyframe": true,
+    "sceneRevision": 41,
+    "appliedSeq": 7,
+    "sceneId": "scene-main",
+    "frameTimestamp": 1770000000048,
+    "viewTransform": [1, 0, 0, 1, 0, 0],
+    "projectionJson": "{\"kind\":\"perspective\",\"fovY\":45}",
+    "activePreviewMode": "motion",
+    "previewPlaybackClockMs": 1234,
+    "diagnostics": {
+      "gpuFrameTimeMs": 7.5,
+      "encodeTimeMs": 3.1,
+      "qualityTier": "high",
+      "droppedFramesSinceLast": 0,
+      "gpuUploadTimeMs": 1.4,
+      "webcodecsDecodeQueueSize": 1,
+      "pendingDecodeFrames": 4,
+      "decodeOutputIntervalMs": 16.7,
+      "decodeOutputBurst": 2
+    }
+  },
+  "character": {
+    "descriptor": {
+      "characterId": "character-a",
+      "name": "Ava",
+      "schemaVersion": 1,
+      "featureFlags": ["morph-v1", "material-layer-v1"],
+      "baseTemplate": {
+        "id": "template-ava",
+        "uri": "templates/ava.nkc",
+        "kind": "character-template"
+      },
+      "templateVersion": "1.0.0",
+      "checksum": "sha256-character"
+    },
+    "topologyVersion": 3,
+    "definition": {
+      "controls": [
+        {
+          "morphId": "Smile",
+          "displayName": "Smile",
+          "targetPath": "$.geometry.morphLibrary.Smile",
+          "defaultWeight": 0,
+          "min": 0,
+          "max": 1,
+          "tags": ["face"]
+        }
+      ],
+      "expressionPresets": [
+        {
+          "presetId": "smile",
+          "displayName": "Smile",
+          "morphWeights": [{ "name": "Smile", "weight": 0.6 }],
+          "bonePoseIds": [],
+          "materialOverrideIds": []
+        }
+      ],
+      "behaviorDrivers": [
+        {
+          "driverId": "blink-driver",
+          "kind": "expression",
+          "targetPath": "$.definition.controls.Blink",
+          "paramsJson": "{\"interval\":3}"
+        }
+      ],
+      "regionDescriptors": {
+        "schemaVersion": 1,
+        "regions": [
+          {
+            "regionId": "face.mouth",
+            "displayName": "Mouth",
+            "schemaVersion": 1,
+            "bindings": [
+              {
+                "kind": "morphControl",
+                "targetId": "Smile",
+                "weight": 1
+              },
+              {
+                "kind": "materialSlot",
+                "targetId": "skin"
+              }
+            ],
+            "tags": ["face", "expression"]
+          }
+        ]
+      }
+    },
+    "geometry": {
+      "baseMesh": { "id": "mesh-main", "uri": "assets/ava.glb", "kind": "mesh" },
+      "skeleton": {
+        "skeletonId": "skeleton-main",
+        "skeleton": { "id": "skeleton-main", "uri": "assets/ava.glb#skeleton", "kind": "skeleton" },
+        "rootBone": "hips",
+        "bindJoints": ["hips", "spine", "head"]
+      },
+      "morphLibrary": [
+        {
+          "morphId": "Smile",
+          "displayName": "Smile",
+          "targetPath": "$.geometry.blendShapes.Smile",
+          "defaultWeight": 0,
+          "tags": ["face"]
+        }
+      ],
+      "skinWeightAtlases": [
+        {
+          "atlasId": "skin-main",
+          "data": {
+            "blockId": "skin-main",
+            "kind": "skin-weight-atlas",
+            "uri": "characters/ava.nkcdata",
+            "checksum": "sha256-skin"
+          },
+          "jointCount": 64,
+          "vertexCount": 1024,
+          "encoding": "f32"
+        }
+      ],
+      "blendShapes": [
+        {
+          "blendShapeId": "Smile",
+          "name": "Smile",
+          "data": {
+            "blockId": "smile-delta",
+            "kind": "blend-shape",
+            "uri": "characters/ava.nkcdata",
+            "checksum": "sha256-smile"
+          },
+          "defaultWeights": [{ "name": "Smile", "weight": 0 }]
+        }
+      ],
+      "dataBlocks": [
+        {
+          "blockId": "smile-delta",
+          "kind": "morph-sparse-delta",
+          "uri": "characters/ava.nkcdata",
+          "checksum": "sha256-smile",
+          "encoding": "f32",
+          "byteOffset": 0,
+          "byteLength": 128
+        }
+      ]
+    },
+    "materialSlots": [
+      {
+        "slotId": "skin",
+        "name": "Skin",
+        "material": { "id": "mat-skin", "uri": "assets/ava.glb#skin", "kind": "material" },
+        "role": "skin",
+        "index": 0
+      }
+    ],
+    "overrideLayer": {
+      "baseTemplate": {
+        "id": "template-ava",
+        "uri": "templates/ava.nkc",
+        "kind": "character-template"
+      },
+      "overrides": [
+        {
+          "path": "$.geometry.morphLibrary.Smile.defaultWeight",
+          "valueType": "number",
+          "valueJson": "0.6",
+          "operation": "set",
+          "baseRevision": 40
+        }
+      ]
+    }
+  },
+  "characterCommandEnvelope": {
+    "seq": 9,
+    "baseRevision": 41,
+    "coalesceKey": "character-a:morph:Smile",
+    "command": {
+      "type": "character",
+      "characterCommand": {
+        "type": "morph-set",
+        "characterId": "character-a",
+        "topologyVersion": 3,
+        "morphSet": {
+          "morphId": "Smile",
+          "weight": 0.6
+        }
+      }
+    }
+  },
+  "nodeRemoveEnvelope": {
+    "seq": 10,
+    "baseRevision": 41,
+    "command": {
+      "type": "node-remove",
+      "payloadJson": "{\"nodeId\":\"light-key\",\"cascade\":false}"
+    }
+  },
+  "viewportDescriptor": {
+    "viewportId": "viewport-main",
+    "sceneId": "scene-main",
+    "cameraRef": {
+      "kind": "editorCamera",
+      "rig": {
+        "position": { "x": 0, "y": 1.5, "z": 4 },
+        "target": { "x": 0, "y": 1, "z": 0 },
+        "up": { "x": 0, "y": 1, "z": 0 },
+        "fov": 45,
+        "mode": "orbit",
+        "near": 0.0125,
+        "far": 250
+      }
+    },
+    "renderMode": "clay",
+    "debugView": "albedo",
+    "resolution": { "width": 1280, "height": 720, "pixelRatio": 1 },
+    "fps": 60,
+    "colorSpace": "srgb",
+    "toneMapping": "aces",
+    "postProcess": { "bloom": false, "ssao": true, "taa": true },
+    "workMode": "lookdev",
+    "helperPassesEnabled": true,
+    "allowFpsDegrade": false,
+    "allowQualityDegrade": false,
+    "h264": {
+      "gopSize": 6,
+      "decoderPreference": "prefer-software"
+    },
+    "lookdev": {
+      "renderMode": "clay",
+      "debugView": "albedo",
+      "materialOverride": {
+        "kind": "clay",
+        "color": { "x": 0.78, "y": 0.76, "z": 0.72 },
+        "roughness": 0.9,
+        "metallic": 0,
+        "preserveAlpha": true
+      },
+      "helperPassesEnabled": true,
+      "showGrid": false,
+      "showSkeleton": false,
+      "showNormals": false
+    }
+  },
+  "renderStreamDescriptor": {
+    "streamId": "stream-main",
+    "viewportId": "viewport-main",
+    "container": "h264-annexb",
+    "codecString": "avc1.4d001f",
+    "profile": "main",
+    "level": "3.1",
+    "frameHeader": "neko-h264-v1",
+    "width": 1280,
+    "height": 720,
+    "codedWidth": 1280,
+    "codedHeight": 720,
+    "fps": 60,
+    "colorSpace": "srgb",
+    "bitDepth": 8,
+    "toneMapping": "aces",
+    "gopSize": 30,
+    "h264": {
+      "gopSize": 6,
+      "decoderPreference": "prefer-software"
+    },
+    "initialRevision": 41,
+    "latencyMode": "realtime",
+    "qualityTier": "high",
+    "helperPassesEnabled": true,
+    "postProcessEnabled": true,
+    "renderMode": "clay",
+    "debugView": "albedo",
+    "lookdev": {
+      "renderMode": "clay",
+      "materialOverride": {
+        "kind": "clay",
+        "roughness": 0.9
+      }
+    }
+  },
+  "selectionQuery": {
+    "viewportId": "viewport-main",
+    "x": 0.5,
+    "y": 0.4,
+    "mask": ["node", "materialSlot", "submesh", "characterRegion"],
+    "mode": "replace"
+  },
+  "selectionQueryResult": {
+    "viewportId": "viewport-main",
+    "revision": 41,
+    "candidates": [
+      {
+        "kind": "materialSlot",
+        "nodeId": "node-mesh",
+        "materialSlotId": "skin",
+        "hit": {
+          "worldPosition": { "x": 4, "y": 4, "z": 5 },
+          "worldNormal": { "x": 0, "y": 1, "z": 0 },
+          "depth": 0.42
+        }
+      },
+      {
+        "kind": "characterRegion",
+        "nodeId": "node-mesh",
+        "characterId": "character-a",
+        "regionId": "face.mouth"
+      }
+    ]
+  },
+  "modelingSession": {
+    "sessionId": "session-sculpt",
+    "meshId": "mesh-main",
+    "characterId": "character-a",
+    "topologyMutable": true,
+    "topologyVersion": 3,
+    "beforeHash": "sha256-before",
+    "affectedFlags": ["positions", "bounds"],
+    "opLog": [
+      {
+        "seq": 1,
+        "operation": "brush",
+        "summary": "inflate cheek vertices",
+        "topologyVersion": 3
+      }
+    ],
+    "state": "active"
+  },
+  "vertexBrushPatch": {
+    "sessionId": "session-sculpt",
+    "meshId": "mesh-main",
+    "topologyVersion": 3,
+    "strokeId": "stroke-1",
+    "seq": 2,
+    "encoding": "f32-delta",
+    "sparseIndices": [1, 2, 3],
+    "affectedStart": 1,
+    "affectedCount": 3,
+    "payload": [0, 1, 2, 3]
+  }
+}

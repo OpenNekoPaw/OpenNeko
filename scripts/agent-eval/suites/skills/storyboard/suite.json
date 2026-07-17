@@ -1,0 +1,81 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "skill.storyboard",
+  "owner": { "kind": "skill", "id": "storyboard" },
+  "target": {
+    "kind": "skill",
+    "identity": {
+      "name": "storyboard",
+      "source": "builtin",
+      "provenance": "builtin",
+      "rootId": "builtin-skills",
+      "relativePath": "storyboard",
+      "fingerprint": "sha256:d49b0a9d7f443b62c3145c7225f9d64db05b5039d3e309bd85154ee8c9be7f3f"
+    }
+  },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [
+    {
+      "id": "markdown",
+      "settings": { "outputFormat": "markdown" },
+      "configurationHash": "sha256:f949e317ef6531bd9fa4f15b04f4cc038036365bc0a8a8f97dcb229049f0baac"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "configured-default",
+      "selection": "configured-default",
+      "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    }
+  ],
+  "judgeProfiles": [],
+  "fixtures": [
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "canonical-two-shot-storyboard",
+      "file": "cases/canonical-two-shot-storyboard.json",
+      "group": "canonical",
+      "visibility": "public"
+    },
+    {
+      "id": "comic-description-trigger",
+      "file": "cases/comic-description-trigger.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "script-document-input",
+      "file": "cases/script-document-input.json",
+      "group": "paraphrase",
+      "visibility": "public"
+    },
+    {
+      "id": "image-sequence-input",
+      "file": "cases/image-sequence-input.json",
+      "group": "paraphrase",
+      "visibility": "public"
+    },
+    {
+      "id": "storyboard-concept-negative",
+      "file": "cases/storyboard-concept-negative.json",
+      "group": "boundary",
+      "visibility": "public"
+    }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
+}

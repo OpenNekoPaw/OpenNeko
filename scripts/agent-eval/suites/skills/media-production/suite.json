@@ -1,0 +1,24 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "skill.media-production",
+  "owner": { "kind": "skill", "id": "media-production" },
+  "target": { "kind": "skill", "identity": { "name": "media-production", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "media-production", "fingerprint": "sha256:cd7aa733360d635f68721a334e5732daff9898a38fea0af768b8c1fca21945e1" } },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [
+    { "id": "plan-markdown", "settings": { "executionMode": "plan", "outputFormat": "markdown" }, "configurationHash": "sha256:ee3b5595b40c66f9dfa03dd1c9f84b1088c79a5e159aacc015040592ea304f5e" },
+    { "id": "ask-markdown", "settings": { "executionMode": "ask", "outputFormat": "markdown" }, "configurationHash": "sha256:8f78f7165c321ad88c733dbbba2545cb1370d5de3480d33245c1243615e11e3e" }
+  ],
+  "modelProfiles": [{ "id": "configured-default", "selection": "configured-default", "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915" }],
+  "judgeProfiles": [],
+  "fixtures": [{ "id": "creative-planning-workspace", "root": "shared-fixtures/creative-planning-workspace", "source": "repository", "digest": "sha256:e0886a2114d2d964afbde9ae7fad0c7d4fdc73a2f0bf5f50d8c6ee251d79cfb8", "mutable": true }],
+  "cases": [
+    { "id": "animation-production-plan", "file": "cases/animation-production-plan.json", "group": "canonical", "visibility": "public" },
+    { "id": "capability-context-character-reference", "file": "cases/capability-context-character-reference.json", "group": "workflow", "visibility": "public" },
+    { "id": "illustration-technique-selection", "file": "cases/illustration-technique-selection.json", "group": "regression", "visibility": "public" },
+    { "id": "creator-scope-replan", "file": "cases/creator-scope-replan.json", "group": "workflow", "visibility": "public" },
+    { "id": "missing-animation-capability", "file": "cases/missing-animation-capability.json", "group": "failure", "visibility": "public" }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": { "rawRetentionDays": 14, "trustedCiRetentionDays": 14, "committedSummary": true, "includeHistory": false }
+}

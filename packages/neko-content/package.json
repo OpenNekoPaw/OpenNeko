@@ -1,0 +1,24 @@
+{
+  "name": "@neko/content",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./document": "./src/document/index.ts",
+    "./document/*": "./src/document/*.ts",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest --run"
+  },
+  "dependencies": {
+    "@neko/shared": "workspace:*",
+    "@zip.js/zip.js": "^2.8.26"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

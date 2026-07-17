@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "neko.webview-functional.scenario.v1",
+  "id": "home.startup-engine-unavailable-handoff.p0",
+  "title": "Home starts through typed IPC and projects unavailable Engine and handoff identity",
+  "ownerPackage": "@neko/app-home",
+  "tier": "p0",
+  "host": "electron",
+  "platforms": ["darwin", "linux", "win32"],
+  "fixture": {
+    "workspace": "scripts/webview-functional/fixtures/home",
+    "digestFiles": [
+      "neko/assets/library.json",
+      ".agents/skills/review/SKILL.md",
+      ".neko/desktop-agent/conversations.json"
+    ]
+  },
+  "extensions": [],
+  "prerequisites": [
+    { "kind": "package-script", "package": "@neko/app-home", "script": "build" },
+    { "kind": "engine", "state": "unavailable" }
+  ],
+  "activation": { "kind": "launch" },
+  "target": { "type": "page", "titleIncludes": "OpenNeko Home" },
+  "steps": [
+    {
+      "id": "wait-home-snapshot",
+      "operation": "wait-visible",
+      "selector": {
+        "css": ".home-shell[data-application-id=\"neko-home\"]",
+        "auditedSelectorReason": "The Home root application identity is the stable renderer boundary reached only after the typed snapshot IPC succeeds."
+      },
+      "timeoutMs": 60000
+    },
+    {
+      "id": "wait-engine-unavailable",
+      "operation": "wait-visible",
+      "selector": {
+        "css": ".engine-state--unavailable",
+        "auditedSelectorReason": "Home projects the typed Engine Core availability on the persistent top bar."
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "id": "stable-handoff-tool",
+      "kind": "attribute",
+      "selector": {
+        "css": "button[data-tool-id=\"neko-vscode\"]",
+        "auditedSelectorReason": "The professional-tool button exposes its stable registered tool identity for handoff acceptance."
+      },
+      "attribute": "data-tool-id",
+      "expected": "neko-vscode"
+    },
+    {
+      "id": "stable-handoff-workspace",
+      "kind": "attribute",
+      "selector": {
+        "css": "button[data-workspace-id]",
+        "auditedSelectorReason": "The professional-tool intent must carry explicit workspace identity and cannot infer an active window."
+      },
+      "attribute": "data-workspace-id",
+      "expected": "personal"
+    },
+    {
+      "id": "engine-unavailable-observed",
+      "kind": "engine-result",
+      "event": "engine.health.unavailable",
+      "source": "webview-functional-prerequisite"
+    },
+    {
+      "id": "home-apphost-ready",
+      "kind": "lifecycle",
+      "event": "home.apphost.ready",
+      "source": "home-functional-host"
+    },
+    { "id": "no-runtime-errors", "kind": "runtime-errors", "expected": [] }
+  ],
+  "errorPolicy": {
+    "knownBenignWarningIds": [],
+    "expectedDiagnosticCodes": [],
+    "failOnConsoleWarning": true
+  },
+  "evidence": { "domSnapshot": true, "screenshot": true, "logs": true, "sideEffects": true },
+  "timeoutMs": 60000,
+  "tags": ["home", "electron", "engine", "ipc", "handoff", "p0"]
+}

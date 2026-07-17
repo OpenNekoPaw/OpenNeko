@@ -1,0 +1,19 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "agent-runtime.tui-markdown",
+  "owner": { "kind": "agent-runtime", "id": "tui-markdown-rendering" },
+  "target": { "kind": "runtime", "id": "tui-markdown", "contractHash": "sha256:c3b1370e9ceb3b47bac0ff9334fbaa89a5514b3fd27337b18820daf806ca24b4" },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [{ "id": "markdown", "settings": { "outputFormat": "markdown" }, "configurationHash": "sha256:f949e317ef6531bd9fa4f15b04f4cc038036365bc0a8a8f97dcb229049f0baac" }],
+  "modelProfiles": [{ "id": "configured-default", "selection": "configured-default", "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915" }],
+  "judgeProfiles": [],
+  "fixtures": [{ "id": "empty-workspace", "root": "shared-fixtures/empty-workspace", "source": "repository", "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081", "mutable": true }],
+  "cases": [
+    { "id": "mixed-gfm-unicode-resize", "file": "cases/mixed-gfm-unicode-resize.json", "group": "regression", "visibility": "public" },
+    { "id": "incomplete-fence-table-streaming", "file": "cases/incomplete-fence-table-streaming.json", "group": "regression", "visibility": "public" },
+    { "id": "unsafe-terminal-controls", "file": "cases/unsafe-terminal-controls.json", "group": "failure", "visibility": "public" }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": { "rawRetentionDays": 14, "trustedCiRetentionDays": 14, "committedSummary": true, "includeHistory": false }
+}

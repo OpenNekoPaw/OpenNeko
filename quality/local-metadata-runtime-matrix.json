@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "minimums": {
+    "vscode": "1.128.0",
+    "node": "24.0.0",
+    "bun": "1.3.10",
+    "vscodeTypes": "1.125.0"
+  },
+  "targets": [
+    { "host": "vscode-extension", "os": "darwin", "arch": "x64" },
+    { "host": "vscode-extension", "os": "darwin", "arch": "arm64" },
+    { "host": "vscode-extension", "os": "linux", "arch": "x64" },
+    { "host": "vscode-extension", "os": "linux", "arch": "arm64" },
+    { "host": "vscode-extension", "os": "win32", "arch": "x64" },
+    { "host": "vscode-extension", "os": "win32", "arch": "arm64" },
+    { "host": "node-cli", "os": "darwin", "arch": "x64" },
+    { "host": "node-cli", "os": "darwin", "arch": "arm64" },
+    { "host": "node-cli", "os": "linux", "arch": "x64" },
+    { "host": "node-cli", "os": "linux", "arch": "arm64" },
+    { "host": "node-cli", "os": "win32", "arch": "x64" },
+    { "host": "node-cli", "os": "win32", "arch": "arm64" },
+    { "host": "bun-tui", "os": "darwin", "arch": "x64" },
+    { "host": "bun-tui", "os": "darwin", "arch": "arm64" },
+    { "host": "bun-tui", "os": "linux", "arch": "x64" },
+    { "host": "bun-tui", "os": "linux", "arch": "arm64" },
+    { "host": "bun-tui", "os": "win32", "arch": "x64" },
+    { "host": "bun-tui", "os": "win32", "arch": "arm64" }
+  ]
+}

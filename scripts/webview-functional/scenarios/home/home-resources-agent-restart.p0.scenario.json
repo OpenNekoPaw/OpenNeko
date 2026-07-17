@@ -1,0 +1,120 @@
+{
+  "schemaVersion": "neko.webview-functional.scenario.v1",
+  "id": "home.resources-agent-restart.p0",
+  "title": "Home projects resources and preserves migrated Agent state across restart",
+  "ownerPackage": "@neko/app-home",
+  "tier": "p0",
+  "host": "electron",
+  "platforms": ["darwin", "linux", "win32"],
+  "fixture": {
+    "workspace": "scripts/webview-functional/fixtures/home",
+    "digestFiles": [
+      "neko/assets/library.json",
+      ".agents/skills/review/SKILL.md",
+      ".neko/desktop-agent/conversations.json"
+    ]
+  },
+  "extensions": [],
+  "prerequisites": [
+    { "kind": "package-script", "package": "@neko/app-home", "script": "build" },
+    { "kind": "engine", "state": "unavailable" }
+  ],
+  "activation": { "kind": "launch" },
+  "target": { "type": "page", "titleIncludes": "OpenNeko Home" },
+  "steps": [
+    {
+      "id": "wait-home",
+      "operation": "wait-visible",
+      "selector": {
+        "css": ".home-shell",
+        "auditedSelectorReason": "The Home shell is mounted only after the real preload bridge returns its startup snapshot."
+      },
+      "timeoutMs": 60000
+    },
+    {
+      "id": "open-resource-library",
+      "operation": "click",
+      "selector": {
+        "css": "button[data-view-id=\"assets\"]",
+        "auditedSelectorReason": "Home navigation exposes stable view identity independently of the active locale."
+      }
+    },
+    {
+      "id": "wait-resource-projection",
+      "operation": "wait-visible",
+      "selector": {
+        "css": ".resource-row",
+        "name": "Functional Scene Bible",
+        "auditedSelectorReason": "Resource rows are the public Home projection of owning resource providers; the fixture label disambiguates the row."
+      }
+    },
+    {
+      "id": "open-agent",
+      "operation": "click",
+      "selector": {
+        "css": "button[data-view-id=\"agent\"]",
+        "auditedSelectorReason": "Home navigation exposes stable view identity independently of the active locale."
+      }
+    },
+    {
+      "id": "wait-migrated-conversation",
+      "operation": "wait-visible",
+      "selector": { "role": "tab", "name": "Migrated Desktop conversation" },
+      "timeoutMs": 60000
+    },
+    { "id": "restart-home", "operation": "restart-host" },
+    {
+      "id": "wait-restarted-home",
+      "operation": "wait-visible",
+      "selector": {
+        "css": ".home-shell",
+        "auditedSelectorReason": "The same Home application root must return after the Electron host restart."
+      },
+      "timeoutMs": 60000
+    },
+    {
+      "id": "reopen-agent",
+      "operation": "click",
+      "selector": {
+        "css": "button[data-view-id=\"agent\"]",
+        "auditedSelectorReason": "Home navigation exposes stable view identity independently of the active locale."
+      }
+    },
+    {
+      "id": "wait-restored-conversation",
+      "operation": "wait-visible",
+      "selector": { "role": "tab", "name": "Migrated Desktop conversation" },
+      "timeoutMs": 60000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "canonical-home-conversation-store",
+      "kind": "file-json",
+      "path": ".neko/home-agent/conversations.json",
+      "jsonPath": "activeConversationId",
+      "expected": "desktop-conversation-1"
+    },
+    {
+      "id": "legacy-source-preserved",
+      "kind": "file-text",
+      "path": ".neko/desktop-agent/conversations.json",
+      "expected": { "contains": "Persist this conversation through Home restart." }
+    },
+    {
+      "id": "home-apphost-restarted",
+      "kind": "lifecycle",
+      "event": "home.apphost.restarted",
+      "source": "home-functional-host"
+    },
+    { "id": "no-runtime-errors", "kind": "runtime-errors", "expected": [] }
+  ],
+  "errorPolicy": {
+    "knownBenignWarningIds": [],
+    "expectedDiagnosticCodes": [],
+    "failOnConsoleWarning": true
+  },
+  "evidence": { "domSnapshot": true, "screenshot": true, "logs": true, "sideEffects": true },
+  "timeoutMs": 60000,
+  "tags": ["home", "electron", "resources", "agent", "restart", "migration", "p0"]
+}

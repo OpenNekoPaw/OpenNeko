@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "neko.webview-functional.scenario.v1",
+  "id": "preview.cbz-node-host.p0",
+  "title": "CBZ preview loads Range-backed pages through the Node document host",
+  "ownerPackage": "neko-preview",
+  "tier": "p0",
+  "host": "vscode",
+  "platforms": ["darwin", "linux"],
+  "fixture": {
+    "workspace": "scripts/webview-functional/fixtures/preview-documents",
+    "digestFiles": ["node-preview.cbz"]
+  },
+  "extensions": [{ "id": "neko.neko-preview", "developmentPath": "packages/neko-preview" }],
+  "prerequisites": [{ "kind": "package-script", "package": "neko-preview", "script": "compile" }],
+  "activation": {
+    "kind": "open-custom-editor",
+    "path": "node-preview.cbz",
+    "viewType": "neko.cbzPreview"
+  },
+  "target": {
+    "type": "iframe",
+    "extensionId": "neko.neko-preview",
+    "viewType": "neko.cbzPreview"
+  },
+  "steps": [
+    {
+      "id": "wait-cbz-ready",
+      "operation": "wait-visible",
+      "selector": { "testId": "cbz-preview-ready" },
+      "timeoutMs": 60000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "cbz-ready",
+      "kind": "attribute",
+      "selector": { "testId": "cbz-preview-ready" },
+      "attribute": "data-page-count",
+      "expected": "2"
+    },
+    {
+      "id": "cbz-fixture-preserved",
+      "kind": "file-text",
+      "path": "node-preview.cbz",
+      "expected": { "contains": "Node CBZ Preview" }
+    },
+    { "id": "no-runtime-errors", "kind": "runtime-errors", "expected": [] }
+  ],
+  "errorPolicy": {
+    "knownBenignWarningIds": [
+      "vscode-webview-local-network-access",
+      "vscode-webview-sandbox-same-origin-scripts",
+      "vscode-development-extension-marketplace-404"
+    ],
+    "expectedDiagnosticCodes": [],
+    "failOnConsoleWarning": true
+  },
+  "evidence": { "domSnapshot": true, "screenshot": true, "logs": true, "sideEffects": true },
+  "timeoutMs": 60000,
+  "tags": ["preview", "cbz", "document", "node-host", "range", "no-engine"]
+}

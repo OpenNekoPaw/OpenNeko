@@ -1,0 +1,36 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "reject-resource-traversal",
+  "suiteId": "skill.skill-creator",
+  "caseGroup": "boundary",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Preserve the native resource traversal rejection without correcting the path or writing outside the Skill package.",
+    "canonicalPath": ["builtin skill-creator", "CreateSkill resource validation", "invalid-resource-path Tool result", "contained absence checks"],
+    "forbiddenFallback": ["path normalization", "ordinary file write", "partial Skill package", "escaped resource"],
+    "observables": [
+      { "ref": "skill-facts", "kind": "runtime-fact", "description": "Builtin skill-creator injection facts.", "required": true },
+      { "ref": "tool-facts", "kind": "runtime-fact", "description": "CreateSkill invalid-resource-path result facts.", "required": true },
+      { "ref": "artifact-absence", "kind": "post-check", "description": "Neither the target package nor escaped resource exists.", "required": true }
+    ],
+    "expectedResult": "CreateSkill rejects the traversal resource path and writes no package or escaped file.",
+    "expectedFailure": "A corrected path, fallback writer, different error, partial package, or escaped file fails."
+  },
+  "fixtureRefs": ["skill-artifact-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "$skill-creator Call CreateSkill exactly once with target project, skill { name: eval-traversal-skill, description: Evaluate traversal rejection., body: # Eval Traversal Skill }, and one utf8 resource { path: ../escape.txt, content: MUST_NOT_ESCAPE }. Preserve the native failure; do not correct, retry, or use another writer." },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+  ],
+  "assertions": [
+    { "id": "skill", "kind": "skill", "identity": { "name": "skill-creator", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "skill-creator", "fingerprint": "sha256:6bf26dda3f4ce05288a597f57195f7af1cf51984da89fe64813deb18d5bcf9a6" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "tool", "kind": "tool-call", "name": "CreateSkill", "status": "error", "resultIncludes": { "code": "invalid-resource-path" }, "evidenceRef": "tool-facts" },
+    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["Write", "../escape.txt", ".neko/skills"], "evidenceRef": "tool-facts" }
+  ],
+  "artifactChecks": [
+    { "id": "target-absent", "kind": "file-absent", "evidenceRef": "artifact-absence", "path": ".agents/skills/eval-traversal-skill" },
+    { "id": "escaped-file-absent", "kind": "file-absent", "evidenceRef": "artifact-absence", "path": ".agents/skills/escape.txt" }
+  ],
+  "budget": { "timeoutMs": 120000, "repetitions": 1 }
+}

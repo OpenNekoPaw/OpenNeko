@@ -1,0 +1,92 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "canonical-two-shot-storyboard",
+  "suiteId": "skill.storyboard",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Create a reviewable two-shot Storyboard Markdown plan with separate image and scene video intent, without structured Canvas authoring.",
+    "canonicalPath": [
+      "builtin storyboard trigger",
+      "prompt composition",
+      "flexible Storyboard Markdown",
+      "final Markdown table"
+    ],
+    "forbiddenFallback": [
+      "comic-to-storyboard legacy Skill",
+      "structured Storyboard authoring",
+      "specialized Canvas table/scene/shot fallback"
+    ],
+    "observables": [
+      {
+        "ref": "skill-facts",
+        "kind": "runtime-fact",
+        "description": "Full builtin Storyboard Host identity and injected fragments.",
+        "required": true
+      },
+      {
+        "ref": "output-contract",
+        "kind": "output-contract",
+        "description": "Canonical table fields and forbidden legacy labels.",
+        "required": true
+      },
+      {
+        "ref": "no-fallback",
+        "kind": "runtime-fact",
+        "description": "Legacy Skill and output path did not participate.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The canonical Storyboard Skill produces one reviewable Markdown table with distinct imagePrompt and videoPrompt intent while keeping unresolved production choices reviewable.",
+    "expectedFailure": "Missing Skill injection, missing creative meaning, or any structured/legacy fallback fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$storyboard 根据短文生成一份可审阅的两镜头 Markdown 分镜初稿，保留来源、不确定性以及独立的图片和场景视频意图，不要创建结构化 Canvas 节点：夜雨中的黑发青年推开废弃车站铁门，先环顾空站台，再发现远处蓝色信号灯闪烁。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "skill-facts" },
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "storyboard",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "storyboard",
+        "fingerprint": "sha256:ab73de988b98b22a9b2598de923c56999abb70ef1cf4bb97c580fabd3b54d719"
+      },
+      "status": "injected",
+      "evidenceRef": "skill-facts"
+    },
+    {
+      "id": "table",
+      "kind": "structured-output",
+      "format": "table",
+      "requiredFields": ["scene", "shot", "imagePrompt", "videoPrompt"],
+      "forbiddenFields": ["生成提示词"],
+      "locale": "zh-cn",
+      "evidenceRef": "output-contract"
+    },
+    {
+      "id": "fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "comic-to-storyboard",
+        "canvas.createStoryboardFromMarkdown",
+        "canvas.ingestMarkdown"
+      ],
+      "evidenceRef": "no-fallback"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "mixed-gfm-unicode-resize",
+  "suiteId": "agent-runtime.tui-markdown",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Render mixed GFM and Unicode content across several terminal widths without reparsing the document.",
+    "canonicalPath": ["Agent stream", "MarkdownStreamingSession", "document projection", "terminal layout resize", "session finalize"],
+    "forbiddenFallback": ["alternate Markdown renderer", "new document revision per resize", "raw terminal control"],
+    "observables": [{ "ref": "markdown-facts", "kind": "runtime-fact", "description": "Final Markdown output and bounded canonical Markdown path events across viewport widths.", "required": true }],
+    "expectedResult": "The mixed Markdown completes and all requested widths reuse one finalized document revision.",
+    "expectedFailure": "Invalid Markdown, missing path events, dropped evidence, or revision drift fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "只输出 Markdown，不调用工具。包含二级标题、粗体、斜体、删除线、嵌套链接、有序与无序列表、三列表格、至少四行 typescript fenced code、Unicode `猫🐈‍⬛ café 你好`，最后输出 https://example.com。" },
+    { "id": "initial-idle", "kind": "wait-for-idle", "timeoutMs": 180000 },
+    { "id": "wide", "kind": "resize", "columns": 96, "rows": 30 },
+    { "id": "medium", "kind": "resize", "columns": 48, "rows": 24 },
+    { "id": "narrow", "kind": "resize", "columns": 24, "rows": 20 },
+    { "id": "final-idle", "kind": "wait-for-idle", "timeoutMs": 30000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "markdown-facts" },
+    { "id": "output", "kind": "structured-output", "format": "markdown", "requiredReferences": ["https://example.com"], "locale": "zh-cn", "evidenceRef": "markdown-facts" },
+    { "id": "path", "kind": "markdown-path", "requiredEvents": ["session-created", "source-updated", "document-projected", "layout-created", "session-finalized"], "viewportWidths": [96, 48, 24], "sameRevisionForViewportWidths": true, "evidenceRef": "markdown-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 240000, "repetitions": 1 }
+}

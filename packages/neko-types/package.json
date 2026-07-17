@@ -1,0 +1,74 @@
+{
+  "name": "@neko/shared",
+  "description": "Shared types, protocols and utilities for OpenNeko",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "generate": "node ../../scripts/proto-gen-ts.mjs",
+    "test": "vitest"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./path": "./src/path/index.ts",
+    "./local-metadata": "./src/local-metadata/index.ts",
+    "./local-metadata/node": "./src/local-metadata/node.ts",
+    "./local-metadata/sqlite": "./src/local-metadata/sqlite/index.ts",
+    "./local-metadata/testing": "./src/local-metadata/testing/index.ts",
+    "./local-metadata/node-sqlite-local-metadata-store": "./src/local-metadata/node-sqlite-local-metadata-store.ts",
+    "./local-metadata/node-workspace-identity": "./src/local-metadata/node-workspace-identity.ts",
+    "./project-file-io": "./src/project-file-io/index.ts",
+    "./project-authoring": "./src/project-authoring/index.ts",
+    "./project-authoring/test-helpers": "./src/project-authoring/test-helpers.ts",
+    "./nks": "./src/nks/index.ts",
+    "./nkv": "./src/nkv/index.ts",
+    "./nkc": "./src/nkc/index.ts",
+    "./nka": "./src/nka/index.ts",
+    "./nkplan": "./src/nkplan/index.ts",
+    "./nkproj": "./src/nkproj/index.ts",
+    "./components": "./src/components/index.ts",
+    "./content-access": "./src/content-access/index.ts",
+    "./icons": "./src/icons/index.ts",
+    "./theme": "./src/theme/index.ts",
+    "./i18n": "./src/i18n/index.ts",
+    "./i18n/webview": "./src/i18n/webview.ts",
+    "./i18n/react": "./src/i18n/react.tsx",
+    "./vscode": "./src/vscode/index.ts",
+    "./config/config-reader": "./src/config/config-reader.ts",
+    "./types/dashboard-task": "./src/types/dashboard-task.ts",
+    "./types/dashboard-project": "./src/types/dashboard-project.ts",
+    "./types/dashboard-creative-entity": "./src/types/dashboard-creative-entity.ts",
+    "./types/creative-ai-invocation": "./src/types/creative-ai-invocation.ts",
+    "./types/npc-test-bench": "./src/types/npc-test-bench.ts",
+    "./types/agent-autoheal": "./src/types/agent-autoheal.ts",
+    "./vscode/extension/command-args": "./src/vscode/extension/command-args.ts",
+    "./vscode/extension": "./src/vscode/extension/index.ts",
+    "./vscode/test-utils": "./src/vscode/test-utils.ts",
+    "./*": "./src/*"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "tailwindcss": ">=3"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "tailwindcss": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.125.0",
+    "jsdom": "^27.0.1"
+  },
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "smol-toml": "1.6.1"
+  }
+}

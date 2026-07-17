@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <!-- NKA Audio: waveform bars -->
+  <line x1="2" y1="8" x2="2" y2="8" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="4" y1="6" x2="4" y2="10" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="6" y1="3.5" x2="6" y2="12.5" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="8" y1="5" x2="8" y2="11" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="10" y1="2" x2="10" y2="14" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="12" y1="5" x2="12" y2="11" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="14" y1="7" x2="14" y2="9" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

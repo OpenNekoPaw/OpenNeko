@@ -1,0 +1,18 @@
+{
+  "schema": "neko.agent-eval.scenario.v2", "id": "timed-cjk-captions", "suiteId": "skill.subtitle-assistant", "caseGroup": "canonical", "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Turn a short transcript into timed, readable Chinese subtitle entries.",
+    "canonicalPath": ["builtin subtitle-assistant", "timing and reading-speed rules", "line breaking", "reviewable SRT block"],
+    "forbiddenFallback": ["untimed transcript", "timeline mutation claim"],
+    "observables": [{ "ref": "skill-facts", "kind": "runtime-fact", "description": "Subtitle Host identity and deterministic timed output.", "required": true }],
+    "expectedResult": "The response contains ordered SRT entries with valid time ranges, concise text, and a validation note.",
+    "expectedFailure": "Missing Skill injection, timestamps, numbering, or readable line breaks fails."
+  },
+  "fixtureRefs": ["empty-workspace"], "runtimeProfileId": "markdown", "modelProfileIds": ["configured-default"],
+  "steps": [{ "id": "submit", "kind": "submit", "prompt": "$subtitle-assistant 把以下 6 秒对白整理为两条 SRT，并在代码块后给出 reading speed 与 line break 验收：0-3 秒“你听见了吗，远处的信号灯在响。”；3-6 秒“别回头，我们继续走。”" }, { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "skill-facts" },
+    { "id": "skill", "kind": "skill", "identity": { "name": "subtitle-assistant", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "subtitle-assistant", "fingerprint": "sha256:e6ed875f492a829d6c6795642d0fd8a03ce170762a356851866a864d891d5fcf" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "output", "kind": "structured-output", "format": "markdown", "requiredFields": ["00:00:00,000", "00:00:03,000", "reading speed", "line break"], "locale": "zh-cn", "evidenceRef": "skill-facts" }
+  ], "artifactChecks": [], "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

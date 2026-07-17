@@ -1,0 +1,137 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "task-continuation",
+  "suiteId": "agent-runtime.workflow-controller",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Generate an image asynchronously, observe its terminal generated-output resource, inspect it through ReadImage, and continue the same Agent conversation without treating it as an AssetLibrary entity.",
+    "canonicalPath": [
+      "TUI input queue",
+      "PiConversationRuntime",
+      "flat image.generate domain-model snapshot",
+      "GenerateImage TaskRef",
+      "image_generation task",
+      "task-result observation",
+      "task-result-continuation",
+      "generated-output ResourceRef",
+      "ReadImage"
+    ],
+    "forbiddenFallback": [
+      "finalize before task result",
+      "user-authored internal continuation",
+      "mock media task",
+      "GetAsset for generated-output id",
+      "implicit AssetLibrary membership",
+      "SubAgent result lookup for a media Task"
+      ,"AgentSession"
+      ,"model-authored provider or model id"
+      ,"nested mediaModels routing"
+    ],
+    "observables": [
+      {
+        "ref": "continuation-facts",
+        "kind": "runtime-fact",
+        "description": "Task terminal result, continuation identity, generated ResourceRef artifact digest/provenance/validator, ReadImage Tool result, forbidden GetAsset absence, ordering, and final answer facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The image task completes with an observed generated resource, a typed continuation uses ReadImage successfully, durable generated-output evidence validates, and GetAsset does not participate.",
+    "expectedFailure": "Missing task result observation, generated resource evidence, ReadImage success, continuation identity, ordering, forbidden GetAsset routing, or terminal idle evidence fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "generate",
+      "kind": "submit",
+      "prompt": "Generate one image of a cat playing with a red ball. Wait for the real task result, then inspect the delivered generated-output ResourceRef with ReadImage before summarizing it. Do not call GetAsset unless an explicit add-to-AssetLibrary operation has returned a separate AssetEntity id."
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 300000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "continuation-facts" },
+    { "id": "pi-runtime", "kind": "pi-runtime", "implementation": "pi-agent-core", "transcriptAuthority": "pi-session", "productMetadataAuthority": "sqlite", "purpose": "agent.main", "workspaceLocatorKind": "virtual", "turnDurability": "durable", "evidenceRef": "continuation-facts" },
+    {
+      "id": "task",
+      "kind": "task-terminal",
+      "taskType": "image_generation",
+      "status": "completed",
+      "evidenceRef": "continuation-facts"
+    },
+    {
+      "id": "read-generated-output",
+      "kind": "tool-call",
+      "name": "ReadImage",
+      "status": "success",
+      "evidenceRef": "continuation-facts"
+    },
+    {
+      "id": "no-generated-output-asset-lookup",
+      "kind": "tool-call",
+      "name": "GetAsset",
+      "status": "absent",
+      "evidenceRef": "continuation-facts"
+    },
+    {
+      "id": "no-subagent-spawn",
+      "kind": "tool-call",
+      "name": "subagent",
+      "status": "absent",
+      "evidenceRef": "continuation-facts"
+    },
+    {
+      "id": "no-subagent-output",
+      "kind": "tool-call",
+      "name": "subagent_output",
+      "status": "absent",
+      "evidenceRef": "continuation-facts"
+    },
+    {
+      "id": "continuation-identity-complete",
+      "kind": "no-fallback",
+      "forbiddenRefs": ["task-continuation-identity-incomplete"],
+      "evidenceRef": "continuation-facts"
+    },
+    {
+      "id": "generated-output",
+      "kind": "artifact",
+      "artifactKind": "generated-asset",
+      "provenanceSource": "generated-asset",
+      "validatorStatus": "valid",
+      "evidenceRef": "continuation-facts"
+    },
+    {
+      "id": "order",
+      "kind": "process-order",
+      "events": [
+        { "kind": "workflow-step", "stepId": "generate", "method": "message.submit" },
+        { "kind": "task", "taskType": "image_generation", "status": "completed" },
+        { "kind": "continuation", "source": "task-result-continuation" },
+        { "kind": "tool", "name": "ReadImage", "status": "success" }
+      ],
+      "evidenceRef": "continuation-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": [
+        "turnIdle",
+        "backgroundTasksIdle",
+        "mediaDeliveryIdle",
+        "taskResultObservationIdle",
+        "continuationQueueIdle"
+      ],
+      "evidenceRef": "continuation-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "non-empty",
+      "evidenceRef": "continuation-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 300000, "repetitions": 1 }
+}

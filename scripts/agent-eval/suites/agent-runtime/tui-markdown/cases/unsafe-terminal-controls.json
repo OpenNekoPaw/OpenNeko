@@ -1,0 +1,32 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "unsafe-terminal-controls",
+  "suiteId": "agent-runtime.tui-markdown",
+  "caseGroup": "failure",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Render untrusted terminal control text as inert Markdown code content across viewport widths.",
+    "canonicalPath": ["provider output", "canonical Markdown session", "terminal-safe encoder", "layout resize"],
+    "forbiddenFallback": ["terminal escape execution", "raw control passthrough", "alternate renderer"],
+    "observables": [{ "ref": "markdown-facts", "kind": "runtime-fact", "description": "Inert output marker and complete Markdown path events across widths.", "required": true }],
+    "expectedResult": "The response contains the inert marker and reflows through one Markdown revision.",
+    "expectedFailure": "Runtime errors, missing inert marker, dropped events, or revision drift fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "不要调用工具。把这些不可信终端控制名称作为普通 Markdown code block 文本复述：ESC/CSI、OSC/BEL、C0、C1；随后写 controls rendered inert。不得声称执行控制序列。" },
+    { "id": "initial-idle", "kind": "wait-for-idle", "timeoutMs": 180000 },
+    { "id": "wide", "kind": "resize", "columns": 72, "rows": 24 },
+    { "id": "narrow", "kind": "resize", "columns": 28, "rows": 20 },
+    { "id": "final-idle", "kind": "wait-for-idle", "timeoutMs": 30000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "markdown-facts" },
+    { "id": "output", "kind": "final-answer", "mode": "contains", "text": ["controls rendered inert"], "evidenceRef": "markdown-facts" },
+    { "id": "path", "kind": "markdown-path", "requiredEvents": ["session-created", "source-updated", "document-projected", "layout-created", "session-finalized"], "viewportWidths": [72, 28], "sameRevisionForViewportWidths": true, "evidenceRef": "markdown-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 240000, "repetitions": 1 }
+}

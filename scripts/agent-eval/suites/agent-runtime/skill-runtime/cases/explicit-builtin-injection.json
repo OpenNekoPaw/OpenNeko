@@ -1,0 +1,30 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "explicit-builtin-injection",
+  "suiteId": "agent-runtime.skill-runtime",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Activate one exact builtin Skill and prove its Host identity and injected prompt fragment.",
+    "canonicalPath": ["explicit Skill trigger", "Pi Skill Host identity resolution", "fingerprint locator disclosure", "Pi prompt input"],
+    "forbiddenFallback": ["name-only precedence", "retired Skill identity", "uninjected completion"],
+    "observables": [{ "ref": "skill-facts", "kind": "runtime-fact", "description": "Typed Skill lifecycle, Host identity, and prompt composition facts.", "required": true }],
+    "expectedResult": "The exact builtin storyboard identity reaches injected state and participates in prompt composition.",
+    "expectedFailure": "Wrong source/location/fingerprint, missing injection, or legacy activation fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "$storyboard 为一个雨夜车站场景给出一个镜头建议。" },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "skill-facts" },
+    { "id": "pi-runtime", "kind": "pi-runtime", "implementation": "pi-agent-core", "transcriptAuthority": "pi-session", "productMetadataAuthority": "sqlite", "purpose": "agent.main", "workspaceLocatorKind": "virtual", "turnDurability": "durable", "evidenceRef": "skill-facts" },
+    { "id": "skill", "kind": "skill", "identity": { "name": "storyboard", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "storyboard", "fingerprint": "sha256:ab73de988b98b22a9b2598de923c56999abb70ef1cf4bb97c580fabd3b54d719" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["comic-to-storyboard"], "evidenceRef": "skill-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

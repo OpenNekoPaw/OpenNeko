@@ -1,0 +1,64 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "agent-runtime.creative-media-workflow",
+  "owner": { "kind": "agent-runtime", "id": "creative-media-workflow" },
+  "target": {
+    "kind": "workflow",
+    "id": "creative-media-feedback-iteration",
+    "contractHash": "sha256:41055e9860200150038a7ef1bb52b5bdd04635217248602b29b4a6f9506523d5"
+  },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [
+    {
+      "id": "canonical-default",
+      "settings": {},
+      "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "configured-default",
+      "selection": "configured-default",
+      "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    },
+    {
+      "id": "nekoapi-chat-image-purpose",
+      "selection": "explicit",
+      "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.5" },
+      "purposes": { "image.generate": { "providerId": "nekoapi-media", "modelId": "gpt-image-2" } },
+      "configurationHash": "sha256:c14623d47482916cddc2e8c56e2fb37ff0b3aa18df384a1a3c2361635bc5db38"
+    }
+  ],
+  "judgeProfiles": [],
+  "fixtures": [
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "image-quality-feedback-iteration",
+      "file": "cases/image-quality-feedback-iteration.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "generated-output-workspace-board",
+      "file": "cases/generated-output-workspace-board.json",
+      "group": "workflow",
+      "visibility": "public"
+    }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
+}

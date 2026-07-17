@@ -1,0 +1,224 @@
+{
+  "name": "neko-canvas",
+  "displayName": "NekoCanvas",
+  "description": "Canvas editor for VSCode",
+  "version": "0.0.1",
+  "publisher": "neko",
+  "l10n": "./l10n",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neko/creative-suite"
+  },
+  "engines": {
+    "vscode": "^1.128.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "canvas",
+    "design",
+    "assets",
+    "library"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "extensionDependencies": [
+    "neko.neko-engine",
+    "neko.neko-tools",
+    "neko.neko-preview"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "neko.canvasEditor",
+        "displayName": "Canvas Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.nkc"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "neko.canvasOutline",
+          "name": "%neko.canvas.outline.title%",
+          "when": "activeCustomEditorId == 'neko.canvasEditor'",
+          "icon": "$(list-tree)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "neko.canvas.new",
+        "title": "%neko.canvas.new.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.asset.import",
+        "title": "%neko.asset.import.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.addToAssetLibrary",
+        "title": "%neko.addToAssetLibrary.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.previewMedia",
+        "title": "%neko.canvas.previewMedia.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.revealPlaybackWorkspace",
+        "title": "%neko.canvas.revealPlaybackWorkspace.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.deleteSelected",
+        "title": "%neko.canvas.deleteSelected.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.escape",
+        "title": "%neko.canvas.escape.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.selectAll",
+        "title": "%neko.canvas.selectAll.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.undo",
+        "title": "%neko.canvas.undo.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.redo",
+        "title": "%neko.canvas.redo.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.selectNodeFromOutline",
+        "title": "%neko.canvas.selectNodeFromOutline.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.selectConnectionFromOutline",
+        "title": "%neko.canvas.selectConnectionFromOutline.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.resetZoom",
+        "title": "%neko.canvas.resetZoom.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.generateSelected",
+        "title": "%neko.canvas.generateSelected.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.updateNodeImage",
+        "title": "%neko.canvas.updateNodeImage.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.detachShotFromScene",
+        "title": "%neko.canvas.detachShotFromScene.title%",
+        "category": "NekoCanvas"
+      },
+      {
+        "command": "neko.canvas.deleteNodeFromOutline",
+        "title": "%neko.canvas.deleteNodeFromOutline.title%",
+        "category": "NekoCanvas"
+      }
+    ],
+    "menus": {
+      "explorer/context": [],
+      "neko.explorer.newProject": [
+        {
+          "command": "neko.canvas.new",
+          "group": "1@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "neko.canvas.detachShotFromScene",
+          "when": "view == neko.canvasOutline && viewItem == shotChild",
+          "group": "1_shot@1"
+        },
+        {
+          "command": "neko.canvas.deleteNodeFromOutline",
+          "when": "view == neko.canvasOutline && viewItem =~ /canvasNode|shotChild/",
+          "group": "2_manage@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "NekoCanvas",
+      "properties": {
+        "neko.canvas.narrative.preview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the Canvas Playback Workspace inside the Canvas editor."
+        },
+        "neko.canvas.narrative.typewriterEffect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable typewriter-style dialogue rendering in Canvas route preview."
+        },
+        "neko.canvas.narrative.autoExpressionMatch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable automatic parenthetical-to-expression matching in Canvas route preview."
+        },
+        "neko.canvas.narrative.showLockedChoices": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show locked choices as disabled instead of hiding them in Canvas route preview."
+        },
+        "neko.canvas.narrative.previewAutoSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "Synchronize Canvas selection and Playback Workspace highlights automatically."
+        },
+        "neko.canvas.narrative.live2dPerformance": {
+          "type": "boolean",
+          "default": false,
+          "description": "Prefer the Live2D performance path when Canvas route preview renderers support it."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "pnpm run compile:extension && pnpm run compile:webview && pnpm run copy:extension && pnpm run copy:webview",
+    "compile:extension": "cd packages/extension && pnpm run build",
+    "compile:webview": "cd packages/webview && pnpm run build",
+    "copy:webview": "rm -rf dist/webview && mkdir -p dist/webview/assets && cp packages/webview/dist/*.html dist/webview/ 2>/dev/null || true && cp -R packages/webview/dist/assets/* dist/webview/assets/ 2>/dev/null || true",
+    "copy:extension": "mkdir -p dist && cp packages/extension/dist/extension.js dist/extension.js",
+    "watch": "pnpm run compile:extension -- --watch",
+    "lint": "eslint packages/extension/src packages/webview/src",
+    "typecheck": "cd packages/extension && tsc --noEmit",
+    "test": "pnpm exec vitest run",
+    "test:packages": "pnpm turbo run test --filter=@neko-canvas/webview",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.125.0",
+    "esbuild": "^0.19.8",
+    "typescript": "^5.3.2",
+    "vitest": "^4.1.2"
+  }
+}

@@ -1,0 +1,2787 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* VSCode Theme Integration - CSS Custom Properties
+   VSCode automatically injects theme variables into webviews.
+   These fallbacks are only used when running outside VSCode (e.g., development mode).
+*/
+:root {
+  /* Fallback values for when VSCode variables are not available */
+  --fallback-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --fallback-font-size: 13px;
+
+  /* Editor - fallback (dark theme) */
+  --fallback-editor-bg: #1e1e1e;
+  --fallback-editor-fg: #cccccc;
+
+  /* Panel - fallback */
+  --fallback-panel-bg: #252526;
+  --fallback-panel-border: #454545;
+
+  /* Sidebar - fallback */
+  --fallback-sidebar-bg: #252526;
+  --fallback-sidebar-fg: #cccccc;
+
+  /* Input - fallback */
+  --fallback-input-bg: #3c3c3c;
+  --fallback-input-fg: #cccccc;
+  --fallback-input-border: #3c3c3c;
+
+  /* Button - fallback */
+  --fallback-button-bg: #0e639c;
+  --fallback-button-fg: #ffffff;
+  --fallback-button-hover-bg: #1177bb;
+  --fallback-button-secondary-bg: #3a3d41;
+  --fallback-button-secondary-fg: #ffffff;
+
+  /* List - fallback */
+  --fallback-list-hover-bg: #2a2d2e;
+  --fallback-list-selection-bg: #094771;
+  --fallback-list-selection-fg: #ffffff;
+
+  /* Dropdown - fallback */
+  --fallback-dropdown-bg: #3c3c3c;
+  --fallback-dropdown-fg: #f0f0f0;
+  --fallback-dropdown-border: #3c3c3c;
+
+  /* Focus/Accent - fallback */
+  --fallback-focus-border: #007acc;
+
+  /* Description text - fallback */
+  --fallback-description-fg: #9d9d9d;
+
+  /* Menu - fallback */
+  --fallback-menu-bg: #252526;
+  --fallback-menu-fg: #cccccc;
+  --fallback-menu-selection-bg: #04395e;
+  --fallback-menu-selection-fg: #ffffff;
+  --fallback-menu-separator-bg: #454545;
+  --fallback-menu-border: #454545;
+
+  /* Error - fallback */
+  --fallback-error-fg: #f14c4c;
+
+  /* Widget shadow - fallback */
+  --fallback-widget-shadow: rgba(0, 0, 0, 0.36);
+
+  /* Scrollbar - fallback */
+  --fallback-scrollbar-bg: rgba(121, 121, 121, 0.4);
+  --fallback-scrollbar-hover-bg: rgba(121, 121, 121, 0.7);
+  --fallback-scrollbar-active-bg: rgba(121, 121, 121, 0.8);
+
+  /* Agent semantic tokens */
+  --agent-bg: var(--vscode-editor-background, var(--fallback-editor-bg));
+  --agent-elevated: color-mix(
+    in srgb,
+    var(--neko-elevated, var(--vscode-panel-background, var(--fallback-panel-bg))) 88%,
+    var(--agent-bg) 12%
+  );
+  --agent-surface: color-mix(
+    in srgb,
+    var(--neko-surface, rgba(255, 255, 255, 0.05)) 78%,
+    var(--agent-elevated) 22%
+  );
+  --agent-border: var(--neko-border, rgba(255, 255, 255, 0.08));
+  --agent-divider: var(--neko-divider, rgba(255, 255, 255, 0.06));
+  --agent-fg: var(--neko-fg, var(--vscode-editor-foreground, var(--fallback-editor-fg)));
+  --agent-fg-secondary: var(
+    --neko-fg-secondary,
+    var(--vscode-descriptionForeground, var(--fallback-description-fg))
+  );
+  --agent-fg-muted: var(--neko-fg-muted, rgba(232, 232, 237, 0.38));
+  --agent-hover: var(--neko-hover, rgba(255, 255, 255, 0.06));
+  --agent-accent: var(--neko-accent, var(--vscode-button-background, var(--fallback-button-bg)));
+  --agent-accent-soft: var(
+    --neko-accent-soft,
+    color-mix(in srgb, var(--agent-accent) 16%, transparent)
+  );
+  --agent-accent-fg: var(--vscode-button-foreground, var(--fallback-button-fg));
+  --agent-input-bg: color-mix(in srgb, var(--agent-elevated) 84%, var(--agent-bg) 16%);
+  --agent-input-border: color-mix(in srgb, var(--agent-fg) 12%, transparent);
+  --agent-chat-row-hover: color-mix(in srgb, var(--agent-fg) 3%, transparent);
+  --agent-empty-panel-bg: color-mix(in srgb, var(--agent-elevated) 54%, transparent);
+  --agent-empty-panel-border: color-mix(in srgb, var(--agent-fg) 8%, transparent);
+  --agent-empty-panel-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 4%, transparent);
+  --agent-empty-copy: var(--agent-fg-secondary);
+  --agent-empty-muted: var(--agent-fg-muted);
+  --agent-empty-action-bg: color-mix(in srgb, var(--agent-elevated) 58%, transparent);
+  --agent-empty-action-border: color-mix(in srgb, var(--agent-fg) 9%, transparent);
+  --agent-empty-action-hover-bg: color-mix(in srgb, var(--agent-fg) 5%, transparent);
+  --agent-empty-action-hover-border: color-mix(in srgb, var(--agent-accent) 38%, transparent);
+  --agent-bubble-assistant-bg: color-mix(in srgb, var(--agent-elevated) 58%, var(--agent-bg) 42%);
+  --agent-bubble-assistant-border: color-mix(in srgb, var(--agent-fg) 10%, transparent);
+  --agent-bubble-user-bg: color-mix(in srgb, var(--agent-accent) 12%, var(--agent-elevated) 88%);
+  --agent-bubble-user-border: color-mix(in srgb, var(--agent-accent) 28%, var(--agent-fg) 6%);
+  --agent-bubble-user-fg: var(--agent-fg);
+  --agent-bubble-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12), inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 4%, transparent);
+  --agent-bubble-user-shadow:
+    0 1px 4px color-mix(in srgb, var(--agent-accent) 12%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 5%, transparent);
+  --agent-composer-rail-bg: color-mix(in srgb, var(--agent-bg) 92%, var(--agent-elevated) 8%);
+  --agent-composer-rail-border: color-mix(in srgb, var(--agent-fg) 8%, transparent);
+  --agent-composer-bg: color-mix(in srgb, var(--agent-elevated) 64%, var(--agent-bg) 36%);
+  --agent-composer-border: color-mix(in srgb, var(--agent-fg) 12%, transparent);
+  --agent-composer-focus-border: color-mix(in srgb, var(--agent-accent) 50%, var(--agent-fg) 8%);
+  --agent-composer-divider: color-mix(in srgb, var(--agent-fg) 7%, transparent);
+  --agent-composer-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12), inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 4%, transparent);
+  --agent-composer-focus-shadow:
+    0 0 0 1px color-mix(in srgb, var(--agent-accent) 18%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--agent-accent) 6%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 5%, transparent);
+  --agent-control-muted-bg: color-mix(in srgb, var(--agent-fg) 7%, transparent);
+  --agent-composer-send-bg: color-mix(in srgb, var(--agent-accent) 88%, var(--agent-fg) 12%);
+  --agent-composer-send-border: color-mix(in srgb, var(--agent-accent) 72%, transparent);
+  --agent-composer-send-fg: var(--agent-accent-fg);
+  --agent-tab-active-bg: color-mix(in srgb, var(--agent-accent) 18%, transparent);
+  --agent-menu-bg: color-mix(
+    in srgb,
+    var(--vscode-menu-background, var(--fallback-menu-bg)) 86%,
+    var(--agent-elevated) 14%
+  );
+  --agent-overlay-bg: color-mix(
+    in srgb,
+    var(--vscode-quickInput-background, var(--vscode-dropdown-background, var(--agent-menu-bg))) 98%,
+    var(--agent-bg) 2%
+  );
+  --agent-overlay-border: color-mix(in srgb, var(--agent-fg) 18%, transparent);
+  --agent-overlay-radius: 7px;
+  --agent-overlay-shadow:
+    0 10px 24px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.24)),
+    inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 5%, transparent);
+  --agent-overlay-padding: 3px;
+  --agent-overlay-inline-size: min(320px, calc(100vw - 24px));
+  --agent-overlay-block-size: min(300px, 52vh);
+  --agent-overlay-wide-inline-size: fit-content;
+  --agent-overlay-wide-min-inline-size: 220px;
+  --agent-overlay-wide-max-inline-size: min(560px, calc(100vw - 24px));
+  --agent-overlay-compact-inline-size: max-content;
+  --agent-overlay-compact-min-inline-size: 88px;
+  --agent-overlay-compact-max-inline-size: min(240px, calc(100vw - 24px));
+  --agent-menu-row-min-height: 27px;
+  --agent-menu-row-padding: 3px 8px;
+  --agent-menu-row-gap: 7px;
+  --agent-menu-row-radius: 5px;
+  --agent-menu-row-hover-bg: color-mix(
+    in srgb,
+    var(--vscode-list-hoverBackground, var(--agent-hover)) 92%,
+    transparent
+  );
+  --agent-menu-row-hover-border: color-mix(in srgb, var(--agent-fg) 10%, transparent);
+  --agent-menu-row-selected-bg: color-mix(in srgb, var(--agent-accent) 10%, transparent);
+  --agent-menu-row-selected-fg: var(--agent-fg);
+  --agent-menu-row-selected-border: transparent;
+  --agent-menu-row-indicator: var(--agent-accent);
+  --agent-menu-row-indicator-width: 2px;
+  --agent-menu-section-margin: 1px 0;
+  --agent-menu-section-padding: 4px 7px 3px;
+  --agent-menu-section-font-size: 10px;
+  --agent-menu-section-line-height: 14px;
+  --agent-danger: var(--neko-danger, var(--vscode-errorForeground, var(--fallback-error-fg)));
+  --agent-success: var(--vscode-charts-green, #89d185);
+  --agent-info: var(--vscode-charts-blue, #3794ff);
+  --agent-warning-bg: color-mix(
+    in srgb,
+    var(--vscode-inputValidation-warningBackground, #5c4b1c) 72%,
+    transparent
+  );
+  --agent-warning-fg: var(--vscode-inputValidation-warningForeground, #ffd60a);
+}
+
+body.vscode-high-contrast,
+body[data-vscode-theme-kind='vscode-high-contrast'] {
+  --agent-elevated: var(--vscode-panel-background, var(--fallback-panel-bg));
+  --agent-surface: var(--agent-elevated);
+  --agent-border: var(--vscode-contrastBorder, #ffffff);
+  --agent-divider: var(--agent-border);
+  --agent-hover: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.12));
+  --agent-accent-soft: var(--vscode-list-activeSelectionBackground, rgba(255, 255, 255, 0.18));
+  --agent-input-bg: var(--agent-elevated);
+  --agent-input-border: var(--agent-border);
+  --agent-chat-row-hover: var(--vscode-list-hoverBackground, transparent);
+  --agent-bubble-assistant-bg: var(--agent-elevated);
+  --agent-bubble-assistant-border: var(--agent-border);
+  --agent-bubble-user-bg: var(--vscode-list-activeSelectionBackground, var(--agent-elevated));
+  --agent-bubble-user-border: var(--agent-border);
+  --agent-bubble-shadow: none;
+  --agent-bubble-user-shadow: none;
+  --agent-composer-rail-bg: var(--agent-bg);
+  --agent-composer-rail-border: var(--agent-border);
+  --agent-composer-bg: var(--agent-elevated);
+  --agent-composer-border: var(--agent-border);
+  --agent-composer-focus-border: var(--vscode-focusBorder, var(--agent-border));
+  --agent-composer-divider: var(--agent-border);
+  --agent-composer-shadow: none;
+  --agent-composer-focus-shadow: none;
+  --agent-control-muted-bg: var(--agent-elevated);
+  --agent-composer-send-bg: var(--vscode-button-background, var(--agent-accent));
+  --agent-composer-send-border: var(--agent-border);
+  --agent-empty-panel-bg: var(--agent-elevated);
+  --agent-empty-panel-border: var(--agent-border);
+  --agent-empty-panel-shadow: none;
+  --agent-empty-copy: var(--agent-fg);
+  --agent-empty-muted: var(--agent-fg-secondary);
+  --agent-empty-action-bg: var(--agent-elevated);
+  --agent-empty-action-border: var(--agent-border);
+  --agent-empty-action-hover-bg: var(--vscode-list-hoverBackground, var(--agent-elevated));
+  --agent-empty-action-hover-border: var(--vscode-focusBorder, var(--agent-border));
+  --agent-overlay-bg: var(--agent-elevated);
+  --agent-overlay-border: var(--agent-border);
+  --agent-overlay-shadow: none;
+  --agent-overlay-inline-size: min(320px, calc(100vw - 24px));
+  --agent-overlay-wide-inline-size: fit-content;
+  --agent-overlay-wide-min-inline-size: 220px;
+  --agent-overlay-wide-max-inline-size: min(560px, calc(100vw - 24px));
+  --agent-menu-row-hover-bg: var(--vscode-list-hoverBackground, var(--agent-elevated));
+  --agent-menu-row-selected-bg: var(--vscode-list-activeSelectionBackground, var(--agent-elevated));
+  --agent-menu-row-selected-fg: var(--vscode-list-activeSelectionForeground, var(--agent-fg));
+  --agent-menu-row-hover-border: var(--agent-border);
+  --agent-menu-row-selected-border: var(--agent-border);
+  --agent-menu-row-indicator: var(--agent-border);
+}
+
+body.vscode-light,
+body[data-vscode-theme-kind='vscode-light'] {
+  --agent-empty-panel-bg: color-mix(in srgb, var(--agent-bg) 84%, #f3f3f3 16%);
+  --agent-empty-panel-border: color-mix(in srgb, var(--agent-fg) 12%, transparent);
+  --agent-empty-panel-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  --agent-empty-copy: color-mix(in srgb, var(--agent-fg) 66%, transparent);
+  --agent-empty-muted: color-mix(in srgb, var(--agent-fg) 32%, transparent);
+  --agent-empty-action-bg: color-mix(in srgb, var(--agent-bg) 72%, #ffffff 28%);
+  --agent-empty-action-border: color-mix(in srgb, var(--agent-fg) 13%, transparent);
+  --agent-empty-action-hover-bg: color-mix(in srgb, var(--agent-accent) 6%, #ffffff 94%);
+  --agent-empty-action-hover-border: color-mix(in srgb, var(--agent-accent) 42%, transparent);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--vscode-font-family, var(--fallback-font-family));
+  font-size: var(--vscode-font-size, var(--fallback-font-size));
+  background-color: var(--agent-bg);
+  color: var(--agent-fg);
+  overflow: hidden;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* VSCode-style buttons */
+.vscode-button {
+  background-color: var(--agent-accent);
+  color: var(--agent-accent-fg);
+  border: 1px solid transparent;
+  padding: 5px 14px;
+  cursor: pointer;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 18px;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--agent-accent) 22%, transparent);
+}
+
+.vscode-button:hover {
+  background-color: color-mix(in srgb, var(--agent-accent) 88%, #ffffff 12%);
+}
+
+.vscode-button:focus {
+  outline: 2px solid var(--agent-accent);
+  outline-offset: 1px;
+}
+
+.vscode-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.vscode-button-secondary {
+  background-color: color-mix(in srgb, var(--agent-fg) 8%, transparent);
+  color: var(--agent-fg);
+  border-color: var(--agent-input-border);
+  box-shadow: none;
+}
+
+.vscode-button-secondary:hover {
+  background-color: color-mix(in srgb, var(--agent-fg) 12%, transparent);
+}
+
+/* VSCode-style inputs */
+.vscode-input {
+  background-color: var(--agent-input-bg);
+  color: var(--agent-fg);
+  border: 1px solid var(--agent-input-border);
+  padding: 4px 8px;
+  font-size: 13px;
+  line-height: 18px;
+  outline: none;
+  border-radius: 8px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.vscode-input:focus {
+  border-color: var(--agent-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent-accent) 20%, transparent);
+}
+
+.vscode-input::placeholder {
+  color: var(--agent-fg-secondary);
+}
+
+/* VSCode-style dropdowns */
+.vscode-dropdown {
+  background-color: var(--agent-input-bg);
+  color: var(--agent-fg);
+  border: 1px solid var(--agent-input-border);
+  padding: 4px 8px;
+  font-size: 13px;
+  outline: none;
+  border-radius: 8px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.vscode-dropdown:focus {
+  border-color: var(--agent-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent-accent) 20%, transparent);
+}
+
+/* VSCode-style list items */
+.vscode-list-item {
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+  color: var(--agent-fg);
+  border-radius: 8px;
+}
+
+.vscode-list-item:hover {
+  background-color: var(--agent-hover);
+}
+
+.vscode-list-item.active {
+  background-color: var(--agent-accent-soft);
+  color: var(--agent-fg);
+}
+
+/* Scrollbar styles - thin overlay style to avoid content obstruction */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--vscode-scrollbarSlider-activeBackground);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Thin scrollbar utility - even thinner for nested containers */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+}
+
+/* VSCode tab-style horizontal scrollbar - very thin and subtle */
+.scrollbar-tab {
+  scrollbar-width: thin;
+}
+
+.scrollbar-tab::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+.scrollbar-tab::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-tab::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 1.5px;
+}
+
+.scrollbar-tab:hover::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background);
+}
+
+.scrollbar-tab::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+/* Overlay scrollbar - scrollbar overlays content instead of taking space */
+.scrollbar-overlay {
+  overflow-y: overlay;
+  overflow-x: hidden;
+}
+
+/* Auto-hide scrollbar when not scrolling */
+.scrollbar-auto-hide::-webkit-scrollbar-thumb {
+  background: transparent;
+  transition: background 0.2s;
+}
+
+.scrollbar-auto-hide:hover::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background);
+}
+
+.scrollbar-auto-hide:hover::-webkit-scrollbar-thumb:hover {
+  background: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Icon button styling */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--agent-fg-secondary);
+  opacity: 0.8;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.icon-button:hover {
+  background-color: var(--agent-hover);
+  color: var(--agent-fg);
+  opacity: 1;
+}
+
+.icon-button:active {
+  background-color: var(--agent-accent-soft);
+}
+
+.icon-button:focus {
+  outline: 1px solid var(--agent-accent);
+  outline-offset: -1px;
+}
+
+/* Tooltip styling */
+.vscode-tooltip {
+  position: absolute;
+  background-color: var(--agent-elevated);
+  border: 1px solid var(--agent-border);
+  color: var(--agent-fg);
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 8px;
+  box-shadow: var(--neko-shadow-md, 0 4px 14px rgba(0, 0, 0, 0.44));
+  z-index: 1000;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Description/secondary text */
+.vscode-description {
+  color: var(--agent-fg-secondary);
+  font-size: 12px;
+}
+
+/* Badge styling */
+.vscode-badge {
+  display: inline-block;
+  background-color: color-mix(in srgb, var(--agent-accent) 14%, transparent);
+  color: color-mix(in srgb, var(--agent-accent) 80%, var(--agent-fg) 20%);
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+  border: 1px solid color-mix(in srgb, var(--agent-accent) 28%, transparent);
+}
+
+/* Toast notification animations */
+@keyframes toast-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: toast-slide-in 0.3s ease-out;
+}
+
+/* ── Neko visual design tokens ────────────────────────────────────────────── */
+
+/* Gradient accent bar — horizontal colorful strip (used at top of modals/cards) */
+.neko-gradient-bar {
+  background: linear-gradient(
+    90deg,
+    var(--vscode-charts-purple, #9c3eda),
+    var(--vscode-charts-blue, #1a85ff),
+    var(--vscode-charts-purple, #9c3eda)
+  );
+  background-size: 200% 100%;
+  height: 2px;
+  animation: neko-gradient-shift 6s ease infinite;
+}
+
+@keyframes neko-gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Elevated floating card — deep shadow + large radius for modals/overlays */
+.neko-float-card {
+  background-color: var(--agent-elevated);
+  border: 1px solid var(--agent-border);
+  border-radius: 16px;
+  box-shadow: var(--neko-shadow-xl, 0 24px 48px rgba(0, 0, 0, 0.28));
+  overflow: hidden;
+}
+
+/* Glass dropdown — frosted glass panel for menus/dropdowns */
+.neko-glass-dropdown {
+  background-color: color-mix(in srgb, var(--agent-menu-bg) 92%, transparent);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  border: 1px solid var(--agent-border);
+  border-radius: 12px;
+  box-shadow:
+    var(--neko-shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.24)),
+    inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 6%, transparent);
+  overflow: hidden;
+}
+
+/* Agent UI helpers */
+.agent-message-row {
+  transition: background-color 0.12s ease;
+}
+
+.agent-message-row:hover {
+  background: var(--agent-chat-row-hover);
+}
+
+.agent-chat-empty-scroll {
+  min-height: 0;
+}
+
+.agent-empty-panel {
+  padding: 14px;
+  border: 1px solid var(--agent-empty-panel-border);
+  border-radius: 8px;
+  background: var(--agent-empty-panel-bg);
+  box-shadow: var(--agent-empty-panel-shadow);
+  overflow-wrap: anywhere;
+}
+
+.agent-empty-title {
+  letter-spacing: 0;
+}
+
+.agent-empty-copy {
+  text-wrap: pretty;
+}
+
+.agent-empty-action {
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--agent-fg) 3%, transparent);
+}
+
+.agent-empty-action-selected {
+  background: color-mix(in srgb, var(--agent-accent) 9%, var(--agent-empty-action-bg));
+}
+
+.agent-bubble {
+  border: 1px solid var(--agent-bubble-assistant-border);
+  box-shadow: var(--agent-bubble-shadow);
+}
+
+.agent-bubble-assistant {
+  background: var(--agent-bubble-assistant-bg);
+  border-color: var(--agent-bubble-assistant-border);
+  color: var(--agent-fg);
+}
+
+.agent-bubble-user {
+  background: var(--agent-bubble-user-bg);
+  border-color: var(--agent-bubble-user-border);
+  color: var(--agent-bubble-user-fg);
+  box-shadow: var(--agent-bubble-user-shadow);
+}
+
+.agent-composer-shell {
+  background: var(--agent-composer-bg);
+  border: 1px solid var(--agent-composer-border);
+  border-radius: 14px;
+  box-shadow: var(--agent-composer-shadow);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.agent-composer-shell:focus-within {
+  border-color: var(--agent-composer-focus-border);
+  box-shadow: var(--agent-composer-focus-shadow);
+}
+
+.agent-composer-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  padding: 8px 10px 7px;
+}
+
+.agent-composer-queue-panel {
+  display: grid;
+  min-width: 0;
+  gap: var(--agent-overlay-padding);
+  margin: 7px 8px 4px;
+  padding: var(--agent-overlay-padding);
+  border: 1px solid var(--agent-overlay-border);
+  border-radius: var(--agent-overlay-radius);
+  background: var(--agent-overlay-bg);
+  box-shadow: var(--agent-overlay-shadow);
+  color: var(--vscode-descriptionForeground);
+}
+
+.agent-composer-queue-header {
+  display: flex;
+  min-height: 28px;
+  min-width: 0;
+  align-items: center;
+  gap: var(--agent-menu-row-gap);
+  padding: var(--agent-menu-row-padding);
+}
+
+.agent-composer-queue-status-dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--agent-accent) 18%, transparent);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 2px var(--agent-overlay-bg);
+}
+
+.agent-composer-queue-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer-queue-toggle {
+  flex: 0 0 auto;
+  min-height: 22px;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--agent-fg-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.agent-composer-queue-toggle:hover {
+  border-color: color-mix(in srgb, var(--agent-fg) 10%, transparent);
+  background: var(--agent-hover);
+  color: var(--agent-fg);
+}
+
+.agent-composer-queue-list {
+  display: grid;
+  min-width: 0;
+  gap: var(--agent-overlay-padding);
+}
+
+.agent-composer-queue-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.agent-composer-queue-row.agent-composer-popover-row {
+  cursor: default;
+}
+
+.agent-composer-queue-index {
+  display: inline-flex;
+  width: 17px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--agent-accent) 12%, transparent);
+  color: var(--agent-accent);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 17px;
+}
+
+.agent-composer-queue-text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--agent-fg);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer-queue-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+
+.agent-composer-queue-action {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--agent-fg-secondary);
+}
+
+.agent-composer-queue-action:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--agent-accent) 32%, transparent);
+  background: color-mix(in srgb, var(--agent-accent) 12%, transparent);
+  color: var(--agent-accent);
+}
+
+.agent-composer-queue-action.is-danger:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--agent-danger) 36%, transparent);
+  background: color-mix(in srgb, var(--agent-danger) 12%, transparent);
+  color: var(--agent-danger);
+}
+
+.agent-composer-queue-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.agent-composer-queue-more,
+.agent-composer-queue-pending {
+  min-width: 0;
+  overflow: hidden;
+  padding: 3px 8px 4px;
+  color: var(--agent-fg-secondary);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer-textarea {
+  flex: 1 1 auto;
+  min-height: 32px;
+  max-height: 120px;
+  min-width: 0;
+  padding: 5px 4px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--vscode-foreground);
+  font-size: 13px;
+  line-height: 20px;
+  resize: none;
+}
+
+.agent-composer-textarea::placeholder {
+  color: var(--vscode-descriptionForeground);
+}
+
+.agent-composer-popover {
+  position: absolute;
+  right: -1px;
+  bottom: 100%;
+  left: -1px;
+  z-index: 50;
+  width: auto;
+  max-height: var(--agent-overlay-block-size);
+  margin-bottom: 6px;
+  overflow: hidden;
+  padding: var(--agent-overlay-padding);
+  border: 1px solid var(--agent-overlay-border);
+  border-radius: var(--agent-overlay-radius);
+  background: var(--agent-overlay-bg);
+  box-shadow: var(--agent-overlay-shadow);
+  color: var(--agent-fg);
+}
+
+.agent-composer-popover-scroll {
+  max-height: calc(var(--agent-overlay-block-size) - (var(--agent-overlay-padding) * 2));
+  overflow-y: auto;
+  padding: 0;
+  scrollbar-color: var(--vscode-scrollbarSlider-background, var(--fallback-scrollbar-bg))
+    transparent;
+  scrollbar-width: thin;
+}
+
+.agent-composer-popover-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.agent-composer-popover-scroll::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+}
+
+.agent-composer-popover-hint,
+.agent-composer-popover-empty {
+  padding: 5px 8px 6px;
+  color: var(--agent-fg-secondary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.agent-composer-popover-section {
+  margin: var(--agent-menu-section-margin);
+  padding: var(--agent-menu-section-padding);
+  color: var(--agent-fg-secondary);
+  font-size: var(--agent-menu-section-font-size);
+  font-weight: 600;
+  line-height: var(--agent-menu-section-line-height);
+}
+
+.agent-composer-popover-section-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--agent-overlay-bg);
+}
+
+.agent-composer-popover-section span:last-child {
+  color: color-mix(in srgb, var(--agent-fg-secondary) 82%, transparent);
+  font-weight: 500;
+}
+
+.agent-composer-popover-row {
+  position: relative;
+  display: grid;
+  width: 100%;
+  align-items: center;
+  gap: var(--agent-menu-row-gap);
+  min-height: var(--agent-menu-row-min-height);
+  padding: var(--agent-menu-row-padding);
+  border: 1px solid transparent;
+  border-radius: var(--agent-menu-row-radius);
+  background: transparent;
+  color: var(--agent-fg);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.agent-composer-popover-row:hover,
+.agent-composer-popover-row:focus-visible {
+  border-color: var(--agent-menu-row-hover-border);
+  background: var(--agent-menu-row-hover-bg);
+  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-hover-border);
+  outline: none;
+}
+
+.agent-composer-popover-row.is-selected {
+  border-color: var(--agent-menu-row-selected-border);
+  background: var(--agent-menu-row-selected-bg);
+  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-indicator);
+  color: var(--agent-menu-row-selected-fg);
+}
+
+.agent-composer-popover-row.is-selected::before {
+  content: none;
+}
+
+.agent-composer-command-row {
+  min-height: 28px;
+  grid-template-columns: minmax(68px, 82px) minmax(0, 1fr) auto;
+}
+
+.agent-composer-session-mode-menu {
+  width: min(420px, calc(100vw - 24px));
+}
+
+.agent-composer-session-mode-menu.is-placement-up {
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+.agent-composer-session-mode-menu.is-placement-down {
+  top: 100%;
+  bottom: auto;
+  margin-top: 2px;
+  margin-bottom: 0;
+}
+
+.agent-composer-session-mode-menu.is-align-start {
+  right: auto;
+  left: 0;
+}
+
+.agent-composer-session-mode-menu.is-align-end {
+  right: 0;
+  left: auto;
+}
+
+.agent-composer-session-mode-row {
+  min-height: 30px;
+  grid-template-columns: 20px minmax(52px, max-content) minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.agent-composer-session-mode-row .agent-composer-popover-secondary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer-entry-prompt-menu {
+  width: auto;
+  max-width: none;
+}
+
+.agent-composer-entry-prompt-row {
+  min-height: 44px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+}
+
+.agent-composer-entry-prompt-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.agent-composer-entry-prompt-row .agent-composer-popover-secondary {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.agent-composer-mention-row {
+  min-height: 28px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+}
+
+.agent-composer-mention-main {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.agent-composer-mention-main.has-meta {
+  color: var(--agent-fg-secondary);
+}
+
+.agent-composer-mention-name {
+  flex: 0 1 auto;
+  max-width: min(46%, 360px);
+}
+
+.agent-composer-mention-meta {
+  flex: 1 1 0;
+  font-size: 11px;
+}
+
+.agent-composer-popover-primary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--agent-fg);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer-command-row .agent-composer-popover-primary:not(.is-selected) {
+  color: var(--vscode-textLink-foreground);
+}
+
+.agent-composer-popover-secondary {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--agent-fg-secondary);
+  font-size: 10.5px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer-popover-row.is-selected .agent-composer-popover-secondary {
+  color: var(--agent-menu-row-selected-fg);
+  opacity: 0.72;
+}
+
+.agent-composer-popover-badge {
+  max-width: 72px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--agent-fg-secondary);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-composer-popover-badges {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 152px;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.agent-composer-popover-badges .agent-composer-popover-badge {
+  min-width: 0;
+}
+
+.agent-composer-popover-row.is-selected .agent-composer-popover-badge {
+  background: color-mix(in srgb, var(--agent-bg) 58%, transparent);
+  color: var(--agent-fg);
+}
+
+.agent-composer-glyph {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid;
+  border-radius: 5px;
+  font-size: 7.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.agent-composer-glyph svg {
+  width: 11px;
+  height: 11px;
+}
+
+.agent-composer-thumbnail {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.agent-reference-row {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-reference-row-attached {
+  padding: 8px 12px 0;
+}
+
+.agent-reference-token {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: min(280px, 100%);
+  height: 26px;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--agent-fg) 10%, transparent);
+  border-radius: 999px;
+  color: var(--agent-fg);
+  font-size: 11.5px;
+  line-height: 1;
+  user-select: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.agent-reference-token-ambient {
+  max-width: min(360px, 54%);
+  background: color-mix(in srgb, var(--agent-fg) 10%, transparent);
+}
+
+.agent-reference-token-attached {
+  background: color-mix(in srgb, var(--agent-accent) 11%, var(--agent-composer-bg));
+  border-color: color-mix(in srgb, var(--agent-accent) 20%, transparent);
+}
+
+.agent-reference-token-inline {
+  max-width: min(240px, 100%);
+  background: color-mix(in srgb, var(--agent-bg) 72%, transparent);
+  border-color: color-mix(in srgb, var(--agent-fg) 12%, transparent);
+}
+
+.agent-reference-token.is-clickable {
+  cursor: pointer;
+}
+
+.agent-reference-token.is-clickable:hover,
+.agent-reference-token.is-clickable:focus-visible {
+  border-color: color-mix(in srgb, var(--agent-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--agent-accent) 14%, transparent);
+  outline: none;
+}
+
+.agent-reference-token-attached:hover {
+  border-color: color-mix(in srgb, var(--agent-accent) 34%, transparent);
+  background: color-mix(in srgb, var(--agent-accent) 15%, var(--agent-composer-bg));
+}
+
+.agent-reference-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--agent-fg-secondary);
+}
+
+.agent-reference-thumbnail {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.agent-reference-label {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-reference-meta,
+.agent-reference-count {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--agent-fg-secondary);
+  font-size: 10.5px;
+  line-height: 1;
+}
+
+.agent-reference-count {
+  flex: 0 0 auto;
+}
+
+.agent-reference-remove {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  margin-right: -4px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--agent-fg-secondary);
+  cursor: pointer;
+  opacity: 0.78;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.agent-reference-remove:hover,
+.agent-reference-remove:focus-visible {
+  background: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 14%, transparent);
+  color: var(--vscode-errorForeground, #f14c4c);
+  opacity: 1;
+  outline: none;
+}
+
+.agent-canvas-reference-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+  padding: 0 8px 6px;
+}
+
+.agent-canvas-reference-actions {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.agent-canvas-reference-action {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  max-width: 120px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--agent-fg) 10%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--agent-bg) 64%, transparent);
+  color: var(--agent-fg);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  white-space: nowrap;
+}
+
+.agent-canvas-reference-action:hover,
+.agent-canvas-reference-action:focus-visible {
+  border-color: color-mix(in srgb, var(--agent-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--agent-accent) 12%, transparent);
+  outline: none;
+}
+
+.agent-control-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 150px;
+  min-height: 24px;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.agent-control-chip:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-foreground);
+}
+
+.agent-control-chip:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--agent-accent));
+  outline-offset: 1px;
+}
+
+.agent-control-chip[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--agent-accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--agent-accent) 24%, transparent);
+}
+
+.agent-control-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-control-chip-muted {
+  opacity: 0.62;
+}
+
+.agent-control-chip-static {
+  cursor: default;
+}
+
+.agent-control-chip-mode {
+  max-width: 108px;
+  padding-inline: 7px;
+  font-weight: 600;
+}
+
+.agent-control-chip-icon {
+  justify-content: center;
+  width: 28px;
+  max-width: 28px;
+  padding-inline: 0;
+}
+
+.agent-control-chip-category {
+  max-width: 88px;
+}
+
+.agent-control-chip-model {
+  max-width: 156px;
+}
+
+.agent-control-chip-understand {
+  max-width: 132px;
+}
+
+.agent-control-chip-param {
+  justify-content: center;
+  min-width: 56px;
+  max-width: 92px;
+}
+
+.agent-control-chip-preset {
+  max-width: 116px;
+}
+
+.agent-control-chip-collapse {
+  width: 22px;
+  max-width: 22px;
+  min-height: 22px;
+  opacity: 0.72;
+}
+
+.agent-generation-params {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 2px;
+}
+
+.agent-composer-control-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 8px 5px;
+}
+
+.agent-composer-control-group {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 30px;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--agent-composer-rail-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--agent-composer-bg) 58%, transparent);
+}
+
+.agent-composer-control-group-mode {
+  flex: 0 1 auto;
+  max-width: min(38%, 220px);
+}
+
+.agent-composer-control-group-config {
+  flex: 1 1 0;
+  justify-content: flex-end;
+  overflow: visible;
+}
+
+.agent-composer-control-group-config .agent-generation-params {
+  width: auto;
+  overflow: visible;
+}
+
+.agent-mode-config-stack {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.agent-inline-config-stack {
+  display: flex;
+  width: auto;
+  min-width: 0;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.agent-inline-config-group {
+  display: flex;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.agent-dropdown-menu {
+  z-index: 50;
+  width: var(--agent-overlay-inline-size);
+  max-width: calc(100vw - 24px);
+  max-height: var(--agent-overlay-block-size);
+  padding: var(--agent-overlay-padding);
+  overflow-y: auto;
+  overflow-x: hidden;
+  color: var(--vscode-dropdown-foreground, var(--agent-fg));
+  background: var(--agent-overlay-bg);
+  border: 1px solid var(--agent-overlay-border);
+  border-radius: var(--agent-overlay-radius);
+  box-shadow: var(--agent-overlay-shadow);
+  scrollbar-color: var(--vscode-scrollbarSlider-background, var(--fallback-scrollbar-bg))
+    transparent;
+  scrollbar-width: thin;
+}
+
+.agent-dropdown-menu::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.agent-dropdown-menu::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+}
+
+.agent-dropdown-menu-compact {
+  width: var(--agent-overlay-compact-inline-size);
+  min-width: var(--agent-overlay-compact-min-inline-size);
+  max-width: var(--agent-overlay-compact-max-inline-size);
+}
+
+.agent-dropdown-menu-preset {
+  width: max-content;
+  min-width: var(--agent-overlay-compact-min-inline-size);
+  max-width: var(--agent-overlay-compact-max-inline-size);
+}
+
+.agent-dropdown-menu-param {
+  width: max-content;
+  min-width: var(--agent-overlay-compact-min-inline-size);
+  max-width: var(--agent-overlay-compact-max-inline-size);
+}
+
+.agent-dropdown-menu-model {
+  width: var(--agent-overlay-wide-inline-size);
+  min-width: min(320px, calc(100vw - 24px));
+  max-width: var(--agent-overlay-wide-max-inline-size);
+}
+
+.agent-dropdown-menu-understanding {
+  width: min(380px, calc(100vw - 24px));
+  min-width: min(340px, calc(100vw - 24px));
+}
+
+.agent-dropdown-menu-mode {
+  width: min(220px, calc(100vw - 24px));
+}
+
+.agent-dropdown-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--agent-menu-row-min-height);
+  gap: var(--agent-menu-row-gap);
+  padding: var(--agent-menu-row-padding);
+  border: 1px solid transparent;
+  border-radius: var(--agent-menu-row-radius);
+  color: var(--vscode-foreground);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.agent-dropdown-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-dropdown-header {
+  min-width: 0;
+  margin: 1px 2px 3px;
+  padding: 3px 6px 4px;
+  border-bottom: 1px solid var(--agent-menu-separator, var(--agent-divider));
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-dropdown-item:hover,
+.agent-dropdown-item:focus-visible {
+  border-color: var(--agent-menu-row-hover-border);
+  background: var(--agent-menu-row-hover-bg);
+  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-hover-border);
+  outline: none;
+}
+
+.agent-dropdown-item-selected {
+  color: var(--agent-menu-row-selected-fg);
+  border-color: var(--agent-menu-row-selected-border);
+  background: var(--agent-menu-row-selected-bg);
+  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-indicator);
+}
+
+.agent-dropdown-item-selected::before {
+  content: none;
+}
+
+.agent-dropdown-item-muted {
+  color: var(--vscode-descriptionForeground);
+}
+
+.agent-dropdown-item-stacked {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 38px;
+  gap: 1px;
+}
+
+.agent-dropdown-item-inline-detail {
+  min-height: 28px;
+}
+
+.agent-dropdown-item-description {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--agent-fg-secondary);
+  font-size: 10px;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-dropdown-item-inline-detail .agent-dropdown-item-description {
+  display: inline;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.agent-dropdown-item-selected .agent-dropdown-item-description {
+  color: var(--agent-fg);
+  opacity: 0.76;
+}
+
+.agent-dropdown-section {
+  margin: var(--agent-menu-section-margin);
+  padding: var(--agent-menu-section-padding);
+  border-top: 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: var(--agent-menu-section-font-size);
+  font-weight: 600;
+  line-height: var(--agent-menu-section-line-height);
+}
+
+.agent-dropdown-section-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agent-dropdown-section-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-dropdown-section-tags {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--agent-fg-secondary);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-dropdown-section:first-child {
+  margin-top: 0;
+  border-top: 0;
+}
+
+.agent-model-provider-group {
+  min-width: 0;
+}
+
+.agent-model-provider-group + .agent-model-provider-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--agent-menu-separator, var(--agent-divider));
+}
+
+.agent-model-provider-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+  margin: 1px 2px 2px;
+  padding: 2px 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+}
+
+.agent-model-provider-name,
+.agent-model-provider-tags,
+.agent-model-option-name,
+.agent-model-option-tags,
+.agent-model-tag {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-model-tag-list {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.agent-model-provider-tags,
+.agent-model-option-tags {
+  flex: 0 1 auto;
+  gap: 3px;
+}
+
+.agent-model-option-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: space-between;
+  min-width: 0;
+  min-height: 25px;
+  padding: 3px 7px 3px 22px;
+}
+
+.agent-model-option-name {
+  flex: 0 1 auto;
+  font-weight: 400;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-understanding-category-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, max-content) minmax(0, 1fr) 12px;
+  align-items: center;
+  gap: 8px;
+  min-height: 31px;
+  padding: 5px 8px;
+}
+
+.agent-understanding-category-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  min-width: 18px;
+}
+
+.agent-understanding-category-label {
+  display: contents;
+}
+
+.agent-understanding-category-name {
+  color: var(--vscode-descriptionForeground);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.agent-understanding-category-model {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vscode-foreground);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-understanding-category-chevron {
+  width: 11px;
+  height: 11px;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.78;
+}
+
+.agent-model-option-tags {
+  flex: 0 1 auto;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.agent-model-tag {
+  display: inline-block;
+  max-width: 82px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--agent-fg) 5%, transparent);
+  color: color-mix(in srgb, var(--agent-fg-secondary) 88%, transparent);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.agent-model-provider-tags .agent-model-tag {
+  max-width: 74px;
+  background: transparent;
+  color: var(--agent-fg-secondary);
+}
+
+.agent-dropdown-item-selected .agent-model-option-tags {
+  color: currentColor;
+  opacity: 0.72;
+}
+
+.agent-dropdown-item-selected .agent-model-tag {
+  background: color-mix(in srgb, var(--agent-bg) 58%, transparent);
+  color: var(--agent-fg);
+}
+
+@media (max-width: 520px) {
+  .agent-canvas-reference-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .agent-reference-token-ambient {
+    max-width: 100%;
+  }
+}
+
+.agent-composer-rail {
+  border-top: 1px solid var(--agent-composer-rail-border);
+  background: var(--agent-composer-rail-bg);
+}
+
+.agent-composer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 37px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--agent-composer-divider);
+  background: color-mix(in srgb, var(--agent-composer-bg) 82%, transparent);
+}
+
+.agent-composer-tool-button {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 28px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.agent-composer-tool-button:hover {
+  background: var(--vscode-toolbar-hoverBackground);
+  color: var(--vscode-foreground);
+}
+
+.agent-composer-tool-button:focus-visible {
+  border-color: color-mix(in srgb, var(--agent-accent) 34%, transparent);
+  outline: 1px solid var(--vscode-focusBorder, var(--agent-accent));
+  outline-offset: 1px;
+}
+
+.agent-composer-tool-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.agent-composer-tool-button-text {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.agent-composer-media-count {
+  display: inline-flex;
+  min-width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 5px;
+  color: var(--vscode-descriptionForeground);
+  font-size: 10.5px;
+  line-height: 1;
+}
+
+.agent-composer-action-button {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 26px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.agent-composer-action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.agent-composer-send {
+  background: var(--agent-composer-send-bg);
+  border: 1px solid var(--agent-composer-send-border);
+  color: var(--agent-composer-send-fg);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--agent-accent) 18%, transparent);
+}
+
+.agent-composer-send:hover {
+  background: color-mix(in srgb, var(--agent-composer-send-bg) 88%, #ffffff 12%);
+}
+
+.agent-composer-queue {
+  border-color: color-mix(in srgb, var(--agent-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--agent-accent) 14%, transparent);
+  color: var(--agent-accent);
+}
+
+.agent-composer-queue:not(:disabled):hover {
+  background: color-mix(in srgb, var(--agent-accent) 20%, transparent);
+}
+
+.agent-composer-stop {
+  border-color: color-mix(in srgb, var(--vscode-errorForeground) 70%, transparent);
+  background: var(--vscode-errorForeground);
+  color: #ffffff;
+}
+
+.agent-composer-stop:not(:disabled):hover {
+  opacity: 0.9;
+}
+
+.agent-composer-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  z-index: 50;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--vscode-editorWidget-border);
+  border-radius: 7px;
+  background: var(--vscode-editorWidget-background);
+  box-shadow: 0 12px 26px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.24));
+  color: var(--vscode-foreground);
+  font-size: 11px;
+  line-height: 15px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.agent-composer-tooltip-muted {
+  color: var(--vscode-descriptionForeground);
+}
+
+.agent-composer-tooltip-link {
+  margin-top: 3px;
+  color: var(--vscode-textLink-foreground);
+}
+
+.agent-header {
+  background: color-mix(in srgb, var(--agent-elevated) 94%, transparent);
+  border-bottom: 1px solid var(--agent-divider);
+}
+
+.agent-header-actions {
+  min-width: max-content;
+  padding-inline-start: 2px;
+}
+
+.agent-header-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  background: transparent;
+  color: var(--agent-fg-secondary);
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  cursor: pointer;
+  flex: 0 0 28px;
+  line-height: 1;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.agent-header-action:hover,
+.agent-header-action:focus-visible {
+  background: color-mix(in srgb, var(--agent-fg) 7%, transparent);
+  color: var(--agent-fg);
+}
+
+.agent-header-action:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--agent-accent));
+  outline-offset: 1px;
+}
+
+.agent-header-action.is-active {
+  background: var(--agent-accent-soft);
+  color: var(--agent-fg);
+}
+
+.agent-header-action svg {
+  flex-shrink: 0;
+}
+
+.agent-account-trigger {
+  overflow: hidden;
+}
+
+.agent-account-avatar,
+.agent-account-status-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.agent-account-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--agent-accent) 18%, var(--agent-elevated) 82%);
+  color: var(--agent-fg);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.agent-account-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--agent-success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--agent-success) 14%, transparent);
+}
+
+.agent-header-menu {
+  width: var(--agent-overlay-inline-size);
+  max-width: calc(100vw - 24px);
+  max-height: min(420px, 70vh);
+  padding: var(--agent-overlay-padding);
+  overflow: hidden;
+  border: 1px solid var(--agent-overlay-border);
+  border-radius: var(--agent-overlay-radius);
+  background: var(--agent-overlay-bg);
+  box-shadow: var(--agent-overlay-shadow);
+  color: var(--agent-fg);
+}
+
+.agent-header-menu-summary,
+.agent-header-menu-search,
+.agent-header-menu-footer {
+  padding: 0 0 var(--agent-overlay-padding);
+}
+
+.agent-header-menu-summary,
+.agent-header-menu-search {
+  margin-bottom: var(--agent-overlay-padding);
+  border-bottom: 0;
+}
+
+.agent-header-menu-item {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: var(--agent-menu-row-min-height);
+  align-items: center;
+  gap: var(--agent-menu-row-gap);
+  padding: var(--agent-menu-row-padding);
+  border: 1px solid transparent;
+  border-radius: var(--agent-menu-row-radius);
+  background: transparent;
+  color: var(--agent-fg);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: left;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.agent-header-menu-item:hover,
+.agent-header-menu-item:focus-visible {
+  border-color: var(--agent-menu-row-hover-border);
+  background: var(--agent-menu-row-hover-bg);
+  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-hover-border);
+  outline: none;
+}
+
+.agent-header-menu-item.is-active {
+  border-color: var(--agent-menu-row-selected-border);
+  background: var(--agent-menu-row-selected-bg);
+  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-indicator);
+  color: var(--agent-menu-row-selected-fg);
+}
+
+.agent-header-menu-item.is-active::before {
+  content: none;
+}
+
+.agent-header-menu-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-menu-icon-button {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--agent-fg-secondary);
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.agent-menu-icon-button:hover,
+.agent-menu-icon-button:focus-visible {
+  background: var(--agent-hover);
+  color: var(--agent-fg);
+  outline: none;
+}
+
+.agent-history-menu {
+  width: var(--agent-overlay-inline-size);
+  max-height: min(420px, 70vh);
+}
+
+.agent-history-menu-section {
+  margin: var(--agent-menu-section-margin);
+  padding: var(--agent-menu-section-padding);
+  border-bottom: 0;
+  font-size: var(--agent-menu-section-font-size);
+  line-height: var(--agent-menu-section-line-height);
+}
+
+.agent-history-menu-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0;
+  scrollbar-color: var(--vscode-scrollbarSlider-background, var(--fallback-scrollbar-bg))
+    transparent;
+  scrollbar-width: thin;
+}
+
+.agent-history-menu-list::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.agent-history-menu-list::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+}
+
+.agent-history-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--agent-menu-row-gap);
+  padding: var(--agent-menu-row-padding);
+  border-radius: var(--agent-menu-row-radius);
+}
+
+.agent-history-menu-item.is-active {
+  border-color: var(--agent-menu-row-selected-border);
+  background: var(--agent-menu-row-selected-bg);
+  box-shadow: inset var(--agent-menu-row-indicator-width) 0 0 var(--agent-menu-row-indicator);
+}
+
+.agent-header-menu-item-main {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agent-header-menu-item-main:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--agent-accent));
+  outline-offset: -1px;
+}
+
+.agent-history-menu-title {
+  overflow: hidden;
+  color: var(--agent-fg);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-history-menu-meta,
+.agent-history-menu-context,
+.agent-history-menu-run,
+.agent-history-menu-footer-hint,
+.agent-history-menu-empty {
+  color: var(--agent-fg-secondary);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.agent-history-menu-meta,
+.agent-history-menu-context {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agent-history-menu-context,
+.agent-history-menu-run {
+  margin-top: 1px;
+}
+
+.agent-history-menu-run {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-history-lifecycle-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.agent-history-menu-item:hover .agent-history-lifecycle-actions,
+.agent-history-menu-item:focus-within .agent-history-lifecycle-actions {
+  opacity: 1;
+}
+
+.agent-history-lifecycle-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.agent-history-lifecycle-danger {
+  color: var(--agent-danger);
+}
+
+.agent-history-lifecycle-warning {
+  color: var(--vscode-charts-yellow);
+}
+
+.agent-history-menu-status-running {
+  color: var(--vscode-charts-blue);
+}
+
+.agent-history-menu-status-completed {
+  color: var(--vscode-charts-green);
+}
+
+.agent-history-menu-empty {
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.agent-workitem-shelf {
+  border-bottom: 1px solid var(--agent-divider);
+}
+
+.agent-chat-empty-scroll .agent-workitem-shelf {
+  border-bottom: 0;
+}
+
+.agent-history-menu-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: var(--agent-overlay-padding);
+  padding: var(--agent-menu-row-padding) 0 0;
+  border-top: 0;
+}
+
+.agent-history-clear-button {
+  padding: 2px 4px;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.agent-history-clear-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.agent-history-clear-button:disabled:hover {
+  background: transparent;
+}
+
+.agent-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 78px;
+  max-width: min(220px, 46vw);
+  flex-shrink: 0;
+  padding: 3px 5px 3px 8px;
+  background: transparent;
+  color: var(--agent-fg-secondary);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.agent-tab:hover {
+  background: var(--agent-hover);
+  color: var(--agent-fg);
+}
+
+.agent-tab-active {
+  background: var(--agent-tab-active-bg);
+  color: var(--agent-fg);
+  border-color: color-mix(in srgb, var(--agent-accent) 24%, transparent);
+}
+
+.agent-tab-main {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  line-height: 18px;
+  padding: 0;
+}
+
+.agent-tab-main:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--agent-accent));
+  outline-offset: 2px;
+}
+
+.agent-tab-title {
+  min-width: 0;
+}
+
+.agent-tab-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  max-width: 58px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+}
+
+.agent-tab-status-running {
+  border-color: color-mix(in srgb, var(--agent-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--agent-accent) 14%, transparent);
+  color: var(--agent-accent);
+}
+
+.agent-tab-status-completed {
+  border-color: color-mix(in srgb, var(--agent-success) 28%, transparent);
+  background: color-mix(in srgb, var(--agent-success) 12%, transparent);
+  color: var(--agent-success);
+}
+
+.agent-tab-status-dot {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.agent-tab-status-running .agent-tab-status-dot {
+  animation: agent-tab-status-pulse 1.3s ease-in-out infinite;
+}
+
+.agent-tab-status-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-tab-close {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.agent-tab-close:hover,
+.agent-tab-close:focus-visible {
+  background: color-mix(in srgb, var(--agent-fg) 10%, transparent);
+  outline: none;
+}
+
+@keyframes agent-tab-status-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.agent-skill-notice {
+  display: flex;
+  width: fit-content;
+  max-width: min(720px, 100%);
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding: 7px 9px;
+  border: 1px solid color-mix(in srgb, var(--agent-accent) 28%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--agent-accent) 8%, var(--agent-surface));
+  color: var(--agent-fg);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.agent-skill-notice-records {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.agent-skill-notice-record {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: 5px;
+}
+
+.agent-skill-notice-icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--agent-accent) 16%, transparent);
+  color: var(--agent-accent);
+}
+
+.agent-skill-notice-label {
+  flex: 0 0 auto;
+  color: var(--agent-fg-secondary);
+  font-weight: 500;
+}
+
+.agent-skill-notice-name {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--agent-fg) 9%, transparent);
+  color: var(--agent-fg);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-skill-notice-meta {
+  flex: 0 0 auto;
+  color: var(--agent-fg-secondary);
+}
+
+.agent-skill-notice-clear {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--agent-accent);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.agent-skill-notice-clear:hover,
+.agent-skill-notice-clear:focus-visible {
+  background: color-mix(in srgb, var(--agent-accent) 12%, transparent);
+  outline: none;
+}
+
+.agent-activation-progress {
+  width: min(720px, 100%);
+  border: 1px solid color-mix(in srgb, var(--agent-accent) 22%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--agent-accent) 6%, var(--agent-surface));
+  color: var(--agent-fg);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.agent-activation-progress-summary {
+  display: flex;
+  width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.agent-activation-progress-summary:focus-visible {
+  outline: 1px solid var(--agent-accent);
+  outline-offset: -2px;
+}
+
+.agent-activation-progress-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+}
+
+.agent-activation-progress-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-activation-progress-title code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--agent-fg) 9%, transparent);
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.agent-activation-progress-meta {
+  flex: 0 0 auto;
+  color: var(--agent-fg-secondary);
+}
+
+.agent-activation-progress-timeline {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0 9px 8px 35px;
+}
+
+.agent-activation-progress-event {
+  min-width: 0;
+  color: var(--agent-fg-secondary);
+}
+
+.agent-activation-progress-step {
+  color: var(--agent-fg);
+  font-weight: 500;
+}
+
+.agent-activation-progress-event-status {
+  margin-left: 6px;
+}
+
+.agent-activation-progress-diagnostic {
+  display: block;
+  color: var(--agent-error);
+}
+
+.agent-card {
+  background: color-mix(in srgb, var(--agent-elevated) 92%, transparent);
+  border: 1px solid var(--agent-border);
+  border-radius: 16px;
+  box-shadow: var(--neko-shadow-lg, 0 12px 32px rgba(0, 0, 0, 0.24));
+}
+
+.agent-inline-card {
+  background: var(--agent-surface);
+  border: 1px solid var(--agent-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.agent-inline-card.is-info {
+  background: color-mix(in srgb, var(--agent-info) 8%, var(--agent-surface));
+  border-color: color-mix(in srgb, var(--agent-info) 24%, transparent);
+}
+
+.agent-inline-card.is-success {
+  background: color-mix(in srgb, var(--agent-success) 8%, var(--agent-surface));
+  border-color: color-mix(in srgb, var(--agent-success) 24%, transparent);
+}
+
+.agent-inline-card.is-warning {
+  background: color-mix(in srgb, var(--agent-warning-fg) 8%, var(--agent-surface));
+  border-color: color-mix(in srgb, var(--agent-warning-fg) 24%, transparent);
+}
+
+.agent-inline-card.is-danger {
+  background: color-mix(in srgb, var(--agent-danger) 8%, var(--agent-surface));
+  border-color: color-mix(in srgb, var(--agent-danger) 24%, transparent);
+}
+
+.agent-inline-header {
+  background: color-mix(in srgb, var(--agent-elevated) 94%, transparent);
+}
+
+.agent-code-block {
+  background: color-mix(in srgb, var(--agent-elevated) 88%, var(--agent-bg) 12%);
+  border: 1px solid var(--agent-border);
+  border-radius: 10px;
+  color: var(--agent-fg);
+}
+
+.agent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--agent-border);
+  background: color-mix(in srgb, var(--agent-elevated) 88%, transparent);
+  color: var(--agent-fg-secondary);
+}
+
+.agent-badge.is-info {
+  background: color-mix(in srgb, var(--agent-info) 14%, transparent);
+  border-color: color-mix(in srgb, var(--agent-info) 28%, transparent);
+  color: var(--agent-info);
+}
+
+.agent-badge.is-success {
+  background: color-mix(in srgb, var(--agent-success) 14%, transparent);
+  border-color: color-mix(in srgb, var(--agent-success) 28%, transparent);
+  color: var(--agent-success);
+}
+
+.agent-badge.is-warning {
+  background: color-mix(in srgb, var(--agent-warning-fg) 14%, transparent);
+  border-color: color-mix(in srgb, var(--agent-warning-fg) 28%, transparent);
+  color: var(--agent-warning-fg);
+}
+
+.agent-badge.is-danger {
+  background: color-mix(in srgb, var(--agent-danger) 14%, transparent);
+  border-color: color-mix(in srgb, var(--agent-danger) 28%, transparent);
+  color: var(--agent-danger);
+}
+
+.agent-search-shell {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  gap: 6px;
+  padding: 3px 7px;
+  background: var(--agent-input-bg);
+  border: 1px solid var(--agent-input-border);
+  border-radius: var(--agent-menu-row-radius);
+}
+
+.agent-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  color: var(--agent-fg);
+  border: none;
+  font-size: 11px;
+  line-height: 18px;
+  outline: none;
+}
+
+.agent-search-input::placeholder {
+  color: var(--agent-fg-secondary);
+}
+
+.agent-menu-section {
+  color: var(--agent-fg-secondary);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.agent-warning-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--agent-warning-fg) 28%, transparent);
+  background: var(--agent-warning-bg);
+  color: var(--agent-warning-fg);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.agent-danger-link {
+  color: var(--agent-danger);
+  border-radius: 6px;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.agent-danger-link:hover {
+  background: color-mix(in srgb, var(--agent-danger) 14%, transparent);
+}

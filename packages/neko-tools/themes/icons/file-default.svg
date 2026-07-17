@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <!-- default file: document with folded corner -->
+  <path d="M3 1.5H10L13 4.5V14.5H3V1.5Z" stroke="#94A3B8" stroke-width="1.2" stroke-linejoin="round"/>
+  <polyline points="10,1.5 10,4.5 13,4.5" stroke="#94A3B8" stroke-width="1.2" stroke-linejoin="round"/>
+</svg>

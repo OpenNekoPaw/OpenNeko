@@ -1,0 +1,25 @@
+{
+  "name": "@neko/host",
+  "description": "Host adapter port contracts for OpenNeko clients",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./application": "./src/application.ts",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest --run"
+  },
+  "dependencies": {
+    "@neko/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

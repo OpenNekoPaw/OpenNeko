@@ -1,0 +1,390 @@
+{
+  "schemaVersion": "neko.webview-functional.scenario.v1",
+  "id": "canvas.spatial-groups.p0",
+  "title": "Canvas foundational nodes and nested spatial Groups use the canonical interaction path",
+  "ownerPackage": "neko-canvas",
+  "tier": "p0",
+  "host": "vscode",
+  "platforms": ["darwin", "linux"],
+  "fixture": {
+    "workspace": "scripts/webview-functional/fixtures/canvas-board",
+    "digestFiles": ["neko/boards/spatial-groups.nkc"]
+  },
+  "extensions": [
+    {
+      "id": "neko.neko-canvas",
+      "developmentPath": "packages/neko-canvas"
+    },
+    {
+      "id": "neko.neko-engine",
+      "developmentPath": "packages/neko-engine"
+    },
+    {
+      "id": "neko.neko-tools",
+      "developmentPath": "packages/neko-tools"
+    },
+    {
+      "id": "neko.neko-preview",
+      "developmentPath": "packages/neko-preview"
+    }
+  ],
+  "prerequisites": [
+    {
+      "kind": "package-script",
+      "package": "neko-canvas",
+      "script": "compile"
+    },
+    {
+      "kind": "package-script",
+      "package": "neko-engine",
+      "script": "compile"
+    },
+    {
+      "kind": "package-script",
+      "package": "neko-tools",
+      "script": "compile"
+    },
+    {
+      "kind": "package-script",
+      "package": "neko-preview",
+      "script": "compile"
+    }
+  ],
+  "activation": {
+    "kind": "open-custom-editor",
+    "path": "neko/boards/spatial-groups.nkc",
+    "viewType": "neko.canvasEditor"
+  },
+  "target": {
+    "type": "iframe",
+    "extensionId": "neko.neko-canvas",
+    "viewType": "neko.canvasEditor"
+  },
+  "steps": [
+    {
+      "id": "wait-main-group",
+      "operation": "wait-visible",
+      "selector": {
+        "css": "[data-node-id=\"group-main\"][data-node-presentation=\"spatial-container\"]",
+        "auditedSelectorReason": "Canvas exposes persisted node identity and descriptor-derived presentation as stable semantic attributes."
+      },
+      "timeoutMs": 60000
+    },
+    {
+      "id": "wait-nested-child",
+      "operation": "wait-visible",
+      "selector": {
+        "css": "[data-node-id=\"text-nested\"][data-node-presentation=\"foundational\"]",
+        "auditedSelectorReason": "The nested child must render as a real foundational node through the policy-aware render plan."
+      }
+    },
+    {
+      "id": "wait-structured-shot",
+      "operation": "wait-visible",
+      "selector": {
+        "css": "[data-node-id=\"shot-structured\"][data-node-presentation=\"structured\"]",
+        "auditedSelectorReason": "The professional Shot keeps its descriptor-derived structured presentation."
+      }
+    },
+    {
+      "id": "select-foundational-child",
+      "operation": "click",
+      "selector": {
+        "css": "[data-node-id=\"text-a\"]",
+        "auditedSelectorReason": "Canvas node identity is the stable interaction target for child-first selection."
+      }
+    },
+    {
+      "id": "wait-child-toolbar",
+      "operation": "wait-visible",
+      "selector": {
+        "css": "[data-selection-context-toolbar=\"true\"][data-selection-count=\"1\"] [data-selection-action=\"node:edit\"]",
+        "auditedSelectorReason": "The selection-owned toolbar exposes canonical action identities without relying on translated labels."
+      }
+    },
+    {
+      "id": "move-child",
+      "operation": "drag",
+      "selector": {
+        "css": "[data-node-id=\"text-a\"] .node-header",
+        "auditedSelectorReason": "The foundational node title row is its visible drag chrome; editable content correctly blocks node movement."
+      },
+      "delta": {
+        "x": 40,
+        "y": 20
+      }
+    },
+    {
+      "id": "save-child-move",
+      "operation": "save"
+    },
+    {
+      "id": "read-child-move",
+      "operation": "read-workspace",
+      "path": "neko/boards/spatial-groups.nkc"
+    },
+    {
+      "id": "select-main-group",
+      "operation": "click",
+      "selector": {
+        "css": "[data-spatial-group-label=\"group-main\"]",
+        "auditedSelectorReason": "The spatial Group label is the explicit subtree selection and movement affordance."
+      }
+    },
+    {
+      "id": "arrange-group",
+      "operation": "click",
+      "selector": {
+        "css": "[data-selection-action=\"container:arrange-stable\"]",
+        "auditedSelectorReason": "The primary Arrange action routes to the canonical Group dispatcher."
+      }
+    },
+    {
+      "id": "save-arranged-group",
+      "operation": "save"
+    },
+    {
+      "id": "read-arranged-group",
+      "operation": "read-workspace",
+      "path": "neko/boards/spatial-groups.nkc"
+    },
+    {
+      "id": "fit-group",
+      "operation": "click",
+      "selector": {
+        "css": "[data-selection-action=\"container:fit-to-content\"]",
+        "auditedSelectorReason": "Fit to content is invoked through the canonical container action identity."
+      }
+    },
+    {
+      "id": "save-fitted-group",
+      "operation": "save"
+    },
+    {
+      "id": "read-fitted-group",
+      "operation": "read-workspace",
+      "path": "neko/boards/spatial-groups.nkc"
+    },
+    {
+      "id": "collapse-group",
+      "operation": "click",
+      "selector": {
+        "css": "[data-spatial-group-collapse-toggle=\"group-main\"]",
+        "auditedSelectorReason": "The visible Group label toggle updates canonical container.collapsed through the owning store action."
+      }
+    },
+    {
+      "id": "wait-collapsed-child-hidden",
+      "operation": "wait-state",
+      "selector": {
+        "css": "[data-node-id=\"text-a\"]",
+        "auditedSelectorReason": "A collapsed spatial Group hides its real descendants without deleting them."
+      },
+      "state": {
+        "kind": "hidden"
+      }
+    },
+    {
+      "id": "expand-group",
+      "operation": "click",
+      "selector": {
+        "css": "[data-spatial-group-collapse-toggle=\"group-main\"]",
+        "auditedSelectorReason": "The same visible Group label toggle restores descendant presentation from canonical state."
+      }
+    },
+    {
+      "id": "wait-expanded-child",
+      "operation": "wait-visible",
+      "selector": {
+        "css": "[data-node-id=\"text-a\"]",
+        "auditedSelectorReason": "Expanding restores the real child node at its arranged absolute position."
+      }
+    },
+    {
+      "id": "move-group-subtree",
+      "operation": "drag",
+      "selector": {
+        "css": "[data-spatial-group-label=\"group-main\"]",
+        "auditedSelectorReason": "Dragging the explicit Group label validates one-delta subtree movement through public pointer events."
+      },
+      "delta": {
+        "x": 50,
+        "y": 30
+      }
+    },
+    {
+      "id": "focus-group-name",
+      "operation": "click",
+      "selector": {
+        "css": "[data-spatial-group-label=\"group-main\"] .spatial-group-name",
+        "auditedSelectorReason": "The visible Group name is the keyboard-accessible rename affordance."
+      }
+    },
+    {
+      "id": "start-keyboard-rename",
+      "operation": "key",
+      "key": "Enter"
+    },
+    {
+      "id": "wait-group-name-input",
+      "operation": "wait-visible",
+      "selector": {
+        "css": "[data-spatial-group-label=\"group-main\"] .spatial-group-name-input",
+        "auditedSelectorReason": "Keyboard rename enters the owning Group label editor."
+      }
+    },
+    {
+      "id": "rename-group",
+      "operation": "input",
+      "selector": {
+        "css": "[data-spatial-group-label=\"group-main\"] .spatial-group-name-input",
+        "auditedSelectorReason": "The visible Group label editor is the public input surface."
+      },
+      "value": "Renamed spatial group"
+    },
+    {
+      "id": "commit-keyboard-rename",
+      "operation": "key",
+      "key": "Enter"
+    },
+    {
+      "id": "save-spatial-group",
+      "operation": "save"
+    },
+    {
+      "id": "toggle-theme",
+      "operation": "host-command",
+      "command": "workbench.action.toggleLightDarkThemes",
+      "args": []
+    },
+    {
+      "id": "capture-alternate-theme",
+      "operation": "screenshot",
+      "screenshotName": "canvas-spatial-groups-alternate-theme"
+    },
+    {
+      "id": "restore-theme",
+      "operation": "host-command",
+      "command": "workbench.action.toggleLightDarkThemes",
+      "args": []
+    },
+    {
+      "id": "capture-restored-theme",
+      "operation": "screenshot",
+      "screenshotName": "canvas-spatial-groups-restored-theme"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "child-move-persisted-before-arrange",
+      "kind": "engine-result",
+      "stepId": "read-child-move",
+      "jsonPath": "text",
+      "expected": {
+        "contains": "\"x\": 160"
+      }
+    },
+    {
+      "id": "foundational-presentation",
+      "kind": "attribute",
+      "selector": {
+        "css": "[data-node-id=\"text-a\"]",
+        "auditedSelectorReason": "Descriptor-derived foundational presentation is exposed as stable node semantics."
+      },
+      "attribute": "data-node-presentation",
+      "expected": "foundational"
+    },
+    {
+      "id": "structured-presentation",
+      "kind": "attribute",
+      "selector": {
+        "css": "[data-node-id=\"shot-structured\"]",
+        "auditedSelectorReason": "Professional nodes retain the structured renderer semantics."
+      },
+      "attribute": "data-node-presentation",
+      "expected": "structured"
+    },
+    {
+      "id": "group-label-persisted",
+      "kind": "file-json",
+      "path": "neko/boards/spatial-groups.nkc",
+      "jsonPath": "nodes.0.data.label",
+      "expected": "Renamed spatial group"
+    },
+    {
+      "id": "group-move-persisted",
+      "kind": "file-json",
+      "path": "neko/boards/spatial-groups.nkc",
+      "jsonPath": "nodes.0.position",
+      "expected": {
+        "x": 130,
+        "y": 130
+      }
+    },
+    {
+      "id": "arranged-child-moved-with-group",
+      "kind": "file-json",
+      "path": "neko/boards/spatial-groups.nkc",
+      "jsonPath": "nodes.1.position",
+      "expected": {
+        "x": 154,
+        "y": 396
+      }
+    },
+    {
+      "id": "nested-group-moved-with-parent",
+      "kind": "file-json",
+      "path": "neko/boards/spatial-groups.nkc",
+      "jsonPath": "nodes.3.position",
+      "expected": {
+        "x": 486,
+        "y": 186
+      }
+    },
+    {
+      "id": "nested-child-relative-placement-preserved",
+      "kind": "file-json",
+      "path": "neko/boards/spatial-groups.nkc",
+      "jsonPath": "nodes.4.position",
+      "expected": {
+        "x": 516,
+        "y": 246
+      }
+    },
+    {
+      "id": "collapse-restored-canonical-state",
+      "kind": "file-json",
+      "path": "neko/boards/spatial-groups.nkc",
+      "jsonPath": "nodes.0.container.collapsed",
+      "expected": false
+    },
+    {
+      "id": "custom-editor-open-observed",
+      "kind": "observation",
+      "event": "host.open-custom-editor",
+      "source": "vscode-functional-controller"
+    },
+    {
+      "id": "no-runtime-errors",
+      "kind": "runtime-errors",
+      "expected": []
+    }
+  ],
+  "errorPolicy": {
+    "knownBenignWarningIds": [
+      "vscode-webview-local-network-access",
+      "vscode-webview-sandbox-same-origin-scripts",
+      "vscode-development-extension-marketplace-404"
+    ],
+    "expectedDiagnosticCodes": [],
+    "failOnConsoleWarning": true
+  },
+  "evidence": {
+    "domSnapshot": true,
+    "screenshot": true,
+    "logs": true,
+    "sideEffects": true
+  },
+  "timeoutMs": 60000,
+  "tags": ["canvas", "spatial-group", "foundational", "toolbar", "keyboard", "theme"]
+}

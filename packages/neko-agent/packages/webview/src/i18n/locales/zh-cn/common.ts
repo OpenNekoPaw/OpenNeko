@@ -1,0 +1,27 @@
+import type { MessageBundle } from '@neko/shared';
+
+export const common = {
+  'common.cancel': '取消',
+  'common.confirm': '确认',
+  'common.save': '保存',
+  'common.delete': '删除',
+  'common.edit': '编辑',
+  'common.add': '添加',
+  'common.remove': '移除',
+  'common.enable': '启用',
+  'common.disable': '禁用',
+  'common.enabled': '已启用',
+  'common.disabled': '已禁用',
+  'common.loading': '加载中...',
+  'common.error': '错误',
+  'common.success': '成功',
+  'common.close': '关闭',
+  'common.view': '查看',
+  'common.copy': '复制',
+  'common.test': '测试',
+  'common.testing': '测试中...',
+  'common.connected': '已连接',
+  'common.failed': '失败',
+  'common.optional': '可选',
+  'common.all': '全部',
+} as const satisfies MessageBundle;

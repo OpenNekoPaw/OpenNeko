@@ -1,0 +1,447 @@
+{
+  "name": "neko-agent",
+  "displayName": "NekoAgent",
+  "description": "AI Agent for creative workflows in VSCode",
+  "version": "0.0.1",
+  "publisher": "neko",
+  "l10n": "./l10n",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neko/creative-suite"
+  },
+  "engines": {
+    "vscode": "^1.128.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "llm",
+    "assistant",
+    "mcp"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "extensionDependencies": [
+    "neko.neko-engine",
+    "neko.neko-tools",
+    "neko.neko-preview"
+  ],
+  "activationEvents": [
+    "onView:neko.aiAssistant",
+    "onCommand:neko.agent.showLogs",
+    "onCommand:neko.agent.retainAndProjectGeneratedOutput",
+    "onCommand:neko.agent.characterDialogue",
+    "onCommand:neko.agent.embodyCharacter",
+    "onCommand:neko.agent.registerCapabilities",
+    "onCommand:neko.agent.registerSlashCommands",
+    "onCommand:neko.agent.sendContext",
+    "onCommand:neko.agent.clearDndPayload",
+    "onCommand:neko.agent.refreshModels",
+    "onInstallType:skill",
+    "onInstallType:endpoint",
+    "onInstallType:provider",
+    "onInstallType:model",
+    "onInstallType:processor"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "neko.installTargets": [
+      {
+        "type": "skill",
+        "activationEvent": "onInstallType:skill"
+      },
+      {
+        "type": "endpoint",
+        "activationEvent": "onInstallType:endpoint"
+      },
+      {
+        "type": "provider",
+        "activationEvent": "onInstallType:provider"
+      },
+      {
+        "type": "model",
+        "activationEvent": "onInstallType:model"
+      },
+      {
+        "type": "processor",
+        "activationEvent": "onInstallType:processor"
+      }
+    ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "neko-assistant",
+          "title": "OpenNeko AI",
+          "icon": "$(hubot)"
+        }
+      ]
+    },
+    "views": {
+      "neko-assistant": [
+        {
+          "type": "webview",
+          "id": "neko.aiAssistant",
+          "name": "%neko.aiAssistant.name%",
+          "contextualTitle": "%neko.aiAssistant.contextualTitle%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "neko.ai.chat",
+        "title": "%neko.ai.chat.title%",
+        "icon": "$(comment-discussion)",
+        "category": "NekoAgent"
+      },
+      {
+        "command": "neko.agent.showLogs",
+        "title": "%neko.agent.showLogs.title%",
+        "icon": "$(output)",
+        "category": "NekoAgent"
+      },
+      {
+        "command": "neko.agent.retainAndProjectGeneratedOutput",
+        "title": "%neko.agent.retainAndProjectGeneratedOutput.title%",
+        "category": "NekoAgent"
+      },
+      {
+        "command": "neko.ai.generateImage",
+        "title": "%neko.ai.generateImage.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateVideo",
+        "title": "%neko.ai.generateVideo.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateTTS",
+        "title": "%neko.ai.generateTTS.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateMusic",
+        "title": "%neko.ai.generateMusic.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateCharacter",
+        "title": "%neko.ai.generateCharacter.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.transferStyle",
+        "title": "%neko.ai.transferStyle.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.enhanceVideo",
+        "title": "%neko.ai.enhanceVideo.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.optimizeAudio",
+        "title": "%neko.ai.optimizeAudio.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.analyzeImage",
+        "title": "%neko.ai.analyzeImage.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.extractImageText",
+        "title": "%neko.ai.extractImageText.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.analyzeVideo",
+        "title": "%neko.ai.analyzeVideo.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.extractVideoSummary",
+        "title": "%neko.ai.extractVideoSummary.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateScript",
+        "title": "%neko.ai.generateScript.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.optimizeScript",
+        "title": "%neko.ai.optimizeScript.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateStoryboard",
+        "title": "%neko.ai.generateStoryboard.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.generateSubtitles",
+        "title": "%neko.ai.generateSubtitles.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.script.generate",
+        "title": "%neko.script.generate.title%",
+        "category": "NekoAgent: Script"
+      },
+      {
+        "command": "neko.script.optimize",
+        "title": "%neko.script.optimize.title%",
+        "category": "NekoAgent: Script"
+      },
+      {
+        "command": "neko.script.generateImage",
+        "title": "%neko.script.generateImage.title%",
+        "category": "NekoAgent: Script"
+      },
+      {
+        "command": "neko.script.generateVideo",
+        "title": "%neko.script.generateVideo.title%",
+        "category": "NekoAgent: Script"
+      },
+      {
+        "command": "neko.ai.summarizeDocument",
+        "title": "%neko.ai.summarizeDocument.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.ai.chatWithDocument",
+        "title": "%neko.ai.chatWithDocument.title%",
+        "category": "NekoAgent: AI"
+      },
+      {
+        "command": "neko.agent.createFromFile",
+        "title": "%neko.agent.createFromFile.title%",
+        "category": "NekoAgent: Creation"
+      },
+      {
+        "command": "neko.agent.retryCreation",
+        "title": "%neko.agent.retryCreation.title%",
+        "category": "NekoAgent: Creation"
+      },
+      {
+        "command": "neko.agent.addToContext",
+        "title": "%neko.agent.addToContext.title%",
+        "category": "NekoAgent: AI",
+        "icon": "$(comment-add)"
+      },
+      {
+        "command": "neko.agent.debug.startStreamLifecycleReplay",
+        "title": "%neko.agent.debug.startStreamLifecycleReplay.title%",
+        "category": "NekoAgent: Development",
+        "enablement": "neko.agent.streamLifecycleAcceptanceEnabled"
+      },
+      {
+        "command": "neko.agent.debug.continueStreamLifecycleReplay",
+        "title": "%neko.agent.debug.continueStreamLifecycleReplay.title%",
+        "category": "NekoAgent: Development",
+        "enablement": "neko.agent.streamLifecycleAcceptanceEnabled"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "neko.ai.chat",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "neko.script.generate",
+          "group": "neko@1",
+          "when": "editorLangId =~ /markdown|plaintext|txt/"
+        },
+        {
+          "command": "neko.script.optimize",
+          "group": "neko@2",
+          "when": "editorLangId =~ /markdown|plaintext|txt/"
+        },
+        {
+          "command": "neko.script.generateImage",
+          "group": "neko@3",
+          "when": "editorLangId =~ /markdown|plaintext|txt/"
+        },
+        {
+          "command": "neko.script.generateVideo",
+          "group": "neko@4",
+          "when": "editorLangId =~ /markdown|plaintext|txt/"
+        },
+        {
+          "command": "neko.agent.createFromFile",
+          "group": "neko@5",
+          "when": "editorLangId =~ /markdown|plaintext|txt|nekostory/"
+        },
+        {
+          "command": "neko.ai.summarizeDocument",
+          "group": "neko@6",
+          "when": "editorLangId == nekostory"
+        },
+        {
+          "command": "neko.ai.chatWithDocument",
+          "group": "neko@7",
+          "when": "editorLangId == nekostory"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "neko.agent.addToContext",
+          "group": "9_nekoai@0",
+          "when": "!explorerResourceIsFolder"
+        },
+        {
+          "command": "neko.ai.summarizeDocument",
+          "group": "9_nekoai@1",
+          "when": "resourceExtname =~ /\\.pdf|\\.docx|\\.doc|\\.epub|\\.pptx|\\.ppt|\\.xlsx|\\.xls|\\.fdx|\\.txt|\\.md|\\.fountain/"
+        },
+        {
+          "command": "neko.ai.chatWithDocument",
+          "group": "9_nekoai@2",
+          "when": "resourceExtname =~ /\\.pdf|\\.docx|\\.doc|\\.epub|\\.pptx|\\.ppt|\\.xlsx|\\.xls|\\.fdx|\\.txt|\\.md|\\.fountain/"
+        },
+        {
+          "command": "neko.agent.createFromFile",
+          "group": "9_nekoai@3",
+          "when": "resourceExtname =~ /\\.fountain|\\.md|\\.txt|\\.pdf|\\.docx/"
+        },
+        {
+          "command": "neko.ai.analyzeImage",
+          "group": "9_nekoai@4",
+          "when": "resourceExtname =~ /\\.png|\\.jpg|\\.jpeg|\\.gif|\\.webp|\\.bmp/"
+        },
+        {
+          "command": "neko.ai.extractImageText",
+          "group": "9_nekoai@5",
+          "when": "resourceExtname =~ /\\.png|\\.jpg|\\.jpeg|\\.gif|\\.webp|\\.bmp/"
+        },
+        {
+          "command": "neko.ai.analyzeVideo",
+          "group": "9_nekoai@6",
+          "when": "resourceExtname =~ /\\.mp4|\\.mov|\\.mkv|\\.avi|\\.webm|\\.m4v/"
+        },
+        {
+          "command": "neko.ai.generateSubtitles",
+          "group": "9_nekoai@7",
+          "when": "resourceExtname =~ /\\.mp4|\\.mov|\\.mkv|\\.avi|\\.webm|\\.m4v/"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "NekoAgent",
+      "properties": {
+        "neko.agent.provider": {
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "openai",
+            "google",
+            "azure",
+            "ollama",
+            "neko-gateway",
+            "custom-newapi",
+            "ollama-local"
+          ],
+          "default": "ollama-local",
+          "description": "Default AI provider"
+        },
+        "neko.agent.model": {
+          "type": "string",
+          "default": "ollama-local-default-chat",
+          "description": "Default model to use"
+        },
+        "neko.agent.apiKey.anthropic": {
+          "type": "string",
+          "default": "",
+          "description": "Anthropic API key"
+        },
+        "neko.agent.apiKey.openai": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API key"
+        },
+        "neko.agent.media.outputDir": {
+          "type": "string",
+          "default": "",
+          "description": "Directory to save generated media. Defaults to <workspace>/neko/generated/file"
+        },
+        "neko.agent.media.showSaveNotification": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a notification when generated media is saved to disk"
+        },
+        "neko.agent.mcp.servers": {
+          "type": "array",
+          "default": [],
+          "description": "MCP server configurations",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Server name"
+              },
+              "transport": {
+                "type": "string",
+                "enum": [
+                  "stdio",
+                  "http"
+                ],
+                "description": "Transport type"
+              },
+              "command": {
+                "type": "string",
+                "description": "Command to run (for stdio)"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Command arguments"
+              },
+              "url": {
+                "type": "string",
+                "description": "Server URL (for http)"
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "Whether the server is enabled"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "pnpm run compile:extension && pnpm run compile:webview && pnpm run copy:skills",
+    "compile:extension": "esbuild ./packages/extension/src/index.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --loader:.md=text",
+    "compile:webview": "cd packages/webview && pnpm run build && cd ../.. && pnpm run copy:webview",
+    "copy:skills": "node scripts/copy-builtin-skills.mjs",
+    "copy:webview": "rm -rf dist/webview && mkdir -p dist/webview && cp -r packages/webview/dist/* dist/webview/",
+    "watch": "pnpm run compile:extension -- --watch",
+    "lint": "eslint packages/extension/src packages/agent/src packages/platform/src packages/webview/src",
+    "test": "vitest",
+    "test:agent:mock": "vitest --run packages/platform/src/config/__tests__/user-config.test.ts",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.125.0",
+    "esbuild": "^0.19.8",
+    "typescript": "^5.3.2",
+    "vitest": "^4.1.2"
+  }
+}

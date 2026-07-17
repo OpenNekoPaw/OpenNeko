@@ -1,0 +1,38 @@
+{
+  "name": "@neko/webview",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    "./host-adapter": "./src/host-adapter/index.tsx",
+    "./root": "./src/root.tsx"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "test": "vitest run",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@neko/neko-client": "workspace:*",
+    "@neko/shared": "workspace:*",
+    "@neko/ui": "workspace:*",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.16",
+    "jsdom": "^27.0.1",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.2",
+    "vite": "^6.4.2",
+    "vite-plugin-static-copy": "^4.0.1",
+    "vitest": "^4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

@@ -1,0 +1,1 @@
+export { CanvasEditorProvider } from './canvasEditorProvider';

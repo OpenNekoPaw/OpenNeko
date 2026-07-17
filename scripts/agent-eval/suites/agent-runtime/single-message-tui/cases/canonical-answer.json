@@ -1,0 +1,43 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "canonical-answer",
+  "suiteId": "agent-runtime.single-message-tui",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Solve a small constrained editing decision and return a semantically correct recommendation through the complete TUI runtime.",
+    "canonicalPath": ["TUI App session owner", "TUI input queue", "PiConversationRuntime", "Pi Agent", "Pi Session", "session.facts"],
+    "forbiddenFallback": ["direct Agent turn execution", "legacy AgentSession assembly", "Executor", "Platform chat adapter", "generic completion without canonical turn facts"],
+    "observables": [
+      {
+        "ref": "turn-facts",
+        "kind": "runtime-fact",
+        "description": "Runtime errors, fully-idle state, canonical user/assistant turns, and final answer.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The answer uses every supplied shot in the only valid order, preserves each duration, verifies the 30-second total, and explains the pacing without inventing changes.",
+    "expectedFailure": "Runtime errors, incomplete idle state, missing canonical turns, or an empty final answer fail the case."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "Plan a 30-second teaser from four shots: A is an 8-second arrival setup, B is a 6-second clue, C is a 10-second pursuit, and D is a 6-second reveal. Use every shot. A must precede B, C must be immediately before D, and D must be last. Reply in 2-4 sentences with the exact order, every duration, the verified total, and one pacing rationale. Do not use tools." },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "turn-facts" },
+    { "id": "pi-runtime", "kind": "pi-runtime", "implementation": "pi-agent-core", "transcriptAuthority": "pi-session", "productMetadataAuthority": "sqlite", "purpose": "agent.main", "workspaceLocatorKind": "virtual", "turnDurability": "durable", "evidenceRef": "turn-facts" },
+    { "id": "idle", "kind": "fully-idle", "evidenceRef": "turn-facts" },
+    { "id": "turn", "kind": "canonical-turn", "evidenceRef": "turn-facts" },
+    { "id": "answer", "kind": "final-answer", "mode": "non-empty", "evidenceRef": "turn-facts" }
+  ],
+  "artifactChecks": [],
+  "rubric": {
+    "kind": "domain-rubric",
+    "ref": "rubrics/constrained-teaser-answer-quality.json",
+    "judgeProfileId": "content-quality-judge"
+  },
+  "budget": { "timeoutMs": 120000, "repetitions": 1 }
+}

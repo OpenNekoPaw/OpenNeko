@@ -1,0 +1,19 @@
+{
+  "schema": "neko.agent-eval.scenario.v2", "id": "fountain-conversion-plan", "suiteId": "skill.script-to-timeline", "caseGroup": "canonical", "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Map a Fountain scene into a reviewable timeline conversion plan without writing project internals.",
+    "canonicalPath": ["builtin script-to-timeline", "Fountain element mapping", "duration estimates", "authoring handoff"],
+    "forbiddenFallback": ["project-internal JSON", "active Webview mutation", "false project success"],
+    "observables": [{ "ref": "skill-facts", "kind": "runtime-fact", "description": "Script-to-timeline Host identity and conversion table.", "required": true }],
+    "expectedResult": "The plan maps scene, action, dialogue, and transition into timed target rows and identifies authoring validation.",
+    "expectedFailure": "Missing Skill injection, mapping, duration, or false durable write claim fails."
+  },
+  "fixtureRefs": ["empty-workspace"], "runtimeProfileId": "markdown", "modelProfileIds": ["configured-default"],
+  "steps": [{ "id": "submit", "kind": "submit", "prompt": "$script-to-timeline 将以下 Fountain 片段转换成 timeline 计划，不写项目 JSON、不执行工具。输出表格，必须包含 source element、target row、duration、speaker、edit intent 和 validation：内景 废弃车站 - 夜；青年推门；青年说“有人吗？”；切至蓝色信号灯。" }, { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "skill-facts" },
+    { "id": "skill", "kind": "skill", "identity": { "name": "script-to-timeline", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "script-to-timeline", "fingerprint": "sha256:fba714967d85743889921665dcb9aeae28b05d3546aa8a17b15d531dc0614c0e" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "output", "kind": "structured-output", "format": "table", "requiredFields": ["source element", "target row", "duration", "speaker", "edit intent", "validation"], "locale": "zh-cn", "evidenceRef": "skill-facts" },
+    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["webview-direct-write", "legacy-pipeline"], "evidenceRef": "skill-facts" }
+  ], "artifactChecks": [], "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

@@ -1,0 +1,90 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "image-sequence-input",
+  "suiteId": "skill.storyboard",
+  "caseGroup": "paraphrase",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Interpret an ordered image-sequence description as flexible Storyboard Markdown while preserving frame order and evidence limits.",
+    "canonicalPath": [
+      "semantic Storyboard Skill discovery",
+      "ordered image-sequence interpretation",
+      "flexible Storyboard Markdown"
+    ],
+    "forbiddenFallback": [
+      "gallery flattening",
+      "structured Storyboard authoring",
+      "specialized Canvas scene/shot fallback"
+    ],
+    "observables": [
+      {
+        "ref": "skill-facts",
+        "kind": "runtime-fact",
+        "description": "Canonical Storyboard Skill injection facts.",
+        "required": true
+      },
+      {
+        "ref": "output-contract",
+        "kind": "output-contract",
+        "description": "Ordered Markdown plan with image and motion intent.",
+        "required": true
+      },
+      {
+        "ref": "no-fallback",
+        "kind": "runtime-fact",
+        "description": "Gallery and structured fallbacks were not observed.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The ordered frames remain source evidence for a reviewable Markdown plan; inferred transitions and durations are marked as suggestions.",
+    "expectedFailure": "Reordering source frames, claiming unseen facts, or materializing structured nodes fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "根据以下按顺序提供的三帧画面描述，写一份可审阅的 Markdown 分镜初稿，保留帧序号和证据限制，把转场、机位运动和时长标为建议，不要创建结构化 Canvas 节点：帧1：清晨空旷站台全景；帧2：红围巾女孩跑向即将关门的列车；帧3：车门关闭，她隔着玻璃回头。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    {
+      "id": "skill",
+      "kind": "skill",
+      "identity": {
+        "name": "storyboard",
+        "source": "builtin",
+        "provenance": "builtin",
+        "rootId": "builtin-skills",
+        "relativePath": "storyboard",
+        "fingerprint": "sha256:ab73de988b98b22a9b2598de923c56999abb70ef1cf4bb97c580fabd3b54d719"
+      },
+      "status": "injected",
+      "evidenceRef": "skill-facts"
+    },
+    {
+      "id": "table",
+      "kind": "structured-output",
+      "format": "table",
+      "requiredFields": ["shot", "source", "action", "camera", "duration"],
+      "locale": "zh-cn",
+      "evidenceRef": "output-contract"
+    },
+    {
+      "id": "fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "gallery",
+        "canvas.createStoryboardFromMarkdown",
+        "canvas_create_node",
+        "canvas_create_composite"
+      ],
+      "evidenceRef": "no-fallback"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

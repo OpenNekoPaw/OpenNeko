@@ -1,0 +1,29 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "incomplete-fence-table-streaming",
+  "suiteId": "agent-runtime.tui-markdown",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Stream a multi-row GFM table and fenced code through incomplete intermediate states and finalize valid Markdown.",
+    "canonicalPath": ["Agent stream", "MarkdownStreamingSession updates", "normalized document projection", "session finalize"],
+    "forbiddenFallback": ["final-only renderer", "second parse path", "unclosed final fence"],
+    "observables": [{ "ref": "markdown-facts", "kind": "runtime-fact", "description": "Final structured Markdown and complete Markdown session path events.", "required": true }],
+    "expectedResult": "The stream finalizes one valid table/fence Markdown document through the canonical path.",
+    "expectedFailure": "Plain text, missing path events, or incomplete evidence fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "直接输出 Markdown，不调用工具。先写至少六行的三列 GFM 表格，再写一个以 ```rust 开始、包含至少六行代码和注释、最后正常闭合的 fenced code block；不要解释。" },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "markdown-facts" },
+    { "id": "output", "kind": "structured-output", "format": "markdown", "locale": "zh-cn", "evidenceRef": "markdown-facts" },
+    { "id": "path", "kind": "markdown-path", "requiredEvents": ["session-created", "source-updated", "document-projected", "layout-created", "session-finalized"], "evidenceRef": "markdown-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

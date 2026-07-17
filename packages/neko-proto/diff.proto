@@ -1,0 +1,430 @@
+// =============================================================================
+// Media Diff Proto Definition (IDL)
+//
+// Authority: neko-engine Rust media_service module
+// Source files:
+//   - packages/neko-engine/packages/engine-kernel/src/media_service/diff.rs
+//   - packages/neko-engine/packages/engine-kernel/src/media_service/image_diff.rs
+//   - packages/neko-engine/packages/engine-kernel/src/media_service/audio_diff.rs
+//   - packages/neko-engine/packages/engine-kernel/src/media_service/video_diff.rs
+//   - packages/neko-engine/packages/engine-kernel/src/media_service/probe.rs
+//
+// Purpose:
+//   Single source of truth for diff result types shared between neko-engine
+//   (Rust) and TypeScript consumers. Covers media probe metadata, per-type
+//   content diff results, and timeline structural diff.
+//
+// Convention:
+//   - Field names use snake_case (TS codegen converts to camelCase)
+//   - Enum values use SCREAMING_SNAKE_CASE with type prefix
+//   - Only engine-recognized fields; UI/view state is separate
+// =============================================================================
+
+syntax = "proto3";
+
+package neko.diff;
+
+// =============================================================================
+// DiffCategory — media type classification for diff routing
+// =============================================================================
+
+enum DiffCategory {
+  DIFF_CATEGORY_IMAGE = 0;
+  DIFF_CATEGORY_AUDIO = 1;
+  DIFF_CATEGORY_VIDEO = 2;
+  DIFF_CATEGORY_TIMELINE = 3;
+  DIFF_CATEGORY_CANVAS = 4;
+  DIFF_CATEGORY_MODEL = 5;
+}
+
+// =============================================================================
+// MediaInfo — probe result for a single media file
+// =============================================================================
+
+message MediaInfo {
+  double duration = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+  double fps = 4;
+  string codec = 5;
+  string format = 6;
+  optional uint64 bitrate = 7;
+  bool has_audio = 8;
+  optional string audio_codec = 9;
+  optional uint32 audio_sample_rate = 10;
+  optional uint32 audio_channels = 11;
+  optional uint64 audio_bitrate = 12;
+  bool has_subtitles = 13;
+  repeated SubtitleStream subtitle_streams = 14;
+}
+
+message SubtitleStream {
+  uint32 index = 1;
+  string codec = 2;
+  optional string language = 3;
+  optional string title = 4;
+  bool is_default = 5;
+  bool is_forced = 6;
+}
+
+// =============================================================================
+// FieldDiff — single metadata field comparison (A vs B)
+// =============================================================================
+
+message FieldDiff {
+  // Field name (e.g. "duration", "codec", "width")
+  string field = 1;
+  // JSON-encoded value from source A
+  string value_a = 2;
+  // JSON-encoded value from source B
+  string value_b = 3;
+  // Whether the values differ
+  bool changed = 4;
+}
+
+// =============================================================================
+// Image Content Diff
+// =============================================================================
+
+message ImageContentDiff {
+  // Structural Similarity Index (0.0 - 1.0, 1.0 = identical)
+  double ssim = 1;
+  // Peak Signal-to-Noise Ratio (dB, higher = more similar)
+  double psnr = 2;
+  // Mean Squared Error (0.0 = identical)
+  double mse = 3;
+  // Percentage of pixels that differ (0.0 - 1.0)
+  double diff_pixel_percent = 4;
+  // Absolute count of differing pixels
+  uint64 diff_pixel_count = 5;
+  // Total pixel count
+  uint64 total_pixels = 6;
+  // Source A dimensions
+  uint32 width_a = 7;
+  uint32 height_a = 8;
+  // Source B dimensions
+  uint32 width_b = 9;
+  uint32 height_b = 10;
+  // Heatmap image as JPEG base64 string
+  string heatmap = 11;
+  uint32 heatmap_width = 12;
+  uint32 heatmap_height = 13;
+}
+
+// =============================================================================
+// Audio Content Diff
+// =============================================================================
+
+message AudioDiffRegion {
+  // Region start time (seconds)
+  double start = 1;
+  // Region end time (seconds)
+  double end = 2;
+  // Signal-to-Noise Ratio for this region (dB)
+  double snr = 3;
+  // RMS difference for this region
+  double rms_diff = 4;
+}
+
+message AudioContentDiff {
+  // Global Signal-to-Noise Ratio (dB, higher = more similar)
+  double snr = 1;
+  // Duration of source A (seconds)
+  double duration_a = 2;
+  // Duration of source B (seconds)
+  double duration_b = 3;
+  // Sample rate used for comparison (typically 48000)
+  uint32 compare_sample_rate = 4;
+  // Total samples compared
+  uint64 total_samples = 5;
+  // Number of segments that differ
+  uint32 diff_segment_count = 6;
+  // Total number of segments
+  uint32 total_segments = 7;
+  // Percentage of segments that differ (0.0 - 1.0)
+  double diff_percent = 8;
+  // Regions where audio differs significantly
+  repeated AudioDiffRegion diff_regions = 9;
+  // Waveform peak data for source A (downsampled to ~800 points, values 0.0-1.0)
+  repeated float waveform_peaks_a = 10;
+  // Waveform peak data for source B (downsampled to ~800 points, values 0.0-1.0)
+  repeated float waveform_peaks_b = 11;
+}
+
+// =============================================================================
+// Video Content Diff
+// =============================================================================
+
+message FrameMetric {
+  // Frame number (0-based)
+  uint64 frame = 1;
+  // Timestamp in seconds
+  double timestamp = 2;
+  // SSIM for this frame (0.0 - 1.0)
+  double ssim = 3;
+  // PSNR for this frame (dB)
+  double psnr = 4;
+}
+
+message VideoDiffRegion {
+  // Region start time (seconds)
+  double start = 1;
+  // Region end time (seconds)
+  double end = 2;
+  // Average SSIM across frames in this region
+  double avg_ssim = 3;
+  // Minimum SSIM in this region
+  double min_ssim = 4;
+  // Number of frames in this region
+  uint32 frame_count = 5;
+}
+
+message VideoContentDiff {
+  // Global average SSIM across all compared frames
+  double avg_ssim = 1;
+  // Minimum SSIM across all compared frames
+  double min_ssim = 2;
+  // Global average PSNR (dB)
+  double avg_psnr = 3;
+  // Minimum PSNR (dB)
+  double min_psnr = 4;
+  // Source A metadata
+  double duration_a = 5;
+  double duration_b = 6;
+  double fps_a = 7;
+  double fps_b = 8;
+  uint32 width_a = 9;
+  uint32 height_a = 10;
+  uint32 width_b = 11;
+  uint32 height_b = 12;
+  // Frame-level metrics
+  uint64 total_frames_compared = 13;
+  uint64 diff_frame_count = 14;
+  double diff_frame_percent = 15;
+  repeated FrameMetric frame_metrics = 16;
+  // Temporal diff regions (contiguous frames below SSIM threshold)
+  repeated VideoDiffRegion diff_regions = 17;
+  // Optional audio diff (when video contains audio tracks)
+  optional AudioContentDiff audio_diff = 18;
+  // Optional path to generated difference visualization video
+  optional string diff_video_path = 19;
+}
+
+// =============================================================================
+// Timeline Structural Diff
+// =============================================================================
+
+enum TimelineChangeType {
+  TIMELINE_CHANGE_TYPE_ADDED = 0;
+  TIMELINE_CHANGE_TYPE_REMOVED = 1;
+  TIMELINE_CHANGE_TYPE_MODIFIED = 2;
+  TIMELINE_CHANGE_TYPE_MOVED = 3;
+  TIMELINE_CHANGE_TYPE_UNCHANGED = 4;
+}
+
+message PropertyChange {
+  // Property name (e.g. "name", "muted", "src")
+  string property = 1;
+  // JSON-encoded previous value
+  string previous = 2;
+  // JSON-encoded current value
+  string current = 3;
+}
+
+message ElementChange {
+  string element_id = 1;
+  string element_name = 2;
+  string element_type = 3;
+  TimelineChangeType change_type = 4;
+  repeated PropertyChange property_changes = 5;
+  // Media source path (for media/audio elements)
+  optional string src = 6;
+  optional string previous_src = 7;
+  // Timeline position
+  optional double start_time = 8;
+  optional double duration = 9;
+}
+
+message TrackChange {
+  string track_id = 1;
+  string track_name = 2;
+  string track_type = 3;
+  TimelineChangeType change_type = 4;
+  repeated PropertyChange property_changes = 5;
+  repeated ElementChange element_changes = 6;
+}
+
+message TimelineDiffSummary {
+  uint32 tracks_added = 1;
+  uint32 tracks_removed = 2;
+  uint32 tracks_modified = 3;
+  uint32 elements_added = 4;
+  uint32 elements_removed = 5;
+  uint32 elements_modified = 6;
+  uint32 media_source_changes = 7;
+}
+
+message TimelineProjectMeta {
+  string name = 1;
+  uint32 resolution_width = 2;
+  uint32 resolution_height = 3;
+  double fps = 4;
+}
+
+message TimelineContentDiff {
+  // Project metadata (current vs previous)
+  optional TimelineProjectMeta current_project = 1;
+  optional TimelineProjectMeta previous_project = 2;
+  // Track-level changes
+  repeated TrackChange track_changes = 3;
+  // Summary statistics
+  TimelineDiffSummary summary = 4;
+  // Duration comparison
+  double duration_current = 5;
+  double duration_previous = 6;
+  // Per-element content diffs (only when includeContentDiff=true)
+  repeated ElementContentDiff element_content_diffs = 7;
+}
+
+// Content diff for a single element whose media source changed
+message ElementContentDiff {
+  string element_id = 1;
+  string element_type = 2;
+  string current_src = 3;
+  string previous_src = 4;
+  // One of the following content diff results
+  string content_type = 5;  // "image" | "audio" | "video" | "error"
+  optional ImageContentDiff image_diff = 6;
+  optional AudioContentDiff audio_diff = 7;
+  optional VideoContentDiff video_diff = 8;
+  optional string error_message = 9;
+}
+
+// =============================================================================
+// Canvas Structural Diff
+// =============================================================================
+
+enum CanvasChangeType {
+  CANVAS_CHANGE_TYPE_ADDED = 0;
+  CANVAS_CHANGE_TYPE_REMOVED = 1;
+  CANVAS_CHANGE_TYPE_MODIFIED = 2;
+  CANVAS_CHANGE_TYPE_UNCHANGED = 3;
+}
+
+message CanvasPropertyChange {
+  // Property name (e.g. "position", "size", "rotation", "label")
+  string property = 1;
+  // JSON-encoded previous value
+  string previous = 2;
+  // JSON-encoded current value
+  string current = 3;
+}
+
+message CanvasNodeChange {
+  string node_id = 1;
+  // Node type ("media" | "storyboard" | "annotation" | "group")
+  string node_type = 2;
+  // Optional label or title for display
+  optional string label = 3;
+  CanvasChangeType change_type = 4;
+  repeated CanvasPropertyChange property_changes = 5;
+  // For group nodes: child IDs added/removed
+  repeated string child_ids_added = 6;
+  repeated string child_ids_removed = 7;
+}
+
+message CanvasConnectionChange {
+  string connection_id = 1;
+  CanvasChangeType change_type = 2;
+  // Source/target node IDs
+  string source_id = 3;
+  string target_id = 4;
+  // Connection type ("default" | "sequence" | "reference")
+  optional string connection_type = 5;
+  optional string label = 6;
+}
+
+message CanvasDiffSummary {
+  uint32 nodes_added = 1;
+  uint32 nodes_removed = 2;
+  uint32 nodes_modified = 3;
+  uint32 connections_added = 4;
+  uint32 connections_removed = 5;
+  uint32 connections_modified = 6;
+}
+
+message CanvasContentDiff {
+  // Canvas metadata comparison
+  optional string name_current = 1;
+  optional string name_previous = 2;
+  // Node-level changes
+  repeated CanvasNodeChange node_changes = 3;
+  // Connection-level changes
+  repeated CanvasConnectionChange connection_changes = 4;
+  // Summary statistics
+  CanvasDiffSummary summary = 5;
+  // Total node counts
+  uint32 total_nodes_current = 6;
+  uint32 total_nodes_previous = 7;
+}
+
+// =============================================================================
+// Audio Silence Detection
+// =============================================================================
+
+message SilenceRegion {
+  // Silence start time (seconds)
+  double start = 1;
+  // Silence end time (seconds)
+  double end = 2;
+  // Duration of the silence region (seconds)
+  double duration = 3;
+  // RMS level in this region (dB, negative values)
+  double rms_db = 4;
+}
+
+message AudioSilenceDetection {
+  // Silence threshold used for detection (dB)
+  double threshold_db = 1;
+  // Minimum duration to be classified as silence (seconds)
+  double min_silence_duration = 2;
+  // Total number of silence regions detected
+  uint32 silence_region_count = 3;
+  // Total silence duration (seconds)
+  double total_silence_duration = 4;
+  // Total audio duration (seconds)
+  double total_duration = 5;
+  // Silence percentage (0.0 - 1.0)
+  double silence_percent = 6;
+  // Detected silence regions
+  repeated SilenceRegion silence_regions_a = 7;
+  repeated SilenceRegion silence_regions_b = 8;
+  // Regions where silence pattern differs between A and B
+  repeated SilenceRegion diff_regions = 9;
+}
+
+// =============================================================================
+// DiffResult — top-level diff output
+// =============================================================================
+
+message DiffResult {
+  // Source file paths
+  string source_a = 1;
+  string source_b = 2;
+  // Category of media being compared
+  DiffCategory category = 3;
+  // Whether the files are identical
+  bool identical = 4;
+  // Metadata field comparison
+  uint32 diff_count = 5;
+  uint32 total_fields = 6;
+  repeated FieldDiff fields = 7;
+  // Probe info for both sources (JSON-encoded MediaInfo)
+  string info_a = 8;
+  string info_b = 9;
+  // Content-level diff (one of, based on category)
+  optional ImageContentDiff image_diff = 10;
+  optional AudioContentDiff audio_diff = 11;
+  optional VideoContentDiff video_diff = 12;
+  optional TimelineContentDiff timeline_diff = 13;
+}

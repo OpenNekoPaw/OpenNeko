@@ -1,0 +1,127 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "create-portable-skill-artifact",
+  "suiteId": "skill.evaluation-artifact-author",
+  "caseGroup": "artifact",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Activate the project evaluation-artifact-author Skill and create one deterministic portable Skill package through the canonical native authoring capability.",
+    "canonicalPath": [
+      "TUI App session owner",
+      "TUI input queue",
+      "AgentSession",
+      "project Skill lifecycle trigger and prompt composition",
+      "CreateSkill Tool",
+      "project .agents/skills artifact",
+      "session.facts and contained artifact validator"
+    ],
+    "forbiddenFallback": [
+      "ordinary file-write Tool",
+      "legacy .neko/skills path",
+      "direct Agent turn runner",
+      "unvalidated final-answer claim"
+    ],
+    "observables": [
+      {
+        "ref": "turn-facts",
+        "kind": "runtime-fact",
+        "description": "Runtime errors, idle state, canonical turn, and final answer.",
+        "required": true
+      },
+      {
+        "ref": "skill-facts",
+        "kind": "runtime-fact",
+        "description": "Full project Skill Host identity and actual injected prompt fragment composition.",
+        "required": true
+      },
+      {
+        "ref": "model-facts",
+        "kind": "runtime-fact",
+        "description": "Actual provider/model and effective session configuration identity.",
+        "required": true
+      },
+      {
+        "ref": "tool-facts",
+        "kind": "runtime-fact",
+        "description": "Successful native CreateSkill call and observed result.",
+        "required": true
+      },
+      {
+        "ref": "artifact-file",
+        "kind": "post-check",
+        "description": "Contained canonical SKILL.md exists with the expected digest and valid UTF-8.",
+        "required": true
+      },
+      {
+        "ref": "no-fallback-facts",
+        "kind": "runtime-fact",
+        "description": "No ordinary Write or legacy Skill creation path participated.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The target project Skill is injected, the configured model calls CreateSkill, and the exact canonical SKILL.md passes the contained validator.",
+    "expectedFailure": "Missing Skill/model/Tool/artifact evidence, incomplete facts, or any forbidden fallback fails the case even when the assistant claims success."
+  },
+  "fixtureRefs": ["skill-artifact-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$evaluation-artifact-author Activate this exact project Skill, then call the native CreateSkill capability once with target project and skill { name: eval-v2-created-skill, description: Evaluation v2 created portable Skill., body: # Evaluation V2 Created Skill\\n\\nUse canonical portable Skill guidance. }. Do not use an ordinary file-write capability and do not write under .neko/skills. Report success only after the native result is observed."
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "turn-facts" },
+    { "id": "idle", "kind": "fully-idle", "evidenceRef": "turn-facts" },
+    { "id": "turn", "kind": "canonical-turn", "evidenceRef": "turn-facts" },
+    { "id": "answer", "kind": "final-answer", "mode": "non-empty", "evidenceRef": "turn-facts" },
+    {
+      "id": "skill-injected",
+      "kind": "skill",
+      "identity": {
+        "name": "evaluation-artifact-author",
+        "source": "project",
+        "provenance": "workspace",
+        "rootId": "project-agent-skills",
+        "relativePath": "evaluation-artifact-author",
+        "fingerprint": "sha256:8b77edb8f93ddcc69f020a92a5c7936cb8ad066fd671a873b53b37534b9e7bb0"
+      },
+      "status": "injected",
+      "evidenceRef": "skill-facts"
+    },
+    {
+      "id": "model-bound",
+      "kind": "model",
+      "profileId": "configured-default",
+      "noFallback": true,
+      "evidenceRef": "model-facts"
+    },
+    {
+      "id": "native-create-skill",
+      "kind": "tool-call",
+      "name": "CreateSkill",
+      "status": "success",
+      "evidenceRef": "tool-facts"
+    },
+    {
+      "id": "no-legacy-fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": ["Write", "LegacyCreateSkill", ".neko/skills"],
+      "evidenceRef": "no-fallback-facts"
+    }
+  ],
+  "artifactChecks": [
+    {
+      "id": "canonical-skill-file",
+      "kind": "file",
+      "evidenceRef": "artifact-file",
+      "path": ".agents/skills/eval-v2-created-skill/SKILL.md",
+      "digest": "sha256:6b794d69dd69b3cf1dda4e1551840d3f389329307108a044e250c310bea73244",
+      "validatorId": "utf8-text-v1"
+    }
+  ],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

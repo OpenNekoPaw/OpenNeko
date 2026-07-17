@@ -1,0 +1,66 @@
+.cut-host-adapter__surface {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 48px;
+  width: 100%;
+  height: 100%;
+  padding: 34px 40px 0;
+  background: #ffffff;
+}
+
+.cut-host-adapter__preview {
+  border: 1px solid #0f172a;
+  background: #000000;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+}
+
+.cut-host-adapter__transport {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.cut-host-adapter__transport button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 6px;
+  color: #ffffff;
+  background: #1687d9;
+}
+
+.cut-host-adapter__tracks {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  height: 100%;
+  padding: 0 32px 18px;
+  background: #ffffff;
+}
+
+.cut-host-adapter__track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 34px;
+  border-radius: 4px;
+  padding: 0 10px;
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.cut-host-adapter__track--video {
+  background: #1f63d1;
+}
+
+.cut-host-adapter__track--audio {
+  background: repeating-linear-gradient(90deg, #1b9d53, #1b9d53 5px, #64c987 5px, #64c987 8px);
+}
+
+.cut-host-adapter__icon {
+  font-size: 9px;
+  font-weight: 900;
+}

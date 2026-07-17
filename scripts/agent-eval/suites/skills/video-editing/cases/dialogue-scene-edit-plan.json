@@ -1,0 +1,18 @@
+{
+  "schema": "neko.agent-eval.scenario.v2", "id": "dialogue-scene-edit-plan", "suiteId": "skill.video-editing", "caseGroup": "canonical", "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Create a timing-specific dialogue edit plan with J/L cuts and transition rationale.",
+    "canonicalPath": ["builtin video-editing", "timeline edit semantics", "timed operations", "revision validation plan"],
+    "forbiddenFallback": ["new media generation", "unverified timeline mutation"],
+    "observables": [{ "ref": "skill-facts", "kind": "runtime-fact", "description": "Video-editing Host identity and operation table.", "required": true }],
+    "expectedResult": "The plan names clip ranges, edit operations, audio sync, transitions, and validation.",
+    "expectedFailure": "Missing Skill injection, timeline semantics, or false project mutation claim fails."
+  },
+  "fixtureRefs": ["empty-workspace"], "runtimeProfileId": "markdown", "modelProfileIds": ["configured-default"],
+  "steps": [{ "id": "submit", "kind": "submit", "prompt": "$video-editing 为一段 20 秒双人对白制定剪辑计划，不执行工具。输出表格，必须包含 time range、clip、operation、J/L cut、transition、audio sync、reason 和 validation。" }, { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "skill-facts" },
+    { "id": "skill", "kind": "skill", "identity": { "name": "video-editing", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "video-editing", "fingerprint": "sha256:a25619eefb95fd3ecfc17747c34d12017dbd8b853c68348e8f07c36eb830ad54" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "output", "kind": "structured-output", "format": "table", "requiredFields": ["time range", "clip", "operation", "reason", "validation"], "locale": "zh-cn", "evidenceRef": "skill-facts" }
+  ], "artifactChecks": [], "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

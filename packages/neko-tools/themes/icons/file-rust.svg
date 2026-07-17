@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <!-- Rust: gear/cog shape -->
+  <circle cx="8" cy="8" r="5" stroke="#DEA584" stroke-width="1.2"/>
+  <circle cx="8" cy="8" r="2" stroke="#DEA584" stroke-width="1.2"/>
+  <line x1="8" y1="2" x2="8" y2="4" stroke="#DEA584" stroke-width="1.2"/>
+  <line x1="8" y1="12" x2="8" y2="14" stroke="#DEA584" stroke-width="1.2"/>
+  <line x1="3" y1="5" x2="4.7" y2="6" stroke="#DEA584" stroke-width="1.2"/>
+  <line x1="11.3" y1="10" x2="13" y2="11" stroke="#DEA584" stroke-width="1.2"/>
+  <line x1="3" y1="11" x2="4.7" y2="10" stroke="#DEA584" stroke-width="1.2"/>
+  <line x1="11.3" y1="6" x2="13" y2="5" stroke="#DEA584" stroke-width="1.2"/>
+</svg>

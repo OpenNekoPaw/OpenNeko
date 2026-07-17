@@ -1,0 +1,18 @@
+{
+  "schema": "neko.agent-eval.scenario.v2", "id": "fountain-station-scene", "suiteId": "skill.script-generation", "caseGroup": "canonical", "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Create a short, structurally valid Fountain scene from a concise premise.",
+    "canonicalPath": ["builtin script-generation", "story beat", "Fountain scene heading", "character and dialogue"],
+    "forbiddenFallback": ["prose synopsis only", "claimed file write"],
+    "observables": [{ "ref": "skill-facts", "kind": "runtime-fact", "description": "Script-generation Host identity and Fountain output structure.", "required": true }],
+    "expectedResult": "The response contains a scene heading, action, character cue, dialogue, and transition in a Fountain block.",
+    "expectedFailure": "Missing Skill injection or Fountain structure fails."
+  },
+  "fixtureRefs": ["empty-workspace"], "runtimeProfileId": "markdown", "modelProfileIds": ["configured-default"],
+  "steps": [{ "id": "submit", "kind": "submit", "prompt": "$script-generation 写一个约 30 秒的 Fountain 场景，不写文件：夜雨中的青年进入废弃车站，发现蓝色信号灯发出异常声响。必须包含 scene heading、action、character、dialogue 和 transition。" }, { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "skill-facts" },
+    { "id": "skill", "kind": "skill", "identity": { "name": "script-generation", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "script-generation", "fingerprint": "sha256:b1d4feb8d580e6e8509d2650fd32fd5a6e70e41a781a00c73dbb278672329a0b" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "output", "kind": "structured-output", "format": "markdown", "requiredFields": ["内景", "青年", "切至"], "locale": "zh-cn", "evidenceRef": "skill-facts" }
+  ], "artifactChecks": [], "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

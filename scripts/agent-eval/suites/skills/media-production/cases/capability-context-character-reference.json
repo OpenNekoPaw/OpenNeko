@@ -1,0 +1,46 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "capability-context-character-reference",
+  "suiteId": "skill.media-production",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "From an actual screenplay, inspect the current canonical Tool and Skill context, choose one approved low-risk P0 production action, execute it, and observe the durable result before proposing the next action.",
+    "canonicalPath": ["screenplay.fountain evidence", "builtin media-production Skill", "GetContext", "ordinary GenerateImage Tool", "image_generation task", "task-result observation", "durable generated artifact", "Agent review"],
+    "forbiddenFallback": ["planning projection handshake", "parallel creative catalog", "text-only completion", "generic video substitution", "mock image task", "IDC stage or run", "legacy workflow runtime"],
+    "observables": [{ "ref": "capability-facts", "kind": "runtime-fact", "description": "Current context query, selected ordinary Tool, task result, durable artifact, effective model, and no-fallback facts.", "required": true }],
+    "expectedResult": "The Agent uses current Tool and Skill context to select image generation for the approved Mara P0 reference, waits for the actual artifact, and reviews it before describing the next action.",
+    "expectedFailure": "Skipping current context, substituting video or text, missing the terminal task/artifact, or participating in a planning/legacy runtime fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "ask-markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$media-production 读取 @screenplay.fountain\n\n先检查当前会话实际可用的工具和 Skill 上下文，再从真实能力中选择一个可执行的低风险 P0 动作推进动画企划。已批准的范围仅为：根据剧本中 Mara、23:47、红伞和无头灯列车的证据，生成一张 Mara 角色视觉参考图到 generated；不得导入资产库、修改项目或改用视频。若当前图片生成不可用则明确 blocked。执行后等待真实结果，观察返回素材，再说明是否可接受以及下一步。不要预建节点图或固定工作流。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 600000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "capability-facts" },
+    { "id": "skill", "kind": "skill", "identity": { "name": "media-production", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "media-production", "fingerprint": "sha256:48049d177c8262a3f5526d15342c0696137be8516509a41c5c8f37ea02e45592" }, "status": "injected", "evidenceRef": "capability-facts" },
+    { "id": "model", "kind": "model", "profileId": "configured-default", "noFallback": true, "evidenceRef": "capability-facts" },
+    { "id": "context", "kind": "tool-call", "name": "GetContext", "status": "success", "evidenceRef": "capability-facts" },
+    { "id": "image", "kind": "tool-call", "name": "GenerateImage", "status": "success", "evidenceRef": "capability-facts" },
+    { "id": "no-video", "kind": "tool-call", "name": "GenerateVideo", "status": "absent", "evidenceRef": "capability-facts" },
+    { "id": "order", "kind": "process-order", "events": [
+      { "kind": "workflow-step", "stepId": "submit", "method": "message.submit" },
+      { "kind": "tool", "name": "GetContext", "status": "success" },
+      { "kind": "tool", "name": "GenerateImage", "status": "success" },
+      { "kind": "task", "taskType": "image_generation", "status": "completed" }
+    ], "evidenceRef": "capability-facts" },
+    { "id": "task", "kind": "task-terminal", "taskType": "image_generation", "status": "completed", "evidenceRef": "capability-facts" },
+    { "id": "artifact", "kind": "artifact", "artifactKind": "generated-asset", "validatorStatus": "valid", "evidenceRef": "capability-facts" },
+    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "backgroundTasksIdle", "mediaDeliveryIdle", "taskResultObservationIdle", "continuationQueueIdle"], "evidenceRef": "capability-facts" },
+    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["creative-capability-planning-projection", "planning-projection", "parallel-creative-catalog", "idc-stage", "idc-run", "stage-persona", "ExecutionPlan", "legacy-workflow-runtime"], "evidenceRef": "capability-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 600000, "repetitions": 1 }
+}

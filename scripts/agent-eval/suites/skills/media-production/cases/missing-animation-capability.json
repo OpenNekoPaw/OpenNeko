@@ -1,0 +1,30 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "missing-animation-capability",
+  "suiteId": "skill.media-production",
+  "caseGroup": "failure",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Plan from actual screenplay evidence when panel, character-reference, animation, audio, Quality, and Export capabilities are unavailable.",
+    "canonicalPath": ["screenplay.fountain evidence", "builtin media-production Skill", "capability-aware limitation", "blocked and partial work units", "smallest valid deliverable"],
+    "forbiddenFallback": ["invented capability", "completion claim", "generic phase list", "IDC recovery stage"],
+    "observables": [{ "ref": "blocked-facts", "kind": "output-contract", "description": "Source-grounded blocked/partial plan with explicit missing capability and bounded recovery.", "required": true }],
+    "expectedResult": "The Agent identifies unsupported execution, records blocked/partial work, and offers the smallest valid review document rather than claiming animation delivery.",
+    "expectedFailure": "Claiming executable animation, omitting blockers, or inventing outputs fails."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "plan-markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "$media-production 读取 @screenplay.fountain\n假定当前没有角色参考生成、Storyboard authoring、动画、音频、Quality 或 Export 能力。仍请给出基于实际内容的最小有效方案：明确 blocked、partial、缺失能力、可先交付的创作者审阅内容、失败恢复和需要澄清的问题；不得声称成片可执行或已完成。" },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "skill", "kind": "skill", "identity": { "name": "media-production", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "media-production", "fingerprint": "sha256:48049d177c8262a3f5526d15342c0696137be8516509a41c5c8f37ea02e45592" }, "status": "injected", "evidenceRef": "blocked-facts" },
+    { "id": "output", "kind": "structured-output", "format": "markdown", "requiredFields": ["Mara", "blocked", "partial", "缺失", "能力", "最小", "失败", "恢复", "澄清"], "locale": "zh-cn", "evidenceRef": "blocked-facts" },
+    { "id": "no-video", "kind": "tool-call", "name": "GenerateVideo", "status": "absent", "evidenceRef": "blocked-facts" },
+    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["idc-stage", "idc-run", "stage-persona", "Draft", "ExecutionPlan", "legacy-workflow-runtime"], "evidenceRef": "blocked-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

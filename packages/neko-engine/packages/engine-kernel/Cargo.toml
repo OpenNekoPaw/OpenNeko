@@ -1,0 +1,102 @@
+[package]
+name = "neko-engine-kernel"
+version.workspace = true
+edition.workspace = true
+description = "Core media processing library with GPU acceleration for OpenNeko"
+license.workspace = true
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+# Shared types
+neko-engine-types = { path = "../engine-types" }
+neko-engine-codec = { path = "../engine-codec" }
+neko-engine-audio = { path = "../engine-audio" }
+neko-engine-gpu = { path = "../engine-gpu" }
+
+# GPU - wgpu for cross-platform GPU compute
+wgpu.workspace = true
+wgpu-hal.workspace = true
+wgpu-core.workspace = true
+pollster.workspace = true
+
+# FFmpeg bindings
+ffmpeg-next.workspace = true
+ffmpeg-sys-next.workspace = true
+
+# Async runtime
+tokio = { workspace = true, features = ["macros", "time"] }
+async-trait.workspace = true
+
+# System monitoring
+sysinfo.workspace = true
+
+# UUID generation
+uuid.workspace = true
+
+# Error handling
+thiserror.workspace = true
+anyhow.workspace = true
+
+# Serialization
+serde.workspace = true
+serde_json.workspace = true
+
+# Logging & Tracing
+tracing.workspace = true
+tracing-tracy = { workspace = true, optional = true }
+tracy-client = { workspace = true, optional = true }
+
+# Utilities
+bytemuck.workspace = true
+crossbeam-channel.workspace = true
+tokio-util = { version = "0.7", features = ["rt"] }
+half = "2.4"
+
+# Image encoding - pure Rust JPEG encoder
+image.workspace = true
+
+# Loudness measurement - ITU-R BS.1770-4
+ebur128.workspace = true
+
+# Media domain logic (probe, diff, subtitle, jpeg — self-contained, no cycle)
+neko-runtime-media = { path = "../runtime-media" }
+
+# Base64 encoding
+base64.workspace = true
+
+# 2D shape rasterization - pure Rust path renderer
+tiny-skia = "0.11"
+
+# Platform-specific GPU interop
+[target.'cfg(target_os = "macos")'.dependencies]
+metal = "0.27"
+objc = "0.2"
+core-foundation = "0.9"
+block = "0.1"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ash = "0.37"
+libc = "0.2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.52", features = [
+    "Win32_Graphics_Direct3D11",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
+    "Win32_Foundation",
+    "Win32_Security",
+] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros"] }
+tempfile = "3"
+
+[features]
+default = []
+videotoolbox = []  # macOS VideoToolbox
+vaapi = []         # Linux VAAPI
+cuda = []          # NVIDIA CUDA
+tracy = ["tracing-tracy", "tracy-client"]  # Tracy profiler integration

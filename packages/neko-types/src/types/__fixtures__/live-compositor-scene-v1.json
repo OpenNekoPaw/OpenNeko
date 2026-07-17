@@ -1,0 +1,338 @@
+{
+  "scene": {
+    "contractVersion": 1,
+    "sceneId": "live-scene-main",
+    "viewportId": "viewport-live-main",
+    "name": "Main Live Scene",
+    "revision": 12,
+    "canvas": {
+      "width": 1920,
+      "height": 1080,
+      "fps": 60,
+      "pixelRatio": 1,
+      "colorSpace": "srgb",
+      "background": "#101014"
+    },
+    "sources": [
+      {
+        "sourceId": "source-bg",
+        "kind": "solid",
+        "label": "Studio Background",
+        "color": "#101014"
+      },
+      {
+        "sourceId": "source-camera-a",
+        "kind": "camera",
+        "label": "Camera A",
+        "deviceSessionRef": "device-session-camera-a",
+        "metadata": {
+          "authorized": true
+        }
+      },
+      {
+        "sourceId": "source-puppet-main",
+        "kind": "puppet",
+        "label": "Host Puppet",
+        "entityRef": "${PROJECT}/characters/host.nkentity"
+      },
+      {
+        "sourceId": "source-tracking-overlay",
+        "kind": "tracking-overlay",
+        "label": "Tracking Diagnostics"
+      }
+    ],
+    "layers": [
+      {
+        "id": "layer-bg",
+        "role": "background",
+        "label": "Background",
+        "source": {
+          "sourceId": "source-bg",
+          "kind": "solid",
+          "label": "Studio Background",
+          "color": "#101014"
+        },
+        "transform": {
+          "position": [960, 540],
+          "scale": [1, 1],
+          "rotationDeg": 0,
+          "anchor": [0.5, 0.5],
+          "size": [1920, 1080]
+        },
+        "opacity": 1,
+        "blendMode": "normal",
+        "visible": true,
+        "zIndex": 0,
+        "sourceUnavailablePolicy": "substitute"
+      },
+      {
+        "id": "layer-camera",
+        "role": "camera",
+        "label": "Camera",
+        "source": {
+          "sourceId": "source-camera-a",
+          "kind": "camera",
+          "label": "Camera A",
+          "deviceSessionRef": "device-session-camera-a",
+          "metadata": {
+            "authorized": true
+          }
+        },
+        "transform": {
+          "position": [1540, 750],
+          "scale": [0.35, 0.35],
+          "rotationDeg": 0,
+          "anchor": [0.5, 0.5],
+          "size": [1280, 720],
+          "crop": [0, 0, 1280, 720]
+        },
+        "opacity": 1,
+        "blendMode": "normal",
+        "visible": true,
+        "zIndex": 10,
+        "sourceUnavailablePolicy": "diagnostic-overlay"
+      },
+      {
+        "id": "layer-puppet",
+        "role": "avatar",
+        "label": "Host",
+        "source": {
+          "sourceId": "source-puppet-main",
+          "kind": "puppet",
+          "label": "Host Puppet",
+          "entityRef": "${PROJECT}/characters/host.nkentity"
+        },
+        "transform": {
+          "position": [960, 650],
+          "scale": [1, 1],
+          "rotationDeg": 0,
+          "anchor": [0.5, 0.9],
+          "size": [760, 900]
+        },
+        "opacity": 1,
+        "blendMode": "normal",
+        "visible": true,
+        "zIndex": 20,
+        "sourceUnavailablePolicy": "hold-last-frame"
+      },
+      {
+        "id": "layer-tracking-overlay",
+        "role": "diagnostic",
+        "label": "Tracking Overlay",
+        "source": {
+          "sourceId": "source-tracking-overlay",
+          "kind": "tracking-overlay",
+          "label": "Tracking Diagnostics"
+        },
+        "transform": {
+          "position": [960, 540],
+          "scale": [1, 1],
+          "rotationDeg": 0,
+          "anchor": [0.5, 0.5],
+          "size": [1920, 1080]
+        },
+        "opacity": 0.6,
+        "blendMode": "alpha",
+        "visible": true,
+        "zIndex": 90,
+        "sourceUnavailablePolicy": "exclude"
+      }
+    ],
+    "presets": [
+      {
+        "id": "preset-main",
+        "label": "Main",
+        "order": 0,
+        "layerIds": ["layer-bg", "layer-camera", "layer-puppet", "layer-tracking-overlay"],
+        "outputRouteIds": ["route-monitor"],
+        "trackingOverlay": {
+          "id": "tracking-overlay-main",
+          "enabled": true,
+          "visible": true,
+          "mode": "skeleton",
+          "sourceIds": ["source-puppet-main"],
+          "opacity": 0.6,
+          "zIndex": 90,
+          "stalePolicy": "dim"
+        }
+      },
+      {
+        "id": "preset-closeup",
+        "label": "Close Up",
+        "order": 1,
+        "layerIds": ["layer-bg", "layer-puppet", "layer-tracking-overlay"],
+        "outputRouteIds": ["route-monitor"]
+      }
+    ],
+    "activePresetId": "preset-main",
+    "trackingOverlay": {
+      "id": "tracking-overlay-main",
+      "enabled": true,
+      "visible": true,
+      "mode": "skeleton",
+      "sourceIds": ["source-puppet-main"],
+      "opacity": 0.6,
+      "zIndex": 90,
+      "stalePolicy": "dim"
+    },
+    "outputRoutes": [
+      {
+        "id": "route-monitor",
+        "kind": "monitor",
+        "label": "Monitor Preview",
+        "enabled": true,
+        "status": "active",
+        "targetRef": "viewport-live-main"
+      },
+      {
+        "id": "route-recording",
+        "kind": "recording",
+        "label": "Compositor Recording",
+        "enabled": false,
+        "status": "unsupported",
+        "diagnostics": [
+          {
+            "id": "diag-recording-unsupported",
+            "code": "unsupported-output-route",
+            "severity": "warning",
+            "message": "Compositor recording output is not implemented in this build.",
+            "timestamp": 1810814400000,
+            "routeId": "route-recording",
+            "retryable": false
+          }
+        ]
+      },
+      {
+        "id": "route-obs",
+        "kind": "obs-virtual-camera",
+        "label": "OBS Virtual Camera",
+        "enabled": false,
+        "status": "unavailable",
+        "diagnostics": [
+          {
+            "id": "diag-obs-unavailable",
+            "code": "unavailable-output-route",
+            "severity": "warning",
+            "message": "OBS virtual camera backend is unavailable on this host.",
+            "timestamp": 1810814400000,
+            "routeId": "route-obs",
+            "retryable": true
+          }
+        ]
+      },
+      {
+        "id": "route-rtmp",
+        "kind": "rtmp",
+        "label": "RTMP",
+        "enabled": false,
+        "status": "permission-required"
+      }
+    ],
+    "diagnostics": [
+      {
+        "id": "diag-unsupported-source",
+        "code": "unsupported-source",
+        "severity": "warning",
+        "message": "Scene source source-model-legacy cannot be adapted into a compositor layer yet.",
+        "timestamp": 1810814400000,
+        "layerId": "layer-model-legacy",
+        "sourceId": "source-model-legacy",
+        "sourceKind": "model",
+        "retryable": false,
+        "details": {
+          "sourceUnavailablePolicy": "diagnostic-overlay"
+        }
+      },
+      {
+        "id": "diag-local-preview",
+        "code": "preview-non-authoritative",
+        "severity": "info",
+        "message": "Local Webview preview is enabled as a non-authoritative preview.",
+        "timestamp": 1810814400000
+      }
+    ],
+    "latencySamples": [
+      {
+        "id": "latency-command-70",
+        "kind": "command-to-frame",
+        "timestamp": 1810814400016,
+        "valueMs": 24.5,
+        "budgetMs": 50,
+        "withinBudget": true,
+        "frameId": 144,
+        "seq": 70
+      },
+      {
+        "id": "latency-tracking-33",
+        "kind": "tracking-to-frame",
+        "timestamp": 1810814400017,
+        "valueMs": 31.2,
+        "budgetMs": 50,
+        "withinBudget": true,
+        "frameId": 144,
+        "sourceId": "source-puppet-main"
+      },
+      {
+        "id": "latency-decode-unavailable",
+        "kind": "decode",
+        "timestamp": 1810814400018,
+        "budgetMs": 16,
+        "withinBudget": false,
+        "unavailableReason": "WebCodecs presentation callback not available"
+      }
+    ],
+    "metadata": {
+      "createdBy": "contract-test",
+      "authoritative": true
+    },
+    "updatedAt": 1810814400000
+  },
+  "commands": {
+    "setPreset": {
+      "presetId": "preset-closeup"
+    },
+    "updateLayer": {
+      "layerId": "layer-puppet",
+      "patch": {
+        "transform": {
+          "position": [960, 620],
+          "scale": [1.08, 1.08],
+          "rotationDeg": 0,
+          "anchor": [0.5, 0.9],
+          "size": [820, 960]
+        },
+        "opacity": 0.95,
+        "visible": true
+      }
+    },
+    "reorderLayer": {
+      "layerId": "layer-camera",
+      "afterLayerId": "layer-puppet",
+      "zIndex": 30
+    },
+    "setTrackingOverlay": {
+      "trackingOverlay": {
+        "id": "tracking-overlay-main",
+        "enabled": true,
+        "visible": true,
+        "mode": "landmarks",
+        "sourceIds": ["source-puppet-main", "source-camera-a"],
+        "opacity": 0.75,
+        "zIndex": 95,
+        "stalePolicy": "hold-last-frame"
+      }
+    },
+    "setOutputRoute": {
+      "routeId": "route-monitor",
+      "enabled": true,
+      "route": {
+        "id": "route-monitor",
+        "kind": "monitor",
+        "label": "Monitor Preview",
+        "enabled": true,
+        "status": "active",
+        "targetRef": "viewport-live-main"
+      }
+    }
+  }
+}

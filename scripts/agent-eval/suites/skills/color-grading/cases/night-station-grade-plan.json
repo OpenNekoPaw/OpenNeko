@@ -1,0 +1,18 @@
+{
+  "schema": "neko.agent-eval.scenario.v2", "id": "night-station-grade-plan", "suiteId": "skill.color-grading", "caseGroup": "canonical", "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Create a parameterized color-correction and grading plan for a rainy night station shot.",
+    "canonicalPath": ["builtin color-grading", "technical correction", "creative grade", "shot-match validation"],
+    "forbiddenFallback": ["generic visual description", "replacement image generation"],
+    "observables": [{ "ref": "skill-facts", "kind": "runtime-fact", "description": "Color-grading Host identity and parameter table.", "required": true }],
+    "expectedResult": "The plan separates correction from grade and names exposure, white balance, contrast, saturation, and matching checks.",
+    "expectedFailure": "Missing Skill injection, parameter values, or validation path fails."
+  },
+  "fixtureRefs": ["empty-workspace"], "runtimeProfileId": "markdown", "modelProfileIds": ["configured-default"],
+  "steps": [{ "id": "submit", "kind": "submit", "prompt": "$color-grading 为夜雨车站镜头制定调色计划，不执行工具。输出参数表，必须区分校正和风格化，并覆盖 exposure、white balance、contrast、saturation、skin tone 与 shot matching。" }, { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "skill-facts" },
+    { "id": "skill", "kind": "skill", "identity": { "name": "color-grading", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "color-grading", "fingerprint": "sha256:1c2d3f26fc78b0cc3db2d4290f9eac3c51b84d553fb657129973feaf9428f5b2" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "output", "kind": "structured-output", "format": "table", "requiredFields": ["参数", "目标", "理由", "验证"], "locale": "zh-cn", "evidenceRef": "skill-facts" }
+  ], "artifactChecks": [], "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

@@ -1,0 +1,6 @@
+{
+  "neko.engine.start.title": "Connect Engine",
+  "neko.engine.stop.title": "Disconnect Engine",
+  "neko.engine.status.title": "Engine Status",
+  "neko.engine.probe.title": "Probe Media File"
+}

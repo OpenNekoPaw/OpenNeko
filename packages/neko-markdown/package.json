@@ -1,0 +1,22 @@
+{
+  "name": "@neko/markdown",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest --run"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.2"
+  },
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5"
+  }
+}

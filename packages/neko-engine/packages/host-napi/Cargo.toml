@@ -1,0 +1,28 @@
+[package]
+name = "neko-host-napi"
+version.workspace = true
+edition.workspace = true
+description = "Node.js N-API bindings for neko-engine-kernel"
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+neko-engine-kernel = { path = "../engine-kernel" }
+neko-host-api = { path = "../host-api" }
+neko-host-http = { path = "../host-http" }
+neko-engine-types = { path = "../engine-types" }
+napi = { version = "2", features = ["async", "napi8"] }
+napi-derive = "2"
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+wgpu.workspace = true
+pollster.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+bytemuck.workspace = true
+
+[build-dependencies]
+napi-build = "2"

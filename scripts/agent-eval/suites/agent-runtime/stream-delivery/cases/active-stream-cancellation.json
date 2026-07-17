@@ -1,0 +1,30 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "active-stream-cancellation",
+  "suiteId": "agent-runtime.stream-delivery",
+  "caseGroup": "failure",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Cancel an active long Markdown stream and return the session to terminal idle.",
+    "canonicalPath": ["message.submit", "AgentSession stream", "message.cancel", "session.waitForIdle"],
+    "forbiddenFallback": ["wait for complete stream", "fabricated final answer", "second renderer"],
+    "observables": [{ "ref": "cancel-facts", "kind": "runtime-fact", "description": "Cancellation acceptance, runtime diagnostics, and terminal idle facts.", "required": true }],
+    "expectedResult": "The active stream cancellation is accepted and all runtime concerns become terminal idle.",
+    "expectedFailure": "Rejected cancellation, remaining work, or runtime errors fail."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "stream", "kind": "submit", "prompt": "立即开始输出一个 400 行、5 列的 GFM Markdown 动画分镜表，每行内容不同。全部完成后才输出 CANCELLATION_SHOULD_PREVENT_THIS_MARKER。" },
+    { "id": "cancel", "kind": "cancel", "afterStepId": "stream" },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 120000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "cancel-facts" },
+    { "id": "cancelled", "kind": "cancellation", "stepId": "cancel", "accepted": true, "evidenceRef": "cancel-facts" },
+    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "backgroundTasksIdle", "mediaDeliveryIdle", "taskResultObservationIdle", "continuationQueueIdle"], "evidenceRef": "cancel-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 120000, "repetitions": 1 }
+}

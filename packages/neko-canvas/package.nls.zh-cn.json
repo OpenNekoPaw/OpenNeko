@@ -1,0 +1,20 @@
+{
+  "neko.canvas.new.title": "新建画布",
+  "neko.canvas.outline.title": "画布大纲",
+  "neko.asset.import.title": "导入素材",
+  "neko.addToAssetLibrary.title": "添加到素材库",
+  "neko.canvas.previewMedia.title": "预览媒体",
+  "neko.canvas.revealPlaybackWorkspace.title": "显示播放工作区",
+  "neko.canvas.deleteSelected.title": "删除选中",
+  "neko.canvas.escape.title": "取消 / 取消选择",
+  "neko.canvas.selectAll.title": "全选",
+  "neko.canvas.undo.title": "撤销",
+  "neko.canvas.redo.title": "重做",
+  "neko.canvas.selectNodeFromOutline.title": "选择节点",
+  "neko.canvas.selectConnectionFromOutline.title": "选择连接",
+  "neko.canvas.resetZoom.title": "重置缩放",
+  "neko.canvas.generateSelected.title": "生成选中镜头",
+  "neko.canvas.updateNodeImage.title": "更新节点图片（来自绘图）",
+  "neko.canvas.detachShotFromScene.title": "将镜头移出场景",
+  "neko.canvas.deleteNodeFromOutline.title": "删除节点"
+}

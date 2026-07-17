@@ -1,0 +1,20 @@
+{
+  "schema": "neko.agent-eval.suite-index.v2",
+  "ownerKind": "skill",
+  "entries": [
+    { "suiteId": "skill.audio-mixing", "path": "audio-mixing/suite.json", "ownerId": "audio-mixing", "targetKind": "skill" },
+    { "suiteId": "skill.color-grading", "path": "color-grading/suite.json", "ownerId": "color-grading", "targetKind": "skill" },
+    { "suiteId": "skill.evaluation-artifact-author", "path": "evaluation-artifact-author/suite.json", "ownerId": "evaluation-artifact-author", "targetKind": "skill" },
+    { "suiteId": "skill.image", "path": "image/suite.json", "ownerId": "image", "targetKind": "skill" },
+    { "suiteId": "skill.media-production", "path": "media-production/suite.json", "ownerId": "media-production", "targetKind": "skill" },
+    { "suiteId": "skill.media-quality-review", "path": "media-quality-review/suite.json", "ownerId": "media-quality-review", "targetKind": "skill" },
+    { "suiteId": "skill.scene-to-music", "path": "scene-to-music/suite.json", "ownerId": "scene-to-music", "targetKind": "skill" },
+    { "suiteId": "skill.script-generation", "path": "script-generation/suite.json", "ownerId": "script-generation", "targetKind": "skill" },
+    { "suiteId": "skill.script-to-timeline", "path": "script-to-timeline/suite.json", "ownerId": "script-to-timeline", "targetKind": "skill" },
+    { "suiteId": "skill.skill-creator", "path": "skill-creator/suite.json", "ownerId": "skill-creator", "targetKind": "skill" },
+    { "suiteId": "skill.storyboard", "path": "storyboard/suite.json", "ownerId": "storyboard", "targetKind": "skill" },
+    { "suiteId": "skill.subtitle-assistant", "path": "subtitle-assistant/suite.json", "ownerId": "subtitle-assistant", "targetKind": "skill" },
+    { "suiteId": "skill.video-editing", "path": "video-editing/suite.json", "ownerId": "video-editing", "targetKind": "skill" },
+    { "suiteId": "skill.video", "path": "video/suite.json", "ownerId": "video", "targetKind": "skill" }
+  ]
+}

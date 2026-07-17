@@ -1,0 +1,27 @@
+import type { MessageBundle } from '@neko/shared';
+
+export const common = {
+  'common.cancel': 'Cancel',
+  'common.confirm': 'Confirm',
+  'common.save': 'Save',
+  'common.delete': 'Delete',
+  'common.edit': 'Edit',
+  'common.add': 'Add',
+  'common.remove': 'Remove',
+  'common.enable': 'Enable',
+  'common.disable': 'Disable',
+  'common.enabled': 'Enabled',
+  'common.disabled': 'Disabled',
+  'common.loading': 'Loading...',
+  'common.error': 'Error',
+  'common.success': 'Success',
+  'common.close': 'Close',
+  'common.view': 'View',
+  'common.copy': 'Copy',
+  'common.test': 'Test',
+  'common.testing': 'Testing...',
+  'common.connected': 'Connected',
+  'common.failed': 'Failed',
+  'common.optional': 'optional',
+  'common.all': 'All',
+} as const satisfies MessageBundle;

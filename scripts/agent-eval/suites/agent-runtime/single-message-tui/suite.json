@@ -1,0 +1,73 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "agent-runtime.single-message-tui",
+  "owner": { "kind": "agent-runtime", "id": "tui-session-runtime" },
+  "target": {
+    "kind": "runtime",
+    "id": "single-message-tui",
+    "contractHash": "sha256:1e11c111ef35c7c00037d037bdd463d8fab634fe3a66e1711f450b08a94b1227"
+  },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [
+    {
+      "id": "canonical-default",
+      "settings": {},
+      "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "id": "thinking-0",
+      "settings": { "thinkingBudget": 0 },
+      "configurationHash": "sha256:82a878d0d08ec3a151819cb976bff055754df0ed72be501c66e6188669d98d2c"
+    },
+    {
+      "id": "thinking-128",
+      "settings": { "thinkingBudget": 128 },
+      "configurationHash": "sha256:6c8b7085878d26c94b0e2120f0c6963161b3326c28d7c081ee150e49bb285c07"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "configured-default",
+      "selection": "configured-default",
+      "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    }
+  ],
+  "judgeProfiles": [
+    {
+      "id": "content-quality-judge",
+      "adapter": "openai-chat-completions-v1",
+      "providerId": "openai",
+      "modelId": "gpt-5-mini",
+      "endpointEnv": "NEKO_AGENT_EVAL_JUDGE_ENDPOINT",
+      "apiKeyEnv": "NEKO_AGENT_EVAL_JUDGE_API_KEY",
+      "temperature": 0,
+      "maxTokens": 1800,
+      "timeoutMs": 120000
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "canonical-answer",
+      "file": "cases/canonical-answer.json",
+      "group": "canonical",
+      "visibility": "public"
+    }
+  ],
+  "rubricRefs": ["rubrics/constrained-teaser-answer-quality.json"],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "base-and-skill-fragments",
+  "suiteId": "agent-runtime.prompt-composition",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Run an explicit Skill turn with the canonical base and Skill prompt fragments actually composed.",
+    "canonicalPath": ["TUI Pi runtime assembly", "base prompt fragment", "explicit storyboard activation", "skill.injection fragment", "assistant output"],
+    "forbiddenFallback": ["replaced base prompt", "legacy Skill fragment", "hidden prompt body projection"],
+    "observables": [{ "ref": "prompt-facts", "kind": "runtime-fact", "description": "Secret-free prompt fragment identities, order, sources, versions, and hashes.", "required": true }],
+    "expectedResult": "Facts include the base and canonical storyboard Skill fragments without exposing their content.",
+    "expectedFailure": "Missing base/Skill fragment, legacy fragment, or incomplete composition facts fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "$storyboard 为夜雨车站的一次推门动作给出一个镜头建议。" },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "prompt-facts" },
+    { "id": "pi-runtime", "kind": "pi-runtime", "implementation": "pi-agent-core", "transcriptAuthority": "pi-session", "productMetadataAuthority": "sqlite", "purpose": "agent.main", "workspaceLocatorKind": "virtual", "turnDurability": "durable", "evidenceRef": "prompt-facts" },
+    { "id": "composition", "kind": "prompt-composition", "requiredFragments": [{ "id": "base", "source": "base" }, { "id": "skill:storyboard", "source": "skill.injection" }], "forbiddenFragmentIds": ["skill:comic-to-storyboard"], "evidenceRef": "prompt-facts" },
+    { "id": "answer", "kind": "final-answer", "mode": "non-empty", "evidenceRef": "prompt-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

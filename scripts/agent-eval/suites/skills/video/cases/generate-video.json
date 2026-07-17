@@ -1,0 +1,30 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "generate-video",
+  "suiteId": "skill.video",
+  "caseGroup": "canonical",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Generate one video clip through the builtin video Skill and observe the real task result.",
+    "canonicalPath": ["builtin video Skill", "GenerateVideo", "video_generation task", "task-result observation", "artifact delivery"],
+    "forbiddenFallback": ["timeline editing Tool", "text-only generation claim", "mock video task"],
+    "observables": [{ "ref": "video-facts", "kind": "runtime-fact", "description": "Skill composition, Tool call, task result, and terminal idle facts.", "required": true }],
+    "expectedResult": "The video Skill calls GenerateVideo and observes a completed video task before finalization.",
+    "expectedFailure": "Missing Skill/Tool/task result or timeline-editing fallback fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "$video Generate one five-second clip of a blue signal light blinking on an abandoned rainy platform. Wait for the real result and report the delivered artifact reference." },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 600000 }
+  ],
+  "assertions": [
+    { "id": "skill", "kind": "skill", "identity": { "name": "video", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "video", "fingerprint": "sha256:002217de560989501f5e64acd093ea63eda6d5e669e103c57befa8acb169ba7e" }, "status": "injected", "evidenceRef": "video-facts" },
+    { "id": "tool", "kind": "tool-call", "name": "GenerateVideo", "status": "success", "evidenceRef": "video-facts" },
+    { "id": "task", "kind": "task-terminal", "taskType": "video_generation", "status": "completed", "evidenceRef": "video-facts" },
+    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["video-editing", "AddTimelineElement"], "evidenceRef": "video-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 600000, "repetitions": 1 }
+}

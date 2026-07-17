@@ -1,0 +1,68 @@
+{
+  "schema": "neko.agent-eval.ablation-plan.v1",
+  "id": "media-production-plan-mode-pilot",
+  "mode": "configuration",
+  "suiteId": "skill.media-production",
+  "caseId": "animation-production-plan",
+  "baselineVariantId": "ask-mode",
+  "matrix": { "strategy": "focused", "maxVariants": 2 },
+  "repetitions": 3,
+  "comparisonPolicy": {
+    "retainEverySample": true,
+    "correctnessDominates": true,
+    "metrics": [
+      "pass-rate",
+      "hard-gates",
+      "tokens",
+      "cost",
+      "latency-p50",
+      "latency-p95",
+      "iterations",
+      "tool-calls",
+      "tool-success",
+      "retries",
+      "task-count",
+      "task-success"
+    ],
+    "quality": {
+      "kind": "hard-gates-only",
+      "reason": "No content Judge is configured; this pilot compares canonical path correctness and execution efficiency only."
+    }
+  },
+  "variants": [
+    {
+      "id": "ask-mode",
+      "role": "baseline",
+      "kind": "configuration",
+      "description": "Ordinary ask execution mode with the same media-production Skill and screenplay fixture.",
+      "changes": [],
+      "runtimeProfileId": "ask-markdown",
+      "modelProfileId": "configured-default",
+      "expectedConfiguration": {
+        "runtimeProfileId": "ask-markdown",
+        "runtimeConfigurationHash": "sha256:8f78f7165c321ad88c733dbbba2545cb1370d5de3480d33245c1243615e11e3e",
+        "modelProfileId": "configured-default",
+        "modelConfigurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+      },
+      "expectedPath": ["TUI App session owner", "session.create runtimeConfig", "ask executionMode", "builtin media-production Skill", "session.facts configuration"],
+      "forbiddenFallback": ["evaluation-only mode flag", "direct AgentSession runner", "IDC stage", "Plan-to-Apply runtime"]
+    },
+    {
+      "id": "plan-mode",
+      "role": "variant",
+      "kind": "configuration",
+      "description": "User-visible Plan execution mode with the same Skill, model, fixture, and no production side effects.",
+      "changes": ["runtime.execution-mode"],
+      "runtimeProfileId": "plan-markdown",
+      "modelProfileId": "configured-default",
+      "expectedConfiguration": {
+        "runtimeProfileId": "plan-markdown",
+        "runtimeConfigurationHash": "sha256:ee3b5595b40c66f9dfa03dd1c9f84b1088c79a5e159aacc015040592ea304f5e",
+        "modelProfileId": "configured-default",
+        "modelConfigurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+      },
+      "expectedPath": ["TUI App session owner", "session.create runtimeConfig", "plan executionMode", "Plan prompt composition", "builtin media-production Skill", "session.facts configuration"],
+      "forbiddenFallback": ["evaluation-only mode flag", "direct AgentSession runner", "IDC stage", "Plan-to-Apply runtime"]
+    }
+  ]
+}

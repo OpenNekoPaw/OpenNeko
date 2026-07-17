@@ -1,0 +1,5 @@
+# Build artifacts (source is consumed directly via exports: "./src/index.ts")
+*.js
+*.d.ts
+*.js.map
+*.d.ts.map

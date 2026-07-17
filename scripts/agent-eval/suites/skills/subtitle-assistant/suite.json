@@ -1,0 +1,12 @@
+{
+  "schema": "neko.agent-eval.suite.v2", "id": "skill.subtitle-assistant",
+  "owner": { "kind": "skill", "id": "subtitle-assistant" },
+  "target": { "kind": "skill", "identity": { "name": "subtitle-assistant", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "subtitle-assistant", "fingerprint": "sha256:3e75228e094ba0826c023cac9f27102caa3825766614fadfa8e09547f794e739" } },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [{ "id": "markdown", "settings": { "outputFormat": "markdown" }, "configurationHash": "sha256:f949e317ef6531bd9fa4f15b04f4cc038036365bc0a8a8f97dcb229049f0baac" }],
+  "modelProfiles": [{ "id": "configured-default", "selection": "configured-default", "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915" }],
+  "judgeProfiles": [], "fixtures": [{ "id": "empty-workspace", "root": "shared-fixtures/empty-workspace", "source": "repository", "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081", "mutable": true }],
+  "cases": [{ "id": "timed-cjk-captions", "file": "cases/timed-cjk-captions.json", "group": "canonical", "visibility": "public" }],
+  "rubricRefs": [], "baselinePolicy": { "mode": "none" },
+  "reportPolicy": { "rawRetentionDays": 14, "trustedCiRetentionDays": 14, "committedSummary": true, "includeHistory": false }
+}

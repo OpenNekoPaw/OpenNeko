@@ -1,0 +1,15 @@
+{
+  "schema": "neko.agent-eval.suite-index.v2",
+  "ownerKind": "agent-runtime",
+  "entries": [
+    { "suiteId": "agent-runtime.creative-media-workflow", "path": "creative-media-workflow/suite.json", "ownerId": "creative-media-workflow", "targetKind": "workflow" },
+    { "suiteId": "agent-runtime.model-binding", "path": "model-binding/suite.json", "ownerId": "session-model-binding", "targetKind": "model" },
+    { "suiteId": "agent-runtime.perception-routing", "path": "perception-routing/suite.json", "ownerId": "perception-routing", "targetKind": "capability" },
+    { "suiteId": "agent-runtime.prompt-composition", "path": "prompt-composition/suite.json", "ownerId": "prompt-composition", "targetKind": "prompt" },
+    { "suiteId": "agent-runtime.single-message-tui", "path": "single-message-tui/suite.json", "ownerId": "tui-session-runtime", "targetKind": "runtime" },
+    { "suiteId": "agent-runtime.skill-runtime", "path": "skill-runtime/suite.json", "ownerId": "skill-runtime", "targetKind": "runtime" },
+    { "suiteId": "agent-runtime.stream-delivery", "path": "stream-delivery/suite.json", "ownerId": "tui-stream-delivery", "targetKind": "runtime" },
+    { "suiteId": "agent-runtime.tui-markdown", "path": "tui-markdown/suite.json", "ownerId": "tui-markdown-rendering", "targetKind": "runtime" },
+    { "suiteId": "agent-runtime.workflow-controller", "path": "workflow-controller/suite.json", "ownerId": "tui-workflow-controller", "targetKind": "workflow" }
+  ]
+}

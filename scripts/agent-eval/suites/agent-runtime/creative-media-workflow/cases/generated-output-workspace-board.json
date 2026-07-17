@@ -1,0 +1,65 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "generated-output-workspace-board",
+  "suiteId": "agent-runtime.creative-media-workflow",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Generate one image and observe it as a durable workspace file, a stable generated-output resource, and an ordinary node on the canonical Workspace Board.",
+    "canonicalPath": [
+      "TUI App session owner",
+      "GenerateImage",
+      "image_generation task",
+      "neko/generated/image workspace file",
+      "generated-output ResourceRef",
+      "Node Workspace Board projection",
+      "neko/boards/workspace.nkc"
+    ],
+    "forbiddenFallback": [
+      "AssetLibrary identity or import",
+      "multi-Board resolver or active Board selection",
+      "runtime generated-draft projection",
+      "direct Agent turn runner"
+    ],
+    "observables": [
+      {
+        "ref": "workflow-facts",
+        "kind": "runtime-fact",
+        "description": "Tool, task, stable generated resource, Workspace Board projection, no-fallback, and terminal idle facts from the canonical TUI owner.",
+        "required": true
+      },
+      {
+        "ref": "generated-file-facts",
+        "kind": "post-check",
+        "description": "The isolated fixture workspace contains at least one regular file under the canonical generated image directory.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The image task materializes a file under neko/generated/image, publishes a valid stable generated-output ResourceRef, and projects ordinary nodes into the Workspace Board.",
+    "expectedFailure": "Missing file, invalid resource identity, blocked or missing Workspace Board projection, incomplete facts, Asset participation, multi-Board routing, runtime draft participation, or non-idle delivery fails visibly."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "$image Generate one image of a small red paper kite resting on a clean white studio table. Wait for the real result and report the delivered generated-output reference. Do not import it into the Asset library, select another Canvas, or create a runtime draft."
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 300000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "workflow-facts" },
+    { "id": "tool", "kind": "tool-call", "name": "GenerateImage", "status": "success", "evidenceRef": "workflow-facts" },
+    { "id": "task", "kind": "task-terminal", "taskType": "image_generation", "status": "completed", "evidenceRef": "workflow-facts" },
+    { "id": "resource", "kind": "artifact", "artifactKind": "generated-asset", "provenanceSource": "generated-asset", "validatorStatus": "valid", "evidenceRef": "workflow-facts" },
+    { "id": "workspace-board", "kind": "workspace-board-projection", "status": "projected", "targetKind": "workspace", "minNodeIds": 2, "revisionRequired": true, "diagnosticsEmpty": true, "evidenceRef": "workflow-facts" },
+    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "backgroundTasksIdle", "mediaDeliveryIdle", "taskResultObservationIdle", "continuationQueueIdle"], "evidenceRef": "workflow-facts" },
+    { "id": "forbidden-paths", "kind": "no-fallback", "forbiddenRefs": ["ListAssets", "GetAsset", "ImportAsset", "AssetEntity", "CanvasBoardIndexService", "AgentCanvasBoardWorkRuntime", "CanvasGeneratedDraftProjectionService", "GeneratedDraftLayer", "active-canvas", ".neko/generated-drafts"], "evidenceRef": "workflow-facts" }
+  ],
+  "artifactChecks": [
+    { "id": "generated-file", "kind": "directory-files", "evidenceRef": "generated-file-facts", "path": "neko/generated/image", "minFiles": 1 }
+  ],
+  "budget": { "timeoutMs": 300000, "repetitions": 1 }
+}

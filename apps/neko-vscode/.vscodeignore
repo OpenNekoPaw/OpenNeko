@@ -1,0 +1,10 @@
+.vscode/**
+node_modules/**
+.turbo/**
+tests/**
+scripts/**
+*.mjs
+*.map
+*.tsbuildinfo
+coverage/**
+ARCHITECTURE.md

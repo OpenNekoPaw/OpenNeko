@@ -1,0 +1,20 @@
+{
+  "neko.canvas.new.title": "New Canvas",
+  "neko.canvas.outline.title": "Canvas Outline",
+  "neko.asset.import.title": "Import Asset",
+  "neko.addToAssetLibrary.title": "Add to Asset Library",
+  "neko.canvas.previewMedia.title": "Preview Media",
+  "neko.canvas.revealPlaybackWorkspace.title": "Reveal Playback Workspace",
+  "neko.canvas.deleteSelected.title": "Delete Selected",
+  "neko.canvas.escape.title": "Cancel / Deselect",
+  "neko.canvas.selectAll.title": "Select All",
+  "neko.canvas.undo.title": "Undo",
+  "neko.canvas.redo.title": "Redo",
+  "neko.canvas.selectNodeFromOutline.title": "Select Node",
+  "neko.canvas.selectConnectionFromOutline.title": "Select Connection",
+  "neko.canvas.resetZoom.title": "Reset Zoom",
+  "neko.canvas.generateSelected.title": "Generate Selected Shots",
+  "neko.canvas.updateNodeImage.title": "Update Node Image (from Sketch)",
+  "neko.canvas.detachShotFromScene.title": "Remove Shot from Scene",
+  "neko.canvas.deleteNodeFromOutline.title": "Delete Node"
+}

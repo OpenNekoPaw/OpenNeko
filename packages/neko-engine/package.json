@@ -1,0 +1,137 @@
+{
+  "name": "neko-engine",
+  "displayName": "Neko Engine",
+  "description": "Embedded media engine for heavy computation - FFmpeg encoding, media processing",
+  "version": "0.0.1",
+  "publisher": "neko",
+  "l10n": "./l10n",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neko/creative-suite"
+  },
+  "engines": {
+    "vscode": "^1.128.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "video",
+    "engine",
+    "media",
+    "ffmpeg",
+    "processing"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "neko.engine.start",
+        "title": "%neko.engine.start.title%",
+        "category": "Neko Engine",
+        "icon": "$(play)"
+      },
+      {
+        "command": "neko.engine.stop",
+        "title": "%neko.engine.stop.title%",
+        "category": "Neko Engine",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "neko.engine.status",
+        "title": "%neko.engine.status.title%",
+        "category": "Neko Engine",
+        "icon": "$(info)"
+      },
+      {
+        "command": "neko.engine.probe",
+        "title": "%neko.engine.probe.title%",
+        "category": "Neko Engine",
+        "icon": "$(search)"
+      },
+      {
+        "command": "neko.engine.export",
+        "title": "%neko.engine.export.title%",
+        "category": "Neko Engine",
+        "icon": "$(export)"
+      },
+      {
+        "command": "neko.engine.openDocs",
+        "title": "Open API Documentation",
+        "category": "Neko Engine",
+        "icon": "$(book)"
+      }
+    ],
+    "configuration": {
+      "title": "Neko Engine",
+      "properties": {
+        "neko.engine.hwAccel": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "videotoolbox",
+            "nvenc",
+            "vaapi",
+            "qsv",
+            "none"
+          ],
+          "description": "Hardware acceleration mode for encoding/decoding"
+        },
+        "neko.engine.gpuDevice": {
+          "type": "string",
+          "default": "",
+          "description": "Preferred GPU device name (empty for auto-select)"
+        },
+        "neko.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "enumDescriptions": [
+            "All logs including debug traces",
+            "Informational messages, warnings, and errors",
+            "Warnings and errors only",
+            "Critical errors only (recommended for production)"
+          ],
+          "description": "Log level for all OpenNeko extensions (applies to both TypeScript and Rust engine)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "pnpm run build",
+    "build": "pnpm run build:napi && pnpm run build:cli && pnpm run compile",
+    "build:napi": "pnpm --filter @neko-engine/host-napi run build:native",
+    "build:cli": "pnpm --filter @neko-engine/host-cli run build:native",
+    "typecheck": "tsc --noEmit -p packages/extension/tsconfig.json",
+    "compile": "esbuild ./packages/extension/src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:@neko-engine/host-napi --format=cjs --platform=node",
+    "watch": "pnpm run compile -- --watch",
+    "lint": "eslint packages/extension/src --ext ts,tsx",
+    "test:extension": "vitest --config vitest.config.ts --run",
+    "test:scripts": "node --test scripts/*.test.js && pnpm run check:media-closure",
+    "check:media-closure": "node scripts/check-media-closure.mjs",
+    "test": "pnpm run test:extension && pnpm run test:scripts",
+    "setup:ffmpeg": "node scripts/download-ffmpeg.js",
+    "setup": "pnpm run setup:ffmpeg",
+    "bundle:ffmpeg": "node scripts/bundle-ffmpeg.js",
+    "package": "vsce package --no-dependencies",
+    "package:platform": "node scripts/package-platform.js"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.125.0",
+    "esbuild": "^0.19.8",
+    "typescript": "^5.3.2",
+    "vitest": "^4.1.2"
+  }
+}

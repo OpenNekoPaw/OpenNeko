@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
+  <!-- JavaScript: JS letters -->
+  <rect x="1" y="2" width="14" height="12" rx="1.5" stroke="#EAB308" stroke-width="1.2"/>
+  <path d="M6 6.5V10C6 10.8 5.5 11 5 11C4.5 11 4 10.5 4 10" stroke="#EAB308" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M9 7C9 6.5 9.5 6 10.5 6C11.5 6 12 6.5 12 7C12 7.5 11.5 8 10.5 8.5C9.5 9 9 9.5 9 10C9 10.5 9.5 11 10.5 11C11.5 11 12 10.5 12 10" stroke="#EAB308" stroke-width="1.2" stroke-linecap="round"/>
+</svg>

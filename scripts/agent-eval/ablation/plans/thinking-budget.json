@@ -1,0 +1,88 @@
+{
+  "schema": "neko.agent-eval.ablation-plan.v1",
+  "id": "thinking-budget-pilot",
+  "mode": "configuration",
+  "suiteId": "agent-runtime.single-message-tui",
+  "caseId": "canonical-answer",
+  "baselineVariantId": "thinking-0",
+  "matrix": { "strategy": "focused", "maxVariants": 2 },
+  "repetitions": 3,
+  "comparisonPolicy": {
+    "retainEverySample": true,
+    "correctnessDominates": true,
+    "metrics": [
+      "pass-rate",
+      "hard-gates",
+      "tokens",
+      "cost",
+      "latency-p50",
+      "latency-p95",
+      "iterations",
+      "tool-calls",
+      "tool-success",
+      "retries",
+      "task-count",
+      "task-success"
+    ],
+    "quality": {
+      "kind": "scenario-rubric",
+      "rubricRef": "rubrics/constrained-teaser-answer-quality.json"
+    }
+  },
+  "variants": [
+    {
+      "id": "thinking-0",
+      "role": "baseline",
+      "kind": "configuration",
+      "description": "Explicit zero thinking budget through canonical TUI runtime configuration.",
+      "changes": [],
+      "runtimeProfileId": "thinking-0",
+      "modelProfileId": "configured-default",
+      "expectedConfiguration": {
+        "runtimeProfileId": "thinking-0",
+        "runtimeConfigurationHash": "sha256:82a878d0d08ec3a151819cb976bff055754df0ed72be501c66e6188669d98d2c",
+        "modelProfileId": "configured-default",
+        "modelConfigurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+      },
+      "expectedPath": [
+        "TUI App session owner",
+        "session.create runtimeConfig",
+        "AgentSession",
+        "session.facts configuration"
+      ],
+      "forbiddenFallback": [
+        "active session configuration",
+        "default runtime value",
+        "direct AgentSession runner",
+        "__ablation marker"
+      ]
+    },
+    {
+      "id": "thinking-128",
+      "role": "variant",
+      "kind": "configuration",
+      "description": "One attributable thinking budget change through canonical TUI runtime configuration.",
+      "changes": ["runtime.thinking-budget"],
+      "runtimeProfileId": "thinking-128",
+      "modelProfileId": "configured-default",
+      "expectedConfiguration": {
+        "runtimeProfileId": "thinking-128",
+        "runtimeConfigurationHash": "sha256:6c8b7085878d26c94b0e2120f0c6963161b3326c28d7c081ee150e49bb285c07",
+        "modelProfileId": "configured-default",
+        "modelConfigurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+      },
+      "expectedPath": [
+        "TUI App session owner",
+        "session.create runtimeConfig",
+        "AgentSession",
+        "session.facts configuration"
+      ],
+      "forbiddenFallback": [
+        "active session configuration",
+        "default runtime value",
+        "direct AgentSession runner",
+        "__ablation marker"
+      ]
+    }
+  ]
+}

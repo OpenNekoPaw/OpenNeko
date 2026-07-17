@@ -1,0 +1,57 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "skill.evaluation-artifact-author",
+  "owner": { "kind": "skill", "id": "evaluation-artifact-author" },
+  "target": {
+    "kind": "skill",
+    "identity": {
+      "name": "evaluation-artifact-author",
+      "source": "project",
+      "provenance": "workspace",
+      "rootId": "project-agent-skills",
+      "relativePath": "evaluation-artifact-author",
+      "fingerprint": "sha256:8b77edb8f93ddcc69f020a92a5c7936cb8ad066fd671a873b53b37534b9e7bb0"
+    }
+  },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [
+    {
+      "id": "canonical-default",
+      "settings": {},
+      "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "configured-default",
+      "selection": "configured-default",
+      "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    }
+  ],
+  "judgeProfiles": [],
+  "fixtures": [
+    {
+      "id": "skill-artifact-workspace",
+      "root": "shared-fixtures/skill-artifact-workspace",
+      "source": "repository",
+      "digest": "sha256:3a06d6986ea5a28c0842c557310da3fcc212fb12a29c1700014ba75186b6edd0",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "create-portable-skill-artifact",
+      "file": "cases/create-portable-skill-artifact.json",
+      "group": "artifact",
+      "visibility": "public"
+    }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
+}

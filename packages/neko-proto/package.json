@@ -1,0 +1,7 @@
+{
+  "name": "@neko/proto",
+  "description": "Protocol Buffer IDL definitions — single source of truth for OpenNeko type contracts",
+  "private": true,
+  "version": "0.0.1",
+  "license": "AGPL-3.0-or-later"
+}

@@ -1,0 +1,18 @@
+{
+  "schema": "neko.agent-eval.scenario.v2", "id": "dialogue-music-mix-plan", "suiteId": "skill.audio-mixing", "caseGroup": "canonical", "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Create a concrete dialogue/music mix plan without claiming a timeline mutation.",
+    "canonicalPath": ["builtin audio-mixing", "level diagnosis", "ducking and loudness targets", "reviewable mix plan"],
+    "forbiddenFallback": ["scene-to-music generation", "unverified timeline mutation"],
+    "observables": [{ "ref": "skill-facts", "kind": "runtime-fact", "description": "Audio-mixing Host identity and structured plan output.", "required": true }],
+    "expectedResult": "The plan separates dialogue and music levels and includes ducking, loudness, and validation.",
+    "expectedFailure": "Missing Skill injection, concrete levels, or false mutation claim fails."
+  },
+  "fixtureRefs": ["empty-workspace"], "runtimeProfileId": "markdown", "modelProfileIds": ["configured-default"],
+  "steps": [{ "id": "submit", "kind": "submit", "prompt": "$audio-mixing 为一段对白加背景音乐制定混音计划，不执行工具。必须写明对白电平、音乐电平、ducking、目标 LUFS、峰值余量和验收检查。" }, { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "skill-facts" },
+    { "id": "skill", "kind": "skill", "identity": { "name": "audio-mixing", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "audio-mixing", "fingerprint": "sha256:0fac8c4ae2aad5defe316d845f998d1a9254ba674b9bfbbe3556d6cac39c8965" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "output", "kind": "structured-output", "format": "markdown", "requiredFields": ["对白", "音乐", "ducking", "LUFS", "峰值", "验收"], "locale": "zh-cn", "evidenceRef": "skill-facts" }
+  ], "artifactChecks": [], "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

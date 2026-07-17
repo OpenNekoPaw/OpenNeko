@@ -1,0 +1,34 @@
+{
+  "schema": "neko.agent-eval.rubric.v2",
+  "id": "constrained-teaser-answer-quality",
+  "domain": "agent-runtime",
+  "version": "v1",
+  "minimumScore": 3.5,
+  "maximumUncertainty": 0.35,
+  "criteria": [
+    {
+      "id": "constraint-accuracy",
+      "description": "Score the semantic correctness of the proposed sequence: it uses A, B, C, and D exactly once in the valid A-B-C-D order, preserves 8, 6, 10, and 6 seconds, and verifies a 30-second total without contradiction.",
+      "weight": 0.45,
+      "evidenceRefs": ["turn-facts"]
+    },
+    {
+      "id": "pacing-reasoning",
+      "description": "Score whether the explanation connects the setup, clue, pursuit, and reveal progression to a credible pacing rationale rather than merely restating the order.",
+      "weight": 0.3,
+      "evidenceRefs": ["turn-facts"]
+    },
+    {
+      "id": "request-relevance",
+      "description": "Score whether the answer directly resolves every requested content decision without inventing replacement shots, changed durations, unsupported constraints, or unrelated advice.",
+      "weight": 0.15,
+      "evidenceRefs": ["turn-facts"]
+    },
+    {
+      "id": "communicative-clarity",
+      "description": "Score whether the recommendation is concise and unambiguous enough for an editor to apply without rereading; assess meaning and usability rather than punctuation or heading format.",
+      "weight": 0.1,
+      "evidenceRefs": ["turn-facts"]
+    }
+  ]
+}

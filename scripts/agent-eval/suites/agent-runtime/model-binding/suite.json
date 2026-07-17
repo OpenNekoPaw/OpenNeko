@@ -1,0 +1,15 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "agent-runtime.model-binding",
+  "owner": { "kind": "agent-runtime", "id": "session-model-binding" },
+  "target": { "kind": "model", "id": "chat-model-binding", "contractHash": "sha256:5e9c7a8e3d6ffaf067c21789a19103102548d17fe8fe6c1ddaf10d1c8601b70a" },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [{ "id": "canonical-default", "settings": {}, "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a" }],
+  "modelProfiles": [{ "id": "nekoapi-gpt-5.5", "selection": "explicit", "chat": { "providerId": "nekoapi-chat", "modelId": "gpt-5.5" }, "configurationHash": "sha256:930c70d9deb59dd74a0b97d009020e5aae62f04593bc76090c20986097c766fe" }],
+  "judgeProfiles": [],
+  "fixtures": [{ "id": "empty-workspace", "root": "shared-fixtures/empty-workspace", "source": "repository", "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081", "mutable": true }],
+  "cases": [{ "id": "explicit-chat-model", "file": "cases/explicit-chat-model.json", "group": "canonical", "visibility": "public" }],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": { "rawRetentionDays": 14, "trustedCiRetentionDays": 14, "committedSummary": true, "includeHistory": false }
+}

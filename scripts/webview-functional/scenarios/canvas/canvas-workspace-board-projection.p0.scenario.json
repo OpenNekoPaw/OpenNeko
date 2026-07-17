@@ -1,0 +1,224 @@
+{
+  "schemaVersion": "neko.webview-functional.scenario.v1",
+  "id": "canvas.workspace-board-projection.p0",
+  "title": "Workspace Board persists typed generated output and preserves user placement on replay",
+  "ownerPackage": "neko-canvas",
+  "tier": "p0",
+  "host": "vscode",
+  "platforms": ["darwin", "linux"],
+  "fixture": {
+    "workspace": "scripts/webview-functional/fixtures/canvas-workspace-board",
+    "digestFiles": [
+      "neko/boards/workspace.nkc",
+      "neko/generated/image/station.svg"
+    ]
+  },
+  "extensions": [
+    {
+      "id": "neko.neko-canvas",
+      "developmentPath": "packages/neko-canvas"
+    },
+    {
+      "id": "neko.neko-engine",
+      "developmentPath": "packages/neko-engine"
+    },
+    {
+      "id": "neko.neko-tools",
+      "developmentPath": "packages/neko-tools"
+    },
+    {
+      "id": "neko.neko-preview",
+      "developmentPath": "packages/neko-preview"
+    }
+  ],
+  "prerequisites": [
+    {
+      "kind": "package-script",
+      "package": "neko-canvas",
+      "script": "compile"
+    },
+    {
+      "kind": "package-script",
+      "package": "neko-engine",
+      "script": "compile"
+    },
+    {
+      "kind": "package-script",
+      "package": "neko-tools",
+      "script": "compile"
+    },
+    {
+      "kind": "package-script",
+      "package": "neko-preview",
+      "script": "compile"
+    }
+  ],
+  "activation": {
+    "kind": "open-custom-editor",
+    "path": "neko/boards/workspace.nkc",
+    "viewType": "neko.canvasEditor"
+  },
+  "target": {
+    "type": "iframe",
+    "extensionId": "neko.neko-canvas",
+    "viewType": "neko.canvasEditor"
+  },
+  "steps": [
+    {
+      "id": "project-generated-image",
+      "operation": "host-command",
+      "command": "neko.canvas.debug.projectWorkspaceBoardGeneratedImage",
+      "args": [
+        {
+          "assetId": "functional-generated-image",
+          "relativePath": "neko/generated/image/station.svg",
+          "title": "Station concept",
+          "mimeType": "image/svg+xml",
+          "taskId": "functional-workspace-board-task",
+          "generatedAt": "2026-07-15T00:00:00.000Z",
+          "width": 320,
+          "height": 180
+        }
+      ]
+    },
+    {
+      "id": "reopen-after-projection",
+      "operation": "close-reopen",
+      "path": "neko/boards/workspace.nkc",
+      "viewType": "neko.canvasEditor"
+    },
+    {
+      "id": "wait-generated-node",
+      "operation": "wait-visible",
+      "selector": {
+        "css": "[data-node-id=\"workspace-artifact-1kmlgi0\"]",
+        "auditedSelectorReason": "The Workspace Board exposes the deterministic provenance-derived node identity persisted in the ordinary .nkc model."
+      },
+      "timeoutMs": 60000
+    },
+    {
+      "id": "move-generated-node",
+      "operation": "drag",
+      "selector": {
+        "css": "[data-node-id=\"workspace-artifact-1kmlgi0\"] .node-header",
+        "auditedSelectorReason": "The ordinary Media node header is the visible user-owned placement affordance."
+      },
+      "delta": {
+        "x": 80,
+        "y": 40
+      }
+    },
+    {
+      "id": "save-user-placement",
+      "operation": "save"
+    },
+    {
+      "id": "replay-same-projection",
+      "operation": "host-command",
+      "command": "neko.canvas.debug.projectWorkspaceBoardGeneratedImage",
+      "args": [
+        {
+          "assetId": "functional-generated-image",
+          "relativePath": "neko/generated/image/station.svg",
+          "title": "Station concept",
+          "mimeType": "image/svg+xml",
+          "taskId": "functional-workspace-board-task",
+          "generatedAt": "2026-07-15T00:00:00.000Z",
+          "width": 320,
+          "height": 180
+        }
+      ]
+    },
+    {
+      "id": "reopen-after-replay",
+      "operation": "close-reopen",
+      "path": "neko/boards/workspace.nkc",
+      "viewType": "neko.canvasEditor"
+    },
+    {
+      "id": "wait-generated-node-after-replay",
+      "operation": "wait-visible",
+      "selector": {
+        "css": "[data-node-id=\"workspace-artifact-1kmlgi0\"]",
+        "auditedSelectorReason": "Reopening proves the same ordinary persisted node survives idempotent projection replay."
+      },
+      "timeoutMs": 60000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "generated-source-remains-durable",
+      "kind": "file-text",
+      "path": "neko/generated/image/station.svg",
+      "expected": {
+        "contains": "<svg"
+      }
+    },
+    {
+      "id": "workspace-inbox-is-ordinary-group",
+      "kind": "file-json",
+      "path": "neko/boards/workspace.nkc",
+      "jsonPath": "nodes.0.type",
+      "expected": "group"
+    },
+    {
+      "id": "projection-replay-created-one-child",
+      "kind": "file-json",
+      "path": "neko/boards/workspace.nkc",
+      "jsonPath": "nodes.0.container.childIds",
+      "expected": ["workspace-artifact-1kmlgi0"]
+    },
+    {
+      "id": "generated-node-is-ordinary-media",
+      "kind": "file-json",
+      "path": "neko/boards/workspace.nkc",
+      "jsonPath": "nodes.1.type",
+      "expected": "media"
+    },
+    {
+      "id": "stable-generated-resource-is-persisted",
+      "kind": "file-json",
+      "path": "neko/boards/workspace.nkc",
+      "jsonPath": "nodes.1.data.resourceRef.source.generatedAssetId",
+      "expected": "functional-generated-image"
+    },
+    {
+      "id": "user-placement-survives-replay",
+      "kind": "file-json",
+      "path": "neko/boards/workspace.nkc",
+      "jsonPath": "nodes.1.position",
+      "expected": {
+        "x": 152,
+        "y": 152
+      }
+    },
+    {
+      "id": "custom-editor-open-observed",
+      "kind": "observation",
+      "event": "host.open-custom-editor",
+      "source": "vscode-functional-controller"
+    },
+    {
+      "id": "no-runtime-errors",
+      "kind": "runtime-errors",
+      "expected": []
+    }
+  ],
+  "errorPolicy": {
+    "knownBenignWarningIds": [
+      "vscode-webview-local-network-access",
+      "vscode-webview-sandbox-same-origin-scripts",
+      "vscode-development-extension-marketplace-404"
+    ],
+    "expectedDiagnosticCodes": [],
+    "failOnConsoleWarning": true
+  },
+  "evidence": {
+    "domSnapshot": true,
+    "screenshot": false,
+    "logs": true,
+    "sideEffects": true
+  },
+  "timeoutMs": 60000,
+  "tags": ["canvas", "workspace-board", "generated-output", "projection", "save", "reopen"]
+}

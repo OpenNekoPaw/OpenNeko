@@ -1,0 +1,39 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "create-portable-skill",
+  "suiteId": "skill.skill-creator",
+  "caseGroup": "artifact",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Use the builtin skill-creator guidance and native authoring capability to create one portable project Skill.",
+    "canonicalPath": ["builtin Skill Host identity", "prompt composition", "CreateSkill", "project .agents/skills", "contained validator"],
+    "forbiddenFallback": ["ordinary file write", "legacy .neko/skills", "Market package identity"],
+    "observables": [
+      { "ref": "skill-facts", "kind": "runtime-fact", "description": "Builtin skill-creator trigger and injected composition facts.", "required": true },
+      { "ref": "tool-facts", "kind": "runtime-fact", "description": "Native CreateSkill call and observed success result.", "required": true },
+      { "ref": "artifact-file", "kind": "post-check", "description": "Exact portable SKILL.md in the project canonical root.", "required": true },
+      { "ref": "no-fallback", "kind": "runtime-fact", "description": "No legacy or ordinary write path participated.", "required": true }
+    ],
+    "expectedResult": "skill-creator is injected and CreateSkill creates the exact validated project Skill file.",
+    "expectedFailure": "Missing Skill composition, Tool result, file digest, or a fallback reference fails."
+  },
+  "fixtureRefs": ["skill-creator-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "$skill-creator Follow the portable authoring guidance, then call CreateSkill exactly once with target project and skill { name: eval-v2-created-skill, description: Evaluation v2 created portable Skill., body: # Evaluation V2 Created Skill\\n\\nUse canonical portable Skill guidance. }. Do not use an ordinary write capability or .neko/skills." },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "skill", "kind": "skill", "identity": { "name": "skill-creator", "source": "builtin", "provenance": "builtin", "rootId": "builtin-skills", "relativePath": "skill-creator", "fingerprint": "sha256:6bf26dda3f4ce05288a597f57195f7af1cf51984da89fe64813deb18d5bcf9a6" }, "status": "injected", "evidenceRef": "skill-facts" },
+    { "id": "tool", "kind": "tool-call", "name": "CreateSkill", "status": "success", "evidenceRef": "tool-facts" },
+    { "id": "fallback", "kind": "no-fallback", "forbiddenRefs": ["Write", "LegacyCreateSkill", ".neko/skills"], "evidenceRef": "no-fallback" }
+  ],
+  "artifactChecks": [
+    { "id": "skill-file", "kind": "file", "evidenceRef": "artifact-file", "path": ".agents/skills/eval-v2-created-skill/SKILL.md", "digest": "sha256:6b794d69dd69b3cf1dda4e1551840d3f389329307108a044e250c310bea73244", "validatorId": "utf8-text-v1" },
+    { "id": "canonical-manifest-absent", "kind": "file-absent", "evidenceRef": "artifact-file", "path": ".agents/skills/eval-v2-created-skill/manifest.json" },
+    { "id": "legacy-skill-unchanged", "kind": "file", "evidenceRef": "no-fallback", "path": ".neko/skills/eval-v2-created-skill/SKILL.md", "digest": "sha256:35c97e071d8a6518f078cbdea7a2df96688c4eb28ab5e599473fb268a87fa7a2", "validatorId": "utf8-text-v1" },
+    { "id": "legacy-manifest-unchanged", "kind": "file", "evidenceRef": "no-fallback", "path": ".neko/skills/eval-v2-created-skill/manifest.json", "digest": "sha256:9e88c1be8aaaa7d7a9d2269a91b88a8a061d63c8f4d5aa9aaaaaa5db4c5600a7", "validatorId": "utf8-text-v1" }
+  ],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

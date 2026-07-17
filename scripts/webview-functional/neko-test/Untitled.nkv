@@ -1,0 +1,48 @@
+{
+  "version": "2.0",
+  "name": "Untitled",
+  "resolution": {
+    "width": 1920,
+    "height": 1080
+  },
+  "fps": 30,
+  "tracks": [
+    {
+      "id": "1784181542731-qsnhzdtwc",
+      "name": "Main Track",
+      "type": "media",
+      "elements": [],
+      "muted": false,
+      "locked": false,
+      "hidden": false,
+      "isMain": true
+    }
+  ],
+  "defaults": {
+    "text": {
+      "fontSize": 48,
+      "fontFamily": "Arial",
+      "color": "#ffffff",
+      "backgroundColor": "transparent",
+      "textAlign": "center",
+      "fontWeight": "normal",
+      "fontStyle": "normal",
+      "textDecoration": "none"
+    },
+    "transform": {
+      "x": 0.5,
+      "y": 0.5,
+      "scaleX": 1,
+      "scaleY": 1,
+      "rotation": 0,
+      "opacity": 1
+    },
+    "audio": {
+      "volume": 1,
+      "pan": 0,
+      "fadeIn": 0,
+      "fadeOut": 0,
+      "gain": 0
+    }
+  }
+}

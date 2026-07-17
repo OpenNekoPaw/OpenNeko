@@ -1,0 +1,47 @@
+import type { MessageBundle } from '@neko/shared';
+
+export const mask = {
+  'mask.add': '添加蒙版',
+  'mask.remove': '删除蒙版',
+  'mask.noMasks': '未应用蒙版',
+  'mask.feather': '羽化',
+  'mask.expansion': '扩展',
+  'mask.opacity': '不透明度',
+  'mask.inverted': '反转',
+  'mask.shape.rectangle': '矩形',
+  'mask.shape.ellipse': '椭圆',
+  'mask.shape.polygon': '多边形',
+  'mask.shape.bezier': '贝塞尔',
+
+  'mask.blendMode.label': '混合模式',
+  'mask.blendMode.add': '添加',
+  'mask.blendMode.subtract': '减去',
+  'mask.blendMode.intersect': '相交',
+  'mask.blendMode.difference': '差集',
+
+  'masks.title': '蒙版',
+  'masks.addMask': '添加蒙版',
+  'masks.removeMask': '删除蒙版',
+  'masks.noMasks': '未应用蒙版',
+  'masks.enabled': '已启用',
+  'masks.inverted': '反转',
+  'masks.shape.rectangle': '矩形',
+  'masks.shape.ellipse': '椭圆',
+  'masks.shape.polygon': '多边形',
+  'masks.shape.bezier': '贝塞尔',
+
+  'masks.properties.feather': '羽化',
+  'masks.properties.expansion': '扩展',
+  'masks.properties.opacity': '不透明度',
+  'masks.properties.centerX': '中心 X',
+  'masks.properties.centerY': '中心 Y',
+  'masks.properties.width': '宽度',
+  'masks.properties.height': '高度',
+  'masks.properties.rotation': '旋转',
+  'masks.properties.cornerRadius': '圆角',
+
+  'masks.blendMode.add': '添加',
+  'masks.blendMode.subtract': '减去',
+  'masks.blendMode.intersect': '相交',
+  'masks.blendMode.difference': '差集',
+} as const satisfies MessageBundle;

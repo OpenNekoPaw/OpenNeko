@@ -1,0 +1,17 @@
+{
+  "name": "@neko-cut/extension",
+  "private": true,
+  "version": "0.0.1",
+  "description": "NekoCut extension source code",
+  "type": "module",
+  "exports": {
+    ".": "./src/extension.ts",
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@neko/asset": "workspace:*",
+    "@neko/neko-client": "workspace:*",
+    "@neko/shared": "workspace:*"
+  },
+  "license": "AGPL-3.0-or-later"
+}

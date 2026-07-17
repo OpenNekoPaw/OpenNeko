@@ -1,0 +1,36 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "tool-text-order-final-answer",
+  "suiteId": "agent-runtime.stream-delivery",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Stream text, execute one Tool, continue streaming a table, and preserve the final answer markers.",
+    "canonicalPath": ["TUI input queue", "Pi Agent event stream", "Tool call", "Timeline projector", "Markdown session finalize"],
+    "forbiddenFallback": ["textual Tool imitation", "second Markdown renderer", "result-only marker match"],
+    "observables": [{ "ref": "stream-facts", "kind": "runtime-fact", "description": "Timeline order, Tool result, Markdown path, structured table, and final answer facts.", "required": true }],
+    "expectedResult": "Opening text, Tool result, closing text, table, and final marker preserve canonical order and delivery.",
+    "expectedFailure": "Missing Tool execution, reordered Timeline rows, invalid table, incomplete Markdown path, or changed marker fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    { "id": "submit", "kind": "submit", "prompt": "严格按以下顺序完成：先单独输出 STREAM_OPENING_MARKER；调用 GetContext 一次且不调用其他工具；工具结果后单独输出 STREAM_FINAL_MARKER；再输出至少 12 行的 GFM 表格，列名为 序号、镜头、动作、时长；最后单独输出 UNCHANGED_FINAL_ANSWER_MARKER。" },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "stream-facts" },
+    { "id": "pi-runtime", "kind": "pi-runtime", "implementation": "pi-agent-core", "transcriptAuthority": "pi-session", "productMetadataAuthority": "sqlite", "purpose": "agent.main", "workspaceLocatorKind": "virtual", "turnDurability": "durable", "evidenceRef": "stream-facts" },
+    { "id": "tool", "kind": "tool-call", "name": "GetContext", "status": "success", "evidenceRef": "stream-facts" },
+    { "id": "timeline", "kind": "process-order", "events": [
+      { "kind": "timeline", "eventKind": "assistant_text", "contentContains": "STREAM_OPENING_MARKER" },
+      { "kind": "timeline", "eventKind": "tool", "toolName": "GetContext", "status": "success" },
+      { "kind": "timeline", "eventKind": "assistant_text", "contentContains": "STREAM_FINAL_MARKER" }
+    ], "evidenceRef": "stream-facts" },
+    { "id": "table", "kind": "structured-output", "format": "table", "requiredFields": ["序号", "镜头", "动作", "时长"], "requiredReferences": ["UNCHANGED_FINAL_ANSWER_MARKER"], "locale": "zh-cn", "evidenceRef": "stream-facts" },
+    { "id": "markdown", "kind": "markdown-path", "requiredEvents": ["session-created", "source-updated", "document-projected", "layout-created", "session-finalized"], "evidenceRef": "stream-facts" }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

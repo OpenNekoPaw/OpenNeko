@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Neko Agent Evaluation'
+  short_description: 'Evaluate and optimize Neko Agent behavior'
+  default_prompt: 'Use $neko-agent-evaluation to plan, run, analyze, or optimize a focused evaluation for this Agent change.'

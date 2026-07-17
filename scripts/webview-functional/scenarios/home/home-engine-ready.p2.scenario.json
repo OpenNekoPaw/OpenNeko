@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "neko.webview-functional.scenario.v1",
+  "id": "home.engine-ready.p2",
+  "title": "Home projects the real Engine Core ready state",
+  "ownerPackage": "@neko/app-home",
+  "tier": "p2",
+  "host": "electron",
+  "platforms": ["darwin", "linux"],
+  "fixture": {
+    "workspace": "scripts/webview-functional/fixtures/home",
+    "digestFiles": ["neko/assets/library.json"]
+  },
+  "extensions": [],
+  "prerequisites": [
+    { "kind": "package-script", "package": "@neko/app-home", "script": "build" },
+    { "kind": "package-script", "package": "neko-engine", "script": "compile" },
+    { "kind": "engine", "state": "ready" }
+  ],
+  "activation": { "kind": "launch" },
+  "target": { "type": "page", "titleIncludes": "OpenNeko Home" },
+  "steps": [
+    {
+      "id": "wait-home-engine-ready",
+      "operation": "wait-visible",
+      "selector": {
+        "css": ".engine-state--ready",
+        "auditedSelectorReason": "The persistent Home top bar projects the typed health response from the real Engine process."
+      },
+      "timeoutMs": 60000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "ready-diagnostic-visible",
+      "kind": "text",
+      "selector": {
+        "css": ".engine-diagnostic",
+        "auditedSelectorReason": "The overview diagnostic is the user-visible projection of Engine Core readiness."
+      },
+      "expected": { "contains": "ready" }
+    },
+    {
+      "id": "real-engine-health-observed",
+      "kind": "engine-result",
+      "event": "engine.health.ready",
+      "source": "webview-functional-prerequisite"
+    },
+    {
+      "id": "home-apphost-ready",
+      "kind": "lifecycle",
+      "event": "home.apphost.ready",
+      "source": "home-functional-host"
+    },
+    { "id": "no-runtime-errors", "kind": "runtime-errors", "expected": [] }
+  ],
+  "errorPolicy": {
+    "knownBenignWarningIds": [],
+    "expectedDiagnosticCodes": [],
+    "failOnConsoleWarning": true
+  },
+  "evidence": { "domSnapshot": true, "screenshot": true, "logs": true, "sideEffects": true },
+  "timeoutMs": 60000,
+  "tags": ["home", "electron", "engine", "ready", "p2"]
+}
