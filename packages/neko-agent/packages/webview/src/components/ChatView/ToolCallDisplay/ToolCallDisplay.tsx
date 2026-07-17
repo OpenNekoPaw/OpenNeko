@@ -128,7 +128,7 @@ function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: Too
           <div className="agent-inline-header flex items-center gap-2 px-3 py-2">
             <WarningIcon className="h-4 w-4 shrink-0 text-[var(--agent-warning-fg)]" />
             <span className="text-[12px] font-medium text-[var(--agent-fg)]">
-              Tool Confirmation Required
+              {t('toolCalls.awaitingApproval')}
             </span>
           </div>
           <div className="px-3 py-2 text-[var(--agent-fg)]">
@@ -161,7 +161,7 @@ function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: Too
                   <ChevronIcon
                     className={`h-3 w-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                   />
-                  {isExpanded ? 'Hide details' : 'Show details'}
+                  {t('toolCalls.args')}
                 </button>
                 {isExpanded && (
                   <div className="mt-1 border-l border-[var(--agent-divider)] pl-2">
@@ -177,18 +177,14 @@ function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: Too
                 onClick={() => handleConfirm(true)}
                 className="vscode-button px-3 py-1 text-[11px] leading-4"
               >
-                Allow
+                {t('toolCalls.approve')}
               </button>
               <button
                 onClick={() => handleConfirm(false)}
                 className="vscode-button vscode-button-secondary px-3 py-1 text-[11px] leading-4"
               >
-                Deny
+                {t('toolCalls.deny')}
               </button>
-              <span className="flex-1" />
-              <span className="text-[10px] text-[var(--agent-fg-secondary)]">
-                Press Enter to allow, Esc to deny
-              </span>
             </div>
           </div>
         </div>

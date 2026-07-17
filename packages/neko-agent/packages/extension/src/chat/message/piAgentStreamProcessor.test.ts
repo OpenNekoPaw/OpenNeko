@@ -1,10 +1,67 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PiProductAgentEvent } from '@neko/agent/pi';
+import { createConversationProjectionStore } from '@neko/agent/runtime';
 
 import { createPiAgentStreamSession } from './piAgentStreamProcessor';
 
 describe('Pi Agent Webview stream projection', () => {
+  it('keeps ask-mode confirmation on the Timeline when Webview ToolCall delivery is delayed', async () => {
+    const projection = createConversationProjectionStore('conversation-1');
+    const webviewMessages: unknown[] = [];
+    let releaseToolCall: (() => void) | undefined;
+    const toolCallDelivery = new Promise<void>((resolve) => {
+      releaseToolCall = resolve;
+    });
+    const session = createPiAgentStreamSession({
+      webview: { postMessage: async (message: unknown) => webviewMessages.push(message) } as never,
+      conversationId: 'conversation-1',
+      messageId: 'message-1',
+      projection,
+      onPhaseChange: vi.fn(),
+      projectMessage: async (message) => {
+        if (message.type === 'toolCall') await toolCallDelivery;
+        return message;
+      },
+      isActive: () => true,
+    });
+
+    await emit(session.events, { type: 'turn.started' });
+    const toolStarted = emit(session.events, {
+      type: 'tool.started',
+      toolCallId: 'tool-1',
+      toolName: 'GenerateImage',
+      args: { prompt: 'cat' },
+    });
+    await Promise.resolve();
+    await emit(session.events, {
+      type: 'confirmation.required',
+      confirmationId: 'confirmation:tool-1',
+      toolCallId: 'tool-1',
+      toolName: 'GenerateImage',
+      summary: 'Run GenerateImage with prompt',
+    });
+
+    const toolItem = projection
+      .snapshot()
+      .turns[0]?.items.find((item) => item.kind === 'tool_call');
+    expect(toolItem?.payload.toolCall).toMatchObject({
+      id: 'tool-1',
+      pendingConfirmation: true,
+      confirmation: {
+        action: 'GenerateImage',
+        description: 'Run GenerateImage with prompt',
+        details: { confirmationId: 'confirmation:tool-1' },
+      },
+    });
+
+    releaseToolCall?.();
+    await toolStarted;
+    expect(webviewMessages.map((message) => (message as { type?: string }).type)).toEqual([
+      'toolCall',
+    ]);
+  });
+
   it('projects Pi identity, text, tool result, confirmation, and terminal state directly', async () => {
     const projectionUpdates: unknown[] = [];
     const webviewMessages: unknown[] = [];
@@ -72,11 +129,22 @@ describe('Pi Agent Webview stream projection', () => {
         turnId: 'turn-1',
       }),
     );
-    expect(webviewMessages).toContainEqual(
+    expect(projectionUpdates).toContainEqual(
       expect.objectContaining({
-        type: 'toolConfirmation',
-        toolCallId: 'tool-1',
-        details: { confirmationId: 'confirmation:tool-1' },
+        operations: [
+          expect.objectContaining({
+            operation: 'upsert',
+            item: expect.objectContaining({
+              kind: 'tool_call',
+              payload: {
+                toolCall: expect.objectContaining({
+                  id: 'tool-1',
+                  pendingConfirmation: true,
+                }),
+              },
+            }),
+          }),
+        ],
       }),
     );
     expect(webviewMessages.at(-1)).toEqual(

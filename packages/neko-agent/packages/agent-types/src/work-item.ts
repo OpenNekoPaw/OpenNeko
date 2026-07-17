@@ -36,6 +36,8 @@ export interface AgentBackgroundTask {
     assets?: RenderableGeneratedAsset[];
   };
   error?: string;
+  /** Whether an explicit new submission is safe after failure. */
+  retryable?: boolean;
   steps?: AgentWorkItemTaskStep[];
   currentStepId?: string;
   eta?: number;
@@ -110,6 +112,7 @@ export interface AgentMediaTaskOutput {
 export interface AgentMediaTaskError {
   code: string;
   message: string;
+  retryable?: boolean;
 }
 
 export type AgentMediaTaskResult = NonNullable<AgentBackgroundTask['result']>;

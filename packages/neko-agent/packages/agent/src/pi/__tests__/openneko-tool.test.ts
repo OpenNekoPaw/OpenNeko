@@ -63,7 +63,7 @@ describe('OpenNeko tool projection to Pi', () => {
   });
 
   it('preserves the strict JSON schema and localized description', () => {
-    const projected = projectOpenNekoTool(tool(), {
+    const projected = projectOpenNekoTool(tool({ isReadOnly: true, requiresConfirmation: false }), {
       locale: 'zh',
       modelPurpose: 'image.understand',
     });
@@ -80,6 +80,8 @@ describe('OpenNeko tool projection to Pi', () => {
     });
     expect(projected.modelPurpose).toBe('image.understand');
     expect(projected.requirements).toEqual({ workspaceTrust: true });
+    expect(projected.isReadOnly).toBe(true);
+    expect(projected.requiresConfirmation).toBe(false);
   });
 
   it('executes through the owning Tool with explicit identity and model facts', async () => {

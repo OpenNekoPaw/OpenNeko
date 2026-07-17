@@ -12,6 +12,7 @@ import {
   projectOpenNekoTools,
   resolveOpenNekoToolModelPurpose,
   registerOpenNekoPiProvider,
+  resolvePiToolPermissionAction,
   resolveAgentPurposeModelUse,
   resolveAgentModelPolicy,
   type AgentModelBindingMap,
@@ -34,6 +35,7 @@ import {
   type SkillHostRecord,
   type SkillSourceRoot,
 } from '@neko/agent/pi';
+import { PiToolConfirmationRegistry } from './piToolConfirmationRegistry';
 
 type PiThinkingLevel = NonNullable<AgentModelPolicy['agent.main']['parameters']['thinkingLevel']>;
 type VSCodePiToolPurpose = Extract<
@@ -127,11 +129,6 @@ export interface ExecuteVSCodePiSkillTurnInput extends ExecuteVSCodePiTurnInput 
 
 export interface VSCodePiConversationCatalogItem extends PiConversationCatalogRecord {
   readonly messageCount: number;
-}
-
-interface PendingConfirmation {
-  resolve(allowed: boolean): void;
-  cancel(): void;
 }
 
 interface ActiveTurn {
@@ -415,7 +412,7 @@ function countDisplayMessages(entries: readonly PiConversationTranscriptEntry[])
 
 class VSCodePiConversationOwner {
   private activeTurn: ActiveTurn | undefined;
-  private readonly pendingConfirmations = new Map<string, PendingConfirmation>();
+  private readonly confirmations = new PiToolConfirmationRegistry();
   private disposed = false;
 
   private constructor(
@@ -598,12 +595,7 @@ class VSCodePiConversationOwner {
   }
 
   confirmTool(toolCallId: string, approved: boolean): void {
-    const pending = this.pendingConfirmations.get(toolCallId);
-    if (!pending) {
-      throw new Error(`Pi tool confirmation ${toolCallId} is not pending.`);
-    }
-    this.pendingConfirmations.delete(toolCallId);
-    pending.resolve(approved);
+    this.confirmations.resolve(toolCallId, approved);
   }
 
   async clearContext(): Promise<void> {
@@ -639,22 +631,31 @@ class VSCodePiConversationOwner {
   ): PiToolPermissionPolicy {
     return {
       preflight: async ({ tool, args, identity: toolIdentity, signal }) => {
-        if (input.executionMode === 'plan') {
+        const action = resolvePiToolPermissionAction(
+          input.executionMode,
+          tool.requiresConfirmation,
+          tool.isReadOnly,
+        );
+        if (action === 'deny') {
           return { allowed: false, reason: 'Tool execution is disabled in plan mode.' };
         }
-        if (input.executionMode === 'auto' && tool.requiresConfirmation !== true) {
+        if (action === 'allow') {
           return { allowed: true };
         }
-        await events.emit({
-          type: 'confirmation.required',
-          identity: toolIdentity,
-          timestamp: Date.now(),
-          confirmationId: `confirmation:${toolIdentity.toolCallId}`,
-          toolCallId: toolIdentity.toolCallId,
-          toolName: tool.name,
-          summary: summarizeToolConfirmation(tool.name, args),
-        });
-        const allowed = await this.waitForConfirmation(toolIdentity.toolCallId, signal);
+        const allowed = await this.confirmations.request(
+          toolIdentity.toolCallId,
+          () =>
+            events.emit({
+              type: 'confirmation.required',
+              identity: toolIdentity,
+              timestamp: Date.now(),
+              confirmationId: `confirmation:${toolIdentity.toolCallId}`,
+              toolCallId: toolIdentity.toolCallId,
+              toolName: tool.name,
+              summary: summarizeToolConfirmation(tool.name, args),
+            }),
+          signal,
+        );
         return allowed
           ? { allowed: true }
           : { allowed: false, reason: `User denied tool ${tool.name}.` };
@@ -662,34 +663,8 @@ class VSCodePiConversationOwner {
     };
   }
 
-  private waitForConfirmation(toolCallId: string, signal?: AbortSignal): Promise<boolean> {
-    if (this.pendingConfirmations.has(toolCallId)) {
-      throw new Error(`Pi tool confirmation ${toolCallId} is already pending.`);
-    }
-    return new Promise<boolean>((resolve) => {
-      let settled = false;
-      const settle = (allowed: boolean): void => {
-        if (settled) return;
-        settled = true;
-        signal?.removeEventListener('abort', abort);
-        resolve(allowed);
-      };
-      const abort = (): void => {
-        this.pendingConfirmations.delete(toolCallId);
-        settle(false);
-      };
-      this.pendingConfirmations.set(toolCallId, {
-        resolve: settle,
-        cancel: () => settle(false),
-      });
-      if (signal?.aborted) abort();
-      else signal?.addEventListener('abort', abort, { once: true });
-    });
-  }
-
   private cancelPendingConfirmations(): void {
-    for (const pending of this.pendingConfirmations.values()) pending.cancel();
-    this.pendingConfirmations.clear();
+    this.confirmations.cancelAll();
   }
 
   private async discoverSkills(): Promise<PiSkillHostSnapshot> {

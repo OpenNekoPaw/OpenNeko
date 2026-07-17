@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ToolCall } from '@neko-agent/types';
 import { MessageActionsProvider } from '@/components/ChatView/MessageActionsContext';
@@ -44,6 +44,44 @@ describe('ToolCallDisplay Canvas authoring results', () => {
     expect(screen.getByText('Approval required')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Create replacement shot/ })).toBeNull();
     expect(mockPostMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('ToolCallDisplay Tool confirmation', () => {
+  it('renders inline approval controls and returns the originating conversation identity', () => {
+    mockPostMessage.mockClear();
+
+    render(
+      <MessageActionsProvider>
+        <ToolCallDisplay
+          conversationId="conv-1"
+          toolCall={{
+            id: 'tool-generate-1',
+            name: 'GenerateImage',
+            arguments: { prompt: 'two cats playing' },
+            pendingConfirmation: true,
+            confirmation: {
+              action: 'GenerateImage',
+              description: 'Generate an image using the configured media provider.',
+              details: { confirmationId: 'confirmation:tool-generate-1' },
+            },
+          }}
+        />
+      </MessageActionsProvider>,
+    );
+
+    expect(screen.getByText('toolCalls.awaitingApproval')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'toolCalls.approve' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'toolCalls.deny' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'toolCalls.approve' }));
+
+    expect(mockPostMessage).toHaveBeenCalledWith({
+      type: 'confirmTool',
+      toolCallId: 'tool-generate-1',
+      approved: true,
+      conversationId: 'conv-1',
+    });
   });
 });
 

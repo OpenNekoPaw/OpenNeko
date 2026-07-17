@@ -64,6 +64,7 @@ export {
 export {
   bridgePiCapabilityTools,
   PiCapabilityToolBridgeError,
+  resolvePiToolPermissionAction,
   type BridgePiCapabilityToolsInput,
   type PiCapabilityTool,
   type PiCapabilityToolBridge,
@@ -71,6 +72,8 @@ export {
   type PiCapabilityToolContext,
   type PiCapabilityToolRequirements,
   type PiToolPermissionDecision,
+  type PiToolPermissionAction,
+  type PiToolPermissionMode,
   type PiToolPermissionPolicy,
   type PiToolRunIdentity,
 } from './capability-tool-bridge';

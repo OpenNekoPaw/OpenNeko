@@ -203,7 +203,7 @@ export function projectBackgroundTaskCard(task: AgentBackgroundTask): Background
     showProgressBar: status.isActive,
     useIndeterminateProgress: status.isActive && !hasProgress,
     showCancel: status.isActive,
-    showRetry: status.isFailed,
+    showRetry: status.isFailed && task.retryable !== false,
     showViewResult: status.isCompleted,
     showCollapsedError: showError,
     showExpandedError: showError,

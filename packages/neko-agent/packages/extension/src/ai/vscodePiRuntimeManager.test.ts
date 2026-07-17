@@ -8,6 +8,7 @@ import {
   NodePiConversationAuthority,
   OpenNekoCredentialStore,
   createOpenNekoPiModels,
+  resolvePiToolPermissionAction,
 } from '@neko/agent/pi';
 import type { Model, Provider } from '@neko/platform';
 
@@ -30,6 +31,19 @@ const accountProvider: Provider = {
   requiresApiKey: false,
   useBearerAuth: true,
 };
+
+describe('VSCodePiRuntimeManager tool permission', () => {
+  it('does not block an explicitly confirmation-free read_skill call in ask mode', () => {
+    expect(resolvePiToolPermissionAction('ask', false, true)).toBe('allow');
+    expect(resolvePiToolPermissionAction('ask', undefined, true)).toBe('allow');
+    expect(resolvePiToolPermissionAction('ask', true, true)).toBe('confirm');
+    expect(resolvePiToolPermissionAction('ask', false, false)).toBe('confirm');
+    expect(resolvePiToolPermissionAction('auto', false, false)).toBe('allow');
+    expect(resolvePiToolPermissionAction('auto', undefined, false)).toBe('allow');
+    expect(resolvePiToolPermissionAction('auto', true, false)).toBe('confirm');
+    expect(resolvePiToolPermissionAction('plan', false, true)).toBe('deny');
+  });
+});
 
 describe('VSCodePiRuntimeManager authority ownership', () => {
   it('opens one program-level authority for catalog reads and disposes it once', async () => {

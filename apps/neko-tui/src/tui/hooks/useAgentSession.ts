@@ -28,6 +28,7 @@ import {
   AgentMessageQueueOperationError,
   type AgentConversationMessageQueue,
 } from '@neko/agent/runtime';
+import { resolvePiToolPermissionAction } from '@neko/agent/pi';
 import {
   projectLlmParameters,
   ConfigManager,
@@ -650,10 +651,15 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           permissionPolicy: {
             preflight: async ({ tool, args, identity }) => {
               const mode = stores.agent.getState().executionMode;
-              if (mode === 'plan') {
+              const action = resolvePiToolPermissionAction(
+                mode,
+                tool.requiresConfirmation,
+                tool.isReadOnly,
+              );
+              if (action === 'deny') {
                 return { allowed: false, reason: 'Plan mode does not execute tools.' };
               }
-              if (mode === 'auto' && tool.requiresConfirmation !== true) {
+              if (action === 'allow') {
                 return { allowed: true };
               }
               return new Promise((resolve) => {

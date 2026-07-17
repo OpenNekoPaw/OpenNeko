@@ -136,6 +136,31 @@ describe('media task view helpers', () => {
     });
   });
 
+  it('preserves a non-retryable provider failure for the webview', () => {
+    const view = createMediaTaskView({
+      id: 'task-ambiguous',
+      type: 'text-to-image',
+      status: 'failed',
+      progress: 100,
+      providerId: 'newapi',
+      modelId: 'gpt-image-2',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:01.000Z'),
+      request: { prompt: 'cat' },
+      error: {
+        code: 'NEWAPI_IMAGE_OUTCOME_UNKNOWN',
+        message: 'Provider outcome is unknown.',
+        retryable: false,
+      },
+    } as any);
+
+    expect(view.error).toEqual({
+      code: 'NEWAPI_IMAGE_OUTCOME_UNKNOWN',
+      message: 'Provider outcome is unknown.',
+      retryable: false,
+    });
+  });
+
   it('projects finalized media result into the webview-safe task schema', () => {
     expect(
       createMediaTaskView(

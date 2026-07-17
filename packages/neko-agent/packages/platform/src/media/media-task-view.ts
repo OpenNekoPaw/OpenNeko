@@ -105,6 +105,7 @@ export interface MediaTaskView {
   error?: {
     code: string;
     message: string;
+    retryable: boolean;
   };
   request: {
     prompt: string;
@@ -137,6 +138,7 @@ export function createMediaTaskView(
           error: {
             code: task.error.code,
             message: task.error.message,
+            retryable: task.error.retryable,
           },
         }
       : {}),

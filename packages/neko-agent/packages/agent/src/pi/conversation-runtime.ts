@@ -563,6 +563,7 @@ function createSkillReadTool(
     label: 'Read Skill',
     description:
       'Read one trusted, enabled Skill file or its contained relative resource from an opaque /__neko_skills/ locator.',
+    isReadOnly: true,
     requiresConfirmation: false,
     parameters: Type.Object(
       { locator: Type.String({ minLength: 1 }) },

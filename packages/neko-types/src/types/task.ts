@@ -181,6 +181,13 @@ export interface TaskOutput {
   data?: unknown;
   /** Error if failed */
   error?: string;
+  /** Structured failure policy retained across task and UI projection boundaries. */
+  failure?: {
+    /** Stable owning-runtime diagnostic code. */
+    code?: string;
+    /** Whether submitting the same task operation again is safe. */
+    retryable: boolean;
+  };
   /** Task metrics */
   metrics?: {
     /** Start time */

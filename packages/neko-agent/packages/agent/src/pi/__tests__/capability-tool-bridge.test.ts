@@ -6,7 +6,11 @@ import {
 } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
 
-import { bridgePiCapabilityTools, type PiCapabilityTool } from '../capability-tool-bridge';
+import {
+  bridgePiCapabilityTools,
+  resolvePiToolPermissionAction,
+  type PiCapabilityTool,
+} from '../capability-tool-bridge';
 import { resolveAgentModelPolicy, type AgentModelBindingMap } from '../model-policy';
 
 const identity = {
@@ -18,6 +22,19 @@ const identity = {
 } as const;
 
 const models = createModels();
+
+describe('Pi tool permission action', () => {
+  it('allows reads without user intervention while retaining risk-based confirmation', () => {
+    expect(resolvePiToolPermissionAction('ask', false, true)).toBe('allow');
+    expect(resolvePiToolPermissionAction('ask', undefined, true)).toBe('allow');
+    expect(resolvePiToolPermissionAction('ask', true, true)).toBe('confirm');
+    expect(resolvePiToolPermissionAction('ask', false, false)).toBe('confirm');
+    expect(resolvePiToolPermissionAction('auto', false, false)).toBe('allow');
+    expect(resolvePiToolPermissionAction('auto', undefined, false)).toBe('allow');
+    expect(resolvePiToolPermissionAction('auto', true, false)).toBe('confirm');
+    expect(resolvePiToolPermissionAction('plan', false, true)).toBe('deny');
+  });
+});
 
 function completedStream(message: AssistantMessage) {
   const stream = createAssistantMessageEventStream();

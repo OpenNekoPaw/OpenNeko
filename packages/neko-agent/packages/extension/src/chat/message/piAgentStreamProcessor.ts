@@ -390,7 +390,12 @@ export function createPiAgentStreamSession(
           const existing = toolItems.get(event.toolCallId);
           if (!existing) throw new Error(`Pi completed unknown tool call ${event.toolCallId}.`);
           const projectedResult = readToolResult(event.result, event.isError);
-          const toolCall: ToolCall = { ...existing.payload.toolCall, result: projectedResult };
+          const toolCall: ToolCall = {
+            id: existing.payload.toolCall.id,
+            name: existing.payload.toolCall.name,
+            arguments: existing.payload.toolCall.arguments,
+            result: projectedResult,
+          };
           const item: TimelineToolItem = {
             ...existing,
             itemRevision: existing.itemRevision + 1,
@@ -418,15 +423,35 @@ export function createPiAgentStreamSession(
           return;
         }
         case 'confirmation.required': {
-          await post({
-            type: 'toolConfirmation',
-            conversationId: options.conversationId,
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            action: event.toolName,
-            description: event.summary,
-            details: { confirmationId: event.confirmationId },
-          });
+          const existing = toolItems.get(event.toolCallId);
+          if (!existing) {
+            throw new Error(`Pi requested confirmation for unknown tool call ${event.toolCallId}.`);
+          }
+          const toolCall: ToolCall = {
+            ...existing.payload.toolCall,
+            pendingConfirmation: true,
+            confirmation: {
+              action: event.toolName,
+              description: event.summary,
+              details: { confirmationId: event.confirmationId },
+            },
+          };
+          const item: TimelineToolItem = {
+            ...existing,
+            itemRevision: existing.itemRevision + 1,
+            status: 'pending',
+            payload: { toolCall },
+            updatedAt: event.timestamp,
+          };
+          toolItems.set(event.toolCallId, item);
+          collectedToolCalls.set(event.toolCallId, toolCall);
+          const block = contentBlocks.find(
+            (candidate) =>
+              candidate.type === 'tool_call' && candidate.toolCall?.id === event.toolCallId,
+          );
+          if (block) block.toolCall = toolCall;
+          applyProjection({ operations: [{ operation: 'upsert', item }] });
+          upsertAssistantMessage(true);
           return;
         }
         case 'turn.failed': {

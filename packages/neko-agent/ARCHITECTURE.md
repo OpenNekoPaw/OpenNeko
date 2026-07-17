@@ -284,6 +284,7 @@ conversation snapshots
 
 - 一个有效 projection frame 只产生一次 Tab runtime state transaction。多个 host frame 若落在同一 animation frame，会按 item 合并为至多一次 streaming render revision。
 - 会话投影与 Markdown external store 使用同一有序提交边界：先把已接受 delivery 提交到 Markdown session 但不通知订阅者，再提交 conversation refs/React state，最后每个受影响 session 只 publish 一次。Renderer 保留 source identity fail-visible 检查，禁止用 catch、fallback 或关闭检查掩盖跨状态源竞态。
+- 共享 Host message 只提供已完成历史和 Timeline item 到达前的等待信号；没有 snapshot、空 snapshot 或只包含历史 turn 的 snapshot 都不得让未被当前 Timeline 表示的活动 message/block 进入 Renderer。只有匹配的 conversation/message/item Markdown session 已提交后才能发布活动渲染投影。
 - completion、replace、error、attachment detach 与 Webview disposal 必须 flush 或 cancel 待提交 frame，禁止遗失最后一个 delta；Tab switch 不参与 delivery lifecycle。
 - 每个 assistant text/thinking item 复用一个 `@neko/markdown` `MarkdownStreamingSession`。append 推进同一个 session；replace 创建新的 source generation；snapshot 只用于 resync；complete finalizes 同一 session。
 - 历史完成消息也进入同一 normalized session/React adapter，不允许 `react-markdown`、final-only parser 或 raw-source success fallback。

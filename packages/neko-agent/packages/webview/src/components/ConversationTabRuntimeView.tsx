@@ -44,8 +44,7 @@ export function ConversationTabRuntimeView({
     readProjection,
     readProjection,
   );
-  const streamingMessageIdRef = useRef(streamingMessageId);
-  streamingMessageIdRef.current = streamingMessageId;
+  const streamingMessageIdRef = useRef<string | null>(null);
   const renderState = useMemo(
     () =>
       projectConversationProjectionRenderState({
@@ -57,6 +56,7 @@ export function ConversationTabRuntimeView({
       }),
     [isThinking, messages, projectionSnapshot.projection, streamingMessageId, workItems],
   );
+  streamingMessageIdRef.current = renderState.streamingMessageId;
 
   return (
     <AgentMarkdownSessionRegistryProvider registry={runtime.markdownSessions}>

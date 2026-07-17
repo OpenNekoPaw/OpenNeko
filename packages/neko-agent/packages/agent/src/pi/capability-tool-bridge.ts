@@ -46,6 +46,7 @@ export interface PiCapabilityTool<TDetails = unknown> {
   readonly modelPurpose?: Exclude<AgentModelPurpose, 'agent.main'>;
   readonly modelPurposeRequirement?: 'required' | 'optional';
   readonly executionMode?: ToolExecutionMode;
+  readonly isReadOnly?: boolean;
   readonly requiresConfirmation?: boolean;
   execute(input: {
     readonly args: unknown;
@@ -57,6 +58,21 @@ export interface PiCapabilityTool<TDetails = unknown> {
 
 export type PiToolPermissionDecision =
   { readonly allowed: true } | { readonly allowed: false; readonly reason: string };
+
+export type PiToolPermissionMode = 'plan' | 'ask' | 'auto';
+export type PiToolPermissionAction = 'allow' | 'confirm' | 'deny';
+
+export function resolvePiToolPermissionAction(
+  mode: PiToolPermissionMode,
+  requiresConfirmation: boolean | undefined,
+  isReadOnly: boolean | undefined,
+): PiToolPermissionAction {
+  if (mode === 'plan') return 'deny';
+  if (requiresConfirmation === true) return 'confirm';
+  if (isReadOnly === true) return 'allow';
+  if (mode === 'auto' && requiresConfirmation !== true) return 'allow';
+  return 'confirm';
+}
 
 export interface PiToolPermissionPolicy {
   preflight(input: {

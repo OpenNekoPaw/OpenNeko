@@ -2,14 +2,56 @@
   "schema": "neko.agent-eval.suite.v2",
   "id": "agent-runtime.skill-runtime",
   "owner": { "kind": "agent-runtime", "id": "skill-runtime" },
-  "target": { "kind": "runtime", "id": "skill-trigger-injection-lifecycle", "contractHash": "sha256:d92ed1cfd4320727c909d093f39789b835ea65fac21a50f36f5b4c991334b6c0" },
+  "target": {
+    "kind": "runtime",
+    "id": "skill-trigger-injection-lifecycle",
+    "contractHash": "sha256:d92ed1cfd4320727c909d093f39789b835ea65fac21a50f36f5b4c991334b6c0"
+  },
   "repositoryRevision": "working-tree",
-  "runtimeProfiles": [{ "id": "canonical-default", "settings": {}, "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a" }],
-  "modelProfiles": [{ "id": "configured-default", "selection": "configured-default", "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915" }],
+  "runtimeProfiles": [
+    {
+      "id": "canonical-default",
+      "settings": {},
+      "configurationHash": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "configured-default",
+      "selection": "configured-default",
+      "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    }
+  ],
   "judgeProfiles": [],
-  "fixtures": [{ "id": "empty-workspace", "root": "shared-fixtures/empty-workspace", "source": "repository", "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081", "mutable": true }],
-  "cases": [{ "id": "explicit-builtin-injection", "file": "cases/explicit-builtin-injection.json", "group": "canonical", "visibility": "public" }],
+  "fixtures": [
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "explicit-builtin-injection",
+      "file": "cases/explicit-builtin-injection.json",
+      "group": "canonical",
+      "visibility": "public"
+    },
+    {
+      "id": "model-selected-read-without-approval",
+      "file": "cases/model-selected-read-without-approval.json",
+      "group": "regression",
+      "visibility": "public"
+    }
+  ],
   "rubricRefs": [],
   "baselinePolicy": { "mode": "none" },
-  "reportPolicy": { "rawRetentionDays": 14, "trustedCiRetentionDays": 14, "committedSummary": true, "includeHistory": false }
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
 }

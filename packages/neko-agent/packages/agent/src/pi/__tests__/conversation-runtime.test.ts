@@ -6,6 +6,7 @@ import {
   createAssistantMessageEventStream,
   createModels,
   createProvider,
+  Type,
   type Api,
   type AssistantMessage,
   type Context,
@@ -135,6 +136,102 @@ describe('PiConversationRuntime', () => {
       }),
       expect.objectContaining({ role: 'assistant' }),
     ]);
+    runtime.dispose();
+  });
+
+  it('does not submit a media task before the originating ToolCall is approved', async () => {
+    const lease = authority.acquireLease('conversation-1');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+    });
+    const responses = [
+      assistantContent('toolUse', [
+        {
+          type: 'toolCall' as const,
+          id: 'generate-image-1',
+          name: 'GenerateImage',
+          arguments: { prompt: 'two cats playing' },
+        },
+      ]),
+      assistant('stop', 'submitted'),
+    ];
+    const models = createFixtureModels(() => {
+      const response = responses.shift();
+      if (response === undefined) throw new Error('Unexpected extra Pi model turn.');
+      return completedStream(response);
+    });
+    const modelPolicy = policy();
+    let announceConfirmation: (() => void) | undefined;
+    const confirmationRequired = new Promise<void>((resolve) => {
+      announceConfirmation = resolve;
+    });
+    let approve: (() => void) | undefined;
+    const approval = new Promise<void>((resolve) => {
+      approve = resolve;
+    });
+    const submitMediaTask = vi.fn(async () => ({
+      content: [{ type: 'text' as const, text: 'task:media-1' }],
+      details: { taskId: 'media-1' },
+    }));
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'base',
+    });
+
+    const execution = runtime.execute({
+      turnId: 'turn-generate',
+      runId: 'run-generate',
+      prompt: 'generate an image',
+      modelPolicy,
+      skillSnapshot: await emptySkills(),
+      capabilityTools: [
+        {
+          name: 'GenerateImage',
+          label: 'Generate image',
+          description: 'Submit an image generation task',
+          parameters: Type.Object({ prompt: Type.String() }),
+          requiresConfirmation: true,
+          execute: submitMediaTask,
+        },
+      ],
+      permissionPolicy: {
+        preflight: async () => {
+          announceConfirmation?.();
+          await approval;
+          return { allowed: true };
+        },
+      },
+      workspaceTrusted: true,
+      events: { emit: () => undefined },
+    });
+
+    await confirmationRequired;
+    expect(submitMediaTask).not.toHaveBeenCalled();
+
+    approve?.();
+    await execution;
+
+    expect(submitMediaTask).toHaveBeenCalledOnce();
+    expect(submitMediaTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: { prompt: 'two cats playing' },
+        context: expect.objectContaining({
+          identity: expect.objectContaining({
+            conversationId: 'conversation-1',
+            turnId: 'turn-generate',
+            runId: 'run-generate',
+            toolCallId: 'generate-image-1',
+          }),
+        }),
+      }),
+    );
     runtime.dispose();
   });
 
@@ -412,7 +509,10 @@ describe('PiConversationRuntime', () => {
       );
     });
     const modelPolicy = policy();
-    const confirmationFlags: Array<boolean | undefined> = [];
+    const permissionTraits: Array<{
+      readonly requiresConfirmation: boolean | undefined;
+      readonly isReadOnly: boolean | undefined;
+    }> = [];
     const runtime = await PiConversationRuntime.open({
       authority,
       lease,
@@ -432,7 +532,10 @@ describe('PiConversationRuntime', () => {
       capabilityTools: [],
       permissionPolicy: {
         preflight: ({ tool }) => {
-          confirmationFlags.push(tool.requiresConfirmation);
+          permissionTraits.push({
+            requiresConfirmation: tool.requiresConfirmation,
+            isReadOnly: tool.isReadOnly,
+          });
           return { allowed: true };
         },
       },
@@ -442,7 +545,7 @@ describe('PiConversationRuntime', () => {
 
     expect(contexts[0]!.systemPrompt ?? '').toContain('read_skill');
     expect(contexts[0]!.tools?.map((tool) => tool.name)).toEqual(['read_skill']);
-    expect(confirmationFlags).toEqual([false]);
+    expect(permissionTraits).toEqual([{ requiresConfirmation: false, isReadOnly: true }]);
     expect(JSON.stringify(contexts[1]!.messages)).toContain('Model selected body.');
     const persisted = await authority.buildContext('conversation-1', 'branch-main');
     expect(JSON.stringify(persisted.messages)).toContain('"fingerprint"');

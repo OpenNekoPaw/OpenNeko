@@ -77,6 +77,7 @@ export class NewAPIImageModel implements ImageModelV3 {
       model: this.modelId,
       prompt: options.prompt,
       n: options.n || 1,
+      response_format: 'b64_json',
     };
 
     if (options.size) {
@@ -135,16 +136,20 @@ export class NewAPIImageModel implements ImageModelV3 {
     const quality = normalizeNewAPIImageQuality(nekoExtras['quality'], this.modelId);
     if (quality !== undefined) body.quality = quality;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.config.apiKey}`,
-        ...(options.headers as Record<string, string>),
+    const response = await fetchNewAPIImageResponse(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.config.apiKey}`,
+          ...(options.headers as Record<string, string>),
+        },
+        body: JSON.stringify(body),
+        signal: options.abortSignal,
       },
-      body: JSON.stringify(body),
-      signal: options.abortSignal,
-    });
+      options.abortSignal,
+    );
 
     if (!response.ok) {
       const errorBody = await response.text();
@@ -156,8 +161,11 @@ export class NewAPIImageModel implements ImageModelV3 {
       data: Array<{ url?: string; b64_json?: string; revised_prompt?: string }>;
     };
 
-    // Return URLs as strings (AI SDK handles downloading)
-    const images = data.data.map((item) => item.url ?? item.b64_json ?? '');
+    const images = await materializeNewAPIImageResults(
+      data.data,
+      createSameOriginDownloadAuthorization(url, this.config.apiKey),
+      options.abortSignal,
+    );
 
     return {
       images,
@@ -200,6 +208,7 @@ export class NewAPIImageModel implements ImageModelV3 {
     const form = new FormData();
     form.append('model', this.modelId);
     form.append('prompt', options.prompt ?? '');
+    form.append('response_format', 'b64_json');
     if (options.n) form.append('n', String(options.n));
     if (options.size) form.append('size', options.size);
     const quality = normalizeNewAPIImageQuality(nekoExtras['quality'], this.modelId);
@@ -291,16 +300,20 @@ export class NewAPIImageModel implements ImageModelV3 {
       form.append('ip_adapter_refs', JSON.stringify(serialized));
     }
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.config.apiKey}`,
-        ...(options.headers as Record<string, string>),
+    const response = await fetchNewAPIImageResponse(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.config.apiKey}`,
+          ...(options.headers as Record<string, string>),
+        },
+        // Do not set Content-Type — fetch populates it with the multipart boundary.
+        body: form,
+        signal: options.abortSignal,
       },
-      // Do not set Content-Type — fetch populates it with the multipart boundary.
-      body: form,
-      signal: options.abortSignal,
-    });
+      options.abortSignal,
+    );
 
     if (!response.ok) {
       const errorBody = await response.text();
@@ -312,7 +325,11 @@ export class NewAPIImageModel implements ImageModelV3 {
       data: Array<{ url?: string; b64_json?: string; revised_prompt?: string }>;
     };
 
-    const images = data.data.map((item) => item.url ?? item.b64_json ?? '');
+    const images = await materializeNewAPIImageResults(
+      data.data,
+      createSameOriginDownloadAuthorization(url, this.config.apiKey),
+      options.abortSignal,
+    );
     return {
       images,
       warnings: [],
@@ -354,6 +371,119 @@ function normalizeNewAPIImageQuality(value: unknown, modelId: string): string | 
       return 'auto';
     default:
       return value;
+  }
+}
+
+const AMBIGUOUS_IMAGE_SUBMISSION_CODES = new Set([
+  'ECONNRESET',
+  'EPIPE',
+  'ETIMEDOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET',
+]);
+
+async function fetchNewAPIImageResponse(
+  url: string,
+  init: RequestInit,
+  signal?: AbortSignal,
+): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    if (signal?.aborted || readErrorName(error) === 'AbortError') throw error;
+    const transportCode = readNestedErrorCode(error);
+    if (!transportCode || !AMBIGUOUS_IMAGE_SUBMISSION_CODES.has(transportCode)) throw error;
+
+    throw Object.assign(
+      new Error(
+        'NewAPI image generation connection closed after submission; the provider outcome is unknown and the image may already have been generated or charged. This operation must not be retried automatically. Check the gateway RELAY_TIMEOUT or use a provider task API with recoverable result identity.',
+      ),
+      {
+        cause: error,
+        code: 'NEWAPI_IMAGE_OUTCOME_UNKNOWN',
+        isRetryable: false,
+      },
+    );
+  }
+}
+
+async function materializeNewAPIImageResults(
+  items: Array<{ url?: string; b64_json?: string }>,
+  downloadAuthorization: SameOriginDownloadAuthorization,
+  signal?: AbortSignal,
+): Promise<Uint8Array[]> {
+  if (items.length === 0) {
+    throw new Error('NewAPI image generation returned no image results.');
+  }
+
+  return Promise.all(
+    items.map(async (item, index) => {
+      if (item.b64_json) {
+        const bytes = decodeBase64OrDataUrl(item.b64_json).bytes;
+        if (bytes.byteLength === 0) {
+          throw new Error(`NewAPI image result ${index} contains empty base64 data.`);
+        }
+        return bytes;
+      }
+
+      if (item.url) {
+        const downloaded = await fetchBinary(item.url, signal, downloadAuthorization);
+        if (downloaded) return downloaded.bytes;
+        throw new Error(
+          `NewAPI image result ${index} could not be downloaded from ${safeUrlOrigin(item.url)}.`,
+        );
+      }
+
+      throw new Error(`NewAPI image result ${index} has neither b64_json nor url.`);
+    }),
+  );
+}
+
+interface SameOriginDownloadAuthorization {
+  readonly origin: string;
+  readonly authorization: string;
+}
+
+function createSameOriginDownloadAuthorization(
+  requestUrl: string,
+  apiKey: string,
+): SameOriginDownloadAuthorization {
+  return {
+    origin: new URL(requestUrl).origin,
+    authorization: `Bearer ${apiKey}`,
+  };
+}
+
+function safeUrlOrigin(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return '<invalid-url>';
+  }
+}
+
+function readErrorName(error: unknown): string | undefined {
+  return readErrorString(error, 'name');
+}
+
+function readNestedErrorCode(error: unknown): string | undefined {
+  return readErrorString(error, 'code') ?? readErrorString(readErrorField(error, 'cause'), 'code');
+}
+
+function readErrorString(error: unknown, key: string): string | undefined {
+  const value = readErrorField(error, key);
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function readErrorField(error: unknown, key: string): unknown {
+  if ((typeof error !== 'object' && typeof error !== 'function') || error === null) {
+    return undefined;
+  }
+  try {
+    return Reflect.get(error, key) as unknown;
+  } catch {
+    return undefined;
   }
 }
 
@@ -570,10 +700,11 @@ async function releaseDispatcher(dispatcher: CloseableDispatcher): Promise<void>
 async function fetchBinary(
   url: string,
   signal?: AbortSignal,
+  authorization?: SameOriginDownloadAuthorization,
 ): Promise<{ bytes: Uint8Array; mimeType: string } | undefined> {
   const dispatcher = await createSafeDispatcher();
   try {
-    return await fetchBinaryWithDispatcher(url, signal, dispatcher);
+    return await fetchBinaryWithDispatcher(url, signal, dispatcher, authorization);
   } finally {
     // Release keep-alive connections held by the per-download Agent. Creating
     // a fresh Agent per call keeps the TOCTOU closure (each lookup callback
@@ -604,12 +735,17 @@ async function fetchBinaryWithDispatcher(
   url: string,
   signal: AbortSignal | undefined,
   dispatcher: CloseableDispatcher | undefined,
+  authorization?: SameOriginDownloadAuthorization,
 ): Promise<{ bytes: Uint8Array; mimeType: string } | undefined> {
   let currentUrl = url;
   let res: Response | undefined;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     await assertRemoteUrlSafe(currentUrl);
     try {
+      const headers =
+        authorization && new URL(currentUrl).origin === authorization.origin
+          ? { Authorization: authorization.authorization }
+          : undefined;
       res = await fetch(
         currentUrl,
         dispatcher
@@ -617,8 +753,8 @@ async function fetchBinaryWithDispatcher(
             // built-in fetch. Typed as `any` because the stdlib `RequestInit`
             // does not declare it.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ({ signal, redirect: 'manual', dispatcher } as any)
-          : { signal, redirect: 'manual' },
+            ({ signal, redirect: 'manual', dispatcher, headers } as any)
+          : { signal, redirect: 'manual', headers },
       );
     } catch {
       return undefined;

@@ -9,6 +9,13 @@ The system MUST use a conversation-scoped Pi Agent for main-model streaming, too
 - **WHEN** a configured conversation receives a user message that calls an available semantic tool
 - **THEN** Pi streams the response, validates and executes the tool, records the result, and emits OpenNeko events carrying the conversation and turn identities
 
+#### Scenario: Attach a Webview while a turn is already streaming
+
+- **WHEN** a retained Tab has no authoritative Timeline snapshot, or its installed snapshot does not yet contain an active assistant message/item already identified by shared Host state
+- **THEN** the Tab withholds that non-Timeline active content, keeps a waiting projection, and renders it only after the Timeline-owned Markdown session is committed for the same conversation, message, and item identity
+
+Active Webview Markdown streaming MUST be owned by the Tab Timeline projection and its normalized Markdown session registry. An empty or historical-only snapshot does not establish ownership of a newer active shared message. The registry commit MUST precede publication of the render projection. A Tab MUST NOT render active Markdown from shared message state, create a renderer-local streaming session, or fall back to a second stream path while the matching Timeline item is pending.
+
 #### Scenario: Legacy path is poisoned
 
 - **WHEN** the legacy Executor or chat-adapter entry point is configured to throw during a Pi-targeted turn
@@ -22,6 +29,20 @@ The system SHALL keep Capability, MCP, permission, workspace trust, ResourceRef,
 
 - **WHEN** Pi proposes a tool call that OpenNeko permission or workspace-trust policy denies
 - **THEN** the tool does not execute and Pi receives an explicit error result tied to the originating conversation and turn
+
+#### Scenario: Ask mode presents a non-read Tool confirmation
+
+- **WHEN** a non-read Tool in `ask` mode requires confirmation while its ToolCall projection is being published
+- **THEN** the same Timeline-owned tool item records the pending confirmation and the Webview renders approve/reject controls before execution; confirmation delivery MUST tolerate asynchronous event completion order and MUST NOT depend on a parallel Webview-only message arriving after the ToolCall
+
+The confirmation wait MUST remain correlated to the originating conversation and ToolCall, and cancellation or a bounded confirmation timeout MUST fail visibly without executing the Tool. A missing or detached Webview confirmation projection MUST NOT leave the turn waiting indefinitely.
+
+#### Scenario: Read authorized internal or workspace information
+
+- **WHEN** Pi proposes a Tool classified as read-only for trusted internal content or content already authorized inside the current workspace
+- **THEN** `ask` and `auto` modes execute the read without user confirmation, while path containment, workspace trust, and content-access checks remain enforced
+
+Permission interaction MUST follow operation risk rather than the existence of a Tool call. An explicitly confirmation-gated Tool MUST still request approval, `plan` mode MUST NOT execute Tools, and a non-read Tool in `ask` mode MUST NOT inherit the read-only exemption. TUI and VS Code MUST consume the same read-only/confirmation decision contract.
 
 #### Scenario: Long generation returns product identity
 
@@ -80,6 +101,20 @@ Configured NewAPI/OneAPI-compatible endpoints, explicit protocol profiles, model
 
 - **WHEN** a flat media purpose selects a configured NewAPI image, video, speech, or music model
 - **THEN** the owning OpenNeko media executor uses the explicit NewAPI endpoint and returns evidence or `TaskRef` without changing the Pi main model or falling back to a chat adapter
+
+#### Scenario: Materialize a completed NewAPI image without a detached URL fetch
+
+- **WHEN** a NewAPI image generation endpoint completes and can return the generated image as inline base64 bytes
+- **THEN** the owning NewAPI image provider requests and decodes the inline result before returning to the media task runtime, and the successful path does not depend on a generic SDK performing an unauthenticated or detached second fetch of a temporary output URL
+
+If a configured NewAPI-compatible deployment cannot return inline image bytes, its provider-owned download path MUST preserve the required authentication and transport policy, validate the response as image content, and fail with the output URL origin plus transport cause without logging credentials or signed query values. It MUST NOT silently submit the generation operation again merely because output materialization failed.
+
+#### Scenario: NewAPI closes a synchronous image request after provider submission
+
+- **WHEN** the NewAPI image generation POST loses its connection before a response or recoverable external task identity is received
+- **THEN** the media task fails visibly as an outcome-unknown, non-retryable operation, reports that provider completion or charging may already have occurred, and does not automatically resubmit the generation request
+
+The diagnostic SHOULD identify the gateway relay-timeout boundary without exposing credentials. Recovery requires a provider task identity, a provider-side result lookup, or gateway configuration that permits the synchronous request to complete; OpenNeko MUST NOT claim that a newly submitted generation is a retry of the original result.
 
 #### Scenario: NewAPI configuration is incomplete
 

@@ -244,14 +244,14 @@ owner 时逐 suite 运行；稳定性或质量结论使用 repeated run，而不
 基础设施不可用；`configuration-invalid` 表示 suite/scenario/profile/effective config
 不合法；`non-comparable` 表示不能对 baseline 声称改善。
 
-## 9. CI、脱敏与交付证据
+## 9. 本地执行、脱敏与交付证据
 
-默认 PR CI 只运行 key-free harness 和 all-suite dry-run。可信 focused/nightly workflow
-只在 `main` push、schedule 或 manual dispatch 执行，不在 fork PR 或
-`pull_request_target` 上读取 secrets。缺少 credential/config 时应生成 blocked summary
+Agent Evaluation 只允许开发者从本地 checkout 显式执行。GitHub Actions 和通用 CI
+命令不得运行 key-free harness、focused case、重复 matrix、provider-backed behavior
+或上传 Evaluation 报告。缺少 credential/config 时，本地 runner 应生成 blocked summary
 并返回 exit 2，不能切换 mock lane。
 
-原始报告写入 gitignored `reports/agent-eval/`。本地保留策略为 14 天，由开发者负责清理；trusted-CI artifact 自动保留 14 天。
+原始报告写入 gitignored `reports/agent-eval/`。本地保留策略为 14 天，由开发者负责清理。
 提交或分享的 OpenSpec/PR 摘要只保留：
 
 - suite/case/run id 与命令；

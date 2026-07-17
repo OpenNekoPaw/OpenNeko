@@ -123,6 +123,7 @@ export function projectMediaTaskToBackgroundTask(task: AgentMediaTaskView): Agen
     updatedAt: toDateString(task.updatedAt),
     ...(result ? { result } : {}),
     error: task.error?.message,
+    retryable: task.error?.retryable,
   };
 }
 

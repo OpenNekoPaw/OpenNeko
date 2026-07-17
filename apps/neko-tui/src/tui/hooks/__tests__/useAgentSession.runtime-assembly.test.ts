@@ -5,7 +5,12 @@ import React, { useEffect } from 'react';
 import { Text } from 'ink';
 import { cleanup, render } from 'ink-testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PiProductAgentEvent, PiProductEventSink } from '@neko/agent/pi';
+import type {
+  PiCapabilityTool,
+  PiProductAgentEvent,
+  PiProductEventSink,
+  PiToolPermissionPolicy,
+} from '@neko/agent/pi';
 import type { IService } from '@neko/shared';
 
 import {
@@ -202,6 +207,39 @@ describe('useAgentSession Pi runtime assembly', () => {
       output: 2,
       total: 6,
     });
+  });
+
+  it('allows registered workspace read tools without approval in ask mode', async () => {
+    let handle: AgentSessionHandle | undefined;
+    renderProbe(validConfig(), (session) => {
+      handle = session;
+    });
+    await waitFor(() => handle?.isReady === true);
+
+    expect(currentRuntime().conversation.stores.agent.getState().executionMode).toBe('ask');
+    await handle!.submit('Inspect the workspace');
+
+    const executeInput = piMocks.execute.mock.calls[0]?.[0] as PiExecuteInput;
+    const readTool = executeInput.capabilityTools.find((tool) => tool.isReadOnly === true);
+    if (!readTool) throw new Error('Expected a registered read-only workspace Tool.');
+    await expect(
+      executeInput.permissionPolicy.preflight({
+        tool: readTool,
+        args: {},
+        identity: {
+          workspaceId: 'workspace-1',
+          conversationId: 'conversation-1',
+          branchId: 'main',
+          turnId: 'turn-read',
+          runId: 'run-read',
+          toolCallId: 'tool-read',
+        },
+        workspaceTrusted: true,
+      }),
+    ).resolves.toEqual({ allowed: true });
+    expect(currentRuntime().conversation.stores.agent.getState().status).not.toBe(
+      'waiting_confirmation',
+    );
   });
 
   it('projects secret-free Pi identity and immutable turn snapshot evidence', async () => {
@@ -408,6 +446,8 @@ interface PiExecuteInput {
   readonly runId: string;
   readonly prompt: string;
   readonly events: PiProductEventSink;
+  readonly capabilityTools: readonly PiCapabilityTool[];
+  readonly permissionPolicy: PiToolPermissionPolicy;
 }
 
 function createPiRuntimeDouble(): object {

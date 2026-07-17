@@ -86,15 +86,85 @@ describe('conversation projection presenter', () => {
     expect(result).toMatchObject({ isThinking: false, streamingMessageId: null });
   });
 
-  it('clears legacy streaming flags after an authoritative empty snapshot', () => {
+  it('withholds an active shared message through an authoritative empty snapshot', () => {
+    const activeMessage: Message = {
+      id: 'legacy-message',
+      role: 'assistant',
+      content: 'non-Timeline partial',
+      timestamp: 1,
+      isStreaming: true,
+      contentBlocks: [
+        {
+          id: 'block-shared',
+          type: 'text',
+          timestamp: 1,
+          content: 'non-Timeline partial',
+          isStreaming: true,
+        },
+      ],
+    };
     const result = projectConversationProjectionRenderState({
-      messages: [],
+      messages: [activeMessage],
       workItems: [],
       isThinking: true,
       streamingMessageId: 'legacy-message',
       projection: { conversationId: 'conv-1', projectionVersion: 0, turns: [] },
     });
 
+    expect(result).toMatchObject({ messages: [], isThinking: true, streamingMessageId: null });
+  });
+
+  it('keeps an unowned active message withheld while retaining projected history', () => {
+    const result = projectConversationProjectionRenderState({
+      messages: [
+        {
+          id: 'message-2',
+          role: 'assistant',
+          content: 'non-Timeline partial',
+          timestamp: 2,
+          isStreaming: true,
+        },
+      ],
+      workItems: [],
+      isThinking: true,
+      streamingMessageId: 'message-2',
+      projection: projection('completed history', { completed: true }),
+    });
+
+    expect(result.messages).toEqual([
+      expect.objectContaining({
+        id: 'message-1',
+        content: 'completed history',
+        isStreaming: false,
+      }),
+    ]);
+    expect(result).toMatchObject({ isThinking: true, streamingMessageId: null });
+  });
+
+  it('lets a completed Timeline turn replace stale shared streaming content', () => {
+    const result = projectConversationProjectionRenderState({
+      messages: [
+        {
+          id: 'message-1',
+          role: 'assistant',
+          content: 'stale partial',
+          timestamp: 1,
+          isStreaming: true,
+        },
+      ],
+      workItems: [],
+      isThinking: true,
+      streamingMessageId: 'message-1',
+      projection: projection('canonical final', { completed: true }),
+    });
+
+    expect(result.messages).toEqual([
+      expect.objectContaining({
+        id: 'message-1',
+        content: 'canonical final',
+        isStreaming: false,
+      }),
+    ]);
     expect(result).toMatchObject({ isThinking: false, streamingMessageId: null });
   });
 

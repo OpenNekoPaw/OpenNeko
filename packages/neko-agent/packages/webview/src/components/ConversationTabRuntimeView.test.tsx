@@ -1,22 +1,178 @@
 import { act, render } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SettingsState } from '@neko-agent/types';
 import { createTabRenderRuntime } from '@/render-runtime/tab-render-runtime';
+import { MarkdownRenderer } from '@/components/ChatView/MessageContent';
+import { createAgentMarkdownSessionKey } from '@/markdown/agent-markdown-session-registry';
 import {
   ConversationTabRuntimeView,
   type ConversationTabRuntimeViewProps,
 } from './ConversationTabRuntimeView';
 
-const { chatWorkspaceSpy } = vi.hoisted(() => ({ chatWorkspaceSpy: vi.fn() }));
+const { chatWorkspaceSpy, renderChatWorkspace } = vi.hoisted(() => ({
+  chatWorkspaceSpy: vi.fn(),
+  renderChatWorkspace: vi.fn((_props: unknown): ReactNode => null),
+}));
 
 vi.mock('./ChatWorkspace', () => ({
   ChatWorkspace: (props: unknown) => {
     chatWorkspaceSpy(props);
-    return null;
+    return renderChatWorkspace(props);
   },
 }));
 
+afterEach(() => {
+  chatWorkspaceSpy.mockClear();
+  renderChatWorkspace.mockReset();
+  renderChatWorkspace.mockImplementation((_props: unknown): ReactNode => null);
+});
+
 describe('ConversationTabRuntimeView', () => {
+  it('does not render non-Timeline active Markdown through an empty initial snapshot', () => {
+    const runtime = createTabRenderRuntime({ tabId: 'tab-a', conversationId: 'conv-a' });
+    runtime.attachProjection({
+      endpointEpoch: 'endpoint-1',
+      attachmentId: 'attachment-a',
+      send: vi.fn(),
+      reportError: vi.fn(),
+    });
+    const messageId = 'izbh0142-01KXQPB5JCJPXJY9Y5ZGPCCPYA1784280356465-l8ckmir20';
+    const blockId = 'block-1784280356465-l8ckmir20';
+    renderChatWorkspace.mockImplementation((value: unknown) => {
+      if (!isChatWorkspaceRenderInput(value)) {
+        throw new Error('Expected ChatWorkspace render input.');
+      }
+      const message = value.messages.find((candidate) => candidate.id === messageId);
+      const block = message?.contentBlocks?.find((candidate) => candidate.type === 'text');
+      if (!block || block.type !== 'text') return null;
+      return (
+        <MarkdownRenderer
+          content={block.content ?? ''}
+          isStreaming={block.isStreaming === true}
+          sessionKey={createAgentMarkdownSessionKey({
+            conversationId: 'conv-a',
+            messageId,
+            itemId: block.id,
+          })}
+        />
+      );
+    });
+    const props: ConversationTabRuntimeViewProps = {
+      ...createProps(runtime),
+      messages: [
+        {
+          id: messageId,
+          role: 'assistant',
+          content: 'partial',
+          timestamp: 1,
+          isStreaming: true,
+          contentBlocks: [
+            {
+              id: blockId,
+              type: 'text',
+              timestamp: 1,
+              content: 'partial',
+              isStreaming: true,
+            },
+          ],
+        },
+      ],
+      isThinking: true,
+      streamingMessageId: messageId,
+    };
+
+    expect(() => render(<ConversationTabRuntimeView {...props} />)).not.toThrow();
+    expect(chatWorkspaceSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        messages: [],
+        isThinking: true,
+        streamingMessageId: null,
+        streamingMessageIdRef: { current: null },
+      }),
+    );
+
+    expect(() =>
+      act(() => {
+        runtime.acceptProjectionFrame({
+          type: 'projectionSnapshot',
+          key: {
+            endpointEpoch: 'endpoint-1',
+            attachmentId: 'attachment-a',
+            tabId: 'tab-a',
+            conversationId: 'conv-a',
+          },
+          sequence: 0,
+          projectionVersion: 1,
+          projection: {
+            conversationId: 'conv-a',
+            projectionVersion: 1,
+            turns: [],
+          },
+        });
+      }),
+    ).not.toThrow();
+    expect(chatWorkspaceSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        messages: [],
+        isThinking: true,
+        streamingMessageId: null,
+        streamingMessageIdRef: { current: null },
+      }),
+    );
+
+    act(() => {
+      runtime.acceptProjectionFrame({
+        type: 'projectionPatch',
+        key: {
+          endpointEpoch: 'endpoint-1',
+          attachmentId: 'attachment-a',
+          tabId: 'tab-a',
+          conversationId: 'conv-a',
+        },
+        sequence: 1,
+        baseProjectionVersion: 1,
+        projectionVersion: 2,
+        patch: {
+          type: 'conversationProjectionPatch',
+          conversationId: 'conv-a',
+          baseProjectionVersion: 1,
+          projectionVersion: 2,
+          turnId: 'turn-1',
+          messageId,
+          operations: [
+            {
+              operation: 'append',
+              item: {
+                conversationId: 'conv-a',
+                turnId: 'turn-1',
+                messageId,
+                itemId: 'text-1',
+                sequence: 1,
+                itemRevision: 1,
+                kind: 'assistant_text',
+                status: 'streaming',
+                payload: { content: 'partial', format: 'markdown', sourceGeneration: 1 },
+                createdAt: 1,
+                updatedAt: 1,
+              },
+            },
+          ],
+        },
+      });
+    });
+
+    expect(runtime.markdownSessions.metrics().activeSessions).toBe(1);
+    expect(chatWorkspaceSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        messages: [expect.objectContaining({ id: messageId, content: 'partial' })],
+        isThinking: true,
+        streamingMessageId: messageId,
+        streamingMessageIdRef: { current: messageId },
+      }),
+    );
+  });
+
   it('renders from its own projection replica without rebinding on visibility changes', () => {
     const runtime = createTabRenderRuntime({ tabId: 'tab-a', conversationId: 'conv-a' });
     runtime.attachProjection({
@@ -109,6 +265,17 @@ describe('ConversationTabRuntimeView', () => {
     );
   });
 });
+
+function isChatWorkspaceRenderInput(
+  value: unknown,
+): value is Pick<ConversationTabRuntimeViewProps, 'messages'> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'messages' in value &&
+    Array.isArray(value.messages)
+  );
+}
 
 function createProps(
   runtime: ReturnType<typeof createTabRenderRuntime>,

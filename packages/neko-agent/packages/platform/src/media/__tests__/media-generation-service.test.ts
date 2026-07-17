@@ -134,6 +134,52 @@ describe('MediaGenerationService', () => {
       expect(queuedTask?.input.options?.retry?.maxRetries).toBe(0);
     });
 
+    it('projects the owning provider failure code and retry policy', async () => {
+      const scope = unknownTaskScope('task-ambiguous');
+      const failedTask: Task = {
+        scope,
+        id: scope.childRunId,
+        type: 'image_generation',
+        status: 'failed',
+        input: {
+          type: 'image_generation',
+          payload: {
+            generationType: 'text-to-image',
+            providerId: 'newapi',
+            modelId: 'gpt-image-2',
+            request: { prompt: 'cat' },
+          },
+        },
+        output: {
+          error: 'Provider outcome is unknown.',
+          failure: {
+            code: 'NEWAPI_IMAGE_OUTCOME_UNKNOWN',
+            retryable: false,
+          },
+        },
+        error: 'Provider outcome is unknown.',
+        progress: 100,
+        createdAt: Date.parse('2026-01-01T00:00:00.000Z'),
+        updatedAt: Date.parse('2026-01-01T00:00:01.000Z'),
+      };
+      const projectionTaskManager = {
+        get: vi.fn().mockResolvedValue(failedTask),
+      } as unknown as TaskManager;
+      const projectionService = new MediaGenerationService(
+        projectionTaskManager,
+        configManager,
+        routingManager,
+      );
+
+      await expect(projectionService.getTask(scope)).resolves.toMatchObject({
+        error: {
+          code: 'NEWAPI_IMAGE_OUTCOME_UNKNOWN',
+          message: 'Provider outcome is unknown.',
+          retryable: false,
+        },
+      });
+    });
+
     it('should detect image-to-image when reference image is provided', async () => {
       // Add image-to-image capability to mock model for this test
       const img2imgModel: Model = {

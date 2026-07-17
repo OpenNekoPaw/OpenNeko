@@ -1064,7 +1064,7 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('workspace-messages-tab-b').textContent).toBe('');
   });
 
-  it('does not mutate cached Markdown streaming state when an ordinary Tab becomes visible', () => {
+  it('withholds cached non-Timeline Markdown when an ordinary Tab becomes visible', () => {
     vi.clearAllMocks();
     render(<ConversationController {...createProps()} />);
 
@@ -1099,8 +1099,8 @@ describe('ConversationController entry state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Switch Chat B' }));
 
-    expect(screen.getByTestId('workspace-messages').textContent).toBe('partial B');
-    expect(screen.getByTestId('workspace-streaming-flags').textContent).toBe('true:true');
+    expect(screen.getByTestId('workspace-messages').textContent).toBe('');
+    expect(screen.getByTestId('workspace-streaming-flags').textContent).toBe('');
   });
 
   it('switches running status and elapsed baseline with the active conversation snapshot', () => {
@@ -1197,7 +1197,7 @@ describe('ConversationController entry state', () => {
     expect(registry.getSnapshot(keyB)?.source).toBe('markdown B');
   });
 
-  it('does not mutate cached Markdown streaming state when a character-role Tab becomes visible', () => {
+  it('withholds cached non-Timeline Markdown when a character-role Tab becomes visible', () => {
     vi.clearAllMocks();
     render(<ConversationController {...createProps()} />);
 
@@ -1237,8 +1237,8 @@ describe('ConversationController entry state', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Switch Role B' }));
 
-    expect(screen.getByTestId('workspace-messages').textContent).toBe('partial role');
-    expect(screen.getByTestId('workspace-streaming-flags').textContent).toBe('true:true');
+    expect(screen.getByTestId('workspace-messages').textContent).toBe('');
+    expect(screen.getByTestId('workspace-streaming-flags').textContent).toBe('');
   });
 
   it('hydrates model and execution settings only into Tabs for the owning conversation', () => {

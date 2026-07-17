@@ -1,0 +1,66 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "model-selected-read-without-approval",
+  "suiteId": "agent-runtime.skill-runtime",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Let the model read one relevant builtin Skill without interrupting the user for approval in ask mode.",
+    "canonicalPath": [
+      "Pi Skill catalog",
+      "model-selected read_skill",
+      "read-only permission decision",
+      "terminal Pi turn"
+    ],
+    "forbiddenFallback": [
+      "tool confirmation wait",
+      "legacy Skill lifecycle",
+      "direct Host file read"
+    ],
+    "observables": [
+      {
+        "ref": "skill-read-facts",
+        "kind": "runtime-fact",
+        "description": "Pi runtime, read_skill Tool result, and terminal-idle facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "read_skill succeeds and the turn reaches idle without a user approval step.",
+    "expectedFailure": "A confirmation wait, missing read_skill result, runtime error, or non-terminal turn fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "请先读取系统提供的 storyboard 技能说明，再依据它为雨夜车站只给出一个镜头建议。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "skill-read-facts" },
+    { "id": "idle", "kind": "fully-idle", "evidenceRef": "skill-read-facts" },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "evidenceRef": "skill-read-facts"
+    },
+    {
+      "id": "read-skill",
+      "kind": "tool-call",
+      "name": "read_skill",
+      "status": "success",
+      "evidenceRef": "skill-read-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

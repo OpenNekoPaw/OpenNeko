@@ -27,24 +27,31 @@ export interface ConversationProjectionRenderState {
 export function projectConversationProjectionRenderState(
   input: ConversationProjectionRenderInput,
 ): ConversationProjectionRenderState {
+  const projectedMessageIds = new Set(input.projection?.turns.map((turn) => turn.messageId) ?? []);
+  const baseMessages = input.messages.filter(
+    (message) =>
+      projectedMessageIds.has(message.id) ||
+      !requiresTimelineStreamingOwner(message, input.streamingMessageId),
+  );
+  const withheldActiveMessage = baseMessages.length !== input.messages.length;
   if (!input.projection) {
     return {
-      messages: input.messages,
+      messages: baseMessages,
       workItems: input.workItems,
-      isThinking: input.isThinking,
-      streamingMessageId: input.streamingMessageId,
+      isThinking: input.isThinking || withheldActiveMessage,
+      streamingMessageId: null,
     };
   }
   if (input.projection.turns.length === 0) {
     return {
-      messages: input.messages,
+      messages: baseMessages,
       workItems: input.workItems,
-      isThinking: false,
+      isThinking: input.isThinking || withheldActiveMessage,
       streamingMessageId: null,
     };
   }
 
-  let messages = [...input.messages];
+  let messages = [...baseMessages];
   const projectedWorkItems: AgentWorkItem[] = [];
   let streamingMessageId: string | null = null;
   for (const turn of input.projection.turns) {
@@ -56,9 +63,23 @@ export function projectConversationProjectionRenderState(
   return {
     messages,
     workItems: mergeProjectedWorkItems(input.workItems, projectedWorkItems),
-    isThinking: streamingMessageId !== null,
+    isThinking: streamingMessageId !== null || withheldActiveMessage,
     streamingMessageId,
   };
+}
+
+function requiresTimelineStreamingOwner(
+  message: Message,
+  streamingMessageId: string | null,
+): boolean {
+  if (message.id === streamingMessageId || message.isStreaming === true) return true;
+  return (
+    message.contentBlocks?.some(
+      (block) =>
+        (block.type === 'text' && block.isStreaming === true) ||
+        (block.type === 'thinking' && block.isThinkingComplete !== true),
+    ) === true
+  );
 }
 
 function projectTurnMessage(turn: ConversationTurnProjection): Message {

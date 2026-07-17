@@ -44,7 +44,7 @@ Explicit `$skill-name` MUST resolve the project-first trusted/enabled record and
 
 #### Scenario: Model selects a Skill
 - **WHEN** the model determines that an eligible catalog entry applies
-- **THEN** it reads the virtual `SKILL.md` through the designated boundary and relative resources remain scoped to that fingerprint root
+- **THEN** it reads the virtual `SKILL.md` through the designated read-only boundary without entering user confirmation, and relative resources remain scoped to that fingerprint root
 
 #### Scenario: Skill changes between turns
 - **WHEN** a Skill fingerprint changes while a turn is active

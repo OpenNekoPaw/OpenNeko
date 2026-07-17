@@ -260,9 +260,9 @@ export class MediaGenerationService {
     const error: MediaAdapterError | undefined =
       task.error || task.output?.error
         ? {
-            code: 'TASK_ERROR',
+            code: task.output?.failure?.code ?? 'TASK_ERROR',
             message: task.error || task.output?.error || 'Unknown error',
-            retryable: false,
+            retryable: task.output?.failure?.retryable ?? false,
           }
         : undefined;
 

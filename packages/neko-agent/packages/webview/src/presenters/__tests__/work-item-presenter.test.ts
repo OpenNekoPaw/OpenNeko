@@ -278,6 +278,21 @@ describe('work-item-presenter', () => {
       showExpandedError: true,
       showResultPreview: false,
     });
+
+    expect(
+      projectBackgroundTaskCard({
+        ...createBackgroundTask('ambiguous-1', 'cat'),
+        status: 'failed',
+        progress: 100,
+        error: 'Provider outcome is unknown',
+        retryable: false,
+      }),
+    ).toMatchObject({
+      tone: 'danger',
+      showRetry: false,
+      showCollapsedError: true,
+      showExpandedError: true,
+    });
   });
 
   it('projects background task results into rich content data', () => {

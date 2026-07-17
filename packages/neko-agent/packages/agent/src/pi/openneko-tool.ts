@@ -73,6 +73,7 @@ export function projectOpenNekoTool(
       ? {}
       : { modelPurposeRequirement: options.modelPurposeRequirement }),
     ...(tool.isConcurrencySafe === true ? { executionMode: 'parallel' as const } : {}),
+    ...(tool.isReadOnly === true ? { isReadOnly: true } : {}),
     ...(tool.requiresConfirmation === undefined
       ? {}
       : { requiresConfirmation: tool.requiresConfirmation }),

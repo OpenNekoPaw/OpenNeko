@@ -537,8 +537,15 @@ export class MediaTaskExecutor {
         throw new Error(errorContext);
       }
 
-      // Non-retryable errors (auth, invalid request, content filter) — fail immediately
-      return { error: errorContext };
+      // Non-retryable errors (auth, invalid request, content filter, or an
+      // ambiguous paid submission) fail immediately and retain their policy.
+      return {
+        error: errorContext,
+        failure: {
+          ...(errorSummary.code ? { code: errorSummary.code } : {}),
+          retryable: false,
+        },
+      };
     }
   }
 
