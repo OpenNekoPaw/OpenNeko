@@ -1,5 +1,5 @@
 /** Active/protected trees are additional to this bounded clean-history budget. */
-export const DEFAULT_MAX_RETAINED_CLEAN_INACTIVE_TABS = 4;
+const DEFAULT_MAX_RETAINED_CLEAN_INACTIVE_TABS = 4;
 
 export interface TabComponentRetentionCandidate {
   readonly tabId: string;

@@ -63,17 +63,14 @@ export function SemanticPromptText({
   );
 }
 
-export function readSemanticPromptSpanText(
-  text: string,
-  span: CanvasAuthoringSemanticPromptSpan,
-): string {
+function readSemanticPromptSpanText(text: string, span: CanvasAuthoringSemanticPromptSpan): string {
   const start = clampPromptOffset(span.range.start, text.length);
   const end = clampPromptOffset(span.range.end, text.length);
   if (end <= start) return '';
   return text.slice(start, end).trim();
 }
 
-export function formatSemanticPromptSpanTitle(
+function formatSemanticPromptSpanTitle(
   text: string,
   span: CanvasAuthoringSemanticPromptSpan,
 ): string {
@@ -87,7 +84,7 @@ export function formatSemanticPromptSpanTitle(
   return parts.join(' · ');
 }
 
-export function getSemanticPromptSpanKindLabel(kind: string): string {
+function getSemanticPromptSpanKindLabel(kind: string): string {
   return translateDisplayKey(`content.promptSpanKind.${kind}`, kind);
 }
 

@@ -95,7 +95,7 @@ export function createImplementationAblationDryRun(planInput, selection) {
   };
 }
 
-export function createImplementationDelta(plan, runId, runs) {
+function createImplementationDelta(plan, runId, runs) {
   const baselineRun = runs.find(({ variant }) => variant.id === plan.baselineVariantId);
   if (!baselineRun) throw implementationError('implementation ablation baseline run is missing');
   const baselineSummary = summarizeRun(baselineRun, plan.comparisonPolicy.quality);
@@ -199,11 +199,7 @@ function summarizeRun(entry, qualityPolicy) {
       ...buildIdentity,
       skillIdentity: variant.skillIdentity,
     },
-    metrics: projectAggregateMetrics(
-      run.aggregate,
-      qualityPolicy,
-      run.samples,
-    ),
+    metrics: projectAggregateMetrics(run.aggregate, qualityPolicy, run.samples),
   };
 }
 

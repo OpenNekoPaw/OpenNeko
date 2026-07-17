@@ -65,7 +65,7 @@ function getGenericApiKeyFromEnv(): string | undefined {
  * Create a ConfigManager for the given workDir.
  * Callers should dispose() when done if not long-lived.
  */
-export function createConfigManager(workDir?: string): ConfigManager {
+function createConfigManager(workDir?: string): ConfigManager {
   const opts: ConfigManagerOptions = {
     userConfigManager: new FileUserConfigManager(),
     workspacePath: workDir,
@@ -467,18 +467,6 @@ export function loadDirectMediaCommandConfig(workDir?: string): {
       },
       modelOptions: cm.getChatModelOptions(),
     };
-  } finally {
-    cm.dispose();
-  }
-}
-
-/**
- * List configured provider IDs.
- */
-export function listConfiguredProviders(workDir?: string): string[] {
-  const cm = createConfigManager(workDir);
-  try {
-    return cm.getProviders().map((p) => p.id);
   } finally {
     cm.dispose();
   }

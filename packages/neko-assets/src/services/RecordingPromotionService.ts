@@ -13,7 +13,7 @@ export type RecordingPromotionErrorCode =
   | 'recording-promotion-invalid-destination'
   | 'recording-project-fact-write-failed';
 
-export class RecordingPromotionError extends Error {
+class RecordingPromotionError extends Error {
   readonly code: RecordingPromotionErrorCode;
   readonly destinationPath: string | null;
 

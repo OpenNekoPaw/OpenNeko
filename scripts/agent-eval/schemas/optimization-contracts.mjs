@@ -15,8 +15,8 @@ export const OPTIMIZATION_SCHEMAS = Object.freeze({
   holdoutSelection: 'neko.agent-eval.optimizer-holdout-selection.v1',
 });
 
-export const OPTIMIZABLE_OWNERS = Object.freeze(['skill-content', 'prompt', 'routing']);
-export const HANDOFF_OWNERS = Object.freeze([
+const OPTIMIZABLE_OWNERS = Object.freeze(['skill-content', 'prompt', 'routing']);
+const HANDOFF_OWNERS = Object.freeze([
   'capability-tool',
   'runtime-session',
   'provider-infrastructure',
@@ -35,7 +35,7 @@ const TEXT_LIST = s.array(TEXT, { maxLength: 100 });
 const NON_EMPTY_TEXT_LIST = s.array(TEXT, { minLength: 1, maxLength: 100 });
 const OWNER = s.enum([...OPTIMIZABLE_OWNERS, ...HANDOFF_OWNERS]);
 
-export const ITERATION_BUDGET_SCHEMA = s.object({
+const ITERATION_BUDGET_SCHEMA = s.object({
   maxCandidates: s.integer({ min: 1, max: 10 }),
   maxIterations: s.integer({ min: 1, max: 20 }),
   timeoutMs: s.integer({ min: 1, max: 86_400_000 }),
@@ -46,7 +46,7 @@ export const ITERATION_BUDGET_SCHEMA = s.object({
   noImprovementLimit: s.integer({ min: 1, max: 10 }),
 });
 
-export const REQUIRED_MATRIX_SCHEMA = s.object({
+const REQUIRED_MATRIX_SCHEMA = s.object({
   suiteId: ID,
   developmentCaseIds: ID_LIST,
   holdoutPolicy: s.object({
@@ -62,7 +62,7 @@ export const REQUIRED_MATRIX_SCHEMA = s.object({
   rubricRef: PATH,
 });
 
-export const OWNERSHIP_FINDING_SCHEMA = s.object({
+const OWNERSHIP_FINDING_SCHEMA = s.object({
   observedFailure: TEXT,
   suspectedOwner: OWNER,
   confidence: s.number({ min: 0, max: 1 }),
@@ -70,7 +70,7 @@ export const OWNERSHIP_FINDING_SCHEMA = s.object({
   missingEvidence: TEXT_LIST,
 });
 
-export const OPTIMIZATION_INTAKE_SCHEMA = s.object(
+const OPTIMIZATION_INTAKE_SCHEMA = s.object(
   {
     schema: s.literal(OPTIMIZATION_SCHEMAS.intake),
     reportId: ID,
@@ -148,7 +148,7 @@ const OPTIMIZATION_TARGET_SCHEMA = s.union([
   }),
 ]);
 
-export const OPTIMIZATION_PLAN_SCHEMA = s.object({
+const OPTIMIZATION_PLAN_SCHEMA = s.object({
   schema: s.literal(OPTIMIZATION_SCHEMAS.plan),
   id: ID,
   status: s.literal('proposed'),
@@ -181,7 +181,7 @@ export const OPTIMIZATION_PLAN_SCHEMA = s.object({
   createdAt: TIMESTAMP,
 });
 
-export const OPTIMIZATION_CANDIDATE_SCHEMA = s.object({
+const OPTIMIZATION_CANDIDATE_SCHEMA = s.object({
   schema: s.literal(OPTIMIZATION_SCHEMAS.candidate),
   id: ID,
   planId: ID,
@@ -201,7 +201,7 @@ export const OPTIMIZATION_CANDIDATE_SCHEMA = s.object({
   createdAt: TIMESTAMP,
 });
 
-export const OPTIMIZATION_HANDOFF_SCHEMA = s.object({
+const OPTIMIZATION_HANDOFF_SCHEMA = s.object({
   schema: s.literal(OPTIMIZATION_SCHEMAS.handoff),
   id: ID,
   reportIds: ID_LIST,
@@ -222,7 +222,7 @@ const APPROVAL_SCOPE_SCHEMA = s.object({
   allowedSections: s.array(SHORT_TEXT, { minLength: 1, maxLength: 50 }),
 });
 
-export const OPTIMIZATION_APPROVAL_SCHEMA = s.object({
+const OPTIMIZATION_APPROVAL_SCHEMA = s.object({
   schema: s.literal(OPTIMIZATION_SCHEMAS.approval),
   id: ID,
   decision: s.enum(['approve', 'reject']),
@@ -249,7 +249,7 @@ const COST_USAGE_SCHEMA = s.union([
   s.object({ status: s.literal('unavailable') }),
 ]);
 
-export const OPTIMIZATION_DECISION_SCHEMA = s.object({
+const OPTIMIZATION_DECISION_SCHEMA = s.object({
   schema: s.literal(OPTIMIZATION_SCHEMAS.decision),
   id: ID,
   planId: ID,
@@ -309,7 +309,7 @@ export const OPTIMIZATION_DECISION_SCHEMA = s.object({
 });
 
 const CHECKPOINT_PARENT_SCHEMA = s.object({ entryId: ID, fingerprint: HASH });
-export const DEVELOPMENT_CHECKPOINT_SCHEMA = s.object(
+const DEVELOPMENT_CHECKPOINT_SCHEMA = s.object(
   {
     schema: s.literal(OPTIMIZATION_SCHEMAS.checkpoint),
     id: ID,
@@ -342,7 +342,7 @@ export const DEVELOPMENT_CHECKPOINT_SCHEMA = s.object(
   },
 );
 
-export const RENAME_LINEAGE_SCHEMA = s.object({
+const RENAME_LINEAGE_SCHEMA = s.object({
   schema: s.literal(OPTIMIZATION_SCHEMAS.renameLineage),
   id: ID,
   kind: s.enum(['rename', 'move']),
@@ -353,13 +353,13 @@ export const RENAME_LINEAGE_SCHEMA = s.object({
   recordedAt: TIMESTAMP,
 });
 
-export const DEVELOPMENT_HISTORY_SCHEMA = s.object({
+const DEVELOPMENT_HISTORY_SCHEMA = s.object({
   schema: s.literal(OPTIMIZATION_SCHEMAS.history),
   entries: s.array(DEVELOPMENT_CHECKPOINT_SCHEMA, { maxLength: 10_000 }),
   renameLineage: s.array(RENAME_LINEAGE_SCHEMA, { maxLength: 1_000 }),
 });
 
-export const HOLDOUT_SELECTION_SCHEMA = s.object({
+const HOLDOUT_SELECTION_SCHEMA = s.object({
   schema: s.literal(OPTIMIZATION_SCHEMAS.holdoutSelection),
   policyId: ID,
   suiteId: ID,
@@ -575,17 +575,7 @@ export function validateHoldoutSelection(input) {
   return input;
 }
 
-export function validateIterationBudget(input) {
-  return validateStrict(input, ITERATION_BUDGET_SCHEMA, 'iterationBudget');
-}
-
-export function validateRequiredMatrix(input) {
-  validateStrict(input, REQUIRED_MATRIX_SCHEMA, 'requiredMatrix');
-  validateMatrix(input, 'requiredMatrix');
-  return input;
-}
-
-export function validateBudgetUsage(usage, budget) {
+function validateBudgetUsage(usage, budget) {
   const limits = [
     ['candidates', 'maxCandidates'],
     ['iterations', 'maxIterations'],

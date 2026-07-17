@@ -11,6 +11,4 @@ const registry = createWebviewLoggerRegistry({
   defaultLevel: LogLevel.Debug,
 });
 
-export const setRootLogger = registry.setRootLogger;
-export const getRootLogger = registry.getRootLogger;
 export const getLogger = registry.getLogger;

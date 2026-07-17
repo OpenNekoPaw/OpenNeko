@@ -18,7 +18,7 @@ export const SCHEMAS = Object.freeze({
   suiteIndex: 'neko.agent-eval.suite-index.v2',
 });
 
-export const TARGET_KINDS = Object.freeze([
+const TARGET_KINDS = Object.freeze([
   'skill',
   'prompt',
   'capability',
@@ -38,7 +38,7 @@ export const CASE_GROUPS = Object.freeze([
   'regression',
   'holdout',
 ]);
-export const OUTCOMES = Object.freeze([
+const OUTCOMES = Object.freeze([
   'pass',
   'case-fail',
   'infrastructure-fail',
@@ -77,7 +77,7 @@ export const TARGET_SCHEMA = s.union([
   HASHED_TARGET_SCHEMA,
 ]);
 
-export const EVIDENCE_CONTRACT_SCHEMA = s.object({
+const EVIDENCE_CONTRACT_SCHEMA = s.object({
   userBehavior: TEXT,
   canonicalPath: STRING_LIST,
   forbiddenFallback: STRING_LIST,
@@ -108,7 +108,7 @@ const COVERAGE_ENTRY_SCHEMA = s.union([
     reason: SHORT_TEXT,
   }),
 ]);
-export const COVERAGE_DELTA_SCHEMA = s.object({
+const COVERAGE_DELTA_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.coverageDelta),
   behaviorId: ID,
   groups: s.array(COVERAGE_ENTRY_SCHEMA, {
@@ -125,7 +125,7 @@ const AUTHORING_BASE = {
   evidenceContract: EVIDENCE_CONTRACT_SCHEMA,
   coverageDelta: COVERAGE_DELTA_SCHEMA,
 };
-export const AUTHORING_DECISION_SCHEMA = s.union([
+const AUTHORING_DECISION_SCHEMA = s.union([
   s.object({ ...AUTHORING_BASE, decision: s.literal('reuse'), suiteId: ID }),
   s.object({ ...AUTHORING_BASE, decision: s.literal('update'), suiteId: ID }),
   s.object({ ...AUTHORING_BASE, decision: s.literal('create'), proposedSuiteId: ID }),
@@ -146,7 +146,7 @@ const RUNTIME_SETTINGS_SCHEMA = s.object(
     outputFormat: s.enum(['text', 'json', 'markdown']),
   },
 );
-export const RUNTIME_PROFILE_SCHEMA = s.object({
+const RUNTIME_PROFILE_SCHEMA = s.object({
   id: ID,
   settings: RUNTIME_SETTINGS_SCHEMA,
   configurationHash: HASH,
@@ -170,7 +170,7 @@ const MODEL_PURPOSES_SCHEMA = s.object(
     'audio.music.generate': MODEL_BINDING_SCHEMA,
   },
 );
-export const MODEL_PROFILE_SCHEMA = s.union([
+const MODEL_PROFILE_SCHEMA = s.union([
   s.object(
     {
       id: ID,
@@ -187,7 +187,7 @@ export const MODEL_PROFILE_SCHEMA = s.union([
   }),
 ]);
 
-export const FIXTURE_SCHEMA = s.object({
+const FIXTURE_SCHEMA = s.object({
   id: ID,
   root: PATH,
   source: s.enum(['repository', 'generated']),
@@ -212,7 +212,7 @@ const SUITE_CASE_INDEX_SCHEMA = s.object({
   visibility: s.enum(['public', 'holdout']),
 });
 
-export const SUITE_SCHEMA = s.object({
+const SUITE_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.suite),
   id: ID,
   owner: s.object({ kind: s.enum(['skill', 'agent-runtime']), id: ID }),
@@ -244,7 +244,7 @@ export const SUITE_SCHEMA = s.object({
   reportPolicy: REPORT_POLICY_SCHEMA,
 });
 
-export const SUITE_INDEX_SCHEMA = s.object({
+const SUITE_INDEX_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.suiteIndex),
   ownerKind: s.enum(['skill', 'agent-runtime']),
   entries: s.array(
@@ -562,7 +562,7 @@ const RUBRIC_CRITERION_SCHEMA = s.object({
   weight: s.number({ min: 0.01, max: 1 }),
   evidenceRefs: ID_LIST,
 });
-export const RUBRIC_DEFINITION_SCHEMA = s.object({
+const RUBRIC_DEFINITION_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.rubric),
   id: ID,
   domain: ID,
@@ -571,18 +571,18 @@ export const RUBRIC_DEFINITION_SCHEMA = s.object({
   maximumUncertainty: s.number({ min: 0, max: 1 }),
   criteria: s.array(RUBRIC_CRITERION_SCHEMA, { minLength: 1, maxLength: 50 }),
 });
-export const RUBRIC_SCHEMA = s.object({
+const RUBRIC_SCHEMA = s.object({
   kind: s.literal('domain-rubric'),
   ref: PATH,
   judgeProfileId: ID,
 });
 
-export const BUDGET_SCHEMA = s.object(
+const BUDGET_SCHEMA = s.object(
   { timeoutMs: s.integer({ min: 1 }), repetitions: s.integer({ min: 1, max: 100 }) },
   { maxTokens: s.integer({ min: 1 }), maxCostUsd: s.number({ min: 0 }) },
 );
 
-export const SCENARIO_SCHEMA = s.object(
+const SCENARIO_SCHEMA = s.object(
   {
     schema: s.literal(SCHEMAS.scenario),
     id: ID,
@@ -628,7 +628,7 @@ const REPORT_LOCATIONS_SCHEMA = s.object(
   { judge: PATH, baselineDiff: PATH },
 );
 
-export const RESULT_SCHEMA = s.object({
+const RESULT_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.result),
   reportId: ID,
   suiteId: ID,
@@ -667,7 +667,7 @@ const EVIDENCE_ITEM_SCHEMA = s.object(
   },
   { digest: HASH, droppedCount: s.integer({ min: 0 }), data: s.anyJson() },
 );
-export const EVIDENCE_SCHEMA = s.object({
+const EVIDENCE_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.evidence),
   reportId: ID,
   items: s.array(EVIDENCE_ITEM_SCHEMA, { minLength: 1, maxLength: 5_000 }),
@@ -696,7 +696,7 @@ const ARTIFACT_MANIFEST_ENTRY_SCHEMA = s.union([
     validatorStatus: s.enum(['valid', 'invalid', 'unavailable']),
   }),
 ]);
-export const ARTIFACT_MANIFEST_SCHEMA = s.object({
+const ARTIFACT_MANIFEST_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.artifactManifest),
   reportId: ID,
   artifacts: s.array(ARTIFACT_MANIFEST_ENTRY_SCHEMA, { maxLength: 1_000 }),
@@ -709,7 +709,7 @@ const DISTRIBUTION_SCHEMA = s.object({
   mean: s.number(),
   variance: s.number({ min: 0 }),
 });
-export const BASELINE_SCHEMA = s.object({
+const BASELINE_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.baseline),
   id: ID,
   target: TARGET_SCHEMA,
@@ -728,7 +728,7 @@ export const BASELINE_SCHEMA = s.object({
   approvedAt: TIMESTAMP,
 });
 
-export const COMPARISON_SCHEMA = s.object(
+const COMPARISON_SCHEMA = s.object(
   {
     schema: s.literal(SCHEMAS.comparison),
     id: ID,
@@ -752,7 +752,7 @@ const JUDGE_CRITERION_RESULT_SCHEMA = s.object({
   reason: TEXT,
   uncertainty: s.number({ min: 0, max: 1 }),
 });
-export const JUDGE_RESULT_SCHEMA = s.object({
+const JUDGE_RESULT_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.judge),
   reportId: ID,
   suiteId: ID,
@@ -776,7 +776,7 @@ export const JUDGE_RESULT_SCHEMA = s.object({
   usage: s.object({ inputTokens: s.integer({ min: 0 }), outputTokens: s.integer({ min: 0 }) }),
 });
 
-export const REPEATED_RUN_SCHEMA = s.object({
+const REPEATED_RUN_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.repeatedRun),
   suiteId: ID,
   caseId: ID,
@@ -831,7 +831,7 @@ export const REPEATED_RUN_SCHEMA = s.object({
   }),
 });
 
-export const FAILURE_ATTRIBUTION_SCHEMA = s.object({
+const FAILURE_ATTRIBUTION_SCHEMA = s.object({
   schema: s.literal(SCHEMAS.failureAttribution),
   reportId: ID,
   observedFailures: s.array(s.object({ id: ID, kind: ID, summary: TEXT, evidenceRefs: ID_LIST }), {
@@ -860,7 +860,7 @@ export const FAILURE_ATTRIBUTION_SCHEMA = s.object({
   ),
 });
 
-export const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
+const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
   stepKinds: new Set([
     'submit',
     'queue',
@@ -917,7 +917,7 @@ export function validateAuthoringDecision(input) {
   return input;
 }
 
-export function validateCoverageDelta(input) {
+function validateCoverageDelta(input) {
   validateStrict(input, COVERAGE_DELTA_SCHEMA, 'coverageDelta');
   const observed = input.groups.map((entry) => entry.group);
   const duplicates = observed.filter((group, index) => observed.indexOf(group) !== index);

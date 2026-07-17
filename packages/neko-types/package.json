@@ -24,8 +24,6 @@
     "./nkv": "./src/nkv/index.ts",
     "./nkc": "./src/nkc/index.ts",
     "./nka": "./src/nka/index.ts",
-    "./nkplan": "./src/nkplan/index.ts",
-    "./nkproj": "./src/nkproj/index.ts",
     "./components": "./src/components/index.ts",
     "./content-access": "./src/content-access/index.ts",
     "./icons": "./src/icons/index.ts",

@@ -45,7 +45,7 @@ export interface TabViewportSnapshot {
   readonly anchorOffset?: number;
 }
 
-export const DEFAULT_TAB_VIEWPORT: TabViewportSnapshot = {
+const DEFAULT_TAB_VIEWPORT: TabViewportSnapshot = {
   followMode: 'follow-tail',
 };
 

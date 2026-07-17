@@ -109,7 +109,7 @@ export function hashOptimizationArtifact(value) {
   return `sha256:${createHash('sha256').update(value).digest('hex')}`;
 }
 
-export function assertPatchScope(patchText, targetFile) {
+function assertPatchScope(patchText, targetFile) {
   const paths = [...patchText.matchAll(/^diff --git a\/(.+) b\/(.+)$/gmu)].flatMap((match) => [
     match[1],
     match[2],

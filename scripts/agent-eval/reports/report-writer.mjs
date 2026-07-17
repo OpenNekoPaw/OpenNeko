@@ -15,7 +15,7 @@ import { validateAblationDelta } from '../schemas/ablation-contracts.mjs';
 import { assertShareableEvidence } from '../schemas/evidence-policy.mjs';
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-export const DEFAULT_REPORT_ROOT = resolve(REPOSITORY_ROOT, 'reports/agent-eval');
+const DEFAULT_REPORT_ROOT = resolve(REPOSITORY_ROOT, 'reports/agent-eval');
 
 export function createM1ReportDocuments(input) {
   const relativeDirectory = `${input.suite.id}/${input.scenario.id}/${input.runId}`;
@@ -206,7 +206,7 @@ export async function writeBaselineDiffReport(document, input, options = {}) {
   return { baselineDiff: file };
 }
 
-export function createSanitizedSummary(input) {
+function createSanitizedSummary(input) {
   const { result } = input;
   const summary = {
     schema: 'neko.agent-eval.summary.v2',

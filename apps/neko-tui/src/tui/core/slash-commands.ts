@@ -65,7 +65,9 @@ export interface TuiConversationCatalogEntry {
 
 export interface TuiConversationCatalogPort {
   list(): readonly TuiConversationCatalogEntry[] | Promise<readonly TuiConversationCatalogEntry[]>;
-  get(id: string): TuiConversationCatalogEntry | undefined | Promise<TuiConversationCatalogEntry | undefined>;
+  get(
+    id: string,
+  ): TuiConversationCatalogEntry | undefined | Promise<TuiConversationCatalogEntry | undefined>;
 }
 
 /**
@@ -180,7 +182,7 @@ export async function handleSlashCommand(
   return toSlashCommandResult(result);
 }
 
-export async function handleSkillInvocation(
+async function handleSkillInvocation(
   input: string,
   _context: SlashCommandContext,
 ): Promise<SkillInvocationResult> {

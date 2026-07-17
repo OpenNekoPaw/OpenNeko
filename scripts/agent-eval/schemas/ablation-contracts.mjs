@@ -156,10 +156,7 @@ const IMPLEMENTATION_PLAN_SCHEMA = s.object({
   variants: s.array(IMPLEMENTATION_VARIANT_SCHEMA, { minLength: 2, maxLength: 20 }),
 });
 
-export const ABLATION_PLAN_SCHEMA = s.union([
-  CONFIGURATION_PLAN_SCHEMA,
-  IMPLEMENTATION_PLAN_SCHEMA,
-]);
+const ABLATION_PLAN_SCHEMA = s.union([CONFIGURATION_PLAN_SCHEMA, IMPLEMENTATION_PLAN_SCHEMA]);
 
 const OUTCOME_SCHEMA = s.enum([
   'pass',
@@ -276,7 +273,7 @@ const ABLATION_DELTA_VARIANT_SCHEMA = s.object(
   { deltaFromBaseline: BASELINE_DELTA_SCHEMA },
 );
 
-export const ABLATION_DELTA_SCHEMA = s.object({
+const ABLATION_DELTA_SCHEMA = s.object({
   schema: s.literal(ABLATION_SCHEMAS.delta),
   id: ID,
   planId: ID,
@@ -337,9 +334,13 @@ export function validateAblationQualityContract(planInput, selection) {
     );
   }
   if (!selection.rubrics?.[policy.rubricRef]) {
-    throw new Error(`ablationPlan rubric was not loaded from its owning suite: ${policy.rubricRef}`);
+    throw new Error(
+      `ablationPlan rubric was not loaded from its owning suite: ${policy.rubricRef}`,
+    );
   }
-  if (!selection.suite.judgeProfiles.some((profile) => profile.id === scenarioRubric.judgeProfileId)) {
+  if (
+    !selection.suite.judgeProfiles.some((profile) => profile.id === scenarioRubric.judgeProfileId)
+  ) {
     throw new Error(
       `ablationPlan scenario Judge profile is not declared by the suite: ${scenarioRubric.judgeProfileId}`,
     );

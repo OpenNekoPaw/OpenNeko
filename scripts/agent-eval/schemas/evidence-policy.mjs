@@ -124,7 +124,7 @@ export const EVIDENCE_ALLOWLISTS = deepFreeze({
   },
 });
 
-export const SECRET_FIELD_NAMES = Object.freeze([
+const SECRET_FIELD_NAMES = Object.freeze([
   'apiKey',
   'api_key',
   'authorization',

@@ -17,7 +17,7 @@ export function resolveResourceRefDisplayName(resourceRef: ResourceRef): string 
   return resourceRef.id;
 }
 
-export function extractResourceBasename(pathOrUri: string): string {
+function extractResourceBasename(pathOrUri: string): string {
   const normalized = pathOrUri.replace(/\\/g, '/');
   const basename = normalized.split('/').pop();
   if (!basename) return pathOrUri;

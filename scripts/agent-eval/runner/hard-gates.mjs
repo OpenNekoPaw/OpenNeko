@@ -1,6 +1,6 @@
 import { evaluateStructuredOutput } from './structured-output.mjs';
 
-export const EVALUATION_OUTCOMES = Object.freeze({
+const EVALUATION_OUTCOMES = Object.freeze({
   pass: 'pass',
   caseFail: 'case-fail',
   infrastructureFail: 'infrastructure-fail',

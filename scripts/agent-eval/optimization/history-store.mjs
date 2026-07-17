@@ -10,7 +10,7 @@ import {
 } from '../schemas/optimization-contracts.mjs';
 
 const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-export const DEFAULT_SKILL_HISTORY_FILE = resolve(
+const DEFAULT_SKILL_HISTORY_FILE = resolve(
   REPOSITORY_ROOT,
   'quality/skill-development-history/history.json',
 );

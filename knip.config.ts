@@ -7,8 +7,6 @@ const config: KnipConfig = {
     'types',
   ],
   ignore: [
-    // Skills are runtime CLI scripts, not imported modules
-    'skills/**',
     // VS Code loads this CommonJS entry from its extension manifest at Debug Host startup.
     'scripts/webview-functional/vscode-controller/extension.cjs',
   ],
@@ -23,7 +21,6 @@ const config: KnipConfig = {
     'sharp', // Native binary, loaded at runtime
     '@img/sharp-wasm32', // Sharp WASM fallback
     'clsx',
-    'electron', // Loaded by the Webview functional Electron host.
   ],
   ignoreIssues: {
     // Internal editor API surfaces: intentionally exported for feature modules
@@ -52,13 +49,10 @@ const config: KnipConfig = {
     '.': {
       entry: [
         'scripts/agent-eval/ablation/run.mjs',
-        'scripts/agent-eval/all-suite-dry-run.mjs',
         'scripts/agent-eval/canvas-json-check.mjs',
         'scripts/agent-eval/local-run.mjs',
         'scripts/agent-eval/protocol-smoke.mjs',
         'scripts/agent-eval/validators/file-validator-cli.mjs',
-        'scripts/check-canvas-playback-boundary.mjs',
-        'scripts/compile-ts-vsix.mjs',
         'scripts/test-orchestration/fixtures/*.ts',
         'scripts/webview-functional/*.test.mjs',
       ],
@@ -79,12 +73,7 @@ const config: KnipConfig = {
     'packages/neko-preview': {},
     'packages/neko-assets': {},
     'packages/neko-engine': {
-      ignore: [
-        'packages/engine-*/**',
-        'packages/host-napi/**',
-        'packages/host-cli/**',
-        'packages/runtime-*/**',
-      ], // Rust packages, skip
+      ignore: ['packages/host-napi/**'], // Rust packages, skip
     },
 
     // ── Extension sub-packages ────────────────────────
@@ -93,8 +82,6 @@ const config: KnipConfig = {
       // Vite auto-detects entries from HTML files, explicit entry is redundant
       ignore: [
         // Phase 2 features (v2.0) - planned but not yet implemented
-        'src/assetLibrary.tsx',
-        'src/components/AssetLibrary/**',
         'src/components/ColorCorrection/**',
         'src/components/Subtitles/**',
         'src/components/Effects/**',
@@ -104,7 +91,6 @@ const config: KnipConfig = {
         'src/components/TransitionPicker/**',
         'src/components/PenToolEditor.tsx',
         'src/components/ShapeRenderer.tsx',
-        'src/components/Toolbar.tsx',
         'src/tools/**',
         'src/utils/subtitleParser.ts',
         'src/types/audioEffects.ts',
@@ -142,7 +128,7 @@ const config: KnipConfig = {
     'packages/neko-agent/test-utils': {},
     'packages/neko-canvas/packages/extension': {},
     'packages/neko-canvas/packages/webview': {
-      entry: ['src/main.tsx', 'src/preview/narrativePreviewMediaRuntime.ts'],
+      entry: ['src/preview/narrativePreviewMediaRuntime.ts'],
       ignore: [
         // Barrel exports
         'src/types/index.ts',

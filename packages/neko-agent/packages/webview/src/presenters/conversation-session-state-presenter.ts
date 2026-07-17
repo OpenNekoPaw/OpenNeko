@@ -73,7 +73,7 @@ export function projectConversationSessionState(
   };
 }
 
-export function normalizeSessionStreamingState(
+function normalizeSessionStreamingState(
   streaming: ConversationSessionStreamingState | undefined,
 ): ConversationSessionStreamingState {
   if (!streaming) {
@@ -90,7 +90,7 @@ export function normalizeSessionStreamingState(
   };
 }
 
-export function idleSessionStreamingState(): ConversationSessionStreamingState {
+function idleSessionStreamingState(): ConversationSessionStreamingState {
   return {
     streamingMessageId: null,
     isThinking: false,

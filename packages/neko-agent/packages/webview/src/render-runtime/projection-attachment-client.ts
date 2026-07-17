@@ -37,7 +37,7 @@ export interface ProjectionAttachmentClientOptions {
   readonly reportError: (error: Error, key: ProjectionAttachmentKey) => void;
 }
 
-export class ProjectionAttachmentClientProtocolError extends Error {
+class ProjectionAttachmentClientProtocolError extends Error {
   constructor(
     readonly code: ProjectionAttachmentProtocolDiagnosticCode,
     message: string,

@@ -69,7 +69,7 @@ export function createConfigurationAblationDryRun(planInput, selection) {
   };
 }
 
-export function createConfigurationDelta(plan, runId, runs) {
+function createConfigurationDelta(plan, runId, runs) {
   const baselineRun = runs.find(({ variant }) => variant.id === plan.baselineVariantId);
   if (!baselineRun) throw configurationError('configuration ablation baseline run is missing');
   const baselineSummary = summarizeRun(

@@ -4,7 +4,7 @@ export const SUPPORTED_FILE_VALIDATOR_IDS = Object.freeze([
   'canvas-json-v1',
 ]);
 
-export const SUPPORTED_RUNTIME_VALIDATOR_IDS = Object.freeze([
+const SUPPORTED_RUNTIME_VALIDATOR_IDS = Object.freeze([
   'durable-resource-ref',
   'composite-artifact-schema',
   'artifact-execution-summary',

@@ -60,14 +60,14 @@ export const EXPECTED_BUILTIN_SKILLS = Object.freeze([
   'script-generation',
   'script-to-timeline',
 ]);
-export const EXPECTED_PROMPT_LAYERS = Object.freeze([
+const EXPECTED_PROMPT_LAYERS = Object.freeze([
   'base',
   'schema',
   'skill',
   'environment',
   'ephemeral',
 ]);
-export const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
+const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'evaluation-platform',
   'tui-debug-facts',
   'prompt-composition',
@@ -79,7 +79,7 @@ export const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'creative-media-workflow',
   'tui-event-projection',
 ]);
-export const EXPECTED_LEGACY_CASES = Object.freeze([
+const EXPECTED_LEGACY_CASES = Object.freeze([
   'cat-play-image-analysis',
   'storyboard-distinct-image-video-prompts',
   'comic-description-canonical-storyboard-skill',
@@ -104,8 +104,14 @@ export async function loadCoverageIndex(options = {}) {
   const root = resolve(options.root ?? DEFAULT_ROOT);
   const input = JSON.parse(await fs.readFile(resolve(root, 'coverage-index.json'), 'utf8'));
   validateStrict(input, COVERAGE_INDEX_SCHEMA, 'coverageIndex');
-  validateUnique(input.targets.map((item) => `${item.kind}:${item.id}`), 'coverage targets');
-  validateUnique(input.legacyCases.map((item) => item.id), 'legacy Evaluation cases');
+  validateUnique(
+    input.targets.map((item) => `${item.kind}:${item.id}`),
+    'coverage targets',
+  );
+  validateUnique(
+    input.legacyCases.map((item) => item.id),
+    'legacy Evaluation cases',
+  );
   validateInventory(input);
   if (options.suites) validateSuiteReferences(input, options.suites);
   return input;
@@ -154,12 +160,17 @@ function validateSuiteReferences(index, suites) {
     if (target.disposition !== 'suite') continue;
     for (const suiteId of target.suiteIds) {
       const suite = byId.get(suiteId);
-      if (!suite) throw new Error(`coverage target ${target.kind}/${target.id} references missing suite ${suiteId}`);
+      if (!suite)
+        throw new Error(
+          `coverage target ${target.kind}/${target.id} references missing suite ${suiteId}`,
+        );
       if (
         target.kind === 'builtin-skill' &&
         (suite.suite.target.kind !== 'skill' || suite.suite.target.identity.name !== target.id)
       ) {
-        throw new Error(`builtin Skill ${target.id} coverage must reference its exact Skill target suite`);
+        throw new Error(
+          `builtin Skill ${target.id} coverage must reference its exact Skill target suite`,
+        );
       }
     }
   }
@@ -167,7 +178,8 @@ function validateSuiteReferences(index, suites) {
     if (legacy.disposition !== 'migrated') continue;
     for (const replacement of legacy.replacements) {
       const suite = byId.get(replacement.suiteId);
-      if (!suite) throw new Error(`legacy case ${legacy.id} references missing suite ${replacement.suiteId}`);
+      if (!suite)
+        throw new Error(`legacy case ${legacy.id} references missing suite ${replacement.suiteId}`);
       if (!suite.cases.some((item) => item.scenario.id === replacement.caseId)) {
         throw new Error(
           `legacy case ${legacy.id} references missing case ${replacement.suiteId}/${replacement.caseId}`,

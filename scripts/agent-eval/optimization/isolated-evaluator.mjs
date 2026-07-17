@@ -188,7 +188,7 @@ export function createOptimizationAblationPlan(planInput, targets, selection) {
   });
 }
 
-export async function projectCurrentBlindSample(sample, options) {
+async function projectCurrentBlindSample(sample, options) {
   if (!sample?.files?.evidence || !sample?.files?.artifactManifest || !sample?.result) {
     throw evaluationError(
       'optimization-sample-evidence-missing',
