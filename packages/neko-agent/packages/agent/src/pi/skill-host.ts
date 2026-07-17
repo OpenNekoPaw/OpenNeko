@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
-import { dirname, isAbsolute, relative } from "node:path";
+import { createHash, randomUUID } from 'node:crypto';
+import { dirname, isAbsolute, relative } from 'node:path';
 
 import {
   formatSkillInvocation,
@@ -8,11 +8,11 @@ import {
   type ExecutionEnv,
   type Skill,
   type SkillDiagnostic,
-} from "@earendil-works/pi-agent-core";
-import { NodeExecutionEnv } from "@earendil-works/pi-agent-core/node";
-import type { ExternalProcessorResult } from "@neko-agent/types";
+} from '@earendil-works/pi-agent-core';
+import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import type { ExternalProcessorResult } from '@neko-agent/types';
 
-export type SkillSourceKind = "builtin" | "personal" | "project";
+export type SkillSourceKind = 'builtin' | 'personal' | 'project';
 
 export interface SkillSource {
   readonly kind: SkillSourceKind;
@@ -24,13 +24,13 @@ export interface SkillSourceRoot {
 }
 
 export interface SkillLocator {
-  readonly kind: "skill";
+  readonly kind: 'skill';
   readonly value: string;
   readonly fingerprint: string;
 }
 
 export interface SkillResourceLocator {
-  readonly kind: "skill-resource";
+  readonly kind: 'skill-resource';
   readonly value: string;
   readonly fingerprint: string;
   readonly relativePath: string;
@@ -69,8 +69,8 @@ export interface SkillHostPolicy {
 }
 
 export interface SkillHostWarning {
-  readonly type: "warning";
-  readonly code: "duplicate-skill";
+  readonly type: 'warning';
+  readonly code: 'duplicate-skill';
   readonly message: string;
   readonly skillName: string;
   readonly selectedSource: SkillSourceKind;
@@ -89,15 +89,12 @@ export interface SkillExternalProcessorPermissionInput {
 }
 
 export type SkillExternalProcessorPermissionDecision =
-  | { readonly allowed: true }
-  | { readonly allowed: false; readonly reason: string };
+  { readonly allowed: true } | { readonly allowed: false; readonly reason: string };
 
 export interface SkillExternalProcessorAuthorizer {
   authorize(
     input: SkillExternalProcessorPermissionInput,
-  ):
-    | SkillExternalProcessorPermissionDecision
-    | Promise<SkillExternalProcessorPermissionDecision>;
+  ): SkillExternalProcessorPermissionDecision | Promise<SkillExternalProcessorPermissionDecision>;
 }
 
 export interface SkillExternalProcessorExecutor {
@@ -121,19 +118,19 @@ export interface ExecuteSkillExternalProcessorInput {
 }
 
 export type SkillHostErrorCode =
-  | "skill-not-found"
-  | "invalid-locator"
-  | "invalid-resource-path"
-  | "resource-outside-skill"
-  | "external-processor-denied"
-  | "external-processor-unavailable";
+  | 'skill-not-found'
+  | 'invalid-locator'
+  | 'invalid-resource-path'
+  | 'resource-outside-skill'
+  | 'external-processor-denied'
+  | 'external-processor-unavailable';
 
 export class SkillHostError extends Error {
   readonly code: SkillHostErrorCode;
 
   constructor(code: SkillHostErrorCode, message: string) {
     super(message);
-    this.name = "SkillHostError";
+    this.name = 'SkillHostError';
     this.code = code;
   }
 }
@@ -245,9 +242,7 @@ export class PiSkillHostSnapshot {
     },
   ) {
     this.byName = new Map(selected.map((entry) => [entry.record.name, entry]));
-    this.byFingerprint = new Map(
-      selected.map((entry) => [entry.record.fingerprint, entry]),
-    );
+    this.byFingerprint = new Map(selected.map((entry) => [entry.record.fingerprint, entry]));
   }
 
   get records(): readonly SkillHostRecord[] {
@@ -265,7 +260,7 @@ export class PiSkillHostSnapshot {
   invoke(skillName: string, additionalInstructions?: string): string {
     const stored = this.byName.get(skillName);
     if (stored === undefined) {
-      throw new SkillHostError("skill-not-found", `Skill ${skillName} is not available.`);
+      throw new SkillHostError('skill-not-found', `Skill ${skillName} is not available.`);
     }
     return formatSkillInvocation(stored.skill, additionalInstructions);
   }
@@ -273,7 +268,7 @@ export class PiSkillHostSnapshot {
   resource(skillName: string, relativePath: string): SkillResourceLocator {
     const stored = this.byName.get(skillName);
     if (stored === undefined) {
-      throw new SkillHostError("skill-not-found", `Skill ${skillName} is not available.`);
+      throw new SkillHostError('skill-not-found', `Skill ${skillName} is not available.`);
     }
     const normalized = validateRelativeResourcePath(relativePath);
     return createResourceLocator(this.namespace, stored.record.fingerprint, normalized);
@@ -281,7 +276,7 @@ export class PiSkillHostSnapshot {
 
   async readText(locator: SkillLocator | SkillResourceLocator): Promise<string> {
     const stored = this.resolveStoredSkill(locator);
-    if (locator.kind === "skill") return stored.skill.content;
+    if (locator.kind === 'skill') return stored.skill.content;
     this.validateResourceLocator(locator);
     const physicalPath = await this.resolvePhysicalResource(stored, locator.relativePath);
     return getOrThrow(await this.env.readTextFile(physicalPath));
@@ -306,31 +301,31 @@ export class PiSkillHostSnapshot {
   ): Promise<SkillExternalProcessorResult> {
     if (this.externalProcessor === undefined) {
       throw new SkillHostError(
-        "external-processor-unavailable",
-        "No Skill external processor executor is configured.",
+        'external-processor-unavailable',
+        'No Skill external processor executor is configured.',
       );
     }
     if (!input.workspaceTrusted) {
       throw new SkillHostError(
-        "external-processor-denied",
-        "Skill external processors require a trusted workspace.",
+        'external-processor-denied',
+        'Skill external processors require a trusted workspace.',
       );
     }
     const stored = this.byName.get(input.skillName);
     if (stored === undefined) {
-      throw new SkillHostError("skill-not-found", `Skill ${input.skillName} is not available.`);
+      throw new SkillHostError('skill-not-found', `Skill ${input.skillName} is not available.`);
     }
     this.validateResourceLocator(input.script);
     if (input.script.fingerprint !== stored.record.fingerprint) {
       throw new SkillHostError(
-        "invalid-locator",
+        'invalid-locator',
         `Script locator does not belong to Skill ${input.skillName}.`,
       );
     }
-    if (!input.script.relativePath.startsWith("scripts/")) {
+    if (!input.script.relativePath.startsWith('scripts/')) {
       throw new SkillHostError(
-        "invalid-resource-path",
-        "External processors must be located under the Skill scripts/ directory.",
+        'invalid-resource-path',
+        'External processors must be located under the Skill scripts/ directory.',
       );
     }
     const args = Object.freeze([...(input.args ?? [])]);
@@ -345,7 +340,7 @@ export class PiSkillHostSnapshot {
       workspaceTrusted: input.workspaceTrusted,
     });
     if (!decision.allowed) {
-      throw new SkillHostError("external-processor-denied", decision.reason);
+      throw new SkillHostError('external-processor-denied', decision.reason);
     }
     const physicalScriptPath = await this.resolvePhysicalResource(
       stored,
@@ -362,10 +357,13 @@ export class PiSkillHostSnapshot {
     this.validateNamespace(locator.value);
     const stored = this.byFingerprint.get(locator.fingerprint);
     if (stored === undefined) {
-      throw new SkillHostError("invalid-locator", "Skill locator is not part of this turn snapshot.");
+      throw new SkillHostError(
+        'invalid-locator',
+        'Skill locator is not part of this turn snapshot.',
+      );
     }
     const expected =
-      locator.kind === "skill"
+      locator.kind === 'skill'
         ? createSkillLocator(this.namespace, locator.fingerprint).value
         : createResourceLocator(
             this.namespace,
@@ -373,7 +371,7 @@ export class PiSkillHostSnapshot {
             validateRelativeResourcePath(locator.relativePath),
           ).value;
     if (locator.value !== expected) {
-      throw new SkillHostError("invalid-locator", "Skill locator value does not match its fields.");
+      throw new SkillHostError('invalid-locator', 'Skill locator value does not match its fields.');
     }
     return stored;
   }
@@ -384,19 +382,26 @@ export class PiSkillHostSnapshot {
 
   private validateNamespace(value: string): void {
     if (!value.startsWith(`/__neko_skills/${this.namespace}/`)) {
-      throw new SkillHostError("invalid-locator", "Skill locator belongs to another process.");
+      throw new SkillHostError('invalid-locator', 'Skill locator belongs to another process.');
     }
   }
 
-  private async resolvePhysicalResource(stored: StoredSkill, relativePath: string): Promise<string> {
+  private async resolvePhysicalResource(
+    stored: StoredSkill,
+    relativePath: string,
+  ): Promise<string> {
     const normalized = validateRelativeResourcePath(relativePath);
     const addressed = getOrThrow(await this.env.joinPath([stored.physicalRoot, normalized]));
     const canonical = getOrThrow(await this.env.canonicalPath(addressed));
     const fromRoot = relative(stored.physicalRoot, canonical);
-    if (fromRoot === ".." || fromRoot.startsWith(`..${pathSeparator(fromRoot)}`) || isAbsolute(fromRoot)) {
+    if (
+      fromRoot === '..' ||
+      fromRoot.startsWith(`..${pathSeparator(fromRoot)}`) ||
+      isAbsolute(fromRoot)
+    ) {
       throw new SkillHostError(
-        "resource-outside-skill",
-        "Skill resource resolves outside its physical Skill package.",
+        'resource-outside-skill',
+        'Skill resource resolves outside its physical Skill package.',
       );
     }
     return canonical;
@@ -408,7 +413,8 @@ function selectProjectFirst(
   warnings: SkillHostWarning[],
 ): readonly StoredSkill[] {
   const ordered = [...candidates].sort(
-    (left, right) => SOURCE_PRIORITY[right.record.source.kind] - SOURCE_PRIORITY[left.record.source.kind],
+    (left, right) =>
+      SOURCE_PRIORITY[right.record.source.kind] - SOURCE_PRIORITY[left.record.source.kind],
   );
   const selected = new Map<string, StoredSkill>();
   for (const candidate of ordered) {
@@ -419,8 +425,8 @@ function selectProjectFirst(
     }
     warnings.push(
       Object.freeze({
-        type: "warning",
-        code: "duplicate-skill",
+        type: 'warning',
+        code: 'duplicate-skill',
         message: `Skill ${candidate.record.name} from ${candidate.record.source.kind} is shadowed by ${winner.record.source.kind}.`,
         skillName: candidate.record.name,
         selectedSource: winner.record.source.kind,
@@ -436,11 +442,11 @@ async function fingerprintSkillPackage(
   skill: Skill,
   physicalRoot: string,
 ): Promise<string> {
-  const hash = createHash("sha256")
+  const hash = createHash('sha256')
     .update(skill.name)
-    .update("\u0000")
+    .update('\u0000')
     .update(skill.description)
-    .update("\u0000")
+    .update('\u0000')
     .update(skill.content);
   const pending = [physicalRoot];
   while (pending.length > 0) {
@@ -449,30 +455,30 @@ async function fingerprintSkillPackage(
       left.path.localeCompare(right.path),
     );
     for (const entry of entries) {
-      const relativePath = relative(physicalRoot, entry.path).replaceAll("\\", "/");
-      hash.update("\u0000").update(entry.kind).update("\u0000").update(relativePath);
-      if (entry.kind === "directory") {
+      const relativePath = relative(physicalRoot, entry.path).replaceAll('\\', '/');
+      hash.update('\u0000').update(entry.kind).update('\u0000').update(relativePath);
+      if (entry.kind === 'directory') {
         pending.push(entry.path);
-      } else if (entry.kind === "file") {
-        hash.update("\u0000").update(getOrThrow(await env.readBinaryFile(entry.path)));
+      } else if (entry.kind === 'file') {
+        hash.update('\u0000').update(getOrThrow(await env.readBinaryFile(entry.path)));
       } else {
         const canonical = getOrThrow(await env.canonicalPath(entry.path));
         hash
-          .update("\u0000")
+          .update('\u0000')
           .update(
             canonical.startsWith(`${physicalRoot}/`)
-              ? relative(physicalRoot, canonical).replaceAll("\\", "/")
-              : "outside",
+              ? relative(physicalRoot, canonical).replaceAll('\\', '/')
+              : 'outside',
           );
       }
     }
   }
-  return hash.digest("hex");
+  return hash.digest('hex');
 }
 
 function createSkillLocator(namespace: string, fingerprint: string): SkillLocator {
   return Object.freeze({
-    kind: "skill",
+    kind: 'skill',
     value: `/__neko_skills/${namespace}/${fingerprint}/SKILL.md`,
     fingerprint,
   });
@@ -483,54 +489,47 @@ function createResourceLocator(
   fingerprint: string,
   relativePath: string,
 ): SkillResourceLocator {
-  const encoded = relativePath.split("/").map(encodeURIComponent).join("/");
+  const encoded = relativePath.split('/').map(encodeURIComponent).join('/');
   return Object.freeze({
-    kind: "skill-resource",
+    kind: 'skill-resource',
     value: `/__neko_skills/${namespace}/${fingerprint}/${encoded}`,
     fingerprint,
     relativePath,
   });
 }
 
-function parseLocator(
-  namespace: string,
-  value: string,
-): SkillLocator | SkillResourceLocator {
+function parseLocator(namespace: string, value: string): SkillLocator | SkillResourceLocator {
   const prefix = `/__neko_skills/${namespace}/`;
   if (!value.startsWith(prefix)) {
-    throw new SkillHostError("invalid-locator", "Skill locator belongs to another process.");
+    throw new SkillHostError('invalid-locator', 'Skill locator belongs to another process.');
   }
-  const segments = value.slice(prefix.length).split("/");
+  const segments = value.slice(prefix.length).split('/');
   const fingerprint = segments.shift();
   if (fingerprint === undefined || !/^[0-9a-f]{64}$/.test(fingerprint)) {
-    throw new SkillHostError("invalid-locator", "Skill locator has an invalid fingerprint.");
+    throw new SkillHostError('invalid-locator', 'Skill locator has an invalid fingerprint.');
   }
-  if (segments.length === 1 && segments[0] === "SKILL.md") {
+  if (segments.length === 1 && segments[0] === 'SKILL.md') {
     return createSkillLocator(namespace, fingerprint);
   }
   let relativePath: string;
   try {
-    relativePath = segments.map(decodeURIComponent).join("/");
+    relativePath = segments.map(decodeURIComponent).join('/');
   } catch {
-    throw new SkillHostError("invalid-locator", "Skill locator contains invalid encoding.");
+    throw new SkillHostError('invalid-locator', 'Skill locator contains invalid encoding.');
   }
-  return createResourceLocator(
-    namespace,
-    fingerprint,
-    validateRelativeResourcePath(relativePath),
-  );
+  return createResourceLocator(namespace, fingerprint, validateRelativeResourcePath(relativePath));
 }
 
 function validateRelativeResourcePath(value: string): string {
-  const normalized = value.replaceAll("\\", "/");
-  const segments = normalized.split("/");
+  const normalized = value.replaceAll('\\', '/');
+  const segments = normalized.split('/');
   if (
     normalized.length === 0 ||
-    normalized.startsWith("/") ||
-    segments.some((segment) => segment.length === 0 || segment === "." || segment === "..")
+    normalized.startsWith('/') ||
+    segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')
   ) {
     throw new SkillHostError(
-      "invalid-resource-path",
+      'invalid-resource-path',
       `Skill resource path must be a contained relative path: ${value}`,
     );
   }
@@ -538,5 +537,5 @@ function validateRelativeResourcePath(value: string): string {
 }
 
 function pathSeparator(relativePath: string): string {
-  return relativePath.includes("\\") ? "\\" : "/";
+  return relativePath.includes('\\') ? '\\' : '/';
 }

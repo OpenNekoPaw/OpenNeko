@@ -55,7 +55,8 @@ function createImageUnderstandingTool(deps: PerceptionCapabilityProviderDeps): T
         },
         focus: {
           type: 'string',
-          description: 'Optional bounded question about visible content, composition, style, or quality.',
+          description:
+            'Optional bounded question about visible content, composition, style, or quality.',
         },
       },
       required: ['resourceRef'],
@@ -140,9 +141,7 @@ async function executeImageUnderstanding(
     version: 1,
     assetId: resourceRef.id,
     modality: 'image',
-    ...(options?.trace?.toolRequestId
-      ? { sourceToolCallId: options.trace.toolRequestId }
-      : {}),
+    ...(options?.trace?.toolRequestId ? { sourceToolCallId: options.trace.toolRequestId } : {}),
     createdAt: completedAt,
     layerStatus: { layer0: 'complete', layer1: 'complete', layer2: 'skipped' },
     structural: {

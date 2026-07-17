@@ -384,5 +384,4 @@ describe('EmbodyCharacterController', () => {
       }),
     );
   });
-
 });

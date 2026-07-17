@@ -199,7 +199,6 @@ describe('HistoryMenu', () => {
     fireEvent.click(deleteButton);
     expect(onDeleteConversation).not.toHaveBeenCalled();
   });
-
 });
 
 function createConversations(): HistoryConversationItem[] {

@@ -25,9 +25,7 @@ export async function executeTextEmbedding(
   const fetchFn = options.fetch ?? globalThis.fetch;
   const protocol = binding.model.protocolProfile ?? binding.provider.protocolProfile;
   if (protocol === 'ollama' || binding.provider.type === 'ollama') {
-    return Promise.all(
-      texts.map((text) => requestOllamaEmbedding(fetchFn, binding, text)),
-    );
+    return Promise.all(texts.map((text) => requestOllamaEmbedding(fetchFn, binding, text)));
   }
   if (
     protocol === 'newapi' ||
@@ -111,7 +109,10 @@ function buildHeaders(binding: TextEmbeddingBinding): Record<string, string> {
     const header = binding.provider.protocolVariant?.authHeader?.trim();
     if (!header) throw new Error(`Embedding provider ${binding.provider.id} has no auth header.`);
     headers[header] = key;
-  } else if (authType === 'api-key' && !(binding.model.useBearerAuth ?? binding.provider.useBearerAuth)) {
+  } else if (
+    authType === 'api-key' &&
+    !(binding.model.useBearerAuth ?? binding.provider.useBearerAuth)
+  ) {
     headers['x-api-key'] = key;
   } else {
     headers.authorization = `Bearer ${key}`;
@@ -145,7 +146,8 @@ async function readJsonResponse(
 }
 
 function validateBinding(binding: TextEmbeddingBinding, texts: readonly string[]): void {
-  if (binding.purpose !== 'text.embed') throw new Error('Embedding requires the text.embed binding.');
+  if (binding.purpose !== 'text.embed')
+    throw new Error('Embedding requires the text.embed binding.');
   if (!binding.provider.enabled || !binding.model.enabled) {
     throw new Error(`Embedding binding ${binding.provider.id}/${binding.model.id} is disabled.`);
   }
@@ -173,5 +175,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isNumberArray(value: unknown): value is number[] {
-  return Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isFinite(item));
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isFinite(item))
+  );
 }

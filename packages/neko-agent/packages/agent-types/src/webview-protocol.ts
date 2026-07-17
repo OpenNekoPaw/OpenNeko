@@ -3165,11 +3165,7 @@ function parseAgentFlatPurposeModelRefs(value: unknown): AgentFlatPurposeModelRe
 function purposeModelCategory(value: string): ProtocolModelCategory | undefined {
   if (value === 'image.generate' || value === 'image.edit') return 'image';
   if (value === 'video.generate') return 'video';
-  if (
-    value === 'audio.generate' ||
-    value === 'audio.tts' ||
-    value === 'audio.music.generate'
-  ) {
+  if (value === 'audio.generate' || value === 'audio.tts' || value === 'audio.music.generate') {
     return 'audio';
   }
   if (

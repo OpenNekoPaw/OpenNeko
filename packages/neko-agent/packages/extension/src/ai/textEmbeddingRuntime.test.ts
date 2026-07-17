@@ -23,16 +23,17 @@ const model = {
 
 describe('executeTextEmbedding', () => {
   it('executes an exact NewAPI/OpenAI-compatible embedding binding', async () => {
-    const fetch = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          data: [
-            { index: 1, embedding: [0.3, 0.4] },
-            { index: 0, embedding: [0.1, 0.2] },
-          ],
-        }),
-        { status: 200 },
-      ),
+    const fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              { index: 1, embedding: [0.3, 0.4] },
+              { index: 0, embedding: [0.1, 0.2] },
+            ],
+          }),
+          { status: 200 },
+        ),
     );
 
     await expect(
@@ -63,10 +64,9 @@ describe('executeTextEmbedding', () => {
   it('executes Ollama embeddings without a credential', async () => {
     const fetch = vi.fn(async (_url: string, request: RequestInit) => {
       const body = JSON.parse(String(request.body)) as { prompt: string };
-      return new Response(
-        JSON.stringify({ embedding: body.prompt === 'first' ? [0.1] : [0.2] }),
-        { status: 200 },
-      );
+      return new Response(JSON.stringify({ embedding: body.prompt === 'first' ? [0.1] : [0.2] }), {
+        status: 200,
+      });
     });
 
     await expect(

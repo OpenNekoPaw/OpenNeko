@@ -265,9 +265,7 @@ function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: Too
           </div>
         )}
 
-        {canvasAuthoringResult && (
-          <CanvasAuthoringResultSummary result={canvasAuthoringResult} />
-        )}
+        {canvasAuthoringResult && <CanvasAuthoringResultSummary result={canvasAuthoringResult} />}
 
         {/* Expanded content */}
         {isExpanded && (
@@ -458,9 +456,7 @@ function CanvasAuthoringResultSummary({ result }: { result: CanvasAuthoringResul
               <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                 <span className="shrink-0 font-mono uppercase">{diagnostic.severity}</span>
                 <span className="min-w-[10rem] flex-1">{diagnostic.message}</span>
-                <span className="shrink-0 font-mono text-[9px] opacity-75">
-                  {diagnostic.code}
-                </span>
+                <span className="shrink-0 font-mono text-[9px] opacity-75">{diagnostic.code}</span>
               </div>
               {(diagnostic.target || diagnostic.requiredQuery || diagnostic.retryable) && (
                 <div className="mt-0.5 flex flex-wrap gap-1 font-mono text-[9px] opacity-80">
@@ -501,13 +497,7 @@ function CanvasAuthoringResultSummary({ result }: { result: CanvasAuthoringResul
   );
 }
 
-function CanvasAuthoringChipRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+function CanvasAuthoringChipRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5">
       <span className="shrink-0 text-[var(--agent-fg-secondary)]">{label}</span>
@@ -556,7 +546,9 @@ function getPromptFieldAlignmentClass(
   return 'border-[color-mix(in_srgb,var(--agent-warning)_24%,transparent)] text-[var(--agent-warning-fg)]';
 }
 
-function formatCanvasAuthoringRefTitle(ref: CanvasAuthoringResultProjection['refs'][number]): string {
+function formatCanvasAuthoringRefTitle(
+  ref: CanvasAuthoringResultProjection['refs'][number],
+): string {
   return [ref.label, `${ref.kind}:${ref.id}`, ...ref.details].filter(Boolean).join(' · ');
 }
 

@@ -14,11 +14,7 @@ import type { CharacterModelTier, CharacterToolPolicy } from './character-runtim
 import { renderCharacterEvidenceBundle, type CharacterEvidenceBundle } from './character-evidence';
 
 export type EmbodyCharacterFeedbackClassification =
-  | 'confirmed'
-  | 'inferred'
-  | 'unknown'
-  | 'out-of-scope'
-  | 'mode-boundary';
+  'confirmed' | 'inferred' | 'unknown' | 'out-of-scope' | 'mode-boundary';
 
 export interface EmbodyCharacterCapabilityPolicy {
   readonly kind: 'character-feedback-readonly';
@@ -346,10 +342,16 @@ export function projectEmbodyCharacterFeedbackPrompt(input: {
         '不要激活技能、写文件、变更角色设置、创建任务、生成媒体或记录日记。',
         '',
         '已确认事实：',
-        ...formatFacts(input.profile.facts.filter((fact) => fact.authority === 'confirmed'), zh),
+        ...formatFacts(
+          input.profile.facts.filter((fact) => fact.authority === 'confirmed'),
+          zh,
+        ),
         '',
         '建议或推断事实：',
-        ...formatFacts(input.profile.facts.filter((fact) => fact.authority === 'suggested'), zh),
+        ...formatFacts(
+          input.profile.facts.filter((fact) => fact.authority === 'suggested'),
+          zh,
+        ),
         '',
         `可用关系数量：${input.evidence.relationships.length}。`,
         `可用出现记录数量：${input.evidence.occurrences.length}。`,
@@ -374,10 +376,16 @@ export function projectEmbodyCharacterFeedbackPrompt(input: {
         'Do not activate skills, write files, mutate character settings, create tasks, generate media, or record diary entries.',
         '',
         'Confirmed facts:',
-        ...formatFacts(input.profile.facts.filter((fact) => fact.authority === 'confirmed'), zh),
+        ...formatFacts(
+          input.profile.facts.filter((fact) => fact.authority === 'confirmed'),
+          zh,
+        ),
         '',
         'Suggested or inferred facts:',
-        ...formatFacts(input.profile.facts.filter((fact) => fact.authority === 'suggested'), zh),
+        ...formatFacts(
+          input.profile.facts.filter((fact) => fact.authority === 'suggested'),
+          zh,
+        ),
         '',
         `Relationships available: ${input.evidence.relationships.length}.`,
         `Occurrences available: ${input.evidence.occurrences.length}.`,
@@ -385,7 +393,10 @@ export function projectEmbodyCharacterFeedbackPrompt(input: {
         ...formatFacts(input.evidence.scriptContextFacts, zh),
       ];
   if (input.prompt?.trim()) {
-    lines.push('', zh ? `用户设置说明：${input.prompt.trim()}` : `User setup note: ${input.prompt.trim()}`);
+    lines.push(
+      '',
+      zh ? `用户设置说明：${input.prompt.trim()}` : `User setup note: ${input.prompt.trim()}`,
+    );
   }
   return lines.join('\n');
 }

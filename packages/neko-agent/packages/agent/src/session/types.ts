@@ -1,8 +1,6 @@
 /** Host projection types consumed by the TUI and VS Code presentation adapters. */
 
-import type {
-  AgentTaskResultFollowUpRequest,
-} from '@neko/shared';
+import type { AgentTaskResultFollowUpRequest } from '@neko/shared';
 import type { AgentMessageQueueSnapshot, AgentQueuedMessageItem } from '@neko-agent/types';
 
 // Re-export validation types

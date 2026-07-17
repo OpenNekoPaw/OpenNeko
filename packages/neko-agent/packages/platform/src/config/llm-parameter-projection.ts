@@ -267,8 +267,7 @@ export function projectLlmParameters(input: LlmParameterProjectionInput): LlmPar
     input.llmConfig?.advanced?.thinkingBudget !== undefined ||
     input.runtimeDefaults?.thinkingBudget !== undefined;
   const diagnostics: LlmParameterDiagnostic[] = [];
-  const chatOptions: ProjectedLlmOptions =
-    {};
+  const chatOptions: ProjectedLlmOptions = {};
   const providerOptions: Record<string, unknown> = {};
 
   applyCommonOptions({

@@ -177,7 +177,11 @@ export class MemoryRecall {
   }
 
   private _normalizeTextForDedupe(text: string): string {
-    return text.toLowerCase().replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').trim();
+    return text
+      .toLowerCase()
+      .replace(/\r\n/g, '\n')
+      .replace(/[ \t]+/g, ' ')
+      .trim();
   }
 
   private _collapseExcessBlankLines(text: string): string {

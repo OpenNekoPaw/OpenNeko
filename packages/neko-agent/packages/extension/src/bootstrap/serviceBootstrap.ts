@@ -60,8 +60,9 @@ export const IPiProviderAuthController = createServiceId<PiProviderAuthControlle
 export const IPiAuthInteraction = createServiceId<AuthInteraction>('piAuthInteraction');
 export const IPiAgentRuntimeManager =
   createServiceId<VSCodePiRuntimeManager>('piAgentRuntimeManager');
-export const IProductPurposeTextRuntime =
-  createServiceId<ICapabilityPurposeTextRuntime>('productPurposeTextRuntime');
+export const IProductPurposeTextRuntime = createServiceId<ICapabilityPurposeTextRuntime>(
+  'productPurposeTextRuntime',
+);
 export const ITaskLifecycleCoordinator = createServiceId<TaskLifecycleCoordinator>(
   'taskLifecycleCoordinator',
 );

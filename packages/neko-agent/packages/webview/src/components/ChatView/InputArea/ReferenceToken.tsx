@@ -11,13 +11,7 @@ import {
 } from '@neko/shared/icons';
 
 export type ReferenceTokenKind =
-  | 'file'
-  | 'image'
-  | 'video'
-  | 'audio'
-  | 'canvas'
-  | 'clip'
-  | 'entity';
+  'file' | 'image' | 'video' | 'audio' | 'canvas' | 'clip' | 'entity';
 
 export type ReferenceTokenVariant = 'ambient' | 'attached' | 'inline';
 

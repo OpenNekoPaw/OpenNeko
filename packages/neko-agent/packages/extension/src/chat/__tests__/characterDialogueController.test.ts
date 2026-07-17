@@ -648,10 +648,7 @@ describe('CharacterDialogueController', () => {
       now: () => '2026-06-01T00:00:00.000Z',
     });
 
-    expect(inferFacts).toHaveBeenCalledWith(
-      thinProfileWithEvidence,
-      '2026-06-01T00:00:00.000Z',
-    );
+    expect(inferFacts).toHaveBeenCalledWith(thinProfileWithEvidence, '2026-06-01T00:00:00.000Z');
     expect(result.profile.facts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1260,5 +1257,4 @@ describe('CharacterDialogueController', () => {
       initialUserMessage: 'hi there',
     });
   });
-
 });

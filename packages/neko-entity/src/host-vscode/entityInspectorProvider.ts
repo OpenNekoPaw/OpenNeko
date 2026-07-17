@@ -503,7 +503,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function resolveInspectorProjectRoot(request: EntityFacadeInspectEntityRequest): string | undefined {
+function resolveInspectorProjectRoot(
+  request: EntityFacadeInspectEntityRequest,
+): string | undefined {
   return (
     request.projectRoot ??
     request.entityRef?.projectRoot ??

@@ -1615,7 +1615,6 @@ describe('handleChatWebviewMessage', () => {
     expect(deps.refreshConfigSnapshot).toHaveBeenCalledTimes(1);
     expect(deps.settingsHandler.sendSettings).not.toHaveBeenCalled();
   });
-
 });
 
 function createCanonicalStoryboardHandoffFixture() {

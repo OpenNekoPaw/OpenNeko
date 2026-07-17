@@ -97,10 +97,7 @@ export function projectMessageList(input: MessageListProjectionInput): MessageLi
 export function projectMessageListItems(
   messages: readonly Message[],
   showThinkingIndicator: boolean,
-  options: Pick<
-    MessageListProjectionInput,
-    'plugins' | 'activationProgress'
-  > = {},
+  options: Pick<MessageListProjectionInput, 'plugins' | 'activationProgress'> = {},
 ): MessageListProjectionItem[] {
   const items: MessageListProjectionItem[] = [];
   let prevRole: Message['role'] | null = null;

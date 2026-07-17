@@ -42,10 +42,11 @@ describe('refreshOllamaModels', () => {
         enabled: true,
       },
     ]);
-    const request = vi.fn(async () =>
-      new Response(JSON.stringify({ models: [{ name: 'llama3' }, { name: 'qwen2.5' }] }), {
-        status: 200,
-      }),
+    const request = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ models: [{ name: 'llama3' }, { name: 'qwen2.5' }] }), {
+          status: 200,
+        }),
     );
 
     await expect(refreshOllamaModels({ config, fetch: request })).resolves.toEqual({

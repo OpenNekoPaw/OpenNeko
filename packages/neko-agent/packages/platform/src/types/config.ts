@@ -10,13 +10,7 @@
  * MCP server category
  */
 export type MCPServerCategory =
-  | 'filesystem'
-  | 'database'
-  | 'api'
-  | 'development'
-  | 'productivity'
-  | 'ai'
-  | 'other';
+  'filesystem' | 'database' | 'api' | 'development' | 'productivity' | 'ai' | 'other';
 
 /**
  * MCP tool info (for display purposes)

@@ -102,7 +102,7 @@ function SendToMenuComponent({
         });
         const authoringHandoff = canvasMarkdownHandoff
           ? projectCanvasAuthoringHandoffFromMarkdown(canvasMarkdownHandoff)
-          : canvasAuthoringHandoff ?? projectCanvasAuthoringHandoffFromTransfer(transferPayload);
+          : (canvasAuthoringHandoff ?? projectCanvasAuthoringHandoffFromTransfer(transferPayload));
         if (!authoringHandoff) return;
         AgentHostMessages.requestCanvasAuthoringHandoff({
           conversationId,
@@ -154,16 +154,15 @@ function SendToMenuComponent({
     : projection.targets;
   const hasCanvasAuthoringHandoffSource = Boolean(
     canvasAuthoringHandoff ||
-      canvasMarkdownHandoff ||
-      assetPath ||
-      assetPaths?.length ||
-      assets?.length ||
-      payload,
+    canvasMarkdownHandoff ||
+    assetPath ||
+    assetPaths?.length ||
+    assets?.length ||
+    payload,
   );
   const capabilityTargets = targets.filter(
     (target) =>
-      target.id !== 'canvas' ||
-      (Boolean(conversationId) && hasCanvasAuthoringHandoffSource),
+      target.id !== 'canvas' || (Boolean(conversationId) && hasCanvasAuthoringHandoffSource),
   );
   const visibleTargets = hideExplorerTarget
     ? capabilityTargets.filter((target) => target.id !== 'explorer')
@@ -291,7 +290,7 @@ function projectCanvasAuthoringAssetResource(
   const sourcePath = asset.path && isStableCanvasSourcePath(asset.path) ? asset.path : undefined;
   const resource: CanvasMarkdownResourceRef = {
     ...(asset.name ? { label: asset.name } : {}),
-    ...(asset.name ?? sourcePath ? { token: asset.name ?? sourcePath } : {}),
+    ...((asset.name ?? sourcePath) ? { token: asset.name ?? sourcePath } : {}),
     role: 'source',
     ...(sourcePath ? { sourcePath } : {}),
     ...(asset.resourceRef ? { resourceRef: asset.resourceRef } : {}),

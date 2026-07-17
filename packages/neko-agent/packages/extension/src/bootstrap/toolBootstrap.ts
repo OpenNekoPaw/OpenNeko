@@ -36,7 +36,9 @@ export function buildEmbedFn(
     const provider = config.getProvider(ref.providerId);
     const model = config.getModel(ref.modelId);
     if (!provider || !model) {
-      throw new Error(`Configured embedding model ${ref.providerId}/${ref.modelId} is unavailable.`);
+      throw new Error(
+        `Configured embedding model ${ref.providerId}/${ref.modelId} is unavailable.`,
+      );
     }
     if (provider.apiKey) {
       await credentials.replace(

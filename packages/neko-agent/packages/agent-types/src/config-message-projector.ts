@@ -82,13 +82,7 @@ export interface SsoErrorProjection {
 export type SsoSessionMessagePayload = SsoSessionChangedMessage['session'];
 
 export type ProjectMentionItemKind =
-  | 'file'
-  | 'canvas-node'
-  | 'character'
-  | 'scene'
-  | 'asset'
-  | 'media'
-  | 'entity';
+  'file' | 'canvas-node' | 'character' | 'scene' | 'asset' | 'media' | 'entity';
 
 export interface ProjectMentionItem {
   id: string;

@@ -592,17 +592,29 @@ export class MediaTaskExecutor {
         timeoutMessage: `${timeoutKind} generation timed out after ${timeoutMs}ms`,
         run: async () => {
           if (generationType === 'text-to-image' || generationType === 'image-to-image') {
-            return adapter.generateImage(preparedRequest as ImageGenerationRequest, model, provider);
+            return adapter.generateImage(
+              preparedRequest as ImageGenerationRequest,
+              model,
+              provider,
+            );
           }
           if (
             generationType === 'text-to-video' ||
             generationType === 'image-to-video' ||
             generationType === 'video-to-video'
           ) {
-            return adapter.generateVideo(preparedRequest as VideoGenerationRequest, model, provider);
+            return adapter.generateVideo(
+              preparedRequest as VideoGenerationRequest,
+              model,
+              provider,
+            );
           }
           if (generationType === 'text-to-audio' || generationType === 'text-to-music') {
-            return adapter.generateAudio(preparedRequest as AudioGenerationRequest, model, provider);
+            return adapter.generateAudio(
+              preparedRequest as AudioGenerationRequest,
+              model,
+              provider,
+            );
           }
           throw new Error(`Unsupported media generation type ${generationType}.`);
         },
@@ -616,7 +628,11 @@ export class MediaTaskExecutor {
         result.status !== 'cancelled'
       ) {
         if (context?.scope && this.taskManager?.saveRecoveryInfo) {
-          await this.taskManager.saveRecoveryInfo(context.scope, result.externalTaskId, provider.id);
+          await this.taskManager.saveRecoveryInfo(
+            context.scope,
+            result.externalTaskId,
+            provider.id,
+          );
         }
         if (context?.scope && this.taskManager) {
           return this.pollForCompletionWithRecovery(
@@ -653,7 +669,9 @@ export class MediaTaskExecutor {
       }
       if (result.status === 'cancelled') return { error: 'Media generation was cancelled.' };
       if (result.status !== 'completed') {
-        return { error: 'Media provider returned a non-terminal result without an external task id.' };
+        return {
+          error: 'Media provider returned a non-terminal result without an external task id.',
+        };
       }
       onProgress(100);
       context?.reportLifecycle({ lifecycle: { costPhase: 'local-finalize' } });

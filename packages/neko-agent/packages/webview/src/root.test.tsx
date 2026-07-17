@@ -1,10 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  WebviewFoundationProvider,
-  createWebviewFoundation,
-} from '@neko/ui/foundation';
+import { WebviewFoundationProvider, createWebviewFoundation } from '@neko/ui/foundation';
 import type { AgentHostRuntimeAdapter } from '@neko-agent/types';
 import { AgentWebviewRoot } from './root';
 

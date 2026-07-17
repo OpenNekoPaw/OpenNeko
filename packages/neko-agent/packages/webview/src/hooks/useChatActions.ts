@@ -275,9 +275,7 @@ export function useChatActions({
         ...(effectiveSessionMode === 'agent' && input?.agentModels
           ? { agentModels: input.agentModels }
           : {}),
-        ...(effectiveSessionMode === 'agent' && purposeModels
-          ? { purposeModels }
-          : {}),
+        ...(effectiveSessionMode === 'agent' && purposeModels ? { purposeModels } : {}),
         ...(effectiveSessionMode === 'agent' && input?.llmConfig
           ? { llmConfig: input.llmConfig }
           : {}),

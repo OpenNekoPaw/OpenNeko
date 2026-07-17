@@ -40,8 +40,7 @@ function unifiedToWorkspaceConfig(unified: UnifiedConfig | null): WorkspaceConfi
   return {
     mcpServers: unified.mcpServers as MCPServerPreset[] | undefined,
     mcpServerOverrides: unified.mcpServerOverrides as
-      | Record<string, Partial<MCPServerPreset>>
-      | undefined,
+      Record<string, Partial<MCPServerPreset>> | undefined,
   };
 }
 

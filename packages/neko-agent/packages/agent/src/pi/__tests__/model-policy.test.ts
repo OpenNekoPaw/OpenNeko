@@ -126,9 +126,7 @@ describe('resolveAgentModelPolicy', () => {
       requirements: { 'image.generate': { capabilities: ['image.generate'] } },
     });
 
-    expect(policy['agent.main'].parameters.timeoutMs).toBe(
-      DEFAULT_PI_MODEL_REQUEST_TIMEOUT_MS,
-    );
+    expect(policy['agent.main'].parameters.timeoutMs).toBe(DEFAULT_PI_MODEL_REQUEST_TIMEOUT_MS);
     expect(policy['image.generate']?.parameters.timeoutMs).toBeUndefined();
 
     const explicit = resolveAgentPurposeModelUse({

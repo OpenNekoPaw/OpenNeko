@@ -13,16 +13,10 @@ import type {
 } from '@neko/shared';
 
 export type CharacterEvidenceMode =
-  | 'character-dialogue'
-  | 'embody-character'
-  | 'character-validation';
+  'character-dialogue' | 'embody-character' | 'character-validation';
 
 export type CharacterEvidenceSourceKind =
-  | 'dashboard-detail'
-  | 'entity-occurrence'
-  | 'story-script-index'
-  | 'project-search'
-  | 'manual';
+  'dashboard-detail' | 'entity-occurrence' | 'story-script-index' | 'project-search' | 'manual';
 
 export type CharacterEvidenceAuthority = 'confirmed' | 'suggested' | 'indexed';
 

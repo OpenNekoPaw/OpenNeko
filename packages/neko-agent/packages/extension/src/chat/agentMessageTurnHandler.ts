@@ -10,10 +10,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import type { AssistantRuntimeSettingsSnapshot, Platform } from '@neko/platform';
 import type { AgentTaskResultFollowUpRequest } from '@neko/shared';
-import {
-  buildGlobalErrorMessage,
-  buildThinkingMessage,
-} from '@neko-agent/types';
+import { buildGlobalErrorMessage, buildThinkingMessage } from '@neko-agent/types';
 import type { IAgentManager } from '../ai/agentManager';
 import { getCanvasSelection } from '../services/canvasAmbientContext';
 import type { IEditorRegistry } from '../editor/common/editorRegistry';

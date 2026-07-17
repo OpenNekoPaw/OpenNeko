@@ -122,14 +122,9 @@ describe('MemoryRecall', () => {
         '分析该文档前，先调用 ReadDocument。',
       ].join('\n');
       const project = createMockProjectMemory(
-        [
-          '## 近期决策',
-          repeatedReference,
-          '',
-          '## Recent Decisions',
-          repeatedReference,
-          '',
-        ].join('\n'),
+        ['## 近期决策', repeatedReference, '', '## Recent Decisions', repeatedReference, ''].join(
+          '\n',
+        ),
       );
 
       const recall = new MemoryRecall({ projectMemory: project });

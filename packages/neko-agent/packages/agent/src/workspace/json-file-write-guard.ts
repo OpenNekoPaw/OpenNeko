@@ -80,9 +80,7 @@ export async function readJsonFileRevision(
   const raw = await fsOps.readFile(filePath);
   const parsed = JSON.parse(raw) as unknown;
   const metadata = parseJsonFileWriteMetadata(parsed);
-  return metadata
-    ? { revision: metadata.revision, ownerId: metadata.ownerId }
-    : { revision: 0 };
+  return metadata ? { revision: metadata.revision, ownerId: metadata.ownerId } : { revision: 0 };
 }
 
 export function parseJsonFileWriteMetadata(value: unknown): JsonFileWriteMetadata | null {

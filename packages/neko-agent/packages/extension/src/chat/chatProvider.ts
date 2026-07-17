@@ -227,8 +227,7 @@ function resolvePiConversationOptions(
       createConversation: (input) => requireAuthority().createConversation(input),
       updateConversationTitle: (conversationId, title) =>
         requireAuthority().updateConversationTitle(conversationId, title),
-      deleteConversation: (conversationId) =>
-        requireAuthority().deleteConversation(conversationId),
+      deleteConversation: (conversationId) => requireAuthority().deleteConversation(conversationId),
       readConversationEntries: (conversationId) =>
         requireAuthority().readConversationEntries(conversationId),
     },
@@ -487,7 +486,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
         );
         const piRuntime = getService(IPiAgentRuntimeManager);
         if (!piRuntime) {
-          throw new Error('Pi Agent runtime manager is unavailable during Chat provider activation.');
+          throw new Error(
+            'Pi Agent runtime manager is unavailable during Chat provider activation.',
+          );
         }
         this._skillHandler.setDependencies({
           listSkills: () => piRuntime.listSkillCatalog(),

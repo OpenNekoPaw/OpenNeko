@@ -17,9 +17,7 @@ export function requireCharacterPurposeRuntime(
   return runtime;
 }
 
-export function createCharacterDialoguePurposeResponder(
-  runtime: ICapabilityPurposeTextRuntime,
-) {
+export function createCharacterDialoguePurposeResponder(runtime: ICapabilityPurposeTextRuntime) {
   return async (input: {
     readonly systemPrompt: string;
     readonly transcript: readonly NpcTranscriptMessage[];
@@ -204,9 +202,12 @@ function parseNpcProfileEnrichmentFacts(
   try {
     parsed = JSON.parse(json);
   } catch (error) {
-    throw new Error('Character profile enrichment output contained invalid JSON.', { cause: error });
+    throw new Error('Character profile enrichment output contained invalid JSON.', {
+      cause: error,
+    });
   }
-  if (!Array.isArray(parsed)) throw new Error('Character profile enrichment output must be an array.');
+  if (!Array.isArray(parsed))
+    throw new Error('Character profile enrichment output must be an array.');
   return parsed.map((item, index): NpcProfileFact => {
     if (!isRecord(item)) throw new Error(`Character profile enrichment item ${index} is invalid.`);
     const key = typeof item['key'] === 'string' ? item['key'].trim() : '';

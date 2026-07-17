@@ -126,7 +126,6 @@ describe('ChatView empty state', () => {
 
     expect(screen.getByRole('status').textContent).toContain('Acting: ReadDocument');
   });
-
 });
 
 function renderChatView(overrides: Partial<React.ComponentProps<typeof ChatView>> = {}) {

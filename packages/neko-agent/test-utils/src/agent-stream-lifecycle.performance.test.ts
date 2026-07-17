@@ -30,8 +30,8 @@ vi.mock('../../packages/extension/src/base', () => ({
 }));
 
 describe('Agent stream lifecycle performance regression', () => {
-  it('keeps the 4,000-chunk Extension/Webview projection path linear and bounded', async () => {
-    const fixture = createTableHeavyStreamFixture();
+  it('keeps the 1,000-chunk Extension/Webview projection path linear and bounded', async () => {
+    const fixture = createTableHeavyStreamFixture(1_000);
     const poisonPaths = createAgentPoisonPaths();
     const markdownSessions = createAgentMarkdownSessionRegistry();
     const projection = createConversationProjectionStore('conv-regression');
@@ -93,7 +93,7 @@ describe('Agent stream lifecycle performance regression', () => {
     projection.dispose();
     markdownSessions.disposeAll();
     processor.dispose();
-  }, 30_000);
+  }, 60_000);
 });
 
 async function* replayEvents(

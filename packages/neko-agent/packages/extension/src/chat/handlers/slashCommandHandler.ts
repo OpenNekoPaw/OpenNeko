@@ -224,7 +224,6 @@ export class SlashCommandHandler {
         return;
     }
   }
-
 }
 
 function summarizeSlashCommandError(error: unknown): Record<string, unknown> {

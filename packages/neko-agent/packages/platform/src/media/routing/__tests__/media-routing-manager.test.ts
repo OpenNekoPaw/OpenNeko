@@ -107,11 +107,7 @@ describe('MediaRoutingManager', () => {
     });
 
     it('should reject explicit provider/model mismatch', async () => {
-      const result = await manager.selectProvider(
-        'text-to-image',
-        'openai',
-        'stable-diffusion-xl',
-      );
+      const result = await manager.selectProvider('text-to-image', 'openai', 'stable-diffusion-xl');
 
       expect(result).toBeNull();
     });

@@ -49,10 +49,7 @@ import {
 } from './entityMemoryContributionAutomation';
 import { projectValueForWebviewResourceDisplay } from './webviewResourceProjection';
 import { getLogger } from '../../base';
-import {
-  createPiAgentStreamSession,
-  type PiAgentStreamSession,
-} from './piAgentStreamProcessor';
+import { createPiAgentStreamSession, type PiAgentStreamSession } from './piAgentStreamProcessor';
 
 const logger = getLogger('AgentStreamProcessor');
 
@@ -173,8 +170,7 @@ export class AgentStreamProcessor {
     onPhaseChange: (phase: AgentPhase, toolName?: string) => void,
   ): PiAgentStreamSession {
     this.activePiStreams.get(conversationId)?.dispose();
-    let session: PiAgentStreamSession;
-    session = createPiAgentStreamSession({
+    const session: PiAgentStreamSession = createPiAgentStreamSession({
       webview,
       conversationId,
       messageId,

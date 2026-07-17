@@ -33,9 +33,7 @@ export interface AgentMentionCatalogEntry extends AgentInputCatalogEntryBase {
 }
 
 export type AgentInputCatalogEntry =
-  | AgentCommandCatalogEntry
-  | AgentSkillInvocationCatalogEntry
-  | AgentMentionCatalogEntry;
+  AgentCommandCatalogEntry | AgentSkillInvocationCatalogEntry | AgentMentionCatalogEntry;
 
 export interface ParsedAgentInputTrigger {
   readonly trigger: AgentInputTriggerKind;

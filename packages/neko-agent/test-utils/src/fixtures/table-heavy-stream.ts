@@ -26,9 +26,11 @@ export interface TableHeavyStreamFixture {
  * The source is deliberately table-heavy because GFM table parsing/layout was
  * the most expensive Webview path in the original trace.
  */
-export function createTableHeavyStreamFixture(): TableHeavyStreamFixture {
+export function createTableHeavyStreamFixture(
+  chunkCount = TABLE_HEAVY_STREAM_CHUNK_COUNT,
+): TableHeavyStreamFixture {
   const source = buildTableHeavySource(TABLE_HEAVY_STREAM_SOURCE_LENGTH);
-  const chunks = splitIntoDeterministicChunks(source, TABLE_HEAVY_STREAM_CHUNK_COUNT);
+  const chunks = splitIntoDeterministicChunks(source, chunkCount);
 
   return {
     source,

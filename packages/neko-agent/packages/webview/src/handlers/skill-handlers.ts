@@ -16,6 +16,4 @@ const handleSkillsList: MessageHandler<'skillsList'> = (message: SkillsListMessa
   context.setSkills(projectInputSkillSummaries(message.skills));
 };
 
-export const skillHandlers: HandlerRegistration[] = [
-  defineHandler('skillsList', handleSkillsList),
-];
+export const skillHandlers: HandlerRegistration[] = [defineHandler('skillsList', handleSkillsList)];

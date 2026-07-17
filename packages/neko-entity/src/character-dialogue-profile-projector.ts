@@ -191,7 +191,9 @@ function renderRepresentationBindings(
   ].join('\n');
 }
 
-function getCharacterDialoguePromptLabels(locale: string | undefined): CharacterDialoguePromptLabels {
+function getCharacterDialoguePromptLabels(
+  locale: string | undefined,
+): CharacterDialoguePromptLabels {
   return locale?.trim().toLowerCase().startsWith('zh') ? ZH_LABELS : EN_LABELS;
 }
 

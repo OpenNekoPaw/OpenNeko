@@ -147,8 +147,7 @@ export class NewAPIChatImageModel implements ImageModelV3 {
     const maskBase64 = nekoExtras['maskBase64'] as string | undefined;
     if (maskBase64) pushLabeledImage('Inpaint mask (white = repaint)', maskBase64);
     const ipAdapterRefs = nekoExtras['ipAdapterRefs'] as
-      | Array<{ imageBase64?: string; mimeType?: string; mode?: string }>
-      | undefined;
+      Array<{ imageBase64?: string; mimeType?: string; mode?: string }> | undefined;
     if (ipAdapterRefs) {
       ipAdapterRefs.forEach((ref, i) => {
         if (ref?.imageBase64) {

@@ -123,7 +123,6 @@ export interface IAgentManager extends vscode.Disposable {
    * Agent 停止执行事件
    */
   readonly onDidAgentStop: vscode.Event<{ conversationId: string }>;
-
 }
 
 export type AgentConversationInterruptionReason = 'user-stop' | 'remove' | 'cancel-all';

@@ -5,10 +5,7 @@ export function projectPiConversationEntries(
   entries: readonly PiConversationTranscriptEntry[],
 ): Message[] {
   const messages: Message[] = [];
-  const toolCalls = new Map<
-    string,
-    { readonly block: ContentBlock; readonly call: ToolCall }
-  >();
+  const toolCalls = new Map<string, { readonly block: ContentBlock; readonly call: ToolCall }>();
 
   for (const entry of entries) {
     if (entry.type !== 'message') continue;
@@ -111,8 +108,8 @@ function projectUserContent(
     .join('\n');
 }
 
-function projectContent(content: readonly { readonly type: string; readonly text?: string }[]): string {
-  return content
-    .map((part) => (part.type === 'text' ? (part.text ?? '') : '[Image]'))
-    .join('\n');
+function projectContent(
+  content: readonly { readonly type: string; readonly text?: string }[],
+): string {
+  return content.map((part) => (part.type === 'text' ? (part.text ?? '') : '[Image]')).join('\n');
 }

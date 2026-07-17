@@ -147,9 +147,7 @@ function getPairwiseConsistencySystemPrompt(locale: string | undefined): string 
 }
 
 function getCharacterConsistencySystemPrompt(locale: string | undefined): string {
-  return isChineseConsistencyLocale(locale)
-    ? CHARACTER_SYSTEM_PROMPT_ZH
-    : CHARACTER_SYSTEM_PROMPT;
+  return isChineseConsistencyLocale(locale) ? CHARACTER_SYSTEM_PROMPT_ZH : CHARACTER_SYSTEM_PROMPT;
 }
 
 function isChineseConsistencyLocale(locale: string | undefined): boolean {
@@ -407,12 +405,7 @@ export class ConsistencyEvaluator {
     const userContent = [
       {
         type: 'text',
-        text: formatPairwiseConsistencyUserText(
-          fromInput,
-          toInput,
-          globalStyle,
-          this.deps.locale,
-        ),
+        text: formatPairwiseConsistencyUserText(fromInput, toInput, globalStyle, this.deps.locale),
       },
       { type: 'image', imageUrl: fromImage },
       { type: 'image', imageUrl: toImage },

@@ -276,8 +276,7 @@ export class ConversationMessageHandler {
       refreshActiveConversation: () => {
         void this.sendActiveConversation();
       },
-      removeAgent: (conversationId) =>
-        this.deps.agentManager?.remove(conversationId),
+      removeAgent: (conversationId) => this.deps.agentManager?.remove(conversationId),
       clearAgentState: (conversationId) => this.deps.messages?.clearAgentState(conversationId),
       clearAgentHistory: (conversationId) => this.deps.agentManager?.clearHistory(conversationId),
       clearPendingMessages: (conversationId) => {

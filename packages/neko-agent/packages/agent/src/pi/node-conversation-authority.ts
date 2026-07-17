@@ -1,6 +1,6 @@
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import type { DatabaseSync } from "node:sqlite";
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { DatabaseSync } from 'node:sqlite';
 
 import {
   JsonlSessionRepo,
@@ -10,8 +10,8 @@ import {
   type Session,
   type SessionContext,
   type SessionTreeEntry,
-} from "@earendil-works/pi-agent-core";
-import { NodeExecutionEnv } from "@earendil-works/pi-agent-core/node";
+} from '@earendil-works/pi-agent-core';
+import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 
 export interface ConversationExecutionLease {
   readonly conversationId: string;
@@ -33,18 +33,14 @@ export interface PiConversationBranchRecord {
   readonly conversationId: string;
   readonly branchId: string;
   readonly parentBranchId?: string;
-  readonly state: "active" | "historical";
+  readonly state: 'active' | 'historical';
   readonly session: JsonlSessionMetadata;
   readonly leafId: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
 
-export type PiTurnDurabilityState =
-  | "volatile"
-  | "persisting"
-  | "durable"
-  | "persistence-delayed";
+export type PiTurnDurabilityState = 'volatile' | 'persisting' | 'durable' | 'persistence-delayed';
 
 export interface PiTurnCheckpointRecord {
   readonly conversationId: string;
@@ -53,7 +49,7 @@ export interface PiTurnCheckpointRecord {
   readonly piSessionId: string;
   readonly leafId: string | null;
   readonly writerEpoch: number;
-  readonly terminalState: "completed" | "cancelled" | "failed";
+  readonly terminalState: 'completed' | 'cancelled' | 'failed';
   readonly committedAt: string;
 }
 
@@ -68,21 +64,21 @@ export interface PiConversationCatalogProjector {
 export type PiConversationTranscriptEntry = SessionTreeEntry;
 
 export type PiConversationAuthorityErrorCode =
-  | "conversation-not-found"
-  | "branch-not-found"
-  | "conversation-exists"
-  | "branch-exists"
-  | "lease-held"
-  | "lease-stale"
-  | "workspace-mismatch"
-  | "invalid-identity";
+  | 'conversation-not-found'
+  | 'branch-not-found'
+  | 'conversation-exists'
+  | 'branch-exists'
+  | 'lease-held'
+  | 'lease-stale'
+  | 'workspace-mismatch'
+  | 'invalid-identity';
 
 export class PiConversationAuthorityError extends Error {
   readonly code: PiConversationAuthorityErrorCode;
 
   constructor(code: PiConversationAuthorityErrorCode, message: string) {
     super(message);
-    this.name = "PiConversationAuthorityError";
+    this.name = 'PiConversationAuthorityError';
     this.code = code;
   }
 }
@@ -108,7 +104,7 @@ export interface ForkPiConversationBranchInput {
   readonly sourceBranchId: string;
   readonly branchId: string;
   readonly entryId?: string;
-  readonly position?: "before" | "at";
+  readonly position?: 'before' | 'at';
 }
 
 export interface CheckpointPiTurnInput {
@@ -116,7 +112,7 @@ export interface CheckpointPiTurnInput {
   readonly conversationId: string;
   readonly branchId: string;
   readonly turnId: string;
-  readonly terminalState: PiTurnCheckpointRecord["terminalState"];
+  readonly terminalState: PiTurnCheckpointRecord['terminalState'];
   readonly messages?: readonly AgentMessage[];
 }
 
@@ -148,20 +144,20 @@ export class NodePiConversationAuthority {
   static async create(
     options: CreateNodePiConversationAuthorityOptions,
   ): Promise<NodePiConversationAuthority> {
-    validateIdentity("workspaceId", options.workspaceId);
-    validateIdentity("hostId", options.hostId);
+    validateIdentity('workspaceId', options.workspaceId);
+    validateIdentity('hostId', options.hostId);
     const leaseTtlMs = options.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS;
     if (!Number.isInteger(leaseTtlMs) || leaseTtlMs <= 0) {
       throw new PiConversationAuthorityError(
-        "invalid-identity",
-        "leaseTtlMs must be a positive integer.",
+        'invalid-identity',
+        'leaseTtlMs must be a positive integer.',
       );
     }
-    const root = join(options.userDataRoot, "agent", "pi");
-    const sessionsRoot = join(root, "sessions");
+    const root = join(options.userDataRoot, 'agent', 'pi');
+    const sessionsRoot = join(root, 'sessions');
     await mkdir(sessionsRoot, { recursive: true });
-    const sqlite = await import("node:sqlite");
-    const database = new sqlite.DatabaseSync(join(root, "metadata.sqlite"), {
+    const sqlite = await import('node:sqlite');
+    const database = new sqlite.DatabaseSync(join(root, 'metadata.sqlite'), {
       enableForeignKeyConstraints: true,
       timeout: 5_000,
     });
@@ -188,47 +184,50 @@ export class NodePiConversationAuthority {
     return `/__neko_workspaces/${encodeURIComponent(this.workspaceId)}`;
   }
 
-  acquireLease(conversationId: string, options?: { readonly takeover?: boolean }): ConversationExecutionLease {
-    validateIdentity("conversationId", conversationId);
+  acquireLease(
+    conversationId: string,
+    options?: { readonly takeover?: boolean },
+  ): ConversationExecutionLease {
+    validateIdentity('conversationId', conversationId);
     const now = this.now();
     const expiresAt = now + this.leaseTtlMs;
-    this.database.exec("BEGIN IMMEDIATE");
+    this.database.exec('BEGIN IMMEDIATE');
     try {
       const current = readLeaseRow(
-        this.database.prepare("SELECT * FROM pi_execution_leases WHERE conversation_id = ?").get(
-          conversationId,
-        ),
+        this.database
+          .prepare('SELECT * FROM pi_execution_leases WHERE conversation_id = ?')
+          .get(conversationId),
       );
       let epoch: number;
       if (current === undefined) {
         epoch = 1;
         this.database
           .prepare(
-            "INSERT INTO pi_execution_leases (conversation_id, holder_id, epoch, expires_at) VALUES (?, ?, ?, ?)",
+            'INSERT INTO pi_execution_leases (conversation_id, holder_id, epoch, expires_at) VALUES (?, ?, ?, ?)',
           )
           .run(conversationId, this.hostId, epoch, expiresAt);
       } else if (current.holderId === this.hostId && current.expiresAt > now) {
         epoch = current.epoch;
         this.database
-          .prepare("UPDATE pi_execution_leases SET expires_at = ? WHERE conversation_id = ?")
+          .prepare('UPDATE pi_execution_leases SET expires_at = ? WHERE conversation_id = ?')
           .run(expiresAt, conversationId);
       } else if (current.expiresAt <= now || options?.takeover === true) {
         epoch = current.epoch + 1;
         this.database
           .prepare(
-            "UPDATE pi_execution_leases SET holder_id = ?, epoch = ?, expires_at = ? WHERE conversation_id = ?",
+            'UPDATE pi_execution_leases SET holder_id = ?, epoch = ?, expires_at = ? WHERE conversation_id = ?',
           )
           .run(this.hostId, epoch, expiresAt, conversationId);
       } else {
         throw new PiConversationAuthorityError(
-          "lease-held",
+          'lease-held',
           `Conversation ${conversationId} is currently owned by another Host.`,
         );
       }
-      this.database.exec("COMMIT");
+      this.database.exec('COMMIT');
       return Object.freeze({ conversationId, holderId: this.hostId, epoch, expiresAt });
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      this.database.exec('ROLLBACK');
       throw error;
     }
   }
@@ -236,16 +235,16 @@ export class NodePiConversationAuthority {
   renewLease(lease: ConversationExecutionLease): ConversationExecutionLease {
     const now = this.now();
     const expiresAt = now + this.leaseTtlMs;
-    this.database.exec("BEGIN IMMEDIATE");
+    this.database.exec('BEGIN IMMEDIATE');
     try {
       this.assertLease(lease, now);
       this.database
-        .prepare("UPDATE pi_execution_leases SET expires_at = ? WHERE conversation_id = ?")
+        .prepare('UPDATE pi_execution_leases SET expires_at = ? WHERE conversation_id = ?')
         .run(expiresAt, lease.conversationId);
-      this.database.exec("COMMIT");
+      this.database.exec('COMMIT');
       return Object.freeze({ ...lease, expiresAt });
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      this.database.exec('ROLLBACK');
       throw error;
     }
   }
@@ -253,7 +252,7 @@ export class NodePiConversationAuthority {
   leaseRenewalDelay(lease: ConversationExecutionLease): number {
     if (lease.holderId !== this.hostId) {
       throw new PiConversationAuthorityError(
-        "lease-stale",
+        'lease-stale',
         `Conversation writer lease ${lease.conversationId}@${lease.epoch} belongs to another Host.`,
       );
     }
@@ -262,27 +261,29 @@ export class NodePiConversationAuthority {
   }
 
   releaseLease(lease: ConversationExecutionLease): void {
-    this.database.exec("BEGIN IMMEDIATE");
+    this.database.exec('BEGIN IMMEDIATE');
     try {
       this.assertLease(lease, this.now(), false);
       this.database
         .prepare(
-          "DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND epoch = ?",
+          'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND epoch = ?',
         )
         .run(lease.conversationId, lease.holderId, lease.epoch);
-      this.database.exec("COMMIT");
+      this.database.exec('COMMIT');
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      this.database.exec('ROLLBACK');
       throw error;
     }
   }
 
-  async createConversation(input: CreatePiConversationInput): Promise<Session<JsonlSessionMetadata>> {
+  async createConversation(
+    input: CreatePiConversationInput,
+  ): Promise<Session<JsonlSessionMetadata>> {
     this.assertInputLease(input.lease, input.conversationId);
-    validateIdentity("branchId", input.branchId);
+    validateIdentity('branchId', input.branchId);
     if (this.readConversation(input.conversationId) !== undefined) {
       throw new PiConversationAuthorityError(
-        "conversation-exists",
+        'conversation-exists',
         `Conversation ${input.conversationId} already exists.`,
       );
     }
@@ -297,7 +298,7 @@ export class NodePiConversationAuthority {
       },
     });
     const metadata = await session.getMetadata();
-    this.database.exec("BEGIN IMMEDIATE");
+    this.database.exec('BEGIN IMMEDIATE');
     try {
       this.assertLease(input.lease, this.now());
       this.database
@@ -309,7 +310,7 @@ export class NodePiConversationAuthority {
         .run(
           this.workspaceId,
           input.conversationId,
-          input.title ?? "New conversation",
+          input.title ?? 'New conversation',
           input.branchId,
           now,
           now,
@@ -317,16 +318,16 @@ export class NodePiConversationAuthority {
       insertBranch(this.database, {
         conversationId: input.conversationId,
         branchId: input.branchId,
-        state: "active",
+        state: 'active',
         session: metadata,
         leafId: null,
         createdAt: now,
         updatedAt: now,
       });
-      this.database.exec("COMMIT");
+      this.database.exec('COMMIT');
       return session;
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      this.database.exec('ROLLBACK');
       await this.sessions.delete(metadata);
       throw error;
     }
@@ -340,14 +341,12 @@ export class NodePiConversationAuthority {
     return this.sessions.open(branch.session);
   }
 
-  async forkBranch(
-    input: ForkPiConversationBranchInput,
-  ): Promise<Session<JsonlSessionMetadata>> {
+  async forkBranch(input: ForkPiConversationBranchInput): Promise<Session<JsonlSessionMetadata>> {
     this.assertInputLease(input.lease, input.conversationId);
-    validateIdentity("branchId", input.branchId);
+    validateIdentity('branchId', input.branchId);
     if (this.readBranch(input.conversationId, input.branchId) !== undefined) {
       throw new PiConversationAuthorityError(
-        "branch-exists",
+        'branch-exists',
         `Branch ${input.branchId} already exists in conversation ${input.conversationId}.`,
       );
     }
@@ -367,23 +366,23 @@ export class NodePiConversationAuthority {
     const metadata = await session.getMetadata();
     const leafId = await session.getLeafId();
     const now = new Date(this.now()).toISOString();
-    this.database.exec("BEGIN IMMEDIATE");
+    this.database.exec('BEGIN IMMEDIATE');
     try {
       this.assertLease(input.lease, this.now());
       insertBranch(this.database, {
         conversationId: input.conversationId,
         branchId: input.branchId,
         parentBranchId: input.sourceBranchId,
-        state: "historical",
+        state: 'historical',
         session: metadata,
         leafId,
         createdAt: now,
         updatedAt: now,
       });
-      this.database.exec("COMMIT");
+      this.database.exec('COMMIT');
       return session;
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      this.database.exec('ROLLBACK');
       await this.sessions.delete(metadata);
       throw error;
     }
@@ -397,11 +396,13 @@ export class NodePiConversationAuthority {
     this.assertInputLease(lease, conversationId);
     this.requireBranch(conversationId, branchId);
     const updatedAt = new Date(this.now()).toISOString();
-    this.database.exec("BEGIN IMMEDIATE");
+    this.database.exec('BEGIN IMMEDIATE');
     try {
       this.assertLease(lease, this.now());
       this.database
-        .prepare("UPDATE pi_branches SET state = 'historical', updated_at = ? WHERE conversation_id = ?")
+        .prepare(
+          "UPDATE pi_branches SET state = 'historical', updated_at = ? WHERE conversation_id = ?",
+        )
         .run(updatedAt, conversationId);
       this.database
         .prepare(
@@ -410,12 +411,12 @@ export class NodePiConversationAuthority {
         .run(updatedAt, conversationId, branchId);
       this.database
         .prepare(
-          "UPDATE pi_conversations SET active_branch_id = ?, updated_at = ? WHERE conversation_id = ?",
+          'UPDATE pi_conversations SET active_branch_id = ?, updated_at = ? WHERE conversation_id = ?',
         )
         .run(branchId, updatedAt, conversationId);
-      this.database.exec("COMMIT");
+      this.database.exec('COMMIT');
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      this.database.exec('ROLLBACK');
       throw error;
     }
   }
@@ -428,29 +429,27 @@ export class NodePiConversationAuthority {
     this.assertInputLease(lease, conversationId);
     if (this.readConversation(conversationId) === undefined) {
       throw new PiConversationAuthorityError(
-        "conversation-not-found",
+        'conversation-not-found',
         `Conversation ${conversationId} does not exist.`,
       );
     }
     const normalized = title.trim();
     if (normalized.length === 0) {
       throw new PiConversationAuthorityError(
-        "invalid-identity",
-        "Conversation title must not be empty.",
+        'invalid-identity',
+        'Conversation title must not be empty.',
       );
     }
     const updatedAt = new Date(this.now()).toISOString();
-    this.database.exec("BEGIN IMMEDIATE");
+    this.database.exec('BEGIN IMMEDIATE');
     try {
       this.assertLease(lease, this.now());
       this.database
-        .prepare(
-          "UPDATE pi_conversations SET title = ?, updated_at = ? WHERE conversation_id = ?",
-        )
+        .prepare('UPDATE pi_conversations SET title = ?, updated_at = ? WHERE conversation_id = ?')
         .run(normalized, updatedAt, conversationId);
-      this.database.exec("COMMIT");
+      this.database.exec('COMMIT');
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      this.database.exec('ROLLBACK');
       throw error;
     }
   }
@@ -462,25 +461,25 @@ export class NodePiConversationAuthority {
     this.assertInputLease(lease, conversationId);
     if (this.readConversation(conversationId) === undefined) {
       throw new PiConversationAuthorityError(
-        "conversation-not-found",
+        'conversation-not-found',
         `Conversation ${conversationId} does not exist.`,
       );
     }
     const sessions = this.listBranches(conversationId).map((branch) => branch.session);
-    this.database.exec("BEGIN IMMEDIATE");
+    this.database.exec('BEGIN IMMEDIATE');
     try {
       this.assertLease(lease, this.now());
       this.database
-        .prepare("DELETE FROM pi_conversations WHERE conversation_id = ?")
+        .prepare('DELETE FROM pi_conversations WHERE conversation_id = ?')
         .run(conversationId);
       this.database
         .prepare(
-          "DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND epoch = ?",
+          'DELETE FROM pi_execution_leases WHERE conversation_id = ? AND holder_id = ? AND epoch = ?',
         )
         .run(conversationId, lease.holderId, lease.epoch);
-      this.database.exec("COMMIT");
+      this.database.exec('COMMIT');
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      this.database.exec('ROLLBACK');
       throw error;
     }
 
@@ -491,7 +490,7 @@ export class NodePiConversationAuthority {
       sessions.map((session) => this.sessions.delete(session)),
     );
     const failures = results.flatMap((result) =>
-      result.status === "rejected" ? [result.reason] : [],
+      result.status === 'rejected' ? [result.reason] : [],
     );
     if (failures.length > 0) {
       throw new AggregateError(
@@ -531,7 +530,7 @@ export class NodePiConversationAuthority {
     const branch = this.requireBranch(input.conversationId, input.branchId);
     const session = await this.sessions.open(branch.session);
     const previousLeafId = await session.getLeafId();
-    this.database.exec("BEGIN IMMEDIATE");
+    this.database.exec('BEGIN IMMEDIATE');
     try {
       this.assertLease(input.lease, this.now());
       await session.appendCompaction(
@@ -543,20 +542,15 @@ export class NodePiConversationAuthority {
       const updatedAt = new Date(this.now()).toISOString();
       this.database
         .prepare(
-          "UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?",
+          'UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?',
         )
-        .run(
-          await session.getLeafId(),
-          updatedAt,
-          input.conversationId,
-          input.branchId,
-        );
+        .run(await session.getLeafId(), updatedAt, input.conversationId, input.branchId);
       this.database
-        .prepare("UPDATE pi_conversations SET updated_at = ? WHERE conversation_id = ?")
+        .prepare('UPDATE pi_conversations SET updated_at = ? WHERE conversation_id = ?')
         .run(updatedAt, input.conversationId);
-      this.database.exec("COMMIT");
+      this.database.exec('COMMIT');
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      this.database.exec('ROLLBACK');
       try {
         if ((await session.getLeafId()) !== previousLeafId) {
           await session.moveTo(previousLeafId);
@@ -572,30 +566,27 @@ export class NodePiConversationAuthority {
   }
 
   async checkpointTurn(input: CheckpointPiTurnInput): Promise<PiTurnCheckpointRecord> {
-    validateIdentity("turnId", input.turnId);
+    validateIdentity('turnId', input.turnId);
     const key = checkpointKey(input.conversationId, input.turnId);
-    this.durability.set(key, "persisting");
+    this.durability.set(key, 'persisting');
     try {
       this.assertInputLease(input.lease, input.conversationId);
       const branch = this.requireBranch(input.conversationId, input.branchId);
       const session = await this.sessions.open(branch.session);
       const previousLeafId = await session.getLeafId();
-      this.database.exec("BEGIN IMMEDIATE");
+      this.database.exec('BEGIN IMMEDIATE');
       try {
         this.assertLease(input.lease, this.now());
         const existing = this.readCheckpoint(input.conversationId, input.turnId);
         if (existing !== undefined) {
-          if (
-            existing.branchId !== input.branchId ||
-            existing.piSessionId !== branch.session.id
-          ) {
+          if (existing.branchId !== input.branchId || existing.piSessionId !== branch.session.id) {
             throw new PiConversationAuthorityError(
-              "invalid-identity",
+              'invalid-identity',
               `Turn checkpoint ${input.conversationId}/${input.turnId} targets a different branch or Pi Session.`,
             );
           }
-          this.database.exec("COMMIT");
-          this.durability.set(key, "durable");
+          this.database.exec('COMMIT');
+          this.durability.set(key, 'durable');
           return existing;
         }
         for (const message of input.messages ?? []) {
@@ -631,14 +622,14 @@ export class NodePiConversationAuthority {
           );
         this.database
           .prepare(
-            "UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?",
+            'UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?',
           )
           .run(leafId, committedAt, input.conversationId, input.branchId);
-        this.database.exec("COMMIT");
-        this.durability.set(key, "durable");
+        this.database.exec('COMMIT');
+        this.durability.set(key, 'durable');
         return Object.freeze(record);
       } catch (error) {
-        this.database.exec("ROLLBACK");
+        this.database.exec('ROLLBACK');
         try {
           if ((await session.getLeafId()) !== previousLeafId) {
             await session.moveTo(previousLeafId);
@@ -652,22 +643,22 @@ export class NodePiConversationAuthority {
         throw error;
       }
     } catch (error) {
-      this.durability.set(key, "persistence-delayed");
+      this.durability.set(key, 'persistence-delayed');
       throw error;
     }
   }
 
   startTurnDurability(conversationId: string, turnId: string): void {
-    validateIdentity("conversationId", conversationId);
-    validateIdentity("turnId", turnId);
+    validateIdentity('conversationId', conversationId);
+    validateIdentity('turnId', turnId);
     const key = checkpointKey(conversationId, turnId);
     if (this.durability.has(key) || this.readCheckpoint(conversationId, turnId) !== undefined) {
       throw new PiConversationAuthorityError(
-        "invalid-identity",
+        'invalid-identity',
         `Turn durability ${conversationId}/${turnId} already exists.`,
       );
     }
-    this.durability.set(key, "volatile");
+    this.durability.set(key, 'volatile');
   }
 
   backfillTurnCheckpoint(input: CheckpointPiTurnInput): Promise<PiTurnCheckpointRecord> {
@@ -681,9 +672,7 @@ export class NodePiConversationAuthority {
   readCheckpoint(conversationId: string, turnId: string): PiTurnCheckpointRecord | undefined {
     return readCheckpointRow(
       this.database
-        .prepare(
-          "SELECT * FROM pi_turn_checkpoints WHERE conversation_id = ? AND turn_id = ?",
-        )
+        .prepare('SELECT * FROM pi_turn_checkpoints WHERE conversation_id = ? AND turn_id = ?')
         .get(conversationId, turnId),
     );
   }
@@ -691,41 +680,38 @@ export class NodePiConversationAuthority {
   readConversation(conversationId: string): PiConversationCatalogRecord | undefined {
     const record = readConversationRow(
       this.database
-        .prepare("SELECT * FROM pi_conversations WHERE conversation_id = ?")
+        .prepare('SELECT * FROM pi_conversations WHERE conversation_id = ?')
         .get(conversationId),
     );
     if (record !== undefined && record.workspaceId !== this.workspaceId) {
       throw new PiConversationAuthorityError(
-        "workspace-mismatch",
+        'workspace-mismatch',
         `Conversation ${conversationId} belongs to workspace ${record.workspaceId}.`,
       );
     }
     return record;
   }
 
-  readBranch(
-    conversationId: string,
-    branchId: string,
-  ): PiConversationBranchRecord | undefined {
+  readBranch(conversationId: string, branchId: string): PiConversationBranchRecord | undefined {
     return readBranchRow(
       this.database
-        .prepare("SELECT * FROM pi_branches WHERE conversation_id = ? AND branch_id = ?")
+        .prepare('SELECT * FROM pi_branches WHERE conversation_id = ? AND branch_id = ?')
         .get(conversationId, branchId),
     );
   }
 
   listConversations(): readonly PiConversationCatalogRecord[] {
     return this.database
-      .prepare("SELECT * FROM pi_conversations WHERE workspace_id = ? ORDER BY updated_at DESC")
+      .prepare('SELECT * FROM pi_conversations WHERE workspace_id = ? ORDER BY updated_at DESC')
       .all(this.workspaceId)
-      .map((row) => requireParsed(readConversationRow(row), "conversation"));
+      .map((row) => requireParsed(readConversationRow(row), 'conversation'));
   }
 
   listBranches(conversationId: string): readonly PiConversationBranchRecord[] {
     return this.database
-      .prepare("SELECT * FROM pi_branches WHERE conversation_id = ? ORDER BY created_at")
+      .prepare('SELECT * FROM pi_branches WHERE conversation_id = ? ORDER BY created_at')
       .all(conversationId)
-      .map((row) => requireParsed(readBranchRow(row), "branch"));
+      .map((row) => requireParsed(readBranchRow(row), 'branch'));
   }
 
   async projectCatalog(projector: PiConversationCatalogProjector): Promise<void> {
@@ -743,14 +729,14 @@ export class NodePiConversationAuthority {
     const conversation = this.readConversation(conversationId);
     if (conversation === undefined) {
       throw new PiConversationAuthorityError(
-        "conversation-not-found",
+        'conversation-not-found',
         `Conversation ${conversationId} does not exist.`,
       );
     }
     const branch = this.readBranch(conversationId, branchId);
     if (branch === undefined) {
       throw new PiConversationAuthorityError(
-        "branch-not-found",
+        'branch-not-found',
         `Branch ${branchId} does not exist in conversation ${conversationId}.`,
       );
     }
@@ -760,7 +746,7 @@ export class NodePiConversationAuthority {
   private assertInputLease(lease: ConversationExecutionLease, conversationId: string): void {
     if (lease.conversationId !== conversationId) {
       throw new PiConversationAuthorityError(
-        "lease-stale",
+        'lease-stale',
         `Lease for ${lease.conversationId} cannot write conversation ${conversationId}.`,
       );
     }
@@ -774,7 +760,7 @@ export class NodePiConversationAuthority {
   ): void {
     const current = readLeaseRow(
       this.database
-        .prepare("SELECT * FROM pi_execution_leases WHERE conversation_id = ?")
+        .prepare('SELECT * FROM pi_execution_leases WHERE conversation_id = ?')
         .get(lease.conversationId),
     );
     if (
@@ -785,7 +771,7 @@ export class NodePiConversationAuthority {
       (requireUnexpired && current.expiresAt <= now)
     ) {
       throw new PiConversationAuthorityError(
-        "lease-stale",
+        'lease-stale',
         `Conversation writer lease ${lease.conversationId}@${lease.epoch} is stale.`,
       );
     }
@@ -797,17 +783,17 @@ export class NodePiConversationAuthority {
     branchId: string,
     leafId: string | null,
   ): void {
-    this.database.exec("BEGIN IMMEDIATE");
+    this.database.exec('BEGIN IMMEDIATE');
     try {
       this.assertLease(lease, this.now());
       this.database
         .prepare(
-          "UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?",
+          'UPDATE pi_branches SET leaf_id = ?, updated_at = ? WHERE conversation_id = ? AND branch_id = ?',
         )
         .run(leafId, new Date(this.now()).toISOString(), conversationId, branchId);
-      this.database.exec("COMMIT");
+      this.database.exec('COMMIT');
     } catch (error) {
-      this.database.exec("ROLLBACK");
+      this.database.exec('ROLLBACK');
       throw error;
     }
   }
@@ -897,41 +883,41 @@ function readConversationRow(value: unknown): PiConversationCatalogRecord | unde
   if (value === undefined) return undefined;
   const row = requireRow(value);
   return Object.freeze({
-    workspaceId: requireString(row, "workspace_id"),
-    conversationId: requireString(row, "conversation_id"),
-    title: requireString(row, "title"),
-    activeBranchId: requireString(row, "active_branch_id"),
-    createdAt: requireString(row, "created_at"),
-    updatedAt: requireString(row, "updated_at"),
+    workspaceId: requireString(row, 'workspace_id'),
+    conversationId: requireString(row, 'conversation_id'),
+    title: requireString(row, 'title'),
+    activeBranchId: requireString(row, 'active_branch_id'),
+    createdAt: requireString(row, 'created_at'),
+    updatedAt: requireString(row, 'updated_at'),
   });
 }
 
 function readBranchRow(value: unknown): PiConversationBranchRecord | undefined {
   if (value === undefined) return undefined;
   const row = requireRow(value);
-  const parentBranchId = optionalString(row, "parent_branch_id");
-  const parentSessionPath = optionalString(row, "pi_parent_session_path");
-  const metadataJson = optionalString(row, "pi_metadata_json");
-  const state = requireString(row, "state");
-  if (state !== "active" && state !== "historical") {
+  const parentBranchId = optionalString(row, 'parent_branch_id');
+  const parentSessionPath = optionalString(row, 'pi_parent_session_path');
+  const metadataJson = optionalString(row, 'pi_metadata_json');
+  const state = requireString(row, 'state');
+  if (state !== 'active' && state !== 'historical') {
     throw new TypeError(`Invalid Pi branch state: ${state}`);
   }
   return Object.freeze({
-    conversationId: requireString(row, "conversation_id"),
-    branchId: requireString(row, "branch_id"),
+    conversationId: requireString(row, 'conversation_id'),
+    branchId: requireString(row, 'branch_id'),
     ...(parentBranchId === undefined ? {} : { parentBranchId }),
     state,
     session: Object.freeze({
-      id: requireString(row, "pi_session_id"),
-      createdAt: requireString(row, "pi_session_created_at"),
-      cwd: requireString(row, "pi_session_cwd"),
-      path: requireString(row, "pi_session_path"),
+      id: requireString(row, 'pi_session_id'),
+      createdAt: requireString(row, 'pi_session_created_at'),
+      cwd: requireString(row, 'pi_session_cwd'),
+      path: requireString(row, 'pi_session_path'),
       ...(parentSessionPath === undefined ? {} : { parentSessionPath }),
       ...(metadataJson === undefined ? {} : { metadata: parseMetadata(metadataJson) }),
     }),
-    leafId: optionalString(row, "leaf_id") ?? null,
-    createdAt: requireString(row, "created_at"),
-    updatedAt: requireString(row, "updated_at"),
+    leafId: optionalString(row, 'leaf_id') ?? null,
+    createdAt: requireString(row, 'created_at'),
+    updatedAt: requireString(row, 'updated_at'),
   });
 }
 
@@ -939,72 +925,73 @@ function readLeaseRow(value: unknown): ConversationExecutionLease | undefined {
   if (value === undefined) return undefined;
   const row = requireRow(value);
   return Object.freeze({
-    conversationId: requireString(row, "conversation_id"),
-    holderId: requireString(row, "holder_id"),
-    epoch: requireInteger(row, "epoch"),
-    expiresAt: requireInteger(row, "expires_at"),
+    conversationId: requireString(row, 'conversation_id'),
+    holderId: requireString(row, 'holder_id'),
+    epoch: requireInteger(row, 'epoch'),
+    expiresAt: requireInteger(row, 'expires_at'),
   });
 }
 
 function readCheckpointRow(value: unknown): PiTurnCheckpointRecord | undefined {
   if (value === undefined) return undefined;
   const row = requireRow(value);
-  const terminalState = requireString(row, "terminal_state");
-  if (terminalState !== "completed" && terminalState !== "cancelled" && terminalState !== "failed") {
+  const terminalState = requireString(row, 'terminal_state');
+  if (
+    terminalState !== 'completed' &&
+    terminalState !== 'cancelled' &&
+    terminalState !== 'failed'
+  ) {
     throw new TypeError(`Invalid Pi checkpoint terminal state: ${terminalState}`);
   }
   return Object.freeze({
-    conversationId: requireString(row, "conversation_id"),
-    turnId: requireString(row, "turn_id"),
-    branchId: requireString(row, "branch_id"),
-    piSessionId: requireString(row, "pi_session_id"),
-    leafId: optionalString(row, "leaf_id") ?? null,
-    writerEpoch: requireInteger(row, "writer_epoch"),
+    conversationId: requireString(row, 'conversation_id'),
+    turnId: requireString(row, 'turn_id'),
+    branchId: requireString(row, 'branch_id'),
+    piSessionId: requireString(row, 'pi_session_id'),
+    leafId: optionalString(row, 'leaf_id') ?? null,
+    writerEpoch: requireInteger(row, 'writer_epoch'),
     terminalState,
-    committedAt: requireString(row, "committed_at"),
+    committedAt: requireString(row, 'committed_at'),
   });
 }
 
 function requireRow(value: unknown): Readonly<Record<string, unknown>> {
   if (!isRecord(value)) {
-    throw new TypeError("node:sqlite returned a non-record row.");
+    throw new TypeError('node:sqlite returned a non-record row.');
   }
   return value;
 }
 
 function requireString(row: Readonly<Record<string, unknown>>, key: string): string {
   const value = row[key];
-  if (typeof value !== "string") throw new TypeError(`SQLite column ${key} must be text.`);
+  if (typeof value !== 'string') throw new TypeError(`SQLite column ${key} must be text.`);
   return value;
 }
 
-function optionalString(
-  row: Readonly<Record<string, unknown>>,
-  key: string,
-): string | undefined {
+function optionalString(row: Readonly<Record<string, unknown>>, key: string): string | undefined {
   const value = row[key];
   if (value === null || value === undefined) return undefined;
-  if (typeof value !== "string") throw new TypeError(`SQLite column ${key} must be text or null.`);
+  if (typeof value !== 'string') throw new TypeError(`SQLite column ${key} must be text or null.`);
   return value;
 }
 
 function requireInteger(row: Readonly<Record<string, unknown>>, key: string): number {
   const value = row[key];
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "number" && Number.isSafeInteger(value)) return value;
+  if (typeof value === 'bigint') return Number(value);
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return value;
   throw new TypeError(`SQLite column ${key} must be an integer.`);
 }
 
 function parseMetadata(value: string): Record<string, unknown> {
   const parsed: unknown = JSON.parse(value);
   if (!isRecord(parsed)) {
-    throw new TypeError("Pi Session metadata must be a JSON object.");
+    throw new TypeError('Pi Session metadata must be a JSON object.');
   }
   return parsed;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function requireParsed<T>(value: T | undefined, kind: string): T {
@@ -1013,9 +1000,9 @@ function requireParsed<T>(value: T | undefined, kind: string): T {
 }
 
 function validateIdentity(field: string, value: string): void {
-  if (value.trim().length === 0 || value.includes("\u0000")) {
+  if (value.trim().length === 0 || value.includes('\u0000')) {
     throw new PiConversationAuthorityError(
-      "invalid-identity",
+      'invalid-identity',
       `${field} must be a non-empty identifier without NUL characters.`,
     );
   }

@@ -670,5 +670,4 @@ describe('ToolRegistry provider schema projection', () => {
     expect(definition?.function.parameters).not.toHaveProperty('targetRequirements');
     expect(definition?.function.parameters).not.toHaveProperty('queryBeforeMutate');
   });
-
 });

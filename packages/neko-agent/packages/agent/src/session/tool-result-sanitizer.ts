@@ -31,14 +31,11 @@ export function sanitizeToolResultFieldsForHistory(
   return {
     data: sanitizeToolResultValueForHistory(result.data),
     attachments: sanitizeToolResultValueForHistory(result.attachments) as
-      | readonly ToolResultAttachment[]
-      | undefined,
+      readonly ToolResultAttachment[] | undefined,
     perceptionCards: sanitizeToolResultValueForHistory(result.perceptionCards) as
-      | readonly PerceptionCard[]
-      | undefined,
+      readonly PerceptionCard[] | undefined,
     artifacts: sanitizeToolResultValueForHistory(result.artifacts) as
-      | readonly ToolResultArtifactTransfer[]
-      | undefined,
+      readonly ToolResultArtifactTransfer[] | undefined,
   };
 }
 

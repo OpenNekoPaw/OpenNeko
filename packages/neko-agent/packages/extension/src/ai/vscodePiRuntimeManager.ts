@@ -192,9 +192,7 @@ export class VSCodePiRuntimeManager {
     return (await host.discover(await vscodePiSkillRoots(this.options))).records;
   }
 
-  async listConversationPresentationCatalog(): Promise<
-    readonly VSCodePiConversationCatalogItem[]
-  > {
+  async listConversationPresentationCatalog(): Promise<readonly VSCodePiConversationCatalogItem[]> {
     this.assertNotDisposed();
     const authority = await this.getAuthority();
     return Promise.all(
@@ -245,7 +243,9 @@ export class VSCodePiRuntimeManager {
       });
       const record = authority.readConversation(input.conversationId);
       if (!record) {
-        throw new Error(`Pi conversation ${input.conversationId} was not cataloged after creation.`);
+        throw new Error(
+          `Pi conversation ${input.conversationId} was not cataloged after creation.`,
+        );
       }
       return record;
     } finally {
@@ -315,12 +315,7 @@ export class VSCodePiRuntimeManager {
     if (!conversation) throw new Error(`Pi conversation ${conversationId} does not exist.`);
     const lease = authority.acquireLease(conversationId);
     try {
-      await authority.rollbackBranch(
-        lease,
-        conversationId,
-        conversation.activeBranchId,
-        null,
-      );
+      await authority.rollbackBranch(lease, conversationId, conversation.activeBranchId, null);
     } finally {
       authority.releaseLease(lease);
     }
@@ -542,42 +537,43 @@ class VSCodePiConversationOwner {
       this.titleInitialized = true;
     }
     const runtimeInput = {
-        ...identity,
-        ...(input.images === undefined
-          ? {}
-          : {
-              images: input.images.map((image) => ({
-                type: 'image' as const,
-                mimeType: image.media_type,
-                data: image.data,
-              })),
-            }),
-        modelPolicy: policy,
-        skillSnapshot,
-        capabilityTools: projectOpenNekoTools(this.options.tools.list(), {
-          locale: input.locale,
-          purposeForTool: resolveOpenNekoToolModelPurpose,
-          isPurposeOptionalForTool: (tool) => tool.name === TOOL_NAMES_QUALITY.QUALITY_CHECK,
-        }),
-        permissionPolicy,
-        workspaceTrusted: this.options.workspaceTrusted(),
-        events,
-        systemPrompt: input.systemPrompt,
-      };
-    const operation = (skill
-      ? this.runtime.executeSkill({
-          ...runtimeInput,
-          skillName: skill.skillName,
-          ...(skill.additionalInstructions === undefined
-            ? {}
-            : { additionalInstructions: skill.additionalInstructions }),
-        })
-      : this.runtime.execute({ ...runtimeInput, prompt: input.prompt }))
-      .then(() => ({
-        status: terminal.status ?? 'completed',
-        ...identity,
-        durability: requireTurnDurability(this.authority, input.conversationId, identity.turnId),
-      }));
+      ...identity,
+      ...(input.images === undefined
+        ? {}
+        : {
+            images: input.images.map((image) => ({
+              type: 'image' as const,
+              mimeType: image.media_type,
+              data: image.data,
+            })),
+          }),
+      modelPolicy: policy,
+      skillSnapshot,
+      capabilityTools: projectOpenNekoTools(this.options.tools.list(), {
+        locale: input.locale,
+        purposeForTool: resolveOpenNekoToolModelPurpose,
+        isPurposeOptionalForTool: (tool) => tool.name === TOOL_NAMES_QUALITY.QUALITY_CHECK,
+      }),
+      permissionPolicy,
+      workspaceTrusted: this.options.workspaceTrusted(),
+      events,
+      systemPrompt: input.systemPrompt,
+    };
+    const operation = (
+      skill
+        ? this.runtime.executeSkill({
+            ...runtimeInput,
+            skillName: skill.skillName,
+            ...(skill.additionalInstructions === undefined
+              ? {}
+              : { additionalInstructions: skill.additionalInstructions }),
+          })
+        : this.runtime.execute({ ...runtimeInput, prompt: input.prompt })
+    ).then(() => ({
+      status: terminal.status ?? 'completed',
+      ...identity,
+      durability: requireTurnDurability(this.authority, input.conversationId, identity.turnId),
+    }));
     this.activeTurn = { identity, operation };
     try {
       return await operation;

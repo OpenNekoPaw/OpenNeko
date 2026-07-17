@@ -22,10 +22,10 @@ describe('resolveProvider', () => {
   });
 
   it('resolves Kling through the compatible native path', () => {
-    const resolved = resolveProvider(
-      'kling',
-      { apiUrl: 'https://api.example.test/v1', apiKey: 'test-key' },
-    );
+    const resolved = resolveProvider('kling', {
+      apiUrl: 'https://api.example.test/v1',
+      apiKey: 'test-key',
+    });
 
     expect(resolved).toMatchObject({ type: 'kling', source: 'native' });
   });

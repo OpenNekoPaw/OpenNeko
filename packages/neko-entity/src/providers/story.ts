@@ -30,11 +30,9 @@ export interface StoryEntityProviderAdapterOptions {
   readonly providerId?: string;
   readonly listCharacterNames: () => readonly string[];
   readonly listCandidates?: () =>
-    | readonly StoryEntityCandidateInput[]
-    | Promise<readonly StoryEntityCandidateInput[]>;
+    readonly StoryEntityCandidateInput[] | Promise<readonly StoryEntityCandidateInput[]>;
   readonly listOccurrences?: () =>
-    | readonly StoryEntityOccurrenceInput[]
-    | Promise<readonly StoryEntityOccurrenceInput[]>;
+    readonly StoryEntityOccurrenceInput[] | Promise<readonly StoryEntityOccurrenceInput[]>;
   readonly available?: () => boolean;
   readonly now?: () => string;
 }

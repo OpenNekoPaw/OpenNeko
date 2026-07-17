@@ -38,8 +38,7 @@ describe('Agent Webview host runtime boundary', () => {
       return forbiddenHostNeutralPatterns
         .filter((forbidden) => forbidden.pattern.test(source))
         .map(
-          (forbidden) =>
-            `${relativePath} matches ${forbidden.pattern}: ${forbidden.replacement}`,
+          (forbidden) => `${relativePath} matches ${forbidden.pattern}: ${forbidden.replacement}`,
         );
     });
 

@@ -110,7 +110,6 @@ class DefaultCapabilityRuntimeBindingStore implements CapabilityRuntimeBindingSt
     this.bindings = mergeCapabilityRuntimeBindings(this.bindings, next, this.logger);
     return this.bindings;
   }
-
 }
 
 function emitBindingWarning(

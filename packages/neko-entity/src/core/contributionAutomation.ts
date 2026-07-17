@@ -13,9 +13,7 @@ import { normalizeAliasList, stableIdPart } from './adapters';
 import type { CreativeEntityService } from './CreativeEntityService';
 
 export type EntityContributionAutomationMode =
-  | 'match-only'
-  | 'candidate'
-  | 'confirm-source-approved';
+  'match-only' | 'candidate' | 'confirm-source-approved';
 
 export type EntityContributionAutomationDecisionKind =
   | 'matched-existing'

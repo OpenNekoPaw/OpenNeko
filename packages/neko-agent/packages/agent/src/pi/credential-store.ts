@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
-import { chmodSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { createHash } from 'node:crypto';
+import { chmodSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import type {
   AuthEvent,
@@ -9,13 +9,10 @@ import type {
   Credential,
   CredentialStore,
   Provider,
-} from "@earendil-works/pi-ai";
+} from '@earendil-works/pi-ai';
 
 export type CredentialProvenance =
-  | "interactive"
-  | "user-config-import"
-  | "environment"
-  | "account-gateway";
+  'interactive' | 'user-config-import' | 'environment' | 'account-gateway';
 
 export interface PersistedUserCredential {
   readonly credential: Credential;
@@ -37,7 +34,7 @@ export interface UserCredentialPersistence {
 
 export interface CredentialStatus {
   readonly providerId: string;
-  readonly type: Credential["type"];
+  readonly type: Credential['type'];
   readonly provenance: CredentialProvenance;
   readonly fingerprint: string;
   readonly updatedAt: string;
@@ -49,21 +46,21 @@ export interface AuthInteraction {
   notify(event: AuthEvent): void;
 }
 
-export type ProviderLoginMethod = "api-key" | "oauth";
+export type ProviderLoginMethod = 'api-key' | 'oauth';
 
 export type OpenNekoCredentialErrorCode =
-  | "provider-mismatch"
-  | "login-unsupported"
-  | "credential-missing"
-  | "credential-type-mismatch"
-  | "persistence";
+  | 'provider-mismatch'
+  | 'login-unsupported'
+  | 'credential-missing'
+  | 'credential-type-mismatch'
+  | 'persistence';
 
 export class OpenNekoCredentialError extends Error {
   readonly code: OpenNekoCredentialErrorCode;
 
   constructor(code: OpenNekoCredentialErrorCode, message: string, cause?: unknown) {
     super(message, cause === undefined ? undefined : { cause });
-    this.name = "OpenNekoCredentialError";
+    this.name = 'OpenNekoCredentialError';
     this.code = code;
   }
 }
@@ -88,14 +85,14 @@ export class OpenNekoCredentialStore implements CredentialStore {
         if (next === undefined) return current;
         return Object.freeze({
           credential: cloneCredential(next),
-          provenance: current?.provenance ?? "interactive",
+          provenance: current?.provenance ?? 'interactive',
           updatedAt: new Date(this.now()).toISOString(),
         });
       });
       return cloneCredential(updated?.credential);
     } catch (cause) {
       throw new OpenNekoCredentialError(
-        "persistence",
+        'persistence',
         `Failed to persist credential for provider ${providerId}.`,
         cause,
       );
@@ -116,13 +113,13 @@ export class OpenNekoCredentialStore implements CredentialStore {
         }),
       );
       if (updated === undefined) {
-        throw new Error("Credential persistence returned no durable entry.");
+        throw new Error('Credential persistence returned no durable entry.');
       }
       return toCredentialStatus(providerId, updated);
     } catch (cause) {
       if (cause instanceof OpenNekoCredentialError) throw cause;
       throw new OpenNekoCredentialError(
-        "persistence",
+        'persistence',
         `Failed to persist credential for provider ${providerId}.`,
         cause,
       );
@@ -134,7 +131,7 @@ export class OpenNekoCredentialStore implements CredentialStore {
       await this.persistence.delete(providerId);
     } catch (cause) {
       throw new OpenNekoCredentialError(
-        "persistence",
+        'persistence',
         `Failed to delete credential for provider ${providerId}.`,
         cause,
       );
@@ -155,7 +152,7 @@ export class OpenNekoCredentialStore implements CredentialStore {
       return await this.persistence.read(providerId);
     } catch (cause) {
       throw new OpenNekoCredentialError(
-        "persistence",
+        'persistence',
         `Failed to read credential for provider ${providerId}.`,
         cause,
       );
@@ -179,10 +176,10 @@ export class PiProviderAuthController {
       notify: (event: AuthEvent) => input.interaction.notify(event),
     };
     let credential: Credential;
-    if (input.method === "oauth") {
+    if (input.method === 'oauth') {
       if (input.provider.auth.oauth === undefined) {
         throw new OpenNekoCredentialError(
-          "login-unsupported",
+          'login-unsupported',
           `Provider ${input.provider.id} does not expose Pi OAuth login.`,
         );
       }
@@ -191,7 +188,7 @@ export class PiProviderAuthController {
       const login = input.provider.auth.apiKey?.login;
       if (login === undefined) {
         throw new OpenNekoCredentialError(
-          "login-unsupported",
+          'login-unsupported',
           `Provider ${input.provider.id} does not expose interactive Pi API-key login.`,
         );
       }
@@ -200,7 +197,7 @@ export class PiProviderAuthController {
     return this.credentials.replace(
       input.provider.id,
       credential,
-      input.provenance ?? "interactive",
+      input.provenance ?? 'interactive',
     );
   }
 
@@ -208,20 +205,20 @@ export class PiProviderAuthController {
     const oauth = provider.auth.oauth;
     if (oauth === undefined) {
       throw new OpenNekoCredentialError(
-        "login-unsupported",
+        'login-unsupported',
         `Provider ${provider.id} does not expose Pi OAuth refresh.`,
       );
     }
     const updated = await this.credentials.modify(provider.id, async (current) => {
       if (current === undefined) {
         throw new OpenNekoCredentialError(
-          "credential-missing",
+          'credential-missing',
           `Provider ${provider.id} has no stored OAuth credential.`,
         );
       }
-      if (current.type !== "oauth") {
+      if (current.type !== 'oauth') {
         throw new OpenNekoCredentialError(
-          "credential-type-mismatch",
+          'credential-type-mismatch',
           `Provider ${provider.id} credential is not OAuth.`,
         );
       }
@@ -229,14 +226,14 @@ export class PiProviderAuthController {
     });
     if (updated === undefined) {
       throw new OpenNekoCredentialError(
-        "credential-missing",
+        'credential-missing',
         `Provider ${provider.id} OAuth refresh produced no credential.`,
       );
     }
     const status = await this.credentials.status(provider.id);
     if (status === undefined) {
       throw new OpenNekoCredentialError(
-        "credential-missing",
+        'credential-missing',
         `Provider ${provider.id} refreshed credential is not durable.`,
       );
     }
@@ -309,9 +306,9 @@ export class NodeSqliteUserCredentialPersistence implements UserCredentialPersis
   static open(
     options: OpenNodeSqliteUserCredentialPersistenceOptions,
   ): NodeSqliteUserCredentialPersistence {
-    const root = join(options.userDataRoot, "agent", "pi");
+    const root = join(options.userDataRoot, 'agent', 'pi');
     mkdirSync(root, { recursive: true, mode: 0o700 });
-    const databasePath = join(root, "credentials.sqlite");
+    const databasePath = join(root, 'credentials.sqlite');
     const database = new DatabaseSync(databasePath, {
       enableForeignKeyConstraints: true,
       timeout: 5_000,
@@ -342,7 +339,7 @@ export class NodeSqliteUserCredentialPersistence implements UserCredentialPersis
     ) => Promise<PersistedUserCredential | undefined>,
   ): Promise<PersistedUserCredential | undefined> {
     return this.enqueue(async () => {
-      this.database.exec("BEGIN IMMEDIATE");
+      this.database.exec('BEGIN IMMEDIATE');
       try {
         const current = this.readCurrent(providerId);
         const next = await fn(current);
@@ -357,17 +354,12 @@ export class NodeSqliteUserCredentialPersistence implements UserCredentialPersis
                  provenance = excluded.provenance,
                  updated_at = excluded.updated_at`,
             )
-            .run(
-              providerId,
-              JSON.stringify(next.credential),
-              next.provenance,
-              next.updatedAt,
-            );
+            .run(providerId, JSON.stringify(next.credential), next.provenance, next.updatedAt);
         }
-        this.database.exec("COMMIT");
+        this.database.exec('COMMIT');
         return next === undefined ? current : cloneEntry(next);
       } catch (error) {
-        this.database.exec("ROLLBACK");
+        this.database.exec('ROLLBACK');
         throw error;
       }
     });
@@ -375,14 +367,12 @@ export class NodeSqliteUserCredentialPersistence implements UserCredentialPersis
 
   delete(providerId: string): Promise<void> {
     return this.enqueue(async () => {
-      this.database.exec("BEGIN IMMEDIATE");
+      this.database.exec('BEGIN IMMEDIATE');
       try {
-        this.database
-          .prepare("DELETE FROM pi_credentials WHERE provider_id = ?")
-          .run(providerId);
-        this.database.exec("COMMIT");
+        this.database.prepare('DELETE FROM pi_credentials WHERE provider_id = ?').run(providerId);
+        this.database.exec('COMMIT');
       } catch (error) {
-        this.database.exec("ROLLBACK");
+        this.database.exec('ROLLBACK');
         throw error;
       }
     });
@@ -397,30 +387,30 @@ export class NodeSqliteUserCredentialPersistence implements UserCredentialPersis
   private readCurrent(providerId: string): PersistedUserCredential | undefined {
     const value = this.database
       .prepare(
-        "SELECT credential_json, provenance, updated_at FROM pi_credentials WHERE provider_id = ?",
+        'SELECT credential_json, provenance, updated_at FROM pi_credentials WHERE provider_id = ?',
       )
       .get(providerId);
     if (value === undefined) return undefined;
-    if (!isRecord(value)) throw new TypeError("Credential SQLite row must be a record.");
-    const credentialJson = value["credential_json"];
-    const provenance = value["provenance"];
-    const updatedAt = value["updated_at"];
+    if (!isRecord(value)) throw new TypeError('Credential SQLite row must be a record.');
+    const credentialJson = value['credential_json'];
+    const provenance = value['provenance'];
+    const updatedAt = value['updated_at'];
     if (
-      typeof credentialJson !== "string" ||
+      typeof credentialJson !== 'string' ||
       !isCredentialProvenance(provenance) ||
-      typeof updatedAt !== "string"
+      typeof updatedAt !== 'string'
     ) {
-      throw new TypeError("Credential SQLite row has an invalid schema.");
+      throw new TypeError('Credential SQLite row has an invalid schema.');
     }
     const credential: unknown = JSON.parse(credentialJson);
     if (!isCredential(credential)) {
-      throw new TypeError("Credential SQLite row contains an invalid Pi credential.");
+      throw new TypeError('Credential SQLite row contains an invalid Pi credential.');
     }
     return Object.freeze({ credential: structuredClone(credential), provenance, updatedAt });
   }
 
   private async enqueue<TResult>(operation: () => Promise<TResult>): Promise<TResult> {
-    if (this.disposed) throw new Error("Credential persistence is disposed.");
+    if (this.disposed) throw new Error('Credential persistence is disposed.');
     const previous = this.chain;
     let release: (() => void) | undefined;
     const next = new Promise<void>((resolve) => {
@@ -430,7 +420,7 @@ export class NodeSqliteUserCredentialPersistence implements UserCredentialPersis
     await previous;
     if (this.disposed) {
       release?.();
-      throw new Error("Credential persistence is disposed.");
+      throw new Error('Credential persistence is disposed.');
     }
     try {
       return await operation();
@@ -440,22 +430,19 @@ export class NodeSqliteUserCredentialPersistence implements UserCredentialPersis
   }
 }
 
-function toCredentialStatus(
-  providerId: string,
-  entry: PersistedUserCredential,
-): CredentialStatus {
+function toCredentialStatus(providerId: string, entry: PersistedUserCredential): CredentialStatus {
   return Object.freeze({
     providerId,
     type: entry.credential.type,
     provenance: entry.provenance,
     fingerprint: credentialFingerprint(entry.credential),
     updatedAt: entry.updatedAt,
-    ...(entry.credential.type === "oauth" ? { expiresAt: entry.credential.expires } : {}),
+    ...(entry.credential.type === 'oauth' ? { expiresAt: entry.credential.expires } : {}),
   });
 }
 
 function credentialFingerprint(credential: Credential): string {
-  return createHash("sha256").update(JSON.stringify(credential)).digest("hex").slice(0, 16);
+  return createHash('sha256').update(JSON.stringify(credential)).digest('hex').slice(0, 16);
 }
 
 function cloneCredential(credential: Credential): Credential;
@@ -484,33 +471,33 @@ function cloneEntry(
 
 function isCredentialProvenance(value: unknown): value is CredentialProvenance {
   return (
-    value === "interactive" ||
-    value === "user-config-import" ||
-    value === "environment" ||
-    value === "account-gateway"
+    value === 'interactive' ||
+    value === 'user-config-import' ||
+    value === 'environment' ||
+    value === 'account-gateway'
   );
 }
 
 function isCredential(value: unknown): value is Credential {
   if (!isRecord(value)) return false;
-  if (value["type"] === "api_key") {
-    const key = value["key"];
-    const env = value["env"];
+  if (value['type'] === 'api_key') {
+    const key = value['key'];
+    const env = value['env'];
     return (
-      (key === undefined || typeof key === "string") &&
+      (key === undefined || typeof key === 'string') &&
       (env === undefined ||
-        (isRecord(env) && Object.values(env).every((entry) => typeof entry === "string")))
+        (isRecord(env) && Object.values(env).every((entry) => typeof entry === 'string')))
     );
   }
   return (
-    value["type"] === "oauth" &&
-    typeof value["access"] === "string" &&
-    typeof value["refresh"] === "string" &&
-    typeof value["expires"] === "number" &&
-    Number.isFinite(value["expires"])
+    value['type'] === 'oauth' &&
+    typeof value['access'] === 'string' &&
+    typeof value['refresh'] === 'string' &&
+    typeof value['expires'] === 'number' &&
+    Number.isFinite(value['expires'])
   );
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

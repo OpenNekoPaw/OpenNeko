@@ -58,8 +58,7 @@ function executeAgentTool(
   const modelId = typeof args.modelId === 'string' ? args.modelId : undefined;
   const purpose = mediaPurposeForTool(name);
   const legacyModels = options.metadata?.mediaModels as
-    | Record<string, { providerId?: string; modelId?: string }>
-    | undefined;
+    Record<string, { providerId?: string; modelId?: string }> | undefined;
   const legacyCategory = purpose?.startsWith('image.')
     ? 'image'
     : purpose?.startsWith('video.')

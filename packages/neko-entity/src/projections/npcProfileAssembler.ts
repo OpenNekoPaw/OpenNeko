@@ -213,25 +213,21 @@ export class NpcProfileAssembler {
   ): readonly NpcProfileRepresentationBinding[] {
     const fromBindings = bindings
       .filter((binding) => binding.entityId === entityRef.entityId && binding.status !== 'rejected')
-      .map(
-        (binding): NpcProfileRepresentationBinding => ({
-          role: binding.role,
-          assetRef: binding.assetRef,
-          isDefault: binding.isDefault,
-          sourceRef: binding.id,
-        }),
-      );
+      .map((binding): NpcProfileRepresentationBinding => ({
+        role: binding.role,
+        assetRef: binding.assetRef,
+        isDefault: binding.isDefault,
+        sourceRef: binding.id,
+      }));
     const fromHints = hints
       .filter((hint) => isSameEntityRef(hint.entityRef, entityRef))
       .flatMap((hint) =>
-        hint.roles.map(
-          (role): NpcProfileRepresentationBinding => ({
-            role,
-            assetRef: hint.assetRef,
-            sourceRef: hint.source.sourceRef,
-            summary: hint.reason,
-          }),
-        ),
+        hint.roles.map((role): NpcProfileRepresentationBinding => ({
+          role,
+          assetRef: hint.assetRef,
+          sourceRef: hint.source.sourceRef,
+          summary: hint.reason,
+        })),
       );
 
     return dedupeRepresentationBindings([...fromBindings, ...fromHints]);

@@ -92,7 +92,10 @@ export class PerceiveTool extends BuiltinTool {
       return this.error('`assetId` must be a non-empty string and `depth` must be 1 or 2');
     }
 
-    if (containsUnderstandingModelOverride(input.options) || options?.metadata?.understandingModels) {
+    if (
+      containsUnderstandingModelOverride(input.options) ||
+      options?.metadata?.understandingModels
+    ) {
       throw new Error(
         'legacy-perception-model-override-rejected: Perception model routing is owned by the immutable turn purpose policy.',
       );

@@ -234,5 +234,4 @@ describe('CapabilityRegistryRuntime', () => {
       providerExpressionProfileRegistry.get('provider-expression:flux', '1.0.0'),
     ).toBeUndefined();
   });
-
 });

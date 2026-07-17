@@ -6,9 +6,7 @@ import {
   projectConversationError,
   projectHistoryClearedConversation,
 } from '../conversation-ui-presenter';
-import {
-  projectConversationSessionState,
-} from '../conversation-session-state-presenter';
+import { projectConversationSessionState } from '../conversation-session-state-presenter';
 
 describe('conversation UI presenter', () => {
   it('appends an error message and resets streaming state', () => {
@@ -236,7 +234,6 @@ describe('conversation UI presenter', () => {
       workItems: [workItemB],
     });
   });
-
 });
 
 function taskScope(childRunId: string) {

@@ -825,12 +825,7 @@ function stripRuntimeOnlyResultFields(value: unknown, seen: WeakSet<object>): un
 }
 
 function isRuntimeOnlyResultField(key: string): boolean {
-  return (
-    key === 'localPath' ||
-    key === 'localPaths' ||
-    key === 'renderUri' ||
-    key === 'renderUris'
-  );
+  return key === 'localPath' || key === 'localPaths' || key === 'renderUri' || key === 'renderUris';
 }
 
 function parseStableDocumentArchiveResourceRef(

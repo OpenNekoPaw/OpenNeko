@@ -301,7 +301,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
 
   // Register neko-agent host tools.
 
-  const purposeMediaService: ICapabilityPurposeMediaService | undefined = bootstrapResult.platform.media
+  const purposeMediaService: ICapabilityPurposeMediaService | undefined = bootstrapResult.platform
+    .media
     ? {
         generateImage: (purpose: string, request: { prompt: string; [key: string]: unknown }) => {
           const model = requirePurposeModelRef(bootstrapResult.platform, purpose);
@@ -321,10 +322,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
     purposeMediaService,
     purposeTextRuntime: bootstrapResult.productPurposeTextRuntime,
     configManager: bootstrapResult.platform.config,
-    embedFn: buildEmbedFn(
-      bootstrapResult.platform.config,
-      bootstrapResult.piCredentialStore,
-    ),
+    embedFn: buildEmbedFn(bootstrapResult.platform.config, bootstrapResult.piCredentialStore),
   };
   const capabilityDiscovery = bootstrapCapabilities(
     {

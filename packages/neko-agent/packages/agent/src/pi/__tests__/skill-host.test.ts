@@ -1,18 +1,18 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import { NodeExecutionEnv } from "@earendil-works/pi-agent-core/node";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   PiSkillHost,
   SkillHostError,
   type SkillHostPolicy,
   type SkillSourceKind,
-} from "../skill-host";
+} from '../skill-host';
 
-describe("PiSkillHost", () => {
+describe('PiSkillHost', () => {
   let root: string;
   let env: NodeExecutionEnv;
   const policy: SkillHostPolicy = {
@@ -21,7 +21,7 @@ describe("PiSkillHost", () => {
   };
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), "neko-skill-host-"));
+    root = await mkdtemp(join(tmpdir(), 'neko-skill-host-'));
     env = new NodeExecutionEnv({ cwd: root });
   });
 
@@ -30,144 +30,136 @@ describe("PiSkillHost", () => {
     await rm(root, { recursive: true, force: true });
   });
 
-  it("selects trusted enabled project Skills first and reports duplicate warnings", async () => {
-    await createSkill(root, "builtin", "shared", "Builtin body");
-    await createSkill(root, "personal", "shared", "Personal body");
-    await createSkill(root, "project", "shared", "Project body");
+  it('selects trusted enabled project Skills first and reports duplicate warnings', async () => {
+    await createSkill(root, 'builtin', 'shared', 'Builtin body');
+    await createSkill(root, 'personal', 'shared', 'Personal body');
+    await createSkill(root, 'project', 'shared', 'Project body');
     const host = new PiSkillHost(env, policy);
 
-    const snapshot = await host.discover(sourceRoots(root, ["builtin", "personal", "project"]));
+    const snapshot = await host.discover(sourceRoots(root, ['builtin', 'personal', 'project']));
 
     expect(snapshot.records).toEqual([
       expect.objectContaining({
-        name: "shared",
-        source: { kind: "project" },
+        name: 'shared',
+        source: { kind: 'project' },
         trusted: true,
         enabled: true,
       }),
     ]);
     expect(snapshot.warnings).toHaveLength(2);
     expect(snapshot.shadowedRecords).toEqual([
-      expect.objectContaining({ name: "shared", source: { kind: "builtin" } }),
-      expect.objectContaining({ name: "shared", source: { kind: "personal" } }),
+      expect.objectContaining({ name: 'shared', source: { kind: 'builtin' } }),
+      expect.objectContaining({ name: 'shared', source: { kind: 'personal' } }),
     ]);
-    expect(snapshot.invoke("shared")).toContain("Project body");
+    expect(snapshot.invoke('shared')).toContain('Project body');
   });
 
-  it("keeps explicit-only Skills invokable while excluding them from model disclosure", async () => {
-    const directory = await createSkill(root, "project", "explicit-only", "Explicit body");
+  it('keeps explicit-only Skills invokable while excluding them from model disclosure', async () => {
+    const directory = await createSkill(root, 'project', 'explicit-only', 'Explicit body');
     await writeFile(
-      join(directory, "SKILL.md"),
+      join(directory, 'SKILL.md'),
       `---\nname: explicit-only\ndescription: explicit fixture\ndisable-model-invocation: true\n---\nExplicit body\n`,
-      "utf8",
+      'utf8',
     );
 
-    const snapshot = await new PiSkillHost(env, policy).discover(
-      sourceRoots(root, ["project"]),
-    );
+    const snapshot = await new PiSkillHost(env, policy).discover(sourceRoots(root, ['project']));
 
     expect(snapshot.skills[0]!.disableModelInvocation).toBe(true);
-    expect(snapshot.invoke("explicit-only")).toContain("Explicit body");
+    expect(snapshot.invoke('explicit-only')).toContain('Explicit body');
   });
 
-  it("exposes only process-local virtual locators and contained relative resources", async () => {
-    const skillRoot = await createSkill(root, "project", "portable", "Read references/guide.md");
-    await mkdir(join(skillRoot, "references"));
-    await writeFile(join(skillRoot, "references", "guide.md"), "Guide body", "utf8");
+  it('exposes only process-local virtual locators and contained relative resources', async () => {
+    const skillRoot = await createSkill(root, 'project', 'portable', 'Read references/guide.md');
+    await mkdir(join(skillRoot, 'references'));
+    await writeFile(join(skillRoot, 'references', 'guide.md'), 'Guide body', 'utf8');
     const host = new PiSkillHost(env, policy);
-    const snapshot = await host.discover(sourceRoots(root, ["project"]));
+    const snapshot = await host.discover(sourceRoots(root, ['project']));
     const record = snapshot.records[0]!;
-    const resource = snapshot.resource("portable", "references/guide.md");
+    const resource = snapshot.resource('portable', 'references/guide.md');
 
     expect(record.locator.value).toMatch(/^\/__neko_skills\/[0-9a-f-]+\/[0-9a-f]{64}\/SKILL\.md$/);
     expect(record.locator.value).not.toContain(root);
     expect(resource.value).not.toContain(root);
     expect(snapshot.skills[0]!.filePath).toBe(record.locator.value);
-    await expect(snapshot.readText(record.locator)).resolves.toContain("Read references/guide.md");
-    await expect(snapshot.readText(resource)).resolves.toBe("Guide body");
-    expect(() => snapshot.resource("portable", "../secret.txt")).toThrowError(
-      expect.objectContaining<Partial<SkillHostError>>({ code: "invalid-resource-path" }),
+    await expect(snapshot.readText(record.locator)).resolves.toContain('Read references/guide.md');
+    await expect(snapshot.readText(resource)).resolves.toBe('Guide body');
+    expect(() => snapshot.resource('portable', '../secret.txt')).toThrowError(
+      expect.objectContaining<Partial<SkillHostError>>({ code: 'invalid-resource-path' }),
     );
   });
 
-  it("rejects a symlink that escapes the Skill package", async () => {
-    const skillRoot = await createSkill(root, "project", "portable", "Body");
-    const outside = join(root, "outside.txt");
-    await writeFile(outside, "secret", "utf8");
-    await mkdir(join(skillRoot, "references"));
-    await symlink(outside, join(skillRoot, "references", "outside.txt"));
-    const snapshot = await new PiSkillHost(env, policy).discover(
-      sourceRoots(root, ["project"]),
-    );
+  it('rejects a symlink that escapes the Skill package', async () => {
+    const skillRoot = await createSkill(root, 'project', 'portable', 'Body');
+    const outside = join(root, 'outside.txt');
+    await writeFile(outside, 'secret', 'utf8');
+    await mkdir(join(skillRoot, 'references'));
+    await symlink(outside, join(skillRoot, 'references', 'outside.txt'));
+    const snapshot = await new PiSkillHost(env, policy).discover(sourceRoots(root, ['project']));
 
     await expect(
-      snapshot.readText(snapshot.resource("portable", "references/outside.txt")),
-    ).rejects.toMatchObject({ code: "resource-outside-skill" });
+      snapshot.readText(snapshot.resource('portable', 'references/outside.txt')),
+    ).rejects.toMatchObject({ code: 'resource-outside-skill' });
   });
 
-  it("refreshes fingerprints on the next discovery while preserving the in-flight snapshot", async () => {
-    const skillRoot = await createSkill(root, "project", "changing", "Version one");
+  it('refreshes fingerprints on the next discovery while preserving the in-flight snapshot', async () => {
+    const skillRoot = await createSkill(root, 'project', 'changing', 'Version one');
     const host = new PiSkillHost(env, policy);
-    const first = await host.discover(sourceRoots(root, ["project"]));
-    await writeFile(
-      join(skillRoot, "SKILL.md"),
-      skillDocument("changing", "Version two"),
-      "utf8",
-    );
-    const second = await host.discover(sourceRoots(root, ["project"]));
+    const first = await host.discover(sourceRoots(root, ['project']));
+    await writeFile(join(skillRoot, 'SKILL.md'), skillDocument('changing', 'Version two'), 'utf8');
+    const second = await host.discover(sourceRoots(root, ['project']));
 
     expect(first.records[0]!.fingerprint).not.toBe(second.records[0]!.fingerprint);
-    expect(first.invoke("changing")).toContain("Version one");
-    expect(second.invoke("changing")).toContain("Version two");
+    expect(first.invoke('changing')).toContain('Version one');
+    expect(second.invoke('changing')).toContain('Version two');
     await expect(second.readText(first.records[0]!.locator)).rejects.toMatchObject({
-      code: "invalid-locator",
+      code: 'invalid-locator',
     });
   });
 
-  it("changes the fingerprint when a contained script changes", async () => {
-    const skillRoot = await createSkill(root, "project", "changing-script", "Run the script");
-    await mkdir(join(skillRoot, "scripts"));
-    const scriptPath = join(skillRoot, "scripts", "run.mjs");
-    await writeFile(scriptPath, "export const version = 1;", "utf8");
+  it('changes the fingerprint when a contained script changes', async () => {
+    const skillRoot = await createSkill(root, 'project', 'changing-script', 'Run the script');
+    await mkdir(join(skillRoot, 'scripts'));
+    const scriptPath = join(skillRoot, 'scripts', 'run.mjs');
+    await writeFile(scriptPath, 'export const version = 1;', 'utf8');
     const host = new PiSkillHost(env, policy);
-    const first = await host.discover(sourceRoots(root, ["project"]));
-    await writeFile(scriptPath, "export const version = 2;", "utf8");
+    const first = await host.discover(sourceRoots(root, ['project']));
+    await writeFile(scriptPath, 'export const version = 2;', 'utf8');
 
-    const second = await host.discover(sourceRoots(root, ["project"]));
+    const second = await host.discover(sourceRoots(root, ['project']));
 
     expect(first.records[0]!.fingerprint).not.toBe(second.records[0]!.fingerprint);
   });
 
-  it("filters untrusted or disabled records before duplicate selection", async () => {
-    await createSkill(root, "builtin", "shared", "Builtin body");
-    await createSkill(root, "project", "shared", "Project body");
+  it('filters untrusted or disabled records before duplicate selection', async () => {
+    await createSkill(root, 'builtin', 'shared', 'Builtin body');
+    await createSkill(root, 'project', 'shared', 'Project body');
     const host = new PiSkillHost(env, {
-      isTrusted: ({ source }) => source.kind !== "project",
+      isTrusted: ({ source }) => source.kind !== 'project',
       isEnabled: () => true,
     });
 
-    const snapshot = await host.discover(sourceRoots(root, ["builtin", "project"]));
+    const snapshot = await host.discover(sourceRoots(root, ['builtin', 'project']));
 
-    expect(snapshot.records[0]!.source.kind).toBe("builtin");
+    expect(snapshot.records[0]!.source.kind).toBe('builtin');
     expect(snapshot.warnings).toEqual([]);
   });
 
-  it("executes scripts only after the explicit user/workspace permission policy allows it", async () => {
-    const skillRoot = await createSkill(root, "project", "processor", "Use scripts/process.mjs");
-    await mkdir(join(skillRoot, "scripts"));
-    await writeFile(join(skillRoot, "scripts", "process.mjs"), "export {};", "utf8");
+  it('executes scripts only after the explicit user/workspace permission policy allows it', async () => {
+    const skillRoot = await createSkill(root, 'project', 'processor', 'Use scripts/process.mjs');
+    await mkdir(join(skillRoot, 'scripts'));
+    await writeFile(join(skillRoot, 'scripts', 'process.mjs'), 'export {};', 'utf8');
     let allowExecution = false;
     const authorize = vi.fn(() =>
       allowExecution
         ? { allowed: true as const }
-        : { allowed: false as const, reason: "user denied" },
+        : { allowed: false as const, reason: 'user denied' },
     );
     const processorResult = {
-      status: "succeeded" as const,
-      processorId: "skill-script",
-      registrationId: "skill-script:fixture",
+      status: 'succeeded' as const,
+      processorId: 'skill-script',
+      registrationId: 'skill-script:fixture',
       registrationRevision: 1,
-      run: { processorRunId: "processor-run-1", stageId: "main", attempt: 1 },
+      run: { processorRunId: 'processor-run-1', stageId: 'main', attempt: 1 },
       outputs: [],
       diagnostics: [],
       exitCode: 0,
@@ -177,24 +169,24 @@ describe("PiSkillHost", () => {
       authorizer: { authorize },
       executor: { execute },
     });
-    const snapshot = await host.discover(sourceRoots(root, ["project"]));
-    const script = snapshot.resource("processor", "scripts/process.mjs");
+    const snapshot = await host.discover(sourceRoots(root, ['project']));
+    const script = snapshot.resource('processor', 'scripts/process.mjs');
     const input = {
-      skillName: "processor",
+      skillName: 'processor',
       script,
-      args: ["--fixture"],
-      conversationId: "conversation-1",
-      turnId: "turn-1",
+      args: ['--fixture'],
+      conversationId: 'conversation-1',
+      turnId: 'turn-1',
       workspaceTrusted: true,
     };
 
     await expect(
       snapshot.executeExternalProcessor({ ...input, workspaceTrusted: false }),
-    ).rejects.toMatchObject({ code: "external-processor-denied" });
+    ).rejects.toMatchObject({ code: 'external-processor-denied' });
     expect(authorize).not.toHaveBeenCalled();
 
     await expect(snapshot.executeExternalProcessor(input)).rejects.toMatchObject({
-      code: "external-processor-denied",
+      code: 'external-processor-denied',
     });
     expect(execute).not.toHaveBeenCalled();
 
@@ -202,7 +194,7 @@ describe("PiSkillHost", () => {
     await expect(snapshot.executeExternalProcessor(input)).resolves.toEqual(processorResult);
     expect(execute).toHaveBeenCalledWith({
       physicalScriptPath: expect.stringMatching(/\/project\/processor\/scripts\/process\.mjs$/),
-      args: ["--fixture"],
+      args: ['--fixture'],
     });
   });
 });
@@ -215,7 +207,7 @@ async function createSkill(
 ): Promise<string> {
   const directory = join(root, source, name);
   await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, "SKILL.md"), skillDocument(name, body), "utf8");
+  await writeFile(join(directory, 'SKILL.md'), skillDocument(name, body), 'utf8');
   return directory;
 }
 

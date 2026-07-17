@@ -61,10 +61,7 @@ import {
   type PendingSendInput,
   type ConversationRenderStateUpdater,
 } from '@/hooks';
-import {
-  useMessageHandler,
-  type PendingForegroundConversationActivation,
-} from '@/handlers';
+import { useMessageHandler, type PendingForegroundConversationActivation } from '@/handlers';
 import type { ConversationSettingsSnapshot } from '@/handlers/types';
 import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
 import { shouldActivateForegroundConversation } from '@/handlers/foreground-activation';

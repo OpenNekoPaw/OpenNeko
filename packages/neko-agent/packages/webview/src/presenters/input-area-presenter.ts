@@ -36,17 +36,12 @@ export interface InputAreaUiProjection {
   showSessionModeSelector: boolean;
   showGenerationParams: boolean;
   inputPlaceholderKey:
-    | 'chat.input.placeholder'
-    | 'chat.input.thinkingPlaceholder'
-    | 'chat.input.queuePlaceholder';
+    'chat.input.placeholder' | 'chat.input.thinkingPlaceholder' | 'chat.input.queuePlaceholder';
   sendTitleKey: 'chat.input.send' | 'chat.input.queue';
 }
 
 export type AmbientCanvasContextActionId =
-  | 'generate-image'
-  | 'batch-generate-images'
-  | 'optimize-selection'
-  | 'understand-selection';
+  'generate-image' | 'batch-generate-images' | 'optimize-selection' | 'understand-selection';
 
 export interface AmbientCanvasContextActionProjection {
   id: AmbientCanvasContextActionId;

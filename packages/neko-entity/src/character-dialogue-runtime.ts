@@ -22,9 +22,7 @@ import type {
 } from './character-evidence';
 
 export type CharacterDialogueThinProfileAction =
-  | 'start-now'
-  | 'enrich-project'
-  | 'manual-supplement';
+  'start-now' | 'enrich-project' | 'manual-supplement';
 
 export type CharacterDialogueTranscriptSavePolicy = 'ask' | 'always' | 'never';
 
@@ -176,8 +174,7 @@ export class CharacterDialogueRuntimeService {
   private readonly locale: string | undefined;
   private readonly createSessionId: (entityRef: CreativeEntityRef) => string;
   private readonly createMessageId:
-    | ((role: NpcTranscriptMessage['role'], turnIndex: number) => string)
-    | undefined;
+    ((role: NpcTranscriptMessage['role'], turnIndex: number) => string) | undefined;
   private readonly logger: CharacterDialogueRuntimeLogger | undefined;
 
   constructor(options: CharacterDialogueRuntimeServiceOptions) {

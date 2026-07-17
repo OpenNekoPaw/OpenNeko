@@ -200,11 +200,7 @@ describe('MediaGenerationService', () => {
       } as unknown as ConfigManager;
 
       const newRoutingManager = new MediaRoutingManager(configManager);
-      const newService = new MediaGenerationService(
-        taskManager,
-        configManager,
-        newRoutingManager,
-      );
+      const newService = new MediaGenerationService(taskManager, configManager, newRoutingManager);
 
       const request = {
         prompt: 'Make it more colorful',
@@ -239,11 +235,7 @@ describe('MediaGenerationService', () => {
       } as unknown as ConfigManager;
 
       const newRoutingManager = new MediaRoutingManager(configManager);
-      const newService = new MediaGenerationService(
-        taskManager,
-        configManager,
-        newRoutingManager,
-      );
+      const newService = new MediaGenerationService(taskManager, configManager, newRoutingManager);
 
       const request = {
         prompt: 'A rocket launching into space',
@@ -276,11 +268,7 @@ describe('MediaGenerationService', () => {
       } as unknown as ConfigManager;
 
       const newRoutingManager = new MediaRoutingManager(configManager);
-      const newService = new MediaGenerationService(
-        taskManager,
-        configManager,
-        newRoutingManager,
-      );
+      const newService = new MediaGenerationService(taskManager, configManager, newRoutingManager);
 
       const request = {
         prompt: 'Animate this image',
@@ -312,11 +300,7 @@ describe('MediaGenerationService', () => {
       } as unknown as ConfigManager;
 
       const newRoutingManager = new MediaRoutingManager(configManager);
-      const newService = new MediaGenerationService(
-        taskManager,
-        configManager,
-        newRoutingManager,
-      );
+      const newService = new MediaGenerationService(taskManager, configManager, newRoutingManager);
 
       await expect(
         newService.generateVideo({
@@ -364,11 +348,7 @@ describe('MediaGenerationService', () => {
       } as unknown as ConfigManager;
 
       const newRoutingManager = new MediaRoutingManager(configManager);
-      const newService = new MediaGenerationService(
-        taskManager,
-        configManager,
-        newRoutingManager,
-      );
+      const newService = new MediaGenerationService(taskManager, configManager, newRoutingManager);
 
       const request = {
         prompt: 'A soothing ambient soundscape',
@@ -401,11 +381,7 @@ describe('MediaGenerationService', () => {
       } as unknown as ConfigManager;
 
       const newRoutingManager = new MediaRoutingManager(configManager);
-      const newService = new MediaGenerationService(
-        taskManager,
-        configManager,
-        newRoutingManager,
-      );
+      const newService = new MediaGenerationService(taskManager, configManager, newRoutingManager);
 
       const request = {
         prompt: 'An upbeat electronic track',

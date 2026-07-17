@@ -59,7 +59,6 @@ describe('neko-entity architecture boundaries', () => {
       }
     }
   });
-
 });
 
 function listTypeScriptFiles(dir: string): string[] {

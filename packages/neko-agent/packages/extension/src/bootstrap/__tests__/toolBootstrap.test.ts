@@ -50,8 +50,8 @@ describe('toolBootstrap', () => {
       replace: vi.fn(),
       read: vi.fn(async () => ({ type: 'api_key', key: 'secret' })),
     };
-    const fetch = vi.fn(async () =>
-      new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1, 0.2] }] })),
+    const fetch = vi.fn(
+      async () => new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1, 0.2] }] })),
     );
     vi.stubGlobal('fetch', fetch);
 

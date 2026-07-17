@@ -52,7 +52,9 @@ const CREATION_INTENT_BY_EXTENSION: Readonly<Record<string, string>> = {
 const IMAGE_FILE_EXTENSION_RE = /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i;
 
 export function buildAgentCreationMessage(input: BuildAgentCreationMessageInput): string {
-  return input.sourceFilePath ? `${input.intent}. Source file: ${input.sourceFilePath}` : input.intent;
+  return input.sourceFilePath
+    ? `${input.intent}. Source file: ${input.sourceFilePath}`
+    : input.intent;
 }
 
 export function buildAgentPromptCommandMessage(input: BuildAgentPromptCommandMessageInput): string {
@@ -79,7 +81,9 @@ export function buildAgentRetryCreationMessage(): string {
 }
 
 export function inferAgentCreationIntentFromFilePath(filePath: string): string {
-  return CREATION_INTENT_BY_EXTENSION[getFileExtension(filePath)] ?? 'Create a video from this file';
+  return (
+    CREATION_INTENT_BY_EXTENSION[getFileExtension(filePath)] ?? 'Create a video from this file'
+  );
 }
 
 export function inferAgentFileContextType(

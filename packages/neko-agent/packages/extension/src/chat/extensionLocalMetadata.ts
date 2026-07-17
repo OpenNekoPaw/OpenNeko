@@ -1,7 +1,4 @@
-import {
-  SqliteTaskRecoveryStorage,
-  SqliteTaskStorage,
-} from '@neko/agent';
+import { SqliteTaskRecoveryStorage, SqliteTaskStorage } from '@neko/agent';
 import {
   LocalMetadataResourceCacheManifestStore,
   createLocalMetadataRevisionCursor,

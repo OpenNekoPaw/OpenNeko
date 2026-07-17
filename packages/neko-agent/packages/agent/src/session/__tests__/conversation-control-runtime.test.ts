@@ -91,9 +91,9 @@ describe('conversation control runtime', () => {
     effects.removeAgent = vi.fn().mockRejectedValue(error);
     effects.deleteConversation = vi.fn();
 
-    await expect(
-      runDeleteConversationRuntime({ conversationId: 'conv-1' }, effects),
-    ).rejects.toBe(error);
+    await expect(runDeleteConversationRuntime({ conversationId: 'conv-1' }, effects)).rejects.toBe(
+      error,
+    );
 
     expect(clearAgentState).not.toHaveBeenCalled();
     expect(effects.deleteConversation).not.toHaveBeenCalled();

@@ -60,8 +60,7 @@ export interface AgentExternalProcessorPlanInput {
 }
 
 export type AgentExternalProcessorPlanResult =
-  | AgentExternalProcessorReadyPlan
-  | AgentExternalProcessorBlockedPlan;
+  AgentExternalProcessorReadyPlan | AgentExternalProcessorBlockedPlan;
 
 export interface AgentExternalProcessorReadyPlan {
   readonly status: 'ready';

@@ -113,11 +113,9 @@ describe('CharacterEvidenceLoader', () => {
   });
 
   it('dedupes Dashboard, occurrence, Story, and search locators for the same range', async () => {
-    const projectSearchReader = vi.fn(
-      async (): Promise<readonly ProjectSearchItem[]> => [
-        makeSearchItem('story-scene-1', 'cases/test.fountain', 30, 34),
-      ],
-    );
+    const projectSearchReader = vi.fn(async (): Promise<readonly ProjectSearchItem[]> => [
+      makeSearchItem('story-scene-1', 'cases/test.fountain', 30, 34),
+    ]);
     const loader = createCharacterEvidenceLoader({
       projectRoot,
       dashboardReader: {

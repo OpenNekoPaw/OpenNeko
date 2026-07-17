@@ -51,7 +51,9 @@ function requireNestedRecord(
   field: string,
 ): Record<string, unknown> {
   if (!isRecord(value)) {
-    throw new Error(`Pi API ${model.api} payload requires object field ${field} for topP projection.`);
+    throw new Error(
+      `Pi API ${model.api} payload requires object field ${field} for topP projection.`,
+    );
   }
   return value;
 }

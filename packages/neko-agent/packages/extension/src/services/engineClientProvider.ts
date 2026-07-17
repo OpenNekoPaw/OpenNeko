@@ -104,7 +104,6 @@ class VSCodeEngineClientProvider implements IEngineClientProvider {
       return false;
     }
   }
-
 }
 
 let singleton: IEngineClientProvider | undefined;

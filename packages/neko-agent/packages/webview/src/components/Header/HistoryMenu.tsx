@@ -1,11 +1,6 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { useTranslation } from '@/i18n/I18nContext';
-import {
-  ClockIcon,
-  CloseIcon,
-  SearchIcon,
-  TrashIcon,
-} from '@neko/shared/icons';
+import { ClockIcon, CloseIcon, SearchIcon, TrashIcon } from '@neko/shared/icons';
 import type { HistoryConversationItem } from '@/presenters/history-menu-presenter';
 
 interface HistoryMenuProps {

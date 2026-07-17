@@ -92,7 +92,9 @@ export function tryHandleMessageRoute(
 
 function dispatchAgentMessageTurn(
   deps: ChatWebviewMessageRouterDeps,
-  request: Parameters<NonNullable<ChatWebviewMessageRouterDeps['messages']>['handleUserMessage']>[1],
+  request: Parameters<
+    NonNullable<ChatWebviewMessageRouterDeps['messages']>['handleUserMessage']
+  >[1],
 ): void {
   const operation = deps.messages?.handleUserMessage(deps.webview, request);
   if (!operation) return;
@@ -100,7 +102,8 @@ function dispatchAgentMessageTurn(
     logger.error('Agent message route failed:', error);
     const message = error instanceof Error ? error.message : 'Agent message route failed.';
     void Promise.resolve(deps.webview.postMessage(buildGlobalErrorMessage(message))).catch(
-      (postError: unknown) => logger.error('Failed to project Agent message route error:', postError),
+      (postError: unknown) =>
+        logger.error('Failed to project Agent message route error:', postError),
     );
   });
 }

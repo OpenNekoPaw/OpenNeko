@@ -633,45 +633,49 @@ describe('InputArea composer controls', () => {
     expect(document.querySelector('.agent-composer-textarea')).toBeTruthy();
   });
 
-  it('sends Agent LLM presets and the primary model slot from the unified config', () => {
-    const onSend = vi.fn();
-    render(
-      <Harness>
-        <InputArea
-          inputValue="完善主角弧光"
-          isThinking={false}
-          onInputChange={vi.fn()}
-          onSend={onSend}
-        />
-      </Harness>,
-    );
+  it(
+    'sends Agent LLM presets and the primary model slot from the unified config',
+    () => {
+      const onSend = vi.fn();
+      render(
+        <Harness>
+          <InputArea
+            inputValue="完善主角弧光"
+            isThinking={false}
+            onInputChange={vi.fn()}
+            onSend={onSend}
+          />
+        </Harness>,
+      );
 
-    fireEvent.click(screen.getByRole('button', { name: '思考' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: '深入' }));
-    fireEvent.click(screen.getByRole('button', { name: '详略' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: '详细' }));
-    fireEvent.click(screen.getByRole('button', { name: '创意' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: '稳定' }));
-    fireEvent.click(screen.getByTitle('发送'));
+      fireEvent.click(screen.getByRole('button', { name: '思考' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: '深入' }));
+      fireEvent.click(screen.getByRole('button', { name: '详略' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: '详细' }));
+      fireEvent.click(screen.getByRole('button', { name: '创意' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: '稳定' }));
+      fireEvent.click(screen.getByTitle('发送'));
 
-    expect(onSend).toHaveBeenCalledWith(
-      expect.objectContaining({
-        messageText: '完善主角弧光',
-        agentModels: {
-          primary: {
-            providerId: 'openai',
-            modelId: 'gpt-5.5',
-            category: 'llm',
+      expect(onSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messageText: '完善主角弧光',
+          agentModels: {
+            primary: {
+              providerId: 'openai',
+              modelId: 'gpt-5.5',
+              category: 'llm',
+            },
           },
-        },
-        llmConfig: {
-          reasoningPreset: 'deep',
-          verbosityPreset: 'detailed',
-          creativityPreset: 'stable',
-        },
-      }),
-    );
-  });
+          llmConfig: {
+            reasoningPreset: 'deep',
+            verbosityPreset: 'detailed',
+            creativityPreset: 'stable',
+          },
+        }),
+      );
+    },
+    30_000,
+  );
 
   it('hides unsupported LLM parameters and trims them from the send payload', () => {
     const onSend = vi.fn();

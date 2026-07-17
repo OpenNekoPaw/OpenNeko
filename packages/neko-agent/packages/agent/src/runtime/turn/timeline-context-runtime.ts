@@ -1,8 +1,5 @@
 import type { MultimodalContextPacket } from '@neko/shared';
-import {
-  resolvePerceptionContextPacket,
-  type PerceptionInputMaterializer,
-} from '@neko/content';
+import { resolvePerceptionContextPacket, type PerceptionInputMaterializer } from '@neko/content';
 import {
   createTimelineContextPacketFromEditor,
   type TimelineEditorContextInput,
@@ -24,7 +21,9 @@ export interface TimelineContextEditorLike {
 }
 
 export interface TimelineContextRuntimeOptions {
-  readonly getPerceptionMaterializer?: () => Promise<PerceptionInputMaterializer | null | undefined>;
+  readonly getPerceptionMaterializer?: () => Promise<
+    PerceptionInputMaterializer | null | undefined
+  >;
 }
 
 export interface BuildTimelineContextPacketInput {

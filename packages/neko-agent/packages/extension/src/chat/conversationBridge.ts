@@ -10,13 +10,8 @@ import { randomUUID } from 'node:crypto';
 
 import * as vscode from 'vscode';
 
-import {
-  createConversationId,
-} from '@neko/agent';
-import type {
-  PiConversationCatalogRecord,
-  PiConversationTranscriptEntry,
-} from '@neko/agent/pi';
+import { createConversationId } from '@neko/agent';
+import type { PiConversationCatalogRecord, PiConversationTranscriptEntry } from '@neko/agent/pi';
 import { buildAgentSessionDiagnosticMessage, type Message } from '@neko-agent/types';
 import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
 
@@ -32,9 +27,7 @@ export interface PiConversationPresentationCatalogItem extends PiConversationCat
 }
 
 export interface PiConversationPresentationAuthority {
-  listConversationPresentationCatalog(): Promise<
-    readonly PiConversationPresentationCatalogItem[]
-  >;
+  listConversationPresentationCatalog(): Promise<readonly PiConversationPresentationCatalogItem[]>;
   createConversation(input: {
     readonly conversationId: string;
     readonly title?: string;
@@ -80,7 +73,8 @@ export class ConversationBridge {
   constructor(
     workspaceRoot: string | (() => string | undefined) | undefined,
     private readonly localResourceAccess: AgentLocalResourceAccess | undefined,
-    private readonly getContentAccessRuntime: (() => AgentContentAccessRuntime | undefined) | undefined,
+    private readonly getContentAccessRuntime:
+      (() => AgentContentAccessRuntime | undefined) | undefined,
     private readonly options: ConversationBridgeOptions,
   ) {
     this.initialWorkspaceRoot =
@@ -124,10 +118,7 @@ export class ConversationBridge {
     this.activeId = null;
   }
 
-  async delete(
-    conversationId: string,
-    options: DeleteConversationOptions = {},
-  ): Promise<boolean> {
+  async delete(conversationId: string, options: DeleteConversationOptions = {}): Promise<boolean> {
     const deleted = await this.options.authority.deleteConversation(conversationId);
     if (!deleted) return false;
     this.removePresentation(conversationId, options.activateNext ?? true);
@@ -396,5 +387,7 @@ function parseCatalogTimestamp(value: string, field: string): number {
 
 function conversationTitle(content: string): string {
   const normalized = content.replace(/\s+/g, ' ').trim();
-  return normalized.length > 50 ? `${normalized.slice(0, 47)}...` : normalized || 'New conversation';
+  return normalized.length > 50
+    ? `${normalized.slice(0, 47)}...`
+    : normalized || 'New conversation';
 }

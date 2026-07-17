@@ -180,5 +180,4 @@ describe('MediaRoutingManager', () => {
       expect(result).toBeNull();
     });
   });
-
 });

@@ -251,11 +251,7 @@ export function createMediaPlatform(deps: MediaPlatformDeps): MediaPlatform {
   taskExecutor.registerWith(deps.taskManager);
 
   // Create service
-  const service = new MediaGenerationService(
-    deps.taskManager,
-    deps.configManager,
-    routingManager,
-  );
+  const service = new MediaGenerationService(deps.taskManager, deps.configManager, routingManager);
 
   return {
     adapterRegistry,

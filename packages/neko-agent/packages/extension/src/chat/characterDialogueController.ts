@@ -864,9 +864,7 @@ export async function defaultEnrichCharacterProfile(
 ): Promise<NpcProfileEnrichmentResult> {
   const observedAt = input.now();
   const deterministicFacts = collectProjectEvidenceEnrichmentFacts(input.profile, observedAt);
-  const inferredFacts = input.inferFacts
-    ? await input.inferFacts(input.profile, observedAt)
-    : [];
+  const inferredFacts = input.inferFacts ? await input.inferFacts(input.profile, observedAt) : [];
   const facts = mergeNpcProfileFacts(input.profile.facts, deterministicFacts, inferredFacts);
   return {
     profile: {
