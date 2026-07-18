@@ -1,20 +1,32 @@
 # Neko Preview
 
-> 轻量媒体、文档与标准 3D 模型预览器
+> 轻量媒体、文档与临时 3D 参考布置器
 
 ## Context Summary
 
 - 项目：OpenNeko - VSCode 创意工作套件
 - 架构：Extension Host（PreviewService + DocumentProvider + ModelPreviewProvider）+ Webview（React）
-- 运行边界：neko-engine 仅为视频、音频和全景媒体提供解码；文档由 Extension Host 读取；标准 3D 模型由独立 Three.js Webview 渲染
+- 运行边界：neko-engine 仅为视频、音频和全景媒体提供解码；文档由 Extension Host 读取；3D 参考由独立 Three.js Webview 渲染
 
 ## Quick Reference
 
-- **职责**：视频/音频播放、文档预览（PDF/EPUB/CBZ/DOCX）和标准 3D 模型只读预览
+- **职责**：视频/音频播放、文档预览（PDF/EPUB/CBZ/DOCX），以及形象、动作、机位和 720° 场景的临时 3D 参考布置
 - **入口**：`packages/extension/src/extension.ts`
 - **子包**：`extension/`（Host）、`webview/`（React UI）
 - **依赖**：`@neko/shared`、`@neko/neko-client`；`three` 仅属于 `@neko/preview-webview`
-- **按需媒体依赖**：仅打开视频、音频或全景媒体时激活 neko-engine；文档和 3D 模型预览不启动 Engine
+- **无模型入口**：命令 `Neko Preview: Open 3D Reference Guide` 打开内置中性素体；内置素体只允许动作和机位参考
+- **按需媒体依赖**：仅打开视频、音频或全景媒体时激活 neko-engine；文档和 3D 参考不启动 Engine
+
+### 3D 参考用途
+
+| 用途 | 可用对象 | 输出与限制 |
+| --- | --- | --- |
+| 形象 | 用户明确加载的模型 | 普通视觉参考；内置 guide preset 技术上禁止进入该路径 |
+| 动作 | 声明关节能力的中性素体 | 姿势骨架或深度控制图；静态模型显示不支持状态 |
+| 机位 | 模型、素体或环境场景 | 相机画幅和捕获图；修改其它面板项不会重置当前 orbit |
+| 720° 场景 | 经 Extension 授权的全景图 | 保留 yaw、pitch、FOV 与环境身份；不转成形象参考 |
+
+内置目录由 Preview 以不可变 ID/version/fingerprint 声明，当前内容均为项目自制的程序化几何，二进制资产增量为 0 B，许可证标记为 `LicenseRef-OpenNeko`。`guide-neutral-mannequin`、blockout props/studio 和中性全景方向网格只用于构图、姿势与空间指示，不是角色形象参考。
 
 ### 标准 3D 格式
 
@@ -67,10 +79,11 @@ Webview (React + Vite)
   │   ├── CoverView (封面艺术 / 占位首字母 + 渐变)
   │   ├── LyricsView (歌词视图，后续接入滚动歌词)
   │   └── AudioControls (播放/暂停/跳转/进度/速度/音量/视图切换)
-  ├── ModelViewer（独立 model.html 入口）
+  ├── 3D Reference（独立 model.html 入口）
   │   ├── GLTF/OBJ/MTL/STL/PLY loaders（Three.js）
-  │   ├── 节点检查、临时变换、相机预设与灯光 staging
-  │   └── 有界 PNG 捕获与 model-preview Agent context
+  │   ├── 用户模型、内置素体/Blockout 与授权全景的 panel-scoped staging
+  │   ├── 节点检查、受约束姿势、相机、灯光、网格与 XYZ 指示
+  │   └── 按用途生成有界 PNG 与单一 3d-reference context
   └── Document Viewers
       ├── PdfViewer (pdfjs-dist, 瀑布流/分页, TextLayer 文本选中)
       ├── EpubViewer (epub.js, 瀑布流/分页, 章节导航)
@@ -100,22 +113,23 @@ DocumentProvider (setupDocumentWebview 统一消息处理)
             → Agent reads file on demand via filePath
 ```
 
-### 3D 模型预览数据流
+### 3D 参考数据流
 
 ```
-标准模型源文件
-  → Extension 有界检查依赖并生成 panel-scoped 精确 URI 映射
-  → 独立 model.html Webview 使用 Three.js 加载和渲染
-  → 用户临时调整节点、相机、灯光和背景
-  → Webview 生成有界 PNG，Extension 校验同一 session/fingerprint/revision
-  → neko.agent.sendContext(model-preview：稳定源引用 + 预览图 + staging 语义)
+用户模型 / 内置 guide preset / 授权全景
+  → Extension 建立 panel-scoped session 与精确资源投影
+  → 独立 model.html Webview 使用 Three.js 临时布置
+  → 用户独立选择形象、动作、机位、720° 场景用途
+  → Webview 生成角色明确的有界 PNG，Extension 校验 session/revision/purpose
+  → Extension 物化可重建 PreviewAsset 并合并为一个 3d-reference context
+  → neko.agent.sendContext（下游必须保留用途和 guide 限制）
 ```
 
 - 源文件始终只读；Preview 不写回模型，也不创建 `.nkm`、`.neko3d`、scene 或 sidecar 项目格式。
-- staging 是按源 fingerprint 和 schema version 恢复的面板 UI 状态，不是 Asset、Entity、Engine 或项目事实。
+- staging 只按 session subject 与 schema version 恢复，是可丢弃的面板 UI 状态，不是 Asset、Entity、Engine 或项目事实。
 - 每个面板独立持有 renderer、scene、控制器、session 和 revision；陈旧或串面板消息会显式失败。
 - GLB 内嵌纹理产生的 `blob:` URL 只允许作为已检查源在当前 Webview 内的浏览器投影；源文件声明的 `blob:`、远程或越界依赖仍由 Extension 拒绝。
-- 发送 Agent 时以预览 PNG 作为视觉证据，以模型 `ResourceRef` 作为稳定引用；不会把 3D 二进制交给通用文本读取或直接上传给媒体 provider。
+- 发送 Agent 时仅物化用户选择的用途输出；不会上传 3D 二进制、把 guide 素体伪装成形象参考，或通过 generic-image fallback 丢失动作/机位/全景角色。
 
 ### 数据流
 
@@ -125,7 +139,7 @@ DocumentProvider (setupDocumentWebview 统一消息处理)
 
 **文档预览**：`Node Extension Host → loopback HTTP → Webview 文档 renderer`，不经过 Rust Engine。
 
-**3D 模型预览**：`Extension 精确授权 URI → Three.js model Webview → Canvas`，不经过 Rust Engine。
+**3D 参考**：`Extension 精确授权 URI/内置 preset descriptor → Three.js model Webview → purpose output`，不经过 Rust Engine，也不建立持久 Model/Scene 项目。
 
 ### 横切关注点
 
@@ -154,4 +168,4 @@ pnpm copy:webview                     # 复制产物到 dist/
 
 ## English Summary
 
-Neko Preview provides read-only previews for media, documents, and a fixed allowlist of standard 3D formats: GLB, glTF, OBJ, STL, and PLY; MTL is accepted only as an OBJ dependency. The Extension authorizes exact local resources, while a dedicated Three.js Webview owns rendering and temporary camera/light/transform staging. Model preview does not activate the Rust Engine, mutate source files, define a model/scene project format, or directly route 3D binaries to an AI provider. Agent handoff uses a bounded preview image, a stable source reference, and typed staging metadata.
+Neko Preview provides read-only media/document previews and temporary 3D reference staging for appearance, pose, camera, and 720-degree scene intent. It accepts GLB, glTF, OBJ, STL, and PLY sources, or opens a project-authored guide-only mannequin without a model file. The Extension authorizes exact resources and owns session/revision checks; the dedicated Three.js Webview owns temporary rendering and purpose-specific captures. The surface never writes source files, creates a durable model/scene project, activates a Rust Model/Scene path, or uploads raw 3D binaries. Agent handoff uses one validated `3d-reference` context whose outputs retain their explicit roles and guide restrictions.

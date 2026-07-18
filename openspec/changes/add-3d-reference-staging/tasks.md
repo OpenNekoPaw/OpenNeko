@@ -11,7 +11,7 @@
 - [x] 2.2 Define the immutable Preview-owned preset catalog contract with stable ID/version/fingerprint, kind, allowed purposes, default scale, pose/environment capabilities, exact packaged dependencies, provenance, and license metadata.
 - [x] 2.3 Add red catalog validation tests for duplicate/unknown IDs, incompatible versions, fingerprint mismatch, invalid joint/render-pass metadata, undeclared dependencies, missing notices, and guide presets that expose appearance.
 - [x] 2.4 Add the minimum project-authored or redistribution-safe guide catalog: abstract articulated mannequin, primitive/blockout props, studio/room blockout, and neutral panoramic orientation grid; include audited notice/provenance records.
-- [ ] 2.5 Add build ownership and lazy-load tests proving non-3D Preview entries do not fetch or instantiate preset assets; record actual per-asset/aggregate bundle size and supported-host load/disposal measurements.
+- [x] 2.5 Add build ownership and lazy-load tests proving non-3D Preview entries do not fetch or instantiate preset assets; record actual per-asset/aggregate bundle size and supported-host load/disposal measurements.
 
 ## 3. Extend the Preview Extension session boundary
 
@@ -27,7 +27,7 @@
 - [x] 4.2 Implement the neutral mannequin and blockout runtime without detailed appearance cues; validate catalog-declared joints, hierarchy, constraints, landmarks, and compatible pose presets rather than guessing node semantics.
 - [x] 4.3 Implement bounded pose/skeleton and supported depth control render passes that exclude toolbar, grid, XYZ, camera helper, labels, and other editor chrome unless explicitly required by that output contract.
 - [x] 4.4 Implement panorama texture/orientation staging with authorized local resources, bounded MIME/size handling, untainted capture, renderer-loss diagnostics, and recursive texture/GPU disposal.
-- [ ] 4.5 Preserve current camera front/reset, orbit, grid, XYZ, light, material, depth, and source-model correctness; use only external `~/Git/neko-test/test.glb` for manual real-model acceptance and never copy that model into the repository.
+- [x] 4.5 Preserve current camera front/reset, orbit, grid, XYZ, light, material, depth, and source-model correctness; use only external `~/Git/neko-test/test.glb` for manual real-model acceptance and never copy that model into the repository.
 
 ## 5. Build the purpose-aware 3D Reference UI
 
@@ -56,6 +56,6 @@
 
 ## 8. Document and prepare rollout
 
-- [ ] 8.1 Update Preview README/architecture, supported reference-purpose tables, built-in catalog/licensing documentation, package description, commands, and user-facing no-model/guide behavior in Chinese and English where applicable.
+- [x] 8.1 Update Preview README/architecture, supported reference-purpose tables, built-in catalog/licensing documentation, package description, commands, and user-facing no-model/guide behavior in Chinese and English where applicable.
 - [ ] 8.2 Update the system ADR and package-boundary documentation only where the stable responsibility changes, preserving the absence of durable 3D projects and Rust Engine Model/Scene authority.
 - [ ] 8.3 Record the final design/reuse audit, asset provenance, actual bundle/performance measurements, canonical-path/no-fallback evidence, Extension Development Host reports, Agent Evaluation disposition, validation commands, blocked checks, and remaining risks in `verification.md`.

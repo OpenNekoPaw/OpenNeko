@@ -1,12 +1,12 @@
 # neko-preview 架构
 
-> 轻量预览器：视频/音频使用 Rust Engine，PDF/EPUB/CBZ/DOCX 由 Node Extension Host 读取。
+> 轻量预览器：视频/音频使用 Rust Engine，PDF/EPUB/CBZ/DOCX 由 Node Extension Host 读取，3D 参考由浏览器 Three.js 临时布置。
 
 ---
 
 ## 系统定位
 
-neko-preview 是 OpenNeko 的预览扩展。以 CustomReadonlyEditorProvider 方式接管视频、音频和文档文件。媒体采用硬件加速的 H.264 + PCM 流式播放；文档通过 Extension Host 内的 loopback Node 服务读取。设计为轻量级——不做编辑，只做预览。
+neko-preview 是 OpenNeko 的预览扩展。以 CustomReadonlyEditorProvider 方式接管视频、音频、文档和标准 3D 文件。媒体采用硬件加速的 H.264 + PCM 流式播放；文档通过 Extension Host 内的 loopback Node 服务读取；3D Reference 在独立 Webview 中布置用户模型、内置 guide preset 或授权全景。设计为轻量级——不写回源文件，也不拥有持久 3D 项目事实。
 
 ---
 
@@ -49,6 +49,11 @@ packages/neko-preview/
 │    │         ├─ EPUB ZIP entry 目录读取               │
 │    │         └─ DOCX 有界整文件读取                   │
 │    │                                                  │
+│    ├─ ModelPreviewProvider                           │
+│    │    ├─ panel-scoped session / revision           │
+│    │    ├─ source / builtin / environment subject    │
+│    │    └─ purpose output materialization            │
+│    │                                                  │
 │    └─ StatusBarManager                                │
 │         └─ 文件信息 / 编码格式 / 播放状态 / 当前时间    │
 │                                                        │
@@ -85,6 +90,25 @@ packages/neko-preview/
 ```
 
 文档路径不会激活 neko-engine。视频、音频与全景媒体在首次需要时由 `PreviewService` 显式激活 Engine 扩展，因此 Preview 清单不声明硬 `extensionDependencies`。
+
+3D Reference 路径同样不激活 neko-engine。Extension Host 只负责资源授权、生命周期、session/revision 校验和有界输出物化；Webview 独立拥有 renderer、scene、orbit、姿势和 GPU 资源。内置 preset 是 Preview 代码声明的不可变程序化 guide，不进入 Assets，也不能作为形象参考。
+
+### 3D Reference
+
+```
+source-model | builtin-preset | environment-only
+  → ModelPreviewProvider（授权 + panel identity）
+  → model Webview（Three.js 临时 staging）
+  → appearance | pose | camera | panorama capture
+  → PreviewAsset ResourceRef
+  → 单一 3d-reference Agent context
+```
+
+- 每个面板独立持有状态和可释放资源；active editor 不是状态 owner。
+- 内置中性素体声明稳定关节、层级和约束，仅开放动作/机位用途。
+- capture 不包含工具栏、网格、XYZ、camera helper 或其它编辑器 chrome。
+- 未知 schema、陈旧 identity、越界资源和不支持的用途直接 diagnostic，不回退旧 `model-preview` 或 generic image。
+- Agent/Canvas/media 必须按角色协商能力；Preview 不选择 provider，也不提交生成任务。
 
 ---
 
