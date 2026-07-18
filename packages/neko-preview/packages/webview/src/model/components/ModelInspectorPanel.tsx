@@ -6,6 +6,7 @@ import {
   PanelSection,
   SelectPropertyRow,
   SliderPropertyRow,
+  toCodiconClassName,
 } from '@neko/ui';
 import type {
   ModelPreviewDiagnostic,
@@ -68,7 +69,16 @@ export function ModelInspectorPanel({
       aria-label={t('preview.model.staging')}
     >
       <header className="model-preview__inspector-header">
-        <h1>{t('preview.model.title')}</h1>
+        <div className="model-preview__inspector-title-row">
+          <div>
+            <span className="model-preview__eyebrow">{t('preview.model.title')}</span>
+            <h1>{t('preview.model.staging')}</h1>
+          </div>
+          <span className="model-preview__readonly-badge">
+            <span className={toCodiconClassName('lock')} aria-hidden="true" />
+            {t('preview.model.readOnlyBadge')}
+          </span>
+        </div>
         <p>{t('preview.model.readOnly')}</p>
       </header>
       {diagnostic ? (
@@ -80,7 +90,9 @@ export function ModelInspectorPanel({
         </p>
       ) : null}
       <div className="model-preview__inspector-content">
+        {facts ? <ModelFacts facts={facts} /> : null}
         <PanelSection
+          className="model-preview__inspector-section"
           density="compact"
           disabled={disabled || !selectedTransform}
           title={t('preview.model.transform')}
@@ -116,9 +128,19 @@ export function ModelInspectorPanel({
                 }
               />
             </>
-          ) : null}
+          ) : (
+            <p className="model-preview__selection-empty">
+              <span className={toCodiconClassName('symbol-misc')} aria-hidden="true" />
+              {t('preview.model.noSelection')}
+            </p>
+          )}
         </PanelSection>
-        <PanelSection density="compact" disabled={disabled} title={t('preview.model.camera')}>
+        <PanelSection
+          className="model-preview__inspector-section"
+          density="compact"
+          disabled={disabled}
+          title={t('preview.model.camera')}
+        >
           <div data-testid="model-preview-camera-controls">
             <SelectPropertyRow
               density="compact"
@@ -156,7 +178,12 @@ export function ModelInspectorPanel({
             ) : null}
           </div>
         </PanelSection>
-        <PanelSection density="compact" disabled={disabled} title={t('preview.model.lighting')}>
+        <PanelSection
+          className="model-preview__inspector-section"
+          density="compact"
+          disabled={disabled}
+          title={t('preview.model.lighting')}
+        >
           <div data-testid="model-preview-light-controls">
             <SliderPropertyRow
               density="compact"
@@ -172,7 +199,11 @@ export function ModelInspectorPanel({
               }}
             />
             {(staging?.lightRig.lights ?? []).map((light) => (
-              <div key={light.id} data-testid={`model-preview-light-${light.id}`}>
+              <div
+                className="model-preview__light-group"
+                key={light.id}
+                data-testid={`model-preview-light-${light.id}`}
+              >
                 <SliderPropertyRow
                   density="compact"
                   disabled={disabled}
@@ -204,13 +235,18 @@ export function ModelInspectorPanel({
             ))}
           </div>
         </PanelSection>
-        <PanelSection density="compact" disabled={disabled} title={t('preview.model.output')}>
+        <PanelSection
+          className="model-preview__inspector-section"
+          density="compact"
+          disabled={disabled}
+          title={t('preview.model.output')}
+        >
           <ColorPropertyRow
             density="compact"
             disabled={disabled}
             id="model-background"
             label={t('preview.model.background')}
-            value={staging?.background ?? '#1e1e1e'}
+            value={staging?.background ?? '#f5f6f8'}
             onCommit={(_, value) => {
               if (staging) onUpdateStaging(updateModelBackground(staging, value));
             }}
@@ -246,7 +282,6 @@ export function ModelInspectorPanel({
             }}
           />
         </PanelSection>
-        {facts ? <ModelFacts facts={facts} /> : null}
       </div>
       <footer className="model-preview__inspector-footer">
         <Button
@@ -254,6 +289,7 @@ export function ModelInspectorPanel({
           data-testid="model-preview-send-to-agent"
           aria-busy={deliveryStatus === 'sending'}
           disabled={disabled || deliveryStatus === 'sending'}
+          leadingIcon={<span className={toCodiconClassName('account')} aria-hidden="true" />}
           onClick={onSendToAgent}
         >
           {deliveryStatus === 'sending'

@@ -81,6 +81,7 @@ const preview: MessageBundle = {
   'preview.model.canvas': '可交互的 3D 模型画布',
   'preview.model.staging': '临时模型布置控制',
   'preview.model.readOnly': '源文件保持只读；相机、灯光与变换仅作为临时布置状态。',
+  'preview.model.readOnlyBadge': '源文件只读',
   'preview.model.waiting': '正在等待已授权的模型源…',
   'preview.model.loading': '正在加载 3D 模型…',
   'preview.model.error': '无法加载此模型。',

@@ -1,7 +1,7 @@
 import { isResourceRef, type ResourceRef } from './resource-cache.js';
 
 export const MODEL_PREVIEW_PROTOCOL_VERSION = 1 as const;
-export const MODEL_PREVIEW_STAGING_SCHEMA_VERSION = 1 as const;
+export const MODEL_PREVIEW_STAGING_SCHEMA_VERSION = 2 as const;
 export const MODEL_PREVIEW_CONTEXT_VERSION = 1 as const;
 
 export const MODEL_PREVIEW_FORMATS = ['glb', 'gltf', 'obj', 'stl', 'ply'] as const;

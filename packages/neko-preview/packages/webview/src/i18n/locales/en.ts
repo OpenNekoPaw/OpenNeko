@@ -82,6 +82,7 @@ const preview: MessageBundle = {
   'preview.model.staging': 'Temporary model staging controls',
   'preview.model.readOnly':
     'Source files stay read-only. Camera, light, and transform changes are temporary staging.',
+  'preview.model.readOnlyBadge': 'Read-only source',
   'preview.model.waiting': 'Waiting for the authorized model source…',
   'preview.model.loading': 'Loading 3D model…',
   'preview.model.error': 'Unable to load this model.',

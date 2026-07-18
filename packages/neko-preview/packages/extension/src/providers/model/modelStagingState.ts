@@ -39,7 +39,7 @@ export function createDefaultModelStagingState(
         { id: 'rim', color: '#ffd2a8', intensity: 1.8, position: { x: 0, y: 3, z: -4 } },
       ],
     },
-    background: '#1e1e1e',
+    background: '#f5f6f8',
     capture: { width: 1024, height: 1024 },
   };
 }

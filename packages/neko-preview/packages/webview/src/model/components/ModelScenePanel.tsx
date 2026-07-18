@@ -27,8 +27,16 @@ export function ModelScenePanel({
       aria-label={t('preview.model.scene')}
     >
       <header className="model-preview__panel-header">
-        <h2>{t('preview.model.scene')}</h2>
-        <span>{nodes.length}</span>
+        <div className="model-preview__panel-title">
+          <span
+            className={`model-preview__panel-icon ${toCodiconClassName('symbol-structure')}`}
+            aria-hidden="true"
+          />
+          <h2>{t('preview.model.scene')}</h2>
+        </div>
+        <span className="model-preview__count" aria-label={`${nodes.length}`}>
+          {nodes.length}
+        </span>
       </header>
       <label className="model-preview__search">
         <span className={toCodiconClassName('search')} aria-hidden="true" />
