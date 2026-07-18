@@ -531,7 +531,7 @@ function TransformAxisGroup({
   readonly onCommit: (value: ModelPreviewVector3) => void;
 }): React.JSX.Element {
   return (
-    <AxisGroup density="compact" label={label}>
+    <AxisGroup className="model-preview__axis-group" density="compact" label={label}>
       {(['x', 'y', 'z'] as const).map((axis) => (
         <AxisGroup.Axis
           key={axis}

@@ -500,6 +500,19 @@ input {
   border-radius: 7px;
 }
 
+.model-preview__axis-group {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 4px !important;
+}
+
+.model-preview__axis-group > div:nth-child(2) {
+  width: 100%;
+}
+
+.model-preview__axis-group > div:last-child:empty {
+  display: none;
+}
+
 .model-preview__inspector-content [data-property-id^='model-light-'] + [data-property-id] {
   margin-top: 1px;
 }
