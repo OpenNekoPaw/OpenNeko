@@ -27,6 +27,7 @@
 | [`adr-agent-native-creation-capability-boundary.md`](adr-agent-native-creation-capability-boundary.md)             | 已取代：Agent 原生创作边界的历史过渡设计                                               |
 | [`adr-agent-directed-creative-orchestration-and-domain-capability-boundary.md`](adr-agent-directed-creative-orchestration-and-domain-capability-boundary.md) | Agent 动态创作编排、能力感知及影视化/动画化领域能力与完成事实边界 |
 | [`adr-agent-command-skill-trigger-boundary.md`](adr-agent-command-skill-trigger-boundary.md)                       | Agent `/` 命令、`$` 技能和 `@` 上下文引用的触发入口边界                               |
+| [`adr-preview-3d-reference-staging-boundary.md`](adr-preview-3d-reference-staging-boundary.md)                     | Preview 形象、动作、机位、720°场景参考、内置预设及用途隔离边界                        |
 | [`adr-agent-sandbox-and-external-processing-boundary.md`](adr-agent-sandbox-and-external-processing-boundary.md)   | Agent 资源沙箱、外部处理器、命令执行和审批边界                                        |
 | [`adr-code-debt-redundancy-governance.md`](adr-code-debt-redundancy-governance.md)                                 | 重复、冗余、兼容桥和 fallback 代码的分类、清理优先级与验证规则                        |
 | [`adr-code-review-quality-gates.md`](adr-code-review-quality-gates.md)                                             | 代码审查、风险分级、验证矩阵和功能偏离检查                                            |
