@@ -237,6 +237,10 @@ export type ThreeReferenceWebviewMessage =
       readonly requestId: string;
       readonly identity: ThreeReferenceIdentity;
       readonly purpose: ThreeReferencePurpose;
+      readonly imageDataUrl: string;
+      readonly width: number;
+      readonly height: number;
+      readonly poseControlMode?: ThreeReferencePoseControlMode;
     }
   | {
       readonly type: '3d-reference/diagnostic';

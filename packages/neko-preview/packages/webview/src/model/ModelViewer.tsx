@@ -360,12 +360,17 @@ export function ModelViewer({
                 poseControlMode,
               },
             );
+            if (!image) throw new Error('3D Reference runtime produced no capture image.');
             setOutputPreview(image);
             vscode.postMessage({
               type: '3d-reference/capture-requested',
               requestId: crypto.randomUUID(),
               identity: referenceIdentityOf(current),
               purpose,
+              imageDataUrl: image,
+              width: staging?.capture.width ?? 1024,
+              height: staging?.capture.height ?? 1024,
+              ...(poseControlMode ? { poseControlMode } : {}),
             });
           }}
           onPoseChange={(pose: ThreeReferencePoseState) => {

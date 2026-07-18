@@ -170,6 +170,9 @@ describe('3D Reference provider session boundary', () => {
       requestId: 'camera-capture',
       identity: { sessionId: 'session-a', revision: 0 },
       purpose: 'camera',
+      imageDataUrl: 'data:image/png;base64,AA==',
+      width: 1024,
+      height: 1024,
     });
     expect(onCaptureRequested).toHaveBeenCalledWith(
       expect.objectContaining({

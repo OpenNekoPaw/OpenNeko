@@ -38,12 +38,24 @@ export function parseThreeReferenceWebviewMessage(
     case '3d-reference/capture-requested':
       return isNonEmptyString(value['requestId']) &&
         isThreeReferenceIdentity(value['identity']) &&
-        isThreeReferencePurpose(value['purpose'])
+        isThreeReferencePurpose(value['purpose']) &&
+        isBoundedPngDataUrl(value['imageDataUrl']) &&
+        isCaptureDimension(value['width']) &&
+        isCaptureDimension(value['height']) &&
+        (value['poseControlMode'] === undefined ||
+          value['poseControlMode'] === 'pose' ||
+          value['poseControlMode'] === 'depth')
         ? {
             type: '3d-reference/capture-requested',
             requestId: value['requestId'],
             identity: value['identity'],
             purpose: value['purpose'],
+            imageDataUrl: value['imageDataUrl'],
+            width: value['width'],
+            height: value['height'],
+            ...(value['poseControlMode'] === undefined
+              ? {}
+              : { poseControlMode: value['poseControlMode'] }),
           }
         : undefined;
     case '3d-reference/diagnostic':
@@ -53,6 +65,18 @@ export function parseThreeReferenceWebviewMessage(
     default:
       return undefined;
   }
+}
+
+function isBoundedPngDataUrl(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.startsWith('data:image/png;base64,') &&
+    value.length <= 24 * 1024 * 1024
+  );
+}
+
+function isCaptureDimension(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 64 && value <= 2048;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

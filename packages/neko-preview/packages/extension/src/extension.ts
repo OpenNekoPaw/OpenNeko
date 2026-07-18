@@ -26,6 +26,8 @@ import {
 } from './providers/document/EpubPreviewProvider';
 import { DocxPreviewProvider } from './providers/document/DocxPreviewProvider';
 import { ModelPreviewProvider } from './providers/model/ModelPreviewProvider';
+import { ThreeReferenceOutputCollector } from './providers/model/ThreeReferenceOutputCollector';
+import { materializeThreeReferenceCapture } from './providers/model/threeReferenceCaptureMaterialization';
 import { registerOpenCommand } from './providers/document/documentProviderHelper';
 import { previewFileServer } from './providers/document/PreviewFileServer';
 import {
@@ -144,7 +146,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
     );
   }
 
-  modelProvider = new ModelPreviewProvider(context.extensionUri, context);
+  const threeReferenceOutputs = new ThreeReferenceOutputCollector({
+    materializeCapture: (request) =>
+      materializeThreeReferenceCapture({
+        request,
+        storageUri: context.globalStorageUri,
+        resolvePreviewService: resolveSharedPreviewService,
+      }),
+    deliverContext: async (payload) => {
+      await vscode.commands.executeCommand('neko.agent.sendContext', payload);
+    },
+  });
+  modelProvider = new ModelPreviewProvider(context.extensionUri, context, {
+    onCaptureRequested: (request) => threeReferenceOutputs.collect(request),
+  });
 
   // Register custom editors
   context.subscriptions.push(

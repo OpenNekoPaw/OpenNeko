@@ -48,6 +48,10 @@ export interface ThreeReferenceCaptureRequest {
   readonly requestId: string;
   readonly identity: ThreeReferenceIdentity;
   readonly purpose: ThreeReferencePurpose;
+  readonly imageDataUrl: string;
+  readonly width: number;
+  readonly height: number;
+  readonly poseControlMode?: 'pose' | 'depth';
   readonly staging: ThreeReferenceStagingSnapshot;
   readonly signal: AbortSignal;
 }
@@ -503,6 +507,10 @@ export class ModelPreviewProvider
             requestId: message.requestId,
             identity: message.identity,
             purpose: message.purpose,
+            imageDataUrl: message.imageDataUrl,
+            width: message.width,
+            height: message.height,
+            ...(message.poseControlMode ? { poseControlMode: message.poseControlMode } : {}),
             staging: state.staging,
             signal: state.abortController.signal,
           });
