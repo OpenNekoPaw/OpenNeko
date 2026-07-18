@@ -8,12 +8,12 @@
 
 ## 2. Implement authorized standard-model source projection
 
-- [ ] 2.1 Implement stable model source `ResourceRef` and fingerprint creation through existing shared resource/path services, with tests for workspace-relative, variable-root, external authorized-root, missing, and unauthorized sources.
-- [ ] 2.2 Implement bounded GLB, STL, and PLY primary-source validation and exact `webview.asWebviewUri()` projection without companion-directory authorization.
-- [ ] 2.3 Implement bounded glTF JSON dependency enumeration for relative buffers and images, preserving embedded `data:` resources while rejecting remote, absolute, traversal, missing, duplicate, excessive, and unsupported dependencies.
-- [ ] 2.4 Implement bounded OBJ and MTL dependency enumeration for declared material libraries and texture maps, with poisoned fixtures for traversal, remote references, missing materials, and undeclared textures.
-- [ ] 2.5 Implement the panel-scoped Model Preview source session that authorizes exact enumerated files, emits the source-relative URI map, supports cancellation, and revokes all projections on dispose.
-- [ ] 2.6 Add focused Extension tests for source-size and dependency-count limits, MIME/extension mismatch, stale sessions, cancellation during inspection, exact URI mapping, and visible diagnostics without Engine or external Viewer fallback.
+- [x] 2.1 Implement stable model source `ResourceRef` and fingerprint creation through existing shared resource/path services, with tests for workspace-relative, variable-root, external authorized-root, missing, and unauthorized sources.
+- [x] 2.2 Implement bounded GLB, STL, and PLY primary-source validation and exact `webview.asWebviewUri()` projection without companion-directory authorization.
+- [x] 2.3 Implement bounded glTF JSON dependency enumeration for relative buffers and images, preserving embedded `data:` resources while rejecting remote, absolute, traversal, missing, duplicate, excessive, and unsupported dependencies.
+- [x] 2.4 Implement bounded OBJ and MTL dependency enumeration for declared material libraries and texture maps, with poisoned fixtures for traversal, remote references, missing materials, and undeclared textures.
+- [x] 2.5 Implement the panel-scoped Model Preview source session that authorizes exact enumerated files, emits the source-relative URI map, supports cancellation, and revokes all projections on dispose.
+- [x] 2.6 Add focused Extension tests for source-size and dependency-count limits, MIME/extension mismatch, stale sessions, cancellation during inspection, exact URI mapping, and visible diagnostics without Engine or external Viewer fallback.
 
 ## 3. Add the Preview Extension composition path
 
