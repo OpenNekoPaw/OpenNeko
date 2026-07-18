@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import { AttachmentProcessor } from '../attachmentProcessor';
 import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
+import type { ResourceRef } from '@neko/shared';
 
 // Mock fs.promises for file reading
 vi.mock('fs', () => ({
@@ -233,6 +234,52 @@ describe('AttachmentProcessor', () => {
     });
   });
 
+  describe('processContextImageResources', () => {
+    it('loads 3D reference resources through stable ResourceRef identity', async () => {
+      const bytes = new Uint8Array(Buffer.from('pose-image'));
+      const resource = previewResourceRef('pose-control');
+      vi.mocked(contentAccessRuntime.loadProviderAsset).mockResolvedValueOnce({
+        status: 'ready',
+        diagnostics: [],
+        bytes,
+        mimeType: 'image/png',
+        sizeBytes: bytes.byteLength,
+      });
+
+      await expect(
+        processor.processContextImageResources([{ role: 'pose', resource }]),
+      ).resolves.toEqual([
+        { type: 'base64', media_type: 'image/png', data: Buffer.from(bytes).toString('base64') },
+      ]);
+      expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith({
+        caller: 'attachment-processor',
+        source: resource,
+        preferredTarget: 'bytes',
+        mimeTypeHint: 'image/png',
+        metadata: { threeReferenceRole: 'pose' },
+      });
+    });
+
+    it('fails visibly when a declared 3D reference image is unavailable', async () => {
+      vi.mocked(contentAccessRuntime.loadProviderAsset).mockResolvedValueOnce({
+        status: 'unauthorized',
+        diagnostics: [
+          {
+            code: 'unauthorized',
+            severity: 'error',
+            message: 'outside allowed roots',
+          },
+        ],
+      });
+
+      await expect(
+        processor.processContextImageResources([
+          { role: 'camera', resource: previewResourceRef('camera-composition') },
+        ]),
+      ).rejects.toThrow(/camera.*outside allowed roots/);
+    });
+  });
+
   describe('readFileAsBase64', () => {
     it('should read and convert to base64 with correct mime type', async () => {
       const mockBuffer = Buffer.from('test');
@@ -323,4 +370,24 @@ function createContentAccessRuntime(): AgentContentAccessRuntime {
     })),
     projectResource: vi.fn(),
   } as unknown as AgentContentAccessRuntime;
+}
+
+function previewResourceRef(id: string): ResourceRef {
+  return {
+    id,
+    scope: 'project',
+    provider: 'preview-variant',
+    kind: 'preview',
+    source: {
+      kind: 'preview-asset',
+      previewAssetId: id,
+      filePath: `/workspace/.neko/.cache/resources/three-reference-captures/${id}.png`,
+    },
+    locator: { kind: 'preview-asset', assetId: id },
+    fingerprint: {
+      strategy: 'provider',
+      value: `preview:${id}`,
+      providerId: 'preview-variant',
+    },
+  };
 }

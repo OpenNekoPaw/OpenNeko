@@ -9,6 +9,7 @@ import { getLogger } from '../../base';
 import {
   projectAgentMessageAttachments,
   type AgentBase64ImageAttachment,
+  type AgentThreeReferenceImageResource,
   type AgentProcessedAttachments,
   type AgentRuntimePromptLocale,
 } from '@neko/agent/runtime';
@@ -103,6 +104,49 @@ export class AttachmentProcessor {
       logger.error('Failed to read file as base64:', err);
       return null;
     }
+  }
+
+  async processContextImageResources(
+    resources: readonly AgentThreeReferenceImageResource[],
+  ): Promise<AgentBase64ImageAttachment[]> {
+    const contentAccessRuntime = this.deps.contentAccessRuntime;
+    if (!contentAccessRuntime) {
+      throw new Error('3D Reference image projection requires AgentContentAccessRuntime.');
+    }
+    const attachments: AgentBase64ImageAttachment[] = [];
+    for (const input of resources) {
+      const loaded = await contentAccessRuntime.loadProviderAsset({
+        caller: 'attachment-processor',
+        source: input.resource,
+        preferredTarget: 'bytes',
+        mimeTypeHint: 'image/png',
+        metadata: { threeReferenceRole: input.role },
+      });
+      if (loaded.status !== 'ready' || !loaded.bytes) {
+        const diagnostic = loaded.diagnostics.find(
+          (candidate) => candidate.severity === 'error',
+        )?.message;
+        throw new Error(
+          `Unable to load ${input.role} 3D Reference image: ${diagnostic ?? loaded.status}`,
+        );
+      }
+      const mediaType = loaded.mimeType ?? 'image/png';
+      if (!isVisionImageMime(mediaType)) {
+        throw new Error(
+          `Unable to load ${input.role} 3D Reference image: unsupported MIME ${mediaType}.`,
+        );
+      }
+      const buffer = Buffer.from(loaded.bytes);
+      const encoded = await this.maybeEncodeVisionImage(buffer);
+      attachments.push(
+        encoded ?? {
+          type: 'base64',
+          media_type: mediaType,
+          data: buffer.toString('base64'),
+        },
+      );
+    }
+    return attachments;
   }
 
   /**

@@ -231,6 +231,8 @@ export class AgentMessageTurnHandler {
           attachments ? [...attachments] : undefined,
           options,
         ),
+      processContextImageResources: (resources) =>
+        this._attachmentProcessor.processContextImageResources(resources),
       createReferencedMediaProcessor: async () =>
         new MediaPreprocessor(
           await this._engineClientProvider.getOptionalClient(),

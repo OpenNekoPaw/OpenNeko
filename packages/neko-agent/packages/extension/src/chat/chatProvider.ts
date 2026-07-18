@@ -317,6 +317,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   // Agent + Skill stack; no separate plan handler is needed.
   private readonly _dndBroker = new DragDropBroker();
   private _webviewReady = false;
+  private _contextTargetCreationPromise?: Promise<{
+    readonly tabId: string;
+    readonly conversationId: string;
+  }>;
   private _keyboardFocused = false;
   private _keyboardEditable = false;
   private _keyboardEditableUpdateSequence = 0;
@@ -609,12 +613,38 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     payload: import('@neko/shared').AgentContextPayload,
   ): Promise<void> {
     await vscode.commands.executeCommand(NEKO_AI_ASSISTANT_FOCUS_COMMAND);
-    const target = requireActiveConversationTabBinding(this._tabState, 'send context payload');
+    const target = await this._resolveContextInjectionTarget();
     if (this._webviewReady && this._view?.webview) {
       this._view.webview.postMessage(buildChatContextInjectionMessage(payload, target));
     } else {
       this._pendingContextPayload = { payload, ...target };
     }
+  }
+
+  private async _resolveContextInjectionTarget(): Promise<{
+    readonly tabId: string;
+    readonly conversationId: string;
+  }> {
+    const isEntryState =
+      this._tabState.activeTabId === null && this._tabState.openTabs.length === 0;
+    if (!isEntryState) {
+      return requireActiveConversationTabBinding(this._tabState, 'send context payload');
+    }
+    if (!this._contextTargetCreationPromise) {
+      this._contextTargetCreationPromise = this._createContextInjectionTarget().finally(() => {
+        this._contextTargetCreationPromise = undefined;
+      });
+    }
+    return this._contextTargetCreationPromise;
+  }
+
+  private async _createContextInjectionTarget(): Promise<{
+    readonly tabId: string;
+    readonly conversationId: string;
+  }> {
+    const conversationId = await this._conversations.create();
+    this._bindCreatedConversationToForegroundTab(conversationId);
+    return requireActiveConversationTabBinding(this._tabState, 'send context payload');
   }
 
   /**

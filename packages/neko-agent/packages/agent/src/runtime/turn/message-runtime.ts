@@ -34,8 +34,16 @@ import type {
   DocumentLocator,
   MessageAttachment,
   ProviderGenerationCapability,
+  ThreeReferenceContextData,
+  ThreeReferenceOutput,
+  ThreeReferencePurpose,
+  ResourceRef,
 } from '@neko/shared';
-import { isAgentResolvedEntityContextData, isDocumentFile } from '@neko/shared';
+import {
+  isAgentResolvedEntityContextData,
+  isDocumentFile,
+  isThreeReferenceContextData,
+} from '@neko/shared';
 import type { AgentEvent } from '../../session/types';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
@@ -213,6 +221,9 @@ export interface PrepareAgentMessageDispatchInput {
     attachments: readonly MessageAttachment[] | undefined,
     options?: { readonly locale?: AgentRuntimePromptLocale | string },
   ) => Promise<AgentProcessedAttachments>;
+  readonly processContextImageResources?: (
+    resources: readonly AgentThreeReferenceImageResource[],
+  ) => Promise<readonly AgentBase64ImageAttachment[]>;
   readonly createReferencedMediaProcessor?:
     | (() => AgentReferencedMediaProcessor | null | Promise<AgentReferencedMediaProcessor | null>)
     | undefined;
@@ -289,6 +300,7 @@ export interface RunAgentMessageTurnRuntimeInput {
   }) => Promise<void> | void;
   readonly inputProcessor?: AgentMessageFileReferenceProcessor | null;
   readonly processAttachments: PrepareAgentMessageDispatchInput['processAttachments'];
+  readonly processContextImageResources?: PrepareAgentMessageDispatchInput['processContextImageResources'];
   readonly createReferencedMediaProcessor?: PrepareAgentMessageDispatchInput['createReferencedMediaProcessor'];
   readonly persistUserMessage: (conversationId: string, message: Message) => void;
   readonly removeUserMessage?: (conversationId: string, messageId: string) => void;
@@ -731,6 +743,45 @@ export function projectContextReferences(
   });
 }
 
+export interface AgentThreeReferenceImageResource {
+  readonly role: ThreeReferencePurpose;
+  readonly resource: ResourceRef;
+}
+
+export function projectThreeReferenceContextImageResources(
+  payloads: readonly AgentContextPayload[] | undefined,
+): AgentThreeReferenceImageResource[] {
+  const resources: AgentThreeReferenceImageResource[] = [];
+  for (const payload of payloads ?? []) {
+    if (payload.type !== '3d-reference') continue;
+    if (!isThreeReferenceContextData(payload.data)) {
+      throw new Error(`Agent 3D Reference context is invalid: ${payload.id}`);
+    }
+    for (const output of payload.data.outputs) {
+      switch (output.kind) {
+        case 'appearance':
+          resources.push({ role: output.kind, resource: output.image });
+          break;
+        case 'pose':
+          resources.push({ role: output.kind, resource: output.controlImage });
+          break;
+        case 'camera':
+          if (output.compositionImage) {
+            resources.push({ role: output.kind, resource: output.compositionImage });
+          }
+          break;
+        case 'panorama-scene':
+          resources.push({ role: output.kind, resource: output.panorama });
+          if (output.viewportImage) {
+            resources.push({ role: output.kind, resource: output.viewportImage });
+          }
+          break;
+      }
+    }
+  }
+  return resources;
+}
+
 export function projectUserMessageContextReferences(input: {
   readonly contextPayloads?: readonly AgentContextPayload[];
   readonly fileReferences?: readonly AgentFileReference[];
@@ -862,7 +913,20 @@ export async function prepareAgentMessageDispatch(
     onProcessed: input.onReferencedMediaProcessed,
     onError: input.onReferencedMediaError,
   });
-  const mediaImages = referencedMediaImages;
+  const contextImageResources = projectThreeReferenceContextImageResources(request.contextPayloads);
+  let contextImages: readonly AgentBase64ImageAttachment[] = [];
+  if (contextImageResources.length > 0) {
+    if (!input.processContextImageResources) {
+      throw new Error('3D Reference image projection requires a context image resource processor.');
+    }
+    contextImages = await input.processContextImageResources(contextImageResources);
+    if (contextImages.length !== contextImageResources.length) {
+      throw new Error(
+        `3D Reference image projection returned ${contextImages.length} images for ${contextImageResources.length} declared resources.`,
+      );
+    }
+  }
+  const mediaImages = [...referencedMediaImages, ...contextImages];
 
   const enhancedMessage = buildEnhancedAgentMessage({
     message: parsedMessage,
@@ -954,6 +1018,7 @@ export async function runAgentMessageTurnRuntime(
     request: input.request,
     inputProcessor: input.inputProcessor,
     processAttachments: input.processAttachments,
+    processContextImageResources: input.processContextImageResources,
     createReferencedMediaProcessor: input.createReferencedMediaProcessor,
     onReferenceError: input.onReferenceError,
     onFileReferenceProcessingError: input.onFileReferenceProcessingError,
@@ -1089,6 +1154,12 @@ export function formatAgentContextPayload(
     }
     return formatResolvedEntityContext(payload, locale);
   }
+  if (payload.type === '3d-reference') {
+    if (!isThreeReferenceContextData(payload.data)) {
+      throw new Error(`Agent 3D Reference context is invalid: ${payload.id}`);
+    }
+    return formatThreeReferenceContext(payload, payload.data, locale);
+  }
   if (documentContext) {
     const lines = [`[${labels.document}: ${payload.label}]`];
     const source = documentContext.source;
@@ -1128,6 +1199,49 @@ export function formatAgentContextPayload(
   }
 
   return `[${labels.context}: ${payload.label}]\n${payload.summary}`;
+}
+
+function formatThreeReferenceContext(
+  payload: AgentContextPayload,
+  data: ThreeReferenceContextData,
+  locale?: AgentRuntimePromptLocale | string,
+): string {
+  const isZh = normalizeAgentRuntimePromptLocale(locale) === 'zh';
+  const guideOnly =
+    data.staging.subject.kind === 'builtin-preset' &&
+    data.staging.subject.appearancePolicy === 'guide-only';
+  const lines = [
+    `[${isZh ? '3D 参考' : '3D Reference'}: ${payload.label}]`,
+    `${isZh ? '会话版本' : 'Session revision'}: ${data.staging.sessionId}:${data.staging.revision}`,
+    `${isZh ? '用途角色' : 'Purpose roles'}: ${data.outputs.map((output) => output.kind).join(', ')}`,
+  ];
+  if (guideOnly) {
+    lines.push(
+      `${isZh ? '指示限制：不可作为形象参考' : 'Guide restriction: not an appearance reference'}`,
+    );
+  }
+  for (const output of data.outputs) {
+    lines.push(formatThreeReferenceOutput(output, isZh));
+  }
+  lines.push(
+    isZh
+      ? '必须保留上述角色：动作图只进入 controlImage，形象图才可进入普通/IP-Adapter 参考；机位和全景保持结构化语义。'
+      : 'Preserve these roles: pose images are controlImage only; only appearance images may enter ordinary/IP-Adapter references; camera and panorama remain structured controls.',
+  );
+  return lines.join('\n');
+}
+
+function formatThreeReferenceOutput(output: ThreeReferenceOutput, isZh: boolean): string {
+  switch (output.kind) {
+    case 'appearance':
+      return `${isZh ? '形象参考' : 'Appearance reference'}: image=${output.image.id}, source=${output.source.id}`;
+    case 'pose':
+      return `${isZh ? '动作控制' : 'Pose control'} (${output.controlMode}): ${output.controlImage.id}`;
+    case 'camera':
+      return `${isZh ? '机位' : 'Camera'}: ${output.camera.cameraId}, FOV ${output.camera.fieldOfViewDeg}°, aspect ${output.camera.aspectRatio}${output.compositionImage ? `, evidence=${output.compositionImage.id}` : ''}`;
+    case 'panorama-scene':
+      return `${isZh ? '720° 场景' : '720° scene'}: panorama=${output.panorama.id}, yaw=${output.orientation.yawDeg}°, pitch=${output.orientation.pitchDeg}°, FOV=${output.orientation.fieldOfViewDeg}°${output.viewportImage ? `, evidence=${output.viewportImage.id}` : ''}`;
+  }
 }
 
 function formatResolvedEntityContext(

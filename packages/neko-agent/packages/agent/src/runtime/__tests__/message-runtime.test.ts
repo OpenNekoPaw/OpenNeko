@@ -4,6 +4,7 @@ import {
   AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
   AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
   type AgentContextPayload,
+  type ResourceRef,
 } from '@neko/shared';
 import {
   AGENT_TURN_PRECONDITION_MESSAGE,
@@ -29,10 +30,12 @@ import {
   projectAgentMentionExtras,
   projectAgentProjectFilesMessage,
   projectContextReferences,
+  projectThreeReferenceContextImageResources,
   runAgentMessageTurnRuntime,
   selectAgentTurnProvider,
   shouldPersistAgentAssistantStream,
   summarizeAgentEventProgress,
+  type AgentThreeReferenceImageResource,
 } from '../turn/message-runtime';
 
 describe('message runtime helpers', () => {
@@ -175,6 +178,35 @@ describe('message runtime helpers', () => {
         data: { filePath: 'notes.md' },
       }),
     ).toBe('[File: notes.md]\nnotes.md');
+  });
+
+  it('preserves 3D reference roles and guide restrictions in Agent evidence', () => {
+    const payload = threeReferencePayload();
+    const projected = formatAgentContextPayload(payload);
+
+    expect(projected).toContain('[3D Reference: Neutral mannequin]');
+    expect(projected).toContain('Guide restriction: not an appearance reference');
+    expect(projected).toContain('Pose control (depth): pose-control');
+    expect(projected).toContain('Camera: front, FOV 45°, aspect 1');
+    expect(projected).not.toContain('ordinary image');
+    expect(projectThreeReferenceContextImageResources([payload])).toEqual([
+      { role: 'pose', resource: resourceRef('pose-control') },
+      { role: 'camera', resource: resourceRef('camera-composition') },
+    ]);
+  });
+
+  it('rejects invalid 3D reference payloads instead of projecting generic context', () => {
+    const payload: AgentContextPayload = {
+      type: '3d-reference',
+      id: '3d-reference:invalid',
+      label: 'Invalid reference',
+      summary: 'Invalid',
+      data: {},
+    };
+
+    expect(() => projectThreeReferenceContextImageResources([payload])).toThrow(
+      /Agent 3D Reference context is invalid/,
+    );
   });
 
   it('does not treat non-document context data as document context by field shape alone', () => {
@@ -467,6 +499,38 @@ describe('message runtime helpers', () => {
       },
     });
     expect(createReferencedMediaProcessor).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds exact 3D reference resources to the Agent multimodal attachments', async () => {
+    const processContextImageResources = vi.fn(
+      async (resources: readonly AgentThreeReferenceImageResource[]) =>
+        resources.map((input) => ({
+          type: 'base64' as const,
+          media_type: 'image/png',
+          data: input.resource.id,
+        })),
+    );
+
+    const prepared = await prepareAgentMessageDispatch({
+      request: {
+        conversationId: 'conv-3d',
+        messageText: 'Use this reference',
+        sessionMode: 'agent',
+        contextPayloads: [threeReferencePayload()],
+      },
+      processAttachments: async () => ({ textContent: '', imageAttachments: [] }),
+      processContextImageResources,
+      generateMessageId: () => 'user-3d',
+    });
+
+    expect(processContextImageResources).toHaveBeenCalledWith([
+      { role: 'pose', resource: resourceRef('pose-control') },
+      { role: 'camera', resource: resourceRef('camera-composition') },
+    ]);
+    expect(prepared.mediaImages).toEqual([
+      { type: 'base64', media_type: 'image/png', data: 'pose-control' },
+      { type: 'base64', media_type: 'image/png', data: 'camera-composition' },
+    ]);
   });
 
   it('routes agent-mode messages to the agent path', async () => {
@@ -1745,3 +1809,81 @@ describe('message runtime helpers', () => {
     ]);
   });
 });
+
+function resourceRef(id: string): ResourceRef {
+  return {
+    id,
+    scope: 'project',
+    provider: 'preview-variant',
+    kind: 'preview',
+    source: {
+      kind: 'preview-asset',
+      previewAssetId: id,
+      filePath: `/workspace/.neko/.cache/resources/three-reference-captures/${id}.png`,
+    },
+    locator: { kind: 'preview-asset', assetId: id },
+    fingerprint: {
+      strategy: 'provider',
+      value: `preview:${id}`,
+      providerId: 'preview-variant',
+    },
+  };
+}
+
+function threeReferencePayload(): AgentContextPayload {
+  return {
+    type: '3d-reference',
+    id: '3d-reference:session-1:2',
+    label: 'Neutral mannequin',
+    summary: 'Pose and camera guide',
+    data: {
+      contractVersion: 1,
+      staging: {
+        schemaVersion: 1,
+        sessionId: 'session-1',
+        revision: 2,
+        subject: {
+          kind: 'builtin-preset',
+          presetId: 'guide-neutral-mannequin',
+          presetVersion: 1,
+          fingerprint: 'preset-fingerprint',
+          presetKind: 'mannequin',
+          appearancePolicy: 'guide-only',
+          allowedPurposes: ['pose', 'camera'],
+        },
+        selectedPurposes: ['pose', 'camera'],
+        camera: {
+          cameraId: 'front',
+          position: { x: 0, y: 1, z: 3 },
+          target: { x: 0, y: 1, z: 0 },
+          fieldOfViewDeg: 45,
+          aspectRatio: 1,
+        },
+        pose: { poseId: 'standing', joints: [] },
+      },
+      outputs: [
+        {
+          kind: 'pose',
+          sessionId: 'session-1',
+          revision: 2,
+          controlImage: resourceRef('pose-control'),
+          controlMode: 'depth',
+          joints: [],
+        },
+        {
+          kind: 'camera',
+          sessionId: 'session-1',
+          revision: 2,
+          camera: {
+            cameraId: 'front',
+            position: { x: 0, y: 1, z: 3 },
+            target: { x: 0, y: 1, z: 0 },
+            fieldOfViewDeg: 45,
+            aspectRatio: 1,
+          },
+          compositionImage: resourceRef('camera-composition'),
+        },
+      ],
+    },
+  };
+}

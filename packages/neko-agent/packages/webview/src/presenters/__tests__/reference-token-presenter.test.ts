@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentContextPayload, MessageAttachment } from '@neko/shared';
+import type { AgentContextPayload, MessageAttachment, ResourceRef } from '@neko/shared';
 import {
   formatReferenceBasename,
   formatReferenceParentPath,
@@ -89,6 +89,33 @@ describe('reference-token-presenter', () => {
     });
   });
 
+  it('projects 3D reference roles and guide restrictions into chip metadata', () => {
+    const payload: AgentContextPayload = {
+      id: '3d-reference:session-1:2',
+      type: '3d-reference',
+      label: 'Neutral mannequin',
+      summary: 'Pose and camera reference',
+      data: threeReferenceData(),
+    };
+
+    expect(projectContextPayloadReferenceToken(payload)).toMatchObject({
+      kind: 'image',
+      meta: 'pose · camera · guide-only',
+    });
+  });
+
+  it('rejects invalid 3D reference chip data instead of disguising it as a file', () => {
+    expect(() =>
+      projectContextPayloadReferenceToken({
+        id: '3d-reference:invalid',
+        type: '3d-reference',
+        label: 'Invalid',
+        summary: 'Invalid',
+        data: {},
+      }),
+    ).toThrow(/3D Reference context is invalid/);
+  });
+
   it('projects ambient canvas references as ambient tokens', () => {
     expect(
       projectAmbientCanvasReferenceToken({
@@ -116,3 +143,74 @@ describe('reference-token-presenter', () => {
     expect(formatReferenceSize(1024)).toBe('1.0 KB');
   });
 });
+
+function threeReferenceData() {
+  return {
+    contractVersion: 1,
+    staging: {
+      schemaVersion: 1,
+      sessionId: 'session-1',
+      revision: 2,
+      subject: {
+        kind: 'builtin-preset',
+        presetId: 'guide-neutral-mannequin',
+        presetVersion: 1,
+        fingerprint: 'preset-fingerprint',
+        presetKind: 'mannequin',
+        appearancePolicy: 'guide-only',
+        allowedPurposes: ['pose', 'camera'],
+      },
+      selectedPurposes: ['pose', 'camera'],
+      camera: {
+        cameraId: 'front',
+        position: { x: 0, y: 1, z: 3 },
+        target: { x: 0, y: 1, z: 0 },
+        fieldOfViewDeg: 45,
+        aspectRatio: 1,
+      },
+      pose: { poseId: 'standing', joints: [] },
+    },
+    outputs: [
+      {
+        kind: 'pose',
+        sessionId: 'session-1',
+        revision: 2,
+        controlImage: resourceRef('pose-control'),
+        controlMode: 'pose',
+        joints: [],
+      },
+      {
+        kind: 'camera',
+        sessionId: 'session-1',
+        revision: 2,
+        camera: {
+          cameraId: 'front',
+          position: { x: 0, y: 1, z: 3 },
+          target: { x: 0, y: 1, z: 0 },
+          fieldOfViewDeg: 45,
+          aspectRatio: 1,
+        },
+      },
+    ],
+  };
+}
+
+function resourceRef(id: string): ResourceRef {
+  return {
+    id,
+    scope: 'project',
+    provider: 'preview-variant',
+    kind: 'preview',
+    source: {
+      kind: 'preview-asset',
+      previewAssetId: id,
+      filePath: `/workspace/.neko/.cache/resources/three-reference-captures/${id}.png`,
+    },
+    locator: { kind: 'preview-asset', assetId: id },
+    fingerprint: {
+      strategy: 'provider',
+      value: `preview:${id}`,
+      providerId: 'preview-variant',
+    },
+  };
+}

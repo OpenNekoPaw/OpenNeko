@@ -201,6 +201,52 @@ describe('chatProvider', () => {
     provider.dispose();
   });
 
+  it('creates and binds an empty foreground conversation before injecting external context', async () => {
+    const context = createMockContext();
+    const provider = new ChatViewProvider(vscode.Uri.file('/ext/neko-agent'), context, {
+      localResourceAccess: createImmediateLocalResourceAccess(),
+      piConversations: createPiConversationOptions([]),
+    });
+    const payload = {
+      type: 'canvas-node' as const,
+      id: 'canvas-node-1',
+      label: 'Node 1',
+      summary: 'Canvas node context',
+      data: { nodeId: 'node-1' },
+    };
+
+    await provider.sendContextPayload(payload);
+
+    const tabStateUpdate = vi
+      .mocked(context.workspaceState.update)
+      .mock.calls.findLast(([key]) => key === 'neko.tabState');
+    expect(tabStateUpdate?.[1]).toEqual({
+      openTabs: [
+        expect.objectContaining({
+          id: expect.stringMatching(/^tab-/),
+          conversationId: expect.any(String),
+        }),
+      ],
+      activeTabId: expect.stringMatching(/^tab-/),
+    });
+    const pending = (
+      provider as unknown as {
+        _pendingContextPayload?: {
+          payload: typeof payload;
+          tabId: string;
+          conversationId: string;
+        };
+      }
+    )._pendingContextPayload;
+    expect(pending).toMatchObject({
+      payload,
+      tabId: tabStateUpdate?.[1].activeTabId,
+      conversationId: tabStateUpdate?.[1].openTabs[0].conversationId,
+    });
+
+    provider.dispose();
+  });
+
   it('starts with entry state instead of restoring previously open conversation tabs', async () => {
     const historicalConversation = {
       id: 'conv-history',

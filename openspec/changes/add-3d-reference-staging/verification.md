@@ -2,7 +2,7 @@
 
 Date: 2026-07-19
 
-This is the current implementation evidence. The change remains active because downstream Agent/Canvas/media routing, automated Webview scenarios, system-document synchronization, and full repository gates are blocked by overlapping user-owned worktree changes described below.
+This is the current implementation evidence. The change remains active because downstream Canvas/media routing, automated Webview scenarios, system-document synchronization, and full repository gates remain incomplete or blocked as described below.
 
 ## Design and reuse audit
 
@@ -22,11 +22,11 @@ pnpm --dir packages/neko-preview copy:webview
 
 Measured output:
 
-| Item | Raw | Gzip | Notes |
-| --- | ---: | ---: | --- |
-| `assets/model.js` | 908.18 kB | 242.46 kB | Only `model.html` loads the 3D entry |
-| Built-in preset binaries | 0 B | 0 B | Mannequin, props, studio, and panorama grid are project-authored procedural geometry |
-| Catalog aggregate binary increment | 0 B | 0 B | No Draco, Meshopt, KTX2, worker, or third-party model payload |
+| Item                               |       Raw |      Gzip | Notes                                                                                |
+| ---------------------------------- | --------: | --------: | ------------------------------------------------------------------------------------ |
+| `assets/model.js`                  | 908.18 kB | 242.46 kB | Only `model.html` loads the 3D entry                                                 |
+| Built-in preset binaries           |       0 B |       0 B | Mannequin, props, studio, and panorama grid are project-authored procedural geometry |
+| Catalog aggregate binary increment |       0 B |       0 B | No Draco, Meshopt, KTX2, worker, or third-party model payload                        |
 
 `buildOwnership.test.ts` proves every non-model HTML entry points to its own main module and contains no model entry or `model.js` reference. Catalog validation proves immutable identity/capabilities/dependencies/provenance/license notices. All current presets use `LicenseRef-OpenNeko` with project-owned redistribution metadata.
 
@@ -51,7 +51,8 @@ Host: VS Code Extension Development Host on macOS, verified through the existing
 - External GLB resource load measured 170 ms in the supported host (cached transfer size is unavailable; decoded size was 33,859,320 bytes).
 - Closing the editor removed the Preview Webview CDP target within the first 500 ms poll. Provider/runtime unit tests additionally assert idempotent recursive disposal and simultaneous-panel isolation.
 - Console inspection reported no Preview runtime errors; the only message was VS Code's unrelated `local-network-access` feature warning.
-- Capturing appearance and camera outputs materialized two 140,949-byte PNGs under the external workspace's `.neko/.cache/resources/three-reference-captures/` directory. No new capture was written to Preview `globalStorageUri`, and the previous “File access path outside allowed roots” diagnostic did not recur. Delivery without an active Agent conversation remained correctly fail-visible and did not change the capture location.
+- Capturing appearance and camera outputs materialized two 140,949-byte PNGs under the external workspace's `.neko/.cache/resources/three-reference-captures/` directory. No new capture was written to Preview `globalStorageUri`, and the previous “File access path outside allowed roots” diagnostic did not recur.
+- Starting from the canonical empty Agent entry state (`activeTabId: null`, no open tabs), Preview created and bound a local conversation before context injection. The Agent Webview displayed one `3d-reference` chip with `appearance · camera`, no alert, and no recurrence of “Cannot send context payload without an active conversation Tab.” No provider request was submitted during this acceptance check.
 
 Manual screenshots were kept outside the repository at `/tmp/neko-3d-reference-test-glb-latest.png`, `/tmp/neko-3d-reference-test-glb-rotated.png`, and `/tmp/neko-3d-reference-builtin-guide.png`.
 
@@ -72,6 +73,18 @@ pnpm --dir packages/neko-preview exec vitest run packages/extension/src/provider
 
 pnpm --dir packages/neko-preview compile:extension
 # production Extension bundle passed; extension.js 693.3 kB
+
+pnpm exec vitest run packages/neko-agent/packages/agent/src/runtime/__tests__/message-runtime.test.ts
+# 1 file, 68 tests passed
+
+pnpm exec vitest run packages/neko-agent/packages/extension/src/chat/message/__tests__/attachmentProcessor.test.ts packages/neko-agent/packages/extension/src/chat/__tests__/chatProvider.test.ts
+# 2 files, 45 tests passed
+
+pnpm exec vitest run packages/neko-agent/packages/webview/src/presenters/__tests__/reference-token-presenter.test.ts packages/neko-agent/packages/webview/src/components/ChatView/InputArea/AgentContextChip.test.tsx
+# 2 files, 9 tests passed
+
+pnpm --dir packages/neko-agent run compile
+# production Agent Extension and Webview builds passed
 ```
 
 Earlier focused contract/provider/runtime/UI/materialization groups passed 28 tests in 6 files, and the cumulative focused Preview groups passed 44 tests. Relevant ESLint and `git diff --check` checks passed at their implementation checkpoints.
@@ -81,9 +94,9 @@ Agent Evaluation disposition is `update` for `agent-runtime.creative-media-workf
 ## Active blockers and residual risk
 
 1. `scripts/webview-functional/` is entirely deleted in the current user worktree, including its VS Code controller and Preview scenario fixtures. Restoring or extending it would overwrite user-owned deletions, so tasks 7.1 and 7.2 remain open. This also explains the reported missing `scripts/webview-functional/vscode-controller` path.
-2. Agent and Canvas contain extensive unrelated modified/deleted/untracked work, including the exact message runtime, media bridge, protocol, Canvas projection, tests, README, and architecture files required by tasks 6.2–6.5. Those tasks remain open rather than mixing ownership or creating parallel routing.
+2. Agent task 6.2 is complete: invalid `3d-reference` payloads fail visibly, role-labelled prompt/evidence projection and chips are canonical, exact ResourceRefs become multimodal attachments, and empty-entry injection creates a conversation through the existing bridge. Canvas/media projection and capability negotiation in tasks 6.3–6.5 remain open; overlapping unrelated work in those files must still be preserved.
 3. System ADR, architecture index, and package-boundary files already have unrelated edits. Task 8.2 remains open; only clean Preview-owned documentation was updated.
-4. Real-model appearance/camera acceptance is complete, but real-source panorama composition and final role-isolated Agent delivery are not; task 7.3 remains open.
+4. Real-model appearance/camera capture and role-labelled Agent context injection are complete, but real-source panorama composition and provider-level role-isolated generation are not; task 7.3 remains open.
 5. Full repository `pnpm build`, `pnpm test`, `pnpm check`, legacy-debt, unused, functional, and real Agent evaluation gates have not yet been accepted for this change. Task 7.5 and final verification task 8.3 remain open.
 6. The full Preview Vitest run passed 320 of 321 tests; the unrelated standard-format matrix test is blocked because its repository fixture `triangle.glb` is absent. The focused capture/collector/extension regression group passed completely.
 7. The Preview Extension `tsc --noEmit` command remains blocked by pre-existing DOM/WebCodecs library configuration errors in `neko-client` plus existing unrelated Preview strict-test errors; the production Extension bundle and focused regression tests pass.

@@ -1,8 +1,10 @@
 import {
   isDocumentFile,
+  isThreeReferenceContextData,
   type AgentContextPayload,
   type AttachmentType,
   type MessageAttachment,
+  type ThreeReferenceContextData,
 } from '@neko/shared';
 
 export type ReferenceTokenProjectionKind =
@@ -78,14 +80,29 @@ export function projectAttachmentReferenceToken(
 export function projectContextPayloadReferenceToken(
   payload: AgentContextPayload,
 ): ReferenceTokenProjection {
+  let threeReference: ThreeReferenceContextData | undefined;
+  if (payload.type === '3d-reference') {
+    if (!isThreeReferenceContextData(payload.data)) {
+      throw new Error(`Agent 3D Reference context is invalid: ${payload.id}`);
+    }
+    threeReference = payload.data;
+  }
   return {
-    kind: toContextReferenceKind(payload.type),
+    kind: threeReference ? 'image' : toContextReferenceKind(payload.type),
     label: payload.label,
     title: payload.summary || payload.label,
-    meta: null,
+    meta: threeReference ? formatThreeReferenceMeta(threeReference) : null,
     countLabel: null,
     thumbnailSrc: null,
   };
+}
+
+function formatThreeReferenceMeta(data: ThreeReferenceContextData): string {
+  const roles = data.outputs.map((output) => output.kind);
+  const guideOnly =
+    data.staging.subject.kind === 'builtin-preset' &&
+    data.staging.subject.appearancePolicy === 'guide-only';
+  return [...roles, ...(guideOnly ? ['guide-only'] : [])].join(' · ');
 }
 
 export function projectMessageContextReferenceToken(
