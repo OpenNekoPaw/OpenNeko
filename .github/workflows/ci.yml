@@ -328,6 +328,42 @@ jobs:
         with:
           comment-summary-in-pr: on-failure
 
+  branch-gate:
+    name: Branch Gate
+    runs-on: ubuntu-latest
+    needs:
+      - changes
+      - build
+      - local-metadata-runtime
+      - test-ts
+      - test-rust
+      - cargo-deny
+      - proto-check
+      - code-quality
+      - openspec-check
+      - dependency-review
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Assert required branch jobs
+        env:
+          CI_GATE_RESULTS: ${{ toJson(needs) }}
+        run: >-
+          node scripts/test-orchestration/assert-ci-gate-results.mjs
+          "Branch Gate"
+          changes
+          build
+          local-metadata-runtime
+          test-ts
+          code-quality
+          dependency-review
+
   # ── Release: TS extensions VSIX packaging ────
   # Runs on push to main only. Packages all TS-only extensions.
   package-ts-vsix:
@@ -467,3 +503,45 @@ jobs:
           name: neko-engine-vsix-${{ matrix.target }}
           path: packages/neko-engine/*.vsix
           retention-days: 30
+
+  main-gate:
+    name: Main Gate
+    runs-on: ubuntu-latest
+    needs:
+      - changes
+      - build
+      - local-metadata-runtime
+      - test-ts
+      - test-rust
+      - cargo-deny
+      - proto-check
+      - code-quality
+      - openspec-check
+      - dependency-review
+      - package-ts-vsix
+      - package-engine-vsix
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Assert required main jobs
+        env:
+          CI_GATE_RESULTS: ${{ toJson(needs) }}
+        run: >-
+          node scripts/test-orchestration/assert-ci-gate-results.mjs
+          "Main Gate"
+          changes
+          build
+          local-metadata-runtime
+          test-ts
+          test-rust
+          cargo-deny
+          code-quality
+          openspec-check
+          package-ts-vsix
+          package-engine-vsix

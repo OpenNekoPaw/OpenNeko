@@ -4,7 +4,16 @@ import { basename, join } from 'node:path';
 import { describe, it } from 'node:test';
 
 const WORKFLOW_DIRECTORY = '.github/workflows';
-const GENERIC_CI_SCRIPTS = Object.freeze(['check:test', 'check:ci', 'ci:local']);
+const GENERIC_CI_SCRIPTS = Object.freeze([
+  'check:test',
+  'check:ci',
+  'gate:local',
+  'gate:branch',
+  'gate:main',
+  'ci:local',
+  'ci:branch',
+  'ci:main',
+]);
 const FORBIDDEN_REFERENCES = Object.freeze([
   'test:agent:eval',
   'scripts/agent-eval/',
