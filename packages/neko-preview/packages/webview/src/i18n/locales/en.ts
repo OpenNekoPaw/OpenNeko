@@ -75,18 +75,18 @@ const preview: MessageBundle = {
   'preview.epub.modeWaterfall': 'Switch to waterfall mode',
   // DOCX
   'preview.docx.loading': 'Loading document...',
-  // Model preview
-  'preview.model.title': '3D Model Preview',
-  'preview.model.viewport': '3D model viewport',
-  'preview.model.canvas': 'Interactive 3D model canvas',
-  'preview.model.staging': 'Temporary model staging controls',
+  // 3D Reference
+  'preview.model.title': '3D Reference',
+  'preview.model.viewport': '3D reference viewport',
+  'preview.model.canvas': 'Interactive 3D reference canvas',
+  'preview.model.staging': 'Temporary 3D reference staging controls',
   'preview.model.readOnly':
-    'Source files stay read-only. Camera, light, and transform changes are temporary staging.',
+    'Source assets stay read-only. Camera, light, pose, and transform changes are temporary staging.',
   'preview.model.readOnlyBadge': 'Read-only source',
-  'preview.model.waiting': 'Waiting for the authorized model source…',
-  'preview.model.loading': 'Loading 3D model…',
-  'preview.model.error': 'Unable to load this model.',
-  'preview.model.scene': 'Model hierarchy',
+  'preview.model.waiting': 'Waiting for an authorized 3D reference subject…',
+  'preview.model.loading': 'Loading 3D reference…',
+  'preview.model.error': 'Unable to load this 3D reference.',
+  'preview.model.scene': 'Reference hierarchy',
   'preview.model.hierarchy': 'Scene hierarchy',
   'preview.model.searchHierarchy': 'Search scene items',
   'preview.model.sceneSettings': '3D scene',

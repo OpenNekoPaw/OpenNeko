@@ -31,7 +31,7 @@
 
 ## 5. Build the purpose-aware 3D Reference UI
 
-- [ ] 5.1 Rename the user-facing surface to 3D Reference/3D 参考 while retaining source-read-only and temporary-staging messaging; update Chinese and English localization together.
+- [x] 5.1 Rename the user-facing surface to 3D Reference/3D 参考 while retaining source-read-only and temporary-staging messaging; update Chinese and English localization together.
 - [ ] 5.2 Add package-local typed source/preset/environment composition using existing tree, panel, property, segmented-control, badge, empty-state, floating-toolbar, focus, keyboard, theme, and i18n primitives; do not add a package-local design system or generic property adapter.
 - [ ] 5.3 Add visible independent appearance, pose, camera, and panoramic-scene purpose controls with capability-derived availability and a persistent “guide only, not appearance reference” label for restricted presets.
 - [ ] 5.4 Add pose preset and constrained joint controls for supported subjects, explicit unsupported states for static/non-articulated models, and no animation timeline, IK, retargeting, or source writeback.

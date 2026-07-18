@@ -106,7 +106,7 @@ describe('ModelViewer', () => {
       }),
     });
     expect(
-      container.querySelector('canvas[aria-label="Interactive 3D model canvas"]'),
+      container.querySelector('canvas[aria-label="Interactive 3D reference canvas"]'),
     ).not.toBeNull();
     expect(container.querySelector('[data-testid="model-preview-scene-panel"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="model-preview-view-controls"]')).not.toBeNull();

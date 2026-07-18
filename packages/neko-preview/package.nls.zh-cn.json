@@ -1,7 +1,7 @@
 {
   "neko.preview.displayName": "Neko 预览",
-  "neko.preview.description": "轻量级媒体、文档与标准 3D 模型预览",
-  "neko.preview.modelPreview.displayName": "Neko 3D 模型预览",
+  "neko.preview.description": "轻量级媒体、文档与 3D 参考预览",
+  "neko.preview.modelPreview.displayName": "Neko 3D 参考",
   "neko.preview.videoPreview.displayName": "视频预览",
   "neko.preview.audioPreview.displayName": "音频预览",
   "neko.preview.panoramicImage.displayName": "全景图片预览",
