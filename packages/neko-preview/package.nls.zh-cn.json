@@ -12,6 +12,7 @@
   "neko.preview.docxPreview.displayName": "Neko DOCX 预览",
   "neko.preview.openVideo.title": "打开视频预览",
   "neko.preview.openAudio.title": "打开音频预览",
+  "neko.preview.openThreeReferenceGuide.title": "打开 3D 参考指南",
   "neko.preview.openPanoramicImage.title": "以全景方式打开",
   "neko.preview.openPanoramicVideo.title": "以全景视频方式打开",
   "neko.preview.openBestPanoramic.title": "打开全景候选文件",

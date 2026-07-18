@@ -165,6 +165,21 @@ export class ModelPreviewProvider
     await this.resolvePanel({ kind: 'builtin-preset', presetId }, panel, token);
   }
 
+  async openBuiltinPresetPanel(presetId: string): Promise<void> {
+    const panel = vscode.window.createWebviewPanel(
+      'neko.preview.3dReferenceGuide',
+      '3D Reference',
+      vscode.ViewColumn.Active,
+      { enableScripts: true, retainContextWhenHidden: true },
+    );
+    const cancellation = new vscode.CancellationTokenSource();
+    panel.onDidDispose(() => {
+      cancellation.cancel();
+      cancellation.dispose();
+    });
+    await this.resolveBuiltinPresetPanel(presetId, panel, cancellation.token);
+  }
+
   async resolveEnvironmentOnlyPanel(
     panel: vscode.WebviewPanel,
     token: vscode.CancellationToken,

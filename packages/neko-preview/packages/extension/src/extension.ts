@@ -196,6 +196,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
 
   // Register commands
   context.subscriptions.push(
+    vscode.commands.registerCommand('neko.preview.openThreeReferenceGuide', async () => {
+      if (!modelProvider) {
+        throw new Error('3D Reference provider is unavailable.');
+      }
+      await modelProvider.openBuiltinPresetPanel('guide-neutral-mannequin');
+    }),
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('neko.preview.openVideo', async () => {
       const fileUri = await vscode.window.showOpenDialog({
         canSelectFiles: true,

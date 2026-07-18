@@ -37,6 +37,7 @@
   ],
   "activationEvents": [
     "onCommand:neko.preview.revealDocumentLocator",
+    "onCommand:neko.preview.openThreeReferenceGuide",
     "onCustomEditor:neko.modelPreview"
   ],
   "main": "./dist/extension.js",
@@ -142,6 +143,11 @@
       }
     ],
     "commands": [
+      {
+        "command": "neko.preview.openThreeReferenceGuide",
+        "title": "%neko.preview.openThreeReferenceGuide.title%",
+        "category": "Neko Preview"
+      },
       {
         "command": "neko.preview.openVideo",
         "title": "%neko.preview.openVideo.title%",

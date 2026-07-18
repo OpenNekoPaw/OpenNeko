@@ -152,6 +152,7 @@ vi.mock('../providers/PanoramicVideoPreviewProvider', () => {
 vi.mock('../providers/model/ModelPreviewProvider', () => {
   const ctor = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.dispose = vi.fn();
+    this.openBuiltinPresetPanel = vi.fn(async () => undefined);
   });
   (ctor as unknown as Record<string, string>).viewType = 'neko.modelPreview';
   return { ModelPreviewProvider: ctor };
@@ -171,6 +172,7 @@ import { PreviewService } from '../services/PreviewService';
 import { VideoPreviewProvider } from '../providers/VideoPreviewProvider';
 import { AudioPreviewProvider } from '../providers/AudioPreviewProvider';
 import { PanoramicImagePreviewProvider } from '../providers/PanoramicImagePreviewProvider';
+import { ModelPreviewProvider } from '../providers/model/ModelPreviewProvider';
 import * as vscode from 'vscode';
 
 // ============================================================================
@@ -278,6 +280,20 @@ describe('extension', () => {
       expect(registeredCommands).toContain('neko.preview.openVideo');
       expect(registeredCommands).toContain('neko.preview.openAudio');
       expect(registeredCommands).toContain('neko.preview.openPanoramicImage');
+      expect(registeredCommands).toContain('neko.preview.openThreeReferenceGuide');
+    });
+
+    it('opens an explicit no-source mannequin guide without selecting a model file', async () => {
+      const context = createMockContext();
+      await activate(context);
+      const registration = vi
+        .mocked(vscode.commands.registerCommand)
+        .mock.calls.find(([command]) => command === 'neko.preview.openThreeReferenceGuide');
+      expect(registration).toBeDefined();
+      await registration?.[1]();
+      const provider = vi.mocked(ModelPreviewProvider).mock.results[0]?.value;
+      expect(provider.openBuiltinPresetPanel).toHaveBeenCalledWith('guide-neutral-mannequin');
+      expect(vscode.window.showOpenDialog).not.toHaveBeenCalled();
     });
 
     it('should not depend on active text editor events for EPUB outline sync', async () => {

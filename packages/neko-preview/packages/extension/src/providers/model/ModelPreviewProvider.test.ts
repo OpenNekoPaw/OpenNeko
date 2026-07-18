@@ -6,8 +6,16 @@ import {
   createResourceRef,
   type ThreeReferenceStagingSnapshot,
 } from '@neko/shared';
+import * as vscode from 'vscode';
 
 vi.mock('vscode', () => ({
+  CancellationTokenSource: class {
+    readonly token = { onCancellationRequested: () => ({ dispose: vi.fn() }) };
+    cancel = vi.fn();
+    dispose = vi.fn();
+  },
+  ViewColumn: { Active: 1 },
+  window: { createWebviewPanel: vi.fn() },
   workspace: {
     workspaceFolders: [{ uri: { fsPath: '/workspace' } }],
     getWorkspaceFolder: () => ({ uri: { fsPath: '/workspace' } }),
@@ -28,6 +36,26 @@ import { ModelPreviewProvider } from './ModelPreviewProvider';
 import { ModelSourceInspectionError } from './modelSourceInspection';
 
 describe('3D Reference provider session boundary', () => {
+  it('opens an explicit no-source guide panel through the same provider lifecycle', async () => {
+    const provider = providerWith(extensionContext(), () => 'guide-session');
+    const guidePanel = panel();
+    vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(guidePanel.value);
+
+    await provider.openBuiltinPresetPanel('guide-neutral-mannequin');
+    await ready(guidePanel, 'guide-session');
+
+    expect(vscode.window.createWebviewPanel).toHaveBeenCalledWith(
+      'neko.preview.3dReferenceGuide',
+      '3D Reference',
+      vscode.ViewColumn.Active,
+      { enableScripts: true, retainContextWhenHidden: true },
+    );
+    expect(guidePanel.messages.at(-1)).toMatchObject({
+      panelSubject: { kind: 'builtin-preset' },
+      staging: { subject: { presetId: 'guide-neutral-mannequin' } },
+    });
+  });
+
   it('initializes isolated source-model panels through the 3d-reference protocol', async () => {
     const context = extensionContext();
     const sessions = ['session-a', 'session-b'];
