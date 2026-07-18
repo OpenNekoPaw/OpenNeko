@@ -1913,6 +1913,7 @@ function escapeRegExp(value: string): string {
 }
 
 function listFiles(dir: string): string[] {
+  if (!existsSync(dir)) return [];
   const entries = readdirSync(dir);
   const files: string[] = [];
   for (const entry of entries) {

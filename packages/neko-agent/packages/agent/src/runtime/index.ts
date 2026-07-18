@@ -58,6 +58,13 @@ export {
 } from './capability/host-content-access-runtime-adapter';
 
 export {
+  collectCreatorVisibleArtifacts,
+  type CreatorVisibleArtifactCandidate,
+  type CreatorVisibleArtifactCollectionInput,
+  type CreatorVisibleToolResult,
+} from './turn/creator-visible-artifact-collector';
+
+export {
   buildAgentRuntimeStateSnapshotMessage,
   createAgentStateRuntime,
   type AgentStateRuntime,
