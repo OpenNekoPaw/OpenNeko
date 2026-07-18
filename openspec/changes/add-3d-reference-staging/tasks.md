@@ -19,7 +19,7 @@
 - [x] 3.2 Add an explicit command/panel entry for a no-source guide session; keep real model/panorama load failures typed and visible and add poison tests proving they cannot open a bundled fallback.
 - [x] 3.3 Project exact built-in assets from the code-owned catalog through `webview.asWebviewUri()` and existing local-resource authorization, sending only stable preset identity plus authorized runtime descriptors to the matching panel.
 - [x] 3.4 Reuse/extract package-local panoramic inspection and authorization helpers for the 3D environment path without nesting or instantiating another custom-editor provider.
-- [ ] 3.5 Add provider lifecycle tests for simultaneous source, guide, and environment-only panels; stale/mismatched messages; cancellation during preset/panorama load; close/reload; and idempotent resource release.
+- [x] 3.5 Add provider lifecycle tests for simultaneous source, guide, and environment-only panels; stale/mismatched messages; cancellation during preset/panorama load; close/reload; and idempotent resource release.
 
 ## 4. Implement Three.js reference staging
 

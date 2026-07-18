@@ -275,6 +275,113 @@ describe('3D Reference provider session boundary', () => {
     await resolution;
     expect(session.dispose).toHaveBeenCalledOnce();
   });
+
+  it('cancels pending preset projection before touching a disposed Webview', async () => {
+    let finishProjection:
+      ((value: { kind: 'procedural'; implementationId: string }) => void) | undefined;
+    const projection = new Promise<{ kind: 'procedural'; implementationId: string }>((resolve) => {
+      finishProjection = resolve;
+    });
+    const projectPresetRuntime = vi.fn(() => projection);
+    const provider = providerWith(extensionContext(), () => 'preset-session', {
+      projectPresetRuntime,
+    });
+    const presetPanel = panel();
+    const resolution = provider.resolveBuiltinPresetPanel(
+      'guide-neutral-mannequin',
+      presetPanel.value,
+      token(),
+    );
+    await Promise.resolve();
+    presetPanel.dispose();
+    finishProjection?.({ kind: 'procedural', implementationId: 'neutral-mannequin-v1' });
+    await resolution;
+    expect(presetPanel.messages).toEqual([]);
+  });
+
+  it('cancels pending panorama authorization with the owning panel signal', async () => {
+    let finishAuthorization:
+      | ((value: {
+          sourceRef: ReturnType<typeof resourceRef>;
+          fingerprint: string;
+          mediaType: 'image/png';
+          sizeBytes: number;
+          webviewUri: string;
+        }) => void)
+      | undefined;
+    let authorizationSignal: AbortSignal | undefined;
+    const authorizePanoramicImageSource = vi.fn(
+      (input: { signal?: AbortSignal }) =>
+        new Promise<{
+          sourceRef: ReturnType<typeof resourceRef>;
+          fingerprint: string;
+          mediaType: 'image/png';
+          sizeBytes: number;
+          webviewUri: string;
+        }>((resolve) => {
+          authorizationSignal = input.signal;
+          finishAuthorization = resolve;
+        }),
+    );
+    const provider = providerWith(extensionContext(), () => 'environment-session', {
+      authorizePanoramicImageSource,
+    });
+    const environmentPanel = panel();
+    await provider.resolveEnvironmentOnlyPanel(environmentPanel.value, token());
+    const authorization = provider.authorizePanoramicEnvironment(
+      environmentPanel.value,
+      uri('/workspace/scene_360.png'),
+    );
+    await Promise.resolve();
+    environmentPanel.dispose();
+    expect(authorizationSignal?.aborted).toBe(true);
+    finishAuthorization?.({
+      sourceRef: resourceRef('panorama'),
+      fingerprint: 'panorama-fingerprint',
+      mediaType: 'image/png',
+      sizeBytes: 1024,
+      webviewUri: 'webview:/workspace/scene_360.png',
+    });
+    await expect(authorization).rejects.toThrow(/disposed/i);
+  });
+
+  it('restores compatible staging with fresh session identity and releases once', async () => {
+    const firstContext = extensionContext();
+    const session = sourceSession('first-session', '/workspace/a.glb');
+    const firstProvider = providerWith(firstContext, () => 'first-session', {
+      openSourceSession: async () => session,
+    });
+    const firstPanel = panel();
+    await firstProvider.resolveCustomEditor(
+      document('/workspace/a.glb'),
+      firstPanel.value,
+      token(),
+    );
+    await ready(firstPanel, 'first-session');
+    const stored = {
+      ...sessionInit(firstPanel).staging,
+      revision: 4,
+      selectedPurposes: ['camera'] as const,
+    };
+
+    const restoredProvider = providerWith(extensionContext(stored), () => 'restored-session');
+    const restoredPanel = panel();
+    await restoredProvider.resolveCustomEditor(
+      document('/workspace/a.glb'),
+      restoredPanel.value,
+      token(),
+    );
+    await ready(restoredPanel, 'restored-session');
+    expect(sessionInit(restoredPanel).staging).toMatchObject({
+      sessionId: 'restored-session',
+      revision: 0,
+      selectedPurposes: ['camera'],
+    });
+
+    firstPanel.dispose();
+    firstPanel.dispose();
+    expect(session.dispose).toHaveBeenCalledOnce();
+  });
 });
 
 function providerWith(

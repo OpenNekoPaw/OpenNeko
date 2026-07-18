@@ -76,6 +76,7 @@ export interface ModelPreviewProviderDependencies {
   }) => Promise<SourceSessionPort>;
   readonly onCaptureRequested?: (request: ThreeReferenceCaptureRequest) => Promise<void>;
   readonly authorizePanoramicImageSource?: typeof authorizePanoramicImageSource;
+  readonly projectPresetRuntime?: typeof projectThreeReferencePresetRuntime;
 }
 
 interface PanelState {
@@ -109,6 +110,7 @@ export class ModelPreviewProvider
   >;
   private readonly onCaptureRequested?: ModelPreviewProviderDependencies['onCaptureRequested'];
   private readonly authorizePanoramicImageSource: typeof authorizePanoramicImageSource;
+  private readonly projectPresetRuntime: typeof projectThreeReferencePresetRuntime;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -132,6 +134,8 @@ export class ModelPreviewProvider
     this.onCaptureRequested = dependencies.onCaptureRequested;
     this.authorizePanoramicImageSource =
       dependencies.authorizePanoramicImageSource ?? authorizePanoramicImageSource;
+    this.projectPresetRuntime =
+      dependencies.projectPresetRuntime ?? projectThreeReferencePresetRuntime;
     this.loadPathPolicy =
       dependencies.loadPathPolicy ??
       (async ({ documentUri, workspaceRoot }) => {
@@ -212,7 +216,7 @@ export class ModelPreviewProvider
       ...(workspaceRoot ? { workspaceRoot } : {}),
     });
     state.abortController.signal.throwIfAborted();
-    return this.authorizePanoramicImageSource({
+    const authorized = await this.authorizePanoramicImageSource({
       sourcePath: sourceUri.fsPath,
       webview: state.panel.webview,
       authorization: this.localResourceAccess,
@@ -221,6 +225,8 @@ export class ModelPreviewProvider
       pathResolver: policy.pathResolver,
       signal: state.abortController.signal,
     });
+    state.abortController.signal.throwIfAborted();
+    return authorized;
   }
 
   dispose(): void {
@@ -384,7 +390,7 @@ export class ModelPreviewProvider
           allowedPurposes: candidate.allowedPurposes,
         } as const;
         resolveThreeReferencePreset(this.presetCatalog, subject);
-        const runtime = await projectThreeReferencePresetRuntime({
+        const runtime = await this.projectPresetRuntime({
           entry: candidate,
           webview: panel.webview,
           extensionUri: this.extensionUri,
