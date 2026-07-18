@@ -4,6 +4,10 @@
 
 The Preview-owned standard 3D path renders the development GLB with its original materials, embedded textures, transparent content, and complete node hierarchy in the VS Code Extension Development Host. The default camera is now a stable front view; non-camera inspector edits preserve the live orbit target and distance; and the viewport exposes a bounds-scaled ground grid, live XYZ orientation indicator, and accessible guide toggles in the updated bottom toolbar. The hierarchy now exposes package-local scene, camera, and node selection with temporary camera operations and a capture-excluded camera helper, while the right inspector switches between scene, camera, and node controls without rewriting the live orbit. The remaining acceptance gap is the isolated synthetic functional scenario: the runner attached to an already-open development workspace instead of its fixture workspace and correctly rejected the run as `configuration-invalid`.
 
+## Archive Acceptance
+
+On 2026-07-19 the remaining tasks 7.3 and 7.4 were explicitly accepted as known verification warnings so the completed source-model slice could be archived before the purpose-aware `add-3d-reference-staging` replacement begins. The synthetic Extension Development Host scenario did not execute its business assertions because workspace identity validation failed closed, and the `excluded` Agent Evaluation disposition therefore lacks that requested real-scenario evidence. Archiving does not convert either warning into a pass, does not claim end-to-end Agent behavior acceptance, and does not weaken the fixture identity check. The follow-up change owns new isolated functional scenarios and purpose-routing evaluation evidence before its rollout.
+
 ## Root Causes and Regression Proof
 
 - The first contract violation was the model Webview's exact URL modifier rejecting every `blob:vscode-webview://...` URL.
