@@ -88,13 +88,16 @@ describe('@neko/ui toolbar primitives', () => {
     act(() => {
       root.render(
         <>
-          <ToolbarSeparator />
+          <ToolbarSeparator orientation="vertical" />
           <ToolbarSpacer />
         </>,
       );
     });
 
-    expect(host.querySelector('.neko-toolbar-sep')?.getAttribute('role')).toBe('separator');
+    const separator = host.querySelector('.neko-toolbar-sep');
+    expect(separator?.getAttribute('role')).toBe('separator');
+    expect(separator?.getAttribute('aria-orientation')).toBe('vertical');
+    expect(separator?.getAttribute('data-orientation')).toBe('vertical');
     expect(host.querySelector<HTMLDivElement>('div[style]')?.style.flex).toBe('1 1 0%');
   });
 });

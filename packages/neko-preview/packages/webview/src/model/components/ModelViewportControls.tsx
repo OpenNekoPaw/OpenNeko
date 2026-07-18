@@ -1,10 +1,4 @@
-import {
-  SegmentedControl,
-  ToolbarButton,
-  ToolbarSeparator,
-  VerticalToolbar,
-  toCodiconClassName,
-} from '@neko/ui';
+import { SegmentedControl, ToolbarButton, ToolbarSeparator, toCodiconClassName } from '@neko/ui';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { useTranslation } from '../../i18n/I18nContext';
 
@@ -54,19 +48,19 @@ export function ModelViewportControls({
           onValueChange={(value) => onViewportModeChange(asViewportMode(value))}
         />
       </div>
-      <VerticalToolbar
+      <div
         className="model-preview__viewport-toolbar"
+        data-active-indicator="button"
         data-testid="model-preview-viewport-toolbar"
-        data-orientation="vertical"
-        width={50}
+        data-orientation="horizontal"
         aria-label={t('preview.model.viewportTools')}
-        aria-orientation="vertical"
+        aria-orientation="horizontal"
         role="toolbar"
         {...getKeyboardBoundaryMetadata({
           scope: 'popover',
           ownerId: 'model-preview-viewport-toolbar',
           priority: 20,
-          ownedKeys: ['Enter', 'Escape', 'Space', 'Tab', 'ArrowUp', 'ArrowDown'],
+          ownedKeys: ['Enter', 'Escape', 'Space', 'Tab', 'ArrowLeft', 'ArrowRight'],
         })}
       >
         <div
@@ -91,7 +85,7 @@ export function ModelViewportControls({
             onClick={() => onViewportModeChange('inspect')}
           />
         </div>
-        <ToolbarSeparator />
+        <ToolbarSeparator orientation="vertical" />
         {(['translate', 'rotate', 'scale'] as const).map((mode) => (
           <ToolbarButton
             key={mode}
@@ -102,7 +96,7 @@ export function ModelViewportControls({
             onClick={() => onTransformModeChange(mode)}
           />
         ))}
-        <ToolbarSeparator />
+        <ToolbarSeparator orientation="vertical" />
         <ToolbarButton
           active={gridVisible}
           disabled={disabled}
@@ -119,14 +113,14 @@ export function ModelViewportControls({
           title={axesVisible ? t('preview.model.hideAxes') : t('preview.model.showAxes')}
           onClick={() => onAxesVisibleChange(!axesVisible)}
         />
-        <ToolbarSeparator />
+        <ToolbarSeparator orientation="vertical" />
         <ToolbarButton
           disabled={disabled}
           icon={<span className={toCodiconClassName('screen-normal')} />}
           title={t('preview.model.frameModel')}
           onClick={onFrameModel}
         />
-      </VerticalToolbar>
+      </div>
     </>
   );
 }

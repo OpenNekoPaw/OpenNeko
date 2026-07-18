@@ -350,21 +350,26 @@ input {
   position: absolute;
   z-index: 3;
   bottom: 18px;
-  left: 18px;
+  left: 50%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
   gap: 6px;
-  height: auto;
-  max-height: calc(100% - 36px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 10px 6px;
+  width: max-content;
+  max-width: calc(100% - 36px);
+  min-height: 50px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 10px;
   border: 1px solid rgba(214, 218, 224, 0.92);
-  border-radius: 999px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow:
     0 16px 34px rgba(31, 35, 41, 0.16),
     0 1px 3px rgba(31, 35, 41, 0.08);
   backdrop-filter: blur(14px);
   scrollbar-width: none;
+  transform: translateX(-50%);
 }
 
 .model-preview__viewport-toolbar::-webkit-scrollbar {
@@ -383,7 +388,7 @@ input {
 .model-preview__toolbar-mode-group {
   display: flex;
   flex: 0 0 auto;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   gap: 0;
   padding: 2px;
@@ -399,34 +404,24 @@ input {
 
 .model-preview__viewport-toolbar .neko-toolbar-btn.active,
 .model-preview__viewport-toolbar .neko-toolbar-btn[aria-pressed='true'] {
-  border-color: transparent;
+  border-color: rgba(78, 137, 224, 0.55);
   color: #2868c7;
-  background: transparent;
-  box-shadow: none;
-}
-
-.model-preview__viewport-toolbar .neko-toolbar-btn.active::after,
-.model-preview__viewport-toolbar .neko-toolbar-btn[aria-pressed='true']::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  z-index: 0;
-  border: 1px solid rgba(78, 137, 224, 0.55);
-  border-radius: 999px;
   background: #e7f1ff;
   box-shadow: 0 1px 5px rgba(78, 125, 233, 0.2);
-  pointer-events: none;
 }
 
-.model-preview__viewport-toolbar .neko-toolbar-btn > .codicon {
-  position: relative;
-  z-index: 1;
+.model-preview__viewport-toolbar .neko-toolbar-btn.active::before,
+.model-preview__viewport-toolbar .neko-toolbar-btn.active::after,
+.model-preview__viewport-toolbar .neko-toolbar-btn[aria-pressed='true']::before,
+.model-preview__viewport-toolbar .neko-toolbar-btn[aria-pressed='true']::after {
+  content: none;
+  display: none;
 }
 
 .model-preview__viewport-toolbar .neko-toolbar-sep {
-  width: 26px;
-  height: 1px;
-  margin: 2px 0;
+  width: 1px;
+  height: 26px;
+  margin: 0 2px;
   background: #e0e3e7;
 }
 

@@ -63,8 +63,21 @@ export function ToolbarButton({
   );
 }
 
-export function ToolbarSeparator(): React.ReactElement {
-  return <div className="neko-toolbar-sep" role="separator" />;
+export interface ToolbarSeparatorProps {
+  readonly orientation?: 'horizontal' | 'vertical';
+}
+
+export function ToolbarSeparator({
+  orientation = 'horizontal',
+}: ToolbarSeparatorProps = {}): React.ReactElement {
+  return (
+    <div
+      aria-orientation={orientation}
+      className="neko-toolbar-sep"
+      data-orientation={orientation}
+      role="separator"
+    />
+  );
 }
 
 export function ToolbarSpacer(): React.ReactElement {

@@ -109,10 +109,11 @@ describe('ModelViewer', () => {
     const viewportToolbar = container.querySelector<HTMLElement>(
       '[data-testid="model-preview-viewport-toolbar"]',
     );
-    expect(viewportToolbar?.classList.contains('neko-vtoolbar')).toBe(true);
-    expect(viewportToolbar?.dataset.orientation).toBe('vertical');
+    expect(viewportToolbar?.classList.contains('neko-vtoolbar')).toBe(false);
+    expect(viewportToolbar?.dataset.activeIndicator).toBe('button');
+    expect(viewportToolbar?.dataset.orientation).toBe('horizontal');
     expect(viewportToolbar?.getAttribute('role')).toBe('toolbar');
-    expect(viewportToolbar?.getAttribute('aria-orientation')).toBe('vertical');
+    expect(viewportToolbar?.getAttribute('aria-orientation')).toBe('horizontal');
     expect(
       viewportToolbar
         ?.querySelector('[data-model-preview-toolbar-group="navigation"]')
