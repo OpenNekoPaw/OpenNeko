@@ -30,6 +30,8 @@ The source stays read-only. Node transforms, camera presets, lights, background,
 
 The light-canvas UI revision advances the recoverable staging schema to v2. Preview rejects v1 panel state and rebuilds canonical temporary staging with the `#f5f6f8` background; source model bytes and durable project data are unaffected.
 
+The follow-up panel interaction pass keeps search clearing keyboard-accessible, projects Agent delivery as idle/sending/succeeded/retry button states, and classifies capture/Agent diagnostics as non-fatal actions so they cannot replace an otherwise healthy model viewport with a load-error overlay.
+
 ## Design and Reuse Audit
 
 - **Responsibility:** Extension owns file policy, bounded inspection, exact URI projection, panel/session identity, capture validation, and Agent command delivery. The dedicated Webview owns Three.js rendering and temporary staging. Agent only consumes the typed `model-preview` context.
@@ -48,6 +50,7 @@ The light-canvas UI revision advances the recoverable staging schema to v2. Prev
 - Angle result: front, side, opposite-side, and three-quarter views retain the complete upper garment and skirt layers instead of exposing the body or internal safety-pants mesh as the camera rotates.
 - Close-range result: after 30 consecutive zoom-in wheel events, the camera stopped outside the model; face, clothing, limbs, and tail remained rendered without internal-face clipping or viewport-filling triangles.
 - Normalized facts shown by the live panel: 39 nodes, 37 meshes, 37 materials, 0 animations.
+- Live component check: searching `尾巴` reduced the hierarchy to 5 visible tree items; the clear action restored all 39 items. The panel remained `ready` with 37 meshes and no alert after the UI rebuild.
 - Local visual evidence: `/tmp/openneko-preview-before.png`, `/tmp/openneko-preview-after-texture-fix.png`, `/tmp/openneko-external-glb-depth-fix-close.png`, `/tmp/openneko-external-glb-depth-fix-angle-close.png`, `/tmp/openneko-external-glb-depth-fix-angle-opposite-close.png`, `/tmp/openneko-external-glb-depth-fix-three-quarter.png`, and `/tmp/openneko-external-glb-final.png`.
 
 ## Validation Commands
@@ -58,6 +61,7 @@ The light-canvas UI revision advances the recoverable staging schema to v2. Prev
 | `pnpm exec vitest run packages/neko-preview/packages/webview/src/model/threeRuntime.test.ts` | Passed: 1 file, 7 tests after the opaque-BLEND material regression failed red | Camera bounds plus deterministic nested opaque/transparent material behavior |
 | `pnpm --filter neko-preview test -- --run` | Current run: 33 files passed; 260/261 tests passed. The sole failure is the removed repository fixture `scripts/webview-functional/fixtures/preview-models/triangle.glb`; it was not recreated because real acceptance was explicitly restricted to the external `~/Git/neko-test/test.glb`. | Preview Extension/Webview deterministic suite except the unavailable local-fixture matrix case |
 | Focused model lifecycle/provider/runtime rerun | Passed: 3 files, 14 tests | Source projection, provider identity/lifecycle, Three runtime |
+| Focused shared/Preview/Agent contract rerun | Passed: 7 files, 92 tests | Staging schema v2, light UI hierarchy, search clearing, delivery states, non-fatal Agent diagnostics, runtime/provider consumers |
 | `pnpm exec tsc -p packages/neko-preview/packages/webview/tsconfig.json --noEmit` | Passed | Model Webview TypeScript contract |
 | Preview Extension `tsc --noEmit` | Blocked by existing package/shared errors in media DOM libs, document/audio/panorama tests and providers; after local corrections, no error remains under `providers/model` | Extension typecheck gap remains outside this proposal boundary |
 | `pnpm --filter @neko/preview-webview build` | Passed | Production model entry and asset ownership |
@@ -84,7 +88,7 @@ The local VS Code workspace now provides `Debug Webview Functional (All)`, whose
 ## Evaluation and Bundle Impact
 
 - Evaluation disposition remains `excluded`: this change adds deterministic host context ingestion, not Agent reasoning, Tool/capability routing, provider selection, or TUI behavior. `agent-runtime.creative-media-workflow` therefore remains unchanged.
-- `model.js` is isolated to `model.html`: 830.19 kB minified / 218.48 kB gzip in the verified build. Existing video, audio, and document entries do not execute it.
+- `model.js` is isolated to `model.html`: 834.22 kB minified / 219.50 kB gzip in the verified build. Existing video, audio, and document entries do not execute it.
 - The production build reports the existing Vite chunk-size warning for this entry; compressed glTF decoders and further code-splitting remain separate design decisions.
 
 ## Remaining Risks

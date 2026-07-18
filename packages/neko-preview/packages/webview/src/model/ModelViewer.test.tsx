@@ -91,6 +91,19 @@ describe('ModelViewer', () => {
     expect(
       container.querySelector('aside[aria-label="Temporary model staging controls"]'),
     ).not.toBeNull();
+
+    const nodeSearch = container.querySelector<HTMLInputElement>('#model-preview-node-search');
+    await act(async () => {
+      setTextInputValue(nodeSearch, 'mesh');
+      nodeSearch?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const clearSearch = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Clear node search"]',
+    );
+    expect(clearSearch).not.toBeNull();
+    await act(async () => clearSearch?.click());
+    expect(nodeSearch?.value).toBe('');
+
     expect(mockWindow.api.postedMessages).toContainEqual(
       expect.objectContaining({
         type: 'model-preview/load-completed',
@@ -149,6 +162,33 @@ describe('ModelViewer', () => {
       'dataset.deliveryStatus',
       'succeeded',
     );
+    expect(sendButton?.textContent).toContain('Sent to Agent');
+    expect(sendButton).toHaveProperty('dataset.deliveryStatus', 'succeeded');
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'model-preview/diagnostic',
+            diagnostic: {
+              code: 'agent-unavailable',
+              message: 'Agent is not available.',
+              severity: 'error',
+              identity: {
+                sessionId: 'session-1',
+                sourceFingerprint: 'fingerprint-1',
+                revision: 0,
+              },
+            },
+          },
+        }),
+      );
+    });
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toMatchObject({
+      dataset: expect.objectContaining({ viewerStatus: 'ready', deliveryStatus: 'error' }),
+    });
+    expect(container.querySelector('.model-preview__viewport [role="alert"]')).toBeNull();
+    expect(sendButton?.textContent).toContain('Retry sending to Agent');
 
     await act(async () => root.unmount());
     expect(runtime.dispose).toHaveBeenCalledOnce();
@@ -313,4 +353,12 @@ function loadMessage() {
       capture: { width: 1024, height: 1024 },
     },
   };
+}
+
+function setTextInputValue(input: HTMLInputElement | null, value: string): void {
+  if (!input) return;
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set?.call(
+    input,
+    value,
+  );
 }
