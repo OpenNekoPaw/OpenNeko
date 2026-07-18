@@ -83,17 +83,13 @@ const config: KnipConfig = {
       ignore: [
         // Phase 2 features (v2.0) - planned but not yet implemented
         'src/components/ColorCorrection/**',
-        'src/components/Subtitles/**',
         'src/components/Effects/**',
         'src/components/Mask/**',
         'src/components/PropertyPanel/**',
         'src/components/SpeedControl/**',
         'src/components/TransitionPicker/**',
-        'src/components/PenToolEditor.tsx',
         'src/components/ShapeRenderer.tsx',
-        'src/tools/**',
         'src/utils/subtitleParser.ts',
-        'src/types/audioEffects.ts',
       ],
     },
     'packages/neko-agent/packages/extension': {

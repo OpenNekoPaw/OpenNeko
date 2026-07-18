@@ -12,10 +12,10 @@
 
 ## 3. Dormant Cut Cleanup
 
-- [ ] 3.1 Delete the unreachable Cut Webview tool executor and stale documentation
-- [ ] 3.2 Delete unreachable subtitle components and Pen tool editor while retaining active subtitle parsing
-- [ ] 3.3 Delete duplicated unused Cut audio-effect definitions and use shared authoritative contracts
-- [ ] 3.4 Narrow Cut Knip ignores to retained active component trees and verified runtime entries
+- [x] 3.1 Delete the unreachable Cut Webview tool executor and stale documentation
+- [x] 3.2 Delete unreachable subtitle components and Pen tool editor while retaining active subtitle parsing
+- [x] 3.3 Delete duplicated unused Cut audio-effect definitions and use shared authoritative contracts
+- [x] 3.4 Narrow Cut Knip ignores to retained active component trees and verified runtime entries
 
 ## 4. Verification
 
