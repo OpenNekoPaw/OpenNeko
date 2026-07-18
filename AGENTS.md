@@ -216,7 +216,7 @@
 | Rust Engine                                                                                                             | 聚焦 `cargo test`；涉及客户端、媒体协议或跨层行为时增加对应集成/运行态验证                                                                                      |
 | Agent evaluation harness、scenario manifest、debug automation 或 facts 契约                                             | `pnpm test:agent:eval`；该命令仅是 key-free harness 自测，不得描述为真实 Agent 行为验收                                                                         |
 | prompt、Skill、capability/tool routing、provider/model、AgentSession、validation/recovery 或 TUI Agent event projection | 按 `.codex/skills/neko-agent-evaluation/SKILL.md` 规划并运行聚焦脚本 evaluation；无法运行真实 case 时记录阻塞条件和残余风险                                     |
-| Webview 视觉、交互、CSP、消息、焦点或媒体                                                                               | 受影响构建/测试，加 `pnpm test:webview:functional` 的聚焦真实场景；`pnpm smoke:webview:targets`/target discovery 仅为环境预检，普通浏览器/Vite/Chrome/Playwright 不能替代 VS Code Webview 运行态验收 |
+| Webview 视觉、交互、CSP、消息、焦点或媒体                                                                               | 受影响构建/测试，加 Extension Development Host + `vscode-extension-debugger` 的聚焦真实场景；`pnpm smoke:webview:targets`/target discovery 仅为环境预检，普通浏览器/Vite/Chrome/Playwright 不能替代 VS Code Webview 运行态验收；UI 运行态测试不得进入 CI |
 | 发布链路或影响面不易限定的高风险改动                                                                                    | `pnpm ci:local` 加所有受影响领域的 evaluation、Extension Development Host/Webview UI 或 Engine 运行态验证                                                       |
 
 - 新路径、迁移和 bug 修复必须同时验证结果与执行路径：断言 canonical contract、handler、renderer、adapter 或 Engine path 被命中，并证明 legacy/fallback 路径未参与。
@@ -263,7 +263,7 @@ pnpm check:unused
 
 # Agent 与 Webview 运行态
 pnpm test:agent:eval
-pnpm test:webview:functional:p0
+pnpm smoke:webview:targets
 
 # Rust Engine
 cd packages/neko-engine && cargo test

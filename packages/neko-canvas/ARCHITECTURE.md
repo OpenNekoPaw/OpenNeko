@@ -18,7 +18,7 @@ Workspace Board delivery 是 Canvas domain 的 host-neutral canonical path：每
 
 Canvas 编辑与预览共享同一个 `neko.canvasEditor` Webview。播放预览不是第二个独立 Webview，而是 Canvas Editor Webview 内的 `PlaybackWorkspace`：上方可显示/隐藏画布区与预览播放区，下方可显示/隐藏 Canvas 预览路线条。该决策遵循系统级 ADR：[`../../docs/architecture/adr-canvas-cut-playback-route-and-timeline-boundary.md`](../../docs/architecture/adr-canvas-cut-playback-route-and-timeline-boundary.md)。
 
-旧的 `openNarrativePreview` 命令只保留为迁移 shim，行为必须转发到 `neko.canvas.revealPlaybackWorkspace` / `playback:revealWorkspace`，不得再作为独立 Canvas Preview Webview 的成功路径。`NarrativePreviewBridge` 只允许作为迁移来源、协议测试对象和后续删除候选；owner 为 `neko-canvas`，移除条件是同 Webview `PlaybackWorkspace` 覆盖 narrative/media route 渲染与真实 VS Code Webview 功能场景，验证命令至少包括 `pnpm --dir packages/neko-canvas exec vitest run packages/extension/src/__tests__/protocol.test.ts` 和聚焦 `pnpm test:webview:functional` 场景。
+旧的 `openNarrativePreview` 命令只保留为迁移 shim，行为必须转发到 `neko.canvas.revealPlaybackWorkspace` / `playback:revealWorkspace`，不得再作为独立 Canvas Preview Webview 的成功路径。`NarrativePreviewBridge` 只允许作为迁移来源、协议测试对象和后续删除候选；owner 为 `neko-canvas`，移除条件是同 Webview `PlaybackWorkspace` 覆盖 narrative/media route 渲染与真实 VS Code Webview 功能场景，验证至少包括 `pnpm --dir packages/neko-canvas exec vitest run packages/extension/src/__tests__/protocol.test.ts`，以及本地 Extension Development Host + `vscode-extension-debugger` 的聚焦场景。UI 运行态测试不得进入 CI。
 
 ---
 

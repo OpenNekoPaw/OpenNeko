@@ -51,10 +51,10 @@ The retained Engine native release build MUST be owned by `neko-engine#build` as
 - **WHEN** the host-napi build starts before the Cargo registry metadata is current
 - **THEN** the wrapper exposes the Cargo metadata/index progress and fails before N-API compilation if metadata cannot be resolved
 
-#### Scenario: Validate test and scenario metadata
+#### Scenario: Validate test and CI metadata
 
-- **WHEN** test discovery, quality guardrails, and Webview functional scenario selection run
-- **THEN** every declared package path resolves to a retained workspace package and no removed product directory is scanned or compiled
+- **WHEN** test discovery, quality guardrails, and CI change detection run
+- **THEN** every declared package path resolves to a retained workspace package, no removed product directory is scanned or compiled, and CI does not invoke the retired Webview functional harness
 
 #### Scenario: Run coverage once per owner
 

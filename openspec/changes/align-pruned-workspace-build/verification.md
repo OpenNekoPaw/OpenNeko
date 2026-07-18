@@ -63,3 +63,9 @@
 - Agent Evaluation disposition: prompt/Skill and capability examples changed, so the focused media-production and script-generation cases were validated in dry-run and the full key-free harness passed. No credentialed provider run was performed, so the result is not claimed as real Agent behavior acceptance.
 - The second root `pnpm test` run reached unrelated current-work failures: Preview `ModelPreviewSourceSession.ts` violates an existing local-resource-root guard, and Canvas foundational media now renders `object-contain` while its test expects `object-cover`. Cleanup-specific narrative and plugin-transfer failures found during that run were corrected and pass focused reruns.
 - `pnpm check:quality` progresses through release, brand, debt, content, application, Agent, and Canvas boundaries, then stops on an unrelated obsolete keyboard-reporter import in Agent `AppShell.tsx`. Those active user changes were preserved rather than folded into this cleanup.
+
+### CI UI-test closure (2026-07-19)
+
+- GitHub workflow change detection now emits only TypeScript, Rust, Proto, and OpenSpec outputs; it does not load the deleted `scripts/webview-functional/` harness.
+- `check:test-orchestration`, which runs inside the repository quality CI job, contains only static orchestration tests and ownership/coverage audits. UI runtime acceptance remains a local Extension Development Host responsibility.
+- `node --test scripts/test-orchestration/ui-functional-workflow.test.mjs`, `pnpm check:test-orchestration`, and both application-boundary self-test/scan paths pass.

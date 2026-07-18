@@ -31,8 +31,6 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       proto: ${{ steps.filter.outputs.proto }}
       openspec: ${{ steps.filter.outputs.openspec }}
-      functional: ${{ steps.filter.outputs.functional }}
-      functional_scenarios: ${{ steps.filter.outputs.functional_scenarios }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -68,8 +66,6 @@ jobs:
           fi
 
           node scripts/test-orchestration/detect-ci-changes.mjs \
-            --github-output "${GITHUB_OUTPUT}" < "${changed_files}"
-          node scripts/webview-functional/scenario-selection.mjs \
             --github-output "${GITHUB_OUTPUT}" < "${changed_files}"
 
   # ── TypeScript: Build & Lint ───────────────

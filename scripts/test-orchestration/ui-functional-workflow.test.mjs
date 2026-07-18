@@ -17,6 +17,18 @@ describe('VS Code functional workflow boundary', () => {
 
     assert.doesNotMatch(workflowText, /NEKO_VSCODE_COMMAND/u);
     assert.doesNotMatch(workflowText, /pnpm test:webview:functional/u);
+    assert.doesNotMatch(workflowText, /scripts\/webview-functional/u);
     assert.doesNotMatch(workflowText, /update\.code\.visualstudio\.com/u);
+  });
+
+  it('keeps the retired Webview functional harness out of CI quality scripts', async () => {
+    const packageJson = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8'));
+    const scripts = packageJson.scripts ?? {};
+    const retiredScriptNames = Object.keys(scripts).filter(
+      (name) => name.includes('webview:functional'),
+    );
+
+    assert.deepEqual(retiredScriptNames, []);
+    assert.doesNotMatch(scripts['check:test-orchestration'] ?? '', /webview-functional/u);
   });
 });

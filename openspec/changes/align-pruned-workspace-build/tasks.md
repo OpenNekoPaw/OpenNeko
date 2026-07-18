@@ -49,3 +49,4 @@
 - [x] 5.4 Define and implement the user-data strategy for `.nka`/`.nks`/`.nkm`/`.nkp`, Canvas project previews, Assets native character export, and Cut `scene3d`/`puppet` timeline contracts; prove removed Engine/product paths cannot return success.
 - [x] 5.5 Replace active Story/Auth/Market/Sketch/Model/Puppet inter-extension routes with retained package-owned services or remove the owning UI/action; do not preserve optional-extension fallbacks.
 - [x] 5.6 Run focused shared/client/Agent/Tools tests, retained builds, dependency and unused checks, strict OpenSpec validation, and record Agent Evaluation disposition plus remaining data/runtime risk.
+- [x] 5.7 Remove the retired Webview functional harness from CI change detection and root CI quality composition; add a regression proving UI runtime tests cannot re-enter GitHub workflows while retaining static removed-product metadata guards.

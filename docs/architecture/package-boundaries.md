@@ -187,8 +187,8 @@ pnpm check:legacy-debt
 pnpm check:unused
 pnpm test
 pnpm build
-pnpm test:webview:functional --owner neko-canvas
+pnpm smoke:webview:targets
 cd packages/neko-engine && cargo test --workspace
 ```
 
-Webview 场景由 owning package 维护业务 fixture 和断言；共享 runner 只拥有宿主、CDP、错误策略和报告。原始报告只能使用隔离合成 workspace，并按仓库规则脱敏。
+Webview 运行态验收不进入 CI；通过 Extension Development Host 与 `vscode-extension-debugger` 在本地执行。场景由 owning package 维护业务 fixture 和断言，证据只能使用隔离合成 workspace，并按仓库规则脱敏。

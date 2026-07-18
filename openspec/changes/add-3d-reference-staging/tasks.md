@@ -50,7 +50,7 @@
 ## 7. Validate the real product boundary
 
 - [ ] 7.1 Add owning Preview functional scenarios with isolated synthetic fixture workspaces for guide creation, preset selection, pose, camera, panorama, purpose toggles, send, reload, multi-panel isolation, and disposal; assert CSP/runtime/console/resource/Engine errors and exact output roles.
-- [ ] 7.2 Run the built-in scenarios in an Extension Development Host through `pnpm test:webview:functional` and `vscode-extension-debugger`; retain only reports under `reports/webview-functional/` and commit a scrubbed result summary.
+- [ ] 7.2 Run the owning scenarios locally in an Extension Development Host through `vscode-extension-debugger`; keep UI runtime tests out of CI and commit only a scrubbed result summary.
 - [ ] 7.3 Manually verify the real-source path in the external `~/Git/neko-test` workspace with `test.glb`, including appearance/pose eligibility, camera, panorama composition, material completeness, angle changes, and role isolation without repository-local copies.
 - [x] 7.4 Use `neko-agent-evaluation` to make an explicit `reuse | update | create | excluded` decision for the changed Agent context/purpose-routing behavior, run `pnpm test:agent:eval` for harness integrity, and run the required focused real TUI case or record the exact external blocker without claiming behavior acceptance.
 - [ ] 7.5 Run focused shared/Preview/Agent/Canvas/media tests, typechecks, production builds, manifest/CSP/build-ownership/license tests, `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, `pnpm check:unused`, strict OpenSpec validation, and `git diff --check`; record all blocked commands and residual risks.
