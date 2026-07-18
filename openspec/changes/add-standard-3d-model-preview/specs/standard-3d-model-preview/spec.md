@@ -99,10 +99,10 @@ The model Webview SHALL show a bounds-scaled ground grid at the model's lowest Y
 - **WHEN** the creator uses the bottom toolbar to toggle grid or axes visibility
 - **THEN** only the panel-local guide projection changes and the model staging revision and source bytes remain unchanged
 
-#### Scenario: Use the viewport tool rail
+#### Scenario: Use the bottom viewport toolbar
 
 - **WHEN** the model viewport renders its navigation, transform, guide, and reframe controls
-- **THEN** Preview presents them as one vertical floating rail composed from the shared toolbar primitives, with grouped navigation modes and visible active states, without changing the existing control behavior
+- **THEN** Preview presents them as one bottom-centered horizontal floating toolbar composed from the shared toolbar primitives, with grouped navigation modes and visible button-level active states without an extra edge highlight, without changing the existing control behavior
 
 ### Requirement: Every model preview session owns independent mutable state
 
