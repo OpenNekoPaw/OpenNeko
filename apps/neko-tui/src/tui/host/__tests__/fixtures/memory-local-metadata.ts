@@ -1,7 +1,4 @@
-import {
-  MemoryTaskRecoveryStorage,
-  MemoryTaskStorage,
-} from '@neko/agent';
+import { MemoryTaskRecoveryStorage, MemoryTaskStorage } from '@neko/agent';
 import type {
   CatalogItemRecord,
   CatalogProjectionRepository,

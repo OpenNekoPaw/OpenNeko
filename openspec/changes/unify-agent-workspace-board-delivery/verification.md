@@ -11,17 +11,19 @@
 
 ### Repository gates
 
-- `pnpm build` passed before the final generic batch cleanup (10/10 tasks, 9m14s); the final incremental rerun is recorded below when complete.
+- `pnpm build` passes after the final generic batch cleanup (10/10 tasks, 2m43s). An earlier cold run also passed 10/10 in 9m14s. Turbo reports only the existing `@neko/asset#build` outputs warning.
 - `pnpm test` reached all affected Board delivery packages successfully, then failed in unrelated `neko-engine` frame-server tests: one 5s timeout and one unexpected `getCompatibleEngine` call. No Board delivery test failed in the final run.
 - `pnpm --dir apps/neko-tui test` passed 531/532; `InputEditor remains editable while an agent turn is running` lost the first input character under concurrent load, while its isolated rerun passed 16/16. The Board startup/hook regressions pass independently.
 - `pnpm check` is blocked by unrelated untracked 3D Preview work: two unused model Webview files plus unused `three` / `@types/three` dependencies. Dependency-cruiser itself passes with no violations.
+- `pnpm check:legacy-debt`, `openspec validate unify-agent-workspace-board-delivery --strict`, and `git diff --check` pass.
 - Strict TUI/Agent typechecks remain blocked by existing cross-package errors outside this change. Changed Canvas domain typecheck passes; changed Agent Extension production tests/build pass. The obsolete debug fact fixture version introduced by this change was corrected from v1 to v2.
 - `pnpm check:unused` passed earlier in this change before the unrelated 3D Preview files appeared; the current failure is recorded above rather than fixed here.
 
 ### Agent Evaluation
 
 - Authoring disposition: `update` `agent-runtime.creative-media-workflow/generated-output-workspace-board`; `create` `workspace-board-material-analysis`; `create` `agent-runtime.workflow-controller/workspace-board-delivery-resume`.
-- Key-free gate: `pnpm test:agent:eval` validates 39 test files / 277 tests and 23 suites / 47 cases. This is schema, runner, selector, and dry-run evidence only.
+- Key-free gate: isolated `pnpm test:agent:eval` validates 39 test files / 277 tests and 23 suites / 47 cases. A prior attempt run concurrently with the full build hit the harness 5s timeout in 17 infrastructure-heavy tests; the no-load rerun is the authoritative result. This is schema, runner, selector, and dry-run evidence only.
+- Focused dry-runs pass for `agent-runtime.creative-media-workflow/generated-output-workspace-board`, `agent-runtime.creative-media-workflow/workspace-board-material-analysis`, and `agent-runtime.workflow-controller/workspace-board-delivery-resume` via `node scripts/agent-eval/protocol-smoke.mjs --suite <suite> --case <case> --dry-run`.
 - Real provider-backed TUI cases were not run: no credential/network/model-backed execution evidence was established in this session. No key-free or dry-run result is claimed as real Agent behavior acceptance.
 - `workspace-board-delivery-resume` is indexed, but the current Evaluation controller has no first-Host terminate/second-Host process takeover operation; its existing `resume` step cannot prove the full task 9.3 contract.
 - Extension Development Host functional acceptance was not run. Browser/Vite evidence was not substituted for the required VS Code Webview/editor-owner scenario.

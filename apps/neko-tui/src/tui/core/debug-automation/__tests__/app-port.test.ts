@@ -484,7 +484,6 @@ describe('createTuiAutomationAppPort', () => {
     expect(facts.conversationPersistence).toEqual(memoryPersistenceSnapshot());
   });
 
-
   it('projects a secret-free effective configuration digest from the current session stores', async () => {
     runtime.conversation.stores.config.getState().setConfig({
       temperature: 0.25,
