@@ -5,6 +5,7 @@ import {
   isThreeReferenceDiagnostic,
   isThreeReferenceContextData,
   isThreeReferenceStagingSnapshot,
+  isThreeReferencePanoramaRuntimeDescriptor,
   THREE_REFERENCE_CONTEXT_VERSION,
   THREE_REFERENCE_STAGING_SCHEMA_VERSION,
   type ThreeReferenceContextData,
@@ -72,6 +73,26 @@ const contextData: ThreeReferenceContextData = {
 };
 
 describe('3D reference contracts', () => {
+  it('accepts only bounded authorized panorama runtime descriptors', () => {
+    expect(
+      isThreeReferencePanoramaRuntimeDescriptor({
+        source: poseImage,
+        fingerprint: 'panorama-1',
+        uri: 'vscode-webview://authorized/scene.hdr',
+        mediaType: 'image/vnd.radiance',
+        sizeBytes: 1024,
+      }),
+    ).toBe(true);
+    expect(
+      isThreeReferencePanoramaRuntimeDescriptor({
+        source: poseImage,
+        fingerprint: 'panorama-1',
+        uri: 'https://example.com/scene.tiff',
+        mediaType: 'image/tiff',
+        sizeBytes: 1024,
+      }),
+    ).toBe(false);
+  });
   it('accepts one serializable guide context with exact pose and camera outputs', () => {
     expect(isThreeReferenceContextData(JSON.parse(JSON.stringify(contextData)))).toBe(true);
 

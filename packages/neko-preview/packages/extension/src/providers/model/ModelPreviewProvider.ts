@@ -226,6 +226,37 @@ export class ModelPreviewProvider
       signal: state.abortController.signal,
     });
     state.abortController.signal.throwIfAborted();
+    const staging: ThreeReferenceStagingSnapshot = {
+      ...state.staging,
+      revision: state.staging.revision + 1,
+      environment: {
+        source: authorized.sourceRef,
+        fingerprint: authorized.fingerprint,
+        orientation: state.staging.environment?.orientation ?? {
+          yawDeg: 0,
+          pitchDeg: 0,
+          fieldOfViewDeg: 75,
+        },
+      },
+    };
+    state.staging = staging;
+    await this.context.workspaceState.update(
+      threeReferenceStagingStateKey(state.panelSubject.subject),
+      staging,
+    );
+    state.abortController.signal.throwIfAborted();
+    await state.panel.webview.postMessage({
+      type: '3d-reference/environment-runtime',
+      identity: identityOf(staging),
+      staging,
+      runtime: {
+        source: authorized.sourceRef,
+        fingerprint: authorized.fingerprint,
+        uri: authorized.webviewUri,
+        mediaType: authorized.mediaType,
+        sizeBytes: authorized.sizeBytes,
+      },
+    });
     return authorized;
   }
 

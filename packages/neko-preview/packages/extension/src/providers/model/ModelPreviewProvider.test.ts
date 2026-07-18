@@ -207,6 +207,22 @@ describe('3D Reference provider session boundary', () => {
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(environmentPanel.messages.at(-1)).toMatchObject({
+      type: '3d-reference/environment-runtime',
+      identity: { sessionId: 'environment-session', revision: 1 },
+      staging: {
+        environment: {
+          fingerprint: 'panorama-fingerprint',
+          orientation: { yawDeg: 0, pitchDeg: 0, fieldOfViewDeg: 75 },
+        },
+      },
+      runtime: {
+        fingerprint: 'panorama-fingerprint',
+        mediaType: 'image/png',
+        sizeBytes: 1024,
+        uri: 'webview:/workspace/scene_360.png',
+      },
+    });
   });
 
   it('keeps a failed real panorama visible and never substitutes the bundled panorama grid', async () => {

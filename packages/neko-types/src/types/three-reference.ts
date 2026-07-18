@@ -84,6 +84,15 @@ export interface ThreeReferenceEnvironment {
   readonly orientation: ThreeReferencePanoramaOrientation;
 }
 
+export interface ThreeReferencePanoramaRuntimeDescriptor {
+  readonly source: ResourceRef;
+  readonly fingerprint: string;
+  readonly uri: string;
+  readonly mediaType:
+    'image/jpeg' | 'image/png' | 'image/webp' | 'image/vnd.radiance' | 'image/x-exr';
+  readonly sizeBytes: number;
+}
+
 export interface ThreeReferenceSourceRuntimeDescriptor {
   readonly source: ResourceRef;
   readonly fingerprint: string;
@@ -193,6 +202,12 @@ export type ThreeReferenceExtensionMessage =
       readonly staging: ThreeReferenceStagingSnapshot;
     }
   | {
+      readonly type: '3d-reference/environment-runtime';
+      readonly identity: ThreeReferenceIdentity;
+      readonly staging: ThreeReferenceStagingSnapshot;
+      readonly runtime: ThreeReferencePanoramaRuntimeDescriptor;
+    }
+  | {
       readonly type: '3d-reference/diagnostic';
       readonly diagnostic: ThreeReferenceDiagnostic;
     }
@@ -278,6 +293,23 @@ export function isThreeReferenceSourceRuntimeDescriptor(
     isModelPreviewFormat(value['format']) &&
     isNonEmptyString(value['entryUri']) &&
     isStringRecord(value['uriMap']) &&
+    isNonNegativeInteger(value['sizeBytes'])
+  );
+}
+
+export function isThreeReferencePanoramaRuntimeDescriptor(
+  value: unknown,
+): value is ThreeReferencePanoramaRuntimeDescriptor {
+  return (
+    isRecord(value) &&
+    isResourceRef(value['source']) &&
+    isNonEmptyString(value['fingerprint']) &&
+    isNonEmptyString(value['uri']) &&
+    (value['mediaType'] === 'image/jpeg' ||
+      value['mediaType'] === 'image/png' ||
+      value['mediaType'] === 'image/webp' ||
+      value['mediaType'] === 'image/vnd.radiance' ||
+      value['mediaType'] === 'image/x-exr') &&
     isNonNegativeInteger(value['sizeBytes'])
   );
 }

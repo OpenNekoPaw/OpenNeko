@@ -13,7 +13,11 @@ import { installMockWebviewWindow } from '@neko/shared/vscode/test-utils';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService } from '../i18n';
 import { ModelViewer } from './ModelViewer';
-import type { ThreeModelRuntimeFactory, ThreeModelRuntimePort } from './threeRuntime';
+import type {
+  ThreeModelRuntimeCallbacks,
+  ThreeModelRuntimeFactory,
+  ThreeModelRuntimePort,
+} from './threeRuntime';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -172,6 +176,16 @@ describe('ModelViewer', () => {
       }),
     );
 
+    const environmentMessage = panoramaEnvironmentMessage(load);
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent('message', { data: environmentMessage }));
+      await Promise.resolve();
+    });
+    expect(runtime.setPanoramaEnvironment).toHaveBeenCalledWith({
+      runtime: environmentMessage.runtime,
+      orientation: environmentMessage.staging.environment.orientation,
+    });
+
     expect(
       [...container.querySelectorAll('button')].find((button) =>
         button.textContent?.includes('Send staged view to Agent'),
@@ -227,6 +241,41 @@ describe('ModelViewer', () => {
       'dataset.viewerStatus',
       'ready',
     );
+    await act(async () => root.unmount());
+    mockWindow.dispose();
+  });
+
+  it('reports a lost WebGL renderer as a fatal session diagnostic', async () => {
+    const mockWindow = installMockWebviewWindow();
+    const runtime = fakeRuntime();
+    let callbacks: ThreeModelRuntimeCallbacks | undefined;
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = ReactDOM.createRoot(container);
+    await act(async () => {
+      root.render(
+        <I18nProvider service={i18nService}>
+          <ModelViewer
+            runtimeFactory={{
+              create: vi.fn((_canvas, nextCallbacks) => {
+                callbacks = nextCallbacks;
+                return runtime.value;
+              }),
+            }}
+            sessionId="session-lost"
+          />
+        </I18nProvider>,
+      );
+    });
+    await act(async () => callbacks?.onRendererLost?.());
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
+      'dataset.viewerStatus',
+      'error',
+    );
+    expect(mockWindow.api.postedMessages).toContainEqual({
+      type: '3d-reference/diagnostic',
+      diagnostic: expect.objectContaining({ code: 'renderer-lost', severity: 'error' }),
+    });
     await act(async () => root.unmount());
     mockWindow.dispose();
   });
@@ -443,11 +492,12 @@ function fakeRuntime() {
   const frameCamera = vi.fn();
   const setCameraGuide = vi.fn();
   const setGroundGridVisible = vi.fn();
+  const setPanoramaEnvironment = vi.fn(async () => undefined);
   const value: ThreeModelRuntimePort = {
     load,
     loadPreset,
     applyReferencePose,
-    setPanoramaEnvironment: vi.fn(async () => undefined),
+    setPanoramaEnvironment,
     clearPanoramaEnvironment: vi.fn(),
     capturePurpose: vi.fn(() => 'data:image/png;base64,AA=='),
     applyStaging,
@@ -495,6 +545,7 @@ function fakeRuntime() {
     frameModel,
     setCameraGuide,
     setGroundGridVisible,
+    setPanoramaEnvironment,
   };
 }
 
@@ -593,6 +644,37 @@ function builtinPresetMessage() {
         aspectRatio: 1,
       },
       pose: { poseId: 'standing', joints: [] },
+    },
+  };
+}
+
+function panoramaEnvironmentMessage(load: ReturnType<typeof loadMessage>) {
+  const source = createResourceRef({
+    scope: 'project',
+    provider: 'test',
+    kind: 'media',
+    source: { kind: 'file', projectRelativePath: 'scene_360.png' },
+    fingerprint: createResourceFingerprint({ strategy: 'hash', value: 'panorama-1' }),
+  });
+  const environment = {
+    source,
+    fingerprint: 'panorama-1',
+    orientation: { yawDeg: 15, pitchDeg: -5, fieldOfViewDeg: 75 },
+  };
+  return {
+    type: '3d-reference/environment-runtime' as const,
+    identity: { sessionId: 'session-1', revision: 1 },
+    staging: {
+      ...load.staging,
+      revision: 1,
+      environment,
+    },
+    runtime: {
+      source,
+      fingerprint: 'panorama-1',
+      uri: 'webview:scene_360.png',
+      mediaType: 'image/png' as const,
+      sizeBytes: 1024,
     },
   };
 }

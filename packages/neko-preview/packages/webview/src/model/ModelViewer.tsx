@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   THREE_REFERENCE_PROTOCOL_VERSION,
   isThreeReferenceDiagnostic,
+  isThreeReferenceIdentity,
+  isThreeReferencePanoramaRuntimeDescriptor,
   isThreeReferencePanelSubject,
   isThreeReferencePurpose,
   isThreeReferenceStagingSnapshot,
@@ -116,6 +118,17 @@ export function ModelViewer({
       onViewChanged: setViewState,
       onDiagnostic(message) {
         setDiagnostic({ code: 'load-failed', message, severity: 'error' });
+      },
+      onRendererLost() {
+        const diagnostic = {
+          code: 'renderer-lost' as const,
+          message: 'The 3D Reference renderer context was lost.',
+          severity: 'error' as const,
+          identity: { sessionId },
+        };
+        setDiagnostic(diagnostic);
+        setStatus('error');
+        vscode.postMessage({ type: '3d-reference/diagnostic', diagnostic });
       },
     });
     runtimeRef.current = runtime;
@@ -368,6 +381,18 @@ async function handleExtensionMessage(input: {
           }
         }
         break;
+      case '3d-reference/environment-runtime': {
+        if (message.identity.sessionId !== input.sessionId) return;
+        input.referenceStagingRef.current = message.staging;
+        const viewportStaging = toViewportStaging(message.staging);
+        input.stagingRef.current = viewportStaging;
+        input.setStaging(viewportStaging);
+        await input.runtime.setPanoramaEnvironment({
+          runtime: message.runtime,
+          orientation: message.staging.environment?.orientation ?? missingPanoramaOrientation(),
+        });
+        break;
+      }
       case '3d-reference/cancel':
         if (message.identity.sessionId !== input.sessionId) return;
         input.setStatus('error');
@@ -500,6 +525,21 @@ function parseExtensionMessage(value: unknown): ThreeReferenceExtensionMessage |
       return isThreeReferenceDiagnostic(value['diagnostic'])
         ? { type: '3d-reference/diagnostic', diagnostic: value['diagnostic'] }
         : undefined;
+    case '3d-reference/environment-runtime':
+      return isThreeReferenceIdentity(value['identity']) &&
+        isThreeReferenceStagingSnapshot(value['staging']) &&
+        isThreeReferencePanoramaRuntimeDescriptor(value['runtime']) &&
+        value['identity'].sessionId === value['staging'].sessionId &&
+        value['identity'].revision === value['staging'].revision &&
+        value['staging'].environment?.source.id === value['runtime'].source.id &&
+        value['staging'].environment?.fingerprint === value['runtime'].fingerprint
+        ? {
+            type: '3d-reference/environment-runtime',
+            identity: value['identity'],
+            staging: value['staging'],
+            runtime: value['runtime'],
+          }
+        : undefined;
     case '3d-reference/cancel': {
       const revision = isRecord(value['identity']) ? value['identity']['revision'] : undefined;
       return isRecord(value['identity']) &&
@@ -520,6 +560,10 @@ function parseExtensionMessage(value: unknown): ThreeReferenceExtensionMessage |
     default:
       return undefined;
   }
+}
+
+function missingPanoramaOrientation(): never {
+  throw new Error('3D Reference environment runtime is missing panorama orientation.');
 }
 
 function toModelSourceDescriptor(

@@ -3,8 +3,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import type {
   ModelPreviewCameraPreset,
@@ -15,6 +17,7 @@ import type {
   NormalizedModelFacts,
   ThreeReferencePanoramaOrientation,
   ThreeReferencePanelSubject,
+  ThreeReferencePanoramaRuntimeDescriptor,
   ThreeReferencePoseControlMode,
   ThreeReferencePoseState,
   ThreeReferencePurpose,
@@ -56,6 +59,7 @@ export interface ThreeModelRuntimeCallbacks {
   readonly onTransformChanged?: (nodePath: string, transform: ModelPreviewTransform) => void;
   readonly onViewChanged?: (view: ModelViewState) => void;
   readonly onDiagnostic?: (message: string) => void;
+  readonly onRendererLost?: () => void;
 }
 
 export interface ThreeModelRuntimePort {
@@ -65,7 +69,7 @@ export interface ThreeModelRuntimePort {
   ): Promise<NormalizedModelFacts>;
   applyReferencePose(pose: ThreeReferencePoseState): void;
   setPanoramaEnvironment(environment: {
-    readonly uri: string;
+    readonly runtime: ThreeReferencePanoramaRuntimeDescriptor;
     readonly orientation: ThreeReferencePanoramaOrientation;
   }): Promise<void>;
   clearPanoramaEnvironment(): void;
@@ -325,6 +329,10 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   };
   private readonly beginOrbitInteraction = (): void => this.beginInteraction();
   private readonly endOrbitInteraction = (): void => this.endInteraction();
+  private readonly handleContextLost = (event: Event): void => {
+    event.preventDefault();
+    this.callbacks.onRendererLost?.();
+  };
 
   constructor(canvas: HTMLCanvasElement, callbacks: ThreeModelRuntimeCallbacks = {}) {
     this.callbacks = callbacks;
@@ -352,6 +360,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.orbit.addEventListener('change', this.handleOrbitChange);
     this.orbit.addEventListener('start', this.beginOrbitInteraction);
     this.orbit.addEventListener('end', this.endOrbitInteraction);
+    canvas.addEventListener('webglcontextlost', this.handleContextLost);
     this.scene.add(this.environmentLight, this.transformHelper);
     for (const id of ['key', 'fill', 'rim']) {
       const light = new THREE.DirectionalLight(0xffffff, 1);
@@ -442,12 +451,12 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   }
 
   async setPanoramaEnvironment(environment: {
-    readonly uri: string;
+    readonly runtime: ThreeReferencePanoramaRuntimeDescriptor;
     readonly orientation: ThreeReferencePanoramaOrientation;
   }): Promise<void> {
     this.assertLive();
     const epoch = ++this.panoramaEpoch;
-    const texture = await new THREE.TextureLoader().loadAsync(environment.uri);
+    const texture = await loadPanoramaTexture(environment.runtime);
     if (this.disposed || epoch !== this.panoramaEpoch) {
       texture.dispose();
       throw new Error('3D Reference panorama load completed after its session was replaced.');
@@ -455,11 +464,16 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     texture.mapping = THREE.EquirectangularReflectionMapping;
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
-    texture.offset.x = environment.orientation.yawDeg / 360;
     this.detachPanoramaEnvironment();
     this.panoramaTexture = texture;
     this.scene.background = texture;
     this.scene.environment = texture;
+    this.scene.backgroundRotation.set(
+      THREE.MathUtils.degToRad(environment.orientation.pitchDeg),
+      THREE.MathUtils.degToRad(environment.orientation.yawDeg),
+      0,
+    );
+    this.scene.environmentRotation.copy(this.scene.backgroundRotation);
     this.requestRender();
   }
 
@@ -676,6 +690,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.orbit.removeEventListener('change', this.handleOrbitChange);
     this.orbit.removeEventListener('start', this.beginOrbitInteraction);
     this.orbit.removeEventListener('end', this.endOrbitInteraction);
+    this.renderer.domElement.removeEventListener('webglcontextlost', this.handleContextLost);
     this.transform.detach();
     this.transform.dispose();
     this.scene.remove(this.transformHelper);
@@ -943,6 +958,21 @@ async function loadModelSource(
         animationCount: 0,
       };
     }
+  }
+}
+
+async function loadPanoramaTexture(
+  runtime: ThreeReferencePanoramaRuntimeDescriptor,
+): Promise<THREE.Texture> {
+  switch (runtime.mediaType) {
+    case 'image/vnd.radiance':
+      return new RGBELoader().loadAsync(runtime.uri);
+    case 'image/x-exr':
+      return new EXRLoader().loadAsync(runtime.uri);
+    case 'image/jpeg':
+    case 'image/png':
+    case 'image/webp':
+      return new THREE.TextureLoader().loadAsync(runtime.uri);
   }
 }
 
