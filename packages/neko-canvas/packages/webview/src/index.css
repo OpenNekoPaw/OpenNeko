@@ -338,7 +338,7 @@ body,
     color 150ms ease;
 }
 
-.canvas-node-library-source-action:hover {
+.canvas-node-library-source-action:not(:disabled):hover {
   background: var(--control-hover);
 }
 
