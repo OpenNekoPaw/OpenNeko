@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { createResourceFingerprint, createResourceRef } from '@neko/shared';
 import {
+  assertPurposeCaptureAllowed,
   configureModelRendererColorPipeline,
   collectNormalizedFacts,
   createExactUrlModifier,
@@ -205,5 +206,40 @@ describe('Three model runtime helpers', () => {
     expect(getModelPixelRatio(2, false)).toBe(1.5);
     expect(getModelPixelRatio(2, true)).toBe(1);
     expect(getModelPixelRatio(0.75, false)).toBe(0.75);
+  });
+
+  it('enforces output roles before capture', () => {
+    expect(() =>
+      assertPurposeCaptureAllowed({
+        purpose: 'appearance',
+        loadedReferenceKind: 'guide-only',
+        hasPoseRuntime: true,
+        hasPanorama: false,
+      }),
+    ).toThrow(/cannot produce appearance/i);
+    expect(() =>
+      assertPurposeCaptureAllowed({
+        purpose: 'pose',
+        loadedReferenceKind: 'source-model',
+        hasPoseRuntime: false,
+        hasPanorama: false,
+      }),
+    ).toThrow(/articulated/i);
+    expect(() =>
+      assertPurposeCaptureAllowed({
+        purpose: 'panorama-scene',
+        loadedReferenceKind: undefined,
+        hasPoseRuntime: false,
+        hasPanorama: false,
+      }),
+    ).toThrow(/requires a staged panorama/i);
+    expect(() =>
+      assertPurposeCaptureAllowed({
+        purpose: 'appearance',
+        loadedReferenceKind: 'source-model',
+        hasPoseRuntime: false,
+        hasPanorama: false,
+      }),
+    ).not.toThrow();
   });
 });

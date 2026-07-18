@@ -342,6 +342,12 @@ async function handleExtensionMessage(input: {
           input.runtime.applyStaging(viewportStaging);
           input.setFacts(facts);
           input.setNodes(input.runtime.getNodes());
+        } else if (message.panelSubject.kind === 'builtin-preset') {
+          facts = await input.runtime.loadPreset(message.panelSubject);
+          if (message.staging.pose) input.runtime.applyReferencePose(message.staging.pose);
+          input.runtime.applyStaging(viewportStaging);
+          input.setFacts(facts);
+          input.setNodes(input.runtime.getNodes());
         } else {
           input.setFacts(undefined);
           input.setNodes([]);

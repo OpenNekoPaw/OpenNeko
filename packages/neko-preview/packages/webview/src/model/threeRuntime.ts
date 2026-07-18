@@ -13,7 +13,19 @@ import type {
   ModelPreviewStagingState,
   ModelPreviewTransform,
   NormalizedModelFacts,
+  ThreeReferencePanoramaOrientation,
+  ThreeReferencePanelSubject,
+  ThreeReferencePoseState,
+  ThreeReferencePurpose,
+  ThreeReferenceRuntimePoseCapabilities,
 } from '@neko/shared';
+import {
+  applyDeclaredMannequinPose,
+  createBlockoutReferencePreset,
+  createNeutralMannequin,
+  type BlockoutReferenceImplementationId,
+  type NeutralMannequinRuntime,
+} from './threeReferencePresetRuntime';
 
 export interface ModelPreviewNode {
   readonly path: string;
@@ -46,6 +58,16 @@ export interface ThreeModelRuntimeCallbacks {
 
 export interface ThreeModelRuntimePort {
   load(source: ModelPreviewSourceDescriptor): Promise<NormalizedModelFacts>;
+  loadPreset(
+    preset: Extract<ThreeReferencePanelSubject, { readonly kind: 'builtin-preset' }>,
+  ): Promise<NormalizedModelFacts>;
+  applyReferencePose(pose: ThreeReferencePoseState): void;
+  setPanoramaEnvironment(environment: {
+    readonly uri: string;
+    readonly orientation: ThreeReferencePanoramaOrientation;
+  }): Promise<void>;
+  clearPanoramaEnvironment(): void;
+  capturePurpose(purpose: ThreeReferencePurpose, settings: ModelPreviewCaptureSettings): string;
   applyStaging(staging: ModelPreviewStagingState): void;
   getNodes(): readonly ModelPreviewNode[];
   setTransformMode(mode: 'translate' | 'rotate' | 'scale'): void;
@@ -221,6 +243,36 @@ export function getModelPixelRatio(devicePixelRatio: number, interacting: boolea
   return Math.min(Math.max(devicePixelRatio, 0.5), interacting ? 1 : 1.5);
 }
 
+export function assertPurposeCaptureAllowed(input: {
+  readonly purpose: ThreeReferencePurpose;
+  readonly loadedReferenceKind: 'source-model' | 'guide-only' | undefined;
+  readonly hasPoseRuntime: boolean;
+  readonly hasPanorama: boolean;
+}): void {
+  switch (input.purpose) {
+    case 'appearance':
+      if (input.loadedReferenceKind !== 'source-model') {
+        throw new Error('Guide-only 3D Reference presets cannot produce appearance output.');
+      }
+      return;
+    case 'pose':
+      if (!input.hasPoseRuntime) {
+        throw new Error('Pose output requires an articulated 3D Reference subject.');
+      }
+      return;
+    case 'camera':
+      if (!input.loadedReferenceKind && !input.hasPanorama) {
+        throw new Error('Camera output requires a staged 3D Reference subject or panorama.');
+      }
+      return;
+    case 'panorama-scene':
+      if (!input.hasPanorama) {
+        throw new Error('Panoramic-scene output requires a staged panorama.');
+      }
+      return;
+  }
+}
+
 class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10000);
@@ -244,10 +296,14 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   private selectedNodePath: string | undefined;
   private transformEnabled = false;
   private facts: NormalizedModelFacts | undefined;
+  private mannequin: NeutralMannequinRuntime | undefined;
+  private panoramaTexture: THREE.Texture | undefined;
+  private loadedReferenceKind: 'source-model' | 'guide-only' | undefined;
   private viewportWidth = 1;
   private viewportHeight = 1;
   private interactionDepth = 0;
   private loadEpoch = 0;
+  private panoramaEpoch = 0;
   private disposed = false;
   private readonly requestRender = (): void => this.renderScheduler.request();
   private readonly commitTransformChange = (): void => this.emitTransformChange();
@@ -321,11 +377,102 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       throw new Error('Model source contains no renderable bounds.');
     }
     this.modelRoot = loaded.root;
+    this.loadedReferenceKind = 'source-model';
     this.scene.add(loaded.root);
     this.indexNodes(loaded.root);
     this.facts = collectNormalizedFacts(loaded.root, bounds, loaded.animationCount);
     this.frameBounds(bounds);
     return this.facts;
+  }
+
+  async loadPreset(
+    preset: Extract<ThreeReferencePanelSubject, { readonly kind: 'builtin-preset' }>,
+  ): Promise<NormalizedModelFacts> {
+    this.assertLive();
+    const epoch = ++this.loadEpoch;
+    this.detachModel();
+    if (preset.runtime.kind !== 'procedural') {
+      throw new Error(`Unsupported 3D Reference preset runtime: ${preset.subject.presetId}`);
+    }
+    const mannequin =
+      preset.runtime.implementationId === 'neutral-mannequin-v1'
+        ? createNeutralMannequin(requireMannequinPoseCapabilities(preset.runtime.poseCapabilities))
+        : undefined;
+    const root = mannequin
+      ? mannequin.root
+      : createBlockoutReferencePreset(
+          toBlockoutReferenceImplementationId(preset.runtime.implementationId),
+        );
+    if (this.disposed || epoch !== this.loadEpoch) {
+      disposeObjectTree(root);
+      throw new Error('3D Reference preset load completed after its session was replaced.');
+    }
+    const bounds = new THREE.Box3().setFromObject(root);
+    if (bounds.isEmpty()) {
+      disposeObjectTree(root);
+      throw new Error('3D Reference preset contains no renderable bounds.');
+    }
+    this.mannequin = mannequin;
+    this.modelRoot = root;
+    this.loadedReferenceKind = 'guide-only';
+    this.scene.add(root);
+    this.indexNodes(root);
+    this.facts = collectNormalizedFacts(root, bounds, 0);
+    this.frameBounds(bounds);
+    return this.facts;
+  }
+
+  applyReferencePose(pose: ThreeReferencePoseState): void {
+    this.assertLive();
+    if (!this.mannequin) {
+      throw new Error('3D Reference pose operations require an articulated guide preset.');
+    }
+    applyDeclaredMannequinPose(this.mannequin, pose);
+    const bounds = new THREE.Box3().setFromObject(this.mannequin.root);
+    if (bounds.isEmpty()) throw new Error('3D Reference pose produced empty renderable bounds.');
+    this.modelBounds = bounds;
+    this.replaceGroundGrid(bounds);
+    this.requestRender();
+  }
+
+  async setPanoramaEnvironment(environment: {
+    readonly uri: string;
+    readonly orientation: ThreeReferencePanoramaOrientation;
+  }): Promise<void> {
+    this.assertLive();
+    const epoch = ++this.panoramaEpoch;
+    const texture = await new THREE.TextureLoader().loadAsync(environment.uri);
+    if (this.disposed || epoch !== this.panoramaEpoch) {
+      texture.dispose();
+      throw new Error('3D Reference panorama load completed after its session was replaced.');
+    }
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.offset.x = environment.orientation.yawDeg / 360;
+    this.detachPanoramaEnvironment();
+    this.panoramaTexture = texture;
+    this.scene.background = texture;
+    this.scene.environment = texture;
+    this.requestRender();
+  }
+
+  clearPanoramaEnvironment(): void {
+    this.assertLive();
+    this.panoramaEpoch += 1;
+    this.detachPanoramaEnvironment();
+    this.requestRender();
+  }
+
+  capturePurpose(purpose: ThreeReferencePurpose, settings: ModelPreviewCaptureSettings): string {
+    this.assertLive();
+    assertPurposeCaptureAllowed({
+      purpose,
+      loadedReferenceKind: this.loadedReferenceKind,
+      hasPoseRuntime: this.mannequin !== undefined,
+      hasPanorama: this.panoramaTexture !== undefined,
+    });
+    return this.capture(settings);
   }
 
   applyStaging(staging: ModelPreviewStagingState): void {
@@ -470,7 +617,9 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     ) {
       throw new Error('Model Preview capture dimensions must be between 64 and 2048 pixels.');
     }
-    if (!this.modelRoot) throw new Error('Model Preview renderer has no loaded model.');
+    if (!this.modelRoot && !this.panoramaTexture) {
+      throw new Error('3D Reference renderer has no loaded subject or panorama.');
+    }
     const previousSize = new THREE.Vector2();
     this.renderer.getSize(previousSize);
     const previousPixelRatio = this.renderer.getPixelRatio();
@@ -517,6 +666,8 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.scene.remove(this.transformHelper);
     this.orbit.dispose();
     this.detachModel();
+    this.panoramaEpoch += 1;
+    this.detachPanoramaEnvironment();
     for (const light of this.directionalLights.values()) {
       this.scene.remove(light, light.target);
     }
@@ -652,6 +803,8 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       disposeObjectTree(this.modelRoot);
     }
     this.modelRoot = undefined;
+    this.mannequin = undefined;
+    this.loadedReferenceKind = undefined;
     this.modelBounds = undefined;
     this.selectedNodePath = undefined;
     this.facts = undefined;
@@ -660,8 +813,38 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.nodes.clear();
   }
 
+  private detachPanoramaEnvironment(): void {
+    if (!this.panoramaTexture) return;
+    if (this.scene.background === this.panoramaTexture) this.scene.background = null;
+    if (this.scene.environment === this.panoramaTexture) this.scene.environment = null;
+    this.panoramaTexture.dispose();
+    this.panoramaTexture = undefined;
+  }
+
   private assertLive(): void {
     if (this.disposed) throw new Error('Model Preview Three runtime is disposed.');
+  }
+}
+
+function requireMannequinPoseCapabilities(
+  capabilities: ThreeReferenceRuntimePoseCapabilities | undefined,
+): ThreeReferenceRuntimePoseCapabilities {
+  if (!capabilities) {
+    throw new Error('Neutral mannequin preset is missing declared pose capabilities.');
+  }
+  return capabilities;
+}
+
+function toBlockoutReferenceImplementationId(
+  implementationId: string,
+): BlockoutReferenceImplementationId {
+  switch (implementationId) {
+    case 'primitive-blockout-props-v1':
+    case 'studio-room-blockout-v1':
+    case 'neutral-panorama-grid-v1':
+      return implementationId;
+    default:
+      throw new Error(`Unknown procedural 3D Reference runtime: ${implementationId}`);
   }
 }
 
@@ -904,17 +1087,21 @@ function applyTransform(object: THREE.Object3D, transform: ModelPreviewTransform
 }
 
 export function disposeObjectTree(root: THREE.Object3D): void {
+  const geometries = new Set<THREE.BufferGeometry>();
+  const materials = new Set<THREE.Material>();
   root.traverse((object) => {
     if (
       object instanceof THREE.Mesh ||
       object instanceof THREE.Points ||
       object instanceof THREE.Line
     ) {
-      object.geometry.dispose();
-      const materials = Array.isArray(object.material) ? object.material : [object.material];
-      for (const material of materials) disposeMaterial(material);
+      geometries.add(object.geometry);
+      const entries = Array.isArray(object.material) ? object.material : [object.material];
+      for (const material of entries) materials.add(material);
     }
   });
+  for (const geometry of geometries) geometry.dispose();
+  for (const material of materials) disposeMaterial(material);
 }
 
 function disposeMaterial(material: THREE.Material): void {

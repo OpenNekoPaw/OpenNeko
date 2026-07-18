@@ -19,6 +19,14 @@ export async function projectThreeReferencePresetRuntime(
     return {
       kind: 'procedural',
       implementationId: input.entry.runtime.implementationId,
+      ...(input.entry.poseCapabilities
+        ? {
+            poseCapabilities: {
+              posePresetIds: input.entry.poseCapabilities.posePresetIds,
+              joints: input.entry.poseCapabilities.joints,
+            },
+          }
+        : {}),
     };
   }
 

@@ -199,6 +199,38 @@ describe('ModelViewer', () => {
     mockWindow.dispose();
   });
 
+  it('loads a builtin guide through the declared preset runtime and applies its pose', async () => {
+    const mockWindow = installMockWebviewWindow();
+    const runtime = fakeRuntime();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = ReactDOM.createRoot(container);
+    await act(async () => {
+      root.render(
+        <I18nProvider service={i18nService}>
+          <ModelViewer
+            runtimeFactory={{ create: vi.fn(() => runtime.value) }}
+            sessionId="session-guide"
+          />
+        </I18nProvider>,
+      );
+    });
+    const message = builtinPresetMessage();
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent('message', { data: message }));
+      await Promise.resolve();
+    });
+    expect(runtime.load).not.toHaveBeenCalled();
+    expect(runtime.loadPreset).toHaveBeenCalledWith(message.panelSubject);
+    expect(runtime.applyReferencePose).toHaveBeenCalledWith(message.staging.pose);
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
+      'dataset.viewerStatus',
+      'ready',
+    );
+    await act(async () => root.unmount());
+    mockWindow.dispose();
+  });
+
   it('switches scene, camera, and node inspectors while camera operations stay temporary', async () => {
     const mockWindow = installMockWebviewWindow();
     const runtime = fakeRuntime();
@@ -402,6 +434,8 @@ function fakeRuntime() {
     animationCount: 0,
   };
   const load = vi.fn(async () => facts);
+  const loadPreset = vi.fn(async () => facts);
+  const applyReferencePose = vi.fn();
   const applyStaging = vi.fn();
   const capture = vi.fn(() => 'data:image/png;base64,AA==');
   const dispose = vi.fn();
@@ -411,6 +445,11 @@ function fakeRuntime() {
   const setGroundGridVisible = vi.fn();
   const value: ThreeModelRuntimePort = {
     load,
+    loadPreset,
+    applyReferencePose,
+    setPanoramaEnvironment: vi.fn(async () => undefined),
+    clearPanoramaEnvironment: vi.fn(),
+    capturePurpose: vi.fn(() => 'data:image/png;base64,AA=='),
     applyStaging,
     getNodes: () => [
       {
@@ -447,6 +486,8 @@ function fakeRuntime() {
   return {
     value,
     load,
+    loadPreset,
+    applyReferencePose,
     applyStaging,
     capture,
     dispose,
@@ -504,6 +545,54 @@ function loadMessage() {
         fieldOfViewDeg: 45,
         aspectRatio: 1,
       },
+    },
+  };
+}
+
+function builtinPresetMessage() {
+  return {
+    type: '3d-reference/session-init' as const,
+    protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
+    panelSubject: {
+      kind: 'builtin-preset' as const,
+      subject: {
+        kind: 'builtin-preset' as const,
+        presetId: 'guide-neutral-mannequin',
+        presetVersion: 1,
+        fingerprint: 'sha256:neutral',
+        presetKind: 'mannequin' as const,
+        appearancePolicy: 'guide-only' as const,
+        allowedPurposes: ['pose', 'camera'] as const,
+      },
+      runtime: {
+        kind: 'procedural' as const,
+        implementationId: 'neutral-mannequin-v1',
+        poseCapabilities: { posePresetIds: ['standing'], joints: [] },
+      },
+    },
+    eligiblePurposes: ['pose', 'camera'] as const,
+    staging: {
+      schemaVersion: THREE_REFERENCE_STAGING_SCHEMA_VERSION,
+      sessionId: 'session-guide',
+      revision: 0,
+      subject: {
+        kind: 'builtin-preset' as const,
+        presetId: 'guide-neutral-mannequin',
+        presetVersion: 1,
+        fingerprint: 'sha256:neutral',
+        presetKind: 'mannequin' as const,
+        appearancePolicy: 'guide-only' as const,
+        allowedPurposes: ['pose', 'camera'] as const,
+      },
+      selectedPurposes: ['pose', 'camera'] as const,
+      camera: {
+        cameraId: 'camera-front',
+        position: { x: 0, y: 0.15, z: 3.5 },
+        target: { x: 0, y: 0, z: 0 },
+        fieldOfViewDeg: 45,
+        aspectRatio: 1,
+      },
+      pose: { poseId: 'standing', joints: [] },
     },
   };
 }

@@ -99,8 +99,26 @@ export interface ThreeReferencePresetRuntimeDependency {
   readonly sha256: string;
 }
 
+export interface ThreeReferenceRuntimeJointConstraint {
+  readonly jointId: string;
+  readonly parentJointId?: string;
+  readonly rotationConstraint: {
+    readonly min: ThreeReferenceVector3;
+    readonly max: ThreeReferenceVector3;
+  };
+}
+
+export interface ThreeReferenceRuntimePoseCapabilities {
+  readonly posePresetIds: readonly string[];
+  readonly joints: readonly ThreeReferenceRuntimeJointConstraint[];
+}
+
 export type ThreeReferencePresetRuntimeDescriptor =
-  | { readonly kind: 'procedural'; readonly implementationId: string }
+  | {
+      readonly kind: 'procedural';
+      readonly implementationId: string;
+      readonly poseCapabilities?: ThreeReferenceRuntimePoseCapabilities;
+    }
   | {
       readonly kind: 'packaged';
       readonly entryDependencyId: string;
@@ -292,7 +310,11 @@ function isThreeReferencePresetRuntimeDescriptor(
   if (!isRecord(value)) return false;
   switch (value['kind']) {
     case 'procedural':
-      return isNonEmptyString(value['implementationId']);
+      return (
+        isNonEmptyString(value['implementationId']) &&
+        (value['poseCapabilities'] === undefined ||
+          isThreeReferenceRuntimePoseCapabilities(value['poseCapabilities']))
+      );
     case 'packaged':
       return (
         isNonEmptyString(value['entryDependencyId']) &&
@@ -304,6 +326,24 @@ function isThreeReferencePresetRuntimeDescriptor(
     default:
       return false;
   }
+}
+
+function isThreeReferenceRuntimePoseCapabilities(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isArrayOf(value['posePresetIds'], isNonEmptyString) &&
+    value['posePresetIds'].length > 0 &&
+    isArrayOf(value['joints'], (joint): joint is ThreeReferenceRuntimeJointConstraint => {
+      if (!isRecord(joint)) return false;
+      return (
+        isNonEmptyString(joint['jointId']) &&
+        (joint['parentJointId'] === undefined || isNonEmptyString(joint['parentJointId'])) &&
+        isRecord(joint['rotationConstraint']) &&
+        isThreeReferenceVector3(joint['rotationConstraint']['min']) &&
+        isThreeReferenceVector3(joint['rotationConstraint']['max'])
+      );
+    })
+  );
 }
 
 function isThreeReferencePresetRuntimeDependency(

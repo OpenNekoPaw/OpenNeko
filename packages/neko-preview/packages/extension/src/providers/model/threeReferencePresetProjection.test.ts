@@ -21,7 +21,11 @@ describe('3D Reference preset runtime projection', () => {
       authorization,
       signal: new AbortController().signal,
     });
-    expect(runtime).toEqual({ kind: 'procedural', implementationId: 'neutral-mannequin-v1' });
+    expect(runtime).toEqual({
+      kind: 'procedural',
+      implementationId: 'neutral-mannequin-v1',
+      poseCapabilities: { posePresetIds: ['standing'], joints: [] },
+    });
     expect(authorization.toWebviewUri).not.toHaveBeenCalled();
   });
 
