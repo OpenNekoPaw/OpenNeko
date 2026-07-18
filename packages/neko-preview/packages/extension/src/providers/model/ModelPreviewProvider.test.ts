@@ -28,8 +28,21 @@ vi.mock('../../utils/html', () => ({ getWebviewHtml: () => '<html>model</html>' 
 
 import { ModelPreviewProvider } from './ModelPreviewProvider';
 import { ModelSourceInspectionError } from './modelSourceInspection';
+import { createDefaultModelStagingState, restoreModelStagingState } from './modelStagingState';
 
 describe('ModelPreviewProvider', () => {
+  it('uses the light neutral canvas for new model sessions', () => {
+    const staging = createDefaultModelStagingState('session-a', 'fingerprint:a.glb');
+    expect(staging).toMatchObject({
+      schemaVersion: 2,
+      background: '#f5f6f8',
+      revision: 0,
+    });
+    expect(
+      restoreModelStagingState({ ...staging, schemaVersion: 1 }, 'session-a', 'fingerprint:a.glb'),
+    ).toBeUndefined();
+  });
+
   it('isolates two panels and rejects cross-panel identities', async () => {
     const context = extensionContext();
     const sessions = ['session-a', 'session-b'];

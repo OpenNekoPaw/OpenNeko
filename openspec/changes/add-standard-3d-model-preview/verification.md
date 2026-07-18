@@ -28,6 +28,8 @@ The Preview-owned standard 3D path renders the development GLB with its original
 
 The source stays read-only. Node transforms, camera presets, lights, background, and capture settings are recoverable panel staging only; no model/scene project format or Rust Engine Model/Scene path was introduced.
 
+The light-canvas UI revision advances the recoverable staging schema to v2. Preview rejects v1 panel state and rebuilds canonical temporary staging with the `#f5f6f8` background; source model bytes and durable project data are unaffected.
+
 ## Design and Reuse Audit
 
 - **Responsibility:** Extension owns file policy, bounded inspection, exact URI projection, panel/session identity, capture validation, and Agent command delivery. The dedicated Webview owns Three.js rendering and temporary staging. Agent only consumes the typed `model-preview` context.

@@ -80,6 +80,11 @@ describe('ModelViewer', () => {
     expect(container.querySelector('[data-testid="model-preview-scene-panel"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="model-preview-view-controls"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="model-preview-inspector"]')).not.toBeNull();
+    expect(container.querySelector('.model-preview__readonly-badge')?.textContent).toContain(
+      'Read-only source',
+    );
+    expect(container.querySelectorAll('.model-preview__facts > div')).toHaveLength(4);
+    expect(container.querySelectorAll('.model-preview__inspector-section')).toHaveLength(4);
     expect(
       container.querySelector('[data-testid="model-preview-viewport-toolbar"]'),
     ).not.toBeNull();
@@ -281,7 +286,7 @@ function loadMessage() {
       sizeBytes: 12,
     },
     staging: {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       sessionId: 'session-1',
       sourceFingerprint: 'fingerprint-1',
       revision: 0,
@@ -304,7 +309,7 @@ function loadMessage() {
           { id: 'rim' as const, color: '#fff', intensity: 2, position: { x: 0, y: 2, z: -2 } },
         ],
       },
-      background: '#1e1e1e',
+      background: '#f5f6f8',
       capture: { width: 1024, height: 1024 },
     },
   };

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createResourceFingerprint, createResourceRef } from '@neko/shared';
+import {
+  createResourceFingerprint,
+  createResourceRef,
+  MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
+} from '@neko/shared';
 
 vi.mock('vscode', () => ({
   commands: {
@@ -157,7 +161,7 @@ function modelCapture(): ModelPreviewCaptureResult {
     },
     dataUrl: `data:image/png;base64,${Buffer.from(pngHeader(64, 64)).toString('base64')}`,
     staging: {
-      schemaVersion: 1,
+      schemaVersion: MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
       sessionId: 'session-1',
       sourceFingerprint: 'fingerprint-1',
       revision: 2,

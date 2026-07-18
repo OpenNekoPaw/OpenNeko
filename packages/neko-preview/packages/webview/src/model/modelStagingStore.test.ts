@@ -44,7 +44,7 @@ describe('model staging store', () => {
 
 function initialState(): ModelPreviewStagingState {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     sessionId: 'session-1',
     sourceFingerprint: 'fingerprint-1',
     revision: 0,
