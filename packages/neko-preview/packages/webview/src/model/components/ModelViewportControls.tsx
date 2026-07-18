@@ -5,19 +5,27 @@ export type ModelViewportMode = 'navigate' | 'inspect';
 export type ModelTransformMode = 'translate' | 'rotate' | 'scale';
 
 export interface ModelViewportControlsProps {
+  readonly axesVisible: boolean;
   readonly disabled: boolean;
+  readonly gridVisible: boolean;
   readonly hasSelection: boolean;
   readonly viewportMode: ModelViewportMode;
   readonly transformMode: ModelTransformMode;
   readonly onViewportModeChange: (mode: ModelViewportMode) => void;
   readonly onTransformModeChange: (mode: ModelTransformMode) => void;
   readonly onFrameModel: () => void;
+  readonly onAxesVisibleChange: (visible: boolean) => void;
+  readonly onGridVisibleChange: (visible: boolean) => void;
 }
 
 export function ModelViewportControls({
+  axesVisible,
   disabled,
+  gridVisible,
   hasSelection,
+  onAxesVisibleChange,
   onFrameModel,
+  onGridVisibleChange,
   onTransformModeChange,
   onViewportModeChange,
   transformMode,
@@ -48,9 +56,16 @@ export function ModelViewportControls({
         <ToolbarButton
           active={viewportMode === 'navigate'}
           disabled={disabled}
-          icon={<span className={toCodiconClassName('edit')} />}
+          icon={<span className={toCodiconClassName('cursor')} />}
           title={t('preview.model.view.navigate')}
           onClick={() => onViewportModeChange('navigate')}
+        />
+        <ToolbarButton
+          active={viewportMode === 'inspect'}
+          disabled={disabled}
+          icon={<span className={toCodiconClassName('inspect')} />}
+          title={t('preview.model.view.inspect')}
+          onClick={() => onViewportModeChange('inspect')}
         />
         <ToolbarSeparator />
         {(['translate', 'rotate', 'scale'] as const).map((mode) => (
@@ -65,8 +80,25 @@ export function ModelViewportControls({
         ))}
         <ToolbarSeparator />
         <ToolbarButton
+          active={gridVisible}
           disabled={disabled}
-          icon={<span className={toCodiconClassName('refresh')} />}
+          icon={<span className={toCodiconClassName('table')} />}
+          title={
+            gridVisible ? t('preview.model.hideGroundGrid') : t('preview.model.showGroundGrid')
+          }
+          onClick={() => onGridVisibleChange(!gridVisible)}
+        />
+        <ToolbarButton
+          active={axesVisible}
+          disabled={disabled}
+          icon={<span className={toCodiconClassName('type-hierarchy')} />}
+          title={axesVisible ? t('preview.model.hideAxes') : t('preview.model.showAxes')}
+          onClick={() => onAxesVisibleChange(!axesVisible)}
+        />
+        <ToolbarSeparator />
+        <ToolbarButton
+          disabled={disabled}
+          icon={<span className={toCodiconClassName('screen-normal')} />}
           title={t('preview.model.frameModel')}
           onClick={onFrameModel}
         />
@@ -80,13 +112,13 @@ function asViewportMode(value: string): ModelViewportMode {
   throw new Error(`Unknown Model Preview viewport mode: ${value}`);
 }
 
-function transformIcon(mode: ModelTransformMode): 'symbol-misc' | 'sync' | 'symbol-structure' {
+function transformIcon(mode: ModelTransformMode): 'move' | 'symbol-ruler' | 'sync' {
   switch (mode) {
     case 'translate':
-      return 'symbol-misc';
+      return 'move';
     case 'rotate':
       return 'sync';
     case 'scale':
-      return 'symbol-structure';
+      return 'symbol-ruler';
   }
 }

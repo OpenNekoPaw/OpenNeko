@@ -15,13 +15,16 @@ import { useTranslation } from '../i18n/I18nContext';
 import { getVscodeApi } from '../shared/vscodeApi';
 import {
   browserThreeRuntimeFactory,
+  DEFAULT_MODEL_VIEW_STATE,
   type ModelPreviewNode,
+  type ModelViewState,
   type ThreeModelRuntimeFactory,
   type ThreeModelRuntimePort,
 } from './threeRuntime';
 import { patchModelTransform, selectModelNode } from './modelStagingStore';
 import { ModelInspectorPanel } from './components/ModelInspectorPanel';
 import { ModelScenePanel } from './components/ModelScenePanel';
+import { ModelOrientationGizmo } from './components/ModelOrientationGizmo';
 import {
   ModelViewportControls,
   type ModelTransformMode,
@@ -54,6 +57,9 @@ export function ModelViewer({
   const [deliveryStatus, setDeliveryStatus] = useState<DeliveryStatus>('idle');
   const [transformMode, setTransformMode] = useState<ModelTransformMode>('translate');
   const [viewportMode, setViewportMode] = useState<ModelViewportMode>('navigate');
+  const [gridVisible, setGridVisible] = useState(true);
+  const [axesVisible, setAxesVisible] = useState(true);
+  const [viewState, setViewState] = useState<ModelViewState>(DEFAULT_MODEL_VIEW_STATE);
   const sessionId = sessionIdOverride ?? document.body.dataset.modelSessionId;
   const vscode = useMemo(() => getVscodeApi(), []);
 
@@ -88,6 +94,7 @@ export function ModelViewer({
           return next;
         });
       },
+      onViewChanged: setViewState,
       onDiagnostic(message) {
         setDiagnostic({ code: 'load-failed', message, severity: 'error' });
       },
@@ -156,6 +163,8 @@ export function ModelViewer({
       }
       data-staging-revision={staging?.revision ?? 0}
       data-delivery-status={deliveryStatus}
+      data-view-distance={viewState.distance}
+      data-view-target={`${viewState.target.x},${viewState.target.y},${viewState.target.z}`}
     >
       <ModelScenePanel
         disabled={controlsDisabled}
@@ -169,11 +178,25 @@ export function ModelViewer({
       />
       <section className="model-preview__viewport" aria-label={t('preview.model.viewport')}>
         <canvas ref={canvasRef} tabIndex={0} aria-label={t('preview.model.canvas')} />
+        {axesVisible ? (
+          <ModelOrientationGizmo
+            disabled={controlsDisabled}
+            orientation={viewState.orientation}
+            onResetView={() => runtimeRef.current?.frameModel()}
+          />
+        ) : null}
         <ModelViewportControls
+          axesVisible={axesVisible}
           disabled={controlsDisabled}
+          gridVisible={gridVisible}
           hasSelection={staging?.selectedNodePath !== undefined}
           viewportMode={viewportMode}
           transformMode={transformMode}
+          onAxesVisibleChange={setAxesVisible}
+          onGridVisibleChange={(visible) => {
+            runtimeRef.current?.setGroundGridVisible(visible);
+            setGridVisible(visible);
+          }}
           onViewportModeChange={setViewportMode}
           onTransformModeChange={(mode) => {
             runtimeRef.current?.setTransformMode(mode);

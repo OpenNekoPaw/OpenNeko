@@ -25,12 +25,12 @@ export function createDefaultModelStagingState(
       {
         id: 'camera-front',
         label: 'Front',
-        position: { x: 0, y: 1, z: 4 },
+        position: { x: 0, y: 0.15, z: 3.5 },
         target: { x: 0, y: 0, z: 0 },
         fieldOfViewDeg: 45,
       },
     ],
-    activeCameraId: 'camera-default',
+    activeCameraId: 'camera-front',
     lightRig: {
       environmentIntensity: 0.7,
       lights: [

@@ -7,6 +7,7 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import type {
+  ModelPreviewCameraPreset,
   ModelPreviewCaptureSettings,
   ModelPreviewSourceDescriptor,
   ModelPreviewStagingState,
@@ -21,8 +22,25 @@ export interface ModelPreviewNode {
   readonly transform: ModelPreviewTransform;
 }
 
+export type ModelViewAxis = 'x' | 'y' | 'z';
+
+export interface ModelViewAxisProjection {
+  readonly x: number;
+  readonly y: number;
+  readonly depth: number;
+}
+
+export type ModelViewOrientation = Readonly<Record<ModelViewAxis, ModelViewAxisProjection>>;
+
+export interface ModelViewState {
+  readonly orientation: ModelViewOrientation;
+  readonly distance: number;
+  readonly target: { readonly x: number; readonly y: number; readonly z: number };
+}
+
 export interface ThreeModelRuntimeCallbacks {
   readonly onTransformChanged?: (nodePath: string, transform: ModelPreviewTransform) => void;
+  readonly onViewChanged?: (view: ModelViewState) => void;
   readonly onDiagnostic?: (message: string) => void;
 }
 
@@ -32,6 +50,7 @@ export interface ThreeModelRuntimePort {
   getNodes(): readonly ModelPreviewNode[];
   setTransformMode(mode: 'translate' | 'rotate' | 'scale'): void;
   setTransformEnabled(enabled: boolean): void;
+  setGroundGridVisible(visible: boolean): void;
   frameModel(): void;
   resize(width: number, height: number): void;
   capture(settings: ModelPreviewCaptureSettings): string;
@@ -108,6 +127,54 @@ export function getOrbitDistanceBounds(radius: number): {
   };
 }
 
+export function shouldApplyModelCameraPose(
+  previousActiveCameraId: string | undefined,
+  nextActiveCameraId: string,
+): boolean {
+  return previousActiveCameraId !== nextActiveCameraId;
+}
+
+export interface ModelGroundGridLayout {
+  readonly size: number;
+  readonly divisions: number;
+  readonly y: number;
+}
+
+export function getModelGroundGridLayout(bounds: THREE.Box3): ModelGroundGridLayout {
+  const size = bounds.getSize(new THREE.Vector3());
+  const horizontalSpan = Math.max(size.x, size.z, 0.001);
+  return {
+    size: Math.max(horizontalSpan * 2.5, size.y * 1.5, 1),
+    divisions: 24,
+    y: bounds.min.y - Math.max(size.y * 0.002, 0.001),
+  };
+}
+
+export function projectModelViewOrientation(
+  cameraQuaternion: THREE.Quaternion,
+): ModelViewOrientation {
+  const inverseCamera = cameraQuaternion.clone().invert();
+  const project = (axis: THREE.Vector3): ModelViewAxisProjection => {
+    const viewAxis = axis.applyQuaternion(inverseCamera);
+    return { x: viewAxis.x, y: -viewAxis.y, depth: viewAxis.z };
+  };
+  return {
+    x: project(new THREE.Vector3(1, 0, 0)),
+    y: project(new THREE.Vector3(0, 1, 0)),
+    z: project(new THREE.Vector3(0, 0, 1)),
+  };
+}
+
+export const DEFAULT_MODEL_VIEW_STATE: ModelViewState = {
+  orientation: {
+    x: { x: 1, y: 0, depth: 0 },
+    y: { x: 0, y: -1, depth: 0 },
+    z: { x: 0, y: 0, depth: 1 },
+  },
+  distance: 3.5,
+  target: { x: 0, y: 0, z: 0 },
+};
+
 export type TextureTransparencyInspector = (texture: THREE.Texture) => Promise<boolean>;
 
 export async function promoteOpaqueBlendMaterials(
@@ -153,6 +220,10 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   private readonly paths = new WeakMap<THREE.Object3D, string>();
   private modelRoot: THREE.Object3D | undefined;
   private modelBounds: THREE.Box3 | undefined;
+  private groundGrid: THREE.GridHelper | undefined;
+  private groundGridVisible = true;
+  private activeCameraPreset: ModelPreviewCameraPreset | undefined;
+  private appliedCameraId: string | undefined;
   private selectedNodePath: string | undefined;
   private transformEnabled = false;
   private facts: NormalizedModelFacts | undefined;
@@ -168,6 +239,10 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.orbit.enabled = !dragging;
     if (dragging) this.beginInteraction();
     else this.endInteraction();
+  };
+  private readonly handleOrbitChange = (): void => {
+    this.requestRender();
+    this.emitViewState();
   };
   private readonly beginOrbitInteraction = (): void => this.beginInteraction();
   private readonly endOrbitInteraction = (): void => this.endInteraction();
@@ -195,7 +270,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.transform.addEventListener('dragging-changed', this.handleTransformDraggingChanged);
     this.transform.addEventListener('change', this.requestRender);
     this.transform.addEventListener('mouseUp', this.commitTransformChange);
-    this.orbit.addEventListener('change', this.requestRender);
+    this.orbit.addEventListener('change', this.handleOrbitChange);
     this.orbit.addEventListener('start', this.beginOrbitInteraction);
     this.orbit.addEventListener('end', this.endOrbitInteraction);
     this.scene.add(this.environmentLight, this.transformHelper);
@@ -204,7 +279,9 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       this.directionalLights.set(id, light);
       this.scene.add(light);
     }
-    this.camera.position.set(3, 2, 3);
+    this.camera.position.set(0, 0.15, 3.5);
+    this.orbit.update();
+    this.emitViewState();
     this.requestRender();
   }
 
@@ -256,11 +333,12 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       throw new Error(`Active Model Preview camera is missing: ${staging.activeCameraId}`);
     const radius = Math.max(facts.bounds.radius, 0.001);
     const center = toThreeVector(facts.bounds.center);
+    const applyCameraPose = shouldApplyModelCameraPose(this.appliedCameraId, camera.id);
+    this.activeCameraPreset = camera;
     this.camera.fov = camera.fieldOfViewDeg;
-    this.camera.position.copy(center).addScaledVector(toThreeVector(camera.position), radius);
     this.camera.updateProjectionMatrix();
-    this.orbit.target.copy(center).add(toThreeVector(camera.target));
-    this.orbit.update();
+    if (applyCameraPose) this.applyCameraPose(camera, center, radius);
+    this.appliedCameraId = camera.id;
     this.environmentLight.intensity = staging.lightRig.environmentIntensity;
     for (const entry of staging.lightRig.lights) {
       const light = this.directionalLights.get(entry.id);
@@ -297,10 +375,17 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.requestRender();
   }
 
+  setGroundGridVisible(visible: boolean): void {
+    this.assertLive();
+    this.groundGridVisible = visible;
+    if (this.groundGrid) this.groundGrid.visible = visible;
+    this.requestRender();
+  }
+
   frameModel(): void {
     this.assertLive();
     if (!this.modelBounds) throw new Error('Model Preview renderer has no loaded model bounds.');
-    this.frameBounds(this.modelBounds);
+    this.frameBounds(this.modelBounds, this.activeCameraPreset);
   }
 
   resize(width: number, height: number): void {
@@ -332,20 +417,27 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.renderer.getSize(previousSize);
     const previousPixelRatio = this.renderer.getPixelRatio();
     const previousAspect = this.camera.aspect;
-    this.renderer.setPixelRatio(1);
-    this.renderer.setSize(settings.width, settings.height, false);
-    this.camera.aspect = settings.width / settings.height;
-    this.camera.updateProjectionMatrix();
-    this.renderer.render(this.scene, this.camera);
-    const dataUrl = this.renderer.domElement.toDataURL('image/png');
-    this.renderer.setPixelRatio(previousPixelRatio);
-    this.renderer.setSize(previousSize.x, previousSize.y, false);
-    this.camera.aspect = previousAspect;
-    this.camera.updateProjectionMatrix();
-    if (!dataUrl.startsWith('data:image/png;base64,')) {
-      throw new Error('Model Preview canvas did not produce a PNG capture.');
+    const gridWasVisible = this.groundGrid?.visible ?? false;
+    if (this.groundGrid) this.groundGrid.visible = false;
+    try {
+      this.renderer.setPixelRatio(1);
+      this.renderer.setSize(settings.width, settings.height, false);
+      this.camera.aspect = settings.width / settings.height;
+      this.camera.updateProjectionMatrix();
+      this.renderer.render(this.scene, this.camera);
+      const dataUrl = this.renderer.domElement.toDataURL('image/png');
+      if (!dataUrl.startsWith('data:image/png;base64,')) {
+        throw new Error('Model Preview canvas did not produce a PNG capture.');
+      }
+      return dataUrl;
+    } finally {
+      if (this.groundGrid) this.groundGrid.visible = gridWasVisible;
+      this.renderer.setPixelRatio(previousPixelRatio);
+      this.renderer.setSize(previousSize.x, previousSize.y, false);
+      this.camera.aspect = previousAspect;
+      this.camera.updateProjectionMatrix();
+      this.requestRender();
     }
-    return dataUrl;
   }
 
   dispose(): void {
@@ -356,7 +448,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.transform.removeEventListener('dragging-changed', this.handleTransformDraggingChanged);
     this.transform.removeEventListener('change', this.requestRender);
     this.transform.removeEventListener('mouseUp', this.commitTransformChange);
-    this.orbit.removeEventListener('change', this.requestRender);
+    this.orbit.removeEventListener('change', this.handleOrbitChange);
     this.orbit.removeEventListener('start', this.beginOrbitInteraction);
     this.orbit.removeEventListener('end', this.endOrbitInteraction);
     this.transform.detach();
@@ -373,21 +465,74 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.renderer.forceContextLoss();
   }
 
-  private frameBounds(bounds: THREE.Box3): void {
+  private frameBounds(bounds: THREE.Box3, cameraPreset?: ModelPreviewCameraPreset): void {
     this.modelBounds = bounds.clone();
     const center = bounds.getCenter(new THREE.Vector3());
     const size = bounds.getSize(new THREE.Vector3());
     const radius = Math.max(size.length() / 2, 0.001);
     this.camera.near = Math.max(radius / 1000, 0.001);
     this.camera.far = Math.max(radius * 100, 100);
-    this.camera.position.copy(center).add(new THREE.Vector3(2.5, 1.8, 2.5).multiplyScalar(radius));
+    if (cameraPreset) this.camera.fov = cameraPreset.fieldOfViewDeg;
     this.camera.updateProjectionMatrix();
-    this.orbit.target.copy(center);
     const distanceBounds = getOrbitDistanceBounds(radius);
     this.orbit.minDistance = distanceBounds.minDistance;
     this.orbit.maxDistance = distanceBounds.maxDistance;
-    this.orbit.update();
+    this.applyCameraPose(
+      cameraPreset ?? {
+        id: 'camera-front',
+        label: 'Front',
+        position: { x: 0, y: 0.15, z: 3.5 },
+        target: { x: 0, y: 0, z: 0 },
+        fieldOfViewDeg: this.camera.fov,
+      },
+      center,
+      radius,
+    );
+    this.replaceGroundGrid(bounds);
     this.requestRender();
+  }
+
+  private applyCameraPose(
+    cameraPreset: ModelPreviewCameraPreset,
+    center: THREE.Vector3,
+    radius: number,
+  ): void {
+    this.camera.position.copy(center).addScaledVector(toThreeVector(cameraPreset.position), radius);
+    this.orbit.target.copy(center).add(toThreeVector(cameraPreset.target));
+    this.orbit.update();
+    this.emitViewState();
+  }
+
+  private replaceGroundGrid(bounds: THREE.Box3): void {
+    this.detachGroundGrid();
+    const layout = getModelGroundGridLayout(bounds);
+    const grid = new THREE.GridHelper(layout.size, layout.divisions, 0xb9c2cf, 0xdde2e8);
+    const materials = Array.isArray(grid.material) ? grid.material : [grid.material];
+    for (const material of materials) {
+      material.transparent = true;
+      material.opacity = 0.62;
+      material.depthWrite = false;
+    }
+    grid.position.y = layout.y;
+    grid.visible = this.groundGridVisible;
+    grid.renderOrder = -1;
+    this.groundGrid = grid;
+    this.scene.add(grid);
+  }
+
+  private detachGroundGrid(): void {
+    if (!this.groundGrid) return;
+    this.scene.remove(this.groundGrid);
+    disposeObjectTree(this.groundGrid);
+    this.groundGrid = undefined;
+  }
+
+  private emitViewState(): void {
+    this.callbacks.onViewChanged?.({
+      orientation: projectModelViewOrientation(this.camera.quaternion),
+      distance: this.camera.position.distanceTo(this.orbit.target),
+      target: fromThreeVector(this.orbit.target),
+    });
   }
 
   private beginInteraction(): void {
@@ -432,6 +577,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
 
   private detachModel(): void {
     this.transform.detach();
+    this.detachGroundGrid();
     if (this.modelRoot) {
       this.scene.remove(this.modelRoot);
       disposeObjectTree(this.modelRoot);
@@ -440,6 +586,8 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.modelBounds = undefined;
     this.selectedNodePath = undefined;
     this.facts = undefined;
+    this.activeCameraPreset = undefined;
+    this.appliedCameraId = undefined;
     this.nodes.clear();
   }
 

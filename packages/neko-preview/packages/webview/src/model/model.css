@@ -1,11 +1,15 @@
-@import "@vscode/codicons/dist/codicon.css";
+@import '@vscode/codicons/dist/codicon.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --neko-surface: color-mix(in srgb, var(--vscode-editor-background) 96%, var(--vscode-foreground) 4%);
+  --neko-surface: color-mix(
+    in srgb,
+    var(--vscode-editor-background) 96%,
+    var(--vscode-foreground) 4%
+  );
   --neko-hover: color-mix(in srgb, var(--vscode-list-hoverBackground) 80%, transparent);
   --neko-border: var(--vscode-panel-border, var(--vscode-widget-border));
   --neko-accent: var(--vscode-button-background);
@@ -155,7 +159,10 @@ input {
   border-radius: 8px;
   color: var(--vscode-descriptionForeground);
   background: var(--vscode-input-background);
-  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background 120ms ease;
 }
 
 .model-preview__search:focus-within {
@@ -251,27 +258,109 @@ input {
   pointer-events: auto;
 }
 
+.model-preview__orientation {
+  position: absolute;
+  z-index: 3;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: 104px;
+  padding: 8px 8px 9px;
+  border: 1px solid rgba(214, 218, 224, 0.9);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 24px rgba(31, 35, 41, 0.1);
+  backdrop-filter: blur(14px);
+}
+
+.model-preview__orientation-svg {
+  width: 80px;
+  height: 80px;
+  overflow: visible;
+}
+
+.model-preview__orientation-ring {
+  fill: rgba(250, 251, 252, 0.82);
+  stroke: #d9dde2;
+  stroke-width: 1.2;
+}
+
+.model-preview__orientation-svg line {
+  stroke-width: 1.7;
+}
+
+.model-preview__orientation-svg text {
+  font-size: 8px;
+  font-weight: 700;
+  user-select: none;
+}
+
+.model-preview__orientation-origin {
+  fill: #b8bdc5;
+}
+
+.model-preview__orientation button {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #dde1e6;
+  border-radius: 999px;
+  color: #666c75;
+  background: #ffffff;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.model-preview__orientation button:hover {
+  color: #25292f;
+  border-color: #c8cdd4;
+  background: #f7f8fa;
+}
+
+.model-preview__orientation button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
 .model-preview__viewport-toolbar {
   position: absolute;
   z-index: 3;
   bottom: 18px;
   left: 50%;
   display: flex;
-  height: 42px;
+  height: 44px;
   align-items: center;
-  gap: 2px;
-  padding: 4px 7px;
+  gap: 3px;
+  padding: 5px 8px;
   transform: translateX(-50%);
   border: 1px solid var(--neko-border);
   border-radius: 13px;
   background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 10px 28px rgba(31, 35, 41, 0.13), 0 1px 3px rgba(31, 35, 41, 0.08);
+  box-shadow:
+    0 10px 28px rgba(31, 35, 41, 0.13),
+    0 1px 3px rgba(31, 35, 41, 0.08);
   backdrop-filter: blur(14px);
 }
 
 .model-preview__viewport-toolbar .neko-toolbar-btn {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.model-preview__viewport-toolbar .neko-toolbar-btn.active,
+.model-preview__viewport-toolbar .neko-toolbar-btn[aria-pressed='true'] {
+  border-color: #c9dcff;
+  color: #315fae;
+  background: #eaf2ff;
+}
+
+.model-preview__viewport-toolbar .neko-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 3px;
+  background: #e0e3e7;
 }
 
 .model-preview__overlay {
@@ -492,6 +581,13 @@ input {
 @media (max-width: 900px) {
   .model-preview {
     grid-template-columns: 200px minmax(0, 1fr) 288px;
+  }
+
+  .model-preview__orientation {
+    right: 10px;
+    width: 92px;
+    transform: scale(0.9);
+    transform-origin: top right;
   }
 }
 
