@@ -433,7 +433,6 @@ function contextPayloadNamespace(type: AgentContextPayload['type']): string | un
   if (type === 'asset' || type === 'media' || type === 'image' || type === 'audio-clip') {
     return 'asset';
   }
-  if (type === 'model-preview') return 'asset';
   return undefined;
 }
 

@@ -657,6 +657,69 @@ describe('webview protocol parser', () => {
     });
   });
 
+  it('accepts a validated purpose-aware 3D reference context', () => {
+    const data = {
+      contractVersion: 1,
+      staging: {
+        schemaVersion: 1,
+        sessionId: 'session-1',
+        revision: 2,
+        subject: {
+          kind: 'builtin-preset',
+          presetId: 'guide-neutral-mannequin',
+          presetVersion: 1,
+          fingerprint: 'preset-fingerprint',
+          presetKind: 'mannequin',
+          appearancePolicy: 'guide-only',
+          allowedPurposes: ['pose', 'camera'],
+        },
+        selectedPurposes: ['pose'],
+        camera: {
+          cameraId: 'camera-front',
+          position: { x: 0, y: 1.4, z: 4 },
+          target: { x: 0, y: 1, z: 0 },
+          fieldOfViewDeg: 45,
+          aspectRatio: 1,
+        },
+        pose: {
+          poseId: 'pose-standing',
+          joints: [{ jointId: 'hips', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } }],
+        },
+      },
+      outputs: [
+        {
+          kind: 'pose',
+          sessionId: 'session-1',
+          revision: 2,
+          controlImage: cacheResourceRef,
+          controlMode: 'pose',
+          joints: [{ jointId: 'hips', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } }],
+        },
+      ],
+    };
+
+    expect(
+      parseSendMessageWebviewMessage({
+        type: 'sendMessage',
+        conversationId: 'conv-1',
+        message: 'Use this pose',
+        sessionMode: 'agent',
+        contextPayloads: [
+          {
+            type: '3d-reference',
+            id: '3d-reference:session-1:2',
+            label: 'Neutral mannequin',
+            summary: 'Pose reference',
+            data,
+          },
+        ],
+      }),
+    ).toMatchObject({
+      type: 'sendMessage',
+      contextPayloads: [{ type: '3d-reference', data }],
+    });
+  });
+
   it('accepts Canvas storyboard action intent context payloads on sendMessage', () => {
     expect(
       parseSendMessageWebviewMessage({
@@ -691,14 +754,16 @@ describe('webview protocol parser', () => {
     });
   });
 
-  it('rejects legacy and incomplete model context payloads on sendMessage', () => {
+  it('rejects removed model context discriminators on sendMessage', () => {
     const base = {
       type: 'sendMessage',
       conversationId: 'conversation-1',
       message: 'Use this model',
+      sessionMode: 'agent',
     };
+    const legacyContext = legacyModelPreviewContextData();
     expect(
-      parseWebviewToExtensionMessage({
+      parseSendMessageWebviewMessage({
         ...base,
         contextPayloads: [
           { type: 'model-scene', id: 'legacy', label: 'Legacy', summary: '', data: {} },
@@ -706,10 +771,16 @@ describe('webview protocol parser', () => {
       }),
     ).toBeNull();
     expect(
-      parseWebviewToExtensionMessage({
+      parseSendMessageWebviewMessage({
         ...base,
         contextPayloads: [
-          { type: 'model-preview', id: 'model', label: 'Model', summary: '', data: {} },
+          {
+            type: 'model-preview',
+            id: 'model',
+            label: 'Model',
+            summary: '',
+            data: legacyContext,
+          },
         ],
       }),
     ).toBeNull();
@@ -963,6 +1034,65 @@ describe('webview protocol parser', () => {
     });
   });
 });
+
+function legacyModelPreviewContextData(): Record<string, unknown> {
+  const camera = {
+    id: 'camera-default',
+    label: 'Default',
+    position: { x: 3, y: 2, z: 3 },
+    target: { x: 0, y: 0, z: 0 },
+    fieldOfViewDeg: 45,
+  };
+  const staging = {
+    schemaVersion: 3,
+    sessionId: 'session-legacy',
+    sourceFingerprint: 'legacy-fingerprint',
+    revision: 1,
+    transformPatches: [],
+    cameraPresets: [camera],
+    activeCameraId: camera.id,
+    lightRig: {
+      environmentIntensity: 1,
+      lights: [
+        { id: 'key', color: '#fff', intensity: 3, position: { x: 1, y: 2, z: 3 } },
+        { id: 'fill', color: '#fff', intensity: 1, position: { x: -1, y: 1, z: 2 } },
+        { id: 'rim', color: '#fff', intensity: 2, position: { x: 0, y: 2, z: -2 } },
+      ],
+    },
+    background: '#1e1e1e',
+    capture: { width: 1024, height: 1024 },
+  };
+  return {
+    contractVersion: 1,
+    source: cacheResourceRef,
+    sourceFingerprint: 'legacy-fingerprint',
+    format: 'glb',
+    facts: {
+      bounds: {
+        min: { x: -1, y: -1, z: -1 },
+        max: { x: 1, y: 1, z: 1 },
+        center: { x: 0, y: 0, z: 0 },
+        size: { x: 2, y: 2, z: 2 },
+        radius: 1.7,
+      },
+      nodeCount: 2,
+      meshCount: 1,
+      materialCount: 1,
+      animationCount: 0,
+    },
+    staging,
+    previewImage: cacheResourceRef,
+    capture: {
+      sessionId: staging.sessionId,
+      sourceFingerprint: staging.sourceFingerprint,
+      revision: staging.revision,
+      mimeType: 'image/png',
+      width: 1024,
+      height: 1024,
+      cameraId: camera.id,
+    },
+  };
+}
 
 function makeTimelineTextItem(input: {
   itemId: string;

@@ -8,15 +8,15 @@ import { AgentContextChip } from './AgentContextChip';
 describe('AgentContextChip', () => {
   it('projects the canonical context discriminator for functional evidence', () => {
     const payload: AgentContextPayload = {
-      type: 'model-preview',
-      id: 'model-preview:fixture:1',
-      label: 'triangle.glb',
-      summary: 'GLB model',
+      type: '3d-reference',
+      id: '3d-reference:fixture:1',
+      label: 'Neutral mannequin',
+      summary: 'Pose and camera reference',
       data: {},
     };
     const { container } = render(<AgentContextChip payload={payload} />);
 
-    expect(container.querySelector('[data-agent-context-type="model-preview"]')).not.toBeNull();
-    expect(screen.getByText('triangle.glb')).toBeTruthy();
+    expect(container.querySelector('[data-agent-context-type="3d-reference"]')).not.toBeNull();
+    expect(screen.getByText('Neutral mannequin')).toBeTruthy();
   });
 });

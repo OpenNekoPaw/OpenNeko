@@ -31,7 +31,7 @@ import {
   isAgentCapabilityInvocationInput,
   isCanvasMarkdownCapabilityTarget,
   isCanvasMarkdownResourceRef,
-  isModelPreviewContextData,
+  isThreeReferenceContextData,
   isResourceRef,
   parseDocumentArchiveResourceRef,
   parseDocumentLocator,
@@ -1984,7 +1984,7 @@ function isAgentContextPayload(raw: unknown): raw is AgentContextPayload {
     isNonEmptyString(raw.label) &&
     typeof raw.summary === 'string' &&
     'data' in raw &&
-    (raw.type !== 'model-preview' || isModelPreviewContextData(raw.data)) &&
+    (raw.type !== '3d-reference' || isThreeReferenceContextData(raw.data)) &&
     (raw.intent === undefined || typeof raw.intent === 'string') &&
     (raw.generationParams === undefined || isRecord(raw.generationParams))
   );
@@ -2001,7 +2001,7 @@ function isAgentContextPayloadType(type: unknown): type is AgentContextPayload['
     type === 'media' ||
     type === 'entity' ||
     type === 'sketch-layer' ||
-    type === 'model-preview' ||
+    type === '3d-reference' ||
     type === 'audio-clip' ||
     type === 'file' ||
     type === 'image' ||
@@ -3128,7 +3128,7 @@ function isAgentContextType(value: unknown): value is AgentContextType {
     value === 'media' ||
     value === 'entity' ||
     value === 'sketch-layer' ||
-    value === 'model-preview' ||
+    value === '3d-reference' ||
     value === 'audio-clip' ||
     value === 'file' ||
     value === 'image' ||

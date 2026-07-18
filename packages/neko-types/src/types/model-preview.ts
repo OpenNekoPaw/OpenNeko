@@ -1,8 +1,7 @@
-import { isResourceRef, type ResourceRef } from './resource-cache.js';
+import type { ResourceRef } from './resource-cache.js';
 
 export const MODEL_PREVIEW_PROTOCOL_VERSION = 1 as const;
 export const MODEL_PREVIEW_STAGING_SCHEMA_VERSION = 3 as const;
-export const MODEL_PREVIEW_CONTEXT_VERSION = 1 as const;
 
 export const MODEL_PREVIEW_FORMATS = ['glb', 'gltf', 'obj', 'stl', 'ply'] as const;
 export type ModelPreviewFormat = (typeof MODEL_PREVIEW_FORMATS)[number];
@@ -99,31 +98,6 @@ export interface ModelPreviewSourceDescriptor {
   readonly sizeBytes: number;
 }
 
-export interface ModelPreviewCaptureMetadata extends ModelPreviewIdentity {
-  readonly mimeType: 'image/png';
-  readonly width: number;
-  readonly height: number;
-  readonly cameraId: string;
-}
-
-export interface ModelPreviewCaptureResult {
-  readonly metadata: ModelPreviewCaptureMetadata;
-  readonly dataUrl: string;
-  readonly staging: ModelPreviewStagingState;
-  readonly facts: NormalizedModelFacts;
-}
-
-export interface ModelPreviewContextData {
-  readonly contractVersion: typeof MODEL_PREVIEW_CONTEXT_VERSION;
-  readonly source: ResourceRef;
-  readonly sourceFingerprint: string;
-  readonly format: ModelPreviewFormat;
-  readonly facts: NormalizedModelFacts;
-  readonly staging: ModelPreviewStagingState;
-  readonly previewImage: ResourceRef;
-  readonly capture: ModelPreviewCaptureMetadata;
-}
-
 export type ModelPreviewDiagnosticCode =
   | 'unsupported-format'
   | 'source-missing'
@@ -141,12 +115,6 @@ export type ModelPreviewDiagnosticCode =
   | 'empty-model'
   | 'renderer-unavailable'
   | 'renderer-lost'
-  | 'capture-invalid'
-  | 'capture-failed'
-  | 'context-invalid'
-  | 'agent-unavailable'
-  | 'agent-rejected'
-  | 'delivery-succeeded'
   | 'disposed';
 
 export interface ModelPreviewDiagnostic {
@@ -162,16 +130,6 @@ export type ModelPreviewExtensionMessage =
       readonly type: 'model-preview/load';
       readonly source: ModelPreviewSourceDescriptor;
       readonly staging: ModelPreviewStagingState;
-    }
-  | {
-      readonly type: 'model-preview/capture-requested';
-      readonly requestId: string;
-      readonly identity: ModelPreviewIdentity;
-      readonly settings: ModelPreviewCaptureSettings;
-    }
-  | {
-      readonly type: 'model-preview/send-succeeded';
-      readonly identity: ModelPreviewIdentity;
     }
   | {
       readonly type: 'model-preview/diagnostic';
@@ -194,15 +152,6 @@ export type ModelPreviewWebviewMessage =
       readonly staging: ModelPreviewStagingState;
     }
   | {
-      readonly type: 'model-preview/capture-completed';
-      readonly requestId: string;
-      readonly capture: ModelPreviewCaptureResult;
-    }
-  | {
-      readonly type: 'model-preview/send-requested';
-      readonly identity: ModelPreviewIdentity;
-    }
-  | {
       readonly type: 'model-preview/diagnostic';
       readonly diagnostic: ModelPreviewDiagnostic;
     };
@@ -211,47 +160,8 @@ export function isModelPreviewFormat(value: unknown): value is ModelPreviewForma
   return typeof value === 'string' && MODEL_PREVIEW_FORMATS.some((format) => format === value);
 }
 
-export function isModelPreviewContextData(value: unknown): value is ModelPreviewContextData {
-  if (!isRecord(value)) return false;
-  if (
-    value['contractVersion'] !== MODEL_PREVIEW_CONTEXT_VERSION ||
-    !isResourceRef(value['source']) ||
-    !isNonEmptyString(value['sourceFingerprint']) ||
-    !isModelPreviewFormat(value['format']) ||
-    !isNormalizedModelFacts(value['facts']) ||
-    !isModelPreviewStagingState(value['staging']) ||
-    !isResourceRef(value['previewImage']) ||
-    !isModelPreviewCaptureMetadata(value['capture'])
-  ) {
-    return false;
-  }
-  const staging = value['staging'];
-  const capture = value['capture'];
-  return (
-    staging.sourceFingerprint === value['sourceFingerprint'] &&
-    capture.sourceFingerprint === value['sourceFingerprint'] &&
-    capture.sessionId === staging.sessionId &&
-    capture.revision === staging.revision &&
-    capture.cameraId === staging.activeCameraId
-  );
-}
-
 export function isModelPreviewIdentity(value: unknown): value is ModelPreviewIdentity {
   return isRecord(value) && isIdentity(value);
-}
-
-export function isModelPreviewCaptureResult(value: unknown): value is ModelPreviewCaptureResult {
-  return (
-    isRecord(value) &&
-    isModelPreviewCaptureMetadata(value['metadata']) &&
-    typeof value['dataUrl'] === 'string' &&
-    value['dataUrl'].startsWith('data:image/png;base64,') &&
-    isModelPreviewStagingState(value['staging']) &&
-    isNormalizedModelFacts(value['facts']) &&
-    value['metadata'].sessionId === value['staging'].sessionId &&
-    value['metadata'].sourceFingerprint === value['staging'].sourceFingerprint &&
-    value['metadata'].revision === value['staging'].revision
-  );
 }
 
 export function isModelPreviewStagingState(value: unknown): value is ModelPreviewStagingState {
@@ -278,17 +188,6 @@ export function isNormalizedModelFacts(value: unknown): value is NormalizedModel
     isNonNegativeInteger(value['meshCount']) &&
     isNonNegativeInteger(value['materialCount']) &&
     isNonNegativeInteger(value['animationCount'])
-  );
-}
-
-function isModelPreviewCaptureMetadata(value: unknown): value is ModelPreviewCaptureMetadata {
-  return (
-    isRecord(value) &&
-    isIdentity(value) &&
-    value['mimeType'] === 'image/png' &&
-    isPositiveInteger(value['width']) &&
-    isPositiveInteger(value['height']) &&
-    isNonEmptyString(value['cameraId'])
   );
 }
 

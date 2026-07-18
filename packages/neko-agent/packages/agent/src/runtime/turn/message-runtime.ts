@@ -34,9 +34,8 @@ import type {
   DocumentLocator,
   MessageAttachment,
   ProviderGenerationCapability,
-  ResourceRef,
 } from '@neko/shared';
-import { isDocumentFile, isModelPreviewContextData } from '@neko/shared';
+import { isDocumentFile } from '@neko/shared';
 import type { AgentEvent } from '../../session/types';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
@@ -217,9 +216,6 @@ export interface PrepareAgentMessageDispatchInput {
   readonly createReferencedMediaProcessor?:
     | (() => AgentReferencedMediaProcessor | null | Promise<AgentReferencedMediaProcessor | null>)
     | undefined;
-  readonly resolveModelPreviewImage?: (
-    previewImage: ResourceRef,
-  ) => Promise<AgentBase64ImageAttachment>;
   readonly onReferenceError?: (error: { reference: string; error: string }) => void;
   readonly onFileReferenceProcessingError?: (error: unknown) => void;
   readonly onReferencedMediaProcessed?: (event: {
@@ -294,7 +290,6 @@ export interface RunAgentMessageTurnRuntimeInput {
   readonly inputProcessor?: AgentMessageFileReferenceProcessor | null;
   readonly processAttachments: PrepareAgentMessageDispatchInput['processAttachments'];
   readonly createReferencedMediaProcessor?: PrepareAgentMessageDispatchInput['createReferencedMediaProcessor'];
-  readonly resolveModelPreviewImage?: PrepareAgentMessageDispatchInput['resolveModelPreviewImage'];
   readonly persistUserMessage: (conversationId: string, message: Message) => void;
   readonly removeUserMessage?: (conversationId: string, messageId: string) => void;
   readonly persistErrorMessage?: (conversationId: string, message: Message) => void;
@@ -871,11 +866,7 @@ export async function prepareAgentMessageDispatch(
     onProcessed: input.onReferencedMediaProcessed,
     onError: input.onReferencedMediaError,
   });
-  const modelPreviewImages = await resolveModelPreviewContextImages(
-    request.contextPayloads,
-    input.resolveModelPreviewImage,
-  );
-  const mediaImages = [...referencedMediaImages, ...modelPreviewImages];
+  const mediaImages = referencedMediaImages;
 
   const enhancedMessage = buildEnhancedAgentMessage({
     message: parsedMessage,
@@ -968,7 +959,6 @@ export async function runAgentMessageTurnRuntime(
     inputProcessor: input.inputProcessor,
     processAttachments: input.processAttachments,
     createReferencedMediaProcessor: input.createReferencedMediaProcessor,
-    resolveModelPreviewImage: input.resolveModelPreviewImage,
     onReferenceError: input.onReferenceError,
     onFileReferenceProcessingError: input.onFileReferenceProcessingError,
     onReferencedMediaProcessed: input.onReferencedMediaProcessed,
@@ -1096,29 +1086,6 @@ export function formatAgentContextPayload(
   const text = extractAgentContextText(payload.data);
   const imageData = extractAgentContextImageData(payload.data);
   const filePath = extractAgentContextFilePath(payload.data);
-
-  if (payload.type === 'model-preview') {
-    if (!isModelPreviewContextData(payload.data)) {
-      throw new Error('Model Preview context data is invalid.');
-    }
-    const data = payload.data;
-    const lights = data.staging.lightRig.lights
-      .map((light) => `${light.id}=${light.intensity.toFixed(1)}`)
-      .join(', ');
-    return [
-      `[${labels.context}: ${payload.label}]`,
-      `Format: ${data.format}`,
-      `Model facts: ${data.facts.nodeCount} nodes, ${data.facts.meshCount} meshes, ${data.facts.materialCount} materials, ${data.facts.animationCount} animations`,
-      `Bounds: ${data.facts.bounds.size.x.toFixed(3)} × ${data.facts.bounds.size.y.toFixed(3)} × ${data.facts.bounds.size.z.toFixed(3)}`,
-      `Active camera: ${data.staging.activeCameraId}`,
-      `Lighting: environment=${data.staging.lightRig.environmentIntensity.toFixed(1)}, ${lights}`,
-      `Selected node: ${data.staging.selectedNodePath ?? 'none'}`,
-      `Temporary transform patches: ${data.staging.transformPatches.length}`,
-      `Source resource: ${data.source.id}`,
-      `Preview resource: ${data.previewImage.id}`,
-      `[${labels.imageAttached}]`,
-    ].join('\n');
-  }
 
   if (documentContext) {
     const lines = [`[${labels.document}: ${payload.label}]`];
@@ -1981,29 +1948,6 @@ function extractAgentContextText(data: unknown): string | undefined {
 function extractAgentContextImageData(data: unknown): string | undefined {
   if (!isRecord(data)) return undefined;
   return optionalString(data['imageData']);
-}
-
-async function resolveModelPreviewContextImages(
-  payloads: readonly AgentContextPayload[] | undefined,
-  resolver: PrepareAgentMessageDispatchInput['resolveModelPreviewImage'],
-): Promise<AgentBase64ImageAttachment[]> {
-  const modelPayloads = (payloads ?? []).filter((payload) => payload.type === 'model-preview');
-  if (modelPayloads.length === 0) return [];
-  if (!resolver) {
-    throw new Error('Model Preview context requires a preview-image content resolver.');
-  }
-  const images: AgentBase64ImageAttachment[] = [];
-  for (const payload of modelPayloads) {
-    if (!isModelPreviewContextData(payload.data)) {
-      throw new Error(`Invalid Model Preview context: ${payload.id}`);
-    }
-    const image = await resolver(payload.data.previewImage);
-    if (image.type !== 'base64' || image.media_type !== 'image/png' || image.data.length === 0) {
-      throw new Error(`Model Preview image resolver returned invalid evidence: ${payload.id}`);
-    }
-    images.push(image);
-  }
-  return images;
 }
 
 function extractAgentContextFilePath(data: unknown): string | undefined {

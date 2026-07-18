@@ -1,5 +1,5 @@
 import type { MessageContextReference } from '@neko-agent/types';
-import { isModelPreviewContextData, type AgentContextPayload } from '@neko/shared';
+import type { AgentContextPayload } from '@neko/shared';
 
 export function projectContextReferencesFromPayloads(
   payloads: AgentContextPayload[] | undefined,
@@ -43,14 +43,6 @@ function projectContextNavigationData(payload: AgentContextPayload): Record<stri
     if (typeof nodeId === 'string') nav.nodeId = nodeId;
   }
   if (payload.type === 'asset' && !nav.assetId) nav.assetId = payload.id;
-  if (payload.type === 'model-preview' && isModelPreviewContextData(payload.data)) {
-    nav.resourceId = payload.data.source.id;
-    nav.previewResourceId = payload.data.previewImage.id;
-    const sourcePath =
-      payload.data.source.source.projectRelativePath ?? payload.data.source.source.uri;
-    if (sourcePath) nav.path = sourcePath;
-  }
-
   return nav;
 }
 

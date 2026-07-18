@@ -5,7 +5,6 @@ import {
   MODEL_PREVIEW_PROTOCOL_VERSION,
   MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
   PathResolver,
-  type ModelPreviewCaptureResult,
   type ModelPreviewStagingState,
 } from '@neko/shared';
 
@@ -77,8 +76,8 @@ describe('ModelPreviewProvider', () => {
     });
 
     await panelA.receive({
-      type: 'model-preview/send-requested',
-      identity: { sessionId: 'session-b', sourceFingerprint: 'fingerprint:b.glb', revision: 0 },
+      type: 'model-preview/state-changed',
+      staging: staging('session-b', 'fingerprint:b.glb', 1),
     });
     expect(panelA.messages.at(-1)).toMatchObject({
       type: 'model-preview/diagnostic',
@@ -137,33 +136,6 @@ describe('ModelPreviewProvider', () => {
     expect(stalePanel.messages[0]).toMatchObject({ diagnostic: { code: 'stale-state' } });
   });
 
-  it('requests a bounded capture and delivers only its matching result', async () => {
-    const deliverCapture = vi.fn(async () => undefined);
-    const context = extensionContext();
-    const provider = providerWith(context, () => 'session-a', deliverCapture);
-    const modelPanel = panel();
-    await provider.resolveCustomEditor(document('/workspace/a.glb'), modelPanel.value, token());
-    const identity = {
-      sessionId: 'session-a',
-      sourceFingerprint: 'fingerprint:a.glb',
-      revision: 0,
-    };
-    await modelPanel.receive({ type: 'model-preview/send-requested', identity });
-    const request = modelPanel.messages.at(-1) as { requestId: string };
-    expect(request).toMatchObject({
-      type: 'model-preview/capture-requested',
-      identity,
-      settings: { width: 1024, height: 1024 },
-    });
-    await modelPanel.receive({
-      type: 'model-preview/capture-completed',
-      requestId: request.requestId,
-      capture: capture(identity),
-    });
-    expect(deliverCapture).toHaveBeenCalledOnce();
-    expect(modelPanel.messages.at(-1)).toMatchObject({ type: 'model-preview/send-succeeded' });
-  });
-
   it('cancels close-during-load without touching the disposed webview and ignores late messages', async () => {
     let release: (() => void) | undefined;
     const deferredSourceSession = sourceSession('session-a', '/workspace/a.glb');
@@ -213,7 +185,6 @@ describe('ModelPreviewProvider', () => {
 function providerWith(
   context: ReturnType<typeof extensionContext>,
   createSessionId: () => string,
-  deliverCapture = vi.fn(async () => undefined),
 ): ModelPreviewProvider {
   return new ModelPreviewProvider(uri('/extension'), context.value, {
     createSessionId,
@@ -222,7 +193,6 @@ function providerWith(
       pathResolver: new PathResolver(),
     }),
     openSourceSession: async ({ sessionId, sourcePath }) => sourceSession(sessionId, sourcePath),
-    deliverCapture,
   });
 }
 
@@ -368,38 +338,6 @@ function staging(
     },
     background: '#1e1e1e',
     capture: { width: 1024, height: 1024 },
-  };
-}
-
-function capture(identity: {
-  readonly sessionId: string;
-  readonly sourceFingerprint: string;
-  readonly revision: number;
-}): ModelPreviewCaptureResult {
-  const currentStaging = staging(identity.sessionId, identity.sourceFingerprint, identity.revision);
-  return {
-    metadata: {
-      ...identity,
-      mimeType: 'image/png',
-      width: 1024,
-      height: 1024,
-      cameraId: currentStaging.activeCameraId,
-    },
-    dataUrl: 'data:image/png;base64,AA==',
-    staging: currentStaging,
-    facts: {
-      bounds: {
-        min: { x: -1, y: -1, z: -1 },
-        max: { x: 1, y: 1, z: 1 },
-        center: { x: 0, y: 0, z: 0 },
-        size: { x: 2, y: 2, z: 2 },
-        radius: 1.7,
-      },
-      nodeCount: 1,
-      meshCount: 1,
-      materialCount: 1,
-      animationCount: 0,
-    },
   };
 }
 

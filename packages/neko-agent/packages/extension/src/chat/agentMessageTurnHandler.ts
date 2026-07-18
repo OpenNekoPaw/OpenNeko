@@ -8,7 +8,6 @@
 
 import * as vscode from 'vscode';
 import * as path from 'node:path';
-import * as fs from 'node:fs/promises';
 import type { AssistantRuntimeSettingsSnapshot, Platform } from '@neko/platform';
 import type { AgentTaskResultFollowUpRequest } from '@neko/shared';
 import { buildGlobalErrorMessage, buildThinkingMessage } from '@neko-agent/types';
@@ -226,32 +225,6 @@ export class AgentMessageTurnHandler {
           await this._engineClientProvider.getOptionalClient(),
           getCapabilityRuntimeBindings().contentAccessRuntime,
         ),
-      resolveModelPreviewImage: async (previewImage) => {
-        const result =
-          await getCapabilityRuntimeBindings().contentAccessRuntime.contentAccess.resolve({
-            request: {
-              ref: previewImage,
-              intent: 'agent-context',
-              target: 'local-path',
-              role: 'preview',
-              caller: 'agent-model-preview-context',
-            },
-          });
-        if (result.status !== 'ready' || !result.localPath) {
-          throw new Error(
-            result.error ?? `Unable to resolve Model Preview image resource: ${previewImage.id}`,
-          );
-        }
-        const bytes = await fs.readFile(result.localPath);
-        if (bytes.byteLength === 0 || bytes.byteLength > 16 * 1024 * 1024) {
-          throw new Error('Model Preview image resource is empty or exceeds 16 MiB.');
-        }
-        return {
-          type: 'base64',
-          media_type: 'image/png',
-          data: bytes.toString('base64'),
-        };
-      },
       onReferenceError: (error) => {
         logger.warn(`Could not read file: ${error.reference}`, error.error);
       },

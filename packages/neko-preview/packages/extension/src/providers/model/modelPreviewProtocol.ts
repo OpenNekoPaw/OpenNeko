@@ -1,6 +1,5 @@
 import {
   MODEL_PREVIEW_PROTOCOL_VERSION,
-  isModelPreviewCaptureResult,
   isModelPreviewIdentity,
   isModelPreviewStagingState,
   isNormalizedModelFacts,
@@ -32,18 +31,6 @@ export function parseModelPreviewWebviewMessage(
     case 'model-preview/state-changed':
       return isModelPreviewStagingState(value['staging'])
         ? { type: 'model-preview/state-changed', staging: value['staging'] }
-        : undefined;
-    case 'model-preview/capture-completed':
-      return isNonEmptyString(value['requestId']) && isModelPreviewCaptureResult(value['capture'])
-        ? {
-            type: 'model-preview/capture-completed',
-            requestId: value['requestId'],
-            capture: value['capture'],
-          }
-        : undefined;
-    case 'model-preview/send-requested':
-      return isModelPreviewIdentity(value['identity'])
-        ? { type: 'model-preview/send-requested', identity: value['identity'] }
         : undefined;
     case 'model-preview/diagnostic':
       return isDiagnostic(value['diagnostic'])

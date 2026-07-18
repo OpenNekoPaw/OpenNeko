@@ -36,23 +36,19 @@ export interface ModelInspectorPanelProps {
   readonly selection: ModelSceneSelection;
   readonly diagnostic?: ModelPreviewDiagnostic;
   readonly disabled: boolean;
-  readonly deliveryStatus: 'idle' | 'sending' | 'succeeded' | 'error';
   readonly onUpdateStaging: (staging: ModelPreviewStagingState) => void;
   readonly onDuplicateCamera: (cameraId: string) => void;
   readonly onRemoveCamera: (cameraId: string) => void;
   readonly onViewCamera: (cameraId: string) => void;
-  readonly onSendToAgent: () => void;
 }
 
 export function ModelInspectorPanel({
-  deliveryStatus,
   diagnostic,
   disabled,
   facts,
   nodes,
   onDuplicateCamera,
   onRemoveCamera,
-  onSendToAgent,
   onUpdateStaging,
   onViewCamera,
   selection,
@@ -66,7 +62,6 @@ export function ModelInspectorPanel({
   const selectedNode =
     selection.kind === 'node' ? nodes.find((node) => node.path === selection.nodePath) : undefined;
   const presentation = inspectorPresentation(selection, selectedCamera, selectedNode, t);
-  const deliveryPresentation = getDeliveryPresentation(deliveryStatus, t);
 
   return (
     <aside
@@ -130,21 +125,6 @@ export function ModelInspectorPanel({
           />
         ) : null}
       </div>
-      <footer className="model-preview__inspector-footer">
-        <Button
-          className="model-preview__send"
-          data-testid="model-preview-send-to-agent"
-          aria-busy={deliveryStatus === 'sending'}
-          disabled={disabled || deliveryStatus === 'sending'}
-          data-delivery-status={deliveryStatus}
-          leadingIcon={
-            <span className={toCodiconClassName(deliveryPresentation.icon)} aria-hidden="true" />
-          }
-          onClick={onSendToAgent}
-        >
-          <span aria-live="polite">{deliveryPresentation.label}</span>
-        </Button>
-      </footer>
     </aside>
   );
 }
@@ -498,22 +478,6 @@ function inspectorPresentation(
         icon: 'person',
         title: node?.label ?? t('preview.model.noSelection'),
       };
-  }
-}
-
-function getDeliveryPresentation(
-  status: ModelInspectorPanelProps['deliveryStatus'],
-  t: ReturnType<typeof useTranslation>['t'],
-): { readonly icon: 'account' | 'check' | 'loading' | 'refresh'; readonly label: string } {
-  switch (status) {
-    case 'idle':
-      return { icon: 'account', label: t('preview.model.sendToAgent') };
-    case 'sending':
-      return { icon: 'loading', label: t('preview.model.sendingToAgent') };
-    case 'succeeded':
-      return { icon: 'check', label: t('preview.model.sentToAgent') };
-    case 'error':
-      return { icon: 'refresh', label: t('preview.model.retrySendToAgent') };
   }
 }
 

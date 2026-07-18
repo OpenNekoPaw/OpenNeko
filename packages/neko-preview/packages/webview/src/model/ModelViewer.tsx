@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  isModelPreviewIdentity,
   isModelPreviewStagingState,
   isResourceRef,
-  type ModelPreviewCaptureResult,
   type ModelPreviewDiagnostic,
   type ModelPreviewExtensionMessage,
   type ModelPreviewIdentity,
@@ -44,7 +42,6 @@ export interface ModelViewerProps {
 }
 
 type ViewerStatus = 'waiting' | 'loading' | 'ready' | 'error';
-type DeliveryStatus = 'idle' | 'sending' | 'succeeded' | 'error';
 
 export function ModelViewer({
   runtimeFactory = browserThreeRuntimeFactory,
@@ -53,15 +50,12 @@ export function ModelViewer({
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const runtimeRef = useRef<ThreeModelRuntimePort | undefined>(undefined);
-  const sourceRef = useRef<ModelPreviewSourceDescriptor | undefined>(undefined);
-  const factsRef = useRef<NormalizedModelFacts | undefined>(undefined);
   const stagingRef = useRef<ModelPreviewStagingState | undefined>(undefined);
   const [status, setStatus] = useState<ViewerStatus>('waiting');
   const [staging, setStaging] = useState<ModelPreviewStagingState>();
   const [facts, setFacts] = useState<NormalizedModelFacts>();
   const [nodes, setNodes] = useState<readonly ModelPreviewNode[]>([]);
   const [diagnostic, setDiagnostic] = useState<ModelPreviewDiagnostic>();
-  const [deliveryStatus, setDeliveryStatus] = useState<DeliveryStatus>('idle');
   const [transformMode, setTransformMode] = useState<ModelTransformMode>('translate');
   const [viewportMode, setViewportMode] = useState<ModelViewportMode>('navigate');
   const [gridVisible, setGridVisible] = useState(true);
@@ -140,9 +134,6 @@ export function ModelViewer({
         setNodes,
         setSceneSelection,
         setDiagnostic,
-        setDeliveryStatus,
-        sourceRef,
-        factsRef,
         stagingRef,
       });
     };
@@ -163,8 +154,6 @@ export function ModelViewer({
   const updateStaging = (next: ModelPreviewStagingState) => {
     stagingRef.current = next;
     setStaging(next);
-    setDeliveryStatus('idle');
-    setDiagnostic((current) => (isDeliveryDiagnostic(current) ? undefined : current));
     postState(vscode, next);
   };
   const controlsDisabled = !staging || status !== 'ready';
@@ -215,7 +204,6 @@ export function ModelViewer({
         staging?.lightRig.lights.find((light) => light.id === 'key')?.intensity ?? ''
       }
       data-staging-revision={staging?.revision ?? 0}
-      data-delivery-status={deliveryStatus}
       data-view-distance={viewState.distance}
       data-view-target={`${viewState.target.x},${viewState.target.y},${viewState.target.z}`}
       data-selection-kind={sceneSelection.kind}
@@ -295,9 +283,8 @@ export function ModelViewer({
         ) : null}
       </section>
       <ModelInspectorPanel
-        deliveryStatus={deliveryStatus}
         diagnostic={status === 'ready' ? diagnostic : undefined}
-        disabled={controlsDisabled || deliveryStatus === 'sending'}
+        disabled={controlsDisabled}
         facts={facts}
         nodes={nodes}
         selection={sceneSelection}
@@ -306,14 +293,6 @@ export function ModelViewer({
         onRemoveCamera={removeCamera}
         onUpdateStaging={updateStaging}
         onViewCamera={viewCamera}
-        onSendToAgent={() => {
-          if (!staging) throw new Error('Model Preview staging is unavailable.');
-          setDeliveryStatus('sending');
-          vscode.postMessage({
-            type: 'model-preview/send-requested',
-            identity: identityOf(staging),
-          });
-        }}
       />
     </main>
   );
@@ -330,9 +309,6 @@ async function handleExtensionMessage(input: {
   readonly setNodes: (nodes: readonly ModelPreviewNode[]) => void;
   readonly setSceneSelection: (selection: ModelSceneSelection) => void;
   readonly setDiagnostic: (diagnostic: ModelPreviewDiagnostic | undefined) => void;
-  readonly setDeliveryStatus: (status: DeliveryStatus) => void;
-  readonly sourceRef: React.MutableRefObject<ModelPreviewSourceDescriptor | undefined>;
-  readonly factsRef: React.MutableRefObject<NormalizedModelFacts | undefined>;
   readonly stagingRef: React.MutableRefObject<ModelPreviewStagingState | undefined>;
 }): Promise<void> {
   const { message } = input;
@@ -344,14 +320,11 @@ async function handleExtensionMessage(input: {
         }
         input.setStatus('loading');
         input.setDiagnostic(undefined);
-        input.setDeliveryStatus('idle');
         input.setSceneSelection({ kind: 'scene' });
-        input.sourceRef.current = message.source;
         input.stagingRef.current = message.staging;
         input.setStaging(message.staging);
         const facts = await input.runtime.load(message.source);
         input.runtime.applyStaging(message.staging);
-        input.factsRef.current = facts;
         input.setFacts(facts);
         input.setNodes(input.runtime.getNodes());
         input.setStatus('ready');
@@ -362,48 +335,9 @@ async function handleExtensionMessage(input: {
         });
         break;
       }
-      case 'model-preview/capture-requested': {
-        const staging = input.stagingRef.current;
-        const facts = input.factsRef.current;
-        if (!staging || !facts || !sameIdentity(message.identity, identityOf(staging))) {
-          throw new Error('Model Preview capture identity is stale.');
-        }
-        const dataUrl = input.runtime.capture(message.settings);
-        const capture: ModelPreviewCaptureResult = {
-          metadata: {
-            ...message.identity,
-            mimeType: 'image/png',
-            width: message.settings.width,
-            height: message.settings.height,
-            cameraId: staging.activeCameraId,
-          },
-          dataUrl,
-          staging,
-          facts,
-        };
-        input.vscode.postMessage({
-          type: 'model-preview/capture-completed',
-          requestId: message.requestId,
-          capture,
-        });
-        break;
-      }
-      case 'model-preview/send-succeeded':
-        if (!sameIdentity(message.identity, identityOfRequired(input.stagingRef.current))) {
-          throw new Error('Model Preview send acknowledgement is stale.');
-        }
-        input.setDiagnostic({
-          code: 'delivery-succeeded',
-          message: 'Model Preview context sent to Agent.',
-          severity: 'info',
-          identity: message.identity,
-        });
-        input.setDeliveryStatus('succeeded');
-        break;
       case 'model-preview/diagnostic':
         input.setDiagnostic(message.diagnostic);
         if (message.diagnostic.severity === 'error') {
-          input.setDeliveryStatus('error');
           if (isViewerFatalDiagnostic(message.diagnostic.code)) {
             input.setStatus('error');
           }
@@ -412,12 +346,7 @@ async function handleExtensionMessage(input: {
     }
   } catch (error) {
     const diagnostic: ModelPreviewDiagnostic = {
-      code:
-        message.type === 'model-preview/capture-requested'
-          ? 'capture-failed'
-          : message.type === 'model-preview/send-succeeded'
-            ? 'stale-revision'
-            : 'load-failed',
+      code: 'load-failed',
       message: error instanceof Error ? error.message : String(error),
       severity: 'error',
       identity: input.stagingRef.current
@@ -425,7 +354,6 @@ async function handleExtensionMessage(input: {
         : { sessionId: input.sessionId },
     };
     input.setDiagnostic(diagnostic);
-    input.setDeliveryStatus('error');
     if (isViewerFatalDiagnostic(diagnostic.code)) {
       input.setStatus('error');
     }
@@ -435,12 +363,6 @@ async function handleExtensionMessage(input: {
 
 function isViewerFatalDiagnostic(code: ModelPreviewDiagnostic['code']): boolean {
   switch (code) {
-    case 'capture-invalid':
-    case 'capture-failed':
-    case 'context-invalid':
-    case 'agent-unavailable':
-    case 'agent-rejected':
-    case 'delivery-succeeded':
     case 'stale-revision':
       return false;
     case 'unsupported-format':
@@ -463,11 +385,6 @@ function isViewerFatalDiagnostic(code: ModelPreviewDiagnostic['code']): boolean 
   }
 }
 
-function isDeliveryDiagnostic(diagnostic: ModelPreviewDiagnostic | undefined): boolean {
-  if (!diagnostic) return false;
-  return !isViewerFatalDiagnostic(diagnostic.code);
-}
-
 function postState(
   vscode: ReturnType<typeof getVscodeApi>,
   staging: ModelPreviewStagingState,
@@ -484,41 +401,12 @@ function identityOf(staging: ModelPreviewStagingState): ModelPreviewIdentity {
   };
 }
 
-function identityOfRequired(staging: ModelPreviewStagingState | undefined): ModelPreviewIdentity {
-  if (!staging) throw new Error('Model Preview staging is unavailable.');
-  return identityOf(staging);
-}
-
-function sameIdentity(left: ModelPreviewIdentity, right: ModelPreviewIdentity): boolean {
-  return (
-    left.sessionId === right.sessionId &&
-    left.sourceFingerprint === right.sourceFingerprint &&
-    left.revision === right.revision
-  );
-}
-
 function parseExtensionMessage(value: unknown): ModelPreviewExtensionMessage | undefined {
   if (!isRecord(value) || typeof value['type'] !== 'string') return undefined;
   switch (value['type']) {
     case 'model-preview/load':
       return isSourceDescriptor(value['source']) && isModelPreviewStagingState(value['staging'])
         ? { type: 'model-preview/load', source: value['source'], staging: value['staging'] }
-        : undefined;
-    case 'model-preview/capture-requested':
-      return typeof value['requestId'] === 'string' &&
-        value['requestId'].length > 0 &&
-        isModelPreviewIdentity(value['identity']) &&
-        isCaptureSettings(value['settings'])
-        ? {
-            type: 'model-preview/capture-requested',
-            requestId: value['requestId'],
-            identity: value['identity'],
-            settings: value['settings'],
-          }
-        : undefined;
-    case 'model-preview/send-succeeded':
-      return isModelPreviewIdentity(value['identity'])
-        ? { type: 'model-preview/send-succeeded', identity: value['identity'] }
         : undefined;
     case 'model-preview/diagnostic':
       return isDiagnostic(value['diagnostic'])
@@ -543,18 +431,6 @@ function isSourceDescriptor(value: unknown): value is ModelPreviewSourceDescript
     typeof value['entryUri'] === 'string' &&
     isStringRecord(value['uriMap']) &&
     typeof value['sizeBytes'] === 'number'
-  );
-}
-
-function isCaptureSettings(
-  value: unknown,
-): value is { readonly width: number; readonly height: number } {
-  return (
-    isRecord(value) &&
-    Number.isInteger(value['width']) &&
-    typeof value['width'] === 'number' &&
-    Number.isInteger(value['height']) &&
-    typeof value['height'] === 'number'
   );
 }
 

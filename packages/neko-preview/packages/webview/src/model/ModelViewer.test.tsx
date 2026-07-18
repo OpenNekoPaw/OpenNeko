@@ -40,7 +40,7 @@ describe('ModelViewer', () => {
     document.body.innerHTML = '';
   });
 
-  it('loads, stages, captures, and disposes through a fakeable panel-owned runtime', async () => {
+  it('loads, stages, rejects legacy capture, and disposes through a fakeable panel-owned runtime', async () => {
     const mockWindow = installMockWebviewWindow();
     const runtime = fakeRuntime();
     const factory: ThreeModelRuntimeFactory = {
@@ -88,7 +88,6 @@ describe('ModelViewer', () => {
         meshCount: '1',
         activeCameraId: 'camera-default',
         keyLightIntensity: '3',
-        deliveryStatus: 'idle',
         viewDistance: '7',
         viewTarget: '1,2,3',
         selectionKind: 'scene',
@@ -165,20 +164,12 @@ describe('ModelViewer', () => {
       }),
     );
 
-    const sendButton = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('Send staged view to Agent'),
-    );
-    expect(sendButton).toBeDefined();
-    await act(async () => sendButton?.click());
-    expect(mockWindow.api.postedMessages.at(-1)).toEqual({
-      type: 'model-preview/send-requested',
-      identity: { sessionId: 'session-1', sourceFingerprint: 'fingerprint-1', revision: 0 },
-    });
-    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
-      'dataset.deliveryStatus',
-      'sending',
-    );
-
+    expect(
+      [...container.querySelectorAll('button')].find((button) =>
+        button.textContent?.includes('Send staged view to Agent'),
+      ),
+    ).toBeUndefined();
+    const postedMessageCount = mockWindow.api.postedMessages.length;
     await act(async () => {
       window.dispatchEvent(
         new MessageEvent('message', {
@@ -192,57 +183,8 @@ describe('ModelViewer', () => {
       );
       await Promise.resolve();
     });
-    expect(runtime.capture).toHaveBeenCalledWith({ width: 1024, height: 1024 });
-    expect(mockWindow.api.postedMessages.at(-1)).toMatchObject({
-      type: 'model-preview/capture-completed',
-      requestId: 'capture-1',
-      capture: {
-        metadata: { cameraId: 'camera-default', width: 1024, height: 1024 },
-        dataUrl: 'data:image/png;base64,AA==',
-      },
-    });
-
-    await act(async () => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'model-preview/send-succeeded',
-            identity: { sessionId: 'session-1', sourceFingerprint: 'fingerprint-1', revision: 0 },
-          },
-        }),
-      );
-    });
-    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
-      'dataset.deliveryStatus',
-      'succeeded',
-    );
-    expect(sendButton?.textContent).toContain('Sent to Agent');
-    expect(sendButton).toHaveProperty('dataset.deliveryStatus', 'succeeded');
-
-    await act(async () => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'model-preview/diagnostic',
-            diagnostic: {
-              code: 'agent-unavailable',
-              message: 'Agent is not available.',
-              severity: 'error',
-              identity: {
-                sessionId: 'session-1',
-                sourceFingerprint: 'fingerprint-1',
-                revision: 0,
-              },
-            },
-          },
-        }),
-      );
-    });
-    expect(container.querySelector('[data-testid="model-preview-ready"]')).toMatchObject({
-      dataset: expect.objectContaining({ viewerStatus: 'ready', deliveryStatus: 'error' }),
-    });
-    expect(container.querySelector('.model-preview__viewport [role="alert"]')).toBeNull();
-    expect(sendButton?.textContent).toContain('Retry sending to Agent');
+    expect(runtime.capture).not.toHaveBeenCalled();
+    expect(mockWindow.api.postedMessages).toHaveLength(postedMessageCount);
 
     await act(async () => root.unmount());
     expect(runtime.dispose).toHaveBeenCalledOnce();
@@ -381,7 +323,7 @@ describe('ModelViewer', () => {
     mockWindow.dispose();
   });
 
-  it('keeps independent runtime roots and reports stale capture failure visibly', async () => {
+  it('keeps independent runtime roots and ignores removed legacy capture messages', async () => {
     const mockWindow = installMockWebviewWindow();
     const first = fakeRuntime();
     const second = fakeRuntime();
@@ -430,10 +372,7 @@ describe('ModelViewer', () => {
       );
       await Promise.resolve();
     });
-    expect(mockWindow.api.postedMessages.at(-1)).toMatchObject({
-      type: 'model-preview/diagnostic',
-      diagnostic: { code: 'capture-failed' },
-    });
+    expect(second.capture).not.toHaveBeenCalled();
     await act(async () => secondRoot.unmount());
     expect(second.dispose).toHaveBeenCalledOnce();
     mockWindow.dispose();

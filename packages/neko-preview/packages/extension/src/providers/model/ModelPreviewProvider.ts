@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   MODEL_PREVIEW_PROTOCOL_VERSION,
-  type ModelPreviewCaptureResult,
   type ModelPreviewDiagnostic,
   type ModelPreviewIdentity,
   type ModelPreviewSourceDescriptor,
@@ -32,12 +31,6 @@ interface ModelPreviewSourceSessionPort extends vscode.Disposable {
   assertLive(sessionId: string, sourceFingerprint: string): void;
 }
 
-export interface ModelPreviewCaptureDeliveryInput {
-  readonly source: ModelPreviewSourceDescriptor;
-  readonly capture: ModelPreviewCaptureResult;
-  readonly workspaceRoot?: string;
-}
-
 export interface ModelPreviewProviderDependencies {
   readonly createSessionId?: () => string;
   readonly loadPathPolicy?: (input: {
@@ -59,7 +52,6 @@ export interface ModelPreviewProviderDependencies {
     readonly pathResolver: PathResolver;
     readonly signal: AbortSignal;
   }) => Promise<ModelPreviewSourceSessionPort>;
-  readonly deliverCapture?: (input: ModelPreviewCaptureDeliveryInput) => Promise<void>;
 }
 
 interface ModelPreviewPanelState {
@@ -67,9 +59,7 @@ interface ModelPreviewPanelState {
   readonly sourceSession: ModelPreviewSourceSessionPort;
   readonly abortController: AbortController;
   readonly disposables: vscode.Disposable[];
-  readonly workspaceRoot?: string;
   staging: ModelPreviewStagingState;
-  pendingCaptureRequestId?: string;
   disposed: boolean;
 }
 
@@ -86,7 +76,6 @@ export class ModelPreviewProvider
   private readonly openSourceSession: NonNullable<
     ModelPreviewProviderDependencies['openSourceSession']
   >;
-  private readonly deliverCapture: NonNullable<ModelPreviewProviderDependencies['deliverCapture']>;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -122,11 +111,6 @@ export class ModelPreviewProvider
       });
     this.openSourceSession =
       dependencies.openSourceSession ?? ((input) => ModelPreviewSourceSession.open(input));
-    this.deliverCapture =
-      dependencies.deliverCapture ??
-      (async () => {
-        throw new Error('Model Preview Agent delivery is not configured.');
-      });
   }
 
   async openCustomDocument(
@@ -211,7 +195,6 @@ export class ModelPreviewProvider
         sourceSession,
         abortController,
         staging,
-        ...(workspaceRoot ? { workspaceRoot } : {}),
         disposables: [cancellation, panelDisposal],
         disposed: false,
       };
@@ -305,43 +288,11 @@ export class ModelPreviewProvider
             state.staging,
           );
           break;
-        case 'model-preview/send-requested': {
-          this.assertIdentity(state, message.identity);
-          if (state.pendingCaptureRequestId) {
-            throw protocolError('stale-revision', 'A Model Preview capture is already pending.');
-          }
-          const requestId = randomUUID();
-          state.pendingCaptureRequestId = requestId;
-          await state.panel.webview.postMessage({
-            type: 'model-preview/capture-requested',
-            requestId,
-            identity: identityOf(state.staging),
-            settings: state.staging.capture,
-          });
-          break;
-        }
-        case 'model-preview/capture-completed':
-          if (message.requestId !== state.pendingCaptureRequestId) {
-            throw protocolError('session-mismatch', 'Model Preview capture request is stale.');
-          }
-          this.assertIdentity(state, message.capture.metadata);
-          state.pendingCaptureRequestId = undefined;
-          await this.deliverCapture({
-            source: state.sourceSession.descriptor,
-            capture: message.capture,
-            ...(state.workspaceRoot ? { workspaceRoot: state.workspaceRoot } : {}),
-          });
-          await state.panel.webview.postMessage({
-            type: 'model-preview/send-succeeded',
-            identity: identityOf(state.staging),
-          });
-          break;
         case 'model-preview/diagnostic':
           await this.postDiagnostic(state, message.diagnostic);
           break;
       }
     } catch (error) {
-      state.pendingCaptureRequestId = undefined;
       await this.postDiagnostic(state, diagnosticFromError(error, identityOf(state.staging)));
     }
   }

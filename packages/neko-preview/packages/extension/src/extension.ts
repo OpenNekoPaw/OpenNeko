@@ -26,7 +26,6 @@ import {
 } from './providers/document/EpubPreviewProvider';
 import { DocxPreviewProvider } from './providers/document/DocxPreviewProvider';
 import { ModelPreviewProvider } from './providers/model/ModelPreviewProvider';
-import { ModelAgentContextBridge } from './providers/model/modelAgentContext';
 import { registerOpenCommand } from './providers/document/documentProviderHelper';
 import { previewFileServer } from './providers/document/PreviewFileServer';
 import {
@@ -145,10 +144,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
     );
   }
 
-  const modelAgentContextBridge = new ModelAgentContextBridge();
-  modelProvider = new ModelPreviewProvider(context.extensionUri, context, {
-    deliverCapture: (input) => modelAgentContextBridge.deliver(input),
-  });
+  modelProvider = new ModelPreviewProvider(context.extensionUri, context);
 
   // Register custom editors
   context.subscriptions.push(

@@ -184,7 +184,6 @@ function toContextReferenceKind(type: string): ReferenceTokenProjectionKind {
   if (
     type === 'canvas-node' ||
     type === 'canvas-storyboard-action-intent' ||
-    type === 'model-preview' ||
     type === 'sketch-layer'
   ) {
     return 'canvas';

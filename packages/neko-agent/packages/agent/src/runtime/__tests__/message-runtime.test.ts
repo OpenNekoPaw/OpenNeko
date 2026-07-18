@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
-import {
-  createResourceFingerprint,
-  createResourceRef,
-  MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
-  type AgentContextPayload,
-} from '@neko/shared';
+import { type AgentContextPayload } from '@neko/shared';
 import {
   AGENT_TURN_PRECONDITION_MESSAGE,
   appendAmbientCanvasSystemPrompt,
@@ -459,59 +454,6 @@ describe('message runtime helpers', () => {
       mediaImages: [],
       route: { kind: 'agent' },
     });
-  });
-
-  it('projects model-preview image evidence without reading model binaries as text', async () => {
-    const inputProcessor = {
-      parseReferences: vi.fn(() => []),
-      process: vi.fn(async () => ({ fileReferences: [], errors: [] })),
-    };
-    const resolveModelPreviewImage = vi.fn(async () => ({
-      type: 'base64' as const,
-      media_type: 'image/png',
-      data: 'preview-image',
-    }));
-    const context = modelPreviewContext();
-    const result = await prepareAgentMessageDispatch({
-      request: {
-        conversationId: 'conv-model',
-        messageText: 'Use the staged model view.',
-        sessionMode: 'agent',
-        contextPayloads: [context],
-      },
-      inputProcessor,
-      processAttachments: async () => ({ textContent: '', imageAttachments: [] }),
-      resolveModelPreviewImage,
-      generateMessageId: () => 'message-model',
-    });
-
-    expect(resolveModelPreviewImage).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'preview-image-ref' }),
-    );
-    expect(result.mediaImages).toEqual([
-      { type: 'base64', media_type: 'image/png', data: 'preview-image' },
-    ]);
-    expect(result.enhancedMessage).toContain('Model facts: 2 nodes, 1 meshes');
-    expect(result.enhancedMessage).toContain('Active camera: camera-default');
-    expect(JSON.stringify(inputProcessor.process.mock.calls)).not.toContain('.glb');
-    expect(result.userMessage.contextReferences).toContainEqual(
-      expect.objectContaining({ type: 'model-preview', id: context.id }),
-    );
-  });
-
-  it('fails visibly instead of degrading model-preview to source-only context', async () => {
-    await expect(
-      prepareAgentMessageDispatch({
-        request: {
-          conversationId: 'conv-model',
-          messageText: 'Use the staged model view.',
-          sessionMode: 'agent',
-          contextPayloads: [modelPreviewContext()],
-        },
-        processAttachments: async () => ({ textContent: '', imageAttachments: [] }),
-        generateMessageId: () => 'message-model',
-      }),
-    ).rejects.toThrow(/requires a preview-image content resolver/);
   });
 
   it('rejects message turns without an explicit conversationId', async () => {
@@ -1815,87 +1757,3 @@ describe('message runtime helpers', () => {
     ]);
   });
 });
-
-function modelPreviewContext(): AgentContextPayload {
-  const source = createResourceRef({
-    id: 'model-source-ref',
-    scope: 'project',
-    provider: 'model-preview-source',
-    kind: 'media',
-    source: { kind: 'file', projectRelativePath: 'models/hero.glb' },
-    fingerprint: createResourceFingerprint({ strategy: 'hash', value: 'model-fingerprint' }),
-  });
-  const previewImage = createResourceRef({
-    id: 'preview-image-ref',
-    scope: 'project',
-    provider: 'model-preview-capture',
-    kind: 'preview',
-    source: {
-      kind: 'file',
-      projectRelativePath: '.neko/.cache/model-preview/capture.png',
-    },
-    fingerprint: createResourceFingerprint({ strategy: 'hash', value: 'preview-fingerprint' }),
-  });
-  return {
-    type: 'model-preview',
-    id: 'model-preview:model-fingerprint:2',
-    label: 'hero.glb',
-    summary: 'Staged model preview',
-    data: {
-      contractVersion: 1,
-      source,
-      sourceFingerprint: 'model-fingerprint',
-      format: 'glb',
-      facts: {
-        bounds: {
-          min: { x: -1, y: -1, z: -1 },
-          max: { x: 1, y: 1, z: 1 },
-          center: { x: 0, y: 0, z: 0 },
-          size: { x: 2, y: 2, z: 2 },
-          radius: 1.7,
-        },
-        nodeCount: 2,
-        meshCount: 1,
-        materialCount: 1,
-        animationCount: 0,
-      },
-      staging: {
-        schemaVersion: MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
-        sessionId: 'session-model',
-        sourceFingerprint: 'model-fingerprint',
-        revision: 2,
-        transformPatches: [],
-        cameraPresets: [
-          {
-            id: 'camera-default',
-            label: 'Default',
-            position: { x: 3, y: 2, z: 3 },
-            target: { x: 0, y: 0, z: 0 },
-            fieldOfViewDeg: 45,
-          },
-        ],
-        activeCameraId: 'camera-default',
-        lightRig: {
-          environmentIntensity: 1,
-          lights: [
-            { id: 'key', color: '#fff', intensity: 3, position: { x: 1, y: 2, z: 3 } },
-            { id: 'fill', color: '#fff', intensity: 1, position: { x: -1, y: 1, z: 2 } },
-            { id: 'rim', color: '#fff', intensity: 2, position: { x: 0, y: 2, z: -2 } },
-          ],
-        },
-        background: '#1e1e1e',
-        capture: { width: 1024, height: 1024 },
-      },
-      previewImage,
-      capture: {
-        sessionId: 'session-model',
-        sourceFingerprint: 'model-fingerprint',
-        revision: 2,
-        mimeType: 'image/png',
-        width: 1024,
-        height: 1024,
-        cameraId: 'camera-default',
-      },
-    },
-  };
-}

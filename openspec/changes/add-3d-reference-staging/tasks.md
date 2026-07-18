@@ -1,16 +1,16 @@
 ## 1. Close the prerequisite and define the replacement contract
 
-- [ ] 1.1 Finish or explicitly accept the remaining warnings in `add-standard-3d-model-preview`, sync its stable specs, and archive it before implementing this follow-up.
-- [ ] 1.2 Add red shared contract/parser/compile tests for the versioned `3d-reference` session, subject, preset, purpose, pose, camera, panorama, output, context, identity, and diagnostic unions from abstract contracts to concrete messages.
-- [ ] 1.3 Poison and remove successful `model-preview` parsing, producers, consumers, fixtures, aliases, and generic-image fallback inside the replacement boundary; prove only `3d-reference` reaches the new canonical path.
-- [ ] 1.4 Define exact migration behavior for transient workspace/Webview state and Agent contexts: rebuild from live staging, reject incompatible versions, and preserve user model/panorama source data without dual-read or dual-write.
+- [x] 1.1 Finish or explicitly accept the remaining warnings in `add-standard-3d-model-preview`, sync its stable specs, and archive it before implementing this follow-up.
+- [x] 1.2 Add red shared contract/parser/compile tests for the versioned `3d-reference` session, subject, preset, purpose, pose, camera, panorama, output, context, identity, and diagnostic unions from abstract contracts to concrete messages.
+- [x] 1.3 Poison and remove successful `model-preview` parsing, producers, consumers, fixtures, aliases, and generic-image fallback inside the replacement boundary; prove only `3d-reference` reaches the new canonical path.
+- [x] 1.4 Define exact migration behavior for transient workspace/Webview state and Agent contexts: rebuild from live staging, reject incompatible versions, and preserve user model/panorama source data without dual-read or dual-write.
 
 ## 2. Prove bundled preset feasibility and ownership
 
-- [ ] 2.1 Implement a bounded feasibility spike comparing corrected project-owned procedural geometry with one audited rigged GLB for mannequin articulation, landmarks, pose output, package size, load time, render quality, and recursive disposal; record the decision in `design.md` before production implementation.
-- [ ] 2.2 Define the immutable Preview-owned preset catalog contract with stable ID/version/fingerprint, kind, allowed purposes, default scale, pose/environment capabilities, exact packaged dependencies, provenance, and license metadata.
-- [ ] 2.3 Add red catalog validation tests for duplicate/unknown IDs, incompatible versions, fingerprint mismatch, invalid joint/render-pass metadata, undeclared dependencies, missing notices, and guide presets that expose appearance.
-- [ ] 2.4 Add the minimum project-authored or redistribution-safe guide catalog: abstract articulated mannequin, primitive/blockout props, studio/room blockout, and neutral panoramic orientation grid; include audited notice/provenance records.
+- [x] 2.1 Implement a bounded feasibility spike comparing corrected project-owned procedural geometry with one audited rigged GLB for mannequin articulation, landmarks, pose output, package size, load time, render quality, and recursive disposal; record the decision in `design.md` before production implementation.
+- [x] 2.2 Define the immutable Preview-owned preset catalog contract with stable ID/version/fingerprint, kind, allowed purposes, default scale, pose/environment capabilities, exact packaged dependencies, provenance, and license metadata.
+- [x] 2.3 Add red catalog validation tests for duplicate/unknown IDs, incompatible versions, fingerprint mismatch, invalid joint/render-pass metadata, undeclared dependencies, missing notices, and guide presets that expose appearance.
+- [x] 2.4 Add the minimum project-authored or redistribution-safe guide catalog: abstract articulated mannequin, primitive/blockout props, studio/room blockout, and neutral panoramic orientation grid; include audited notice/provenance records.
 - [ ] 2.5 Add build ownership and lazy-load tests proving non-3D Preview entries do not fetch or instantiate preset assets; record actual per-asset/aggregate bundle size and supported-host load/disposal measurements.
 
 ## 3. Extend the Preview Extension session boundary
