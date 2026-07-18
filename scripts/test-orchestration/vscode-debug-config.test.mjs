@@ -32,11 +32,14 @@ test('VS Code launch configurations reference valid tasks and local paths', asyn
     );
 
     for (const argument of configuration.args ?? []) {
-      if (!argument.startsWith('${workspaceFolder}')) {
+      const workspacePath = argument.startsWith('--extensionDevelopmentPath=')
+        ? argument.slice('--extensionDevelopmentPath='.length)
+        : argument;
+      if (!workspacePath.startsWith('${workspaceFolder}')) {
         continue;
       }
 
-      const localPath = argument.replace('${workspaceFolder}', repositoryRoot);
+      const localPath = workspacePath.replace('${workspaceFolder}', repositoryRoot);
       await assert.doesNotReject(
         access(localPath),
         `${configuration.name} references missing path ${argument}`,

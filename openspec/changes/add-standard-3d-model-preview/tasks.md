@@ -22,6 +22,7 @@
 - [x] 3.3 Implement compatible recoverable Preview state keyed by source fingerprint and staging schema version; reject incompatible state instead of loosely migrating or applying defaults over stale edits.
 - [x] 3.4 Register and dispose the provider from the Preview Extension composition root, preserving lazy Engine activation rules and proving model preview never creates `PreviewService` or dispatches Engine model/scene actions.
 - [x] 3.5 Add provider lifecycle tests covering two simultaneous model panels, independent state, reload, close-during-load, late messages, idempotent dispose, and panel-visible failure projection.
+- [x] 3.6 Make close/cancel during asynchronous editor resolution a terminal lifecycle state: release partial resources and never read, write, or post to a disposed Webview.
 
 ## 4. Build the isolated Three.js model Webview
 
@@ -61,6 +62,7 @@
 - [ ] 7.4 Record the Agent Evaluation authoring decision for host-private Model Preview context ingestion as `excluded` from real TUI behavior evaluation, with deterministic Preview/Agent protocol tests and the real VS Code scenario as evidence; run `pnpm test:agent:eval` for key-free harness integrity and do not claim it as behavior acceptance.
 - [x] 7.5 Revisit the Evaluation disposition and create or update `agent-runtime.creative-media-workflow` with one canonical and one failure case if implementation adds Agent reasoning, Tool/capability routing, provider selection, or TUI-observable behavior beyond deterministic context projection.
 - [x] 7.6 Run `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, `pnpm check:unused`, strict OpenSpec validation, and `git diff --check`; record blocked commands, report paths, no-fallback evidence, and residual risk without treating dry-runs or target discovery as acceptance.
+- [x] 7.7 Keep the ordinary external-workspace `Debug Dev (All)` launch free of missing functional-runner extension paths and validate every local Extension Development Host path after parsing its argument prefix.
 
 ## 8. Synchronize documentation and delivery evidence
 
