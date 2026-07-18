@@ -102,7 +102,7 @@ The model Webview SHALL show a bounds-scaled ground grid at the model's lowest Y
 #### Scenario: Use the bottom viewport toolbar
 
 - **WHEN** the model viewport renders its navigation, transform, guide, and reframe controls
-- **THEN** Preview presents them as one bottom-centered horizontal pill-shaped floating toolbar composed from the shared toolbar primitives, with grouped navigation modes and visible button-level active states without an extra edge highlight, without changing the existing control behavior
+- **THEN** Preview presents them as one bottom-centered horizontal pill-shaped floating toolbar composed from the shared toolbar primitives and the same theme-token visual recipe as Canvas, with grouped navigation modes and visible inset button-level active states without an edge highlight, without changing the existing control behavior
 
 ### Requirement: Every model preview session owns independent mutable state
 

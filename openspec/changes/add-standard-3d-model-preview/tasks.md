@@ -44,7 +44,7 @@
 - [x] 5.8 Add the bounds-scaled ground grid, live screen-space XYZ orientation indicator, and updated accessible bottom toolbar with panel-local guide toggles; verify the real external development GLB in the Extension Development Host.
 - [x] 5.9 Project one package-local scene/camera/node hierarchy selection, add accessible camera edit/duplicate/view/remove operations, and render/dispose a capture-excluded camera helper without changing source bytes or the shared staging shape.
 - [x] 5.10 Refactor the right inspector into contextual scene, camera, and node panels using existing `@neko/ui` property primitives; add regression coverage and verify switching/editing with the external development GLB without resetting the live orbit view.
-- [x] 5.11 Restyle the viewport controls as a Canvas-aligned bottom-centered horizontal pill-shaped floating toolbar using shared toolbar primitives, preserve all existing actions and accessible states without an extra edge highlight, and verify the external development GLB in the Extension Development Host.
+- [x] 5.11 Restyle the viewport controls as a Canvas-aligned bottom-centered horizontal pill-shaped floating toolbar using the shared theme-token visual recipe and toolbar primitives, preserve all existing actions and accessible inset active states without an edge highlight, and verify Canvas plus the external development GLB in the Extension Development Host.
 
 ## 6. Deliver canonical Model Preview context to Agent
 
