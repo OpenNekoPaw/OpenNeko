@@ -82,8 +82,6 @@ export interface UseVSCodeMessagesOptions {
   /** Called when scene TOC is available for a ScriptNode */
   onScriptIndexResult?: (nodeId: string, scenes: ScriptScene[], error?: string) => void;
   onTextDocumentReadResult?: (result: CanvasTextDocumentReadResult) => void;
-  /** Called when model install status is known */
-  onModelInstalledResult?: (nodeId: string, installedVersion: string | null) => void;
   /** Called when cut syncs minimal operational metadata back into canvas */
   onTimelineSync?: (payload: CanvasTimelineSyncPayload) => void;
   /** Return all nodes (optionally filtered by type) — used to respond to nodes.list requests */
@@ -120,8 +118,6 @@ export interface UseVSCodeMessagesOptions {
   onCanvasDataLoaded?: (data: CanvasData) => void;
   /** Called after the extension confirms that the current custom document save completed. */
   onSaved?: () => void;
-  /** Called when the Sketch round-trip sends an edited image back to a canvas node */
-  onUpdateNodeImage?: (nodeId: string, imageData: string, childNodeId?: string) => void;
   onKeyboardFocusChange?: (focused: boolean) => void;
   isKeyboardFocusedRef?: React.MutableRefObject<boolean>;
   isComposingRef?: React.MutableRefObject<boolean>;
@@ -204,7 +200,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
     onCanvasCreativeAiActionResult,
     onScriptIndexResult,
     onTextDocumentReadResult,
-    onModelInstalledResult,
     onTimelineSync,
     getNodes,
     getNode,
@@ -223,7 +218,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
     onProjectionSourceChanged,
     onCanvasDataLoaded,
     onSaved,
-    onUpdateNodeImage,
     onKeyboardFocusChange,
     isKeyboardFocusedRef,
     isComposingRef,
@@ -244,8 +238,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
   onScriptIndexResultRef.current = onScriptIndexResult;
   const onTextDocumentReadResultRef = useRef(onTextDocumentReadResult);
   onTextDocumentReadResultRef.current = onTextDocumentReadResult;
-  const onModelInstalledResultRef = useRef(onModelInstalledResult);
-  onModelInstalledResultRef.current = onModelInstalledResult;
   const onTimelineSyncRef = useRef(onTimelineSync);
   onTimelineSyncRef.current = onTimelineSync;
   const getNodesRef = useRef(getNodes);
@@ -282,8 +274,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
   onCanvasDataLoadedRef.current = onCanvasDataLoaded;
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
-  const onUpdateNodeImageRef = useRef(onUpdateNodeImage);
-  onUpdateNodeImageRef.current = onUpdateNodeImage;
   const onKeyboardFocusChangeRef = useRef(onKeyboardFocusChange);
   onKeyboardFocusChangeRef.current = onKeyboardFocusChange;
   const isKeyboardFocusedRefRef = useRef(isKeyboardFocusedRef);
@@ -401,12 +391,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
             if (isCanvasTextDocumentReadResult(message)) {
               onTextDocumentReadResultRef.current?.(message);
             }
-            break;
-          case 'modelInstalledResult':
-            onModelInstalledResultRef.current?.(
-              message.nodeId as string,
-              (message.installedVersion as string | null) ?? null,
-            );
             break;
           case 'timelineSync':
             if (
@@ -726,15 +710,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
             }
             break;
           }
-
-          // Round-trip: Sketch sends back an edited image for a canvas shot node
-          case 'updateNodeImage':
-            onUpdateNodeImageRef.current?.(
-              message.nodeId as string,
-              message.imageData as string,
-              message.childNodeId as string | undefined,
-            );
-            break;
         }
       };
 

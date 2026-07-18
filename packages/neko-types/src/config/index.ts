@@ -98,4 +98,3 @@ export type { EnvGetter } from './credential-resolver';
 // Import directly from '@neko/shared/config/config-reader' in Node.js environments.
 
 // NOTE: auth-config-loader.ts is NOT exported here because it uses Node.js APIs.
-// Import directly from '@neko/shared/config/auth-config-loader' in Node.js environments.

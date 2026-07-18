@@ -110,7 +110,7 @@ export interface TaskResultDeliveryGroupMetadata {
  * other process-local runtime handles.
  */
 export interface TaskLifecycleMetadata {
-  /** Owning conversation for UI replay, Dashboard grouping, and auditing */
+  /** Owning conversation for UI replay, task projection grouping, and auditing */
   readonly ownerConversationId?: string;
   /** Owning durable run for terminal/process-backed observers and cancellation */
   readonly ownerRunId?: string;

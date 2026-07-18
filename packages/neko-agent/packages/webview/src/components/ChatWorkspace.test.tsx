@@ -911,7 +911,6 @@ function createSettings(): SettingsState {
       },
     ],
     modelGroups: [],
-    ssoSession: null,
   };
 }
 

@@ -1,9 +1,7 @@
 /**
  * AssetManifest v4 contract.
  *
- * This file is the shared client/server schema surface for neko-market.
- * Registry server remains authoritative for producing, validating, signing,
- * and curating marketplace manifests; clients consume this contract.
+ * This file is the portable package and local asset manifest schema.
  *
  * @see docs/architecture/manifest-schema-spec.md
  * @see docs/architecture/registry-server-contract.md
@@ -104,9 +102,9 @@ export type MediaKind =
   | 'model-3d'
   | 'model-motion'
   | 'model-config'
-  | 'puppet-model'
-  | 'puppet-motion'
-  | 'puppet-config'
+  | 'live2d-model'
+  | 'live2d-motion'
+  | 'live2d-config'
   | 'voice-pack'
   | 'document';
 
@@ -120,9 +118,9 @@ export const MEDIA_KINDS: readonly MediaKind[] = [
   'model-3d',
   'model-motion',
   'model-config',
-  'puppet-model',
-  'puppet-motion',
-  'puppet-config',
+  'live2d-model',
+  'live2d-motion',
+  'live2d-config',
   'voice-pack',
   'document',
 ] as const;
@@ -151,9 +149,9 @@ export interface MediaMetadata {
   };
   'model-motion'?: { format: 'gltf-animation' | 'nkma' | 'vrma'; duration?: number };
   'model-config'?: { format: 'vrm-expression' | 'material-preset' | 'nkm-config' };
-  'puppet-model'?: { format: 'moc3' | 'nkp' | 'live2d-bundle'; textureCount?: number };
-  'puppet-motion'?: { format: 'live2d' | 'nkpup'; duration: number };
-  'puppet-config'?: { format: 'exp3' | 'physics3' | 'live2d-config' | 'nkp-config' };
+  'live2d-model'?: { format: 'moc3' | 'live2d-bundle'; textureCount?: number };
+  'live2d-motion'?: { format: 'live2d'; duration: number };
+  'live2d-config'?: { format: 'exp3' | 'physics3' | 'live2d-config' };
   'voice-pack'?: {
     format: 'wav' | 'ogg' | 'flac' | 'voice-pack';
     language?: string;
@@ -170,7 +168,7 @@ export interface MediaMetadata {
 }
 
 export interface StarterMetadata {
-  targetEditor: 'cut' | 'canvas' | 'model' | 'sketch' | 'puppet' | 'story';
+  targetEditor: 'cut' | 'canvas';
   requires?: AssetType[];
 }
 
@@ -178,7 +176,7 @@ export interface IdentityMetadata {
   identityKind: 'character' | 'location' | 'object' | 'style';
   identityId: string;
   forms: Array<{
-    role: '3d-rigged' | '2d-puppet' | 'portrait' | 'voice' | 'bio' | 'reference';
+    role: '3d-rigged' | '2d-rigged' | 'portrait' | 'voice' | 'bio' | 'reference';
     packageRef: string;
     relPath?: string;
   }>;
@@ -240,7 +238,6 @@ export interface EndpointMetadata {
 }
 
 export type AssetProviderTrustLevel = 'core' | 'community' | 'untrusted';
-export type ProviderCardMarketTrustLevel = AssetProviderTrustLevel;
 
 export interface ProviderSignature {
   readonly algorithm: 'sha256' | 'sha512' | 'ed25519';
@@ -259,9 +256,6 @@ export interface ProviderMetadata {
   trustLevel?: AssetProviderTrustLevel;
   signature?: ProviderSignature;
 }
-
-/** Backward-compatible name for provider marketplace metadata. */
-export type ProviderCardMarketMetadata = ProviderMetadata;
 
 export type ProfilePackageKind = 'artifact' | 'provider-expression';
 export type ProfilePackageHost = 'vscode' | 'cli' | 'tui';
@@ -308,9 +302,6 @@ export interface SkillMetadata {
     minContextWindow?: number;
   };
 }
-
-/** Backward-compatible name for skill marketplace metadata. */
-export type SkillMarketMetadata = SkillMetadata;
 
 export interface ProcessorMetadata {
   processorManifestPath: string;
@@ -594,7 +585,7 @@ export type AssetSemantics =
   | { type: 'media'; mediaKind: 'image'; data: ImageSemantics }
   | { type: 'media'; mediaKind: 'video'; data: VideoSemantics }
   | { type: 'media'; mediaKind: '3d-model'; data: ModelMediaSemantics }
-  | { type: 'media'; mediaKind: 'puppet-motion'; data: PuppetMotionSemantics }
+  | { type: 'media'; mediaKind: 'live2d-motion'; data: Live2DMotionSemantics }
   | { type: 'identity'; data: IdentitySemantics }
   | { type: 'skill'; data: SkillSemantics }
   | { type: 'model'; data: ModelSemantics }
@@ -688,7 +679,7 @@ export interface ModelMediaSemantics {
   rigged: boolean;
 }
 
-export interface PuppetMotionSemantics {
+export interface Live2DMotionSemantics {
   emotion: string[];
   actionType: ('idle' | 'walk' | 'run' | 'gesture' | 'reaction')[];
   loopable: boolean;

@@ -104,11 +104,18 @@ export class DocumentContentAccessRuntime {
             ? await this.readDocumentNext(input)
             : await this.readDocumentContent(resolvedDocumentSource, stableDocumentSource, input);
     const documentResourceRef = readDocumentArchiveRef(input.source);
+    const resourceRef = isResourceRef(input.source)
+      ? input.source
+      : createPortableFileResourceRef(
+          stableSource(input.source) ?? resolved.source,
+          this.deps.resolveDocumentResourceScope(),
+          output.text,
+        );
     return {
       contentAccess: resolved,
       source: resolved.source ?? stableSource(input.source),
       ...output,
-      ...(isResourceRef(input.source) ? { resourceRef: input.source } : {}),
+      ...(resourceRef ? { resourceRef } : {}),
       ...(documentResourceRef ? { documentResourceRef } : {}),
     };
   }
@@ -378,6 +385,39 @@ function stableSource(
   source: ContentSourceRef,
 ): Exclude<ContentSourceRef, { readonly kind: 'runtime' }> | undefined {
   return source.kind === 'runtime' ? source.source : source;
+}
+
+function createPortableFileResourceRef(
+  source: Exclude<ContentSourceRef, { readonly kind: 'runtime' }> | undefined,
+  scope: ResourceRef['scope'],
+  text: string | undefined,
+): ResourceRef | undefined {
+  if (source?.kind !== 'file') return undefined;
+  const projectRelativePath = normalizePortableSourcePath(source.path);
+  if (!projectRelativePath) return undefined;
+  return createResourceRef({
+    scope,
+    provider: 'source-file-content-access',
+    kind: 'document',
+    source: { kind: 'file', projectRelativePath },
+    locator: { kind: 'file', path: projectRelativePath },
+    fingerprint: text
+      ? createResourceFingerprint({ strategy: 'hash', source: text })
+      : createResourceFingerprint({ strategy: 'none', value: projectRelativePath }),
+  });
+}
+
+function normalizePortableSourcePath(value: string): string | undefined {
+  const normalized = value.replaceAll('\\', '/').replace(/^\.\//u, '');
+  if (
+    normalized.length === 0 ||
+    normalized.startsWith('/') ||
+    /^[A-Za-z]:\//u.test(normalized) ||
+    normalized.split('/').some((segment) => segment === '..')
+  ) {
+    return undefined;
+  }
+  return normalized;
 }
 
 function readSourcePath(ref: ContentSourceRef): string | undefined {

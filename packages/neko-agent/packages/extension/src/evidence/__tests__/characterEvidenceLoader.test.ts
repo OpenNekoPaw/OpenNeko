@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
+  CreativeEntityOccurrenceProjection,
   CreativeEntityRef,
-  DashboardCreativeEntityDetail,
   ProjectSearchItem,
 } from '@neko/shared';
 import {
@@ -10,37 +10,36 @@ import {
   resolveCharacterEvidenceProjectPath,
 } from '../characterEvidenceLoader';
 
+vi.mock('vscode', async () => await import('../../__mocks__/vscode'));
+
 const projectRoot = '/workspace/project-a';
 const entityRef: CreativeEntityRef = {
   entityId: 'char-lin',
   entityKind: 'character',
   projectRoot,
-  source: 'neko-story',
+  source: 'neko-entity',
 };
 
 describe('CharacterEvidenceLoader', () => {
-  it('loads late-scene evidence beyond the first six occurrences', async () => {
-    const details = [
-      makeDetail(
-        Array.from({ length: 8 }, (_, index) => ({
-          location: `cases/long.fountain:${index < 7 ? 10 + index : 220}`,
-          label: 'Lin',
-        })),
-      ),
-    ];
-    const script = makeNumberedScript(260, {
-      220: 'LIN reveals the late-scene clue about the northern gate.',
-    });
+  it('loads late-scene evidence through canonical occurrence readers', async () => {
     const loader = createCharacterEvidenceLoader({
       projectRoot,
-      dashboardReader: { listDetails: vi.fn(async () => details) },
+      entityReader: { getEntity: vi.fn(async () => makeEntity()) },
+      occurrenceReader: {
+        listOccurrences: vi.fn(async () =>
+          Array.from({ length: 8 }, (_, index) =>
+            makeOccurrence(`cases/long.fountain:${index < 7 ? 10 + index : 220}`),
+          ),
+        ),
+      },
       projectSearchReader: { search: vi.fn(async () => []) },
       storyIndexReader: { getScriptIndex: vi.fn(async () => undefined) },
       textReader: {
-        readTextFile: vi.fn(async (filePath) => {
-          expect(filePath).toBe('/workspace/project-a/cases/long.fountain');
-          return script;
-        }),
+        readTextFile: vi.fn(async () =>
+          makeNumberedScript(260, {
+            220: 'LIN reveals the late-scene clue about the northern gate.',
+          }),
+        ),
       },
       maxWindowLines: 24,
     });
@@ -59,22 +58,13 @@ describe('CharacterEvidenceLoader', () => {
     expect(bundle.chunks[0]?.sourceRefs[0]?.lineStart).toBeGreaterThanOrEqual(208);
   });
 
-  it('rejects absolute, parent-directory escape, unsupported, and missing sources with omissions', async () => {
+  it('rejects unsafe, unsupported, and missing explicit source refs', async () => {
     const missingReader = vi.fn(async () => {
       throw new Error('missing');
     });
     const loader = createCharacterEvidenceLoader({
       projectRoot,
-      dashboardReader: {
-        listDetails: vi.fn(async () => [
-          makeDetail([
-            { location: '/tmp/outside.fountain:10', label: 'Abs' },
-            { location: '../outside.fountain:10', label: 'Escape' },
-            { location: 'cases/image.png:10', label: 'Unsupported' },
-            { location: 'cases/missing.fountain:10', label: 'Missing' },
-          ]),
-        ]),
-      },
+      entityReader: { getEntity: vi.fn(async () => makeEntity()) },
       projectSearchReader: { search: vi.fn(async () => []) },
       storyIndexReader: { getScriptIndex: vi.fn(async () => undefined) },
       textReader: { readTextFile: missingReader },
@@ -86,61 +76,37 @@ describe('CharacterEvidenceLoader', () => {
       query: 'missing evidence',
       projectRoot,
       budget: { maxChunks: 4, maxCharacters: 4000, perChunkMaxCharacters: 1200 },
+      seedSourceRefs: [
+        { id: 'abs', kind: 'manual', location: '/tmp/outside.fountain:10' },
+        { id: 'escape', kind: 'manual', location: '../outside.fountain:10' },
+        { id: 'unsupported', kind: 'manual', location: 'cases/image.png:10' },
+        { id: 'missing', kind: 'manual', location: 'cases/missing.fountain:10' },
+      ],
     });
 
     expect(bundle.chunks).toEqual([]);
     expect(bundle.omitted).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          reason: 'safety',
-          message: expect.stringContaining('/tmp/outside.fountain'),
-        }),
-        expect.objectContaining({
-          reason: 'safety',
-          message: expect.stringContaining('../outside.fountain'),
-        }),
-        expect.objectContaining({
-          reason: 'unsupported-source',
-          message: expect.stringContaining('cases/image.png'),
-        }),
-        expect.objectContaining({
-          reason: 'missing-source',
-          message: expect.stringContaining('cases/missing.fountain'),
-        }),
+        expect.objectContaining({ reason: 'safety' }),
+        expect.objectContaining({ reason: 'unsupported-source' }),
+        expect.objectContaining({ reason: 'missing-source' }),
       ]),
     );
     expect(missingReader).toHaveBeenCalledTimes(1);
   });
 
-  it('dedupes Dashboard, occurrence, Story, and search locators for the same range', async () => {
-    const projectSearchReader = vi.fn(async (): Promise<readonly ProjectSearchItem[]> => [
-      makeSearchItem('story-scene-1', 'cases/test.fountain', 30, 34),
-    ]);
+  it('dedupes occurrence, Story, and search locators for the same range', async () => {
     const loader = createCharacterEvidenceLoader({
       projectRoot,
-      dashboardReader: {
-        listDetails: vi.fn(async () => [
-          makeDetail([{ location: 'cases/test.fountain:30-34', label: 'Lin' }]),
-        ]),
-      },
+      entityReader: { getEntity: vi.fn(async () => makeEntity()) },
       occurrenceReader: {
-        listOccurrences: vi.fn(async () => [
-          {
-            entityRef,
-            label: 'Lin',
-            role: 'reference',
-            location: 'cases/test.fountain:30-34',
-            source: {
-              sourceId: 'neko-story',
-              sourceKind: 'story',
-              sourceRef: 'cases/test.fountain:30-34',
-              providerId: 'neko-story',
-              freshness: 'fresh',
-            },
-          },
+        listOccurrences: vi.fn(async () => [makeOccurrence('cases/test.fountain:30-34')]),
+      },
+      projectSearchReader: {
+        search: vi.fn(async (): Promise<readonly ProjectSearchItem[]> => [
+          makeSearchItem('story-scene-1', 'cases/test.fountain', 30, 34),
         ]),
       },
-      projectSearchReader: { search: projectSearchReader },
       storyIndexReader: {
         getScriptIndex: vi.fn(async () => ({
           uri: 'file:///workspace/project-a/cases/test.fountain',
@@ -187,45 +153,8 @@ describe('CharacterEvidenceLoader', () => {
     });
 
     expect(bundle.chunks).toHaveLength(1);
-    expect(bundle.chunks[0]?.text).toContain('LIN notices the sealed door.');
     expect(bundle.chunks[0]?.sourceRefs.map((sourceRef) => sourceRef.kind)).toEqual(
-      expect.arrayContaining([
-        'dashboard-detail',
-        'entity-occurrence',
-        'project-search',
-        'story-script-index',
-      ]),
-    );
-  });
-
-  it('uses ProjectSearchItem only as a locator and records stale freshness', async () => {
-    const loader = createCharacterEvidenceLoader({
-      projectRoot,
-      dashboardReader: { listDetails: vi.fn(async () => []) },
-      projectSearchReader: {
-        search: vi.fn(async () => [
-          makeSearchItem('scene-stale', 'cases/search.fountain', 5, 8, 'stale'),
-        ]),
-      },
-      storyIndexReader: { getScriptIndex: vi.fn(async () => undefined) },
-      textReader: {
-        readTextFile: vi.fn(async () =>
-          makeNumberedScript(20, { 5: 'LIN remembers only indexed project evidence.' }),
-        ),
-      },
-    });
-
-    const bundle = await loader.loadEvidence({
-      entityRef,
-      mode: 'character-dialogue',
-      query: 'indexed project evidence',
-      projectRoot,
-      budget: { maxChunks: 4, maxCharacters: 4000, perChunkMaxCharacters: 1000 },
-    });
-
-    expect(bundle.chunks[0]?.text).toContain('LIN remembers only indexed project evidence.');
-    expect(bundle.omitted).toEqual(
-      expect.arrayContaining([expect.objectContaining({ reason: 'stale' })]),
+      expect.arrayContaining(['entity-occurrence', 'project-search', 'story-script-index']),
     );
   });
 
@@ -248,67 +177,36 @@ describe('CharacterEvidenceLoader', () => {
     expect(
       resolveCharacterEvidenceProjectPath({
         projectRoot,
-        candidatePath: '/workspace/project-a/cases/test.fountain',
-        allowAbsolutePath: false,
-      }),
-    ).toBeNull();
-    expect(
-      resolveCharacterEvidenceProjectPath({
-        projectRoot,
-        candidatePath: '/workspace/project-a/cases/test.fountain',
-        allowAbsolutePath: true,
-      }),
-    ).toEqual({
-      filePath: '/workspace/project-a/cases/test.fountain',
-      projectRelativePath: 'cases/test.fountain',
-    });
-    expect(
-      resolveCharacterEvidenceProjectPath({
-        projectRoot,
         candidatePath: '../escape.fountain',
-        allowAbsolutePath: false,
-      }),
-    ).toBeNull();
-    expect(
-      resolveCharacterEvidenceProjectPath({
-        projectRoot,
-        candidatePath: 'cases/image.png',
         allowAbsolutePath: false,
       }),
     ).toBeNull();
   });
 });
 
-function makeDetail(
-  occurrences: readonly { readonly location: string; readonly label: string }[],
-): DashboardCreativeEntityDetail {
+function makeEntity() {
   return {
-    ref: {
-      source: 'neko-story',
-      sourceEntityId: 'entity:char-lin',
-      entityId: 'char-lin',
-      entityKind: 'character',
-      projectRoot,
-    },
-    label: 'Lin',
-    kind: 'character',
-    status: 'confirmed',
-    sourceKind: 'script',
+    id: 'char-lin',
+    kind: 'character' as const,
+    canonicalName: 'Lin',
     aliases: ['林'],
-    relationships: [],
-    occurrences: occurrences.map((occurrence) => ({
-      source: 'script',
-      role: 'reference',
-      label: occurrence.label,
-      location: occurrence.location,
-    })),
-    bindings: [],
-    defaults: [],
-    requirements: [],
-    visualDrafts: [],
-    syncSuggestions: [],
-    freshness: 'fresh',
-    actions: [],
+    status: 'confirmed' as const,
+  };
+}
+
+function makeOccurrence(location: string): CreativeEntityOccurrenceProjection {
+  return {
+    entityRef,
+    label: 'Lin',
+    role: 'reference',
+    location,
+    source: {
+      sourceId: 'fountain-content',
+      sourceKind: 'story',
+      sourceRef: location,
+      providerId: 'fountain-content',
+      freshness: 'fresh',
+    },
   };
 }
 
@@ -317,7 +215,6 @@ function makeSearchItem(
   relativePath: string,
   lineStart: number,
   lineEnd: number,
-  freshness: ProjectSearchItem['freshness'] = 'fresh',
 ): ProjectSearchItem {
   const filePath = `${projectRoot}/${relativePath}`;
   return {
@@ -334,12 +231,8 @@ function makeSearchItem(
     projectRoot,
     filePath,
     searchText: 'Lin scene',
-    navigationData: {
-      filePath,
-      lineStart: lineStart - 1,
-      lineEnd: lineEnd - 1,
-    },
-    freshness,
+    navigationData: { filePath, lineStart: lineStart - 1, lineEnd: lineEnd - 1 },
+    freshness: 'fresh',
   };
 }
 

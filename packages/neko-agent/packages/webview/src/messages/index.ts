@@ -365,6 +365,19 @@ export const AgentHostMessages = {
     });
   },
 
+  confirmRoleplayCandidate: (input: {
+    readonly projectSearchItemId: string;
+    readonly initialUserMessage?: string;
+  }) => {
+    postWebviewMessage({
+      type: 'confirmRoleplayCandidate',
+      projectSearchItemId: input.projectSearchItemId,
+      ...(input.initialUserMessage !== undefined
+        ? { initialUserMessage: input.initialUserMessage }
+        : {}),
+    });
+  },
+
   // ==========================================================================
   // File Operations
   // ==========================================================================
@@ -528,15 +541,5 @@ export const AgentHostMessages = {
   /** Notify Extension Host that a drag operation started (DnD) */
   dndStart: (asset: { path: string; mediaType: 'image' | 'video' | 'audio'; name: string }) => {
     postWebviewMessage({ type: 'dnd:start', asset });
-  },
-
-  /** Start SSO login through extension bridge */
-  ssoLogin: (force?: boolean) => {
-    postWebviewMessage({ type: 'ssoLogin', ...(force !== undefined ? { force } : {}) });
-  },
-
-  /** Logout current SSO session */
-  ssoLogout: () => {
-    postWebviewMessage({ type: 'ssoLogout' });
   },
 };

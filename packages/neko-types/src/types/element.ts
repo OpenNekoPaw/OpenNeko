@@ -41,7 +41,7 @@ type AssertKeysSubset<A, B> =
 // Omit oneof fields (media/audio/text/shape/subtitle) — these are
 // element-type-specific data, not base element properties.
 type _CheckBaseElement = AssertKeysSubset<
-  Omit<EngineElement, 'media' | 'audio' | 'text' | 'shape' | 'subtitle' | 'scene3d' | 'puppet'>,
+  Omit<EngineElement, 'media' | 'audio' | 'text' | 'shape' | 'subtitle'>,
   BaseTimelineElement
 >;
 type _CheckSubtitle = AssertKeysSubset<EngineSubtitleElementData, SubtitleElement>;
@@ -206,51 +206,5 @@ export interface SubtitleElement extends BaseTimelineElement {
   };
 }
 
-export interface Scene3DElement extends BaseTimelineElement {
-  type: 'scene3d';
-  /** Source glTF/GLB/VRM file path */
-  src: string;
-  /** Camera node ID from model (optional) */
-  cameraNodeId?: string;
-  /** Active animation clip name */
-  animationClip?: string;
-  /** Loop animation playback (default: false) */
-  animationLoop?: boolean;
-  /** Animation playback speed multiplier (default: 1.0) */
-  animationSpeed?: number;
-  /** Background color [r,g,b,a] — null = transparent */
-  backgroundColor?: [number, number, number, number];
-  /** Camera override parameters */
-  cameraOverride?: {
-    position: [number, number, number];
-    target: [number, number, number];
-    up?: [number, number, number];
-    fovY?: number;
-  };
-}
-
-/** 2D puppet (Live2D/MOC3) element on the timeline */
-export interface PuppetElement extends BaseTimelineElement {
-  type: 'puppet';
-  /** Source puppet file path (.moc3) */
-  src: string;
-  /** Active animation clip name */
-  animationClip?: string;
-  /** Loop animation playback (default: false) */
-  animationLoop?: boolean;
-  /** Animation playback speed multiplier (default: 1.0) */
-  animationSpeed?: number;
-  /** Active expression name */
-  expression?: string;
-  /** Parameter value overrides: paramName → value (0.0-1.0) */
-  parameterOverrides?: Record<string, number>;
-}
-
 export type TimelineElement =
-  | MediaElement
-  | TextElement
-  | AudioElement
-  | ShapeElement
-  | SubtitleElement
-  | Scene3DElement
-  | PuppetElement;
+  MediaElement | TextElement | AudioElement | ShapeElement | SubtitleElement;

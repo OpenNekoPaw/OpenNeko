@@ -135,7 +135,11 @@ export function EntryPromptMenu({
                     ) : null}
                   </span>
                   <span className="agent-composer-popover-badge">
-                    {t('chat.entryPrompt.roleplay.badge')}
+                    {t(
+                      isRoleplayCandidateItem(item)
+                        ? 'chat.entryPrompt.roleplay.confirmBadge'
+                        : 'chat.entryPrompt.roleplay.badge',
+                    )}
                   </span>
                 </button>
               ))
@@ -159,9 +163,13 @@ function projectRoleplayItems(items: readonly MentionItem[]): MentionItem[] {
 }
 
 function isPlayableRoleplayItem(item: MentionItem): boolean {
-  if (item.kind === 'character') return true;
-  if (item.kind !== 'entity' && item.kind !== 'asset') return false;
-  return isCharacterEntityType(item.entityType);
+  if (item.kind !== 'entity') return false;
+  if (!isCharacterEntityType(item.entityType)) return false;
+  return !item.navigationData?.candidateId || isRoleplayCandidateItem(item);
+}
+
+function isRoleplayCandidateItem(item: MentionItem): boolean {
+  return Boolean(item.navigationData?.candidateId && item.navigationData?.projectSearchItemId);
 }
 
 function isCharacterEntityType(entityType: string | undefined): boolean {

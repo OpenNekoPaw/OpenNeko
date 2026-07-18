@@ -49,9 +49,8 @@ describe('neko-suite plugin transfer planner', () => {
         },
       }),
     ).toEqual({
-      status: 'execute-command',
-      command: 'neko.sketch.authoring.importImageSource',
-      payload: { path: '/tmp/frame.png', name: 'Frame' },
+      status: 'unsupported',
+      target: 'sketch',
     });
 
     expect(
@@ -63,9 +62,8 @@ describe('neko-suite plugin transfer planner', () => {
         },
       }),
     ).toEqual({
-      status: 'execute-command',
-      command: 'neko.model.authoring.importAsset',
-      payload: { path: '/tmp/character.glb', name: 'Character' },
+      status: 'unsupported',
+      target: 'model',
     });
 
     expect(
@@ -196,39 +194,18 @@ describe('neko-suite plugin transfer planner', () => {
     });
   });
 
-  it('passes durable authoring target and provenance to canonical package commands', () => {
-    const target = {
-      kind: 'file' as const,
-      documentUri: 'file:///repo/shot.nks',
-      title: 'Shot paintover',
-      reveal: true,
-    };
-    const provenance = {
-      source: 'agent' as const,
-      conversationId: 'conv-1',
-      messageId: 'msg-1',
-    };
-
+  it('rejects removed durable authoring targets', () => {
     expect(
       buildNekoSuitePluginTransferPlan({
         target: 'sketch',
         payload: {
           kind: 'singleAsset',
           asset: { path: '/tmp/frame.png', mediaType: 'image', name: 'Frame' },
-          target,
-          provenance,
         },
       }),
     ).toEqual({
-      status: 'execute-command',
-      command: 'neko.sketch.authoring.importImageSource',
-      payload: {
-        path: '/tmp/frame.png',
-        name: 'Frame',
-        target,
-        reveal: true,
-        provenance,
-      },
+      status: 'unsupported',
+      target: 'sketch',
     });
   });
 
@@ -264,18 +241,12 @@ describe('neko-suite plugin transfer planner', () => {
 
     expect(plans).toEqual([
       expect.objectContaining({ command: 'neko.cut.authoring.importGeneratedClip' }),
-      expect.objectContaining({ command: 'neko.sketch.authoring.importImageSource' }),
-      expect.objectContaining({ command: 'neko.model.authoring.importAsset' }),
+      { status: 'unsupported', target: 'sketch' },
+      { status: 'unsupported', target: 'model' },
     ]);
     expect(
       plans.map((plan) => (plan.status === 'execute-command' ? plan.command : '')),
-    ).not.toEqual(
-      expect.arrayContaining([
-        'neko.cut.importGeneratedClip',
-        'neko.sketch.importAsset',
-        'neko.model.importAsset',
-      ]),
-    );
+    ).not.toEqual(expect.arrayContaining(['neko.cut.importGeneratedClip']));
   });
 
   it.each([

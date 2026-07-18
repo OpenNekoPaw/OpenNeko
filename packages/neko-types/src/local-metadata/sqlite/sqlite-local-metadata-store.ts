@@ -91,7 +91,11 @@ import {
   isProjectSearchItemKind,
   isProjectSearchPartitionKind,
 } from '../../types/project-cache-search';
-import { isMediaSemanticIndex, type MediaSemanticIndex } from '../../types/media-semantic-index';
+import { isMediaSemanticIndex } from '../../types/media-semantic-index';
+import {
+  isCompactMediaSemanticIndex,
+  isSemanticEvidenceProjection,
+} from '../../types/semantic-source';
 import {
   NekoStorageContractError,
   createWorkspacePortableLocator,
@@ -585,9 +589,16 @@ function decodeSemanticProjection(
     });
   }
   const evidence = evidenceRows.map(decodeSemanticEvidence);
-  const textSegments = evidence
+  const compactEvidence = evidence
     .filter((item) => item.kind === 'text-segment')
     .map((item) => item.payload);
+  if (!compactEvidence.every(isSemanticEvidenceProjection)) {
+    throw new LocalMetadataError({
+      code: 'metadata-integrity-failed',
+      operation: 'decode-semantic-projection',
+      message: `Stored semantic evidence contains an incompatible body-bearing payload: ${sourceId}`,
+    });
+  }
   const entityMentions = evidence
     .filter((item) => item.kind === 'entity-mention')
     .map((item) => item.payload);
@@ -599,16 +610,15 @@ function decodeSemanticProjection(
     .map((item) => item.payload);
   const index: unknown = {
     ...indexMetadata,
-    ...(textSegments.length > 0 ? { textSegments } : {}),
     ...(entityMentions.length > 0 ? { entityMentions } : {}),
     ...(semanticTags.length > 0 ? { semanticTags } : {}),
     ...(perceptionRefs.length > 0 ? { perceptionRefs } : {}),
   };
-  if (!isMediaSemanticIndex(index)) {
+  if (!isCompactMediaSemanticIndex(index)) {
     throw new LocalMetadataError({
       code: 'metadata-integrity-failed',
       operation: 'decode-semantic-projection',
-      message: `Stored semantic evidence does not reconstruct a valid index: ${sourceId}`,
+      message: `Stored semantic evidence does not reconstruct a valid compact index: ${sourceId}`,
     });
   }
   const freshness = readString(sourceRow, 'freshness');
@@ -626,6 +636,7 @@ function decodeSemanticProjection(
     coverage,
     freshness,
     index,
+    evidence: compactEvidence,
     updatedAt: readString(sourceRow, 'updated_at'),
   };
 }
@@ -1607,7 +1618,7 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     const sourceIds = new Set<string>();
     const prepared = request.sources.map((source) => {
       assertSemanticProjectionRecord(source, sourceIds);
-      return { source, ...splitSemanticIndex(source.index) };
+      return { source, ...splitSemanticProjection(source) };
     });
     await this.connection().run('DELETE FROM semantic_sources WHERE partition_key = ?', [
       partitionKey(request.partition),
@@ -1634,7 +1645,7 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     }
     const prepared = {
       source: request.source,
-      ...splitSemanticIndex(request.source.index),
+      ...splitSemanticProjection(request.source),
     };
     assertSemanticProjectionRecord(request.source, new Set<string>());
     await this.connection().run(
@@ -1672,6 +1683,58 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     return true;
   }
 
+  async clearBodyBearingSources(
+    partition: LocalMetadataPartition,
+    updatedAt: string,
+  ): Promise<readonly string[]> {
+    assertSemanticProjectionPartition(partition);
+    parseMetadataTimestamp(updatedAt, 'clear-body-bearing-semantic-sources');
+    const rows = await this.connection().all(
+      `SELECT source_id
+         FROM semantic_sources
+        WHERE partition_key = ?
+          AND EXISTS (
+            SELECT 1
+              FROM semantic_evidence
+             WHERE semantic_evidence.partition_key = semantic_sources.partition_key
+               AND semantic_evidence.source_id = semantic_sources.source_id
+               AND semantic_evidence.evidence_kind = 'text-segment'
+               AND json_type(semantic_evidence.evidence_json, '$.text') IS NOT NULL
+          )
+        ORDER BY source_id`,
+      [partitionKey(partition)],
+    );
+    const sourceIds = rows.map((row) => readString(row, 'source_id'));
+    if (sourceIds.length === 0) return [];
+    const result = await this.connection().run(
+      `DELETE FROM semantic_sources
+        WHERE partition_key = ?
+          AND EXISTS (
+            SELECT 1
+              FROM semantic_evidence
+             WHERE semantic_evidence.partition_key = semantic_sources.partition_key
+               AND semantic_evidence.source_id = semantic_sources.source_id
+               AND semantic_evidence.evidence_kind = 'text-segment'
+               AND json_type(semantic_evidence.evidence_json, '$.text') IS NOT NULL
+          )`,
+      [partitionKey(partition)],
+    );
+    if (result.changes !== sourceIds.length) {
+      throw new LocalMetadataError({
+        code: 'metadata-transaction-failed',
+        operation: 'clear-body-bearing-semantic-sources',
+        message: 'Body-bearing semantic cache cleanup changed an unexpected number of sources',
+      });
+    }
+    const currentSources = await this.list(partition);
+    await this.projectionVersions.increment({
+      partition,
+      ...projectionFreshnessUpdate(currentSources, 'semantic-sources-not-fresh'),
+      updatedAt,
+    });
+    return sourceIds;
+  }
+
   async insertMissing(
     request: SemanticProjectionReplaceRequest,
   ): Promise<SemanticProjectionInsertMissingResult> {
@@ -1680,7 +1743,7 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     const sourceIds = new Set<string>();
     const prepared = request.sources.map((source) => {
       assertSemanticProjectionRecord(source, sourceIds);
-      return { source, ...splitSemanticIndex(source.index) };
+      return { source, ...splitSemanticProjection(source) };
     });
     const insertedSourceIds: string[] = [];
     const preservedSourceIds: string[] = [];
@@ -1704,7 +1767,9 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
 
   private async insertSource(
     partition: LocalMetadataPartition,
-    item: { readonly source: SemanticProjectionRecord } & ReturnType<typeof splitSemanticIndex>,
+    item: { readonly source: SemanticProjectionRecord } & ReturnType<
+      typeof splitSemanticProjection
+    >,
     preserveExisting = false,
   ): Promise<boolean> {
     const key = partitionKey(partition);
@@ -1776,6 +1841,7 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
       parameters.push(...kinds);
     }
     appendProjectionStringFilter(clauses, parameters, 'source_id', query.sourceId);
+    appendProjectionStringFilter(clauses, parameters, 'projection_id', query.projectionId);
     appendProjectionStringFilter(clauses, parameters, 'candidate_id', query.candidateId);
     appendProjectionStringFilter(clauses, parameters, 'asset_ref', query.assetRef);
     if (query.entityId !== undefined) {
@@ -2394,6 +2460,9 @@ function assertSemanticProjectionRecord(
     !record.coverage.every(isProjectSemanticCoverageAnalysisKind) ||
     !isProjectIndexFreshness(record.freshness) ||
     !isMediaSemanticIndex(record.index) ||
+    Object.prototype.hasOwnProperty.call(record.index, 'textSegments') ||
+    !Array.isArray(record.evidence) ||
+    !record.evidence.every(isSemanticEvidenceProjection) ||
     !Number.isFinite(Date.parse(record.updatedAt))
   ) {
     throw new LocalMetadataError({
@@ -2405,22 +2474,22 @@ function assertSemanticProjectionRecord(
   sourceIds.add(record.sourceId);
 }
 
-function splitSemanticIndex(index: MediaSemanticIndex): {
+function splitSemanticProjection(record: SemanticProjectionRecord): {
   readonly indexMetadata: Omit<
-    MediaSemanticIndex,
-    'textSegments' | 'entityMentions' | 'semanticTags' | 'perceptionRefs'
+    SemanticProjectionRecord['index'],
+    'entityMentions' | 'semanticTags' | 'perceptionRefs'
   >;
   readonly evidence: readonly EncodedSemanticEvidence[];
 } {
-  const { textSegments, entityMentions, semanticTags, perceptionRefs, ...indexMetadata } = index;
+  const { entityMentions, semanticTags, perceptionRefs, ...indexMetadata } = record.index;
   const evidence: EncodedSemanticEvidence[] = [];
   let ordinal = 0;
-  for (const segment of textSegments ?? []) {
+  for (const item of record.evidence) {
     evidence.push({
       kind: 'text-segment',
-      evidenceId: segment.segmentId,
+      evidenceId: item.evidenceId,
       ordinal: ordinal++,
-      payload: segment,
+      payload: item,
     });
   }
   for (const mention of entityMentions ?? []) {
@@ -3343,6 +3412,15 @@ class ExclusiveSemanticProjectionRepository implements SemanticProjectionReposit
   ): Promise<boolean> {
     return this.exclusive.run(() =>
       this.transaction('cache-write', () => this.raw.deleteSource(partition, sourceId, updatedAt)),
+    );
+  }
+
+  clearBodyBearingSources(
+    partition: LocalMetadataPartition,
+    updatedAt: string,
+  ): Promise<readonly string[]> {
+    return this.exclusive.run(() =>
+      this.transaction('cache-write', () => this.raw.clearBodyBearingSources(partition, updatedAt)),
     );
   }
 

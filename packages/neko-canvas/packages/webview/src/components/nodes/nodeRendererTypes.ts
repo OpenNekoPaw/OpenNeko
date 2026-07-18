@@ -74,7 +74,6 @@ export interface NodeRendererContext extends NodeRendererCommonProps {
   onDocumentLoadText?: (nodeId: string, docPath: string, docType: CanvasTextDocumentType) => void;
   documentTextProjection?: TextDocumentRuntimeProjection;
   onCanvasEmbedOpen?: (canvasPath: string) => void;
-  onModelCheckInstalled?: (nodeId: string, modelPath: string) => void;
   onRemoveContainerChild?: (containerId: string, childId: string) => void;
 }
 

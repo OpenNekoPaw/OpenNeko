@@ -334,15 +334,7 @@ function isMediaRangeLike(value: unknown): boolean {
 }
 
 function isQualityProjectDomain(value: unknown): boolean {
-  return (
-    value === 'sketch' ||
-    value === 'canvas' ||
-    value === 'cut' ||
-    value === 'audio' ||
-    value === 'model' ||
-    value === 'puppet' ||
-    value === 'story'
-  );
+  return value === 'canvas' || value === 'cut' || value === 'audio';
 }
 
 function isQualityRepairPlanLike(value: unknown): boolean {

@@ -193,7 +193,7 @@ export const en = {
   'library.badge.projected': 'Projected',
   'library.action.create': 'Add {node}',
   'library.action.pickFile': 'Choose a file to add {node}',
-  'library.action.sourceBound': 'Add from Dashboard or an entity source',
+  'library.action.sourceBound': 'Add from an entity source',
   'library.action.projected': 'Created by an entity graph projection',
   'library.group.storyboard': 'Storyboard',
   'library.group.narrative': 'Narrative',
@@ -251,7 +251,6 @@ export const en = {
   'menu.ai.adjustCamera': 'Adjust Camera',
   'menu.ai.understand': 'Understand Content',
   'menu.ai.sendToAgent': 'Send to Agent',
-  'menu.ai.editInSketch': 'Edit in Sketch',
   'menu.ai.generateVideo': 'Generate Video',
   'menu.ai.editWithControlNet': 'ControlNet Edit',
 
@@ -324,6 +323,10 @@ export const en = {
   'group.viewMode': 'Group view',
   'group.overview': 'Overview',
   'group.typeList': 'Type list',
+  'workspaceBoard.inbox': 'Inbox',
+  'workspaceBoard.task': 'Task · {id}',
+  'workspaceBoard.run': 'Run · {id}',
+  'workspaceBoard.processing': 'Processing',
   'gallery.openItemDetail': 'Open gallery item detail',
   'gallery.viewCountCompact': '{count} views',
   'gallery.viewMode': 'Gallery view',
@@ -870,9 +873,6 @@ export const en = {
   'preset.project.preview': 'Preview',
   'preview.open': 'Open',
   'project.type.nkv': 'Video Project',
-  'project.type.nka': 'Audio Project',
-  'project.type.nkm': '3D Model',
-  'project.type.nkp': 'Puppet',
 
   // Generation panel — advanced section
   'gen.advanced': 'Advanced',

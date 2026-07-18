@@ -2,7 +2,7 @@
 // AUTO-GENERATED — DO NOT EDIT
 //
 // Source: packages/neko-proto/timeline.proto
-// Source hash: 1f2e0e294a6d6ea9
+// Source hash: 27c1eea507bbf7f2
 // Command: node scripts/proto-gen-ts.mjs
 // =============================================================================
 
@@ -11,7 +11,7 @@
 // =============================================================================
 
 export type EngineTrackType =
-  'video' | 'audio' | 'text' | 'effect' | 'subtitle' | 'shape' | 'media' | 'scene3d' | 'puppet';
+  'video' | 'audio' | 'text' | 'effect' | 'subtitle' | 'shape' | 'media';
 
 export type EngineBlendMode =
   | 'normal'
@@ -291,39 +291,6 @@ export interface EngineSubtitleElementData {
   shadow?: EngineTextShadow;
 }
 
-export interface EngineCameraOverride {
-  /** [x, y, z] */
-  position: number[];
-  /** [x, y, z] */
-  target: number[];
-  /** [x, y, z] default: [0, 1, 0] */
-  up: number[];
-  /** degrees, default: 45.0 */
-  fovY: number;
-}
-
-export interface EngineScene3DElementData {
-  src: string;
-  cameraNodeId?: string;
-  animationClip?: string;
-  animationLoop: boolean;
-  /** default: 1.0 */
-  animationSpeed: number;
-  /** [r,g,b,a] */
-  backgroundColor: number[];
-  cameraOverride?: EngineCameraOverride;
-}
-
-export interface EnginePuppetElementData {
-  src: string;
-  animationClip?: string;
-  animationLoop: boolean;
-  /** default: 1.0 */
-  animationSpeed: number;
-  expression?: string;
-  parameterOverrides: Record<string, number>;
-}
-
 export interface EngineElement {
   /** Element ID */
   id: string;
@@ -349,8 +316,6 @@ export interface EngineElement {
   text?: EngineTextElementData;
   shape?: EngineShapeElementData;
   subtitle?: EngineSubtitleElementData;
-  scene3d?: EngineScene3DElementData;
-  puppet?: EnginePuppetElementData;
 }
 
 /**
@@ -624,25 +589,6 @@ export const ENGINE_SUBTITLE_KEYS = [
   'strokeColor',
   'strokeWidth',
   'shadow',
-] as const;
-
-export const ENGINE_SCENE3D_KEYS = [
-  'src',
-  'cameraNodeId',
-  'animationClip',
-  'animationLoop',
-  'animationSpeed',
-  'backgroundColor',
-  'cameraOverride',
-] as const;
-
-export const ENGINE_PUPPET_KEYS = [
-  'src',
-  'animationClip',
-  'animationLoop',
-  'animationSpeed',
-  'expression',
-  'parameterOverrides',
 ] as const;
 
 export const ENGINE_TRACK_KEYS = [

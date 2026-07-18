@@ -1617,7 +1617,7 @@ function isArtifactProfileUsableForValidation(
       ['profile'],
       'Persisted artifacts cannot reference skill-local profile descriptors.',
       {
-        expected: 'builtin, package, market, project, personal',
+        expected: 'builtin, package, project, personal',
         actual: descriptor.source,
         details: {
           profileId: descriptor.profileId,

@@ -8,8 +8,20 @@
 
 import * as vscode from 'vscode';
 import * as path from 'node:path';
+import { buildFountainScriptIndex } from '@neko/content';
 import type { AssistantRuntimeSettingsSnapshot, Platform } from '@neko/platform';
-import type { AgentTaskResultFollowUpRequest } from '@neko/shared';
+import {
+  AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
+  AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
+  ENTITY_FACADE_COMMANDS,
+  isAgentResolvedEntityContextData,
+  isCreativeEntity,
+  isCreativeEntityKind,
+  isEntityFacadeCommandError,
+  type AgentContextPayload,
+  type AgentTaskResultFollowUpRequest,
+  type CreativeEntityKind,
+} from '@neko/shared';
 import { buildGlobalErrorMessage, buildThinkingMessage } from '@neko-agent/types';
 import type { IAgentManager } from '../ai/agentManager';
 import { getCanvasSelection } from '../services/canvasAmbientContext';
@@ -50,14 +62,13 @@ import {
 import { MediaTaskDeliveryHost } from '../services/mediaTaskDeliveryHost';
 import { MediaTurnBridge } from '../services/mediaTurnBridge';
 import { WorkspaceBoardProjectionHost } from '../services/workspaceBoardProjectionHost';
-import type { AgentDashboardWorkItemSource } from '../services/dashboardWorkItemSource';
+import type { AgentWorkItemProjectionSource } from '../services/workItemProjectionSource';
 import type { AgentLocalResourceAccess } from '../services/localResourceAccess';
 import type { GeneratedAssetIndex } from '@neko/platform/media/generated-asset-index';
 import { createVSCodeWorkspaceFileReader } from '../services/workspaceFileReader';
 import { searchVSCodeProjectFiles } from '../services/workspaceProjectSearch';
 import { searchProjectMentionCandidates } from '../services/projectMentionSearch';
 import { AgentTurnBridge } from './message/agentTurnBridge';
-import type { AccountAiCatalogCache } from '../services/accountAiCatalogCache';
 import {
   formatAgentLlmConfigDiagnostics,
   resolveAgentLlmConfigForTurn,
@@ -67,7 +78,6 @@ import { getCapabilityRuntimeBindings } from '../bootstrap/capabilityBootstrap';
 const logger = getLogger('AgentMessageTurnHandler');
 
 export interface AgentMessageTurnHandlerOptions {
-  readonly accountAiCatalog?: AccountAiCatalogCache;
   readonly generatedAssetIndex?: GeneratedAssetIndex;
   readonly workspaceId?: string;
 }
@@ -104,7 +114,7 @@ export class AgentMessageTurnHandler {
     private readonly _platform?: Platform,
     private readonly _taskManager?: IRuntimeTaskManager,
     private readonly _engineClientProvider: IEngineClientProvider = getEngineClientProvider(),
-    private readonly _dashboardWorkItems?: AgentDashboardWorkItemSource,
+    private readonly _workItemProjections?: AgentWorkItemProjectionSource,
     private readonly _localResourceAccess?: AgentLocalResourceAccess,
     private readonly _options: AgentMessageTurnHandlerOptions = {},
   ) {
@@ -125,7 +135,7 @@ export class AgentMessageTurnHandler {
     this._mediaTurnBridge = new MediaTurnBridge({
       platform: this._platform,
       mediaDeliveryHost: this._mediaDeliveryHost,
-      dashboardWorkItems: this._dashboardWorkItems,
+      workItemProjections: this._workItemProjections,
       localResourceAccess: this._localResourceAccess,
       conversations: this._conversations,
       workspaceBoardProjection: this._workspaceBoardProjection,
@@ -141,7 +151,7 @@ export class AgentMessageTurnHandler {
         this._engineClientProvider.transcodeFile(inputPath, outputPath, mediaType),
       mediaDeliveryHost: this._mediaDeliveryHost,
       workspaceBoardProjection: this._workspaceBoardProjection,
-      dashboardWorkItems: this._dashboardWorkItems,
+      workItemProjections: this._workItemProjections,
       localResourceAccess: this._localResourceAccess,
       contentAccessRuntime: getCapabilityRuntimeBindings().contentAccessRuntime,
       getConversationProjection: (conversationId) => {
@@ -164,8 +174,8 @@ export class AgentMessageTurnHandler {
       providers: this._providers,
       agentManager: this._agentManager,
       getSystemPrompt: this._getSystemPrompt,
-      accountAiCatalog: this._options.accountAiCatalog,
       streamProcessor: this._streamProcessor,
+      terminalArtifactDelivery: this._workspaceBoardProjection,
       onPhaseChange: ({ conversationId, phase, toolName, timestamp }) =>
         this._updateAgentState(conversationId, phase, toolName, timestamp),
       generateMessageId: () => createAgentMessageId(),
@@ -207,8 +217,9 @@ export class AgentMessageTurnHandler {
       ...request,
       locale: request.locale ?? vscode.env.language,
     };
-    const turnSettings = this._settings.snapshotForConversation(localizedRequest.conversationId);
-    const resolvedRequest = this._resolveAgentTurnRequest(webview, localizedRequest, turnSettings);
+    const groundedRequest = await this._resolveEntityContextPayloads(localizedRequest);
+    const turnSettings = this._settings.snapshotForConversation(groundedRequest.conversationId);
+    const resolvedRequest = this._resolveAgentTurnRequest(webview, groundedRequest, turnSettings);
     if (!resolvedRequest) {
       return;
     }
@@ -390,6 +401,74 @@ export class AgentMessageTurnHandler {
     };
   }
 
+  private async _resolveEntityContextPayloads(
+    request: AgentMessageRuntimeRequest,
+  ): Promise<AgentMessageRuntimeRequest> {
+    if (!request.contextPayloads?.some((payload) => payload.type === 'entity')) {
+      return request;
+    }
+
+    const projectRoot = this._resolveEntityContextProjectRoot(request.conversationId);
+    const contextPayloads: AgentContextPayload[] = [];
+    for (const payload of request.contextPayloads) {
+      if (payload.type !== 'entity') {
+        contextPayloads.push(payload);
+        continue;
+      }
+      const entityRef = isAgentResolvedEntityContextData(payload.data)
+        ? payload.data.entityRef
+        : readEntityMentionRef(payload);
+      const result = await vscode.commands.executeCommand<unknown>(
+        ENTITY_FACADE_COMMANDS.getEntity,
+        { projectRoot, entityRef },
+      );
+      if (isEntityFacadeCommandError(result)) {
+        throw new Error(
+          `Agent Entity context resolution failed: ${result.code}: ${result.message}`,
+        );
+      }
+      if (!isCreativeEntity(result)) {
+        throw new Error(`Agent Entity context was not found: ${entityRef.entityId}`);
+      }
+      if (result.id !== entityRef.entityId || result.kind !== entityRef.entityKind) {
+        throw new Error(
+          `Agent Entity context identity mismatch: expected ${entityRef.entityKind}:${entityRef.entityId}, received ${result.kind}:${result.id}`,
+        );
+      }
+      if (result.status !== 'confirmed') {
+        throw new Error(`Agent Entity context is not confirmed: ${result.id}`);
+      }
+      contextPayloads.push({
+        ...payload,
+        data: {
+          schemaVersion: AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
+          kind: AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
+          entityRef,
+          entity: result,
+        },
+      });
+    }
+    return { ...request, contextPayloads };
+  }
+
+  private _resolveEntityContextProjectRoot(conversationId: string): string {
+    const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
+    const conversationHash = conversationId.slice(0, 8);
+    const matchingFolders = workspaceFolders.filter(
+      (folder) => getConversationWorkDirHash(folder.uri.fsPath) === conversationHash,
+    );
+    if (matchingFolders.length === 1) {
+      return matchingFolders[0]!.uri.fsPath;
+    }
+    if (matchingFolders.length > 1) {
+      throw new Error(`Agent Entity context workspace is ambiguous: ${conversationId}`);
+    }
+    if (workspaceFolders.length === 1) {
+      return workspaceFolders[0]!.uri.fsPath;
+    }
+    throw new Error(`Agent Entity context workspace cannot be resolved: ${conversationId}`);
+  }
+
   private _updateAgentState(
     conversationId: string,
     phase: AgentStateRuntimeEntry['phase'],
@@ -431,48 +510,38 @@ export class AgentMessageTurnHandler {
       getCanvasNodes: (id) => getCanvasSelection(id),
       getCharacters: async () => {
         try {
-          const ext = vscode.extensions.getExtension<{
-            getCharacterRegistry?():
-              | {
-                  characters: readonly {
-                    id: string;
-                    canonicalName: string;
-                    metadata?: { role?: string };
-                  }[];
-                }
-              | undefined;
-          }>('neko.neko-story');
-          const registry = ext?.isActive ? ext.exports.getCharacterRegistry?.() : undefined;
-          if (!registry) return [];
-          return registry.characters.map((c) => ({
-            id: c.id,
-            name: c.canonicalName,
-            role: c.metadata?.role,
+          if (!projectRoot) return [];
+          const entities = await vscode.commands.executeCommand<unknown>(
+            ENTITY_FACADE_COMMANDS.listEntities,
+            { projectRoot, query: { kind: 'character' } },
+          );
+          if (!Array.isArray(entities)) return [];
+          return entities.filter(isCreativeEntity).map((entity) => ({
+            id: entity.id,
+            name: entity.canonicalName,
+            role:
+              typeof entity.metadata?.['role'] === 'string' ? entity.metadata['role'] : undefined,
           }));
-        } catch {
+        } catch (error) {
+          logger.warn('Failed to load retained Entity character projection', error);
           return [];
         }
       },
       getScenes: async () => {
         try {
-          const ext = vscode.extensions.getExtension<{
-            getScriptIndex?(
-              uri: string,
-            ):
-              | { scenes: readonly { sceneId: string; sceneTitle: string; heading: string }[] }
-              | undefined;
-          }>('neko.neko-story');
-          if (!ext?.isActive) return [];
           const editor = vscode.window.activeTextEditor;
-          if (!editor) return [];
-          const index = ext.exports.getScriptIndex?.(editor.document.uri.toString());
-          if (!index) return [];
+          if (!editor || !editor.document.fileName.toLowerCase().endsWith('.fountain')) return [];
+          const index = buildFountainScriptIndex({
+            uri: editor.document.uri.toString(),
+            content: editor.document.getText(),
+          });
           return index.scenes.map((s) => ({
             id: s.sceneId,
             title: s.sceneTitle || s.heading,
             heading: s.heading,
           }));
-        } catch {
+        } catch (error) {
+          logger.warn('Failed to project active Fountain scenes', error);
           return [];
         }
       },
@@ -548,6 +617,35 @@ export class AgentMessageTurnHandler {
     }
     this._disposables.length = 0;
   }
+}
+
+function readEntityMentionRef(payload: AgentContextPayload): {
+  readonly entityId: string;
+  readonly entityKind: CreativeEntityKind;
+} {
+  const data = readRecord(payload.data);
+  const navigationData = readRecord(data?.['navigationData']);
+  const entityId = readNonEmptyString(navigationData?.['sourceId']);
+  const entityKind = navigationData?.['sourceKind'];
+  if (
+    data?.['source'] !== 'entity-graph' ||
+    navigationData?.['partition'] !== 'creative-entities' ||
+    !entityId ||
+    !isCreativeEntityKind(entityKind)
+  ) {
+    throw new Error(`Agent Entity mention identity is invalid: ${payload.id}`);
+  }
+  return { entityId, entityKind };
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function createVSCodeEntityMemoryContributionAutomation(): EntityMemoryContributionAutomationPort {

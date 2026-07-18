@@ -1,18 +1,10 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import type {
-  CreativeEntity,
   CreativeEntityOccurrenceProjection,
   CreativeEntityRef,
   CreativeEntityRelationshipProjection,
   CreativeEntityRepresentationHint,
-  CreativeEntitySourceKind,
-  DashboardCreativeEntityDetail,
-  DashboardCreativeEntityOccurrenceRef,
-  DashboardCreativeEntityRef,
-  DashboardCreativeEntityRelationshipSummary,
-  DashboardCreativeEntityRow,
-  DashboardCreativeEntitySource,
   NpcProfileFact,
   NpcProfileRelationshipValue,
   NpcSerializableValue,
@@ -24,14 +16,14 @@ import type {
   NpcTranscriptArtifact,
   NpcTranscriptMessage,
 } from '@neko/shared';
-import { CHARACTER_ROLE_TEST_ARTIFACT_DIR, isCreativeEntityRef } from '@neko/shared';
 import {
-  DASHBOARD_CREATIVE_ENTITY_SOURCE_COMMAND,
-  DASHBOARD_NEUTRAL_CREATIVE_ENTITY_SOURCE_COMMAND,
-  isDashboardCreativeEntityDetail,
-  isDashboardCreativeEntitySource,
-  type DashboardCreativeEntitySourceRequest,
-} from '@neko/shared/types/dashboard-creative-entity';
+  CHARACTER_ROLE_TEST_ARTIFACT_DIR,
+  ENTITY_FACADE_COMMANDS,
+  isCreativeEntityCandidate,
+  isCreativeEntityOperationResult,
+  isCreativeEntityRef,
+  isEntityFacadeCommandError,
+} from '@neko/shared';
 import {
   CharacterDialogueSession,
   createDefaultCharacterDialogueSessionId,
@@ -61,6 +53,10 @@ import {
 } from '@neko-agent/types';
 import { getLogger } from '../base';
 import { createDefaultCharacterEvidenceLoader } from '../evidence/characterEvidenceLoader';
+import {
+  resolveRoleplayCandidateSearchSelection,
+  type RoleplayCandidateSearchSelection,
+} from '../services/projectMentionSearch';
 
 export interface CharacterDialogueControllerDeps {
   readonly getWebview: () => vscode.Webview | undefined;
@@ -79,6 +75,14 @@ export interface CharacterDialogueControllerDeps {
     input: NpcEntityResolutionInput,
   ) => Promise<CreativeEntityRef | null>;
   readonly pickEntityRef?: (input: NpcEntityPickerInput) => Promise<CreativeEntityRef | null>;
+  readonly resolveRoleplayCandidate?: (input: {
+    readonly projectSearchItemId: string;
+    readonly projectRoot: string;
+  }) => Promise<RoleplayCandidateSearchSelection | null>;
+  readonly confirmRoleplayCandidate?: (input: {
+    readonly projectRoot: string;
+    readonly candidate: RoleplayCandidateSearchSelection;
+  }) => Promise<CreativeEntityRef>;
   readonly chooseThinProfileAction?: (
     input: NpcThinProfileActionInput,
   ) => Promise<NpcThinProfileAction>;
@@ -524,7 +528,7 @@ export class CharacterDialogueController implements vscode.Disposable {
       collectEvidence: async (entityRef) => {
         const projectRoot = resolveProjectRoot(entityRef);
         const normalizedRef = this.normalizeEntityRef(entityRef, projectRoot);
-        const reader = createDashboardCharacterProfileEvidenceReader(projectRoot);
+        const reader = createCharacterProfileEvidenceReader(projectRoot);
         const [relationships, occurrences, representationHints, scriptContextFacts] =
           await Promise.all([
             reader.listRelationships(normalizedRef),
@@ -590,11 +594,14 @@ export class CharacterDialogueController implements vscode.Disposable {
     }
 
     const parsed = parseCharacterDialogueSlashArgs(input.args);
-    const entityRef =
-      parsed.entityRef ??
-      (parsed.entityToken
+    const hasExplicitEntityIdentity =
+      parsed.entityRef !== undefined || parsed.entityToken?.startsWith('entity:') === true;
+    const explicitEntityRef = resolveExplicitCharacterDialogueEntityRef(parsed, projectRoot);
+    const entityRef = hasExplicitEntityIdentity
+      ? explicitEntityRef
+      : parsed.entityToken
         ? await this.resolveEntityRef(parsed.entityToken, projectRoot)
-        : await this.pickEntityRef(projectRoot));
+        : await this.pickEntityRef(projectRoot);
     if (!entityRef) {
       this.postGlobalError('请先选择一个项目角色，再开始角色对话。');
       return null;
@@ -608,6 +615,58 @@ export class CharacterDialogueController implements vscode.Disposable {
       projectRoot,
       ...(parsed.initialUserMessage ? { initialUserMessage: parsed.initialUserMessage } : {}),
     });
+  }
+
+  async confirmRoleplayCandidate(input: {
+    readonly projectSearchItemId: string;
+    readonly initialUserMessage?: string;
+  }): Promise<CharacterDialogueLaunchResult | null> {
+    const projectRoot = this.deps.getProjectRoot();
+    if (!projectRoot) {
+      this.postGlobalError('请先打开工作区，再确认角色候选。');
+      return null;
+    }
+
+    try {
+      const candidate = await (
+        this.deps.resolveRoleplayCandidate ?? resolveRoleplayCandidateSearchSelection
+      )({
+        projectSearchItemId: input.projectSearchItemId,
+        projectRoot,
+      });
+      if (!candidate) {
+        throw new Error('角色候选已失效或不再可确认，请刷新后重试。');
+      }
+      const entityRef = await (
+        this.deps.confirmRoleplayCandidate ?? confirmRoleplayCandidateThroughEntityFacade
+      )({
+        projectRoot,
+        candidate,
+      });
+      if (entityRef.entityKind !== 'character') {
+        throw new Error('确认结果不是角色实体，无法开始角色扮演。');
+      }
+      if (entityRef.projectRoot && entityRef.projectRoot !== projectRoot) {
+        throw new Error('确认结果属于其他工作区，无法开始角色扮演。');
+      }
+      return this.launch({
+        entityRef: {
+          ...entityRef,
+          projectRoot,
+          source: entityRef.source ?? 'neko-entity',
+        },
+        source: 'slash-command',
+        mode: 'roleplay',
+        enrichment: 'skip',
+        projectRoot,
+        ...(input.initialUserMessage?.trim()
+          ? { initialUserMessage: input.initialUserMessage.trim() }
+          : {}),
+      });
+    } catch (error) {
+      this.postGlobalError(error instanceof Error ? error.message : String(error));
+      return null;
+    }
   }
 
   dispose(): void {
@@ -664,23 +723,6 @@ export class CharacterDialogueController implements vscode.Disposable {
         projectRoot,
       );
     }
-    const candidate = (await services.service.listCandidates()).find(
-      (item) =>
-        item.id === normalized || item.name === normalized || item.aliases?.includes(normalized),
-    );
-    if (candidate) {
-      return this.normalizeEntityRef(
-        {
-          entityId: candidate.resolvedEntityRef?.entityId ?? candidate.id,
-          entityKind: candidate.kind,
-          projectRoot,
-          source: 'neko-entity',
-        },
-        projectRoot,
-      );
-    }
-    const dashboardRef = await resolveDashboardEntityRefByToken(projectRoot, normalized);
-    if (dashboardRef) return this.normalizeEntityRef(dashboardRef, projectRoot);
     return null;
   }
 
@@ -689,37 +731,18 @@ export class CharacterDialogueController implements vscode.Disposable {
     if (configured) return this.normalizeEntityRef(configured, projectRoot);
 
     const services = createVSCodeEntityServices({ projectRoot, logger });
-    const [entities, candidates] = await Promise.all([
-      services.service.list({ kind: 'character' }),
-      services.service.listCandidates('open'),
-    ]);
-    const localItems: NpcEntityQuickPickItem[] = [
-      ...entities.map((entity) => ({
-        label: entity.displayName ?? entity.canonicalName,
-        description: entity.aliases.join(', '),
-        aliases: entity.aliases,
-        ref: {
-          entityId: entity.id,
-          entityKind: entity.kind,
-          projectRoot,
-          source: 'neko-entity',
-        } satisfies CreativeEntityRef,
-      })),
-      ...candidates
-        .filter((candidate) => candidate.kind === 'character')
-        .map((candidate) => ({
-          label: candidate.name,
-          description: 'candidate',
-          ref: {
-            entityId: candidate.resolvedEntityRef?.entityId ?? candidate.id,
-            entityKind: candidate.kind,
-            projectRoot,
-            source: 'neko-entity',
-          } satisfies CreativeEntityRef,
-        })),
-    ];
-    const dashboardItems = await loadDashboardNpcEntityPickerItems(projectRoot);
-    const items = dedupeNpcEntityPickerItems([...localItems, ...dashboardItems]);
+    const entities = await services.service.list({ kind: 'character' });
+    const items: NpcEntityQuickPickItem[] = entities.map((entity) => ({
+      label: entity.displayName ?? entity.canonicalName,
+      description: entity.aliases.join(', '),
+      aliases: entity.aliases,
+      ref: {
+        entityId: entity.id,
+        entityKind: entity.kind,
+        projectRoot,
+        source: 'neko-entity',
+      } satisfies CreativeEntityRef,
+    }));
     const picked = await vscode.window.showQuickPick(items, {
       placeHolder: '选择要对话测试的项目角色',
       matchOnDescription: true,
@@ -752,27 +775,71 @@ export class CharacterDialogueController implements vscode.Disposable {
   private readonly now = (): string => this.deps.now?.() ?? new Date().toISOString();
 }
 
+async function confirmRoleplayCandidateThroughEntityFacade(input: {
+  readonly projectRoot: string;
+  readonly candidate: RoleplayCandidateSearchSelection;
+}): Promise<CreativeEntityRef> {
+  const provenance = {
+    providerId: 'neko-agent-roleplay',
+    sourceKind: 'candidate' as const,
+    ...(input.candidate.sourceRef ? { sourceRef: input.candidate.sourceRef } : {}),
+    label: input.candidate.name,
+  };
+  const proposed = await vscode.commands.executeCommand<unknown>(
+    ENTITY_FACADE_COMMANDS.proposeCandidate,
+    {
+      projectRoot: input.projectRoot,
+      candidate: {
+        id: input.candidate.candidateId,
+        kind: input.candidate.kind,
+        name: input.candidate.name,
+        aliases: input.candidate.aliases,
+        identityBasis: 'user-named',
+        provenance: [provenance],
+        ...(input.candidate.sourceRef ? { sourceRefs: [input.candidate.sourceRef] } : {}),
+        metadata: {
+          promotionSource: 'agent-roleplay',
+        },
+      },
+    },
+  );
+  if (!isCreativeEntityCandidate(proposed)) {
+    throw new Error(entityFacadeFailureMessage(proposed, '无法保存角色候选。'));
+  }
+
+  const confirmed = await vscode.commands.executeCommand<unknown>(
+    ENTITY_FACADE_COMMANDS.confirmCandidate,
+    {
+      projectRoot: input.projectRoot,
+      candidateId: proposed.id,
+      kind: 'character',
+    },
+  );
+  if (!isCreativeEntityOperationResult(confirmed) || !confirmed.ok) {
+    throw new Error(entityFacadeFailureMessage(confirmed, '无法确认角色候选。'));
+  }
+  const entityRef = confirmed.affectedEntityRefs.find(
+    (ref) => ref.entityKind === 'character' && ref.projectRoot === input.projectRoot,
+  );
+  if (!entityRef) {
+    throw new Error('Entity facade 未返回已确认角色的稳定引用。');
+  }
+  return entityRef;
+}
+
+function entityFacadeFailureMessage(value: unknown, fallback: string): string {
+  return isEntityFacadeCommandError(value) ? value.message : fallback;
+}
+
 export function createDefaultCharacterProfileAssembler(
   projectRoot: string,
 ): CharacterProfileAssemblerPort {
   return {
     async assembleProfile(input): Promise<NpcProfileAssemblyResult> {
       const services = createVSCodeEntityServices({ projectRoot, logger });
-      const evidenceReader = createDashboardCharacterProfileEvidenceReader(projectRoot);
-      const dashboardEntityReader = createDashboardNpcEntityReader(projectRoot);
+      const evidenceReader = createCharacterProfileEvidenceReader(projectRoot);
       const readers: NpcProfileAssemblerReaders = {
-        getEntity: async (entityId) =>
-          (await services.service.get(entityId)) ??
-          (await dashboardEntityReader.getEntity({
-            entityId,
-            entityKind: input.entityRef.entityKind,
-            projectRoot,
-            ...(input.entityRef.source ? { source: input.entityRef.source } : {}),
-          })),
-        getCandidate: async (candidateId) =>
-          (await services.service.listCandidates()).find(
-            (candidate) => candidate.id === candidateId,
-          ),
+        getEntity: (entityId) => services.service.get(entityId),
         listBindings: () => services.bindings.list(),
         listVisualDrafts: () => services.drafts.list(),
         listRelationships: (entityRef) => evidenceReader.listRelationships(entityRef),
@@ -810,51 +877,22 @@ export interface DefaultCharacterProfileEnrichmentInput extends NpcProfileEnrich
   ) => Promise<readonly NpcProfileFact[]>;
 }
 
-export function createDashboardCharacterProfileEvidenceReader(
+export function createCharacterProfileEvidenceReader(
   projectRoot: string,
 ): CharacterProfileEvidenceReader {
-  const loadDetails = createDashboardCreativeEntityDetailLoader(projectRoot);
+  void projectRoot;
   return {
-    async listRelationships(entityRef) {
-      const details = await loadDetails(entityRef);
-      return dedupeByKey(
-        details.flatMap((detail) =>
-          detail.relationships.map((relationship) =>
-            dashboardRelationshipToProjection(entityRef, relationship, detail.ref),
-          ),
-        ),
-        relationshipProjectionKey,
-      );
+    async listRelationships() {
+      return [];
     },
-    async listOccurrences(entityRef) {
-      const details = await loadDetails(entityRef);
-      return dedupeByKey(
-        details.flatMap((detail) =>
-          detail.occurrences.map((occurrence) =>
-            dashboardOccurrenceToProjection(entityRef, occurrence, detail.ref),
-          ),
-        ),
-        occurrenceProjectionKey,
-      );
+    async listOccurrences() {
+      return [];
     },
     async listRepresentationHints() {
       return [];
     },
-    async listScriptContextFacts(entityRef) {
-      const details = await loadDetails(entityRef);
-      const snippets = await loadNpcScriptContextSnippets(projectRoot, details);
-      return snippets.map((snippet) => ({
-        key: `script.context.${snippet.index}`,
-        value: snippet.text,
-        source: 'script-extraction',
-        authority: 'confirmed',
-        sourceRef: snippet.location,
-        providerId: snippet.source,
-        metadata: {
-          occurrenceLabel: snippet.label,
-          ...(snippet.metadata ?? {}),
-        },
-      }));
+    async listScriptContextFacts() {
+      return [];
     },
   };
 }
@@ -988,458 +1026,6 @@ function projectEnrichedSparsityScore(
   };
 }
 
-function createDashboardCreativeEntityDetailLoader(
-  projectRoot: string,
-): (entityRef: CreativeEntityRef) => Promise<readonly DashboardCreativeEntityDetail[]> {
-  const detailByEntityId = new Map<string, Promise<readonly DashboardCreativeEntityDetail[]>>();
-  return (entityRef) => {
-    const existing = detailByEntityId.get(entityRef.entityId);
-    if (existing) return existing;
-    const promise = loadDashboardCreativeEntityDetails(projectRoot, entityRef);
-    detailByEntityId.set(entityRef.entityId, promise);
-    return promise;
-  };
-}
-
-interface NpcScriptContextSnippet {
-  readonly index: number;
-  readonly text: string;
-  readonly location: string;
-  readonly label: string;
-  readonly source: string;
-  readonly metadata?: Readonly<Record<string, NpcSerializableValue>>;
-}
-
-const NPC_SCRIPT_CONTEXT_CHUNK_MAX_CHARS = 8000;
-
-async function loadNpcScriptContextSnippets(
-  projectRoot: string,
-  details: readonly DashboardCreativeEntityDetail[],
-): Promise<readonly NpcScriptContextSnippet[]> {
-  const snippets: NpcScriptContextSnippet[] = [];
-  const fileContexts = new Map<string, NpcScriptContextFileContext>();
-
-  for (const detail of details) {
-    for (const occurrence of detail.occurrences) {
-      if (occurrence.source !== 'script') continue;
-
-      const location = parseNpcScriptLocation(projectRoot, occurrence.location);
-      if (!location) continue;
-
-      const existing = fileContexts.get(location.filePath);
-      if (existing) {
-        existing.occurrences.push({
-          line: location.line,
-          location: occurrence.location,
-          label: occurrence.label,
-        });
-        continue;
-      }
-
-      fileContexts.set(location.filePath, {
-        filePath: location.filePath,
-        relativePath: location.relativePath,
-        source: detail.ref.source,
-        occurrences: [
-          {
-            line: location.line,
-            location: occurrence.location,
-            label: occurrence.label,
-          },
-        ],
-      });
-    }
-  }
-
-  for (const context of fileContexts.values()) {
-    const chunks = await readNpcScriptFileContext(context);
-    for (const chunk of chunks) {
-      snippets.push({
-        index: snippets.length + 1,
-        text: chunk.text,
-        location: chunk.location,
-        label: context.occurrences[0]?.label ?? '',
-        source: context.source,
-        metadata: {
-          scriptFile: context.relativePath,
-          lineRange: `${chunk.startLine}-${chunk.endLine}`,
-          occurrenceLines: uniqueNumbers(context.occurrences.map((occurrence) => occurrence.line)),
-          occurrenceLabels: uniqueStrings(
-            context.occurrences.map((occurrence) => occurrence.label),
-          ),
-        },
-      });
-    }
-  }
-
-  return snippets;
-}
-
-interface ParsedNpcScriptLocation {
-  readonly filePath: string;
-  readonly relativePath: string;
-  readonly line: number;
-}
-
-function parseNpcScriptLocation(
-  projectRoot: string,
-  location: string,
-): ParsedNpcScriptLocation | null {
-  const match = /^(.+):(\d+)(?::\d+)?$/.exec(location.trim());
-  if (!match) return null;
-
-  const relativePath = match[1];
-  const line = Number.parseInt(match[2] ?? '', 10);
-  if (!relativePath || !Number.isFinite(line) || line < 1) return null;
-  if (path.isAbsolute(relativePath)) return null;
-  if (!isSupportedNpcScriptContextFile(relativePath)) return null;
-
-  const filePath = path.normalize(path.join(projectRoot, relativePath));
-  if (!isPathInsideProject(projectRoot, filePath)) return null;
-  return { filePath, relativePath: path.normalize(relativePath), line };
-}
-
-interface NpcScriptContextOccurrence {
-  readonly line: number;
-  readonly location: string;
-  readonly label: string;
-}
-
-interface NpcScriptContextFileContext {
-  readonly filePath: string;
-  readonly relativePath: string;
-  readonly source: string;
-  readonly occurrences: NpcScriptContextOccurrence[];
-}
-
-interface NpcScriptContextChunk {
-  readonly text: string;
-  readonly location: string;
-  readonly startLine: number;
-  readonly endLine: number;
-}
-
-async function readNpcScriptFileContext(
-  context: NpcScriptContextFileContext,
-): Promise<readonly NpcScriptContextChunk[]> {
-  try {
-    const raw = await vscode.workspace.fs.readFile(vscode.Uri.file(context.filePath));
-    const text = Buffer.from(raw).toString('utf8');
-    const lines = text.split(/\r?\n/);
-    if (lines.length === 0) return [];
-    return chunkNpcScriptFileContext(context, lines);
-  } catch (error) {
-    logger.debug('NPC script context unavailable', {
-      filePath: context.filePath,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return [];
-  }
-}
-
-function chunkNpcScriptFileContext(
-  context: NpcScriptContextFileContext,
-  lines: readonly string[],
-): readonly NpcScriptContextChunk[] {
-  const chunks: NpcScriptContextChunk[] = [];
-  const occurrenceLines = uniqueNumbers(context.occurrences.map((occurrence) => occurrence.line));
-  let currentLines: string[] = [];
-  let currentStartLine = 1;
-  let currentLength = 0;
-
-  const flush = () => {
-    if (currentLines.length === 0) return;
-    const startLine = currentStartLine;
-    const endLine = startLine + currentLines.length - 1;
-    const header = [
-      `Script file: ${context.relativePath}`,
-      `Lines: ${startLine}-${endLine}`,
-      `Character occurrence lines in this file: ${occurrenceLines.join(', ') || 'none'}`,
-      'Full script context:',
-    ].join('\n');
-    const body = currentLines.join('\n').trimEnd();
-    chunks.push({
-      text: `${header}\n${body}`.trim(),
-      location:
-        chunks.length === 0 && context.occurrences.length === 1
-          ? context.occurrences[0]!.location
-          : `${context.relativePath}:${startLine}-${endLine}`,
-      startLine,
-      endLine,
-    });
-    currentLines = [];
-    currentStartLine = endLine + 1;
-    currentLength = 0;
-  };
-
-  lines.forEach((line, index) => {
-    const numberedLine = `${index + 1}: ${line}`;
-    if (
-      currentLines.length > 0 &&
-      currentLength + numberedLine.length + 1 > NPC_SCRIPT_CONTEXT_CHUNK_MAX_CHARS
-    ) {
-      flush();
-    }
-    if (currentLines.length === 0) {
-      currentStartLine = index + 1;
-    }
-    currentLines.push(numberedLine);
-    currentLength += numberedLine.length + 1;
-  });
-  flush();
-
-  return chunks;
-}
-
-function isSupportedNpcScriptContextFile(filePath: string): boolean {
-  return /\.(fountain|spmd|md|txt)$/i.test(filePath);
-}
-
-function isPathInsideProject(projectRoot: string, filePath: string): boolean {
-  const relative = path.relative(projectRoot, filePath);
-  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
-}
-
-function createDashboardNpcEntityReader(projectRoot: string): {
-  getEntity(entityRef: CreativeEntityRef): Promise<CreativeEntity | undefined>;
-} {
-  const loadDetails = createDashboardCreativeEntityDetailLoader(projectRoot);
-  return {
-    async getEntity(entityRef) {
-      const detail = (await loadDetails(entityRef)).find(
-        (candidate) => candidate.kind === 'character',
-      );
-      return detail ? dashboardDetailToCreativeEntity(detail) : undefined;
-    },
-  };
-}
-
-async function resolveDashboardEntityRefByToken(
-  projectRoot: string,
-  token: string,
-): Promise<CreativeEntityRef | null> {
-  const items = await loadDashboardNpcEntityPickerItems(projectRoot);
-  const normalizedToken = normalizeLookupText(token);
-  const matched = items.find((item) =>
-    itemLookupTokens(item).some((candidate) => normalizeLookupText(candidate) === normalizedToken),
-  );
-  return matched?.ref ?? null;
-}
-
-async function loadDashboardNpcEntityPickerItems(
-  projectRoot: string,
-): Promise<readonly NpcEntityQuickPickItem[]> {
-  const sources = await loadDashboardCreativeEntitySources({ projectRoot });
-  const items: NpcEntityQuickPickItem[] = [];
-
-  for (const source of sources) {
-    try {
-      const snapshot = await source.getSnapshot();
-      for (const row of snapshot.rows) {
-        const ref = dashboardRowToNpcEntityRef(row, projectRoot);
-        if (!ref) continue;
-        items.push({
-          label: row.label,
-          description: dashboardPickerDescription(source, row),
-          detail: row.summary,
-          ref,
-          ...(row.aliases ? { aliases: row.aliases } : {}),
-        });
-      }
-    } catch (error) {
-      logger.debug('NPC entity picker source unavailable', {
-        source: source.source,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  return items;
-}
-
-async function loadDashboardCreativeEntityDetails(
-  projectRoot: string,
-  entityRef: CreativeEntityRef,
-): Promise<readonly DashboardCreativeEntityDetail[]> {
-  const sources = await loadDashboardCreativeEntitySources({ projectRoot });
-  const details: DashboardCreativeEntityDetail[] = [];
-  for (const source of orderDashboardSourcesForEntityRef(sources, entityRef)) {
-    const detail = await loadDashboardCreativeEntityDetailFromSource(
-      source,
-      projectRoot,
-      entityRef,
-    );
-    if (detail) details.push(detail);
-  }
-  return details;
-}
-
-async function loadDashboardCreativeEntitySources(
-  request: DashboardCreativeEntitySourceRequest,
-): Promise<readonly DashboardCreativeEntitySource[]> {
-  const commands = [
-    DASHBOARD_NEUTRAL_CREATIVE_ENTITY_SOURCE_COMMAND,
-    DASHBOARD_CREATIVE_ENTITY_SOURCE_COMMAND,
-  ] as const;
-  const sources: DashboardCreativeEntitySource[] = [];
-
-  for (const command of commands) {
-    try {
-      const candidate = await vscode.commands.executeCommand<unknown>(command, request);
-      if (isDashboardCreativeEntitySource(candidate)) {
-        sources.push(candidate);
-      }
-    } catch (error) {
-      logger.debug('Character profile evidence source unavailable', {
-        command,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  return sources;
-}
-
-function orderDashboardSourcesForEntityRef(
-  sources: readonly DashboardCreativeEntitySource[],
-  entityRef: CreativeEntityRef,
-): readonly DashboardCreativeEntitySource[] {
-  return [...sources].sort((left, right) => {
-    const leftRank = sourceRankForEntityRef(left.source, entityRef);
-    const rightRank = sourceRankForEntityRef(right.source, entityRef);
-    return leftRank - rightRank || left.source.localeCompare(right.source);
-  });
-}
-
-function sourceRankForEntityRef(source: string, entityRef: CreativeEntityRef): number {
-  if (entityRef.source && source === entityRef.source) return 0;
-  if (source === 'neko-story') return 1;
-  if (source === 'neko-entity') return 2;
-  return 3;
-}
-
-async function loadDashboardCreativeEntityDetailFromSource(
-  source: DashboardCreativeEntitySource,
-  projectRoot: string,
-  entityRef: CreativeEntityRef,
-): Promise<DashboardCreativeEntityDetail | undefined> {
-  const candidates = dashboardRefsForNpcEntity(projectRoot, source.source, entityRef);
-  for (const ref of candidates) {
-    try {
-      const detail = await source.getDetail(ref);
-      if (isDashboardCreativeEntityDetail(detail)) {
-        return detail;
-      }
-    } catch (error) {
-      logger.debug('Character profile evidence detail unavailable', {
-        source: source.source,
-        entityId: entityRef.entityId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-  return undefined;
-}
-
-function dashboardRefsForNpcEntity(
-  projectRoot: string,
-  source: string,
-  entityRef: CreativeEntityRef,
-): readonly DashboardCreativeEntityRef[] {
-  const base = {
-    source,
-    entityId: entityRef.entityId,
-    entityKind: entityRef.entityKind,
-  } satisfies Omit<DashboardCreativeEntityRef, 'sourceEntityId'>;
-  return [
-    { ...base, sourceEntityId: `entity:${entityRef.entityId}` },
-    { ...base, sourceEntityId: entityRef.entityId },
-    { ...base, sourceEntityId: `candidate:${entityRef.entityKind}:${entityRef.entityId}` },
-  ];
-}
-
-function dashboardRelationshipToProjection(
-  entityRef: CreativeEntityRef,
-  relationship: DashboardCreativeEntityRelationshipSummary,
-  sourceRef: DashboardCreativeEntityRef,
-): CreativeEntityRelationshipProjection {
-  const fromId = relationship.from || entityRef.entityId;
-  const toId = relationship.to || entityRef.entityId;
-  return {
-    from: {
-      entityId: fromId,
-      entityKind: fromId === entityRef.entityId ? entityRef.entityKind : 'character',
-      ...(entityRef.projectRoot ? { projectRoot: entityRef.projectRoot } : {}),
-      source: sourceRef.source,
-    },
-    to: {
-      entityId: toId,
-      entityKind: toId === entityRef.entityId ? entityRef.entityKind : 'character',
-      ...(entityRef.projectRoot ? { projectRoot: entityRef.projectRoot } : {}),
-      source: sourceRef.source,
-    },
-    type: relationship.type,
-    strength: relationship.strength,
-    source: {
-      sourceId: sourceRef.source,
-      sourceKind: dashboardSourceKind(sourceRef.source),
-      sourceRef: relationship.provenance,
-      providerId: sourceRef.source,
-      freshness: 'fresh',
-    },
-    ...(relationship.confidence !== undefined ? { confidence: relationship.confidence } : {}),
-  };
-}
-
-function dashboardOccurrenceToProjection(
-  entityRef: CreativeEntityRef,
-  occurrence: DashboardCreativeEntityOccurrenceRef,
-  sourceRef: DashboardCreativeEntityRef,
-): CreativeEntityOccurrenceProjection {
-  return {
-    entityRef,
-    label: occurrence.label,
-    source: {
-      sourceId: sourceRef.source,
-      sourceKind: dashboardOccurrenceSourceKind(occurrence.source),
-      sourceRef: occurrence.location,
-      providerId: sourceRef.source,
-      freshness: 'fresh',
-    },
-    role: occurrence.role,
-    location: occurrence.location,
-    ...(occurrence.detail !== undefined ? { detail: occurrence.detail } : {}),
-  };
-}
-
-function dashboardOccurrenceSourceKind(
-  source: DashboardCreativeEntityOccurrenceRef['source'],
-): CreativeEntityOccurrenceProjection['source']['sourceKind'] {
-  switch (source) {
-    case 'registry':
-      return 'registry';
-    case 'script':
-      return 'story';
-    case 'asset':
-      return 'asset';
-    case 'generated-asset':
-      return 'generated';
-    case 'canvas':
-    case 'canvas-comment':
-    case 'canvas-container':
-    case 'canvas-text':
-      return 'canvas';
-  }
-}
-
-function dashboardSourceKind(source: string): CreativeEntitySourceKind {
-  if (source === 'neko-story') return 'story';
-  if (source === 'neko-entity') return 'registry';
-  if (source.includes('canvas')) return 'canvas';
-  if (source.includes('asset')) return 'asset';
-  return 'agent';
-}
-
 export function defaultCharacterEvidenceBudgetForMode(
   mode: 'character-dialogue' | 'embody-character' | 'character-validation',
 ): CharacterEvidenceBudget {
@@ -1466,131 +1052,6 @@ export function defaultCharacterEvidenceBudgetForMode(
         maxTokens: 3000,
       };
   }
-}
-
-function relationshipProjectionKey(relationship: CreativeEntityRelationshipProjection): string {
-  return [
-    relationship.from.entityId,
-    relationship.to.entityId,
-    relationship.type,
-    relationship.source.sourceRef ?? '',
-    relationship.source.providerId ?? '',
-  ].join('\u0000');
-}
-
-function occurrenceProjectionKey(occurrence: CreativeEntityOccurrenceProjection): string {
-  return [
-    occurrence.entityRef?.entityId ?? '',
-    occurrence.source.sourceRef ?? occurrence.location,
-    occurrence.role,
-    occurrence.label,
-    occurrence.source.providerId ?? '',
-  ].join('\u0000');
-}
-
-function dashboardDetailToCreativeEntity(detail: DashboardCreativeEntityDetail): CreativeEntity {
-  return {
-    id: dashboardRefEntityId(detail.ref),
-    kind: 'character',
-    canonicalName: detail.label,
-    aliases: detail.aliases,
-    status: detail.status === 'confirmed' ? 'confirmed' : 'candidate',
-    metadata: {
-      ...(detail.metadata ?? {}),
-      dashboardSource: detail.ref.source,
-      dashboardSourceEntityId: detail.ref.sourceEntityId,
-      sourceKind: detail.sourceKind,
-    },
-  };
-}
-
-function dashboardRowToNpcEntityRef(
-  row: DashboardCreativeEntityRow,
-  projectRoot: string,
-): CreativeEntityRef | null {
-  if (row.kind !== 'character') return null;
-  if (row.actions.some((action) => action.id === 'character-dialogue' && action.disabled)) {
-    return null;
-  }
-
-  return {
-    entityId: dashboardRefEntityId(row.ref),
-    entityKind: 'character',
-    projectRoot,
-    source: row.ref.source,
-  };
-}
-
-function dashboardRefEntityId(ref: DashboardCreativeEntityRef): string {
-  return (
-    ref.entityId ??
-    readDashboardPrefixedId(ref.sourceEntityId, 'entity:') ??
-    readDashboardPrefixedId(ref.sourceEntityId, `candidate:${ref.entityKind}:`) ??
-    ref.sourceEntityId
-  );
-}
-
-function readDashboardPrefixedId(value: string, prefix: string): string | undefined {
-  return value.startsWith(prefix) ? value.slice(prefix.length) : undefined;
-}
-
-function dashboardPickerDescription(
-  source: DashboardCreativeEntitySource,
-  row: DashboardCreativeEntityRow,
-): string {
-  return [
-    row.status,
-    source.sourceDisplayName ?? source.source,
-    row.aliases && row.aliases.length > 0 ? row.aliases.join(', ') : undefined,
-  ]
-    .filter((value): value is string => Boolean(value?.trim()))
-    .join(' · ');
-}
-
-function dedupeNpcEntityPickerItems(
-  items: readonly NpcEntityQuickPickItem[],
-): readonly NpcEntityQuickPickItem[] {
-  const seen = new Set<string>();
-  const deduped: NpcEntityQuickPickItem[] = [];
-  for (const item of items) {
-    const key = `${item.ref.entityKind}\u0000${item.ref.entityId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(item);
-  }
-  return deduped;
-}
-
-function itemLookupTokens(item: NpcEntityQuickPickItem): readonly string[] {
-  return [item.ref.entityId, item.label, ...(item.aliases ?? [])].filter((value): value is string =>
-    Boolean(value?.trim()),
-  );
-}
-
-function normalizeLookupText(value: string): string {
-  return value.trim().toLowerCase();
-}
-
-function dedupeByKey<T>(items: readonly T[], getKey: (item: T) => string): readonly T[] {
-  const seen = new Set<string>();
-  const deduped: T[] = [];
-  for (const item of items) {
-    const key = getKey(item);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(item);
-  }
-  return deduped;
-}
-
-function uniqueStrings(values: readonly string[]): readonly string[] {
-  return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
-}
-
-function uniqueNumbers(values: readonly number[]): readonly number[] {
-  return Array.from(new Set(values.filter((value) => Number.isFinite(value)))).sort(
-    (left, right) => left - right,
-  );
 }
 
 function assertCharacterDialogueRouteNotAborted(signal: AbortSignal): void {
@@ -1624,17 +1085,26 @@ export function resolveCharacterDialogueEntityRefFromSlashArgs(input: {
   readonly projectRoot?: string;
 }): CreativeEntityRef | null {
   const parsed = parseCharacterDialogueSlashArgs(input.args);
+  return resolveExplicitCharacterDialogueEntityRef(parsed, input.projectRoot);
+}
+
+function resolveExplicitCharacterDialogueEntityRef(
+  parsed: ParsedCharacterDialogueSlashArgs,
+  projectRoot: string | undefined,
+): CreativeEntityRef | null {
   if (parsed.entityRef) {
     return parsed.entityRef;
   }
-  if (!parsed.entityToken) {
+  if (!parsed.entityToken?.startsWith('entity:')) {
     return null;
   }
+  const entityId = normalizeMentionToken(parsed.entityToken).trim();
+  if (!entityId) return null;
   return {
-    entityId: normalizeMentionToken(parsed.entityToken),
+    entityId,
     entityKind: 'character',
-    ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
-    source: 'slash-command',
+    ...(projectRoot ? { projectRoot } : {}),
+    source: 'neko-entity',
   };
 }
 

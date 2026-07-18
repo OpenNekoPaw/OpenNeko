@@ -94,6 +94,32 @@ describe('SemanticSourceCoordinator', () => {
       expect.objectContaining({ source: expect.objectContaining({ relativePath: 'notes.txt' }) }),
     );
   });
+
+  it('accepts document containers and only registered structured schemas', async () => {
+    const fixture = createFixture([
+      file('book.pdf', 'sha256:pdf', 20_000_000),
+      file('config.json', 'sha256:config'),
+      {
+        ...file('story.json', 'sha256:story'),
+        creativeSchema: { schemaId: 'openneko.story', schemaVersion: '1' },
+      },
+    ]);
+    fixture.coordinator.setScopes([scope]);
+    await fixture.coordinator.reconcile('workspace');
+    expect(fixture.extractDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ source: expect.objectContaining({ format: 'pdf' }) }),
+    );
+    expect(fixture.readFile).toHaveBeenCalledTimes(1);
+    expect(fixture.replaceSource).toHaveBeenCalledTimes(2);
+    expect(fixture.replaceSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({
+          relativePath: 'story.json',
+          creativeSchema: { schemaId: 'openneko.story', schemaVersion: '1' },
+        }),
+      }),
+    );
+  });
 });
 
 function createFixture(files: readonly SemanticSourceFileObservation[]) {
@@ -112,6 +138,7 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
         sourceRef: { kind: 'file', path: input.source.portablePath },
         updatedAt: input.analyzedAt,
       },
+      evidence: [],
       mentions: [],
       occurrences: [],
       candidates: [],
@@ -123,6 +150,18 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
     storedFingerprints.set(input.source.sourceId, input.source.fingerprint);
   });
   const markStale = vi.fn(async () => undefined);
+  const readFile = vi.fn(async () => new TextEncoder().encode('Rin'));
+  const extractDocument = vi.fn(async ({ source }: { source: SemanticSourceDescriptor }) => [
+    {
+      segmentId: `${source.sourceId}:segment:0`,
+      unitId: `${source.sourceId}:unit:0`,
+      kind: 'plain' as const,
+      text: 'Rin',
+      locator: { kind: 'page' as const, pageNumber: 1, pageIndex: 0 },
+      contentHash: 'fnv1a32:1c8f4c6c',
+      range: { startOffset: 0, endOffset: 3, startLine: 1, endLine: 1 },
+    },
+  ]);
   const coordinator = new SemanticSourceCoordinator(
     {
       discovery: {
@@ -137,7 +176,7 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
         },
         observeFile: async (_scope, relativePath) =>
           files.find((candidate) => candidate.relativePath === relativePath) ?? null,
-        readFile: async () => new TextEncoder().encode('Rin'),
+        readFile,
         readFingerprint: async (observation) => currentFingerprint ?? observation.fingerprint,
       },
       projection: {
@@ -163,11 +202,15 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
       extractText: ({ source }) => [
         {
           segmentId: `${source.sourceId}:segment:0`,
+          unitId: `${source.sourceId}:text`,
           kind: 'plain',
           text: 'Rin',
+          locator: { kind: 'text-range', startChar: 0, endChar: 3 },
+          contentHash: 'fnv1a32:1c8f4c6c',
           range: { startOffset: 0, endOffset: 3, startLine: 1, endLine: 1 },
         },
       ],
+      extractDocument,
       now: () => '2026-07-18T00:00:00.000Z',
     },
     { analyzerId: 'test', supports: () => true, analyze },
@@ -180,6 +223,8 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
     analyze,
     replaceSource,
     markStale,
+    readFile,
+    extractDocument,
     get currentFingerprint() {
       return currentFingerprint;
     },
@@ -189,11 +234,15 @@ function createFixture(files: readonly SemanticSourceFileObservation[]) {
   };
 }
 
-function file(relativePath: string, fingerprint: string): SemanticSourceFileObservation {
+function file(
+  relativePath: string,
+  fingerprint: string,
+  sizeBytes = 3,
+): SemanticSourceFileObservation {
   return {
     relativePath,
     runtimePath: `/workspace/${relativePath}`,
-    sizeBytes: 3,
+    sizeBytes,
     modifiedAtMs: 1,
     fingerprint,
   };

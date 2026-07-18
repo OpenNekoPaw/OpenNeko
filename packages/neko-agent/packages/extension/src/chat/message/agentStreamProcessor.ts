@@ -42,7 +42,7 @@ import type { ConversationBridge } from '../conversationBridge';
 import type { GeneratedAssetIndex } from '@neko/platform/media/generated-asset-index';
 import { MediaTaskDeliveryHost } from '../../services/mediaTaskDeliveryHost';
 import type { WorkspaceBoardProjectionHost } from '../../services/workspaceBoardProjectionHost';
-import type { AgentDashboardWorkItemSource } from '../../services/dashboardWorkItemSource';
+import type { AgentWorkItemProjectionSource } from '../../services/workItemProjectionSource';
 import type { AgentLocalResourceAccess } from '../../services/localResourceAccess';
 import {
   observeEntityMemoryContributionAutomation,
@@ -71,6 +71,10 @@ interface MediaUnderstandingModelOverrides {
  */
 export interface StreamProcessingResult {
   messageId: string;
+  identity?: {
+    readonly turnId: string;
+    readonly runId: string;
+  };
   accumulatedResponse: string;
   accumulatedThinking: string;
   hasError: boolean;
@@ -115,8 +119,8 @@ export interface AgentStreamProcessorDeps {
     readonly perceptionPipeline?: IPerceptionPipeline;
     readonly backfillSink?: BackfillSink;
   };
-  /** Extension-host mirror for Dashboard task aggregation. */
-  dashboardWorkItems?: AgentDashboardWorkItemSource;
+  /** Extension-host mirror for durable task delivery projection. */
+  workItemProjections?: AgentWorkItemProjectionSource;
   /** Unified local resource access for Webview URI projection. */
   localResourceAccess?: AgentLocalResourceAccess;
   /** Unified content access runtime for stable ResourceRef projection. */
@@ -218,7 +222,7 @@ export class AgentStreamProcessor {
       if (!isActiveTurn()) return;
       if (message.type === 'agentTurnTimelineUpdate') {
         conversationProjection.apply(message);
-        this.deps.dashboardWorkItems?.acceptWebviewMessage(message);
+        this.deps.workItemProjections?.acceptWebviewMessage(message);
         return;
       }
       const projectedMessage = await projectStreamMessageResourcesForWebview(webview, message, {
@@ -323,7 +327,7 @@ export class AgentStreamProcessor {
                 logger.warn(
                   'Generated output persisted but Workspace Board projection was blocked',
                   {
-                    diagnostics: projection.diagnostics,
+                    diagnosticCodes: projection.diagnostics.map((diagnostic) => diagnostic.code),
                   },
                 );
               }

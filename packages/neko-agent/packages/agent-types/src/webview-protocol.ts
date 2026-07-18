@@ -49,7 +49,6 @@ import type {
   OpenTab,
   SessionMode,
   SettingsState,
-  SsoSession,
   TabState,
 } from './ui';
 import type { PluginSlashCommandInvocation } from './plugin-slash-command';
@@ -59,7 +58,7 @@ import type {
   SubAgentWorkItemEvent,
   TaskWorkItem,
 } from './work-item';
-import type { DashboardTask } from '@neko/shared/types/dashboard-task';
+import type { TaskProjection } from '@neko/shared/types/task-projection';
 import type { AgentArtifactTransferPayload } from './artifact-transfer';
 import type {
   PluginTransferAssetRef,
@@ -215,7 +214,6 @@ export interface EmptyWebviewMessage {
     | 'refreshConfigSnapshot'
     | 'getSkills'
     | 'openUserConfigFile'
-    | 'ssoLogout'
     | 'openConfigFile'
     | 'getTabState';
 }
@@ -420,14 +418,15 @@ export interface StartCharacterDialogueFromSlashWebviewMessage {
   args?: string;
 }
 
+export interface ConfirmRoleplayCandidateWebviewMessage {
+  type: 'confirmRoleplayCandidate';
+  projectSearchItemId: string;
+  initialUserMessage?: string;
+}
+
 export interface ExitEmbodyCharacterSessionWebviewMessage {
   type: 'exitEmbodyCharacterSession';
   sessionId: string;
-}
-
-export interface SsoLoginWebviewMessage {
-  type: 'ssoLogin';
-  force?: boolean;
 }
 
 export interface RevealContextSourceWebviewMessage {
@@ -498,9 +497,9 @@ export type WebviewToExtensionMessage =
   | InvokeSkillWebviewMessage
   | InvokePluginSlashCommandWebviewMessage
   | StartCharacterDialogueFromSlashWebviewMessage
+  | ConfirmRoleplayCandidateWebviewMessage
   | ExitCharacterDialogueSessionWebviewMessage
   | ExitEmbodyCharacterSessionWebviewMessage
-  | SsoLoginWebviewMessage
   | RevealContextSourceWebviewMessage
   | WebviewKeyboardFocusWebviewMessage
   | WebviewKeyboardEditableWebviewMessage
@@ -554,8 +553,6 @@ export interface ProjectFilesWebviewMessage {
 export interface PluginsAvailable {
   canvas?: boolean;
   cut?: boolean;
-  sketch?: boolean;
-  model?: boolean;
 }
 
 export interface ThinkingMessage {
@@ -848,16 +845,6 @@ export interface PluginsAvailableMessage {
   plugins?: PluginsAvailable;
 }
 
-export interface SsoSessionChangedMessage {
-  type: 'ssoSessionChanged';
-  session: SsoSession | null;
-}
-
-export interface SsoErrorMessage {
-  type: 'ssoError';
-  error: string;
-}
-
 export interface ToolCallMessage {
   type: 'toolCall';
   conversationId: string;
@@ -1040,7 +1027,7 @@ export interface MediaTaskProgressMessage {
 export interface TaskDeliveryReplayMessage {
   type: 'taskDeliveryReplay';
   conversationId: string;
-  task: DashboardTask;
+  task: TaskProjection;
 }
 
 export interface ExternalMessage {
@@ -1094,8 +1081,6 @@ export type ExtensionToWebviewMessage =
   | ProviderMutationResultMessage
   | PluginCommandsMessage
   | PluginsAvailableMessage
-  | SsoSessionChangedMessage
-  | SsoErrorMessage
   | ToolCallMessage
   | ToolResultMessage
   | ToolResultBackfillMessage
@@ -1177,7 +1162,6 @@ const EMPTY_MESSAGE_TYPES: readonly EmptyWebviewMessage['type'][] = [
   'refreshConfigSnapshot',
   'getSkills',
   'openUserConfigFile',
-  'ssoLogout',
   'openConfigFile',
   'getTabState',
 ];
@@ -1219,9 +1203,9 @@ export const WEBVIEW_TO_EXTENSION_MESSAGE_TYPES = [
   'invokeSkill',
   'invokePluginSlashCommand',
   'startCharacterDialogueFromSlash',
+  'confirmRoleplayCandidate',
   'exitCharacterDialogueSession',
   'exitEmbodyCharacterSession',
-  'ssoLogin',
   'revealContextSource',
   'webviewKeyboardFocus',
   'webviewKeyboardEditable',
@@ -1647,7 +1631,7 @@ export function buildMediaTaskProgressMessage(input: {
 
 export function buildTaskDeliveryReplayMessage(input: {
   readonly conversationId: string;
-  readonly task: DashboardTask;
+  readonly task: TaskProjection;
 }): TaskDeliveryReplayMessage {
   return {
     type: 'taskDeliveryReplay',
@@ -1799,12 +1783,12 @@ export function parseWebviewToExtensionMessage(raw: unknown): WebviewToExtension
       return parseInvokePluginSlashCommandMessage(raw);
     case 'startCharacterDialogueFromSlash':
       return parseStartCharacterDialogueFromSlashMessage(raw);
+    case 'confirmRoleplayCandidate':
+      return parseConfirmRoleplayCandidateMessage(raw);
     case 'exitCharacterDialogueSession':
       return parseExitCharacterDialogueSessionMessage(raw);
     case 'exitEmbodyCharacterSession':
       return parseExitEmbodyCharacterSessionMessage(raw);
-    case 'ssoLogin':
-      return parseSsoLoginMessage(raw);
     case 'revealContextSource':
       return parseRevealContextSourceMessage(raw);
     case 'webviewKeyboardFocus':
@@ -3026,6 +3010,19 @@ function parseStartCharacterDialogueFromSlashMessage(
   };
 }
 
+function parseConfirmRoleplayCandidateMessage(
+  raw: Record<string, unknown>,
+): ConfirmRoleplayCandidateWebviewMessage | null {
+  const projectSearchItemId = requiredString(raw.projectSearchItemId);
+  const initialUserMessage = optionalStringStrict(raw.initialUserMessage);
+  if (!projectSearchItemId || initialUserMessage === null) return null;
+  return {
+    type: 'confirmRoleplayCandidate',
+    projectSearchItemId,
+    ...(initialUserMessage !== undefined ? { initialUserMessage } : {}),
+  };
+}
+
 function parseExitCharacterDialogueSessionMessage(
   raw: Record<string, unknown>,
 ): ExitCharacterDialogueSessionWebviewMessage | null {
@@ -3091,13 +3088,6 @@ export function buildEmbodyCharacterSessionExitedMessage(input: {
     ...(input.artifact ? { artifact: input.artifact } : {}),
     ...(input.savedPath ? { savedPath: input.savedPath } : {}),
   };
-}
-
-function parseSsoLoginMessage(raw: Record<string, unknown>): SsoLoginWebviewMessage | null {
-  const force = raw.force;
-  if (force === undefined) return { type: 'ssoLogin' };
-  if (typeof force !== 'boolean') return null;
-  return { type: 'ssoLogin', force };
 }
 
 function parseRevealContextSourceMessage(

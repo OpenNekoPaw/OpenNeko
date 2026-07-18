@@ -1,4 +1,4 @@
-import type { DashboardTask } from '@neko/shared/types/dashboard-task';
+import type { TaskProjection } from '@neko/shared/types/task-projection';
 import { buildTaskDeliveryReplayMessage } from '@neko-agent/types';
 
 export interface TaskDeliveryCursor {
@@ -14,7 +14,7 @@ export interface TaskDeliveryCursorStorage {
 }
 
 export interface TaskDeliveryProjectionSource {
-  getSnapshot(): Promise<readonly DashboardTask[]>;
+  getSnapshot(): Promise<readonly TaskProjection[]>;
 }
 
 export interface TaskDeliveryTarget {
@@ -83,11 +83,11 @@ export class StateTaskDeliveryCursorStorage implements TaskDeliveryCursorStorage
   }
 }
 
-function isTerminalTask(task: DashboardTask): boolean {
+function isTerminalTask(task: TaskProjection): boolean {
   return task.status === 'done' || task.status === 'error' || task.status === 'cancelled';
 }
 
-function isAfterCursor(task: DashboardTask, cursor: TaskDeliveryCursor | undefined): boolean {
+function isAfterCursor(task: TaskProjection, cursor: TaskDeliveryCursor | undefined): boolean {
   if (!cursor) {
     return true;
   }
@@ -98,14 +98,14 @@ function isAfterCursor(task: DashboardTask, cursor: TaskDeliveryCursor | undefin
   );
 }
 
-function toCursor(task: DashboardTask): TaskDeliveryCursor {
+function toCursor(task: TaskProjection): TaskDeliveryCursor {
   return {
     updatedAt: task.completedAt ?? task.startedAt,
     taskId: task.taskId,
   };
 }
 
-function compareByCursor(a: DashboardTask, b: DashboardTask): number {
+function compareByCursor(a: TaskProjection, b: TaskProjection): number {
   const cursorA = toCursor(a);
   const cursorB = toCursor(b);
   if (cursorA.updatedAt !== cursorB.updatedAt) {

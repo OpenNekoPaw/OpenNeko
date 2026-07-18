@@ -69,7 +69,7 @@ export type VSCodePiDirectPurpose = Extract<
 export interface VSCodePiPurposeModelSelection {
   readonly provider: Provider;
   readonly model: Model;
-  readonly providerSource: 'explicit-config' | 'account-gateway';
+  readonly providerSource: 'explicit-config';
 }
 
 export interface ResolveVSCodePiPurposeModelUseInput extends VSCodePiPurposeModelSelection {
@@ -84,7 +84,6 @@ export interface VSCodePiRuntimeManagerOptions {
   readonly workspaceRoot?: string;
   readonly builtinSkillRoot: string;
   readonly credentials: OpenNekoCredentialStore;
-  readonly resolveAccountGatewayCredential?: (providerId: string) => Promise<string>;
   readonly tools: IToolRegistry;
   readonly workspaceTrusted: () => boolean;
 }
@@ -95,7 +94,7 @@ export interface ExecuteVSCodePiTurnInput {
   readonly systemPrompt: string;
   readonly provider: Provider;
   readonly model: Model;
-  readonly providerSource: 'explicit-config' | 'account-gateway';
+  readonly providerSource: 'explicit-config';
   readonly purposeModels?: Partial<Record<VSCodePiToolPurpose, VSCodePiPurposeModelSelection>>;
   readonly executionMode: AssistantExecutionMode;
   readonly temperature?: number;
@@ -431,7 +430,6 @@ class VSCodePiConversationOwner {
       models,
       options.credentials,
       filterVSCodePiTurnPurposeModels(input, options.tools.list()),
-      options.resolveAccountGatewayCredential,
     );
     const contextWindow = input.model.contextWindow;
     if (!contextWindow) {
@@ -518,7 +516,6 @@ class VSCodePiConversationOwner {
       this.models,
       this.options.credentials,
       filterVSCodePiTurnPurposeModels(input, this.options.tools.list()),
-      this.options.resolveAccountGatewayCredential,
     );
     const contextWindow = input.model.contextWindow;
     if (!contextWindow) {
@@ -709,7 +706,6 @@ export async function resolveVSCodePiTurnModelPolicy(
   models: ReturnType<typeof createOpenNekoPiModels>,
   credentials: OpenNekoCredentialStore,
   input: ExecuteVSCodePiTurnInput,
-  resolveAccountGatewayCredential: ((providerId: string) => Promise<string>) | undefined,
 ): Promise<AgentModelPolicy> {
   const selections: PiPurposeSelection[] = [
     {
@@ -732,14 +728,9 @@ export async function resolveVSCodePiTurnModelPolicy(
   const catalog: AgentModelCatalogEntry[] = [];
   const catalogKeys = new Set<string>();
   for (const group of providerGroups) {
-    await ensureVSCodePiProviderCredential(
-      credentials,
-      { provider: group.provider, providerSource: group.providerSource },
-      resolveAccountGatewayCredential,
-    );
+    await ensureVSCodePiProviderCredential(credentials, { provider: group.provider });
     const credential = await credentials.read(group.provider.id);
-    const requiresApiKey =
-      group.providerSource === 'account-gateway' || group.provider.requiresApiKey !== false;
+    const requiresApiKey = group.provider.requiresApiKey !== false;
     const projection = registerOpenNekoPiProvider(models, {
       id: group.provider.id,
       name: group.provider.displayName,
@@ -862,18 +853,12 @@ export async function resolveVSCodePiPurposeModelUse(
   models: ReturnType<typeof createOpenNekoPiModels>,
   credentials: OpenNekoCredentialStore,
   input: ResolveVSCodePiPurposeModelUseInput,
-  resolveAccountGatewayCredential: ((providerId: string) => Promise<string>) | undefined,
 ): Promise<ResolvedPiAgentModelUse> {
   const selection: PiPurposeSelection = input;
   validatePiPurposeSelection(selection);
-  await ensureVSCodePiProviderCredential(
-    credentials,
-    { provider: input.provider, providerSource: input.providerSource },
-    resolveAccountGatewayCredential,
-  );
+  await ensureVSCodePiProviderCredential(credentials, { provider: input.provider });
   const credential = await credentials.read(input.provider.id);
-  const requiresApiKey =
-    input.providerSource === 'account-gateway' || input.provider.requiresApiKey !== false;
+  const requiresApiKey = input.provider.requiresApiKey !== false;
   const projection = registerOpenNekoPiProvider(models, {
     id: input.provider.id,
     name: input.provider.displayName,
@@ -921,7 +906,7 @@ interface PiPurposeSelection extends VSCodePiPurposeModelSelection {
 
 interface PiProviderSelectionGroup {
   readonly provider: Provider;
-  readonly providerSource: 'explicit-config' | 'account-gateway';
+  readonly providerSource: 'explicit-config';
   readonly auth: ReturnType<typeof resolveProviderAuth>;
   readonly selections: readonly PiPurposeSelection[];
   readonly models: readonly OpenNekoPiModelConfig[];
@@ -1155,8 +1140,7 @@ function requiredPiPurposeCapabilities(
 
 export async function ensureVSCodePiProviderCredential(
   credentials: OpenNekoCredentialStore,
-  input: Pick<ExecuteVSCodePiTurnInput, 'provider' | 'providerSource'>,
-  resolveAccountGatewayCredential: ((providerId: string) => Promise<string>) | undefined,
+  input: Pick<ExecuteVSCodePiTurnInput, 'provider'>,
 ): Promise<void> {
   if (input.provider.apiKey) {
     await credentials.replace(
@@ -1166,17 +1150,6 @@ export async function ensureVSCodePiProviderCredential(
     );
     return;
   }
-  if (input.providerSource !== 'account-gateway') return;
-  if (!resolveAccountGatewayCredential) {
-    throw new Error(
-      `Account gateway provider ${input.provider.id} has no product-auth credential resolver.`,
-    );
-  }
-  const key = (await resolveAccountGatewayCredential(input.provider.id)).trim();
-  if (!key) {
-    throw new Error(`Account gateway provider ${input.provider.id} returned an empty credential.`);
-  }
-  await credentials.replace(input.provider.id, { type: 'api_key', key }, 'account-gateway');
 }
 
 function resolveProviderAuth(

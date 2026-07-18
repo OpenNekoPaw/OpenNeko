@@ -17,6 +17,7 @@ import type {
 } from '@neko/shared';
 import {
   CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+  createSafeCanvasWorkspaceProjectionDiagnostic,
   createGeneratedAssetsWorkspaceDeliveryRequest,
   resolveWorkspaceGeneratedAssetRelativeDirectory,
   stripRenderableGeneratedAssetPath,
@@ -30,13 +31,20 @@ import {
   type MediaTask,
   type MediaTaskProgressViewDelivery,
   type MediaTaskViewDelivery,
-  type Platform,
 } from '@neko/platform';
 import type { GeneratedMediaTaskType } from '@neko/platform/media/media-generated-asset';
 import { NodeWorkspaceBoardMutationPort } from './node-workspace-board-mutation-port';
 
 export interface NodeMediaTaskDeliveryHostDeps {
-  readonly platform?: Platform;
+  readonly platform?: {
+    readonly media?: {
+      saveOutputs(
+        scope: TaskRunScope,
+        outputDir: string,
+        options?: DownloadMediaOptions,
+      ): Promise<string[]>;
+    };
+  };
   readonly workspaceRoot: string;
   readonly workspaceId: string;
   readonly metadataStore: LocalMetadataStore;
@@ -44,15 +52,26 @@ export interface NodeMediaTaskDeliveryHostDeps {
   readonly onWorkspaceBoardProjection?: (
     results: readonly CanvasWorkspaceProjectionResult[],
   ) => void;
-  readonly onGeneratedOutputDelivery?: (
-    lifecycles: readonly GeneratedAssetRevisionRef[],
-  ) => void;
+  readonly onGeneratedOutputDelivery?: (lifecycles: readonly GeneratedAssetRevisionRef[]) => void;
+}
+
+export interface WorkspaceBoardDeliveryObservability {
+  readonly canonicalSubmissionCount: number;
+  readonly resumeScanCount: number;
+  readonly legacyFallbackCounts: {
+    readonly activeCanvas: number;
+    readonly recentCanvas: number;
+    readonly directWriter: number;
+    readonly genericSendToCanvas: number;
+  };
 }
 
 export class NodeMediaTaskDeliveryHost {
   private readonly assetIndex: GeneratedAssetIndex;
   private readonly workspaceBoardMutation: NodeWorkspaceBoardMutationPort;
   private readonly workspaceBoardDelivery: WorkspaceBoardDeliveryCoordinator;
+  private canonicalSubmissionCount = 0;
+  private resumeScanCount = 0;
 
   constructor(private readonly deps: NodeMediaTaskDeliveryHostDeps) {
     this.assetIndex = deps.assetIndex;
@@ -69,10 +88,26 @@ export class NodeMediaTaskDeliveryHost {
 
   dispose(): void {}
 
-  async resumePendingWorkspaceBoardDeliveries(): Promise<readonly CanvasWorkspaceProjectionResult[]> {
+  async resumePendingWorkspaceBoardDeliveries(): Promise<
+    readonly CanvasWorkspaceProjectionResult[]
+  > {
+    this.resumeScanCount += 1;
     const results = await this.workspaceBoardDelivery.flush();
     this.deps.onWorkspaceBoardProjection?.(results);
     return results;
+  }
+
+  getWorkspaceBoardDeliveryObservability(): WorkspaceBoardDeliveryObservability {
+    return {
+      canonicalSubmissionCount: this.canonicalSubmissionCount,
+      resumeScanCount: this.resumeScanCount,
+      legacyFallbackCounts: {
+        activeCanvas: 0,
+        recentCanvas: 0,
+        directWriter: 0,
+        genericSendToCanvas: 0,
+      },
+    };
   }
 
   async createTaskViewDelivery(task: MediaTask): Promise<MediaTaskViewDelivery> {
@@ -80,7 +115,7 @@ export class NodeMediaTaskDeliveryHost {
       ...this.createDeliveryInput(task, toGeneratedMediaTaskType(task.type)),
       task,
     });
-    await this.deliverGeneratedAssets(delivery.deliveryPlan.generatedAssets);
+    await this.deliverGeneratedOutputBatch(delivery.deliveryPlan.generatedAssets);
     return delivery;
   }
 
@@ -92,7 +127,7 @@ export class NodeMediaTaskDeliveryHost {
       ...this.createDeliveryInput(task, taskType),
       task,
     });
-    await this.deliverGeneratedAssets(delivery.deliveryPlan.generatedAssets);
+    await this.deliverGeneratedOutputBatch(delivery.deliveryPlan.generatedAssets);
     return delivery;
   }
 
@@ -118,23 +153,18 @@ export class NodeMediaTaskDeliveryHost {
     };
   }
 
-  private async deliverGeneratedAssets(assets: readonly GeneratedAsset[]): Promise<void> {
+  private async deliverGeneratedOutputBatch(assets: readonly GeneratedAsset[]): Promise<void> {
     if (assets.length === 0) return;
     this.deps.onGeneratedOutputDelivery?.(
       assets.flatMap((asset) => (asset.lifecycle ? [asset.lifecycle] : [])),
     );
-    let results: readonly CanvasWorkspaceProjectionResult[];
-    try {
-      const request = createGeneratedAssetsWorkspaceDeliveryRequest(assets, {
+    await this.deliverWorkspaceBoardRequest(
+      createGeneratedAssetsWorkspaceDeliveryRequest(assets, {
         workspaceId: this.deps.workspaceId,
         workspaceUri: this.workspaceBoardMutation.workspaceUri(),
         sourceHost: 'tui',
-      });
-      results = await this.workspaceBoardDelivery.enqueue(request);
-    } catch (error) {
-      results = [blockedProjection(error)];
-    }
-    this.deps.onWorkspaceBoardProjection?.(results);
+      }),
+    );
   }
 
   async deliverCreatorVisibleArtifacts(input: {
@@ -143,7 +173,6 @@ export class NodeMediaTaskDeliveryHost {
     readonly artifacts: readonly CreatorVisibleArtifactCandidate[];
     readonly taskId?: string;
     readonly runId?: string;
-    readonly documentUri?: string;
   }): Promise<readonly CanvasWorkspaceProjectionResult[]> {
     if (input.artifacts.length === 0) return [];
     const request = {
@@ -151,7 +180,6 @@ export class NodeMediaTaskDeliveryHost {
       target: {
         workspaceId: this.deps.workspaceId,
         workspaceUri: this.workspaceBoardMutation.workspaceUri(),
-        ...(input.documentUri ? { documentUri: input.documentUri } : {}),
       },
       process: {
         deliveryId: input.deliveryId,
@@ -160,19 +188,23 @@ export class NodeMediaTaskDeliveryHost {
         ...(input.taskId ? { taskId: input.taskId } : {}),
         ...(input.runId ? { runId: input.runId } : {}),
       },
-      artifacts: input.artifacts.map((artifact) =>
-        toProjectionArtifact(artifact, input),
-      ),
+      artifacts: input.artifacts.map((artifact) => toProjectionArtifact(artifact, input)),
     } satisfies CanvasWorkspaceProjectionRequest;
+    return this.deliverWorkspaceBoardRequest(request);
+  }
+
+  private async deliverWorkspaceBoardRequest(
+    request: CanvasWorkspaceProjectionRequest,
+  ): Promise<readonly CanvasWorkspaceProjectionResult[]> {
+    this.canonicalSubmissionCount += 1;
+    let results: readonly CanvasWorkspaceProjectionResult[];
     try {
-      const results = await this.workspaceBoardDelivery.enqueue(request);
-      this.deps.onWorkspaceBoardProjection?.(results);
-      return results;
+      results = await this.workspaceBoardDelivery.enqueue(request);
     } catch (error) {
-      const results = [blockedProjection(error)];
-      this.deps.onWorkspaceBoardProjection?.(results);
-      return results;
+      results = [blockedProjection(error)];
     }
+    this.deps.onWorkspaceBoardProjection?.(results);
+    return results;
   }
 }
 
@@ -213,24 +245,20 @@ function toProjectionArtifact(
     kind: artifact.kind,
     title: artifact.title,
     ...(artifact.resourceRef ? { resourceRef: artifact.resourceRef } : {}),
-    ...(artifact.documentResourceRef
-      ? { documentResourceRef: artifact.documentResourceRef }
-      : {}),
+    ...(artifact.documentResourceRef ? { documentResourceRef: artifact.documentResourceRef } : {}),
     provenance,
   };
 }
 
 function blockedProjection(error: unknown): CanvasWorkspaceProjectionResult {
+  const message = error instanceof Error ? error.message : String(error);
+  const code = /metadata|sqlite|ledger/iu.test(message)
+    ? 'delivery-ledger-unavailable'
+    : 'projection-write-failed';
   return {
     version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     status: 'blocked',
-    diagnostics: [
-      {
-        code: 'projection-write-failed',
-        severity: 'error',
-        message: error instanceof Error ? error.message : String(error),
-      },
-    ],
+    diagnostics: [createSafeCanvasWorkspaceProjectionDiagnostic(code)],
   };
 }
 

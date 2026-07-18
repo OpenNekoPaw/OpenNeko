@@ -86,9 +86,6 @@ function shouldPreferProjectSearchItem(
   if (isUnifiedEntityProjection(candidate) && !isUnifiedEntityProjection(current)) {
     return true;
   }
-  if (isDashboardEntityProjection(candidate) && !isDashboardEntityProjection(current)) {
-    return true;
-  }
   return candidate.freshness === 'fresh' && current.freshness !== 'fresh';
 }
 
@@ -97,10 +94,6 @@ function isUnifiedEntityProjection(item: ProjectSearchItem): boolean {
     item.source.sourceId === 'neko-entity' ||
     readString(item.navigationData?.['source']) === 'neko-entity'
   );
-}
-
-function isDashboardEntityProjection(item: ProjectSearchItem): boolean {
-  return readString(item.navigationData?.['source']) === item.source.sourceId;
 }
 
 function aggregatePartitionStatus(

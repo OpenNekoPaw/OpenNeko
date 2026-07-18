@@ -2,7 +2,7 @@
  * Media LSP — Pure data types (no vscode dependency)
  *
  * All types used by the diagnostic analyzer, parser, and workspace index.
- * Mirrors the pattern from neko-story's DiagnosticEntry.
+ * Shared media LSP diagnostic contracts.
  */
 
 // ─── Diagnostic ──────────────────────────────────────────────────────────────

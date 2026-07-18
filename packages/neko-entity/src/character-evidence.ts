@@ -1,11 +1,10 @@
 /** Character-domain evidence selection and projection. */
 import * as path from 'node:path';
 import type {
+  CreativeEntity,
   CreativeEntityOccurrenceProjection,
   CreativeEntityRef,
-  DashboardCreativeEntityDetail,
-  DashboardCreativeEntityOccurrenceRef,
-  NekoStoryScriptIndex,
+  FountainScriptIndex,
   NpcProfileFact,
   NpcTranscriptMessage,
   ProjectIndexFreshness,
@@ -16,7 +15,7 @@ export type CharacterEvidenceMode =
   'character-dialogue' | 'embody-character' | 'character-validation';
 
 export type CharacterEvidenceSourceKind =
-  'dashboard-detail' | 'entity-occurrence' | 'story-script-index' | 'project-search' | 'manual';
+  'entity-occurrence' | 'story-script-index' | 'project-search' | 'manual';
 
 export type CharacterEvidenceAuthority = 'confirmed' | 'suggested' | 'indexed';
 
@@ -127,8 +126,8 @@ export interface CharacterEvidenceTrimResult {
   readonly omitted: readonly CharacterEvidenceOmission[];
 }
 
-export interface CharacterEvidenceDashboardDetailReader {
-  listDetails(entityRef: CreativeEntityRef): Promise<readonly DashboardCreativeEntityDetail[]>;
+export interface CharacterEvidenceEntityReader {
+  getEntity(entityRef: CreativeEntityRef): Promise<CreativeEntity | undefined>;
 }
 
 export interface CharacterEvidenceOccurrenceReader {
@@ -149,7 +148,7 @@ export interface CharacterEvidenceProjectSearchReader {
 }
 
 export interface CharacterEvidenceStoryIndexReader {
-  getScriptIndex(filePath: string): Promise<NekoStoryScriptIndex | undefined>;
+  getScriptIndex(filePath: string): Promise<FountainScriptIndex | undefined>;
 }
 
 export interface CharacterEvidenceTextReader {
@@ -163,7 +162,7 @@ export interface CharacterEvidenceRuntimeLogger {
 
 export interface CharacterEvidenceStrategyOptions {
   readonly projectRoot: string;
-  readonly dashboardReader?: CharacterEvidenceDashboardDetailReader;
+  readonly entityReader?: CharacterEvidenceEntityReader;
   readonly occurrenceReader?: CharacterEvidenceOccurrenceReader;
   readonly projectSearchReader?: CharacterEvidenceProjectSearchReader;
   readonly storyIndexReader?: CharacterEvidenceStoryIndexReader;
@@ -312,7 +311,7 @@ export function parseCharacterEvidenceLocation(
 
 class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
   private readonly projectRoot: string;
-  private readonly dashboardReader: CharacterEvidenceDashboardDetailReader | undefined;
+  private readonly entityReader: CharacterEvidenceEntityReader | undefined;
   private readonly occurrenceReader: CharacterEvidenceOccurrenceReader | undefined;
   private readonly projectSearchReader: CharacterEvidenceProjectSearchReader | undefined;
   private readonly storyIndexReader: CharacterEvidenceStoryIndexReader | undefined;
@@ -324,7 +323,7 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
 
   constructor(options: CharacterEvidenceStrategyOptions) {
     this.projectRoot = options.projectRoot;
-    this.dashboardReader = options.dashboardReader;
+    this.entityReader = options.entityReader;
     this.occurrenceReader = options.occurrenceReader;
     this.projectSearchReader = options.projectSearchReader;
     this.storyIndexReader = options.storyIndexReader;
@@ -340,11 +339,11 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
     const budget = normalizeCharacterEvidenceBudget(request.budget);
     const omitted: CharacterEvidenceOmission[] = [];
     const entityRef = normalizeEntityRefProjectRoot(request.entityRef, request.projectRoot);
-    const details = await this.loadDashboardDetails(entityRef, omitted);
-    const profileTokens = collectProfileTokens(entityRef, details);
+    const entity = await this.loadEntity(entityRef, omitted);
+    const profileTokens = collectProfileTokens(entityRef, entity);
     const locators = await this.collectLocators({
       request: { ...request, entityRef },
-      details,
+      entity,
       profileTokens,
       omitted,
     });
@@ -373,31 +372,30 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
     };
   }
 
-  private async loadDashboardDetails(
+  private async loadEntity(
     entityRef: CreativeEntityRef,
     omitted: CharacterEvidenceOmission[],
-  ): Promise<readonly DashboardCreativeEntityDetail[]> {
-    if (!this.dashboardReader) return [];
+  ): Promise<CreativeEntity | undefined> {
+    if (!this.entityReader) return undefined;
     try {
-      return await this.dashboardReader.listDetails(entityRef);
+      return await this.entityReader.getEntity(entityRef);
     } catch (error) {
       omitted.push({
         reason: 'unavailable',
-        message: `Dashboard detail evidence is unavailable: ${formatUnknownError(error)}`,
+        message: `Canonical Entity evidence is unavailable: ${formatUnknownError(error)}`,
       });
-      return [];
+      return undefined;
     }
   }
 
   private async collectLocators(input: {
     readonly request: CharacterEvidenceRequest;
-    readonly details: readonly DashboardCreativeEntityDetail[];
+    readonly entity: CreativeEntity | undefined;
     readonly profileTokens: readonly string[];
     readonly omitted: CharacterEvidenceOmission[];
   }): Promise<readonly CharacterEvidenceLocator[]> {
     const locators: CharacterEvidenceLocator[] = [
       ...(input.request.seedSourceRefs ?? []).flatMap(sourceRefToLocator),
-      ...input.details.flatMap((detail) => dashboardDetailToLocators(detail)),
     ];
 
     if (this.occurrenceReader) {
@@ -432,11 +430,11 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
 
   private async collectProjectSearchLocators(input: {
     readonly request: CharacterEvidenceRequest;
-    readonly details: readonly DashboardCreativeEntityDetail[];
+    readonly entity: CreativeEntity | undefined;
     readonly omitted: CharacterEvidenceOmission[];
   }): Promise<readonly CharacterEvidenceLocator[]> {
     if (!this.projectSearchReader) return [];
-    const searchQuery = buildEvidenceSearchQuery(input.request, input.details);
+    const searchQuery = buildEvidenceSearchQuery(input.request, input.entity);
     if (!searchQuery) return [];
 
     try {
@@ -489,7 +487,7 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
           id: `story-scene:${filePath}:${scene.sceneId}`,
           sourceKind: 'story-script-index',
           label: scene.heading || scene.sceneTitle,
-          providerId: 'neko-story',
+          providerId: 'fountain-content',
           candidatePath: filePath,
           allowAbsolutePath: true,
           lineStart: scene.line_start + 1,
@@ -507,7 +505,7 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
     return sceneLocators;
   }
 
-  private async safeGetScriptIndex(filePath: string): Promise<NekoStoryScriptIndex | undefined> {
+  private async safeGetScriptIndex(filePath: string): Promise<FountainScriptIndex | undefined> {
     try {
       return await this.storyIndexReader?.getScriptIndex(filePath);
     } catch (error) {
@@ -917,12 +915,6 @@ export function normalizeCharacterEvidenceBudget(
   return normalizeBudget({ ...DEFAULT_CHARACTER_EVIDENCE_BUDGET, ...budget });
 }
 
-export function dashboardDetailToCharacterEvidenceLocators(
-  detail: DashboardCreativeEntityDetail,
-): readonly CharacterEvidenceLocator[] {
-  return dashboardDetailToLocators(detail);
-}
-
 export function occurrenceProjectionToCharacterEvidenceLocators(
   occurrence: CreativeEntityOccurrenceProjection,
 ): readonly CharacterEvidenceLocator[] {
@@ -1010,60 +1002,6 @@ export function dedupeCharacterEvidenceLocators(
   return deduped;
 }
 
-function dashboardDetailToLocators(
-  detail: DashboardCreativeEntityDetail,
-): readonly CharacterEvidenceLocator[] {
-  return detail.occurrences.flatMap((occurrence) => {
-    if (occurrence.source !== 'script') return [];
-    return dashboardOccurrenceToLocator(detail, occurrence);
-  });
-}
-
-function dashboardOccurrenceToLocator(
-  detail: DashboardCreativeEntityDetail,
-  occurrence: DashboardCreativeEntityOccurrenceRef,
-): readonly CharacterEvidenceLocator[] {
-  const parsed = parseCharacterEvidenceLocation(occurrence.location);
-  if (!parsed) {
-    return [
-      {
-        id: `dashboard:${detail.ref.source}:${occurrence.location}`,
-        sourceKind: 'dashboard-detail',
-        label: occurrence.label,
-        providerId: detail.ref.source,
-        rawLocation: occurrence.location,
-        allowAbsolutePath: false,
-        authority: 'confirmed',
-        freshness: detail.freshness,
-        metadata: {
-          occurrenceRole: occurrence.role,
-          dashboardSource: detail.ref.source,
-        },
-      },
-    ];
-  }
-
-  return [
-    {
-      id: `dashboard:${detail.ref.source}:${occurrence.location}`,
-      sourceKind: 'dashboard-detail',
-      label: occurrence.label,
-      providerId: detail.ref.source,
-      rawLocation: occurrence.location,
-      candidatePath: parsed.candidatePath,
-      allowAbsolutePath: false,
-      lineStart: parsed.lineStart,
-      lineEnd: parsed.lineEnd,
-      authority: 'confirmed',
-      freshness: detail.freshness,
-      metadata: {
-        occurrenceRole: occurrence.role,
-        dashboardSource: detail.ref.source,
-      },
-    },
-  ];
-}
-
 function occurrenceProjectionToLocator(
   occurrence: CreativeEntityOccurrenceProjection,
 ): readonly CharacterEvidenceLocator[] {
@@ -1146,10 +1084,10 @@ function sourceRefToLocator(
 }
 
 function findSceneForLocator(
-  index: NekoStoryScriptIndex,
+  index: FountainScriptIndex,
   locator: CharacterEvidenceLocator,
   profileTokens: readonly string[],
-): NekoStoryScriptIndex['scenes'][number] | undefined {
+): FountainScriptIndex['scenes'][number] | undefined {
   if (locator.lineStart !== undefined) {
     const zeroBasedLine = Math.max(0, locator.lineStart - 1);
     const lineScene = index.scenes.find(
@@ -1213,25 +1151,27 @@ function characterEvidenceChunkId(sourceRef: CharacterEvidenceSourceRef): string
 
 function buildEvidenceSearchQuery(
   request: CharacterEvidenceRequest,
-  details: readonly DashboardCreativeEntityDetail[],
+  entity: CreativeEntity | undefined,
 ): string {
   return [
     request.query,
     request.entityRef.entityId,
-    ...details.flatMap((detail) => [detail.label, ...detail.aliases]),
+    ...(entity ? [entity.displayName, entity.canonicalName, ...entity.aliases] : []),
   ]
-    .filter((value) => value.trim().length > 0)
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     .join(' ');
 }
 
 function collectProfileTokens(
   entityRef: CreativeEntityRef,
-  details: readonly DashboardCreativeEntityDetail[],
+  entity: CreativeEntity | undefined,
 ): readonly string[] {
-  return normalizeCharacterEvidenceTokens([
-    entityRef.entityId,
-    ...details.flatMap((detail) => [detail.label, ...detail.aliases]),
-  ]);
+  return normalizeCharacterEvidenceTokens(
+    [
+      entityRef.entityId,
+      ...(entity ? [entity.displayName, entity.canonicalName, ...entity.aliases] : []),
+    ].filter((value): value is string => typeof value === 'string'),
+  );
 }
 
 function parseCandidatePath(location: string | undefined): string | undefined {

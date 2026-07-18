@@ -37,6 +37,51 @@ describe('storyboard table contract', () => {
     expect(STORYBOARD_TABLE_PROFILES).not.toContain('manga-to-video');
   });
 
+  it('rejects removed puppet representations from active voice cue requests', () => {
+    const result = normalizeStoryboardTable({
+      value: {
+        schemaVersion: 1,
+        kind: 'storyboard-table',
+        title: 'Removed representation',
+        scenes: [
+          {
+            sceneId: 'scene-1',
+            sceneTitle: 'Scene',
+            shots: [
+              {
+                shotNumber: 1,
+                duration: 1,
+                visualDescription: 'A character speaks.',
+                characterAction: 'Speaks.',
+                imageStrategy: 'generate-new',
+                voiceCues: [
+                  {
+                    cueId: 'voice-1',
+                    kind: 'dialogue',
+                    text: 'Hello.',
+                    requestedRepresentationKind: 'puppet-bone',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result.table?.scenes[0]?.shots[0]?.voiceCues?.[0]).not.toHaveProperty(
+      'requestedRepresentationKind',
+    );
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'invalid-required-field',
+          path: ['scenes', 0, 'shots', 0, 'voiceCues', 0, 'requestedRepresentationKind'],
+        }),
+      ]),
+    );
+  });
+
   it('accepts a strict semantic storyboard table with layered media refs', () => {
     const profile: StoryboardTableProfile = 'from-comic';
     const table: StoryboardTable = {

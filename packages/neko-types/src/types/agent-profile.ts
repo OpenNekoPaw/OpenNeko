@@ -3,7 +3,6 @@ export const AGENT_PROFILE_KINDS = ['artifact', 'provider-expression'] as const;
 export const AGENT_PROFILE_SOURCES = [
   'builtin',
   'package',
-  'market',
   'project',
   'personal',
   'skill-local',
@@ -12,7 +11,6 @@ export const AGENT_PROFILE_SOURCES = [
 export const PERSISTABLE_AGENT_PROFILE_SOURCES = [
   'builtin',
   'package',
-  'market',
   'project',
   'personal',
 ] as const;

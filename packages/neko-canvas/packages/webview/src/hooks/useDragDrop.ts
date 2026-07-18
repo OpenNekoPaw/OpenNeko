@@ -542,12 +542,7 @@ function createCanvasDroppedAssetFromAddSourceResult(input: {
   }
   if (kind === 'project') {
     const projectType = input.metadata.projectType;
-    if (
-      projectType !== 'nkv' &&
-      projectType !== 'nka' &&
-      projectType !== 'nkm' &&
-      projectType !== 'nkp'
-    ) {
+    if (projectType !== 'nkv') {
       return undefined;
     }
     return { kind: 'project', path: input.durablePath, name, title, projectType };

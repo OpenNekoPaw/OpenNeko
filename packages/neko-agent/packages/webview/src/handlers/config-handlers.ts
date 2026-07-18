@@ -16,8 +16,6 @@ import type {
   PluginsAvailableMessage,
   ProviderMutationResultMessage,
   SettingsUpdatedMessage,
-  SsoErrorMessage,
-  SsoSessionChangedMessage,
 } from './messages';
 import {
   projectConfigStateMessage,
@@ -26,8 +24,6 @@ import {
   projectProjectFilesMessage,
   projectSettingsDataMessage,
   projectSettingsMutationError,
-  projectSsoErrorMessage,
-  projectSsoSessionChangedMessage,
 } from '../presenters/config-message-presenter';
 import { AgentHostMessages } from '../messages';
 import type { SettingsDataProjection } from '@neko-agent/types';
@@ -69,12 +65,7 @@ function selectInitialChatModel(projection: SettingsDataProjection): ChatModelOp
   const llmModels = chatModelOptions.filter(
     (option) => option.providerId && option.modelId && (option.category ?? 'llm') === 'llm',
   );
-  return (
-    llmModels.find((option) => option.source === 'explicit-config') ??
-    llmModels.find((option) => option.source === 'account-gateway') ??
-    llmModels[0] ??
-    null
-  );
+  return llmModels.find((option) => option.source === 'explicit-config') ?? llmModels[0] ?? null;
 }
 
 /**
@@ -145,29 +136,6 @@ const handlePluginsAvailable: MessageHandler<'pluginsAvailable'> = (
 };
 
 /**
- * Handle 'ssoSessionChanged' message - Account state from neko-auth bridge.
- */
-const handleSsoSessionChanged: MessageHandler<'ssoSessionChanged'> = (
-  message: SsoSessionChangedMessage,
-  context,
-) => {
-  const projection = projectSsoSessionChangedMessage(message);
-  context.updateSettings(projection.settingsPatch);
-  if (projection.showOnboarding !== undefined) {
-    context.setShowOnboarding(projection.showOnboarding);
-  }
-};
-
-/**
- * Handle global SSO errors from the bridge.
- */
-const handleSsoError: MessageHandler<'ssoError'> = (message: SsoErrorMessage, context) => {
-  const projection = projectSsoErrorMessage(message);
-  context.setGlobalError(projection.globalError);
-  context.setShowOnboarding(projection.showOnboarding);
-};
-
-/**
  * Handle mutation acknowledgements that are already reflected by settings/config refreshes.
  */
 const handleSettingsMutationAck: MessageHandler<
@@ -190,6 +158,4 @@ export const configHandlers: HandlerRegistration[] = [
   defineHandler('modelRemoved', handleSettingsMutationAck),
   defineHandler('pluginCommands', handlePluginCommands),
   defineHandler('pluginsAvailable', handlePluginsAvailable),
-  defineHandler('ssoSessionChanged', handleSsoSessionChanged),
-  defineHandler('ssoError', handleSsoError),
 ];

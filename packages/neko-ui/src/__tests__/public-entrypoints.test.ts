@@ -8,20 +8,9 @@ import * as markdown from '../markdown';
 import * as primitives from '../primitives';
 import * as testUtils from '../test-utils';
 import * as ui from '../index';
-import * as viewport from '../viewport';
 import * as workbench from '../workbench';
 
 describe('@neko/ui public entrypoints', () => {
-  it('keeps existing viewport exports available through the canonical entry', () => {
-    expect(viewport.ViewportShell).toBe(ui.ViewportShell);
-    expect(viewport.OverlayRenderer).toBe(ui.OverlayRenderer);
-    expect(viewport.ViewportToolbar).toBe(ui.ViewportToolbar);
-    expect(viewport.ViewportPredictionLayer).toBe(ui.ViewportPredictionLayer);
-    expect(viewport.bridgeRenderFrameMetaToViewportFrameMeta).toBe(
-      ui.bridgeRenderFrameMetaToViewportFrameMeta,
-    );
-  });
-
   it('exposes new UI system subpath surfaces', () => {
     expect(primitives).toBeDefined();
     expect(creative.DEFAULT_TREE_VIEW_VIRTUALIZATION.threshold).toBe(200);

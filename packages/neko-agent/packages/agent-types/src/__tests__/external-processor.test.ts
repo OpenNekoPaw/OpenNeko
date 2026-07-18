@@ -8,7 +8,6 @@ import {
   parseExternalProcessorManifestJson,
   registerBuiltinExternalProcessors,
   registerExtensionExternalProcessorContributions,
-  registerMarketExternalProcessorPackages,
   registerPersonalExternalProcessorManifests,
   registerProjectExternalProcessorManifests,
   validateExternalProcessorManifest,
@@ -183,10 +182,9 @@ describe('external processor registry', () => {
     const registry = createExternalProcessorRegistry();
     const registration = registry.upsert(
       {
-        sourceScope: 'market',
-        agentCapabilitySource: 'market',
-        sourceId: '@test/upscale',
-        packageId: '@test/upscale',
+        sourceScope: 'personal',
+        agentCapabilitySource: 'local',
+        sourceId: 'test-upscale',
         trustLevel: 'untrusted',
       },
       validManifest,
@@ -391,61 +389,6 @@ describe('external processor registry', () => {
     expect(registry.list().processors).toEqual([]);
     expect(registry.list({ includeDisabled: true }).processors[0]).toEqual(
       expect.objectContaining({ enabled: false, sourceScope: 'personal' }),
-    );
-  });
-
-  it('projects market processors with package trust metadata', () => {
-    const registry = createExternalProcessorRegistry();
-    const result = registerMarketExternalProcessorPackages({
-      registry,
-      packages: [
-        {
-          packageId: '@market/upscale',
-          publisherId: 'market-pub',
-          version: '2.0.0',
-          trustLevel: 'community',
-          entitlement: 'allowed',
-          manifest: validManifest,
-        },
-      ],
-    });
-
-    expect(result.diagnostics).toEqual([]);
-    expect(result.registrations[0]).toEqual(
-      expect.objectContaining({
-        registrationId: 'market:@market/upscale:upscale-image',
-        sourceScope: 'market',
-        agentCapabilitySource: 'market',
-        trustLevel: 'community',
-        packageId: '@market/upscale',
-        enabled: true,
-      }),
-    );
-  });
-
-  it('disables revoked or non-entitled market processors', () => {
-    const registry = createExternalProcessorRegistry();
-    const result = registerMarketExternalProcessorPackages({
-      registry,
-      packages: [
-        {
-          packageId: '@market/revoked',
-          version: '2.0.0',
-          trustLevel: 'untrusted',
-          entitlement: 'denied',
-          revoked: true,
-          manifest: validManifest,
-        },
-      ],
-    });
-
-    expect(result.registrations[0]).toEqual(expect.objectContaining({ enabled: false }));
-    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
-      'Market processor package "@market/revoked" is not entitled.',
-      'Market processor package "@market/revoked" is revoked.',
-    ]);
-    expect(registry.resolve('upscale-image')).toEqual(
-      expect.objectContaining({ code: 'disabled-processor' }),
     );
   });
 

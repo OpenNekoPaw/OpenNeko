@@ -43,7 +43,7 @@ describe('ProjectAssetBindingAvailabilityWatcher', () => {
             id: 'binding-voice',
             entityId: 'char_xiaoju',
             entityKind: 'character',
-            assetRef: 'market://voice/xiaoju',
+            assetRef: 'shared://voice/xiaoju',
             role: 'voice',
             status: 'confirmed',
             availability: 'active',

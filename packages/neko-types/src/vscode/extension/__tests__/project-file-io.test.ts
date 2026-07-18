@@ -175,22 +175,22 @@ describe('ProjectFileSaveSession', () => {
   it('allows callers to override the default atomic write policy', async () => {
     const save = vi.fn(async (request: unknown): Promise<ProjectFileSaveResponse> => ({
       ok: true,
-      filePath: '/workspace/project/edit.nka',
+      filePath: '/workspace/project/edit.nkv',
       document: (request as { document: { title: string } }).document,
       diagnostics: [],
       written: true,
     }));
     const session = new ProjectFileSaveSession<{ title: string }>({
-      formatId: 'nka',
+      formatId: 'nkv',
       store: { save } as never,
     });
 
     await session.save({
-      targetUri: createUri('/workspace/project/edit.nka'),
+      targetUri: createUri('/workspace/project/edit.nkv'),
       document: { title: 'Audio' },
       saveReason: 'vscode-save',
       atomic: true,
-      defaultMessage: 'Failed to save NKA',
+      defaultMessage: 'Failed to save NKV',
     });
 
     expect(save).toHaveBeenCalledWith(
@@ -206,28 +206,28 @@ describe('ProjectFileSaveSession', () => {
       const document = (request as { document: { title: string } }).document;
       return {
         ok: true,
-        filePath: '/workspace/project/edit.nks',
+        filePath: '/workspace/project/edit.nkc',
         document,
         diagnostics: [],
         written: true,
       };
     });
-    const webview = createSnapshotWebview({ title: 'Sketch' });
+    const webview = createSnapshotWebview({ title: 'Canvas' });
     const session = new ProjectFileSaveSession<{ title: string }>({
-      formatId: 'nks',
+      formatId: 'nkc',
       store: { save } as never,
     });
 
     await session.saveFromWebviewSnapshot({
       webview,
-      targetUri: createUri('/workspace/project/edit.nks'),
+      targetUri: createUri('/workspace/project/edit.nkc'),
       saveReason: 'vscode-save',
-      defaultMessage: 'Failed to save NKS',
+      defaultMessage: 'Failed to save NKC',
     });
 
     expect(save).toHaveBeenCalledWith(
       expect.objectContaining({
-        document: { title: 'Sketch' },
+        document: { title: 'Canvas' },
         saveReason: 'vscode-save',
       }),
     );

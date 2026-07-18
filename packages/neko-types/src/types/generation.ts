@@ -64,7 +64,7 @@ export interface NodeGenerationConfig {
 // =============================================================================
 
 /** Where a particular parameter value came from */
-export type ParamSource = 'node' | 'project' | 'market' | 'system';
+export type ParamSource = 'node' | 'project' | 'system';
 
 /** Fully resolved params with source annotation for each modality */
 export interface ResolvedGenerationParams {
@@ -111,24 +111,24 @@ export const DEFAULT_GENERATION_MODEL_CONFIG: GenerationModelConfig = {
 // =============================================================================
 
 /**
- * Merge node-level, project-level, market-level, and system defaults into
+ * Merge node-level, project-level, and system defaults into
  * a single ResolvedGenerationParams with source annotation.
  */
 export function resolveGenerationParams(
   node: NodeGenerationConfig | undefined,
   project: Partial<GenerationParams> | undefined,
-  market: Partial<GenerationModelConfig> | undefined,
+  projectModels: Partial<GenerationModelConfig> | undefined,
   system:
     { params?: Partial<GenerationParams>; models?: Partial<GenerationModelConfig> } | undefined,
   llm: string,
 ): ResolvedGenerationParams {
   const resolveModel = (
     nodeModel: string | undefined,
-    marketModel: string | undefined,
+    projectModel: string | undefined,
     fallback: string,
   ): { model: string; modelSource: ParamSource } => {
     if (nodeModel !== undefined) return { model: nodeModel, modelSource: 'node' };
-    if (marketModel !== undefined) return { model: marketModel, modelSource: 'market' };
+    if (projectModel !== undefined) return { model: projectModel, modelSource: 'project' };
     if (fallback) return { model: fallback, modelSource: 'system' };
     return { model: fallback, modelSource: 'system' };
   };
@@ -177,15 +177,15 @@ export function resolveGenerationParams(
   return {
     image: {
       ...imageBase,
-      ...resolveModel(node?.image?.model, market?.image, systemModels?.image ?? ''),
+      ...resolveModel(node?.image?.model, projectModels?.image, systemModels?.image ?? ''),
     },
     video: {
       ...videoBase,
-      ...resolveModel(node?.video?.model, market?.video, systemModels?.video ?? ''),
+      ...resolveModel(node?.video?.model, projectModels?.video, systemModels?.video ?? ''),
     },
     audio: {
       ...audioBase,
-      ...resolveModel(node?.audio?.model, market?.audio, systemModels?.audio ?? ''),
+      ...resolveModel(node?.audio?.model, projectModels?.audio, systemModels?.audio ?? ''),
     },
     llm,
   };

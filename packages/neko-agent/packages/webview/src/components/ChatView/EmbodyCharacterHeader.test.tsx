@@ -65,7 +65,7 @@ function createSession(): EmbodyCharacterSessionProjection {
       ],
       sparsity: 'partial',
     },
-    source: 'neko-story',
+    source: 'fountain-content',
     projectRoot: '/workspace/project-a',
     scopeSummary: ['occurrence: rooftop scene cases/test.fountain:8'],
     prompt: 'Check knowledge boundary.',

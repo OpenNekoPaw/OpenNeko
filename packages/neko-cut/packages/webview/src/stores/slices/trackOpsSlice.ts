@@ -52,8 +52,6 @@ export const createTrackOpsSlice: StateCreator<
       subtitle: 'Subtitle Track',
       shape: 'Shape Track',
       effect: 'Effect Track',
-      scene3d: '3D Scene Track',
-      puppet: 'Puppet Track',
     };
     const trackName = name || defaultNames[type] || 'Track';
     const newTrack: TimelineTrack = {

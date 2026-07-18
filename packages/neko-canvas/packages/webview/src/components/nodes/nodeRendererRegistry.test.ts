@@ -5,6 +5,7 @@ import type { CanvasNode } from '@neko/shared';
 import { renderCanvasNode } from './nodeRendererRegistry';
 import { createStoryboardNodeRendererRegistry } from '../../subsystems/storyboard/renderers';
 import { createStoryboardNodeTypeDescriptors } from '../../subsystems/storyboard/descriptors';
+import { createBuiltInWebviewSubsystemRegistry } from '../../subsystems/webviewSubsystemRegistry';
 import { createBuiltInNodeTypeDescriptors } from './nodeTypeDescriptors';
 import behaviorRegistration from '../../subsystems/behavior';
 import entityRegistration from '../../subsystems/entity';
@@ -12,6 +13,36 @@ import memoryRegistration from '../../subsystems/memory';
 import { buildCanvasNode } from '../../utils/nodeFactory';
 
 describe('nodeRendererRegistry', () => {
+  it('renders core groups without activating the storyboard subsystem', () => {
+    const coreRenderers = createBuiltInWebviewSubsystemRegistry({}).getCoreNodeRenderers();
+    const storyboardRenderers = createStoryboardNodeRendererRegistry();
+    const node: CanvasNode = {
+      id: 'workspace-inbox',
+      type: 'group',
+      position: { x: 40, y: 40 },
+      size: { width: 640, height: 360 },
+      zIndex: 1,
+      preset: 'group.basic',
+      container: { policy: 'group', childIds: [], deleteBehavior: 'release-children' },
+      data: { label: 'Inbox', color: '#64748b' },
+    };
+
+    expect(coreRenderers.group).toBeTypeOf('function');
+    expect(storyboardRenderers.group).toBeUndefined();
+    const markup = renderToStaticMarkup(
+      renderCanvasNode(coreRenderers, {
+        node,
+        allNodes: [node],
+        selectedNodeIds: [],
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        isSelected: false,
+        containerRef: { current: null },
+      }),
+    );
+    expect(markup).toContain('data-spatial-group-frame="true"');
+    expect(markup).not.toContain('UNSUPPORTED');
+  });
+
   it('registers storyboard subsystem node renderers', () => {
     const registry = createStoryboardNodeRendererRegistry();
 

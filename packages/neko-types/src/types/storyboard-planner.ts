@@ -7,7 +7,7 @@ import type {
   StoryboardVoiceCue,
 } from './storyboard-table';
 import type { DocumentArchiveResourceRef } from './document-reading';
-import type { NekoStoryScriptIndex } from './extension-api';
+import type { FountainScriptIndex } from './fountain-script';
 import type { ResourceRef } from './resource-cache';
 import type { ShotImagePrepPlan } from './shot-image-prep';
 import type { CanvasStoryboardPromptState } from './canvas-semantic-storyboard';
@@ -142,7 +142,7 @@ export interface CreatedCanvasStoryboard {
 
 export interface CreateStoryboardPayloadResult {
   readonly payload: CanvasStoryboardPayload;
-  readonly sourceIndex: NekoStoryScriptIndex;
+  readonly sourceIndex: FountainScriptIndex;
 }
 
 export interface CanonicalCanvasStoryboardProjectionResult {

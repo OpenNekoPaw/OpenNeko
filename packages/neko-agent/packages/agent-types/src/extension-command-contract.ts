@@ -8,7 +8,6 @@ export const NEKO_AGENT_UNREGISTER_EXTERNAL_PROCESSOR_PACKAGE_COMMAND =
 export const NEKO_AGENT_REGISTER_EXTERNAL_PROCESSOR_CONTRIBUTION_COMMAND =
   'neko.agent.registerExternalProcessorContribution';
 export const NEKO_AGENT_LLM_GENERATE_COMMAND = 'neko.agent.llm.generate';
-export const NEKO_PUPPET_EXTENSION_ID = 'neko.neko-puppet';
 
 export interface PluginSlashCommandCommandInput {
   readonly extensionId: string;

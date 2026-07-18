@@ -6,7 +6,6 @@
 
 import type { DocumentExtensionMessage, DocumentWebviewMessage } from './document-types';
 import type {
-  EnvironmentPlacement,
   PanoramaCoverageAngle,
   PanoramaViewState,
   PreviewManifest,
@@ -203,13 +202,6 @@ export interface PanoramaRequestVariantMessage {
   request: PreviewVariantRequest;
 }
 
-export interface PanoramaSendToModelMessage {
-  type: 'panorama:sendToModel';
-  assetId: string;
-  viewState?: PanoramaViewState;
-  placement?: Partial<EnvironmentPlacement>;
-}
-
 export type WebviewMessage =
   | ReadyMessage
   | PlayMessage
@@ -225,5 +217,4 @@ export type WebviewMessage =
   | PanoramaSaveDefaultViewMessage
   | PanoramaUpdateAssetMessage
   | PanoramaRequestVariantMessage
-  | PanoramaSendToModelMessage
   | DocumentWebviewMessage;

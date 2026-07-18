@@ -38,10 +38,6 @@ import type {
   SettingsDataProjection,
   SettingsState,
   SettingsUpdatedMessage,
-  SsoErrorMessage,
-  SsoErrorProjection,
-  SsoSessionChangedMessage,
-  SsoSessionProjection,
 } from '@neko-agent/types';
 
 const AGENT_MEDIA_CATEGORIES: readonly AgentMediaModelCategory[] = ['image', 'video', 'audio'];
@@ -325,22 +321,6 @@ export function projectPluginsAvailableMessage(message: PluginsAvailableMessage)
   return message.plugins ?? {};
 }
 
-export function projectSsoSessionChangedMessage(
-  message: SsoSessionChangedMessage,
-): SsoSessionProjection {
-  return {
-    settingsPatch: { ssoSession: message.session },
-    showOnboarding: message.session ? false : undefined,
-  };
-}
-
-export function projectSsoErrorMessage(message: SsoErrorMessage): SsoErrorProjection {
-  return {
-    globalError: message.error,
-    showOnboarding: true,
-  };
-}
-
 export function projectSettingsMutationError(
   message: SettingsUpdatedMessage | ProviderMutationResultMessage,
 ): string | null {
@@ -436,7 +416,7 @@ function isMediaUnderstandingModelStatusValue(
 function readMediaUnderstandingModelSource(
   value: unknown,
 ): MediaUnderstandingModelSource | undefined {
-  return value === 'explicit-config' || value === 'account-gateway' ? value : undefined;
+  return value === 'explicit-config' ? value : undefined;
 }
 
 function readOptionalStringProps(
@@ -486,10 +466,7 @@ function readConfigDiagnostic(value: unknown): SettingsState['configDiagnostic']
     code !== 'missingModel' &&
     code !== 'missingApiKey' &&
     code !== 'invalidDefaultProvider' &&
-    code !== 'invalidDefaultModel' &&
-    code !== 'missingAccountCatalog' &&
-    code !== 'accountCatalogUnavailable' &&
-    code !== 'accountModelNotEntitled'
+    code !== 'invalidDefaultModel'
   ) {
     return undefined;
   }
@@ -640,7 +617,8 @@ function describeMentionExtra(extra: ProjectMentionExtra): string {
     return extra.mediaType ? `Media · ${extra.mediaType}` : 'Media';
   }
   if (extra.type === 'entity') {
-    return extra.entityType ? `Entity · ${extra.entityType}` : 'Entity';
+    const entityLabel = extra.navigationData?.candidateId ? 'Entity Candidate' : 'Entity';
+    return extra.entityType ? `${entityLabel} · ${extra.entityType}` : entityLabel;
   }
   return extra.type;
 }
@@ -720,7 +698,7 @@ function isLlmParameterControls(value: unknown): value is ChatModelOption['llmPa
 function isModelSourceGroup(value: unknown): value is ModelSourceGroup {
   const record = asRecord(value);
   if (!record) return false;
-  if (record.source !== 'account-gateway' && record.source !== 'explicit-config') return false;
+  if (record.source !== 'explicit-config') return false;
   if (!readString(record, 'providerId') || !readString(record, 'providerLabel')) return false;
   if (typeof record.priority !== 'number' || !Number.isFinite(record.priority)) return false;
 

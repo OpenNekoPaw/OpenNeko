@@ -23,7 +23,6 @@ import type {
   TextElement,
   ShapeElement,
   SubtitleElement,
-  Scene3DElement,
   TimelineTrack,
 } from '@neko/shared';
 import type { ElementEditState, TrackUIState } from './ui-state';
@@ -35,8 +34,6 @@ import {
   ENGINE_TEXT_KEYS,
   ENGINE_SHAPE_KEYS,
   ENGINE_SUBTITLE_KEYS,
-  ENGINE_SCENE3D_KEYS,
-  ENGINE_PUPPET_KEYS,
   ENGINE_TRACK_KEYS,
 } from '@neko/shared';
 
@@ -67,9 +64,6 @@ export type EditorShapeElement = ShapeElement & Partial<ElementEditState>;
 
 /** Editor subtitle element */
 export type EditorSubtitleElement = SubtitleElement & Partial<ElementEditState>;
-
-/** Editor scene3d element */
-export type EditorScene3DElement = Scene3DElement & Partial<ElementEditState>;
 
 // =============================================================================
 // Extended Track Type (Engine fields + UI fields)
@@ -114,8 +108,6 @@ export function toEngineElement(element: EditorElement): TimelineElement {
     text: ENGINE_TEXT_KEYS,
     shape: ENGINE_SHAPE_KEYS,
     subtitle: ENGINE_SUBTITLE_KEYS,
-    scene3d: ENGINE_SCENE3D_KEYS,
-    puppet: ENGINE_PUPPET_KEYS,
   };
 
   const typeKeys = typeKeyMap[element.type];

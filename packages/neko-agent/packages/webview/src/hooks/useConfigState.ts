@@ -38,7 +38,6 @@ const DEFAULT_SETTINGS: SettingsState = {
   chatModelOptions: [],
   defaultMediaModels: {},
   modelGroups: [],
-  ssoSession: null,
   configDiagnostic: undefined,
 };
 

@@ -54,6 +54,8 @@ message Transform {
 // =============================================================================
 
 enum TrackType {
+  reserved 7, 8;
+  reserved "TRACK_TYPE_SCENE3D", "TRACK_TYPE_PUPPET";
   TRACK_TYPE_VIDEO = 0;
   TRACK_TYPE_AUDIO = 1;
   TRACK_TYPE_TEXT = 2;
@@ -61,8 +63,6 @@ enum TrackType {
   TRACK_TYPE_SUBTITLE = 4;
   TRACK_TYPE_SHAPE = 5;
   TRACK_TYPE_MEDIA = 6;  // Alias for Video (used in JVI files)
-  TRACK_TYPE_SCENE3D = 7;
-  TRACK_TYPE_PUPPET = 8;
 }
 
 // =============================================================================
@@ -379,37 +379,13 @@ message SubtitleElementData {
   optional TextShadow shadow = 9;
 }
 
-message CameraOverride {
-  repeated float position = 1;  // [x, y, z]
-  repeated float target = 2;    // [x, y, z]
-  repeated float up = 3;        // [x, y, z] default: [0, 1, 0]
-  float fov_y = 4;              // degrees, default: 45.0
-}
-
-message Scene3DElementData {
-  string src = 1;
-  optional string camera_node_id = 2;
-  optional string animation_clip = 3;
-  bool animation_loop = 4;
-  double animation_speed = 5;  // default: 1.0
-  repeated float background_color = 6;  // [r,g,b,a]
-  optional CameraOverride camera_override = 7;
-}
-
-message PuppetElementData {
-  string src = 1;
-  optional string animation_clip = 2;
-  bool animation_loop = 3;
-  double animation_speed = 4;  // default: 1.0
-  optional string expression = 5;
-  map<string, float> parameter_overrides = 6;
-}
-
 // =============================================================================
 // Element (domain/timeline.rs)
 // =============================================================================
 
 message Element {
+  reserved 30, 31;
+  reserved "scene3d", "puppet";
   // Element ID
   string id = 1;
   // Element name
@@ -421,8 +397,6 @@ message Element {
     TextElementData text = 5;
     ShapeElementData shape = 6;
     SubtitleElementData subtitle = 7;
-    Scene3DElementData scene3d = 30;
-    PuppetElementData puppet = 31;
   }
   // Start time on timeline (seconds)
   double start_time = 8;

@@ -83,11 +83,8 @@ describe('canvas storyboard import contracts', () => {
     expect(importBody).not.toContain("type: 'generated-asset'");
   });
 
-  it('subscribes and backfills candidate confirmations into open storyboard shots', () => {
-    expect(providerSource).toContain('subscribeToEntityChangeEvents');
-    expect(providerSource).toContain("'neko.entity.getDashboardCreativeEntitySource'");
-    expect(providerSource).toContain('readCreativeEntityChangedRefs(event)');
-    expect(providerSource).toContain('this.applyEntityCandidateBackfill(changedRefs)');
+  it('backfills explicit candidate confirmations into open storyboard shots', () => {
+    expect(providerSource).not.toContain('getDashboardCreativeEntitySource');
     expect(providerSource).toContain("message.type === 'entity.confirmCandidate'");
     expect(providerSource).toContain('this.applyEntityCandidateBackfill([');
   });

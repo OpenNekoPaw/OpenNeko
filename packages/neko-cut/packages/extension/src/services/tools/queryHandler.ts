@@ -128,7 +128,7 @@ export class QueryHandler implements IToolHandler {
         };
 
         // Use discriminated union narrowing
-        if (element.type === 'media' || element.type === 'audio' || element.type === 'scene3d') {
+        if (element.type === 'media' || element.type === 'audio') {
           info.src = element.src;
         }
         if (element.type === 'text') {

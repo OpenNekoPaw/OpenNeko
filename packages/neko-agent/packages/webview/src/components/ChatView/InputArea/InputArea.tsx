@@ -698,7 +698,10 @@ export function InputArea({
     closeEntryPromptMenu();
     if (item.filePath) {
       addSelectedFileReference(item);
-    } else if (item.contextPayload && onAddContextChip) {
+    } else if (item.contextPayload) {
+      if (!onAddContextChip) {
+        throw new Error(`Context-backed mention "${item.id}" requires onAddContextChip.`);
+      }
       // Remove the trailing @filter from input
       replaceActiveMention('');
       onAddContextChip(item.contextPayload);
@@ -878,6 +881,15 @@ export function InputArea({
 
   const handleEntryRoleplaySelect = (item: MentionItem) => {
     closeEntryPromptMenu();
+    const projectSearchItemId = item.navigationData?.projectSearchItemId;
+    if (item.navigationData?.candidateId && projectSearchItemId) {
+      AgentHostMessages.confirmRoleplayCandidate({
+        projectSearchItemId,
+        ...(inputValue.trim() ? { initialUserMessage: inputValue.trim() } : {}),
+      });
+      textareaRef.current?.focus();
+      return;
+    }
     AgentHostMessages.startCharacterDialogueFromSlash(
       `${formatRoleplaySlashEntity(item)} --roleplay --skip-enrich${formatInitialRoleplayMessage(inputValue)}`,
     );

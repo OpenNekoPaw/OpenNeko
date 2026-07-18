@@ -6,7 +6,7 @@ import type {
   CreativeEntityKind,
   CreativeEntityOccurrenceProjection,
   EntityMention,
-  MediaTextSegment,
+  SemanticEvidenceProjection,
   SemanticEntitySnapshot,
   SemanticSourceAnalysisInput,
   SemanticSourceAnalysisResult,
@@ -61,8 +61,8 @@ export class TextEntityAnalyzer implements SemanticSourceAnalyzer {
     const candidates = [...candidateObservations.values()].map((observation) =>
       candidateFromObservation(input, observation),
     );
-    const textSegments = input.segments.map((segment) =>
-      toMediaTextSegment(
+    const evidence = input.segments.map((segment) =>
+      toSemanticEvidence(
         input,
         segment,
         mentions.filter((mention) => mention.metadata?.['segmentId'] === segment.segmentId),
@@ -86,7 +86,6 @@ export class TextEntityAnalyzer implements SemanticSourceAnalyzer {
         indexId: input.source.sourceId,
         assetId: input.source.sourceId,
         sourceRef,
-        ...(textSegments.length > 0 ? { textSegments } : {}),
         ...(mentions.length > 0 ? { entityMentions: mentions } : {}),
         updatedAt: input.analyzedAt,
         metadata: {
@@ -96,6 +95,7 @@ export class TextEntityAnalyzer implements SemanticSourceAnalyzer {
           format: input.source.format,
         },
       },
+      evidence,
       mentions,
       occurrences,
       candidates,
@@ -241,8 +241,11 @@ function collectExactNameMentions(
 ): void {
   for (const entry of index.labels) {
     const entities = index.byName.get(entry.normalized) ?? [];
-    if (entities.length !== 1) continue;
-    const entity = entities[0];
+    const compatible = segment.explicitEntityKind
+      ? entities.filter((entity) => entity.kind === segment.explicitEntityKind)
+      : entities;
+    if (compatible.length !== 1) continue;
+    const entity = compatible[0];
     if (!entity) continue;
     for (const offset of findExactOffsets(segment.text, entry.label)) {
       addLinkedMention(
@@ -274,7 +277,7 @@ function collectExplicitCandidateObservation(
   const normalizedName = normalizeCharacterLookupKey(name);
   const exact = index.byName.get(normalizedName) ?? [];
   const compatible = exact.filter((entity) => entity.kind === kind);
-  if (compatible.length === 1 && exact.length === 1) return;
+  if (compatible.length === 1) return;
   const id = `candidate:auto:${kind}:${stableIdPart(normalizedName)}`;
   const mentionId = `${input.source.sourceId}:candidate:${segment.segmentId}`;
   const current = observations.get(id) ?? {
@@ -307,6 +310,8 @@ function collectExplicitCandidateObservation(
     metadata: { segmentId: segment.segmentId, matchKind: 'structural-candidate' },
   });
   occurrences.push({
+    occurrenceId: `${mentionId}:occurrence`,
+    mentionId,
     candidateId: id,
     label: name,
     source: {
@@ -320,6 +325,9 @@ function collectExplicitCandidateObservation(
     role: 'definition',
     location: `${input.source.portablePath}:${range.startLine ?? 1}`,
     detail: 'structural-candidate',
+    locator: segment.locator,
+    range,
+    sourceFingerprint: input.source.fingerprint,
   });
 }
 
@@ -384,6 +392,8 @@ function addLinkedMention(
     metadata: { segmentId: segment.segmentId, matchKind },
   });
   occurrences.push({
+    occurrenceId: `${mentionId}:occurrence`,
+    mentionId,
     entityRef,
     label: text,
     source: {
@@ -397,19 +407,24 @@ function addLinkedMention(
     role: 'reference',
     location: `${input.source.portablePath}:${range.startLine ?? 1}`,
     detail: matchKind,
+    locator: segment.locator,
+    range,
+    sourceFingerprint: input.source.fingerprint,
   });
 }
 
-function toMediaTextSegment(
+function toSemanticEvidence(
   input: SemanticSourceAnalysisInput,
   segment: SemanticTextSegment,
   mentions: readonly EntityMention[],
-): MediaTextSegment {
+): SemanticEvidenceProjection {
   return {
-    segmentId: segment.segmentId,
-    kind: input.source.format === 'fountain' ? 'script' : 'manual',
-    text: segment.text,
+    evidenceId: segment.segmentId,
+    unitId: segment.unitId,
+    kind: segment.kind,
     sourceRef: documentSourceRef(input, segment.range),
+    locator: segment.locator,
+    contentHash: segment.contentHash,
     provenance: {
       providerId: ANALYZER_ID,
       sourceKind: 'document',
@@ -423,7 +438,6 @@ function toMediaTextSegment(
       semanticSegmentKind: segment.kind,
       ...(segment.explicitEntityKind ? { explicitEntityKind: segment.explicitEntityKind } : {}),
       ...(segment.explicitEntityName ? { explicitEntityName: segment.explicitEntityName } : {}),
-      ...(segment.range.structuredPath ? { structuredPath: segment.range.structuredPath } : {}),
     },
   };
 }

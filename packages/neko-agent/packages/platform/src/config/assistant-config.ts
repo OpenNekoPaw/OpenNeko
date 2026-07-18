@@ -1,7 +1,6 @@
 import {
   DEFAULT_CONFIG,
   DEFAULT_EXTENSION_CONFIG,
-  type AccountAiCatalogDiagnostic,
   type ChatModelOption,
   type MediaModelType,
   type ModelSourceGroup,
@@ -17,7 +16,7 @@ export type MediaUnderstandingCategory = 'image' | 'audio' | 'video';
 export type MediaUnderstandingPurpose =
   'image.understand' | 'audio.understand' | 'video.understand';
 export type MediaUnderstandingModelStatusValue = 'configured' | 'auto' | 'missing';
-export type MediaUnderstandingModelSource = 'explicit-config' | 'account-gateway';
+export type MediaUnderstandingModelSource = 'explicit-config';
 
 export const MEDIA_UNDERSTANDING_PURPOSES = [
   { category: 'image', purpose: 'image.understand' },
@@ -73,10 +72,7 @@ export interface AssistantProviderSelection {
   isConfigured: boolean;
   defaultModel: string;
   modelIds: string[];
-  source?: 'explicit-config' | 'account-gateway';
-  accountCatalogAvailable?: boolean;
-  entitledModelIds?: readonly string[];
-  modelCapabilities?: Readonly<Record<string, readonly string[]>>;
+  source?: 'explicit-config';
 }
 
 export interface AssistantSettingsSnapshot {
@@ -126,7 +122,6 @@ export interface AssistantConfigState {
   modelGroups: ModelSourceGroup[];
   defaultMediaModels: Partial<Record<MediaModelType, string>>;
   mediaUnderstandingModels?: MediaUnderstandingModels;
-  accountDiagnostics?: AccountAiCatalogDiagnostic[];
   configDiagnostic?: AssistantConfigDiagnostic;
 }
 

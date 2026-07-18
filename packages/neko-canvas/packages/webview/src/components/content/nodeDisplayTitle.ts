@@ -11,6 +11,10 @@ const NODE_TYPE_I18N_KEY: Partial<Record<string, string>> = {
 };
 
 export function resolveNodeDisplayTitle(node: CanvasNode): string {
+  const explicitTitle = resolveExplicitNodeTitle(node);
+  if (explicitTitle) {
+    return explicitTitle;
+  }
   const resourceRef = readResourceRef(node);
   if (resourceRef) {
     return resolveResourceRefDisplayName(resourceRef);
@@ -18,18 +22,15 @@ export function resolveNodeDisplayTitle(node: CanvasNode): string {
   if (node.preview?.title) {
     return extractFilename(node.preview.title);
   }
-  const explicitTitle = resolveExplicitNodeTitle(node);
-  if (explicitTitle) {
-    return explicitTitle;
-  }
   const key = NODE_TYPE_I18N_KEY[node.type] ?? `node.${node.type}`;
   return t(key) || node.id;
 }
 
 function resolveExplicitNodeTitle(node: CanvasNode): string | undefined {
-  if (node.type !== 'text') return undefined;
+  if (node.type !== 'text' && node.type !== 'media' && node.type !== 'document') return undefined;
   const title = node.data.title?.trim();
   if (title) return title;
+  if (node.type !== 'text') return undefined;
   const sourceName = node.data.provenance?.['sourceName'];
   return typeof sourceName === 'string' && sourceName.trim().length > 0
     ? sourceName.trim()

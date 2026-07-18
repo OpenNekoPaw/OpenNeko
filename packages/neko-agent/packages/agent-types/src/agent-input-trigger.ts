@@ -2,7 +2,7 @@ export type AgentInputTriggerKind = 'command' | 'skill' | 'mention';
 export type AgentInputTriggerPrefix = '/' | '$' | '@';
 
 export type AgentCommandCatalogSource = 'builtin' | 'plugin' | 'command-artifact';
-export type AgentSkillInvocationCatalogSource = 'builtin' | 'personal' | 'project' | 'market';
+export type AgentSkillInvocationCatalogSource = 'builtin' | 'personal' | 'project';
 
 export interface AgentInputCatalogEntryBase {
   readonly id: string;

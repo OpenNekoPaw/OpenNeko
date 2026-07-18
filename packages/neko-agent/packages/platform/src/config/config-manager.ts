@@ -9,7 +9,6 @@ import type { Provider, Model } from '../types/provider';
 import type { RetryTimeoutPreset, BuiltinPresetName } from '../types/error';
 import type { MCPServerPreset } from '../types/config';
 import type {
-  AccountAiCatalogSnapshot,
   ChatModelOption,
   GenerationModelConfig,
   MediaModelType,
@@ -45,7 +44,6 @@ import {
   selectAssistantProvider,
   type AssistantConfigState,
   type AssistantConfiguredProviderView,
-  type AssistantProviderModelView,
   type AssistantProviderSelection,
   type AssistantProviderView,
   type AssistantRuntimeSettingsSnapshot,
@@ -298,23 +296,17 @@ export class ConfigManager {
     return buildAssistantConfiguredProviderViews(this.getConfig());
   }
 
-  getAssistantConfigState(
-    options: { accountCatalog?: AccountAiCatalogSnapshot | null } = {},
-  ): AssistantConfigState {
+  getAssistantConfigState(): AssistantConfigState {
     const config = this.getConfig();
-    const projection = this.resolveProviderSources(options.accountCatalog ?? null);
+    const projection = this.resolveProviderSources();
     const configDiagnostic = this.getProjectedConfigDiagnostic(projection);
     const explicitState = buildAssistantConfigState(config);
-    const accountProviderViews = this.buildAccountProviderViews(options.accountCatalog ?? null);
     const settings = this.getAssistantSettingsSnapshot();
     const chatModelOptions = [...projection.chatModelOptions];
     return {
       ...explicitState,
-      providers: [...accountProviderViews, ...explicitState.providers],
-      configuredProviders: [
-        ...accountProviderViews.map((provider) => ({ ...provider })),
-        ...explicitState.configuredProviders,
-      ],
+      providers: explicitState.providers,
+      configuredProviders: explicitState.configuredProviders,
       selectedProviderId: settings.selectedProviderId,
       selectedModelId: settings.selectedModelId,
       customSystemPrompt: settings.customSystemPrompt,
@@ -332,11 +324,6 @@ export class ConfigManager {
         models: config.models.values(),
       }),
       mediaUnderstandingModels: this.buildMediaUnderstandingModels(),
-      ...(options.accountCatalog?.diagnostics
-        ? {
-            accountDiagnostics: [...options.accountCatalog.diagnostics],
-          }
-        : {}),
       ...(configDiagnostic ? { configDiagnostic } : {}),
     };
   }
@@ -418,11 +405,9 @@ export class ConfigManager {
     });
   }
 
-  getAssistantSettingsData(
-    options: { accountCatalog?: AccountAiCatalogSnapshot | null } = {},
-  ): AssistantSettingsData {
+  getAssistantSettingsData(): AssistantSettingsData {
     const config = this.getConfig();
-    const providerSourceProjection = this.resolveProviderSources(options.accountCatalog ?? null);
+    const providerSourceProjection = this.resolveProviderSources();
     const chatModelOptions = [...providerSourceProjection.chatModelOptions];
     const explicitState = buildAssistantConfigState(config);
     const settingsDiagnostic =
@@ -820,16 +805,13 @@ export class ConfigManager {
     return status;
   }
 
-  private resolveProviderSources(
-    accountCatalog: AccountAiCatalogSnapshot | null,
-  ): AiProviderSourceProjection {
+  private resolveProviderSources(): AiProviderSourceProjection {
     this.ensureMerged();
     return resolveAiProviderSources({
       providers: Array.from(this.providers.values()),
       models: Array.from(this.models.values()),
       userConfigReadResult: this.userConfigReadResult,
       configDiagnostic: this.configDiagnostic,
-      accountCatalog,
     });
   }
 
@@ -842,10 +824,7 @@ export class ConfigManager {
     if (this.isBlockingConfigReadDiagnostic(this.configDiagnostic)) {
       return this.configDiagnostic;
     }
-    if (projection.hasAccountGateway) {
-      return undefined;
-    }
-    return projection.accountConfigDiagnostic ?? this.configDiagnostic;
+    return this.configDiagnostic;
   }
 
   private isBlockingConfigReadDiagnostic(
@@ -868,36 +847,6 @@ export class ConfigManager {
       diagnostic?.code === 'invalidDefaultModelBinding' ||
       diagnostic?.code === 'readError'
     );
-  }
-
-  private buildAccountProviderViews(
-    catalog: AccountAiCatalogSnapshot | null,
-  ): AssistantConfiguredProviderView[] {
-    if (!catalog || catalog.status !== 'available') return [];
-    const allowed = new Set(catalog.entitlement.allowedModelIds);
-    const disabled = new Set(catalog.entitlement.disabledModelIds ?? []);
-    const models: AssistantProviderModelView[] = catalog.models
-      .filter((model) => model.enabled !== false)
-      .filter((model) => allowed.has(model.id) && !disabled.has(model.id))
-      .map((model) => ({
-        id: model.id,
-        name: model.displayName || model.name || model.id,
-        enabled: true,
-      }));
-    if (models.length === 0) return [];
-    return [
-      {
-        id: catalog.provider.id,
-        name: catalog.provider.displayName || catalog.provider.name || catalog.provider.id,
-        type: catalog.provider.type,
-        connectionKind: catalog.provider.connectionKind,
-        protocolProfile: catalog.provider.protocolProfile,
-        supportLevel: catalog.provider.supportLevel,
-        requiresApiKey: false,
-        models,
-        enabled: true,
-      },
-    ];
   }
 
   private getAssistantDefaultProviderScalarForSettings(): string | null {

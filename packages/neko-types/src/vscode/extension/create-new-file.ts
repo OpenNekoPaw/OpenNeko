@@ -39,7 +39,7 @@ export interface CreateNewFileOptions {
   targetFolder?: vscode.Uri;
   /** Stem used when generating a unique default name. Defaults to `'Untitled'`. */
   baseName?: string;
-  /** File extension including the leading dot, e.g. `'.nkm'`. */
+  /** File extension including the leading dot, e.g. `'.nkc'`. */
   ext: string;
   /** Returns the initial file content given the file stem (name without extension). */
   template: (title: string) => string | Uint8Array;
@@ -73,7 +73,7 @@ export interface CreateNewFileOptions {
  * Explorer, and trigger an inline rename so the user can set the final name.
  *
  * The inline input is pre-filled with the default name and extension
- * (e.g. "Untitled.nkm"), with only the stem selected. The user can type a new
+ * (e.g. "Untitled.nkc"), with only the stem selected. The user can type a new
  * stem; the extension is preserved automatically by VSCode's rename UX.
  *
  * @returns The URI of the created file (with the default name, before rename),

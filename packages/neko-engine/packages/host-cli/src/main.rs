@@ -6,7 +6,6 @@
 //! 2. CLI mode: Direct .nkv file export
 
 mod args;
-mod nka_loader;
 mod runner;
 
 use clap::Parser;

@@ -7,8 +7,6 @@ import type {
   CreativeEntityChangeEvent,
   CreativeEntityKind,
   CreativeEntityRef,
-  DashboardCreativeEntityEvent,
-  DashboardCreativeEntitySourceRequest,
   EntityBindingWidgetTriggerRequest,
   EntityAssetBinding,
   EntityFacadeAssetReverseLookupRequest,
@@ -39,7 +37,6 @@ import type {
 import {
   ENTITY_FACADE_COMMANDS,
   ENTITY_FACADE_SHORT_METADATA_KEYS,
-  createCharacterEvidenceLedgerStore,
   createEmptyCharacterRegistryFile,
   isEntityBindingWidgetTriggerRequest,
   isEntityFacadeAssetReverseLookupRequest,
@@ -64,10 +61,6 @@ import {
   isEntityFacadeUpsertVisualDraftRequest,
   isEntityMemoryContribution,
 } from '@neko/shared';
-import {
-  isDashboardCreativeEntitySourceRequest,
-  toDashboardCreativeEntityId,
-} from '@neko/shared/types/dashboard-creative-entity';
 import { CreativeEntityService } from '../core/CreativeEntityService';
 import {
   EntityContributionAutomationService,
@@ -83,8 +76,7 @@ import { EntityAssetMetadataProjector, projectEntityBindingAvailability } from '
 import { CreativeEntityRegistryService, ProjectEntityStore } from '../core/entityStore';
 import type { EntityRuntimeFileStore, EntityRuntimePorts } from '../core/ports';
 import { SerialEntityRuntimeLock } from '../core/ports';
-import { EntityDashboardCreativeEntitySource } from '../dashboard/source';
-import { resolveCharacterMemoryPath, resolveCharacterRegistryPath } from '../core/paths';
+import { resolveCharacterRegistryPath } from '../core/paths';
 import {
   CommandProjectAssetRefResolver,
   ProjectAssetBindingAvailabilityWatcher,
@@ -92,8 +84,9 @@ import {
 
 export {
   EntityInspectorProvider,
-  isInspectorEventRelated,
-  toInspectorDashboardRef,
+  isInspectorChangeRelated,
+  toInspectorEntityRef,
+  type EntityInspectorChangeSubscriber,
   type EntityInspectorCommandExecutor,
   type EntityInspectorProviderOptions,
 } from './entityInspectorProvider';
@@ -209,17 +202,17 @@ export interface VSCodeEntityRuntimeOptions {
   };
 }
 
-export interface VSCodeDashboardEntitySourceCommandOptions {
+export interface VSCodeEntityCommandOptions {
   readonly projectRoot?: string;
   readonly logger?: VSCodeEntityRuntimeOptions['logger'];
   readonly runtimeRegistry?: VSCodeEntityRuntimeRegistry;
 }
 
-export interface VSCodeEntityContributionAutomationCommandOptions extends VSCodeDashboardEntitySourceCommandOptions {
+export interface VSCodeEntityContributionAutomationCommandOptions extends VSCodeEntityCommandOptions {
   readonly automation?: EntityContributionAutomationOptions;
 }
 
-export interface VSCodeEntityFacadeCommandOptions extends VSCodeDashboardEntitySourceCommandOptions {
+export interface VSCodeEntityFacadeCommandOptions extends VSCodeEntityCommandOptions {
   readonly inputBox?: Pick<typeof vscode.window, 'showInputBox'>;
   readonly quickPick?: Pick<typeof vscode.window, 'showQuickPick'>;
   readonly executeCommand?: typeof vscode.commands.executeCommand;
@@ -229,10 +222,6 @@ export interface VSCodeEntityContributionAutomationRequest {
   readonly projectRoot?: string;
   readonly contribution: EntityMemoryContribution;
   readonly options?: EntityContributionAutomationOptions;
-}
-
-export interface VSCodeDashboardEntitySourceOptions extends VSCodeEntityRuntimeOptions {
-  readonly runtime?: VSCodeEntityRuntime;
 }
 
 export interface VSCodeEntityRuntime {
@@ -386,114 +375,6 @@ export function createVSCodeEntityServices(options: VSCodeEntityRuntimeOptions):
     requirements,
     drafts,
     service,
-  };
-}
-
-export function createVSCodeDashboardEntitySource(options: VSCodeDashboardEntitySourceOptions) {
-  const runtime = options.runtime ?? createVSCodeEntityRuntime(options);
-  const characterMemoryPath = resolveCharacterMemoryPath(options.projectRoot);
-  return {
-    runtime,
-    source: new EntityDashboardCreativeEntitySource({
-      projectRoot: options.projectRoot,
-      service: runtime.service,
-      characterMemory: {
-        path: characterMemoryPath,
-        store: createCharacterEvidenceLedgerStore({
-          async readFile(filePath) {
-            return fs.readFile(filePath, 'utf8');
-          },
-          async writeFile(filePath, content) {
-            await fs.mkdir(path.dirname(filePath), { recursive: true });
-            const tmpPath = `${filePath}.tmp`;
-            await fs.writeFile(tmpPath, content, 'utf8');
-            await fs.rename(tmpPath, filePath);
-          },
-          async exists(filePath) {
-            try {
-              await fs.access(filePath);
-              return true;
-            } catch {
-              return false;
-            }
-          },
-          async mkdir(directoryPath) {
-            await fs.mkdir(directoryPath, { recursive: true });
-          },
-        }),
-      },
-      executeCommand: async (command, ...args) => vscode.commands.executeCommand(command, ...args),
-      translate: (message, ...args) => vscode.l10n.t(message, ...args),
-      subscribe(listener) {
-        const disposable = runtime.onDidChangeEntity((event) => {
-          listener(entityEventToDashboardEvent(event));
-        });
-        return { dispose: () => disposable.dispose() };
-      },
-    }),
-  };
-}
-
-function entityEventToDashboardEvent(
-  event: CreativeEntityChangeEvent,
-): DashboardCreativeEntityEvent {
-  const entityRef = event.changedRefs.find((ref) => ref.entityRef)?.entityRef;
-  return {
-    type: event.reason === 'deprecate' ? 'removed' : 'refreshed',
-    source: 'neko-entity',
-    ref: entityRef
-      ? {
-          source: 'neko-entity',
-          sourceEntityId: `entity:${entityRef.entityId}`,
-          entityId: entityRef.entityId,
-          entityKind: entityRef.entityKind,
-          projectRoot: entityRef.projectRoot,
-        }
-      : undefined,
-    changedRefs: event.changedRefs,
-    freshness: event.freshness,
-  };
-}
-
-export function registerDashboardEntitySourceCommand(
-  options: VSCodeDashboardEntitySourceCommandOptions = {},
-) {
-  const ownsRuntimeRegistry = !options.runtimeRegistry;
-  const runtimeRegistry =
-    options.runtimeRegistry ?? new VSCodeEntityRuntimeRegistry({ logger: options.logger });
-  const cached = new Map<string, EntityDashboardCreativeEntitySource>();
-  const command = vscode.commands.registerCommand(
-    'neko.entity.getDashboardCreativeEntitySource',
-    (request: DashboardCreativeEntitySourceRequest | unknown) => {
-      const sourceRequest = isDashboardCreativeEntitySourceRequest(request) ? request : undefined;
-      const projectRoot =
-        options.projectRoot ??
-        sourceRequest?.projectRoot ??
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!projectRoot) {
-        return undefined;
-      }
-      const current = cached.get(projectRoot);
-      if (current) {
-        return current;
-      }
-      const next = createVSCodeDashboardEntitySource({
-        projectRoot,
-        logger: options.logger,
-        runtime: runtimeRegistry.get(projectRoot),
-      });
-      cached.set(projectRoot, next.source);
-      return next.source;
-    },
-  );
-  return {
-    dispose() {
-      command.dispose();
-      if (ownsRuntimeRegistry) {
-        runtimeRegistry.dispose();
-      }
-      cached.clear();
-    },
   };
 }
 
@@ -939,7 +820,7 @@ function resolveRuntime(
   registry: VSCodeEntityRuntimeRegistry,
   request: EntityFacadeProjectContext,
   entityRef: Pick<CreativeEntityRef, 'projectRoot'> | undefined,
-  options: VSCodeDashboardEntitySourceCommandOptions,
+  options: VSCodeEntityCommandOptions,
 ):
   | { readonly projectRoot: string; readonly runtime: VSCodeEntityRuntime }
   | ReturnType<typeof missingProject> {
@@ -1274,7 +1155,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export { toDashboardCreativeEntityId };
 export { createEmptyCharacterRegistryFile, resolveCharacterRegistryPath };
 export type {
   EntityAssetBindingService,

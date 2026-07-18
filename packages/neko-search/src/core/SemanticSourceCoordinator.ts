@@ -1,5 +1,6 @@
 import type {
   SemanticEntitySnapshot,
+  SemanticCreativeSchemaRef,
   SemanticSourceAnalysisResult,
   SemanticSourceAnalyzer,
   SemanticSourceDescriptor,
@@ -21,6 +22,7 @@ export interface SemanticSourceFileObservation {
   readonly sizeBytes: number;
   readonly modifiedAtMs: number;
   readonly fingerprint: string;
+  readonly creativeSchema?: SemanticCreativeSchemaRef;
 }
 
 export interface SemanticSourceFileBatch {
@@ -70,6 +72,11 @@ export interface SemanticSourceCoordinatorPorts {
     readonly content: Uint8Array;
     readonly signal: AbortSignal;
   }) => readonly SemanticTextSegment[];
+  readonly extractDocument?: (input: {
+    readonly source: SemanticSourceDescriptor;
+    readonly file: SemanticSourceFileObservation;
+    readonly signal: AbortSignal;
+  }) => Promise<readonly SemanticTextSegment[]>;
   readonly now?: () => string;
 }
 
@@ -242,8 +249,13 @@ export class SemanticSourceCoordinator {
     if (signal.aborted) throw new Error(`Semantic source ${source.sourceId} processing aborted.`);
     const stored = await this.ports.projection.getSource(source.sourceId);
     if (stored?.sourceFingerprint === source.fingerprint) return 'skipped';
-    const content = await this.ports.discovery.readFile(file, signal);
-    const segments = this.ports.extractText({ source, content, signal });
+    const segments = isSemanticDocumentFormat(source.format)
+      ? await this.requireDocumentExtractor()({ source, file, signal })
+      : this.ports.extractText({
+          source,
+          content: await this.ports.discovery.readFile(file, signal),
+          signal,
+        });
     const entities = await this.ports.getEntitySnapshot();
     const updatedAt = this.now();
     const result = await this.analyzer.analyze({
@@ -280,6 +292,14 @@ export class SemanticSourceCoordinator {
     return scope;
   }
 
+  private requireDocumentExtractor(): NonNullable<
+    SemanticSourceCoordinatorPorts['extractDocument']
+  > {
+    const extractor = this.ports.extractDocument;
+    if (!extractor) throw new Error('Semantic document extractor is not registered.');
+    return extractor;
+  }
+
   private controllerFor(rootId: string): AbortController {
     const existing = this.controllers.get(rootId);
     if (existing && !existing.signal.aborted) return existing;
@@ -309,7 +329,7 @@ function descriptorFromObservation(
   file: SemanticSourceFileObservation,
 ): SemanticSourceDescriptor | undefined {
   const relativePath = normalizeRelativePath(file.relativePath);
-  const format = semanticFormat(relativePath);
+  const format = semanticFormat(relativePath, file.creativeSchema);
   if (!format || isExcludedSemanticPath(relativePath)) return undefined;
   const analysisMode =
     scope.analysisMode === 'off'
@@ -329,19 +349,28 @@ function descriptorFromObservation(
     fingerprint: file.fingerprint,
     sizeBytes: file.sizeBytes,
     modifiedAtMs: file.modifiedAtMs,
+    ...(file.creativeSchema ? { creativeSchema: file.creativeSchema } : {}),
   };
 }
 
-export function semanticFormat(relativePath: string): SemanticSourceFormat | undefined {
+export function semanticFormat(
+  relativePath: string,
+  creativeSchema?: SemanticCreativeSchemaRef,
+): SemanticSourceFormat | undefined {
   const lower = relativePath.toLocaleLowerCase();
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'markdown';
   if (lower.endsWith('.txt')) return 'plain';
-  if (lower.endsWith('.fountain') || lower.endsWith('.nks') || lower.endsWith('.story')) {
-    return 'fountain';
-  }
-  if (lower.endsWith('.json')) return 'json';
-  if (lower.endsWith('.yaml') || lower.endsWith('.yml')) return 'yaml';
+  if (lower.endsWith('.fountain')) return 'fountain';
+  if (lower.endsWith('.pdf')) return 'pdf';
+  if (lower.endsWith('.epub')) return 'epub';
+  if (lower.endsWith('.docx')) return 'docx';
+  if (creativeSchema && lower.endsWith('.json')) return 'json';
+  if (creativeSchema && (lower.endsWith('.yaml') || lower.endsWith('.yml'))) return 'yaml';
   return undefined;
+}
+
+function isSemanticDocumentFormat(format: SemanticSourceFormat): boolean {
+  return format === 'pdf' || format === 'epub' || format === 'docx';
 }
 
 export function isExcludedSemanticPath(relativePath: string): boolean {

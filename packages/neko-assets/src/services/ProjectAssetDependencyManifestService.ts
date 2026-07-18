@@ -1,11 +1,6 @@
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import type {
-  CharacterAssetMediaKind,
-  InstalledPackage,
-  ProjectAssetDependency,
-  ProjectAssetDependencyManifest,
-} from '@neko/shared';
+import type { ProjectAssetDependency, ProjectAssetDependencyManifest } from '@neko/shared';
 
 export interface ProjectAssetDependencyManifestFileSystem {
   readonly readFile: (filePath: string) => Promise<Uint8Array>;
@@ -14,15 +9,11 @@ export interface ProjectAssetDependencyManifestFileSystem {
   readonly exists: (filePath: string) => Promise<boolean>;
 }
 
-export interface ProjectAssetDependencyMarketReader {
-  readonly isInstalled: (packageId: string) => boolean | Promise<boolean>;
-}
-
 export type ProjectAssetDependencyValidationIssueCode =
   | 'missing-import-source'
   | 'missing-import-destination'
   | 'missing-workspace-source'
-  | 'missing-market-package'
+  | 'removed-market-source'
   | 'source-hash-mismatch'
   | 'manifest-read-failed';
 
@@ -46,7 +37,6 @@ export interface ProjectAssetDependencyValidationResult {
 export interface ProjectAssetDependencyManifestServiceOptions {
   readonly projectRoot: string;
   readonly fs: ProjectAssetDependencyManifestFileSystem;
-  readonly market?: ProjectAssetDependencyMarketReader;
   readonly now?: () => Date;
 }
 
@@ -55,13 +45,11 @@ export class ProjectAssetDependencyManifestService {
 
   private readonly projectRoot: string;
   private readonly fs: ProjectAssetDependencyManifestFileSystem;
-  private readonly market: ProjectAssetDependencyMarketReader | undefined;
   private readonly now: () => Date;
 
   constructor(options: ProjectAssetDependencyManifestServiceOptions) {
     this.projectRoot = path.resolve(options.projectRoot);
     this.fs = options.fs;
-    this.market = options.market;
     this.now = options.now ?? (() => new Date());
     this.manifestPath = path.join(this.projectRoot, 'neko', 'assets', 'manifest.json');
   }
@@ -158,31 +146,6 @@ export class ProjectAssetDependencyManifestService {
     };
   }
 
-  createMarketDependency(input: {
-    readonly id: string;
-    readonly packageId: string;
-    readonly version?: string;
-    readonly mediaKind: ProjectAssetDependency['mediaKind'];
-    readonly dimensions: ProjectAssetDependency['dimensions'];
-    readonly storageMode?: ProjectAssetDependency['storageMode'];
-    readonly contentHash?: string;
-    readonly assetEntityId?: string;
-    readonly variantId?: string;
-  }): ProjectAssetDependency {
-    return {
-      id: input.id,
-      sourceKind: 'market',
-      packageId: input.packageId,
-      mediaKind: input.mediaKind,
-      dimensions: input.dimensions,
-      storageMode: input.storageMode ?? 'market',
-      ...(input.version ? { version: input.version } : {}),
-      ...(input.contentHash ? { contentHash: input.contentHash } : {}),
-      ...(input.assetEntityId ? { assetEntityId: input.assetEntityId } : {}),
-      ...(input.variantId ? { variantId: input.variantId } : {}),
-    };
-  }
-
   createWorkspaceDependency(input: {
     readonly id: string;
     readonly workspacePath: string;
@@ -205,20 +168,6 @@ export class ProjectAssetDependencyManifestService {
     };
   }
 
-  createMarketDependencyFromInstalledPackage(pkg: InstalledPackage): ProjectAssetDependency {
-    const metadata = pkg.manifest.typeMetadata;
-    const rawMediaKind = metadata?.type === 'media' ? metadata.data.mediaKind : undefined;
-    const mediaKind = isCharacterAssetMediaKind(rawMediaKind) ? rawMediaKind : 'puppet-model';
-    return this.createMarketDependency({
-      id: pkg.packageId,
-      packageId: pkg.packageId,
-      version: pkg.version,
-      mediaKind,
-      dimensions: inferDimensions(mediaKind),
-      contentHash: pkg.manifest.distribution?.checksum,
-    });
-  }
-
   private createEmptyManifest(): ProjectAssetDependencyManifest {
     return {
       version: 1,
@@ -235,7 +184,15 @@ export class ProjectAssetDependencyManifestService {
       case 'import':
         return this.validateImportDependency(dependency);
       case 'market':
-        return this.validateMarketDependency(dependency);
+        return [
+          {
+            dependencyId: dependency.id,
+            sourceKind: dependency.sourceKind,
+            code: 'removed-market-source',
+            message: `Market-backed asset dependencies are not supported by the retained product set: ${dependency.packageId}`,
+            packageId: dependency.packageId,
+          },
+        ];
       case 'workspace':
         return this.validateWorkspaceDependency(dependency);
     }
@@ -283,22 +240,6 @@ export class ProjectAssetDependencyManifestService {
     }
 
     return issues;
-  }
-
-  private async validateMarketDependency(
-    dependency: Extract<ProjectAssetDependency, { sourceKind: 'market' }>,
-  ): Promise<ProjectAssetDependencyValidationIssue[]> {
-    const installed = await this.market?.isInstalled(dependency.packageId);
-    if (installed !== false) return [];
-    return [
-      {
-        dependencyId: dependency.id,
-        sourceKind: dependency.sourceKind,
-        code: 'missing-market-package',
-        message: `Market package is not installed: ${dependency.packageId}`,
-        packageId: dependency.packageId,
-      },
-    ];
   }
 
   private async validateWorkspaceDependency(
@@ -383,26 +324,6 @@ function isProjectAssetDependency(value: unknown): value is ProjectAssetDependen
     typeof value['mediaKind'] === 'string' &&
     Array.isArray(value['dimensions']) &&
     typeof value['storageMode'] === 'string'
-  );
-}
-
-function inferDimensions(mediaKind: string): ProjectAssetDependency['dimensions'] {
-  if (mediaKind.endsWith('-motion')) return ['motion'];
-  if (mediaKind.endsWith('-config')) return ['config'];
-  if (mediaKind === 'voice-pack') return ['audio'];
-  return ['model'];
-}
-
-function isCharacterAssetMediaKind(value: unknown): value is CharacterAssetMediaKind {
-  return (
-    value === 'puppet-model' ||
-    value === 'puppet-motion' ||
-    value === 'puppet-config' ||
-    value === 'model-3d' ||
-    value === 'model-motion' ||
-    value === 'model-config' ||
-    value === 'voice-pack' ||
-    value === 'character-pack'
   );
 }
 

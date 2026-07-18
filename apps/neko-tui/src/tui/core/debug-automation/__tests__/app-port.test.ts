@@ -630,14 +630,72 @@ describe('createTuiAutomationAppPort', () => {
         getWorkspaceBoardProjections: () => [
           {
             version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+            deliveryId: 'delivery:queued-secret-holder',
+            status: 'queued',
+            diagnostics: [
+              {
+                code: 'delivery-claim-conflict',
+                severity: 'error',
+                message: 'holder=tui-secret /Users/private/neko.db tasks token=secret',
+              },
+            ],
+          },
+          {
+            version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+            deliveryId: 'delivery:claimed-secret-holder',
+            status: 'claimed',
+            writerEpoch: 7,
+            diagnostics: [],
+          },
+          {
+            version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
             status: 'projected',
             target: {
               kind: 'workspace',
               documentUri: 'file:///private/workspace/neko/boards/workspace.nkc',
             },
             revision: `sha256:${'c'.repeat(64)}`,
-            nodeIds: ['workspace-inbox', 'generated-output-1'],
+            nodeIds: ['workspace-content-generated-output-1'],
+            connectionIds: ['workspace-relation-1'],
             diagnostics: [],
+          },
+        ],
+        getWorkspaceBoardDeliveryObservability: () => ({
+          canonicalSubmissionCount: 3,
+          resumeScanCount: 1,
+          legacyFallbackCounts: {
+            activeCanvas: 0,
+            recentCanvas: 0,
+            directWriter: 0,
+            genericSendToCanvas: 0,
+          },
+        }),
+        getCreatorVisibleArtifacts: () => [
+          {
+            artifactId: 'source-screenplay',
+            revision: `sha256:${'a'.repeat(64)}`,
+            role: 'source',
+            kind: 'file-reference',
+            title: 'screenplay.fountain',
+            sourceId: 'source-screenplay',
+            resourceRef: {
+              id: 'source-screenplay',
+              scope: 'project',
+              provider: 'source-file-content-access',
+              kind: 'document',
+              source: { kind: 'file', projectRelativePath: 'screenplay.fountain' },
+              locator: { kind: 'file', path: 'screenplay.fountain' },
+              fingerprint: { strategy: 'hash', value: `sha256:${'a'.repeat(64)}` },
+            },
+          },
+          {
+            artifactId: 'material-analysis',
+            revision: `markdown:${'b'.repeat(64)}`,
+            role: 'analysis',
+            kind: 'markdown',
+            title: 'Material Analysis',
+            sourceId: 'artifact:material-analysis',
+            markdown: '# Material Analysis\n\nFindings.',
           },
         ],
       }),
@@ -648,10 +706,26 @@ describe('createTuiAutomationAppPort', () => {
 
     expect(facts.workspaceBoardProjections).toEqual([
       {
+        deliveryIdHash: expect.stringMatching(/^sha256:/),
+        status: 'queued',
+        nodeIds: [],
+        connectionIds: [],
+        diagnosticCodes: ['delivery-claim-conflict'],
+      },
+      {
+        deliveryIdHash: expect.stringMatching(/^sha256:/),
+        status: 'claimed',
+        nodeIds: [],
+        connectionIds: [],
+        writerEpoch: 7,
+        diagnosticCodes: [],
+      },
+      {
         status: 'projected',
         targetKind: 'workspace',
         revision: `sha256:${'c'.repeat(64)}`,
-        nodeIds: ['workspace-inbox', 'generated-output-1'],
+        nodeIds: ['workspace-content-generated-output-1'],
+        connectionIds: ['workspace-relation-1'],
         diagnosticCodes: [],
       },
     ]);
@@ -659,8 +733,35 @@ describe('createTuiAutomationAppPort', () => {
       limit: 128,
       droppedCount: 0,
     });
+    expect(facts.workspaceBoardDelivery).toEqual({
+      canonicalSubmissionCount: 3,
+      resumeScanCount: 1,
+      legacyFallbackCounts: {
+        activeCanvas: 0,
+        recentCanvas: 0,
+        directWriter: 0,
+        genericSendToCanvas: 0,
+      },
+    });
+    expect(facts.artifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ref: 'source-screenplay',
+          kind: 'resource-ref',
+          provenance: expect.objectContaining({ source: 'source-file' }),
+        }),
+        expect.objectContaining({
+          ref: 'material-analysis',
+          kind: 'composite-artifact',
+          provenance: expect.objectContaining({ source: 'tool-result' }),
+        }),
+      ]),
+    );
     expect(JSON.stringify(facts.workspaceBoardProjections)).not.toContain('documentUri');
     expect(JSON.stringify(facts.workspaceBoardProjections)).not.toContain('/private/workspace');
+    expect(JSON.stringify(facts.workspaceBoardProjections)).not.toMatch(
+      /tui-secret|\/Users\/private|neko\.db|tasks|token=secret/,
+    );
   });
 
   it('collects revision-bound generated-output facts from completed media tasks', async () => {

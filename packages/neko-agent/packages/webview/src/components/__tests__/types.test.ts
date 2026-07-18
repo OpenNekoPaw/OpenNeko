@@ -5,7 +5,6 @@ import type {
   ConversationSummary,
   OpenTab,
   TabType,
-  SsoSession,
   ShellExecutionMode,
   SettingsState,
   ConfiguredProvider,
@@ -168,25 +167,6 @@ describe('types validation', () => {
     });
   });
 
-  describe('SsoSession type', () => {
-    it('should accept full SSO session', () => {
-      const session: SsoSession = {
-        user: 'user@studio.com',
-        plan: 'Pro',
-        usage: 12400,
-      };
-      expect(session.user).toBe('user@studio.com');
-      expect(session.plan).toBe('Pro');
-      expect(session.usage).toBe(12400);
-    });
-
-    it('should accept minimal SSO session', () => {
-      const session: SsoSession = { user: 'user@example.com' };
-      expect(session.plan).toBeUndefined();
-      expect(session.usage).toBeUndefined();
-    });
-  });
-
   describe('ShellExecutionMode type', () => {
     it('should accept valid execution modes', () => {
       const modes: ShellExecutionMode[] = ['plan', 'ask', 'auto'];
@@ -248,12 +228,12 @@ describe('types validation', () => {
 
     it('should accept provider-owned auto model option', () => {
       const option: ChatModelOption = {
-        id: 'neko-account-gateway:auto',
+        id: 'configured-gateway:auto',
         label: 'Auto',
-        providerId: 'neko-account-gateway',
+        providerId: 'configured-gateway',
         modelId: 'auto',
       };
-      expect(option.id).toBe('neko-account-gateway:auto');
+      expect(option.id).toBe('configured-gateway:auto');
     });
   });
 
@@ -273,7 +253,6 @@ describe('types validation', () => {
         executionMode: 'ask',
         chatModelOptions: [],
         modelGroups: [],
-        ssoSession: null,
       };
       expect(settings.executionMode).toBe('ask');
       expect(settings.temperature).toBe(0.7);
@@ -295,7 +274,6 @@ describe('types validation', () => {
         executionMode: 'auto',
         chatModelOptions: [],
         modelGroups: [],
-        ssoSession: null,
       };
       expect(settings.selectedProviderId).toBe('openai');
       expect(settings.selectedModelId).toBe('gpt-4');

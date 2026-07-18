@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('vscode', async () => await import('../../__mocks__/vscode'));
+vi.mock('../webviewAssetManifest', () => ({
+  readAgentWebviewAssetPaths: () => ({
+    script: 'assets/assistant-testHash.js',
+    style: 'assets/assistant-style-testHash.css',
+  }),
+}));
 
 import * as vscode from 'vscode';
 import {
@@ -1084,8 +1090,9 @@ describe('chatProvider', () => {
     await Promise.resolve();
 
     expect(webview.html).toContain('<!DOCTYPE html>');
-    expect(webview.html).toMatch(/assistant\.js\?v=[A-Za-z0-9]+/);
-    expect(webview.html).toMatch(/assistant-style\.css\?v=[A-Za-z0-9]+/);
+    expect(webview.html).toContain('assets/assistant-testHash.js');
+    expect(webview.html).toContain('assets/assistant-style-testHash.css');
+    expect(webview.html).not.toContain('?v=');
     expect(webview.onDidReceiveMessage).toHaveBeenCalled();
 
     provider.dispose();
@@ -1131,8 +1138,6 @@ describe('chatProvider', () => {
       plugins: {
         canvas: true,
         cut: false,
-        sketch: false,
-        model: false,
       },
     });
 

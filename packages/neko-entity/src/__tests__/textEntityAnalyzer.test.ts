@@ -31,6 +31,20 @@ const entities: readonly CreativeEntity[] = [
     aliases: [],
     status: 'confirmed',
   },
+  {
+    id: 'char_morgan',
+    kind: 'character',
+    canonicalName: 'Morgan',
+    aliases: [],
+    status: 'confirmed',
+  },
+  {
+    id: 'location_morgan',
+    kind: 'location',
+    canonicalName: 'Morgan',
+    aliases: [],
+    status: 'confirmed',
+  },
 ];
 
 describe('TextEntityAnalyzer', () => {
@@ -44,6 +58,15 @@ describe('TextEntityAnalyzer', () => {
     );
     expect(result.candidates).toEqual([]);
     expect(result.occurrences).toHaveLength(3);
+    expect(result.index.textSegments).toBeUndefined();
+    expect(result.evidence).toEqual([
+      expect.objectContaining({
+        evidenceId: 'segment-1',
+        unitId: 'unit-1',
+        contentHash: 'fnv1a32:segment-1',
+      }),
+    ]);
+    expect(JSON.stringify(result.evidence)).not.toContain('Rin meets');
   });
 
   it('does not create candidates in link-existing mode', async () => {
@@ -78,6 +101,26 @@ describe('TextEntityAnalyzer', () => {
         }),
       ]),
     );
+  });
+
+  it('uses structural kind to select the only compatible exact entity', async () => {
+    const result = await new TextEntityAnalyzer().analyze(
+      input([
+        segment('fountain-character', 'Morgan', 1, 'character', 'Morgan'),
+        segment('fountain-scene', 'Rin', 2, 'location', 'Rin'),
+      ]),
+    );
+    expect(result.mentions).toEqual([
+      expect.objectContaining({ entityRef: { entityId: 'char_morgan', entityKind: 'character' } }),
+      expect.objectContaining({ candidateName: 'Rin' }),
+    ]);
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        kind: 'location',
+        name: 'Rin',
+        metadata: expect.objectContaining({ reviewStatus: 'ambiguous' }),
+      }),
+    ]);
   });
 
   it('aggregates source observations into exception-oriented review items', async () => {
@@ -138,8 +181,11 @@ function segment(
 ): SemanticTextSegment {
   return {
     segmentId: `segment-${line}`,
+    unitId: `unit-${line}`,
     kind,
     text,
+    locator: { kind: 'text-range', startLine: line, endLine: line },
+    contentHash: `fnv1a32:segment-${line}`,
     range: {
       startOffset: line * 100,
       endOffset: line * 100 + text.length,

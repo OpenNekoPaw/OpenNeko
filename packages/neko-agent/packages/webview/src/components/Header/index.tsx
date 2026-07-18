@@ -3,7 +3,7 @@ import { TabBar } from '@/components/Header/TabBar';
 import { HistoryMenu } from '@/components/Header/HistoryMenu';
 import { useTranslation } from '@/i18n/I18nContext';
 import { AccountBar } from '@/components/AccountBar';
-import type { SsoSession, ConfiguredProvider } from '@neko-agent/types';
+import type { ConfiguredProvider } from '@neko-agent/types';
 import { PlusIcon } from '@neko/shared/icons';
 import type { DisplayTab } from '@/presenters/tab-display-presenter';
 import type { HistoryConversationItem } from '@/presenters/history-menu-presenter';
@@ -23,7 +23,6 @@ interface HeaderProps {
   clearableConversationCount?: number;
   protectedConversationCount?: number;
   // AccountBar props (replaces settings gear)
-  ssoSession: SsoSession | null;
   configuredProviders: ConfiguredProvider[];
   onOpenOnboarding: () => void;
 }
@@ -42,7 +41,6 @@ export function Header({
   onClearClosedConversations,
   clearableConversationCount,
   protectedConversationCount,
-  ssoSession,
   configuredProviders,
   onOpenOnboarding,
 }: HeaderProps) {
@@ -84,11 +82,7 @@ export function Header({
         />
 
         {/* AccountBar — replaces settings gear */}
-        <AccountBar
-          ssoSession={ssoSession}
-          configuredProviders={configuredProviders}
-          onOpenOnboarding={onOpenOnboarding}
-        />
+        <AccountBar configuredProviders={configuredProviders} onOpenOnboarding={onOpenOnboarding} />
       </div>
     </header>
   );

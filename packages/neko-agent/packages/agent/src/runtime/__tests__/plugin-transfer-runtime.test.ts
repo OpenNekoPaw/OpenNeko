@@ -167,8 +167,6 @@ describe('plugin transfer runtime', () => {
       plugins: {
         canvas: true,
         cut: false,
-        sketch: false,
-        model: false,
       },
     });
   });

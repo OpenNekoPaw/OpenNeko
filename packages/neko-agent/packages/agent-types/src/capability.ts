@@ -14,7 +14,7 @@ import type {
   PromptFragment,
 } from '@neko/shared';
 
-export type AgentCapabilitySource = 'builtin' | 'market' | 'local' | 'plugin' | 'mcp' | 'provider';
+export type AgentCapabilitySource = 'builtin' | 'local' | 'plugin' | 'mcp' | 'provider';
 
 export type AgentCapabilityContributionKind =
   | 'skill'

@@ -478,9 +478,9 @@ describe('useChatActions', () => {
             category: 'llm',
           },
           {
-            id: 'neko-account-gateway:gpt-5.5',
+            id: 'configured-gateway:gpt-5.5',
             label: 'GPT 5.5',
-            providerId: 'neko-account-gateway',
+            providerId: 'configured-gateway',
             modelId: 'gpt-5.5',
             category: 'llm',
           },
@@ -505,7 +505,7 @@ describe('useChatActions', () => {
         sessionMode: 'agent',
         agentModels: {
           primary: {
-            providerId: 'neko-account-gateway',
+            providerId: 'configured-gateway',
             modelId: 'gpt-5.5',
             category: 'llm',
           },
@@ -520,7 +520,7 @@ describe('useChatActions', () => {
         sessionMode: 'agent',
         agentModels: {
           primary: {
-            providerId: 'neko-account-gateway',
+            providerId: 'configured-gateway',
             modelId: 'gpt-5.5',
             category: 'llm',
           },

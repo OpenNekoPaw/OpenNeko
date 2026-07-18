@@ -1,6 +1,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { buildFountainScriptIndex } from '@neko/content';
 import {
   detectMediaType,
   isDocumentFile,
@@ -10,7 +11,6 @@ import {
   type EntityAssetProjectionRecord,
   type EntityAssetProjectionRepository,
   type GeneratedAsset,
-  type NekoStoryAPI,
   type ProjectIndexFreshness,
   type ProjectIndexPartitionStatus,
   type ProjectSearchAdapter,
@@ -27,7 +27,7 @@ import {
 import { buildProjectSearchText, matchesProjectSearchItem } from '../core/normalization';
 import type { ProjectSearchLogger } from '../core/ports';
 
-const STORY_GLOB = '**/*.{fountain,nks,story}';
+const STORY_GLOB = '**/*.fountain';
 
 export interface JsonReader {
   read<T>(filePath: string): Promise<T | null>;
@@ -262,15 +262,15 @@ class StorySymbolProjectSearchAdapter extends BaseProjectSearchAdapter {
 
   private async buildItems(projectRoot: string): Promise<readonly ProjectSearchItem[]> {
     const files = await this.workspaceFileFinder.findFiles(STORY_GLOB, '**/node_modules/**');
-    const storyApi = getStoryApi();
     const items: ProjectSearchItem[] = [];
 
     for (const uri of files) {
       const filePath = uri.fsPath;
       if (!isPathInside(filePath, projectRoot)) continue;
 
-      const scriptIndex = storyApi?.getScriptIndex?.(filePath);
-      if (scriptIndex) {
+      const sourceText = await readWorkspaceText(filePath);
+      if (sourceText) {
+        const scriptIndex = buildFountainScriptIndex({ uri: filePath, content: sourceText });
         for (const character of scriptIndex.characters) {
           items.push(
             createStoryItem(projectRoot, filePath, 'script-role', character.name, {
@@ -312,51 +312,6 @@ class StorySymbolProjectSearchAdapter extends BaseProjectSearchAdapter {
               ]),
             }),
           );
-        }
-        continue;
-      }
-
-      const parsed = storyApi?.parseScript(await readWorkspaceText(filePath));
-      if (!parsed) continue;
-      for (const element of parsed.elements) {
-        if (element.type === 'character') {
-          const name = optionalString(element['name']) ?? element.text;
-          if (name) {
-            items.push(
-              createStoryItem(projectRoot, filePath, 'script-role', name, {
-                id: `script-role:${filePath}:${name}`,
-                description: 'Script role',
-                navigationData: { filePath },
-                searchText: buildProjectSearchText([name, filePath, 'script role character']),
-              }),
-            );
-          }
-        }
-        if (element.type === 'scene_heading') {
-          const label = optionalString(element['raw']) ?? element.text;
-          if (label) {
-            items.push(
-              createStoryItem(projectRoot, filePath, 'story-scene', label, {
-                id: `story-scene:${filePath}:${label}`,
-                description: 'Story scene',
-                navigationData: { filePath },
-                searchText: buildProjectSearchText([label, filePath, 'story scene']),
-              }),
-            );
-          }
-        }
-        if (element.type === 'section') {
-          const label = optionalString(element['text']) ?? element.text;
-          if (label) {
-            items.push(
-              createStoryItem(projectRoot, filePath, 'story-section', label, {
-                id: `story-section:${filePath}:${label}`,
-                description: 'Story section',
-                navigationData: { filePath },
-                searchText: buildProjectSearchText([label, filePath, 'story section']),
-              }),
-            );
-          }
         }
       }
     }
@@ -1160,15 +1115,6 @@ function matchesMediaLibraryRawItem(
     },
     query,
   );
-}
-
-function getStoryApi(): NekoStoryAPI | undefined {
-  try {
-    const extension = vscode.extensions.getExtension<NekoStoryAPI>('neko.neko-story');
-    return extension?.isActive ? extension.exports : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 async function readWorkspaceText(filePath: string): Promise<string> {

@@ -24,7 +24,6 @@ export default defineConfig({
       'packages/extension/src/editor/video/messageHandler.test.ts',
       'packages/extension/src/editor/video/videoEditorModel.contract.test.ts',
       'packages/extension/src/editor/video/videoEditorProvider.save.test.ts',
-      'packages/extension/src/market/**/*.test.ts',
       'packages/extension/src/services/**/*.test.ts',
     ],
     exclude: ['**/node_modules/**', '**/dist/**'],

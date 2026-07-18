@@ -19,6 +19,7 @@ export const CHAT_WEBVIEW_MESSAGE_ROUTER_TYPES = [
   'projectionDetach',
   'searchProjectFiles',
   'startCharacterDialogueFromSlash',
+  'confirmRoleplayCandidate',
   'mermaidError',
   'confirmTool',
   'cancelMessage',

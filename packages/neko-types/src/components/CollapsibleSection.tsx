@@ -1,7 +1,7 @@
 /**
  * CollapsibleSection — Unified collapsible panel section.
  *
- * Merges neko-sketch CollapsiblePanel + neko-cut PropertyGroup patterns.
+ * Shared collapsible panel primitive for retained Webviews.
  * Caller is responsible for i18n — pass already-translated `title` string.
  *
  * CSS classes injected by Tailwind preset plugin.

@@ -1,5 +1,5 @@
 /**
- * ScriptNode - TOC-mode reference to a .nks / .fountain screenplay.
+ * ScriptNode - TOC-mode reference to a .fountain screenplay.
  * Shows scene structure only (no full text), loaded via getScriptIndex.
  * Clicking a scene can navigate to the linked SceneGroupNode.
  */
@@ -34,7 +34,7 @@ export interface ScriptNodeProps {
   ) => void;
   onConnectionStart?: (nodeId: string, anchor: string, e: React.MouseEvent) => void;
   onUpdateData?: (nodeId: string, data: Partial<ScriptCanvasNode['data']>) => void;
-  /** Called to load scenes from neko-story */
+  /** Called to load scenes from the retained Fountain content service. */
   onLoadScenes?: (nodeId: string, scriptPath: string) => void;
   indexState?: ScriptIndexRuntimeState;
   /** Called when user clicks "open script" button */

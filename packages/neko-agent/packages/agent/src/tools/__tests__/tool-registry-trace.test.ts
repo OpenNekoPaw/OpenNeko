@@ -3,7 +3,7 @@ import {
   CapturedLogTransport,
   ConsoleLogger,
   LogLevel,
-  SCENE_RENDER_SERVICE_PORT_ID,
+  TIMELINE_RENDER_SERVICE_PORT_ID,
   createAgentTraceContext,
   createTool,
   type ToolExecuteOptions,
@@ -593,20 +593,20 @@ describe('ToolRegistry provider schema projection', () => {
     const registry = new ToolRegistry();
     registry.register(
       createTool({
-        name: 'ModelInspectScene',
-        description: 'Inspect the active 3D scene.',
+        name: 'InspectTimeline',
+        description: 'Inspect the active timeline.',
         category: 'analysis',
         isConcurrencySafe: true,
         isReadOnly: true,
         domain: {
-          id: 'scene',
+          id: 'timeline',
           source: 'engine-tool',
-          servicePortId: SCENE_RENDER_SERVICE_PORT_ID,
+          servicePortId: TIMELINE_RENDER_SERVICE_PORT_ID,
         },
         parameters: {
           type: 'object',
           properties: {
-            nodeId: { type: 'string' },
+            trackId: { type: 'string' },
           },
         },
         execute: async () => ({ success: true, data: 'ok' }),
@@ -616,9 +616,9 @@ describe('ToolRegistry provider schema projection', () => {
     const [definition] = registry.toToolDefinitions();
 
     expect(definition?.domain).toEqual({
-      id: 'scene',
+      id: 'timeline',
       source: 'engine-tool',
-      servicePortId: SCENE_RENDER_SERVICE_PORT_ID,
+      servicePortId: TIMELINE_RENDER_SERVICE_PORT_ID,
     });
     expect(definition?.function.parameters).not.toHaveProperty('domain');
   });
@@ -628,25 +628,25 @@ describe('ToolRegistry provider schema projection', () => {
     const registry = new ToolRegistry();
     registry.register(
       createTool({
-        name: 'PuppetSetBone',
-        description: 'Move a native puppet bone.',
+        name: 'TimelineMoveClip',
+        description: 'Move a timeline clip.',
         category: 'media',
         safetyKind: 'non-destructive-mutation',
         targetRequirements: {
-          required: ['puppetId', 'bone'],
+          required: ['trackId', 'clipId'],
           allowedFallbacks: ['selection'],
         },
         queryBeforeMutate: {
-          preferredQueryTools: ['InspectPuppet2D'],
-          reason: 'Resolve native puppet capability and stable bone ids before editing.',
+          preferredQueryTools: ['InspectTimeline'],
+          reason: 'Resolve the target track and stable clip id before editing.',
         },
         parameters: {
           type: 'object',
           properties: {
-            puppetId: { type: 'string' },
-            bone: { type: 'string' },
+            trackId: { type: 'string' },
+            clipId: { type: 'string' },
           },
-          required: ['puppetId', 'bone'],
+          required: ['trackId', 'clipId'],
         },
         execute: async () => ({ success: true, data: 'ok' }),
       }),
@@ -657,12 +657,12 @@ describe('ToolRegistry provider schema projection', () => {
     expect(definition?.planning).toEqual({
       safetyKind: 'non-destructive-mutation',
       targetRequirements: {
-        required: ['puppetId', 'bone'],
+        required: ['trackId', 'clipId'],
         allowedFallbacks: ['selection'],
       },
       queryBeforeMutate: {
-        preferredQueryTools: ['InspectPuppet2D'],
-        reason: 'Resolve native puppet capability and stable bone ids before editing.',
+        preferredQueryTools: ['InspectTimeline'],
+        reason: 'Resolve the target track and stable clip id before editing.',
       },
     });
     expect(definition?.function.parameters).not.toHaveProperty('planning');

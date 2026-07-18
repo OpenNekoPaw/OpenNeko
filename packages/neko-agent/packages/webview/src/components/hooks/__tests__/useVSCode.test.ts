@@ -368,6 +368,18 @@ describe('messages', () => {
         });
       });
 
+      it('should post stable Search identity for explicit roleplay Candidate confirmation', () => {
+        AgentHostMessages.confirmRoleplayCandidate({
+          projectSearchItemId: 'entity-projection:semantic-xiaoju',
+          initialUserMessage: '你好，小橘',
+        });
+        expect(mockPostMessage).toHaveBeenCalledWith({
+          type: 'confirmRoleplayCandidate',
+          projectSearchItemId: 'entity-projection:semantic-xiaoju',
+          initialUserMessage: '你好，小橘',
+        });
+      });
+
       it('should post confirmTool', () => {
         AgentHostMessages.confirmTool('tool-1', true, 'conv-1');
         expect(mockPostMessage).toHaveBeenCalledWith({

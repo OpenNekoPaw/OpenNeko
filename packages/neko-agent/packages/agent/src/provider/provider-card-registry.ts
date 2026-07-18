@@ -9,7 +9,7 @@ import type {
 } from '@neko/shared';
 import { isValidProviderId } from '@neko/shared';
 
-const LAYER_ORDER: readonly ProviderCardLayer[] = ['builtin', 'market', 'project'];
+const LAYER_ORDER: readonly ProviderCardLayer[] = ['builtin', 'personal', 'project'];
 
 export class ProviderCardRegistry implements IProviderCardRegistry {
   private readonly _cardsByTarget = new Map<string, Map<ProviderCardLayer, ProviderCard>>();

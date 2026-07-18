@@ -83,6 +83,80 @@ describe('Canvas Workspace Board delivery contract', () => {
     );
   });
 
+  it('rejects unresolved, self-referencing, and duplicate creative-content relations', () => {
+    const unresolved = request({
+      artifacts: [
+        sourceArtifact(),
+        {
+          ...markdownArtifact(),
+          provenance: {
+            ...markdownArtifact().provenance,
+            sourceArtifactIds: ['missing-source'],
+          },
+        },
+      ],
+    });
+    const selfReferencing = request({
+      artifacts: [
+        {
+          ...markdownArtifact(),
+          provenance: {
+            ...markdownArtifact().provenance,
+            sourceArtifactIds: ['analysis-1'],
+          },
+        },
+      ],
+    });
+    const duplicate = request({
+      artifacts: [
+        sourceArtifact(),
+        {
+          ...markdownArtifact(),
+          provenance: {
+            ...markdownArtifact().provenance,
+            sourceArtifactIds: ['source-1', 'source-1'],
+          },
+        },
+      ],
+    });
+    const duplicateArtifactId = request({
+      artifacts: [
+        sourceArtifact(),
+        {
+          ...sourceArtifact(),
+          provenance: {
+            ...sourceArtifact().provenance,
+            revision: 'source:sha256:shot-2',
+          },
+        },
+      ],
+    });
+    const cyclic = request({
+      artifacts: [
+        {
+          ...sourceArtifact(),
+          provenance: {
+            ...sourceArtifact().provenance,
+            sourceArtifactIds: ['analysis-1'],
+          },
+        },
+        {
+          ...markdownArtifact(),
+          provenance: {
+            ...markdownArtifact().provenance,
+            sourceArtifactIds: ['source-1'],
+          },
+        },
+      ],
+    });
+
+    for (const invalid of [unresolved, selfReferencing, duplicate, duplicateArtifactId, cyclic]) {
+      expect(validateCanvasWorkspaceProjectionRequest(invalid).map(({ code }) => code)).toContain(
+        'invalid-artifact-relation',
+      );
+    }
+  });
+
   it('keeps stable idempotency identity without active or recent routing state', () => {
     const first = request();
     const second = request();

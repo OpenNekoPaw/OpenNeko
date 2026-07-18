@@ -515,6 +515,18 @@ Done.`;
     });
   });
 
+  it('accepts a CommonMark tilde fence for an explicit NEKO artifact', () => {
+    const candidates = extractCompositeContentFenceCandidates(`~~~NEKO
+{"schemaVersion":1,"kind":"composite-artifact","artifactId":"analysis","title":"Analysis","blocks":[{"blockId":"summary","kind":"text","text":"Findings."}]}
+~~~`);
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      language: 'neko',
+      value: { artifactId: 'analysis', title: 'Analysis' },
+    });
+  });
+
   it('keeps invalid semantic storyboard tables visible with bounded diagnostics', () => {
     const result = parseCompositeContentJson(
       JSON.stringify({

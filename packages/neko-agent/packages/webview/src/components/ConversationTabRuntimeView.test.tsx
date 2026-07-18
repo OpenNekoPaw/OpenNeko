@@ -330,7 +330,6 @@ function createSettings(): SettingsState {
     executionMode: 'ask',
     chatModelOptions: [],
     modelGroups: [],
-    ssoSession: null,
   };
 }
 

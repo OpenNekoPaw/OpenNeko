@@ -23,7 +23,7 @@ import {
 } from '@neko/agent';
 import type { ITaskManager as TaskManager, TaskRunScope } from '@neko/shared';
 import { getLogger } from '../../base';
-import type { AgentDashboardWorkItemSource } from '../../services/dashboardWorkItemSource';
+import type { AgentWorkItemProjectionSource } from '../../services/workItemProjectionSource';
 import type { AgentLocalResourceAccess } from '../../services/localResourceAccess';
 import {
   resolveGeneratedAssetOpenPath,
@@ -37,7 +37,7 @@ const logger = getLogger('TaskHandler');
  */
 export interface TaskHandlerDeps {
   taskManager?: TaskManager;
-  dashboardWorkItems?: AgentDashboardWorkItemSource;
+  workItemProjections?: AgentWorkItemProjectionSource;
   localResourceAccess?: AgentLocalResourceAccess;
   generatedAssetLookup?: GeneratedAssetLookup;
   hostPrivateTaskLeaseGuard?: TaskRuntimeDeps['hostPrivateLeaseGuard'];
@@ -125,7 +125,7 @@ export class TaskHandler {
   private _createTaskRuntimeEffects(webview?: vscode.Webview): TaskRuntimeEffects {
     return {
       postMessage: async (message: TaskRuntimeMessage): Promise<void> => {
-        this.deps.dashboardWorkItems?.acceptWebviewMessage(message);
+        this.deps.workItemProjections?.acceptWebviewMessage(message);
         await webview?.postMessage(message);
       },
       openTaskResult: (plan: TaskResultOpenPlan) => this.executeOpenPlan(plan),

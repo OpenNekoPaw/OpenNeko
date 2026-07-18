@@ -43,8 +43,8 @@ vi.mock('@neko/shared/local-metadata/node', () => ({
       const source = projection.sources.get(sourceId);
       return source ? { sourceId, sourceFingerprint: source.fingerprint } : null;
     }),
-    listSources: vi.fn(async (rootId: string) =>
-      [...projection.sources.values()].filter((source) => source.rootId === rootId),
+    listSources: vi.fn(async (rootId?: string) =>
+      [...projection.sources.values()].filter((source) => !rootId || source.rootId === rootId),
     ),
     replaceSource: vi.fn(
       async (input: {
@@ -58,6 +58,9 @@ vi.mock('@neko/shared/local-metadata/node', () => ({
     deleteSource: vi.fn(async (sourceId: string) => projection.sources.delete(sourceId)),
     markSourceStale: vi.fn(async () => undefined),
     listAutomaticCandidates: vi.fn(async () => projection.candidates),
+    findOccurrencesByEntity: vi.fn(async () => []),
+    findEntityLinksByOccurrence: vi.fn(async () => null),
+    findEntityLinksByLocator: vi.fn(async () => []),
     readSemanticRevision: vi.fn(async () => ({ revision: 0, freshness: 'fresh' })),
     readEntityRevision: vi.fn(async () => ({ revision: 0, freshness: 'fresh' })),
     dispose: vi.fn(async () => undefined),
@@ -131,8 +134,8 @@ describe('SemanticSourceDiscoveryService integration path', () => {
     await mkdir(workspace, { recursive: true });
     await mkdir(firstLibrary, { recursive: true });
     await mkdir(secondLibrary, { recursive: true });
-    await writeFile(join(firstLibrary, 'old.json'), '{"name":"old"}', 'utf8');
-    await writeFile(join(secondLibrary, 'new.json'), '{"name":"new"}', 'utf8');
+    await writeFile(join(firstLibrary, 'old.md'), '# Old', 'utf8');
+    await writeFile(join(secondLibrary, 'new.md'), '# New', 'utf8');
 
     const settings = createSettings([
       {
@@ -150,7 +153,7 @@ describe('SemanticSourceDiscoveryService integration path', () => {
       homedir: root,
     });
     await service.start();
-    expect(projection.sources.has('media-library:LIBRARY:old.json')).toBe(true);
+    expect(projection.sources.has('media-library:LIBRARY:old.md')).toBe(true);
 
     settings.libraries = [
       {
@@ -169,11 +172,43 @@ describe('SemanticSourceDiscoveryService integration path', () => {
       },
     ];
     settingsChange.listener?.();
-    await waitFor(() => projection.sources.has('media-library:LIBRARY:new.json'));
-    expect(projection.sources.has('media-library:LIBRARY:old.json')).toBe(false);
-    expect(projection.sources.has('media-library:LIBRARY:new.json')).toBe(true);
+    await waitFor(() => projection.sources.has('media-library:LIBRARY:new.md'));
+    expect(projection.sources.has('media-library:LIBRARY:old.md')).toBe(false);
+    expect(projection.sources.has('media-library:LIBRARY:new.md')).toBe(true);
     expect([...projection.sources.keys()]).not.toContain('media-library:MISSING:any.json');
 
+    service.dispose();
+  });
+
+  it('analyzes JSON only through an explicitly registered creative schema', async () => {
+    const root = await createFixtureRoot();
+    const workspace = join(root, 'workspace');
+    await mkdir(workspace, { recursive: true });
+    await writeFile(join(workspace, 'story.json'), '{"characters":[{"name":"Nova"}]}', 'utf8');
+    await writeFile(join(workspace, 'config.json'), '{"name":"Do not index"}', 'utf8');
+    const schema = { schemaId: 'openneko.story', schemaVersion: '1' };
+    const service = new SemanticSourceDiscoveryService({
+      workspaceRoot: workspace,
+      settingsService: createSettings([]),
+      entityService: createEntityService(),
+      homedir: root,
+      creativeSchemaAdapters: [
+        {
+          schema,
+          formats: ['json'],
+          selectField: ({ path, value }) =>
+            path[0] === 'characters' && path.at(-1) === 'name'
+              ? { explicitEntityKind: 'character', explicitEntityName: value }
+              : false,
+        },
+      ],
+      resolveCreativeSchema: ({ relativePath }) =>
+        relativePath === 'story.json' ? schema : undefined,
+    });
+
+    await service.start();
+    expect(projection.sources.has('workspace:story.json')).toBe(true);
+    expect(projection.sources.has('workspace:config.json')).toBe(false);
     service.dispose();
   });
 });

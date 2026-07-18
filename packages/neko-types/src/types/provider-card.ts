@@ -44,7 +44,7 @@ export type StyleFamily =
   | '3d-render'
   | 'mixed';
 
-export type ProviderCardLayer = 'builtin' | 'market' | 'project';
+export type ProviderCardLayer = 'builtin' | 'personal' | 'project';
 
 export type ProviderExpressionProfileSource = AgentProfileSource;
 
@@ -261,8 +261,8 @@ export function providerCardLayerToAgentProfileSource(
   switch (layer) {
     case 'builtin':
       return 'builtin';
-    case 'market':
-      return 'market';
+    case 'personal':
+      return 'personal';
     case 'project':
       return 'project';
   }
@@ -368,7 +368,7 @@ export function validateProviderExpressionProfileDescriptor(
 }
 
 function isProviderCardLayer(value: unknown): value is ProviderCardLayer {
-  return value === 'builtin' || value === 'market' || value === 'project';
+  return value === 'builtin' || value === 'personal' || value === 'project';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

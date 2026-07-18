@@ -116,7 +116,7 @@ describe('EntityContributionAutomationService', () => {
       name: '少年',
       provenance: [
         {
-          providerId: 'neko-story',
+          providerId: 'fountain-content',
           sourceKind: 'story',
           sourceRef: 'story.fountain:12',
           confidence: 0.8,

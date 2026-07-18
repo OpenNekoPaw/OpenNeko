@@ -157,10 +157,8 @@ function inferModelRole(value: unknown): 'reference' | 'workflow' {
   return value === 'workflow' ? 'workflow' : 'reference';
 }
 
-function inferProjectType(value: unknown): 'nkv' | 'nka' | 'nkm' | 'nkp' {
-  if (value === 'nkv' || value === 'nka' || value === 'nkm' || value === 'nkp') {
-    return value;
-  }
+function inferProjectType(value: unknown): 'nkv' {
+  if (value === 'nkv') return value;
   return 'nkv';
 }
 

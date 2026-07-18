@@ -92,4 +92,36 @@ describe('collectCreatorVisibleArtifacts', () => {
     ]);
     expect(collected.some((candidate) => candidate.artifactId === 'failed.png')).toBe(false);
   });
+
+  it('collects an accessed document only with an explicit fenced reviewable artifact', () => {
+    const assistantMarkdown = `Review complete.\n\n~~~NEKO\n${JSON.stringify({
+      schemaVersion: 1,
+      kind: 'composite-artifact',
+      artifactId: 'material-analysis',
+      title: 'Material Analysis',
+      blocks: [{ blockId: 'findings', kind: 'text', text: 'Selected findings.' }],
+    })}\n~~~`;
+    const toolResults: CreatorVisibleToolResult[] = [
+      {
+        name: 'ReadDocument',
+        success: true,
+        data: { resourceRef: sourceRef },
+      },
+    ];
+
+    expect(collectCreatorVisibleArtifacts({ toolResults, assistantMarkdown })).toEqual([
+      expect.objectContaining({ role: 'source', resourceRef: sourceRef }),
+      expect.objectContaining({
+        artifactId: 'material-analysis',
+        role: 'analysis',
+        markdown: '# Material Analysis\n\nSelected findings.',
+      }),
+    ]);
+    expect(
+      collectCreatorVisibleArtifacts({
+        toolResults,
+        assistantMarkdown: '# Material Analysis\n\nOrdinary reply only.',
+      }),
+    ).toEqual([]);
+  });
 });

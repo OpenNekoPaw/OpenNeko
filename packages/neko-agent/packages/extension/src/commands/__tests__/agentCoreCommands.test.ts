@@ -8,6 +8,8 @@ import {
 } from '@neko/shared';
 import { registerAgentCoreCommands } from '../agentCoreCommands';
 
+vi.mock('vscode', async () => await import('../../__mocks__/vscode'));
+
 vi.mock('@neko/agent/runtime', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@neko/agent/runtime')>();
   return {
@@ -115,7 +117,7 @@ describe('agentCoreCommands bridge', () => {
 
     const request = {
       entityRef: { entityId: 'char-xiaoju', entityKind: 'character' },
-      source: 'dashboard',
+      source: 'agent',
     };
     await callback?.(request);
 
@@ -144,7 +146,7 @@ describe('agentCoreCommands bridge', () => {
     const callback = vi
       .mocked(vscode.commands.registerCommand)
       .mock.calls.find(([command]) => command === NEKO_AGENT_CHARACTER_DIALOGUE_COMMAND)?.[1];
-    await callback?.({ source: 'dashboard' });
+    await callback?.({ source: 'agent' });
 
     expect(chatViewProvider.startCharacterDialogue).not.toHaveBeenCalled();
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith('无法启动角色对话：启动请求无效。');
@@ -186,15 +188,9 @@ describe('agentCoreCommands bridge', () => {
         source: 'neko-entity',
         projectRoot: '/workspace',
       },
-      dashboardRef: {
-        source: 'neko-entity',
-        sourceEntityId: 'entity:char-xiaoju',
-        entityId: 'char-xiaoju',
-        entityKind: 'character',
-      },
-      scopes: [{ kind: 'occurrence', source: 'neko-story', ref: 'cases/test.fountain:8' }],
+      scopes: [{ kind: 'occurrence', source: 'fountain-content', ref: 'cases/test.fountain:8' }],
       prompt: 'Check future knowledge leakage.',
-      source: 'dashboard',
+      source: 'agent',
       projectRoot: '/workspace',
     });
 

@@ -87,9 +87,6 @@ importers:
       vitest:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
-      ws:
-        specifier: 8.18.3
-        version: 8.18.3
       yaml:
         specifier: 2.9.0
         version: 2.9.0
@@ -423,7 +420,7 @@ importers:
         version: 18.3.7(@types/react@18.3.27)
       '@vitejs/plugin-react':
         specifier: 4.3.4
-        version: 4.3.4(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+        version: 4.3.4(vite@6.4.2(@types/node@25.7.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.9.0))
       autoprefixer:
         specifier: ^10.4.16
         version: 10.4.23(postcss@8.5.6)
@@ -441,10 +438,10 @@ importers:
         version: 5.9.3
       vite:
         specifier: 6.4.2
-        version: 6.4.2(@types/node@25.7.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.7.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.9.0)
       vitest:
         specifier: 4.1.2
-        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.9.0))
 
   packages/neko-agent/test-utils:
     dependencies:
@@ -659,6 +656,15 @@ importers:
       '@zip.js/zip.js':
         specifier: ^2.8.26
         version: 2.8.26
+      epub2:
+        specifier: ^3.0.2
+        version: 3.0.2(ts-toolbelt@9.6.0)
+      mammoth:
+        specifier: ^1.12.0
+        version: 1.12.0
+      pdf-parse:
+        specifier: ^2.4.5
+        version: 2.4.5
       yaml:
         specifier: 2.9.0
         version: 2.9.0
@@ -916,7 +922,7 @@ importers:
         version: 0.180.0
       '@vitejs/plugin-react':
         specifier: 4.3.4
-        version: 4.3.4(vite@6.4.2(@types/node@25.7.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.9.0))
+        version: 4.3.4(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
       autoprefixer:
         specifier: ^10.4.16
         version: 10.4.23(postcss@8.5.6)
@@ -934,12 +940,15 @@ importers:
         version: 5.9.3
       vite:
         specifier: 6.4.2
-        version: 6.4.2(@types/node@25.7.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.9.0)
+        version: 6.4.2(@types/node@25.7.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)
 
   packages/neko-proto: {}
 
   packages/neko-search:
     dependencies:
+      '@neko/content':
+        specifier: workspace:*
+        version: link:../neko-content
       '@neko/shared':
         specifier: workspace:*
         version: link:../neko-types
@@ -10014,6 +10023,14 @@ snapshots:
     optionalDependencies:
       vite: 6.4.2(@types/node@24.13.3)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0)
 
+  '@vitest/mocker@4.1.2(vite@6.4.2(@types/node@25.7.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.9.0))':
+    dependencies:
+      '@vitest/spy': 4.1.2
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 6.4.2(@types/node@25.7.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.9.0)
+
   '@vitest/mocker@4.1.2(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))':
     dependencies:
       '@vitest/spy': 4.1.2
@@ -13755,6 +13772,35 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@types/node': 24.13.3
+      jsdom: 27.4.0
+    transitivePeerDependencies:
+      - msw
+
+  vitest@4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.9.0)):
+    dependencies:
+      '@vitest/expect': 4.1.2
+      '@vitest/mocker': 4.1.2(vite@6.4.2(@types/node@25.7.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.9.0))
+      '@vitest/pretty-format': 4.1.2
+      '@vitest/runner': 4.1.2
+      '@vitest/snapshot': 4.1.2
+      '@vitest/spy': 4.1.2
+      '@vitest/utils': 4.1.2
+      es-module-lexer: 2.1.0
+      expect-type: 1.3.0
+      magic-string: 0.30.21
+      obug: 2.1.1
+      pathe: 2.0.3
+      picomatch: 4.0.4
+      std-env: 4.1.0
+      tinybench: 2.9.0
+      tinyexec: 1.1.2
+      tinyglobby: 0.2.16
+      tinyrainbow: 3.1.0
+      vite: 6.4.2(@types/node@25.7.0)(jiti@1.21.7)(tsx@4.21.0)(yaml@2.9.0)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.0
+      '@types/node': 25.7.0
       jsdom: 27.4.0
     transitivePeerDependencies:
       - msw

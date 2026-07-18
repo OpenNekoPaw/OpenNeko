@@ -828,13 +828,13 @@ describe('AgentStreamProcessor', () => {
           sizeBytes: 2048,
         })),
       };
-      const dashboardWorkItems = {
+      const workItemProjections = {
         acceptWebviewMessage: vi.fn(),
       };
       processor = createAgentStreamProcessor({
         localResourceAccess: localResourceAccess as any,
         contentAccessRuntime: contentAccessRuntime as any,
-        dashboardWorkItems: dashboardWorkItems as any,
+        workItemProjections: workItemProjections as any,
       });
       const events = toAsyncIterable([
         {
@@ -914,7 +914,7 @@ describe('AgentStreamProcessor', () => {
         },
       );
       expect(JSON.stringify(webview.postMessage.mock.calls)).not.toContain(materializedPath);
-      expect(dashboardWorkItems.acceptWebviewMessage).toHaveBeenCalledWith(
+      expect(workItemProjections.acceptWebviewMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'agentTurnTimelineUpdate',
           operations: expect.arrayContaining([

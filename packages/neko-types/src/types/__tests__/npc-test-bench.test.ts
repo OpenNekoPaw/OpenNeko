@@ -161,18 +161,12 @@ describe('character role workflow contracts', () => {
     expect(CHARACTER_ROLE_TEST_ARTIFACT_DIR).toBe('.neko/character-tests');
   });
 
-  it('validates launch requests from slash command and Dashboard sources', () => {
+  it('validates launch requests from Agent entry points', () => {
     const launch: NpcTestBenchLaunchRequest = {
       entityRef,
-      dashboardRef: {
-        source: 'neko-entity',
-        sourceEntityId: 'char-xiaoju',
-        entityId: 'char-xiaoju',
-        entityKind: 'character',
-      },
       mode: 'consult',
       enrichment: 'ask',
-      source: 'dashboard',
+      source: 'agent',
       projectRoot: '${workspaceFolder}',
       initialUserMessage: '先聊一分钟',
     };
@@ -182,26 +176,20 @@ describe('character role workflow contracts', () => {
     expect(isNpcTestBenchLaunchRequest({ ...launch, projectRoot: '' })).toBe(false);
   });
 
-  it('validates Agent NPC workflow requests from Dashboard actions', () => {
+  it('validates Agent NPC workflow requests from canonical Entity actions', () => {
     const request: NpcAgentWorkflowRequest = {
       workflow: 'embody-character',
       entityRef,
-      dashboardRef: {
-        source: 'neko-entity',
-        sourceEntityId: 'entity:char-xiaoju',
-        entityId: 'char-xiaoju',
-        entityKind: 'character',
-      },
       scopes: [
         {
           kind: 'occurrence',
-          source: 'neko-story',
+          source: 'fountain-content',
           ref: 'cases/test.fountain:8',
           label: 'Scene 1',
         },
       ],
       prompt: 'Check knowledge leakage.',
-      source: 'dashboard',
+      source: 'agent',
       projectRoot: '${workspaceFolder}',
     };
 
@@ -213,7 +201,7 @@ describe('character role workflow contracts', () => {
     expect(
       isNpcAgentWorkflowRequest({
         ...request,
-        scopes: [{ kind: 'occurrence', source: 'neko-story', ref: '/tmp/test.fountain' }],
+        scopes: [{ kind: 'occurrence', source: 'fountain-content', ref: '/tmp/test.fountain' }],
       }),
     ).toBe(false);
   });

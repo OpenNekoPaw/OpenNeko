@@ -16,7 +16,7 @@ export interface AmbientCanvasNodeProjection {
 
 export interface PluginTransferTargetProjection {
   id: PluginTransferTarget;
-  label: 'Canvas' | 'Timeline' | 'Sketch' | 'Model' | 'Explorer';
+  label: 'Canvas' | 'Timeline' | 'Explorer';
   accepts: readonly PluginTransferMediaType[];
   requiresPlugin: NekoPluginKey | null;
 }
@@ -38,18 +38,6 @@ const PLUGIN_TRANSFER_TARGETS: readonly PluginTransferTargetProjection[] = [
     label: 'Timeline',
     accepts: ['image', 'video', 'audio'],
     requiresPlugin: 'cut',
-  },
-  {
-    id: 'sketch',
-    label: 'Sketch',
-    accepts: ['image'],
-    requiresPlugin: 'sketch',
-  },
-  {
-    id: 'model',
-    label: 'Model',
-    accepts: ['model'],
-    requiresPlugin: 'model',
   },
   {
     id: 'explorer',

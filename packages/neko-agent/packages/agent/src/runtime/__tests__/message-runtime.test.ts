@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
-import { type AgentContextPayload } from '@neko/shared';
+import {
+  AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
+  AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
+  type AgentContextPayload,
+} from '@neko/shared';
 import {
   AGENT_TURN_PRECONDITION_MESSAGE,
   appendAmbientCanvasSystemPrompt,
@@ -187,6 +191,41 @@ describe('message runtime helpers', () => {
         },
       }),
     ).toBe('[File: notes.md]\nnotes.md');
+  });
+
+  it('formats only resolved Entity snapshots as Agent context', () => {
+    expect(
+      formatAgentContextPayload({
+        type: 'entity',
+        id: 'entity:char-xiaoju',
+        label: '小橘',
+        summary: 'thin search summary',
+        data: {
+          schemaVersion: AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
+          kind: AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
+          entityRef: { entityId: 'char-xiaoju', entityKind: 'character' },
+          entity: {
+            id: 'char-xiaoju',
+            kind: 'character',
+            canonicalName: '小橘',
+            displayName: '橘猫侦探',
+            aliases: ['橘子'],
+            status: 'confirmed',
+            metadata: { role: '侦探' },
+          },
+        },
+      }),
+    ).toContain('Canonical name: 小橘');
+
+    expect(() =>
+      formatAgentContextPayload({
+        type: 'entity',
+        id: 'entity:char-xiaoju',
+        label: '小橘',
+        summary: 'thin search summary',
+        data: { navigationData: { sourceId: 'char-xiaoju' } },
+      }),
+    ).toThrow('Agent Entity context is unresolved');
   });
 
   it('formats document context source and locator metadata for follow-up reads', () => {
@@ -455,7 +494,6 @@ describe('message runtime helpers', () => {
       route: { kind: 'agent' },
     });
   });
-
   it('rejects message turns without an explicit conversationId', async () => {
     const postMessage = vi.fn();
     const persistUserMessage = vi.fn();
@@ -1489,96 +1527,46 @@ describe('message runtime helpers', () => {
     });
   });
 
-  it('rejects account gateway selections when catalog or entitlement is unavailable', () => {
-    expect(
-      selectAgentTurnProvider({
-        requestedProviderId: 'neko-account-gateway',
-        requestedModelId: 'official-chat',
-        getProvider: () => ({
-          id: 'neko-account-gateway',
-          isConfigured: true,
-          source: 'account-gateway',
-          accountCatalogAvailable: false,
-          modelIds: ['official-chat'],
-        }),
-      }),
-    ).toEqual({
-      ok: false,
-      effectiveProviderId: 'neko-account-gateway',
-      effectiveModelId: 'official-chat',
-      reason: 'account-catalog-missing',
-    });
-
-    expect(
-      selectAgentTurnProvider({
-        requestedProviderId: 'neko-account-gateway',
-        requestedModelId: 'official-denied',
-        getProvider: () => ({
-          id: 'neko-account-gateway',
-          isConfigured: true,
-          source: 'account-gateway',
-          accountCatalogAvailable: true,
-          modelIds: ['official-denied'],
-          entitledModelIds: ['official-chat'],
-        }),
-      }),
-    ).toEqual({
-      ok: false,
-      effectiveProviderId: 'neko-account-gateway',
-      effectiveModelId: 'official-denied',
-      reason: 'account-model-not-entitled',
-    });
-  });
-
   it('validates required model capabilities without provider fallback', () => {
     expect(
       selectAgentTurnProvider({
-        requestedProviderId: 'neko-account-gateway',
+        requestedProviderId: 'local',
         requestedModelId: 'text-only',
         requiredCapabilities: ['vision'],
         getProvider: () => ({
-          id: 'neko-account-gateway',
+          id: 'local',
           isConfigured: true,
-          source: 'account-gateway',
-          accountCatalogAvailable: true,
           modelIds: ['text-only'],
-          entitledModelIds: ['text-only'],
           modelCapabilities: { 'text-only': ['chat'] },
         }),
       }),
     ).toEqual({
       ok: false,
-      effectiveProviderId: 'neko-account-gateway',
+      effectiveProviderId: 'local',
       effectiveModelId: 'text-only',
       reason: 'missing-required-capability',
     });
 
     expect(
       selectAgentTurnProvider({
-        requestedProviderId: 'neko-account-gateway',
+        requestedProviderId: 'local',
         requestedModelId: 'vision-model',
         requiredCapabilities: ['vision'],
         getProvider: () => ({
-          id: 'neko-account-gateway',
+          id: 'local',
           isConfigured: true,
-          source: 'account-gateway',
-          accountCatalogAvailable: true,
           modelIds: ['vision-model'],
-          entitledModelIds: ['vision-model'],
           modelCapabilities: { 'vision-model': ['chat', 'vision'] },
         }),
       }),
     ).toEqual({
       ok: true,
-      effectiveProviderId: 'neko-account-gateway',
+      effectiveProviderId: 'local',
       effectiveModelId: 'vision-model',
       provider: {
-        id: 'neko-account-gateway',
+        id: 'local',
         isConfigured: true,
-        source: 'account-gateway',
-        accountCatalogAvailable: true,
         modelIds: ['vision-model'],
-        entitledModelIds: ['vision-model'],
         modelCapabilities: { 'vision-model': ['chat', 'vision'] },
       },
     });

@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { CanvasViewport, GroupCanvasNode, CanvasNode } from '@neko/shared';
-import { getContainerChildIds } from '@neko/shared';
+import {
+  CANVAS_WORKSPACE_INBOX_NODE_ID,
+  getContainerChildIds,
+  type CanvasViewport,
+  type GroupCanvasNode,
+  type CanvasNode,
+} from '@neko/shared';
 import { toCodiconClassName } from '@neko/ui/icons';
 import { BaseNode } from './BaseNode';
 import { useCanvasStore } from '../../stores/canvasStore';
@@ -52,17 +57,19 @@ export function GroupNode({
         .filter((candidate): candidate is CanvasNode => Boolean(candidate)),
     [allNodes, childIds],
   );
-  const [draftLabel, setDraftLabel] = useState(node.data.label ?? t('node.group'));
+  const labelPresentation = resolveGroupLabelPresentation(node);
+  const [draftLabel, setDraftLabel] = useState(labelPresentation.label);
   const [editingLabel, setEditingLabel] = useState(false);
 
   useEffect(() => {
-    if (!editingLabel) setDraftLabel(node.data.label ?? t('node.group'));
-  }, [editingLabel, node.data.label]);
+    if (!editingLabel) setDraftLabel(labelPresentation.label);
+  }, [editingLabel, labelPresentation.label]);
 
   const commitLabel = (): void => {
-    const label = draftLabel.trim() || t('node.group');
+    const label = draftLabel.trim() || labelPresentation.label;
     setDraftLabel(label);
     setEditingLabel(false);
+    if (labelPresentation.derived && label === labelPresentation.label) return;
     if (label !== node.data.label) onUpdateData?.(node.id, { label });
   };
   const renderZIndex = Math.min(node.zIndex, ...childNodes.map((child) => child.zIndex)) - 1;
@@ -125,7 +132,7 @@ export function GroupNode({
               onKeyDown={(event) => {
                 if (event.key === 'Enter') commitLabel();
                 if (event.key === 'Escape') {
-                  setDraftLabel(node.data.label ?? t('node.group'));
+                  setDraftLabel(labelPresentation.label);
                   setEditingLabel(false);
                 }
               }}
@@ -169,4 +176,44 @@ export function GroupNode({
       </div>
     </BaseNode>
   );
+}
+
+interface GroupLabelPresentation {
+  readonly label: string;
+  readonly derived: boolean;
+}
+
+function resolveGroupLabelPresentation(node: GroupCanvasNode): GroupLabelPresentation {
+  const authoredLabel = node.data.label?.trim();
+  if (node.id === CANVAS_WORKSPACE_INBOX_NODE_ID) {
+    if (!authoredLabel || authoredLabel === 'Inbox') {
+      return { label: t('workspaceBoard.inbox'), derived: true };
+    }
+    return { label: authoredLabel, derived: false };
+  }
+
+  const provenance = node.data.provenance;
+  if (typeof provenance?.['deliveryId'] !== 'string') {
+    return authoredLabel
+      ? { label: authoredLabel, derived: false }
+      : { label: t('node.group'), derived: false };
+  }
+
+  const taskId = readNonEmptyString(provenance['taskId']);
+  const runId = readNonEmptyString(provenance['runId']);
+  const previousDefaultLabel = taskId
+    ? `Agent Task ${taskId}`
+    : runId
+      ? `Agent Run ${runId}`
+      : 'Agent Processing';
+  if (authoredLabel && authoredLabel !== previousDefaultLabel) {
+    return { label: authoredLabel, derived: false };
+  }
+  if (taskId) return { label: t('workspaceBoard.task', { id: taskId }), derived: true };
+  if (runId) return { label: t('workspaceBoard.run', { id: runId }), derived: true };
+  return { label: t('workspaceBoard.processing'), derived: true };
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }

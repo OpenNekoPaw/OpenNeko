@@ -127,7 +127,7 @@ describe('CreativeEntityService', () => {
       name: '小橘',
       provenance: [
         {
-          providerId: 'neko-story',
+          providerId: 'fountain-content',
           sourceKind: 'story',
           sourceRef: 'cases/test.fountain:8',
           confidence: 0.91,
@@ -176,7 +176,9 @@ describe('CreativeEntityService', () => {
     const candidate = await service.proposeCandidate({
       kind: 'character',
       name: '橘子',
-      provenance: [{ providerId: 'neko-story', sourceKind: 'story', sourceRef: 'test.fountain:3' }],
+      provenance: [
+        { providerId: 'fountain-content', sourceKind: 'story', sourceRef: 'test.fountain:3' },
+      ],
     });
 
     await service.mergeCandidateIntoExisting({

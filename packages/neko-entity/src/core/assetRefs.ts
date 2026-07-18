@@ -13,7 +13,6 @@ export type AssetRefBackendResolver = (
 
 export interface DefaultAssetRefResolverOptions {
   readonly project?: AssetRefBackendResolver;
-  readonly market?: AssetRefBackendResolver;
   readonly shared?: AssetRefBackendResolver;
   readonly external?: AssetRefBackendResolver;
 }

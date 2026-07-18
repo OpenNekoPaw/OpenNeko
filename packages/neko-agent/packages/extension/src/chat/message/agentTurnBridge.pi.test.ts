@@ -52,6 +52,7 @@ const imageModel: Model = {
 
 const streamResult: StreamProcessingResult = {
   messageId: 'message-1',
+  identity: { turnId: 'turn-1', runId: 'run-1' },
   accumulatedResponse: 'done',
   accumulatedThinking: '',
   hasError: false,
@@ -74,6 +75,7 @@ describe('AgentTurnBridge Pi canonical path', () => {
   });
   const postMessage = vi.fn(async () => true);
   const streamDispose = vi.fn();
+  const deliverCreatorVisibleArtifacts = vi.fn(async () => []);
   const streamEvents: PiProductEventSink = { emit: vi.fn() };
   const createPiStream = vi.fn(() => ({
     events: streamEvents,
@@ -117,6 +119,58 @@ describe('AgentTurnBridge Pi canonical path', () => {
     );
     expect(legacyGetOrCreate).not.toHaveBeenCalled();
     expect(streamDispose).toHaveBeenCalledOnce();
+  });
+
+  it('submits one terminal artifact batch with the original Pi turn/run identity', async () => {
+    createPiStream.mockReturnValueOnce({
+      events: streamEvents,
+      result: () => ({
+        ...streamResult,
+        collectedToolCalls: [
+          {
+            id: 'tool-1',
+            name: 'AnalyzeMaterial',
+            arguments: {},
+            result: {
+              success: true,
+              data: {},
+              artifacts: [
+                {
+                  type: 'artifactSnapshot',
+                  complete: true,
+                  artifact: {
+                    schemaVersion: 1,
+                    kind: 'composite-artifact',
+                    artifactId: 'analysis-1',
+                    title: 'Material Analysis',
+                    blocks: [{ blockId: 'text-1', kind: 'text', text: 'Findings.' }],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      dispose: streamDispose,
+    });
+    const bridge = createBridge();
+
+    await bridge.execute(createInput());
+
+    expect(deliverCreatorVisibleArtifacts).toHaveBeenCalledTimes(1);
+    expect(deliverCreatorVisibleArtifacts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deliveryId: 'agent-turn:turn-1',
+        runId: 'run-1',
+        artifacts: [
+          expect.objectContaining({
+            artifactId: 'analysis-1',
+            kind: 'markdown',
+            role: 'analysis',
+          }),
+        ],
+      }),
+    );
   });
 
   it('projects normalized topP into the exact Pi turn snapshot', async () => {
@@ -241,29 +295,9 @@ describe('AgentTurnBridge Pi canonical path', () => {
     );
   });
 
-  it('does not fall back to explicit config when the selected account catalog fails', async () => {
-    const refreshError = new Error('account unauthorized');
-    const bridge = createBridge(undefined, {
-      getCachedSnapshot: () => null,
-      peekSnapshot: () => ({ provider: { id: provider.id } }),
-      getSnapshot: vi.fn(async () => {
-        throw refreshError;
-      }),
-      invalidateForAuthFailure: vi.fn(),
-    });
-
-    await expect(bridge.execute(createInput())).rejects.toThrow(
-      'Account AI catalog refresh failed for provider gateway.',
-    );
-    expect(executePiTurn).not.toHaveBeenCalled();
-  });
-
-  function createBridge(
-    overrides?: {
-      getModel?: (modelId: string) => Model | undefined;
-    },
-    accountAiCatalog?: object,
-  ): AgentTurnBridge {
+  function createBridge(overrides?: {
+    getModel?: (modelId: string) => Model | undefined;
+  }): AgentTurnBridge {
     return new AgentTurnBridge({
       providers: {
         getProviderConfig: () => provider,
@@ -295,8 +329,8 @@ describe('AgentTurnBridge Pi canonical path', () => {
         dequeuePendingMessage: vi.fn(() => pendingItems.shift() ?? null),
       } as unknown as IAgentManager,
       getSystemPrompt: () => 'system prompt',
-      ...(accountAiCatalog ? { accountAiCatalog: accountAiCatalog as never } : {}),
       streamProcessor: { createPiStream } as unknown as AgentStreamProcessor,
+      terminalArtifactDelivery: { deliverCreatorVisibleArtifacts },
       onPhaseChange: vi.fn(),
       generateMessageId: () => 'message-1',
     });

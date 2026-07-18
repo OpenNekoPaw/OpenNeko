@@ -125,9 +125,9 @@ describe('configHandlers', () => {
             category: 'llm',
           },
           {
-            id: 'neko-account-gateway:gpt-5.5',
+            id: 'configured-gateway:gpt-5.5',
             label: 'GPT 5.5',
-            providerId: 'neko-account-gateway',
+            providerId: 'configured-gateway',
             modelId: 'gpt-5.5',
             category: 'llm',
           },
@@ -140,7 +140,7 @@ describe('configHandlers', () => {
       'conversation-1',
       expect.objectContaining({
         selectedModel: 'deepseek-chat:deepseek-v4-pro',
-        availableModelIds: ['deepseek-chat:deepseek-v4-pro', 'neko-account-gateway:gpt-5.5'],
+        availableModelIds: ['deepseek-chat:deepseek-v4-pro', 'configured-gateway:gpt-5.5'],
         defaultMediaModels: {},
         executionMode: 'ask',
         settingsPatch: expect.objectContaining({
@@ -163,9 +163,9 @@ describe('configHandlers', () => {
         selectedModelId: null,
         chatModelOptions: [
           {
-            id: 'neko-account-gateway:auto',
+            id: 'configured-gateway:auto',
             label: 'Neko Official / Auto',
-            providerId: 'neko-account-gateway',
+            providerId: 'configured-gateway',
             modelId: 'auto',
             category: 'llm',
           },
@@ -176,12 +176,12 @@ describe('configHandlers', () => {
 
     expect(context.hydrateConversationSettings).toHaveBeenCalledWith(
       'conversation-1',
-      expect.objectContaining({ selectedModel: 'neko-account-gateway:auto' }),
+      expect.objectContaining({ selectedModel: 'configured-gateway:auto' }),
     );
     expect(context.updateSettings).not.toHaveBeenCalled();
     expect(messageMocks.updateSettingsMessage).toHaveBeenCalledWith(
       {
-        providerId: 'neko-account-gateway',
+        providerId: 'configured-gateway',
         modelId: 'auto',
       },
       'conversation-1',
@@ -200,11 +200,11 @@ describe('configHandlers', () => {
         selectedModelId: null,
         chatModelOptions: [
           {
-            id: 'neko-account-gateway:auto',
+            id: 'configured-gateway:auto',
             label: 'Neko Official / Auto',
-            providerId: 'neko-account-gateway',
+            providerId: 'configured-gateway',
             modelId: 'auto',
-            source: 'account-gateway',
+            source: 'explicit-config',
             category: 'llm',
           },
           {

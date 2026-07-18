@@ -34,11 +34,9 @@ import {
 describe('creative entity asset composition contracts', () => {
   it('declares target-aware fallback chains for all resolver targets', () => {
     expect(DEFAULT_REPRESENTATION_FALLBACKS).toEqual({
-      story: ['reference', 'portrait'],
-      canvas: ['portrait', 'reference', 'puppet-bone', 'live2d', 'live3d'],
-      agent: ['reference', 'portrait', 'puppet-bone', 'live2d', 'live3d'],
-      live: ['live3d', 'puppet-bone', 'live2d'],
-      cut: ['video', 'puppet-bone', 'live2d', 'live3d', 'portrait'],
+      canvas: ['portrait', 'reference', 'live2d', 'live3d'],
+      agent: ['reference', 'portrait', 'live2d', 'live3d'],
+      cut: ['video', 'live2d', 'live3d', 'portrait'],
     });
   });
 
@@ -66,9 +64,9 @@ describe('creative entity asset composition contracts', () => {
     expect(isCreativeEntityKind('character')).toBe(true);
     expect(isCreativeEntityKind('vehicle')).toBe(false);
     expect(isRepresentationKind('live2d')).toBe(true);
-    expect(isRepresentationKind('puppet-bone')).toBe(true);
+    expect(isRepresentationKind('puppet-bone')).toBe(false);
     expect(isRepresentationKind('avatar')).toBe(false);
-    expect(isAssetRefScheme('market')).toBe(true);
+    expect(isAssetRefScheme('market')).toBe(false);
     expect(isAssetRefScheme('file')).toBe(false);
     expect(isEntityAssetBindingRole('portrait')).toBe(true);
     expect(isEntityAssetBindingRole('puppet-bone')).toBe(true);
@@ -102,7 +100,7 @@ describe('creative entity asset composition contracts', () => {
       confidence: 0.92,
       provenance: [
         {
-          providerId: 'neko-story',
+          providerId: 'fountain-content',
           sourceKind: 'story',
           sourceRef: 'cases/test.fountain:12',
           confidence: 0.92,
@@ -190,7 +188,7 @@ describe('creative entity asset composition contracts', () => {
     ).toBe(true);
     expect(
       isCreativeEntityProviderStatus({
-        providerId: 'neko-story',
+        providerId: 'fountain-content',
         sourceKind: 'story',
         available: false,
         freshness: 'stale',
@@ -279,7 +277,7 @@ describe('creative entity asset composition contracts', () => {
       status: 'open',
       provenance: [
         {
-          providerId: 'neko-story',
+          providerId: 'fountain-content',
           sourceKind: 'story',
         },
       ],

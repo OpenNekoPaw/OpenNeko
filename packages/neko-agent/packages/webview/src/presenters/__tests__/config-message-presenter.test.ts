@@ -10,8 +10,6 @@ import {
   projectProjectFilesMessage,
   projectSettingsDataMessage,
   projectSettingsMutationError,
-  projectSsoErrorMessage,
-  projectSsoSessionChangedMessage,
 } from '../config-message-presenter';
 import { buildConfigChangedMessage, buildConfigStateMessage } from '@neko-agent/types';
 
@@ -286,6 +284,35 @@ describe('config message presenter', () => {
     });
   });
 
+  it('labels semantic Entity Candidates distinctly from confirmed Entities', () => {
+    expect(
+      projectProjectFilesMessage({
+        type: 'projectFiles',
+        purpose: 'roleplay',
+        mentionExtras: [
+          {
+            type: 'entity',
+            id: 'entity-projection:semantic-xiaoju',
+            label: '小橘',
+            summary: 'Entity: 小橘 (character candidate)',
+            source: 'entity-graph',
+            entityType: 'character',
+            navigationData: {
+              candidateId: 'candidate:auto:character:小橘',
+              projectSearchItemId: 'entity-projection:semantic-xiaoju',
+            },
+          },
+        ],
+      }).mentionItems,
+    ).toEqual([
+      expect.objectContaining({
+        kind: 'entity',
+        label: '小橘',
+        description: 'Entity Candidate · character',
+      }),
+    ]);
+  });
+
   it('applies media model defaults only to empty selections', () => {
     const projection = projectMediaModelSelectionDefaults({
       selection: {
@@ -358,20 +385,20 @@ describe('config message presenter', () => {
 
     expect(
       projectMessageModelSelection({
-        selectedModel: 'neko-account-gateway:auto',
+        selectedModel: 'local-gateway:auto',
         sessionMode: 'agent',
         chatModelOptions: [
           {
-            id: 'neko-account-gateway:auto',
-            label: 'Neko Official / Auto',
-            providerId: 'neko-account-gateway',
+            id: 'local-gateway:auto',
+            label: 'Local Gateway / Auto',
+            providerId: 'local-gateway',
             modelId: 'auto',
             category: 'llm',
           },
         ],
       }),
     ).toEqual({
-      chatModel: { providerId: 'neko-account-gateway', modelId: 'auto', category: 'llm' },
+      chatModel: { providerId: 'local-gateway', modelId: 'auto', category: 'llm' },
     });
   });
 
@@ -763,126 +790,5 @@ describe('config message presenter', () => {
     expect(projectSettingsMutationError({ type: 'settingsUpdated', success: false })).toBe(
       'Settings update failed.',
     );
-  });
-
-  it('projects SSO session and error messages for account UI', () => {
-    expect(
-      projectSsoSessionChangedMessage({
-        type: 'ssoSessionChanged',
-        session: { user: 'user@example.com', plan: 'Pro' },
-      }),
-    ).toEqual({
-      settingsPatch: { ssoSession: { user: 'user@example.com', plan: 'Pro' } },
-      showOnboarding: false,
-    });
-
-    expect(
-      projectSsoSessionChangedMessage({
-        type: 'ssoSessionChanged',
-        session: null,
-      }),
-    ).toEqual({
-      settingsPatch: { ssoSession: null },
-      showOnboarding: undefined,
-    });
-
-    expect(projectSsoErrorMessage({ type: 'ssoError', error: 'Login failed' })).toEqual({
-      globalError: 'Login failed',
-      showOnboarding: true,
-    });
-  });
-
-  it('projects source-grouped account gateway model state', () => {
-    expect(
-      projectConfigStateMessage({
-        type: 'configState',
-        config: {
-          configuredProviders: [
-            {
-              id: 'neko-account-gateway',
-              name: 'Neko Official',
-              type: 'newapi',
-              enabled: true,
-              requiresApiKey: false,
-              models: [{ id: 'official-chat', name: 'Official Chat', enabled: true }],
-            },
-          ],
-          modelGroups: [
-            {
-              source: 'account-gateway',
-              providerId: 'neko-account-gateway',
-              providerLabel: 'Neko Official',
-              connectionKind: 'gateway',
-              priority: 0,
-              modelsByType: {
-                llm: [
-                  {
-                    id: 'neko-account-gateway:official-chat',
-                    label: 'Neko Official / Official Chat',
-                    providerId: 'neko-account-gateway',
-                    modelId: 'official-chat',
-                    category: 'llm',
-                    capabilities: ['chat'],
-                  },
-                ],
-                image: [
-                  {
-                    id: 'neko-account-gateway:official-image',
-                    label: 'Neko Official / Official Image',
-                    providerId: 'neko-account-gateway',
-                    modelId: 'official-image',
-                    category: 'image',
-                    capabilities: ['text_to_image'],
-                  },
-                ],
-              },
-            },
-          ],
-        },
-      }),
-    ).toEqual({
-      configuredProviders: [
-        {
-          id: 'neko-account-gateway',
-          name: 'Neko Official',
-          type: 'newapi',
-          enabled: true,
-          requiresApiKey: false,
-          models: [{ id: 'official-chat', name: 'Official Chat', enabled: true }],
-        },
-      ],
-      modelGroups: [
-        {
-          source: 'account-gateway',
-          providerId: 'neko-account-gateway',
-          providerLabel: 'Neko Official',
-          connectionKind: 'gateway',
-          priority: 0,
-          modelsByType: {
-            llm: [
-              {
-                id: 'neko-account-gateway:official-chat',
-                label: 'Neko Official / Official Chat',
-                providerId: 'neko-account-gateway',
-                modelId: 'official-chat',
-                category: 'llm',
-                capabilities: ['chat'],
-              },
-            ],
-            image: [
-              {
-                id: 'neko-account-gateway:official-image',
-                label: 'Neko Official / Official Image',
-                providerId: 'neko-account-gateway',
-                modelId: 'official-image',
-                category: 'image',
-                capabilities: ['text_to_image'],
-              },
-            ],
-          },
-        },
-      ],
-      configDiagnostic: undefined,
-    });
   });
 });

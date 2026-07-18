@@ -10,67 +10,96 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { isInspectorEventRelated, toInspectorDashboardRef } from './entityInspectorProvider';
+import {
+  EntityInspectorProvider,
+  isInspectorChangeRelated,
+  toInspectorEntityRef,
+  type EntityInspectorChangeSubscriber,
+} from './entityInspectorProvider';
 
 describe('EntityInspectorProvider canonical Entity path', () => {
-  it('projects retained entity requests onto the neutral Entity source', () => {
+  it('normalizes retained entity requests onto the canonical Entity source', () => {
     expect(
-      toInspectorDashboardRef(
+      toInspectorEntityRef(
         {
-          entityRef: {
-            entityId: 'character-1',
-            entityKind: 'character',
-            projectRoot: '/old-workspace',
-            source: 'removed-story-source',
-          },
+          entityId: 'character-1',
+          entityKind: 'character',
+          projectRoot: '/old-workspace',
+          source: 'removed-story-source',
         },
         '/workspace',
       ),
     ).toEqual({
       source: 'neko-entity',
-      sourceEntityId: 'entity:character-1',
       entityId: 'character-1',
       entityKind: 'character',
       projectRoot: '/workspace',
     });
   });
 
-  it('keeps candidate requests inside the retained workspace source', () => {
-    expect(toInspectorDashboardRef({ candidateId: 'candidate:1' }, '/workspace')).toEqual({
-      source: 'neko-entity',
-      sourceEntityId: 'candidate:1',
-      entityKind: 'character',
-      projectRoot: '/workspace',
-    });
-  });
-
-  it('refreshes an inspected entity when the canonical runtime reports a related change', () => {
+  it('matches canonical runtime changes without a source-specific row contract', () => {
     expect(
-      isInspectorEventRelated(
+      isInspectorChangeRelated(
         {
-          source: 'neko-entity',
-          sourceEntityId: 'entity:character-1',
           entityId: 'character-1',
           entityKind: 'character',
           projectRoot: '/workspace',
-        },
-        {
-          type: 'refreshed',
           source: 'neko-entity',
-          freshness: 'fresh',
-          changedRefs: [
-            {
-              kind: 'binding',
-              id: 'character-1',
-              entityRef: {
-                entityId: 'character-1',
-                entityKind: 'character',
-                projectRoot: '/workspace',
-              },
-            },
-          ],
         },
+        [
+          {
+            kind: 'binding',
+            id: 'character-1',
+            entityRef: {
+              entityId: 'character-1',
+              entityKind: 'character',
+              projectRoot: '/workspace',
+            },
+          },
+        ],
       ),
     ).toBe(true);
+  });
+
+  it('refreshes through the canonical Entity runtime subscription', async () => {
+    let listener: Parameters<EntityInspectorChangeSubscriber>[1] | undefined;
+    const subscription = { dispose: vi.fn() };
+    const executeCommand = vi.fn(async () => ({
+      entity: {
+        id: 'character-1',
+        kind: 'character',
+        canonicalName: '小橘',
+        aliases: [],
+        status: 'confirmed',
+      },
+      candidates: [],
+      bindings: [],
+      visualDrafts: [],
+    }));
+    const provider = new EntityInspectorProvider({
+      executeCommand,
+      subscribeEntityChanges: (_projectRoot, nextListener) => {
+        listener = nextListener;
+        return subscription;
+      },
+    });
+
+    await provider.inspect({
+      projectRoot: '/workspace',
+      entityRef: { entityId: 'character-1', entityKind: 'character' },
+      reveal: false,
+    });
+    listener?.({
+      projectRoot: '/workspace',
+      reason: 'update-metadata',
+      changedRefs: [{ kind: 'entity', id: 'character-1' }],
+      generation: 2,
+      freshness: 'fresh',
+      updatedAt: '2026-07-19T00:00:00.000Z',
+    });
+
+    await vi.waitFor(() => expect(executeCommand).toHaveBeenCalledTimes(2));
+    provider.dispose();
+    expect(subscription.dispose).toHaveBeenCalledOnce();
   });
 });

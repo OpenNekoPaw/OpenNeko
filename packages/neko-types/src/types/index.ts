@@ -5,7 +5,6 @@
 // Generated engine types (from packages/neko-proto/*.proto)
 export * from '../generated/timeline.engine';
 export * from '../generated/diff.engine';
-export * from '../generated/scene.engine';
 export type { EngineResolution } from '../generated/timeline.engine';
 
 // Track types
@@ -16,9 +15,6 @@ export * from './easing';
 
 // Blend modes
 export * from './blendMode';
-export * from './sketch-psd-import';
-export * from './sketch-psd-blend-mode';
-export * from './sketch-ai';
 
 // Transform
 export * from './transform';
@@ -46,8 +42,8 @@ export * from './audio';
 export * from './audioAutomation';
 export * from './audioEffectParams';
 export * from './audioMix';
-export * from './audioProtocol';
 export * from './audioTempo';
+export * from './media-stream';
 
 // Speed
 export * from './speed';
@@ -74,6 +70,7 @@ export * from './message';
 export * from './config';
 export * from './agent-ai-source';
 export * from './external-research';
+export * from './fountain-script';
 
 // AI Actions
 export * from './aiAction';
@@ -85,10 +82,7 @@ export * from './task';
 // Task Views (Extension ↔ Webview DTO)
 export * from './task-view';
 
-// Dashboard task monitoring contracts
-export * from './dashboard-task';
-export * from './dashboard-project';
-export * from './dashboard-creative-entity';
+export * from './task-projection';
 export * from './creative-entity-facade';
 export * from './npc-test-bench';
 
@@ -256,30 +250,6 @@ export type {
 } from './quality';
 export * from './reference-resolution';
 
-// Sketch types (.nks document format)
-export * from './sketch';
-
-// Puppet types (.nkp project format)
-export * from './puppet';
-export * from './puppet-motion-preset';
-
-// Puppet face parameter template (standard 32-param face model)
-export * from './puppet-face-params';
-
-// Keyframe editor types (shared mini-timeline for puppet/model editors)
-export * from './keyframe-editor';
-
-// 3D Model project types (.nkm project format)
-export * from './model-project';
-export * from './model-agent-api';
-
-// 3D scene authoring and viewport contracts
-export * from './scene';
-export * from './model-ai-preview-scene-modes';
-
-// Audio project types (.nka file format)
-export * from './audioProject';
-
 // Proxy protocol types (video proxy generation and management)
 export * from './proxyProtocol';
 
@@ -287,15 +257,8 @@ export * from './proxyProtocol';
 export * from './preview';
 export * from './panoramic-preview';
 
-// Unified viewport protocol contracts
-export * from './viewport-protocol';
-export * from './live-compositor';
-
 // Extension API types (inter-extension communication)
 export * from './extension-api';
-
-// Auth types (shared interfaces for neko-auth ecosystem)
-export * from './auth';
 
 // Generation types (output params + model config)
 export * from './generation';

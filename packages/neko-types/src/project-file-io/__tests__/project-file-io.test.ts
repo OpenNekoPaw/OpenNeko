@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AudioProjectData } from '../../types/audioProject';
 import type { ProjectData } from '../../types/project';
 import {
   ProjectFileStore,
@@ -13,11 +12,7 @@ import {
   detectRuntimeOrCacheSourceHandle,
   handleProjectSourceAddRequest,
   ingestProjectSourceAddRequest,
-  nkaSourcePathPolicy,
   nkcSourcePathPolicy,
-  nkpSourcePathPolicy,
-  nksSourcePathPolicy,
-  nkmSourcePathPolicy,
   nkvSourcePathPolicy,
   resolveProjectSourceDiagnostics,
   toContentIngestRequest,
@@ -276,201 +271,39 @@ describe('ProjectFileStore', () => {
 });
 
 describe('default project format codecs', () => {
-  it('registers nkv, nkc, nka, nks, nkp, and nkm', () => {
+  it('registers only retained nkv and nkc formats', () => {
     const registry = createDefaultProjectFormatCodecRegistry();
 
-    expect(registry.getByExtension('cut.nkv')?.formatId).toBe('nkv');
-    expect(registry.getByExtension('canvas.nkc')?.formatId).toBe('nkc');
-    expect(registry.getByExtension('audio.nka')?.formatId).toBe('nka');
-    expect(registry.getByExtension('sketch.nks')?.formatId).toBe('nks');
-    expect(registry.getByExtension('puppet.nkp')?.formatId).toBe('nkp');
-    expect(registry.getByExtension('model.nkm')?.formatId).toBe('nkm');
+    expect(registry.list().map((codec) => codec.formatId)).toEqual(['nkv', 'nkc']);
+    for (const extension of ['nka', 'nks', 'nkm', 'nkp']) {
+      expect(registry.getByExtension(`removed.${extension}`)).toBeUndefined();
+    }
   });
 
-  it('marks future nkm documents read-only', async () => {
-    const store = new ProjectFileStore({
-      registry: createDefaultProjectFormatCodecRegistry(),
-      fileOps: createMemoryFileOps({
-        '/project/model.nkm': JSON.stringify({
-          version: 999,
-          name: 'Future',
-          model: { src: 'hero.glb' },
-          faceParams: {},
-          customClips: [],
-          camera: null,
-          viewport: { zoom: 1 },
-          editorState: {},
-        }),
-      }),
-    });
+  it.each(['nka', 'nks', 'nkm', 'nkp'])(
+    'rejects removed .%s formats before reading or writing user data',
+    async (extension) => {
+      const filePath = `/workspace/project/source.${extension}`;
+      const files = createMemoryFileOps({ [filePath]: '{"preserve":true}' });
+      const readFile = vi.fn(files.readFile);
+      const writeFile = vi.fn(files.writeFile);
+      const store = new ProjectFileStore({
+        registry: createDefaultProjectFormatCodecRegistry(),
+        fileOps: { ...files, readFile, writeFile },
+      });
 
-    const result = await store.load({ filePath: '/project/model.nkm' });
+      const loaded = await store.load({ filePath });
+      const saved = await store.save({ filePath, document: { replacement: true } });
 
-    expect(result.readOnly).toBe(true);
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
-      'unsupported-version',
-    );
-  });
-
-  it('loads .nkm profile: 2d scene authoring data through the model codec', async () => {
-    const store = new ProjectFileStore({
-      registry: createDefaultProjectFormatCodecRegistry(),
-      fileOps: createMemoryFileOps({
-        '/project/scene.nkm': JSON.stringify({
-          version: 2,
-          name: '2D Scene',
-          profile: '2d',
-          model: { src: null },
-          scene2d: {
-            sprites: [{ id: 'sprite-1', assetRef: './hero.png' }],
-            tilemaps: [
-              {
-                id: 'tilemap-1',
-                tilesetRef: './tiles.png',
-                width: 32,
-                height: 18,
-                tileWidth: 32,
-                tileHeight: 32,
-              },
-            ],
-            lights: [{ id: 'light-1', kind: 'point', intensity: 0.8 }],
-            camera: { position: [0, 0], zoom: 1 },
-          },
-          faceParams: {},
-          customClips: [],
-          camera: null,
-          viewport: { zoom: 1 },
-          editorState: {},
-        }),
-      }),
-    });
-
-    const result = await store.load({ filePath: '/project/scene.nkm' });
-
-    expect(result.ok).toBe(true);
-    expect(result.diagnostics).toEqual([]);
-    expect(result.document).toMatchObject({
-      profile: '2d',
-      scene2d: {
-        sprites: [{ id: 'sprite-1', assetRef: './hero.png' }],
-      },
-    });
-  });
-
-  it('diagnoses .nkp files that contain generic 2D scene authoring fields', async () => {
-    const store = new ProjectFileStore({
-      registry: createDefaultProjectFormatCodecRegistry(),
-      fileOps: createMemoryFileOps({
-        '/project/wrong.nkp': JSON.stringify({
-          version: '2.0',
-          name: 'Wrong Domain',
-          puppet: { src: './model.moc3', format: 'moc3' },
-          tilemaps: [],
-          sceneCamera: { position: [0, 0], zoom: 1 },
-          parameters: {},
-          viewport: { zoom: 1 },
-        }),
-      }),
-    });
-
-    const result = await store.load({ filePath: '/project/wrong.nkp' });
-
-    expect(result.ok).toBe(false);
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('wrong-domain-field');
-    expect(result.diagnostics.map((diagnostic) => diagnostic.path?.join('.'))).toEqual(
-      expect.arrayContaining(['tilemaps', 'sceneCamera']),
-    );
-  });
-
-  it('loads .nkm profile: live actor refs without copying puppet truth', async () => {
-    const store = new ProjectFileStore({
-      registry: createDefaultProjectFormatCodecRegistry(),
-      fileOps: createMemoryFileOps({
-        '/project/stage.nkm': JSON.stringify({
-          version: 2,
-          name: 'Live Stage',
-          profile: 'live',
-          model: { src: null },
-          live: {
-            actors: [{ id: 'actor-sakura', ref: './sakura.nkp', role: 'host' }],
-            routes: [{ id: 'route-1', source: 'camera-1', target: 'actor-sakura' }],
-          },
-          faceParams: {},
-          customClips: [],
-          camera: null,
-          viewport: { zoom: 1 },
-          editorState: {},
-        }),
-      }),
-    });
-
-    const result = await store.load({ filePath: '/project/stage.nkm' });
-
-    expect(result.ok).toBe(true);
-    expect(result.diagnostics).toEqual([]);
-    expect(result.document).toMatchObject({
-      profile: 'live',
-      live: { actors: [{ id: 'actor-sakura', ref: './sakura.nkp' }] },
-    });
-  });
-
-  it('fails closed for unsupported .nkm scene profiles', async () => {
-    const store = new ProjectFileStore({
-      registry: createDefaultProjectFormatCodecRegistry(),
-      fileOps: createMemoryFileOps({
-        '/project/unknown.nkm': JSON.stringify({
-          version: 2,
-          name: 'Unknown Profile',
-          profile: 'puppet',
-          model: { src: null },
-          faceParams: {},
-          customClips: [],
-          camera: null,
-          viewport: { zoom: 1 },
-          editorState: {},
-        }),
-      }),
-    });
-
-    const result = await store.load({ filePath: '/project/unknown.nkm' });
-
-    expect(result.ok).toBe(false);
-    expect(result.readOnly).toBe(true);
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('invalid-document');
-  });
-
-  it('rejects .nkm profile: live actor entries that embed puppet parameter truth', async () => {
-    const store = new ProjectFileStore({
-      registry: createDefaultProjectFormatCodecRegistry(),
-      fileOps: createMemoryFileOps({
-        '/project/stage.nkm': JSON.stringify({
-          version: 2,
-          name: 'Live Stage',
-          profile: 'live',
-          model: { src: null },
-          live: {
-            actors: [
-              {
-                id: 'actor-sakura',
-                ref: './sakura.nkp',
-                parameters: { ParamAngleX: 0.4 },
-              },
-            ],
-          },
-          faceParams: {},
-          customClips: [],
-          camera: null,
-          viewport: { zoom: 1 },
-          editorState: {},
-        }),
-      }),
-    });
-
-    const result = await store.load({ filePath: '/project/stage.nkm' });
-
-    expect(result.ok).toBe(false);
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('invalid-document');
-  });
+      expect(loaded).toMatchObject({ ok: false, readOnly: true });
+      expect(saved).toMatchObject({ ok: false, written: false });
+      expect(loaded.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['invalid-format']);
+      expect(saved.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['invalid-format']);
+      expect(readFile).not.toHaveBeenCalled();
+      expect(writeFile).not.toHaveBeenCalled();
+      expect(files.readText(filePath)).toBe('{"preserve":true}');
+    },
+  );
 });
 
 describe('portable source path policy', () => {
@@ -685,73 +518,6 @@ describe('source descriptor helpers', () => {
     expect(
       replaced.tracks[0]?.elements[0]?.type === 'media' ? replaced.tracks[0].elements[0].src : '',
     ).toBe('media/clip.mp4');
-  });
-
-  it('lists nkp and nkm source fields', () => {
-    const nkpSources = nkpSourcePathPolicy.listSources({
-      version: '2.0',
-      name: 'Puppet',
-      puppet: { src: './hero.moc3' },
-      parameters: {},
-      viewport: { zoom: 1 },
-    });
-    const nkmSources = nkmSourcePathPolicy.listSources({
-      version: 2,
-      name: 'Model',
-      model: { src: './hero.glb' },
-      faceParams: {},
-      customClips: [],
-      camera: null,
-      viewport: { zoom: 1 },
-      editorState: {},
-    });
-
-    expect(nkpSources.map((source) => source.id)).toContain('puppet.src');
-    expect(nkmSources.map((source) => source.id)).toContain('model.src');
-  });
-
-  it('lists and replaces nkc source fields while nks has no external source fields', () => {
-    const canvas = {
-      version: '2.1',
-      name: 'Canvas',
-      nodes: [
-        {
-          id: 'media-1',
-          type: 'media',
-          position: { x: 0, y: 0 },
-          size: { width: 320, height: 180 },
-          data: {
-            assetPath: '/workspace/project/media/hero.png',
-            prompt: 'do not treat prose as a path',
-          },
-        },
-      ],
-      connections: [],
-    };
-    const descriptors = nkcSourcePathPolicy.listSources(canvas);
-    const replaced = nkcSourcePathPolicy.replaceSources(canvas, [
-      { descriptor: descriptors[0]!, path: 'media/hero.png' },
-    ]);
-
-    expect(descriptors.map((descriptor) => descriptor.id)).toContain(
-      'canvas.nodes.0.data.assetPath',
-    );
-    expect(descriptors.map((descriptor) => descriptor.id)).not.toContain(
-      'canvas.nodes.0.data.prompt',
-    );
-    expect(
-      (replaced.nodes[0]?.data as { readonly assetPath?: string } | undefined)?.assetPath,
-    ).toBe('media/hero.png');
-    expect(
-      nksSourcePathPolicy.listSources({
-        version: '1.2',
-        canvas: { width: 100, height: 100, dpi: 72, backgroundColor: '#fff' },
-        layers: [],
-        brushPresets: [],
-        palette: [],
-        viewport: { panX: 0, panY: 0, zoom: 1 },
-      }),
-    ).toEqual([]);
   });
 
   it('ignores nkc FieldBinding JSON pointer paths while saving media node sources', async () => {
@@ -1179,164 +945,6 @@ describe('source descriptor helpers', () => {
         'canvas.nodes.3.data.thumbnailPath',
         'canvas.nodes.4.data.projectPath',
       ]),
-    );
-  });
-
-  it('stores nkc, nka, and nks documents without reading workspace cache state', async () => {
-    const projectFiles = createMemoryFileOps({
-      '/workspace/project/canvas.nkc': JSON.stringify({
-        version: '2.1',
-        name: 'Canvas',
-        nodes: [],
-        connections: [],
-      }),
-      '/workspace/project/audio.nka': JSON.stringify({
-        version: '2.1',
-        name: 'Audio',
-        sampleRate: 48000,
-        channels: 2,
-        duration: 0,
-        tracks: [],
-        masterEffectsChain: [],
-        markers: [],
-      }),
-      '/workspace/project/sketch.nks': JSON.stringify({
-        version: '1.2',
-        canvas: { width: 100, height: 100, dpi: 72, backgroundColor: '#fff' },
-        layers: [],
-        brushPresets: [],
-        palette: [],
-        viewport: { panX: 0, panY: 0, zoom: 1 },
-      }),
-    });
-    const readProjectFile = projectFiles.readFile.bind(projectFiles);
-    const files = {
-      ...projectFiles,
-      readFile: vi.fn(async (filePath: string) => {
-        if (filePath.includes('/.neko/')) {
-          throw new Error(`Project document attempted to read local cache state: ${filePath}`);
-        }
-        return readProjectFile(filePath);
-      }),
-    };
-    const store = new ProjectFileStore({
-      registry: createDefaultProjectFormatCodecRegistry(),
-      fileOps: files,
-    });
-
-    const canvas = await store.load({ filePath: '/workspace/project/canvas.nkc' });
-    const audio = await store.load({ filePath: '/workspace/project/audio.nka' });
-    const sketch = await store.load({ filePath: '/workspace/project/sketch.nks' });
-    const canvasSave = await store.save({
-      filePath: '/workspace/project/canvas.nkc',
-      formatId: 'nkc',
-      document: {
-        version: '2.1',
-        name: 'Saved Canvas',
-        nodes: [],
-        connections: [],
-      },
-      sourcePolicy: nkcSourcePathPolicy,
-      sourcePolicyOptions: {
-        context: {
-          owningWorkspaceRoot: '/workspace/project',
-          workspaceRoots: ['/workspace/project'],
-        },
-      },
-    });
-
-    expect(canvas.ok).toBe(true);
-    expect(audio.ok).toBe(true);
-    expect(sketch.ok).toBe(true);
-    expect(canvasSave.ok).toBe(true);
-    expect(files.readText('/workspace/project/canvas.nkc')).toContain('"name": "Saved Canvas"');
-    expect(files.readFile).toHaveBeenCalledTimes(3);
-    expect(files.readFile.mock.calls.map(([filePath]) => filePath)).toEqual([
-      '/workspace/project/canvas.nkc',
-      '/workspace/project/audio.nka',
-      '/workspace/project/sketch.nks',
-    ]);
-  });
-
-  it('saves and reloads NKA add-source audio tracks through durable source refs', async () => {
-    const files = createMemoryFileOps();
-    const store = new ProjectFileStore({
-      registry: createDefaultProjectFormatCodecRegistry(),
-      fileOps: files,
-    });
-    const project = {
-      version: '2.2',
-      name: 'Audio add-source',
-      sampleRate: 48000,
-      channels: 2,
-      tracks: [
-        {
-          id: 'track-1',
-          name: 'Voice',
-          type: 'audio',
-          elements: [
-            {
-              id: 'element-1',
-              type: 'audio',
-              name: 'voice.wav',
-              src: '/workspace/project/audio/voice.wav',
-              duration: 3,
-              startTime: 0,
-              trimStart: 0,
-              trimEnd: 0,
-              transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, anchorX: 0, anchorY: 0 },
-              opacity: 1,
-              blendMode: 'normal',
-              effects: [],
-              muted: false,
-              hidden: false,
-              locked: false,
-              speed: { speed: 1, preservePitch: true, reverse: false },
-            },
-          ],
-          muted: false,
-          locked: false,
-          hidden: false,
-          isMain: true,
-        },
-      ],
-      masterEffectsChain: [],
-      markers: [],
-    };
-
-    const saved = await store.save({
-      filePath: '/workspace/project/audio.nka',
-      formatId: 'nka',
-      document: project,
-      sourcePolicy: nkaSourcePathPolicy,
-      sourcePolicyOptions: {
-        context: {
-          owningWorkspaceRoot: '/workspace/project',
-          workspaceRoots: ['/workspace/project'],
-        },
-      },
-      saveReason: 'add-source',
-    });
-    const loaded = await store.load<AudioProjectData>({
-      filePath: '/workspace/project/audio.nka',
-      formatId: 'nka',
-      sourcePolicy: nkaSourcePathPolicy,
-      sourcePolicyOptions: {
-        context: {
-          owningWorkspaceRoot: '/workspace/project',
-          workspaceRoots: ['/workspace/project'],
-        },
-        fileExists: (filePath) => filePath === '/workspace/project/audio/voice.wav',
-      },
-    });
-
-    expect(saved.ok).toBe(true);
-    expect(saved.document?.tracks[0]?.elements[0]).toMatchObject({ src: 'audio/voice.wav' });
-    expect(loaded.ok).toBe(true);
-    expect(loaded.document?.tracks[0]?.elements[0]).toMatchObject({ src: 'audio/voice.wav' });
-    expect(files.readText('/workspace/project/audio.nka')).toContain('"src": "audio/voice.wav"');
-    expect(files.readText('/workspace/project/audio.nka')).not.toContain(
-      '/workspace/project/audio/voice.wav',
     );
   });
 });

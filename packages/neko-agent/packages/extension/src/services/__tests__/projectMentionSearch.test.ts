@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { PROJECT_SEARCH_QUERY_COMMAND } from '@neko/search/host-vscode';
-import { searchProjectMentionCandidates } from '../projectMentionSearch';
+import {
+  resolveRoleplayCandidateSearchSelection,
+  searchProjectMentionCandidates,
+} from '../projectMentionSearch';
 
 vi.mock('vscode', async () => await import('../../__mocks__/vscode'));
 
@@ -158,23 +161,30 @@ describe('projectMentionSearch', () => {
     );
   });
 
-  it('narrows roleplay searches to playable character candidates', async () => {
+  it('returns confirmed characters and explicitly confirmable character Candidates for roleplay', async () => {
     vi.mocked(vscode.commands.executeCommand).mockResolvedValue({
       items: [
         {
-          id: 'entity:char-xiaoju',
+          id: 'entity:character:char-xiaoju',
           kind: 'creative-entity',
           label: '小橘',
           description: 'Character',
           source: {
             partition: 'creative-entities',
-            sourceId: 'char-xiaoju',
-            sourceKind: 'character',
+            sourceId: 'neko-entity',
+            sourceKind: 'registry',
+            refId: 'char-xiaoju',
+            metadata: { entityKind: 'character', status: 'confirmed' },
           },
           projectRoot: '/workspace',
           searchText: '小橘 character',
           freshness: 'fresh',
           metadata: { entityType: 'character' },
+          navigationData: {
+            entityId: 'char-xiaoju',
+            entityKind: 'character',
+            source: 'neko-entity',
+          },
         },
         {
           id: 'asset:asset-xiaoju',
@@ -191,6 +201,80 @@ describe('projectMentionSearch', () => {
           searchText: '小橘参考图',
           freshness: 'fresh',
           metadata: { mediaType: 'image', entityType: 'character' },
+        },
+        {
+          id: 'creative-entity:legacy-character',
+          kind: 'creative-entity',
+          label: '旧角色投影',
+          source: {
+            partition: 'creative-entities',
+            sourceId: 'legacy-character',
+            sourceKind: 'character',
+          },
+          projectRoot: '/workspace',
+          searchText: '旧角色投影 character',
+          freshness: 'fresh',
+          metadata: { entityType: 'character' },
+        },
+        {
+          id: 'candidate:auto:character:小灰',
+          kind: 'entity-candidate',
+          label: '小灰',
+          description: 'Automatic candidate',
+          source: {
+            partition: 'creative-entities',
+            sourceId: 'candidate:auto:character:小灰',
+            sourceKind: 'candidate',
+            refId: 'candidate:auto:character:小灰',
+            metadata: { entityKind: 'character', status: 'observed' },
+          },
+          projectRoot: '/workspace',
+          searchText: '小灰 character candidate',
+          freshness: 'fresh',
+          metadata: { entityType: 'character' },
+        },
+        {
+          id: 'context-script-entity:/workspace/cases/test.fountain:小灰',
+          kind: 'entity-candidate',
+          label: '小灰',
+          source: {
+            partition: 'creative-entities',
+            sourceId: 'agent-context-script',
+            sourceKind: 'script',
+            projectRelativePath: 'cases/test.fountain',
+            metadata: { entityKind: 'character', status: 'candidate' },
+          },
+          projectRoot: '/workspace',
+          canonicalName: '小灰',
+          searchText: '小灰 character candidate script',
+          freshness: 'fresh',
+          metadata: { entityType: 'character', status: 'candidate' },
+          navigationData: { candidateId: '小灰', entityKind: 'character' },
+        },
+        {
+          id: 'entity-projection:workspace:cases/test.fountain:candidate:candidate:auto:character:小灰',
+          kind: 'entity-candidate',
+          label: '小灰',
+          description: 'character candidate',
+          source: {
+            partition: 'creative-entities',
+            sourceId: 'workspace:cases/test.fountain',
+            sourceKind: 'candidate',
+            refId: 'candidate:auto:character:小灰',
+          },
+          projectRoot: '/workspace',
+          searchText: '小灰 character open ${WORKSPACE}/cases/test.fountain',
+          freshness: 'fresh',
+          metadata: {
+            entityType: 'character',
+            status: 'open',
+            identityBasis: 'user-named',
+          },
+          navigationData: {
+            candidateId: 'candidate:auto:character:小灰',
+            kind: 'character',
+            source: 'workspace:cases/test.fountain',
+          },
         },
         {
           id: 'entity:scene-rooftop',
@@ -226,8 +310,8 @@ describe('projectMentionSearch', () => {
       expect.objectContaining({
         text: '',
         mode: 'mention',
-        kinds: ['script-role', 'creative-entity', 'entity-candidate', 'asset', 'generated-asset'],
-        partitions: ['story-symbols', 'creative-entities', 'asset-library'],
+        kinds: ['creative-entity', 'entity-candidate'],
+        partitions: ['creative-entities'],
       }),
     );
     expect(candidates).toEqual([
@@ -235,13 +319,154 @@ describe('projectMentionSearch', () => {
         type: 'entity',
         label: '小橘',
         entityType: 'character',
+        navigationData: expect.objectContaining({
+          entityId: 'char-xiaoju',
+          refId: 'char-xiaoju',
+          projectSearchItemId: 'entity:character:char-xiaoju',
+        }),
       }),
       expect.objectContaining({
-        type: 'asset',
-        label: '小橘参考图',
+        type: 'entity',
+        label: '小灰',
         entityType: 'character',
+        navigationData: expect.objectContaining({
+          candidateId: 'candidate:auto:character:小灰',
+          projectSearchItemId:
+            'entity-projection:workspace:cases/test.fountain:candidate:candidate:auto:character:小灰',
+        }),
       }),
     ]);
+  });
+
+  it('re-resolves a selected roleplay Candidate from its stable Project Search identity', async () => {
+    vi.mocked(vscode.commands.executeCommand).mockResolvedValue({
+      items: [
+        {
+          id: 'entity-projection:semantic-xiaoju',
+          kind: 'entity-candidate',
+          label: '小橘',
+          source: {
+            partition: 'creative-entities',
+            sourceId: 'workspace:cases/test.fountain',
+            sourceKind: 'candidate',
+            refId: 'candidate:auto:character:小橘',
+          },
+          projectRoot: '/workspace',
+          canonicalName: '小橘',
+          aliases: ['橘仔'],
+          searchText: '小橘 character open',
+          freshness: 'fresh',
+          metadata: { entityType: 'character', status: 'open' },
+          navigationData: {
+            candidateId: 'candidate:auto:character:小橘',
+            kind: 'character',
+            source: 'workspace:cases/test.fountain',
+          },
+        },
+      ],
+      partitions: [],
+      freshness: 'fresh',
+      context: { projectRoot: '/workspace' },
+      query: { text: '' },
+    });
+
+    await expect(
+      resolveRoleplayCandidateSearchSelection({
+        projectSearchItemId: 'entity-projection:semantic-xiaoju',
+        projectRoot: '/workspace',
+      }),
+    ).resolves.toEqual({
+      projectSearchItemId: 'entity-projection:semantic-xiaoju',
+      candidateId: 'candidate:auto:character:小橘',
+      name: '小橘',
+      kind: 'character',
+      aliases: ['橘仔'],
+      sourceRef: 'workspace:cases/test.fountain',
+    });
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+      PROJECT_SEARCH_QUERY_COMMAND,
+      expect.objectContaining({
+        text: 'entity-projection:semantic-xiaoju',
+        mode: 'entity-picker',
+        limit: 1,
+        kinds: ['entity-candidate'],
+        partitions: ['creative-entities'],
+        projectRoot: '/workspace',
+      }),
+    );
+
+    await expect(
+      resolveRoleplayCandidateSearchSelection({
+        projectSearchItemId: 'entity-projection:forged',
+        projectRoot: '/workspace',
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('offers a named context-script Candidate for explicit confirm-and-roleplay', async () => {
+    vi.mocked(vscode.commands.executeCommand).mockResolvedValue({
+      items: [
+        {
+          id: 'context-script-entity:/workspace/cases/test.fountain:小橘',
+          kind: 'entity-candidate',
+          label: '小橘',
+          source: {
+            partition: 'creative-entities',
+            sourceId: 'agent-context-script',
+            sourceKind: 'script',
+            projectRelativePath: 'cases/test.fountain',
+            metadata: {
+              entityKind: 'character',
+              status: 'candidate',
+              identityBasis: 'user-named',
+            },
+          },
+          projectRoot: '/workspace',
+          canonicalName: '小橘',
+          searchText: '小橘 character candidate script',
+          freshness: 'fresh',
+          metadata: {
+            entityType: 'character',
+            status: 'candidate',
+            identityBasis: 'user-named',
+          },
+          navigationData: {
+            candidateId: '小橘',
+            entityKind: 'character',
+            source: 'agent-context-script',
+          },
+        },
+      ],
+      partitions: [],
+      freshness: 'fresh',
+      context: { projectRoot: '/workspace' },
+      query: { text: '' },
+    });
+
+    const candidates = await searchProjectMentionCandidates(
+      { includePattern: '**/*', limit: 30, purpose: 'roleplay' },
+      { projectRoot: '/workspace', contextFilePath: '/workspace/cases/test.fountain' },
+    );
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        id: 'context-script-entity:/workspace/cases/test.fountain:小橘',
+        label: '小橘',
+      }),
+    ]);
+    await expect(
+      resolveRoleplayCandidateSearchSelection({
+        projectSearchItemId: 'context-script-entity:/workspace/cases/test.fountain:小橘',
+        projectRoot: '/workspace',
+        contextFilePath: '/workspace/cases/test.fountain',
+      }),
+    ).resolves.toEqual({
+      projectSearchItemId: 'context-script-entity:/workspace/cases/test.fountain:小橘',
+      candidateId: '小橘',
+      name: '小橘',
+      kind: 'character',
+      aliases: [],
+      sourceRef: 'cases/test.fountain',
+    });
   });
 
   it('contracts media library absolute paths before exposing path-backed mention candidates', async () => {

@@ -6,6 +6,7 @@ import type {
   Task,
 } from '@neko/shared';
 import type { PromptCompositionFragmentProjection } from '@neko/agent';
+import type { CreatorVisibleArtifactCandidate } from '@neko/agent/runtime';
 import type { TuiConversationStores } from '../../runtime/tui-application-runtime';
 import type { Message } from '../../types/state';
 import type {
@@ -18,12 +19,14 @@ import type {
   TuiDebugAutomationTaskFact,
   TuiDebugAutomationToolCallSummary,
   TuiDebugAutomationTurnSummary,
+  TuiDebugAutomationWorkspaceBoardDeliveryFacts,
 } from './types';
 import type { TuiConversationPersistenceSnapshot } from '../../host/tui-local-metadata-binding';
 import type { TuiPiRuntimeEvidence } from '../pi-runtime-owner';
 import { TuiDebugAutomationProtocolError } from './protocol';
 import {
   projectGeneratedOutputLifecycleArtifactFacts,
+  projectCreatorVisibleArtifactFacts,
   projectTaskOutputArtifactFacts,
 } from '../artifact-fact-projector';
 
@@ -55,7 +58,9 @@ export interface TuiAutomationSessionHandle {
   readonly getMessageQueueSnapshot: () => AgentMessageQueueSnapshot | null;
   readonly getPromptCompositionProjection?: () => readonly PromptCompositionFragmentProjection[];
   readonly getWorkspaceBoardProjections?: () => readonly CanvasWorkspaceProjectionResult[];
+  readonly getWorkspaceBoardDeliveryObservability?: () => TuiDebugAutomationWorkspaceBoardDeliveryFacts;
   readonly getGeneratedOutputLifecycles?: () => readonly GeneratedAssetRevisionRef[];
+  readonly getCreatorVisibleArtifacts?: () => readonly CreatorVisibleArtifactCandidate[];
   readonly getPendingTaskResultDeliveryCount?: () => number;
 }
 
@@ -149,7 +154,12 @@ export function createTuiAutomationAppPort(
       const turns = readTurnSummaries(stores);
       const skillActivations = bounded([], FACT_LIMITS.skillActivations);
       const artifacts = bounded(
-        readArtifactFacts(stores, rawTasks, handle.getGeneratedOutputLifecycles?.() ?? []),
+        readArtifactFacts(
+          stores,
+          rawTasks,
+          handle.getGeneratedOutputLifecycles?.() ?? [],
+          handle.getCreatorVisibleArtifacts?.() ?? [],
+        ),
         FACT_LIMITS.artifacts,
       );
       const workspaceBoardProjections = bounded(
@@ -187,6 +197,16 @@ export function createTuiAutomationAppPort(
         promptComposition: promptComposition.items,
         artifacts: artifacts.items,
         workspaceBoardProjections: workspaceBoardProjections.items,
+        workspaceBoardDelivery: handle.getWorkspaceBoardDeliveryObservability?.() ?? {
+          canonicalSubmissionCount: 0,
+          resumeScanCount: 0,
+          legacyFallbackCounts: {
+            activeCanvas: 0,
+            recentCanvas: 0,
+            directWriter: 0,
+            genericSendToCanvas: 0,
+          },
+        },
         runtimeErrors: runtimeErrors.items,
         canvas: canvas.value,
         markdown,
@@ -244,6 +264,7 @@ function projectWorkspaceBoardProjectionFacts(
     ...(result.target ? { targetKind: result.target.kind } : {}),
     ...(result.revision ? { revision: result.revision } : {}),
     nodeIds: [...(result.nodeIds ?? [])],
+    connectionIds: [...(result.connectionIds ?? [])],
     ...(result.artifactRoleCounts ? { artifactRoleCounts: result.artifactRoleCounts } : {}),
     ...(result.writerEpoch ? { writerEpoch: result.writerEpoch } : {}),
     diagnosticCodes: result.diagnostics.map((diagnostic) => diagnostic.code),
@@ -757,6 +778,7 @@ function readArtifactFacts(
   stores: TuiConversationStores,
   tasks: readonly Task[],
   generatedOutputLifecycles: readonly GeneratedAssetRevisionRef[],
+  creatorVisibleArtifacts: readonly CreatorVisibleArtifactCandidate[],
 ): TuiDebugAutomationSessionFacts['artifacts'] {
   const facts = [
     ...stores.conversation
@@ -766,6 +788,7 @@ function readArtifactFacts(
       ),
     ...projectTaskOutputArtifactFacts(tasks),
     ...projectGeneratedOutputLifecycleArtifactFacts(generatedOutputLifecycles),
+    ...projectCreatorVisibleArtifactFacts(creatorVisibleArtifacts),
   ];
   const unique = new Map<string, (typeof facts)[number]>();
   for (const fact of facts)

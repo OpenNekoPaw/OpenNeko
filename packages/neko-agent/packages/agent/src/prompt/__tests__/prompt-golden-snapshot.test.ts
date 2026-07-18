@@ -53,6 +53,10 @@ describe('prompt golden snapshots', () => {
       expect(prompt).toMatch(/independent from `ReadDocument`|与 `ReadDocument` 是独立工具/);
       expect(prompt).toMatch(/missing visual-analysis path|视觉分析链路缺失/);
       expect(prompt).toMatch(/artifact profile|当前 artifact profile/);
+      expect(prompt).toMatch(
+        /named, reviewable Markdown artifact|具名、可审阅的 Markdown artifact/,
+      );
+      expect(prompt).toMatch(/NEKO fenced JSON composite artifact/);
       expect(prompt).toMatch(/runtime capability contract/);
       expect(prompt).toMatch(/validation requirements/);
       expect(prompt).toMatch(

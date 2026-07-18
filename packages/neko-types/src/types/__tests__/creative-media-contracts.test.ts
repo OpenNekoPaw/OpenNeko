@@ -210,9 +210,9 @@ describe('creative media shared contracts', () => {
     expect(
       validateProjectQualityPreview({
         project: {
-          domain: 'model',
-          documentUri: 'file:///workspace/scene.nkm',
-          projectRevision: 'nkm:scene-v1',
+          domain: 'cut',
+          documentUri: 'file:///workspace/edit.nkv',
+          projectRevision: 'nkv:edit-v1',
         },
         previewRef: invalidPreviewRef,
         sessionRenderUri: 'file:///workspace/render.png',

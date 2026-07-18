@@ -312,6 +312,16 @@ function createFakePort(): TuiDebugAutomationAppPort {
         promptComposition: [],
         artifacts: [],
         workspaceBoardProjections: [],
+        workspaceBoardDelivery: {
+          canonicalSubmissionCount: 0,
+          resumeScanCount: 0,
+          legacyFallbackCounts: {
+            activeCanvas: 0,
+            recentCanvas: 0,
+            directWriter: 0,
+            genericSendToCanvas: 0,
+          },
+        },
         runtimeErrors: [],
         canvas: { messageSummaries: [], toolCallSummaries: [] },
         markdown: mockState.renderedAppProps?.automation?.readMarkdownFacts() ?? {

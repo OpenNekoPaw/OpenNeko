@@ -15,9 +15,9 @@ import {
   operationToolDomainMetadata,
 } from '../operation-tool-adapter';
 import {
+  AUDIO_RENDER_SERVICE_PORT_ID,
   CREATIVE_DOMAIN_SERVICE_PORT_IDS,
-  PUPPET_RENDER_SERVICE_PORT_ID,
-  SCENE_RENDER_SERVICE_PORT_ID,
+  TIMELINE_RENDER_SERVICE_PORT_ID,
 } from '../domain-routing';
 
 const operationTool: OperationTool = {
@@ -141,20 +141,20 @@ describe('operation tool adapter contracts', () => {
   });
 
   it('maps operation domains to normalized creative domains', () => {
-    expect(operationToolDomainMetadata('model')).toEqual({
-      id: 'scene',
+    expect(operationToolDomainMetadata('timeline')).toEqual({
+      id: 'timeline',
       source: 'operation-tool',
-      operationDomain: 'model',
-      servicePortId: SCENE_RENDER_SERVICE_PORT_ID,
+      operationDomain: 'timeline',
+      servicePortId: TIMELINE_RENDER_SERVICE_PORT_ID,
     });
-    expect(operationToolDomainMetadata('puppet')).toEqual({
-      id: 'puppet',
+    expect(operationToolDomainMetadata('audio')).toEqual({
+      id: 'audio',
       source: 'operation-tool',
-      operationDomain: 'puppet',
-      servicePortId: PUPPET_RENDER_SERVICE_PORT_ID,
+      operationDomain: 'audio',
+      servicePortId: AUDIO_RENDER_SERVICE_PORT_ID,
     });
-    expect(CREATIVE_DOMAIN_SERVICE_PORT_IDS.scene).toBe(SCENE_RENDER_SERVICE_PORT_ID);
-    expect(CREATIVE_DOMAIN_SERVICE_PORT_IDS.puppet).toBe(PUPPET_RENDER_SERVICE_PORT_ID);
+    expect(CREATIVE_DOMAIN_SERVICE_PORT_IDS.timeline).toBe(TIMELINE_RENDER_SERVICE_PORT_ID);
+    expect(CREATIVE_DOMAIN_SERVICE_PORT_IDS.audio).toBe(AUDIO_RENDER_SERVICE_PORT_ID);
     expect(getOperationToolCreativeDomain(operationTool)).toEqual(
       expect.objectContaining({
         id: 'timeline',
@@ -167,14 +167,14 @@ describe('operation tool adapter contracts', () => {
     const router = createDomainRouter();
     const result = router.route(
       {
-        id: 'intent-model-1',
-        domain: operationToolDomainMetadata('model'),
+        id: 'intent-timeline-1',
+        domain: operationToolDomainMetadata('timeline'),
       },
       [
         {
-          id: 'scene-tools',
-          domain: { id: 'scene', source: 'capability' },
-          servicePortId: SCENE_RENDER_SERVICE_PORT_ID,
+          id: 'timeline-tools',
+          domain: { id: 'timeline', source: 'capability' },
+          servicePortId: TIMELINE_RENDER_SERVICE_PORT_ID,
         },
       ],
     );
@@ -182,23 +182,23 @@ describe('operation tool adapter contracts', () => {
     expect(result).toEqual({
       ok: true,
       plan: {
-        intentId: 'intent-model-1',
-        domain: operationToolDomainMetadata('model'),
-        servicePortId: SCENE_RENDER_SERVICE_PORT_ID,
-        capabilityId: 'scene-tools',
+        intentId: 'intent-timeline-1',
+        domain: operationToolDomainMetadata('timeline'),
+        servicePortId: TIMELINE_RENDER_SERVICE_PORT_ID,
+        capabilityId: 'timeline-tools',
       },
     });
   });
 
   it('returns explainable domain route failures', () => {
     const router = createDomainRouter();
-    const sceneCapability = {
-      id: 'scene-tools',
-      domain: { id: 'scene' as const, source: 'capability' as const },
-      servicePortId: SCENE_RENDER_SERVICE_PORT_ID,
+    const timelineCapability = {
+      id: 'timeline-tools',
+      domain: { id: 'timeline' as const, source: 'capability' as const },
+      servicePortId: TIMELINE_RENDER_SERVICE_PORT_ID,
     };
 
-    expect(router.route({ id: 'intent-missing-domain' }, [sceneCapability])).toEqual({
+    expect(router.route({ id: 'intent-missing-domain' }, [timelineCapability])).toEqual({
       ok: false,
       error: expect.objectContaining({
         reason: 'missing-intent-domain',
@@ -207,7 +207,7 @@ describe('operation tool adapter contracts', () => {
     });
     expect(
       router.route(
-        { id: 'intent-no-capabilities', domain: operationToolDomainMetadata('model') },
+        { id: 'intent-no-capabilities', domain: operationToolDomainMetadata('timeline') },
         [],
       ),
     ).toEqual({
@@ -221,10 +221,10 @@ describe('operation tool adapter contracts', () => {
       router.route(
         {
           id: 'intent-filter-empty',
-          domain: operationToolDomainMetadata('model'),
+          domain: operationToolDomainMetadata('timeline'),
           capabilityIds: ['missing-capability'],
         },
-        [sceneCapability],
+        [timelineCapability],
       ),
     ).toEqual({
       ok: false,
@@ -238,16 +238,16 @@ describe('operation tool adapter contracts', () => {
       router.route(
         {
           id: 'intent-domain-mismatch',
-          domain: operationToolDomainMetadata('puppet'),
+          domain: operationToolDomainMetadata('audio'),
         },
-        [sceneCapability],
+        [timelineCapability],
       ),
     ).toEqual({
       ok: false,
       error: expect.objectContaining({
         reason: 'domain-mismatch',
         intentId: 'intent-domain-mismatch',
-        domain: operationToolDomainMetadata('puppet'),
+        domain: operationToolDomainMetadata('audio'),
       }),
     });
   });
@@ -256,8 +256,8 @@ describe('operation tool adapter contracts', () => {
     const router = createDomainRouter();
     const result = router.route(
       {
-        id: 'intent-model-1',
-        domain: operationToolDomainMetadata('model'),
+        id: 'intent-timeline-1',
+        domain: operationToolDomainMetadata('timeline'),
       },
       [],
     );
@@ -273,14 +273,14 @@ describe('operation tool adapter contracts', () => {
     const router = createDomainRouter();
     const result = router.route(
       {
-        id: 'intent-model-1',
-        domain: operationToolDomainMetadata('model'),
+        id: 'intent-timeline-1',
+        domain: operationToolDomainMetadata('timeline'),
       },
       [
         {
-          id: 'scene-tools',
-          domain: { id: 'scene', source: 'capability' },
-          servicePortId: SCENE_RENDER_SERVICE_PORT_ID,
+          id: 'timeline-tools',
+          domain: { id: 'timeline', source: 'capability' },
+          servicePortId: TIMELINE_RENDER_SERVICE_PORT_ID,
         },
       ],
     );
@@ -288,7 +288,7 @@ describe('operation tool adapter contracts', () => {
     expect(JSON.parse(JSON.stringify(result))).toEqual(result);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.plan.servicePortId).toBe(SCENE_RENDER_SERVICE_PORT_ID);
+      expect(result.plan.servicePortId).toBe(TIMELINE_RENDER_SERVICE_PORT_ID);
     }
   });
 });

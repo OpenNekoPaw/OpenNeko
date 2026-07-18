@@ -208,10 +208,7 @@ export async function resolveProjectMediaSourcesForRuntime(
       elements: await Promise.all(
         track.elements.map(async (element) => {
           if (
-            (element.type === 'media' ||
-              element.type === 'audio' ||
-              element.type === 'scene3d' ||
-              element.type === 'puppet') &&
+            (element.type === 'media' || element.type === 'audio') &&
             typeof element.src === 'string' &&
             !isRemoteUrl(element.src)
           ) {

@@ -532,6 +532,12 @@ function isDeliveryReceipt(value: unknown): value is CanvasWorkspaceDeliveryRece
     Array.isArray(value['artifactIdentities']) &&
     Array.isArray(value['diagnostics']) &&
     value['diagnostics'].every(isProjectionDiagnostic) &&
+    (value['nodeIds'] === undefined ||
+      (Array.isArray(value['nodeIds']) &&
+        value['nodeIds'].every((nodeId) => typeof nodeId === 'string'))) &&
+    (value['connectionIds'] === undefined ||
+      (Array.isArray(value['connectionIds']) &&
+        value['connectionIds'].every((connectionId) => typeof connectionId === 'string'))) &&
     Number.isInteger(value['writerEpoch']) &&
     typeof value['writerEpoch'] === 'number' &&
     value['writerEpoch'] > 0 &&

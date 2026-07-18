@@ -136,34 +136,6 @@ export function buildNekoSuitePluginTransferPlan(
     };
   }
 
-  if (input.target === 'sketch' && payload.asset.mediaType === 'image') {
-    return {
-      status: 'execute-command',
-      command: 'neko.sketch.authoring.importImageSource',
-      payload: {
-        path: payload.asset.path,
-        ...(payload.asset.name ? { name: payload.asset.name } : {}),
-        ...(authoringTarget ? { target: authoringTarget } : {}),
-        ...(authoringTarget?.reveal !== undefined ? { reveal: authoringTarget.reveal } : {}),
-        ...(provenance ? { provenance } : {}),
-      },
-    };
-  }
-
-  if (input.target === 'model' && payload.asset.mediaType === 'model') {
-    return {
-      status: 'execute-command',
-      command: 'neko.model.authoring.importAsset',
-      payload: {
-        path: payload.asset.path,
-        ...(payload.asset.name ? { name: payload.asset.name } : {}),
-        ...(authoringTarget ? { target: authoringTarget } : {}),
-        ...(authoringTarget?.reveal !== undefined ? { reveal: authoringTarget.reveal } : {}),
-        ...(provenance ? { provenance } : {}),
-      },
-    };
-  }
-
   if (input.target === 'explorer') {
     return {
       status: 'reveal-file',

@@ -243,8 +243,8 @@ describe('validateNkv', () => {
     });
   });
 
-  describe('complete project with all element types', () => {
-    it('should accept a project with media, audio, text, shape, subtitle, scene3d elements', () => {
+  describe('complete project with all retained element types', () => {
+    it('should accept a project with media, audio, text, shape, and subtitle elements', () => {
       const baseElement = {
         id: 'e',
         name: 'E',
@@ -272,7 +272,6 @@ describe('validateNkv', () => {
               { ...baseElement, id: 'e3', type: 'text', content: 'Hello' },
               { ...baseElement, id: 'e4', type: 'shape', shapeType: 'rectangle' },
               { ...baseElement, id: 'e5', type: 'subtitle', text: 'Sub' },
-              { ...baseElement, id: 'e6', type: 'scene3d', src: '/model.glb' },
             ],
           },
         ],
@@ -282,6 +281,28 @@ describe('validateNkv', () => {
 
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
+    });
+
+    it.each(['scene3d', 'puppet'])('rejects removed %s timeline elements', (type) => {
+      const data = {
+        ...VALID_PROJECT,
+        tracks: [
+          {
+            ...VALID_PROJECT.tracks[0],
+            elements: [{ ...VALID_MEDIA_ELEMENT, id: 'removed', type, src: '/removed.asset' }],
+          },
+        ],
+      };
+
+      const result = validateNkv(data);
+
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({
+          field: 'tracks[0].elements[0].type',
+          message: expect.stringContaining('invalid element type'),
+        }),
+      );
     });
   });
 

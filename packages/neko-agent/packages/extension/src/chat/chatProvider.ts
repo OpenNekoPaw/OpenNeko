@@ -27,7 +27,6 @@ import { ConversationBridge, type ConversationBridgeOptions } from './conversati
 import { AgentMessageTurnHandler } from './agentMessageTurnHandler';
 import { SystemPromptManager } from './systemPromptManager';
 import { ConfigBridge } from '../services/configBridge';
-import { getNekoAuthAPI } from '../services/nekoAuthApi';
 import { DragDropBroker } from '../services/DragDropBroker';
 import {
   TaskHandler,
@@ -52,7 +51,7 @@ import {
 import type { IRuntimeTaskManager } from '@neko/agent';
 import { setActiveCanvasAmbientScope } from '../services/canvasAmbientContext';
 import { postPluginsAvailable } from '../services/pluginTransferBridge';
-import { AgentDashboardWorkItemSource } from '../services/dashboardWorkItemSource';
+import { AgentWorkItemProjectionSource } from '../services/workItemProjectionSource';
 import {
   CharacterDialogueController,
   defaultEnrichCharacterProfile,
@@ -100,7 +99,7 @@ import type {
   NpcAgentWorkflowRequest,
 } from '@neko/shared';
 import { updateWebviewKeyboardEditableOwner } from '@neko/shared/vscode/extension';
-import { AccountAiCatalogCache } from '../services/accountAiCatalogCache';
+import { readAgentWebviewAssetPaths } from './webviewAssetManifest';
 
 const logger = getLogger('ChatProvider');
 const AGENT_KEYBOARD_EDITABLE_CONTEXT = 'neko.agent.keyboardEditable';
@@ -309,10 +308,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   private _productPurposeText?: ICapabilityPurposeTextRuntime;
   private _taskManager?: IRuntimeTaskManager;
   private _configBridge?: ConfigBridge;
-  private readonly _accountAiCatalog: AccountAiCatalogCache;
   private readonly _localResourceAccess: AgentLocalResourceAccess;
   private readonly _generatedAssetIndex: GeneratedAssetIndex | undefined;
-  private readonly _dashboardWorkItems = new AgentDashboardWorkItemSource();
+  private readonly _workItemProjections = new AgentWorkItemProjectionSource();
   private readonly _taskDeliveryBridge: TaskDeliveryBridge;
   // Note: _routerAskBroker and _workflowPlanHandler were removed alongside
   // the workflow/orchestrator layer. Pipeline intents now flow through the
@@ -339,10 +337,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     this._settings = new SettingsManager(undefined, _context.workspaceState);
     this._systemPrompt = new SystemPromptManager();
     this._systemPrompt.setLocale(vscode.env.language);
-    this._accountAiCatalog = new AccountAiCatalogCache({
-      getAuth: () => getNekoAuthAPI(),
-      logger,
-    });
     this._localResourceAccess =
       this._options.localResourceAccess ?? createChatLocalResourceAccess(_extensionUri, _context);
     this._generatedAssetIndex = this._options.generatedAssetIndex;
@@ -354,7 +348,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     );
 
     this._taskDeliveryBridge = new TaskDeliveryBridge({
-      projectionSource: this._dashboardWorkItems.projectionSource,
+      projectionSource: this._workItemProjections.projectionSource,
       cursorStorage: new StateTaskDeliveryCursorStorage(
         'neko.agent.taskDeliveryCursors',
         this._context.globalState,
@@ -421,7 +415,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     // restore filtering checks whether persisted role-session tabs are live.
     this._loadTabState();
 
-    this._context.subscriptions.push(this._dashboardWorkItems);
+    this._context.subscriptions.push(this._workItemProjections);
     this._slashCommandHandler = new SlashCommandHandler({
       conversations: this._conversations,
       settings: this._settings,
@@ -461,13 +455,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
         });
 
         // Initialize ConfigBridge for unified config message handling
-        this._configBridge = new ConfigBridge(
-          this._platform,
-          this._context,
-          this._accountAiCatalog,
-        );
+        this._configBridge = new ConfigBridge(this._platform, this._context);
 
-        this._providers = new ProviderManager(this._platform, this._accountAiCatalog);
+        this._providers = new ProviderManager(this._platform);
         this._messages = new AgentMessageTurnHandler(
           this._settings,
           this._providers,
@@ -478,10 +468,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
           this._platform,
           this._taskManager,
           undefined,
-          this._dashboardWorkItems,
+          this._workItemProjections,
           this._localResourceAccess,
           {
-            accountAiCatalog: this._accountAiCatalog,
             generatedAssetIndex: this._generatedAssetIndex,
             workspaceId: this._options.localMetadata?.workspaceId,
           },
@@ -496,7 +485,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
           listSkills: () => piRuntime.listSkillCatalog(),
           invoke: (webview, request) => this._messages!.handleUserMessage(webview, request),
         });
-        this._dashboardWorkItems.updateDeps({
+        this._workItemProjections.updateDeps({
           platform: this._platform,
           taskManager: this._taskManager,
         });
@@ -504,7 +493,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
         // Update handler dependencies via type-safe updateDeps()
         this._taskHandler.updateDeps({
           taskManager: this._taskManager,
-          dashboardWorkItems: this._dashboardWorkItems,
+          workItemProjections: this._workItemProjections,
           localResourceAccess: this._localResourceAccess,
           generatedAssetLookup: this._generatedAssetIndex,
         });
@@ -514,7 +503,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
         });
         this._settingsHandler.updateDeps({
           platform: this._platform,
-          accountAiCatalog: this._accountAiCatalog,
           conversationSettings: this._settings,
         });
         this._contextHandler.updateDeps({ agentManager: this._agentManager });
@@ -1330,19 +1318,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   private _getHtmlForWebview(webview: vscode.Webview): string {
     const nonce = getNonce();
     const locale = vscode.env.language;
-    const assetVersion = encodeURIComponent(nonce);
-
-    const scriptUri = appendWebviewAssetVersion(
-      webview.asWebviewUri(
-        vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'assets', 'assistant.js'),
-      ),
-      assetVersion,
+    const assets = readAgentWebviewAssetPaths(this._extensionUri.fsPath);
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', ...assets.script.split('/')),
     );
-    const styleUri = appendWebviewAssetVersion(
-      webview.asWebviewUri(
-        vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'assets', 'assistant-style.css'),
-      ),
-      assetVersion,
+    const styleUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', ...assets.style.split('/')),
     );
 
     return `<!DOCTYPE html>
@@ -1520,10 +1501,4 @@ function getNonce(): string {
     text += possible.charAt(Math.floor(Math.random() * possible.length));
   }
   return text;
-}
-
-function appendWebviewAssetVersion(uri: vscode.Uri, version: string): string {
-  const uriText = uri.toString();
-  const separator = uriText.includes('?') ? '&' : '?';
-  return `${uriText}${separator}v=${version}`;
 }

@@ -46,7 +46,7 @@ export type BlendModeType =
 
 /**
  * CSS/WebGL-compatible blend mode subset (12 modes, kebab-case).
- * Used by 2D canvas renderers (neko-sketch WebGL compositor).
+ * Used by retained 2D Canvas and media compositors.
  * Distinct from BlendModeType which uses camelCase for the Rust engine protocol.
  */
 export type SketchBlendMode =

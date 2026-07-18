@@ -104,6 +104,12 @@ describe('TUI Node adapter boundary', () => {
     expect(packageManifest.scripts?.['build:bundle']).toBe('tsup');
     expect(packageManifest.scripts?.['dev']).toBe('tsx src/main.ts');
   });
+
+  it('bundles every source-exported Workspace Board dependency into the executable', () => {
+    const buildConfig = readFileSync(join(packageRoot, 'tsup.config.ts'), 'utf8');
+
+    expect(buildConfig).toMatch(/noExternal:\s*\[[\s\S]*'@neko-canvas\/domain'/u);
+  });
 });
 
 function listProductionSources(dirPath: string): readonly string[] {

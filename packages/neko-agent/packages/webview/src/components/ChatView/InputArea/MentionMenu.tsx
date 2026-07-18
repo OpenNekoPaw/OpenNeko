@@ -359,6 +359,14 @@ function getMentionBadgeSpecs(
 ): Array<{ key: string; label: MentionLocalizedLabel; toneKey: string }> {
   const specs: Array<{ key: string; label: MentionLocalizedLabel; toneKey: string }> = [];
 
+  if (item.navigationData?.candidateId) {
+    specs.push({
+      key: 'entity:candidate',
+      label: { key: 'chat.input.mentionTags.entity.candidate', defaultText: 'Candidate' },
+      toneKey: 'candidate',
+    });
+  }
+
   if (item.source) {
     specs.push({
       key: `source:${item.source}`,

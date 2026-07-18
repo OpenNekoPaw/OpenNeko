@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MemoryTaskRecoveryStorage, MemoryTaskStorage, TaskManager } from '@neko/agent';
 import type { TaskRunScope } from '@neko/shared';
-import type { DashboardTask } from '@neko/shared/types/dashboard-task';
+import type { TaskProjection } from '@neko/shared/types/task-projection';
 import type { ConfigManager } from '@neko/platform';
 import type { Model, Provider } from '@neko/platform';
 import type { MediaAdapter, MediaAdapterResult } from '@neko/platform';
@@ -10,7 +10,7 @@ import { getMediaAdapterRegistry } from '@neko/platform/media/adapters/media-ada
 import { TaskDeliveryBridge } from './taskDeliveryBridge';
 
 describe('agent async task lifecycle integration', () => {
-  it('recovers external wait task and replays visible Chat/Dashboard projections', async () => {
+  it('recovers external wait task and replays the visible Chat task projection', async () => {
     const storage = new MemoryTaskStorage();
     const recoveryStorage = new MemoryTaskRecoveryStorage();
     const adapter = createAdapter();
@@ -40,9 +40,9 @@ describe('agent async task lifecycle integration', () => {
     const recoveredTask = await secondManager.get(taskScope);
     expect(recoveredTask?.status).toBe('completed');
 
-    const dashboardTask = toDashboardTask(recoveredTask!);
+    const taskProjection = toTaskProjection(recoveredTask!);
     const projectionSource = {
-      getSnapshot: vi.fn(async () => [dashboardTask]),
+      getSnapshot: vi.fn(async () => [taskProjection]),
     };
     const posted: unknown[] = [];
     const bridge = new TaskDeliveryBridge({
@@ -156,9 +156,9 @@ async function waitForRecoveryInfo(
   throw new Error('Timed out waiting for recovery info');
 }
 
-function toDashboardTask(
+function toTaskProjection(
   task: NonNullable<Awaited<ReturnType<TaskManager['get']>>>,
-): DashboardTask {
+): TaskProjection {
   const outputs =
     task.output?.data && typeof task.output.data === 'object'
       ? ((task.output.data as { outputs?: Array<{ url: string }> }).outputs ?? [])

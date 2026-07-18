@@ -9,7 +9,6 @@
     "./core": "./src/core/index.ts",
     "./host-vscode": "./src/host-vscode/index.ts",
     "./providers": "./src/providers/index.ts",
-    "./dashboard": "./src/dashboard/index.ts",
     "./projections": "./src/projections/index.ts",
     "./search": "./src/search/index.ts",
     "./testing": "./src/testing/index.ts",

@@ -1,11 +1,22 @@
 import type { CharacterMemorySourceRange, EntityMention } from './character-memory';
+import { isCharacterMemorySourceRef, type CharacterMemorySourceRef } from './character-memory';
 import type {
   CreativeEntity,
   CreativeEntityCandidate,
   CreativeEntityKind,
+  CreativeEntityRef,
   CreativeEntityOccurrenceProjection,
 } from './creative-entity-asset-composition';
-import type { MediaSemanticIndex } from './media-semantic-index';
+import type { DocumentLocator } from './document-reading';
+import { parseDocumentLocator } from './document-reading';
+import type {
+  MediaSemanticIndex,
+  MediaTextRange,
+  MediaTextSegmentKind,
+  MediaTextSegmentProvenance,
+} from './media-semantic-index';
+import { isMediaSemanticIndex, isMediaTextSegmentKind } from './media-semantic-index';
+import type { ProjectIndexFreshness } from './project-cache-search';
 
 export const SEMANTIC_SOURCE_ANALYSIS_MODES = [
   'off',
@@ -13,7 +24,16 @@ export const SEMANTIC_SOURCE_ANALYSIS_MODES = [
   'discover-candidates',
 ] as const;
 
-export const SEMANTIC_SOURCE_FORMATS = ['markdown', 'plain', 'fountain', 'json', 'yaml'] as const;
+export const SEMANTIC_SOURCE_FORMATS = [
+  'markdown',
+  'plain',
+  'fountain',
+  'json',
+  'yaml',
+  'pdf',
+  'epub',
+  'docx',
+] as const;
 
 export const SEMANTIC_SOURCE_ROOT_KINDS = ['workspace', 'media-library'] as const;
 
@@ -65,12 +85,21 @@ export interface SemanticSourceDescriptor {
   readonly fingerprint: string;
   readonly sizeBytes: number;
   readonly modifiedAtMs: number;
+  readonly creativeSchema?: SemanticCreativeSchemaRef;
+}
+
+export interface SemanticCreativeSchemaRef {
+  readonly schemaId: string;
+  readonly schemaVersion: string;
 }
 
 export interface SemanticTextSegment {
   readonly segmentId: string;
+  readonly unitId: string;
   readonly kind: SemanticTextSegmentKind;
   readonly text: string;
+  readonly locator: DocumentLocator;
+  readonly contentHash: string;
   readonly range: CharacterMemorySourceRange & {
     readonly startOffset: number;
     readonly endOffset: number;
@@ -80,6 +109,23 @@ export interface SemanticTextSegment {
   };
   readonly explicitEntityKind?: CreativeEntityKind;
   readonly explicitEntityName?: string;
+  readonly metadata?: Readonly<Record<string, string | number | boolean | null>>;
+}
+
+export type CompactMediaSemanticIndex = Omit<MediaSemanticIndex, 'textSegments'> & {
+  readonly textSegments?: never;
+};
+
+export interface SemanticEvidenceProjection {
+  readonly evidenceId: string;
+  readonly unitId: string;
+  readonly kind: SemanticTextSegmentKind | MediaTextSegmentKind;
+  readonly sourceRef: CharacterMemorySourceRef;
+  readonly locator: DocumentLocator;
+  readonly range?: SemanticTextSegment['range'] | MediaTextRange;
+  readonly contentHash: string;
+  readonly entityMentionIds?: readonly string[];
+  readonly provenance: MediaTextSegmentProvenance;
   readonly metadata?: Readonly<Record<string, string | number | boolean | null>>;
 }
 
@@ -109,7 +155,8 @@ export interface SemanticSourceAnalysisResult {
   readonly sourceId: string;
   readonly sourceFingerprint: string;
   readonly entityRevision: string;
-  readonly index: MediaSemanticIndex;
+  readonly index: CompactMediaSemanticIndex;
+  readonly evidence: readonly SemanticEvidenceProjection[];
   readonly mentions: readonly EntityMention[];
   readonly occurrences: readonly CreativeEntityOccurrenceProjection[];
   readonly candidates: readonly CreativeEntityCandidate[];
@@ -140,6 +187,20 @@ export interface AutomaticEntityCandidateReviewItem {
   readonly occurrenceCount: number;
   readonly explicitStructuralMentionCount: number;
   readonly mentionIds: readonly string[];
+}
+
+export interface SemanticEntityOccurrenceRecord {
+  readonly occurrenceId: string;
+  readonly sourceId: string;
+  readonly sourceFingerprint: string;
+  readonly freshness: ProjectIndexFreshness;
+  readonly occurrence: CreativeEntityOccurrenceProjection;
+}
+
+export interface SemanticOccurrenceEntityLinks {
+  readonly occurrence: SemanticEntityOccurrenceRecord;
+  readonly entityRefs: readonly CreativeEntityRef[];
+  readonly candidateIds: readonly string[];
 }
 
 export function isSemanticSourceAnalysisMode(value: unknown): value is SemanticSourceAnalysisMode {
@@ -192,7 +253,43 @@ export function isSemanticSourceDescriptor(value: unknown): value is SemanticSou
     isNonNegativeSafeInteger(value['sizeBytes']) &&
     typeof value['modifiedAtMs'] === 'number' &&
     Number.isFinite(value['modifiedAtMs']) &&
-    value['modifiedAtMs'] >= 0
+    value['modifiedAtMs'] >= 0 &&
+    (value['creativeSchema'] === undefined ||
+      isSemanticCreativeSchemaRef(value['creativeSchema'])) &&
+    ((value['format'] !== 'json' && value['format'] !== 'yaml') ||
+      isSemanticCreativeSchemaRef(value['creativeSchema']))
+  );
+}
+
+export function isSemanticCreativeSchemaRef(value: unknown): value is SemanticCreativeSchemaRef {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value['schemaId']) &&
+    isNonEmptyString(value['schemaVersion'])
+  );
+}
+
+export function isSemanticEvidenceProjection(value: unknown): value is SemanticEvidenceProjection {
+  if (!isRecord(value) || containsBodyBearingField(value)) return false;
+  return (
+    isNonEmptyString(value['evidenceId']) &&
+    isNonEmptyString(value['unitId']) &&
+    (isSemanticTextSegmentKind(value['kind']) || isMediaTextSegmentKind(value['kind'])) &&
+    isCharacterMemorySourceRef(value['sourceRef']) &&
+    parseDocumentLocator(value['locator']) !== undefined &&
+    isNonEmptyString(value['contentHash']) &&
+    (value['entityMentionIds'] === undefined ||
+      (Array.isArray(value['entityMentionIds']) &&
+        value['entityMentionIds'].every(isNonEmptyString))) &&
+    isRecord(value['provenance']) &&
+    isNonEmptyString(value['provenance']['providerId']) &&
+    isNonEmptyString(value['provenance']['sourceKind'])
+  );
+}
+
+export function isCompactMediaSemanticIndex(value: unknown): value is CompactMediaSemanticIndex {
+  return (
+    isMediaSemanticIndex(value) && !Object.prototype.hasOwnProperty.call(value, 'textSegments')
   );
 }
 
@@ -227,4 +324,14 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function containsBodyBearingField(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsBodyBearingField);
+  if (!isRecord(value)) return false;
+  for (const [key, item] of Object.entries(value)) {
+    if (['text', 'body', 'content', 'snippet', 'imageData', 'bytes'].includes(key)) return true;
+    if (containsBodyBearingField(item)) return true;
+  }
+  return false;
 }

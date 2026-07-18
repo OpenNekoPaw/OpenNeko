@@ -120,7 +120,7 @@ describe('node card action dispatcher', () => {
     });
   });
 
-  it('dispatches image edit and AssetLibrary promotion with stable material identity', () => {
+  it('dispatches AssetLibrary promotion with stable material identity', () => {
     const postMessage = vi.fn();
     const node = createNode('media-1', 'media', {
       assetPath: 'assets/ref.png',
@@ -128,16 +128,9 @@ describe('node card action dispatcher', () => {
     });
     const ctx = createNodeActionContext({ node, postMessage });
 
-    NODE_CARD_ACTION_DISPATCHER['edit-media'](ctx);
     NODE_CARD_ACTION_DISPATCHER['save-to-asset-library'](ctx);
 
-    expect(postMessage).toHaveBeenNthCalledWith(1, {
-      type: 'editCanvasImage',
-      nodeId: 'media-1',
-      assetPath: 'assets/ref.png',
-      mediaType: 'image',
-    });
-    expect(postMessage).toHaveBeenNthCalledWith(2, {
+    expect(postMessage).toHaveBeenCalledWith({
       type: 'saveCanvasMaterialToAssetLibrary',
       nodeId: 'media-1',
       assetPath: 'assets/ref.png',

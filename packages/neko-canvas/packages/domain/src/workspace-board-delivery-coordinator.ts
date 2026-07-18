@@ -1,5 +1,6 @@
 import {
   CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+  createSafeCanvasWorkspaceProjectionDiagnostic,
   hashStableValue,
   planCanvasWorkspaceBoardProjection,
   resolveCanvasWorkspaceBoardDocumentUri,
@@ -45,6 +46,8 @@ export interface WorkspaceBoardDeliveryCoordinatorOptions {
 
 export class WorkspaceBoardDeliveryCoordinator {
   private readonly leaseDurationMs: number;
+  private retainedWriter: CanvasWorkspaceDeliveryClaim | undefined;
+  private operationQueue: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: WorkspaceBoardDeliveryCoordinatorOptions) {
     this.leaseDurationMs = options.leaseDurationMs ?? 15_000;
@@ -56,15 +59,47 @@ export class WorkspaceBoardDeliveryCoordinator {
     const receipt = await this.options.ledger.getReceipt(request.process.deliveryId);
     if (receipt) return [receiptToResult(receipt)];
     await this.options.ledger.enqueue(request);
-    return this.flush();
+    const results = await this.flush();
+    return results.length > 0 ? results : [queuedResult(request)];
   }
 
   async flush(): Promise<readonly CanvasWorkspaceProjectionResult[]> {
-    const writer = await this.options.ledger.acquireWriter({
-      holderId: this.options.holderId,
-      leaseDurationMs: this.leaseDurationMs,
+    return this.runExclusive(() => this.flushUnderWriter());
+  }
+
+  async acquireWriterOwnership(): Promise<boolean> {
+    return this.runExclusive(async () => {
+      const writer = await this.acquireWriter();
+      this.retainedWriter = writer;
+      return writer !== undefined;
     });
-    if (!writer) return [];
+  }
+
+  async releaseWriterOwnership(): Promise<void> {
+    return this.runExclusive(async () => {
+      const writer = this.retainedWriter;
+      this.retainedWriter = undefined;
+      if (writer) await this.options.ledger.releaseWriter(writer);
+    });
+  }
+
+  async retry(deliveryId: string): Promise<readonly CanvasWorkspaceProjectionResult[]> {
+    await this.options.ledger.retry(deliveryId);
+    return this.flush();
+  }
+
+  async discard(deliveryId: string): Promise<void> {
+    await this.options.ledger.discard(deliveryId);
+  }
+
+  private async flushUnderWriter(): Promise<readonly CanvasWorkspaceProjectionResult[]> {
+    const retainWriter = this.retainedWriter !== undefined;
+    const writer = await this.acquireWriter();
+    if (!writer) {
+      this.retainedWriter = undefined;
+      return [];
+    }
+    if (retainWriter) this.retainedWriter = writer;
     try {
       const pending = await this.options.ledger.listPending();
       const results: CanvasWorkspaceProjectionResult[] = [];
@@ -78,17 +113,24 @@ export class WorkspaceBoardDeliveryCoordinator {
       }
       return results;
     } finally {
-      await this.options.ledger.releaseWriter(writer);
+      if (!retainWriter) await this.options.ledger.releaseWriter(writer);
     }
   }
 
-  async retry(deliveryId: string): Promise<readonly CanvasWorkspaceProjectionResult[]> {
-    await this.options.ledger.retry(deliveryId);
-    return this.flush();
+  private acquireWriter(): Promise<CanvasWorkspaceDeliveryClaim | undefined> {
+    return this.options.ledger.acquireWriter({
+      holderId: this.options.holderId,
+      leaseDurationMs: this.leaseDurationMs,
+    });
   }
 
-  async discard(deliveryId: string): Promise<void> {
-    await this.options.ledger.discard(deliveryId);
+  private async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const run = this.operationQueue.then(operation, operation);
+    this.operationQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 
   private async projectClaimed(
@@ -100,27 +142,20 @@ export class WorkspaceBoardDeliveryCoordinator {
     const documentUri =
       explicit ?? resolveCanvasWorkspaceBoardDocumentUri(request.target.workspaceUri);
     try {
-      const loaded = await this.options.mutation.loadLatest({
+      const projection = await this.projectLatest(
+        request,
         documentUri,
-        createIfMissing: explicit === undefined,
-      });
-      const plan = planCanvasWorkspaceBoardProjection(loaded.canvasData, request);
-      const saved =
-        plan.status === 'projected'
-          ? await this.options.mutation.saveAtomic({
-              documentUri,
-              expectedRevision: loaded.revision,
-              canvasData: plan.canvasData,
-              assertWriter: () => this.options.ledger.assertWriter(writer),
-            })
-          : { revision: loaded.revision };
+        explicit === undefined,
+        writer,
+      );
       const result: CanvasWorkspaceProjectionResult = {
         version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
         deliveryId: request.process.deliveryId,
-        status: plan.status,
+        status: projection.status,
         target: { kind: explicit ? 'explicit' : 'workspace', documentUri },
-        revision: saved.revision,
-        nodeIds: plan.nodeIds,
+        revision: projection.revision,
+        nodeIds: projection.nodeIds,
+        connectionIds: projection.connectionIds,
         artifactRoleCounts: countArtifactRoles(request),
         writerEpoch: writer.epoch,
         diagnostics: [],
@@ -145,6 +180,52 @@ export class WorkspaceBoardDeliveryCoordinator {
         diagnostics: [diagnostic],
       };
     }
+  }
+
+  private async projectLatest(
+    request: CanvasWorkspaceProjectionRequest,
+    documentUri: string,
+    createIfMissing: boolean,
+    writer: CanvasWorkspaceDeliveryClaim,
+  ): Promise<{
+    readonly status: 'projected' | 'noop';
+    readonly revision: string;
+    readonly nodeIds: readonly string[];
+    readonly connectionIds: readonly string[];
+  }> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const loaded = await this.options.mutation.loadLatest({ documentUri, createIfMissing });
+      const plan = planCanvasWorkspaceBoardProjection(loaded.canvasData, request);
+      if (plan.status === 'noop') {
+        return {
+          status: 'noop',
+          revision: loaded.revision,
+          nodeIds: plan.nodeIds,
+          connectionIds: plan.connectionIds,
+        };
+      }
+      try {
+        const saved = await this.options.mutation.saveAtomic({
+          documentUri,
+          expectedRevision: loaded.revision,
+          canvasData: plan.canvasData,
+          assertWriter: () => this.options.ledger.assertWriter(writer),
+        });
+        return {
+          status: 'projected',
+          revision: saved.revision,
+          nodeIds: plan.nodeIds,
+          connectionIds: plan.connectionIds,
+        };
+      } catch (error) {
+        if (attempt === 0 && isStaleRevisionError(error)) {
+          await this.options.ledger.assertWriter(writer);
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error('stale-revision: Canvas Board changed during both projection attempts.');
   }
 
   private now(): number {
@@ -174,6 +255,7 @@ function createReceipt(
     target: result.target,
     revision: result.revision,
     nodeIds: result.nodeIds,
+    connectionIds: result.connectionIds,
     writerEpoch: result.writerEpoch,
     diagnostics: result.diagnostics,
     completedAt,
@@ -188,9 +270,20 @@ function receiptToResult(receipt: CanvasWorkspaceDeliveryReceipt): CanvasWorkspa
     ...(receipt.target ? { target: receipt.target } : {}),
     ...(receipt.revision ? { revision: receipt.revision } : {}),
     ...(receipt.nodeIds ? { nodeIds: receipt.nodeIds } : {}),
+    ...(receipt.connectionIds ? { connectionIds: receipt.connectionIds } : {}),
     artifactRoleCounts: countReceiptArtifactRoles(receipt),
     writerEpoch: receipt.writerEpoch,
     diagnostics: receipt.diagnostics,
+  };
+}
+
+function queuedResult(request: CanvasWorkspaceProjectionRequest): CanvasWorkspaceProjectionResult {
+  return {
+    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+    deliveryId: request.process.deliveryId,
+    status: 'queued',
+    artifactRoleCounts: countArtifactRoles(request),
+    diagnostics: [],
   };
 }
 
@@ -219,7 +312,7 @@ function toDiagnostic(error: unknown): CanvasWorkspaceProjectionDiagnostic {
       : /projection-conflict/iu.test(message)
         ? 'projection-conflict'
         : 'projection-write-failed';
-  return { code, severity: 'error', message };
+  return createSafeCanvasWorkspaceProjectionDiagnostic(code);
 }
 
 function isConflictDiagnostic(diagnostic: CanvasWorkspaceProjectionDiagnostic): boolean {
@@ -227,6 +320,12 @@ function isConflictDiagnostic(diagnostic: CanvasWorkspaceProjectionDiagnostic): 
     diagnostic.code === 'stale-writer' ||
     diagnostic.code === 'stale-revision' ||
     diagnostic.code === 'projection-conflict'
+  );
+}
+
+function isStaleRevisionError(error: unknown): boolean {
+  return /stale-board-target|stale-revision/iu.test(
+    error instanceof Error ? error.message : String(error),
   );
 }
 

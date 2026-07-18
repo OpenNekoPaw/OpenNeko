@@ -223,7 +223,7 @@ function makeEvidenceBundle(text: string) {
         sourceRefs: [
           {
             id: 'source-1',
-            kind: 'dashboard-detail' as const,
+            kind: 'entity-occurrence' as const,
             projectRelativePath: 'cases/test.fountain',
             lineStart: 10,
             lineEnd: 12,

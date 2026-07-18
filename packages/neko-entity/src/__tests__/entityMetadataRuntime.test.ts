@@ -74,7 +74,7 @@ describe('VS Code Entity metadata runtime', () => {
       entityId: 'char-rin',
       entityKind: 'character',
       source: 'story',
-      sourceRef: 'story/main.nks:12',
+      sourceRef: 'story/main.fountain:12',
       requiredKinds: ['live2d'],
       status: 'missing',
     });

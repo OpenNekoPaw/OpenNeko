@@ -88,7 +88,7 @@ export interface MixAutomationPointConfig {
   curve: AudioAutomationCurve;
 }
 
-/** Engine-facing automation lane, independent from .nka edit operations. */
+/** Engine-facing automation lane for retained media processing. */
 export interface MixAutomationLaneConfig {
   id: string;
   target: AutomationTarget;

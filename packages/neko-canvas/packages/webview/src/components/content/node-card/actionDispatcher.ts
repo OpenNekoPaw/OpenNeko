@@ -48,10 +48,6 @@ export const NODE_CARD_ACTION_DISPATCHER: NodeCardActionDispatcher = {
     ctx.canvasStore.openContentOverlay(ctx.nodeId);
   },
 
-  'edit-media': (ctx) => {
-    postMaterialHostAction(ctx, 'editCanvasImage');
-  },
-
   'save-to-asset-library': (ctx) => {
     postMaterialHostAction(ctx, 'saveCanvasMaterialToAssetLibrary');
   },
@@ -91,8 +87,8 @@ export const NODE_CARD_ACTION_DISPATCHER: NodeCardActionDispatcher = {
 };
 
 function postMaterialHostAction(
-  ctx: Parameters<NodeCardActionDispatcher['edit-media']>[0],
-  type: 'editCanvasImage' | 'saveCanvasMaterialToAssetLibrary',
+  ctx: Parameters<NodeCardActionDispatcher['save-to-asset-library']>[0],
+  type: 'saveCanvasMaterialToAssetLibrary',
 ): void {
   const assetPath = readPersistentAssetPath(ctx.node);
   const documentResourceRef = readDocumentResourceRef(ctx.node);

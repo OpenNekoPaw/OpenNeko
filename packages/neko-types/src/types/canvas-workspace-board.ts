@@ -88,6 +88,7 @@ export type CanvasWorkspaceProjectionDiagnosticCode =
   | 'invalid-canvas-extension'
   | 'missing-projection-identity'
   | 'duplicate-artifact-identity'
+  | 'invalid-artifact-relation'
   | 'unsupported-projection-kind'
   | 'invalid-resource-ref'
   | 'runtime-value-forbidden'
@@ -106,13 +107,43 @@ export interface CanvasWorkspaceProjectionDiagnostic {
   readonly path?: readonly (string | number)[];
 }
 
+export function createSafeCanvasWorkspaceProjectionDiagnostic(
+  code: CanvasWorkspaceProjectionDiagnosticCode,
+): CanvasWorkspaceProjectionDiagnostic {
+  const messages: Readonly<Record<CanvasWorkspaceProjectionDiagnosticCode, string>> = {
+    'invalid-contract-version': 'Workspace Board delivery uses an unsupported contract version.',
+    'workspace-required': 'Workspace Board delivery requires one resolved workspace.',
+    'invalid-canvas-target': 'Workspace Board delivery target is invalid.',
+    'invalid-canvas-extension': 'The Canvas extension cannot accept Workspace Board delivery.',
+    'missing-projection-identity': 'Workspace Board delivery identity is incomplete.',
+    'duplicate-artifact-identity': 'Workspace Board delivery contains duplicate artifact identity.',
+    'invalid-artifact-relation':
+      'Workspace Board delivery contains an invalid creative-content relation.',
+    'unsupported-projection-kind':
+      'Workspace Board delivery contains an unsupported artifact kind.',
+    'invalid-resource-ref':
+      'Workspace Board delivery contains an invalid durable resource reference.',
+    'runtime-value-forbidden': 'Workspace Board delivery contains a forbidden runtime-only value.',
+    'legacy-routing-forbidden': 'Workspace Board delivery contains a removed routing field.',
+    'delivery-ledger-unavailable': 'Workspace Board delivery state is unavailable.',
+    'delivery-claim-conflict': 'Workspace Board delivery is queued behind another writer.',
+    'stale-writer': 'Workspace Board writer ownership changed before the delivery completed.',
+    'stale-revision': 'Workspace Board changed before the delivery could be saved.',
+    'projection-conflict': 'Workspace Board has user changes that cannot be overwritten safely.',
+    'projection-write-failed':
+      'Workspace Board could not be updated; durable artifacts remain available.',
+  };
+  return { code, severity: 'error', message: messages[code] };
+}
+
 export interface CanvasWorkspaceProjectionResult {
   readonly version: typeof CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION;
   readonly deliveryId?: string;
-  readonly status: 'projected' | 'noop' | 'blocked' | 'conflict';
+  readonly status: Exclude<CanvasWorkspaceDeliveryState, 'discarded'>;
   readonly target?: CanvasWorkspaceProjectionResolvedTarget;
   readonly revision?: string;
   readonly nodeIds?: readonly string[];
+  readonly connectionIds?: readonly string[];
   readonly artifactRoleCounts?: Readonly<Record<CanvasWorkspaceArtifactRole, number>>;
   readonly writerEpoch?: number;
   readonly diagnostics: readonly CanvasWorkspaceProjectionDiagnostic[];
@@ -138,6 +169,7 @@ export interface CanvasWorkspaceDeliveryReceipt {
   readonly target?: CanvasWorkspaceProjectionResolvedTarget;
   readonly revision?: string;
   readonly nodeIds?: readonly string[];
+  readonly connectionIds?: readonly string[];
   readonly writerEpoch: number;
   readonly diagnostics: readonly CanvasWorkspaceProjectionDiagnostic[];
   readonly completedAt: number;
@@ -380,6 +412,9 @@ export function isCanvasWorkspaceProjectionRequest(
       typeof provenance['kind'] === 'string' &&
       typeof provenance['role'] === 'string' &&
       typeof provenance['sourceId'] === 'string' &&
+      (provenance['sourceArtifactIds'] === undefined ||
+        (Array.isArray(provenance['sourceArtifactIds']) &&
+          provenance['sourceArtifactIds'].every((sourceId) => typeof sourceId === 'string'))) &&
       typeof provenance['createdAt'] === 'string'
     );
   });
@@ -508,9 +543,121 @@ export function validateCanvasWorkspaceProjectionRequest(
     }
     validateArtifact(request, artifact, index, identities, diagnostics);
   });
+  validateArtifactRelations(request.artifacts, diagnostics);
 
   visitForbiddenValues(request, [], diagnostics);
   return diagnostics;
+}
+
+function validateArtifactRelations(
+  artifacts: readonly CanvasWorkspaceProjectionArtifact[],
+  diagnostics: CanvasWorkspaceProjectionDiagnostic[],
+): void {
+  const artifactIds = new Set<string>();
+  let relationsValid = true;
+  artifacts.forEach((artifact, index) => {
+    const artifactId = artifact.provenance.artifactId;
+    if (!isNonEmptyString(artifactId)) return;
+    if (artifactIds.has(artifactId)) {
+      relationsValid = false;
+      diagnostics.push(
+        diagnostic(
+          'invalid-artifact-relation',
+          'Canvas artifact identities must be unique within one relation batch.',
+          ['artifacts', index, 'provenance', 'artifactId'],
+        ),
+      );
+    }
+    artifactIds.add(artifactId);
+  });
+
+  artifacts.forEach((artifact, index) => {
+    const sourceArtifactIds = artifact.provenance.sourceArtifactIds;
+    if (sourceArtifactIds === undefined) return;
+    const path = ['artifacts', index, 'provenance', 'sourceArtifactIds'] as const;
+    if (!Array.isArray(sourceArtifactIds)) {
+      relationsValid = false;
+      diagnostics.push(
+        diagnostic(
+          'invalid-artifact-relation',
+          'Canvas artifact sourceArtifactIds must be an array of stable artifact identities.',
+          path,
+        ),
+      );
+      return;
+    }
+
+    const seen = new Set<string>();
+    sourceArtifactIds.forEach((sourceArtifactId, sourceIndex) => {
+      if (!isNonEmptyString(sourceArtifactId)) {
+        relationsValid = false;
+        diagnostics.push(
+          diagnostic(
+            'invalid-artifact-relation',
+            'Canvas artifact relation requires a non-empty source artifact identity.',
+            [...path, sourceIndex],
+          ),
+        );
+        return;
+      }
+      if (sourceArtifactId === artifact.provenance.artifactId) {
+        relationsValid = false;
+        diagnostics.push(
+          diagnostic('invalid-artifact-relation', 'Canvas artifact cannot derive from itself.', [
+            ...path,
+            sourceIndex,
+          ]),
+        );
+      }
+      if (!artifactIds.has(sourceArtifactId)) {
+        relationsValid = false;
+        diagnostics.push(
+          diagnostic(
+            'invalid-artifact-relation',
+            'Canvas artifact relation must resolve within the delivery batch.',
+            [...path, sourceIndex],
+          ),
+        );
+      }
+      if (seen.has(sourceArtifactId)) {
+        relationsValid = false;
+        diagnostics.push(
+          diagnostic(
+            'invalid-artifact-relation',
+            'Canvas artifact relation cannot repeat one source identity.',
+            [...path, sourceIndex],
+          ),
+        );
+      }
+      seen.add(sourceArtifactId);
+    });
+  });
+
+  if (!relationsValid) return;
+  const pending = new Map(
+    artifacts.map((artifact) => [
+      artifact.provenance.artifactId,
+      artifact.provenance.sourceArtifactIds ?? [],
+    ]),
+  );
+  const resolved = new Set<string>();
+  while (pending.size > 0) {
+    const next = [...pending].find(([, sourceIds]) =>
+      sourceIds.every((sourceId) => resolved.has(sourceId)),
+    );
+    if (!next) {
+      diagnostics.push(
+        diagnostic(
+          'invalid-artifact-relation',
+          'Canvas artifact relations must not contain a dependency cycle.',
+          ['artifacts'],
+        ),
+      );
+      return;
+    }
+    pending.delete(next[0]);
+    resolved.add(next[0]);
+  }
 }
 
 function validateArtifact(

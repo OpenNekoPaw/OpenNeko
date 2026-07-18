@@ -2323,9 +2323,9 @@ describe('NodeContentDispatcher', () => {
           position: { x: 640, y: 260 },
           zIndex: 0,
           data: {
-            projectPath: 'projects/demo.nkp',
-            projectTitle: 'Puppet Demo',
-            projectType: 'nkp',
+            projectPath: 'projects/demo.nkv',
+            projectTitle: 'Cut Demo',
+            projectType: 'nkv',
           },
         }),
         id: 'project-parity',
@@ -2367,7 +2367,6 @@ describe('NodeContentDispatcher', () => {
     expect(markup).toContain('data-node-id="project-parity"');
     expect(markup).toContain('data-node-id="scene-parity" data-node-presentation="structured"');
     expect(markup).toContain('data-content-block-id="project-asset-preview"');
-    expect(markup).toContain('Puppet');
     expect(markup).toContain('Default path');
   });
 });

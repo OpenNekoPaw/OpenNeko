@@ -1,13 +1,4 @@
-import type {
-  NekoStoryParsedScript,
-  ProjectSearchItem,
-  ProjectSearchSourceRef,
-} from '@neko/shared';
-import type {
-  DashboardCreativeEntityRow,
-  DashboardCreativeEntityState,
-} from '@neko/shared/types/dashboard-creative-entity';
-import { toDashboardCreativeEntityId } from '@neko/shared/types/dashboard-creative-entity';
+import type { FountainParsedScript, ProjectSearchItem, ProjectSearchSourceRef } from '@neko/shared';
 
 export interface ScriptEntityCandidate {
   readonly name: string;
@@ -21,81 +12,7 @@ export interface ContextScriptEntitySearchItemOptions {
   readonly uri?: string;
 }
 
-export type StoryScriptParser = (text: string) => NekoStoryParsedScript | undefined;
-
-export function dashboardCreativeEntityRowToProjectSearchItem(
-  row: DashboardCreativeEntityRow,
-  projectRoot: string,
-): ProjectSearchItem {
-  const entityKind = row.kind;
-  return {
-    id: `dashboard:${toDashboardCreativeEntityId(row.ref)}`,
-    kind: row.status === 'candidate' ? 'entity-candidate' : 'creative-entity',
-    label: row.label,
-    description: row.summary ?? `${row.kind} · ${row.status}`,
-    icon: iconForEntityKind(row.kind),
-    source: {
-      partition: 'creative-entities',
-      sourceId: row.ref.source,
-      sourceKind: row.sourceKind,
-      refId: row.ref.entityId ?? row.ref.sourceEntityId,
-      metadata: {
-        entityKind,
-        status: row.status,
-        dashboardSourceKind: row.sourceKind,
-      },
-    },
-    projectRoot,
-    canonicalName: row.label,
-    aliases: row.aliases,
-    searchText: buildProjectSearchText([
-      row.label,
-      row.aliases,
-      row.kind,
-      row.status,
-      row.sourceKind,
-      row.summary,
-      row.searchText,
-    ]),
-    navigationData: {
-      source: row.ref.source,
-      sourceEntityId: row.ref.sourceEntityId,
-      ...(row.ref.entityId ? { entityId: row.ref.entityId } : {}),
-      entityKind,
-      status: row.status,
-      sourceKind: row.sourceKind,
-      ...(row.ref.workspaceFolder ? { workspaceFolder: row.ref.workspaceFolder } : {}),
-      projectRoot,
-    },
-    freshness: row.freshness,
-    metadata: {
-      entityType: entityKind,
-      entityKind,
-      status: row.status,
-      sourceKind: row.sourceKind,
-      ...(row.occurrenceCount !== undefined ? { occurrenceCount: row.occurrenceCount } : {}),
-    },
-  };
-}
-
-export function dashboardCreativeEntityRowsToProjectSearchItems(
-  rows: readonly DashboardCreativeEntityRow[],
-  projectRoot: string,
-): readonly ProjectSearchItem[] {
-  return rows
-    .filter((row) => dashboardRowBelongsToProject(row, projectRoot))
-    .map((row) => dashboardCreativeEntityRowToProjectSearchItem(row, projectRoot));
-}
-
-export function dashboardCreativeEntityStateFreshnessValues(
-  state: DashboardCreativeEntityState,
-  items: readonly ProjectSearchItem[],
-) {
-  return [
-    ...state.statuses.map((status) => status.freshness),
-    ...items.map((item) => item.freshness),
-  ];
-}
+export type StoryScriptParser = (text: string) => FountainParsedScript | undefined;
 
 export function extractScriptCharacterCandidates(
   text: string,
@@ -144,7 +61,11 @@ export function scriptCharacterCandidateToProjectSearchItem(
     filePath: options.filePath,
     ...(options.uri ? { uri: options.uri } : {}),
     ...(options.projectRelativePath ? { projectRelativePath: options.projectRelativePath } : {}),
-    metadata: { entityKind: 'character', status: 'candidate' },
+    metadata: {
+      entityKind: 'character',
+      status: 'candidate',
+      identityBasis: 'user-named',
+    },
   };
 
   return {
@@ -177,6 +98,7 @@ export function scriptCharacterCandidateToProjectSearchItem(
       entityType: 'character',
       entityKind: 'character',
       status: 'candidate',
+      identityBasis: 'user-named',
     },
   };
 }
@@ -184,7 +106,7 @@ export function scriptCharacterCandidateToProjectSearchItem(
 function safeParseStoryScript(
   parseStoryScript: StoryScriptParser | undefined,
   text: string,
-): NekoStoryParsedScript | undefined {
+): FountainParsedScript | undefined {
   try {
     return parseStoryScript?.(text);
   } catch {
@@ -195,27 +117,6 @@ function safeParseStoryScript(
 function normalizeScriptCharacterName(value: string | undefined): string | undefined {
   const name = value?.trim().replace(/^@+/, '').trim();
   return name ? name : undefined;
-}
-
-function dashboardRowBelongsToProject(
-  row: DashboardCreativeEntityRow,
-  projectRoot: string,
-): boolean {
-  if (!row.ref.projectRoot) return true;
-  if (isAbsoluteLocalPath(row.ref.projectRoot)) {
-    return normalizeLocalPath(row.ref.projectRoot) === normalizeLocalPath(projectRoot);
-  }
-  return true;
-}
-
-function iconForEntityKind(kind: string): string {
-  if (kind === 'character') return '@';
-  if (kind === 'scene') return '#';
-  if (kind === 'location') return 'location';
-  if (kind === 'object') return 'object';
-  if (kind === 'style') return 'style';
-  if (kind === 'action') return 'action';
-  return 'entity';
 }
 
 function buildProjectSearchText(
@@ -231,14 +132,6 @@ function buildProjectSearchText(
     }
   }
   return flattened.join(' ');
-}
-
-function isAbsoluteLocalPath(value: string): boolean {
-  return /^([a-zA-Z]:[\\/]|\/|\\\\)/.test(value);
-}
-
-function normalizeLocalPath(value: string): string {
-  return value.replace(/\\/g, '/').replace(/\/+/g, '/').replace(/\/$/, '');
 }
 
 function readString(value: unknown): string | undefined {

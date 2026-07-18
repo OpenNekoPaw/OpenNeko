@@ -29,10 +29,7 @@ export type AgentConfigDiagnosticCode =
   | 'unsupportedWorkspaceModelDefinition'
   | 'unsupportedSkillSource'
   | 'invalidDefaultProvider'
-  | 'invalidDefaultModel'
-  | 'missingAccountCatalog'
-  | 'accountCatalogUnavailable'
-  | 'accountModelNotEntitled';
+  | 'invalidDefaultModel';
 
 export interface AgentConfigDiagnostic {
   code: AgentConfigDiagnosticCode;

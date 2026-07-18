@@ -8,17 +8,7 @@ import {
 import { createProjectFileDiagnostic, type ProjectFileDiagnostic } from './diagnostics';
 
 export type ProjectSourceRole =
-  | 'media'
-  | 'audio'
-  | 'model'
-  | 'puppet'
-  | 'scene3d'
-  | 'image'
-  | 'document'
-  | 'generated'
-  | 'bundle'
-  | 'project'
-  | 'other';
+  'media' | 'audio' | 'model' | 'image' | 'document' | 'generated' | 'bundle' | 'project' | 'other';
 
 export interface ProjectSourceDescriptor {
   readonly id: string;

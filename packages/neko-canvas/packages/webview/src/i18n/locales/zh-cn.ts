@@ -190,7 +190,7 @@ export const zhCN = {
   'library.badge.projected': '投影',
   'library.action.create': '添加{node}',
   'library.action.pickFile': '选择文件添加{node}',
-  'library.action.sourceBound': '从 Dashboard 或实体来源添加',
+  'library.action.sourceBound': '从实体来源添加',
   'library.action.projected': '由实体关系投影生成',
   'library.group.storyboard': '故事板',
   'library.group.narrative': '叙事',
@@ -247,7 +247,6 @@ export const zhCN = {
   'menu.ai.adjustCamera': '调整机位',
   'menu.ai.understand': '理解内容',
   'menu.ai.sendToAgent': '发送到 Agent',
-  'menu.ai.editInSketch': '在 Sketch 中编辑',
   'menu.ai.generateVideo': '生成视频',
   'menu.ai.editWithControlNet': 'ControlNet 编辑',
 
@@ -320,6 +319,10 @@ export const zhCN = {
   'group.viewMode': '分组视图',
   'group.overview': '概览',
   'group.typeList': '按类型',
+  'workspaceBoard.inbox': '收件箱',
+  'workspaceBoard.task': '任务 · {id}',
+  'workspaceBoard.run': '运行 · {id}',
+  'workspaceBoard.processing': '处理中',
   'gallery.openItemDetail': '打开画廊条目详情',
   'gallery.viewCountCompact': '{count} 视图',
   'gallery.viewMode': '画廊视图',
@@ -862,9 +865,6 @@ export const zhCN = {
   'preset.project.preview': '预览',
   'preview.open': '打开',
   'project.type.nkv': '视频项目',
-  'project.type.nka': '音频项目',
-  'project.type.nkm': '3D 模型',
-  'project.type.nkp': '角色项目',
 
   // Generation panel — advanced section
   'gen.advanced': '高级选项',

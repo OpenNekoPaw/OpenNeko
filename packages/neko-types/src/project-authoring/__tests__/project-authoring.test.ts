@@ -128,8 +128,8 @@ describe('project authoring contracts', () => {
     ).toEqual({ ok: true, diagnostics: [] });
 
     const invalid = validateNekoProjectAuthoringOperationDescriptor({
-      id: 'sketch.selectionInpaint',
-      domain: 'sketch',
+      id: 'cut.selectionInpaint',
+      domain: 'cut',
       kind: 'document-authoring',
       requiresActiveEditor: true,
     });
@@ -142,9 +142,9 @@ describe('project authoring contracts', () => {
 
   it('requires non-canonical legacy document commands to point at canonical authoring commands', () => {
     const invalid = validateNekoProjectAuthoringCommandDescriptor({
-      commandId: 'neko.sketch.importAsset',
-      domain: 'sketch',
-      operationId: 'sketch.importImageLayer',
+      commandId: 'neko.cut.importGeneratedClip',
+      domain: 'cut',
+      operationId: 'cut.importGeneratedClip',
       operationKind: 'document-authoring',
       disposition: 'ui-only-wrapper',
     });
@@ -155,25 +155,25 @@ describe('project authoring contracts', () => {
     ]);
 
     const migrated = validateNekoProjectAuthoringCommandDescriptor({
-      commandId: 'neko.sketch.importAsset',
-      domain: 'sketch',
-      operationId: 'sketch.importImageLayer',
+      commandId: 'neko.cut.importGeneratedClip',
+      domain: 'cut',
+      operationId: 'cut.importGeneratedClip',
       operationKind: 'document-authoring',
       disposition: 'ui-only-wrapper',
-      canonicalCommandId: 'neko.sketch.authoring.importImageLayer',
+      canonicalCommandId: 'neko.cut.authoring.importGeneratedClip',
     });
     expect(migrated).toEqual({ ok: true, diagnostics: [] });
   });
 
   it('scans static sources for old UI-bound durable authoring routes', () => {
     const result = scanNekoProjectAuthoringStaticGuards(`
-      await commands.executeCommand('neko.model.importAsset', { path });
+      await commands.executeCommand('neko.cut.importGeneratedClip', { path });
       webview.postMessage({ type: 'importGeneratedClip' });
     `);
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics.map((diagnostic) => diagnostic.context?.['ruleId'])).toEqual([
-      'legacy-command:neko.model.importAsset',
+      'legacy-command:neko.cut.importGeneratedClip',
       'webview-import-generated-clip-message',
     ]);
   });

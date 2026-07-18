@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type {
-  EnvironmentPlacement,
   PanoramaCoverageAngle,
   PanoramaViewState,
   PreviewManifest,
@@ -139,26 +138,5 @@ describe('engine-first preview shared contracts', () => {
     expect(normalizePanoramaViewModeForProjection('equirectangular', 'little-planet')).toBe(
       'little-planet',
     );
-  });
-
-  it('keeps preview view state separate from model environment placement', () => {
-    const viewState: PanoramaViewState = {
-      ...DEFAULT_PANORAMA_VIEW_STATE,
-      yawDeg: 120,
-      pitchDeg: 20,
-    };
-    const placement: EnvironmentPlacement = {
-      sourceAssetId: 'asset-1',
-      sourceUri: '${PROJECT}/textures/studio_360.hdr',
-      mode: 'background-and-ibl',
-      rotationDeg: 0,
-      intensity: 1,
-      exposure: viewState.exposure,
-      visibleAsBackground: true,
-    };
-
-    expect(placement.rotationDeg).not.toBe(viewState.yawDeg);
-    expectJsonSerializable(viewState);
-    expectJsonSerializable(placement);
   });
 });

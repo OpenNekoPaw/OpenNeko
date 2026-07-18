@@ -1,8 +1,7 @@
 /**
  * OnboardingFlow — full-screen overlay for first-time AI service setup.
  *
- * Path A: SSO login (opens OAuth in browser)
- * Path B: Open config file (user adds API key manually; extension auto-detects changes)
+ * Opens the local user config file where providers and API keys are configured.
  *
  * Closes when onComplete() is called or when isAiConfigured becomes true (auto-dismiss
  * handled by the parent via onComplete).
@@ -20,11 +19,6 @@ interface OnboardingFlowProps {
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
   const [step, setStep] = useState<Step>('choose');
-
-  const handleSsoLogin = () => {
-    AgentHostMessages.ssoLogin();
-    // Flow closes when extension sends back 'ssoSessionChanged'
-  };
 
   const handleOpenConfigFile = () => {
     AgentHostMessages.openUserConfigFile();
@@ -49,21 +43,8 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 {t('onboarding.subtitle')}
               </p>
               <button
-                onClick={handleSsoLogin}
-                className="vscode-button mb-3 flex w-full justify-center py-2 text-[12px] font-medium"
-              >
-                {t('onboarding.ssoButton')}
-              </button>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-px flex-1 bg-[var(--agent-divider)]" />
-                <span className="text-[10px] text-[var(--agent-fg-secondary)]">
-                  {t('onboarding.or')}
-                </span>
-                <div className="h-px flex-1 bg-[var(--agent-divider)]" />
-              </div>
-              <button
                 onClick={handleOpenConfigFile}
-                className="vscode-button vscode-button-secondary flex w-full justify-center py-2 text-[12px] font-medium"
+                className="vscode-button flex w-full justify-center py-2 text-[12px] font-medium"
               >
                 {t('onboarding.openConfigButton')}
               </button>

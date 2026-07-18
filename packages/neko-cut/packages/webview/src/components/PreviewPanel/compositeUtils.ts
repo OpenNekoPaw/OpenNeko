@@ -297,12 +297,3 @@ export function buildPausedPreviewOverlayElements(
 
   return overlays;
 }
-
-export function hasVisibleScene3DAtTime(project: ProjectData, time: number): boolean {
-  return project.tracks.some((track) =>
-    track.elements.some((element) => {
-      const editorElement = element as EditorElement;
-      return editorElement.type === 'scene3d' && isElementVisibleAtTime(editorElement, time);
-    }),
-  );
-}

@@ -18,6 +18,7 @@ describe('DocumentContentAccessRuntime', () => {
     };
     const documentAccess = {
       supports: vi.fn(() => true),
+      hasDRM: vi.fn(async () => false),
       readContent: vi.fn(),
       getManifest: vi.fn(),
       createBatchCursor: vi.fn(),
@@ -74,6 +75,14 @@ describe('DocumentContentAccessRuntime', () => {
         locator: { kind: 'chapter', chapterHref: 'Page_1', spineIndex: 0 },
         versionPolicy: 'versioned-export',
       },
+    });
+    expect(result.resourceRef).toMatchObject({
+      scope: 'project',
+      provider: 'source-file-content-access',
+      kind: 'document',
+      source: { kind: 'file', projectRelativePath: source.filePath },
+      locator: { kind: 'file', path: source.filePath },
+      fingerprint: { strategy: 'hash', value: expect.any(String) },
     });
     expect(loadProviderAsset).toHaveBeenCalledWith(
       expect.objectContaining({

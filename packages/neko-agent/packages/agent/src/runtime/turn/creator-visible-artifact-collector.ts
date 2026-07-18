@@ -1,5 +1,6 @@
 import {
   hashStableValue,
+  isResourceRef,
   validateDurableResourceRef,
   validateCompositeArtifact,
   type CanvasWorkspaceProjectionKind,
@@ -9,6 +10,7 @@ import {
   type ToolResultArtifactTransfer,
   type ToolResultAttachment,
 } from '@neko/shared';
+import { extractCompositeContentFenceCandidates } from '@neko-agent/types';
 
 export interface CreatorVisibleArtifactCandidate {
   readonly artifactId: string;
@@ -27,10 +29,13 @@ export interface CreatorVisibleArtifactCollectionInput {
   readonly toolResults: readonly CreatorVisibleToolResult[];
   readonly generatedLifecycles?: readonly GeneratedAssetRevisionRef[];
   readonly consumedResourceIds?: ReadonlySet<string>;
+  readonly assistantMarkdown?: string;
 }
 
 export interface CreatorVisibleToolResult {
+  readonly name?: string;
   readonly success: boolean;
+  readonly data?: unknown;
   readonly attachments?: readonly ToolResultAttachment[];
   readonly artifacts?: readonly ToolResultArtifactTransfer[];
 }
@@ -41,6 +46,10 @@ export function collectCreatorVisibleArtifacts(
   const candidates: CreatorVisibleArtifactCandidate[] = [];
   for (const result of input.toolResults) {
     if (!result.success) continue;
+    if (result.name === 'ReadDocument') {
+      const source = collectReadDocumentSource(result.data);
+      if (source) candidates.push(source);
+    }
     for (const attachment of result.attachments ?? []) {
       const resourceRef = attachment.assetRef?.resourceRef;
       const documentResourceRef = attachment.assetRef?.documentResourceRef;
@@ -80,7 +89,14 @@ export function collectCreatorVisibleArtifacts(
       resourceRef: lifecycle.resourceRef,
     });
   }
-  return deduplicateCandidates(candidates);
+  for (const fenced of extractCompositeContentFenceCandidates(input.assistantMarkdown ?? '')) {
+    const candidate = collectCompositeMarkdownArtifact(fenced.value);
+    if (candidate) candidates.push(candidate);
+  }
+  const reviewable = candidates.some((candidate) => candidate.role !== 'source');
+  return deduplicateCandidates(
+    reviewable ? candidates : candidates.filter((candidate) => candidate.role !== 'source'),
+  );
 }
 
 function collectMarkdownArtifact(
@@ -89,59 +105,72 @@ function collectMarkdownArtifact(
   if (transfer.type !== 'artifactSnapshot' && transfer.type !== 'artifactBackfill')
     return undefined;
   if (transfer.type === 'artifactSnapshot' && transfer.complete === false) return undefined;
-  if (!validateCompositeArtifact(transfer.artifact).ok) return undefined;
-  const markdown = compositeArtifactMarkdown(transfer.artifact);
+  return collectCompositeMarkdownArtifact(transfer.artifact);
+}
+
+function collectCompositeMarkdownArtifact(
+  value: unknown,
+): CreatorVisibleArtifactCandidate | undefined {
+  if (!validateCompositeArtifact(value).ok || !isRecord(value)) return undefined;
+  const artifactId = readNonEmptyString(value['artifactId']);
+  const title = readNonEmptyString(value['title']);
+  if (!artifactId || !title) return undefined;
+  const markdown = compositeArtifactMarkdown(value);
   if (!markdown) return undefined;
-  const artifact = transfer.artifact;
-  const sourceArtifactIds = artifact.provenance?.sourceArtifactIds;
+  const sourceArtifactIds = readSourceArtifactIds(value['provenance']);
   return {
-    artifactId: artifact.artifactId,
-    revision: `markdown:${hashStableValue({ artifact, markdown })}`,
+    artifactId,
+    revision: `markdown:${hashStableValue({ artifact: value, markdown })}`,
     role: 'analysis',
     kind: 'markdown',
-    title: artifact.title,
-    sourceId: `artifact:${artifact.artifactId}`,
+    title,
+    sourceId: `artifact:${artifactId}`,
     ...(sourceArtifactIds ? { sourceArtifactIds } : {}),
     markdown,
   };
 }
 
-function compositeArtifactMarkdown(artifact: {
-  readonly title: string;
-  readonly blocks: readonly {
-    readonly kind: string;
-    readonly text?: string;
-    readonly title?: string;
-    readonly table?: {
-      readonly columns: readonly { readonly columnId: string; readonly label?: string }[];
-      readonly rows: readonly {
-        readonly cells: Readonly<Record<string, Record<string, unknown>>>;
-      }[];
-    };
-  }[];
-}): string | undefined {
-  const sections = [`# ${artifact.title.trim()}`];
-  for (const block of artifact.blocks) {
-    if (block.kind === 'text' && block.text?.trim()) {
-      sections.push(block.text.trim());
+function compositeArtifactMarkdown(
+  artifact: Readonly<Record<string, unknown>>,
+): string | undefined {
+  const title = readNonEmptyString(artifact['title']);
+  const blocks = artifact['blocks'];
+  if (!title || !Array.isArray(blocks)) return undefined;
+  const sections = [`# ${title}`];
+  for (const block of blocks) {
+    if (!isRecord(block)) continue;
+    const kind = block['kind'];
+    const text = readNonEmptyString(block['text']);
+    if (kind === 'text' && text) {
+      sections.push(text);
       continue;
     }
-    if (block.kind === 'table' && block.table) {
-      sections.push(renderTable(block.table));
+    if (kind === 'table' && isRecord(block['table'])) {
+      const table = renderTable(block['table']);
+      if (table) sections.push(table);
     }
   }
   return sections.length > 1 ? sections.join('\n\n') : undefined;
 }
 
-function renderTable(table: {
-  readonly columns: readonly { readonly columnId: string; readonly label?: string }[];
-  readonly rows: readonly { readonly cells: Readonly<Record<string, unknown>> }[];
-}): string {
-  const headers = table.columns.map((column) => column.label ?? column.columnId);
+function renderTable(table: Readonly<Record<string, unknown>>): string | undefined {
+  const rawColumns = table['columns'];
+  const rawRows = table['rows'];
+  if (!Array.isArray(rawColumns) || !Array.isArray(rawRows)) return undefined;
+  const columns = rawColumns.flatMap((column) => {
+    if (!isRecord(column)) return [];
+    const columnId = readNonEmptyString(column['columnId']);
+    if (!columnId) return [];
+    return [{ columnId, label: readNonEmptyString(column['label']) }];
+  });
+  if (columns.length === 0) return undefined;
+  const headers = columns.map((column) => column.label ?? column.columnId);
   const lines = [`| ${headers.join(' | ')} |`, `| ${headers.map(() => '---').join(' | ')} |`];
-  for (const row of table.rows) {
-    const values = table.columns.map((column) => {
-      const cell = row.cells[column.columnId];
+  for (const row of rawRows) {
+    if (!isRecord(row) || !isRecord(row['cells'])) continue;
+    const cells = row['cells'];
+    const values = columns.map((column) => {
+      const cell = cells[column.columnId];
       if (!isRecord(cell)) return '';
       const value = cell['value'] ?? cell['valueMs'];
       return typeof value === 'string' ? value : String(value ?? '');
@@ -149,6 +178,41 @@ function renderTable(table: {
     lines.push(`| ${values.join(' | ')} |`);
   }
   return lines.join('\n');
+}
+
+function collectReadDocumentSource(data: unknown): CreatorVisibleArtifactCandidate | undefined {
+  if (!isRecord(data)) return undefined;
+  const resourceRef = data['resourceRef'];
+  if (!isResourceRef(resourceRef) || !validateDurableResourceRef(resourceRef).ok) return undefined;
+  const id = readNonEmptyString(resourceRef.id);
+  const fingerprint = readNonEmptyString(resourceRef.fingerprint.value);
+  if (!id || !fingerprint) return undefined;
+  const source = resourceRef.source;
+  const title =
+    readNonEmptyString(source.projectRelativePath) ??
+    readNonEmptyString(source.filePath) ??
+    'Document source';
+  return {
+    artifactId: id,
+    revision: fingerprint,
+    role: 'source',
+    kind: 'file-reference',
+    title,
+    sourceId: id,
+    resourceRef,
+  };
+}
+
+function readSourceArtifactIds(value: unknown): readonly string[] | undefined {
+  if (!isRecord(value) || !Array.isArray(value['sourceArtifactIds'])) return undefined;
+  const ids = value['sourceArtifactIds'].filter(
+    (candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0,
+  );
+  return ids.length > 0 ? ids : undefined;
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

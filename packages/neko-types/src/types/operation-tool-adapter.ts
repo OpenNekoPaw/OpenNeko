@@ -9,8 +9,7 @@ import type { Tool } from './tool';
 
 export { createDomainRouter } from './domain-routing';
 
-export type OperationToolDomain =
-  'timeline' | 'canvas' | 'sketch' | 'audio' | 'model' | 'puppet' | 'project';
+export type OperationToolDomain = 'timeline' | 'canvas' | 'audio' | 'project';
 
 export type OperationToolRisk = 'low' | 'medium' | 'high' | 'unknown';
 
@@ -134,12 +133,6 @@ export function mapOperationToolDomainToCreativeDomain(
   domain: OperationToolDomain,
 ): CreativeDomainId {
   switch (domain) {
-    case 'model':
-      return 'scene';
-    case 'puppet':
-      return 'puppet';
-    case 'sketch':
-      return 'sketch';
     case 'canvas':
       return 'canvas';
     case 'audio':

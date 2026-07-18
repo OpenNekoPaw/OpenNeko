@@ -69,9 +69,9 @@ describe('Agent external processor runtime', () => {
     const registry = createExternalProcessorRegistry();
     registry.upsert(
       {
-        sourceScope: 'market',
-        agentCapabilitySource: 'market',
-        sourceId: '@demo/upscale',
+        sourceScope: 'personal',
+        agentCapabilitySource: 'local',
+        sourceId: 'demo-upscale',
         trustLevel: 'untrusted',
       },
       manifest,

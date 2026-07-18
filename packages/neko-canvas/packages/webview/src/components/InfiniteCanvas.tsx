@@ -77,7 +77,7 @@ export interface InfiniteCanvasProps {
   isGridVisible?: boolean;
 
   // ── ScriptNode callbacks ───────────────────────────────────────────────────
-  /** Called to load scene TOC from neko-story */
+  /** Called to load a scene TOC from the retained Fountain content service. */
   onScriptLoadScenes?: (nodeId: string, scriptPath: string) => void;
   scriptIndexStates?: Readonly<Record<string, ScriptIndexRuntimeState>>;
   /** Called when user opens a script file */
@@ -95,7 +95,6 @@ export interface InfiniteCanvasProps {
 
   // ── ModelNode callbacks ────────────────────────────────────────────────────
   /** Called to check if a model is installed */
-  onModelCheckInstalled?: (nodeId: string, modelPath: string) => void;
   /** Called to remove a child node from its container */
   onRemoveContainerChild?: (containerId: string, childId: string) => void;
   expandedNodeId?: string | null;
@@ -135,7 +134,6 @@ export function InfiniteCanvas({
   onDocumentLoadText,
   documentTextProjections,
   onCanvasEmbedOpen,
-  onModelCheckInstalled,
   onRemoveContainerChild,
   expandedNodeId,
   isGridVisible = true,
@@ -143,7 +141,9 @@ export function InfiniteCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const webviewSubsystemRegistryRef = useRef(createBuiltInWebviewSubsystemRegistry());
-  const [nodeRendererRegistry, setNodeRendererRegistry] = useState<NodeRendererRegistry>({});
+  const [nodeRendererRegistry, setNodeRendererRegistry] = useState<NodeRendererRegistry>(() =>
+    webviewSubsystemRegistryRef.current.getCoreNodeRenderers(),
+  );
   const [nodeTypeDescriptorRegistry, setNodeTypeDescriptorRegistry] =
     useState<NodeTypeDescriptorRegistry>(() =>
       webviewSubsystemRegistryRef.current.getCoreNodeTypeDescriptors(),
@@ -339,7 +339,9 @@ export function InfiniteCanvas({
       .then((registrations) => {
         if (cancelled) return;
 
-        const nextRegistry: NodeRendererRegistry = {};
+        const nextRegistry: NodeRendererRegistry = {
+          ...webviewSubsystemRegistryRef.current.getCoreNodeRenderers(),
+        };
         for (const registration of registrations) {
           Object.assign(nextRegistry, registration.nodeRenderers);
         }
@@ -354,7 +356,7 @@ export function InfiniteCanvas({
       })
       .catch(() => {
         if (!cancelled) {
-          setNodeRendererRegistry({});
+          setNodeRendererRegistry(webviewSubsystemRegistryRef.current.getCoreNodeRenderers());
           setNodeTypeDescriptorRegistry(
             webviewSubsystemRegistryRef.current.getCoreNodeTypeDescriptors(),
           );
@@ -499,7 +501,6 @@ export function InfiniteCanvas({
             onDocumentLoadText,
             documentTextProjection: documentTextProjections?.[node.id],
             onCanvasEmbedOpen,
-            onModelCheckInstalled,
             onRemoveContainerChild,
             isExpanded: expandedNodeId === node.id,
             selectedNodeIds,

@@ -74,7 +74,7 @@ export interface ToolsFileFrontmatter {
 /**
  * Where the skill/command comes from
  */
-export type SkillSource = 'builtin' | 'personal' | 'project' | 'market';
+export type SkillSource = 'builtin' | 'personal' | 'project';
 
 /**
  * Canonical explicit entry point for a registry item that reuses the Skill
@@ -252,7 +252,7 @@ export type SkillCatalogEditableSource = Extract<SkillCatalogSource, 'project' |
 export interface SkillCatalogAction {
   /** Typed host-resolved action id. Never a VSCode command id or file path. */
   readonly id: SkillCatalogActionId;
-  /** Optional display hint. Dashboard may localize by action id instead. */
+  /** Optional display hint. A host UI may localize by action id instead. */
   readonly label?: string;
   /** Optional destination for copy/fork/create actions. */
   readonly targetSource?: SkillCatalogEditableSource;
@@ -1306,7 +1306,7 @@ function createDefaultCatalogActions(input: {
   if (input.editable) {
     return ['run', 'edit', 'reveal', 'duplicate'];
   }
-  if (input.source === 'builtin' || input.source === 'market') {
+  if (input.source === 'builtin') {
     return ['run', 'fork'];
   }
   return ['run'];
@@ -1465,7 +1465,6 @@ const SKILL_CATALOG_SOURCES = [
   'builtin',
   'personal',
   'project',
-  'market',
   'plugin',
 ] as const satisfies readonly SkillCatalogSource[];
 

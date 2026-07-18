@@ -691,7 +691,7 @@ export interface GalleryCanvasNode extends CanvasNodeBase {
 // Content Reference Nodes (script / document / model / canvas-embed)
 // =============================================================================
 
-/** A scene entry returned by neko-story getScriptIndex */
+/** A scene entry returned by the retained Fountain content index. */
 export interface ScriptScene {
   id: string;
   title: string;
@@ -700,7 +700,7 @@ export interface ScriptScene {
 }
 
 /**
- * Script node - TOC-mode reference to a .nks / .fountain screenplay
+ * Script node - TOC-mode reference to a .fountain screenplay
  */
 export interface ScriptCanvasNode extends CanvasNodeBase {
   type: 'script';
@@ -871,7 +871,7 @@ export interface CanvasEmbedCanvasNode extends CanvasNodeBase {
 }
 
 /**
- * Project node — reference to a .nkv / .nka / .nkm / .nkp project file
+ * Project node — reference to a retained .nkv project file
  */
 export interface ProjectCanvasNode extends CanvasNodeBase {
   type: 'project';

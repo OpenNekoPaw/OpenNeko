@@ -272,7 +272,7 @@ Agent 输入框中的模式配置是会话级选择，不会自动写回 `~/.nek
 
 普通 Agent 对话当前使用 `primary` 模型槽位。Webview 发送的 Agent 配置会在 Extension 边界解析为明确的 `providerId + modelId`：优先使用 composer 的 `agentModels.primary`，其次使用旧 `chatModel`，最后使用当前设置中的完整 LLM 选择。若缺少 provider 或 model 任一半、`primary` 与 `chatModel` 指向不同模型、provider/model 不匹配、模型缺失、provider 未配置或模型不是启用的 LLM，Agent 会返回可见诊断，不会切到无关模型。
 
-Webview 不再提供全局 `auto` 选项，也不会用空 provider/model 清除运行态覆盖。用户配置 API 不生成语义 `auto`；`auto` 只有作为真实 provider 下的模型 ID 时才合法，例如账号 catalog 的 `neko-account-gateway:auto`。若用户显式配置 `custom-gateway:auto`，它也只是普通模型 ID。这类选择仍会以完整 `providerId + modelId` 传递。刷新配置快照或重新读取 `config.toml` 时，若没有运行态选择，新的文件默认值或账号 catalog 默认值会重新成为事实来源；当用户配置模型和账号模型同时可选且没有显式运行态选择时，Webview 优先用用户配置的 LLM 初始化当前选择。
+Webview 不提供全局 `auto` 选项，也不会用空 provider/model 清除运行态覆盖。用户配置 API 不生成语义 `auto`；若用户显式配置 `custom-gateway:auto`，它只是普通模型 ID。这类选择仍会以完整 `providerId + modelId` 传递。刷新配置快照或重新读取 `config.toml` 时，若没有运行态选择，新的文件默认值会重新成为事实来源。
 
 MVP 合同预留了 `fast`、`deep`、`summarizer`、`vision` 槽位，用于未来多模型编排；当前普通 Agent turn 只支持 `primary`。如果 payload 引用这些非 MVP 槽位，Extension 会返回 fail-visible 诊断，而不是静默忽略。
 

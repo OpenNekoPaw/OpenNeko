@@ -80,7 +80,7 @@ export type MediaUnderstandingCategory = 'image' | 'audio' | 'video';
 export type MediaUnderstandingPurpose =
   'image.understand' | 'audio.understand' | 'video.understand';
 export type MediaUnderstandingModelStatusValue = 'configured' | 'auto' | 'missing';
-export type MediaUnderstandingModelSource = 'explicit-config' | 'account-gateway';
+export type MediaUnderstandingModelSource = 'explicit-config';
 
 export interface MediaUnderstandingModelStatus {
   category: MediaUnderstandingCategory;
@@ -102,19 +102,6 @@ export type MediaUnderstandingModels = Record<
 export type MediaUnderstandingModelSelections = Partial<
   Record<MediaUnderstandingCategory, ModelRef<'llm'>>
 >;
-
-// ---------------------------------------------------------------------------
-// SSO
-// ---------------------------------------------------------------------------
-
-export interface SsoSession {
-  /** Display name or email */
-  user: string;
-  /** Plan tier, e.g. 'Pro' */
-  plan?: string;
-  /** Token usage this period */
-  usage?: number;
-}
 
 // ---------------------------------------------------------------------------
 // Settings State (webview full state)
@@ -152,8 +139,6 @@ export interface SettingsState {
   modelGroups: Array<ModelSourceGroup>;
   /** Read-only projection of the models Agent will use for native media understanding. */
   mediaUnderstandingModels?: MediaUnderstandingModels;
-  /** SSO session info (null when using custom key or not logged in) */
-  ssoSession: SsoSession | null;
   /** Safe config file diagnostic for the active snapshot, if loading failed. */
   configDiagnostic?: AgentConfigDiagnostic;
 }

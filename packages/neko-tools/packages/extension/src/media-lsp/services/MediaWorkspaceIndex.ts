@@ -4,7 +4,7 @@
  * Scans all *.nkv files in workspace, caches parsed projects, and maintains
  * derived indices for cross-file navigation (media references, element IDs, symbols).
  *
- * Follows the WorkspaceIndexService pattern from neko-story.
+ * Maintains the media workspace index used by the LSP providers.
  */
 
 import * as vscode from 'vscode';

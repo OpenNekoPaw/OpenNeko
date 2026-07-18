@@ -29,11 +29,11 @@ describe('EntityAssetMetadataProjector', () => {
             {
               providerId: 'story',
               sourceKind: 'story',
-              sourceRef: 'story/main.nks:12',
+              sourceRef: 'story/main.fountain:12',
               metadata: { projectRoot: '/workspace' },
             },
           ],
-          sourceRefs: ['story/main.nks:12'],
+          sourceRefs: ['story/main.fountain:12'],
           metadata: { projectRoot: '/workspace', review: 'needed' },
         },
       ],
@@ -97,11 +97,11 @@ describe('EntityAssetMetadataProjector', () => {
           source: {
             sourceId: 'story-main',
             sourceKind: 'story',
-            sourceRef: 'story/main.nks:12',
+            sourceRef: 'story/main.fountain:12',
             freshness: 'fresh',
           },
           role: 'reference',
-          location: 'story/main.nks:12',
+          location: 'story/main.fountain:12',
         },
       ],
       relationships: [

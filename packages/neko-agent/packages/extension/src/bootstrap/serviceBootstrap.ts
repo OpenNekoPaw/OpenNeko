@@ -42,7 +42,6 @@ import {
 } from '../ai/piCredentialRuntime';
 import { VSCodePiRuntimeManager } from '../ai/vscodePiRuntimeManager';
 import { VSCodePiPurposeModelRuntime } from '../ai/vscodePiPurposeModelRuntime';
-import { getNekoAuthAPI } from '../services/nekoAuthApi';
 
 // =============================================================================
 // Service Identifiers
@@ -152,17 +151,6 @@ export async function bootstrapCoreServices(
   });
   services.set(IPlatform, platform);
 
-  const resolveAccountGatewayCredential = async (providerId: string): Promise<string> => {
-    const auth = await getNekoAuthAPI();
-    const session = await auth?.getSession();
-    const accessToken = session?.accessToken.trim();
-    if (!accessToken) {
-      throw new Error(
-        `Account gateway provider ${providerId} requires an active OpenNeko account session.`,
-      );
-    }
-    return accessToken;
-  };
   const piAgentRuntimeManager = new VSCodePiRuntimeManager({
     userDataRoot: defaultOpenNekoUserDataRoot(nodeOs.homedir()),
     workspaceId: taskPersistence?.workspaceId ?? 'vscode-empty-window',
@@ -170,7 +158,6 @@ export async function bootstrapCoreServices(
     ...(workspacePath ? { workspaceRoot: workspacePath } : {}),
     builtinSkillRoot: join(context.extensionUri.fsPath, 'dist', 'skills'),
     credentials: piCredentials.credentials,
-    resolveAccountGatewayCredential,
     tools: toolRegistry,
     workspaceTrusted: () => vscode.workspace.isTrusted,
   });
@@ -178,7 +165,6 @@ export async function bootstrapCoreServices(
   const piPurposeModelRuntime = new VSCodePiPurposeModelRuntime({
     credentials: piCredentials.credentials,
     config: platform.config,
-    resolveAccountGatewayCredential,
   });
   const productPurposeTextRuntime: ICapabilityPurposeTextRuntime = {
     complete: (input) => {

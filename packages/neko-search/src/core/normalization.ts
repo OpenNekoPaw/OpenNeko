@@ -48,6 +48,7 @@ export function matchesProjectSearchItem(
 
   const haystack = normalizeSearchText(
     buildProjectSearchText([
+      item.id,
       item.label,
       item.description,
       item.canonicalName,

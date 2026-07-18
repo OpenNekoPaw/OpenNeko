@@ -573,7 +573,7 @@ export interface ChatModelOption {
   /** Provider display label for source-grouped selectors */
   providerLabel?: string;
   /** Secret-free provider source used for grouping and trust badges */
-  source?: 'account-gateway' | 'explicit-config' | string;
+  source?: 'explicit-config' | string;
   /** Connection path for grouping direct, gateway, and local providers */
   connectionKind?: ProviderConnectionKind;
   /** Protocol profile implemented by the provider endpoint */

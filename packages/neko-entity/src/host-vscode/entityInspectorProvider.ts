@@ -1,32 +1,29 @@
 import * as vscode from 'vscode';
 import {
   ENTITY_FACADE_COMMANDS,
-  isCreativeEntityKind,
-  isCreativeEntityRef,
+  isCreativeEntity,
+  isCreativeEntityCandidate,
+  isEntityAssetBinding,
   isEntityBindingWidgetAction,
   isEntityFacadeInspectEntityRequest,
+  isVisualIdentityDraft,
+  type CreativeEntity,
+  type CreativeEntityCandidate,
+  type CreativeEntityChangeEvent,
   type CreativeEntityChangedRef,
   type CreativeEntityRef,
+  type EntityAssetBinding,
   type EntityBindingWidgetAction,
+  type EntityFacadeEntityDetailResult,
   type EntityFacadeInspectEntityRequest,
 } from '@neko/shared';
 import type { ILogger } from '@neko/shared';
 import { projectEntityBindingAvailabilityText } from '../projections';
-import {
-  DASHBOARD_NEUTRAL_CREATIVE_ENTITY_SOURCE_COMMAND,
-  isDashboardCreativeEntityDetail,
-  isDashboardCreativeEntityRef,
-  isDashboardCreativeEntitySource,
-  toDashboardCreativeEntityId,
-  type DashboardCreativeEntityDetail,
-  type DashboardCreativeEntityEvent,
-  type DashboardCreativeEntityRef,
-  type DashboardCreativeEntitySource,
-} from '@neko/shared/types/dashboard-creative-entity';
 
 export interface EntityInspectorProviderOptions {
   readonly logger?: Pick<ILogger, 'warn'>;
   readonly executeCommand?: EntityInspectorCommandExecutor;
+  readonly subscribeEntityChanges?: EntityInspectorChangeSubscriber;
 }
 
 export type EntityInspectorCommandExecutor = (
@@ -34,11 +31,17 @@ export type EntityInspectorCommandExecutor = (
   ...args: readonly unknown[]
 ) => Thenable<unknown>;
 
+export type EntityInspectorChangeSubscriber = (
+  projectRoot: string,
+  listener: (event: CreativeEntityChangeEvent) => void,
+) => vscode.Disposable;
+
 interface EntityInspectorState {
-  readonly ref?: DashboardCreativeEntityRef;
   readonly entityRef?: CreativeEntityRef;
   readonly candidateId?: string;
-  readonly detail?: DashboardCreativeEntityDetail;
+  readonly entity?: CreativeEntity;
+  readonly candidate?: CreativeEntityCandidate;
+  readonly bindings?: readonly EntityAssetBinding[];
   readonly bindingTexts?: readonly string[];
   readonly error?: string;
 }
@@ -58,8 +61,6 @@ interface EntityInspectorStrings {
   readonly noSummary: string;
   readonly bindings: string;
   readonly noBindings: string;
-  readonly requirements: string;
-  readonly noRequirements: string;
   readonly actions: string;
   readonly rename: string;
   readonly addAlias: string;
@@ -67,26 +68,23 @@ interface EntityInspectorStrings {
   readonly actionFailed: string;
 }
 
-interface RegisteredInspectorSource {
-  readonly source: DashboardCreativeEntitySource;
-  readonly subscription: { dispose(): void };
-}
-
 export class EntityInspectorProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   static readonly viewType = 'neko.entityInspector';
 
   private readonly logger: Pick<ILogger, 'warn'>;
   private readonly executeCommand: EntityInspectorCommandExecutor;
+  private readonly subscribeEntityChanges: EntityInspectorChangeSubscriber | undefined;
   private readonly disposables: vscode.Disposable[] = [];
-  private readonly sources = new Map<string, RegisteredInspectorSource>();
+  private readonly entityChangeSubscriptions = new Map<string, vscode.Disposable>();
   private webviewView: vscode.WebviewView | undefined;
   private state: EntityInspectorState = {};
   private autoFollowTimer: ReturnType<typeof setTimeout> | undefined;
   private pendingAutoFollow: EntityFacadeInspectEntityRequest | undefined;
 
-  constructor(private readonly options: EntityInspectorProviderOptions = {}) {
+  constructor(options: EntityInspectorProviderOptions = {}) {
     this.logger = options.logger ?? NOOP_ENTITY_INSPECTOR_LOGGER;
     this.executeCommand = options.executeCommand ?? vscode.commands.executeCommand;
+    this.subscribeEntityChanges = options.subscribeEntityChanges;
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -115,29 +113,29 @@ export class EntityInspectorProvider implements vscode.WebviewViewProvider, vsco
         message: vscode.l10n.t('Open a workspace before inspecting an entity.'),
       };
     }
-    const ref = toInspectorDashboardRef(input, projectRoot);
-    if (!ref) {
-      return {
-        ok: false,
-        message: vscode.l10n.t('Inspector request requires entityRef or candidateId.'),
-      };
+
+    try {
+      this.ensureEntityChangeSubscription(projectRoot);
+      this.state = input.entityRef
+        ? await this.loadEntityState(
+            toInspectorEntityRef(input.entityRef, projectRoot),
+            projectRoot,
+          )
+        : input.candidateId
+          ? await this.loadCandidateState(input.candidateId, projectRoot)
+          : { error: vscode.l10n.t('Inspector request requires entityRef or candidateId.') };
+    } catch (error) {
+      this.logger.warn('Entity Inspector load failed', error);
+      this.state = { error: error instanceof Error ? error.message : String(error) };
+      this.postState();
+      return { ok: false, message: this.state.error };
     }
 
-    const source = await this.getSource(projectRoot);
-    const detail = await source.getDetail(ref);
-    this.state = {
-      ref,
-      ...(input.entityRef ? { entityRef: input.entityRef } : {}),
-      ...(input.candidateId ? { candidateId: input.candidateId } : {}),
-      ...(detail ? { detail } : {}),
-      ...(detail ? { bindingTexts: projectInspectorBindingTexts(detail) } : {}),
-      ...(detail ? {} : { error: vscode.l10n.t('Entity detail is unavailable.') }),
-    };
     if (input.reveal !== false) {
       await vscode.commands.executeCommand(`${EntityInspectorProvider.viewType}.focus`);
     }
     this.postState();
-    return { ok: true };
+    return this.state.error ? { ok: false, message: this.state.error } : { ok: true };
   }
 
   follow(input: unknown, delayMs = 250): void {
@@ -157,56 +155,99 @@ export class EntityInspectorProvider implements vscode.WebviewViewProvider, vsco
 
   dispose(): void {
     if (this.autoFollowTimer) clearTimeout(this.autoFollowTimer);
-    for (const registered of this.sources.values()) {
-      registered.subscription.dispose();
-    }
-    this.sources.clear();
     for (const disposable of this.disposables) {
       disposable.dispose();
     }
     this.disposables.length = 0;
+    for (const subscription of this.entityChangeSubscriptions.values()) {
+      subscription.dispose();
+    }
+    this.entityChangeSubscriptions.clear();
   }
 
-  private async refreshIfAffected(event: DashboardCreativeEntityEvent): Promise<void> {
-    if (!this.state.ref || !isInspectorEventRelated(this.state.ref, event)) return;
+  private ensureEntityChangeSubscription(projectRoot: string): void {
+    if (!this.subscribeEntityChanges || this.entityChangeSubscriptions.has(projectRoot)) return;
+    const subscription = this.subscribeEntityChanges(projectRoot, (event) => {
+      void this.refreshFromEntityChange(projectRoot, event);
+    });
+    this.entityChangeSubscriptions.set(projectRoot, subscription);
+  }
+
+  private async refreshFromEntityChange(
+    projectRoot: string,
+    event: CreativeEntityChangeEvent,
+  ): Promise<void> {
     try {
-      const nextEntityRef = resolveConfirmedCandidateEntityRef(this.state.candidateId, event);
-      const projectRoot =
-        nextEntityRef?.projectRoot ??
-        this.state.ref.projectRoot ??
-        vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      if (!projectRoot) return;
-      const nextRef = nextEntityRef
-        ? toInspectorDashboardRef({ entityRef: nextEntityRef }, projectRoot)
-        : this.state.ref;
-      if (!nextRef) return;
-      const source = await this.getSource(projectRoot);
-      const detail = await source.getDetail(nextRef);
-      const nextState: EntityInspectorState = nextEntityRef
-        ? {
-            ref: nextRef,
-            entityRef: nextEntityRef,
-            ...(detail ? { detail } : {}),
-            ...(detail ? { bindingTexts: projectInspectorBindingTexts(detail) } : {}),
-            ...(detail ? {} : { error: vscode.l10n.t('Entity detail is unavailable.') }),
-          }
-        : {
-            ...this.state,
-            ref: nextRef,
-            ...(detail ? { detail } : {}),
-            ...(detail ? { bindingTexts: projectInspectorBindingTexts(detail) } : {}),
-            ...(detail ? {} : { error: vscode.l10n.t('Entity detail is unavailable.') }),
-          };
-      this.state = nextState;
-      this.postState();
+      const confirmedCandidateRef = this.state.candidateId
+        ? event.changedRefs.find(
+            (changedRef) =>
+              changedRef.kind === 'candidate' && changedRef.id === this.state.candidateId,
+          )?.entityRef
+        : undefined;
+      if (confirmedCandidateRef) {
+        await this.inspect({ projectRoot, entityRef: confirmedCandidateRef, reveal: false });
+        return;
+      }
+      if (
+        this.state.entityRef?.projectRoot === projectRoot &&
+        isInspectorChangeRelated(this.state.entityRef, event.changedRefs)
+      ) {
+        await this.inspect({ projectRoot, entityRef: this.state.entityRef, reveal: false });
+        return;
+      }
+      if (
+        this.state.candidateId &&
+        event.changedRefs.some(
+          (changedRef) =>
+            changedRef.kind === 'candidate' && changedRef.id === this.state.candidateId,
+        )
+      ) {
+        await this.inspect({ projectRoot, candidateId: this.state.candidateId, reveal: false });
+      }
     } catch (error) {
-      this.logger.warn('Entity Inspector refresh failed', error);
-      this.state = {
-        ...this.state,
+      this.logger.warn('Entity Inspector refresh failed', {
+        projectRoot,
         error: error instanceof Error ? error.message : String(error),
-      };
-      this.postState();
+      });
     }
+  }
+
+  private async loadEntityState(
+    entityRef: CreativeEntityRef,
+    projectRoot: string,
+  ): Promise<EntityInspectorState> {
+    const result = await this.executeCommand(ENTITY_FACADE_COMMANDS.getEntityDetail, {
+      projectRoot,
+      entityRef,
+    });
+    const detail = readEntityFacadeDetail(result);
+    if (!detail?.entity) {
+      return { entityRef, error: vscode.l10n.t('Entity detail is unavailable.') };
+    }
+    return {
+      entityRef,
+      entity: detail.entity,
+      bindings: detail.bindings,
+      bindingTexts: detail.bindings.map(projectEntityBindingAvailabilityText),
+    };
+  }
+
+  private async loadCandidateState(
+    candidateId: string,
+    projectRoot: string,
+  ): Promise<EntityInspectorState> {
+    const result = await this.executeCommand(ENTITY_FACADE_COMMANDS.listCandidates, {
+      projectRoot,
+    });
+    const candidate = Array.isArray(result)
+      ? result.find(
+          (item): item is CreativeEntityCandidate =>
+            isCreativeEntityCandidate(item) && item.id === candidateId,
+        )
+      : undefined;
+    return candidate
+      ? { candidateId, candidate }
+      : { candidateId, error: vscode.l10n.t('Entity detail is unavailable.') };
   }
 
   private async handleMessage(message: unknown): Promise<void> {
@@ -217,37 +258,23 @@ export class EntityInspectorProvider implements vscode.WebviewViewProvider, vsco
       });
       return;
     }
-    const entityRef =
-      this.state.entityRef ??
-      (this.state.detail ? detailToCreativeEntityRef(this.state.detail) : undefined);
     const result = await this.executeCommand(ENTITY_FACADE_COMMANDS.triggerBindingWidgetAction, {
       context: {
         surface: 'inspector',
-        projectRoot: entityRef?.projectRoot,
+        projectRoot: this.state.entityRef?.projectRoot,
       },
       action: message.action,
-      ...(entityRef ? { entityRef } : {}),
+      ...(this.state.entityRef ? { entityRef: this.state.entityRef } : {}),
       ...(this.state.candidateId ? { candidateId: this.state.candidateId } : {}),
       ...(message.payload ? { payload: message.payload } : {}),
     });
     this.post({ type: 'entityInspector.actionResult', result });
-  }
-
-  private async getSource(projectRoot: string): Promise<DashboardCreativeEntitySource> {
-    const current = this.sources.get(projectRoot);
-    if (current) return current.source;
-    const candidate = await this.executeCommand(DASHBOARD_NEUTRAL_CREATIVE_ENTITY_SOURCE_COMMAND, {
-      projectRoot,
-    });
-    if (!isDashboardCreativeEntitySource(candidate)) {
-      throw new Error('Entity source is unavailable for the active workspace.');
-    }
-    const subscription = candidate.onDidChangeEntity((event) => {
-      void this.refreshIfAffected(event);
-    });
-    const registered = { source: candidate, subscription };
-    this.sources.set(projectRoot, registered);
-    return registered.source;
+    const target = this.state.entityRef
+      ? { entityRef: this.state.entityRef, reveal: false }
+      : this.state.candidateId
+        ? { candidateId: this.state.candidateId, reveal: false }
+        : undefined;
+    if (target) await this.inspect(target);
   }
 
   private postState(): void {
@@ -282,7 +309,6 @@ export class EntityInspectorProvider implements vscode.WebviewViewProvider, vsco
     .muted { color: var(--vscode-descriptionForeground); }
     .row { border-top: 1px solid var(--vscode-panel-border); padding: 8px 0; }
     button { margin: 0 6px 6px 0; }
-    code { word-break: break-all; }
   </style>
 </head>
 <body>
@@ -303,20 +329,20 @@ export class EntityInspectorProvider implements vscode.WebviewViewProvider, vsco
       return items && items.length ? items.map((item) => '<li>' + esc(item) + '</li>').join('') : '<li class="muted">' + esc(empty) + '</li>';
     }
     function render(state) {
-      const detail = state.detail;
-      if (!detail) {
+      const record = state.entity || state.candidate;
+      if (!record) {
         root.className = 'muted';
         root.innerHTML = '<p>' + esc(strings.noEntitySelected) + '</p>' + (state.error ? '<p>' + esc(state.error) + '</p>' : '');
         return;
       }
+      const label = record.displayName || record.canonicalName || record.name;
       root.className = '';
       root.innerHTML =
-        '<h2>' + esc(detail.label) + '</h2>' +
-        '<div class="muted">' + esc(detail.kind) + ' · ' + esc(detail.status) + ' · ' + esc(detail.freshness) + '</div>' +
-        '<div class="row"><h3>' + esc(strings.aliases) + '</h3><ul>' + list(detail.aliases, strings.noAliases) + '</ul></div>' +
-        '<div class="row"><h3>' + esc(strings.summary) + '</h3><p>' + esc(detail.description || detail.metadata?.appearanceSummary || detail.metadata?.visualSummary || strings.noSummary) + '</p></div>' +
+        '<h2>' + esc(label) + '</h2>' +
+        '<div class="muted">' + esc(record.kind) + ' · ' + esc(record.status) + '</div>' +
+        '<div class="row"><h3>' + esc(strings.aliases) + '</h3><ul>' + list(record.aliases || [], strings.noAliases) + '</ul></div>' +
+        '<div class="row"><h3>' + esc(strings.summary) + '</h3><p>' + esc(record.metadata?.description || record.metadata?.appearanceSummary || record.metadata?.visualSummary || strings.noSummary) + '</p></div>' +
         '<div class="row"><h3>' + esc(strings.bindings) + '</h3><ul>' + list(state.bindingTexts || [], strings.noBindings) + '</ul></div>' +
-        '<div class="row"><h3>' + esc(strings.requirements) + '</h3><ul>' + list((detail.requirements || []).map((req) => req.requiredKinds.join(', ') + ' · ' + req.status), strings.noRequirements) + '</ul></div>' +
         '<div class="row"><h3>' + esc(strings.actions) + '</h3>' +
         '<button data-action="rename-entity">' + esc(strings.rename) + '</button>' +
         '<button data-action="add-alias">' + esc(strings.addAlias) + '</button>' +
@@ -338,6 +364,77 @@ export class EntityInspectorProvider implements vscode.WebviewViewProvider, vsco
   }
 }
 
+export function toInspectorEntityRef(
+  entityRef: CreativeEntityRef,
+  projectRoot: string,
+): CreativeEntityRef {
+  return {
+    entityId: entityRef.entityId,
+    entityKind: entityRef.entityKind,
+    projectRoot,
+    source: 'neko-entity',
+  };
+}
+
+export function isInspectorChangeRelated(
+  current: CreativeEntityRef,
+  changedRefs: readonly CreativeEntityChangedRef[],
+): boolean {
+  return changedRefs.some((changedRef) => {
+    if (changedRef.entityRef) {
+      return (
+        changedRef.entityRef.entityId === current.entityId &&
+        changedRef.entityRef.entityKind === current.entityKind
+      );
+    }
+    return (
+      (changedRef.kind === 'entity' ||
+        changedRef.kind === 'binding' ||
+        changedRef.kind === 'requirement' ||
+        changedRef.kind === 'visual-draft') &&
+      changedRef.id === current.entityId
+    );
+  });
+}
+
+function readEntityFacadeDetail(value: unknown): EntityFacadeEntityDetailResult | undefined {
+  if (!isRecord(value)) return undefined;
+  const entity = value['entity'];
+  const candidates = value['candidates'];
+  const bindings = value['bindings'];
+  const visualDrafts = value['visualDrafts'];
+  if (entity !== undefined && !isCreativeEntity(entity)) return undefined;
+  if (!Array.isArray(candidates) || !candidates.every(isCreativeEntityCandidate)) return undefined;
+  if (!Array.isArray(bindings) || !bindings.every(isEntityAssetBinding)) return undefined;
+  if (!Array.isArray(visualDrafts) || !visualDrafts.every(isVisualIdentityDraft)) return undefined;
+  return {
+    ...(entity ? { entity } : {}),
+    candidates,
+    bindings,
+    visualDrafts,
+  };
+}
+
+function isEntityInspectorActionMessage(value: unknown): value is EntityInspectorActionMessage {
+  if (!isRecord(value)) return false;
+  return (
+    value['type'] === 'entityInspector.action' &&
+    isEntityBindingWidgetAction(value['action']) &&
+    (value['payload'] === undefined || isRecord(value['payload']))
+  );
+}
+
+function resolveInspectorProjectRoot(
+  request: EntityFacadeInspectEntityRequest,
+): string | undefined {
+  return (
+    request.projectRoot ??
+    request.entityRef?.projectRoot ??
+    request.context?.projectRoot ??
+    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  );
+}
+
 function entityInspectorStrings(): EntityInspectorStrings {
   return {
     title: vscode.l10n.t('Entity Inspector'),
@@ -348,8 +445,6 @@ function entityInspectorStrings(): EntityInspectorStrings {
     noSummary: vscode.l10n.t('No summary'),
     bindings: vscode.l10n.t('Bindings'),
     noBindings: vscode.l10n.t('No bindings'),
-    requirements: vscode.l10n.t('Requirements'),
-    noRequirements: vscode.l10n.t('No requirements'),
     actions: vscode.l10n.t('Actions'),
     rename: vscode.l10n.t('Rename'),
     addAlias: vscode.l10n.t('Add alias'),
@@ -381,137 +476,8 @@ function escapeHtml(value: string): string {
   });
 }
 
-function projectInspectorBindingTexts(detail: DashboardCreativeEntityDetail): readonly string[] {
-  return detail.bindings.map((binding) => projectEntityBindingAvailabilityText(binding));
-}
-
-export function toInspectorDashboardRef(
-  request: EntityFacadeInspectEntityRequest,
-  projectRoot: string,
-): DashboardCreativeEntityRef | undefined {
-  if (request.entityRef) {
-    return {
-      source: 'neko-entity',
-      sourceEntityId: `entity:${request.entityRef.entityId}`,
-      entityId: request.entityRef.entityId,
-      entityKind: request.entityRef.entityKind,
-      projectRoot,
-    };
-  }
-  if (request.candidateId) {
-    return {
-      source: 'neko-entity',
-      sourceEntityId: request.candidateId,
-      entityKind: 'character',
-      projectRoot,
-    };
-  }
-  return undefined;
-}
-
-export function isInspectorEventRelated(
-  current: DashboardCreativeEntityRef,
-  event: DashboardCreativeEntityEvent,
-): boolean {
-  if (
-    event.ref &&
-    toDashboardCreativeEntityId(event.ref) === toDashboardCreativeEntityId(current)
-  ) {
-    return true;
-  }
-  if (isCandidateDashboardRef(current)) {
-    return (
-      event.changedRefs?.some(
-        (changedRef) => changedRef.kind === 'candidate' && changedRef.id === current.sourceEntityId,
-      ) === true
-    );
-  }
-  const currentEntityId = current.entityId;
-  if (currentEntityId) {
-    return (
-      event.changedRefs?.some((changedRef) => {
-        if (changedRef.entityRef) {
-          return (
-            changedRef.entityRef.entityId === currentEntityId &&
-            changedRef.entityRef.entityKind === current.entityKind
-          );
-        }
-        return (
-          (changedRef.kind === 'entity' ||
-            changedRef.kind === 'binding' ||
-            changedRef.kind === 'requirement' ||
-            changedRef.kind === 'visual-draft') &&
-          changedRef.id === currentEntityId
-        );
-      }) === true
-    );
-  }
-  return false;
-}
-
-function resolveConfirmedCandidateEntityRef(
-  candidateId: string | undefined,
-  event: DashboardCreativeEntityEvent,
-): CreativeEntityRef | undefined {
-  if (!candidateId) return undefined;
-  const changedRef = event.changedRefs?.find(
-    (candidateRef) => candidateRef.kind === 'candidate' && candidateRef.id === candidateId,
-  );
-  return changedRef?.entityRef;
-}
-
-function isCandidateDashboardRef(ref: DashboardCreativeEntityRef): boolean {
-  return ref.sourceEntityId.startsWith('candidate:');
-}
-
-function isEntityInspectorActionMessage(value: unknown): value is EntityInspectorActionMessage {
-  if (!isRecord(value)) return false;
-  return (
-    value['type'] === 'entityInspector.action' &&
-    isEntityBindingWidgetAction(value['action']) &&
-    (value['payload'] === undefined || isRecord(value['payload']))
-  );
-}
-
-function detailToCreativeEntityRef(
-  detail: DashboardCreativeEntityDetail,
-): CreativeEntityRef | undefined {
-  if (!isDashboardCreativeEntityDetail(detail)) return undefined;
-  if (
-    !detail.ref.entityId ||
-    !isCreativeEntityKind(detail.ref.entityKind) ||
-    !isCreativeEntityRef({
-      entityId: detail.ref.entityId,
-      entityKind: detail.ref.entityKind,
-    })
-  ) {
-    return undefined;
-  }
-  return {
-    entityId: detail.ref.entityId,
-    entityKind: detail.ref.entityKind,
-    ...(detail.ref.projectRoot ? { projectRoot: detail.ref.projectRoot } : {}),
-    source: detail.ref.source,
-  };
-}
-
-function sameCreativeEntityRef(left: CreativeEntityRef, right: CreativeEntityRef): boolean {
-  return left.entityId === right.entityId && left.entityKind === right.entityKind;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function resolveInspectorProjectRoot(
-  request: EntityFacadeInspectEntityRequest,
-): string | undefined {
-  return (
-    request.projectRoot ??
-    request.entityRef?.projectRoot ??
-    request.context?.projectRoot ??
-    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-  );
 }
 
 function getNonce(): string {

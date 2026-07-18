@@ -126,7 +126,7 @@ describe('VSCode semantic coverage provider', () => {
   });
 
   it('queries injected semantic projections without scanning sidecars and preserves stale freshness', async () => {
-    const index = readSemanticIndexFixture();
+    const fixture = readSemanticProjectionFixture();
     const repository: SemanticProjectionRepository = {
       list: async () => [
         {
@@ -139,7 +139,7 @@ describe('VSCode semantic coverage provider', () => {
           },
           coverage: ['ocr'],
           freshness: 'stale',
-          index,
+          ...fixture,
           updatedAt: '2026-07-13T04:00:00.000Z',
         },
       ],
@@ -147,6 +147,7 @@ describe('VSCode semantic coverage provider', () => {
       replacePartition: async () => undefined,
       replaceSource: async () => undefined,
       deleteSource: async () => false,
+      clearBodyBearingSources: async () => [],
       insertMissing: async () => ({ insertedSourceIds: [], preservedSourceIds: [] }),
     };
     const provider = createVSCodeSemanticCoverageProvider({
@@ -206,7 +207,7 @@ function createSemanticProjection(): {
           },
           coverage: ['ocr'],
           freshness: 'fresh',
-          index: readSemanticIndexFixture(),
+          ...readSemanticProjectionFixture(),
           updatedAt: '2026-07-13T04:00:00.000Z',
         },
       ],
@@ -214,6 +215,7 @@ function createSemanticProjection(): {
       replacePartition: async () => undefined,
       replaceSource: async () => undefined,
       deleteSource: async () => false,
+      clearBodyBearingSources: async () => [],
       insertMissing: async () => ({ insertedSourceIds: [], preservedSourceIds: [] }),
     },
     partition: {
@@ -271,6 +273,28 @@ function readSemanticIndexFixture(): MediaSemanticIndex {
   const parsed = parseMediaSemanticIndexSidecar(semanticIndexContent());
   if (!parsed.record) throw new Error('Semantic index test fixture must be valid.');
   return parsed.record.index;
+}
+
+function readSemanticProjectionFixture() {
+  const index = readSemanticIndexFixture();
+  const segment = index.textSegments?.[0];
+  if (!segment) throw new Error('Semantic index test fixture must contain one segment.');
+  const { textSegments: _textSegments, ...compactIndex } = index;
+  return {
+    index: compactIndex,
+    evidence: [
+      {
+        evidenceId: segment.segmentId,
+        unitId: 'page-1',
+        kind: segment.kind,
+        sourceRef: segment.sourceRef,
+        locator: { kind: 'page' as const, pageNumber: 1, pageIndex: 0 },
+        range: segment.range,
+        contentHash: 'sha256:segment-1',
+        provenance: segment.provenance,
+      },
+    ],
+  };
 }
 
 function characterMemoryContent(): string {

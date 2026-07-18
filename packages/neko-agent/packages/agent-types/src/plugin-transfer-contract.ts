@@ -10,8 +10,6 @@ import type {
 export const NEKO_PLUGIN_EXTENSION_IDS = {
   canvas: 'neko.neko-canvas',
   cut: 'neko.neko-cut',
-  sketch: 'neko.neko-sketch',
-  model: 'neko.neko-model',
 } as const;
 
 export type NekoPluginKey = keyof typeof NEKO_PLUGIN_EXTENSION_IDS;
@@ -123,18 +121,11 @@ export interface PluginTransferCutImportGeneratedClipPayload extends PluginTrans
   readonly trackIndex?: number;
 }
 
-export interface PluginTransferPathImportAssetPayload extends PluginTransferAuthoringPayloadBase {
-  readonly path: string;
-  readonly name?: string;
-}
-
 export interface PluginTransferCutStoryboardAuthoringPayload
   extends PluginTransferCutStoryboardPayload, PluginTransferAuthoringPayloadBase {}
 
 export interface PluginTransferCommandPlanMap {
   readonly 'neko.canvas.importAsset': PluginTransferCanvasImportAssetPayload;
-  readonly 'neko.sketch.authoring.importImageSource': PluginTransferPathImportAssetPayload;
-  readonly 'neko.model.authoring.importAsset': PluginTransferPathImportAssetPayload;
   readonly 'neko.cut.authoring.importStoryboard': PluginTransferCutStoryboardAuthoringPayload;
   readonly 'neko.cut.authoring.importGeneratedClip': PluginTransferCutImportGeneratedClipPayload;
 }

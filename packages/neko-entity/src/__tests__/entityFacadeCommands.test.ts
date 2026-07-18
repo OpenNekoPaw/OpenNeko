@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ENTITY_FACADE_COMMANDS, isEntityFacadeCommandError } from '@neko/shared';
-import {
-  registerDashboardEntitySourceCommand,
-  registerEntityFacadeCommands,
-  VSCodeEntityRuntimeRegistry,
-} from '../host-vscode';
+import { registerEntityFacadeCommands, VSCodeEntityRuntimeRegistry } from '../host-vscode';
 import { CreativeEntityService } from '../core/CreativeEntityService';
 import { resolveCharacterRegistryPath, resolveEntityAssetBindingsPath } from '../core/paths';
 import type { EntityRuntimePorts } from '../core/ports';
@@ -37,24 +33,17 @@ describe('entity facade commands', () => {
     registry.dispose();
   });
 
-  it('confirms candidate and shares the event with dashboard source listeners', async () => {
+  it('confirms a candidate through the canonical facade', async () => {
     const files = new MemoryEntityFileStore();
     const registry = createMemoryRuntimeRegistry(files);
     const facadeDisposable = registerEntityFacadeCommands({ runtimeRegistry: registry });
-    const sourceDisposable = registerDashboardEntitySourceCommand({ runtimeRegistry: registry });
-
-    const source = await commands.executeCommand<{
-      onDidChangeEntity(listener: (event: unknown) => void): { dispose(): void };
-    }>('neko.entity.getDashboardCreativeEntitySource', { projectRoot });
-    const listener = vi.fn();
-    const subscription = source.onDidChangeEntity(listener);
 
     const candidate = await commands.executeCommand(ENTITY_FACADE_COMMANDS.proposeCandidate, {
       projectRoot,
       candidate: {
         kind: 'character',
         name: '小橘',
-        provenance: [{ providerId: 'neko-story', sourceKind: 'story' }],
+        provenance: [{ providerId: 'fountain-content', sourceKind: 'story' }],
       },
     });
     expect(candidate).toEqual(expect.objectContaining({ id: 'candidate:character:char_小橘' }));
@@ -77,18 +66,6 @@ describe('entity facade commands', () => {
         ]),
       }),
     );
-    expect(listener).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'refreshed',
-        source: 'neko-entity',
-        changedRefs: expect.arrayContaining([
-          expect.objectContaining({
-            kind: 'candidate',
-            id: 'candidate:character:char_小橘',
-          }),
-        ]),
-      }),
-    );
     expect(files.get(resolveCharacterRegistryPath(projectRoot))).toEqual({
       version: 1,
       characters: [
@@ -100,8 +77,6 @@ describe('entity facade commands', () => {
       ],
     });
 
-    subscription.dispose();
-    sourceDisposable.dispose();
     facadeDisposable.dispose();
     registry.dispose();
   });
@@ -204,7 +179,7 @@ describe('entity facade commands', () => {
     const result = await commands.executeCommand(ENTITY_FACADE_COMMANDS.updateMetadata, {
       projectRoot,
       entityRef: { entityId: 'char_xiaoju', entityKind: 'character' },
-      metadata: { longMemory: 'multi-field memory edits belong in Dashboard' },
+      metadata: { longMemory: 'multi-field memory edits belong in the Entity editor' },
     });
 
     expect(result).toEqual(expect.objectContaining({ code: 'unsupported-edit' }));

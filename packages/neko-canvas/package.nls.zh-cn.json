@@ -14,7 +14,6 @@
   "neko.canvas.selectConnectionFromOutline.title": "选择连接",
   "neko.canvas.resetZoom.title": "重置缩放",
   "neko.canvas.generateSelected.title": "生成选中镜头",
-  "neko.canvas.updateNodeImage.title": "更新节点图片（来自绘图）",
   "neko.canvas.detachShotFromScene.title": "将镜头移出场景",
   "neko.canvas.deleteNodeFromOutline.title": "删除节点"
 }

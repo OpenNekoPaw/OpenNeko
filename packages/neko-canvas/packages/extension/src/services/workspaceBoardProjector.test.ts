@@ -82,6 +82,18 @@ describe('WorkspaceBoardProjector', () => {
     expect(result).not.toHaveProperty('target');
   });
 
+  it('reports a permission failure as a blocked projection write', async () => {
+    const enqueue = vi.fn(async () => {
+      throw new Error('EACCES: permission denied while saving the Workspace Board');
+    });
+    const projector = new WorkspaceBoardProjector({ getCoordinator: () => ({ enqueue }) });
+
+    await expect(projector.project(request())).resolves.toMatchObject({
+      status: 'blocked',
+      diagnostics: [expect.objectContaining({ code: 'projection-write-failed' })],
+    });
+  });
+
   it('rejects legacy routing payloads before invoking the coordinator', async () => {
     const enqueue = vi.fn();
     const projector = new WorkspaceBoardProjector({ getCoordinator: () => ({ enqueue }) });
@@ -89,6 +101,22 @@ describe('WorkspaceBoardProjector', () => {
     const result = await projector.project({
       ...request(),
       activeCanvas: 'file:///workspace/project/active.nkc',
+    } as unknown as CanvasWorkspaceProjectionRequest);
+
+    expect(result).toMatchObject({
+      status: 'blocked',
+      diagnostics: [expect.objectContaining({ code: 'legacy-routing-forbidden' })],
+    });
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('rejects the legacy recent Canvas routing hint before invoking the coordinator', async () => {
+    const enqueue = vi.fn();
+    const projector = new WorkspaceBoardProjector({ getCoordinator: () => ({ enqueue }) });
+
+    const result = await projector.project({
+      ...request(),
+      recentCanvas: 'file:///workspace/project/recent.nkc',
     } as unknown as CanvasWorkspaceProjectionRequest);
 
     expect(result).toMatchObject({

@@ -18,9 +18,6 @@ export * from './core/index';
 // Operations (EditOperation 指令序列系统)
 export * from './operations';
 
-// Audio helpers
-export * from './audio';
-
 // Logger (ILogger + ConsoleLogger)
 export * from './logger/index';
 
@@ -48,7 +45,6 @@ export * from './entity-uri/index';
 // Format SDKs (load/validate/migrate/save project files)
 export * from './nkv/index';
 export * from './nkc/index';
-export * from './nka/index';
 
 // VSCode Webview API is NOT exported from main entry to avoid
 // requiring DOM types in Node.js consumers.

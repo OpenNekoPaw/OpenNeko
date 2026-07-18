@@ -610,8 +610,6 @@ function resolveActionLabel(action: CardActionDescriptor): string {
       return t('action.generateShort');
     case 'duplicate':
       return t('action.duplicateShort');
-    case 'edit-media':
-      return t('action.editShort');
     case 'save-to-asset-library':
       return t('action.saveToAssetLibrary');
     case 'open-in-editor':

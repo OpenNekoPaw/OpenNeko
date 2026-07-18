@@ -1,6 +1,7 @@
 import { isMarkdownParentNode, parseNormalizedMarkdown, type MarkdownNode } from '@neko/markdown';
 import type {
   CreativeEntityKind,
+  SemanticCreativeSchemaRef,
   SemanticSourceDescriptor,
   SemanticTextSegment,
   SemanticTextSegmentKind,
@@ -15,6 +16,7 @@ export type SemanticTextExtractionErrorCode =
   | 'semantic-text-invalid-utf8'
   | 'semantic-text-invalid-json'
   | 'semantic-text-invalid-yaml'
+  | 'semantic-text-unregistered-schema'
   | 'semantic-text-unsupported-format';
 
 export class SemanticTextExtractionError extends Error {
@@ -33,6 +35,21 @@ export interface ExtractSemanticTextInput {
   readonly content: string | Uint8Array;
   readonly maxBytes?: number;
   readonly signal?: AbortSignal;
+  readonly creativeSchemaAdapters?: readonly SemanticCreativeSchemaAdapter[];
+}
+
+export interface SemanticCreativeSchemaField {
+  readonly explicitEntityKind?: CreativeEntityKind;
+  readonly explicitEntityName?: string;
+}
+
+export interface SemanticCreativeSchemaAdapter {
+  readonly schema: SemanticCreativeSchemaRef;
+  readonly formats: readonly ('json' | 'yaml')[];
+  selectField(input: {
+    readonly path: readonly (string | number)[];
+    readonly value: string;
+  }): SemanticCreativeSchemaField | false;
 }
 
 export function extractSemanticText(
@@ -52,10 +69,14 @@ export function extractSemanticText(
       return extractMarkdownSegments(input.source.sourceId, text);
     case 'fountain':
       return extractFountainSegments(input.source.sourceId, text);
-    case 'json':
-      return extractJsonSegments(input.source.sourceId, text);
-    case 'yaml':
-      return extractYamlSegments(input.source.sourceId, text);
+    case 'json': {
+      const adapter = requireCreativeSchemaAdapter(input, 'json');
+      return extractJsonSegments(input.source.sourceId, text, adapter);
+    }
+    case 'yaml': {
+      const adapter = requireCreativeSchemaAdapter(input, 'yaml');
+      return extractYamlSegments(input.source.sourceId, text, adapter);
+    }
     default:
       throw new SemanticTextExtractionError(
         'semantic-text-unsupported-format',
@@ -232,7 +253,11 @@ function extractFountainSegments(sourceId: string, text: string): readonly Seman
   return segments;
 }
 
-function extractJsonSegments(sourceId: string, text: string): readonly SemanticTextSegment[] {
+function extractJsonSegments(
+  sourceId: string,
+  text: string,
+  adapter: SemanticCreativeSchemaAdapter,
+): readonly SemanticTextSegment[] {
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -246,19 +271,25 @@ function extractJsonSegments(sourceId: string, text: string): readonly SemanticT
   const segments: SemanticTextSegment[] = [];
   let searchOffset = 0;
   visitStructuredValue(value, [], (stringValue, path) => {
+    const field = adapter.selectField({ path, value: stringValue });
+    if (!field) return;
     const literal = JSON.stringify(stringValue);
     const found = text.indexOf(literal, searchOffset);
     const start = found >= 0 ? found + 1 : Math.max(0, searchOffset);
     const end = found >= 0 ? found + literal.length - 1 : start + stringValue.length;
     searchOffset = Math.max(searchOffset, end);
     segments.push(
-      structuredSegment(sourceId, segments.length, stringValue, text, start, end, path),
+      structuredSegment(sourceId, segments.length, stringValue, text, start, end, path, field),
     );
   });
   return segments;
 }
 
-function extractYamlSegments(sourceId: string, text: string): readonly SemanticTextSegment[] {
+function extractYamlSegments(
+  sourceId: string,
+  text: string,
+  adapter: SemanticCreativeSchemaAdapter,
+): readonly SemanticTextSegment[] {
   const document = parseDocument(text, { strict: true });
   if (document.errors.length > 0) {
     throw new SemanticTextExtractionError(
@@ -269,7 +300,12 @@ function extractYamlSegments(sourceId: string, text: string): readonly SemanticT
   const segments: SemanticTextSegment[] = [];
   if (document.contents) {
     visitYamlNode(document.contents, [], (value, path, start, end) => {
-      segments.push(structuredSegment(sourceId, segments.length, value, text, start, end, path));
+      const field = adapter.selectField({ path, value });
+      if (field) {
+        segments.push(
+          structuredSegment(sourceId, segments.length, value, text, start, end, path, field),
+        );
+      }
     });
   }
   return segments;
@@ -333,9 +369,8 @@ function structuredSegment(
   start: number,
   end: number,
   path: readonly (string | number)[],
+  field: SemanticCreativeSchemaField,
 ): SemanticTextSegment {
-  const explicitEntityKind = inferStructuredEntityKind(path);
-  const isExplicitName = isStructuredNamePath(path);
   return makeSegment(
     sourceId,
     ordinal,
@@ -344,34 +379,10 @@ function structuredSegment(
     source,
     { start, end },
     {
-      ...(explicitEntityKind ? { explicitEntityKind } : {}),
-      ...(explicitEntityKind && isExplicitName ? { explicitEntityName: value } : {}),
+      ...(field.explicitEntityKind ? { explicitEntityKind: field.explicitEntityKind } : {}),
+      ...(field.explicitEntityName ? { explicitEntityName: field.explicitEntityName } : {}),
       structuredPath: path,
     },
-  );
-}
-
-function inferStructuredEntityKind(
-  path: readonly (string | number)[],
-): CreativeEntityKind | undefined {
-  for (const segment of path) {
-    if (typeof segment !== 'string') continue;
-    const normalized = segment.toLowerCase();
-    if (['character', 'characters', 'cast'].includes(normalized)) return 'character';
-    if (['scene', 'scenes'].includes(normalized)) return 'scene';
-    if (['location', 'locations', 'place', 'places'].includes(normalized)) return 'location';
-    if (['object', 'objects', 'prop', 'props'].includes(normalized)) return 'object';
-    if (['style', 'styles'].includes(normalized)) return 'style';
-  }
-  return undefined;
-}
-
-function isStructuredNamePath(path: readonly (string | number)[]): boolean {
-  const last = path[path.length - 1];
-  return (
-    typeof last === 'number' ||
-    (typeof last === 'string' &&
-      ['name', 'canonicalname', 'displayname'].includes(last.toLowerCase()))
   );
 }
 
@@ -393,8 +404,17 @@ function makeSegment(
   const end = positionAt(source, offsets.end);
   return {
     segmentId: `${sourceId}:segment:${ordinal}`,
+    unitId: `${sourceId}:text`,
     kind,
     text: value,
+    locator: {
+      kind: 'text-range',
+      startChar: offsets.start,
+      endChar: offsets.end,
+      startLine: start.line,
+      endLine: end.line,
+    },
+    contentHash: hashSemanticText(value),
     range: {
       startOffset: offsets.start,
       endOffset: offsets.end,
@@ -408,6 +428,35 @@ function makeSegment(
     ...(options?.explicitEntityName ? { explicitEntityName: options.explicitEntityName } : {}),
     ...(options?.metadata ? { metadata: options.metadata } : {}),
   };
+}
+
+function requireCreativeSchemaAdapter(
+  input: ExtractSemanticTextInput,
+  format: 'json' | 'yaml',
+): SemanticCreativeSchemaAdapter {
+  const schema = input.source.creativeSchema;
+  const adapter = input.creativeSchemaAdapters?.find(
+    (candidate) =>
+      candidate.schema.schemaId === schema?.schemaId &&
+      candidate.schema.schemaVersion === schema.schemaVersion &&
+      candidate.formats.includes(format),
+  );
+  if (!schema || !adapter) {
+    throw new SemanticTextExtractionError(
+      'semantic-text-unregistered-schema',
+      `Semantic ${format.toUpperCase()} requires a registered creative schema adapter.`,
+    );
+  }
+  return adapter;
+}
+
+function hashSemanticText(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, '0')}`;
 }
 
 function lineSpans(text: string): readonly LineSpan[] {

@@ -1,7 +1,7 @@
 // =============================================================================
 // Export Round-Trip Tests
 //
-// Validates that ProjectData survives saveNkv → loadNkv for all 7 element types,
+// Validates that ProjectData survives saveNkv → loadNkv for all retained element types,
 // and that the validator accepts every supported element type.
 // =============================================================================
 
@@ -9,7 +9,6 @@ import { describe, it, expect } from 'vitest';
 import { loadNkv, saveNkv } from '../codec';
 import { validateNkvProject } from '../validator';
 import type { ProjectData } from '../../types/project';
-import type { Scene3DElement, PuppetElement } from '../../types/element';
 import {
   createTestProject,
   createTestTrack,
@@ -24,47 +23,7 @@ import {
 // Helpers
 // =============================================================================
 
-function createScene3DElement(id: string): Scene3DElement {
-  return {
-    id,
-    type: 'scene3d',
-    name: 'Test Scene3D',
-    src: '/models/scene.glb',
-    duration: 10,
-    startTime: 0,
-    trimStart: 0,
-    trimEnd: 0,
-    transform: { x: 0.5, y: 0.5, scaleX: 1, scaleY: 1, rotation: 0, anchorX: 0.5, anchorY: 0.5 },
-    opacity: 1,
-    blendMode: 'normal',
-    effects: [],
-    muted: false,
-    hidden: false,
-    locked: false,
-  };
-}
-
-function createPuppetElement(id: string): PuppetElement {
-  return {
-    id,
-    type: 'puppet',
-    name: 'Test Puppet',
-    src: '/models/character.moc3',
-    duration: 10,
-    startTime: 0,
-    trimStart: 0,
-    trimEnd: 0,
-    transform: { x: 0.5, y: 0.5, scaleX: 1, scaleY: 1, rotation: 0, anchorX: 0.5, anchorY: 0.5 },
-    opacity: 1,
-    blendMode: 'normal',
-    effects: [],
-    muted: false,
-    hidden: false,
-    locked: false,
-  };
-}
-
-/** Create a project with all 7 element types across tracks */
+/** Create a project with all retained element types across tracks. */
 function createFullProject(): ProjectData {
   return createTestProject({
     tracks: [
@@ -93,16 +52,6 @@ function createFullProject(): ProjectData {
         type: 'subtitle',
         elements: [createTestSubtitleElement({ id: 'sub-1' })],
       }),
-      createTestTrack({
-        id: 'scene3d-t',
-        type: 'scene3d',
-        elements: [createScene3DElement('scene3d-1')],
-      }),
-      createTestTrack({
-        id: 'puppet-t',
-        type: 'puppet' as 'video',
-        elements: [createPuppetElement('puppet-1')],
-      }),
     ],
   });
 }
@@ -113,21 +62,19 @@ function createFullProject(): ProjectData {
 
 describe('NKV export round-trip', () => {
   describe('codec round-trip (saveNkv -> loadNkv)', () => {
-    it('full project with all 7 element types survives round-trip', () => {
+    it('full project with all retained element types survives round-trip', () => {
       const original = createFullProject();
       const json = saveNkv(original, { validate: false });
       const result = loadNkv(json);
 
       // All tracks and elements present
-      expect(result.project.tracks).toHaveLength(7);
+      expect(result.project.tracks).toHaveLength(5);
       expect(result.project.tracks.map((t) => t.id)).toEqual([
         'video-t',
         'audio-t',
         'text-t',
         'shape-t',
         'subtitle-t',
-        'scene3d-t',
-        'puppet-t',
       ]);
 
       // Deep equality via JSON serialization (same as existing roundtrip.test.ts pattern)
@@ -289,17 +236,19 @@ describe('NKV export round-trip', () => {
       expect(validateNkvProject(project).valid).toBe(true);
     });
 
-    it('accepts scene3d element', () => {
+    it.each(['scene3d', 'puppet'] as const)('rejects removed %s elements', (type) => {
       const project = createTestProject({
         tracks: [
-          createTestTrack({
-            id: 'sc3d',
-            type: 'scene3d',
-            elements: [createScene3DElement('s3d-1')],
-          }),
+          {
+            ...createTestTrack({ id: 'removed', type: 'video' }),
+            type,
+            elements: [
+              { ...createTestMediaElement({ id: 'removed-1' }), type, src: '/removed.asset' },
+            ],
+          } as never,
         ],
       });
-      expect(validateNkvProject(project).valid).toBe(true);
+      expect(validateNkvProject(project).valid).toBe(false);
     });
   });
 });

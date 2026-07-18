@@ -11,8 +11,7 @@ import type {
   Provider,
 } from '@earendil-works/pi-ai';
 
-export type CredentialProvenance =
-  'interactive' | 'user-config-import' | 'environment' | 'account-gateway';
+export type CredentialProvenance = 'interactive' | 'user-config-import' | 'environment';
 
 export interface PersistedUserCredential {
   readonly credential: Credential;
@@ -470,12 +469,7 @@ function cloneEntry(
 }
 
 function isCredentialProvenance(value: unknown): value is CredentialProvenance {
-  return (
-    value === 'interactive' ||
-    value === 'user-config-import' ||
-    value === 'environment' ||
-    value === 'account-gateway'
-  );
+  return value === 'interactive' || value === 'user-config-import' || value === 'environment';
 }
 
 function isCredential(value: unknown): value is Credential {

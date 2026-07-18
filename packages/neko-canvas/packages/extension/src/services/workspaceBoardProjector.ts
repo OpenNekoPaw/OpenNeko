@@ -1,5 +1,6 @@
 import {
   CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+  createSafeCanvasWorkspaceProjectionDiagnostic,
   validateCanvasWorkspaceProjectionRequest,
   validateCanvasWorkspaceProjectionResult,
   type CanvasWorkspaceProjectionDiagnostic,
@@ -71,17 +72,14 @@ function validateResult(result: CanvasWorkspaceProjectionResult): CanvasWorkspac
 
 function toProjectionDiagnostic(error: unknown): CanvasWorkspaceProjectionDiagnostic {
   const message = error instanceof Error ? error.message : String(error);
-  return {
-    code: /stale-writer/iu.test(message)
-      ? 'stale-writer'
-      : /stale-revision|stale-board-target/iu.test(message)
-        ? 'stale-revision'
-        : /projection-conflict/iu.test(message)
-          ? 'projection-conflict'
-          : /metadata|sqlite|ledger/iu.test(message)
-            ? 'delivery-ledger-unavailable'
-            : 'projection-write-failed',
-    severity: 'error',
-    message,
-  };
+  const code = /stale-writer/iu.test(message)
+    ? 'stale-writer'
+    : /stale-revision|stale-board-target/iu.test(message)
+      ? 'stale-revision'
+      : /projection-conflict/iu.test(message)
+        ? 'projection-conflict'
+        : /metadata|sqlite|ledger/iu.test(message)
+          ? 'delivery-ledger-unavailable'
+          : 'projection-write-failed';
+  return createSafeCanvasWorkspaceProjectionDiagnostic(code);
 }

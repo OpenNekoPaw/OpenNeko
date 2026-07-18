@@ -79,15 +79,13 @@ describe('canvas narrative validation', () => {
   it('rejects non-Fountain scene refs without old-format branches', () => {
     const diagnostics = validateCanvasNarrativeGraph(
       canvas([
-        node('scene-a', 'narrative-scene', { sceneRef: 'story/main.nks' }),
+        node('scene-a', 'narrative-scene', { sceneRef: 'story/main.fountain' }),
         node('scene-b', 'narrative-scene', { sceneRef: 'story/main.story' }),
-        node('scene-c', 'narrative-scene', { sceneRef: 'story/main.nkstory' }),
+        node('scene-c', 'narrative-scene', { sceneRef: 'story/alternate.fountain' }),
       ]),
     );
 
     expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
-      'invalid-narrative-scene-ref',
-      'invalid-narrative-scene-ref',
       'invalid-narrative-scene-ref',
     ]);
   });

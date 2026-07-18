@@ -614,6 +614,42 @@ describe('document access service', () => {
     expect(result.text).toBe('line 2\nline 3');
   });
 
+  it('builds DOCX paragraph locators instead of one body-sized segment', async () => {
+    const deps = createDeps({
+      loadModule: createModuleLoader((packageName) =>
+        packageName === 'mammoth'
+          ? {
+              extractRawText: async () => ({
+                value: 'First paragraph.\n\nSecond paragraph.',
+              }),
+            }
+          : null,
+      ),
+    });
+    const runtime = createDocumentReaderRuntime(deps);
+    const service = createDocumentAccessService({ reader: runtime, runtime: deps });
+
+    const manifest = await service.getManifest('/doc/story.docx');
+    const first = manifest.units[0];
+    const second = manifest.units[1];
+    if (!first) throw new Error('DOCX manifest did not contain the first paragraph');
+
+    expect(manifest.units).toHaveLength(2);
+    expect(first?.kind).toBe('section');
+    expect(first?.locator).toEqual({
+      kind: 'text-range',
+      startChar: 0,
+      endChar: 16,
+      paragraphIndex: 0,
+    });
+    expect(second?.locator).toEqual(
+      expect.objectContaining({ kind: 'text-range', paragraphIndex: 1 }),
+    );
+    await expect(
+      service.readRange('/doc/story.docx', { locator: first.locator }),
+    ).resolves.toMatchObject({ text: 'First paragraph.' });
+  });
+
   it('reads PDF page ranges using pdf-parse partial pages when available', async () => {
     class FakePdfParser {
       constructor(_options: { data: Uint8Array }) {}

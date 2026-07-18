@@ -4,7 +4,7 @@
  * Watches .nkv documents for open/change/close events, debounces analysis,
  * and publishes DiagnosticEntry[] → vscode.Diagnostic[].
  *
- * Follows the FountainDiagnosticsProvider pattern from neko-story.
+ * Provides Fountain-style diagnostics for JVI media metadata.
  */
 
 import * as vscode from 'vscode';

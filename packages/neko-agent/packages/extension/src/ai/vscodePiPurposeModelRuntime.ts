@@ -15,7 +15,6 @@ import {
 export interface VSCodePiPurposeModelRuntimeOptions {
   readonly credentials: OpenNekoCredentialStore;
   readonly config: Platform['config'];
-  readonly resolveAccountGatewayCredential?: (providerId: string) => Promise<string>;
 }
 
 export interface CompleteVSCodePiPurposeModelInput {
@@ -34,17 +33,12 @@ export class VSCodePiPurposeModelRuntime {
   async complete(input: CompleteVSCodePiPurposeModelInput): Promise<PiPurposeModelCompletion> {
     const selection = this.resolveSelection(input);
     const models = createOpenNekoPiModels(this.options.credentials);
-    const modelUse = await resolveVSCodePiPurposeModelUse(
-      models,
-      this.options.credentials,
-      {
-        purpose: input.purpose,
-        ...selection,
-        providerSource: 'explicit-config',
-        ...(input.parameters === undefined ? {} : { parameters: input.parameters }),
-      },
-      this.options.resolveAccountGatewayCredential,
-    );
+    const modelUse = await resolveVSCodePiPurposeModelUse(models, this.options.credentials, {
+      purpose: input.purpose,
+      ...selection,
+      providerSource: 'explicit-config',
+      ...(input.parameters === undefined ? {} : { parameters: input.parameters }),
+    });
     return completePiPurposeModel({
       models,
       modelUse,

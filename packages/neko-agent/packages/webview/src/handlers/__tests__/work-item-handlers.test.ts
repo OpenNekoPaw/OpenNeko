@@ -39,12 +39,12 @@ describe('work item message handlers', () => {
       configHandlers,
       {
         type: 'pluginsAvailable',
-        plugins: { canvas: true, cut: false, sketch: true },
+        plugins: { canvas: true, cut: false },
       },
       harness.context,
     );
 
-    expect(harness.pluginsAvailable()).toEqual({ canvas: true, cut: false, sketch: true });
+    expect(harness.pluginsAvailable()).toEqual({ canvas: true, cut: false });
   });
 
   it('ignores stale project file mention results for older @ filters', () => {

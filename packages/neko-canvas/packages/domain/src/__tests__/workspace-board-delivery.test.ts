@@ -59,7 +59,27 @@ describe('Workspace Board delivery coordinator', () => {
     await first.flush();
 
     expect(mutation.saveCount).toBe(2);
-    expect(mutation.canvasData.nodes.filter((node) => node.type === 'group')).toHaveLength(3);
+    expect(mutation.canvasData.nodes).toHaveLength(2);
+    expect(mutation.canvasData.nodes.every((node) => node.type === 'text')).toBe(true);
+    expect(mutation.canvasData.nodes.every((node) => node.parentId === undefined)).toBe(true);
+  });
+
+  it('keeps another Host pending while an editor owner retains the writer lease', async () => {
+    const store = await createStore();
+    const mutation = new MemoryMutationPort();
+    const editorOwner = createCoordinator(store, mutation, 'vscode-editor');
+    const backgroundHost = createCoordinator(store, mutation, 'tui-host');
+    const request = delivery('delivery:pending-behind-editor');
+
+    await expect(editorOwner.acquireWriterOwnership()).resolves.toBe(true);
+    await expect(backgroundHost.enqueue(request)).resolves.toMatchObject([
+      { deliveryId: request.process.deliveryId, status: 'queued', diagnostics: [] },
+    ]);
+    expect(mutation.saveCount).toBe(0);
+
+    await expect(editorOwner.flush()).resolves.toMatchObject([{ status: 'projected' }]);
+    expect(mutation.saveCount).toBe(1);
+    await editorOwner.releaseWriterOwnership();
   });
 
   it('rejects a stale epoch after lease takeover', async () => {
@@ -111,11 +131,79 @@ describe('Workspace Board delivery coordinator', () => {
     expect(mutation.saveCount).toBe(1);
     await expect(recovered.enqueue(request)).resolves.toMatchObject([{ status: 'noop' }]);
   });
+
+  it('keeps a delivery blocked when Canvas fails before writing and retries the same identity', async () => {
+    const store = await createStore();
+    const mutation = new MemoryMutationPort();
+    mutation.failBeforeSave = new Error('permission denied');
+    const coordinator = createCoordinator(store, mutation, 'host-a');
+    const request = delivery('delivery:before-write');
+
+    const blocked = await coordinator.enqueue(request);
+    expect(blocked).toMatchObject([
+      { status: 'blocked', diagnostics: [{ code: 'projection-write-failed' }] },
+    ]);
+    expect(JSON.stringify(blocked)).not.toContain('permission denied');
+    expect(mutation.saveCount).toBe(0);
+
+    mutation.failBeforeSave = undefined;
+    await expect(coordinator.retry(request.process.deliveryId)).resolves.toMatchObject([
+      { status: 'projected', deliveryId: request.process.deliveryId },
+    ]);
+    expect(mutation.saveCount).toBe(1);
+  });
+
+  it('reloads and re-plans once when the Canvas revision changes before save', async () => {
+    const store = await createStore();
+    const mutation = new MemoryMutationPort();
+    mutation.changeRevisionBeforeNextSave = true;
+    const coordinator = createCoordinator(store, mutation, 'host-a');
+
+    await expect(coordinator.enqueue(delivery('delivery:replan'))).resolves.toMatchObject([
+      { status: 'projected' },
+    ]);
+    expect(mutation.saveAttempts).toBe(2);
+    expect(mutation.saveCount).toBe(1);
+    expect(mutation.canvasData.nodes.some((node) => node.id === 'user-edit')).toBe(true);
+  });
+
+  it('returns a conflict without writing when a deterministic delivery node is occupied', async () => {
+    const store = await createStore();
+    const request = delivery('delivery:occupied');
+    const mutation = new MemoryMutationPort();
+    const projected = planCanvasWorkspaceBoardProjection(mutation.canvasData, request);
+    const occupiedId = projected.nodeIds.at(-1);
+    if (!occupiedId) throw new Error('Projection test requires a child node identity.');
+    mutation.canvasData = {
+      ...mutation.canvasData,
+      nodes: [
+        ...mutation.canvasData.nodes,
+        {
+          id: occupiedId,
+          type: 'text',
+          position: { x: 0, y: 0 },
+          size: { width: 320, height: 180 },
+          zIndex: 1,
+          data: { content: 'user' },
+        },
+      ],
+    };
+
+    await expect(
+      createCoordinator(store, mutation, 'host-a').enqueue(request),
+    ).resolves.toMatchObject([
+      { status: 'conflict', diagnostics: [{ code: 'projection-conflict' }] },
+    ]);
+    expect(mutation.saveCount).toBe(0);
+  });
 });
 
 class MemoryMutationPort implements CanvasWorkspaceBoardMutationPort {
   canvasData = createEmptyCanvasData('Workspace');
   saveCount = 0;
+  saveAttempts = 0;
+  failBeforeSave?: Error;
+  changeRevisionBeforeNextSave = false;
 
   async loadLatest(input: {
     readonly documentUri: string;
@@ -135,6 +223,25 @@ class MemoryMutationPort implements CanvasWorkspaceBoardMutationPort {
     readonly canvasData: CanvasData;
     readonly assertWriter?: () => Promise<void>;
   }): Promise<{ readonly revision: string }> {
+    this.saveAttempts += 1;
+    if (this.failBeforeSave) throw this.failBeforeSave;
+    if (this.changeRevisionBeforeNextSave) {
+      this.changeRevisionBeforeNextSave = false;
+      this.canvasData = {
+        ...this.canvasData,
+        nodes: [
+          ...this.canvasData.nodes,
+          {
+            id: 'user-edit',
+            type: 'text',
+            position: { x: 8, y: 8 },
+            size: { width: 320, height: 180 },
+            zIndex: 1,
+            data: { content: 'edit' },
+          },
+        ],
+      };
+    }
     const current = createCanvasWorkspaceBoardRevision(this.canvasData);
     if (current !== input.expectedRevision)
       throw new Error('stale-revision: memory document changed.');

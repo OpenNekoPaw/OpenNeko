@@ -36,7 +36,6 @@
     "onView:neko.entityInspector",
     "onCommand:neko.assets.contractPath",
     "onCommand:neko.assets.queryMediaLibrary",
-    "onCommand:neko.entity.getDashboardCreativeEntitySource",
     "onCommand:neko.entity.inspectEntity",
     "onCommand:neko.entityInspector.follow",
     "onCommand:neko.entity.addAlias",

@@ -32,6 +32,15 @@ function isRuntimeVersionAtLeast(current: string, minimum: readonly number[]): b
   return true;
 }
 
+export function assertSupportedBunSqliteRuntimeVersion(current: string): void {
+  if (isRuntimeVersionAtLeast(current, [1, 3, 10])) return;
+  throw new LocalMetadataError({
+    code: 'metadata-unsupported-runtime',
+    operation: 'open-bun-sqlite',
+    message: `bun:sqlite requires Bun 1.3.10 or newer; received ${current}`,
+  });
+}
+
 function normalizeRows(rows: unknown): readonly SqliteRow[] {
   if (!Array.isArray(rows)) {
     throw new TypeError('bun:sqlite query did not return an array');
@@ -97,13 +106,7 @@ class BunSqliteConnection implements SqliteConnection {
 
 class BunSqliteConnectionFactory implements SqliteConnectionFactory {
   async open(options: LocalMetadataOpenOptions): Promise<SqliteConnection> {
-    if (!isRuntimeVersionAtLeast(Bun.version, [1, 3, 10])) {
-      throw new LocalMetadataError({
-        code: 'metadata-unsupported-runtime',
-        operation: 'open-bun-sqlite',
-        message: `bun:sqlite requires Bun 1.3.10 or newer; received ${Bun.version}`,
-      });
-    }
+    assertSupportedBunSqliteRuntimeVersion(Bun.version);
     await mkdir(dirname(options.databasePath), { recursive: true });
     let database: Database | null = null;
     try {

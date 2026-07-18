@@ -43,7 +43,7 @@ const CAPABILITY_DIAGNOSTICS: readonly AgentCapabilityAvailabilityDiagnostic[] =
   },
   {
     level: 'info',
-    providerId: 'neko-story',
+    providerId: 'fountain-content',
     contributionKind: 'provider',
     code: 'capability.provider.host-not-supported',
     reason: 'host=tui is not supported',
@@ -145,7 +145,7 @@ describe('infrastructure command presenters', () => {
       'cut.render',
       'Vendor codec: Foo/H.266 is unavailable',
       'codec:foo-h266',
-      'neko-story',
+      'fountain-content',
       'host=tui is not supported',
     ]) {
       expect(en.output).toContain(stableValue);
@@ -154,7 +154,7 @@ describe('infrastructure command presenters', () => {
     expect(en.output.indexOf('neko-assets')).toBeLessThan(en.output.indexOf('neko-cut'));
     expect(zh.output.indexOf('neko-assets')).toBeLessThan(zh.output.indexOf('neko-cut'));
     expect(en.output).toContain('warn neko-cut tool cut.render:');
-    expect(en.output).toContain('info neko-story provider: host=tui is not supported');
+    expect(en.output).toContain('info fountain-content provider: host=tui is not supported');
     expect(en.output).not.toContain('provider :');
   });
 

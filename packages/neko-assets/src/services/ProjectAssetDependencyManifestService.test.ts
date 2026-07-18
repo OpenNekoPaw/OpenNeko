@@ -15,7 +15,7 @@ describe('ProjectAssetDependencyManifestService', () => {
         id: 'z-market',
         packageId: '@studio/sakura-motion',
         version: '1.0.0',
-        mediaKind: 'puppet-motion',
+        mediaKind: 'live2d-motion',
         dimensions: ['motion'],
       }),
     );
@@ -23,7 +23,7 @@ describe('ProjectAssetDependencyManifestService', () => {
       service.createImportDependency({
         id: 'a-import',
         originalFile: '/repo/downloads/sakura.zip',
-        mediaKind: 'puppet-model',
+        mediaKind: 'live2d-model',
         dimensions: ['model'],
         storageMode: 'bundle-memory',
         contentHash: 'sha256:source',
@@ -62,7 +62,7 @@ describe('ProjectAssetDependencyManifestService', () => {
       service.createImportDependency({
         id: 'sakura',
         originalFile: '/repo/downloads/sakura.zip',
-        mediaKind: 'puppet-model',
+        mediaKind: 'live2d-model',
         dimensions: ['model'],
         storageMode: 'bundle-memory',
         contentHash: 'sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',

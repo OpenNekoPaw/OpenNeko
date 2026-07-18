@@ -48,7 +48,6 @@ export interface UseContextMenuOptions {
   onGenerateSelected?: () => void;
   onBatchGenerate?: () => void;
   onSendToAgent?: (intent?: string) => void;
-  onEditInSketch?: () => void;
   onGenerateVideo?: () => void;
   onEditWithControlNet?: () => void;
   onSetPlaybackEntry?: (nodeId: string) => void;
@@ -91,7 +90,6 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
     onGenerateSelected,
     onBatchGenerate,
     onSendToAgent,
-    onEditInSketch,
     onGenerateVideo,
     onEditWithControlNet,
     onSetPlaybackEntry,
@@ -163,7 +161,6 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
         onGenerateSelected,
         onBatchGenerate,
         onSendToAgent,
-        onEditInSketch,
         onGenerateVideo,
         onEditWithControlNet,
       };
@@ -197,7 +194,6 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
       onGenerateSelected,
       onBatchGenerate,
       onSendToAgent,
-      onEditInSketch,
       onGenerateVideo,
       onEditWithControlNet,
       onSetPlaybackEntry,

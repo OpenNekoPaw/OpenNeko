@@ -1,64 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { DashboardCreativeEntityRow } from '@neko/shared/types/dashboard-creative-entity';
 import {
-  dashboardCreativeEntityRowsToProjectSearchItems,
-  dashboardCreativeEntityStateFreshnessValues,
   extractScriptCharacterCandidates,
   scriptCharacterCandidateToProjectSearchItem,
 } from '../projectSearch';
+import { createEntitySearchAdapter } from '../index';
 
-describe('entity project search projections', () => {
-  it('projects Dashboard creative entity rows into canonical project search items', () => {
-    const items = dashboardCreativeEntityRowsToProjectSearchItems(
-      [
-        createDashboardRow({
-          label: '小橘',
-          sourceEntityId: 'candidate:character:小橘',
-          status: 'candidate',
-        }),
-      ],
-      '/workspace/neko',
-    );
-
-    expect(items).toEqual([
-      expect.objectContaining({
-        id: 'dashboard:neko-story:candidate:character:小橘',
-        kind: 'entity-candidate',
-        label: '小橘',
-        source: expect.objectContaining({
-          sourceId: 'neko-story',
-          metadata: expect.objectContaining({ entityKind: 'character' }),
-        }),
-        navigationData: expect.objectContaining({
-          source: 'neko-story',
-          sourceEntityId: 'candidate:character:小橘',
-        }),
-      }),
-    ]);
-  });
-
-  it('keeps rows with relative project roots and filters mismatched absolute project roots', () => {
-    const items = dashboardCreativeEntityRowsToProjectSearchItems(
-      [
-        createDashboardRow({
-          label: '相对项目',
-          sourceEntityId: 'candidate:relative',
-          status: 'candidate',
-          projectRoot: 'neko',
-        }),
-        createDashboardRow({
-          label: '其它项目',
-          sourceEntityId: 'candidate:foreign',
-          status: 'candidate',
-          projectRoot: '/workspace/other',
-        }),
-      ],
-      '/workspace/neko',
-    );
-
-    expect(items.map((item) => item.label)).toEqual(['相对项目']);
-  });
-
+describe('Entity project search projections', () => {
   it('extracts @character markers and Story parser character elements without VSCode', () => {
     const script = [
       'EXT. 猫猫家门口 - 清晨',
@@ -114,50 +61,76 @@ describe('entity project search projections', () => {
     );
   });
 
-  it('combines Dashboard source and item freshness values', () => {
-    const row = createDashboardRow({
-      label: '小橘',
-      sourceEntityId: 'candidate:character:小橘',
-      status: 'candidate',
-    });
-    const items = dashboardCreativeEntityRowsToProjectSearchItems([row], '/workspace/neko');
-
-    expect(
-      dashboardCreativeEntityStateFreshnessValues(
-        {
-          statuses: [{ source: 'neko-story', available: true, freshness: 'building' }],
-          rows: [row],
+  it('projects automatic character candidates from the canonical metadata repository', async () => {
+    const partition = {
+      scope: 'workspace' as const,
+      workspaceId: 'workspace-1',
+      domain: 'entity-asset-projection',
+    };
+    const adapter = createEntitySearchAdapter({
+      projectRoot: '/workspace',
+      service: {
+        list: async () => [],
+        listCandidates: async () => [],
+      },
+      automaticCandidateProjection: {
+        partition,
+        readRevision: async () => ({
+          partition,
+          revision: 1,
+          freshness: 'fresh',
+          diagnostic: null,
+          updatedAt: '2026-07-19T00:00:00.000Z',
+        }),
+        repository: {
+          list: async () => [
+            {
+              projectionId: 'workspace:cases/test.fountain:candidate:candidate:auto:character:小橘',
+              kind: 'entity-candidate' as const,
+              sourceId: 'workspace:cases/test.fountain',
+              candidateId: 'candidate:auto:character:小橘',
+              freshness: 'fresh' as const,
+              updatedAt: '2026-07-19T00:00:00.000Z',
+              value: {
+                id: 'candidate:auto:character:小橘',
+                kind: 'character' as const,
+                name: '小橘',
+                aliases: ['橘仔'],
+                status: 'open' as const,
+                identityBasis: 'user-named' as const,
+                provenance: [],
+                sourceRefs: ['${WORKSPACE}/cases/test.fountain'],
+                createdAt: '2026-07-19T00:00:00.000Z',
+                updatedAt: '2026-07-19T00:00:00.000Z',
+                metadata: { projectionKind: 'automatic-entity-candidate' },
+              },
+            },
+          ],
         },
-        items,
+      },
+    });
+
+    await expect(
+      adapter.query(
+        {
+          text: '',
+          mode: 'entity-picker',
+          kinds: ['entity-candidate'],
+          partitions: ['creative-entities'],
+        },
+        { projectRoot: '/workspace' },
       ),
-    ).toEqual(['building', 'fresh']);
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 'entity-projection:workspace:cases/test.fountain:candidate:candidate:auto:character:小橘',
+        kind: 'entity-candidate',
+        label: '小橘',
+        navigationData: expect.objectContaining({
+          candidateId: 'candidate:auto:character:小橘',
+          sourceRef: '${WORKSPACE}/cases/test.fountain',
+        }),
+        metadata: expect.objectContaining({ status: 'open' }),
+      }),
+    ]);
   });
 });
-
-function createDashboardRow(row: {
-  readonly label: string;
-  readonly sourceEntityId: string;
-  readonly status: 'candidate' | 'confirmed';
-  readonly kind?: 'character' | 'scene';
-  readonly projectRoot?: string;
-}): DashboardCreativeEntityRow {
-  const kind = row.kind ?? 'character';
-  return {
-    ref: {
-      source: 'neko-story',
-      sourceEntityId: row.sourceEntityId,
-      entityId: row.label,
-      entityKind: kind,
-      ...(row.projectRoot ? { projectRoot: row.projectRoot } : {}),
-    },
-    label: row.label,
-    kind,
-    status: row.status,
-    sourceKind: row.status === 'candidate' ? 'script' : 'registry',
-    summary: 'Dashboard entity state row',
-    occurrenceCount: 1,
-    freshness: 'fresh',
-    actions: [],
-    searchText: `${row.label} ${kind}`,
-  };
-}

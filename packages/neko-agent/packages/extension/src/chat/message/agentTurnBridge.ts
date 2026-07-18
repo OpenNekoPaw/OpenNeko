@@ -9,14 +9,15 @@ import type {
   AgentLlmRuntimeOptions,
   AgentMessageExecutionOverrides,
 } from '@neko/agent/runtime';
+import { collectCreatorVisibleArtifacts } from '@neko/agent/runtime';
 import { buildGlobalErrorMessage } from '@neko-agent/types';
 
 import type { IAgentManager } from '../../ai/agentManager';
 import type { ExecuteVSCodePiTurnInput } from '../../ai/vscodePiRuntimeManager';
 import { getLogger } from '../../base';
-import type { AccountAiCatalogCache } from '../../services/accountAiCatalogCache';
 import type { ProviderManager } from '../providerManager';
 import type { AgentStreamProcessor, StreamProcessingResult } from './agentStreamProcessor';
+import type { WorkspaceBoardProjectionHost } from '../../services/workspaceBoardProjectionHost';
 
 const logger = getLogger('AgentTurnBridge');
 
@@ -24,8 +25,8 @@ export interface AgentTurnBridgeDeps {
   providers: ProviderManager;
   agentManager?: IAgentManager;
   getSystemPrompt: (conversationId: string, executionMode: 'auto' | 'ask' | 'plan') => string;
-  accountAiCatalog?: AccountAiCatalogCache;
   streamProcessor: AgentStreamProcessor;
+  terminalArtifactDelivery?: Pick<WorkspaceBoardProjectionHost, 'deliverCreatorVisibleArtifacts'>;
   onPhaseChange: (event: {
     conversationId: string;
     phase: AgentPhase;
@@ -107,7 +108,6 @@ export class AgentTurnBridge {
 
     this.activeConversations.add(input.conversationId);
     try {
-      await this.refreshAccountCatalogForTurn(input.chatModel?.providerId);
       const selection = this.resolveModelSelection(input.chatModel);
       const executionMode = input.executionOverrides?.executionMode ?? input.settings.executionMode;
       const messageId = this.deps.generateMessageId();
@@ -156,6 +156,7 @@ export class AgentTurnBridge {
         const streamResult = stream.result();
         const completed =
           turn.status === 'completed' && streamResult.terminalStatus === 'completed';
+        if (completed) await this.deliverTerminalArtifacts(streamResult);
         const model: AgentTurnModelOutcome = completed
           ? { status: 'completed', streamCount: 1 }
           : turn.status === 'cancelled' || streamResult.terminalStatus === 'cancelled'
@@ -181,6 +182,39 @@ export class AgentTurnBridge {
       this.activeConversations.delete(input.conversationId);
       this.dispatchNext(input.conversationId);
     }
+  }
+
+  private async deliverTerminalArtifacts(stream: StreamProcessingResult): Promise<void> {
+    const delivery = this.deps.terminalArtifactDelivery;
+    if (!delivery) return;
+    const artifacts = collectCreatorVisibleArtifacts({
+      toolResults: stream.collectedToolCalls.flatMap((toolCall) =>
+        toolCall.result
+          ? [
+              {
+                name: toolCall.name,
+                success: toolCall.result.success,
+                data: toolCall.result.data,
+                ...(toolCall.result.attachments
+                  ? { attachments: toolCall.result.attachments }
+                  : {}),
+                ...(toolCall.result.artifacts ? { artifacts: toolCall.result.artifacts } : {}),
+              },
+            ]
+          : [],
+      ),
+      assistantMarkdown: stream.accumulatedResponse,
+    });
+    if (artifacts.length === 0) return;
+    if (!stream.identity) {
+      throw new Error('Completed Pi artifact delivery requires the original turn/run identity.');
+    }
+    await delivery.deliverCreatorVisibleArtifacts({
+      deliveryId: `agent-turn:${stream.identity.turnId}`,
+      createdAt: new Date().toISOString(),
+      artifacts,
+      runId: stream.identity.runId,
+    });
   }
 
   private resolveModelSelection(modelRef: ModelRef | undefined): {
@@ -273,29 +307,6 @@ export class AgentTurnBridge {
       item = manager.dequeuePendingMessage(conversationId);
     }
     this.pendingTurns.delete(conversationId);
-  }
-
-  private async refreshAccountCatalogForTurn(providerId?: string): Promise<void> {
-    if (!this.deps.accountAiCatalog) return;
-    const cached = this.deps.accountAiCatalog.getCachedSnapshot();
-    if (cached && (!providerId || cached.provider.id === providerId)) return;
-    const knownAccountProviderId = this.deps.accountAiCatalog.peekSnapshot()?.provider.id;
-    try {
-      const result = await this.deps.accountAiCatalog.getSnapshot();
-      if (
-        providerId === knownAccountProviderId &&
-        result.snapshot?.provider.id !== knownAccountProviderId
-      ) {
-        throw new Error(`Account AI catalog for provider ${providerId} is unavailable.`);
-      }
-    } catch (error) {
-      this.deps.accountAiCatalog.invalidateForAuthFailure(error);
-      if (providerId === knownAccountProviderId) {
-        throw new Error(`Account AI catalog refresh failed for provider ${providerId}.`, {
-          cause: error,
-        });
-      }
-    }
   }
 }
 

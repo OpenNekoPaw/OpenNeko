@@ -2,6 +2,22 @@ import type { SemanticSourceDescriptor, SemanticSourceFormat } from '@neko/share
 import { describe, expect, it } from 'vitest';
 import { extractSemanticText, SemanticTextExtractionError } from './semantic-text';
 
+const storySchemaAdapter = {
+  schema: { schemaId: 'openneko.story', schemaVersion: '1' },
+  formats: ['json', 'yaml'] as const,
+  selectField: ({ path, value }: { path: readonly (string | number)[]; value: string }) => {
+    const normalizedPath = path.filter((item): item is string => typeof item === 'string');
+    const nameField = normalizedPath.at(-1)?.toLowerCase() === 'name';
+    if (normalizedPath.includes('characters') && nameField) {
+      return { explicitEntityKind: 'character' as const, explicitEntityName: value };
+    }
+    if (normalizedPath.includes('locations') && nameField) {
+      return { explicitEntityKind: 'location' as const, explicitEntityName: value };
+    }
+    return false;
+  },
+};
+
 describe('semantic text extraction', () => {
   it('extracts plain paragraphs with stable ranges', () => {
     const segments = extractSemanticText({
@@ -12,6 +28,8 @@ describe('semantic text extraction', () => {
       expect.objectContaining({
         kind: 'plain',
         text: 'First line\nsecond line',
+        contentHash: expect.stringMatching(/^fnv1a32:/u),
+        locator: expect.objectContaining({ kind: 'text-range', startChar: 0 }),
         range: expect.objectContaining({ startLine: 1, endLine: 2, startOffset: 0 }),
       }),
       expect.objectContaining({
@@ -65,6 +83,7 @@ describe('semantic text extraction', () => {
     const json = extractSemanticText({
       source: source('json'),
       content: '{"characters":[{"name":"Rin"}],"note":"hello"}',
+      creativeSchemaAdapters: [storySchemaAdapter],
     });
     expect(json).toEqual(
       expect.arrayContaining([
@@ -79,6 +98,7 @@ describe('semantic text extraction', () => {
     const yaml = extractSemanticText({
       source: source('yaml'),
       content: 'locations:\n  - name: Harbor\n',
+      creativeSchemaAdapters: [storySchemaAdapter],
     });
     expect(yaml).toEqual(
       expect.arrayContaining([
@@ -92,9 +112,19 @@ describe('semantic text extraction', () => {
   });
 
   it('fails visibly for invalid structured text, UTF-8, limits, and cancellation', () => {
-    expect(() => extractSemanticText({ source: source('json'), content: '{' })).toThrowError(
-      expect.objectContaining({ code: 'semantic-text-invalid-json' }),
-    );
+    expect(() =>
+      extractSemanticText({
+        source: source('json'),
+        content: '{',
+        creativeSchemaAdapters: [storySchemaAdapter],
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'semantic-text-invalid-json' }));
+    expect(() =>
+      extractSemanticText({
+        source: { ...source('json'), creativeSchema: undefined },
+        content: '{"name":"Rin"}',
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'semantic-text-unregistered-schema' }));
     expect(() =>
       extractSemanticText({ source: source('plain'), content: new Uint8Array([0xff]) }),
     ).toThrowError(expect.objectContaining({ code: 'semantic-text-invalid-utf8' }));
@@ -122,5 +152,8 @@ function source(format: SemanticSourceFormat): SemanticSourceDescriptor {
     fingerprint: 'sha256:test',
     sizeBytes: 10,
     modifiedAtMs: 1,
+    ...((format === 'json' || format === 'yaml') && {
+      creativeSchema: storySchemaAdapter.schema,
+    }),
   };
 }

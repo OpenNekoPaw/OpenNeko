@@ -7,7 +7,7 @@
 //
 // Background: every sub-package (sketch, canvas, audio, timeline, etc.)
 // has its own `applyXxxOperation(data, op)` function. Q3's
-// recovery guidance and Q4's Puppet/Model Operations will both need to say
+// recovery guidance and retained media operations both need to say
 // "Apply this operation" without caring which sub-system owns it.
 //
 // This module provides:

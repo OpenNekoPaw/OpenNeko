@@ -121,22 +121,21 @@ import {
 } from '../core/tui-conversation-id';
 import { NodeWorkspaceContentError } from '../host/node-workspace-content-host';
 import { runNodeResourceCacheStartupGc } from '../host/node-resource-cache-startup-gc';
-import {
-  TuiPiRuntimeOwner,
-  type TuiPiRuntimeEvidence,
-} from '../core/pi-runtime-owner';
+import { TuiPiRuntimeOwner, type TuiPiRuntimeEvidence } from '../core/pi-runtime-owner';
 import type { TuiConversationCatalogPort } from '../core/slash-commands';
-import {
-  createTuiPiEventAdapter,
-  type TuiPiEventAdapter,
-} from '../adapters/pi-event-adapter';
+import { createTuiPiEventAdapter, type TuiPiEventAdapter } from '../adapters/pi-event-adapter';
 import {
   materializeTuiMediaTaskResult,
   projectTuiTaskResultContinuation,
 } from '../core/tui-task-result-continuation';
-import { NodeMediaTaskDeliveryHost } from '../host/node-media-task-delivery-host';
-import { collectCreatorVisibleArtifacts } from '@neko/agent/runtime';
-
+import {
+  NodeMediaTaskDeliveryHost,
+  type WorkspaceBoardDeliveryObservability,
+} from '../host/node-media-task-delivery-host';
+import {
+  collectCreatorVisibleArtifacts,
+  type CreatorVisibleArtifactCandidate,
+} from '@neko/agent/runtime';
 
 interface ExecutePromptOptions {
   readonly metadata?: Record<string, unknown>;
@@ -263,6 +262,10 @@ export interface AgentSessionHandle {
   readonly getPromptCompositionProjection: () => readonly PromptCompositionFragmentProjection[];
   /** Secret-free Workspace Board projection outcomes for debug automation. */
   readonly getWorkspaceBoardProjections: () => readonly CanvasWorkspaceProjectionResult[];
+  /** Canonical delivery and legacy-fallback counters for debug automation. */
+  readonly getWorkspaceBoardDeliveryObservability: () => WorkspaceBoardDeliveryObservability;
+  /** Terminal creator-visible artifacts submitted through the canonical delivery host. */
+  readonly getCreatorVisibleArtifacts: () => readonly CreatorVisibleArtifactCandidate[];
   /** Stable generated-output lifecycle facts retained without Host paths. */
   readonly getGeneratedOutputLifecycles: () => readonly GeneratedAssetRevisionRef[];
   /** Terminal Task results still being materialized or delivered to a continuation. */
@@ -336,6 +339,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
   const toolRegistryRef = useRef<ToolRegistry | null>(null);
   const taskManagerRef = useRef<IRuntimeTaskManager | null>(null);
   const workspaceBoardProjectionsRef = useRef<readonly CanvasWorkspaceProjectionResult[]>([]);
+  const creatorVisibleArtifactsRef = useRef<readonly CreatorVisibleArtifactCandidate[]>([]);
   const generatedOutputLifecyclesRef = useRef<readonly GeneratedAssetRevisionRef[]>([]);
   const generatedAssetIndexRef = useRef<GeneratedAssetIndex | null>(null);
   const mediaTaskDeliveryHostRef = useRef<NodeMediaTaskDeliveryHost | null>(null);
@@ -414,13 +418,9 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
     }
   }, []);
 
-  const syncRuntimeProjection = useCallback(
-    (contextTokenCount: number | null = null): void => {
-      stores.agent.getState().setContextTokenCount(contextTokenCount);
-    },
-    [],
-  );
-
+  const syncRuntimeProjection = useCallback((contextTokenCount: number | null = null): void => {
+    stores.agent.getState().setContextTokenCount(contextTokenCount);
+  }, []);
 
   const resumeConversation = useCallback(
     async (conversationId: string): Promise<void> => {
@@ -469,6 +469,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       try {
         isReadyRef.current = false;
         workspaceBoardProjectionsRef.current = [];
+        creatorVisibleArtifactsRef.current = [];
         generatedOutputLifecyclesRef.current = [];
         setIsReady(false);
         setCapabilityRevision((revision) => revision + 1);
@@ -557,7 +558,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           createCLITaskManager({
             taskStorage: localMetadataBinding.taskStorage,
             taskRecoveryStorage: localMetadataBinding.taskRecoveryStorage,
-        });
+          });
         await taskManager.initialize();
         taskManagerRef.current = taskManager;
         const cliPlatform = createCLIPlatform({
@@ -605,9 +606,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
               if (!continuation) return;
               const submitContinuation = submitInternalContinuationRef.current;
               if (!submitContinuation) {
-                throw new Error(
-                  `TUI task continuation owner is unavailable for ${event.task.id}.`,
-                );
+                throw new Error(`TUI task continuation owner is unavailable for ${event.task.id}.`);
               }
               await submitContinuation(continuation);
             })()
@@ -844,6 +843,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       const turnEvidence = runtimeEvidence?.lastTurn;
       const candidates = collectCreatorVisibleArtifacts({
         toolResults: piEventAdapter.getTerminalToolResults(),
+        assistantMarkdown: readLastPiAssistantText(piRuntimeOwner.messages),
       });
       if (candidates.length > 0 && turnEvidence) {
         const deliveryHost = mediaTaskDeliveryHostRef.current;
@@ -854,8 +854,15 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           deliveryId: `agent-turn:${turnEvidence.turnId}`,
           createdAt: new Date().toISOString(),
           artifacts: candidates,
-          runId: turnEvidence.runId,
+          runId: options.continuationMetadata?.runId ?? turnEvidence.runId,
+          ...(options.continuationMetadata?.taskId
+            ? { taskId: options.continuationMetadata.taskId }
+            : {}),
         });
+        creatorVisibleArtifactsRef.current = Object.freeze([
+          ...creatorVisibleArtifactsRef.current,
+          ...candidates,
+        ]);
       }
       void refreshTaskSummary();
       syncRuntimeProjection();
@@ -961,7 +968,6 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       try {
         await executePrompt(prompt, { metadata: executionOverrides?.metadata, source: 'user' });
         await releaseRuntimeQueuedPrompts();
-
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
         stores.agent.getState().setError(err);
@@ -1149,12 +1155,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       syncRuntimeProjection();
       return item;
     },
-    [
-      presentation,
-      projectRuntimeMessageQueue,
-      requireRuntimeMessageQueue,
-      syncRuntimeProjection,
-    ],
+    [presentation, projectRuntimeMessageQueue, requireRuntimeMessageQueue, syncRuntimeProjection],
   );
 
   const editQueuedMessage = useCallback(
@@ -1246,9 +1247,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
             ...(identity.providerExpressionProfileId
               ? { providerExpressionProfileId: identity.providerExpressionProfileId }
               : {}),
-            ...(configuredModel.capabilities
-              ? { capabilities: configuredModel.capabilities }
-              : {}),
+            ...(configuredModel.capabilities ? { capabilities: configuredModel.capabilities } : {}),
           },
         });
       } finally {
@@ -1480,6 +1479,18 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
     getPiRuntimeEvidence: () => piRuntimeOwnerRef.current?.getRuntimeEvidence() ?? null,
     getPromptCompositionProjection: () => [],
     getWorkspaceBoardProjections: () => workspaceBoardProjectionsRef.current,
+    getWorkspaceBoardDeliveryObservability: () =>
+      mediaTaskDeliveryHostRef.current?.getWorkspaceBoardDeliveryObservability() ?? {
+        canonicalSubmissionCount: 0,
+        resumeScanCount: 0,
+        legacyFallbackCounts: {
+          activeCanvas: 0,
+          recentCanvas: 0,
+          directWriter: 0,
+          genericSendToCanvas: 0,
+        },
+      },
+    getCreatorVisibleArtifacts: () => creatorVisibleArtifactsRef.current,
     getGeneratedOutputLifecycles: () => generatedOutputLifecyclesRef.current,
     getPendingTaskResultDeliveryCount: () => pendingTaskResultDeliveryCountRef.current,
     syncRuntimeState: () => syncRuntimeProjection(),
@@ -1513,7 +1524,6 @@ function buildSystemPromptWithContext(builder: SystemPromptBuilder, config: CLIC
   ];
   return base + context.join('\n');
 }
-
 
 function projectCliLlmParameters(
   config: CLIConfig,
@@ -1558,7 +1568,6 @@ function projectCliLlmParameters(
   }
 }
 
-
 function selectRunningTasks(tasks: readonly Task[]): readonly Task[] {
   const activeTasks = tasks
     .filter((task) => task.status === 'pending' || task.status === 'running')
@@ -1602,6 +1611,22 @@ function projectPiHistoryToChatMessages(messages: readonly unknown[]): ChatMessa
     const content = projectPiMessageContent(message.content);
     return [{ role, content }];
   });
+}
+
+function readLastPiAssistantText(messages: readonly unknown[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (
+      typeof message === 'object' &&
+      message !== null &&
+      'role' in message &&
+      message.role === 'assistant' &&
+      'content' in message
+    ) {
+      return projectPiMessageContent(message.content);
+    }
+  }
+  return '';
 }
 
 function projectPiMessageContent(content: unknown): string {

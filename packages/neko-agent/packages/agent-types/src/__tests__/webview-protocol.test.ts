@@ -289,6 +289,26 @@ describe('webview protocol parser', () => {
     });
   });
 
+  it('accepts an explicit roleplay Candidate confirmation with stable Search identity', () => {
+    expect(
+      parseWebviewToExtensionMessage({
+        type: 'confirmRoleplayCandidate',
+        projectSearchItemId: 'entity-projection:semantic-xiaoju',
+        initialUserMessage: '你好，小橘',
+      }),
+    ).toEqual({
+      type: 'confirmRoleplayCandidate',
+      projectSearchItemId: 'entity-projection:semantic-xiaoju',
+      initialUserMessage: '你好，小橘',
+    });
+    expect(
+      parseWebviewToExtensionMessage({
+        type: 'confirmRoleplayCandidate',
+        projectSearchItemId: '',
+      }),
+    ).toBeNull();
+  });
+
   it('accepts message queue commands with explicit conversation and item scope', () => {
     expect(
       parseWebviewToExtensionMessage({

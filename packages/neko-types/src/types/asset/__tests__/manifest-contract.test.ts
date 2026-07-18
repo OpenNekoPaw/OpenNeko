@@ -323,8 +323,8 @@ describe('AssetManifest v4 contract', () => {
 
   it('accepts puppet, model, and voice media kinds for character assets', () => {
     const kinds = [
-      'puppet-model',
-      'puppet-config',
+      'live2d-model',
+      'live2d-config',
       'model-2d-scene',
       'model-3d',
       'model-motion',

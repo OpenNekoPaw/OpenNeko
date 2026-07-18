@@ -4,7 +4,6 @@ import { getContainerChildIds, getNodeParentId } from '@neko/shared';
 import { Button, IconButton, Popover } from '@neko/ui/primitives';
 import {
   CopyIcon,
-  EditIcon,
   LayersIcon,
   MoreHorizontalIcon,
   OpenIcon,
@@ -187,21 +186,6 @@ function resolveToolbarActions(
   const material = resolveCanvasMaterialPresentation(node, allNodes);
   const materialActions = material
     ? [
-        ...(material.canEditImage
-          ? [
-              createNodeAction(
-                node,
-                parentId,
-                {
-                  id: 'edit-media',
-                  label: 'action.editShort',
-                  position: 'bottom',
-                  visibleWhen: 'always',
-                },
-                previewSource,
-              ),
-            ]
-          : []),
         ...(material.canPreview
           ? [
               createNodeAction(
@@ -454,8 +438,6 @@ function nodeActionIcon(actionId: NodeCardActionId): ReactNode {
       return <RefreshIcon size={14} />;
     case 'remove':
       return <TrashIcon size={14} />;
-    case 'edit-media':
-      return <EditIcon size={14} />;
   }
 }
 

@@ -1,16 +1,22 @@
 import { afterEach, describe, expect, it } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   CATALOG_PROJECTION_MIGRATIONS,
   ENTITY_ASSET_PROJECTION_MIGRATIONS,
+  AGENT_STATE_MIGRATIONS,
   M1_LOCAL_METADATA_MIGRATIONS,
   SEARCH_PROJECTION_MIGRATIONS,
 } from '@neko/shared/local-metadata/sqlite';
 import { runLocalMetadataAdapterContract } from '@neko/shared/local-metadata/testing';
 import { resolveGlobalStorageLayout } from '@neko/shared';
-import { createBunSqliteLocalMetadataStore } from '../bun-sqlite-local-metadata-store';
+import {
+  assertSupportedBunSqliteRuntimeVersion,
+  createBunSqliteLocalMetadataStore,
+} from '../bun-sqlite-local-metadata-store';
+import { WorkspaceBoardDeliveryLedger } from '@neko-canvas/domain';
+import type { CanvasWorkspaceProjectionRequest } from '@neko/shared';
 
 const WORKSPACE_ID = '9b2de3b5-5f50-4be4-9551-71fb5b512489';
 const temporaryDirectories: string[] = [];
@@ -73,6 +79,82 @@ describe('bun:sqlite local metadata store', () => {
       code: 'metadata-integrity-failed',
       operation: 'open-bun-sqlite',
     });
+    expect((await readdir(join(homedir, '.neko'))).some((entry) => entry.endsWith('.json'))).toBe(
+      false,
+    );
+  });
+
+  it('rejects an unsupported Bun runtime before creating fallback storage', async () => {
+    const homedir = await createTemporaryHome();
+
+    expect(() => assertSupportedBunSqliteRuntimeVersion('1.3.9')).toThrow(
+      expect.objectContaining({
+        code: 'metadata-unsupported-runtime',
+        operation: 'open-bun-sqlite',
+      }),
+    );
+    await expect(readdir(homedir)).resolves.toEqual([]);
+  });
+
+  it('shares fenced Workspace Board deliveries across Bun Hosts without fallback storage', async () => {
+    const homedir = await createTemporaryHome();
+    const layout = resolveGlobalStorageLayout(homedir);
+    const firstStore = createBunSqliteLocalMetadataStore({ homedir });
+    const secondStore = createBunSqliteLocalMetadataStore({ homedir });
+    let now = 1_000;
+
+    try {
+      await firstStore.open({ databasePath: layout.database, busyTimeoutMs: 5_000 });
+      await firstStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
+      await firstStore.migrateNamespace(AGENT_STATE_MIGRATIONS);
+      await firstStore.repositories.workspaces.bind({
+        identity: { version: 1, workspaceId: WORKSPACE_ID },
+        locator: { kind: 'variable', value: '${HOME}/Git/neko-test' },
+        seenAt: '2026-07-13T00:00:00.000Z',
+      });
+      await secondStore.open({ databasePath: layout.database, busyTimeoutMs: 5_000 });
+
+      const firstLedger = new WorkspaceBoardDeliveryLedger({
+        metadataStore: firstStore,
+        workspaceId: WORKSPACE_ID,
+        now: () => now,
+      });
+      const secondLedger = new WorkspaceBoardDeliveryLedger({
+        metadataStore: secondStore,
+        workspaceId: WORKSPACE_ID,
+        now: () => now,
+      });
+      const shared = workspaceBoardDelivery('delivery:bun-shared');
+      await firstLedger.enqueue(shared);
+      await expect(secondLedger.enqueue(shared)).resolves.toMatchObject({ state: 'queued' });
+      await firstLedger.enqueue(workspaceBoardDelivery('delivery:bun-a'));
+      await secondLedger.enqueue(workspaceBoardDelivery('delivery:bun-b'));
+
+      await expect(secondLedger.listPending()).resolves.toHaveLength(3);
+      const firstClaim = await firstLedger.acquireWriter({
+        holderId: 'bun-host-a',
+        leaseDurationMs: 10,
+      });
+      expect(firstClaim).toBeDefined();
+      await expect(
+        secondLedger.acquireWriter({ holderId: 'bun-host-b', leaseDurationMs: 10 }),
+      ).resolves.toBeUndefined();
+      now = 2_000;
+      const secondClaim = await secondLedger.acquireWriter({
+        holderId: 'bun-host-b',
+        leaseDurationMs: 10,
+      });
+      expect(secondClaim?.epoch).toBeGreaterThan(firstClaim?.epoch ?? 0);
+      await expect(firstLedger.assertWriter(firstClaim!)).rejects.toThrow('stale-writer');
+
+      const localEntries = await readdir(join(homedir, '.neko'));
+      expect(localEntries.some((entry) => entry.endsWith('.json'))).toBe(false);
+      expect(localEntries.some((entry) => entry !== 'neko.db' && entry.startsWith('neko.db.'))).toBe(
+        false,
+      );
+    } finally {
+      await Promise.all([firstStore.dispose(), secondStore.dispose()]);
+    }
   });
 
   it('migrates Search, Entity/Asset, and catalog projection tables through bun:sqlite', async () => {
@@ -203,3 +285,35 @@ describe('bun:sqlite local metadata store', () => {
     await store.dispose();
   });
 });
+
+function workspaceBoardDelivery(deliveryId: string): CanvasWorkspaceProjectionRequest {
+  return {
+    version: 2,
+    target: {
+      workspaceId: WORKSPACE_ID,
+      workspaceUri: 'file:///workspace/project/',
+    },
+    process: {
+      deliveryId,
+      sourceHost: 'tui',
+      createdAt: '2026-07-15T00:00:00.000Z',
+    },
+    artifacts: [
+      {
+        kind: 'markdown',
+        title: 'Bun analysis',
+        markdown: '# Bun analysis',
+        provenance: {
+          version: 2,
+          deliveryId,
+          artifactId: `${deliveryId}:analysis`,
+          revision: `${deliveryId}:revision-1`,
+          kind: 'markdown',
+          role: 'analysis',
+          sourceId: `artifact:${deliveryId}`,
+          createdAt: '2026-07-15T00:00:00.000Z',
+        },
+      },
+    ],
+  };
+}

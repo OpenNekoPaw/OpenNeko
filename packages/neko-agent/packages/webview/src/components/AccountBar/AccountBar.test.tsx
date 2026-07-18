@@ -6,13 +6,11 @@ import { AccountBar } from './index';
 const messageMocks = vi.hoisted(() => ({
   openConfigFile: vi.fn(),
   openUserConfigFile: vi.fn(),
-  ssoLogout: vi.fn(),
 }));
 
 const translations: Record<string, string> = {
   'accountBar.connectTitle': 'Connect AI Service',
   'accountBar.connectCta': 'Connect AI',
-  'accountBar.signOut': 'Sign out',
   'accountBar.changeKey': 'Change API Key',
   'accountBar.modelGenerationConfig': 'Models & Generation',
   'accountBar.openConfigFile': 'Open Config File',
@@ -28,12 +26,10 @@ vi.mock('@/messages', () => ({
   AgentHostMessages: {
     openConfigFile: messageMocks.openConfigFile,
     openUserConfigFile: messageMocks.openUserConfigFile,
-    ssoLogout: messageMocks.ssoLogout,
   },
   VSCodeMessages: {
     openConfigFile: messageMocks.openConfigFile,
     openUserConfigFile: messageMocks.openUserConfigFile,
-    ssoLogout: messageMocks.ssoLogout,
   },
 }));
 
@@ -41,17 +37,10 @@ describe('AccountBar', () => {
   beforeEach(() => {
     messageMocks.openConfigFile.mockClear();
     messageMocks.openUserConfigFile.mockClear();
-    messageMocks.ssoLogout.mockClear();
   });
 
   it('renders configured custom-key state as an adaptive header menu', () => {
-    render(
-      <AccountBar
-        ssoSession={null}
-        configuredProviders={[createProvider()]}
-        onOpenOnboarding={vi.fn()}
-      />,
-    );
+    render(<AccountBar configuredProviders={[createProvider()]} onOpenOnboarding={vi.fn()} />);
 
     const trigger = screen.getByRole('button', { name: 'OpenAI' });
     expect(trigger.getAttribute('class')).toContain('agent-account-trigger');
@@ -85,37 +74,10 @@ describe('AccountBar', () => {
     expect(messageMocks.openUserConfigFile).toHaveBeenCalledTimes(1);
   });
 
-  it('exposes model, raw config, and sign-out actions for signed-in accounts', () => {
-    render(
-      <AccountBar
-        ssoSession={{ user: 'artist@example.com', plan: 'Pro' }}
-        configuredProviders={[]}
-        onOpenOnboarding={vi.fn()}
-      />,
-    );
-
-    const trigger = screen.getByRole('button', { name: 'artist@example.com' });
-    expect(trigger.querySelector('.agent-account-avatar')?.textContent).toBe('A');
-    fireEvent.click(trigger);
-
-    expect(screen.getByRole('menuitem', { name: 'Models & Generation' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: 'Open Config File' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeTruthy();
-
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Open Config File' }));
-    expect(messageMocks.openUserConfigFile).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(trigger);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
-    expect(messageMocks.ssoLogout).toHaveBeenCalledTimes(1);
-  });
-
   it('keeps the unconfigured state as a compact onboarding action', () => {
     const onOpenOnboarding = vi.fn();
 
-    render(
-      <AccountBar ssoSession={null} configuredProviders={[]} onOpenOnboarding={onOpenOnboarding} />,
-    );
+    render(<AccountBar configuredProviders={[]} onOpenOnboarding={onOpenOnboarding} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect AI' }));
     expect(onOpenOnboarding).toHaveBeenCalledTimes(1);

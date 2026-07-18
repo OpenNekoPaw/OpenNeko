@@ -205,10 +205,5 @@ class PartitionRefreshDebouncer implements vscode.Disposable {
 }
 
 function isStoryDocument(document: vscode.TextDocument): boolean {
-  return (
-    document.languageId === 'nekostory' ||
-    document.uri.fsPath.endsWith('.fountain') ||
-    document.uri.fsPath.endsWith('.nks') ||
-    document.uri.fsPath.endsWith('.story')
-  );
+  return document.uri.fsPath.endsWith('.fountain');
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { DashboardTask } from '@neko/shared/types/dashboard-task';
+import type { TaskProjection } from '@neko/shared/types/task-projection';
 import { StateTaskDeliveryCursorStorage, TaskDeliveryBridge } from './taskDeliveryBridge';
 
 describe('TaskDeliveryBridge', () => {
@@ -45,7 +45,7 @@ describe('TaskDeliveryBridge', () => {
   });
 });
 
-function createTask(overrides: Partial<DashboardTask> & { taskId: string }): DashboardTask {
+function createTask(overrides: Partial<TaskProjection> & { taskId: string }): TaskProjection {
   return {
     taskId: overrides.taskId,
     source: 'neko-agent',

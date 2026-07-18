@@ -383,28 +383,8 @@ function hasPluginTransferAssetIdentity(asset: PluginTransferAssetRef): boolean 
 function getTargetIcon(target: SendToTarget): React.ReactNode {
   if (target === 'canvas') return <LayersIcon className="h-3.5 w-3.5" />;
   if (target === 'cut') return <ScissorsIcon className="h-3.5 w-3.5" />;
-  if (target === 'sketch') return <EditGlyph />;
-  if (target === 'model') return <ModelGlyph />;
   if (target === 'explorer') return <FileIcon className="h-3.5 w-3.5" />;
   return <UploadIcon className="h-3.5 w-3.5" />;
-}
-
-function EditGlyph() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor">
-      <path d="M3 12.5 11.5 4 13 5.5 4.5 14H3v-1.5Z" strokeWidth="1.5" />
-      <path d="M10.5 5 12 6.5" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-function ModelGlyph() {
-  return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor">
-      <path d="M8 1.8 13 4.5v5.8L8 14.2 3 10.3V4.5L8 1.8Z" strokeWidth="1.4" />
-      <path d="M3.3 4.7 8 7.4l4.7-2.7M8 7.4v6.2" strokeWidth="1.2" />
-    </svg>
-  );
 }
 
 export const SendToMenu = memo(SendToMenuComponent);

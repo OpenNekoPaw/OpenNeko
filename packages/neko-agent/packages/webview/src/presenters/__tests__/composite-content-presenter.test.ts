@@ -1152,7 +1152,7 @@ describe('composite content presenter', () => {
           },
         }),
       ],
-      plugins: { model: true },
+      plugins: { canvas: true },
     });
 
     expect(projection.kind).toBe('asset-gallery');
@@ -1166,7 +1166,7 @@ describe('composite content presenter', () => {
         message: 'Asset 0 does not have an adapter-provided model URI',
       },
     ]);
-    expect(projection.data.plugins).toEqual({ model: true });
+    expect(projection.data.plugins).toEqual({ canvas: true });
   });
 
   it('diagnoses stable asset refs that lack adapter-provided webview URIs', () => {

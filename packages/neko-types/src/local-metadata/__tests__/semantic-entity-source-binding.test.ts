@@ -35,6 +35,31 @@ describe('workspace semantic/entity metadata binding', () => {
     await expect(binding.listAutomaticCandidates()).resolves.toEqual([
       expect.objectContaining({ id: 'candidate:auto:character:nova' }),
     ]);
+    await expect(binding.findOccurrencesByEntity('char_rin')).resolves.toEqual([
+      expect.objectContaining({
+        occurrenceId: 'mention-rin:occurrence',
+        sourceFingerprint: request.source.fingerprint,
+      }),
+    ]);
+    await expect(
+      binding.findEntityLinksByOccurrence('mention-rin:occurrence'),
+    ).resolves.toMatchObject({
+      entityRefs: [{ entityId: 'char_rin', entityKind: 'character' }],
+      candidateIds: [],
+    });
+    await expect(
+      binding.findEntityLinksByOccurrence('mention-nova:occurrence'),
+    ).resolves.toMatchObject({
+      entityRefs: [],
+      candidateIds: ['candidate:auto:character:nova'],
+    });
+    await expect(
+      binding.findEntityLinksByLocator(request.source.sourceId, {
+        kind: 'text-range',
+        startLine: 1,
+        endLine: 1,
+      }),
+    ).resolves.toHaveLength(2);
     await expect(binding.readSemanticRevision()).resolves.toMatchObject({ freshness: 'fresh' });
     await expect(binding.readEntityRevision()).resolves.toMatchObject({ freshness: 'fresh' });
 
@@ -117,10 +142,49 @@ function commitRequest(): SemanticEntitySourceCommitRequest {
         sourceRef: { kind: 'file', path: source.portablePath },
         updatedAt,
       },
+      evidence: [],
       mentions: [],
-      occurrences: [],
+      occurrences: [
+        occurrence({
+          occurrenceId: 'mention-rin:occurrence',
+          mentionId: 'mention-rin',
+          entityRef: { entityId: 'char_rin', entityKind: 'character' },
+          label: 'Rin',
+        }),
+        occurrence({
+          occurrenceId: 'mention-nova:occurrence',
+          mentionId: 'mention-nova',
+          candidateId: candidate.id,
+          label: 'Nova',
+        }),
+      ],
       candidates: [candidate],
       diagnostics: [],
     },
+  };
+}
+
+function occurrence(input: {
+  readonly occurrenceId: string;
+  readonly mentionId: string;
+  readonly entityRef?: { readonly entityId: string; readonly entityKind: 'character' };
+  readonly candidateId?: string;
+  readonly label: string;
+}) {
+  return {
+    ...input,
+    source: {
+      sourceId: 'workspace:story.fountain',
+      sourceKind: 'document' as const,
+      sourceRef: '${WORKSPACE}/story.fountain',
+      providerId: 'neko.text-entity.deterministic',
+      freshness: 'fresh' as const,
+      updatedAt: '2026-07-18T00:00:00.000Z',
+    },
+    role: 'reference' as const,
+    location: '${WORKSPACE}/story.fountain:1',
+    locator: { kind: 'text-range' as const, startLine: 1, endLine: 1 },
+    range: { startLine: 1, endLine: 1 },
+    sourceFingerprint: 'sha256:story-v1',
   };
 }

@@ -7,8 +7,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::args::{ActionOpts, AudioAction, Command, TimelineAction};
-use crate::nka_loader::NkaLoader;
+use crate::args::{ActionOpts, Command, TimelineAction};
 use indicatif::{ProgressBar, ProgressStyle};
 use neko_engine_types::{ActionRequest, EngineConfig};
 use neko_host_api::{
@@ -63,20 +62,11 @@ impl Runner {
                 self.dispatch_action("videos", action.action_name(), action.opts())
                     .await
             }
-            Command::Audios { action } => match action {
-                AudioAction::MixExport { opts }
-                    if opts
-                        .source
-                        .as_deref()
-                        .is_some_and(|source| source.ends_with(".nka")) =>
-                {
-                    self.run_nka_mix_export(&opts).await
-                }
-                ref a => {
-                    self.dispatch_action("audios", a.action_name(), a.opts())
-                        .await
-                }
-            },
+            Command::Audios { action } => {
+                reject_removed_project_source(action.opts())?;
+                self.dispatch_action("audios", action.action_name(), action.opts())
+                    .await
+            }
             Command::Images { action } => {
                 self.dispatch_action("images", action.action_name(), action.opts())
                     .await
@@ -442,53 +432,6 @@ impl Runner {
         Ok(())
     }
 
-    async fn run_nka_mix_export(
-        &mut self,
-        opts: &ActionOpts,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let source = opts.source.as_ref().ok_or_else(|| {
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "--source is required for .nka mix_export",
-            )) as Box<dyn std::error::Error + Send + Sync>
-        })?;
-
-        let output = extract_output_path(opts.options.as_deref())?;
-        let loader = NkaLoader::new();
-        let loaded = loader.load(source)?;
-
-        let mut options = opts
-            .options
-            .as_deref()
-            .map(serde_json::from_str::<serde_json::Value>)
-            .transpose()
-            .map_err(|e| {
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    format!("Invalid options JSON: {}", e),
-                )) as Box<dyn std::error::Error + Send + Sync>
-            })?
-            .unwrap_or_else(|| serde_json::json!({}));
-        options["config"] = serde_json::to_value(&loaded.config).map_err(|e| {
-            Box::new(std::io::Error::other(format!(
-                "Failed to serialize .nka mix config: {}",
-                e
-            ))) as Box<dyn std::error::Error + Send + Sync>
-        })?;
-        options["output"] = serde_json::Value::String(output);
-
-        let merged = serde_json::to_string(&options).map_err(|e| {
-            Box::new(std::io::Error::other(format!(
-                "Failed to serialize mix export options: {}",
-                e
-            ))) as Box<dyn std::error::Error + Send + Sync>
-        })?;
-
-        let mut dispatch_opts = opts.clone();
-        dispatch_opts.options = Some(merged);
-        self.dispatch_action("audios", "mix_export", &dispatch_opts)
-            .await
-    }
 }
 
 impl Default for Runner {
@@ -537,31 +480,20 @@ fn timeline_action_opts(action: &TimelineAction) -> &ActionOpts {
     }
 }
 
-fn extract_output_path(
-    options: Option<&str>,
-) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let value = options
-        .map(serde_json::from_str::<serde_json::Value>)
-        .transpose()
-        .map_err(|e| {
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("Invalid options JSON: {}", e),
-            )) as Box<dyn std::error::Error + Send + Sync>
-        })?
-        .unwrap_or_else(|| serde_json::json!({}));
-
-    value
-        .get("output")
-        .and_then(|value| value.as_str())
-        .filter(|value| !value.is_empty())
-        .map(ToString::to_string)
-        .ok_or_else(|| {
-            Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "options.output is required for .nka mix_export",
-            )) as Box<dyn std::error::Error + Send + Sync>
-        })
+fn reject_removed_project_source(
+    opts: &ActionOpts,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if opts
+        .source
+        .as_deref()
+        .is_some_and(|source| source.to_ascii_lowercase().ends_with(".nka"))
+    {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            ".nka projects are not supported by the retained media CLI",
+        )));
+    }
+    Ok(())
 }
 
 /// Print detailed performance summary from export progress data
@@ -675,6 +607,38 @@ fn print_performance_summary(data: &serde_json::Value) {
     );
     if let Some(vram) = vram_usage_bytes {
         println!("  Peak VRAM:   {:>6.1} MB", vram as f64 / 1024.0 / 1024.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reject_removed_project_source;
+    use crate::args::ActionOpts;
+
+    fn opts(source: &str) -> ActionOpts {
+        ActionOpts {
+            id: None,
+            source: Some(source.to_string()),
+            session: None,
+            stream: None,
+            options: None,
+            body: None,
+            format: "pretty".to_string(),
+        }
+    }
+
+    #[test]
+    fn rejects_removed_nka_projects_before_engine_dispatch() {
+        let error = reject_removed_project_source(&opts("/workspace/legacy.NKA")).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            ".nka projects are not supported by the retained media CLI"
+        );
+    }
+
+    #[test]
+    fn permits_retained_audio_sources() {
+        assert!(reject_removed_project_source(&opts("/workspace/dialogue.wav")).is_ok());
     }
 }
 

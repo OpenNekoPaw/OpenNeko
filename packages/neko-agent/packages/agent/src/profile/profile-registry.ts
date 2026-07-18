@@ -30,7 +30,6 @@ interface AgentProfileRegistryEntry<TProfile extends AgentProfileIdentity> {
 const SOURCE_LAYER_ORDER: readonly AgentProfileSource[] = [
   'builtin',
   'package',
-  'market',
   'personal',
   'project',
   'skill-local',

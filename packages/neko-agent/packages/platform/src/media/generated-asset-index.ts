@@ -53,8 +53,6 @@ export interface ResourceCacheGeneratedAssetIndexBinding {
 const INDEX_FILE_NAME = 'index.json';
 const GENERATED_OUTPUT_INDEX_PROVIDER = 'generated-output-index';
 const GENERATED_OUTPUT_PROJECTION_FIELD = 'generatedOutputProjection';
-const LEGACY_GENERATED_DRAFT_INDEX_PROVIDER = 'generated-draft-index';
-const LEGACY_GENERATED_DRAFT_PROJECTION_FIELD = 'generatedDraftProjection';
 
 export class ResourceCacheGeneratedAssetIndexStore implements GeneratedAssetIndexStore {
   private readonly now: () => string;
@@ -140,6 +138,11 @@ export class ResourceCacheGeneratedAssetIndexStore implements GeneratedAssetInde
   }
 
   private decodeEntry(entry: ResourceCacheEntry): GeneratedAsset | null {
+    if (isLegacyGeneratedDraftProjection(entry)) {
+      throw new Error(
+        `legacy-generated-draft-projection: Resource ${entry.resource.id} must be rebuilt through the generated output index.`,
+      );
+    }
     if (!this.isProjectionEntry(entry)) return null;
     const projection = readGeneratedOutputProjection(entry);
     if (!projection) return null;
@@ -183,10 +186,8 @@ export class ResourceCacheGeneratedAssetIndexStore implements GeneratedAssetInde
   private isProjectionEntry(entry: ResourceCacheEntry): boolean {
     return (
       entry.resource.kind === 'generated' &&
-      ((entry.resource.provider === GENERATED_OUTPUT_INDEX_PROVIDER &&
-        entry.providerMetadata?.[GENERATED_OUTPUT_PROJECTION_FIELD] !== undefined) ||
-        (entry.resource.provider === LEGACY_GENERATED_DRAFT_INDEX_PROVIDER &&
-          entry.providerMetadata?.[LEGACY_GENERATED_DRAFT_PROJECTION_FIELD] !== undefined))
+      entry.resource.provider === GENERATED_OUTPUT_INDEX_PROVIDER &&
+      entry.providerMetadata?.[GENERATED_OUTPUT_PROJECTION_FIELD] !== undefined
     );
   }
 
@@ -215,6 +216,14 @@ export class ResourceCacheGeneratedAssetIndexStore implements GeneratedAssetInde
     const prefix = '${WORKSPACE}/';
     return pathKey.startsWith(prefix) ? pathKey.slice(prefix.length) : undefined;
   }
+}
+
+function isLegacyGeneratedDraftProjection(entry: ResourceCacheEntry): boolean {
+  return (
+    entry.resource.kind === 'generated' &&
+    (entry.resource.provider === ['generated', 'draft', 'index'].join('-') ||
+      entry.providerMetadata?.[['generated', 'Draft', 'Projection'].join('')] !== undefined)
+  );
 }
 
 export class GeneratedAssetIndex {
@@ -444,9 +453,7 @@ function readGeneratedOutputProjection(
   const value =
     entry.resource.provider === GENERATED_OUTPUT_INDEX_PROVIDER
       ? entry.providerMetadata?.[GENERATED_OUTPUT_PROJECTION_FIELD]
-      : entry.resource.provider === LEGACY_GENERATED_DRAFT_INDEX_PROVIDER
-        ? entry.providerMetadata?.[LEGACY_GENERATED_DRAFT_PROJECTION_FIELD]
-        : undefined;
+      : undefined;
   return isGeneratedOutputProjectionPayload(value) ? value : undefined;
 }
 

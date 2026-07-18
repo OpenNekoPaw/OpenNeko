@@ -26,7 +26,7 @@ import {
 } from '@neko/shared';
 import { getLogger } from '../base';
 import { MediaTaskDeliveryHost } from './mediaTaskDeliveryHost';
-import type { AgentDashboardWorkItemSource } from './dashboardWorkItemSource';
+import type { AgentWorkItemProjectionSource } from './workItemProjectionSource';
 import type { AgentLocalResourceAccess } from './localResourceAccess';
 import type { ConversationBridge } from '../chat/conversationBridge';
 import type { WorkspaceBoardProjectionHost } from './workspaceBoardProjectionHost';
@@ -36,7 +36,7 @@ const logger = getLogger('MediaTurnBridge');
 export interface MediaTurnBridgeDeps {
   platform?: Platform;
   mediaDeliveryHost: MediaTaskDeliveryHost;
-  dashboardWorkItems?: AgentDashboardWorkItemSource;
+  workItemProjections?: AgentWorkItemProjectionSource;
   localResourceAccess?: AgentLocalResourceAccess;
   conversations?: ConversationBridge;
   workspaceBoardProjection?: Pick<WorkspaceBoardProjectionHost, 'deliverBatch'>;
@@ -77,7 +77,7 @@ export class MediaTurnBridge {
       mediaModel: input.mediaModel,
       now: this.deps.now,
       postMessage: (message) => {
-        this.deps.dashboardWorkItems?.acceptWebviewMessage(message);
+        this.deps.workItemProjections?.acceptWebviewMessage(message);
         void input.webview.postMessage(message);
       },
       persistErrorMessage: (message) => {
@@ -230,7 +230,7 @@ export class MediaTurnBridge {
     for (const result of results) {
       if (result.status === 'blocked') {
         logger.warn('Generated output persisted but Workspace Board projection was blocked', {
-          diagnostics: result.diagnostics,
+          diagnosticCodes: result.diagnostics.map((diagnostic) => diagnostic.code),
         });
       }
     }

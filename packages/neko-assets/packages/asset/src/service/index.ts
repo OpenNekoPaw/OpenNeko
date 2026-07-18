@@ -22,14 +22,6 @@ export {
 export { AssetRegistry, type AssetRegistryConfig, type AssetChangeListener } from './AssetRegistry';
 export { AssetHealthService, type AssetHealthServiceConfig } from './AssetHealthService';
 export {
-  isMarketProjectedEntity,
-  isUsableMarketAssetInstall,
-  marketAssetProjectionToEntityInput,
-  projectMarketAssetInstall,
-  projectMarketAssetInstalls,
-  type MarketAssetProjection,
-} from './MarketAssetProjection';
-export {
   buildAssetBindingCandidate,
   buildCancelEntityBindingPlan,
   buildDeleteAssetPlan,

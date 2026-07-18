@@ -91,7 +91,6 @@ export {
   NEKO_AGENT_REGISTER_SLASH_COMMANDS_COMMAND,
   NEKO_AGENT_UNREGISTER_EXTERNAL_PROCESSOR_PACKAGE_COMMAND,
   NEKO_AI_ASSISTANT_FOCUS_COMMAND,
-  NEKO_PUPPET_EXTENSION_ID,
   buildPluginSlashCommandCommand,
   type PluginSlashCommandCommandInput,
 } from './extension-command-contract';
@@ -160,9 +159,6 @@ export type {
   ProjectMentionItemKind,
   SessionModeMediaSelectionProjection,
   SettingsDataProjection,
-  SsoErrorProjection,
-  SsoSessionMessagePayload,
-  SsoSessionProjection,
 } from './config-message-projector';
 export type {
   AgentStateEntry,
@@ -262,7 +258,6 @@ export type {
   ExternalProcessorManifest,
   ExternalProcessorManifestValidationOptions,
   ExternalProcessorManifestValidationResult,
-  ExternalProcessorMarketPackageProjection,
   ExternalProcessorOutput,
   ExternalProcessorOutputDeclaration,
   ExternalProcessorParamDeclaration,
@@ -307,7 +302,6 @@ export {
   parseExternalProcessorManifestJson,
   registerBuiltinExternalProcessors,
   registerExtensionExternalProcessorContributions,
-  registerMarketExternalProcessorPackages,
   registerPersonalExternalProcessorManifests,
   registerProjectExternalProcessorManifests,
   validateExternalProcessorManifest,
@@ -518,9 +512,6 @@ export type {
   SettingsUpdatedMessage,
   SkillsListMessage,
   SlashCommandResultMessage,
-  SsoLoginWebviewMessage,
-  SsoErrorMessage,
-  SsoSessionChangedMessage,
   StreamCompleteMessage,
   StreamTextMessage,
   StreamThinkingMessage,
@@ -646,7 +637,6 @@ export type {
   MediaUnderstandingModelStatusValue,
   MediaUnderstandingModels,
   MediaUnderstandingModelSelections,
-  SsoSession,
   SettingsState,
 } from './ui';
 export {
@@ -672,7 +662,6 @@ export {
   type PluginTransferCutStoryboardShot,
   type PluginTransferCutStoryboardShotBase,
   type PluginTransferMediaType,
-  type PluginTransferPathImportAssetPayload,
   type PluginTransferProvenance,
   type PluginTransferCommandPlan,
   type PluginTransferPayload,

@@ -276,7 +276,7 @@ export interface ICapabilityConfigManager {
  * Keeps the provider decoupled from VSCode API and @neko/platform at the type level.
  *
  * Platform services are optional — providers that don't need them (e.g. neko-engine)
- * simply ignore them. Providers that need media generation (e.g. neko-canvas, neko-sketch)
+ * simply ignore them. Providers that need media generation (for example, neko-canvas)
  * use `mediaService` and `configManager`.
  */
 export interface AgentCapabilityContext {

@@ -57,6 +57,15 @@ export function tryHandleMessageRoute(
       void deps.characterDialogue?.launchFromSlash({ args: message.args });
       return true;
 
+    case 'confirmRoleplayCandidate':
+      void deps.characterDialogue?.confirmRoleplayCandidate({
+        projectSearchItemId: message.projectSearchItemId,
+        ...(message.initialUserMessage !== undefined
+          ? { initialUserMessage: message.initialUserMessage }
+          : {}),
+      });
+      return true;
+
     case 'mermaidError': {
       const conversationId = resolveRequiredConversationId(
         webview,

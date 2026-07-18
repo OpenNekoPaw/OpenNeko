@@ -25,6 +25,7 @@ import {
   type CanvasMarkdownCapabilityInput,
   type ResourceRef,
   type ExternalCreativeAiInvocation,
+  CANVAS_WORKSPACE_BOARD_PATH,
   resolveGlobalStorageLayout,
   type LocalMetadataStore,
 } from '@neko/shared';
@@ -62,6 +63,7 @@ import {
 } from './creativeAiCanvasAdapter';
 import { CanvasProjectAuthoringService } from './services/canvasProjectAuthoringService';
 import { WorkspaceBoardProjector } from './services/workspaceBoardProjector';
+import { WorkspaceBoardEditorLeaseOwner } from './services/workspaceBoardEditorLeaseOwner';
 import { registerWorkspaceBoardFunctionalAcceptance } from './debug/workspaceBoardFunctionalAcceptance';
 
 // Extension state
@@ -194,7 +196,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCa
     readNarrativePreviewFeatureToggles(
       vscode.workspace.getConfiguration(NARRATIVE_PREVIEW_CONFIG_SECTION),
     );
-  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  const workspaceRoot = workspaceFolder?.uri.fsPath;
   const resourceCacheMetadata = workspaceRoot
     ? await createNodeWorkspaceResourceCacheMetadataBinding({
         homedir: os.homedir() || workspaceRoot,
@@ -237,38 +240,72 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCa
   }
   const workspaceBoardCoordinators = new Map<string, WorkspaceBoardDeliveryCoordinator>();
   const holderId = `vscode-canvas:${process.pid}:${randomUUID()}`;
+  const getWorkspaceBoardCoordinator = (workspaceId: string) => {
+    if (!workspaceBoardMetadataStore) {
+      throw new Error('Workspace Board delivery ledger is unavailable without a workspace.');
+    }
+    if (workspaceId !== workspaceBoardWorkspaceId) {
+      throw new Error(
+        `Workspace Board delivery workspace ${workspaceId} does not match the active Canvas workspace.`,
+      );
+    }
+    let coordinator = workspaceBoardCoordinators.get(workspaceId);
+    if (!coordinator) {
+      coordinator = new WorkspaceBoardDeliveryCoordinator({
+        ledger: new WorkspaceBoardDeliveryLedger({
+          metadataStore: workspaceBoardMetadataStore,
+          workspaceId,
+        }),
+        mutation: canvasProjectAuthoringService,
+        holderId,
+      });
+      workspaceBoardCoordinators.set(workspaceId, coordinator);
+      void coordinator.flush().catch((error: unknown) => {
+        logger.warn('Workspace Board pending delivery resume failed.', error);
+      });
+    }
+    return coordinator;
+  };
   workspaceBoardProjector = new WorkspaceBoardProjector({
-    getCoordinator: (workspaceId) => {
-      if (!workspaceBoardMetadataStore) {
-        throw new Error('Workspace Board delivery ledger is unavailable without a workspace.');
-      }
-      if (workspaceId !== workspaceBoardWorkspaceId) {
-        throw new Error(
-          `Workspace Board delivery workspace ${workspaceId} does not match the active Canvas workspace.`,
-        );
-      }
-      let coordinator = workspaceBoardCoordinators.get(workspaceId);
-      if (!coordinator) {
-        coordinator = new WorkspaceBoardDeliveryCoordinator({
-          ledger: new WorkspaceBoardDeliveryLedger({
-            metadataStore: workspaceBoardMetadataStore,
-            workspaceId,
-          }),
-          mutation: canvasProjectAuthoringService,
-          holderId,
-        });
-        workspaceBoardCoordinators.set(workspaceId, coordinator);
-        void coordinator.flush().catch((error: unknown) => {
-          logger.warn('Workspace Board pending delivery resume failed.', error);
-        });
-      }
-      return coordinator;
-    },
+    getCoordinator: getWorkspaceBoardCoordinator,
   });
+  let workspaceBoardEditorLeaseOwner: WorkspaceBoardEditorLeaseOwner | undefined;
+  if (workspaceFolder && workspaceBoardWorkspaceId) {
+    const workspaceBoardUri = vscode.Uri.joinPath(
+      workspaceFolder.uri,
+      ...CANVAS_WORKSPACE_BOARD_PATH.split('/'),
+    );
+    workspaceBoardEditorLeaseOwner = new WorkspaceBoardEditorLeaseOwner({
+      workspaceBoardDocumentUri: workspaceBoardUri.toString(),
+      coordinator: getWorkspaceBoardCoordinator(workspaceBoardWorkspaceId),
+      onDidChangeDocumentLifecycle: canvasEditorProvider.onDidChangeDocumentLifecycle,
+      logger,
+    });
+    context.subscriptions.push(workspaceBoardEditorLeaseOwner);
+  }
   if (context.extensionMode === vscode.ExtensionMode.Development) {
+    if (
+      !workspaceBoardMetadataStore ||
+      !workspaceBoardWorkspaceId ||
+      !workspaceBoardEditorLeaseOwner
+    ) {
+      throw new Error('Workspace Board functional acceptance requires an initialized workspace.');
+    }
+    const editorOwnerCoordinator = getWorkspaceBoardCoordinator(workspaceBoardWorkspaceId);
+    const competingHostCoordinator = new WorkspaceBoardDeliveryCoordinator({
+      ledger: new WorkspaceBoardDeliveryLedger({
+        metadataStore: workspaceBoardMetadataStore,
+        workspaceId: workspaceBoardWorkspaceId,
+      }),
+      mutation: canvasProjectAuthoringService,
+      holderId: `functional-tui:${process.pid}:${randomUUID()}`,
+    });
     registerWorkspaceBoardFunctionalAcceptance({
       context,
       projector: workspaceBoardProjector,
+      competingHostCoordinator,
+      editorOwnerCoordinator,
+      whenEditorOwnerIdle: () => workspaceBoardEditorLeaseOwner.whenIdle(),
       getWorkspaceId: () => workspaceBoardWorkspaceId,
       getActiveDocumentUri: () => canvasEditorProvider.getActiveCanvasDocumentUri(),
       revealDocument: (uri) => canvasEditorProvider.revealCanvasDocument(uri),
@@ -533,7 +570,7 @@ function registerCommands(
   getNarrativePreviewFeatureToggles: () => ReturnType<typeof readNarrativePreviewFeatureToggles>,
   creativeAiApplyAdapter: CanvasCreativeAiApplyAdapter,
 ): void {
-  // New Canvas - create file with inline rename (like neko-story)
+  // New Canvas - create file with inline rename.
   context.subscriptions.push(
     vscode.commands.registerCommand('neko.canvas.new', async (uri?: vscode.Uri) => {
       try {
@@ -780,25 +817,6 @@ function registerCommands(
     vscode.commands.registerCommand('neko.canvas.resetZoom', () => {
       canvasEditorProvider.postKeyboardAction('resetZoom');
     }),
-  );
-
-  // Round-trip: receive an edited image back from neko-sketch and update the shot node
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'neko.canvas.updateNodeImage',
-      (args: { nodeId: string; imageData: string; childNodeId?: string }) => {
-        const { nodeId, imageData, childNodeId } = args;
-        const delivered = canvasEditorProvider.postUpdateNodeImage(nodeId, imageData, childNodeId);
-        if (!delivered) {
-          void handleError(
-            new Error(
-              'No active canvas editor — open the canvas first, then send back from Sketch.',
-            ),
-            { showToUser: true, severity: 'warning' },
-          );
-        }
-      },
-    ),
   );
 
   // Preview media files with neko-preview (hardware-accelerated customEditor)

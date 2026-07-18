@@ -30,7 +30,7 @@ The existing viewport exports remain behavior-compatible during the UI design sy
 ## Boundaries
 
 - Do not import `vscode` or call `acquireVsCodeApi()` from this package.
-- Do not import feature packages such as Cut, Model, Puppet, Sketch, Canvas, Agent, Market, Dashboard, Tools, Preview, Audio, Live, or Story.
+- Do not import feature packages such as Cut, Model, Puppet, Sketch, Canvas, Agent, Market, Tools, Preview, Audio, Live, or Story.
 - Do not execute engine, media, or viewport authority logic here; render DTOs and invoke callbacks owned by callers.
 - New UI styles consume `--neko-*` or VSCode theme variables.
 - New control icons enter through `@neko/ui/icons` or an explicit codicon mapping.

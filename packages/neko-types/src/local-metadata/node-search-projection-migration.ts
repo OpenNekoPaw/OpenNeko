@@ -7,6 +7,7 @@ import type { AssetMediaType } from '../types/asset/entity';
 import {
   parseMediaSemanticIndexSidecar,
   type MediaSemanticIndex,
+  type MediaTextRange,
 } from '../types/media-semantic-index';
 import type { ProjectSemanticCoverageAnalysisKind } from '../types/project-cache-search';
 import type { LocalMetadataPartition } from './model';
@@ -240,8 +241,7 @@ export async function migrateLegacySemanticIndexSidecars(options: {
     importedSourceCount: importResult.insertedSourceIds.length,
     importedEvidenceCount: imported.reduce(
       (count, item) =>
-        count +
-        (insertedIds.has(item.record.sourceId) ? countSemanticEvidence(item.record.index) : 0),
+        count + (insertedIds.has(item.record.sourceId) ? countSemanticEvidence(item.record) : 0),
       0,
     ),
     preservedExistingSourceCount: importResult.preservedSourceIds.length,
@@ -287,6 +287,7 @@ function semanticIndexToProjection(
     .update(JSON.stringify(index.sourceRef))
     .digest('hex')}`;
   const firstProvider = index.textSegments?.[0]?.provenance;
+  const { textSegments, ...compactIndex } = index;
   return {
     sourceId: index.indexId ?? `semantic:${index.assetId}`,
     sourceFingerprint,
@@ -299,9 +300,39 @@ function semanticIndexToProjection(
     },
     coverage: semanticCoverageKinds(index),
     freshness: 'fresh',
-    index,
+    index: compactIndex,
+    evidence: (textSegments ?? []).map((segment) => ({
+      evidenceId: segment.segmentId,
+      unitId: segment.segmentId,
+      kind: segment.kind,
+      sourceRef: segment.sourceRef,
+      locator: legacySegmentLocator(segment.range),
+      ...(segment.range ? { range: segment.range } : {}),
+      contentHash: `sha256:${createHash('sha256').update(segment.text).digest('hex')}`,
+      ...(segment.entityMentionIds ? { entityMentionIds: segment.entityMentionIds } : {}),
+      provenance: segment.provenance,
+    })),
     updatedAt: index.updatedAt ?? new Date(migratedAt).toISOString(),
   };
+}
+
+function legacySegmentLocator(range: MediaTextRange | undefined) {
+  if (range && typeof range === 'object') {
+    const value = range as {
+      readonly startLine?: number;
+      readonly endLine?: number;
+      readonly startOffset?: number;
+      readonly endOffset?: number;
+    };
+    return {
+      kind: 'text-range' as const,
+      ...(value.startOffset !== undefined ? { startChar: value.startOffset } : {}),
+      ...(value.endOffset !== undefined ? { endChar: value.endOffset } : {}),
+      ...(value.startLine !== undefined ? { startLine: value.startLine } : {}),
+      ...(value.endLine !== undefined ? { endLine: value.endLine } : {}),
+    };
+  }
+  return { kind: 'text-range' as const };
 }
 
 function semanticCoverageKinds(
@@ -331,12 +362,12 @@ function semanticCoverageKinds(
   return orderedKinds.filter((kind) => coverage.has(kind));
 }
 
-function countSemanticEvidence(index: MediaSemanticIndex): number {
+function countSemanticEvidence(record: SemanticProjectionRecord): number {
   return (
-    (index.textSegments?.length ?? 0) +
-    (index.entityMentions?.length ?? 0) +
-    (index.semanticTags?.length ?? 0) +
-    (index.perceptionRefs?.length ?? 0)
+    record.evidence.length +
+    (record.index.entityMentions?.length ?? 0) +
+    (record.index.semanticTags?.length ?? 0) +
+    (record.index.perceptionRefs?.length ?? 0)
   );
 }
 

@@ -1,5 +1,9 @@
 import type { CameraAngle, CameraMovement, ShotScale } from './canvas';
-import type { CreativeEntityRef, RepresentationKind } from './creative-entity-asset-composition';
+import {
+  isRepresentationKind,
+  type CreativeEntityRef,
+  type RepresentationKind,
+} from './creative-entity-asset-composition';
 import {
   parseDocumentArchiveResourceRef,
   type DocumentArchiveResourceRef,
@@ -2660,9 +2664,18 @@ function normalizeVoiceCues(
       [...cuePath, 'speakerEntityRef'],
       diagnostics,
     );
-    const requestedRepresentationKind = normalizeRepresentationKind(
-      record['requestedRepresentationKind'],
-    );
+    const rawRequestedRepresentationKind = record['requestedRepresentationKind'];
+    const requestedRepresentationKind = normalizeRepresentationKind(rawRequestedRepresentationKind);
+    if (rawRequestedRepresentationKind !== undefined && !requestedRepresentationKind) {
+      diagnostics.push(
+        storyboardDiagnostic(
+          'warning',
+          'invalid-required-field',
+          [...cuePath, 'requestedRepresentationKind'],
+          'Voice cue requestedRepresentationKind is not supported.',
+        ),
+      );
+    }
     const extensions = normalizeExtensions(
       record['extensions'],
       [...cuePath, 'extensions'],
@@ -2751,16 +2764,7 @@ function normalizeCreativeEntityKind(value: unknown): CreativeEntityRef['entityK
 }
 
 function normalizeRepresentationKind(value: unknown): RepresentationKind | undefined {
-  return value === 'portrait' ||
-    value === 'reference' ||
-    value === 'puppet-bone' ||
-    value === 'live2d' ||
-    value === 'live3d' ||
-    value === 'voice' ||
-    value === 'motion' ||
-    value === 'video'
-    ? value
-    : undefined;
+  return isRepresentationKind(value) ? value : undefined;
 }
 
 function normalizeStoryboardTableSource(

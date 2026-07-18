@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  AssetEntity,
-  CharacterRecord,
-  EntityAssetBinding,
-  NkpNativeProjectData,
-} from '@neko/shared';
+import type { AssetEntity, CharacterRecord, EntityAssetBinding } from '@neko/shared';
 import { CharacterAssetExportService } from './CharacterAssetExportService';
 
 describe('CharacterAssetExportService', () => {
@@ -24,13 +19,13 @@ describe('CharacterAssetExportService', () => {
       bindings: [
         {
           role: 'live2d',
-          mediaKind: 'puppet-model',
+          mediaKind: 'live2d-model',
           dimension: 'model',
           assetEntityId: 'asset-sakura-model',
         },
         {
           role: 'motion',
-          mediaKind: 'puppet-motion',
+          mediaKind: 'live2d-motion',
           dimension: 'motion',
           assetEntityId: 'asset-sakura-motion',
         },
@@ -43,7 +38,7 @@ describe('CharacterAssetExportService', () => {
 
   it('exports character-pack bundle manifest, entity artifact, and subpackage files', async () => {
     const fs = createFs({
-      '/repo/assets/sakura.nkp': Buffer.from('project'),
+      '/repo/assets/sakura-live2d.zip': Buffer.from('project'),
       '/repo/assets/idle.motion3.json': Buffer.from('{}'),
     });
     const writtenZips: FakeZip[] = [];
@@ -71,7 +66,7 @@ describe('CharacterAssetExportService', () => {
         'manifest.json',
         'entity.nkentity',
         'assets/asset-sakura-model/manifest.json',
-        'assets/asset-sakura-model/files/sakura.nkp',
+        'assets/asset-sakura-model/files/sakura-live2d.zip',
         'assets/asset-sakura-motion/manifest.json',
         'assets/asset-sakura-motion/files/idle.motion3.json',
       ]),
@@ -79,259 +74,52 @@ describe('CharacterAssetExportService', () => {
     expect(fs.files.get('/repo/out/sakura-character-pack.zip')).toBeInstanceOf(Buffer);
   });
 
-  it('exports native .nkp v2 data without mutating the source puppet', async () => {
-    const fs = createFs({
-      '/repo/assets/sakura-native.nkp': Buffer.from(
-        JSON.stringify(nativePuppetProjectFixture),
-        'utf-8',
-      ),
-    });
-    const service = createService(fs);
-
-    const result = await service.exportNativePuppetProject({
-      sourcePath: '/repo/assets/sakura-native.nkp',
-      outputPath: '/repo/out/sakura-exported.nkp',
-      name: 'Sakura Exported',
-    });
-
-    const exported = JSON.parse(String(fs.files.get('/repo/out/sakura-exported.nkp')));
-    expect(result).toMatchObject({
-      format: 'nkp',
-      files: [{ role: 'model', mediaKind: 'puppet-model', dimension: 'model' }],
-    });
-    expect(exported).toMatchObject({
-      name: 'Sakura Exported',
-      puppet: { format: 'native', animationModel: 'bone-blendshape' },
-    });
-    expect(JSON.parse(String(fs.files.get('/repo/assets/sakura-native.nkp')))).toMatchObject({
-      name: 'Sakura Native',
-    });
-  });
-
-  it('exports Spine JSON from native skeleton, mesh, skin weights, and animation data', async () => {
-    const fs = createFs({
-      '/repo/assets/sakura-native.nkp': Buffer.from(
-        JSON.stringify(nativePuppetProjectFixture),
-        'utf-8',
-      ),
-    });
-    const service = createService(fs);
-
-    const result = await service.exportNativePuppetSpineJson({
-      sourcePath: '/repo/assets/sakura-native.nkp',
-      outputPath: '/repo/out/sakura.spine.json',
-    });
-
-    const exported = JSON.parse(String(fs.files.get('/repo/out/sakura.spine.json')));
-    expect(result).toMatchObject({
-      format: 'spine-json',
-      files: [{ role: 'spine-json', mediaKind: 'puppet-model', dimension: 'model' }],
-    });
-    expect(exported).toMatchObject({
-      skeleton: { name: 'Sakura Native' },
-      bones: [expect.objectContaining({ name: 'bone-root' })],
-      slots: [expect.objectContaining({ name: 'layer-face', bone: 'bone-root' })],
-      neko: {
-        source: 'nkp-v2-native',
-        animationModel: 'bone-blendshape',
-        blendShapes: ['jawOpen'],
-      },
-    });
-    expect(exported.skins[0].attachments['layer-face']['layer-face']).toMatchObject({
-      type: 'mesh',
-      path: 'textures/face.png',
-      nekoSkinWeights: { meshId: 'mesh-face' },
-    });
-    expect(exported.animations).toHaveProperty('idle');
-  });
-
-  it('exports spritesheet bake and Lottie compatibility plans without source mutation', async () => {
-    const fs = createFs({
-      '/repo/assets/sakura-native.nkp': Buffer.from(
-        JSON.stringify(nativePuppetProjectFixture),
-        'utf-8',
-      ),
-    });
-    const service = createService(fs);
-
-    const spritesheet = await service.exportNativePuppetSpritesheetPlan({
-      sourcePath: '/repo/assets/sakura-native.nkp',
-      outputPath: '/repo/out/sakura-spritesheet.json',
-      frameRate: 12,
-      frameSize: [512, 512],
-    });
-    const lottie = await service.exportNativePuppetLottiePlan({
-      sourcePath: '/repo/assets/sakura-native.nkp',
-      outputPath: '/repo/out/sakura-lottie-plan.json',
-    });
-
-    const spritesheetPlan = JSON.parse(String(fs.files.get('/repo/out/sakura-spritesheet.json')));
-    const lottiePlan = JSON.parse(String(fs.files.get('/repo/out/sakura-lottie-plan.json')));
-    expect(spritesheet).toMatchObject({
-      format: 'spritesheet',
-      files: [{ role: 'spritesheet', mediaKind: 'puppet-motion', dimension: 'motion' }],
-    });
-    expect(spritesheetPlan).toMatchObject({
-      format: 'neko-native-puppet-spritesheet-plan',
-      mutatesSource: false,
-      target: { frameRate: 12, frameSize: [512, 512] },
-      clips: [expect.objectContaining({ name: 'idle', frameCount: 12 })],
-    });
-    expect(lottie).toMatchObject({
-      format: 'lottie-plan',
-      files: [{ role: 'diagnostic' }],
-    });
-    expect(lottiePlan).toMatchObject({
-      format: 'neko-native-puppet-lottie-plan',
-      mutatesSource: false,
-      status: 'unsupported',
-      fallbackTargets: ['spritesheet', 'spine-json'],
-    });
-    expect(JSON.parse(String(fs.files.get('/repo/assets/sakura-native.nkp')))).toMatchObject({
-      name: 'Sakura Native',
-    });
-  });
-
-  it('exports .nkentity v2 metadata for native puppet bindings and optional Live2D bindings', async () => {
-    const fs = createFs();
+  it('rejects native .nkp entity export before creating output or changing the source', async () => {
+    const sourcePath = '/repo/assets/sakura-native.nkp';
+    const source = Buffer.from('{"native":true}');
+    const fs = createFs({ [sourcePath]: source });
     const service = createService(fs, {
-      assetEntities: nativePuppetAssetEntities(),
       bindings: nativePuppetBindings(),
+      assetEntities: nativePuppetAssetEntities(),
     });
 
-    const result = await service.exportEntity({
-      projectRoot: '/repo',
-      entityId: 'char-sakura',
-      outputPath: '/repo/out/sakura-native.nkentity',
-    });
+    await expect(
+      service.exportEntity({
+        projectRoot: '/repo',
+        entityId: 'char-sakura',
+        outputPath: '/repo/out/native.nkentity',
+      }),
+    ).rejects.toThrow('Native .nkp puppet export is not supported');
 
-    expect(result.entity).toMatchObject({
-      version: 2,
-      metadata: {
-        nativePuppet: {
-          rigTemplate: 'humanoid_upper',
-          blendshapeStandard: 'arkit_52',
-          implementedBlendShapes: ['jawOpen', 'mouthSmileLeft'],
-          animationModel: 'bone-blendshape',
-          sourceKind: 'live2d-bundle',
-        },
-      },
-      bindings: [
-        expect.objectContaining({
-          role: 'live2d',
-          assetEntityId: 'asset-sakura-live2d',
-          optional: true,
-        }),
-        expect.objectContaining({
-          role: 'puppet-bone',
-          assetEntityId: 'asset-sakura-native',
-          optional: false,
-          metadata: expect.objectContaining({
-            animationModel: 'bone-blendshape',
-            implementedBlendShapes: ['jawOpen', 'mouthSmileLeft'],
-          }),
-        }),
-      ],
-    });
+    expect(fs.createDirectory).not.toHaveBeenCalled();
+    expect(fs.writeFile).not.toHaveBeenCalled();
+    expect(fs.files.get(sourcePath)).toEqual(source);
+    expect(fs.files.has('/repo/out/native.nkentity')).toBe(false);
   });
 
-  it('exports character-pack with native puppet package and optional Live2D fallback', async () => {
-    const fs = createFs({
-      '/repo/assets/sakura-native.nkp': Buffer.from('native-project'),
-      '/repo/assets/sakura-live2d.zip': Buffer.from('legacy-live2d'),
-    });
+  it('rejects native .nkp character packs before constructing or writing an archive', async () => {
+    const sourcePath = '/repo/assets/sakura-native.nkp';
+    const source = Buffer.from('{"native":true}');
+    const fs = createFs({ [sourcePath]: source });
     const writtenZips: FakeZip[] = [];
     const service = createService(fs, {
-      zipConstructor: fakeZipConstructor(writtenZips),
-      assetEntities: nativePuppetAssetEntities(),
       bindings: nativePuppetBindings(),
+      assetEntities: nativePuppetAssetEntities(),
+      zipConstructor: fakeZipConstructor(writtenZips),
     });
 
-    const result = await service.exportCharacterPack({
-      projectRoot: '/repo',
-      entityId: 'char-sakura',
-      outputPath: '/repo/out/sakura-native-pack.zip',
-      name: 'Sakura Native Pack',
-    });
-
-    const entries = [...(writtenZips[0]?.entries.keys() ?? [])];
-    const entityBytes = writtenZips[0]?.entries.get('entity.nkentity');
-    const packagedEntity = entityBytes ? JSON.parse(entityBytes.toString('utf-8')) : undefined;
-    expect(entries).toEqual(
-      expect.arrayContaining([
-        'assets/asset-sakura-native/manifest.json',
-        'assets/asset-sakura-native/files/sakura-native.nkp',
-        'assets/asset-sakura-live2d/manifest.json',
-        'assets/asset-sakura-live2d/files/sakura-live2d.zip',
-      ]),
-    );
-    expect(result.manifest.contents).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ packageId: 'local/asset-sakura-native', role: 'puppet-bone' }),
-        expect.objectContaining({
-          packageId: 'local/asset-sakura-live2d',
-          role: 'live2d',
-          optional: true,
-        }),
-      ]),
-    );
-    expect(packagedEntity).toMatchObject({
-      version: 2,
-      metadata: {
-        nativePuppet: {
-          animationModel: 'bone-blendshape',
-          sourceKind: 'live2d-bundle',
-        },
-      },
-      bindings: [
-        expect.objectContaining({
-          role: 'live2d',
-          ref: './assets/asset-sakura-live2d/manifest.json',
-        }),
-        expect.objectContaining({
-          role: 'puppet-bone',
-          ref: './assets/asset-sakura-native/manifest.json',
-        }),
-      ],
-    });
-  });
-
-  it('plans native puppet game and video exports with non-mutating diagnostics', () => {
-    const service = createService();
-
-    expect(
-      service.planNativePuppetSpineExport({
-        sourcePath: '/repo/assets/sakura-native.nkp',
-        outputPath: '/repo/out/sakura.spine.json',
+    await expect(
+      service.exportCharacterPack({
+        projectRoot: '/repo',
+        entityId: 'char-sakura',
+        outputPath: '/repo/out/native.zip',
       }),
-    ).toMatchObject({
-      target: 'spine-json',
-      mutatesSource: false,
-      files: [{ role: 'spine-json', mediaKind: 'puppet-model', dimension: 'model' }],
-      diagnostics: [{ code: 'spine-native-data-required', severity: 'info' }],
-    });
-    expect(
-      service.planNativePuppetSpritesheetExport({
-        sourcePath: '/repo/assets/sakura-native.nkp',
-        outputPath: '/repo/out/sakura-spritesheet.json',
-      }),
-    ).toMatchObject({
-      target: 'spritesheet',
-      mutatesSource: false,
-      files: [{ role: 'spritesheet', mediaKind: 'puppet-motion', dimension: 'motion' }],
-      diagnostics: [{ code: 'spritesheet-bake-plan', severity: 'info' }],
-    });
-    expect(
-      service.planNativePuppetLottieExport({
-        sourcePath: '/repo/assets/sakura-native.nkp',
-        outputPath: '/repo/out/sakura-lottie-plan.json',
-      }),
-    ).toMatchObject({
-      target: 'lottie',
-      mutatesSource: false,
-      files: [{ role: 'diagnostic' }],
-      diagnostics: [{ code: 'lottie-native-skinning-unsupported', severity: 'unsupported' }],
-    });
+    ).rejects.toThrow('Native .nkp puppet export is not supported');
+
+    expect(writtenZips).toEqual([]);
+    expect(fs.writeFile).not.toHaveBeenCalled();
+    expect(fs.files.get(sourcePath)).toEqual(source);
+    expect(fs.files.has('/repo/out/native.zip')).toBe(false);
   });
 });
 
@@ -404,15 +192,15 @@ function assetEntities(): readonly AssetEntity[] {
     assetEntity({
       id: 'asset-sakura-model',
       name: 'Sakura Model',
-      filePath: '/repo/assets/sakura.nkp',
-      mediaKind: 'puppet-model',
+      filePath: '/repo/assets/sakura-live2d.zip',
+      mediaKind: 'live2d-model',
       dimension: 'model',
     }),
     assetEntity({
       id: 'asset-sakura-motion',
       name: 'Sakura Idle',
       filePath: '/repo/assets/idle.motion3.json',
-      mediaKind: 'puppet-motion',
+      mediaKind: 'live2d-motion',
       dimension: 'motion',
     }),
   ];
@@ -450,123 +238,25 @@ function nativePuppetAssetEntities(): readonly AssetEntity[] {
       id: 'asset-sakura-native',
       name: 'Sakura Native Puppet',
       filePath: '/repo/assets/sakura-native.nkp',
-      mediaKind: 'puppet-model',
+      mediaKind: 'live2d-model',
       dimension: 'model',
-      characterAsset: {
-        rigTemplate: 'humanoid_upper',
-        blendshapeStandard: 'arkit_52',
-        implementedBlendShapes: ['jawOpen', 'mouthSmileLeft'],
-        animationModel: 'bone-blendshape',
-        sourceKind: 'live2d-bundle',
-      },
+      characterAsset: {},
     }),
     assetEntity({
       id: 'asset-sakura-live2d',
       name: 'Sakura Legacy Live2D',
       filePath: '/repo/assets/sakura-live2d.zip',
-      mediaKind: 'puppet-model',
+      mediaKind: 'live2d-model',
       dimension: 'model',
     }),
   ];
 }
 
-const nativePuppetProjectFixture: NkpNativeProjectData = {
-  version: '2.0',
-  name: 'Sakura Native',
-  puppet: {
-    src: null,
-    format: 'native',
-    animationModel: 'bone-blendshape',
-    importSource: { kind: 'live2d-bundle', path: './sakura-live2d.zip' },
-  },
-  layers: [
-    {
-      id: 'layer-face',
-      name: 'Face',
-      textureRef: 'textures/face.png',
-      mesh: {
-        id: 'mesh-face',
-        vertices: [
-          [0, 0],
-          [1, 0],
-          [0, 1],
-        ],
-      },
-      skinWeights: {
-        meshId: 'mesh-face',
-        jointIndices: [
-          [0, 0, 0, 0],
-          [0, 0, 0, 0],
-          [0, 0, 0, 0],
-        ],
-        jointWeights: [
-          [1, 0, 0, 0],
-          [1, 0, 0, 0],
-          [1, 0, 0, 0],
-        ],
-      },
-    },
-  ],
-  skeleton: {
-    bones: [{ id: 'bone-root', name: 'root', parent: null, position: [0, 0] }],
-  },
-  blendShapes: {
-    standard: 'arkit_52',
-    implemented: ['jawOpen'],
-    shapes: [
-      {
-        id: 'shape-jaw-open',
-        name: 'jawOpen',
-        meshId: 'mesh-face',
-        vertexDeltas: [
-          [0, 0],
-          [0, 0.1],
-          [0, 0.1],
-        ],
-      },
-    ],
-  },
-  controlDrivers: [],
-  expressions: {},
-  animations: [
-    {
-      name: 'idle',
-      durationMs: 1000,
-      boneTracks: [
-        {
-          bone: 'bone-root',
-          rotationKeys: [
-            { timeMs: 0, value: 0 },
-            { timeMs: 1000, value: 2 },
-          ],
-        },
-      ],
-      blendshapeTracks: [
-        {
-          blendshape: 'jawOpen',
-          weightKeys: [
-            { timeMs: 0, value: 0 },
-            { timeMs: 500, value: 0.5 },
-          ],
-        },
-      ],
-    },
-  ],
-  autoRig: {
-    template: 'humanoid_upper',
-    generatedBy: 'neko-auto-rig/test',
-    confidence: 0.8,
-    sourceKind: 'live2d-bundle',
-  },
-  parameters: {},
-  viewport: { zoom: 1 },
-};
-
 function assetEntity(input: {
   readonly id: string;
   readonly name: string;
   readonly filePath: string;
-  readonly mediaKind: 'puppet-model' | 'puppet-motion';
+  readonly mediaKind: 'live2d-model' | 'live2d-motion';
   readonly dimension: 'model' | 'motion';
   readonly characterAsset?: Partial<
     AssetEntity['variants'][number]['files'][number]['characterAsset']

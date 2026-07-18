@@ -125,10 +125,10 @@ describe('NpcProfileAssembler', () => {
         entityRef,
         label: '小橘 enters the workshop',
         source: {
-          sourceId: 'neko-story',
+          sourceId: 'fountain-content',
           sourceKind: 'story',
           sourceRef: 'story/test.fountain:12',
-          providerId: 'neko-story',
+          providerId: 'fountain-content',
         },
         role: 'reference',
         location: 'story/test.fountain:12',
@@ -143,10 +143,10 @@ describe('NpcProfileAssembler', () => {
         strength: 'strong',
         confidence: 0.8,
         source: {
-          sourceId: 'neko-story',
+          sourceId: 'fountain-content',
           sourceKind: 'story',
           sourceRef: 'story/test.fountain:20',
-          providerId: 'neko-story',
+          providerId: 'fountain-content',
         },
       },
     ];
@@ -251,7 +251,7 @@ describe('NpcProfileAssembler', () => {
       identityBasis: 'user-named',
       provenance: [
         {
-          providerId: 'neko-story',
+          providerId: 'fountain-content',
           sourceKind: 'story',
           sourceRef: 'story/test.fountain:12',
         },

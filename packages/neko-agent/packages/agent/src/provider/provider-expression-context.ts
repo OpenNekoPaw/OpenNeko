@@ -129,7 +129,7 @@ function matchesProviderTarget(card: ProviderCard, target: ProviderExpressionTar
 }
 
 function scoreProviderCard(card: ProviderCard, options: ProviderExpressionContextOptions): number {
-  let score = card.sourceLayer === 'project' ? 3 : card.sourceLayer === 'market' ? 2 : 1;
+  let score = card.sourceLayer === 'project' ? 3 : card.sourceLayer === 'personal' ? 2 : 1;
   if (options.providerId && card.providerId === options.providerId) {
     score += 8;
   }

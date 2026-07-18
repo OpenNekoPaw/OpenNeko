@@ -144,11 +144,7 @@ export interface AssetFederationAvailabilityRefresh {
 }
 
 export function isFederatedAssetRef(assetRef: string): boolean {
-  return (
-    assetRef.startsWith('market://') ||
-    assetRef.startsWith('shared://') ||
-    assetRef.startsWith('external://')
-  );
+  return assetRef.startsWith('shared://') || assetRef.startsWith('external://');
 }
 
 function isProjectBinding(binding: EntityAssetBinding): boolean {

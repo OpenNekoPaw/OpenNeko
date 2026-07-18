@@ -139,7 +139,10 @@ vi.mock('@/components/ChatWorkspace', () => ({
     contextTokenCount?: number;
     workItems?: readonly AgentWorkItem[];
     handleMessage?: (event: MessageEvent) => void;
-    pendingSendRequest?: { id: number; input: { messageText?: string } } | null;
+    pendingSendRequest?: {
+      id: number;
+      input: { messageText?: string; contextPayloads?: AgentContextPayload[] };
+    } | null;
     initialInputRequest?: { id: number; messageText: string } | null;
     initialEntryPromptMenuRequest?: { id: number; menu: 'generate-assets' | 'roleplay' } | null;
     onInitialEntryPromptMenuRequestConsumed?: (id: number) => void;
@@ -292,6 +295,11 @@ vi.mock('@/components/ChatWorkspace', () => ({
         <span data-testid={testId('pending-send')}>
           {props.pendingSendRequest?.input.messageText ?? 'none'}
         </span>
+        <span data-testid={testId('pending-send-context')}>
+          {props.pendingSendRequest?.input.contextPayloads
+            ?.map((payload) => payload.label)
+            .join('|') ?? 'none'}
+        </span>
         <span data-testid={testId('initial-input')}>
           {props.initialInputRequest?.messageText ?? 'none'}
         </span>
@@ -312,8 +320,16 @@ vi.mock('@/components/ChatView/InputArea', async () => {
       disabled?: boolean;
       entryPromptMenu?: 'generate-assets' | 'roleplay' | null;
     }) => {
-      const { isBusy, modelCatalogStatus, onRequestFiles, selectedModel, mediaModelSelection } =
-        useInputAreaContext();
+      const {
+        isBusy,
+        modelCatalogStatus,
+        onRequestFiles,
+        selectedModel,
+        mediaModelSelection,
+        contextChips,
+        onAddContextChip,
+        onRemoveContextChip,
+      } = useInputAreaContext();
       return (
         <div>
           <span data-testid="entry-selected-model">{selectedModel}</span>
@@ -336,6 +352,26 @@ vi.mock('@/components/ChatView/InputArea', async () => {
           <button type="button" disabled={props.disabled} onClick={() => props.onSend()}>
             Send
           </button>
+          <button
+            type="button"
+            onClick={() =>
+              onAddContextChip?.({
+                type: 'entity',
+                id: 'entity:character:xiaoju',
+                label: '小橘',
+                summary: 'Entity · character',
+                data: { entityId: 'xiaoju', entityKind: 'character' },
+              })
+            }
+          >
+            Select Entity Mention
+          </button>
+          <button type="button" onClick={() => onRemoveContextChip('entity:character:xiaoju')}>
+            Remove Entity Mention
+          </button>
+          <span data-testid="entry-context-chips">
+            {contextChips.map((payload) => payload.label).join('|')}
+          </span>
           <span data-testid="entry-page-menu">{props.entryPromptMenu ?? 'none'}</span>
         </div>
       );
@@ -529,6 +565,33 @@ describe('ConversationController entry state', () => {
 
     expect(screen.getByTestId('pending-send').textContent).toBe('@hero');
     expect(screen.getByTestId('initial-input').textContent).toBe('none');
+  });
+
+  it('attaches a selected Entity mention in the tabless composer and carries it into send', () => {
+    vi.clearAllMocks();
+    render(<ConversationController {...createProps()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Entity Mention' }));
+
+    expect(screen.getByTestId('entry-context-chips').textContent).toBe('小橘');
+
+    fireEvent.change(screen.getByPlaceholderText('Type anything...'), {
+      target: { value: 'continue with this character' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'activeConversation',
+            conversation: { id: 'conv-new', title: 'New Chat', messages: [] },
+          },
+        }),
+      );
+    });
+
+    expect(screen.getByTestId('pending-send-context').textContent).toBe('小橘');
   });
 
   it('returns to the entry page after closing the last tab and keeps entry mention search tabless', () => {
@@ -1857,6 +1920,5 @@ function createSettings(): SettingsState {
       },
     ],
     modelGroups: [],
-    ssoSession: null,
   };
 }

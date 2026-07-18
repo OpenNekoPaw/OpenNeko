@@ -39,7 +39,7 @@ const STORYBOARD_DOMAIN_KIND = 'StoryboardTable';
 const ANIMATION_PLAN_DOMAIN_KIND = 'AnimationPlan';
 
 const COMPOSITE_CONTENT_FENCE_LANGUAGE_SET = new Set<string>(COMPOSITE_CONTENT_FENCE_LANGUAGES);
-const COMPOSITE_CONTENT_FENCE_PATTERN = /```([^\n`]*)\n([\s\S]*?)```/g;
+const COMPOSITE_CONTENT_FENCE_PATTERN = /(```|~~~)([^\n]*)\n([\s\S]*?)\1/g;
 
 export function isCompositeContentFenceLanguage(info: string | undefined): boolean {
   const language = normalizeFenceLanguage(info);
@@ -51,8 +51,8 @@ export function extractCompositeContentFenceCandidates(
 ): readonly CompositeContentFenceCandidate[] {
   const candidates: CompositeContentFenceCandidate[] = [];
   for (const match of markdown.matchAll(COMPOSITE_CONTENT_FENCE_PATTERN)) {
-    const info = match[1];
-    const rawJson = match[2];
+    const info = match[2];
+    const rawJson = match[3];
     if (!isCompositeContentFenceLanguage(info) || !rawJson) continue;
 
     const language = normalizeFenceLanguage(info);

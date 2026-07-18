@@ -77,9 +77,9 @@ Webview 端通过 `canvasOperationStore` 作为运行时桥接层生成 `EditOpe
 | 素材库拖拽       | ✅   | `application/json` 协议 → `project:addSource`，Extension Host 统一解析路径变量                                                 |
 | 工具栏文件选择器 | ✅   | `pickMedia` / `pickFile` 生成 `ProjectSourceAddRequest` 后再创建节点                                                           |
 | 引用节点选择器   | ✅   | `pickScriptDocument` / `pickReferenceDocument` / `pickModelReference` / `pickCanvasDocument`                                   |
-| 文件类型         | ✅   | `.md` / `.markdown` / `.txt` / `.log` / `.fountain` / `.nks` / `.story` 统一导入 `TextNode`；二进制文档继续创建 `DocumentNode` |
+| 文件类型         | ✅   | `.md` / `.markdown` / `.txt` / `.log` / `.fountain` 统一导入 `TextNode`；二进制文档继续创建 `DocumentNode` |
 
-所有受支持文本文件统一导入低干扰 Text 节点。Extension Host 经既有 Canvas 路径边界执行最大 1 MB 的严格 UTF-8 读取，成功后把内容作为可编辑快照写入 `TextNode.data.content`，并在 provenance 中保留可移植来源路径；源文件后续变化不会静默覆盖 Canvas 编辑。`.md` / `.markdown` 使用 `format: markdown`，`.txt` / `.log` / `.fountain` / `.nks` / `.story` 使用 `format: plain`。普通文件添加不再自动创建 Script 节点；Script 保留给未来显式的剧本工作流。
+所有受支持文本文件统一导入低干扰 Text 节点。Extension Host 经既有 Canvas 路径边界执行最大 1 MB 的严格 UTF-8 读取，成功后把内容作为可编辑快照写入 `TextNode.data.content`，并在 provenance 中保留可移植来源路径；源文件后续变化不会静默覆盖 Canvas 编辑。`.md` / `.markdown` 使用 `format: markdown`，`.txt` / `.log` / `.fountain` 使用 `format: plain`。普通文件添加不再自动创建 Script 节点；Script 保留给未来显式的剧本工作流。
 
 外部 `neko.canvas.importAsset` / `NekoCanvasAPI.importAsset()` 不再要求 Canvas Webview 已打开；它通过 `CanvasProjectAuthoringService` 创建 media 节点，只持久化 `${VAR}/path`、workspace-relative path、`ResourceRef` 或 `DocumentArchiveResourceRef`。Webview URI、blob、cache path 和 temp path 不能作为 `.nkc` 身份写入。
 

@@ -96,6 +96,32 @@ describe('PreviewSurface media playback control', () => {
     vi.restoreAllMocks();
   });
 
+  it('contains inline creative images so the complete composition remains visible', async () => {
+    await act(async () => {
+      root.render(
+        <PreviewSurface
+          source={{
+            id: 'creative-image-1',
+            role: 'image',
+            title: 'Creative image',
+            variants: [
+              {
+                id: 'creative-image-1:preview',
+                role: 'image',
+                sourcePath: 'data:image/png;base64,cHJldmlldw==',
+              },
+            ],
+          }}
+          surfaceKind="inline"
+        />,
+      );
+    });
+
+    const image = host.querySelector<HTMLImageElement>('[data-preview-surface="visual"] img');
+    expect(image?.className).toContain('object-contain');
+    expect(image?.className).not.toContain('object-cover');
+  });
+
   it.each([
     {
       role: 'video-proxy' as const,

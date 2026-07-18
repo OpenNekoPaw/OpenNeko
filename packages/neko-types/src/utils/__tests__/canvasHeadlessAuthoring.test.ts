@@ -28,14 +28,14 @@ function emptyCanvas(): CanvasData {
 function storyboardPayload(): CanvasStoryboardPayload {
   return {
     mode: 'semantic',
-    sourceScriptUri: '${WORKSPACE}/story/demo.nks',
+    sourceScriptUri: '${WORKSPACE}/story/demo.fountain',
     creativeScope: {
       kind: 'sequence',
       workId: 'demo-sequence',
       title: 'Demo Sequence',
       sceneIds: ['scene-alpha', 'scene-beta'],
       shotIds: ['shot-alpha-1', 'shot-alpha-2', 'shot-beta-1'],
-      sourceStoryboardRef: '${WORKSPACE}/story/demo.nks',
+      sourceStoryboardRef: '${WORKSPACE}/story/demo.fountain',
     },
     scenes: [
       {

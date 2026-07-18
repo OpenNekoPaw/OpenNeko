@@ -9,7 +9,6 @@ import type {
   ProjectFileMentionInfo,
   ProjectMentionMediaType,
   ProjectMentionSource,
-  SsoSessionChangedMessage,
 } from './webview-protocol';
 
 export type MediaModelDefaults = Partial<Record<AgentMediaModelCategory, string>>;
@@ -68,18 +67,6 @@ export interface SessionModeMediaSelectionProjection {
   mediaModelSelection: MediaModelSelectionState;
   updated: boolean;
 }
-
-export interface SsoSessionProjection {
-  settingsPatch: Pick<Partial<SettingsState>, 'ssoSession'>;
-  showOnboarding?: boolean;
-}
-
-export interface SsoErrorProjection {
-  globalError: string;
-  showOnboarding: boolean;
-}
-
-export type SsoSessionMessagePayload = SsoSessionChangedMessage['session'];
 
 export type ProjectMentionItemKind =
   'file' | 'canvas-node' | 'character' | 'scene' | 'asset' | 'media' | 'entity';

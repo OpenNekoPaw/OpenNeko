@@ -1,4 +1,5 @@
-import type { NekoCanvasAPI, NekoStoryScriptIndex } from '../types/extension-api';
+import type { NekoCanvasAPI } from '../types/extension-api';
+import type { FountainScriptIndex } from '../types/fountain-script';
 import type {
   ApplyCanvasStoryboardOptions,
   CanvasStoryboardPayload,
@@ -37,7 +38,7 @@ const DEFAULT_SHOT_DURATION = 3;
 const STORYBOARD_SEQUENCE_CONNECTION_LABEL = 'next';
 
 export function createStoryboardPayload(
-  scriptIndex: NekoStoryScriptIndex,
+  scriptIndex: FountainScriptIndex,
   options: CreateStoryboardPayloadOptions = {},
 ): CanvasStoryboardPayload {
   const mode = options.mode ?? 'mechanical';
@@ -436,7 +437,7 @@ function createStoryboardSequenceConnections(shotCount: number): CanvasComposite
 }
 
 function buildMechanicalShotPlans(
-  scene: NekoStoryScriptIndex['scenes'][number],
+  scene: FountainScriptIndex['scenes'][number],
   scenePlan: StoryScenePlan | undefined,
   firstShotNumber: number,
   characterBindings: Readonly<Record<string, string>> | undefined,
@@ -459,7 +460,7 @@ function buildMechanicalShotPlans(
 }
 
 function buildSemanticShotPlans(
-  scene: NekoStoryScriptIndex['scenes'][number],
+  scene: FountainScriptIndex['scenes'][number],
   scenePlan: StoryScenePlan | undefined,
   firstShotNumber: number,
   characterBindings: Readonly<Record<string, string>> | undefined,
@@ -475,7 +476,7 @@ function buildSemanticShotPlans(
 }
 
 function normalizeShotPlan(
-  scene: NekoStoryScriptIndex['scenes'][number],
+  scene: FountainScriptIndex['scenes'][number],
   shotPlan: StoryShotPlan,
   shotNumber: number,
   characterBindings: Readonly<Record<string, string>> | undefined,

@@ -472,14 +472,11 @@ describe('node:sqlite local metadata store', () => {
       entries: [createGlobalResourceCacheEntry('node-resource', 'node/thumbnail.jpg')],
     });
 
-    const bunFixture = join(
-      process.cwd(),
-      '..',
-      '..',
-      'scripts',
-      'test-orchestration',
-      'fixtures',
-      'bun-tui-sqlite-roundtrip.ts',
+    const bunFixture = fileURLToPath(
+      new URL(
+        '../../../../../../scripts/test-orchestration/fixtures/bun-tui-sqlite-roundtrip.ts',
+        import.meta.url,
+      ),
     );
     await execFileAsync('bun', [bunFixture], {
       env: { ...process.env, NEKO_SQLITE_TEST_HOME: homedir },

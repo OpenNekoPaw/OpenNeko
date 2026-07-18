@@ -1,7 +1,7 @@
-// TODO(P2): Duplicated hook — neko-story has a thin useVSCodeMessaging
+// TODO(P2): Duplicated thin Webview messaging hook.
 // that delegates to the shared VS Code bridge and owns its message listener.
 // This version adds heavy domain logic (timeline, export, context menu, AI actions).
-// The thin wrapper pattern from neko-story could be extracted to
+// This thin wrapper pattern could be extracted to
 // @neko/shared/hooks/useVSCodeMessaging as a generic base, with this hook
 // composing domain-specific handlers on top of it.
 

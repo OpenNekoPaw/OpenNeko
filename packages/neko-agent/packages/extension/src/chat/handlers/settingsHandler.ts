@@ -14,10 +14,6 @@ import {
 } from '@neko/platform';
 import { buildAssistantSettingsUpdatedMessage } from '@neko/platform/config/assistant-config';
 import {
-  isAuthorizationFailure,
-  type AccountAiCatalogCache,
-} from '../../services/accountAiCatalogCache';
-import {
   createAgentCapabilityActivationIntent,
   createAgentCapabilityActivationProgressEvent,
   type AgentCapabilityActivationProgressEvent,
@@ -31,7 +27,6 @@ import type { SettingsManager } from '../settingsManager';
  */
 export interface SettingsHandlerDeps {
   platform?: Platform;
-  accountAiCatalog?: AccountAiCatalogCache;
   conversationSettings?: SettingsManager;
 }
 
@@ -61,12 +56,8 @@ export class SettingsHandler {
       }
 
       const conversationSettings = this.requireConversationSettings();
-      const accountCatalog = await this.getAccountCatalogForSettingsProjection();
       const message = buildAssistantSettingsRuntimeDataMessage({
-        getSettingsData: () =>
-          this.deps.platform?.config.getAssistantSettingsData({
-            accountCatalog,
-          }),
+        getSettingsData: () => this.deps.platform?.config.getAssistantSettingsData(),
       });
       if (message) {
         const snapshot = conversationSettings.snapshotForConversation(options.conversationId);
@@ -174,20 +165,6 @@ export class SettingsHandler {
       throw new Error('Conversation settings runtime is not initialized');
     }
     return settings;
-  }
-
-  private async getAccountCatalogForSettingsProjection() {
-    try {
-      const result = await this.deps.accountAiCatalog?.getSnapshot();
-      return result?.snapshot ?? null;
-    } catch (error) {
-      if (isAuthorizationFailure(error)) {
-        this.deps.accountAiCatalog?.invalidateForAuthFailure(error);
-        logger.warn('Account AI catalog authorization failed for settings projection:', error);
-        return null;
-      }
-      throw error;
-    }
   }
 }
 

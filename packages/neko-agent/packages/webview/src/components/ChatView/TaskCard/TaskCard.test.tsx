@@ -66,7 +66,7 @@ describe('TaskCard result actions', () => {
       <TaskCard
         task={createCompletedImageTask()}
         onViewResult={vi.fn()}
-        plugins={{ canvas: true, cut: true, sketch: true, model: false }}
+        plugins={{ canvas: true, cut: true }}
       />,
     );
 
@@ -76,7 +76,6 @@ describe('TaskCard result actions', () => {
     expect(screen.getByTestId('result-preview').getAttribute('data-open-on-click')).toBe('false');
     expect(screen.queryByRole('button', { name: /Canvas/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Timeline/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Sketch/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Explorer|Folder/ })).toBeNull();
     expect(screen.queryByText('tasks.revealInExplorer')).toBeNull();
     expect(screen.queryByText(/frame\.png/)).toBeNull();

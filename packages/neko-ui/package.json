@@ -6,7 +6,6 @@
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./viewport": "./src/viewport/index.ts",
     "./primitives": "./src/primitives/index.ts",
     "./creative": "./src/creative/index.ts",
     "./icons": "./src/icons/index.ts",

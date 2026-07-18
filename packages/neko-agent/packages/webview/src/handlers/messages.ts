@@ -47,8 +47,6 @@ export type {
   SettingsUpdatedMessage,
   SkillsListMessage,
   SlashCommandResultMessage,
-  SsoErrorMessage,
-  SsoSessionChangedMessage,
   AssistantTextReplacementMessage,
   StreamCompleteMessage,
   StreamTextMessage,

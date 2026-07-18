@@ -95,6 +95,7 @@ import {
 import { DEFAULT_GENERATION_PARAMS } from '@/components/ChatView/InputArea/types';
 import { useTabRenderRuntimeRegistry } from '@/render-runtime/useTabRenderRuntimeRegistry';
 import { useProjectionEndpoint } from '@/render-runtime/useProjectionEndpoint';
+import type { AgentContextPayload } from '@neko/shared';
 
 // =============================================================================
 // Props
@@ -237,6 +238,7 @@ export function ConversationController({
   const [entryAction, setEntryAction] = useState<EmptyStateEntryAction>('start-chat');
   const [entryInputValue, setEntryInputValue] = useState('');
   const entryInputValueRef = useRef('');
+  const [entryContextReferences, setEntryContextReferences] = useState<AgentContextPayload[]>([]);
   const [entrySessionMode, setEntrySessionMode] = useState<SessionMode>('agent');
   const [entryGenCategory, setEntryGenCategory] = useState<GenCategory>('image');
   const [entryGenParams, setEntryGenParams] = useState<GenerationParams>(DEFAULT_GENERATION_PARAMS);
@@ -261,6 +263,14 @@ export function ConversationController({
   const updateEntryInputValue = useCallback((value: string) => {
     entryInputValueRef.current = value;
     setEntryInputValue(value);
+  }, []);
+  const addEntryContextReference = useCallback((payload: AgentContextPayload) => {
+    setEntryContextReferences((current) =>
+      current.some((reference) => reference.id === payload.id) ? current : [...current, payload],
+    );
+  }, []);
+  const removeEntryContextReference = useCallback((id: string) => {
+    setEntryContextReferences((current) => current.filter((reference) => reference.id !== id));
   }, []);
   const hydrateConversationSettings = useCallback(
     (conversationId: string, snapshot: ConversationSettingsSnapshot) => {
@@ -913,6 +923,7 @@ export function ConversationController({
     (input?: PendingSendInput) => {
       const messageText = (input?.messageText ?? entryInputValue).trim();
       if (!messageText) return;
+      const contextPayloads = input?.contextPayloads ?? entryContextReferences;
 
       switch (entryAction) {
         case 'start-chat': {
@@ -923,8 +934,10 @@ export function ConversationController({
             messageText,
             displayMessageText: input?.displayMessageText ?? messageText,
             sessionMode: input?.sessionMode ?? entrySessionMode,
+            ...(contextPayloads.length > 0 ? { contextPayloads: [...contextPayloads] } : {}),
           });
           updateEntryInputValue('');
+          setEntryContextReferences([]);
           return;
         }
         case 'generate-assets':
@@ -943,7 +956,9 @@ export function ConversationController({
     },
     [
       entryAction,
+      entryContextReferences,
       entryInputValue,
+      entrySessionMode,
       handleSendWithoutConversation,
       startNewForegroundConversationWithEntryPrompt,
       updateEntryInputValue,
@@ -1291,8 +1306,9 @@ export function ConversationController({
               onGenParamsChange={handleEntryGenParamsChange}
               contextTokenCount={0}
               isCompressing={false}
-              contextChips={[]}
-              onRemoveContextChip={() => undefined}
+              contextChips={entryContextReferences}
+              onAddContextChip={addEntryContextReference}
+              onRemoveContextChip={removeEntryContextReference}
               ambientNodes={[]}
               conversationKind="chat"
             >

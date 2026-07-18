@@ -276,6 +276,7 @@ export const chat = {
   'chat.input.mentionTags.kind.scene': '场景',
   'chat.input.mentionTags.entity.asset': '素材',
   'chat.input.mentionTags.entity.character': '角色',
+  'chat.input.mentionTags.entity.candidate': '候选',
   'chat.input.mentionTags.entity.scene': '场景',
   'chat.input.mentionTags.entity.shot': '镜头',
   'chat.input.mentionTags.entity.canvas': '画布',
@@ -309,8 +310,9 @@ export const chat = {
   'chat.entryPrompt.generateAssets.count': '{count} 个模型',
   'chat.entryPrompt.roleplay.hint': '选择可用的统一实体，进入角色扮演对话。',
   'chat.entryPrompt.roleplay.section': '可扮演角色',
-  'chat.entryPrompt.roleplay.empty': '未找到可用于角色扮演的角色实体。',
+  'chat.entryPrompt.roleplay.empty': '未找到已确认的可扮演角色；请先在实体面板确认角色。',
   'chat.entryPrompt.roleplay.badge': '角色',
+  'chat.entryPrompt.roleplay.confirmBadge': '确认并扮演',
 
   'chat.toolCall.tool': '工具',
   'chat.toolCall.args': '参数',

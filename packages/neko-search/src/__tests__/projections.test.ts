@@ -10,7 +10,7 @@ import {
 vi.mock('vscode', async () => await import('../testing/vscode'));
 
 describe('project search consumer projections', () => {
-  it('maps Dashboard/global search queries to shared project search mode', () => {
+  it('maps global search queries to shared project search mode', () => {
     expect(
       toProjectGlobalSearchQuery({
         text: '小橘',
@@ -73,7 +73,7 @@ describe('project search consumer projections', () => {
     expect(JSON.stringify(result)).not.toContain('.neko/.cache');
   });
 
-  it('queries the host command for Dashboard/global search consumers', async () => {
+  it('queries the host command for global search consumers', async () => {
     vi.mocked(vscode.commands.executeCommand).mockResolvedValue({
       query: { text: '小橘', mode: 'global' },
       context: { projectRoot: '/workspace' },

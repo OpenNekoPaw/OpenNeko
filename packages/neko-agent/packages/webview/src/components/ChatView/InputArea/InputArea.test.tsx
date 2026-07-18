@@ -9,6 +9,7 @@ import { InputArea } from './InputArea';
 
 const vscodeMocks = vi.hoisted(() => ({
   invokeSkill: vi.fn(),
+  confirmRoleplayCandidate: vi.fn(),
   startCharacterDialogueFromSlash: vi.fn(),
 }));
 
@@ -60,6 +61,7 @@ const translations: Record<string, string> = {
   'chat.entryPrompt.roleplay.section': '可扮演角色',
   'chat.entryPrompt.roleplay.empty': '未找到可用于角色扮演的角色实体。',
   'chat.entryPrompt.roleplay.badge': '角色',
+  'chat.entryPrompt.roleplay.confirmBadge': '确认并扮演',
   'chat.autoMode': '自动',
   'chat.selectModel': '选择模型',
   'chat.noModelsAvailable': '无可用模型',
@@ -1114,11 +1116,16 @@ describe('InputArea composer controls', () => {
         conversationKind="character-dialogue"
         mentionItems={[
           {
-            id: 'entity:char-xiaoju',
+            id: 'entity:character:char-xiaoju',
             kind: 'entity',
             label: '小橘',
             description: '主角',
             entityType: 'character',
+            navigationData: {
+              entityId: 'char-xiaoju',
+              entityKind: 'character',
+              source: 'neko-entity',
+            },
           },
         ]}
       >
@@ -1135,6 +1142,41 @@ describe('InputArea composer controls', () => {
 
     fireEvent.change(textarea, { target: { value: '@小' } });
     expect(screen.getByTitle('小橘 主角')).toBeTruthy();
+  });
+
+  it('replaces a selected Entity mention with its context reference', () => {
+    const onAddContextChip = vi.fn();
+    const contextPayload: AgentContextPayload = {
+      type: 'entity',
+      id: 'entity:character:xiaoju',
+      label: '小橘',
+      summary: 'Entity · character',
+      data: { entityId: 'xiaoju', entityKind: 'character' },
+    };
+    render(
+      <Harness
+        onAddContextChip={onAddContextChip}
+        mentionItems={[
+          {
+            id: contextPayload.id,
+            kind: 'entity',
+            label: contextPayload.label,
+            entityType: 'character',
+            contextPayload,
+          },
+        ]}
+      >
+        <InputAreaStatefulHarness initialInputValue="" onSend={vi.fn()} />
+      </Harness>,
+    );
+
+    const textarea = screen.getByPlaceholderText('输入任何问题...') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '@小橘' } });
+    fireEvent.click(screen.getByRole('menuitem', { name: /小橘/ }));
+
+    expect(onAddContextChip).toHaveBeenCalledWith(contextPayload);
+    expect(textarea.value).toBe('');
+    expect(screen.queryByRole('menu')).toBeNull();
   });
 
   it('opens the entry prompt above the composer for asset generation modes', () => {
@@ -1221,7 +1263,7 @@ describe('InputArea composer controls', () => {
 
     expect(screen.getByText('选择可用的统一实体，进入角色扮演对话。')).toBeTruthy();
     expect(getEntryPromptRowByPrimaryText('小橘')).toBeTruthy();
-    expect(getEntryPromptRowByPrimaryText('小橘参考图')).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: /小橘参考图/ })).toBeNull();
     expect(getEntryPromptRowByPrimaryText('中文角色')).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /天台/ })).toBeNull();
 
@@ -1264,6 +1306,46 @@ describe('InputArea composer controls', () => {
     expect(vscodeMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
       'entity:char-xiaoju --roleplay --skip-enrich "你还记得昨晚的雨吗？"',
     );
+  });
+
+  it('confirms a projected character Candidate before starting roleplay', () => {
+    const onSend = vi.fn();
+    render(
+      <Harness
+        mentionItems={[
+          {
+            id: 'entity:entity-projection:semantic-xiaoju',
+            kind: 'entity',
+            label: '小橘',
+            description: 'Entity Candidate · character',
+            entityType: 'character',
+            navigationData: {
+              candidateId: 'candidate:auto:character:小橘',
+              projectSearchItemId: 'entity-projection:semantic-xiaoju',
+            },
+          },
+        ]}
+      >
+        <InputArea
+          inputValue="你好，小橘"
+          isThinking={false}
+          entryPromptMenu="roleplay"
+          onEntryPromptMenuChange={vi.fn()}
+          onInputChange={vi.fn()}
+          onSend={onSend}
+        />
+      </Harness>,
+    );
+
+    expect(screen.getByText('确认并扮演')).toBeTruthy();
+    fireEvent.click(getEntryPromptRowByPrimaryText('小橘'));
+
+    expect(vscodeMocks.confirmRoleplayCandidate).toHaveBeenCalledWith({
+      projectSearchItemId: 'entity-projection:semantic-xiaoju',
+      initialUserMessage: '你好，小橘',
+    });
+    expect(vscodeMocks.startCharacterDialogueFromSlash).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
   });
 
   it('projects selected canvas nodes into a lightweight reference row and recommended actions', () => {
@@ -1966,6 +2048,7 @@ function Harness({
   contextChips = [],
   conversationKind,
   onRemoveContextChip = vi.fn(),
+  onAddContextChip,
   mentionItems = [],
   onRequestFiles = vi.fn(),
   onMediaModelSelect = vi.fn(),
@@ -1988,6 +2071,7 @@ function Harness({
   readonly contextChips?: AgentContextPayload[];
   readonly conversationKind?: ConversationKind;
   readonly onRemoveContextChip?: (id: string) => void;
+  readonly onAddContextChip?: React.ComponentProps<typeof InputAreaProvider>['onAddContextChip'];
   readonly mentionItems?: React.ComponentProps<typeof InputAreaProvider>['mentionItems'];
   readonly onRequestFiles?: React.ComponentProps<typeof InputAreaProvider>['onRequestFiles'];
   readonly onMediaModelSelect?: React.ComponentProps<
@@ -2046,6 +2130,7 @@ function Harness({
       skills={skills}
       onRequestFiles={onRequestFiles}
       mentionItems={mentionItems}
+      onAddContextChip={onAddContextChip}
       contextChips={contextChips}
       onRemoveContextChip={onRemoveContextChip}
       ambientNodes={ambientNodes}

@@ -44,20 +44,10 @@ const ALLOWED_TRACK_TYPES = new Set([
   'effect',
   'subtitle',
   'shape',
-  'scene3d',
-  'puppet',
   'media',
 ]);
 
-const ALLOWED_ELEMENT_TYPES = new Set([
-  'media',
-  'audio',
-  'text',
-  'shape',
-  'subtitle',
-  'scene3d',
-  'puppet',
-]);
+const ALLOWED_ELEMENT_TYPES = new Set(['media', 'audio', 'text', 'shape', 'subtitle']);
 
 // =============================================================================
 // Internal validators
@@ -423,12 +413,6 @@ function validateTypeSpecificFields(
     case 'subtitle': {
       if (!isString(element['text'])) {
         errors.push({ field: `${path}.text`, message: 'must be a string', severity: 'error' });
-      }
-      break;
-    }
-    case 'scene3d': {
-      if (!isString(element['src'])) {
-        errors.push({ field: `${path}.src`, message: 'must be a string', severity: 'error' });
       }
       break;
     }

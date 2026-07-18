@@ -10,7 +10,7 @@ describe('project asset dependency manifest contract', () => {
       {
         id: 'import:sakura',
         sourceKind: 'import',
-        mediaKind: 'puppet-model',
+        mediaKind: 'live2d-model',
         dimensions: ['model', 'motion', 'config'],
         storageMode: 'bundle-memory',
         originalFile: '${PROJECT}/imports/sakura.zip',

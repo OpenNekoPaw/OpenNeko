@@ -23,7 +23,6 @@ export interface CanvasMaterialPresentation {
   readonly source: CanvasMaterialSource;
   readonly mediaType?: CanvasMaterialMediaType;
   readonly canPreview: boolean;
-  readonly canEditImage: boolean;
   readonly canPromoteToAssetLibrary: boolean;
   readonly generation?: CanvasMaterialGenerationPresentation;
 }
@@ -70,7 +69,6 @@ function resolveMediaMaterialPresentation(
     source: generated ? 'generated' : 'referenced',
     mediaType: data.mediaType,
     canPreview: true,
-    canEditImage: data.mediaType === 'image',
     canPromoteToAssetLibrary: true,
     ...(generated
       ? {
@@ -108,7 +106,6 @@ function resolveShotMaterialPresentation(
     source: 'generated',
     mediaType,
     canPreview: hasIdentity,
-    canEditImage: mediaType === 'image' && hasIdentity,
     canPromoteToAssetLibrary: hasIdentity,
     generation: {
       ...(prompt ? { prompt } : {}),

@@ -2,13 +2,12 @@
  * ModelNode - AI model reference card (LoRA / checkpoint / ControlNet / VAE).
  *
  * Two roles:
- *   - 'reference': info card showing model metadata + install status
+ *   - 'reference': info card showing model metadata
  *   - 'workflow':  has an output port → connects to ShotNode to specify generation model
  */
 
-import { useEffect } from 'react';
 import type { ModelCanvasNode, CanvasViewport } from '@neko/shared';
-import { CheckIcon, PackageIcon, SettingsIcon, RefreshIcon, LayersIcon } from '@neko/shared/icons';
+import { PackageIcon, SettingsIcon, RefreshIcon, LayersIcon } from '@neko/shared/icons';
 import { BaseNode } from './BaseNode';
 
 // =============================================================================
@@ -34,8 +33,6 @@ export interface ModelNodeProps {
   ) => void;
   onConnectionStart?: (nodeId: string, anchor: string, e: React.MouseEvent) => void;
   onUpdateData?: (nodeId: string, data: Partial<ModelCanvasNode['data']>) => void;
-  /** Called on mount to check if model is installed; result updates local state */
-  onCheckInstalled?: (nodeId: string, modelPath: string) => void;
 }
 
 // =============================================================================
@@ -63,36 +60,11 @@ export function ModelNode({
   onResize,
   onResizeEnd,
   onConnectionStart,
-  onCheckInstalled,
 }: ModelNodeProps) {
-  const { modelPath, modelName, modelType, role, installedVersion } = node.data;
-
-  // null = unknown (check pending), true = installed, false = not installed
-  // The parent updates node.data.installedVersion when modelInstalledResult arrives.
-  const installed: boolean | null = installedVersion != null ? true : null;
-
-  // Request install check on mount when status is unknown
-  useEffect(() => {
-    if (installed === null) {
-      onCheckInstalled?.(node.id, modelPath);
-    }
-  }, [node.id, modelPath, installed, onCheckInstalled]);
+  const { modelPath, modelName, modelType, role } = node.data;
 
   const color = MODEL_TYPE_COLOR[modelType] ?? 'var(--node-fg-secondary)';
   const typeLabel = modelType.charAt(0).toUpperCase() + modelType.slice(1);
-
-  const installBadge = () => {
-    if (installed === null)
-      return <span style={{ color: 'var(--node-fg-secondary)', fontSize: 9 }}>检查中…</span>;
-    if (installed)
-      return (
-        <span className="inline-flex items-center gap-1" style={{ color: '#34d399', fontSize: 9 }}>
-          <CheckIcon size={10} strokeWidth={2.2} />
-          {installedVersion ?? '已安装'}
-        </span>
-      );
-    return <span style={{ color: '#f87171', fontSize: 9 }}>未安装</span>;
-  };
 
   return (
     <BaseNode
@@ -161,7 +133,6 @@ export function ModelNode({
             >
               {typeLabel}
             </span>
-            {installBadge()}
           </div>
 
           {/* File path */}

@@ -15,13 +15,6 @@ export {
   type IApplyRegistry,
 } from './apply-primitive';
 export { applyCanvasOperation } from './apply-canvas';
-export { applySketchOperation, type SketchDocumentData } from './apply-sketch';
-export { applyAudioOperation, type AudioProjectData } from './apply-audio';
-export {
-  applyTrackMixOperation,
-  invertTrackMixOperation,
-  createDefaultTrackMixState,
-} from './apply-track-mix';
 export {
   findTrack,
   findElement,

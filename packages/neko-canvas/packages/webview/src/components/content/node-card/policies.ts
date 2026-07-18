@@ -361,6 +361,10 @@ function findSelectedGenerationCandidate(
 }
 
 function resolveMediaTitle(node: CanvasNode): string {
+  const authoredTitle = readString(node.data, 'title')?.trim();
+  if (authoredTitle) {
+    return authoredTitle;
+  }
   const resourceRef = readResourceRef(node);
   if (resourceRef) {
     return resolveResourceRefDisplayName(resourceRef);

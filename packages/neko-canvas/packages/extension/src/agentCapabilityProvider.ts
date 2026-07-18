@@ -9,6 +9,7 @@
  */
 
 import * as vscode from 'vscode';
+import { buildFountainScriptIndex } from '@neko/content';
 import type {
   AgentCapabilityProvider,
   AgentCapabilityContext,
@@ -20,7 +21,6 @@ import type {
   CanvasNodeType,
   ICapabilityMediaService,
   ICapabilityConfigManager,
-  NekoStoryAPI,
   StoryScenePlan,
   JsonPointerPath,
   CanvasStoryboardExecutionSummaryRequest,
@@ -4515,21 +4515,9 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
         } satisfies ToolParameters,
         async execute(args) {
           try {
-            const storyExt = vscode.extensions.getExtension<NekoStoryAPI>('neko.neko-story');
-            if (!storyExt) {
-              return { success: false, error: 'neko-story is not available.' };
-            }
-            const storyApi = storyExt.isActive
-              ? storyExt.exports
-              : ((await storyExt.activate()) as NekoStoryAPI);
-            const scriptIndex = storyApi.getScriptIndex(args.path as string);
-
-            if (!scriptIndex) {
-              return {
-                success: false,
-                error: 'Script not indexed. Open the .fountain file in VSCode first, then retry.',
-              };
-            }
+            const scriptPath = args.path as string;
+            const content = await vscode.workspace.fs.readFile(vscode.Uri.file(scriptPath));
+            const scriptIndex = buildFountainScriptIndex({ uri: scriptPath, content });
             if (scriptIndex.scenes.length === 0) {
               return { success: false, error: 'No scenes found in this screenplay.' };
             }
@@ -4541,8 +4529,7 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
               scriptIndex.characters.map((character) => character.name),
               {
                 workspaceRoot,
-                uriOrPath: args.path as string,
-                characterResolver: storyApi,
+                uriOrPath: scriptPath,
               },
             );
             const payload = createStoryboardPayload(scriptIndex, {

@@ -1,14 +1,16 @@
 import type { WorkspaceIdentityDescriptor, WorkspacePortableLocator } from '../types/storage';
 import type { ResourceCacheEntry } from '../types/resource-cache';
 import type { MediaFileMetadata } from '../types/asset/entity';
-import type { AssetManifest, AssetType } from '../types/asset/manifest';
 import type {
-  InstalledLargeAssetState,
-  InstalledPackageSource,
-  InstalledPackageStatus,
-  WorkspaceTrustLevel,
-} from '../types/asset/market';
-import type { MediaSemanticIndex } from '../types/media-semantic-index';
+  AssetManifest,
+  AssetType,
+  LocalAssetStorageMode,
+  ProxyVariant,
+} from '../types/asset/manifest';
+import type {
+  CompactMediaSemanticIndex,
+  SemanticEvidenceProjection,
+} from '../types/semantic-source';
 import type {
   CreativeEntityCandidate,
   CreativeEntityKind,
@@ -235,7 +237,8 @@ export interface SemanticProjectionRecord {
   readonly provider: ProjectSemanticProviderMetadata;
   readonly coverage: readonly ProjectSemanticCoverageAnalysisKind[];
   readonly freshness: ProjectIndexFreshness;
-  readonly index: MediaSemanticIndex;
+  readonly index: CompactMediaSemanticIndex;
+  readonly evidence: readonly SemanticEvidenceProjection[];
   readonly updatedAt: string;
 }
 
@@ -269,6 +272,10 @@ export interface SemanticProjectionRepository {
     sourceId: string,
     updatedAt: string,
   ): Promise<boolean>;
+  clearBodyBearingSources(
+    partition: LocalMetadataPartition,
+    updatedAt: string,
+  ): Promise<readonly string[]>;
   insertMissing(
     request: SemanticProjectionReplaceRequest,
   ): Promise<SemanticProjectionInsertMissingResult>;
@@ -333,6 +340,7 @@ export type EntityAssetProjectionRecord =
 
 export interface EntityAssetProjectionQuery {
   readonly partition: LocalMetadataPartition;
+  readonly projectionId?: string;
   readonly kinds?: readonly EntityAssetProjectionKind[];
   readonly sourceId?: string;
   readonly entityId?: string;
@@ -401,6 +409,29 @@ export interface CatalogProjectionRepository {
 }
 
 export type MarketInstallationTrustSource = 'vscode-workspace' | 'tui-policy' | 'migration';
+
+/** Preservation-only shape for installation receipts left by the removed Market product. */
+export type InstalledPackageStatus =
+  'active' | 'expiring-soon' | 'expired' | 'incompatible' | 'deprecated';
+
+export interface InstalledLargeAssetState {
+  readonly state: 'not-owned' | 'owned' | 'manifest-only' | 'proxy' | 'partial' | 'full';
+  readonly selectedItems?: readonly string[];
+  readonly downloadedItems?: readonly string[];
+  readonly selectedVariantId?: string;
+  readonly proxyQuality?: ProxyVariant['qualityTag'];
+  readonly totalSize?: number;
+  readonly downloadedSize?: number;
+}
+
+export interface InstalledPackageSource {
+  readonly kind: 'market' | 'local' | 'local-link' | 'ai-generated';
+  readonly storageMode?: LocalAssetStorageMode;
+  readonly path?: string;
+  readonly originalPath?: string;
+}
+
+export type WorkspaceTrustLevel = 'trusted' | 'restricted' | 'limited';
 
 export interface MarketInstallationTrustDecision {
   readonly level: WorkspaceTrustLevel;

@@ -4,7 +4,6 @@ import { resolveCanvasPickerAssetKind } from './canvasSourceSelection';
 describe('resolveCanvasPickerAssetKind', () => {
   it('routes declared screenplay text away from automatic Script creation', () => {
     expect(resolveCanvasPickerAssetKind('script', 'pilot.fountain')).toBe('text');
-    expect(resolveCanvasPickerAssetKind('script', 'pilot.nks')).toBe('text');
   });
 
   it('routes every supported text selection to the Text path', () => {

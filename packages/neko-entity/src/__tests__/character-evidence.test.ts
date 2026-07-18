@@ -70,8 +70,8 @@ describe('character evidence runtime helpers', () => {
       sourceRefs: [
         {
           ...makeChunk('right', 'Lin says the same thing.', 10).sourceRefs[0]!,
-          id: 'dashboard:cases/test.fountain:10',
-          kind: 'dashboard-detail',
+          id: 'manual:cases/test.fountain:10',
+          kind: 'manual',
         },
       ],
       relevance: { score: 9, signals: [{ name: 'query-token-match', weight: 9 }] },
@@ -83,7 +83,7 @@ describe('character evidence runtime helpers', () => {
     expect(deduped[0]?.id).toBe('right');
     expect(deduped[0]?.sourceRefs.map((sourceRef) => sourceRef.kind)).toEqual([
       'entity-occurrence',
-      'dashboard-detail',
+      'manual',
     ]);
     expect(deduped[0]?.relevance.score).toBe(9);
   });
@@ -197,15 +197,19 @@ describe('character evidence runtime helpers', () => {
   it('loads late scene evidence through host-agnostic reader ports', async () => {
     const strategy = createCharacterEvidenceStrategy({
       projectRoot: '/project',
-      dashboardReader: {
-        listDetails: async () => [
-          makeDetail(
-            Array.from({ length: 8 }, (_, index) => ({
-              location: `cases/long.fountain:${index < 7 ? 10 + index : 220}`,
-              label: 'Lin',
-            })),
-          ),
-        ],
+      occurrenceReader: {
+        listOccurrences: async () =>
+          Array.from({ length: 8 }, (_, index) => ({
+            entityRef,
+            label: 'Lin',
+            role: 'reference' as const,
+            location: `cases/long.fountain:${index < 7 ? 10 + index : 220}`,
+            source: {
+              sourceId: 'fountain-content',
+              sourceKind: 'story' as const,
+              freshness: 'fresh' as const,
+            },
+          })),
       },
       projectSearchReader: { search: async () => [] },
       storyIndexReader: { getScriptIndex: async () => undefined },
@@ -232,14 +236,9 @@ describe('character evidence runtime helpers', () => {
     expect(bundle.chunks[0]?.sourceRefs[0]?.lineStart).toBeGreaterThanOrEqual(208);
   });
 
-  it('dedupes dashboard, occurrence, story index, and project search locators for one range', async () => {
+  it('dedupes occurrence, story index, and project search locators for one range', async () => {
     const strategy = createCharacterEvidenceStrategy({
       projectRoot: '/project',
-      dashboardReader: {
-        listDetails: async () => [
-          makeDetail([{ location: 'cases/test.fountain:30-34', label: 'Lin' }]),
-        ],
-      },
       occurrenceReader: {
         listOccurrences: async () => [
           {
@@ -248,10 +247,10 @@ describe('character evidence runtime helpers', () => {
             role: 'reference',
             location: 'cases/test.fountain:30-34',
             source: {
-              sourceId: 'neko-story',
+              sourceId: 'fountain-content',
               sourceKind: 'story',
               sourceRef: 'cases/test.fountain:30-34',
-              providerId: 'neko-story',
+              providerId: 'fountain-content',
               freshness: 'fresh',
             },
           },
@@ -307,28 +306,13 @@ describe('character evidence runtime helpers', () => {
     expect(bundle.chunks).toHaveLength(1);
     expect(bundle.chunks[0]?.text).toContain('LIN notices the sealed door.');
     expect(bundle.chunks[0]?.sourceRefs.map((sourceRef) => sourceRef.kind)).toEqual(
-      expect.arrayContaining([
-        'dashboard-detail',
-        'entity-occurrence',
-        'project-search',
-        'story-script-index',
-      ]),
+      expect.arrayContaining(['entity-occurrence', 'project-search', 'story-script-index']),
     );
   });
 
   it('records stale, unsafe, unsupported, and missing source omissions deterministically', async () => {
     const strategy = createCharacterEvidenceStrategy({
       projectRoot: '/project',
-      dashboardReader: {
-        listDetails: async () => [
-          makeDetail([
-            { location: '/tmp/outside.fountain:10', label: 'Abs' },
-            { location: '../outside.fountain:10', label: 'Escape' },
-            { location: 'cases/image.png:10', label: 'Unsupported' },
-            { location: 'cases/missing.fountain:10', label: 'Missing' },
-          ]),
-        ],
-      },
       projectSearchReader: {
         search: async () => [makeSearchItem('scene-stale', 'cases/search.fountain', 5, 8, 'stale')],
       },
@@ -348,6 +332,12 @@ describe('character evidence runtime helpers', () => {
       query: 'indexed project evidence',
       projectRoot: '/project',
       budget: { maxChunks: 4, maxCharacters: 4000, perChunkMaxCharacters: 1200 },
+      seedSourceRefs: [
+        { id: 'abs', kind: 'manual', location: '/tmp/outside.fountain:10' },
+        { id: 'escape', kind: 'manual', location: '../outside.fountain:10' },
+        { id: 'unsupported', kind: 'manual', location: 'cases/image.png:10' },
+        { id: 'missing', kind: 'manual', location: 'cases/missing.fountain:10' },
+      ],
     });
 
     expect(bundle.chunks[0]?.text).toContain('LIN remembers indexed project evidence.');
@@ -375,7 +365,7 @@ function makeChunk(
       {
         id: `entity:cases/test.fountain:${line}`,
         kind: 'entity-occurrence',
-        providerId: 'neko-story',
+        providerId: 'fountain-content',
         projectRelativePath: 'cases/test.fountain',
         location: `cases/test.fountain:${line}`,
         lineStart: line,
@@ -386,37 +376,6 @@ function makeChunk(
     authority: 'confirmed',
     relevance,
     freshness: 'fresh',
-  };
-}
-
-function makeDetail(occurrences: readonly { readonly location: string; readonly label: string }[]) {
-  return {
-    ref: {
-      source: 'neko-story',
-      sourceEntityId: 'entity:char-lin',
-      entityId: 'char-lin',
-      entityKind: 'character' as const,
-      projectRoot: '/project',
-    },
-    label: 'Lin',
-    kind: 'character' as const,
-    status: 'confirmed' as const,
-    sourceKind: 'script' as const,
-    aliases: ['林'],
-    relationships: [],
-    occurrences: occurrences.map((occurrence) => ({
-      source: 'script' as const,
-      role: 'reference' as const,
-      label: occurrence.label,
-      location: occurrence.location,
-    })),
-    bindings: [],
-    defaults: [],
-    requirements: [],
-    visualDrafts: [],
-    syncSuggestions: [],
-    freshness: 'fresh' as const,
-    actions: [],
   };
 }
 

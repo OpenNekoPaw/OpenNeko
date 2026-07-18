@@ -114,8 +114,6 @@ export type {
   PreviewManifest,
   PreviewVariant,
   PreviewVariantRequest,
-  PuppetCommandAck,
-  PuppetCommandEnvelope,
   RegisterPreviewAssetRequest,
   UpdatePreviewAssetMetadataRequest,
 } from '@neko/shared';

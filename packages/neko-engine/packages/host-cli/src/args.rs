@@ -273,7 +273,7 @@ define_actions!(AudioAction {
     Mixdown => "mixdown",
     /// Start or update a multi-track audio mix stream
     MixStream => "mix_stream",
-    /// Export a .nka project file by mapping it to MixdownConfig
+    /// Export a caller-supplied multi-track mix configuration
     MixExport => "mix_export",
 });
 

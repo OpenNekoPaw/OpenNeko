@@ -766,7 +766,7 @@ const MEDIA_TOOL_LOCALIZATION = {
   GenerateVideo: {
     zh: {
       description:
-        '提交由当前 Provider/model 执行的生成式异步视频生成 Task（单片段）。只有当生成式视频适合当前镜头且所需首帧、尾帧、参考视频、运动、时长和尺寸控制均通过当前支持校验时使用；不要因为目标是“动画”就忽略逐帧、Puppet、分层 2D、3D 场景或合成能力。结果仅是 generated clip 草稿，不是时间线、成片或交付证明。此工具立即返回媒体 taskId，视频尚未完成；该 ID 不是 SubAgent ID，禁止传给 subagent 或 subagent_output。等待稳定结果并观察实际视频和适用的 Quality 证据。',
+        '提交由当前 Provider/model 执行的生成式异步视频生成 Task（单片段）。只有当生成式视频适合当前镜头且所需首帧、尾帧、参考视频、运动、时长和尺寸控制均通过当前支持校验时使用；不要因为目标是“动画”就忽略逐帧、分层 2D 或合成能力。结果仅是 generated clip 草稿，不是时间线、成片或交付证明。此工具立即返回媒体 taskId，视频尚未完成；该 ID 不是 SubAgent ID，禁止传给 subagent 或 subagent_output。等待稳定结果并观察实际视频和适用的 Quality 证据。',
       parameters: {
         prompt: '视频生成或编辑提示词。',
         taskRef: '可选 Task markdown URI/path，作为生成意图来源。',
@@ -1328,7 +1328,7 @@ export function registerMediaAgentTools(
     createTool({
       name: 'GenerateVideo',
       description:
-        'Submit a generative async single-clip VIDEO Task to the current Provider/model. Use it only when generative video fits the shot and every required first-frame, last-frame, reference-video, motion, duration, and size control validates against current support; an animation goal alone is not a reason to ignore frame animation, Puppet, layered 2D, 3D scene, or compositing capabilities. The result is only a generated clip draft, not a timeline, final cut, or deliverable. The returned media taskId is not ready media and is not a SubAgent ID; never pass it to subagent or subagent_output. Wait for the Host Task observation/continuation to deliver a stable result, then inspect the actual video plus applicable Quality evidence.',
+        'Submit a generative async single-clip VIDEO Task to the current Provider/model. Use it only when generative video fits the shot and every required first-frame, last-frame, reference-video, motion, duration, and size control validates against current support; an animation goal alone is not a reason to ignore frame animation, layered 2D, or compositing capabilities. The result is only a generated clip draft, not a timeline, final cut, or deliverable. The returned media taskId is not ready media and is not a SubAgent ID; never pass it to subagent or subagent_output. Wait for the Host Task observation/continuation to deliver a stable result, then inspect the actual video plus applicable Quality evidence.',
       localization: MEDIA_TOOL_LOCALIZATION.GenerateVideo,
       category: 'generation',
       safetyKind: 'non-destructive-mutation',

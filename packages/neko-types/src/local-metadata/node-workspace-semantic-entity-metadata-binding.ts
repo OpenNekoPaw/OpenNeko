@@ -1,5 +1,8 @@
 import type {
   CreativeEntityCandidate,
+  DocumentLocator,
+  SemanticEntityOccurrenceRecord,
+  SemanticOccurrenceEntityLinks,
   SemanticSourceAnalysisResult,
   SemanticSourceDescriptor,
 } from '../types';
@@ -8,7 +11,11 @@ import { resolveGlobalStorageLayout } from '../types/storage';
 import type { LocalMetadataPartition, LocalMetadataPartitionRevision } from './model';
 import { createNodeSqliteLocalMetadataStore } from './node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from './node-workspace-identity';
-import type { EntityAssetProjectionRecord, SemanticProjectionRecord } from './repositories';
+import type {
+  EntityAssetProjectionRecord,
+  SemanticProjectionRecord,
+  SemanticProjectionRepository,
+} from './repositories';
 import {
   ENTITY_ASSET_PROJECTION_MIGRATIONS,
   M1_LOCAL_METADATA_MIGRATIONS,
@@ -32,6 +39,12 @@ export interface NodeWorkspaceSemanticEntityMetadataBinding {
   deleteSource(sourceId: string, updatedAt: string): Promise<boolean>;
   markSourceStale(sourceId: string, diagnostic: string, updatedAt: string): Promise<void>;
   listAutomaticCandidates(): Promise<readonly CreativeEntityCandidate[]>;
+  findOccurrencesByEntity(entityId: string): Promise<readonly SemanticEntityOccurrenceRecord[]>;
+  findEntityLinksByOccurrence(occurrenceId: string): Promise<SemanticOccurrenceEntityLinks | null>;
+  findEntityLinksByLocator(
+    sourceId: string,
+    locator: DocumentLocator,
+  ): Promise<readonly SemanticOccurrenceEntityLinks[]>;
   readSemanticRevision(): Promise<LocalMetadataPartitionRevision | null>;
   readEntityRevision(): Promise<LocalMetadataPartitionRevision | null>;
   dispose(): Promise<void>;
@@ -70,6 +83,28 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
       workspaceId,
       domain: 'entity-asset-projection',
     };
+    const cleanupAt = (options.now ?? (() => new Date().toISOString()))();
+    await metadataStore.transaction(
+      {
+        mode: 'cache-write',
+        ownership: 'cache',
+        operation: 'clear-body-bearing-semantic-sources',
+      },
+      async ({ repositories }) => {
+        const sourceIds = await repositories.semanticProjections.clearBodyBearingSources(
+          semanticPartition,
+          cleanupAt,
+        );
+        for (const sourceId of sourceIds) {
+          await repositories.entityAssetProjections.replaceSource({
+            partition: entityPartition,
+            sourceId,
+            records: [],
+            updatedAt: cleanupAt,
+          });
+        }
+      },
+    );
     return {
       workspaceId,
       semanticPartition,
@@ -204,6 +239,47 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
             : [],
         );
       },
+      findOccurrencesByEntity: async (entityId) => {
+        const records = await metadataStore.repositories.entityAssetProjections.list({
+          partition: entityPartition,
+          kinds: ['entity-occurrence'],
+          entityId,
+        });
+        return loadSemanticOccurrenceRecords(
+          records,
+          metadataStore.repositories.semanticProjections,
+          semanticPartition,
+        );
+      },
+      findEntityLinksByOccurrence: async (occurrenceId) => {
+        const records = await metadataStore.repositories.entityAssetProjections.list({
+          partition: entityPartition,
+          projectionId: occurrenceId,
+          kinds: ['entity-occurrence'],
+        });
+        const occurrences = await loadSemanticOccurrenceRecords(
+          records,
+          metadataStore.repositories.semanticProjections,
+          semanticPartition,
+        );
+        const occurrence = occurrences[0];
+        return occurrence ? occurrenceLinks(occurrence) : null;
+      },
+      findEntityLinksByLocator: async (sourceId, locator) => {
+        const records = await metadataStore.repositories.entityAssetProjections.list({
+          partition: entityPartition,
+          sourceId,
+          kinds: ['entity-occurrence'],
+        });
+        const occurrences = await loadSemanticOccurrenceRecords(
+          records,
+          metadataStore.repositories.semanticProjections,
+          semanticPartition,
+        );
+        return occurrences
+          .filter((record) => sameDocumentLocator(record.occurrence.locator, locator))
+          .map(occurrenceLinks);
+      },
       readSemanticRevision: () => metadataStore.readPartitionRevision(semanticPartition),
       readEntityRevision: () => metadataStore.readPartitionRevision(entityPartition),
       dispose: () => metadataStore.dispose(),
@@ -214,6 +290,56 @@ export async function createNodeWorkspaceSemanticEntityMetadataBinding(options: 
   }
 }
 
+async function loadSemanticOccurrenceRecords(
+  records: readonly EntityAssetProjectionRecord[],
+  semanticRepository: SemanticProjectionRepository,
+  semanticPartition: LocalMetadataPartition,
+): Promise<readonly SemanticEntityOccurrenceRecord[]> {
+  const sources = new Map<string, SemanticProjectionRecord>();
+  const results: SemanticEntityOccurrenceRecord[] = [];
+  for (const record of records) {
+    if (record.kind !== 'entity-occurrence') continue;
+    let source = sources.get(record.sourceId);
+    if (!source) {
+      source = (await semanticRepository.get(semanticPartition, record.sourceId)) ?? undefined;
+      if (!source) {
+        throw new Error(`Semantic occurrence source is unavailable: ${record.sourceId}`);
+      }
+      sources.set(record.sourceId, source);
+    }
+    const occurrence = record.value;
+    if (
+      occurrence.occurrenceId !== record.projectionId ||
+      occurrence.sourceFingerprint !== source.sourceFingerprint ||
+      !occurrence.locator
+    ) {
+      throw new Error(`Semantic occurrence projection is inconsistent: ${record.projectionId}`);
+    }
+    results.push({
+      occurrenceId: record.projectionId,
+      sourceId: record.sourceId,
+      sourceFingerprint: source.sourceFingerprint,
+      freshness: record.freshness,
+      occurrence,
+    });
+  }
+  return results;
+}
+
+function occurrenceLinks(
+  occurrence: SemanticEntityOccurrenceRecord,
+): SemanticOccurrenceEntityLinks {
+  return {
+    occurrence,
+    entityRefs: occurrence.occurrence.entityRef ? [occurrence.occurrence.entityRef] : [],
+    candidateIds: occurrence.occurrence.candidateId ? [occurrence.occurrence.candidateId] : [],
+  };
+}
+
+function sameDocumentLocator(left: DocumentLocator | undefined, right: DocumentLocator): boolean {
+  return left !== undefined && JSON.stringify(left) === JSON.stringify(right);
+}
+
 function semanticRecord(request: SemanticEntitySourceCommitRequest): SemanticProjectionRecord {
   return {
     sourceId: request.source.sourceId,
@@ -221,8 +347,8 @@ function semanticRecord(request: SemanticEntitySourceCommitRequest): SemanticPro
     provider: {
       providerId: 'neko.text-entity.deterministic',
       sourceIdentity: request.source.sourceId,
-      indexVersion: 'text-entity-v1',
-      schemaVersion: '1',
+      indexVersion: 'text-entity-v2',
+      schemaVersion: '2',
     },
     coverage: ['entity-mention'],
     freshness: 'fresh',
@@ -246,6 +372,7 @@ function semanticRecord(request: SemanticEntitySourceCommitRequest): SemanticPro
         },
       },
     },
+    evidence: request.result.evidence,
     updatedAt: request.updatedAt,
   };
 }
@@ -254,8 +381,8 @@ function entityProjectionRecords(
   request: SemanticEntitySourceCommitRequest,
 ): readonly EntityAssetProjectionRecord[] {
   const occurrenceRecords: EntityAssetProjectionRecord[] = request.result.occurrences.map(
-    (occurrence, index) => ({
-      projectionId: `${request.source.sourceId}:occurrence:${index}`,
+    (occurrence) => ({
+      projectionId: requireSemanticOccurrenceId(occurrence),
       kind: 'entity-occurrence',
       sourceId: request.source.sourceId,
       ...(occurrence.entityRef ? { entityId: occurrence.entityRef.entityId } : {}),
@@ -277,6 +404,15 @@ function entityProjectionRecords(
     }),
   );
   return [...occurrenceRecords, ...candidateRecords];
+}
+
+function requireSemanticOccurrenceId(
+  occurrence: SemanticSourceAnalysisResult['occurrences'][number],
+): string {
+  if (!occurrence.occurrenceId?.trim()) {
+    throw new Error('Semantic Entity occurrence is missing its canonical occurrence identity.');
+  }
+  return occurrence.occurrenceId;
 }
 
 function readSemanticSourceDescriptor(

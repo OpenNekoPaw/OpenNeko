@@ -1,12 +1,15 @@
 import * as vscode from 'vscode';
 import {
   CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+  createSafeCanvasWorkspaceProjectionDiagnostic,
   NEKO_EXTENSION_IDS,
   type CanvasWorkspaceDeliveryBatch,
+  type CanvasWorkspaceProjectionArtifact,
   type CanvasWorkspaceProjectionDiagnostic,
   type CanvasWorkspaceProjectionResult,
   type NekoCanvasAPI,
 } from '@neko/shared';
+import type { CreatorVisibleArtifactCandidate } from '@neko/agent/runtime';
 
 export interface WorkspaceBoardProjectionHostOptions {
   readonly workspaceId?: string;
@@ -16,6 +19,26 @@ export interface WorkspaceBoardProjectionHostOptions {
 
 export class WorkspaceBoardProjectionHost {
   constructor(private readonly options: WorkspaceBoardProjectionHostOptions = {}) {}
+
+  async deliverCreatorVisibleArtifacts(input: {
+    readonly deliveryId: string;
+    readonly createdAt: string;
+    readonly artifacts: readonly CreatorVisibleArtifactCandidate[];
+    readonly taskId?: string;
+    readonly runId?: string;
+  }): Promise<readonly CanvasWorkspaceProjectionResult[]> {
+    if (input.artifacts.length === 0) return [];
+    return this.deliverBatch({
+      process: {
+        deliveryId: input.deliveryId,
+        sourceHost: 'vscode',
+        createdAt: input.createdAt,
+        ...(input.taskId ? { taskId: input.taskId } : {}),
+        ...(input.runId ? { runId: input.runId } : {}),
+      },
+      artifacts: input.artifacts.map((artifact) => toProjectionArtifact(artifact, input)),
+    });
+  }
 
   async deliverBatch(
     batch: CanvasWorkspaceDeliveryBatch,
@@ -46,12 +69,52 @@ export class WorkspaceBoardProjectionHost {
         artifacts: batch.artifacts,
       });
       return [result];
-    } catch (error) {
-      return [
-        blocked('projection-write-failed', error instanceof Error ? error.message : String(error)),
-      ];
+    } catch {
+      return [blocked('projection-write-failed')];
     }
   }
+}
+
+function toProjectionArtifact(
+  artifact: CreatorVisibleArtifactCandidate,
+  input: {
+    readonly deliveryId: string;
+    readonly createdAt: string;
+    readonly taskId?: string;
+    readonly runId?: string;
+  },
+): CanvasWorkspaceProjectionArtifact {
+  const provenance = {
+    version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+    deliveryId: input.deliveryId,
+    artifactId: artifact.artifactId,
+    revision: artifact.revision,
+    kind: artifact.kind,
+    role: artifact.role,
+    sourceId: artifact.sourceId,
+    ...(artifact.sourceArtifactIds ? { sourceArtifactIds: artifact.sourceArtifactIds } : {}),
+    ...(input.taskId ? { taskId: input.taskId } : {}),
+    ...(input.runId ? { runId: input.runId } : {}),
+    createdAt: input.createdAt,
+  };
+  if (artifact.kind === 'markdown') {
+    if (!artifact.markdown) {
+      throw new Error(`Markdown artifact ${artifact.artifactId} has no durable body.`);
+    }
+    return {
+      kind: 'markdown',
+      title: artifact.title,
+      markdown: artifact.markdown,
+      provenance,
+    };
+  }
+  return {
+    kind: artifact.kind,
+    title: artifact.title,
+    ...(artifact.resourceRef ? { resourceRef: artifact.resourceRef } : {}),
+    ...(artifact.documentResourceRef ? { documentResourceRef: artifact.documentResourceRef } : {}),
+    provenance,
+  };
 }
 
 async function getCanvasApi(): Promise<Pick<NekoCanvasAPI, 'boards'> | undefined> {
@@ -67,11 +130,15 @@ function readWorkspaceUris(): readonly string[] {
 
 function blocked(
   code: CanvasWorkspaceProjectionDiagnostic['code'],
-  message: string,
+  message?: string,
 ): CanvasWorkspaceProjectionResult {
   return {
     version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
     status: 'blocked',
-    diagnostics: [{ code, severity: 'error', message }],
+    diagnostics: [
+      message
+        ? { code, severity: 'error', message }
+        : createSafeCanvasWorkspaceProjectionDiagnostic(code),
+    ],
   };
 }

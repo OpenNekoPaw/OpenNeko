@@ -4,15 +4,11 @@ import type { TaskRunScope } from '@neko/shared';
 import { AgentTaskProjectionSource } from './taskProjectionSource';
 
 describe('AgentTaskProjectionSource', () => {
-  it('maps work items to dashboard tasks with safe output refs', () => {
-    const source = new AgentTaskProjectionSource({
-      host: {
-        workspaceFolders: [{ uri: { fsPath: '/workspace' } }],
-      },
-    });
+  it('maps work items to task projections with safe output refs', () => {
+    const source = new AgentTaskProjectionSource();
 
     expect(
-      source.toDashboardTask(
+      source.toTaskProjection(
         createTaskWorkItem({
           id: 'media-1',
           kind: 'media-task',
@@ -37,10 +33,10 @@ describe('AgentTaskProjectionSource', () => {
   });
 
   it('does not own task actions beyond projection declarations', () => {
-    const source = new AgentTaskProjectionSource({ host: {} });
+    const source = new AgentTaskProjectionSource();
 
     expect(
-      source.toDashboardTask(
+      source.toTaskProjection(
         createTaskWorkItem({
           id: 'tool-1',
           kind: 'tool-background-task',

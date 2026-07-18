@@ -18,7 +18,7 @@ describe('canvas creative scope contracts', () => {
     ]);
   });
 
-  it('projects compact board summaries for dashboard grouping', () => {
+  it('projects compact board summaries for host grouping', () => {
     expect(
       projectCanvasBoardSummaryForIndex({
         canvasId: 'canvas-1',

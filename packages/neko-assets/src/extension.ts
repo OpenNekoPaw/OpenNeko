@@ -52,7 +52,6 @@ import {
 import {
   EntityInspectorProvider,
   VSCodeEntityRuntimeRegistry,
-  registerDashboardEntitySourceCommand,
   registerEntityFacadeCommands,
 } from '@neko/entity/host-vscode';
 import { createEngineMetadataExtractor } from './services/EngineMetadataExtractor';
@@ -88,7 +87,6 @@ import { setRootLogger, getLogger } from './utils/logger';
 import { setErrorHandler, handleError } from './utils/errorHandler';
 import { openAssetPreview } from './utils/preview';
 import { createNekoAssetsCapabilityProvider } from './agentCapabilityProvider';
-import { MediaImportDispatcher } from './services/ImportDispatcher';
 import { ProjectAssetDependencyManifestService } from './services/ProjectAssetDependencyManifestService';
 import { CharacterAssetExportService } from './services/CharacterAssetExportService';
 import {
@@ -236,15 +234,15 @@ export async function activate(
           }
         : undefined,
   });
-  const entityInspectorProvider = new EntityInspectorProvider({ logger: rootLogger });
+  const entityInspectorProvider = new EntityInspectorProvider({
+    logger: rootLogger,
+    subscribeEntityChanges: (projectRoot, listener) =>
+      entityRuntimeRegistry.get(projectRoot).onDidChangeEntity(listener),
+  });
   context.subscriptions.push(
     entityRuntimeRegistry,
     entityInspectorProvider,
     registerEntityFacadeCommands({ logger: rootLogger, runtimeRegistry: entityRuntimeRegistry }),
-    registerDashboardEntitySourceCommand({
-      logger: rootLogger,
-      runtimeRegistry: entityRuntimeRegistry,
-    }),
     vscode.window.registerWebviewViewProvider(
       EntityInspectorProvider.viewType,
       entityInspectorProvider,
@@ -298,14 +296,6 @@ export async function activate(
             } catch {
               return false;
             }
-          },
-        },
-        market: {
-          isInstalled: (packageId) => {
-            const market = vscode.extensions.getExtension<{ isInstalled(id: string): boolean }>(
-              'neko.neko-market',
-            );
-            return market?.exports?.isInstalled(packageId) ?? false;
           },
         },
       });
@@ -1307,30 +1297,6 @@ function registerAssetCommands(context: vscode.ExtensionContext): void {
       if (!uri || !library) return;
 
       try {
-        const dispatcher = createMediaImportDispatcher();
-        const validation = dispatcher.validateFormat(uri.fsPath);
-        if (validation.supported) {
-          const workspaceFolderPaths = (vscode.workspace.workspaceFolders ?? []).map(
-            (folder) => folder.uri.fsPath,
-          );
-          const owningWorkspaceRoot = findOwningWorkspaceRoot(
-            uri,
-            vscode.workspace.workspaceFolders ?? [],
-          );
-          await dispatcher.importFile({
-            sourcePath: uri.fsPath,
-            owningWorkspaceRoot,
-            workspaceFolderPaths,
-            pathVariables: mediaSettingsService
-              ? await mediaSettingsService.getPathVariableMap()
-              : undefined,
-          });
-          vscode.window.showInformationMessage(
-            `Imported media asset: ${path.basename(uri.fsPath)}`,
-          );
-          return;
-        }
-
         const result = await library.importFile(uri.fsPath);
         await library.flush();
         entityChangeEmitter?.fire();
@@ -1354,7 +1320,7 @@ function registerAssetCommands(context: vscode.ExtensionContext): void {
 
       const selected = await vscode.window.showQuickPick(
         result.issues.map((issue) => ({
-          label: `$(${issue.code === 'missing-market-package' ? 'package' : 'warning'}) ${issue.code}`,
+          label: `$(warning) ${issue.code}`,
           description: issue.dependencyId,
           detail: issue.message,
           issue,
@@ -1684,32 +1650,6 @@ async function exportCharacterPack(input: unknown): Promise<unknown> {
   }
 }
 
-function createMediaImportDispatcher(): MediaImportDispatcher {
-  return new MediaImportDispatcher({
-    fs: {
-      readFile: async (filePath) => vscode.workspace.fs.readFile(vscode.Uri.file(filePath)),
-      writeFile: async (filePath, data) =>
-        vscode.workspace.fs.writeFile(vscode.Uri.file(filePath), data),
-      createDirectory: async (dirPath) =>
-        vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath)),
-      exists: async (filePath) => {
-        try {
-          await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
-          return true;
-        } catch {
-          return false;
-        }
-      },
-    },
-    commands: {
-      executeCommand: (command, ...args) => vscode.commands.executeCommand(command, ...args),
-    },
-    assetRegistrar: {
-      registerImportedAsset: registerImportedAssetDescriptor,
-    },
-  });
-}
-
 function findOwningWorkspaceRoot(
   uri: vscode.Uri,
   workspaceFolders: readonly vscode.WorkspaceFolder[],
@@ -1800,7 +1740,7 @@ function isAuthorizedLocalPath(
 async function registerImportedAssetDescriptor(descriptor: ImportedAssetDescriptor): Promise<void> {
   if (!library || !descriptor.path) return;
   const category =
-    descriptor.mediaKind.startsWith('puppet-') || descriptor.mediaKind.startsWith('model-')
+    descriptor.mediaKind.startsWith('live2d-') || descriptor.mediaKind.startsWith('model-')
       ? 'character'
       : 'object';
   const durableProjectRef =

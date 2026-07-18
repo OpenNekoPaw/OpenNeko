@@ -45,7 +45,7 @@ const profile: NpcProfileSource = {
 const request: NpcAgentWorkflowRequest = {
   workflow: 'embody-character',
   entityRef,
-  source: 'dashboard',
+  source: 'agent',
   projectRoot: '/workspace/project-a',
   prompt: 'Check knowledge boundary.',
 };
@@ -56,14 +56,14 @@ const relationship: CreativeEntityRelationshipProjection = {
     entityId: 'char-ahui',
     entityKind: 'character',
     projectRoot: '/workspace/project-a',
-    source: 'neko-story',
+    source: 'fountain-content',
   },
   type: 'ally',
   source: {
-    sourceId: 'neko-story',
+    sourceId: 'fountain-content',
     sourceKind: 'story',
     sourceRef: 'cases/test.fountain:8',
-    providerId: 'neko-story',
+    providerId: 'fountain-content',
   },
 };
 
@@ -71,10 +71,10 @@ const occurrence: CreativeEntityOccurrenceProjection = {
   entityRef,
   label: '小橘',
   source: {
-    sourceId: 'neko-story',
+    sourceId: 'fountain-content',
     sourceKind: 'story',
     sourceRef: 'cases/test.fountain:8',
-    providerId: 'neko-story',
+    providerId: 'fountain-content',
   },
   role: 'reference',
   location: 'cases/test.fountain:8',
@@ -239,7 +239,7 @@ describe('EmbodyCharacterController', () => {
             sourceRefs: [
               {
                 id: 'source-1',
-                kind: 'dashboard-detail',
+                kind: 'entity-occurrence',
                 projectRelativePath: 'cases/late.fountain',
                 lineStart: 220,
                 lineEnd: 220,

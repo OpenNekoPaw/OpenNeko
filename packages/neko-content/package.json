@@ -17,6 +17,9 @@
     "@neko/markdown": "workspace:*",
     "@neko/shared": "workspace:*",
     "@zip.js/zip.js": "^2.8.26",
+    "epub2": "^3.0.2",
+    "mammoth": "^1.12.0",
+    "pdf-parse": "^2.4.5",
     "yaml": "2.9.0"
   },
   "devDependencies": {

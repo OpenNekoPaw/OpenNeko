@@ -14,16 +14,15 @@ import type { Model, Provider } from '@neko/platform';
 
 import {
   VSCodePiRuntimeManager,
-  ensureVSCodePiProviderCredential,
   filterVSCodePiTurnPurposeModels,
   resolveVSCodePiPurposeModelUse,
   resolveVSCodePiTurnModelPolicy,
 } from './vscodePiRuntimeManager';
 
-const accountProvider: Provider = {
-  id: 'neko-account-gateway',
-  name: 'neko-account-gateway',
-  displayName: 'Neko Account Gateway',
+const configuredProvider: Provider = {
+  id: 'configured-newapi',
+  name: 'configured-newapi',
+  displayName: 'Configured NewAPI',
   type: 'newapi',
   apiUrl: 'https://gateway.example.invalid/v1',
   enabled: true,
@@ -186,15 +185,15 @@ describe('VSCodePiRuntimeManager credential projection', () => {
     const input = {
       purposeModels: {
         'video.understand': {
-          provider: accountProvider,
+          provider: configuredProvider,
           model: {
             id: 'video-understanding',
             name: 'gemini-3.5-flash',
-            providerId: accountProvider.id,
+            providerId: configuredProvider.id,
             capabilities: ['video.understand'],
             enabled: true,
           },
-          providerSource: 'account-gateway',
+          providerSource: 'explicit-config',
         },
       },
     } as never;
@@ -204,52 +203,11 @@ describe('VSCodePiRuntimeManager credential projection', () => {
     });
   });
 
-  it('projects the product account session into the shared Pi store with explicit provenance', async () => {
-    const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-    const resolveAccountGatewayCredential = vi.fn(async () => '  account-token  ');
-
-    await ensureVSCodePiProviderCredential(
-      credentials,
-      { provider: accountProvider, providerSource: 'account-gateway' },
-      resolveAccountGatewayCredential,
-    );
-
-    expect(resolveAccountGatewayCredential).toHaveBeenCalledWith('neko-account-gateway');
-    await expect(credentials.read('neko-account-gateway')).resolves.toEqual({
-      type: 'api_key',
-      key: 'account-token',
-    });
-    await expect(credentials.status('neko-account-gateway')).resolves.toMatchObject({
-      provenance: 'account-gateway',
-      fingerprint: expect.stringMatching(/^[0-9a-f]{16}$/),
-    });
-  });
-
-  it('does not fall back when the account credential resolver is absent or empty', async () => {
-    const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-
-    await expect(
-      ensureVSCodePiProviderCredential(
-        credentials,
-        { provider: accountProvider, providerSource: 'account-gateway' },
-        undefined,
-      ),
-    ).rejects.toThrow('no product-auth credential resolver');
-    await expect(
-      ensureVSCodePiProviderCredential(
-        credentials,
-        { provider: accountProvider, providerSource: 'account-gateway' },
-        async () => '   ',
-      ),
-    ).rejects.toThrow('returned an empty credential');
-    await expect(credentials.read('neko-account-gateway')).resolves.toBeUndefined();
-  });
-
   it('freezes main and bounded understanding as peer purpose entries', async () => {
     const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
     const models = createOpenNekoPiModels(credentials);
     const provider: Provider = {
-      ...accountProvider,
+      ...configuredProvider,
       id: 'configured-newapi',
       name: 'configured-newapi',
       requiresApiKey: true,
@@ -321,7 +279,7 @@ describe('VSCodePiRuntimeManager credential projection', () => {
     const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
     const models = createOpenNekoPiModels(credentials);
     const provider: Provider = {
-      ...accountProvider,
+      ...configuredProvider,
       id: 'configured-newapi',
       name: 'configured-newapi',
       requiresApiKey: true,
@@ -375,57 +333,11 @@ describe('VSCodePiRuntimeManager credential projection', () => {
     expect(models.getModel('configured-newapi', 'image-api-id')).toBeUndefined();
   });
 
-  it('uses the exact account NewAPI endpoint, model, bearer token, and source', async () => {
-    const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
-    const models = createOpenNekoPiModels(credentials);
-    const model: Model = {
-      id: 'account-chat',
-      name: 'account-api-chat',
-      providerId: accountProvider.id,
-      type: 'llm',
-      capabilities: ['chat'],
-      contextWindow: 32_000,
-      maxOutputTokens: 4_096,
-      enabled: true,
-    };
-
-    const policy = await resolveVSCodePiTurnModelPolicy(
-      models,
-      credentials,
-      {
-        conversationId: 'conversation-account',
-        prompt: 'hello',
-        systemPrompt: 'system',
-        provider: accountProvider,
-        model,
-        providerSource: 'account-gateway',
-        executionMode: 'ask',
-        locale: 'en',
-        events: { emit: vi.fn() },
-      },
-      async () => 'account-access-token',
-    );
-
-    expect(policy['agent.main'].model).toMatchObject({
-      provider: 'neko-account-gateway',
-      id: 'account-api-chat',
-      api: 'openai-completions',
-      baseUrl: 'https://gateway.example.invalid/v1',
-    });
-    await expect(models.getAuth(policy['agent.main'].model)).resolves.toEqual({
-      auth: { headers: { authorization: 'Bearer account-access-token' } },
-      source: 'OpenNeko CredentialStore',
-    });
-    await expect(credentials.status(accountProvider.id)).resolves.toMatchObject({
-      provenance: 'account-gateway',
-    });
-  });
-
   it('resolves a flat Canvas purpose without creating an agent.main binding', async () => {
     const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
     const models = createOpenNekoPiModels(credentials);
     const provider: Provider = {
-      ...accountProvider,
+      ...configuredProvider,
       id: 'configured-newapi',
       name: 'configured-newapi',
       requiresApiKey: true,
@@ -468,7 +380,7 @@ describe('VSCodePiRuntimeManager credential projection', () => {
     const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
     const models = createOpenNekoPiModels(credentials);
     const provider: Provider = {
-      ...accountProvider,
+      ...configuredProvider,
       id: 'configured-newapi',
       name: 'configured-newapi',
       requiresApiKey: true,
@@ -546,17 +458,17 @@ describe('VSCodePiRuntimeManager credential projection', () => {
           conversationId: 'conversation-wrong-provider',
           prompt: 'hello',
           systemPrompt: 'system',
-          provider: accountProvider,
+          provider: configuredProvider,
           model,
-          providerSource: 'account-gateway',
+          providerSource: 'explicit-config',
           executionMode: 'ask',
           locale: 'en',
           events: { emit: vi.fn() },
         },
-        async () => 'account-token',
+        undefined,
       ),
     ).rejects.toThrow(
-      'Model foreign-model belongs to provider another-provider, not neko-account-gateway.',
+      'Model foreign-model belongs to provider another-provider, not configured-newapi.',
     );
   });
 });

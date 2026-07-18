@@ -67,8 +67,11 @@ vi.mock('vscode', () => {
 });
 import * as vscode from 'vscode';
 import {
+  AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
+  AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
   createAgentCapabilityActivationIntent,
   createAgentCapabilityActivationProgressEvent,
+  ENTITY_FACADE_COMMANDS,
 } from '@neko/shared';
 import {
   buildProviderExpressionTargets,
@@ -201,6 +204,26 @@ function createChatModelRequest(
     chatModel: { providerId: 'anthropic', modelId: 'claude-3', category: 'llm' },
     ...overrides,
   });
+}
+
+function entityMentionContextPayload() {
+  return {
+    type: 'entity' as const,
+    id: 'entity:char-xiaoju',
+    label: '小橘',
+    summary: 'Entity: 小橘 (Character)',
+    data: {
+      type: 'entity',
+      id: 'entity:char-xiaoju',
+      source: 'entity-graph',
+      entityType: 'character',
+      navigationData: {
+        partition: 'creative-entities',
+        sourceId: 'char-xiaoju',
+        sourceKind: 'character',
+      },
+    },
+  };
 }
 
 /** Minimal SettingsManager-shaped object */
@@ -691,6 +714,199 @@ describe('AgentMessageTurnHandler', () => {
         expect.objectContaining({ locale: 'zh', prompt: '继续生成中文分镜表' }),
       );
       expect(agentManager.getOrCreate).not.toHaveBeenCalled();
+    });
+
+    it('grounds an attached Entity mention through the Entity facade before provider dispatch', async () => {
+      (vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: '/workspace' } }];
+      vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command: string) => {
+        if (command === ENTITY_FACADE_COMMANDS.getEntity) {
+          return {
+            id: 'char-xiaoju',
+            kind: 'character',
+            canonicalName: '小橘',
+            displayName: '橘猫侦探',
+            aliases: ['橘子'],
+            status: 'confirmed',
+            metadata: { role: '侦探', temperament: '冷静' },
+          };
+        }
+        return undefined;
+      });
+      const webview = createMockWebview();
+      const agentManager = createMockAgentManager();
+      const handler = buildHandler({
+        agentManager,
+        providers: createMockProviders(true),
+      });
+
+      await handler.handleUserMessage(
+        webview as any,
+        createChatModelRequest('分析这个角色', {
+          contextPayloads: [
+            {
+              type: 'entity',
+              id: 'entity:char-xiaoju',
+              label: '小橘',
+              summary: 'Entity: 小橘 (Character)',
+              data: {
+                type: 'entity',
+                id: 'entity:char-xiaoju',
+                source: 'entity-graph',
+                entityType: 'character',
+                navigationData: {
+                  partition: 'creative-entities',
+                  sourceId: 'char-xiaoju',
+                  sourceKind: 'character',
+                },
+              },
+            },
+          ],
+        }),
+      );
+
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+        ENTITY_FACADE_COMMANDS.getEntity,
+        {
+          projectRoot: '/workspace',
+          entityRef: { entityId: 'char-xiaoju', entityKind: 'character' },
+        },
+      );
+      expect(agentManager.executePiTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: expect.stringContaining('Canonical name: 小橘'),
+        }),
+      );
+      expect(agentManager.executePiTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: expect.stringContaining('"temperament": "冷静"'),
+        }),
+      );
+    });
+
+    it('re-resolves a claimed resolved Entity snapshot instead of trusting Webview facts', async () => {
+      (vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: '/workspace' } }];
+      vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command: string) => {
+        if (command === ENTITY_FACADE_COMMANDS.getEntity) {
+          return {
+            id: 'char-xiaoju',
+            kind: 'character',
+            canonicalName: '小橘',
+            aliases: [],
+            status: 'confirmed',
+            metadata: { role: '侦探' },
+          };
+        }
+        return undefined;
+      });
+      const agentManager = createMockAgentManager();
+      const handler = buildHandler({ agentManager, providers: createMockProviders(true) });
+
+      await handler.handleUserMessage(
+        createMockWebview() as any,
+        createChatModelRequest('分析这个角色', {
+          contextPayloads: [
+            {
+              type: 'entity',
+              id: 'entity:char-xiaoju',
+              label: '小橘',
+              summary: 'Entity: 小橘 (Character)',
+              data: {
+                schemaVersion: AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
+                kind: AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
+                entityRef: { entityId: 'char-xiaoju', entityKind: 'character' },
+                entity: {
+                  id: 'char-xiaoju',
+                  kind: 'character',
+                  canonicalName: '伪造名称',
+                  aliases: [],
+                  status: 'confirmed',
+                  metadata: { role: '伪造身份' },
+                },
+              },
+            },
+          ],
+        }),
+      );
+
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+        ENTITY_FACADE_COMMANDS.getEntity,
+        {
+          projectRoot: '/workspace',
+          entityRef: { entityId: 'char-xiaoju', entityKind: 'character' },
+        },
+      );
+      expect(agentManager.executePiTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: expect.stringContaining('Canonical name: 小橘') }),
+      );
+      expect(agentManager.executePiTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ prompt: expect.not.stringContaining('伪造身份') }),
+      );
+    });
+
+    it('rejects a missing Entity instead of dispatching the thin mention summary', async () => {
+      (vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: '/workspace' } }];
+      vi.mocked(vscode.commands.executeCommand).mockResolvedValue(undefined);
+      const webview = createMockWebview();
+      const agentManager = createMockAgentManager();
+      const handler = buildHandler({ agentManager, providers: createMockProviders(true) });
+
+      await expect(
+        handler.handleUserMessage(
+          webview as any,
+          createChatModelRequest('分析这个角色', {
+            contextPayloads: [entityMentionContextPayload()],
+          }),
+        ),
+      ).rejects.toThrow('Agent Entity context was not found: char-xiaoju');
+      expect(agentManager.executePiTurn).not.toHaveBeenCalled();
+    });
+
+    it('rejects an Entity facade result with a different kind before provider dispatch', async () => {
+      (vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: '/workspace' } }];
+      vi.mocked(vscode.commands.executeCommand).mockResolvedValue({
+        id: 'char-xiaoju',
+        kind: 'scene',
+        canonicalName: '小橘',
+        aliases: [],
+        status: 'confirmed',
+      });
+      const webview = createMockWebview();
+      const agentManager = createMockAgentManager();
+      const handler = buildHandler({ agentManager, providers: createMockProviders(true) });
+
+      await expect(
+        handler.handleUserMessage(
+          webview as any,
+          createChatModelRequest('分析这个角色', {
+            contextPayloads: [entityMentionContextPayload()],
+          }),
+        ),
+      ).rejects.toThrow('Agent Entity context identity mismatch');
+      expect(agentManager.executePiTurn).not.toHaveBeenCalled();
+    });
+
+    it('rejects Entity grounding when a multi-root workspace cannot be tied to the conversation', async () => {
+      (vscode.workspace as any).workspaceFolders = [
+        { uri: { fsPath: '/workspace-a' } },
+        { uri: { fsPath: '/workspace-b' } },
+      ];
+      const agentManager = createMockAgentManager();
+      const handler = buildHandler({ agentManager, providers: createMockProviders(true) });
+
+      await expect(
+        handler.handleUserMessage(
+          createMockWebview() as any,
+          createChatModelRequest('分析这个角色', {
+            conversationId: 'unmatched-conversation',
+            contextPayloads: [entityMentionContextPayload()],
+          }),
+        ),
+      ).rejects.toThrow('Agent Entity context workspace cannot be resolved');
+      expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
+        ENTITY_FACADE_COMMANDS.getEntity,
+        expect.anything(),
+      );
+      expect(agentManager.executePiTurn).not.toHaveBeenCalled();
     });
   });
 
@@ -1653,7 +1869,7 @@ describe('AgentMessageTurnHandler', () => {
       );
     });
 
-    it('uses a roleplay-scoped candidate search without scanning workspace files', async () => {
+    it('uses the Entity roleplay partition without scanning workspace files', async () => {
       const webview = createMockWebview();
       const handler = buildHandler();
 
@@ -1667,13 +1883,20 @@ describe('AgentMessageTurnHandler', () => {
             description: 'Character',
             source: {
               partition: 'creative-entities',
-              sourceId: 'char-xiaoju',
-              sourceKind: 'character',
+              sourceId: 'neko-entity',
+              sourceKind: 'registry',
+              refId: 'char-xiaoju',
+              metadata: { entityKind: 'character', status: 'confirmed' },
             },
             projectRoot: '/workspace',
             searchText: '小橘 character',
             freshness: 'fresh',
             metadata: { entityType: 'character' },
+            navigationData: {
+              entityId: 'char-xiaoju',
+              kind: 'character',
+              source: 'neko-entity',
+            },
           },
         ],
         partitions: [],
@@ -1692,8 +1915,8 @@ describe('AgentMessageTurnHandler', () => {
         expect.objectContaining({
           text: '',
           mode: 'mention',
-          kinds: ['script-role', 'creative-entity', 'entity-candidate', 'asset', 'generated-asset'],
-          partitions: ['story-symbols', 'creative-entities', 'asset-library'],
+          kinds: ['creative-entity', 'entity-candidate'],
+          partitions: ['creative-entities'],
         }),
       );
       expect(webview.postMessage).toHaveBeenCalledWith({

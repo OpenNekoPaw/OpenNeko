@@ -318,8 +318,7 @@ export class CharacterDialogueRuntimeService {
   private async resolveThinProfileAction(
     input: CharacterDialogueProfilePreparationInput,
   ): Promise<CharacterDialogueThinProfileAction> {
-    const enrichment =
-      input.request.enrichment ?? defaultCharacterDialogueEnrichmentForSource(input.request.source);
+    const enrichment = input.request.enrichment;
     switch (enrichment) {
       case 'skip':
         return 'start-now';
@@ -447,12 +446,6 @@ export function appendCharacterDialogueUserSupplement(
       .filter((value): value is string => Boolean(value?.trim()))
       .join('\n'),
   };
-}
-
-export function defaultCharacterDialogueEnrichmentForSource(
-  source: NpcTestBenchLaunchRequest['source'],
-): NpcTestBenchLaunchRequest['enrichment'] | undefined {
-  return source === 'dashboard' ? 'skip' : undefined;
 }
 
 export function createDefaultCharacterDialogueSessionId(entityRef: CreativeEntityRef): string {

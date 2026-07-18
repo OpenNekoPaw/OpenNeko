@@ -80,6 +80,7 @@ function createDeps(): ChatWebviewMessageRouterDeps {
     characterDialogue: {
       hasSession: vi.fn(() => false),
       routeUserMessage: vi.fn(),
+      confirmRoleplayCandidate: vi.fn(),
       launchFromSlash: vi.fn(),
       cancel: vi.fn(() => false),
       exit: vi.fn(),
@@ -407,6 +408,25 @@ describe('handleChatWebviewMessage', () => {
     });
     expect(deps.slashCommandHandler.handleCommand).not.toHaveBeenCalled();
     expect(deps.messages?.handleUserMessage).not.toHaveBeenCalled();
+  });
+
+  it('routes explicit Candidate confirmation to Character Dialogue without trusting Candidate facts', () => {
+    const deps = createDeps();
+
+    handleChatWebviewMessage(
+      {
+        type: 'confirmRoleplayCandidate',
+        projectSearchItemId: 'entity-projection:semantic-xiaoju',
+        initialUserMessage: '你好，小橘',
+      },
+      deps,
+    );
+
+    expect(deps.characterDialogue?.confirmRoleplayCandidate).toHaveBeenCalledWith({
+      projectSearchItemId: 'entity-projection:semantic-xiaoju',
+      initialUserMessage: '你好，小橘',
+    });
+    expect(deps.characterDialogue?.launchFromSlash).not.toHaveBeenCalled();
   });
 
   it('routes Character Dialogue exit events to the Character Dialogue controller', () => {

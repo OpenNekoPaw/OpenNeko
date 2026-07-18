@@ -135,7 +135,7 @@ describe('extension.ts -- entity integration boundary', () => {
     expect(extensionSource).toContain('ENTITY_FACADE_COMMANDS.inspectEntity');
     expect(extensionSource).toContain('ENTITY_FACADE_COMMANDS.proposeCandidate');
     expect(extensionSource).toContain('registerEntityFacadeCommands');
-    expect(extensionSource).toContain('registerDashboardEntitySourceCommand');
+    expect(extensionSource).not.toContain('DashboardCreativeEntity');
     expect(extensionSource).toContain('EntityInspectorProvider');
   });
 

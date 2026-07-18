@@ -8,9 +8,9 @@ import type { PathVariableMap } from '../path';
 export type CharacterAssetDimension = 'model' | 'motion' | 'config' | 'audio' | 'text';
 
 export type CharacterAssetMediaKind =
-  | 'puppet-model'
-  | 'puppet-motion'
-  | 'puppet-config'
+  | 'live2d-model'
+  | 'live2d-motion'
+  | 'live2d-config'
   | 'model-3d'
   | 'model-motion'
   | 'model-config'

@@ -61,15 +61,12 @@ export function AppShell() {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Auto-show onboarding when no AI service is configured
-  const isAiConfigured = !!(
-    settings.ssoSession ||
-    settings.configuredProviders.find(
-      (provider) =>
-        provider.enabled !== false &&
-        ((provider.models?.length ?? 0) > 0 ||
-          !!provider.apiKey ||
-          provider.requiresApiKey === false),
-    )
+  const isAiConfigured = !!settings.configuredProviders.find(
+    (provider) =>
+      provider.enabled !== false &&
+      ((provider.models?.length ?? 0) > 0 ||
+        !!provider.apiKey ||
+        provider.requiresApiKey === false),
   );
   useEffect(() => {
     if (hasConfigSnapshot && !isAiConfigured) {
@@ -110,7 +107,6 @@ export function AppShell() {
         renderHeader={(headerProps) => (
           <Header
             {...headerProps}
-            ssoSession={settings.ssoSession}
             configuredProviders={settings.configuredProviders}
             onOpenOnboarding={() => setShowOnboarding(true)}
           />

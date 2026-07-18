@@ -37,7 +37,7 @@ export interface MediaTimeRange {
 }
 
 export interface QualityProjectRef {
-  readonly domain: 'sketch' | 'canvas' | 'cut' | 'audio' | 'model' | 'puppet' | 'story';
+  readonly domain: 'canvas' | 'cut' | 'audio';
   readonly documentUri: string;
   readonly projectRevision: string;
   readonly contentDigest?: string;

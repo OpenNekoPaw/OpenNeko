@@ -124,7 +124,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
   // Engine Status
   context.subscriptions.push(vscode.commands.registerCommand('neko.engine.status', cmdShowStatus));
 
-  // Engine runtime status (internal read-only API for dashboard/diagnostics)
+  // Engine runtime status (internal read-only API for status and diagnostic consumers)
   context.subscriptions.push(
     vscode.commands.registerCommand('neko.engine.getStatus', getEngineRuntimeStatus),
   );

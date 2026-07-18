@@ -1,7 +1,14 @@
 import { stat, readFile, readdir } from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { extractSemanticText } from '@neko/content';
+import {
+  extractSemanticDocument,
+  extractSemanticText,
+  readSemanticOccurrenceContext,
+  SemanticOccurrenceContextError,
+} from '@neko/content';
+import { type IDocumentAccessService } from '@neko/content/document';
+import { createNodeDocumentAccessService } from '@neko/content/document/node';
 import type { CreativeEntityService } from '@neko/entity/core';
 import {
   SemanticSourceCoordinator,
@@ -16,6 +23,9 @@ import type {
   CreativeEntityCandidate,
   SemanticSourceDescriptor,
   SemanticSourceAnalysisResult,
+  SemanticEntityOccurrenceRecord,
+  SemanticCreativeSchemaRef,
+  SemanticOccurrenceEntityLinks,
   SemanticTextSegment,
 } from '@neko/shared';
 import {
@@ -27,6 +37,7 @@ import { projectAutomaticEntityCandidateReview } from '@neko/entity/core';
 import { isExcludedSemanticPath, semanticFormat } from '@neko/search/core';
 import type { MediaLibrarySettingsService } from './MediaLibrarySettingsService';
 import { getLogger } from '../utils/logger';
+import type { SemanticCreativeSchemaAdapter } from '@neko/content';
 
 const logger = getLogger('SemanticSourceDiscovery');
 const MAX_SOURCE_BYTES = 1_000_000;
@@ -38,6 +49,11 @@ export interface SemanticSourceDiscoveryServiceOptions {
   readonly settingsService: MediaLibrarySettingsService;
   readonly entityService: CreativeEntityService;
   readonly homedir: string;
+  readonly creativeSchemaAdapters?: readonly SemanticCreativeSchemaAdapter[];
+  readonly resolveCreativeSchema?: (input: {
+    readonly rootKind: SemanticSourceRuntimeScope['rootKind'];
+    readonly relativePath: string;
+  }) => SemanticCreativeSchemaRef | undefined;
 }
 
 export class SemanticSourceDiscoveryService implements vscode.Disposable {
@@ -45,15 +61,17 @@ export class SemanticSourceDiscoveryService implements vscode.Disposable {
   private readonly watchers: vscode.FileSystemWatcher[] = [];
   private readonly walkStates = new Map<string, string[]>();
   private readonly coordinator: SemanticSourceCoordinator;
+  private readonly documentAccess: IDocumentAccessService;
   private binding: NodeWorkspaceSemanticEntityMetadataBinding | undefined;
   private scopes: readonly SemanticSourceRuntimeScope[] = [];
   private reconcileTimer: ReturnType<typeof setTimeout> | undefined;
   private disposed = false;
 
   constructor(private readonly options: SemanticSourceDiscoveryServiceOptions) {
+    this.documentAccess = createNodeDocumentAccessService({ logger });
     this.coordinator = new SemanticSourceCoordinator(
       {
-        discovery: new NodeSemanticSourceDiscovery(this.walkStates),
+        discovery: new NodeSemanticSourceDiscovery(this.walkStates, options.resolveCreativeSchema),
         projection: new BindingSemanticSourceProjection(() => this.requireBinding()),
         getEntitySnapshot: async () => {
           const entities = await options.entityService.list({ status: 'confirmed' });
@@ -63,7 +81,22 @@ export class SemanticSourceDiscoveryService implements vscode.Disposable {
           };
         },
         extractText: ({ source, content, signal }) =>
-          extractSemanticText({ source, content, maxBytes: MAX_SOURCE_BYTES, signal }),
+          extractSemanticText({
+            source,
+            content,
+            maxBytes: MAX_SOURCE_BYTES,
+            signal,
+            creativeSchemaAdapters: options.creativeSchemaAdapters,
+          }),
+        extractDocument: async ({ source, file, signal }) =>
+          (
+            await extractSemanticDocument({
+              source,
+              runtimePath: file.runtimePath,
+              documentAccess: this.documentAccess,
+              signal,
+            })
+          ).segments,
         now: () => new Date().toISOString(),
       },
       new TextEntityAnalyzer(),
@@ -105,6 +138,55 @@ export class SemanticSourceDiscoveryService implements vscode.Disposable {
     return projectAutomaticEntityCandidateReview(candidates).filter(
       (item) => item.reviewStatus === 'suggested' || item.reviewStatus === 'ambiguous',
     );
+  }
+
+  findOccurrencesByEntity(entityId: string): Promise<readonly SemanticEntityOccurrenceRecord[]> {
+    return this.requireBinding().findOccurrencesByEntity(entityId);
+  }
+
+  findEntityLinksByOccurrence(occurrenceId: string): Promise<SemanticOccurrenceEntityLinks | null> {
+    return this.requireBinding().findEntityLinksByOccurrence(occurrenceId);
+  }
+
+  async readOccurrenceContext(occurrenceId: string) {
+    const links = await this.requireBinding().findEntityLinksByOccurrence(occurrenceId);
+    if (!links) throw new Error(`Unknown semantic Entity occurrence: ${occurrenceId}`);
+    const descriptor = (await this.requireBinding().listSources()).find(
+      (source) => source.sourceId === links.occurrence.sourceId,
+    );
+    if (!descriptor) {
+      throw new Error(`Semantic Entity occurrence source is unavailable: ${occurrenceId}`);
+    }
+    const scope = this.scopes.find((candidate) => candidate.rootId === descriptor.rootId);
+    if (!scope) throw new Error(`Semantic source root is unavailable: ${descriptor.rootId}`);
+    const runtimePath = path.join(scope.runtimeRoot, descriptor.relativePath);
+    try {
+      return await readSemanticOccurrenceContext({
+        record: links.occurrence,
+        source: {
+          filePath: runtimePath,
+          format: descriptor.format === 'plain' ? 'text' : descriptor.format,
+          fileId: descriptor.sourceId,
+        },
+        documentAccess: this.documentAccess,
+        readFingerprint: () => fingerprintForPath(runtimePath),
+      });
+    } catch (error) {
+      if (
+        error instanceof SemanticOccurrenceContextError &&
+        error.code === 'semantic-occurrence-context-stale'
+      ) {
+        void this.coordinator
+          .handleHint(scope.rootId, descriptor.relativePath, 'change')
+          .catch((refreshError) =>
+            logger.warn('Failed to refresh stale semantic occurrence source', {
+              sourceId: descriptor.sourceId,
+              error: refreshError instanceof Error ? refreshError.message : String(refreshError),
+            }),
+          );
+      }
+      throw error;
+    }
   }
 
   async saveCandidateForReview(candidateId: string): Promise<CreativeEntityCandidate> {
@@ -150,14 +232,21 @@ export class SemanticSourceDiscoveryService implements vscode.Disposable {
     document: vscode.TextDocument,
   ): Promise<readonly vscode.DocumentSymbol[]> {
     const scope = this.scopeForPath(document.uri.fsPath);
+    const relativePath = scope
+      ? path.relative(scope.runtimeRoot, document.uri.fsPath).replace(/\\/gu, '/')
+      : '';
+    const creativeSchema = scope
+      ? this.options.resolveCreativeSchema?.({ rootKind: scope.rootKind, relativePath })
+      : undefined;
     if (
       !scope ||
-      !semanticFormat(document.uri.fsPath) ||
+      !semanticFormat(document.uri.fsPath, creativeSchema) ||
+      isSemanticDocumentPath(document.uri.fsPath) ||
       isExcludedSemanticPath(document.uri.fsPath)
     ) {
       return [];
     }
-    const source = sourceForDocument(scope, document);
+    const source = sourceForDocument(scope, document, creativeSchema);
     const persisted = await this.requireBinding().getSource(source.sourceId);
     const currentFingerprint = await fingerprintForPath(document.uri.fsPath);
     const mentions =
@@ -324,6 +413,7 @@ export class SemanticSourceDiscoveryService implements vscode.Disposable {
       source,
       content: document.getText(),
       maxBytes: MAX_SOURCE_BYTES,
+      creativeSchemaAdapters: this.options.creativeSchemaAdapters,
     });
     const entities = await this.options.entityService.list({ status: 'confirmed' });
     const result = await new TextEntityAnalyzer().analyze({
@@ -354,7 +444,10 @@ export class SemanticSourceDiscoveryService implements vscode.Disposable {
 }
 
 class NodeSemanticSourceDiscovery implements SemanticSourceDiscoveryPort {
-  constructor(private readonly walkStates: Map<string, string[]>) {}
+  constructor(
+    private readonly walkStates: Map<string, string[]>,
+    private readonly resolveCreativeSchema?: SemanticSourceDiscoveryServiceOptions['resolveCreativeSchema'],
+  ) {}
 
   async listFiles(input: {
     readonly scope: SemanticSourceRuntimeScope;
@@ -387,9 +480,13 @@ class NodeSemanticSourceDiscovery implements SemanticSourceDiscoveryPort {
           if (!isExcludedSemanticPath(relativePath)) stack.push(runtimePath);
           continue;
         }
+        const creativeSchema = this.resolveCreativeSchema?.({
+          rootKind: input.scope.rootKind,
+          relativePath,
+        });
         if (
           !entry.isFile() ||
-          !semanticFormat(relativePath) ||
+          !semanticFormat(relativePath, creativeSchema) ||
           isExcludedSemanticPath(relativePath)
         ) {
           continue;
@@ -399,7 +496,9 @@ class NodeSemanticSourceDiscovery implements SemanticSourceDiscoveryPort {
           runtimePath,
           relativePath,
         );
-        if (observed) files.push(observed);
+        if (observed) {
+          files.push({ ...observed, ...(creativeSchema ? { creativeSchema } : {}) });
+        }
         if (files.length >= input.limit) break;
       }
     }
@@ -419,7 +518,12 @@ class NodeSemanticSourceDiscovery implements SemanticSourceDiscoveryPort {
     if (!normalized || normalized.startsWith('../') || path.isAbsolute(normalized)) return null;
     const runtimePath = path.resolve(scope.runtimeRoot, normalized);
     if (!isPathInside(scope.runtimeRoot, runtimePath)) return null;
-    return observeRuntimeFile(scope.runtimeRoot, runtimePath, normalized);
+    const creativeSchema = this.resolveCreativeSchema?.({
+      rootKind: scope.rootKind,
+      relativePath: normalized,
+    });
+    const observed = await observeRuntimeFile(scope.runtimeRoot, runtimePath, normalized);
+    return observed ? { ...observed, ...(creativeSchema ? { creativeSchema } : {}) } : null;
   }
 
   async readFile(file: SemanticSourceFileObservation, signal: AbortSignal): Promise<Uint8Array> {
@@ -495,9 +599,10 @@ async function observeRuntimeFile(
 function sourceForDocument(
   scope: SemanticSourceRuntimeScope,
   document: vscode.TextDocument,
+  creativeSchema?: SemanticCreativeSchemaRef,
 ): SemanticSourceDescriptor {
   const relativePath = path.relative(scope.runtimeRoot, document.uri.fsPath).replace(/\\/gu, '/');
-  const format = semanticFormat(relativePath);
+  const format = semanticFormat(relativePath, creativeSchema);
   if (!format) throw new Error(`Unsupported semantic document: ${document.uri.fsPath}`);
   return {
     sourceId: `${scope.rootId}:${relativePath}`,
@@ -511,6 +616,7 @@ function sourceForDocument(
     fingerprint: `${Buffer.byteLength(document.getText(), 'utf8')}:unsaved`,
     sizeBytes: Buffer.byteLength(document.getText(), 'utf8'),
     modifiedAtMs: 0,
+    ...(creativeSchema ? { creativeSchema } : {}),
   };
 }
 
@@ -530,4 +636,8 @@ function createEntityRevision(entities: readonly unknown[]): string {
 function isPathInside(root: string, filePath: string): boolean {
   const relative = path.relative(path.resolve(root), path.resolve(filePath));
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function isSemanticDocumentPath(filePath: string): boolean {
+  return /\.(?:pdf|epub|docx)$/iu.test(filePath);
 }

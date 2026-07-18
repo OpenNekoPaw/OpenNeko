@@ -32,11 +32,7 @@ import {
   type EngineAvVideoStreamClient,
 } from '@neko/neko-client';
 import type { ProjectData } from '@neko/shared';
-import {
-  buildCompositeLayers,
-  buildPausedPreviewOverlayElements,
-  hasVisibleScene3DAtTime,
-} from './compositeUtils';
+import { buildCompositeLayers, buildPausedPreviewOverlayElements } from './compositeUtils';
 import { PerformanceOverlay } from './PerformanceOverlay';
 import { ShapeLayerRenderer } from '../ShapeRenderer';
 import type { ShapeInstance } from '../../types/shape';
@@ -316,10 +312,6 @@ export const PreviewPanel = memo(function PreviewPanel({
 
   const pausedCompositeState = useMemo(() => {
     if (!project || isPlaying) {
-      return { enabled: false, layers: [] as ReturnType<typeof buildCompositeLayers> };
-    }
-
-    if (hasVisibleScene3DAtTime(project, currentTime)) {
       return { enabled: false, layers: [] as ReturnType<typeof buildCompositeLayers> };
     }
 

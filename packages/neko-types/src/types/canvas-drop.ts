@@ -5,7 +5,7 @@ export type CanvasDroppedAssetKind =
 
 export type CanvasTextFileFormat = NonNullable<TextCanvasNode['data']['format']>;
 
-export type NkProjectType = 'nkv' | 'nka' | 'nkm' | 'nkp';
+export type NkProjectType = 'nkv';
 
 export interface DroppedMediaCanvasAsset {
   kind: 'media';
@@ -103,8 +103,6 @@ const TEXT_EXTENSIONS: Record<string, CanvasTextFileFormat> = {
   txt: 'plain',
   log: 'plain',
   fountain: 'plain',
-  nks: 'plain',
-  story: 'plain',
 };
 const DOCUMENT_EXTENSIONS: Record<string, DroppedDocumentCanvasAsset['docType']> = {
   pdf: 'pdf',
@@ -121,9 +119,6 @@ const CANVAS_EXTENSIONS = new Set(['nkc']);
 
 const PROJECT_EXTENSIONS: Record<string, NkProjectType> = {
   nkv: 'nkv',
-  nka: 'nka',
-  nkm: 'nkm',
-  nkp: 'nkp',
 };
 
 function getFileExtension(fileName: string): string {

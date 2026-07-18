@@ -13,6 +13,7 @@ import type {
   ContentBlock,
   ToolCall,
 } from '@neko-agent/types';
+import type { ToolResultArtifactTransfer, ToolResultAttachment } from '@neko/shared';
 
 import type { ConversationBridge } from '../conversationBridge';
 import type { StreamProcessingResult } from './agentStreamProcessor';
@@ -49,6 +50,7 @@ export function createPiAgentStreamSession(
     );
   }
   let turnId: string | undefined;
+  let runId: string | undefined;
   let sequence = 0;
   let accumulatedResponse = '';
   let accumulatedThinking = '';
@@ -68,8 +70,10 @@ export function createPiAgentStreamSession(
 
   const requireTurnId = (event: PiProductAgentEvent): string => {
     turnId ??= event.identity.turnId;
+    runId ??= event.identity.runId;
     if (
       turnId !== event.identity.turnId ||
+      runId !== event.identity.runId ||
       event.identity.conversationId !== options.conversationId
     ) {
       throw new Error(
@@ -501,6 +505,7 @@ export function createPiAgentStreamSession(
       }
       return {
         messageId: options.messageId,
+        ...(turnId && runId ? { identity: { turnId, runId } } : {}),
         accumulatedResponse,
         accumulatedThinking,
         hasError: terminalStatus === 'failed',
@@ -521,18 +526,62 @@ function toRecord(value: unknown): Record<string, unknown> {
 }
 
 function readToolResult(value: unknown, isError: boolean): NonNullable<ToolCall['result']> {
-  if (isRecord(value) && isRecord(value.details) && typeof value.details.success === 'boolean') {
+  const details = isRecord(value) && isRecord(value.details) ? value.details : undefined;
+  if (details && typeof details.success === 'boolean') {
     return {
-      success: value.details.success,
-      data: value.details.data,
-      ...(typeof value.details.error === 'string' ? { error: value.details.error } : {}),
+      success: details.success,
+      data: details.data,
+      ...(typeof details.error === 'string' ? { error: details.error } : {}),
+      ...readToolResultCollections(details),
     };
   }
   return {
     success: !isError,
-    data: isRecord(value) && 'details' in value ? value.details : value,
+    data:
+      details && 'data' in details
+        ? details.data
+        : isRecord(value) && 'details' in value
+          ? value.details
+          : value,
     ...(isError ? { error: 'Pi tool execution failed.' } : {}),
+    ...readToolResultCollections(details ?? value),
   };
+}
+
+function readToolResultCollections(value: unknown): {
+  readonly attachments?: readonly ToolResultAttachment[];
+  readonly artifacts?: readonly ToolResultArtifactTransfer[];
+} {
+  if (!isRecord(value)) return {};
+  const attachments = value['attachments'];
+  const artifacts = value['artifacts'];
+  return {
+    ...(Array.isArray(attachments)
+      ? { attachments: attachments.filter(isToolResultAttachment) }
+      : {}),
+    ...(Array.isArray(artifacts)
+      ? { artifacts: artifacts.filter(isToolResultArtifactTransfer) }
+      : {}),
+  };
+}
+
+function isToolResultAttachment(value: unknown): value is ToolResultAttachment {
+  if (!isRecord(value)) return false;
+  const type = value['type'];
+  return (
+    (type === 'image' || type === 'audio' || type === 'video') && typeof value['path'] === 'string'
+  );
+}
+
+function isToolResultArtifactTransfer(value: unknown): value is ToolResultArtifactTransfer {
+  if (!isRecord(value)) return false;
+  const type = value['type'];
+  return (
+    type === 'artifactSnapshot' ||
+    type === 'artifactBackfill' ||
+    type === 'artifactBlockPage' ||
+    type === 'artifactExecutionSummary'
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

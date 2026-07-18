@@ -143,8 +143,6 @@ export interface NekoProjectAuthoringStaticGuardResult {
 
 export const NEKO_PROJECT_AUTHORING_LEGACY_UI_BOUND_COMMAND_IDS = [
   'neko.cut.importGeneratedClip',
-  'neko.sketch.importAsset',
-  'neko.model.importAsset',
 ] as const;
 
 export const NEKO_PROJECT_AUTHORING_OPERATION_KINDS = [

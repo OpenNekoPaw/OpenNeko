@@ -586,7 +586,7 @@ describe('compatibility project search adapters', () => {
     );
   });
 
-  it('projects puppet and model asset dimensions through the asset-library partition', async () => {
+  it('projects Live2D and model asset dimensions through the asset-library partition', async () => {
     const adapters = createCompatibilityProjectSearchAdapters({
       workspaceFileFinder: { findFiles: async () => [] },
       jsonReader: makeJsonReader({
@@ -606,7 +606,7 @@ describe('compatibility project search adapters', () => {
                       mediaType: 'document',
                       characterAsset: {
                         assetDimension: 'model',
-                        mediaKind: 'puppet-model',
+                        mediaKind: 'live2d-model',
                         storageMode: 'bundle-memory',
                         bundleLocator: {
                           bundlePath: './sakura.zip',
@@ -649,8 +649,8 @@ describe('compatibility project search adapters', () => {
     expect(adapters.filter((adapter) => adapter.partition === 'asset-library')).toHaveLength(1);
 
     const assetAdapter = adapters.find((adapter) => adapter.partition === 'asset-library')!;
-    const puppetItems = await assetAdapter.query(
-      { text: 'puppet-model', projectRoot: '/workspace' },
+    const live2dItems = await assetAdapter.query(
+      { text: 'live2d-model', projectRoot: '/workspace' },
       { projectRoot: '/workspace' },
     );
     const modelItems = await assetAdapter.query(
@@ -658,12 +658,12 @@ describe('compatibility project search adapters', () => {
       { projectRoot: '/workspace' },
     );
 
-    expect(puppetItems[0]).toEqual(
+    expect(live2dItems[0]).toEqual(
       expect.objectContaining({
         source: expect.objectContaining({ partition: 'asset-library' }),
         metadata: expect.objectContaining({
           assetDimension: 'model',
-          mediaKind: 'puppet-model',
+          mediaKind: 'live2d-model',
           storageMode: 'bundle-memory',
           bundleLocator: expect.objectContaining({
             fragmentRef: './sakura.zip#avatars/sakura/sakura.moc3',
@@ -672,7 +672,7 @@ describe('compatibility project search adapters', () => {
         }),
         navigationData: expect.objectContaining({
           assetDimension: 'model',
-          mediaKind: 'puppet-model',
+          mediaKind: 'live2d-model',
           storageMode: 'bundle-memory',
         }),
       }),

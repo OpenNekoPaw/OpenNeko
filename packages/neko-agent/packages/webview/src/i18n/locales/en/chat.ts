@@ -292,6 +292,7 @@ export const chat = {
   'chat.input.mentionTags.kind.scene': 'Scene',
   'chat.input.mentionTags.entity.asset': 'Asset',
   'chat.input.mentionTags.entity.character': 'Character',
+  'chat.input.mentionTags.entity.candidate': 'Candidate',
   'chat.input.mentionTags.entity.scene': 'Scene',
   'chat.input.mentionTags.entity.shot': 'Shot',
   'chat.input.mentionTags.entity.canvas': 'Canvas',
@@ -329,8 +330,10 @@ export const chat = {
   'chat.entryPrompt.generateAssets.count': '{count} model(s)',
   'chat.entryPrompt.roleplay.hint': 'Choose an available unified entity to enter roleplay.',
   'chat.entryPrompt.roleplay.section': 'Playable Characters',
-  'chat.entryPrompt.roleplay.empty': 'No character entity is available for roleplay.',
+  'chat.entryPrompt.roleplay.empty':
+    'No confirmed roleplay character is available. Confirm one in the Entity panel first.',
   'chat.entryPrompt.roleplay.badge': 'Character',
+  'chat.entryPrompt.roleplay.confirmBadge': 'Confirm & roleplay',
 
   'chat.toolCall.tool': 'Tool',
   'chat.toolCall.args': 'Args',

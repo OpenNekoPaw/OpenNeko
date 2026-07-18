@@ -882,9 +882,6 @@ export function CanvasApp() {
     onTextDocumentReadResult: (result) => {
       setDocumentTextProjections((current) => applyTextDocumentReadResult(current, result));
     },
-    onModelInstalledResult: (nodeId, installedVersion) => {
-      updateNodeData(nodeId, { installedVersion: installedVersion ?? undefined });
-    },
     onTimelineSync: (payload) => {
       payload.shots.forEach(({ shotId, projectName, importedAt }) => {
         const node = useCanvasStore.getState().canvasData?.nodes.find((n) => n.id === shotId);
@@ -894,30 +891,6 @@ export function CanvasApp() {
           lastImportedToTimelineProject: projectName ?? node.data.lastImportedToTimelineProject,
         });
       });
-    },
-    onUpdateNodeImage: (nodeId, imageData, childNodeId) => {
-      // Sketch round-trip: update the shot node's generatedImage and append to history
-      const node = useCanvasStore.getState().canvasData?.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
-      if (node.type === 'shot') {
-        const shotNode = node as import('@neko/shared').ShotCanvasNode;
-        const history = appendSelectedGenerationCandidate(shotNode.data.generationHistory ?? [], {
-          id: `sketch-${Date.now()}`,
-          dataUrl: imageData,
-          prompt: '',
-          timestamp: Date.now(),
-          selected: true,
-        });
-        updateNodeData(nodeId, {
-          generatedImage: imageData,
-          generationHistory: history,
-        });
-      } else if (node.type === 'gallery' && childNodeId) {
-        updateGalleryChildGeneration(nodeId, childNodeId, {
-          imageData,
-          historyIdPrefix: 'gallery-sketch',
-        });
-      }
     },
     onKeyboardFocusChange: setKeyboardFocused,
     isKeyboardFocusedRef,
@@ -1225,17 +1198,6 @@ export function CanvasApp() {
     );
   }, [selectedNodeIds, nodes, openGenerationPanel]);
 
-  /** Open the selected ShotNode's generated image in neko-sketch for editing */
-  const handleEditInSketch = useCallback(() => {
-    const nodeId = selectedNodeIds[0];
-    if (!nodeId) return;
-    const node = nodes.find((n) => n.id === nodeId);
-    if (!node) return;
-    const data = node.data as Record<string, unknown>;
-    const imageData = (data['generatedImage'] as string | undefined) ?? null;
-    vscode?.postMessage({ type: 'editInSketch', nodeId, imageData });
-  }, [selectedNodeIds, nodes]);
-
   const handleScriptLoadScenes = useCallback((nodeId: string, scriptPath: string) => {
     setScriptIndexStates((current) => ({
       ...current,
@@ -1293,10 +1255,6 @@ export function CanvasApp() {
 
   const handleCanvasBoardRefOpen = useCallback((ref: CanvasBoardRef) => {
     vscode?.postMessage({ type: 'openCanvasBoardRef', ref });
-  }, []);
-
-  const handleModelCheckInstalled = useCallback((nodeId: string, modelPath: string) => {
-    vscode?.postMessage({ type: 'checkModelInstalled', nodeId, modelPath });
   }, []);
 
   const handleRemoveContainerChild = useCallback(
@@ -1393,7 +1351,6 @@ export function CanvasApp() {
     onGenerateSelected: handleGenerateSelected,
     onBatchGenerate: handleBatchGenerate,
     onSendToAgent: handleSendToAgent,
-    onEditInSketch: handleEditInSketch,
     onGenerateVideo: handleGenerateVideo,
     onEditWithControlNet: handleEditWithControlNet,
     onSetPlaybackEntry: setPlaybackEntry,
@@ -1878,7 +1835,6 @@ export function CanvasApp() {
                   onDocumentLoadText={handleDocumentLoadText}
                   documentTextProjections={documentTextProjections}
                   onCanvasEmbedOpen={handleCanvasEmbedOpen}
-                  onModelCheckInstalled={handleModelCheckInstalled}
                   onRemoveContainerChild={handleRemoveContainerChild}
                   onConnectionUpdate={updateConnection}
                   expandedNodeId={expandedNodeId}

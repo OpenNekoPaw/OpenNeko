@@ -4,14 +4,6 @@ import {
   isEntityAssetBindingRole,
   type CreativeEntityRef,
 } from './creative-entity-asset-composition';
-import {
-  isDashboardCharacterRoleWorkflowAction,
-  isDashboardCharacterRoleWorkflowScopeRef,
-  isDashboardCreativeEntityRef,
-  type DashboardCharacterRoleWorkflowAction,
-  type DashboardCharacterRoleWorkflowScopeRef,
-  type DashboardCreativeEntityRef,
-} from './dashboard-creative-entity';
 
 export const NPC_TEST_BENCH_AS_SLASH_COMMAND_NAME = 'as';
 export const NPC_TEST_BENCH_AS_SLASH_COMMAND = '/as';
@@ -35,8 +27,23 @@ export type NpcProfileFactSource =
   | 'agent-inferred'
   | 'user-supplement';
 export type NpcProfileEnrichmentMode = 'ask' | 'skip' | 'auto' | 'manual';
-export type NpcTestBenchLaunchSource = 'slash-command' | 'dashboard' | 'story' | 'canvas' | 'asset';
-export type NpcAgentWorkflowLaunchSource = 'dashboard' | 'agent' | 'story' | 'canvas' | 'asset';
+export type NpcTestBenchLaunchSource = 'slash-command' | 'agent' | 'story' | 'canvas' | 'asset';
+export type NpcAgentWorkflowLaunchSource = 'agent' | 'story' | 'canvas' | 'asset';
+export type NpcCharacterRoleWorkflowAction = 'embody-character';
+export type NpcCharacterRoleWorkflowScopeKind =
+  | 'project'
+  | 'story-scene'
+  | 'story-document'
+  | 'occurrence'
+  | 'interaction-path'
+  | 'validation-artifact';
+
+export interface NpcCharacterRoleWorkflowScopeRef {
+  readonly kind: NpcCharacterRoleWorkflowScopeKind;
+  readonly source: string;
+  readonly ref: string;
+  readonly label?: string;
+}
 
 export type NpcTranscriptMessageRole = 'user' | 'npc' | 'system' | 'evaluator';
 export type NpcEvaluationDimension =
@@ -112,7 +119,6 @@ export interface NpcProfileSource {
 
 export interface NpcTestBenchLaunchRequest {
   readonly entityRef: CreativeEntityRef;
-  readonly dashboardRef?: DashboardCreativeEntityRef;
   readonly mode?: NpcTestMode;
   readonly enrichment?: NpcProfileEnrichmentMode;
   readonly source?: NpcTestBenchLaunchSource;
@@ -122,10 +128,9 @@ export interface NpcTestBenchLaunchRequest {
 }
 
 export interface NpcAgentWorkflowRequest {
-  readonly workflow: DashboardCharacterRoleWorkflowAction;
+  readonly workflow: NpcCharacterRoleWorkflowAction;
   readonly entityRef: CreativeEntityRef;
-  readonly dashboardRef?: DashboardCreativeEntityRef;
-  readonly scopes?: readonly DashboardCharacterRoleWorkflowScopeRef[];
+  readonly scopes?: readonly NpcCharacterRoleWorkflowScopeRef[];
   readonly prompt?: string;
   readonly source?: NpcAgentWorkflowLaunchSource;
   readonly projectRoot?: string;
@@ -240,13 +245,12 @@ export const NPC_PROFILE_ENRICHMENT_MODES: readonly NpcProfileEnrichmentMode[] =
 ] as const;
 export const NPC_TEST_BENCH_LAUNCH_SOURCES: readonly NpcTestBenchLaunchSource[] = [
   'slash-command',
-  'dashboard',
+  'agent',
   'story',
   'canvas',
   'asset',
 ] as const;
 export const NPC_AGENT_WORKFLOW_LAUNCH_SOURCES: readonly NpcAgentWorkflowLaunchSource[] = [
-  'dashboard',
   'agent',
   'story',
   'canvas',
@@ -419,7 +423,6 @@ export function isNpcTestBenchLaunchRequest(value: unknown): value is NpcTestBen
   if (!isRecord(value)) return false;
   return (
     isCreativeEntityRef(value['entityRef']) &&
-    (value['dashboardRef'] === undefined || isDashboardCreativeEntityRef(value['dashboardRef'])) &&
     (value['mode'] === undefined || isNpcTestMode(value['mode'])) &&
     (value['enrichment'] === undefined || isNpcProfileEnrichmentMode(value['enrichment'])) &&
     (value['source'] === undefined || isNpcTestBenchLaunchSource(value['source'])) &&
@@ -433,15 +436,49 @@ export function isNpcTestBenchLaunchRequest(value: unknown): value is NpcTestBen
 export function isNpcAgentWorkflowRequest(value: unknown): value is NpcAgentWorkflowRequest {
   if (!isRecord(value)) return false;
   return (
-    isDashboardCharacterRoleWorkflowAction(value['workflow']) &&
+    value['workflow'] === 'embody-character' &&
     isCreativeEntityRef(value['entityRef']) &&
-    (value['dashboardRef'] === undefined || isDashboardCreativeEntityRef(value['dashboardRef'])) &&
     (value['scopes'] === undefined ||
       (Array.isArray(value['scopes']) &&
-        value['scopes'].every(isDashboardCharacterRoleWorkflowScopeRef))) &&
+        value['scopes'].every(isNpcCharacterRoleWorkflowScopeRef))) &&
     (value['prompt'] === undefined || typeof value['prompt'] === 'string') &&
     (value['source'] === undefined || isNpcAgentWorkflowLaunchSource(value['source'])) &&
     (value['projectRoot'] === undefined || isNonEmptyString(value['projectRoot']))
+  );
+}
+
+export function isNpcCharacterRoleWorkflowScopeRef(
+  value: unknown,
+): value is NpcCharacterRoleWorkflowScopeRef {
+  if (!isRecord(value)) return false;
+  return (
+    isNpcCharacterRoleWorkflowScopeKind(value['kind']) &&
+    isNonEmptyString(value['source']) &&
+    isPortableNpcScopeRef(value['ref']) &&
+    (value['label'] === undefined || typeof value['label'] === 'string')
+  );
+}
+
+function isPortableNpcScopeRef(value: unknown): value is string {
+  return (
+    isNonEmptyString(value) &&
+    !value.startsWith('/') &&
+    !value.startsWith('\\') &&
+    !/^[A-Za-z]:[\\/]/.test(value) &&
+    !/^file:/i.test(value)
+  );
+}
+
+function isNpcCharacterRoleWorkflowScopeKind(
+  value: unknown,
+): value is NpcCharacterRoleWorkflowScopeKind {
+  return (
+    value === 'project' ||
+    value === 'story-scene' ||
+    value === 'story-document' ||
+    value === 'occurrence' ||
+    value === 'interaction-path' ||
+    value === 'validation-artifact'
   );
 }
 

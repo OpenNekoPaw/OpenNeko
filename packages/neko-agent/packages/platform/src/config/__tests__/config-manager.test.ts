@@ -195,38 +195,6 @@ const SAMPLE_MODEL: Model = {
   enabled: true,
 };
 
-function createAccountCatalog() {
-  return {
-    source: 'account-gateway' as const,
-    status: 'available' as const,
-    provider: {
-      id: 'neko-account-gateway',
-      name: 'neko-account-gateway',
-      displayName: 'Neko Official',
-      type: 'newapi' as const,
-      apiUrl: '',
-      enabled: true,
-      connectionKind: 'gateway' as const,
-      protocolProfile: 'newapi' as const,
-      supportLevel: 'verified' as const,
-      requiresApiKey: false,
-    },
-    models: [
-      {
-        id: 'official-chat',
-        name: 'gpt-4o-mini',
-        displayName: 'Official Chat',
-        providerId: 'neko-account-gateway',
-        type: 'llm' as const,
-        capabilities: ['chat'],
-        enabled: true,
-      },
-    ],
-    entitlement: { allowedModelIds: ['official-chat'] },
-    expiresAt: Date.now() + 60_000,
-  };
-}
-
 // =============================================================================
 // Tests
 // =============================================================================
@@ -498,7 +466,7 @@ describe('ConfigManager', () => {
       expect(() => manager.assertConfigAvailable()).toThrow('Agent configuration file is missing');
     });
 
-    it('reports missing config from account-aware config state when account gateway is absent', () => {
+    it('reports missing config from local config state', () => {
       const manager = new ConfigManager({
         userConfigManager: createReadResultUserConfigManager({
           status: 'missing',
@@ -514,7 +482,7 @@ describe('ConfigManager', () => {
       );
     });
 
-    it('keeps non-AI empty config out of settings data until account-aware projection runs', () => {
+    it('keeps non-AI empty config out of settings data', () => {
       const manager = new ConfigManager({
         userConfigManager: createReadResultUserConfigManager({
           status: 'ok',
@@ -542,32 +510,6 @@ describe('ConfigManager', () => {
       expect(() => manager.assertConfigAvailable()).toThrow(
         'Agent configuration has no enabled providers',
       );
-    });
-
-    it('allows account gateway catalog to satisfy absent explicit AI configuration', () => {
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'missing',
-          filePath: '/tmp/neko/config.toml',
-        }),
-      });
-
-      const state = manager.getAssistantConfigState({
-        accountCatalog: createAccountCatalog(),
-      });
-
-      expect(state.configDiagnostic).toBeUndefined();
-      expect(state.configuredProviders).toEqual([
-        expect.objectContaining({
-          id: 'neko-account-gateway',
-          requiresApiKey: false,
-          models: [expect.objectContaining({ id: 'official-chat' })],
-        }),
-      ]);
-      expect(state.modelGroups[0]).toMatchObject({
-        source: 'account-gateway',
-        providerId: 'neko-account-gateway',
-      });
     });
 
     it('projects global model defaults for the tabless Agent composer', () => {
@@ -621,25 +563,6 @@ describe('ConfigManager', () => {
           },
         }),
       );
-    });
-
-    it('keeps invalid explicit AI config diagnostic instead of falling back to account gateway', () => {
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            defaultProvider: 'missing-provider',
-          },
-        }),
-      });
-
-      const state = manager.getAssistantConfigState({
-        accountCatalog: createAccountCatalog(),
-      });
-
-      expect(state.configDiagnostic).toEqual(expect.objectContaining({ code: 'missingProvider' }));
-      expect(state.modelGroups[0]).toMatchObject({ source: 'account-gateway' });
     });
 
     it('reports missing API keys for enabled chat models before model resolution', () => {
@@ -1111,53 +1034,6 @@ describe('ConfigManager', () => {
       });
 
       expect(manager.resolveModelRefForPurpose('video.understand')).toBeUndefined();
-    });
-
-    it('keeps invalid type defaults visible instead of falling back to account gateway', () => {
-      const localProvider: Provider = {
-        id: 'ollama-local',
-        name: 'ollama',
-        displayName: 'Ollama Local',
-        type: 'ollama',
-        apiUrl: 'http://localhost:11434/api',
-        enabled: true,
-        connectionKind: 'local',
-        protocolProfile: 'ollama',
-        requiresApiKey: false,
-      };
-      const textOnlyModel: Model = {
-        id: 'text-only',
-        name: 'llama3.2',
-        providerId: 'ollama-local',
-        type: 'llm',
-        capabilities: ['chat'],
-        enabled: true,
-      };
-      const manager = new ConfigManager({
-        userConfigManager: createReadResultUserConfigManager({
-          status: 'ok',
-          filePath: '/tmp/neko/config.toml',
-          config: {
-            providers: [localProvider],
-            models: [textOnlyModel],
-            defaultModels: {
-              video: {
-                providerId: 'ollama-local',
-                modelId: 'text-only',
-              },
-            },
-          },
-        }),
-      });
-
-      const state = manager.getAssistantConfigState({
-        accountCatalog: createAccountCatalog(),
-      });
-
-      expect(state.configDiagnostic).toEqual(
-        expect.objectContaining({ code: 'invalidDefaultModelBinding' }),
-      );
-      expect(state.modelGroups[0]).toMatchObject({ source: 'account-gateway' });
     });
 
     it('clears availability diagnostics after runtime credential projection', async () => {

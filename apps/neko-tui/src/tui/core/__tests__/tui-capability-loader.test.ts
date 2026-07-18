@@ -334,7 +334,7 @@ function createProviderExpressionProfile(profileId: string): ProviderExpressionP
     providerId: profileId.endsWith('vscode') ? 'vscode-provider' : 'flux',
     displayName: 'Flux',
     version: '1.0.0',
-    sourceLayer: 'market',
+    sourceLayer: 'personal',
     capabilities: ['image.generate'],
     syntaxProfile: { notes: [] },
     conceptCoverage: { entries: [] },

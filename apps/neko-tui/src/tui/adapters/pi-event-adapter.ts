@@ -1,15 +1,14 @@
 import type { PiProductAgentEvent, PiProductEventSink } from '@neko/agent/pi';
-import type {
-  ToolResultArtifactTransfer,
-  ToolResultAttachment,
-} from '@neko/shared';
+import type { ToolResultArtifactTransfer, ToolResultAttachment } from '@neko/shared';
 
 import type { TuiConversationStores } from '../runtime/tui-runtime-context';
 
 export interface TuiPiEventAdapter extends PiProductEventSink {
   reset(): void;
   getTerminalToolResults(): readonly {
+    readonly name: string;
     readonly success: boolean;
+    readonly data?: unknown;
     readonly attachments?: readonly ToolResultAttachment[];
     readonly artifacts?: readonly ToolResultArtifactTransfer[];
   }[];
@@ -19,7 +18,9 @@ export function createTuiPiEventAdapter(stores: TuiConversationStores): TuiPiEve
   let assistantStarted = false;
   let accumulatedText = '';
   let terminalToolResults: {
+    readonly name: string;
     readonly success: boolean;
+    readonly data?: unknown;
     readonly attachments?: readonly ToolResultAttachment[];
     readonly artifacts?: readonly ToolResultArtifactTransfer[];
   }[] = [];
@@ -65,7 +66,9 @@ export function createTuiPiEventAdapter(stores: TuiConversationStores): TuiPiEve
         case 'tool.completed': {
           const details = toolResultDetails(event.result);
           terminalToolResults.push({
+            name: event.toolName,
             success: !event.isError,
+            data: details.data,
             ...(details.attachments ? { attachments: details.attachments } : {}),
             ...(details.artifacts ? { artifacts: details.artifacts } : {}),
           });
@@ -122,7 +125,9 @@ export function createTuiPiEventAdapter(stores: TuiConversationStores): TuiPiEve
       terminalToolResults = [];
     },
     getTerminalToolResults(): readonly {
+      readonly name: string;
       readonly success: boolean;
+      readonly data?: unknown;
       readonly attachments?: readonly ToolResultAttachment[];
       readonly artifacts?: readonly ToolResultArtifactTransfer[];
     }[] {
@@ -190,8 +195,7 @@ function isToolResultAttachment(value: unknown): value is ToolResultAttachment {
   if (!isRecord(value)) return false;
   const type = value['type'];
   return (
-    (type === 'image' || type === 'audio' || type === 'video') &&
-    typeof value['path'] === 'string'
+    (type === 'image' || type === 'audio' || type === 'video') && typeof value['path'] === 'string'
   );
 }
 

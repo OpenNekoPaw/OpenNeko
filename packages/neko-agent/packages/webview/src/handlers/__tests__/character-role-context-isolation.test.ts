@@ -225,6 +225,12 @@ describe('character role context isolation', () => {
     const nextTabs: OpenTab[] = [
       { id: 'tab-a', title: 'A', conversationId: 'conv-a' },
       { id: 'tab-b', title: 'B', conversationId: 'conv-b' },
+      {
+        id: 'tab-role',
+        title: 'Character Dialogue: 小橘',
+        conversationId: 'npc-session-1',
+        kind: 'character-dialogue',
+      },
     ];
 
     dispatch(
@@ -242,6 +248,7 @@ describe('character role context isolation', () => {
         bindings: [
           { tabId: 'tab-a', conversationId: 'conv-a' },
           { tabId: 'tab-b', conversationId: 'conv-b' },
+          { tabId: 'tab-role', conversationId: 'npc-session-1' },
         ],
         activeTabId: 'tab-b',
       },

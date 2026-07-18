@@ -92,8 +92,8 @@ They walk side by side in silence.
 两人并肩默默走着。
 ```
 
-6. **Fountain syntax**: Follow the Fountain Syntax Reference provided by
-   neko-story (covers English + CJK scene headings, characters, transitions,
+6. **Fountain syntax**: Follow the project's Fountain Syntax Reference
+   (covers English + CJK scene headings, characters, transitions,
    parentheticals, forced markers, and all other elements).
 
 7. **Save to file**:
@@ -284,7 +284,7 @@ Before finalizing script:
 ## Next Steps After Script
 
 Suggest to user:
-1. **Preview in neko-story** - Open .fountain file in VSCode for syntax highlighting
-2. **Convert to timeline** - Use the script-to-timeline skill or Story/Cut authoring capability
+1. **Review the source** - Open the `.fountain` file with an available text preview
+2. **Convert to timeline** - Use the script-to-timeline skill or retained Cut authoring capability
 3. **Generate storyboard** - Use storyboard-to-timeline skill to create video
 4. **Refine and iterate** - Make changes based on visual preview

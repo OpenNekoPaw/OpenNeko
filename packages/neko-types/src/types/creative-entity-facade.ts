@@ -79,18 +79,7 @@ export const ENTITY_BINDING_WIDGET_ACTIONS = [
 export type EntityBindingWidgetAction = (typeof ENTITY_BINDING_WIDGET_ACTIONS)[number];
 
 export type EntityBindingWidgetHostSurface =
-  | 'canvas'
-  | 'sketch'
-  | 'model'
-  | 'puppet'
-  | 'story'
-  | 'agent'
-  | 'assets'
-  | 'dashboard'
-  | 'inspector'
-  | 'treeview'
-  | 'overlay'
-  | 'command-palette';
+  'canvas' | 'agent' | 'assets' | 'inspector' | 'treeview' | 'overlay' | 'command-palette';
 
 export interface EntityFacadeProjectContext {
   readonly projectRoot?: string;
@@ -703,13 +692,8 @@ function isEntityFacadeTreeItemStatus(
 function isEntityBindingWidgetHostSurface(value: unknown): value is EntityBindingWidgetHostSurface {
   return (
     value === 'canvas' ||
-    value === 'sketch' ||
-    value === 'model' ||
-    value === 'puppet' ||
-    value === 'story' ||
     value === 'agent' ||
     value === 'assets' ||
-    value === 'dashboard' ||
     value === 'inspector' ||
     value === 'treeview' ||
     value === 'overlay' ||

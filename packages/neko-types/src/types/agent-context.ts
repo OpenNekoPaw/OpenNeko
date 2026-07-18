@@ -2,7 +2,45 @@
 // Agent Context Types — unified context payload for sendToAgent protocol
 // =============================================================================
 
+import {
+  isCreativeEntity,
+  isCreativeEntityKind,
+  type CreativeEntity,
+  type CreativeEntityKind,
+} from './creative-entity-asset-composition.js';
 import type { ResolvedGenerationParams } from './generation.js';
+
+export const AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION = 1 as const;
+export const AGENT_RESOLVED_ENTITY_CONTEXT_KIND = 'resolved-entity-context' as const;
+
+export interface AgentResolvedEntityContextData {
+  readonly schemaVersion: typeof AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION;
+  readonly kind: typeof AGENT_RESOLVED_ENTITY_CONTEXT_KIND;
+  readonly entityRef: {
+    readonly entityId: string;
+    readonly entityKind: CreativeEntityKind;
+  };
+  readonly entity: CreativeEntity & { readonly status: 'confirmed' };
+}
+
+export function isAgentResolvedEntityContextData(
+  value: unknown,
+): value is AgentResolvedEntityContextData {
+  if (!isRecord(value)) return false;
+  const entityRef = value['entityRef'];
+  const entity = value['entity'];
+  if (!isRecord(entityRef) || !isCreativeEntity(entity)) return false;
+  return (
+    value['schemaVersion'] === AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION &&
+    value['kind'] === AGENT_RESOLVED_ENTITY_CONTEXT_KIND &&
+    typeof entityRef['entityId'] === 'string' &&
+    entityRef['entityId'].length > 0 &&
+    isCreativeEntityKind(entityRef['entityKind']) &&
+    entity.id === entityRef['entityId'] &&
+    entity.kind === entityRef['entityKind'] &&
+    entity.status === 'confirmed'
+  );
+}
 
 /**
  * Source type for agent context attachments.
@@ -73,4 +111,8 @@ export interface CanvasAmbientContext {
     type: string;
     summary: string;
   }>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -52,6 +52,7 @@ export interface DocumentLowLevelAccess {
 
 export interface IDocumentAccessService {
   supports(filePath: string): boolean;
+  hasDRM(filePath: string): Promise<boolean>;
   readContent(filePath: string): Promise<DocumentContent>;
   getManifest(source: DocumentSourceRef | string): Promise<DocumentManifest>;
   createBatchCursor(
@@ -169,6 +170,10 @@ export class DocumentAccessService implements IDocumentAccessService {
 
   supports(filePath: string): boolean {
     return this.deps.reader.supports(filePath);
+  }
+
+  hasDRM(filePath: string): Promise<boolean> {
+    return this.deps.reader.hasDRM(filePath);
   }
 
   readContent(filePath: string): Promise<DocumentContent> {
@@ -460,6 +465,27 @@ export class DocumentAccessService implements IDocumentAccessService {
 
   private async getContentBackedManifest(source: DocumentSourceRef): Promise<DocumentManifest> {
     const content = await this.deps.reader.read(source.filePath);
+    if (source.format === 'docx' || source.format === 'doc') {
+      const sections = splitTextSectionSpans(content.text);
+      return {
+        source,
+        format: source.format,
+        fileId: source.fileId,
+        units: sections.map((section, index) => ({
+          kind: 'section',
+          locator: {
+            kind: 'text-range',
+            startChar: section.start,
+            endChar: section.end,
+            paragraphIndex: index,
+          },
+          title: `Paragraph ${index + 1}`,
+          charCount: section.end - section.start,
+        })),
+        capabilities: makeCapabilities({ text: true, requiresFullExtraction: true }),
+        metadata: content.metadata,
+      };
+    }
     const count = content.pageCount ?? 1;
     const unitKind = source.format === 'pptx' || source.format === 'ppt' ? 'slide' : 'section';
     const units = Array.from({ length: Math.max(count, 1) }, (_, index): DocumentManifestUnit => {
@@ -1101,10 +1127,35 @@ function sliceTextByLocator(
 }
 
 function splitTextIntoSections(text: string): readonly string[] {
-  return text
-    .split(/\n{2,}/)
-    .map((section) => section.trim())
-    .filter((section) => section.length > 0);
+  return splitTextSectionSpans(text).map((section) => text.slice(section.start, section.end));
+}
+
+function splitTextSectionSpans(
+  text: string,
+): readonly { readonly start: number; readonly end: number }[] {
+  const sections: { start: number; end: number }[] = [];
+  let rawStart = 0;
+  for (const separator of text.matchAll(/\n{2,}/gu)) {
+    const separatorStart = separator.index;
+    appendTrimmedSection(text, rawStart, separatorStart, sections);
+    rawStart = separatorStart + separator[0].length;
+  }
+  appendTrimmedSection(text, rawStart, text.length, sections);
+  return sections.length > 0 ? sections : [{ start: 0, end: 0 }];
+}
+
+function appendTrimmedSection(
+  text: string,
+  rawStart: number,
+  rawEnd: number,
+  sections: { start: number; end: number }[],
+): void {
+  const raw = text.slice(rawStart, rawEnd);
+  const leading = raw.match(/^\s*/u)?.[0].length ?? 0;
+  const trailing = raw.match(/\s*$/u)?.[0].length ?? 0;
+  const start = rawStart + leading;
+  const end = Math.max(start, rawEnd - trailing);
+  if (end > start) sections.push({ start, end });
 }
 
 function selectComicRangeEntries<TEntry extends { readonly name: string }>(

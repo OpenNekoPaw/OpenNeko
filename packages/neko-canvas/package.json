@@ -128,11 +128,6 @@
         "category": "NekoCanvas"
       },
       {
-        "command": "neko.canvas.updateNodeImage",
-        "title": "%neko.canvas.updateNodeImage.title%",
-        "category": "NekoCanvas"
-      },
-      {
         "command": "neko.canvas.detachShotFromScene",
         "title": "%neko.canvas.detachShotFromScene.title%",
         "category": "NekoCanvas"

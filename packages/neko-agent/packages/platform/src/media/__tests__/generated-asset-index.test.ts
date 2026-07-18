@@ -76,7 +76,7 @@ describe('GeneratedAssetIndex', () => {
     expect(restored.get(asset.id)).toEqual(asset);
   });
 
-  it('loads and rewrites legacy generated-draft manifest projections without losing outputs', async () => {
+  it('fails visibly instead of loading the removed generated-draft projection path', async () => {
     const workspaceRoot = await createTempDir();
     const asset = imageAsset({
       path: path.join(workspaceRoot, 'neko', 'generated', 'image', 'legacy.png'),
@@ -123,24 +123,13 @@ describe('GeneratedAssetIndex', () => {
       },
     });
 
-    const binding = await createResourceCacheGeneratedAssetIndex({
-      manifestStore: manifest.store,
-      workspaceRoot,
-      homedir: workspaceRoot,
-    });
-
-    expect(binding.index.get(asset.id)).toEqual(asset);
-    expect(Object.values(manifest.current().entries)).toEqual([
-      expect.objectContaining({
-        resource: expect.objectContaining({ provider: 'generated-output-index' }),
-        providerMetadata: expect.objectContaining({
-          generatedOutputProjection: expect.any(Object),
-        }),
+    await expect(
+      createResourceCacheGeneratedAssetIndex({
+        manifestStore: manifest.store,
+        workspaceRoot,
+        homedir: workspaceRoot,
       }),
-    ]);
-    expect(JSON.stringify(manifest.current())).not.toMatch(
-      /generatedDraftProjection|generated-draft-index|generated-draft:asset-1/,
-    );
+    ).rejects.toThrow('legacy-generated-draft-projection');
   });
 
   it('backs up, imports, verifies, and archives the legacy generated asset index', async () => {

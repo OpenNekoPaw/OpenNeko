@@ -99,19 +99,7 @@ const LOCAL_FILE_EXTENSIONS = new Set([
   '.nkeffect',
   '.nkentity',
   '.nkexpr',
-  '.nka',
   '.nkbind',
-  '.nkma',
-  '.nkm',
-  '.nkmc',
-  '.nkmotion',
-  '.nkp',
-  '.nkpm',
-  '.nkproj',
-  '.nks',
-  '.nkscene',
-  '.nkseries',
-  '.nkst',
   '.nkv',
   '.obj',
   '.ogg',
@@ -690,18 +678,6 @@ function shouldScanNestedReferences(filePath: string): boolean {
     lower.endsWith('.nkeffect') ||
     lower.endsWith('.nkentity') ||
     lower.endsWith('.nkexpr') ||
-    lower.endsWith('.nka') ||
-    lower.endsWith('.nkma') ||
-    lower.endsWith('.nkm') ||
-    lower.endsWith('.nkmc') ||
-    lower.endsWith('.nkmotion') ||
-    lower.endsWith('.nkp') ||
-    lower.endsWith('.nkpm') ||
-    lower.endsWith('.nkproj') ||
-    lower.endsWith('.nks') ||
-    lower.endsWith('.nkscene') ||
-    lower.endsWith('.nkseries') ||
-    lower.endsWith('.nkst') ||
     lower.endsWith('.nkv')
   );
 }

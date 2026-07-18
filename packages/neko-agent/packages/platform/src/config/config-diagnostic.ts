@@ -14,10 +14,7 @@ export type AssistantConfigAvailabilityCode =
   | 'invalidDefaultModelBinding'
   | 'unsupportedWorkspaceProviderDefinition'
   | 'unsupportedWorkspaceModelDefinition'
-  | 'unsupportedSkillSource'
-  | 'missingAccountCatalog'
-  | 'accountCatalogUnavailable'
-  | 'accountModelNotEntitled';
+  | 'unsupportedSkillSource';
 
 export type AssistantConfigDiagnosticCode = ConfigReadErrorCode | AssistantConfigAvailabilityCode;
 
@@ -146,12 +143,6 @@ export function buildSafeConfigDiagnosticMessage(
       return `Agent configuration selects an unavailable default provider: ${filePath}. Fix default_provider, then open a new Agent session or tab.`;
     case 'invalidDefaultModel':
       return `Agent configuration selects an unavailable default chat model: ${filePath}. Fix default_model, then open a new Agent session or tab.`;
-    case 'missingAccountCatalog':
-      return 'Neko account AI catalog is unavailable. Log in or configure a local AI provider, then open a new Agent session or tab.';
-    case 'accountCatalogUnavailable':
-      return 'Neko account AI catalog is temporarily unavailable. Refresh Agent or configure a local AI provider.';
-    case 'accountModelNotEntitled':
-      return 'Neko account does not have entitlement for the selected AI model. Choose another entitled model or update the account plan.';
   }
 }
 

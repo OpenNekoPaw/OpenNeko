@@ -7,7 +7,6 @@ import {
   type ContributionDiagnostic,
   type MediaSemanticIndex,
   type MediaTextRange,
-  type MediaTextSegment,
   type LocalMetadataPartition,
   type ProjectIndexFreshness,
   type ProjectSearchQueryContext,
@@ -18,6 +17,7 @@ import {
   type ProjectSemanticCoverageStatus,
   type ProjectSemanticProviderMetadata,
   type SemanticProjectionRepository,
+  type SemanticEvidenceProjection,
 } from '@neko/shared';
 import type { ProjectSearchLogger, ProjectSemanticCoverageProvider } from '../core/ports';
 
@@ -99,7 +99,7 @@ class VSCodeSemanticCoverageProvider implements ProjectSemanticCoverageProvider 
         if (!stableSourceRefsMatch(query.sourceRef, record.index.sourceRef)) return [];
         const staleReasons: readonly ProjectSemanticCoverageStaleReason[] | undefined =
           record.freshness === 'fresh' ? undefined : ['index-stale'];
-        return semanticIndexEvidence(record.index, query).map((item) => ({
+        return semanticIndexEvidence(record.index, record.evidence, query).map((item) => ({
           ...item,
           provider: {
             ...record.provider,
@@ -170,19 +170,20 @@ class VSCodeSemanticCoverageProvider implements ProjectSemanticCoverageProvider 
 
 function semanticIndexEvidence(
   index: MediaSemanticIndex,
+  evidence: readonly SemanticEvidenceProjection[],
   query: ProjectSemanticCoverageQuery,
 ): readonly CoverageEvidence[] {
   switch (query.analysisKind) {
     case 'ocr':
     case 'asr':
     case 'subtitle':
-      return textSegmentEvidence(index, query, (segment) => segment.kind === query.analysisKind);
+      return compactEvidence(evidence, query, (item) => item.kind === query.analysisKind);
     case 'vision':
       return [
-        ...textSegmentEvidence(
-          index,
+        ...compactEvidence(
+          evidence,
           query,
-          (segment) => segment.kind === 'caption' || segment.kind === 'agent',
+          (item) => item.kind === 'caption' || item.kind === 'agent',
         ),
         ...(index.semanticTags ?? []).map((tag) => ({
           range: tag.sourceRef ? readEvidenceRange(tag.sourceRef) : undefined,
@@ -198,35 +199,30 @@ function semanticIndexEvidence(
           evidenceIds: [mention.mentionId],
           provider: providerMetadata(query),
         })),
-        ...textSegmentEvidence(
-          index,
-          query,
-          (segment) => (segment.entityMentionIds?.length ?? 0) > 0,
-        ),
+        ...compactEvidence(evidence, query, (item) => (item.entityMentionIds?.length ?? 0) > 0),
       ];
     case 'storyboard':
-      return textSegmentEvidence(
-        index,
+      return compactEvidence(
+        evidence,
         query,
-        (segment) =>
-          segment.kind === 'agent' &&
-          readString(segment.metadata?.['artifactKind']) === 'storyboard',
+        (item) =>
+          item.kind === 'agent' && readString(item.metadata?.['artifactKind']) === 'storyboard',
       );
     case 'character-observation':
       return [];
   }
 }
 
-function textSegmentEvidence(
-  _index: MediaSemanticIndex,
+function compactEvidence(
+  evidence: readonly SemanticEvidenceProjection[],
   query: ProjectSemanticCoverageQuery,
-  predicate: (segment: MediaTextSegment) => boolean,
+  predicate: (item: SemanticEvidenceProjection) => boolean,
 ): readonly CoverageEvidence[] {
-  return (_index.textSegments ?? []).filter(predicate).map((segment) => ({
-    range: segment.range ?? readEvidenceRange(segment.sourceRef),
-    segmentIds: [segment.segmentId],
-    evidenceIds: [segment.segmentId],
-    provider: providerMetadata(query, segment.provenance.providerId),
+  return evidence.filter(predicate).map((item) => ({
+    range: item.range ?? readEvidenceRange(item.sourceRef),
+    segmentIds: [item.evidenceId],
+    evidenceIds: [item.evidenceId],
+    provider: providerMetadata(query, item.provenance.providerId),
   }));
 }
 

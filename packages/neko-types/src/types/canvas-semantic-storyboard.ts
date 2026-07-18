@@ -10,7 +10,7 @@ import {
   validateCanvasAuthoringSemanticPromptDocument,
 } from './canvas-authoring-contracts';
 import type { AgentTaskResultRef } from './agent-task-result-observation';
-import type { DashboardTaskRef } from './dashboard-task';
+import type { TaskProjectionRef } from './task-projection';
 import type {
   StoryboardMediaIdentityClassificationOptions,
   StoryboardMediaRef,
@@ -97,7 +97,7 @@ export interface CanvasStoryboardReferenceMedia {
   readonly diagnostics?: readonly CanvasAuthoringDiagnostic[];
 }
 
-export interface CanvasStoryboardTaskRef extends DashboardTaskRef {
+export interface CanvasStoryboardTaskRef extends TaskProjectionRef {
   readonly taskId?: string;
   readonly taskKind?: 'image' | 'video' | 'audio' | 'reference-processing' | 'prompt-optimization';
   readonly conversationId?: string;

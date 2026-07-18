@@ -24,6 +24,20 @@ describe('project search normalization and filters', () => {
     expect(matchesProjectSearchItem(item, { text: '小灰' })).toBe(false);
   });
 
+  it('matches a stable item identity for exact Host re-resolution', () => {
+    const item = createProjectSearchItem({
+      id: 'entity-projection:semantic-xiaoju',
+      kind: 'entity-candidate',
+      label: '小橘',
+      partition: 'creative-entities',
+    });
+
+    expect(matchesProjectSearchItem(item, { text: item.id })).toBe(true);
+    expect(matchesProjectSearchItem(item, { text: 'entity-projection:semantic-xiaohui' })).toBe(
+      false,
+    );
+  });
+
   it('applies explicit partition, kind, media, file, and scope filters centrally', () => {
     const item = {
       ...createProjectSearchItem({

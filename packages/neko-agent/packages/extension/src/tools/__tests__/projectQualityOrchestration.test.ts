@@ -11,14 +11,14 @@ import {
 import { collectProjectQualityEvidence } from '../projectQualityOrchestration';
 
 const project: QualityProjectRef = {
-  domain: 'model',
-  documentUri: 'file:///workspace/scene.nkm',
-  projectRevision: 'nkm:digest',
+  domain: 'cut',
+  documentUri: 'file:///workspace/edit.nkv',
+  projectRevision: 'nkv:digest',
   contentDigest: 'digest',
 };
 const target: QualityTarget = {
   version: MEDIA_QUALITY_CONTRACT_VERSION,
-  targetId: 'scene-project',
+  targetId: 'cut-project',
   kind: 'project-artifact',
   projectRef: project,
   revision: project.projectRevision,
@@ -26,7 +26,7 @@ const target: QualityTarget = {
 };
 const snapshotRef = createResourceRef({
   scope: 'project',
-  provider: 'neko-model',
+  provider: 'neko-cut',
   kind: 'document',
   source: {
     kind: 'document',

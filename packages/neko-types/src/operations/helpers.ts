@@ -13,7 +13,7 @@ import { OperationError } from './errors';
 // HasTracks — 泛型约束，任何包含 tracks 字段的数据结构
 // =============================================================================
 
-/** Any data structure that contains a tracks array (ProjectData, AudioProjectData, etc.) */
+/** Any retained data structure that contains a timeline tracks array. */
 export interface HasTracks {
   tracks: TimelineTrack[];
 }
@@ -67,7 +67,7 @@ export function findShape(
 }
 
 /**
- * 不可变更新 track — 返回新数据（泛型，支持 ProjectData / AudioProjectData）
+ * 不可变更新 track — 返回新数据。
  */
 export function updateTrackInProject<T extends HasTracks>(
   data: T,
@@ -81,7 +81,7 @@ export function updateTrackInProject<T extends HasTracks>(
 }
 
 /**
- * 不可变更新 element — 返回新数据（泛型，支持 ProjectData / AudioProjectData）
+ * 不可变更新 element — 返回新数据。
  */
 export function updateElementInProject<T extends HasTracks>(
   data: T,

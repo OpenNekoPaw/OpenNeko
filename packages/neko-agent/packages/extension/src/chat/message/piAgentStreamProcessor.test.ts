@@ -112,6 +112,7 @@ describe('Pi Agent Webview stream projection', () => {
 
     const result = session.result();
     expect(result).toMatchObject({
+      identity: { turnId: 'turn-1', runId: 'run-1' },
       accumulatedResponse: 'hello done',
       accumulatedThinking: 'reason',
       terminalStatus: 'completed',

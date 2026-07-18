@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'path';
+import { buildFountainScriptIndex } from '@neko/content';
 import {
   createDocumentResourceRefFromArchiveRef,
   createHostContentAccessRuntime,
@@ -53,7 +54,6 @@ import {
   isResourceRef,
   isDocumentResourceStatusReason,
   isCanvasNodeType,
-  isCreativeEntityRef,
   isProjectedCanvasData,
   isProjectedCanvasSource,
   createDefaultProjectFormatCodecRegistry,
@@ -142,8 +142,7 @@ import type {
   ProjectFileDiagnostic,
   ProjectFileSaveReason,
   NekoAssetsAPI,
-  NekoStoryAPI,
-  NekoStoryScriptIndex,
+  FountainScriptIndex,
   NarrativePreviewFeatureToggles,
   ResourceRef,
   ResourceVariantRole,
@@ -289,18 +288,6 @@ function assertCanvasNodeType(type: CanvasNodeType | undefined): void {
   if (type !== undefined && !isCanvasNodeType(type)) {
     throw new Error(`Unsupported Canvas node type "${type}"`);
   }
-}
-
-function readCreativeEntityChangedRefs(event: unknown): CreativeEntityChangedRef[] {
-  if (!isPlainRecord(event) || !Array.isArray(event['changedRefs'])) return [];
-  return event['changedRefs'].filter((ref): ref is CreativeEntityChangedRef => {
-    if (!isPlainRecord(ref)) return false;
-    return (
-      ref['kind'] === 'candidate' &&
-      typeof ref['id'] === 'string' &&
-      isCreativeEntityRef(ref['entityRef'])
-    );
-  });
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -591,7 +578,7 @@ function readCanvasNodeContainerChildIds(node: Record<string, unknown>): string[
     : [];
 }
 
-function mapStoryScriptIndexToCanvasScenes(index: NekoStoryScriptIndex | undefined): ScriptScene[] {
+function mapStoryScriptIndexToCanvasScenes(index: FountainScriptIndex | undefined): ScriptScene[] {
   if (!index) {
     return [];
   }
@@ -678,6 +665,11 @@ function isPreviewVariantAPI(api: unknown): api is NekoPreviewVariantAPI {
   );
 }
 
+export interface CanvasDocumentLifecycleEvent {
+  readonly type: 'opened' | 'ready' | 'dirty' | 'saved' | 'reverted' | 'closed';
+  readonly documentUri: string;
+}
+
 export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.CustomDocument> {
   public static readonly viewType = 'neko.canvasEditor';
 
@@ -688,6 +680,10 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
 
   private readonly _onDidChangeCanvas = new vscode.EventEmitter<CanvasChangeEvent>();
   public readonly onDidChangeCanvas = this._onDidChangeCanvas.event;
+
+  private readonly _onDidChangeDocumentLifecycle =
+    new vscode.EventEmitter<CanvasDocumentLifecycleEvent>();
+  public readonly onDidChangeDocumentLifecycle = this._onDidChangeDocumentLifecycle.event;
 
   private readonly _onSelectionChange = new vscode.EventEmitter<CanvasNode[]>();
   public readonly onSelectionChange = this._onSelectionChange.event;
@@ -737,7 +733,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     }),
     logger,
   });
-  private entityChangeSubscription: vscode.Disposable | undefined;
   private headlessAssetImporter: CanvasHeadlessAssetImporter | undefined;
   private creativeAiApplyAdapter: CanvasCreativeAiApplyAdapter | undefined;
 
@@ -770,11 +765,9 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     this.localResourceAccess = contentRuntime.localResourceAccess;
     this.resourceCache = contentRuntime.resourceCache;
     this.contentAccess = contentRuntime.contentAccess;
-    this.subscribeToEntityChangeEvents();
   }
 
   dispose(): void {
-    this.entityChangeSubscription?.dispose();
     this.narrativePreviewBridge.dispose();
     for (const subscription of this.projectionSubscriptions.values()) {
       subscription.dispose();
@@ -782,6 +775,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     this.projectionSubscriptions.clear();
     this._onSelectionChange.dispose();
     this._onDidChangeCanvas.dispose();
+    this._onDidChangeDocumentLifecycle.dispose();
     this._onDidChangeCustomDocument.dispose();
     void this.resourceCache
       ?.dispose()
@@ -1401,28 +1395,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     }
   }
 
-  private subscribeToEntityChangeEvents(): void {
-    const projectRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!projectRoot) return;
-    void vscode.commands
-      .executeCommand<{
-        onDidChangeEntity?: (listener: (event: unknown) => void) => vscode.Disposable;
-      }>('neko.entity.getDashboardCreativeEntitySource', { projectRoot })
-      .then((source) => {
-        if (!source || typeof source.onDidChangeEntity !== 'function') return;
-        this.entityChangeSubscription = source.onDidChangeEntity((event) => {
-          const changedRefs = readCreativeEntityChangedRefs(event);
-          if (changedRefs.length > 0) {
-            this.applyEntityCandidateBackfill(changedRefs);
-          }
-        });
-        this.context.subscriptions.push(this.entityChangeSubscription);
-      })
-      .then(undefined, (error) => {
-        logger.debug('Canvas entity change subscription unavailable', error);
-      });
-  }
-
   openNarrativePreview(): Promise<boolean> {
     return this.revealPlaybackWorkspace();
   }
@@ -1735,6 +1707,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     this.webviewPanelsByDocumentUri.set(documentUri, webviewPanel);
     this.documentsByDocumentUri.set(documentUri, document);
     this.canvasDataReadyDocumentUris.delete(documentUri);
+    this._onDidChangeDocumentLifecycle.fire({ type: 'opened', documentUri });
     const focusedRegistration = this.focusedWebviews.register({
       id: documentUri,
       viewType: CanvasEditorProvider.viewType,
@@ -1787,6 +1760,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     webviewPanel.onDidDispose(async () => {
       focusedRegistration.dispose();
       await this.setGlobalKeyboardEditable(documentUri, false);
+      this._onDidChangeDocumentLifecycle.fire({ type: 'closed', documentUri });
       this.webviewPanelsByDocumentUri.delete(documentUri);
       this.documentsByDocumentUri.delete(documentUri);
       this.canvasSnapshotsByDocumentUri.delete(documentUri);
@@ -1854,7 +1828,9 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     document: vscode.CustomDocument,
     _cancellation: vscode.CancellationToken,
   ): Promise<void> {
-    this.dirtyCanvasDocumentUris.delete(document.uri.toString());
+    const documentUri = document.uri.toString();
+    this.dirtyCanvasDocumentUris.delete(documentUri);
+    this._onDidChangeDocumentLifecycle.fire({ type: 'reverted', documentUri });
     this.getWebviewPanelForDocument(document)?.webview.postMessage({ type: 'revert' });
   }
 
@@ -1885,22 +1861,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       return false;
     }
     return this.focusedWebviews.postKeyboardAction(action, request);
-  }
-
-  /**
-   * Update the generatedImage of a shot node and push the change to the webview.
-   * Called by the `neko.canvas.updateNodeImage` command when Sketch sends back
-   * an edited image via the round-trip workflow.
-   */
-  postUpdateNodeImage(nodeId: string, imageData: string, childNodeId?: string): boolean {
-    if (!this.activeWebviewPanel) return false;
-    this.activeWebviewPanel.webview.postMessage({
-      type: 'updateNodeImage',
-      nodeId,
-      imageData,
-      childNodeId,
-    });
-    return true;
   }
 
   // API Methods
@@ -2581,6 +2541,10 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     }
 
     this.dirtyCanvasDocumentUris.add(document.uri.toString());
+    this._onDidChangeDocumentLifecycle.fire({
+      type: 'dirty',
+      documentUri: document.uri.toString(),
+    });
     this._onDidChangeCustomDocument.fire({ document });
     const savedUri = await vscode.workspace.save(document.uri);
     if (!savedUri) {
@@ -2623,6 +2587,10 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     this.dirtyCanvasDocumentUris.delete(document.uri.toString());
     const data = canvasData as unknown as Record<string, unknown>;
     this.rememberCanvasSnapshot(document, data);
+    this._onDidChangeDocumentLifecycle.fire({
+      type: 'saved',
+      documentUri: document.uri.toString(),
+    });
     if (this.isActiveCanvasDocument(document)) {
       this.syncOutline(document.uri.toString(), data);
       this.syncStatusBar(data);
@@ -2674,6 +2642,10 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           }
           webviewPanel.webview.postMessage({ type: 'update', data });
           this.rememberCanvasSnapshot(document, canvasRecord);
+          this._onDidChangeDocumentLifecycle.fire({
+            type: 'ready',
+            documentUri: document.uri.toString(),
+          });
           if (this.isActiveCanvasDocument(document)) {
             this.syncOutline(document.uri.toString(), canvasRecord);
             this.syncStatusBar(canvasRecord);
@@ -2992,34 +2964,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         break;
       }
 
-      case 'editCanvasImage': {
-        try {
-          if (message.mediaType !== 'image') {
-            throw new Error('Canvas image editing requires an image material.');
-          }
-          const fsPath = await this.resolveCanvasMaterialLocalFilePath(
-            message,
-            document.uri,
-            'neko-canvas.edit-image-material',
-          );
-          const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(fsPath));
-          await vscode.commands.executeCommand('neko.sketch.editImage', {
-            base64: Buffer.from(bytes).toString('base64'),
-            name: path.basename(fsPath),
-            context: {
-              source: 'canvas',
-              sourceNodeId: typeof message.nodeId === 'string' ? message.nodeId : undefined,
-              metadata: { mediaType: 'image' },
-            },
-          });
-        } catch (error) {
-          logger.error(`Failed to edit Canvas image material: ${error}`);
-          void handleError(error instanceof Error ? error : new Error(String(error)), {
-            showToUser: true,
-          });
-        }
-        break;
-      }
       case 'preview:resolveVariant': {
         await this.handlePreviewVariantMessage(message, webviewPanel, document.uri);
         break;
@@ -3044,9 +2988,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           const ext = assetPath.split('.').pop()?.toLowerCase() ?? '';
           const editorIdMap: Record<string, string> = {
             nkv: 'neko.nekocut.editor',
-            nka: 'neko.nekocut.editor',
-            nkm: 'neko.nekomodel.editor',
-            nkp: 'neko.nekopuppet.editor',
           };
           const editorId = editorIdMap[ext];
           if (editorId) {
@@ -3091,6 +3032,10 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       case 'operationApplied':
         // EditOperation sync from webview — fire dirty event
         this.dirtyCanvasDocumentUris.add(document.uri.toString());
+        this._onDidChangeDocumentLifecycle.fire({
+          type: 'dirty',
+          documentUri: document.uri.toString(),
+        });
         this._onDidChangeCustomDocument.fire({ document });
         this._onDidChangeCanvas.fire(
           mapOperationToCanvasChangeEvent(
@@ -3283,12 +3228,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             const tracks = projectData['tracks'] as
               Array<{ elements?: Array<{ src?: string }> }> | undefined;
             assetSrc = tracks?.[0]?.elements?.[0]?.src;
-          } else if (projectType === 'nkm') {
-            const model = projectData['model'] as { src?: string } | undefined;
-            assetSrc = model?.src;
-          } else if (projectType === 'nkp') {
-            const puppet = projectData['puppet'] as { src?: string } | undefined;
-            assetSrc = puppet?.src;
           }
 
           if (!assetSrc) {
@@ -3340,9 +3279,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           const uri = vscode.Uri.file(filePath);
           const editorIdMap: Record<string, string> = {
             nkv: 'neko.nekocut.editor',
-            nka: 'neko.nekocut.editor',
-            nkm: 'neko.nekomodel.editor',
-            nkp: 'neko.nekopuppet.editor',
           };
           const editorId = editorIdMap[projectType];
           if (editorId) {
@@ -3505,40 +3441,24 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       }
 
       case 'getScriptIndex': {
-        // Fetch scene TOC from neko-story
         const scriptPath = message.scriptPath as string;
         const requestNodeId = message.nodeId as string;
-        const storyExt = vscode.extensions.getExtension<NekoStoryAPI>('neko.neko-story');
-
-        if (!storyExt) {
-          webviewPanel.webview.postMessage({
-            type: 'scriptIndexResult',
-            nodeId: requestNodeId,
-            scenes: null,
-            error: 'neko-story not available',
-          });
-          break;
-        }
-
         try {
-          const storyApi = storyExt.isActive
-            ? storyExt.exports
-            : ((await storyExt.activate()) as NekoStoryAPI);
           const resolvedScriptPath = await this.resolveAssetPath(scriptPath, document.uri);
-          const index = storyApi.getScriptIndex(resolvedScriptPath);
+          const content = await vscode.workspace.fs.readFile(vscode.Uri.file(resolvedScriptPath));
+          const index = buildFountainScriptIndex({ uri: resolvedScriptPath, content });
 
           webviewPanel.webview.postMessage({
             type: 'scriptIndexResult',
             nodeId: requestNodeId,
             scenes: mapStoryScriptIndexToCanvasScenes(index),
-            error: index ? undefined : 'script index unavailable',
           });
-        } catch {
+        } catch (error) {
           webviewPanel.webview.postMessage({
             type: 'scriptIndexResult',
             nodeId: requestNodeId,
             scenes: null,
-            error: 'neko-story not available',
+            error: error instanceof Error ? error.message : 'Fountain source could not be parsed',
           });
         }
         break;
@@ -3602,32 +3522,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           logger.error(`Failed to open related canvas board: ${error}`);
           void handleError(error instanceof Error ? error : new Error(String(error)), {
             showToUser: true,
-          });
-        }
-        break;
-      }
-
-      case 'checkModelInstalled': {
-        // Query neko-market for model installation status
-        const modelPath = message.modelPath as string;
-        const modelNodeId = message.nodeId as string;
-        try {
-          const installed = await vscode.commands.executeCommand<boolean>(
-            'neko.market.isInstalled',
-            modelPath,
-          );
-          // Webview expects installedVersion: string | null
-          // neko.market.isInstalled returns boolean; convert to version string or null
-          webviewPanel.webview.postMessage({
-            type: 'modelInstalledResult',
-            nodeId: modelNodeId,
-            installedVersion: installed ? 'installed' : null,
-          });
-        } catch {
-          webviewPanel.webview.postMessage({
-            type: 'modelInstalledResult',
-            nodeId: modelNodeId,
-            installedVersion: null,
           });
         }
         break;
@@ -3776,50 +3670,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
               severity: 'warning',
             });
           }
-        }
-        break;
-      }
-
-      case 'editInSketch': {
-        // Open the ShotNode's generated image in neko-sketch for round-trip editing
-        const nodeId = message.nodeId as string;
-        const imageDataFromWebview = (message.imageData as string | undefined) ?? null;
-
-        const node = await this.getNode(nodeId);
-        if (!node) break;
-
-        const d = node.data as Record<string, unknown>;
-        // Prefer the image provided by the webview; fall back to the stored generatedImage
-        const raw = imageDataFromWebview ?? (d['generatedImage'] as string | undefined) ?? null;
-        if (!raw) {
-          void handleError(new Error('No generated image found for this shot node'), {
-            showToUser: true,
-            severity: 'warning',
-          });
-          break;
-        }
-        // Strip data URL prefix if present
-        const base64 = raw.startsWith('data:') ? (raw.split(',')[1] ?? raw) : raw;
-        const name = `Shot-${String(d['shotNumber'] ?? '').padStart(3, '0')}.png`;
-
-        try {
-          await vscode.commands.executeCommand('neko.sketch.editImage', {
-            base64,
-            name,
-            context: {
-              source: 'canvas',
-              sourceNodeId: nodeId,
-              metadata: {
-                shotNumber: d['shotNumber'],
-                childNodeId: d['childNodeId'],
-              },
-            },
-          });
-        } catch {
-          void handleError(
-            new Error('Failed to open image in Sketch — is neko-sketch installed?'),
-            { showToUser: true },
-          );
         }
         break;
       }
@@ -4587,7 +4437,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         };
       case 'script':
       case 'text':
-        return { 'Text Files': ['md', 'markdown', 'txt', 'log', 'fountain', 'nks', 'story'] };
+        return { 'Text Files': ['md', 'markdown', 'txt', 'log', 'fountain'] };
       case 'document':
         return {
           Documents: ['pdf', 'docx', 'epub', 'cbz'],
@@ -4598,17 +4448,17 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       case 'canvas':
         return { 'Neko Canvas': ['nkc'], 'All Files': ['*'] };
       case 'project':
-        return { 'Neko Projects': ['nkv', 'nka', 'nkm', 'nkp'], 'All Files': ['*'] };
+        return { 'Neko Projects': ['nkv'], 'All Files': ['*'] };
       default:
         return {
           Images: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'],
           Videos: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v'],
           Audio: ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'],
-          'Text Files': ['md', 'markdown', 'txt', 'log', 'fountain', 'nks', 'story'],
+          'Text Files': ['md', 'markdown', 'txt', 'log', 'fountain'],
           Documents: ['pdf', 'docx', 'epub', 'cbz'],
           Models: ['safetensors', 'ckpt', 'pt', 'pth', 'bin'],
           'Neko Canvas': ['nkc'],
-          'Neko Projects': ['nkv', 'nka', 'nkm', 'nkp'],
+          'Neko Projects': ['nkv'],
           'All Files': ['*'],
         };
     }

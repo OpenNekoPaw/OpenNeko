@@ -3,12 +3,12 @@ import type { IProviderCardRegistry, ProviderCard } from '@neko/shared';
 import { registerRuntimeProviderCardDirectories } from '../provider-card-runtime';
 
 describe('registerRuntimeProviderCardDirectories', () => {
-  it('registers market and project provider card directories with canonical layers', async () => {
-    const marketCard = createProviderCard('market-provider');
+  it('registers personal and project provider card directories with canonical layers', async () => {
+    const personalCard = createProviderCard('personal-provider');
     const projectCard = createProviderCard('project-provider');
     const registerDirectory = vi
       .fn()
-      .mockResolvedValueOnce([marketCard])
+      .mockResolvedValueOnce([personalCard])
       .mockResolvedValueOnce([projectCard]);
 
     const result = await registerRuntimeProviderCardDirectories({
@@ -26,7 +26,7 @@ describe('registerRuntimeProviderCardDirectories', () => {
       1,
       expect.objectContaining({
         root: '/home/neko/.neko/providers',
-        sourceLayer: 'market',
+        sourceLayer: 'personal',
         recursive: true,
         sourceRefPrefix: '${NEKO_HOME}/providers',
       }),
@@ -41,7 +41,7 @@ describe('registerRuntimeProviderCardDirectories', () => {
       }),
     );
     expect(result).toEqual({
-      market: [marketCard],
+      personal: [personalCard],
       project: [projectCard],
     });
   });
@@ -62,7 +62,7 @@ describe('registerRuntimeProviderCardDirectories', () => {
     expect(registerDirectory).toHaveBeenCalledTimes(1);
     expect(registerDirectory).toHaveBeenCalledWith(
       expect.objectContaining({
-        sourceLayer: 'market',
+        sourceLayer: 'personal',
       }),
     );
   });
@@ -127,7 +127,7 @@ function createProviderCard(providerId: string): ProviderCard {
     providerId,
     displayName: providerId,
     version: '1.0.0',
-    sourceLayer: 'market',
+    sourceLayer: 'personal',
     sourceRef: `${providerId}.card.md`,
     capabilities: [],
     syntaxProfile: {

@@ -21,7 +21,7 @@ const activateMock = vi.fn();
 const disposeMock = vi.fn();
 const discoveryDeps: unknown[] = [];
 const registerRuntimeProviderCardDirectoriesMock = vi.fn(() =>
-  Promise.resolve({ market: [], project: [] }),
+  Promise.resolve({ personal: [], project: [] }),
 );
 
 function createMockCapabilityRuntimeBindingStore(logger: {

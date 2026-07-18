@@ -26,7 +26,7 @@ import {
 import { getLogger } from '../base';
 import {
   createDefaultCharacterProfileAssembler,
-  createDashboardCharacterProfileEvidenceReader,
+  createCharacterProfileEvidenceReader,
   defaultCharacterEvidenceBudgetForMode,
   summarizeCharacterProfile,
   upsertCharacterRoleTab,
@@ -215,7 +215,7 @@ export class EmbodyCharacterController implements vscode.Disposable {
     }
     const reader =
       this.deps.createEvidenceReader?.(projectRoot) ??
-      createDashboardCharacterProfileEvidenceReader(projectRoot);
+      createCharacterProfileEvidenceReader(projectRoot);
     const [relationships, occurrences, representationHints, scriptContextFacts] = await Promise.all(
       [
         reader.listRelationships(entityRef),

@@ -31,7 +31,7 @@ export interface RegisterRuntimeProviderCardDirectoriesOptions {
 }
 
 export interface RuntimeProviderCardDirectoryRegistrationResult {
-  readonly market: readonly ProviderCard[];
+  readonly personal: readonly ProviderCard[];
   readonly project: readonly ProviderCard[];
 }
 
@@ -40,10 +40,10 @@ export async function registerRuntimeProviderCardDirectories(
 ): Promise<RuntimeProviderCardDirectoryRegistrationResult> {
   const registerDirectory = options.registerDirectory ?? registerProviderCardDirectory;
 
-  const marketRegistration = registerProviderCardRuntimeDirectory({
+  const personalRegistration = registerProviderCardRuntimeDirectory({
     options,
     registerDirectory,
-    layer: 'market',
+    layer: 'personal',
     root: resolveGlobalStorageLayout(options.homeDir).providerCards,
     recursive: true,
     sourceRefPrefix: '${NEKO_HOME}/providers',
@@ -61,9 +61,9 @@ export async function registerRuntimeProviderCardDirectories(
       })
     : Promise.resolve([]);
 
-  const [market, project] = await Promise.all([marketRegistration, projectRegistration]);
+  const [personal, project] = await Promise.all([personalRegistration, projectRegistration]);
 
-  return { market, project };
+  return { personal, project };
 }
 
 async function registerProviderCardRuntimeDirectory(input: {

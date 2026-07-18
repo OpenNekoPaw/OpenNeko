@@ -6,7 +6,7 @@ describe('Agent profile registries', () => {
   it('records duplicate diagnostics without silently hiding source layers', () => {
     const registry = new ArtifactProfileRegistry();
     registry.register(makeArtifactProfile({ source: 'builtin' }));
-    const result = registry.register(makeArtifactProfile({ source: 'market' }));
+    const result = registry.register(makeArtifactProfile({ source: 'package' }));
 
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([
@@ -14,7 +14,7 @@ describe('Agent profile registries', () => {
       ]),
     );
     expect(registry.get('studio.shot-review', 1)).toEqual(
-      expect.objectContaining({ source: 'market' }),
+      expect.objectContaining({ source: 'package' }),
     );
     expect(registry.getDiagnostics()).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'duplicate-profile-id' })]),
@@ -35,14 +35,14 @@ describe('Agent profile registries', () => {
       expect.objectContaining({ source: 'project' }),
     );
 
-    registry.register(makeArtifactProfile({ source: 'market', profileId: 'studio.alt-review' }));
+    registry.register(makeArtifactProfile({ source: 'personal', profileId: 'studio.alt-review' }));
     registry.unregister('studio.shot-review', 'project', 1);
 
     expect(registry.get('studio.shot-review', 1)).toEqual(
       expect.objectContaining({ source: 'builtin' }),
     );
     expect(registry.get('studio.alt-review', 1)).toEqual(
-      expect.objectContaining({ source: 'market' }),
+      expect.objectContaining({ source: 'personal' }),
     );
   });
 

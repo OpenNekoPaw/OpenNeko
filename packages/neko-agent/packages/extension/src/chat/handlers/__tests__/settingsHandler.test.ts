@@ -81,34 +81,6 @@ describe('SettingsHandler', () => {
     );
   });
 
-  it('passes account catalog snapshots into the shared provider projection', async () => {
-    const accountCatalog = {
-      getSnapshot: vi.fn().mockResolvedValue({
-        snapshot: {
-          source: 'account-gateway',
-          status: 'available',
-          provider: { id: 'neko-account-gateway' },
-          models: [],
-          entitlement: { allowedModelIds: [] },
-          expiresAt: 10_000,
-        },
-        refreshed: false,
-      }),
-      invalidateForAuthFailure: vi.fn(),
-    };
-    const handler = new SettingsHandler({
-      platform: platform as never,
-      accountAiCatalog: accountCatalog as never,
-      conversationSettings: conversationSettings as never,
-    });
-
-    await handler.sendSettings(webview as never, { conversationId: 'conversation-a' });
-
-    expect(platform.config.getAssistantSettingsData).toHaveBeenCalledWith({
-      accountCatalog: expect.objectContaining({ source: 'account-gateway' }),
-    });
-  });
-
   it('updates only the target conversation while other Agents and Tasks may be running', async () => {
     const handler = new SettingsHandler({
       platform: platform as never,

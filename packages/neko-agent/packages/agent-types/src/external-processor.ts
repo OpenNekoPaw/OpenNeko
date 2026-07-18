@@ -17,7 +17,6 @@ export const EXTERNAL_PROCESSOR_SOURCE_SCOPES = [
   'builtin',
   'project',
   'personal',
-  'market',
   'extension',
 ] as const;
 
@@ -298,16 +297,6 @@ export interface ExternalProcessorPersonalRegistry {
   readonly entries: readonly ExternalProcessorPersonalRegistryEntry[];
 }
 
-export interface ExternalProcessorMarketPackageProjection {
-  readonly packageId: string;
-  readonly publisherId?: string;
-  readonly version: string;
-  readonly trustLevel: Exclude<AgentCapabilityTrustLevel, 'core'>;
-  readonly entitlement?: 'allowed' | 'denied' | 'unknown';
-  readonly revoked?: boolean;
-  readonly manifest: ExternalProcessorManifest;
-}
-
 export interface ExternalProcessorExtensionContribution {
   readonly extensionId: string;
   readonly contributionId?: string;
@@ -542,57 +531,6 @@ export function registerPersonalExternalProcessorManifests(input: {
         { enabled: entry.enabled ?? false },
       ),
     );
-  }
-  return { registrations, diagnostics };
-}
-
-export function registerMarketExternalProcessorPackages(input: {
-  readonly registry: ExternalProcessorRegistry;
-  readonly packages: readonly ExternalProcessorMarketPackageProjection[];
-}): ExternalProcessorDiscoveryResult {
-  const registrations: ExternalProcessorRegistration[] = [];
-  const diagnostics: ExternalProcessorDiagnostic[] = [];
-  for (const item of input.packages) {
-    const packageDiagnostics: ExternalProcessorDiagnostic[] = [];
-    if (item.entitlement === 'denied') {
-      packageDiagnostics.push(
-        diagnostic(
-          'disabled-processor',
-          'error',
-          `Market processor package "${item.packageId}" is not entitled.`,
-          undefined,
-          { packageId: item.packageId },
-        ),
-      );
-    }
-    if (item.revoked === true) {
-      packageDiagnostics.push(
-        diagnostic(
-          'disabled-processor',
-          'error',
-          `Market processor package "${item.packageId}" is revoked.`,
-          undefined,
-          { packageId: item.packageId },
-        ),
-      );
-    }
-    registrations.push(
-      input.registry.upsert(
-        {
-          sourceScope: 'market',
-          agentCapabilitySource: 'market',
-          sourceId: item.packageId,
-          packageId: item.packageId,
-          trustLevel: item.trustLevel,
-        },
-        item.manifest,
-        {
-          enabled: item.entitlement !== 'denied' && item.revoked !== true,
-          diagnostics: packageDiagnostics,
-        },
-      ),
-    );
-    diagnostics.push(...packageDiagnostics);
   }
   return { registrations, diagnostics };
 }

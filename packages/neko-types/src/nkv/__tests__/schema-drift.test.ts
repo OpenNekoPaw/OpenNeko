@@ -174,7 +174,7 @@ describe('Schema ↔ TypeScript drift detection', () => {
       }
 
       // TS union discriminator values (from TimelineElement union members)
-      const tsTypes = ['media', 'audio', 'text', 'shape', 'subtitle', 'scene3d', 'puppet'];
+      const tsTypes = ['media', 'audio', 'text', 'shape', 'subtitle'];
 
       expect(schemaTypes.sort()).toEqual(tsTypes.sort());
     });

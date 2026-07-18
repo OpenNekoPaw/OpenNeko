@@ -94,6 +94,7 @@ describe('content access tools', () => {
       status: 'ready',
       source: documentContentSource,
       diagnostics: [],
+      resourceRef,
       text: 'hello document',
       totalTextChars: 14,
       returnedTextChars: 14,
@@ -105,6 +106,7 @@ describe('content access tools', () => {
     });
 
     expect(result.success).toBe(true);
+    expect(result.data).toMatchObject({ resourceRef });
     expect(runtime.resolveDocumentContent).toHaveBeenCalledWith({
       caller: 'read-document',
       source: documentContentSource,

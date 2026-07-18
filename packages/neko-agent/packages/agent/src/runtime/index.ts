@@ -151,13 +151,9 @@ export {
 } from './capability/capability-runtime-bindings';
 
 export {
-  NEKO_AUTH_EXTENSION_ID,
   buildConfigBridgeGlobalErrorMessage,
-  buildConfigBridgeSsoSessionChangedMessage,
   buildConfigChangedRuntimeMessage,
   runConfigBridgeQueryRuntime,
-  runConfigBridgeSsoLoginRuntime,
-  runConfigBridgeSsoLogoutRuntime,
   type ConfigBridgeRuntimeLogger,
   type ConfigBridgeQueryConfigState,
   type ConfigBridgeQueryMessage,

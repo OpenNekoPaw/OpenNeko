@@ -106,7 +106,7 @@ function createEmbodyCharacterSessionProjection(): EmbodyCharacterSessionProject
       ],
       sparsity: 'thin',
     },
-    source: 'neko-story',
+    source: 'fountain-content',
     projectRoot: '/workspace/project-a',
     scopeSummary: ['project: current project'],
     summary: 'protagonist',

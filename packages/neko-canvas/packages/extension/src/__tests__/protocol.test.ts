@@ -142,20 +142,16 @@ describe('canvasEditorProvider message contracts', () => {
       expect(providerSource).toContain('scenes: null,');
     });
 
-    it('resolves the contracted script path before querying neko-story', () => {
+    it('resolves and reads the contracted script path through the retained content parser', () => {
       expect(providerSource).toContain(
         'const resolvedScriptPath = await this.resolveAssetPath(scriptPath, document.uri);',
       );
-    });
-
-    it('uses NekoStoryAPI instead of a non-existent command bridge', () => {
       expect(providerSource).toContain(
-        "vscode.extensions.getExtension<NekoStoryAPI>('neko.neko-story')",
+        'vscode.workspace.fs.readFile(vscode.Uri.file(resolvedScriptPath))',
       );
       expect(providerSource).toContain(
-        'const index = storyApi.getScriptIndex(resolvedScriptPath);',
+        'buildFountainScriptIndex({ uri: resolvedScriptPath, content })',
       );
-      expect(providerSource).not.toContain("'neko.story.getScriptIndex'");
     });
 
     it('does not use bare index as field name in scriptIndexResult', () => {
@@ -166,20 +162,6 @@ describe('canvasEditorProvider message contracts', () => {
       );
       const hasOldPattern = scriptIndexLines.some((l) => /\bindex: index\b/.test(l));
       expect(hasOldPattern).toBe(false);
-    });
-  });
-
-  describe('NKV-003: modelInstalledResult installedVersion field', () => {
-    it('sends installedVersion field', () => {
-      // After NKV-003 fix: must use "installedVersion" not "installed"
-      expect(providerSource).toContain('installedVersion:');
-    });
-
-    it('does not use bare installed as field name', () => {
-      // The old pattern "installed: installed" should not appear
-      const lines = providerSource.split('\n');
-      const badPattern = lines.some((l) => /^\s+installed:\s+installed/.test(l));
-      expect(badPattern).toBe(false);
     });
   });
 
@@ -307,7 +289,7 @@ describe('canvasEditorProvider message contracts', () => {
       expect(providerSource).toContain("target: 'local-path'");
     });
 
-    it('material edit and AssetLibrary actions reuse one authorized local-path resolver', () => {
+    it('AssetLibrary actions reuse the authorized local-path resolver', () => {
       const actions = providerSource.slice(
         providerSource.indexOf("case 'openMediaPreview':"),
         providerSource.indexOf("case 'preview:resolveVariant':"),
@@ -318,9 +300,7 @@ describe('canvasEditorProvider message contracts', () => {
       );
 
       expect(actions).toContain("case 'saveCanvasMaterialToAssetLibrary':");
-      expect(actions).toContain("case 'editCanvasImage':");
       expect(actions).toContain("'neko.assets.importFile'");
-      expect(actions).toContain("'neko.sketch.editImage'");
       expect(actions).toContain('vscode.workspace.fs.readFile');
       expect(resolver).toContain('this.resolvePreviewResourceRef(');
       expect(resolver).toContain('this.resolveResourceRefLocalPreviewPath(');

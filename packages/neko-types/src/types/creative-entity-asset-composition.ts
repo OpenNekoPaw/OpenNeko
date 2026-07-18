@@ -1,11 +1,13 @@
 // =============================================================================
 // Creative Entity Asset Composition
 //
-// Shared contracts for composing creative entities with project, market, shared,
-// or external asset representations.
+// Shared contracts for composing creative entities with project, shared, or
+// external asset representations.
 // =============================================================================
 
 import type { ProjectIndexFreshness } from './project-cache-search';
+import type { CharacterMemorySourceRange } from './character-memory';
+import type { DocumentLocator } from './document-reading';
 
 export type CreativeEntityKind = 'character' | 'scene' | 'object' | 'location' | 'style';
 
@@ -179,6 +181,8 @@ export interface CreativeEntityProviderStatus {
 }
 
 export interface CreativeEntityOccurrenceProjection {
+  readonly occurrenceId?: string;
+  readonly mentionId?: string;
   readonly entityRef?: CreativeEntityRef;
   readonly candidateId?: string;
   readonly label: string;
@@ -186,6 +190,9 @@ export interface CreativeEntityOccurrenceProjection {
   readonly role: 'definition' | 'reference';
   readonly location: string;
   readonly detail?: string;
+  readonly locator?: DocumentLocator;
+  readonly range?: CharacterMemorySourceRange;
+  readonly sourceFingerprint?: string;
 }
 
 export interface CreativeEntityRelationshipProjection {
@@ -248,9 +255,9 @@ export interface EntityAssetBindingFile {
 }
 
 export type RepresentationKind =
-  'portrait' | 'reference' | 'puppet-bone' | 'live2d' | 'live3d' | 'voice' | 'motion' | 'video';
+  'portrait' | 'reference' | 'live2d' | 'live3d' | 'voice' | 'motion' | 'video';
 
-export type RepresentationTarget = 'story' | 'canvas' | 'agent' | 'live' | 'cut';
+export type RepresentationTarget = 'canvas' | 'agent' | 'cut';
 
 export interface RepresentationResolveRequest {
   readonly entityId: string;
@@ -302,14 +309,12 @@ export type MissingRepresentationAction = 'generate' | 'import' | 'bind-existing
 export const DEFAULT_REPRESENTATION_FALLBACKS: Readonly<
   Record<RepresentationTarget, readonly RepresentationKind[]>
 > = {
-  story: ['reference', 'portrait'],
-  canvas: ['portrait', 'reference', 'puppet-bone', 'live2d', 'live3d'],
-  agent: ['reference', 'portrait', 'puppet-bone', 'live2d', 'live3d'],
-  live: ['live3d', 'puppet-bone', 'live2d'],
-  cut: ['video', 'puppet-bone', 'live2d', 'live3d', 'portrait'],
+  canvas: ['portrait', 'reference', 'live2d', 'live3d'],
+  agent: ['reference', 'portrait', 'live2d', 'live3d'],
+  cut: ['video', 'live2d', 'live3d', 'portrait'],
 } as const;
 
-export type AssetRefScheme = 'project' | 'market' | 'shared' | 'external';
+export type AssetRefScheme = 'project' | 'shared' | 'external';
 
 export interface ParsedAssetRef {
   readonly scheme: AssetRefScheme;
@@ -446,7 +451,6 @@ export const ENTITY_ASSET_BINDING_ROLES: readonly EntityAssetBindingRole[] = [
 export const REPRESENTATION_KINDS: readonly RepresentationKind[] = [
   'portrait',
   'reference',
-  'puppet-bone',
   'live2d',
   'live3d',
   'voice',
@@ -456,7 +460,6 @@ export const REPRESENTATION_KINDS: readonly RepresentationKind[] = [
 
 export const ASSET_REF_SCHEMES: readonly AssetRefScheme[] = [
   'project',
-  'market',
   'shared',
   'external',
 ] as const;

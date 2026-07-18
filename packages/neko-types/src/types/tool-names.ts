@@ -12,8 +12,6 @@
  * - PIPELINE: pipeline orchestration and diagnostics
  * - QUALITY: quality check and consistency tools
  * - EFFECTS: video effects and shader management
- * - STORY: neko-story script tools
- * - SKETCH: neko-sketch painting tools
  * - ASSETS: asset management tools
  * - TRANSCRIBE: speech-to-text tools
  * - SYSTEM: system/utility tools (file ops, skill discovery)
@@ -126,32 +124,6 @@ export const TOOL_NAMES_EFFECTS = {
 } as const;
 
 // =============================================================================
-// NekoStory — Script Tools
-// =============================================================================
-
-export const TOOL_NAMES_STORY = {
-  GET_SCRIPT_INDEX: 'GetScriptIndex',
-  SEARCH_SCRIPT_INDEX: 'SearchScriptIndex',
-  GENERATE_SCENE_PLAN: 'GenerateScenePlan',
-  GENERATE_SHOT_PLAN: 'GenerateShotPlan',
-  STORY_APPLY_SUGGESTION: 'story_apply_suggestion',
-} as const;
-
-// =============================================================================
-// NekoSketch — Painting Tools
-// =============================================================================
-
-export const TOOL_NAMES_SKETCH = {
-  SKETCH_GENERATE: 'SketchGenerate',
-  SKETCH_SMART_SELECTION: 'SketchSmartSelection',
-  SKETCH_INPAINT: 'SketchInpaint',
-  SKETCH_STYLE_TRANSFER: 'SketchStyleTransfer',
-  SKETCH_UPSCALE: 'SketchUpscale',
-  SKETCH_AUTO_LAYER: 'SketchAutoLayer',
-  SKETCH_LINEART_COLORIZE: 'SketchLineartColorize',
-} as const;
-
-// =============================================================================
 // Assets — Asset Management
 // =============================================================================
 
@@ -179,63 +151,11 @@ export const TOOL_NAMES_SEARCH = {
 } as const;
 
 // =============================================================================
-// NekoModel — 3D Scene Operations
-// =============================================================================
-
-export const TOOL_NAMES_MODEL = {
-  MODEL_SCENE_QUERY: 'model_scene_query',
-  MODEL_NODE_MANIPULATE: 'model_node_manipulate',
-  MODEL_ANIMATION_CONTROL: 'model_animation_control',
-} as const;
-
-// =============================================================================
-// NekoPuppet — Native 2D Puppet Operations
-// =============================================================================
-
-export const TOOL_NAMES_PUPPET = {
-  PUPPET_QUERY: 'puppet:query',
-  PUPPET_CREATE_NATIVE: 'puppet:create_native',
-  PUPPET_SET_EXPRESSION: 'puppet:set_expression',
-  PUPPET_SET_BLENDSHAPE: 'puppet:set_blendshape',
-  PUPPET_SET_BONE: 'puppet:set_bone',
-  PUPPET_SET_CONTROL_DRIVER: 'puppet:set_control_driver',
-  PUPPET_PLAY_ANIMATION: 'puppet:play_animation',
-  PUPPET_AUTO_RIG: 'puppet:auto_rig',
-  PUPPET_GENERATE_ANIMATION: 'puppet:generate_animation',
-} as const;
-
-// =============================================================================
 // Transcribe — Speech-to-Text
 // =============================================================================
 
 export const TOOL_NAMES_TRANSCRIBE = {
   TRANSCRIBE_AUDIO: 'TranscribeAudio',
-} as const;
-
-// =============================================================================
-// Audio — neko-audio DAW operations
-// =============================================================================
-
-export const TOOL_NAMES_AUDIO = {
-  GET_AUDIO_PROJECT_INFO: 'GetAudioProjectInfo',
-  LIST_AUDIO_TRACKS: 'ListAudioTracks',
-  ADD_AUDIO_TRACK: 'AddAudioTrack',
-  REMOVE_AUDIO_TRACK: 'RemoveAudioTrack',
-  SET_TRACK_PROPERTIES: 'SetTrackProperties',
-  IMPORT_AUDIO: 'ImportAudio',
-  SET_TRACK_VOLUME: 'SetTrackVolume',
-  SET_TRACK_PAN: 'SetTrackPan',
-  SET_TRACK_AUTOMATION: 'SetTrackAutomation',
-  APPLY_TRACK_EFFECT: 'ApplyTrackEffect',
-  REMOVE_TRACK_EFFECT: 'RemoveTrackEffect',
-  APPLY_MASTER_EFFECT: 'ApplyMasterEffect',
-  MIX_EXPORT: 'MixExport',
-  GENERATE_MUSIC: 'GenerateMusic',
-  GENERATE_SFX: 'GenerateSFX',
-  GENERATE_VOICE: 'GenerateVoice',
-  STEM_SEPARATION: 'StemSeparation',
-  AUDIO_DENOISE: 'AudioDenoise',
-  ANALYZE_AUDIO_LOUDNESS: 'AnalyzeAudioLoudness',
 } as const;
 
 // =============================================================================
@@ -310,13 +230,8 @@ export const TOOL_NAMES = {
   ...TOOL_NAMES_MEDIA,
   ...TOOL_NAMES_QUALITY,
   ...TOOL_NAMES_EFFECTS,
-  ...TOOL_NAMES_STORY,
-  ...TOOL_NAMES_SKETCH,
   ...TOOL_NAMES_ASSETS,
-  ...TOOL_NAMES_MODEL,
-  ...TOOL_NAMES_PUPPET,
   ...TOOL_NAMES_TRANSCRIBE,
-  ...TOOL_NAMES_AUDIO,
   ...TOOL_NAMES_PERCEPTION,
   ...TOOL_NAMES_SYSTEM,
   ...TOOL_NAMES_CREATION,

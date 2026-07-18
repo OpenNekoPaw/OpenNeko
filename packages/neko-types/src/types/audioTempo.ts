@@ -20,7 +20,7 @@ export interface TimeSignatureEvent {
   denominator: number;
 }
 
-/** Serialized musical time map for .nka projects. */
+/** Serialized musical time map for retained timeline and audio processing state. */
 export interface TempoMap {
   ppq: number;
   tempoEvents: TempoEvent[];

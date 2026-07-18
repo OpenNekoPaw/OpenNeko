@@ -33,24 +33,23 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     cssCodeSplit: false,
+    manifest: 'asset-manifest.json',
     rollupOptions: {
       input: {
         assistant: path.resolve(__dirname, 'index.html'),
       },
       output: {
-        entryFileNames: 'assets/[name].js',
+        entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: (assetInfo) => {
           // Rename style.css to assistant-style.css to avoid conflicts
           if (assetInfo.name === 'style.css') {
-            return 'assets/assistant-style.css';
+            return 'assets/assistant-style-[hash].css';
           }
-          return 'assets/[name].[ext]';
+          return 'assets/[name]-[hash].[ext]';
         },
-        // NOTE: Code splitting disabled for VSCode webview compatibility
-        // VSCode webviews have strict resource loading restrictions that
-        // prevent dynamic imports from working with hashed chunk names.
-        // All code is bundled into a single file instead.
+        // Entry and imported chunks share content-addressed paths so the
+        // VSCode resource proxy cannot mix assets from different builds.
       },
     },
     modulePreload: false,

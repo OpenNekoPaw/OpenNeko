@@ -122,8 +122,7 @@ export interface UnifiedConfig {
 
   /**
    * OAuth 2.0 configuration.
-   * Fallback for neko-auth when VSCode settings (`neko.auth.*`) are empty.
-   * Also used by CLI where VSCode settings are unavailable.
+   * OAuth settings used by local provider adapters and CLI hosts.
    */
   auth?: AuthConfigJson;
 

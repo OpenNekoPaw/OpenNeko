@@ -2,7 +2,6 @@ import type {
   ArtboardCanvasNode,
   CanvasEmbedCanvasNode,
   DocumentCanvasNode,
-  GroupCanvasNode,
   ModelCanvasNode,
   ScriptCanvasNode,
   StoryboardCanvasNode,
@@ -10,7 +9,6 @@ import type {
 import { ArtboardNode } from '../../components/nodes/ArtboardNode';
 import { CanvasEmbedNode } from '../../components/nodes/CanvasEmbedNode';
 import { DocumentNode } from '../../components/nodes/DocumentNode';
-import { GroupNode } from '../../components/nodes/GroupNode';
 import { ModelNode } from '../../components/nodes/ModelNode';
 import { ScriptNode } from '../../components/nodes/ScriptNode';
 import { StoryboardNode } from '../../components/nodes/StoryboardNode';
@@ -23,14 +21,6 @@ export function createStoryboardNodeRendererRegistry(): NodeRendererRegistry {
     ),
     artboard: ({ node, ...commonProps }) => (
       <ArtboardNode key={node.id} node={node as ArtboardCanvasNode} {...commonProps} />
-    ),
-    group: ({ node, allNodes, ...commonProps }) => (
-      <GroupNode
-        key={node.id}
-        node={node as GroupCanvasNode}
-        allNodes={allNodes}
-        {...commonProps}
-      />
     ),
     script: ({
       node,
@@ -74,13 +64,8 @@ export function createStoryboardNodeRendererRegistry(): NodeRendererRegistry {
         onOpenCanvas={onCanvasEmbedOpen}
       />
     ),
-    model: ({ node, onModelCheckInstalled, ...commonProps }) => (
-      <ModelNode
-        key={node.id}
-        node={node as ModelCanvasNode}
-        {...commonProps}
-        onCheckInstalled={onModelCheckInstalled}
-      />
+    model: ({ node, ...commonProps }) => (
+      <ModelNode key={node.id} node={node as ModelCanvasNode} {...commonProps} />
     ),
   };
 }

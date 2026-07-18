@@ -371,15 +371,7 @@ function readOptionalNonEmptyString(value: unknown, field: string): string | und
 }
 
 function isProjectDomain(value: unknown): value is QualityProjectRef['domain'] {
-  return (
-    value === 'sketch' ||
-    value === 'canvas' ||
-    value === 'cut' ||
-    value === 'audio' ||
-    value === 'model' ||
-    value === 'puppet' ||
-    value === 'story'
-  );
+  return value === 'canvas' || value === 'cut' || value === 'audio';
 }
 
 function isLineageRelation(value: unknown): value is QualityLineageRef['relation'] {

@@ -1008,7 +1008,7 @@ function MediaTransferActions({
       assetPath={media.localPath}
       mediaType={mediaType}
       plugins={plugins}
-      allowedTargets={mediaType === 'model' ? ['model', 'explorer'] : undefined}
+      allowedTargets={mediaType === 'model' ? ['explorer'] : undefined}
     />
   );
 }

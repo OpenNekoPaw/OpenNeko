@@ -7,8 +7,6 @@ import type {
   CreativeEntitySyncSuggestion,
 } from '@neko/shared';
 
-export * from './story';
-
 export interface CreativeEntityProviderContext {
   readonly projectRoot: string;
   readonly changedRefs?: readonly string[];

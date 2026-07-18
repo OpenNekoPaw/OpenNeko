@@ -43,7 +43,7 @@ describe('createNekoAssetsCapabilityProvider', () => {
             fileMediaType: 'image',
             characterAsset: {
               assetDimension: 'model',
-              mediaKind: 'puppet-model',
+              mediaKind: 'live2d-model',
               storageMode: 'bundle-memory',
             },
           }),
@@ -78,7 +78,7 @@ describe('createNekoAssetsCapabilityProvider', () => {
             fileCount: 1,
             mediaTypes: ['image'],
             assetDimensions: ['model'],
-            mediaKinds: ['puppet-model'],
+            mediaKinds: ['live2d-model'],
             storageModes: ['bundle-memory'],
           },
         ],

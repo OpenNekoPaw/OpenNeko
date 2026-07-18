@@ -207,23 +207,6 @@ describe('Search projection repository', () => {
               kind: 'document',
               source: { kind: 'file', projectRelativePath: 'docs/comic.pdf' },
             },
-            textSegments: [
-              {
-                segmentId: 'segment-1',
-                kind: 'ocr',
-                text: 'Rin: We have to go.',
-                sourceRef: {
-                  kind: 'document',
-                  source: { filePath: 'docs/comic.pdf', format: 'pdf' },
-                  range: { startLine: 1, endLine: 10 },
-                },
-                provenance: {
-                  providerId: 'ocr.local',
-                  sourceKind: 'comic',
-                },
-                range: { startLine: 1, endLine: 10 },
-              },
-            ],
             semanticTags: [
               {
                 tagId: 'tag-rin',
@@ -234,6 +217,22 @@ describe('Search projection repository', () => {
             ],
             updatedAt: '2026-07-13T02:00:00.000Z',
           },
+          evidence: [
+            {
+              evidenceId: 'segment-1',
+              unitId: 'page-1',
+              kind: 'ocr',
+              sourceRef: {
+                kind: 'document',
+                source: { filePath: 'docs/comic.pdf', format: 'pdf' },
+                range: { startLine: 1, endLine: 10 },
+              },
+              locator: { kind: 'page', pageNumber: 1, pageIndex: 0 },
+              range: { startLine: 1, endLine: 10 },
+              contentHash: 'sha256:segment-1',
+              provenance: { providerId: 'ocr.local', sourceKind: 'comic' },
+            },
+          ],
         },
       ],
       updatedAt: '2026-07-13T02:00:00.000Z',
@@ -254,9 +253,9 @@ describe('Search projection repository', () => {
         freshness: 'fresh',
         index: expect.objectContaining({
           assetId: 'asset-page-1',
-          textSegments: [expect.objectContaining({ segmentId: 'segment-1', kind: 'ocr' })],
           semanticTags: [expect.objectContaining({ tagId: 'tag-rin', label: 'Rin' })],
         }),
+        evidence: [expect.objectContaining({ evidenceId: 'segment-1', kind: 'ocr' })],
       }),
     ]);
     await expect(second.readPartitionRevision(partition)).resolves.toMatchObject({
@@ -264,6 +263,112 @@ describe('Search projection repository', () => {
       freshness: 'fresh',
     });
 
+    await second.dispose();
+
+    const database = new DatabaseSync(databasePath, { readOnly: true });
+    const persistedPayloads = database
+      .prepare(
+        `SELECT evidence_json AS payload FROM semantic_evidence
+         UNION ALL SELECT index_json AS payload FROM semantic_sources
+         UNION ALL SELECT document_json AS payload FROM search_documents`,
+      )
+      .all()
+      .flatMap((row) => (typeof row['payload'] === 'string' ? [row['payload']] : []));
+    database.close();
+    expect(persistedPayloads.join('\n')).not.toContain('Rin: We have to go.');
+  });
+
+  it('clears legacy body-bearing semantic source cache without touching workspace facts', async () => {
+    const homedir = await mkdtemp(join(tmpdir(), 'neko-semantic-body-cleanup-'));
+    temporaryDirectories.push(homedir);
+    const databasePath = resolveGlobalStorageLayout(homedir).database;
+    const partition = {
+      scope: 'workspace' as const,
+      workspaceId: WORKSPACE_ID,
+      domain: 'semantic-projection',
+    };
+    const first = createNodeSqliteLocalMetadataStore({ homedir });
+    await first.open({ databasePath, busyTimeoutMs: 1_000 });
+    await first.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
+    await first.migrateNamespace(SEARCH_PROJECTION_MIGRATIONS);
+    await first.repositories.workspaces.bind({
+      identity: { version: 1, workspaceId: WORKSPACE_ID },
+      locator: { kind: 'variable', value: '${HOME}/workspace' },
+      seenAt: '2026-07-13T00:00:00.000Z',
+    });
+    await first.dispose();
+
+    const partitionKey = `workspace:${WORKSPACE_ID}:semantic-projection`;
+    const sourceRef = { kind: 'file', path: '${WORKSPACE}/story.md' };
+    const legacyIndex = {
+      version: 1,
+      indexId: 'semantic:legacy-body',
+      assetId: 'legacy-body',
+      sourceRef,
+      updatedAt: '2026-07-13T02:00:00.000Z',
+    };
+    const database = new DatabaseSync(databasePath);
+    database
+      .prepare(
+        `INSERT INTO semantic_sources (
+          partition_key, partition_scope, workspace_id, source_id, asset_id,
+          source_ref_json, source_fingerprint, provider_json, coverage_json,
+          freshness, index_json, updated_at
+        ) VALUES (?, 'workspace', ?, ?, ?, ?, ?, ?, ?, 'fresh', ?, ?)`,
+      )
+      .run(
+        partitionKey,
+        WORKSPACE_ID,
+        'semantic:legacy-body',
+        'legacy-body',
+        JSON.stringify(sourceRef),
+        'sha256:legacy',
+        JSON.stringify({
+          providerId: 'legacy.text',
+          indexVersion: 'text-v1',
+          schemaVersion: '1',
+        }),
+        JSON.stringify(['entity-mention']),
+        JSON.stringify(legacyIndex),
+        '2026-07-13T02:00:00.000Z',
+      );
+    database
+      .prepare(
+        `INSERT INTO semantic_evidence (
+          partition_key, partition_scope, workspace_id, source_id,
+          evidence_kind, evidence_id, ordinal, evidence_json
+        ) VALUES (?, 'workspace', ?, ?, 'text-segment', 'segment-1', 0, ?)`,
+      )
+      .run(
+        partitionKey,
+        WORKSPACE_ID,
+        'semantic:legacy-body',
+        JSON.stringify({
+          segmentId: 'segment-1',
+          kind: 'manual',
+          text: 'Complete legacy source body.',
+          sourceRef: {
+            kind: 'document',
+            source: { filePath: '${WORKSPACE}/story.md', format: 'markdown' },
+          },
+          provenance: { providerId: 'legacy.text', sourceKind: 'document' },
+        }),
+      );
+    database.close();
+
+    const second = createNodeSqliteLocalMetadataStore({ homedir });
+    await second.open({ databasePath, busyTimeoutMs: 1_000 });
+    await second.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
+    await second.migrateNamespace(SEARCH_PROJECTION_MIGRATIONS);
+    await expect(
+      second.repositories.semanticProjections.clearBodyBearingSources(
+        partition,
+        '2026-07-13T03:00:00.000Z',
+      ),
+    ).resolves.toEqual(['semantic:legacy-body']);
+    await expect(
+      second.repositories.semanticProjections.get(partition, 'semantic:legacy-body'),
+    ).resolves.toBeNull();
     await second.dispose();
   });
 
@@ -310,6 +415,7 @@ describe('Search projection repository', () => {
         semanticTags: [{ tagId: 'shared-tag', label: 'Shared', source: 'document' as const }],
         updatedAt: '2026-07-13T02:00:00.000Z',
       },
+      evidence: [],
       updatedAt: '2026-07-13T02:00:00.000Z',
     };
 
@@ -579,9 +685,9 @@ describe('Search projection repository', () => {
         sourceId: 'semantic:asset-page-1',
         coverage: ['ocr', 'vision'],
         index: expect.objectContaining({
-          textSegments: [expect.objectContaining({ segmentId: 'segment-1' })],
           semanticTags: [expect.objectContaining({ tagId: 'tag-rin' })],
         }),
+        evidence: [expect.objectContaining({ evidenceId: 'segment-1' })],
       }),
     ]);
 
@@ -663,6 +769,7 @@ describe('Search projection repository', () => {
             semanticTags: [{ tagId: 'current-tag', label: 'Current', source: 'document' }],
             updatedAt: '2026-07-13T05:00:00.000Z',
           },
+          evidence: [],
           updatedAt: '2026-07-13T05:00:00.000Z',
         },
       ],
@@ -716,6 +823,7 @@ describe('Search projection repository', () => {
             semanticTags: [{ tagId: 'new-tag', label: 'New', source: 'document' }],
             updatedAt: '2026-07-13T06:00:00.000Z',
           },
+          evidence: [],
           updatedAt: '2026-07-13T06:00:00.000Z',
         },
       ],

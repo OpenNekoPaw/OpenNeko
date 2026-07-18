@@ -1,5 +1,4 @@
 import type {
-  EnvironmentPlacement,
   OPEN_PANORAMIC_IMAGE_COMMAND,
   OPEN_PANORAMIC_VIDEO_COMMAND,
   PANORAMIC_IMAGE_VIEW_TYPE,
@@ -24,10 +23,6 @@ export interface PanoramicPreviewApi {
   saveDefaultPanoramaView(assetId: string, viewState: PanoramaViewState): Promise<void>;
 }
 
-export interface PanoramicModelApi {
-  useEnvironment(placement: EnvironmentPlacement): Promise<void>;
-}
-
 export interface PanoramicPreviewCommandBoundary {
   executeCommand<T>(command: string, ...args: readonly unknown[]): Promise<T>;
 }
@@ -38,4 +33,3 @@ export {
   OPEN_PANORAMIC_IMAGE_COMMAND,
   OPEN_PANORAMIC_VIDEO_COMMAND,
 } from '@neko/shared';
-export const USE_AS_MODEL_ENVIRONMENT_COMMAND = 'neko.model.useEnvironment';

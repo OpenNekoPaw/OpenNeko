@@ -8,6 +8,7 @@ import { defineHandler } from './types';
 import type { MessageHandler, HandlerRegistration } from './types';
 import type { TabStateMessage } from './messages';
 import { AgentHostMessages } from '../messages';
+import { isCharacterRoleTab } from '@/presenters/character-role-session-presenter';
 
 /**
  * Handle 'tabState' message - Restore tab state from extension
@@ -50,7 +51,10 @@ const handleTabState: MessageHandler<'tabState'> = (message: TabStateMessage, co
     if (!restoredConversationIds) {
       throw new Error('Tab state handling requires a Webview-owned restore request registry.');
     }
-    for (const conversationId of new Set(openTabs.map((tab) => tab.conversationId))) {
+    const ordinaryConversationIds = new Set(
+      openTabs.filter((tab) => !isCharacterRoleTab(tab)).map((tab) => tab.conversationId),
+    );
+    for (const conversationId of ordinaryConversationIds) {
       if (restoredConversationIds.current.has(conversationId)) continue;
       restoredConversationIds.current.add(conversationId);
       AgentHostMessages.getConversationSnapshot(conversationId);

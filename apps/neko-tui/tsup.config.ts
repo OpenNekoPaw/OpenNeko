@@ -17,6 +17,7 @@ export default defineConfig({
   },
   noExternal: [
     '@neko-agent/types',
+    '@neko-canvas/domain',
     '@neko/agent',
     '@neko/ai-sdk',
     '@neko/asset',

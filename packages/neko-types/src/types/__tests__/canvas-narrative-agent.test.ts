@@ -43,7 +43,7 @@ describe('canvas narrative agent analysis', () => {
       nodes: [
         node('start', 'narrative-start'),
         node('scene-a', 'narrative-scene', {
-          sceneRef: 'story/main.nks',
+          sceneRef: 'story/main.fountain',
         }),
         node('scene-b', 'narrative-scene', {
           sceneRef: 'scenes/branch.fountain',
@@ -64,14 +64,13 @@ describe('canvas narrative agent analysis', () => {
         'narrative-missing-ending',
         'narrative-unreachable-node',
         'narrative-accidental-dead-end',
-        'narrative-invalid-scene-ref',
         'narrative-unsupported-condition',
         'narrative-unresolved-variable',
       ]),
     );
     expect(analysis.nodeSummaries['scene-a']).toMatchObject({
       role: 'scene',
-      sceneRef: 'story/main.nks',
+      sceneRef: 'story/main.fountain',
       choiceLabels: ['unsupported'],
       conditions: ['closeness + 1 > 3'],
     });

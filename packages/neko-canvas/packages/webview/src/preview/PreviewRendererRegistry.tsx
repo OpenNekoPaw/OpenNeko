@@ -607,7 +607,7 @@ function getVisualPreviewImageClassName(
   if (surfaceKind === 'overlay') {
     return 'max-h-[52vh] w-full object-contain';
   }
-  return 'h-full w-full object-cover';
+  return 'h-full w-full object-contain';
 }
 
 function renderVideoPreview({
@@ -925,8 +925,6 @@ function useProjectThumbnail(assetPath: string | undefined, nodeId: string): str
     if (!vscode) return;
 
     const ext = assetPath.split('.').pop()?.toLowerCase() ?? '';
-    if (ext === 'nka') return;
-
     requestedRef.current = true;
 
     const handleMessage = (event: MessageEvent) => {
@@ -1004,12 +1002,6 @@ function resolveProjectTypeLabel(value: unknown, defaultExt: string): string {
   switch (projectType) {
     case 'nkv':
       return t('project.type.nkv');
-    case 'nka':
-      return t('project.type.nka');
-    case 'nkm':
-      return t('project.type.nkm');
-    case 'nkp':
-      return t('project.type.nkp');
     default:
       return t('node.project');
   }

@@ -75,6 +75,29 @@ describe('node card policies', () => {
     expect(JSON.stringify(source.source.variants ?? [])).not.toContain('cachePath');
   });
 
+  it('prefers a creator-facing media title over its stable resource identity', () => {
+    const node = createMediaNode('media-authored-title', {
+      assetPath: '',
+      mediaType: 'image',
+      title: 'Station concept from background host',
+      resourceRef: {
+        id: 'generated-output:station',
+        scope: 'project',
+        provider: 'generated-output',
+        kind: 'generated',
+        source: {
+          kind: 'generated-asset',
+          generatedAssetId: 'station',
+          projectRelativePath: 'neko/generated/image/station.svg',
+        },
+        locator: { kind: 'generated-asset', assetId: 'station' },
+        fingerprint: { strategy: 'hash', value: 'sha256:station' },
+      },
+    });
+
+    expect(mediaCardPolicy.resolveTitle(node)).toBe('Station concept from background host');
+  });
+
   it('shows document cache expiry without treating cache paths as previews', () => {
     const node = createMediaNode('media-doc-missing', {
       assetPath: '',

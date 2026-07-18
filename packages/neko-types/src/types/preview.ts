@@ -163,16 +163,6 @@ export interface PreviewVariantRequest {
   readonly format?: 'jpeg' | 'png' | 'webp';
 }
 
-export interface EnvironmentPlacement {
-  readonly sourceAssetId: string;
-  readonly sourceUri?: string;
-  readonly mode: 'skybox' | 'ibl' | 'background-and-ibl';
-  readonly rotationDeg: number;
-  readonly intensity: number;
-  readonly exposure: number;
-  readonly visibleAsBackground: boolean;
-}
-
 export const DEFAULT_PANORAMA_VIEW_STATE: PanoramaViewState = {
   mode: 'sphere',
   yawDeg: 0,

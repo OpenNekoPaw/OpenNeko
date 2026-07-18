@@ -71,16 +71,16 @@ describe('StatusBarProjectionManager', () => {
   });
 
   it('shows projected items only when the active custom editor matches', () => {
-    let activeCustomEditorId: string | null = 'neko.modelEditor';
+    let activeCustomEditorId: string | null = 'neko.cutEditor';
     const manager = new StatusBarProjectionManager(
       [
         {
-          id: 'neko.model.objects',
+          id: 'neko.cut.objects',
           alignment: vscode.StatusBarAlignment.Left,
           priority: 10,
           text: '$(symbol-array) 3 objects',
-          activeCustomEditorId: 'neko.modelEditor',
-          visibilityCondition: 'activeCustomEditorId == neko.modelEditor',
+          activeCustomEditorId: 'neko.cutEditor',
+          visibilityCondition: 'activeCustomEditorId == neko.cutEditor',
         },
       ],
       {
@@ -88,13 +88,13 @@ describe('StatusBarProjectionManager', () => {
       },
     );
 
-    expect(mocks.statusItems.get('neko.model.objects')?.show).toHaveBeenCalledTimes(1);
-    expect(mocks.statusItems.get('neko.model.objects')?.hide).not.toHaveBeenCalled();
+    expect(mocks.statusItems.get('neko.cut.objects')?.show).toHaveBeenCalledTimes(1);
+    expect(mocks.statusItems.get('neko.cut.objects')?.hide).not.toHaveBeenCalled();
 
     activeCustomEditorId = 'neko.canvasEditor';
     mocks.textEditorListeners.forEach((listener) => listener());
 
-    expect(mocks.statusItems.get('neko.model.objects')?.hide).toHaveBeenCalledTimes(1);
+    expect(mocks.statusItems.get('neko.cut.objects')?.hide).toHaveBeenCalledTimes(1);
 
     manager.dispose();
   });
@@ -104,10 +104,10 @@ describe('StatusBarProjectionManager', () => {
     const manager = new StatusBarProjectionManager(
       [
         {
-          id: 'neko.model.engine',
+          id: 'neko.cut.engine',
           alignment: vscode.StatusBarAlignment.Left,
           priority: 8,
-          activeCustomEditorId: 'neko.modelEditor',
+          activeCustomEditorId: 'neko.cutEditor',
         },
       ],
       {
@@ -115,13 +115,13 @@ describe('StatusBarProjectionManager', () => {
       },
     );
 
-    expect(mocks.statusItems.get('neko.model.engine')?.show).not.toHaveBeenCalled();
+    expect(mocks.statusItems.get('neko.cut.engine')?.show).not.toHaveBeenCalled();
 
-    activeCustomEditorId = 'neko.modelEditor';
+    activeCustomEditorId = 'neko.cutEditor';
     mocks.tabListeners.forEach((listener) => listener());
     mocks.tabGroupListeners.forEach((listener) => listener());
 
-    expect(mocks.statusItems.get('neko.model.engine')?.show).toHaveBeenCalledTimes(2);
+    expect(mocks.statusItems.get('neko.cut.engine')?.show).toHaveBeenCalledTimes(2);
 
     manager.dispose();
   });
@@ -140,27 +140,27 @@ describe('StatusBarProjectionManager', () => {
     const manager = new StatusBarProjectionManager(
       [
         {
-          id: 'neko.model.selected',
+          id: 'neko.cut.selected',
           alignment: vscode.StatusBarAlignment.Left,
           priority: 9,
-          activeCustomEditorId: 'neko.modelEditor',
-          visibilityCondition: 'activeCustomEditorId == neko.modelEditor',
+          activeCustomEditorId: 'neko.cutEditor',
+          visibilityCondition: 'activeCustomEditorId == neko.cutEditor',
         },
       ],
       {
-        resolveActiveSurface: () => ({ activeCustomEditorId: 'neko.modelEditor' }),
+        resolveActiveSurface: () => ({ activeCustomEditorId: 'neko.cutEditor' }),
       },
     );
 
-    expect(mocks.statusItems.get('neko.model.selected')).not.toHaveProperty('when');
+    expect(mocks.statusItems.get('neko.cut.selected')).not.toHaveProperty('when');
     expect(
       isStatusBarItemSpecVisible(
         {
-          id: 'neko.model.selected',
+          id: 'neko.cut.selected',
           alignment: vscode.StatusBarAlignment.Left,
           priority: 9,
-          activeCustomEditorId: 'neko.modelEditor',
-          visibilityCondition: 'activeCustomEditorId == neko.modelEditor',
+          activeCustomEditorId: 'neko.cutEditor',
+          visibilityCondition: 'activeCustomEditorId == neko.cutEditor',
         },
         { activeCustomEditorId: 'neko.canvasEditor' },
       ),

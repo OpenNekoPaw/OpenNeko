@@ -71,17 +71,7 @@
         },
         "type": {
           "type": "string",
-          "enum": [
-            "video",
-            "audio",
-            "text",
-            "effect",
-            "subtitle",
-            "shape",
-            "scene3d",
-            "puppet",
-            "media"
-          ],
+          "enum": ["video", "audio", "text", "effect", "subtitle", "shape", "media"],
           "description": "Track type determining what elements it can contain"
         },
         "elements": {
@@ -116,9 +106,7 @@
         { "$ref": "#/$defs/AudioElement" },
         { "$ref": "#/$defs/TextElement" },
         { "$ref": "#/$defs/ShapeElement" },
-        { "$ref": "#/$defs/SubtitleElement" },
-        { "$ref": "#/$defs/Scene3dElement" },
-        { "$ref": "#/$defs/PuppetElement" }
+        { "$ref": "#/$defs/SubtitleElement" }
       ]
     },
     "TimelineElementBase": {
@@ -455,105 +443,6 @@
             "shadow": {
               "$ref": "#/$defs/TextShadow",
               "description": "Subtitle shadow properties"
-            }
-          }
-        }
-      ]
-    },
-    "Scene3dElement": {
-      "description": "A 3D scene element (glTF/GLB/VRM model)",
-      "allOf": [
-        { "$ref": "#/$defs/TimelineElementBase" },
-        {
-          "type": "object",
-          "required": ["type", "src"],
-          "properties": {
-            "type": {
-              "const": "scene3d"
-            },
-            "src": {
-              "type": "string",
-              "description": "Source 3D model file path or URI"
-            },
-            "cameraNodeId": {
-              "type": "string",
-              "description": "ID of the camera node in the 3D scene"
-            },
-            "animationClip": {
-              "type": "string",
-              "description": "Name of the animation clip to play"
-            },
-            "animationLoop": {
-              "type": "boolean",
-              "description": "Whether the animation should loop"
-            },
-            "animationSpeed": {
-              "type": "number",
-              "description": "Animation playback speed multiplier"
-            },
-            "backgroundColor": {
-              "type": "array",
-              "description": "Background color as [r, g, b, a] (0-1 range)",
-              "items": {
-                "type": "number"
-              },
-              "minItems": 4,
-              "maxItems": 4
-            },
-            "cameraOverride": {
-              "type": "object",
-              "description": "Override camera position and orientation",
-              "required": ["position", "target"],
-              "properties": {
-                "position": {
-                  "type": "array",
-                  "description": "Camera position [x, y, z]",
-                  "items": { "type": "number" },
-                  "minItems": 3,
-                  "maxItems": 3
-                },
-                "target": {
-                  "type": "array",
-                  "description": "Camera look-at target [x, y, z]",
-                  "items": { "type": "number" },
-                  "minItems": 3,
-                  "maxItems": 3
-                },
-                "up": {
-                  "type": "array",
-                  "description": "Camera up vector [x, y, z]",
-                  "items": { "type": "number" },
-                  "minItems": 3,
-                  "maxItems": 3
-                },
-                "fovY": {
-                  "type": "number",
-                  "description": "Vertical field of view in degrees"
-                }
-              }
-            }
-          }
-        }
-      ]
-    },
-    "PuppetElement": {
-      "description": "A 2D puppet element (Live2D/MOC3)",
-      "allOf": [
-        { "$ref": "#/$defs/TimelineElementBase" },
-        {
-          "type": "object",
-          "required": ["type", "src"],
-          "properties": {
-            "type": { "const": "puppet" },
-            "src": { "type": "string", "description": "Source puppet file path (.moc3)" },
-            "animationClip": { "type": "string", "description": "Active animation clip name" },
-            "animationLoop": { "type": "boolean", "description": "Loop animation playback" },
-            "animationSpeed": { "type": "number", "description": "Animation speed multiplier" },
-            "expression": { "type": "string", "description": "Active expression name" },
-            "parameterOverrides": {
-              "type": "object",
-              "description": "Parameter name to value overrides",
-              "additionalProperties": { "type": "number" }
             }
           }
         }

@@ -54,7 +54,7 @@ describe('media import contracts', () => {
       },
       {
         dimension: 'motion',
-        mediaKind: 'puppet-motion',
+        mediaKind: 'live2d-motion',
         storageMode: 'bundle-memory',
         locator: {
           bundlePath: './sakura.zip',
@@ -66,12 +66,12 @@ describe('media import contracts', () => {
         dimension: 'config',
         mediaKind: 'model-config',
         storageMode: 'disk',
-        path: './hero.nkm',
-        metadata: { format: 'nkm' },
+        path: './hero.model3.json',
+        metadata: { format: 'live2d-config' },
       },
     ];
     const result: ImportResult = {
-      projectFilePath: './hero.nkm',
+      projectFilePath: './character-import.json',
       importedAssets,
       diagnostics: ['Imported with existing workspace references.'],
     };

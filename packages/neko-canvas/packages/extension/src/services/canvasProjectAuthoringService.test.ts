@@ -9,6 +9,7 @@ import {
   type ResourceRef,
 } from '@neko/shared';
 import { CanvasProjectAuthoringService } from './canvasProjectAuthoringService';
+import { createCanvasWorkspaceBoardRevision } from '@neko-canvas/domain';
 import * as vscode from 'vscode';
 
 const vscodeMockState = vi.hoisted(() => {
@@ -118,6 +119,13 @@ function readJsonFile(filePath: string): unknown {
 function createProvider(activeUri?: vscode.Uri) {
   return {
     getActiveCanvasDocumentUri: vi.fn(() => activeUri),
+    getOpenCanvasDocumentSnapshot: vi.fn<
+      (
+        documentUri: string,
+      ) =>
+        | { readonly canvasData: ReturnType<typeof createEmptyCanvasData>; readonly dirty: boolean }
+        | undefined
+    >(() => undefined),
     applyHostCanvasData: vi.fn(),
     revealCanvasDocument: vi.fn(),
   };
@@ -220,6 +228,93 @@ describe('CanvasProjectAuthoringService', () => {
       expect.objectContaining({ fsPath: '/workspace/project/neko/boards/workspace.nkc' }),
       expect.objectContaining({ nodes: expect.any(Array) }),
     );
+  });
+
+  it('projects through the clean opened Workspace Board editor snapshot', async () => {
+    const documentUri = 'file:///workspace/project/neko/boards/workspace.nkc';
+    const openedCanvas = createEmptyCanvasData('Opened Workspace Board');
+    const provider = createProvider();
+    provider.getOpenCanvasDocumentSnapshot.mockReturnValue({
+      canvasData: openedCanvas,
+      dirty: false,
+    });
+    const service = new CanvasProjectAuthoringService({
+      context: { subscriptions: [] } as never,
+      canvasEditorProvider: provider,
+    });
+
+    const loaded = await service.loadLatest({ documentUri, createIfMissing: true });
+    const planned = planCanvasWorkspaceBoardProjection(
+      loaded.canvasData,
+      workspaceProjectionRequest(),
+    );
+    await service.saveAtomic({
+      documentUri,
+      expectedRevision: loaded.revision,
+      canvasData: planned.canvasData,
+    });
+
+    expect(provider.getOpenCanvasDocumentSnapshot).toHaveBeenCalledWith(documentUri);
+    expect(provider.applyHostCanvasData).toHaveBeenCalledWith(
+      expect.objectContaining({ fsPath: '/workspace/project/neko/boards/workspace.nkc' }),
+      planned.canvasData,
+    );
+  });
+
+  it('keeps unsaved opened Workspace Board edits untouched', async () => {
+    const documentUri = 'file:///workspace/project/neko/boards/workspace.nkc';
+    const dirtyCanvas = createEmptyCanvasData('Unsaved user Board');
+    const persistedCanvas = createEmptyCanvasData('Persisted Board');
+    vscodeMockState.files.set(
+      '/workspace/project/neko/boards/workspace.nkc',
+      new TextEncoder().encode(saveNkc(persistedCanvas)),
+    );
+    const provider = createProvider();
+    provider.getOpenCanvasDocumentSnapshot.mockReturnValue({
+      canvasData: dirtyCanvas,
+      dirty: true,
+    });
+    const service = new CanvasProjectAuthoringService({
+      context: { subscriptions: [] } as never,
+      canvasEditorProvider: provider,
+    });
+
+    await expect(service.loadLatest({ documentUri, createIfMissing: true })).rejects.toThrow(
+      'projection-conflict',
+    );
+
+    const reopened = loadNkc(
+      new TextDecoder().decode(
+        vscodeMockState.files.get('/workspace/project/neko/boards/workspace.nkc'),
+      ),
+    );
+    expect(reopened.data).toEqual(persistedCanvas);
+    expect(vscodeMockState.writeFile).not.toHaveBeenCalled();
+    expect(provider.applyHostCanvasData).not.toHaveBeenCalled();
+  });
+
+  it('rejects a stale opened Workspace Board revision before writing or applying editor data', async () => {
+    const documentUri = 'file:///workspace/project/neko/boards/workspace.nkc';
+    const openedCanvas = createEmptyCanvasData('Current opened Board');
+    const provider = createProvider();
+    provider.getOpenCanvasDocumentSnapshot.mockReturnValue({
+      canvasData: openedCanvas,
+      dirty: false,
+    });
+    const service = new CanvasProjectAuthoringService({
+      context: { subscriptions: [] } as never,
+      canvasEditorProvider: provider,
+    });
+
+    await expect(
+      service.saveAtomic({
+        documentUri,
+        expectedRevision: 'nkc:stale-revision',
+        canvasData: createEmptyCanvasData('Rejected projection'),
+      }),
+    ).rejects.toThrow('stale-revision');
+    expect(vscodeMockState.writeFile).not.toHaveBeenCalled();
+    expect(provider.applyHostCanvasData).not.toHaveBeenCalled();
   });
 
   it('does not overwrite an invalid existing Workspace Board', async () => {
@@ -430,14 +525,15 @@ describe('CanvasProjectAuthoringService', () => {
   it('writes an explicit document target instead of the active Canvas document', async () => {
     const activeUri = vscode.Uri.file('/workspace/project/Active.nkc');
     const explicitUri = vscode.Uri.file('/workspace/project/Explicit.nkc');
+    const workspaceBoardUri = vscode.Uri.file('/workspace/project/neko/boards/workspace.nkc');
+    const explicitData = createEmptyCanvasData('Explicit');
     vscodeMockState.files.set(
       activeUri.fsPath,
       new TextEncoder().encode(saveNkc(createEmptyCanvasData('Active'))),
     );
-    vscodeMockState.files.set(
-      explicitUri.fsPath,
-      new TextEncoder().encode(saveNkc(createEmptyCanvasData('Explicit'))),
-    );
+    vscodeMockState.files.set(explicitUri.fsPath, new TextEncoder().encode(saveNkc(explicitData)));
+    const workspaceBoardBytes = new TextEncoder().encode(saveNkc(createEmptyCanvasData('Board')));
+    vscodeMockState.files.set(workspaceBoardUri.fsPath, workspaceBoardBytes);
     const provider = createProvider(activeUri);
     const service = new CanvasProjectAuthoringService({
       context: { subscriptions: [] } as never,
@@ -445,7 +541,10 @@ describe('CanvasProjectAuthoringService', () => {
     });
 
     const result = await service.createNode({
-      target: { documentUri: explicitUri.toString() },
+      target: {
+        documentUri: explicitUri.toString(),
+        expectedRevision: createCanvasWorkspaceBoardRevision(explicitData),
+      },
       node: {
         type: 'text',
         position: { x: 1, y: 2 },
@@ -460,6 +559,7 @@ describe('CanvasProjectAuthoringService', () => {
     const active = loadNkc(new TextDecoder().decode(vscodeMockState.files.get(activeUri.fsPath)));
     expect(explicit.data.nodes).toHaveLength(1);
     expect(active.data.nodes).toHaveLength(0);
+    expect(vscodeMockState.files.get(workspaceBoardUri.fsPath)).toEqual(workspaceBoardBytes);
   });
 
   it('reveals the target only after a successful save when requested', async () => {

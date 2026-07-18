@@ -26,7 +26,6 @@ import {
 } from '../services/CutProjectAuthoringService';
 import { addCutProjectSource } from '../editor/video/cutProjectSourceIngest';
 import { IAssetService, AssetService } from '../services/AssetService';
-import { MarketShaderService } from '../services/MarketShaderService';
 
 // =============================================================================
 // Service Identifiers
@@ -49,7 +48,6 @@ export interface IServiceBootstrapResult {
   connectionStateManager: ConnectionStateManager;
   cutProjectAuthoringService: CutProjectAuthoringService;
   assetService: AssetService;
-  marketShaderService: MarketShaderService;
 }
 
 // =============================================================================
@@ -115,17 +113,6 @@ export async function bootstrapCoreServices(
     getRootLogger().error('Failed to initialize AssetService:', error);
   });
 
-  // ==========================================================================
-  // 7. Market Shader Service (marketplace-installed shaders)
-  // ==========================================================================
-  const marketShaderService = new MarketShaderService(getRootLogger().child('MarketShaderService'));
-  context.subscriptions.push(marketShaderService);
-
-  // Initialize in background (non-blocking)
-  marketShaderService.initialize().catch((error) => {
-    getRootLogger().error('Failed to initialize MarketShaderService:', error);
-  });
-
   return {
     editorRegistry,
     statusBar,
@@ -133,7 +120,6 @@ export async function bootstrapCoreServices(
     connectionStateManager,
     cutProjectAuthoringService,
     assetService,
-    marketShaderService,
   };
 }
 

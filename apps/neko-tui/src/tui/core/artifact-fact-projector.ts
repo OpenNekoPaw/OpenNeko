@@ -10,6 +10,7 @@ import {
   type ToolResultAttachment,
 } from '@neko/shared';
 import type { TerminalArtifactFact } from '../types/state';
+import type { CreatorVisibleArtifactCandidate } from '@neko/agent/runtime';
 
 export function projectToolResultArtifactFacts(
   result: {
@@ -43,24 +44,26 @@ export function projectTaskOutputArtifactFacts(
         readString(metadata, 'contentDigest') ??
         (resource.fingerprint.strategy === 'hash' ? resource.fingerprint.value : undefined);
       const revision = readString(metadata, 'revision');
-      return [{
-        ref: resource.id,
-        kind: resource.source.kind === 'generated-asset' ? 'generated-asset' : 'resource-ref',
-        ...(digest ? { digest } : {}),
-        ...(revision ? { revision } : {}),
-        provenance: {
-          source: resource.source.kind,
-          taskId: task.id,
-          providerId: resource.provider,
-        },
-        deliveryStatus: task.status === 'completed' ? 'delivered' : 'failed',
-        validator: { id: 'durable-resource-ref', status: validation.ok ? 'valid' : 'invalid' },
-        diagnostics: validation.diagnostics.map((item) => ({
-          code: item.code,
-          severity: item.severity,
-          message: item.message,
-        })),
-      } satisfies TerminalArtifactFact];
+      return [
+        {
+          ref: resource.id,
+          kind: resource.source.kind === 'generated-asset' ? 'generated-asset' : 'resource-ref',
+          ...(digest ? { digest } : {}),
+          ...(revision ? { revision } : {}),
+          provenance: {
+            source: resource.source.kind,
+            taskId: task.id,
+            providerId: resource.provider,
+          },
+          deliveryStatus: task.status === 'completed' ? 'delivered' : 'failed',
+          validator: { id: 'durable-resource-ref', status: validation.ok ? 'valid' : 'invalid' },
+          diagnostics: validation.diagnostics.map((item) => ({
+            code: item.code,
+            severity: item.severity,
+            message: item.message,
+          })),
+        } satisfies TerminalArtifactFact,
+      ];
     });
   });
 }
@@ -87,6 +90,51 @@ export function projectGeneratedOutputLifecycleArtifactFacts(
         severity: item.severity,
         message: item.message,
       })),
+    };
+  });
+}
+
+export function projectCreatorVisibleArtifactFacts(
+  artifacts: readonly CreatorVisibleArtifactCandidate[],
+): readonly TerminalArtifactFact[] {
+  return artifacts.map((artifact) => {
+    if (artifact.resourceRef) {
+      const validation = validateDurableResourceRef(artifact.resourceRef);
+      return {
+        ref: artifact.artifactId,
+        kind: artifact.role === 'output' ? 'generated-asset' : 'resource-ref',
+        digest: hashStable({
+          artifactId: artifact.artifactId,
+          revision: artifact.revision,
+          resourceRef: artifact.resourceRef,
+        }),
+        revision: artifact.revision,
+        provenance: {
+          source: artifact.role === 'source' ? 'source-file' : artifact.resourceRef.source.kind,
+          providerId: artifact.resourceRef.provider,
+        },
+        deliveryStatus: 'delivered',
+        validator: { id: 'durable-resource-ref', status: validation.ok ? 'valid' : 'invalid' },
+        diagnostics: validation.diagnostics.map((item) => ({
+          code: item.code,
+          severity: item.severity,
+          message: item.message,
+        })),
+      };
+    }
+    return {
+      ref: artifact.artifactId,
+      kind: 'composite-artifact',
+      digest: hashStable({
+        artifactId: artifact.artifactId,
+        revision: artifact.revision,
+        markdown: artifact.markdown,
+      }),
+      revision: artifact.revision,
+      provenance: { source: 'tool-result' },
+      deliveryStatus: 'delivered',
+      validator: { id: 'composite-artifact-schema', status: 'valid' },
+      diagnostics: [],
     };
   });
 }

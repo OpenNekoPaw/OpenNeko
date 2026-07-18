@@ -320,7 +320,7 @@ describe('MessageList auto-scroll lifecycle', () => {
     registerDefaultRenderers();
 
     renderWithI18n(
-      <MessageActionsProvider pluginsAvailable={{ canvas: true, cut: false, sketch: false }}>
+      <MessageActionsProvider pluginsAvailable={{ canvas: true, cut: false }}>
         <MessageList
           messages={[createStoryboardMarkdownMessage()]}
           isThinking={false}

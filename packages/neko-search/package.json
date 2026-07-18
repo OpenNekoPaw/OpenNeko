@@ -17,6 +17,7 @@
     "test:run": "vitest --run"
   },
   "dependencies": {
+    "@neko/content": "workspace:*",
     "@neko/shared": "workspace:*"
   },
   "devDependencies": {

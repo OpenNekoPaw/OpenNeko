@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { applyStoryboardPayloadToCanvas, createStoryboardPayload } from '../storyboardPlanner';
 import { createResourceFingerprint, createResourceRef } from '../../types/resource-cache';
-import type { NekoCanvasAPI, NekoStoryScriptIndex } from '../../types/extension-api';
+import type { NekoCanvasAPI } from '../../types/extension-api';
+import type { FountainScriptIndex } from '../../types/fountain-script';
 import type { StoryScenePlan } from '../../types/storyboard-planner';
 
-const scriptIndex: NekoStoryScriptIndex = {
+const scriptIndex: FountainScriptIndex = {
   uri: 'file:///project/demo.fountain',
   total_lines: 42,
   scenes: [

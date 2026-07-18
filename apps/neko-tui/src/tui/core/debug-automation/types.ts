@@ -260,9 +260,21 @@ export interface TuiDebugAutomationWorkspaceBoardProjectionFact {
   readonly targetKind?: NonNullable<CanvasWorkspaceProjectionResult['target']>['kind'];
   readonly revision?: string;
   readonly nodeIds: readonly string[];
+  readonly connectionIds: readonly string[];
   readonly artifactRoleCounts?: Readonly<Record<'source' | 'analysis' | 'output', number>>;
   readonly writerEpoch?: number;
   readonly diagnosticCodes: readonly string[];
+}
+
+export interface TuiDebugAutomationWorkspaceBoardDeliveryFacts {
+  readonly canonicalSubmissionCount: number;
+  readonly resumeScanCount: number;
+  readonly legacyFallbackCounts: {
+    readonly activeCanvas: number;
+    readonly recentCanvas: number;
+    readonly directWriter: number;
+    readonly genericSendToCanvas: number;
+  };
 }
 
 export interface TuiDebugAutomationConversationPersistenceFacts {
@@ -295,6 +307,7 @@ export interface TuiDebugAutomationSessionFacts {
   readonly promptComposition: readonly PromptCompositionFragmentProjection[];
   readonly artifacts: readonly TerminalArtifactFact[];
   readonly workspaceBoardProjections: readonly TuiDebugAutomationWorkspaceBoardProjectionFact[];
+  readonly workspaceBoardDelivery: TuiDebugAutomationWorkspaceBoardDeliveryFacts;
   readonly runtimeErrors: readonly string[];
   readonly canvas: TuiDebugAutomationCanvasFacts;
   readonly markdown: TuiDebugAutomationMarkdownFacts;

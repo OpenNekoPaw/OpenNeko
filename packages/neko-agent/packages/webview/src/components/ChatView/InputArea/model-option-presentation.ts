@@ -56,9 +56,7 @@ export function groupModelOptionsByProvider(
 
 function buildProviderTags(model: ChatModelOption, t: Translate): readonly string[] {
   const tags: string[] = [];
-  if (model.source === 'account-gateway') {
-    tags.push(readTranslation(t, 'chat.modelSource.official', 'Official'));
-  } else if (model.source === 'explicit-config') {
+  if (model.source === 'explicit-config') {
     tags.push(readTranslation(t, 'chat.modelSource.custom', 'Custom'));
   }
   if (model.connectionKind) {

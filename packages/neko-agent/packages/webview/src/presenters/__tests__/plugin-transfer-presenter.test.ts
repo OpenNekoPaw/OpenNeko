@@ -9,7 +9,7 @@ describe('plugin transfer presenter', () => {
     expect(
       projectPluginTransferMenu({
         mediaType: 'image',
-        plugins: { canvas: true, cut: false, sketch: true },
+        plugins: { canvas: true, cut: false },
       }),
     ).toEqual({
       showMenu: true,
@@ -19,12 +19,6 @@ describe('plugin transfer presenter', () => {
           label: 'Canvas',
           accepts: ['image'],
           requiresPlugin: 'canvas',
-        },
-        {
-          id: 'sketch',
-          label: 'Sketch',
-          accepts: ['image'],
-          requiresPlugin: 'sketch',
         },
         {
           id: 'explorer',
@@ -62,9 +56,9 @@ describe('plugin transfer presenter', () => {
     expect(
       projectPluginTransferMenu({
         mediaType: 'model',
-        plugins: { model: true },
+        plugins: {},
       }).targets.map((target) => target.id),
-    ).toEqual(['model', 'explorer']);
+    ).toEqual(['explorer']);
   });
 
   it('limits structured cut storyboard payloads to the timeline target', () => {

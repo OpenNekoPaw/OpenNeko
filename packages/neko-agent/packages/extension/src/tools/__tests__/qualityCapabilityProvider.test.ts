@@ -131,14 +131,14 @@ describe('QualityCapabilityProvider', () => {
 
   it('routes project targets through the owning facade without content materialization', async () => {
     const projectRef = {
-      domain: 'model' as const,
-      documentUri: 'file:///workspace/scene.nkm',
-      projectRevision: 'nkm:scene-v1',
-      contentDigest: 'scene-v1',
+      domain: 'cut' as const,
+      documentUri: 'file:///workspace/edit.nkv',
+      projectRevision: 'nkv:edit-v1',
+      contentDigest: 'edit-v1',
     };
     const projectTarget = {
       version: MEDIA_QUALITY_CONTRACT_VERSION,
-      targetId: 'scene-project',
+      targetId: 'cut-project',
       kind: 'project-artifact' as const,
       projectRef,
       revision: projectRef.projectRevision,
@@ -146,7 +146,7 @@ describe('QualityCapabilityProvider', () => {
     };
     const snapshotRef = createResourceRef({
       scope: 'project',
-      provider: 'neko-model',
+      provider: 'neko-cut',
       kind: 'document',
       source: { kind: 'document', uri: projectRef.documentUri, identity: { hash: 'scene-v1' } },
       locator: { kind: 'file', uri: projectRef.documentUri },

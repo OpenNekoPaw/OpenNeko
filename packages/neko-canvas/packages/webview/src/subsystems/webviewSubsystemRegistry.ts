@@ -7,7 +7,9 @@ import {
   type CanvasSubsystemManifest,
 } from '@neko/shared';
 import { createCoreNodeTypeDescriptors } from './core/descriptors';
+import { createCoreNodeRendererRegistry } from './core/renderers';
 import type { NodeTypeDescriptorRegistry } from '../components/nodes/nodeTypeDescriptor';
+import type { NodeRendererRegistry } from '../components/nodes/nodeRendererTypes';
 import type { WebviewSubsystemLoader, WebviewSubsystemRegistration } from './types';
 
 export interface WebviewSubsystemRegistry {
@@ -16,6 +18,7 @@ export interface WebviewSubsystemRegistry {
   getNodeTypeSummary(canvas: Pick<CanvasData, 'nodes'>): Readonly<Record<string, number>>;
   getManifest(id: CanvasSubsystemId): CanvasSubsystemManifest | undefined;
   getSubsystemForNodeType(type: CanvasNodeType): CanvasSubsystemManifest | undefined;
+  getCoreNodeRenderers(): NodeRendererRegistry;
   getCoreNodeTypeDescriptors(): NodeTypeDescriptorRegistry;
   load(id: CanvasSubsystemId): Promise<WebviewSubsystemRegistration>;
   loadForCanvas(
@@ -50,6 +53,9 @@ export function createBuiltInWebviewSubsystemRegistry(
     },
     getSubsystemForNodeType(type) {
       return manifests.find((manifest) => manifest.triggerNodeTypes.includes(type));
+    },
+    getCoreNodeRenderers() {
+      return createCoreNodeRendererRegistry();
     },
     getCoreNodeTypeDescriptors() {
       return createCoreNodeTypeDescriptors();

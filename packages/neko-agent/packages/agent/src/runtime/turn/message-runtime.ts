@@ -35,7 +35,7 @@ import type {
   MessageAttachment,
   ProviderGenerationCapability,
 } from '@neko/shared';
-import { isDocumentFile } from '@neko/shared';
+import { isAgentResolvedEntityContextData, isDocumentFile } from '@neko/shared';
 import type { AgentEvent } from '../../session/types';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
@@ -466,9 +466,7 @@ export interface AgentProviderCandidate {
   readonly id: string;
   readonly isConfigured: boolean;
   readonly modelIds?: readonly string[];
-  readonly source?: 'explicit-config' | 'account-gateway';
-  readonly accountCatalogAvailable?: boolean;
-  readonly entitledModelIds?: readonly string[];
+  readonly source?: 'explicit-config';
   readonly modelCapabilities?: Readonly<Record<string, readonly string[]>>;
 }
 
@@ -495,8 +493,6 @@ export type AgentTurnProviderSelection<TProvider extends AgentProviderCandidate>
         | 'missing-chat-model'
         | 'chat-provider-not-configured'
         | 'chat-model-not-found'
-        | 'account-catalog-missing'
-        | 'account-model-not-entitled'
         | 'missing-required-capability';
     };
 
@@ -1087,6 +1083,12 @@ export function formatAgentContextPayload(
   const imageData = extractAgentContextImageData(payload.data);
   const filePath = extractAgentContextFilePath(payload.data);
 
+  if (payload.type === 'entity') {
+    if (!isAgentResolvedEntityContextData(payload.data)) {
+      throw new Error(`Agent Entity context is unresolved: ${payload.id}`);
+    }
+    return formatResolvedEntityContext(payload, locale);
+  }
   if (documentContext) {
     const lines = [`[${labels.document}: ${payload.label}]`];
     const source = documentContext.source;
@@ -1126,6 +1128,34 @@ export function formatAgentContextPayload(
   }
 
   return `[${labels.context}: ${payload.label}]\n${payload.summary}`;
+}
+
+function formatResolvedEntityContext(
+  payload: AgentContextPayload,
+  locale?: AgentRuntimePromptLocale | string,
+): string {
+  if (!isAgentResolvedEntityContextData(payload.data)) {
+    throw new Error(`Agent Entity context is unresolved: ${payload.id}`);
+  }
+  const entity = payload.data.entity;
+  const isZh = normalizeAgentRuntimePromptLocale(locale) === 'zh';
+  const lines = [
+    `[${isZh ? '实体' : 'Entity'}: ${payload.label}]`,
+    `${isZh ? '实体 ID' : 'Entity ID'}: ${entity.id}`,
+    `${isZh ? '类型' : 'Kind'}: ${entity.kind}`,
+    `${isZh ? '规范名称' : 'Canonical name'}: ${entity.canonicalName}`,
+  ];
+  if (entity.displayName) {
+    lines.push(`${isZh ? '显示名称' : 'Display name'}: ${entity.displayName}`);
+  }
+  lines.push(
+    `${isZh ? '别名' : 'Aliases'}: ${entity.aliases.length > 0 ? entity.aliases.join(', ') : isZh ? '无' : 'none'}`,
+    `${isZh ? '状态' : 'Status'}: ${entity.status}`,
+  );
+  if (entity.metadata) {
+    lines.push(`${isZh ? '元数据' : 'Metadata'}:\n${JSON.stringify(entity.metadata, null, 2)}`);
+  }
+  return lines.join('\n');
 }
 
 function getEnhancedMessageLabels(locale?: AgentRuntimePromptLocale | string): {
@@ -1560,25 +1590,6 @@ export function selectAgentTurnProvider<TProvider extends AgentProviderCandidate
     };
   }
 
-  if (provider.source === 'account-gateway') {
-    if (provider.accountCatalogAvailable === false) {
-      return {
-        ok: false,
-        effectiveProviderId,
-        effectiveModelId,
-        reason: 'account-catalog-missing',
-      };
-    }
-    if (provider.entitledModelIds && !provider.entitledModelIds.includes(effectiveModelId)) {
-      return {
-        ok: false,
-        effectiveProviderId,
-        effectiveModelId,
-        reason: 'account-model-not-entitled',
-      };
-    }
-  }
-
   const requiredCapabilities = input.requiredCapabilities ?? [];
   if (requiredCapabilities.length > 0) {
     const modelCapabilities = provider.modelCapabilities?.[effectiveModelId] ?? [];
@@ -1949,7 +1960,6 @@ function extractAgentContextImageData(data: unknown): string | undefined {
   if (!isRecord(data)) return undefined;
   return optionalString(data['imageData']);
 }
-
 function extractAgentContextFilePath(data: unknown): string | undefined {
   if (!isRecord(data)) return undefined;
   return optionalString(data['filePath']) ?? optionalString(data['path']);

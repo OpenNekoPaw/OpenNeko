@@ -79,59 +79,6 @@
           "light": "./themes/icons/file-canvas.svg",
           "dark": "./themes/icons/file-canvas.svg"
         }
-      },
-      {
-        "id": "neko-audio-file",
-        "aliases": [
-          "Neko Audio"
-        ],
-        "extensions": [
-          ".nka"
-        ],
-        "icon": {
-          "light": "./themes/icons/file-audio.svg",
-          "dark": "./themes/icons/file-audio.svg"
-        }
-      },
-      {
-        "id": "neko-sketch-file",
-        "aliases": [
-          "Neko Sketch"
-        ],
-        "extensions": [
-          ".nks"
-        ],
-        "icon": {
-          "light": "./themes/icons/file-sketch.svg",
-          "dark": "./themes/icons/file-sketch.svg"
-        }
-      },
-      {
-        "id": "neko-puppet-file",
-        "aliases": [
-          "Neko Puppet"
-        ],
-        "extensions": [
-          ".nkp",
-          ".inp"
-        ],
-        "icon": {
-          "light": "./themes/icons/file-puppet.svg",
-          "dark": "./themes/icons/file-puppet.svg"
-        }
-      },
-      {
-        "id": "neko-model-file",
-        "aliases": [
-          "Neko 3D Model"
-        ],
-        "extensions": [
-          ".nkm"
-        ],
-        "icon": {
-          "light": "./themes/icons/file-model.svg",
-          "dark": "./themes/icons/file-model.svg"
-        }
       }
     ],
     "customEditors": [

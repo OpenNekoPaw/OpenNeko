@@ -223,18 +223,22 @@ describe('creative entity composition extension utilities', () => {
     expect(nextBindings[0]).not.toHaveProperty('isDefault');
   });
 
-  it('parses and validates supported assetRef schemes with query qualifiers', () => {
+  it('parses and validates retained assetRef schemes with query qualifiers', () => {
     const resolver = new DefaultAssetRefResolver();
 
     expect(
-      resolver.parse('market://package/com.example.avatar@1.2.0/files/linxia.nkp?channel=stable'),
+      resolver.parse('shared://team/com.example.avatar@1.2.0/files/linxia.glb?channel=stable'),
     ).toEqual({
-      scheme: 'market',
-      raw: 'market://package/com.example.avatar@1.2.0/files/linxia.nkp?channel=stable',
-      authority: 'package',
-      path: 'com.example.avatar@1.2.0/files/linxia.nkp',
+      scheme: 'shared',
+      raw: 'shared://team/com.example.avatar@1.2.0/files/linxia.glb?channel=stable',
+      authority: 'team',
+      path: 'com.example.avatar@1.2.0/files/linxia.glb',
       version: undefined,
       query: { channel: 'stable' },
+    });
+    expect(resolver.validate('market://package/avatar@1.0.0/file.zip')).toEqual({
+      valid: false,
+      reason: expect.stringContaining('unsupported scheme'),
     });
     expect(resolver.validate('project://assets/linxia?variant=portrait-v2')).toEqual({
       valid: true,
@@ -271,12 +275,9 @@ describe('creative entity composition extension utilities', () => {
     );
   });
 
-  it('keeps market, shared, and external refs read-only by default', async () => {
+  it('keeps shared and external refs read-only by default', async () => {
     const resolver = new DefaultAssetRefResolver();
 
-    await expect(resolver.resolve('market://package/avatar@1.0.0/file.nkp')).resolves.toEqual(
-      expect.objectContaining({ scheme: 'market', source: 'market', readonly: true }),
-    );
     await expect(resolver.resolve('shared://team-library/characters/linxia')).resolves.toEqual(
       expect.objectContaining({ scheme: 'shared', source: 'shared', readonly: true }),
     );
@@ -388,7 +389,7 @@ describe('creative entity composition extension utilities', () => {
     await expect(
       resolver.resolve({
         entityId: 'char_linxia',
-        target: 'live',
+        target: 'canvas',
         preferredKind: 'live2d',
       }),
     ).resolves.toEqual(
@@ -411,7 +412,7 @@ describe('creative entity composition extension utilities', () => {
     );
   });
 
-  it('does not resolve portrait as a Live avatar', async () => {
+  it('reports missing retained representations when no binding exists', async () => {
     const resolver = new RepresentationResolver({
       entities: {
         get: async () => ({
@@ -425,26 +426,15 @@ describe('creative entity composition extension utilities', () => {
         resolveByName: async () => undefined,
       },
       bindings: {
-        list: async () => [
-          {
-            id: 'bind-portrait',
-            entityId: 'char_linxia',
-            entityKind: 'character',
-            assetRef: 'project://assets/linxia-portrait',
-            role: 'portrait',
-            status: 'confirmed',
-            source: 'user',
-            updatedAt: '2026-05-10T00:00:00.000Z',
-          },
-        ],
+        list: async () => [],
       } as unknown as EntityAssetBindingService,
       assetRefs: new DefaultAssetRefResolver(),
     });
 
-    await expect(resolver.resolve({ entityId: 'char_linxia', target: 'live' })).resolves.toEqual({
+    await expect(resolver.resolve({ entityId: 'char_linxia', target: 'canvas' })).resolves.toEqual({
       status: 'missing-representation',
       entityId: 'char_linxia',
-      missingKinds: ['live3d', 'puppet-bone', 'live2d'],
+      missingKinds: ['portrait', 'reference', 'live2d', 'live3d'],
       suggestedActions: ['generate', 'import', 'bind-existing', 'dismiss'],
     });
   });

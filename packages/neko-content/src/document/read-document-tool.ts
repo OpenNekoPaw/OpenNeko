@@ -2,6 +2,7 @@ import {
   TOOL_NAMES_SYSTEM,
   type ContentAccessDiagnostic,
   type ContentAccessResult,
+  type DocumentArchiveResourceRef,
   createTool,
   isContentSourceRef,
   type ContentSourceRef,
@@ -73,6 +74,8 @@ export interface ReadDocumentContentAccessResult {
   readonly status: ContentAccessResult['status'];
   readonly source?: Exclude<ContentSourceRef, { readonly kind: 'runtime' }>;
   readonly diagnostics: readonly ContentAccessDiagnostic[];
+  readonly resourceRef?: ResourceRef;
+  readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly text?: string;
   readonly totalTextChars?: number;
   readonly returnedTextChars?: number;
@@ -92,6 +95,8 @@ export interface ReadDocumentContentAccessResult {
 interface ReadDocumentToolData {
   readonly source: Exclude<ContentSourceRef, { readonly kind: 'runtime' }>;
   readonly mode: ReadDocumentMode;
+  readonly resourceRef?: ResourceRef;
+  readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly text?: string;
   readonly totalTextChars?: number;
   readonly returnedTextChars?: number;
@@ -247,6 +252,8 @@ async function executeReadDocument(
     data: {
       source: result.source,
       mode,
+      ...(result.resourceRef ? { resourceRef: result.resourceRef } : {}),
+      ...(result.documentResourceRef ? { documentResourceRef: result.documentResourceRef } : {}),
       ...(truncatedText
         ? {
             text: truncatedText.text,

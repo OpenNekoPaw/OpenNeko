@@ -62,7 +62,7 @@ interface ExportJobInfo {
   startedAt: number;
 }
 
-/** Read-only export job metadata for source-owned dashboard adapters */
+/** Read-only export job metadata for source-owned task projection adapters. */
 export interface ExportJobSnapshot {
   readonly jobId: string;
   readonly config: ExportConfig;
