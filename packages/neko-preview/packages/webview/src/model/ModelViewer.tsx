@@ -21,7 +21,14 @@ import {
   type ThreeModelRuntimeFactory,
   type ThreeModelRuntimePort,
 } from './threeRuntime';
-import { patchModelTransform, selectModelNode } from './modelStagingStore';
+import {
+  duplicateModelCamera,
+  patchModelTransform,
+  removeModelCamera,
+  selectModelCamera,
+  selectModelNode,
+} from './modelStagingStore';
+import type { ModelSceneSelection } from './modelSceneSelection';
 import { ModelInspectorPanel } from './components/ModelInspectorPanel';
 import { ModelScenePanel } from './components/ModelScenePanel';
 import { ModelOrientationGizmo } from './components/ModelOrientationGizmo';
@@ -60,6 +67,7 @@ export function ModelViewer({
   const [gridVisible, setGridVisible] = useState(true);
   const [axesVisible, setAxesVisible] = useState(true);
   const [viewState, setViewState] = useState<ModelViewState>(DEFAULT_MODEL_VIEW_STATE);
+  const [sceneSelection, setSceneSelection] = useState<ModelSceneSelection>({ kind: 'scene' });
   const sessionId = sessionIdOverride ?? document.body.dataset.modelSessionId;
   const vscode = useMemo(() => getVscodeApi(), []);
 
@@ -69,8 +77,18 @@ export function ModelViewer({
   }, [staging]);
 
   useEffect(() => {
-    runtimeRef.current?.setTransformEnabled(viewportMode === 'inspect');
-  }, [viewportMode]);
+    runtimeRef.current?.setTransformEnabled(
+      viewportMode === 'inspect' && sceneSelection.kind === 'node',
+    );
+  }, [sceneSelection.kind, viewportMode]);
+
+  useEffect(() => {
+    const camera =
+      sceneSelection.kind === 'camera'
+        ? staging?.cameraPresets.find((preset) => preset.id === sceneSelection.cameraId)
+        : undefined;
+    runtimeRef.current?.setCameraGuide(camera);
+  }, [sceneSelection, staging]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -120,6 +138,7 @@ export function ModelViewer({
         setStaging,
         setFacts,
         setNodes,
+        setSceneSelection,
         setDiagnostic,
         setDeliveryStatus,
         sourceRef,
@@ -149,6 +168,40 @@ export function ModelViewer({
     postState(vscode, next);
   };
   const controlsDisabled = !staging || status !== 'ready';
+  const duplicateCamera = (cameraId: string): void => {
+    if (!staging) throw new Error('Model Preview staging is unavailable.');
+    const sourceCamera = staging.cameraPresets.find((camera) => camera.id === cameraId);
+    if (!sourceCamera) throw new Error(`Unknown Model Preview camera: ${cameraId}`);
+    const next = duplicateModelCamera(
+      staging,
+      cameraId,
+      `${sourceCamera.label} ${t('preview.model.copySuffix')}`,
+    );
+    const previousIds = new Set(staging.cameraPresets.map((camera) => camera.id));
+    const duplicate = next.cameraPresets.find((camera) => !previousIds.has(camera.id));
+    if (!duplicate) throw new Error('Model Preview camera duplication produced no camera.');
+    updateStaging(next);
+    setSceneSelection({ kind: 'camera', cameraId: duplicate.id });
+    setViewportMode('navigate');
+  };
+  const removeCamera = (cameraId: string): void => {
+    if (!staging) throw new Error('Model Preview staging is unavailable.');
+    const next = removeModelCamera(staging, cameraId);
+    updateStaging(next);
+    setSceneSelection({ kind: 'camera', cameraId: next.activeCameraId });
+    setViewportMode('navigate');
+  };
+  const viewCamera = (cameraId: string): void => {
+    if (!staging) throw new Error('Model Preview staging is unavailable.');
+    const camera = staging.cameraPresets.find((preset) => preset.id === cameraId);
+    if (!camera) throw new Error(`Unknown Model Preview camera: ${cameraId}`);
+    runtimeRef.current?.frameCamera(camera);
+    if (staging.activeCameraId !== cameraId) {
+      updateStaging(selectModelCamera(staging, cameraId));
+    }
+    setSceneSelection({ kind: 'camera', cameraId });
+    setViewportMode('navigate');
+  };
 
   return (
     <main
@@ -165,15 +218,42 @@ export function ModelViewer({
       data-delivery-status={deliveryStatus}
       data-view-distance={viewState.distance}
       data-view-target={`${viewState.target.x},${viewState.target.y},${viewState.target.z}`}
+      data-selection-kind={sceneSelection.kind}
     >
       <ModelScenePanel
         disabled={controlsDisabled}
         nodes={nodes}
-        selectedNodePath={staging?.selectedNodePath}
-        onSelectNode={(nodePath) => {
-          if (!staging) return;
-          updateStaging(selectModelNode(staging, nodePath));
-          setViewportMode('inspect');
+        selection={sceneSelection}
+        staging={staging}
+        onCameraAction={(cameraId, action) => {
+          switch (action) {
+            case 'edit':
+              setSceneSelection({ kind: 'camera', cameraId });
+              setViewportMode('navigate');
+              break;
+            case 'duplicate': {
+              duplicateCamera(cameraId);
+              break;
+            }
+            case 'view': {
+              viewCamera(cameraId);
+              break;
+            }
+            case 'remove': {
+              removeCamera(cameraId);
+              break;
+            }
+          }
+        }}
+        onSelectionChange={(selection) => {
+          setSceneSelection(selection);
+          if (selection.kind === 'node') {
+            if (!staging) throw new Error('Model Preview staging is unavailable.');
+            updateStaging(selectModelNode(staging, selection.nodePath));
+            setViewportMode('inspect');
+          } else {
+            setViewportMode('navigate');
+          }
         }}
       />
       <section className="model-preview__viewport" aria-label={t('preview.model.viewport')}>
@@ -189,7 +269,7 @@ export function ModelViewer({
           axesVisible={axesVisible}
           disabled={controlsDisabled}
           gridVisible={gridVisible}
-          hasSelection={staging?.selectedNodePath !== undefined}
+          hasSelection={sceneSelection.kind === 'node' && staging?.selectedNodePath !== undefined}
           viewportMode={viewportMode}
           transformMode={transformMode}
           onAxesVisibleChange={setAxesVisible}
@@ -220,10 +300,14 @@ export function ModelViewer({
         disabled={controlsDisabled || deliveryStatus === 'sending'}
         facts={facts}
         nodes={nodes}
+        selection={sceneSelection}
         staging={staging}
+        onDuplicateCamera={duplicateCamera}
+        onRemoveCamera={removeCamera}
         onUpdateStaging={updateStaging}
+        onViewCamera={viewCamera}
         onSendToAgent={() => {
-          if (!staging) return;
+          if (!staging) throw new Error('Model Preview staging is unavailable.');
           setDeliveryStatus('sending');
           vscode.postMessage({
             type: 'model-preview/send-requested',
@@ -244,6 +328,7 @@ async function handleExtensionMessage(input: {
   readonly setStaging: (state: ModelPreviewStagingState) => void;
   readonly setFacts: (facts: NormalizedModelFacts) => void;
   readonly setNodes: (nodes: readonly ModelPreviewNode[]) => void;
+  readonly setSceneSelection: (selection: ModelSceneSelection) => void;
   readonly setDiagnostic: (diagnostic: ModelPreviewDiagnostic | undefined) => void;
   readonly setDeliveryStatus: (status: DeliveryStatus) => void;
   readonly sourceRef: React.MutableRefObject<ModelPreviewSourceDescriptor | undefined>;
@@ -260,6 +345,7 @@ async function handleExtensionMessage(input: {
         input.setStatus('loading');
         input.setDiagnostic(undefined);
         input.setDeliveryStatus('idle');
+        input.setSceneSelection({ kind: 'scene' });
         input.sourceRef.current = message.source;
         input.stagingRef.current = message.staging;
         input.setStaging(message.staging);

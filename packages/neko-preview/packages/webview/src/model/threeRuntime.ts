@@ -51,6 +51,8 @@ export interface ThreeModelRuntimePort {
   setTransformMode(mode: 'translate' | 'rotate' | 'scale'): void;
   setTransformEnabled(enabled: boolean): void;
   setGroundGridVisible(visible: boolean): void;
+  setCameraGuide(camera: ModelPreviewCameraPreset | undefined): void;
+  frameCamera(camera: ModelPreviewCameraPreset): void;
   frameModel(): void;
   resize(width: number, height: number): void;
   capture(settings: ModelPreviewCaptureSettings): string;
@@ -150,6 +152,20 @@ export function getModelGroundGridLayout(bounds: THREE.Box3): ModelGroundGridLay
   };
 }
 
+export function getModelCameraGuidePose(
+  bounds: THREE.Box3,
+  camera: ModelPreviewCameraPreset,
+): { readonly position: THREE.Vector3; readonly target: THREE.Vector3; readonly radius: number } {
+  const center = bounds.getCenter(new THREE.Vector3());
+  const size = bounds.getSize(new THREE.Vector3());
+  const radius = Math.max(size.length() / 2, 0.001);
+  return {
+    position: center.clone().addScaledVector(toThreeVector(camera.position), radius),
+    target: center.clone().add(toThreeVector(camera.target)),
+    radius,
+  };
+}
+
 export function projectModelViewOrientation(
   cameraQuaternion: THREE.Quaternion,
 ): ModelViewOrientation {
@@ -221,6 +237,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   private modelRoot: THREE.Object3D | undefined;
   private modelBounds: THREE.Box3 | undefined;
   private groundGrid: THREE.GridHelper | undefined;
+  private cameraGuide: THREE.CameraHelper | undefined;
   private groundGridVisible = true;
   private activeCameraPreset: ModelPreviewCameraPreset | undefined;
   private appliedCameraId: string | undefined;
@@ -382,6 +399,47 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.requestRender();
   }
 
+  setCameraGuide(camera: ModelPreviewCameraPreset | undefined): void {
+    this.assertLive();
+    this.detachCameraGuide();
+    if (!camera || !this.modelBounds) {
+      this.requestRender();
+      return;
+    }
+    const pose = getModelCameraGuidePose(this.modelBounds, camera);
+    const targetDistance = pose.position.distanceTo(pose.target);
+    const helperCamera = new THREE.PerspectiveCamera(
+      camera.fieldOfViewDeg,
+      this.camera.aspect,
+      Math.max(pose.radius / 20, 0.001),
+      Math.max(targetDistance * 1.25, pose.radius * 1.5, 1),
+    );
+    helperCamera.position.copy(pose.position);
+    helperCamera.lookAt(pose.target);
+    helperCamera.updateMatrixWorld(true);
+    const helper = new THREE.CameraHelper(helperCamera);
+    helper.name = `Model Preview camera guide: ${camera.id}`;
+    helper.renderOrder = 2;
+    this.cameraGuide = helper;
+    this.scene.add(helper);
+    this.requestRender();
+  }
+
+  frameCamera(camera: ModelPreviewCameraPreset): void {
+    this.assertLive();
+    if (!this.modelBounds) throw new Error('Model Preview renderer has no loaded model bounds.');
+    const pose = getModelCameraGuidePose(this.modelBounds, camera);
+    this.camera.fov = camera.fieldOfViewDeg;
+    this.camera.updateProjectionMatrix();
+    this.camera.position.copy(pose.position);
+    this.orbit.target.copy(pose.target);
+    this.orbit.update();
+    this.activeCameraPreset = camera;
+    this.appliedCameraId = camera.id;
+    this.emitViewState();
+    this.requestRender();
+  }
+
   frameModel(): void {
     this.assertLive();
     if (!this.modelBounds) throw new Error('Model Preview renderer has no loaded model bounds.');
@@ -418,7 +476,9 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     const previousPixelRatio = this.renderer.getPixelRatio();
     const previousAspect = this.camera.aspect;
     const gridWasVisible = this.groundGrid?.visible ?? false;
+    const cameraGuideWasVisible = this.cameraGuide?.visible ?? false;
     if (this.groundGrid) this.groundGrid.visible = false;
+    if (this.cameraGuide) this.cameraGuide.visible = false;
     try {
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(settings.width, settings.height, false);
@@ -432,6 +492,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       return dataUrl;
     } finally {
       if (this.groundGrid) this.groundGrid.visible = gridWasVisible;
+      if (this.cameraGuide) this.cameraGuide.visible = cameraGuideWasVisible;
       this.renderer.setPixelRatio(previousPixelRatio);
       this.renderer.setSize(previousSize.x, previousSize.y, false);
       this.camera.aspect = previousAspect;
@@ -527,6 +588,13 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.groundGrid = undefined;
   }
 
+  private detachCameraGuide(): void {
+    if (!this.cameraGuide) return;
+    this.scene.remove(this.cameraGuide);
+    disposeObjectTree(this.cameraGuide);
+    this.cameraGuide = undefined;
+  }
+
   private emitViewState(): void {
     this.callbacks.onViewChanged?.({
       orientation: projectModelViewOrientation(this.camera.quaternion),
@@ -578,6 +646,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   private detachModel(): void {
     this.transform.detach();
     this.detachGroundGrid();
+    this.detachCameraGuide();
     if (this.modelRoot) {
       this.scene.remove(this.modelRoot);
       disposeObjectTree(this.modelRoot);
