@@ -136,28 +136,18 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).not.toMatch(/isCanvasSettingsVisible/);
   });
 
-  it('styles the left toolbar as a bounded theme-colored pill with inset active circles', () => {
+  it('uses the shared theme-colored floating-toolbar recipe and keeps only Canvas placement local', () => {
     expect(cssSource).toMatch(
       /\.canvas-floating-toolbar-host\s*\{[^}]*left:\s*16px;[^}]*bottom:\s*16px;/s,
     );
     expect(cssSource).toMatch(
       /\.canvas-floating-toolbar\.neko-vtoolbar\s*\{[^}]*height:\s*auto;[^}]*max-height:\s*100%;/s,
     );
-    expect(cssSource).toMatch(
-      /\.canvas-floating-toolbar\.neko-vtoolbar\s*\{[^}]*border-radius:\s*999px;[^}]*background:\s*var\(--toolbar-bg\);/s,
-    );
-    expect(cssSource).toMatch(
-      /\.canvas-floating-toolbar \.neko-toolbar-btn\s*\{[^}]*width:\s*36px;[^}]*height:\s*36px;[^}]*border-radius:\s*999px;/s,
-    );
-    expect(cssSource).toMatch(
-      /\.canvas-floating-toolbar \.neko-toolbar-btn\.active::before,[\s\S]*content:\s*none;[\s\S]*display:\s*none;/,
-    );
-    expect(cssSource).toMatch(
-      /\.canvas-floating-toolbar \.neko-toolbar-btn\.active\s*\{[^}]*color:\s*var\(--neko-accent\);[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;/s,
-    );
-    expect(cssSource).toMatch(
-      /\.canvas-floating-toolbar \.neko-toolbar-btn\.active::after\s*\{[^}]*inset:\s*3px;[^}]*border:[^}]*var\(--neko-accent\)[^}]*border-radius:\s*999px;[^}]*background:[^}]*var\(--neko-accent\)[^}]*box-shadow:[^}]*var\(--neko-accent-glow\);/s,
-    );
+    expect(toolbarSource).toMatch(/className="canvas-floating-toolbar neko-floating-toolbar/);
+    expect(toolbarSource).toMatch(/data-orientation="vertical"/);
+    expect(toolbarSource).toMatch(/className="canvas-toolbar-mode-group neko-toolbar-mode-group"/);
+    expect(cssSource).not.toMatch(/\.canvas-floating-toolbar \.neko-toolbar-btn/);
+    expect(cssSource).not.toMatch(/\.canvas-toolbar-mode-group\s*\{/);
     expect(appSource).toMatch(/data-canvas-toolbar-host="left"/);
     expect(appSource).not.toMatch(/data-canvas-toolbar-host="right"/);
   });

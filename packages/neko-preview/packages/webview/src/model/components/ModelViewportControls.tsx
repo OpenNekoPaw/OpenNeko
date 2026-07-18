@@ -49,7 +49,7 @@ export function ModelViewportControls({
         />
       </div>
       <div
-        className="model-preview__viewport-toolbar"
+        className="model-preview__viewport-toolbar neko-floating-toolbar"
         data-active-indicator="button"
         data-testid="model-preview-viewport-toolbar"
         data-orientation="horizontal"
@@ -66,7 +66,7 @@ export function ModelViewportControls({
       >
         <div
           aria-label={t('preview.model.viewMode')}
-          className="model-preview__toolbar-mode-group"
+          className="model-preview__toolbar-mode-group neko-toolbar-mode-group"
           data-active-mode={viewportMode}
           data-model-preview-toolbar-group="navigation"
           role="group"

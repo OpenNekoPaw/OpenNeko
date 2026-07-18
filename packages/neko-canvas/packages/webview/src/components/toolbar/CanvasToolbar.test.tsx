@@ -42,10 +42,11 @@ describe('CanvasToolbar', () => {
       root.render(<CanvasToolbar onUndo={() => undefined} onRedo={() => undefined} />);
     });
 
-    expect(host.querySelector('.neko-vtoolbar')).not.toBeNull();
-    expect(host.querySelector('.canvas-floating-toolbar')?.getAttribute('aria-label')).toBe(
-      'Canvas tools',
-    );
+    const toolbar = host.querySelector('.canvas-floating-toolbar');
+    expect(toolbar?.classList.contains('neko-vtoolbar')).toBe(true);
+    expect(toolbar?.classList.contains('neko-floating-toolbar')).toBe(true);
+    expect(toolbar?.getAttribute('data-orientation')).toBe('vertical');
+    expect(toolbar?.getAttribute('aria-label')).toBe('Canvas tools');
     expect(host.querySelectorAll('.neko-toolbar-btn').length).toBeGreaterThan(0);
     expect(host.querySelector('[data-canvas-toolbar-action="select-tool"]')).not.toBeNull();
     expect(host.querySelector('[data-canvas-toolbar-action="toggle-pan-mode"]')).not.toBeNull();
@@ -79,6 +80,7 @@ describe('CanvasToolbar', () => {
     const modeGroup = host.querySelector<HTMLElement>('[data-canvas-toolbar-mode-group]');
 
     expect(modeGroup?.getAttribute('role')).toBe('group');
+    expect(modeGroup?.classList.contains('neko-toolbar-mode-group')).toBe(true);
     expect(modeGroup?.getAttribute('aria-label')).toBe('Canvas navigation mode');
     expect(Array.from(modeGroup?.children ?? [])).toEqual([selectButton, handButton]);
     expect(selectButton?.getAttribute('aria-label')).toBe('Select Tool (V)');

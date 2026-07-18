@@ -81,7 +81,8 @@ export function CanvasToolbar({
 
   return (
     <VerticalToolbar
-      className="canvas-floating-toolbar relative z-20"
+      className="canvas-floating-toolbar neko-floating-toolbar relative z-20"
+      data-orientation="vertical"
       width={48}
       aria-label={t('toolbar.leftRail')}
       {...getKeyboardBoundaryMetadata({
@@ -93,7 +94,7 @@ export function CanvasToolbar({
     >
       <div
         aria-label={t('toolbar.navigationMode')}
-        className="canvas-toolbar-mode-group"
+        className="canvas-toolbar-mode-group neko-toolbar-mode-group"
         data-active-mode={isPanMode ? 'pan' : 'select'}
         data-canvas-toolbar-mode-group="navigation"
         role="group"

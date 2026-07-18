@@ -110,16 +110,17 @@ describe('ModelViewer', () => {
       '[data-testid="model-preview-viewport-toolbar"]',
     );
     expect(viewportToolbar?.classList.contains('neko-vtoolbar')).toBe(false);
+    expect(viewportToolbar?.classList.contains('neko-floating-toolbar')).toBe(true);
     expect(viewportToolbar?.dataset.activeIndicator).toBe('button');
     expect(viewportToolbar?.dataset.orientation).toBe('horizontal');
     expect(viewportToolbar?.dataset.shape).toBe('pill');
     expect(viewportToolbar?.getAttribute('role')).toBe('toolbar');
     expect(viewportToolbar?.getAttribute('aria-orientation')).toBe('horizontal');
-    expect(
-      viewportToolbar
-        ?.querySelector('[data-model-preview-toolbar-group="navigation"]')
-        ?.getAttribute('data-active-mode'),
-    ).toBe('navigate');
+    const navigationGroup = viewportToolbar?.querySelector(
+      '[data-model-preview-toolbar-group="navigation"]',
+    );
+    expect(navigationGroup?.classList.contains('neko-toolbar-mode-group')).toBe(true);
+    expect(navigationGroup?.getAttribute('data-active-mode')).toBe('navigate');
     expect(container.querySelector('[data-testid="model-preview-orientation"]')).not.toBeNull();
     const resetView = container.querySelector<HTMLButtonElement>('button[aria-label="Reset view"]');
     await act(async () => resetView?.click());

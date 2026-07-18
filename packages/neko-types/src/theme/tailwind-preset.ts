@@ -105,6 +105,102 @@ export const nekoTailwindPreset = {
           background: 'var(--neko-divider)',
           'flex-shrink': '0',
         },
+        '.neko-floating-toolbar': {
+          display: 'flex',
+          'align-items': 'center',
+          gap: '6px',
+          border: '1px solid var(--neko-toolbar-border)',
+          'border-radius': '999px',
+          background: 'var(--neko-toolbar-background)',
+          'box-shadow': 'var(--neko-toolbar-shadow)',
+          'pointer-events': 'auto',
+          'scrollbar-width': 'none',
+        },
+        '.neko-floating-toolbar::-webkit-scrollbar': {
+          display: 'none',
+        },
+        '.neko-floating-toolbar[data-orientation="vertical"]': {
+          'flex-direction': 'column',
+          padding: '10px 6px',
+        },
+        '.neko-floating-toolbar[data-orientation="horizontal"]': {
+          'flex-direction': 'row',
+          padding: '6px 10px',
+        },
+        '.neko-floating-toolbar .neko-toolbar-btn': {
+          position: 'relative',
+          width: '36px',
+          height: '36px',
+          flex: '0 0 auto',
+          'border-radius': '999px',
+          color: 'var(--neko-toolbar-foreground-secondary)',
+        },
+        '.neko-toolbar-mode-group': {
+          display: 'flex',
+          'align-items': 'center',
+          gap: '0',
+          flex: '0 0 auto',
+          padding: '2px',
+          'border-radius': '999px',
+          background:
+            'color-mix(in srgb, var(--neko-toolbar-foreground-secondary) 10%, var(--neko-toolbar-background))',
+          'box-shadow':
+            'inset 0 0 0 1px color-mix(in srgb, var(--neko-toolbar-foreground-secondary) 18%, transparent)',
+        },
+        '.neko-floating-toolbar[data-orientation="vertical"] .neko-toolbar-mode-group': {
+          'flex-direction': 'column',
+        },
+        '.neko-floating-toolbar[data-orientation="horizontal"] .neko-toolbar-mode-group': {
+          'flex-direction': 'row',
+        },
+        '.neko-floating-toolbar .neko-toolbar-btn:hover:not(:disabled)': {
+          color: 'var(--neko-toolbar-foreground)',
+          background: 'var(--neko-toolbar-hover)',
+        },
+        '.neko-floating-toolbar .neko-toolbar-btn.active, .neko-floating-toolbar .neko-toolbar-btn[aria-pressed="true"]':
+          {
+            'border-color': 'transparent',
+            color: 'var(--neko-toolbar-accent)',
+            background: 'transparent',
+            'box-shadow': 'none',
+          },
+        '.neko-floating-toolbar .neko-toolbar-btn.active::before, .neko-floating-toolbar .neko-toolbar-btn[aria-pressed="true"]::before':
+          {
+            content: 'none',
+            display: 'none',
+          },
+        '.neko-floating-toolbar .neko-toolbar-btn.active::after, .neko-floating-toolbar .neko-toolbar-btn[aria-pressed="true"]::after':
+          {
+            content: '""',
+            position: 'absolute',
+            inset: '3px',
+            'z-index': '0',
+            border: '1px solid color-mix(in srgb, var(--neko-toolbar-accent) 55%, transparent)',
+            'border-radius': '999px',
+            background:
+              'color-mix(in srgb, var(--neko-toolbar-accent) 18%, var(--neko-toolbar-background))',
+            'box-shadow': '0 1px 5px var(--neko-toolbar-accent-glow)',
+            'pointer-events': 'none',
+          },
+        '.neko-floating-toolbar .neko-toolbar-btn > svg, .neko-floating-toolbar .neko-toolbar-btn > .codicon':
+          {
+            position: 'relative',
+            'z-index': '1',
+          },
+        '.neko-floating-toolbar .neko-toolbar-sep': {
+          flex: '0 0 auto',
+          background: 'var(--neko-toolbar-divider)',
+        },
+        '.neko-floating-toolbar .neko-toolbar-sep[data-orientation="horizontal"]': {
+          width: '26px',
+          height: '1px',
+          margin: '2px 0',
+        },
+        '.neko-floating-toolbar .neko-toolbar-sep[data-orientation="vertical"]': {
+          width: '1px',
+          height: '26px',
+          margin: '0 2px',
+        },
 
         // ── Collapsible Section ───────────────────────────────────────────
         '.neko-collapsible': {
