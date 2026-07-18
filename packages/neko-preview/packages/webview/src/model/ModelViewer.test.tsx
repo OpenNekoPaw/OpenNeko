@@ -273,6 +273,7 @@ describe('ModelViewer', () => {
     expect(
       container.querySelector('[data-testid="model-preview-camera-inspector"]'),
     ).not.toBeNull();
+    expect(container.querySelectorAll('.model-preview__axis-group')).toHaveLength(2);
     expect(runtime.setCameraGuide).toHaveBeenLastCalledWith(
       expect.objectContaining({ id: 'camera-default' }),
     );
