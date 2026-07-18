@@ -18,7 +18,7 @@ export type AgentContextType =
   | 'media'
   | 'entity'
   | 'sketch-layer'
-  | 'model-preview'
+  | '3d-reference'
   | 'audio-clip'
   | 'file'
   | 'image'

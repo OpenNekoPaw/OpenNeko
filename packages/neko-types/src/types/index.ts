@@ -303,6 +303,7 @@ export * from './generation';
 // Agent context types (unified sendToAgent payload)
 export * from './agent-context';
 export * from './model-preview';
+export * from './three-reference';
 
 // Document reading contracts (Preview ↔ Agent ↔ Platform)
 export * from './document-reading';

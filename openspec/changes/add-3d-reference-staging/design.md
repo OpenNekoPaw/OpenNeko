@@ -88,7 +88,40 @@ The generalized payload uses the `3d-reference` discriminator and a new contract
 
 Alternative: keep `model-preview` and add `3d-guide`. Rejected because two nearly identical capture/session bridges would create competing canonical paths and ambiguous consumer behavior.
 
+#### Exact transient-state migration contract
+
+- The new Webview/Extension state key and schema start at `THREE_REFERENCE_STAGING_SCHEMA_VERSION = 1`. The implementation MUST NOT read or write the previous `modelPreviewStaging` shape as a `3d-reference` snapshot, and it MUST NOT translate an old revision into a new revision.
+- An already open source-model or panorama panel may rebuild a fresh revision-0 3D Reference session only from its still-live, authorized source descriptor. The rebuild copies the source `ResourceRef` and fingerprint as source identity; camera, pose, purpose selection, output resources, and old capture state are reconstructed from new defaults or explicit current user actions.
+- Reloaded or reopened panels re-inspect the original user-selected model/panorama through the normal authorization boundary. User source files and resource identities remain untouched; rebuildable capture/cache artifacts are not migrated.
+- A `3d-reference` context whose contract version or staging schema version is unknown is rejected. A removed `model-preview` context is also rejected. Neither case is mapped, dual-read, dual-written, attached as a generic image, or reported as a successful send.
+- State rejection is visible through the typed version/protocol diagnostic at the owning boundary. It may offer the user a fresh session, but it cannot silently substitute a built-in guide for a failed real source.
+
 ### Use a fixed, audited, immutable preset catalog
+
+#### Mannequin feasibility decision (2026-07-19)
+
+The bounded spike at `packages/neko-preview/packages/webview/scripts/three-reference-preset-feasibility.mts` compares a corrected Preview-owned procedural mannequin against one externally downloaded, fingerprint-pinned rigged GLB. The external input is Khronos `RiggedSimple` (`CC-BY-4.0`, © 2017 Cesium, SHA-256 `3a79dabb67bb0cd598a18d08b954d9d357c27c30672f82ef5d3f4e7fe6ca3401`); it is never copied into the repository or selected as a product preset.
+
+Measured on Node `v25.6.1`, macOS arm64, over 25 construction/parse samples after five warmups; timing below is the observed median range across three isolated runs:
+
+| Criterion                                |                                                  Corrected procedural candidate |                           Audited `RiggedSimple.glb` |
+| ---------------------------------------- | ------------------------------------------------------------------------------: | ---------------------------------------------------: |
+| Additional packaged binary bytes         |                                                                               0 |                                               15,104 |
+| Median construct/parse time              |                                                                  0.898–1.022 ms |                                       0.575–0.678 ms |
+| Meshes / triangles                       |                                                                        15 / 560 |                                              1 / 188 |
+| Skin/bones                               |                                         explicit pivot hierarchy / 0 glTF bones |                                     1 skin / 2 bones |
+| Required humanoid landmark coverage      |                                                                           16/16 |                                                 0/16 |
+| Constrained pose changes target landmark |                                                                             yes |                      no compatible humanoid landmark |
+| Production recursive disposal            |                          15 geometries and all material dispose events observed |     1 geometry and 1 material dispose event observed |
+| Render-quality proxy                     | complete neutral head/torso/limb silhouette, intentionally no appearance detail | valid skinning-test shape, not a humanoid silhouette |
+
+Decision: use corrected project-owned procedural geometry for the initial neutral mannequin. Its stable named pivots directly satisfy pose output and landmark contracts, it adds no binary asset/license payload, and it is structurally incapable of supplying detailed appearance. `RiggedSimple` remains useful evidence that the loader and recursive disposer handle a real skin, but its two-bone test geometry is not a viable mannequin. Actual supported-host render appearance and load/disposal acceptance remain required in tasks 2.5 and 7.2; this Node metric is a feasibility comparison, not Webview visual acceptance.
+
+Reproduction downloads the audited input outside the repository and runs:
+
+```bash
+pnpm --dir packages/neko-preview/packages/webview exec tsx scripts/three-reference-preset-feasibility.mts /tmp/neko-3d-reference-spike/RiggedSimple.glb
+```
 
 Preview Extension owns a code-declared catalog with preset ID/version, packaged fingerprint, kind, allowed purposes, scale, capability descriptor, asset path, provenance, and license. Staging stores only identity/version. Extension projects exact bundled files with `webview.asWebviewUri()` and sends identity-bearing URIs; Webview never guesses paths.
 
@@ -100,7 +133,7 @@ The first catalog is intentionally small:
 4. neutral panoramic orientation grid;
 5. optional project-authored or redistribution-safe appearance example, clearly separated from guide assets.
 
-The existing `generateHumanoidGlb` helper is only a feasibility reference: it has a useful hierarchy but its comment/mesh behavior and old empty-model ownership need audit. Implementation must either re-home and correct a guide-owned procedural asset or replace it with an audited bundled GLB; it must not silently revive a removed model-project path.
+The existing `generateHumanoidGlb` helper remains only a historical feasibility reference: its ownership and node-attached mesh behavior do not satisfy the selected runtime-pivot contract. Production implements the corrected candidate inside Preview's preset runtime rather than importing that L1 template or reviving a removed model-project path.
 
 Alternative: runtime catalog registration or asset-directory discovery. Rejected until a real external preset provider and trust/install lifecycle exist.
 
