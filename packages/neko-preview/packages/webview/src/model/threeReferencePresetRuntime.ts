@@ -116,6 +116,42 @@ export function applyDeclaredMannequinPose(
   mannequin.root.updateMatrixWorld(true);
 }
 
+export function createMannequinSkeletonOverlay(mannequin: NeutralMannequinRuntime): THREE.Group {
+  mannequin.root.updateMatrixWorld(true);
+  const root = new THREE.Group();
+  root.name = 'guide-output:pose-skeleton';
+  const jointPositions = new Map<string, THREE.Vector3>();
+  for (const [jointId, joint] of mannequin.joints) {
+    jointPositions.set(jointId, joint.getWorldPosition(new THREE.Vector3()));
+  }
+  const points = [...jointPositions.values()];
+  const segmentPoints: THREE.Vector3[] = [];
+  for (const declaration of mannequin.capabilities.joints) {
+    if (!declaration.parentJointId) continue;
+    const parent = jointPositions.get(declaration.parentJointId);
+    const child = jointPositions.get(declaration.jointId);
+    if (!parent || !child) {
+      throw new Error(`3D Reference skeleton joint is unavailable: ${declaration.jointId}`);
+    }
+    segmentPoints.push(parent, child);
+  }
+  const lineGeometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
+  root.add(
+    new THREE.LineSegments(
+      lineGeometry,
+      new THREE.LineBasicMaterial({ color: 0x18212d, linewidth: 2 }),
+    ),
+  );
+  const pointGeometry = new THREE.BufferGeometry().setFromPoints(points);
+  root.add(
+    new THREE.Points(
+      pointGeometry,
+      new THREE.PointsMaterial({ color: 0x2d73da, size: 8, sizeAttenuation: false }),
+    ),
+  );
+  return root;
+}
+
 export function createBlockoutReferencePreset(
   implementationId: BlockoutReferenceImplementationId,
 ): THREE.Group {
@@ -176,7 +212,7 @@ function validateCapabilities(capabilities: ThreeReferenceRuntimePoseCapabilitie
   for (const declaration of capabilities.joints) {
     const layout = JOINT_LAYOUT.find(([jointId]) => jointId === declaration.jointId);
     if (!layout) throw new Error(`Unknown declared mannequin joint: ${declaration.jointId}`);
-    if (declaration.parentJointId !== undefined && declaration.parentJointId !== layout[1]) {
+    if (declaration.parentJointId !== layout[1]) {
       throw new Error(`3D Reference mannequin hierarchy mismatch: ${declaration.jointId}`);
     }
   }

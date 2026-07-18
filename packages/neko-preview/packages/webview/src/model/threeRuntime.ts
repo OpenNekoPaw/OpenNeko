@@ -15,6 +15,7 @@ import type {
   NormalizedModelFacts,
   ThreeReferencePanoramaOrientation,
   ThreeReferencePanelSubject,
+  ThreeReferencePoseControlMode,
   ThreeReferencePoseState,
   ThreeReferencePurpose,
   ThreeReferenceRuntimePoseCapabilities,
@@ -22,6 +23,7 @@ import type {
 import {
   applyDeclaredMannequinPose,
   createBlockoutReferencePreset,
+  createMannequinSkeletonOverlay,
   createNeutralMannequin,
   type BlockoutReferenceImplementationId,
   type NeutralMannequinRuntime,
@@ -67,7 +69,11 @@ export interface ThreeModelRuntimePort {
     readonly orientation: ThreeReferencePanoramaOrientation;
   }): Promise<void>;
   clearPanoramaEnvironment(): void;
-  capturePurpose(purpose: ThreeReferencePurpose, settings: ModelPreviewCaptureSettings): string;
+  capturePurpose(
+    purpose: ThreeReferencePurpose,
+    settings: ModelPreviewCaptureSettings,
+    options?: { readonly poseControlMode?: ThreeReferencePoseControlMode },
+  ): string;
   applyStaging(staging: ModelPreviewStagingState): void;
   getNodes(): readonly ModelPreviewNode[];
   setTransformMode(mode: 'translate' | 'rotate' | 'scale'): void;
@@ -464,7 +470,11 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.requestRender();
   }
 
-  capturePurpose(purpose: ThreeReferencePurpose, settings: ModelPreviewCaptureSettings): string {
+  capturePurpose(
+    purpose: ThreeReferencePurpose,
+    settings: ModelPreviewCaptureSettings,
+    options: { readonly poseControlMode?: ThreeReferencePoseControlMode } = {},
+  ): string {
     this.assertLive();
     assertPurposeCaptureAllowed({
       purpose,
@@ -472,7 +482,12 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       hasPoseRuntime: this.mannequin !== undefined,
       hasPanorama: this.panoramaTexture !== undefined,
     });
-    return this.capture(settings);
+    const restore = this.preparePurposeRenderPass(purpose, options.poseControlMode);
+    try {
+      return this.capture(settings);
+    } finally {
+      restore();
+    }
   }
 
   applyStaging(staging: ModelPreviewStagingState): void {
@@ -819,6 +834,46 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     if (this.scene.environment === this.panoramaTexture) this.scene.environment = null;
     this.panoramaTexture.dispose();
     this.panoramaTexture = undefined;
+  }
+
+  private preparePurposeRenderPass(
+    purpose: ThreeReferencePurpose,
+    poseControlMode: ThreeReferencePoseControlMode | undefined,
+  ): () => void {
+    const transformWasVisible = this.transformHelper.visible;
+    this.transformHelper.visible = false;
+    if (purpose !== 'pose') {
+      return () => {
+        this.transformHelper.visible = transformWasVisible;
+      };
+    }
+    if (!this.mannequin) {
+      this.transformHelper.visible = transformWasVisible;
+      throw new Error('Pose render pass requires an articulated 3D Reference subject.');
+    }
+    const mannequinRoot = this.mannequin.root;
+    if (poseControlMode === 'depth') {
+      const previousOverride = this.scene.overrideMaterial;
+      const depthMaterial = new THREE.MeshDepthMaterial({
+        depthPacking: THREE.BasicDepthPacking,
+      });
+      this.scene.overrideMaterial = depthMaterial;
+      return () => {
+        this.scene.overrideMaterial = previousOverride;
+        depthMaterial.dispose();
+        this.transformHelper.visible = transformWasVisible;
+      };
+    }
+    const modelWasVisible = mannequinRoot.visible;
+    const skeleton = createMannequinSkeletonOverlay(this.mannequin);
+    mannequinRoot.visible = false;
+    this.scene.add(skeleton);
+    return () => {
+      this.scene.remove(skeleton);
+      disposeObjectTree(skeleton);
+      mannequinRoot.visible = modelWasVisible;
+      this.transformHelper.visible = transformWasVisible;
+    };
   }
 
   private assertLive(): void {

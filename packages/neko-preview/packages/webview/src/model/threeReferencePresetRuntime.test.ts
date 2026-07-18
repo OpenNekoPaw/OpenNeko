@@ -4,6 +4,7 @@ import { disposeObjectTree } from './threeRuntime';
 import {
   applyDeclaredMannequinPose,
   createBlockoutReferencePreset,
+  createMannequinSkeletonOverlay,
   createNeutralMannequin,
 } from './threeReferencePresetRuntime';
 
@@ -47,6 +48,22 @@ describe('neutral 3D Reference mannequin runtime', () => {
         joints: [{ jointId: 'leftElbow', rotation: { x: 9, y: 0, z: 0, order: 'XYZ' } }],
       }),
     ).toThrow(/constraint/i);
+  });
+
+  it('projects only declared joints and parent links into the pose render overlay', () => {
+    const mannequin = createNeutralMannequin(poseCapabilities());
+    const overlay = createMannequinSkeletonOverlay(mannequin);
+    const lines = overlay.children.find((child) => child instanceof THREE.LineSegments);
+    const points = overlay.children.find((child) => child instanceof THREE.Points);
+    expect(lines).toBeInstanceOf(THREE.LineSegments);
+    expect(points).toBeInstanceOf(THREE.Points);
+    if (!(lines instanceof THREE.LineSegments) || !(points instanceof THREE.Points)) {
+      throw new Error('Pose overlay omitted declared line or point geometry.');
+    }
+    expect(lines.geometry.getAttribute('position').count).toBe(30);
+    expect(points.geometry.getAttribute('position').count).toBe(16);
+    disposeObjectTree(overlay);
+    disposeObjectTree(mannequin.root);
   });
 
   it('recursively disposes every mannequin geometry and shared material exactly once', () => {
@@ -95,28 +112,29 @@ describe('neutral 3D Reference mannequin runtime', () => {
 });
 
 function poseCapabilities() {
-  const ids = [
-    'hips',
-    'spine',
-    'chest',
-    'head',
-    'leftShoulder',
-    'leftElbow',
-    'leftWrist',
-    'rightShoulder',
-    'rightElbow',
-    'rightWrist',
-    'leftHip',
-    'leftKnee',
-    'leftAnkle',
-    'rightHip',
-    'rightKnee',
-    'rightAnkle',
-  ];
+  const hierarchy = [
+    ['hips', undefined],
+    ['spine', 'hips'],
+    ['chest', 'spine'],
+    ['head', 'chest'],
+    ['leftShoulder', 'chest'],
+    ['leftElbow', 'leftShoulder'],
+    ['leftWrist', 'leftElbow'],
+    ['rightShoulder', 'chest'],
+    ['rightElbow', 'rightShoulder'],
+    ['rightWrist', 'rightElbow'],
+    ['leftHip', 'hips'],
+    ['leftKnee', 'leftHip'],
+    ['leftAnkle', 'leftKnee'],
+    ['rightHip', 'hips'],
+    ['rightKnee', 'rightHip'],
+    ['rightAnkle', 'rightKnee'],
+  ] as const;
   return {
     posePresetIds: ['standing'],
-    joints: ids.map((jointId) => ({
+    joints: hierarchy.map(([jointId, parentJointId]) => ({
       jointId,
+      ...(parentJointId ? { parentJointId } : {}),
       rotationConstraint: {
         min: { x: -1, y: -1, z: -1 },
         max: { x: 1, y: 1, z: 1 },

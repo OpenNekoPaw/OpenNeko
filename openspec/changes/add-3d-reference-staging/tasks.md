@@ -25,7 +25,7 @@
 
 - [x] 4.1 Extend the fakeable Three runtime port with declared preset load, pose capability/constraints, pose preset and joint operations, panorama environment projection, purpose render passes, and exact disposal contracts.
 - [x] 4.2 Implement the neutral mannequin and blockout runtime without detailed appearance cues; validate catalog-declared joints, hierarchy, constraints, landmarks, and compatible pose presets rather than guessing node semantics.
-- [ ] 4.3 Implement bounded pose/skeleton and supported depth control render passes that exclude toolbar, grid, XYZ, camera helper, labels, and other editor chrome unless explicitly required by that output contract.
+- [x] 4.3 Implement bounded pose/skeleton and supported depth control render passes that exclude toolbar, grid, XYZ, camera helper, labels, and other editor chrome unless explicitly required by that output contract.
 - [ ] 4.4 Implement panorama texture/orientation staging with authorized local resources, bounded MIME/size handling, untainted capture, renderer-loss diagnostics, and recursive texture/GPU disposal.
 - [ ] 4.5 Preserve current camera front/reset, orbit, grid, XYZ, light, material, depth, and source-model correctness; use only external `~/Git/neko-test/test.glb` for manual real-model acceptance and never copy that model into the repository.
 

@@ -62,6 +62,8 @@ export interface ThreeReferencePoseState {
   readonly joints: readonly ThreeReferenceJointPose[];
 }
 
+export type ThreeReferencePoseControlMode = 'pose' | 'depth';
+
 export interface ThreeReferenceCamera {
   readonly cameraId: string;
   readonly position: ThreeReferenceVector3;
@@ -161,7 +163,7 @@ export type ThreeReferenceOutput =
   | (ThreeReferenceOutputIdentity & {
       readonly kind: 'pose';
       readonly controlImage: ResourceRef;
-      readonly controlMode: 'pose' | 'depth';
+      readonly controlMode: ThreeReferencePoseControlMode;
       readonly joints: readonly ThreeReferenceJointPose[];
     })
   | (ThreeReferenceOutputIdentity & {
