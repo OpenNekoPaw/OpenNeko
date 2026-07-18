@@ -20,7 +20,6 @@ import {
 describe('Three model runtime helpers', () => {
   it('resolves only exact authorized URLs and rejects network or undeclared probes', () => {
     const resolve = createExactUrlModifier({
-      protocolVersion: 1,
       source: createResourceRef({
         scope: 'project',
         provider: 'test',

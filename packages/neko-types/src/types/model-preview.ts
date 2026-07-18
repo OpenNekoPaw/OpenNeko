@@ -1,6 +1,5 @@
 import type { ResourceRef } from './resource-cache.js';
 
-export const MODEL_PREVIEW_PROTOCOL_VERSION = 1 as const;
 export const MODEL_PREVIEW_STAGING_SCHEMA_VERSION = 3 as const;
 
 export const MODEL_PREVIEW_FORMATS = ['glb', 'gltf', 'obj', 'stl', 'ply'] as const;
@@ -89,7 +88,6 @@ export interface NormalizedModelFacts {
 }
 
 export interface ModelPreviewSourceDescriptor {
-  readonly protocolVersion: typeof MODEL_PREVIEW_PROTOCOL_VERSION;
   readonly source: ResourceRef;
   readonly sourceFingerprint: string;
   readonly format: ModelPreviewFormat;
@@ -124,37 +122,6 @@ export interface ModelPreviewDiagnostic {
   readonly identity?: Partial<ModelPreviewIdentity>;
   readonly detail?: string;
 }
-
-export type ModelPreviewExtensionMessage =
-  | {
-      readonly type: 'model-preview/load';
-      readonly source: ModelPreviewSourceDescriptor;
-      readonly staging: ModelPreviewStagingState;
-    }
-  | {
-      readonly type: 'model-preview/diagnostic';
-      readonly diagnostic: ModelPreviewDiagnostic;
-    };
-
-export type ModelPreviewWebviewMessage =
-  | {
-      readonly type: 'model-preview/ready';
-      readonly protocolVersion: typeof MODEL_PREVIEW_PROTOCOL_VERSION;
-      readonly sessionId: string;
-    }
-  | {
-      readonly type: 'model-preview/load-completed';
-      readonly identity: ModelPreviewIdentity;
-      readonly facts: NormalizedModelFacts;
-    }
-  | {
-      readonly type: 'model-preview/state-changed';
-      readonly staging: ModelPreviewStagingState;
-    }
-  | {
-      readonly type: 'model-preview/diagnostic';
-      readonly diagnostic: ModelPreviewDiagnostic;
-    };
 
 export function isModelPreviewFormat(value: unknown): value is ModelPreviewFormat {
   return typeof value === 'string' && MODEL_PREVIEW_FORMATS.some((format) => format === value);

@@ -1,7 +1,12 @@
-import { isModelPreviewFormat, type ModelPreviewFormat } from './model-preview.js';
+import {
+  isModelPreviewFormat,
+  type ModelPreviewFormat,
+  type NormalizedModelFacts,
+} from './model-preview.js';
 import { isResourceRef, type ResourceRef } from './resource-cache.js';
 
 export const THREE_REFERENCE_CONTEXT_VERSION = 1 as const;
+export const THREE_REFERENCE_PROTOCOL_VERSION = 1 as const;
 export const THREE_REFERENCE_STAGING_SCHEMA_VERSION = 1 as const;
 
 export const THREE_REFERENCE_PURPOSES = ['appearance', 'pose', 'camera', 'panorama-scene'] as const;
@@ -77,6 +82,30 @@ export interface ThreeReferenceEnvironment {
   readonly orientation: ThreeReferencePanoramaOrientation;
 }
 
+export interface ThreeReferenceSourceRuntimeDescriptor {
+  readonly source: ResourceRef;
+  readonly fingerprint: string;
+  readonly format: ModelPreviewFormat;
+  readonly entryUri: string;
+  readonly uriMap: Readonly<Record<string, string>>;
+  readonly sizeBytes: number;
+}
+
+export type ThreeReferencePanelSubject =
+  | {
+      readonly kind: 'source-model';
+      readonly subject: Extract<ThreeReferenceSubject, { readonly kind: 'source-model' }>;
+      readonly runtime: ThreeReferenceSourceRuntimeDescriptor;
+    }
+  | {
+      readonly kind: 'builtin-preset';
+      readonly subject: Extract<ThreeReferenceSubject, { readonly kind: 'builtin-preset' }>;
+    }
+  | {
+      readonly kind: 'environment-only';
+      readonly subject: Extract<ThreeReferenceSubject, { readonly kind: 'environment-only' }>;
+    };
+
 export interface ThreeReferenceStagingSnapshot extends ThreeReferenceIdentity {
   readonly schemaVersion: typeof THREE_REFERENCE_STAGING_SCHEMA_VERSION;
   readonly subject: ThreeReferenceSubject;
@@ -118,6 +147,50 @@ export interface ThreeReferenceContextData {
   readonly outputs: readonly ThreeReferenceOutput[];
 }
 
+export type ThreeReferenceExtensionMessage =
+  | {
+      readonly type: '3d-reference/session-init';
+      readonly protocolVersion: typeof THREE_REFERENCE_PROTOCOL_VERSION;
+      readonly panelSubject: ThreeReferencePanelSubject;
+      readonly eligiblePurposes: readonly ThreeReferencePurpose[];
+      readonly staging: ThreeReferenceStagingSnapshot;
+    }
+  | {
+      readonly type: '3d-reference/diagnostic';
+      readonly diagnostic: ThreeReferenceDiagnostic;
+    }
+  | {
+      readonly type: '3d-reference/cancel';
+      readonly identity: ThreeReferenceIdentity;
+      readonly reason: string;
+    };
+
+export type ThreeReferenceWebviewMessage =
+  | {
+      readonly type: '3d-reference/ready';
+      readonly protocolVersion: typeof THREE_REFERENCE_PROTOCOL_VERSION;
+      readonly sessionId: string;
+    }
+  | {
+      readonly type: '3d-reference/load-completed';
+      readonly identity: ThreeReferenceIdentity;
+      readonly facts?: NormalizedModelFacts;
+    }
+  | {
+      readonly type: '3d-reference/staging-changed';
+      readonly staging: ThreeReferenceStagingSnapshot;
+    }
+  | {
+      readonly type: '3d-reference/capture-requested';
+      readonly requestId: string;
+      readonly identity: ThreeReferenceIdentity;
+      readonly purpose: ThreeReferencePurpose;
+    }
+  | {
+      readonly type: '3d-reference/diagnostic';
+      readonly diagnostic: ThreeReferenceDiagnostic;
+    };
+
 export const THREE_REFERENCE_DIAGNOSTIC_CODES = [
   'contract-version-unsupported',
   'staging-version-unsupported',
@@ -129,6 +202,16 @@ export const THREE_REFERENCE_DIAGNOSTIC_CODES = [
   'purpose-role-violation',
   'output-invalid',
   'resource-invalid',
+  'source-missing',
+  'source-unauthorized',
+  'source-unsupported',
+  'source-load-failed',
+  'panorama-load-failed',
+  'protocol-mismatch',
+  'renderer-unavailable',
+  'renderer-lost',
+  'cancelled',
+  'disposed',
 ] as const;
 export type ThreeReferenceDiagnosticCode = (typeof THREE_REFERENCE_DIAGNOSTIC_CODES)[number];
 
@@ -142,6 +225,45 @@ export interface ThreeReferenceDiagnostic {
 
 export function isThreeReferencePurpose(value: unknown): value is ThreeReferencePurpose {
   return THREE_REFERENCE_PURPOSES.some((purpose) => purpose === value);
+}
+
+export function isThreeReferenceIdentity(value: unknown): value is ThreeReferenceIdentity {
+  return isRecord(value) && isIdentityFields(value);
+}
+
+export function isThreeReferenceSourceRuntimeDescriptor(
+  value: unknown,
+): value is ThreeReferenceSourceRuntimeDescriptor {
+  return (
+    isRecord(value) &&
+    isResourceRef(value['source']) &&
+    isNonEmptyString(value['fingerprint']) &&
+    isModelPreviewFormat(value['format']) &&
+    isNonEmptyString(value['entryUri']) &&
+    isStringRecord(value['uriMap']) &&
+    isNonNegativeInteger(value['sizeBytes'])
+  );
+}
+
+export function isThreeReferencePanelSubject(value: unknown): value is ThreeReferencePanelSubject {
+  if (!isRecord(value) || !isThreeReferenceSubject(value['subject'])) return false;
+  if (value['kind'] !== value['subject'].kind) return false;
+  switch (value['kind']) {
+    case 'source-model':
+      return (
+        value['subject'].kind === 'source-model' &&
+        isThreeReferenceSourceRuntimeDescriptor(value['runtime']) &&
+        value['runtime'].source.id === value['subject'].source.id &&
+        value['runtime'].fingerprint === value['subject'].fingerprint &&
+        value['runtime'].format === value['subject'].format
+      );
+    case 'builtin-preset':
+      return value['subject'].kind === 'builtin-preset' && value['runtime'] === undefined;
+    case 'environment-only':
+      return value['subject'].kind === 'environment-only' && value['runtime'] === undefined;
+    default:
+      return false;
+  }
 }
 
 export function isThreeReferenceDiagnostic(value: unknown): value is ThreeReferenceDiagnostic {
@@ -185,7 +307,7 @@ export function isThreeReferenceStagingSnapshot(
   if (
     !isRecord(value) ||
     value['schemaVersion'] !== THREE_REFERENCE_STAGING_SCHEMA_VERSION ||
-    !isThreeReferenceIdentity(value) ||
+    !isIdentityFields(value) ||
     !isThreeReferenceSubject(value['subject']) ||
     !isArrayOf(value['selectedPurposes'], isThreeReferencePurpose) ||
     value['selectedPurposes'].length === 0 ||
@@ -230,7 +352,7 @@ export function isThreeReferenceSubject(value: unknown): value is ThreeReference
 }
 
 export function isThreeReferenceOutput(value: unknown): value is ThreeReferenceOutput {
-  if (!isRecord(value) || !isThreeReferenceIdentity(value)) return false;
+  if (!isRecord(value) || !isIdentityFields(value)) return false;
   switch (value['kind']) {
     case 'appearance':
       return isResourceRef(value['image']) && isResourceRef(value['source']);
@@ -275,8 +397,12 @@ function isThreeReferencePresetIdentity(value: Record<string, unknown>): boolean
   );
 }
 
-function isThreeReferenceIdentity(value: Record<string, unknown>): boolean {
+function isIdentityFields(value: Record<string, unknown>): boolean {
   return isNonEmptyString(value['sessionId']) && isNonNegativeInteger(value['revision']);
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((item) => typeof item === 'string');
 }
 
 function isPartialThreeReferenceIdentity(value: unknown): boolean {

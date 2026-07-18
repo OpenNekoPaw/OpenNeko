@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createResourceFingerprint,
   createResourceRef,
-  MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
+  THREE_REFERENCE_PROTOCOL_VERSION,
+  THREE_REFERENCE_STAGING_SCHEMA_VERSION,
 } from '@neko/shared';
 import { installMockWebviewWindow } from '@neko/shared/vscode/test-utils';
 import { I18nProvider } from '../i18n/I18nContext';
@@ -68,20 +69,27 @@ describe('ModelViewer', () => {
       );
     });
     expect(mockWindow.api.postedMessages[0]).toEqual({
-      type: 'model-preview/ready',
-      protocolVersion: 1,
+      type: '3d-reference/ready',
+      protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
       sessionId: 'session-1',
     });
 
     const load = loadMessage();
-    const sourceSnapshot = JSON.stringify(load.source);
+    const sourceSnapshot = JSON.stringify(load.panelSubject);
     await act(async () => {
       window.dispatchEvent(new MessageEvent('message', { data: load }));
       await Promise.resolve();
     });
-    expect(runtime.load).toHaveBeenCalledWith(load.source);
-    expect(runtime.applyStaging).toHaveBeenCalledWith(load.staging);
-    expect(JSON.stringify(load.source)).toBe(sourceSnapshot);
+    expect(runtime.load).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceFingerprint: 'fingerprint-1',
+        entryUri: 'webview:model.glb',
+      }),
+    );
+    expect(runtime.applyStaging).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'session-1', sourceFingerprint: 'fingerprint-1' }),
+    );
+    expect(JSON.stringify(load.panelSubject)).toBe(sourceSnapshot);
     expect(container.querySelector('[data-testid="model-preview-ready"]')).toMatchObject({
       dataset: expect.objectContaining({
         viewerStatus: 'ready',
@@ -159,8 +167,8 @@ describe('ModelViewer', () => {
 
     expect(mockWindow.api.postedMessages).toContainEqual(
       expect.objectContaining({
-        type: 'model-preview/load-completed',
-        identity: { sessionId: 'session-1', sourceFingerprint: 'fingerprint-1', revision: 0 },
+        type: '3d-reference/load-completed',
+        identity: { sessionId: 'session-1', revision: 0 },
       }),
     );
 
@@ -450,49 +458,52 @@ function fakeRuntime() {
 }
 
 function loadMessage() {
+  const source = createResourceRef({
+    scope: 'project',
+    provider: 'test',
+    kind: 'media',
+    source: { kind: 'file', projectRelativePath: 'model.glb' },
+    fingerprint: createResourceFingerprint({ strategy: 'hash', value: 'fingerprint-1' }),
+  });
   return {
-    type: 'model-preview/load' as const,
-    source: {
-      protocolVersion: 1 as const,
-      source: createResourceRef({
-        scope: 'project',
-        provider: 'test',
-        kind: 'media',
-        source: { kind: 'file', projectRelativePath: 'model.glb' },
-        fingerprint: createResourceFingerprint({ strategy: 'hash', value: 'fingerprint-1' }),
-      }),
-      sourceFingerprint: 'fingerprint-1',
-      format: 'glb' as const,
-      entryUri: 'webview:model.glb',
-      uriMap: { 'model.glb': 'webview:model.glb' },
-      sizeBytes: 12,
-    },
-    staging: {
-      schemaVersion: MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
-      sessionId: 'session-1',
-      sourceFingerprint: 'fingerprint-1',
-      revision: 0,
-      transformPatches: [],
-      cameraPresets: [
-        {
-          id: 'camera-default',
-          label: 'Default',
-          position: { x: 3, y: 2, z: 3 },
-          target: { x: 0, y: 0, z: 0 },
-          fieldOfViewDeg: 45,
-        },
-      ],
-      activeCameraId: 'camera-default',
-      lightRig: {
-        environmentIntensity: 1,
-        lights: [
-          { id: 'key' as const, color: '#fff', intensity: 3, position: { x: 1, y: 2, z: 3 } },
-          { id: 'fill' as const, color: '#fff', intensity: 1, position: { x: -1, y: 1, z: 2 } },
-          { id: 'rim' as const, color: '#fff', intensity: 2, position: { x: 0, y: 2, z: -2 } },
-        ],
+    type: '3d-reference/session-init' as const,
+    protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
+    panelSubject: {
+      kind: 'source-model' as const,
+      subject: {
+        kind: 'source-model' as const,
+        source,
+        fingerprint: 'fingerprint-1',
+        format: 'glb' as const,
       },
-      background: '#f5f6f8',
-      capture: { width: 1024, height: 1024 },
+      runtime: {
+        source,
+        fingerprint: 'fingerprint-1',
+        format: 'glb' as const,
+        entryUri: 'webview:model.glb',
+        uriMap: { 'model.glb': 'webview:model.glb' },
+        sizeBytes: 12,
+      },
+    },
+    eligiblePurposes: ['appearance', 'camera'] as const,
+    staging: {
+      schemaVersion: THREE_REFERENCE_STAGING_SCHEMA_VERSION,
+      sessionId: 'session-1',
+      revision: 0,
+      subject: {
+        kind: 'source-model' as const,
+        source,
+        fingerprint: 'fingerprint-1',
+        format: 'glb' as const,
+      },
+      selectedPurposes: ['appearance', 'camera'] as const,
+      camera: {
+        cameraId: 'camera-default',
+        position: { x: 3, y: 2, z: 3 },
+        target: { x: 0, y: 0, z: 0 },
+        fieldOfViewDeg: 45,
+        aspectRatio: 1,
+      },
     },
   };
 }

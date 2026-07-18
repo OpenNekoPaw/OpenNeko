@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  isModelPreviewStagingState,
-  isResourceRef,
+  THREE_REFERENCE_PROTOCOL_VERSION,
+  isThreeReferenceDiagnostic,
+  isThreeReferencePanelSubject,
+  isThreeReferencePurpose,
+  isThreeReferenceStagingSnapshot,
   type ModelPreviewDiagnostic,
-  type ModelPreviewExtensionMessage,
-  type ModelPreviewIdentity,
   type ModelPreviewSourceDescriptor,
   type ModelPreviewStagingState,
   type NormalizedModelFacts,
+  type ThreeReferenceExtensionMessage,
+  type ThreeReferencePanelSubject,
+  type ThreeReferenceStagingSnapshot,
 } from '@neko/shared';
 import { useTranslation } from '../i18n/I18nContext';
 import { getVscodeApi } from '../shared/vscodeApi';
@@ -51,6 +55,7 @@ export function ModelViewer({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const runtimeRef = useRef<ThreeModelRuntimePort | undefined>(undefined);
   const stagingRef = useRef<ModelPreviewStagingState | undefined>(undefined);
+  const referenceStagingRef = useRef<ThreeReferenceStagingSnapshot | undefined>(undefined);
   const [status, setStatus] = useState<ViewerStatus>('waiting');
   const [staging, setStaging] = useState<ModelPreviewStagingState>();
   const [facts, setFacts] = useState<NormalizedModelFacts>();
@@ -102,7 +107,9 @@ export function ModelViewer({
           if (!current) return current;
           const next = patchModelTransform(current, nodePath, transform);
           stagingRef.current = next;
-          postState(vscode, next);
+          const referenceStaging = referenceStagingRef.current;
+          if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
+          referenceStagingRef.current = postState(vscode, next, referenceStaging);
           return next;
         });
       },
@@ -135,12 +142,13 @@ export function ModelViewer({
         setSceneSelection,
         setDiagnostic,
         stagingRef,
+        referenceStagingRef,
       });
     };
     window.addEventListener('message', onMessage);
     vscode.postMessage({
-      type: 'model-preview/ready',
-      protocolVersion: 1,
+      type: '3d-reference/ready',
+      protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
       sessionId,
     });
     return () => {
@@ -154,7 +162,9 @@ export function ModelViewer({
   const updateStaging = (next: ModelPreviewStagingState) => {
     stagingRef.current = next;
     setStaging(next);
-    postState(vscode, next);
+    const referenceStaging = referenceStagingRef.current;
+    if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
+    referenceStagingRef.current = postState(vscode, next, referenceStaging);
   };
   const controlsDisabled = !staging || status !== 'ready';
   const duplicateCamera = (cameraId: string): void => {
@@ -299,49 +309,67 @@ export function ModelViewer({
 }
 
 async function handleExtensionMessage(input: {
-  readonly message: ModelPreviewExtensionMessage;
+  readonly message: ThreeReferenceExtensionMessage;
   readonly runtime: ThreeModelRuntimePort;
   readonly sessionId: string;
   readonly vscode: ReturnType<typeof getVscodeApi>;
   readonly setStatus: (status: ViewerStatus) => void;
   readonly setStaging: (state: ModelPreviewStagingState) => void;
-  readonly setFacts: (facts: NormalizedModelFacts) => void;
+  readonly setFacts: (facts: NormalizedModelFacts | undefined) => void;
   readonly setNodes: (nodes: readonly ModelPreviewNode[]) => void;
   readonly setSceneSelection: (selection: ModelSceneSelection) => void;
   readonly setDiagnostic: (diagnostic: ModelPreviewDiagnostic | undefined) => void;
   readonly stagingRef: React.MutableRefObject<ModelPreviewStagingState | undefined>;
+  readonly referenceStagingRef: React.MutableRefObject<ThreeReferenceStagingSnapshot | undefined>;
 }): Promise<void> {
   const { message } = input;
   try {
     switch (message.type) {
-      case 'model-preview/load': {
+      case '3d-reference/session-init': {
         if (message.staging.sessionId !== input.sessionId) {
-          throw new Error('Model Preview load identity does not match this Webview.');
+          throw new Error('3D Reference session identity does not match this Webview.');
         }
         input.setStatus('loading');
         input.setDiagnostic(undefined);
         input.setSceneSelection({ kind: 'scene' });
-        input.stagingRef.current = message.staging;
-        input.setStaging(message.staging);
-        const facts = await input.runtime.load(message.source);
-        input.runtime.applyStaging(message.staging);
-        input.setFacts(facts);
-        input.setNodes(input.runtime.getNodes());
+        input.referenceStagingRef.current = message.staging;
+        const viewportStaging = toViewportStaging(message.staging);
+        input.stagingRef.current = viewportStaging;
+        input.setStaging(viewportStaging);
+        let facts: NormalizedModelFacts | undefined;
+        if (message.panelSubject.kind === 'source-model') {
+          facts = await input.runtime.load(toModelSourceDescriptor(message.panelSubject));
+          input.runtime.applyStaging(viewportStaging);
+          input.setFacts(facts);
+          input.setNodes(input.runtime.getNodes());
+        } else {
+          input.setFacts(undefined);
+          input.setNodes([]);
+        }
         input.setStatus('ready');
         input.vscode.postMessage({
-          type: 'model-preview/load-completed',
-          identity: identityOf(message.staging),
-          facts,
+          type: '3d-reference/load-completed',
+          identity: referenceIdentityOf(message.staging),
+          ...(facts ? { facts } : {}),
         });
         break;
       }
-      case 'model-preview/diagnostic':
-        input.setDiagnostic(message.diagnostic);
+      case '3d-reference/diagnostic':
+        input.setDiagnostic(toModelDiagnostic(message.diagnostic));
         if (message.diagnostic.severity === 'error') {
           if (isViewerFatalDiagnostic(message.diagnostic.code)) {
             input.setStatus('error');
           }
         }
+        break;
+      case '3d-reference/cancel':
+        if (message.identity.sessionId !== input.sessionId) return;
+        input.setStatus('error');
+        input.setDiagnostic({
+          code: 'disposed',
+          message: message.reason,
+          severity: 'error',
+        });
         break;
     }
   } catch (error) {
@@ -350,103 +378,197 @@ async function handleExtensionMessage(input: {
       message: error instanceof Error ? error.message : String(error),
       severity: 'error',
       identity: input.stagingRef.current
-        ? identityOf(input.stagingRef.current)
+        ? {
+            sessionId: input.sessionId,
+            revision: input.referenceStagingRef.current?.revision ?? 0,
+          }
         : { sessionId: input.sessionId },
     };
     input.setDiagnostic(diagnostic);
     if (isViewerFatalDiagnostic(diagnostic.code)) {
       input.setStatus('error');
     }
-    input.vscode.postMessage({ type: 'model-preview/diagnostic', diagnostic });
+    input.vscode.postMessage({
+      type: '3d-reference/diagnostic',
+      diagnostic: {
+        code: 'source-load-failed',
+        message: diagnostic.message,
+        severity: 'error',
+        ...(diagnostic.identity
+          ? {
+              identity: {
+                ...(diagnostic.identity.sessionId
+                  ? { sessionId: diagnostic.identity.sessionId }
+                  : {}),
+                ...(diagnostic.identity.revision === undefined
+                  ? {}
+                  : { revision: diagnostic.identity.revision }),
+              },
+            }
+          : {}),
+      },
+    });
   }
 }
 
-function isViewerFatalDiagnostic(code: ModelPreviewDiagnostic['code']): boolean {
+function isViewerFatalDiagnostic(code: string): boolean {
   switch (code) {
     case 'stale-revision':
       return false;
-    case 'unsupported-format':
-    case 'source-missing':
-    case 'source-unauthorized':
-    case 'source-too-large':
-    case 'mime-mismatch':
-    case 'unsafe-dependency':
-    case 'missing-dependency':
-    case 'dependency-limit-exceeded':
-    case 'protocol-mismatch':
-    case 'session-mismatch':
-    case 'stale-state':
-    case 'load-failed':
-    case 'empty-model':
-    case 'renderer-unavailable':
-    case 'renderer-lost':
-    case 'disposed':
+    default:
       return true;
   }
 }
 
-function postState(
-  vscode: ReturnType<typeof getVscodeApi>,
-  staging: ModelPreviewStagingState,
-): void {
-  vscode.setState({ modelPreviewStaging: staging });
-  vscode.postMessage({ type: 'model-preview/state-changed', staging });
+function toModelDiagnostic(
+  diagnostic: Extract<
+    ThreeReferenceExtensionMessage,
+    { type: '3d-reference/diagnostic' }
+  >['diagnostic'],
+): ModelPreviewDiagnostic {
+  return {
+    code:
+      diagnostic.code === 'stale-revision'
+        ? 'stale-revision'
+        : diagnostic.code === 'renderer-lost'
+          ? 'renderer-lost'
+          : diagnostic.code === 'renderer-unavailable'
+            ? 'renderer-unavailable'
+            : 'load-failed',
+    message: diagnostic.message,
+    severity: diagnostic.severity,
+    identity: diagnostic.identity,
+  };
 }
 
-function identityOf(staging: ModelPreviewStagingState): ModelPreviewIdentity {
+function postState(
+  vscode: ReturnType<typeof getVscodeApi>,
+  viewportStaging: ModelPreviewStagingState,
+  staging: ThreeReferenceStagingSnapshot,
+): ThreeReferenceStagingSnapshot {
+  const activeCamera = viewportStaging.cameraPresets.find(
+    (camera) => camera.id === viewportStaging.activeCameraId,
+  );
+  if (!activeCamera) throw new Error('3D Reference active camera is unavailable.');
+  const next: ThreeReferenceStagingSnapshot = {
+    ...staging,
+    revision: staging.revision + 1,
+    camera: {
+      cameraId: activeCamera.id,
+      position: activeCamera.position,
+      target: activeCamera.target,
+      fieldOfViewDeg: activeCamera.fieldOfViewDeg,
+      aspectRatio: staging.camera.aspectRatio,
+    },
+  };
+  vscode.setState({ threeReferenceStaging: next });
+  vscode.postMessage({ type: '3d-reference/staging-changed', staging: next });
+  return next;
+}
+
+function referenceIdentityOf(staging: ThreeReferenceStagingSnapshot) {
   return {
     sessionId: staging.sessionId,
-    sourceFingerprint: staging.sourceFingerprint,
     revision: staging.revision,
   };
 }
 
-function parseExtensionMessage(value: unknown): ModelPreviewExtensionMessage | undefined {
+function parseExtensionMessage(value: unknown): ThreeReferenceExtensionMessage | undefined {
   if (!isRecord(value) || typeof value['type'] !== 'string') return undefined;
   switch (value['type']) {
-    case 'model-preview/load':
-      return isSourceDescriptor(value['source']) && isModelPreviewStagingState(value['staging'])
-        ? { type: 'model-preview/load', source: value['source'], staging: value['staging'] }
+    case '3d-reference/session-init':
+      return value['protocolVersion'] === THREE_REFERENCE_PROTOCOL_VERSION &&
+        isThreeReferencePanelSubject(value['panelSubject']) &&
+        Array.isArray(value['eligiblePurposes']) &&
+        value['eligiblePurposes'].every(isThreeReferencePurpose) &&
+        isThreeReferenceStagingSnapshot(value['staging'])
+        ? {
+            type: '3d-reference/session-init',
+            protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
+            panelSubject: value['panelSubject'],
+            eligiblePurposes: value['eligiblePurposes'],
+            staging: value['staging'],
+          }
         : undefined;
-    case 'model-preview/diagnostic':
-      return isDiagnostic(value['diagnostic'])
-        ? { type: 'model-preview/diagnostic', diagnostic: value['diagnostic'] }
+    case '3d-reference/diagnostic':
+      return isThreeReferenceDiagnostic(value['diagnostic'])
+        ? { type: '3d-reference/diagnostic', diagnostic: value['diagnostic'] }
         : undefined;
+    case '3d-reference/cancel': {
+      const revision = isRecord(value['identity']) ? value['identity']['revision'] : undefined;
+      return isRecord(value['identity']) &&
+        typeof value['identity']['sessionId'] === 'string' &&
+        typeof revision === 'number' &&
+        Number.isInteger(revision) &&
+        typeof value['reason'] === 'string'
+        ? {
+            type: '3d-reference/cancel',
+            identity: {
+              sessionId: value['identity']['sessionId'],
+              revision,
+            },
+            reason: value['reason'],
+          }
+        : undefined;
+    }
     default:
       return undefined;
   }
 }
 
-function isSourceDescriptor(value: unknown): value is ModelPreviewSourceDescriptor {
-  if (!isRecord(value)) return false;
-  return (
-    value['protocolVersion'] === 1 &&
-    isResourceRef(value['source']) &&
-    typeof value['sourceFingerprint'] === 'string' &&
-    (value['format'] === 'glb' ||
-      value['format'] === 'gltf' ||
-      value['format'] === 'obj' ||
-      value['format'] === 'stl' ||
-      value['format'] === 'ply') &&
-    typeof value['entryUri'] === 'string' &&
-    isStringRecord(value['uriMap']) &&
-    typeof value['sizeBytes'] === 'number'
-  );
+function toModelSourceDescriptor(
+  panelSubject: Extract<ThreeReferencePanelSubject, { kind: 'source-model' }>,
+): ModelPreviewSourceDescriptor {
+  return {
+    source: panelSubject.runtime.source,
+    sourceFingerprint: panelSubject.runtime.fingerprint,
+    format: panelSubject.runtime.format,
+    entryUri: panelSubject.runtime.entryUri,
+    uriMap: panelSubject.runtime.uriMap,
+    sizeBytes: panelSubject.runtime.sizeBytes,
+  };
 }
 
-function isDiagnostic(value: unknown): value is ModelPreviewDiagnostic {
-  return (
-    isRecord(value) &&
-    typeof value['code'] === 'string' &&
-    typeof value['message'] === 'string' &&
-    (value['severity'] === 'info' ||
-      value['severity'] === 'warning' ||
-      value['severity'] === 'error')
-  );
+function toViewportStaging(staging: ThreeReferenceStagingSnapshot): ModelPreviewStagingState {
+  return {
+    schemaVersion: 3,
+    sessionId: staging.sessionId,
+    sourceFingerprint: subjectFingerprint(staging),
+    revision: 0,
+    transformPatches: [],
+    cameraPresets: [
+      {
+        id: staging.camera.cameraId,
+        label: staging.camera.cameraId === 'camera-front' ? 'Front' : staging.camera.cameraId,
+        position: staging.camera.position,
+        target: staging.camera.target,
+        fieldOfViewDeg: staging.camera.fieldOfViewDeg,
+      },
+    ],
+    activeCameraId: staging.camera.cameraId,
+    lightRig: {
+      environmentIntensity: 0.7,
+      lights: [
+        { id: 'key', color: '#ffffff', intensity: 3, position: { x: 3, y: 4, z: 4 } },
+        { id: 'fill', color: '#b8d8ff', intensity: 1.2, position: { x: -3, y: 2, z: 2 } },
+        { id: 'rim', color: '#ffd2a8', intensity: 1.8, position: { x: 0, y: 3, z: -4 } },
+      ],
+    },
+    background: '#f5f6f8',
+    capture: { width: 1024, height: 1024 },
+  };
 }
 
-function isStringRecord(value: unknown): value is Record<string, string> {
-  return isRecord(value) && Object.values(value).every((item) => typeof item === 'string');
+function subjectFingerprint(staging: ThreeReferenceStagingSnapshot): string {
+  switch (staging.subject.kind) {
+    case 'source-model':
+      return staging.subject.fingerprint;
+    case 'builtin-preset':
+      return staging.subject.fingerprint;
+    case 'environment-only':
+      return 'environment-only';
+  }
+  throw new Error('Unknown 3D Reference subject kind.');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

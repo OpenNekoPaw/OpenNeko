@@ -143,7 +143,6 @@ export class ModelPreviewSourceSession implements vscode.Disposable {
         projectionRoot: input.projectionRoot,
         projectionFileSystem,
         descriptor: {
-          protocolVersion: 1,
           source: inspected.sourceRef,
           sourceFingerprint: inspected.sourceFingerprint,
           format: inspected.format,

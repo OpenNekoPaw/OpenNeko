@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  PathResolver,
+  THREE_REFERENCE_PROTOCOL_VERSION,
   createResourceFingerprint,
   createResourceRef,
-  MODEL_PREVIEW_PROTOCOL_VERSION,
-  MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
-  PathResolver,
-  type ModelPreviewStagingState,
+  type ThreeReferenceStagingSnapshot,
 } from '@neko/shared';
 
 vi.mock('vscode', () => ({
@@ -23,31 +22,13 @@ vi.mock('@neko/shared/vscode/extension', () => ({
   loadHostContentPathPolicy: vi.fn(),
 }));
 
-vi.mock('../../utils/html', () => ({ getWebviewHtml: () => '<html>model</html>' }));
+vi.mock('../../utils/html', () => ({ getWebviewHtml: () => '<html>3d reference</html>' }));
 
 import { ModelPreviewProvider } from './ModelPreviewProvider';
 import { ModelSourceInspectionError } from './modelSourceInspection';
-import { createDefaultModelStagingState, restoreModelStagingState } from './modelStagingState';
 
-describe('ModelPreviewProvider', () => {
-  it('uses the light neutral canvas for new model sessions', () => {
-    const staging = createDefaultModelStagingState('session-a', 'fingerprint:a.glb');
-    expect(staging).toMatchObject({
-      schemaVersion: MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
-      background: '#f5f6f8',
-      activeCameraId: 'camera-front',
-      revision: 0,
-    });
-    expect(staging.cameraPresets.find((camera) => camera.id === 'camera-front')).toMatchObject({
-      position: { x: 0 },
-      target: { x: 0 },
-    });
-    expect(
-      restoreModelStagingState({ ...staging, schemaVersion: 2 }, 'session-a', 'fingerprint:a.glb'),
-    ).toBeUndefined();
-  });
-
-  it('isolates two panels and rejects cross-panel identities', async () => {
+describe('3D Reference provider session boundary', () => {
+  it('initializes isolated source-model panels through the 3d-reference protocol', async () => {
     const context = extensionContext();
     const sessions = ['session-a', 'session-b'];
     const provider = providerWith(context, () => sessions.shift() ?? 'unexpected');
@@ -56,135 +37,174 @@ describe('ModelPreviewProvider', () => {
     await provider.resolveCustomEditor(document('/workspace/a.glb'), panelA.value, token());
     await provider.resolveCustomEditor(document('/workspace/b.glb'), panelB.value, token());
 
-    await panelA.receive({
-      type: 'model-preview/ready',
-      protocolVersion: MODEL_PREVIEW_PROTOCOL_VERSION,
-      sessionId: 'session-a',
-    });
-    await panelB.receive({
-      type: 'model-preview/ready',
-      protocolVersion: MODEL_PREVIEW_PROTOCOL_VERSION,
-      sessionId: 'session-b',
-    });
+    await ready(panelA, 'session-a');
+    await ready(panelB, 'session-b');
     expect(panelA.messages.at(-1)).toMatchObject({
-      type: 'model-preview/load',
-      staging: { sessionId: 'session-a', sourceFingerprint: 'fingerprint:a.glb' },
+      type: '3d-reference/session-init',
+      protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
+      panelSubject: { kind: 'source-model', subject: { fingerprint: 'fingerprint:a.glb' } },
+      eligiblePurposes: ['appearance', 'camera'],
+      staging: { sessionId: 'session-a', revision: 0 },
     });
     expect(panelB.messages.at(-1)).toMatchObject({
-      type: 'model-preview/load',
-      staging: { sessionId: 'session-b', sourceFingerprint: 'fingerprint:b.glb' },
+      type: '3d-reference/session-init',
+      panelSubject: { kind: 'source-model', subject: { fingerprint: 'fingerprint:b.glb' } },
+      staging: { sessionId: 'session-b' },
     });
 
     await panelA.receive({
-      type: 'model-preview/state-changed',
-      staging: staging('session-b', 'fingerprint:b.glb', 1),
+      type: '3d-reference/load-completed',
+      identity: { sessionId: 'session-b', revision: 0 },
     });
     expect(panelA.messages.at(-1)).toMatchObject({
-      type: 'model-preview/diagnostic',
+      type: '3d-reference/diagnostic',
       diagnostic: { code: 'session-mismatch' },
     });
-    expect(panelB.messages).toHaveLength(1);
   });
 
-  it('persists monotonic staging and rejects stale revisions', async () => {
+  it('initializes explicit built-in and environment-only subjects without a source session', async () => {
     const context = extensionContext();
-    const provider = providerWith(context, () => 'session-a');
-    const modelPanel = panel();
-    await provider.resolveCustomEditor(document('/workspace/a.glb'), modelPanel.value, token());
-    const initial = staging('session-a', 'fingerprint:a.glb', 0);
-    await modelPanel.receive({
-      type: 'model-preview/state-changed',
-      staging: { ...initial, revision: 1, background: '#000000' },
-    });
-    expect(context.workspaceState.update).toHaveBeenCalledWith(
-      expect.stringContaining('fingerprint:a.glb'),
-      expect.objectContaining({ revision: 1, background: '#000000' }),
-    );
-    await modelPanel.receive({ type: 'model-preview/state-changed', staging: initial });
-    expect(modelPanel.messages.at(-1)).toMatchObject({
-      diagnostic: { code: 'stale-revision' },
-    });
-  });
-
-  it('restores compatible state with fresh session identity and rejects incompatible state', async () => {
-    const compatible = staging('old-session', 'fingerprint:a.glb', 9);
-    const compatibleContext = extensionContext(compatible);
-    const compatibleProvider = providerWith(compatibleContext, () => 'new-session');
-    const compatiblePanel = panel();
-    await compatibleProvider.resolveCustomEditor(
-      document('/workspace/a.glb'),
-      compatiblePanel.value,
-      token(),
-    );
-    await compatiblePanel.receive({
-      type: 'model-preview/ready',
-      protocolVersion: MODEL_PREVIEW_PROTOCOL_VERSION,
-      sessionId: 'new-session',
-    });
-    expect(compatiblePanel.messages.at(-1)).toMatchObject({
-      staging: { sessionId: 'new-session', revision: 0, background: compatible.background },
-    });
-
-    const staleContext = extensionContext({ ...compatible, sourceFingerprint: 'other' });
-    const staleProvider = providerWith(staleContext, () => 'new-session');
-    const stalePanel = panel();
-    await staleProvider.resolveCustomEditor(
-      document('/workspace/a.glb'),
-      stalePanel.value,
-      token(),
-    );
-    expect(stalePanel.messages[0]).toMatchObject({ diagnostic: { code: 'stale-state' } });
-  });
-
-  it('cancels close-during-load without touching the disposed webview and ignores late messages', async () => {
-    let release: (() => void) | undefined;
-    const deferredSourceSession = sourceSession('session-a', '/workspace/a.glb');
-    const openSourceSession = vi.fn(
-      () =>
-        new Promise<typeof deferredSourceSession>((resolve) => {
-          release = () => resolve(deferredSourceSession);
-        }),
-    );
-    const context = extensionContext();
-    const provider = new ModelPreviewProvider(uri('/extension'), context.value, {
-      createSessionId: () => 'session-a',
-      loadPathPolicy: async () => ({
-        authorizedRoots: ['/workspace'],
-        pathResolver: new PathResolver(),
-      }),
+    const sessions = ['preset-session', 'environment-session'];
+    const openSourceSession = vi.fn();
+    const provider = providerWith(context, () => sessions.shift() ?? 'unexpected', {
       openSourceSession,
     });
-    const modelPanel = panel();
-    const resolving = provider.resolveCustomEditor(
-      document('/workspace/a.glb'),
-      modelPanel.value,
+    const presetPanel = panel();
+    const environmentPanel = panel();
+
+    await provider.resolveBuiltinPresetPanel('guide-neutral-mannequin', presetPanel.value, token());
+    await provider.resolveEnvironmentOnlyPanel(environmentPanel.value, token());
+    await ready(presetPanel, 'preset-session');
+    await ready(environmentPanel, 'environment-session');
+
+    expect(openSourceSession).not.toHaveBeenCalled();
+    expect(presetPanel.messages.at(-1)).toMatchObject({
+      panelSubject: {
+        kind: 'builtin-preset',
+        subject: { presetId: 'guide-neutral-mannequin', appearancePolicy: 'guide-only' },
+      },
+      eligiblePurposes: ['pose', 'camera'],
+      staging: { selectedPurposes: ['pose', 'camera'], pose: { poseId: 'standing' } },
+    });
+    expect(environmentPanel.messages.at(-1)).toMatchObject({
+      panelSubject: { kind: 'environment-only' },
+      eligiblePurposes: ['camera', 'panorama-scene'],
+      staging: { selectedPurposes: ['camera'] },
+    });
+  });
+
+  it('persists only monotonic same-subject staging and rejects stale or ineligible updates', async () => {
+    const context = extensionContext();
+    const provider = providerWith(context, () => 'session-a');
+    const sourcePanel = panel();
+    await provider.resolveCustomEditor(document('/workspace/a.glb'), sourcePanel.value, token());
+    await ready(sourcePanel, 'session-a');
+    const initial = sessionInit(sourcePanel).staging;
+
+    await sourcePanel.receive({
+      type: '3d-reference/staging-changed',
+      staging: { ...initial, revision: 1, selectedPurposes: ['camera'] },
+    });
+    expect(context.workspaceState.update).toHaveBeenCalledWith(
+      expect.stringContaining('3d-reference'),
+      expect.objectContaining({ revision: 1, selectedPurposes: ['camera'] }),
+    );
+    await sourcePanel.receive({
+      type: '3d-reference/staging-changed',
+      staging: { ...initial, revision: 1 },
+    });
+    expect(sourcePanel.messages.at(-1)).toMatchObject({ diagnostic: { code: 'stale-revision' } });
+    await sourcePanel.receive({
+      type: '3d-reference/staging-changed',
+      staging: {
+        ...initial,
+        revision: 2,
+        selectedPurposes: ['pose'],
+        pose: { poseId: 'standing', joints: [] },
+      },
+    });
+    expect(sourcePanel.messages.at(-1)).toMatchObject({
+      diagnostic: { code: 'purpose-unsupported' },
+    });
+  });
+
+  it('routes only selected eligible purpose capture requests with panel cancellation', async () => {
+    const onCaptureRequested = vi.fn(async () => undefined);
+    const provider = providerWith(extensionContext(), () => 'session-a', {
+      onCaptureRequested,
+    });
+    const sourcePanel = panel();
+    await provider.resolveCustomEditor(document('/workspace/a.glb'), sourcePanel.value, token());
+    await ready(sourcePanel, 'session-a');
+
+    await sourcePanel.receive({
+      type: '3d-reference/capture-requested',
+      requestId: 'camera-capture',
+      identity: { sessionId: 'session-a', revision: 0 },
+      purpose: 'camera',
+    });
+    expect(onCaptureRequested).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: 'camera-capture',
+        purpose: 'camera',
+        signal: expect.any(AbortSignal),
+      }),
+    );
+    const signal = onCaptureRequested.mock.calls[0]![0].signal;
+    sourcePanel.dispose();
+    expect(signal.aborted).toBe(true);
+  });
+
+  it('does not fall back to a built-in preset when source loading fails', async () => {
+    const context = extensionContext();
+    const provider = providerWith(context, () => 'session-a', {
+      openSourceSession: async () => {
+        throw new ModelSourceInspectionError({
+          code: 'source-missing',
+          message: 'source missing',
+          severity: 'error',
+        });
+      },
+    });
+    const sourcePanel = panel();
+    await provider.resolveCustomEditor(
+      document('/workspace/missing.glb'),
+      sourcePanel.value,
       token(),
     );
-    await vi.waitFor(() => expect(openSourceSession).toHaveBeenCalledOnce());
-    modelPanel.dispose();
-    release?.();
-    await expect(resolving).resolves.toBeUndefined();
-    expect(deferredSourceSession.dispose).toHaveBeenCalledOnce();
-    expect(modelPanel.html).toBe('');
+    expect(sourcePanel.html).toContain('source missing');
+    expect(sourcePanel.messages).toEqual([]);
+    expect(context.workspaceState.update).not.toHaveBeenCalled();
+  });
 
-    const liveProvider = providerWith(extensionContext(), () => 'session-live');
-    const livePanel = panel();
-    await liveProvider.resolveCustomEditor(document('/workspace/a.glb'), livePanel.value, token());
-    livePanel.dispose();
-    livePanel.dispose();
-    const messageCount = livePanel.messages.length;
-    await livePanel.receive({
-      type: 'model-preview/ready',
-      protocolVersion: MODEL_PREVIEW_PROTOCOL_VERSION,
-      sessionId: 'session-live',
+  it('ignores disposed Webviews instead of accessing panel.webview after disposal', async () => {
+    let finishSource: ((value: ReturnType<typeof sourceSession>) => void) | undefined;
+    const pending = new Promise<ReturnType<typeof sourceSession>>((resolve) => {
+      finishSource = resolve;
     });
-    expect(livePanel.messages).toHaveLength(messageCount);
+    const provider = providerWith(extensionContext(), () => 'session-a', {
+      openSourceSession: () => pending,
+    });
+    const sourcePanel = panel();
+    const resolution = provider.resolveCustomEditor(
+      document('/workspace/a.glb'),
+      sourcePanel.value,
+      token(),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    sourcePanel.dispose();
+    const session = sourceSession('session-a', '/workspace/a.glb');
+    finishSource?.(session);
+    await resolution;
+    expect(session.dispose).toHaveBeenCalledOnce();
   });
 });
 
 function providerWith(
   context: ReturnType<typeof extensionContext>,
   createSessionId: () => string,
+  overrides: Record<string, unknown> = {},
 ): ModelPreviewProvider {
   return new ModelPreviewProvider(uri('/extension'), context.value, {
     createSessionId,
@@ -193,6 +213,7 @@ function providerWith(
       pathResolver: new PathResolver(),
     }),
     openSourceSession: async ({ sessionId, sourcePath }) => sourceSession(sessionId, sourcePath),
+    ...overrides,
   });
 }
 
@@ -202,7 +223,6 @@ function sourceSession(sessionId: string, sourcePath: string) {
   return {
     sessionId,
     descriptor: {
-      protocolVersion: 1 as const,
       source: resourceRef(`source:${fileName}`),
       sourceFingerprint: fingerprint,
       format: 'glb' as const,
@@ -295,6 +315,23 @@ function panel() {
   };
 }
 
+async function ready(target: ReturnType<typeof panel>, sessionId: string) {
+  await target.receive({
+    type: '3d-reference/ready',
+    protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
+    sessionId,
+  });
+}
+
+function sessionInit(target: ReturnType<typeof panel>) {
+  return target.messages.find(
+    (message): message is { staging: ThreeReferenceStagingSnapshot } =>
+      typeof message === 'object' &&
+      message !== null &&
+      (message as { type?: unknown }).type === '3d-reference/session-init',
+  )!;
+}
+
 function token() {
   return { onCancellationRequested: () => ({ dispose: vi.fn() }) } as never;
 }
@@ -305,40 +342,6 @@ function document(fsPath: string) {
 
 function uri(fsPath: string) {
   return { fsPath, path: fsPath, scheme: 'file', toString: () => `file://${fsPath}` } as never;
-}
-
-function staging(
-  sessionId: string,
-  sourceFingerprint: string,
-  revision: number,
-): ModelPreviewStagingState {
-  return {
-    schemaVersion: MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
-    sessionId,
-    sourceFingerprint,
-    revision,
-    transformPatches: [],
-    cameraPresets: [
-      {
-        id: 'camera-default',
-        label: 'Default',
-        position: { x: 3, y: 2, z: 3 },
-        target: { x: 0, y: 0, z: 0 },
-        fieldOfViewDeg: 45,
-      },
-    ],
-    activeCameraId: 'camera-default',
-    lightRig: {
-      environmentIntensity: 1,
-      lights: [
-        { id: 'key', color: '#fff', intensity: 3, position: { x: 1, y: 2, z: 3 } },
-        { id: 'fill', color: '#fff', intensity: 1, position: { x: -1, y: 1, z: 2 } },
-        { id: 'rim', color: '#fff', intensity: 2, position: { x: 0, y: 2, z: -2 } },
-      ],
-    },
-    background: '#1e1e1e',
-    capture: { width: 1024, height: 1024 },
-  };
 }
 
 function resourceRef(id: string) {
