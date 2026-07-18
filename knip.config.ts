@@ -151,6 +151,7 @@ const config: KnipConfig = {
         'src/docx/main.tsx',
         'src/epub/main.tsx',
         'src/pdf/main.tsx',
+        'src/model/main.tsx',
       ],
     },
     'packages/neko-preview/packages/extension': {},

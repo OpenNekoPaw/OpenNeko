@@ -16,7 +16,7 @@
 
 ## Verification
 
-- **Key-free validation:** Run `pnpm test:agent:eval` to validate Evaluation schemas, discovery, runner semantics, reports, and all indexed suite dry-runs; record that this is harness integrity only.
+- **Key-free validation:** `pnpm test:agent:eval` passed on 2026-07-18 (39 files, 277 tests; 23 suites and 47 cases discovered by the all-suite dry-run). This validates harness integrity only and is not Model Preview behavior acceptance.
 - **Deterministic Agent validation:** Run focused shared context, Agent protocol/parser, presenter/reference-token, multimodal attachment projection, and no-fallback tests for `model-preview` and rejected `model-scene`.
 - **Real VS Code validation:** Run the focused synthetic Model Preview Webview functional scenario in an Extension Development Host and retain the sanitized report location.
 - **Blocked or unexecuted cases:** If the verified VS Code CDP target, Agent extension, WebGL, or functional fixture environment is unavailable, record the exact blocker and keep runtime projection unaccepted rather than substituting browser/Vite or TUI dry-run evidence.
@@ -26,6 +26,7 @@
 - Passing deterministic tests proves schema, identity, projection, and legacy-path rejection.
 - Passing the VS Code scenario proves the real host path from authorized model load through capture and Agent context projection.
 - Neither result proves a configured AI video provider natively consumes 3D binaries or that a model will choose a particular generation action; those behaviors are outside this change.
+- The implementation was revisited after runtime debugging and still adds no Agent reasoning instructions, Tool/capability routing, provider selection, or new TUI behavior. The `excluded` disposition therefore remains valid and `agent-runtime.creative-media-workflow` is unchanged.
 
 ## Residual Risk
 
