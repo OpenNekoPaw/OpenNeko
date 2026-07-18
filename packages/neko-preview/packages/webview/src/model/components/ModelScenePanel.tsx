@@ -38,17 +38,31 @@ export function ModelScenePanel({
           {nodes.length}
         </span>
       </header>
-      <label className="model-preview__search">
+      <div className="model-preview__search">
         <span className={toCodiconClassName('search')} aria-hidden="true" />
-        <span className="model-preview__sr-only">{t('preview.model.searchNodes')}</span>
+        <label className="model-preview__sr-only" htmlFor="model-preview-node-search">
+          {t('preview.model.searchNodes')}
+        </label>
         <input
+          id="model-preview-node-search"
           aria-label={t('preview.model.searchNodes')}
           disabled={disabled}
           placeholder={t('preview.model.searchNodes')}
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
-      </label>
+        {query.length > 0 ? (
+          <button
+            className="model-preview__search-clear"
+            type="button"
+            aria-label={t('preview.model.clearSearch')}
+            disabled={disabled}
+            onClick={() => setQuery('')}
+          >
+            <span className={toCodiconClassName('close')} aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
       {items.length > 0 ? (
         <TreeView
           className="model-preview__tree"

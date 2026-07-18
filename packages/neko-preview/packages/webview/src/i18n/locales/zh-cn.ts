@@ -87,6 +87,7 @@ const preview: MessageBundle = {
   'preview.model.error': '无法加载此模型。',
   'preview.model.scene': '模型层级',
   'preview.model.searchNodes': '搜索模型节点',
+  'preview.model.clearSearch': '清除节点搜索',
   'preview.model.nodeHierarchy': '模型节点层级',
   'preview.model.noMatchingNodes': '没有匹配的节点',
   'preview.model.viewMode': '视口模式',
@@ -124,6 +125,8 @@ const preview: MessageBundle = {
   'preview.model.animations': '动画',
   'preview.model.sendToAgent': '将当前布置发送给 Agent',
   'preview.model.sendingToAgent': '正在发送给 Agent…',
+  'preview.model.sentToAgent': '已发送给 Agent',
+  'preview.model.retrySendToAgent': '重试发送给 Agent',
 };
 
 export const bundles: Record<string, MessageBundle> = {

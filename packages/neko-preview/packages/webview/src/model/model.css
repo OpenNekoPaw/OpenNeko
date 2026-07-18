@@ -186,6 +186,30 @@ input {
   background: transparent;
 }
 
+.model-preview__search-clear {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #7b8088;
+  background: transparent;
+  cursor: pointer;
+}
+
+.model-preview__search-clear:hover {
+  color: #30343a;
+  background: #e9ebee;
+}
+
+.model-preview__search-clear:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
 .model-preview__tree [data-tree-item-id] {
   margin: 1px 0;
   border-radius: 6px;
@@ -434,6 +458,24 @@ input {
   height: 32px;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(20, 22, 25, 0.12);
+}
+
+.model-preview__send[data-delivery-status='succeeded'] {
+  background: #216e4e;
+}
+
+.model-preview__send[data-delivery-status='error'] {
+  background: #a33a32;
+}
+
+.model-preview__send[data-delivery-status='sending'] .codicon-loading {
+  animation: model-preview-spin 850ms linear infinite;
+}
+
+@keyframes model-preview-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .model-preview__sr-only {

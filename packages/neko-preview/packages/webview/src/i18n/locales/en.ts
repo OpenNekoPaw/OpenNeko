@@ -88,6 +88,7 @@ const preview: MessageBundle = {
   'preview.model.error': 'Unable to load this model.',
   'preview.model.scene': 'Model hierarchy',
   'preview.model.searchNodes': 'Search model nodes',
+  'preview.model.clearSearch': 'Clear node search',
   'preview.model.nodeHierarchy': 'Model node hierarchy',
   'preview.model.noMatchingNodes': 'No matching nodes',
   'preview.model.viewMode': 'Viewport mode',
@@ -125,6 +126,8 @@ const preview: MessageBundle = {
   'preview.model.animations': 'Animations',
   'preview.model.sendToAgent': 'Send staged view to Agent',
   'preview.model.sendingToAgent': 'Sending to Agent…',
+  'preview.model.sentToAgent': 'Sent to Agent',
+  'preview.model.retrySendToAgent': 'Retry sending to Agent',
 };
 
 export const bundles: Record<string, MessageBundle> = {

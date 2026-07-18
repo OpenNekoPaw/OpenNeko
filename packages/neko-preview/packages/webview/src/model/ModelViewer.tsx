@@ -137,6 +137,8 @@ export function ModelViewer({
   const updateStaging = (next: ModelPreviewStagingState) => {
     stagingRef.current = next;
     setStaging(next);
+    setDeliveryStatus('idle');
+    setDiagnostic((current) => (isDeliveryDiagnostic(current) ? undefined : current));
     postState(vscode, next);
   };
   const controlsDisabled = !staging || status !== 'ready';
@@ -192,7 +194,7 @@ export function ModelViewer({
       <ModelInspectorPanel
         deliveryStatus={deliveryStatus}
         diagnostic={status === 'ready' ? diagnostic : undefined}
-        disabled={controlsDisabled}
+        disabled={controlsDisabled || deliveryStatus === 'sending'}
         facts={facts}
         nodes={nodes}
         staging={staging}
@@ -293,13 +295,20 @@ async function handleExtensionMessage(input: {
         input.setDiagnostic(message.diagnostic);
         if (message.diagnostic.severity === 'error') {
           input.setDeliveryStatus('error');
-          input.setStatus('error');
+          if (isViewerFatalDiagnostic(message.diagnostic.code)) {
+            input.setStatus('error');
+          }
         }
         break;
     }
   } catch (error) {
     const diagnostic: ModelPreviewDiagnostic = {
-      code: message.type === 'model-preview/capture-requested' ? 'capture-failed' : 'load-failed',
+      code:
+        message.type === 'model-preview/capture-requested'
+          ? 'capture-failed'
+          : message.type === 'model-preview/send-succeeded'
+            ? 'stale-revision'
+            : 'load-failed',
       message: error instanceof Error ? error.message : String(error),
       severity: 'error',
       identity: input.stagingRef.current
@@ -308,9 +317,46 @@ async function handleExtensionMessage(input: {
     };
     input.setDiagnostic(diagnostic);
     input.setDeliveryStatus('error');
-    input.setStatus('error');
+    if (isViewerFatalDiagnostic(diagnostic.code)) {
+      input.setStatus('error');
+    }
     input.vscode.postMessage({ type: 'model-preview/diagnostic', diagnostic });
   }
+}
+
+function isViewerFatalDiagnostic(code: ModelPreviewDiagnostic['code']): boolean {
+  switch (code) {
+    case 'capture-invalid':
+    case 'capture-failed':
+    case 'context-invalid':
+    case 'agent-unavailable':
+    case 'agent-rejected':
+    case 'delivery-succeeded':
+    case 'stale-revision':
+      return false;
+    case 'unsupported-format':
+    case 'source-missing':
+    case 'source-unauthorized':
+    case 'source-too-large':
+    case 'mime-mismatch':
+    case 'unsafe-dependency':
+    case 'missing-dependency':
+    case 'dependency-limit-exceeded':
+    case 'protocol-mismatch':
+    case 'session-mismatch':
+    case 'stale-state':
+    case 'load-failed':
+    case 'empty-model':
+    case 'renderer-unavailable':
+    case 'renderer-lost':
+    case 'disposed':
+      return true;
+  }
+}
+
+function isDeliveryDiagnostic(diagnostic: ModelPreviewDiagnostic | undefined): boolean {
+  if (!diagnostic) return false;
+  return !isViewerFatalDiagnostic(diagnostic.code);
 }
 
 function postState(

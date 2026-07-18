@@ -57,6 +57,7 @@ export function ModelInspectorPanel({
     (patch) => patch.nodePath === staging.selectedNodePath,
   );
   const selectedTransform = selectedPatch?.transform ?? selectedNode?.transform;
+  const deliveryPresentation = getDeliveryPresentation(deliveryStatus, t);
   const updateSelectedTransform = (transform: ModelPreviewTransform): void => {
     if (!staging?.selectedNodePath) return;
     onUpdateStaging(patchModelTransform(staging, staging.selectedNodePath, transform));
@@ -289,16 +290,33 @@ export function ModelInspectorPanel({
           data-testid="model-preview-send-to-agent"
           aria-busy={deliveryStatus === 'sending'}
           disabled={disabled || deliveryStatus === 'sending'}
-          leadingIcon={<span className={toCodiconClassName('account')} aria-hidden="true" />}
+          data-delivery-status={deliveryStatus}
+          leadingIcon={
+            <span className={toCodiconClassName(deliveryPresentation.icon)} aria-hidden="true" />
+          }
           onClick={onSendToAgent}
         >
-          {deliveryStatus === 'sending'
-            ? t('preview.model.sendingToAgent')
-            : t('preview.model.sendToAgent')}
+          <span aria-live="polite">{deliveryPresentation.label}</span>
         </Button>
       </footer>
     </aside>
   );
+}
+
+function getDeliveryPresentation(
+  status: ModelInspectorPanelProps['deliveryStatus'],
+  t: ReturnType<typeof useTranslation>['t'],
+): { readonly icon: 'account' | 'check' | 'loading' | 'refresh'; readonly label: string } {
+  switch (status) {
+    case 'idle':
+      return { icon: 'account', label: t('preview.model.sendToAgent') };
+    case 'sending':
+      return { icon: 'loading', label: t('preview.model.sendingToAgent') };
+    case 'succeeded':
+      return { icon: 'check', label: t('preview.model.sentToAgent') };
+    case 'error':
+      return { icon: 'refresh', label: t('preview.model.retrySendToAgent') };
+  }
 }
 
 function TransformAxisGroup({
