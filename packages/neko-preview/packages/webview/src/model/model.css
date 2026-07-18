@@ -362,7 +362,7 @@ input {
   overflow-y: hidden;
   padding: 6px 10px;
   border: 1px solid rgba(214, 218, 224, 0.92);
-  border-radius: 18px;
+  border-radius: 999px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow:
     0 16px 34px rgba(31, 35, 41, 0.16),

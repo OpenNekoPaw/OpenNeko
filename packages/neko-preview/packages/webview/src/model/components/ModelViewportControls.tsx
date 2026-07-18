@@ -53,6 +53,7 @@ export function ModelViewportControls({
         data-active-indicator="button"
         data-testid="model-preview-viewport-toolbar"
         data-orientation="horizontal"
+        data-shape="pill"
         aria-label={t('preview.model.viewportTools')}
         aria-orientation="horizontal"
         role="toolbar"
