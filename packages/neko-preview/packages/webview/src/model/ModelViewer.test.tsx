@@ -91,6 +91,7 @@ describe('ModelViewer', () => {
         deliveryStatus: 'idle',
         viewDistance: '7',
         viewTarget: '1,2,3',
+        selectionKind: 'scene',
       }),
     });
     expect(
@@ -103,7 +104,8 @@ describe('ModelViewer', () => {
       'Read-only source',
     );
     expect(container.querySelectorAll('.model-preview__facts > div')).toHaveLength(4);
-    expect(container.querySelectorAll('.model-preview__inspector-section')).toHaveLength(4);
+    expect(container.querySelectorAll('.model-preview__inspector-section')).toHaveLength(2);
+    expect(container.querySelector('[data-testid="model-preview-scene-inspector"]')).not.toBeNull();
     expect(
       container.querySelector('[data-testid="model-preview-viewport-toolbar"]'),
     ).not.toBeNull();
@@ -130,9 +132,7 @@ describe('ModelViewer', () => {
     await act(async () => axesToggle?.click());
     expect(container.querySelector('[data-testid="model-preview-orientation"]')).toBeNull();
     expect(container.querySelector('button[aria-label="Show XYZ axes"]')).not.toBeNull();
-    expect(
-      container.querySelector('aside[aria-label="Temporary model staging controls"]'),
-    ).not.toBeNull();
+    expect(container.querySelector('aside[data-inspector-kind="scene"]')).not.toBeNull();
 
     const nodeSearch = container.querySelector<HTMLInputElement>('#model-preview-node-search');
     await act(async () => {
@@ -237,6 +237,137 @@ describe('ModelViewer', () => {
     mockWindow.dispose();
   });
 
+  it('switches scene, camera, and node inspectors while camera operations stay temporary', async () => {
+    const mockWindow = installMockWebviewWindow();
+    const runtime = fakeRuntime();
+    const factory: ThreeModelRuntimeFactory = { create: vi.fn(() => runtime.value) };
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = ReactDOM.createRoot(container);
+    await act(async () => {
+      root.render(
+        <I18nProvider service={i18nService}>
+          <ModelViewer runtimeFactory={factory} sessionId="session-1" />
+        </I18nProvider>,
+      );
+    });
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent('message', { data: loadMessage() }));
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="model-preview-inspector"]')).toHaveProperty(
+      'dataset.inspectorKind',
+      'scene',
+    );
+    runtime.setCameraGuide.mockClear();
+    const cameraRow = container.querySelector<HTMLElement>(
+      '[data-tree-item-id="model-selection:camera:camera-default"]',
+    );
+    expect(cameraRow).not.toBeNull();
+    await act(async () => cameraRow?.click());
+    expect(container.querySelector('[data-testid="model-preview-inspector"]')).toHaveProperty(
+      'dataset.inspectorKind',
+      'camera',
+    );
+    expect(
+      container.querySelector('[data-testid="model-preview-camera-inspector"]'),
+    ).not.toBeNull();
+    expect(runtime.setCameraGuide).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'camera-default' }),
+    );
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
+      'dataset.stagingRevision',
+      '0',
+    );
+
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent('message', { data: loadMessage() }));
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
+      'dataset.selectionKind',
+      'scene',
+    );
+    expect(container.querySelector('[data-testid="model-preview-inspector"]')).toHaveProperty(
+      'dataset.inspectorKind',
+      'scene',
+    );
+
+    await act(async () => cameraRow?.click());
+
+    const cameraName = container.querySelector<HTMLInputElement>('input[aria-label="Camera name"]');
+    await act(async () => {
+      cameraName?.focus();
+      setTextInputValue(cameraName, 'Portrait');
+      cameraName?.blur();
+    });
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
+      'dataset.stagingRevision',
+      '1',
+    );
+    expect(runtime.frameCamera).not.toHaveBeenCalled();
+    expect(runtime.setCameraGuide).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 'camera-default', label: 'Portrait' }),
+    );
+
+    const cameraInspector = container.querySelector(
+      '[data-testid="model-preview-camera-inspector"]',
+    );
+    const duplicateButton = [...(cameraInspector?.querySelectorAll('button') ?? [])].find(
+      (button) => button.textContent?.trim() === 'Duplicate',
+    );
+    await act(async () => duplicateButton?.click());
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
+      'dataset.stagingRevision',
+      '2',
+    );
+    expect(container.textContent).toContain('Portrait Copy');
+
+    const viewButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'View through camera',
+    );
+    await act(async () => viewButton?.click());
+    expect(runtime.frameCamera).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'camera-default-copy' }),
+    );
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
+      'dataset.activeCameraId',
+      'camera-default-copy',
+    );
+
+    const removeButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Remove',
+    );
+    await act(async () => removeButton?.click());
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toMatchObject({
+      dataset: expect.objectContaining({
+        activeCameraId: 'camera-default',
+        selectionKind: 'camera',
+      }),
+    });
+
+    const nodeRow = container.querySelector<HTMLElement>(
+      '[data-tree-item-id="model-selection:node:root/0:mesh"]',
+    );
+    await act(async () => nodeRow?.click());
+    expect(container.querySelector('[data-testid="model-preview-node-inspector"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="model-preview-inspector"]')).toHaveProperty(
+      'dataset.inspectorKind',
+      'node',
+    );
+
+    const sceneRow = container.querySelector<HTMLElement>(
+      '[data-tree-item-id="model-selection:scene"]',
+    );
+    await act(async () => sceneRow?.click());
+    expect(container.querySelector('[data-testid="model-preview-scene-inspector"]')).not.toBeNull();
+    expect(runtime.setCameraGuide).toHaveBeenLastCalledWith(undefined);
+
+    await act(async () => root.unmount());
+    mockWindow.dispose();
+  });
+
   it('keeps independent runtime roots and reports stale capture failure visibly', async () => {
     const mockWindow = installMockWebviewWindow();
     const first = fakeRuntime();
@@ -315,6 +446,8 @@ function fakeRuntime() {
   const capture = vi.fn(() => 'data:image/png;base64,AA==');
   const dispose = vi.fn();
   const frameModel = vi.fn();
+  const frameCamera = vi.fn();
+  const setCameraGuide = vi.fn();
   const setGroundGridVisible = vi.fn();
   const value: ThreeModelRuntimePort = {
     load,
@@ -344,12 +477,24 @@ function fakeRuntime() {
     setTransformMode: vi.fn(),
     setTransformEnabled: vi.fn(),
     setGroundGridVisible,
+    setCameraGuide,
+    frameCamera,
     frameModel,
     resize: vi.fn(),
     capture,
     dispose,
   };
-  return { value, load, applyStaging, capture, dispose, frameModel, setGroundGridVisible };
+  return {
+    value,
+    load,
+    applyStaging,
+    capture,
+    dispose,
+    frameCamera,
+    frameModel,
+    setCameraGuide,
+    setGroundGridVisible,
+  };
 }
 
 function loadMessage() {

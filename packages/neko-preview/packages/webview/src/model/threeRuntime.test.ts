@@ -9,6 +9,7 @@ import {
   createRenderScheduler,
   disposeObjectTree,
   getModelGroundGridLayout,
+  getModelCameraGuidePose,
   getModelPixelRatio,
   getOrbitDistanceBounds,
   promoteOpaqueBlendMaterials,
@@ -151,6 +152,20 @@ describe('Three model runtime helpers', () => {
       divisions: 24,
       y: -3.016,
     });
+  });
+
+  it('projects a temporary camera helper from normalized model bounds', () => {
+    const bounds = new THREE.Box3(new THREE.Vector3(-1, -2, -1), new THREE.Vector3(1, 2, 1));
+    const pose = getModelCameraGuidePose(bounds, {
+      id: 'portrait',
+      label: 'Portrait',
+      position: { x: 0, y: 0.5, z: 2 },
+      target: { x: 0, y: 1, z: 0 },
+      fieldOfViewDeg: 35,
+    });
+    expect(pose.radius).toBeCloseTo(Math.sqrt(6));
+    expect(pose.position.toArray()).toEqual([0, Math.sqrt(6) / 2, Math.sqrt(6) * 2]);
+    expect(pose.target.toArray()).toEqual([0, 1, 0]);
   });
 
   it('projects world XYZ axes into screen-space orientation', () => {

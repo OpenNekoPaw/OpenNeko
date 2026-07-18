@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_PREVIEW_STAGING_SCHEMA_VERSION, type ModelPreviewStagingState } from '@neko/shared';
 import {
+  duplicateModelCamera,
   patchModelTransform,
+  removeModelCamera,
   selectModelCamera,
   selectModelNode,
+  updateModelCamera,
   updateModelEnvironmentIntensity,
   updateModelLight,
 } from './modelStagingStore';
@@ -39,6 +42,37 @@ describe('model staging store', () => {
         position: { x: 0, y: 0, z: 1 },
       }),
     ).toThrow(/Unknown/);
+  });
+
+  it('duplicates, renames, and removes temporary camera presets deterministically', () => {
+    let state = initialState();
+    state = duplicateModelCamera(state, 'front', 'Front copy');
+    state = duplicateModelCamera(state, 'front', 'Front copy 2');
+    expect(state.cameraPresets.map((camera) => camera.id)).toEqual([
+      'default',
+      'front',
+      'front-copy',
+      'front-copy-2',
+    ]);
+    state = updateModelCamera(state, { ...state.cameraPresets[2]!, label: 'Portrait' });
+    state = selectModelCamera(state, 'front-copy');
+    state = removeModelCamera(state, 'front-copy');
+    expect(state.activeCameraId).toBe('default');
+    expect(state.cameraPresets.map((camera) => camera.label)).toEqual([
+      'Default',
+      'Front',
+      'Front copy 2',
+    ]);
+    expect(state.revision).toBe(5);
+  });
+
+  it('refuses invalid camera edits or removal of the final preset', () => {
+    const state = initialState();
+    expect(() => updateModelCamera(state, { ...state.cameraPresets[0]!, label: ' ' })).toThrow(
+      /cannot be empty/,
+    );
+    const singleCamera = { ...state, cameraPresets: [state.cameraPresets[0]!] };
+    expect(() => removeModelCamera(singleCamera, 'default')).toThrow(/at least one camera/);
   });
 });
 
