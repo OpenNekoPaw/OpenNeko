@@ -1859,7 +1859,7 @@ function modelPreviewContext(): AgentContextPayload {
         animationCount: 0,
       },
       staging: {
-        schemaVersion: 1,
+        schemaVersion: 2,
         sessionId: 'session-model',
         sourceFingerprint: 'model-fingerprint',
         revision: 2,
