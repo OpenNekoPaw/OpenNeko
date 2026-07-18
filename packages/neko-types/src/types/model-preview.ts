@@ -235,6 +235,24 @@ export function isModelPreviewContextData(value: unknown): value is ModelPreview
   );
 }
 
+export function isModelPreviewIdentity(value: unknown): value is ModelPreviewIdentity {
+  return isRecord(value) && isIdentity(value);
+}
+
+export function isModelPreviewCaptureResult(value: unknown): value is ModelPreviewCaptureResult {
+  return (
+    isRecord(value) &&
+    isModelPreviewCaptureMetadata(value['metadata']) &&
+    typeof value['dataUrl'] === 'string' &&
+    value['dataUrl'].startsWith('data:image/png;base64,') &&
+    isModelPreviewStagingState(value['staging']) &&
+    isNormalizedModelFacts(value['facts']) &&
+    value['metadata'].sessionId === value['staging'].sessionId &&
+    value['metadata'].sourceFingerprint === value['staging'].sourceFingerprint &&
+    value['metadata'].revision === value['staging'].revision
+  );
+}
+
 export function isModelPreviewStagingState(value: unknown): value is ModelPreviewStagingState {
   if (!isRecord(value)) return false;
   return (
@@ -252,7 +270,7 @@ export function isModelPreviewStagingState(value: unknown): value is ModelPrevie
   );
 }
 
-function isNormalizedModelFacts(value: unknown): value is NormalizedModelFacts {
+export function isNormalizedModelFacts(value: unknown): value is NormalizedModelFacts {
   if (!isRecord(value) || !isBounds(value['bounds'])) return false;
   return (
     isNonNegativeInteger(value['nodeCount']) &&
