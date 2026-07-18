@@ -46,8 +46,7 @@ export type SkillLifecycleDiagnosticCode =
   | 'model-override-conflict'
   | 'single-injection-slot-blocked'
   | 'expired-record'
-  | 'stale-record'
-  | 'legacy-skill-alias';
+  | 'stale-record';
 
 export interface SkillLifecycleTurnLifetime {
   readonly kind: 'turn';

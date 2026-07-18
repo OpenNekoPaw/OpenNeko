@@ -341,7 +341,7 @@ async function ingestMarkdown(
         parsedTable: parsed.table,
         profile: profileResult.profile,
         actionCapabilityId: input.capabilityId,
-        fallbackLabel: input.title ?? 'Creative Table',
+        defaultLabel: input.title ?? 'Creative Table',
         includeActions: true,
       });
     }
@@ -354,7 +354,7 @@ async function ingestMarkdown(
       actionCapabilityId: input.capabilityId,
       extraDiagnostics: profileResult.diagnostics,
       displayFallback: true,
-      fallbackLabel: input.title ?? 'Markdown Table',
+      defaultLabel: input.title ?? 'Markdown Table',
       includeActions: false,
     });
     return genericResult;
@@ -366,7 +366,7 @@ async function ingestMarkdown(
     parsedTable: parsed.table,
     profile: CANVAS_GENERIC_TABLE_PROFILE,
     actionCapabilityId: input.capabilityId,
-    fallbackLabel: input.title ?? 'Markdown Table',
+    defaultLabel: input.title ?? 'Markdown Table',
     includeActions: false,
   });
 }
@@ -442,7 +442,7 @@ async function createTableFromMarkdown(
     parsedTable: parsed.table,
     profile: CANVAS_GENERIC_TABLE_PROFILE,
     actionCapabilityId: input.capabilityId,
-    fallbackLabel: input.tableTitle ?? input.title ?? 'Markdown Table',
+    defaultLabel: input.tableTitle ?? input.title ?? 'Markdown Table',
     includeActions: false,
   });
 }
@@ -455,7 +455,7 @@ async function createProfiledTableFromParsed(options: {
   readonly actionCapabilityId: CanvasMarkdownCapabilityInput['capabilityId'];
   readonly extraDiagnostics?: readonly CanvasMarkdownCapabilityDiagnostic[];
   readonly displayFallback?: boolean;
-  readonly fallbackLabel?: string;
+  readonly defaultLabel?: string;
   readonly includeActions?: boolean;
 }): Promise<CanvasMarkdownCapabilityResult> {
   const resolvedKind = toResolvedTableKind(options.profile, options.displayFallback);
@@ -513,7 +513,7 @@ async function createProfiledTableFromParsed(options: {
       {
         resolvedKind,
         displayFallback: Boolean(options.displayFallback),
-        label: options.fallbackLabel,
+        label: options.defaultLabel,
       },
     ),
     'table.basic',

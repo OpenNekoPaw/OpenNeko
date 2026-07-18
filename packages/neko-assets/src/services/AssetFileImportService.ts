@@ -15,7 +15,7 @@ export interface AssetFileImportServiceOptions {
   readonly didImport: () => void;
 }
 
-/** Fail-visible explicit import path for workspace, media-library, and legacy generated sources. */
+/** Fail-visible explicit import path for workspace, media-library, and retained generated sources. */
 export class AssetFileImportService {
   constructor(private readonly options: AssetFileImportServiceOptions) {}
 

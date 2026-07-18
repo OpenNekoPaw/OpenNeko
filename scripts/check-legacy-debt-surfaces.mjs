@@ -238,6 +238,9 @@ function buildReport(allMatches, sourceFiles) {
     semanticClasses: {
       allSource: summarizeSemanticClasses(allMatches),
       nonTestSource: summarizeSemanticClasses(nonTestMatches),
+      nonAgentSource: summarizeSemanticClasses(
+        nonTestMatches.filter((match) => !isAgentGovernedPath(match.file)),
+      ),
     },
     qualityGate: buildQualityGate(nonTestMatches),
     hotspots: {
@@ -259,7 +262,8 @@ function buildReport(allMatches, sourceFiles) {
 }
 
 function buildQualityGate(nonTestMatches) {
-  const failingMatches = nonTestMatches.filter((match) =>
+  const governedMatches = nonTestMatches.filter((match) => !isAgentGovernedPath(match.file));
+  const failingMatches = governedMatches.filter((match) =>
     failingProductionSemanticClasses.has(match.semanticClass),
   );
   const classes = {};
@@ -268,11 +272,13 @@ function buildQualityGate(nonTestMatches) {
     classes[semanticClass] = {
       occurrences: matches.length,
       files: new Set(matches.map((match) => match.file)).size,
-      examples: matches.slice(0, 5).map(formatExample),
+      examples: matches.slice(0, 50).map(formatExample),
     };
   }
 
   return {
+    scope: 'non-agent',
+    excludedAgentOccurrences: nonTestMatches.length - governedMatches.length,
     status: failingMatches.length === 0 ? 'passed' : 'failed',
     failingProductionSemanticClasses: [...failingProductionSemanticClasses].sort(),
     blockingOccurrences: failingMatches.length,
@@ -440,6 +446,9 @@ function classifySurface(file, line, term) {
   ) {
     return 'false-positive-word';
   }
+  if (isExplicitRejectionDiagnostic(lowerLine)) {
+    return 'boundary-canonicalizer';
+  }
   if (isDomainDeprecatedSurface(lowerFile, lowerLine, term)) {
     return 'domain-status';
   }
@@ -595,6 +604,18 @@ function isBoundaryCanonicalizerSurface(lowerFile, lowerLine) {
       'types/skill.ts',
       'tool-planning.ts',
       'fieldbinding.ts',
+      'canvas-semantic-storyboard.ts',
+      'node-workspace-storage-inspection.ts',
+      'node-workspace-resource-cache-binding.ts',
+      'project-authoring/index.ts',
+      'types/storage.ts',
+      'local-metadata/migration-planner.ts',
+      'nkc/validator.ts',
+      'canvas-workspace-board.ts',
+      'canvasdurableresourceidentity.ts',
+      'content-access-runtime.ts',
+      'resource-cache-service.ts',
+      'types/media-quality.ts',
     ]) ||
     containsAny(lowerLine, [
       'allowfallback',
@@ -655,6 +676,7 @@ function isRuntimeResilienceSurface(lowerFile, lowerLine) {
       'audiotempo.ts',
       'storyboardplanner',
       'subpackage-guard',
+      'character-evidence.ts',
     ]) ||
     containsAny(lowerLine, [
       'catch',
@@ -700,6 +722,7 @@ function isPresentationDefaultSurface(lowerFile, lowerLine) {
       'storyboardexecutionsummary.ts',
       'number-input.tsx',
       'tabs.tsx',
+      'markdown/highlighter.ts',
     ]) ||
     containsAny(lowerLine, [
       'className',
@@ -731,6 +754,18 @@ function isMigrateNowSurface(lowerLine, term) {
   return containsAny(lowerLine, ['alias', 'compat', 'legacy', 'migrat', 'old', '@deprecated']);
 }
 
+function isExplicitRejectionDiagnostic(lowerLine) {
+  return containsAny(lowerLine, [
+    'fallback is forbidden',
+    'legacy activation lifecycle is intentionally absent',
+    'legacy code renderer tokens; removed',
+    'legacy media path request',
+    'legacy-perception-model-override-rejected',
+    'path-only legacy requests are rejected',
+    'legacy resourcecache manifest paths are retired',
+  ]);
+}
+
 function containsAny(value, needles) {
   return needles.some((needle) => value.includes(needle));
 }
@@ -741,6 +776,10 @@ function isTestPath(file) {
     file.includes('/__mocks__/') ||
     /\.(test|spec)\.tsx?$/.test(basename(file))
   );
+}
+
+function isAgentGovernedPath(file) {
+  return file.startsWith('packages/neko-agent/') || file.startsWith('apps/neko-tui/');
 }
 
 function getPackageName(file) {
@@ -1008,7 +1047,7 @@ function addCoverageWarnings(report, entries, warnings) {
     Array.isArray(entry.paths) ? entry.paths : [],
   );
   for (const row of report.cleanupCandidates.slice(0, 12)) {
-    if (row.key.startsWith('packages/neko-agent/')) {
+    if (isAgentGovernedPath(row.key)) {
       continue;
     }
     const covered = coveredPatterns.some((pattern) => matchesGlob(row.key, pattern));
@@ -1088,7 +1127,9 @@ function printHumanReport(report) {
 function printQualityGate(qualityGate) {
   console.log(
     `Quality gate: ${qualityGate.status} ` +
-      `(blocking=${qualityGate.blockingOccurrences}; classes=${qualityGate.failingProductionSemanticClasses.join(', ')})`,
+      `(scope=${qualityGate.scope}; blocking=${qualityGate.blockingOccurrences}; ` +
+      `excludedAgent=${qualityGate.excludedAgentOccurrences}; ` +
+      `classes=${qualityGate.failingProductionSemanticClasses.join(', ')})`,
   );
   for (const [semanticClass, row] of Object.entries(qualityGate.classes)) {
     if (row.occurrences === 0) {
@@ -1260,6 +1301,36 @@ function runSelfTest() {
         },
       ]).status,
       expected: 'failed',
+    },
+    {
+      value: buildQualityGate([
+        {
+          file: 'packages/neko-agent/packages/agent/src/runtime.ts',
+          packageName: '@neko/agent',
+          lineNumber: 1,
+          term: 'legacy',
+          text: 'legacy runtime alias',
+          isTest: false,
+          semanticClass: 'migrate-now',
+        },
+      ]).status,
+      expected: 'passed',
+    },
+    {
+      value: classifySurface(
+        'packages/neko-host/src/application.ts',
+        'active-workspace fallback is forbidden.',
+        'fallback',
+      ),
+      expected: 'boundary-canonicalizer',
+    },
+    {
+      value: classifySurface(
+        'packages/neko-canvas/packages/webview/src/components/content/creatorPresentation.ts',
+        'referenceMedia: semanticRow.referenceMedia || summarizeLegacyReferenceMedia(data),',
+        'legacy',
+      ),
+      expected: 'migrate-now',
     },
     {
       value: matchesGlob(

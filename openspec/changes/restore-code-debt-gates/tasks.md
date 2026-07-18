@@ -1,14 +1,14 @@
 ## 1. Debt Gate Ownership
 
-- [ ] 1.1 Add scanner self-tests for Agent/non-Agent scope partitioning and explicit rejection diagnostics
-- [ ] 1.2 Make the repository quality gate block only non-Agent owned findings
-- [ ] 1.3 Classify explicit migration modules and presentation defaults without hiding successful dual reads
+- [x] 1.1 Add scanner self-tests for Agent/non-Agent scope partitioning and explicit rejection diagnostics
+- [x] 1.2 Make the repository quality gate block only non-Agent owned findings
+- [x] 1.3 Classify explicit migration modules and presentation defaults without hiding successful dual reads
 
 ## 2. Ledger Synchronization
 
-- [ ] 2.1 Replace LCDR-018 substring matching with exact removed-surface patterns
-- [ ] 2.2 Mark pruned script and Puppet entries removed and update the retained Live contract entry
-- [ ] 2.3 Remove obsolete required coverage and add coverage for current high-volume migration boundaries
+- [x] 2.1 Replace LCDR-018 substring matching with exact removed-surface patterns
+- [x] 2.2 Mark pruned script and Puppet entries removed and update the retained Live contract entry
+- [x] 2.3 Remove obsolete required coverage and add coverage for current high-volume migration boundaries
 
 ## 3. Dormant Cut Cleanup
 

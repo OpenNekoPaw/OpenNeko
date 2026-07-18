@@ -223,7 +223,7 @@ function projectSceneShotTableRow(
     node: shot,
     ordinal: index + 1,
     shotNumber: readShotNumber(shot, index),
-    referenceMedia: semanticRow.referenceMedia || summarizeLegacyReferenceMedia(data),
+    referenceMedia: semanticRow.referenceMedia,
     imagePrompt: semanticRow.imagePrompt,
     imagePromptDocument: storyboardPromptState?.promptBlocks?.imagePromptDocument,
     videoPrompt: semanticRow.videoPrompt,
@@ -336,16 +336,6 @@ function summarizeImagePrep(
     summarizeRegenerationRecommendation(planMetadata['regenerationRecommendation']),
     summarizeComicImageAudit(planMetadata['imageAudit']),
     summarizeComicImageAudit(readStoryboardComicImageAuditExtension(node, data)),
-  ]);
-}
-
-function summarizeLegacyReferenceMedia(data: Record<string, unknown>): string {
-  return joinDisplayParts([
-    summarizeMediaRefs(readReadonlyArray(data['sourceMediaRefs']), 'source'),
-    summarizeMediaRefs(readReadonlyArray(data['mediaRefs']), 'media'),
-    readString(data, 'referenceImagePath'),
-    summarizeRecordRef(data['referenceImageResourceRef']),
-    summarizeRecordRef(data['referenceResourceRef']),
   ]);
 }
 

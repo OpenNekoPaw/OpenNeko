@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "scope": "non-agent",
   "owner": "architecture",
-  "updatedAt": "2026-06-19",
+  "updatedAt": "2026-07-18",
   "scanner": "node scripts/check-legacy-debt-surfaces.mjs --validate-ledger",
   "qualityGate": {
     "failingProductionSemanticClasses": ["delete-now", "migrate-now", "needs-review"],
@@ -119,11 +119,6 @@
       "ledgerEntryId": "LCDR-011"
     },
     {
-      "id": "REQ-LCDR-014",
-      "pathPattern": "packages/neko-types/src/vscode/extension/*resource-cache-provider.ts",
-      "ledgerEntryId": "LCDR-014"
-    },
-    {
       "id": "REQ-LCDR-015",
       "pathPattern": "packages/neko-types/src/nkc/migrator.ts",
       "ledgerEntryId": "LCDR-015",
@@ -148,10 +143,24 @@
       "requiredWhileMatched": false
     },
     {
-      "id": "REQ-LCDR-023",
-      "pathPattern": "packages/neko-puppet/packages/webview/src/PuppetApp.tsx",
-      "ledgerEntryId": "LCDR-023",
-      "requiredWhileMatched": false
+      "id": "REQ-LCDR-030",
+      "pathPattern": "packages/neko-types/src/local-metadata/*.ts",
+      "ledgerEntryId": "LCDR-030"
+    },
+    {
+      "id": "REQ-LCDR-031",
+      "pathPattern": "packages/neko-types/src/types/canvas-semantic-storyboard.ts",
+      "ledgerEntryId": "LCDR-031"
+    },
+    {
+      "id": "REQ-LCDR-032",
+      "pathPattern": "packages/neko-types/src/types/skill.ts",
+      "ledgerEntryId": "LCDR-032"
+    },
+    {
+      "id": "REQ-LCDR-033",
+      "pathPattern": "packages/neko-canvas/packages/extension/src/markdownCapabilities.ts",
+      "ledgerEntryId": "LCDR-033"
     }
   ],
   "entries": [
@@ -429,12 +438,13 @@
       "validation": {
         "commands": [
           "pnpm check:unused",
-          "rg \"InlineControls|InlineSelect|InlineInput|InlineTextarea|ImageViewer|components/content/index\" packages/neko-canvas/packages/webview/src"
+          "rg -w \"InlineControls|InlineSelect|InlineInput|InlineTextarea|ImageViewer\" packages/neko-canvas/packages/webview/src || true",
+          "rg \"components/content/index\" packages/neko-canvas/packages/webview/src || true"
         ]
       },
       "stalePatterns": [
         {
-          "pattern": "InlineControls|InlineSelect|InlineInput|InlineTextarea|ImageViewer|components/content/index",
+          "pattern": "\\bInlineControls\\b|\\bInlineSelect\\b|\\bInlineInput\\b|\\bInlineTextarea\\b|\\bImageViewer\\b|components/content/index",
           "paths": [
             "packages/neko-canvas/packages/webview/src/**/*.ts",
             "packages/neko-canvas/packages/webview/src/**/*.tsx"
@@ -508,18 +518,19 @@
     {
       "id": "LCDR-021",
       "package": "repo-scripts",
-      "surface": "Repo scripts reported as unused files by knip",
-      "semanticClass": "false-positive-word",
-      "action": "model-entrypoint",
-      "status": "active",
+      "surface": "Pruned 3D route and scene render diagnostic scripts",
+      "semanticClass": "delete-now",
+      "action": "delete",
+      "status": "removed",
       "owner": "architecture",
       "paths": ["scripts/check-3d-route-a-boundaries.mjs", "scripts/scene-render-diagnostics.mjs"],
-      "replacement": "Root package scripts model these as real repo-level script entrypoints.",
-      "removeCondition": "Only remove if corresponding root/package scripts are deleted and docs stop referencing the tools.",
+      "replacement": "Retained workspace quality and Engine diagnostics scripts.",
+      "removeCondition": "Removed by workspace pruning; no root script, documentation, or runtime entry references these files.",
+      "removedAt": "2026-07-18",
       "validation": {
         "commands": [
           "pnpm check:unused",
-          "rg \"check-3d-route-a-boundaries|scene-render-diagnostics\" package.json scripts docs"
+          "rg \"check-3d-route-a-boundaries|scene-render-diagnostics\" package.json scripts docs || true"
         ]
       }
     },
@@ -686,14 +697,15 @@
       "surface": "VSCode document resource cache provider canonical boundary",
       "semanticClass": "boundary-canonicalizer",
       "action": "migrate",
-      "status": "active",
+      "status": "removed",
       "owner": "neko-types-vscode",
       "paths": [
         "packages/neko-types/src/vscode/extension/document-resource-cache-provider.ts",
         "packages/neko-types/src/vscode/extension/index.ts"
       ],
       "replacement": "Single document/resource cache provider boundary with canonical resource descriptors.",
-      "removeCondition": "Document archive resources resolve only through canonical document entries or explicit range fallback; no legacy cache-path materialization is needed.",
+      "removeCondition": "Canonical document resource providers no longer contain legacy, fallback, or deprecated debt terms; LCDR-024 retains the removed-surface poison checks.",
+      "removedAt": "2026-07-18",
       "validation": {
         "commands": [
           "pnpm --dir packages/neko-types exec vitest run src/vscode/extension/__tests__/document-resource-cache-provider.test.ts src/vscode/extension/__tests__/resource-cache-service.test.ts",
@@ -812,24 +824,18 @@
     {
       "id": "LCDR-022",
       "package": "@neko/shared",
-      "surface": "Live compositor fallback policy and non-authoritative local preview diagnostics",
-      "semanticClass": "runtime-resilience",
-      "action": "preserve",
+      "surface": "Orphaned shared Live compositor contract after Live package pruning",
+      "semanticClass": "delete-now",
+      "action": "delete",
       "status": "active",
-      "owner": "neko-live",
-      "paths": [
-        "packages/neko-types/src/types/live-compositor.ts",
-        "packages/neko-live/packages/webview/src/viewport/liveCompositorScene.ts",
-        "packages/neko-live/packages/webview/src/viewport/liveVisualPath.ts",
-        "packages/neko-live/packages/extension/src/LiveSessionService.ts"
-      ],
-      "replacement": "Current compositor unavailable-source, unsupported-route, hold-last-frame, substitute, diagnostic overlay, and non-authoritative local preview policy.",
-      "removeCondition": "Only remove fallback policy values when compositor, recording, and preview parity tests prove no current unavailable-source or local-preview path needs them.",
+      "owner": "neko-types",
+      "paths": ["packages/neko-types/src/types/live-compositor.ts"],
+      "replacement": "No retained Live product consumer; future live composition must introduce a new owning contract through an active OpenSpec change.",
+      "removeCondition": "Delete the shared contract and root export after confirming no external prelaunch fixture or release entry consumes LiveCompositor symbols.",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-live/packages/webview exec vitest run src/rendererMigration.test.ts src/viewport/LiveController.test.ts",
-          "pnpm --dir packages/neko-live exec vitest run packages/extension/src/LiveSessionService.test.ts",
-          "rg -i \"fallbackPolicy|fallback-non-authoritative|local-fallback\" packages/neko-types/src/types/live-compositor.ts packages/neko-live/packages"
+          "pnpm check:unused",
+          "rg -n \"LiveCompositor|live-compositor\" packages apps --glob '!packages/neko-types/src/types/live-compositor.ts' --glob '!packages/neko-types/src/types/index.ts'"
         ]
       }
     },
@@ -838,19 +844,20 @@
       "package": "@neko-puppet/webview",
       "surface": "Puppet local canvas fallback preview label and non-authoritative viewport diagnostics",
       "semanticClass": "runtime-resilience",
-      "action": "preserve",
-      "status": "active",
+      "action": "delete",
+      "status": "removed",
       "owner": "neko-puppet",
       "paths": [
         "packages/neko-puppet/packages/webview/src/PuppetApp.tsx",
         "packages/neko-puppet/packages/webview/src/components/PuppetCanvas.tsx"
       ],
-      "replacement": "Current local canvas preview for puppet sources when authoritative engine/compositor output is unavailable.",
-      "removeCondition": "Only remove local fallback preview naming when puppet authoritative compositor/engine preview covers no-source and loaded-puppet states with passing viewport tests.",
+      "replacement": "Puppet product package was removed from the retained workspace.",
+      "removeCondition": "Removed by workspace pruning; no retained manifest, package, or runtime path owns Puppet Webview preview behavior.",
+      "removedAt": "2026-07-18",
       "validation": {
         "commands": [
-          "pnpm --dir packages/neko-puppet/packages/webview exec vitest run src/layout/puppetResizeLayout.test.ts",
-          "rg -i \"local-fallback|fallbackLabel|PuppetFallbackLabel\" packages/neko-puppet/packages/webview/src/PuppetApp.tsx packages/neko-puppet/packages/webview/src/components/PuppetCanvas.tsx"
+          "pnpm check:unused",
+          "rg -n \"PuppetApp|PuppetCanvas|PuppetFallbackLabel\" packages apps || true"
         ]
       }
     },
@@ -966,6 +973,88 @@
         }
       ],
       "notes": "This file is not an unused shim: it is still on the current Agent project search call path through @neko/search/host-vscode. Agent call-site ownership is tracked in the Agent LCD register; this non-Agent ledger entry covers the neko-search bridge itself."
+    },
+    {
+      "id": "LCDR-030",
+      "package": "@neko/shared",
+      "surface": "Explicit local workspace metadata inspection and migration boundaries",
+      "semanticClass": "boundary-canonicalizer",
+      "action": "migrate",
+      "status": "active",
+      "owner": "neko-types-local-metadata",
+      "paths": [
+        "packages/neko-types/src/local-metadata/node-workspace-storage-inspection.ts",
+        "packages/neko-types/src/local-metadata/node-proxy-manifest-migration.ts",
+        "packages/neko-types/src/local-metadata/node-search-projection-migration.ts",
+        "packages/neko-types/src/local-metadata/node-media-metadata-migration.ts",
+        "packages/neko-types/src/local-metadata/node-entity-asset-projection-migration.ts"
+      ],
+      "replacement": "Canonical local metadata stores populated by explicit, verified migration commands that preserve valuable prelaunch workspace data.",
+      "removeCondition": "Remove individual migration readers only after retained workspaces no longer require the source format and inspection reports prove the format is absent or safely rebuildable.",
+      "validation": {
+        "commands": [
+          "pnpm --dir packages/neko-types test",
+          "rg -n \"legacy|deprecated|migration\" packages/neko-types/src/local-metadata -g \"*.ts\""
+        ]
+      },
+      "notes": "These modules are explicit migration and inspection entrypoints, not successful runtime fallback readers. Verification failures throw and remain fail-visible."
+    },
+    {
+      "id": "LCDR-031",
+      "package": "@neko/shared",
+      "surface": "Canvas semantic storyboard migration diagnostics and provenance",
+      "semanticClass": "boundary-canonicalizer",
+      "action": "migrate",
+      "status": "active",
+      "owner": "neko-canvas",
+      "paths": ["packages/neko-types/src/types/canvas-semantic-storyboard.ts"],
+      "replacement": "Canonical semantic storyboard prompt documents with explicit migration-required states and provenance records.",
+      "removeCondition": "Remove legacy prompt migration inputs only after persisted storyboard data is migrated or rejected explicitly and canonical prompt authority tests no longer require them.",
+      "validation": {
+        "commands": [
+          "pnpm --dir packages/neko-types test",
+          "rg -n \"legacy|migration-required|migrationProvenance\" packages/neko-types/src/types/canvas-semantic-storyboard.ts"
+        ]
+      },
+      "notes": "Legacy prompt fields never become canonical authority implicitly; ambiguous or malformed inputs produce explicit diagnostics."
+    },
+    {
+      "id": "LCDR-032",
+      "package": "@neko/shared",
+      "surface": "Portable Skill contract migration and explicit legacy metadata validation",
+      "semanticClass": "boundary-canonicalizer",
+      "action": "migrate",
+      "status": "active",
+      "owner": "neko-types-skill",
+      "paths": ["packages/neko-types/src/types/skill.ts"],
+      "replacement": "Portable SKILL.md contracts plus Neko overlay metadata, with legacy metadata accepted only by explicit migration and validation APIs.",
+      "removeCondition": "Remove legacy Skill metadata contracts after all persisted custom Skills and Host policy call sites use portable Skill and overlay contracts without compatibility validation.",
+      "validation": {
+        "commands": [
+          "pnpm --dir packages/neko-types test",
+          "rg -n \"legacy|deprecated|compatibility\" packages/neko-types/src/types/skill.ts"
+        ]
+      },
+      "notes": "Canonical package loading does not read legacy metadata implicitly; the retained surface exists for explicit migration and diagnostics."
+    },
+    {
+      "id": "LCDR-033",
+      "package": "@neko/canvas-extension",
+      "surface": "Canvas Markdown generic-table presentation fallback state",
+      "semanticClass": "presentation-default",
+      "action": "rename",
+      "status": "active",
+      "owner": "neko-canvas",
+      "paths": ["packages/neko-canvas/packages/extension/src/markdownCapabilities.ts"],
+      "replacement": "A neutral generic-table presentation mode and default label naming that does not imply runtime compatibility or recovery.",
+      "removeCondition": "Rename displayFallback across the Canvas Markdown capability contract and consumers when that public DTO next changes; defaultLabel already uses presentation-specific naming.",
+      "validation": {
+        "commands": [
+          "pnpm --dir packages/neko-canvas/packages/extension test",
+          "rg -n \"displayFallback|defaultLabel\" packages/neko-canvas/packages/extension/src/markdownCapabilities.ts"
+        ]
+      },
+      "notes": "displayFallback selects the generic-table review presentation and never invokes an old runtime path or compatibility reader."
     }
   ]
 }

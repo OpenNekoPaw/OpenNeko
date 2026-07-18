@@ -1199,7 +1199,7 @@ function ShotCreatorPromptEditor({
       {projection?.legacyMigrationPrompt ? (
         <div
           className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-800"
-          data-shot-creator-legacy-prompt="true"
+          data-shot-creator-migration-prompt="true"
         >
           {t('content.overlayShotPromptLegacyMigration')}
         </div>
