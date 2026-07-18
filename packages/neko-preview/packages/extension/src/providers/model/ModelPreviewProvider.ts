@@ -20,6 +20,7 @@ import { getPreviewErrorHtml } from '../previewProviderHelper';
 import { ModelPreviewSourceSession } from './ModelPreviewSourceSession';
 import { ModelSourceInspectionError } from './modelSourceInspection';
 import { parseThreeReferenceWebviewMessage } from './threeReferenceProtocol';
+import { projectThreeReferencePresetRuntime } from './threeReferencePresetProjection';
 import {
   THREE_REFERENCE_PRESET_CATALOG,
   resolveThreeReferencePreset,
@@ -348,8 +349,15 @@ export class ModelPreviewProvider
           allowedPurposes: candidate.allowedPurposes,
         } as const;
         resolveThreeReferencePreset(this.presetCatalog, subject);
+        const runtime = await projectThreeReferencePresetRuntime({
+          entry: candidate,
+          webview: panel.webview,
+          extensionUri: this.extensionUri,
+          authorization: this.localResourceAccess,
+          signal: abortController.signal,
+        });
         return {
-          panelSubject: { kind: 'builtin-preset', subject },
+          panelSubject: { kind: 'builtin-preset', subject, runtime },
           eligiblePurposes: candidate.allowedPurposes,
           staging: createBuiltinPresetStaging(sessionId, candidate),
         };

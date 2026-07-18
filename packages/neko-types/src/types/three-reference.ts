@@ -91,6 +91,22 @@ export interface ThreeReferenceSourceRuntimeDescriptor {
   readonly sizeBytes: number;
 }
 
+export interface ThreeReferencePresetRuntimeDependency {
+  readonly dependencyId: string;
+  readonly uri: string;
+  readonly mediaType:
+    'model/gltf-binary' | 'image/png' | 'image/jpeg' | 'image/webp' | 'image/vnd.radiance';
+  readonly sha256: string;
+}
+
+export type ThreeReferencePresetRuntimeDescriptor =
+  | { readonly kind: 'procedural'; readonly implementationId: string }
+  | {
+      readonly kind: 'packaged';
+      readonly entryDependencyId: string;
+      readonly dependencies: readonly ThreeReferencePresetRuntimeDependency[];
+    };
+
 export type ThreeReferencePanelSubject =
   | {
       readonly kind: 'source-model';
@@ -100,6 +116,7 @@ export type ThreeReferencePanelSubject =
   | {
       readonly kind: 'builtin-preset';
       readonly subject: Extract<ThreeReferenceSubject, { readonly kind: 'builtin-preset' }>;
+      readonly runtime: ThreeReferencePresetRuntimeDescriptor;
     }
   | {
       readonly kind: 'environment-only';
@@ -258,12 +275,51 @@ export function isThreeReferencePanelSubject(value: unknown): value is ThreeRefe
         value['runtime'].format === value['subject'].format
       );
     case 'builtin-preset':
-      return value['subject'].kind === 'builtin-preset' && value['runtime'] === undefined;
+      return (
+        value['subject'].kind === 'builtin-preset' &&
+        isThreeReferencePresetRuntimeDescriptor(value['runtime'])
+      );
     case 'environment-only':
       return value['subject'].kind === 'environment-only' && value['runtime'] === undefined;
     default:
       return false;
   }
+}
+
+function isThreeReferencePresetRuntimeDescriptor(
+  value: unknown,
+): value is ThreeReferencePresetRuntimeDescriptor {
+  if (!isRecord(value)) return false;
+  switch (value['kind']) {
+    case 'procedural':
+      return isNonEmptyString(value['implementationId']);
+    case 'packaged':
+      return (
+        isNonEmptyString(value['entryDependencyId']) &&
+        isArrayOf(value['dependencies'], isThreeReferencePresetRuntimeDependency) &&
+        value['dependencies'].some(
+          (dependency) => dependency.dependencyId === value['entryDependencyId'],
+        )
+      );
+    default:
+      return false;
+  }
+}
+
+function isThreeReferencePresetRuntimeDependency(
+  value: unknown,
+): value is ThreeReferencePresetRuntimeDependency {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value['dependencyId']) &&
+    isNonEmptyString(value['uri']) &&
+    (value['mediaType'] === 'model/gltf-binary' ||
+      value['mediaType'] === 'image/png' ||
+      value['mediaType'] === 'image/jpeg' ||
+      value['mediaType'] === 'image/webp' ||
+      value['mediaType'] === 'image/vnd.radiance') &&
+    isNonEmptyString(value['sha256'])
+  );
 }
 
 export function isThreeReferenceDiagnostic(value: unknown): value is ThreeReferenceDiagnostic {
