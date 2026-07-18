@@ -164,12 +164,13 @@ describe('ModelPreviewProvider', () => {
     expect(modelPanel.messages.at(-1)).toMatchObject({ type: 'model-preview/send-succeeded' });
   });
 
-  it('cancels close-during-load and ignores late messages after idempotent dispose', async () => {
+  it('cancels close-during-load without touching the disposed webview and ignores late messages', async () => {
     let release: (() => void) | undefined;
+    const deferredSourceSession = sourceSession('session-a', '/workspace/a.glb');
     const openSourceSession = vi.fn(
       () =>
-        new Promise<never>((_resolve, reject) => {
-          release = () => reject(new Error('load cancelled'));
+        new Promise<typeof deferredSourceSession>((resolve) => {
+          release = () => resolve(deferredSourceSession);
         }),
     );
     const context = extensionContext();
@@ -190,8 +191,9 @@ describe('ModelPreviewProvider', () => {
     await vi.waitFor(() => expect(openSourceSession).toHaveBeenCalledOnce());
     modelPanel.dispose();
     release?.();
-    await resolving;
-    expect(modelPanel.html).toContain('load cancelled');
+    await expect(resolving).resolves.toBeUndefined();
+    expect(deferredSourceSession.dispose).toHaveBeenCalledOnce();
+    expect(modelPanel.html).toBe('');
 
     const liveProvider = providerWith(extensionContext(), () => 'session-live');
     const livePanel = panel();
@@ -269,22 +271,38 @@ function panel() {
   const messages: unknown[] = [];
   const receiveListeners: Array<(message: unknown) => unknown> = [];
   const disposeListeners: Array<() => void> = [];
+  let disposed = false;
+  let html = '';
+  const assertLive = () => {
+    if (disposed) throw new Error('Webview is disposed');
+  };
   const webview = {
     options: {},
-    html: '',
+    get html() {
+      return html;
+    },
+    set html(value: string) {
+      assertLive();
+      html = value;
+    },
     cspSource: 'webview-csp',
     asWebviewUri: vi.fn(),
     postMessage: vi.fn(async (message: unknown) => {
+      assertLive();
       messages.push(message);
       return true;
     }),
     onDidReceiveMessage: vi.fn((listener: (message: unknown) => unknown) => {
+      assertLive();
       receiveListeners.push(listener);
       return { dispose: vi.fn() };
     }),
   };
   const value = {
-    webview,
+    get webview() {
+      assertLive();
+      return webview;
+    },
     onDidDispose: vi.fn((listener: () => void) => {
       disposeListeners.push(listener);
       return { dispose: vi.fn() };
@@ -294,12 +312,14 @@ function panel() {
     value,
     messages,
     get html() {
-      return webview.html;
+      return html;
     },
     async receive(message: unknown) {
       await Promise.all(receiveListeners.map((listener) => listener(message)));
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
       for (const listener of disposeListeners) listener();
     },
   };

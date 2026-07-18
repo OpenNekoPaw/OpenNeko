@@ -143,18 +143,25 @@ export class ModelPreviewProvider
     token: vscode.CancellationToken,
   ): Promise<void> {
     const sessionId = this.createSessionId();
+    const webview = panel.webview;
     const abortController = new AbortController();
     let activeState: ModelPreviewPanelState | undefined;
-    const cancellation = token.onCancellationRequested(() =>
-      abortController.abort(new Error('Model Preview panel resolution cancelled.')),
-    );
-    const panelDisposal = panel.onDidDispose(() => {
+    let pendingSourceSession: ModelPreviewSourceSessionPort | undefined;
+    let resolutionStopped = false;
+    const stopResolution = (reason: Error): void => {
+      resolutionStopped = true;
       if (activeState) {
         this.disposePanel(activeState);
       } else {
-        abortController.abort(new Error('Model Preview panel disposed during resolution.'));
+        abortController.abort(reason);
       }
-    });
+    };
+    const cancellation = token.onCancellationRequested(() =>
+      stopResolution(new Error('Model Preview panel resolution cancelled.')),
+    );
+    const panelDisposal = panel.onDidDispose(() =>
+      stopResolution(new Error('Model Preview panel disposed during resolution.')),
+    );
     try {
       const workspaceRoot =
         vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath ??
@@ -163,7 +170,8 @@ export class ModelPreviewProvider
         documentUri: document.uri,
         ...(workspaceRoot ? { workspaceRoot } : {}),
       });
-      const sourceSession = await this.openSourceSession({
+      abortController.signal.throwIfAborted();
+      pendingSourceSession = await this.openSourceSession({
         sessionId,
         sourcePath: document.uri.fsPath,
         projectionRoot: path.join(
@@ -171,7 +179,7 @@ export class ModelPreviewProvider
           'model-preview-projections',
           sessionId,
         ),
-        webview: panel.webview,
+        webview,
         extensionUri: this.extensionUri,
         authorization: this.localResourceAccess,
         authorizedRoots: policy.authorizedRoots,
@@ -180,8 +188,13 @@ export class ModelPreviewProvider
         signal: abortController.signal,
       });
       if (abortController.signal.aborted) {
-        sourceSession.dispose();
+        pendingSourceSession.dispose();
+        pendingSourceSession = undefined;
         abortController.signal.throwIfAborted();
+      }
+      const sourceSession = pendingSourceSession;
+      if (!sourceSession) {
+        throw new Error('Model Preview source session did not initialize.');
       }
       const stateKey = modelStagingStateKey(sourceSession.descriptor.sourceFingerprint);
       const stored = this.context.workspaceState.get<unknown>(stateKey);
@@ -203,13 +216,14 @@ export class ModelPreviewProvider
         disposed: false,
       };
       activeState = state;
+      pendingSourceSession = undefined;
       this.panels.set(panel, state);
-      const messageDisposable = panel.webview.onDidReceiveMessage((raw) =>
+      const messageDisposable = webview.onDidReceiveMessage((raw) =>
         this.handleMessage(state, raw),
       );
       state.disposables.push(messageDisposable);
-      panel.webview.html = getWebviewHtml({
-        webview: panel.webview,
+      webview.html = getWebviewHtml({
+        webview,
         extensionUri: this.extensionUri,
         entry: 'model',
         modelSessionId: sessionId,
@@ -224,10 +238,16 @@ export class ModelPreviewProvider
         });
       }
     } catch (error) {
-      cancellation.dispose();
-      panelDisposal.dispose();
-      abortController.abort(error);
-      panel.webview.html = getPreviewErrorHtml(
+      if (activeState) {
+        this.disposePanel(activeState);
+      } else {
+        pendingSourceSession?.dispose();
+        cancellation.dispose();
+        panelDisposal.dispose();
+        abortController.abort(error);
+      }
+      if (resolutionStopped) return;
+      webview.html = getPreviewErrorHtml(
         diagnosticFromError(error, { sessionId }).message,
         '3D Model Preview',
       );
