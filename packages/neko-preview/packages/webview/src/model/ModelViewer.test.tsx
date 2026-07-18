@@ -106,9 +106,18 @@ describe('ModelViewer', () => {
     expect(container.querySelectorAll('.model-preview__facts > div')).toHaveLength(4);
     expect(container.querySelectorAll('.model-preview__inspector-section')).toHaveLength(2);
     expect(container.querySelector('[data-testid="model-preview-scene-inspector"]')).not.toBeNull();
+    const viewportToolbar = container.querySelector<HTMLElement>(
+      '[data-testid="model-preview-viewport-toolbar"]',
+    );
+    expect(viewportToolbar?.classList.contains('neko-vtoolbar')).toBe(true);
+    expect(viewportToolbar?.dataset.orientation).toBe('vertical');
+    expect(viewportToolbar?.getAttribute('role')).toBe('toolbar');
+    expect(viewportToolbar?.getAttribute('aria-orientation')).toBe('vertical');
     expect(
-      container.querySelector('[data-testid="model-preview-viewport-toolbar"]'),
-    ).not.toBeNull();
+      viewportToolbar
+        ?.querySelector('[data-model-preview-toolbar-group="navigation"]')
+        ?.getAttribute('data-active-mode'),
+    ).toBe('navigate');
     expect(container.querySelector('[data-testid="model-preview-orientation"]')).not.toBeNull();
     const resetView = container.querySelector<HTMLButtonElement>('button[aria-label="Reset view"]');
     await act(async () => resetView?.click());

@@ -1,4 +1,11 @@
-import { SegmentedControl, ToolbarButton, ToolbarSeparator, toCodiconClassName } from '@neko/ui';
+import {
+  SegmentedControl,
+  ToolbarButton,
+  ToolbarSeparator,
+  VerticalToolbar,
+  toCodiconClassName,
+} from '@neko/ui';
+import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { useTranslation } from '../../i18n/I18nContext';
 
 export type ModelViewportMode = 'navigate' | 'inspect';
@@ -47,26 +54,43 @@ export function ModelViewportControls({
           onValueChange={(value) => onViewportModeChange(asViewportMode(value))}
         />
       </div>
-      <div
+      <VerticalToolbar
         className="model-preview__viewport-toolbar"
         data-testid="model-preview-viewport-toolbar"
-        role="toolbar"
+        data-orientation="vertical"
+        width={50}
         aria-label={t('preview.model.viewportTools')}
+        aria-orientation="vertical"
+        role="toolbar"
+        {...getKeyboardBoundaryMetadata({
+          scope: 'popover',
+          ownerId: 'model-preview-viewport-toolbar',
+          priority: 20,
+          ownedKeys: ['Enter', 'Escape', 'Space', 'Tab', 'ArrowUp', 'ArrowDown'],
+        })}
       >
-        <ToolbarButton
-          active={viewportMode === 'navigate'}
-          disabled={disabled}
-          icon={<span className={toCodiconClassName('cursor')} />}
-          title={t('preview.model.view.navigate')}
-          onClick={() => onViewportModeChange('navigate')}
-        />
-        <ToolbarButton
-          active={viewportMode === 'inspect'}
-          disabled={disabled}
-          icon={<span className={toCodiconClassName('inspect')} />}
-          title={t('preview.model.view.inspect')}
-          onClick={() => onViewportModeChange('inspect')}
-        />
+        <div
+          aria-label={t('preview.model.viewMode')}
+          className="model-preview__toolbar-mode-group"
+          data-active-mode={viewportMode}
+          data-model-preview-toolbar-group="navigation"
+          role="group"
+        >
+          <ToolbarButton
+            active={viewportMode === 'navigate'}
+            disabled={disabled}
+            icon={<span className={toCodiconClassName('cursor')} />}
+            title={t('preview.model.view.navigate')}
+            onClick={() => onViewportModeChange('navigate')}
+          />
+          <ToolbarButton
+            active={viewportMode === 'inspect'}
+            disabled={disabled}
+            icon={<span className={toCodiconClassName('inspect')} />}
+            title={t('preview.model.view.inspect')}
+            onClick={() => onViewportModeChange('inspect')}
+          />
+        </div>
         <ToolbarSeparator />
         {(['translate', 'rotate', 'scale'] as const).map((mode) => (
           <ToolbarButton
@@ -102,7 +126,7 @@ export function ModelViewportControls({
           title={t('preview.model.frameModel')}
           onClick={onFrameModel}
         />
-      </div>
+      </VerticalToolbar>
     </>
   );
 }
