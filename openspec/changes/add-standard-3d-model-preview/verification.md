@@ -39,7 +39,7 @@ The source stays read-only. Node transforms, camera presets, lights, background,
 
 ## Development Host Evidence
 
-- Host: VS Code Extension Development Host with the repository development extensions, opening `/Users/feng/Git/neko-test/test.glb` directly from its external workspace. The model was not copied into the repository or modified. The final rendering pass used the same dev extension paths without an attached Node inspector because the built-in debugger's network inspection raised `Missing dataLength in event` while reading the 34 MB GLB before the Preview handler could mount.
+- Host: VS Code Extension Development Host with the repository development extensions, opening `~/Git/neko-test/test.glb` directly from its external workspace. The model was not copied into the repository or modified. The final rendering pass used the same dev extension paths without an attached Node inspector because the built-in debugger's network inspection raised `Missing dataLength in event` while reading the 34 MB GLB before the Preview handler could mount.
 - Before the fix: 21 GLTF texture load errors and a white/incomplete model.
 - After the fix: no Three.js, texture, CSP, or model runtime error; the only console message was the known VS Code `local-network-access` feature warning.
 - Visual result: original red/white/skin colors, transparent clothing details, skirt, and tail render; the erroneous large black clothing blocks are absent. UI exposes scene search/tree, orbit/node modes, temporary transform, camera, light, background, capture size, and Agent handoff.
