@@ -880,6 +880,9 @@ importers:
       '@neko/ui':
         specifier: workspace:*
         version: link:../../../neko-ui
+      '@vscode/codicons':
+        specifier: 0.0.45
+        version: 0.0.45
       '@zip.js/zip.js':
         specifier: ^2.7.52
         version: 2.8.26

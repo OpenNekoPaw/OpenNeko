@@ -15,6 +15,7 @@
     "@neko/neko-client": "workspace:*",
     "@neko/shared": "workspace:*",
     "@neko/ui": "workspace:*",
+    "@vscode/codicons": "0.0.45",
     "@zip.js/zip.js": "^2.7.52",
     "docx-preview": "^0.3.3",
     "epubjs": "^0.3.93",
