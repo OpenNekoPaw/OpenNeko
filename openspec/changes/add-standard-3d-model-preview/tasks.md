@@ -39,6 +39,8 @@
 - [x] 5.4 Build the fixed model staging UI from existing `@neko/ui` primitives, including keyboard/focus handling, accessible labels/states, localized diagnostics, loading/empty/error views, and clear read-only-source messaging.
 - [x] 5.5 Implement bounded untainted PNG capture with exact staging identity, camera/light/transform metadata, configured dimension limits, and visible failure for stale revisions, invalid dimensions, renderer loss, or capture errors.
 - [x] 5.6 Add Webview tests for staging serialization, camera/light/transform behavior, accessibility, source-byte immutability, stale state, capture validation, and multiple independent panel roots.
+- [x] 5.7 Make canonical front framing the initial/reset pose and project camera presets differentially so non-camera inspector changes preserve the live orbit position, target, and distance; advance incompatible recoverable staging explicitly and add red/green regressions.
+- [x] 5.8 Add the bounds-scaled ground grid, live screen-space XYZ orientation indicator, and updated accessible bottom toolbar with panel-local guide toggles; verify the real external development GLB in the Extension Development Host.
 
 ## 6. Deliver canonical Model Preview context to Agent
 

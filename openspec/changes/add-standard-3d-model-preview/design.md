@@ -98,6 +98,10 @@ The state is keyed by stable source fingerprint and schema version. It can be re
 
 Every message carries `sessionId`, `sourceFingerprint`, and staging `revision`. Focus or active editor state never substitutes for identity.
 
+Camera pose projection is intent-based rather than a side effect of every staging update. The runtime applies the canonical front pose on first load, applies a preset pose when the active preset identity changes, and reframes only from an explicit reset-view action. Lighting, background, capture dimensions, node selection, and transform staging MUST preserve the live OrbitControls position, target, and distance. Field-of-view changes update the projection matrix without replacing the current orbit pose.
+
+The model Webview owns two non-source viewport guides: a bounds-scaled ground grid positioned at the model's lowest Y bound, and a screen-space XYZ orientation indicator derived from the live camera orientation. They are renderer/UI aids only, remain outside shared staging and Agent context, default to visible, and are controlled from the package-local viewport toolbar. This avoids persisting editor chrome as model truth or adding another shared scene contract.
+
 ### Materialize captures as derived preview resources
 
 The Webview produces a bounded PNG from the current untainted canvas together with the exact staging identity and capture metadata. The Extension validates the live session, size, MIME, and revision, then materializes the PNG through the existing rebuildable preview/cache resource boundary and creates a stable preview-image `ResourceRef`.
