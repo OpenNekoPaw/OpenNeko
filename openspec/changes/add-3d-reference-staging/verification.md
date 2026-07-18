@@ -69,6 +69,8 @@ pnpm --dir packages/neko-preview compile:webview
 
 Earlier focused contract/provider/runtime/UI/materialization groups passed 28 tests in 6 files, and the cumulative focused Preview groups passed 44 tests. Relevant ESLint and `git diff --check` checks passed at their implementation checkpoints.
 
+Agent Evaluation disposition is `update` for `agent-runtime.creative-media-workflow`. `pnpm test:agent:eval` passed with 39 files / 278 tests and strict discovery of 23 suites / 47 cases. This is harness integrity only. The required real canonical/failure cases are blocked by the missing TUI Preview-context input boundary and unfinished downstream routing; see `evaluation.md`.
+
 ## Active blockers and residual risk
 
 1. `scripts/webview-functional/` is entirely deleted in the current user worktree, including its VS Code controller and Preview scenario fixtures. Restoring or extending it would overwrite user-owned deletions, so tasks 7.1 and 7.2 remain open. This also explains the reported missing `scripts/webview-functional/vscode-controller` path.
