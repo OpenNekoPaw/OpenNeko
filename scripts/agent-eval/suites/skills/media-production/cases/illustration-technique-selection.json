@@ -7,9 +7,9 @@
   "evidenceContract": {
     "userBehavior": "Inspect an actual layered illustration and the current canonical Tool/Skill context, compare viable animation techniques, and select or block the next technique without defaulting to generative video or starting production.",
     "canonicalPath": ["station-illustration.svg evidence", "builtin media-production Skill", "GetContext", "current Tool comparison", "capability-aware technique decision"],
-    "forbiddenFallback": ["automatic GenerateVideo", "invented Puppet, frame-animation, layered-2D, scene, or compositing support", "planning projection handshake", "parallel creative catalog", "IDC stage or run", "legacy workflow runtime"],
+    "forbiddenFallback": ["automatic GenerateVideo", "invented frame-animation, layered-2D, or compositing support", "planning projection handshake", "parallel creative catalog", "IDC stage or run", "legacy workflow runtime"],
     "observables": [{ "ref": "selection-facts", "kind": "runtime-fact", "description": "Source read, current context query, technique comparison, Tool absence, effective model, usage/context estimate, and no-fallback facts.", "required": true }],
-    "expectedResult": "The Agent reads the layered SVG, checks current capabilities, compares generative video, layered 2D, Puppet, frame animation, 3D scene/camera, and compositing against the source and target, then selects only a declared path or reports the preferred path unavailable.",
+    "expectedResult": "The Agent reads the layered SVG, checks current capabilities, compares generative video, layered 2D, frame animation, and compositing against the source and target, then selects only a declared path or reports the preferred path unavailable.",
     "expectedFailure": "Calling video or image generation, inventing support, omitting current context, or using a planning/legacy runtime fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
@@ -19,7 +19,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$media-production 读取 @station-illustration.svg\n\n这是一个可分层的静态车站插画。先检查当前会话实际可用的工具和 Skill 上下文，再比较生成式视频、分层 2D、Puppet、逐帧动画、3D 场景/摄影机与合成。目标是保留 Mara、红伞、无头灯列车和钟表的造型一致性，只让雨、伞和列车做克制运动。输出来源证据、各技术所需输入、当前 supported/degraded/unavailable 判断、选择或 blocked 结论及下一项可执行动作。不要假设未注册能力可用，不要生成图片或视频，不要预建节点图或固定工作流。"
+      "prompt": "$media-production 读取 @station-illustration.svg\n\n这是一个可分层的静态车站插画。先检查当前会话实际可用的工具和 Skill 上下文，再比较生成式视频、分层 2D、逐帧动画与合成。目标是保留 Mara、红伞、无头灯列车和钟表的造型一致性，只让雨、伞和列车做克制运动。输出来源证据、各技术所需输入、当前 supported/degraded/unavailable 判断、选择或 blocked 结论及下一项可执行动作。不要假设未注册能力可用，不要生成图片或视频，不要预建节点图或固定工作流。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 240000 }
   ],
@@ -29,7 +29,7 @@
     { "id": "model", "kind": "model", "profileId": "configured-default", "noFallback": true, "evidenceRef": "selection-facts" },
     { "id": "read", "kind": "tool-call", "name": "Read", "status": "success", "evidenceRef": "selection-facts" },
     { "id": "context", "kind": "tool-call", "name": "GetContext", "status": "success", "evidenceRef": "selection-facts" },
-    { "id": "output", "kind": "structured-output", "format": "markdown", "requiredFields": ["Mara", "红伞", "无头灯列车", "雨", "生成式视频", "分层 2D", "Puppet", "逐帧", "3D", "合成", "degraded", "unavailable", "结论"], "locale": "zh-cn", "evidenceRef": "selection-facts" },
+    { "id": "output", "kind": "structured-output", "format": "markdown", "requiredFields": ["Mara", "红伞", "无头灯列车", "雨", "生成式视频", "分层 2D", "逐帧", "合成", "degraded", "unavailable", "结论"], "locale": "zh-cn", "evidenceRef": "selection-facts" },
     { "id": "no-image", "kind": "tool-call", "name": "GenerateImage", "status": "absent", "evidenceRef": "selection-facts" },
     { "id": "no-video", "kind": "tool-call", "name": "GenerateVideo", "status": "absent", "evidenceRef": "selection-facts" },
     { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "backgroundTasksIdle", "mediaDeliveryIdle", "taskResultObservationIdle", "continuationQueueIdle"], "evidenceRef": "selection-facts" },

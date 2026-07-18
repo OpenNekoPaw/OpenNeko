@@ -6,26 +6,79 @@
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "Terminate the first TUI Host after a valid Workspace Board delivery is queued, then let a second Host resume it.",
-    "canonicalPath": ["Host A enqueue", "Host A termination", "LocalMetadata pending delivery", "Host B fenced takeover", "Canvas receipt"],
-    "forbiddenFallback": ["new delivery identity", "direct .nkc write", "last-write-wins", "active Canvas fallback"],
-    "observables": [{ "ref": "recovery-facts", "kind": "runtime-fact", "description": "Stable delivery identity, claim epochs, single Canvas effect, projected receipt, and terminal idle facts.", "required": true }],
+    "canonicalPath": [
+      "Host A enqueue",
+      "Host A termination",
+      "LocalMetadata pending delivery",
+      "Host B fenced takeover",
+      "Canvas receipt"
+    ],
+    "forbiddenFallback": [
+      "new delivery identity",
+      "direct .nkc write",
+      "last-write-wins",
+      "active Canvas fallback"
+    ],
+    "observables": [
+      {
+        "ref": "recovery-facts",
+        "kind": "runtime-fact",
+        "description": "Stable delivery identity, claim epochs, single Canvas effect, projected receipt, and terminal idle facts.",
+        "required": true
+      }
+    ],
     "expectedResult": "Host B resumes the same delivery identity, applies exactly one Canvas batch, and reaches terminal idle.",
-    "expectedFailure": "Changed identity, stale commit success, duplicate processing Group, missing receipt, or non-idle recovery fails."
+    "expectedFailure": "Changed identity, stale commit success, duplicate content node, legacy visual Group creation, missing receipt, or non-idle recovery fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
   "modelProfileIds": ["configured-default"],
   "steps": [
-    { "id": "queue", "kind": "submit", "prompt": "Create one named reviewable Markdown analysis artifact and wait until the Workspace Board delivery is queued." },
+    {
+      "id": "queue",
+      "kind": "submit",
+      "prompt": "Create one named reviewable Markdown analysis artifact and wait until the Workspace Board delivery is queued."
+    },
     { "id": "first-idle", "kind": "wait-for-idle", "timeoutMs": 240000 },
     { "id": "resume-host", "kind": "resume", "conversationRef": "current" },
-    { "id": "recover", "kind": "submit", "prompt": "Resume the same workspace delivery context and confirm it remains available." },
+    {
+      "id": "recover",
+      "kind": "submit",
+      "prompt": "Resume the same workspace delivery context and confirm it remains available."
+    },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 240000 }
   ],
   "assertions": [
-    { "id": "recovered", "kind": "recovery", "resumeStepId": "resume-host", "submitStepId": "recover", "idleStepId": "idle", "evidenceRef": "recovery-facts" },
-    { "id": "single-effect", "kind": "workspace-board-projection", "status": "projected", "targetKind": "workspace", "minNodeIds": 3, "revisionRequired": true, "diagnosticsEmpty": true, "evidenceRef": "recovery-facts" },
-    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "backgroundTasksIdle", "mediaDeliveryIdle", "taskResultObservationIdle", "continuationQueueIdle"], "evidenceRef": "recovery-facts" }
+    {
+      "id": "recovered",
+      "kind": "recovery",
+      "resumeStepId": "resume-host",
+      "submitStepId": "recover",
+      "idleStepId": "idle",
+      "evidenceRef": "recovery-facts"
+    },
+    {
+      "id": "single-effect",
+      "kind": "workspace-board-projection",
+      "status": "projected",
+      "targetKind": "workspace",
+      "minNodeIds": 1,
+      "revisionRequired": true,
+      "diagnosticsEmpty": true,
+      "evidenceRef": "recovery-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": [
+        "turnIdle",
+        "backgroundTasksIdle",
+        "mediaDeliveryIdle",
+        "taskResultObservationIdle",
+        "continuationQueueIdle"
+      ],
+      "evidenceRef": "recovery-facts"
+    }
   ],
   "artifactChecks": [],
   "budget": { "timeoutMs": 240000, "repetitions": 1 }

@@ -902,7 +902,27 @@ function assertNoFallback(assertion, facts) {
     'runtimeErrors',
   ]);
   const observed = collectRuntimeRefs(facts);
+  const boardFallbackCounters = new Map([
+    ['active-canvas', 'activeCanvas'],
+    ['recentCanvas', 'recentCanvas'],
+    ['NodeWorkspaceBoardProjector', 'directWriter'],
+    ['generic-send-to-canvas', 'genericSendToCanvas'],
+  ]);
+  const requestedBoardCounters = assertion.forbiddenRefs.flatMap((ref) => {
+    const counter = boardFallbackCounters.get(ref);
+    return counter ? [[ref, counter]] : [];
+  });
+  if (requestedBoardCounters.length > 0 && !facts?.workspaceBoardDelivery?.legacyFallbackCounts) {
+    throw new Error('Workspace Board legacy fallback counters are unavailable');
+  }
   const forbidden = assertion.forbiddenRefs.filter((ref) => observed.has(ref));
+  for (const [ref, counter] of requestedBoardCounters) {
+    const count = facts.workspaceBoardDelivery.legacyFallbackCounts[counter];
+    if (!Number.isInteger(count) || count < 0) {
+      throw new Error(`Workspace Board legacy fallback counter is invalid: ${counter}`);
+    }
+    if (count > 0 && !forbidden.includes(ref)) forbidden.push(ref);
+  }
   if (forbidden.length > 0) {
     throw new Error(`forbidden fallback reference(s) observed: ${forbidden.join(', ')}`);
   }
@@ -925,6 +945,22 @@ function assertWorkspaceBoardProjection(assertion, facts) {
       `Workspace Board projection has ${arrayOrEmpty(projection.nodeIds).length} node id(s); expected at least ${assertion.minNodeIds}`,
     );
   }
+  const legacyGroupNodeIds = arrayOrEmpty(projection.nodeIds).filter(
+    (nodeId) => nodeId === 'workspace-inbox' || nodeId.startsWith('workspace-process-'),
+  );
+  if (legacyGroupNodeIds.length > 0) {
+    throw new Error(
+      `Workspace Board projection used legacy visual Group node id(s): ${legacyGroupNodeIds.join(', ')}`,
+    );
+  }
+  if (
+    assertion.minConnectionIds !== undefined &&
+    arrayOrEmpty(projection.connectionIds).length < assertion.minConnectionIds
+  ) {
+    throw new Error(
+      `Workspace Board projection has ${arrayOrEmpty(projection.connectionIds).length} connection id(s); expected at least ${assertion.minConnectionIds}`,
+    );
+  }
   if (assertion.revisionRequired && !projection.revision) {
     throw new Error('Workspace Board projection has no revision evidence');
   }
@@ -938,6 +974,7 @@ function assertWorkspaceBoardProjection(assertion, facts) {
     targetKind: projection.targetKind,
     revision: projection.revision,
     nodeIds: projection.nodeIds,
+    connectionIds: projection.connectionIds,
     diagnosticCodes: projection.diagnosticCodes,
   };
 }

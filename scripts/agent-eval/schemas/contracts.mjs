@@ -497,15 +497,20 @@ const ASSERTION_SCHEMA = s.union([
     kind: s.literal('no-fallback'),
     forbiddenRefs: EXTERNAL_ID_LIST,
   }),
-  s.object({
-    ...ASSERTION_COMMON,
-    kind: s.literal('workspace-board-projection'),
-    status: s.enum(['projected', 'noop']),
-    targetKind: s.literal('workspace'),
-    minNodeIds: s.integer({ min: 1 }),
-    revisionRequired: s.boolean(),
-    diagnosticsEmpty: s.boolean(),
-  }),
+  s.object(
+    {
+      ...ASSERTION_COMMON,
+      kind: s.literal('workspace-board-projection'),
+      status: s.enum(['projected', 'noop']),
+      targetKind: s.literal('workspace'),
+      minNodeIds: s.integer({ min: 1 }),
+      revisionRequired: s.boolean(),
+      diagnosticsEmpty: s.boolean(),
+    },
+    {
+      minConnectionIds: s.integer({ min: 0 }),
+    },
+  ),
 ]);
 
 const ARTIFACT_CHECK_SCHEMA = s.union([

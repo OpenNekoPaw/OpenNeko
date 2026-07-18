@@ -220,7 +220,7 @@ override a failed hard gate. `non-comparable` is not an improvement or a pass.
 ## Skill and Prompt Optimization Debug Functional
 
 Optimization is an evidence consumer layered on the Evaluation platform. It is
-not a second runner, product capability, Agent Skill, Dashboard action, or
+not a second runner, product capability, Agent Skill, core product action, or
 automatic repository mutation path. The canonical implementation is under
 `scripts/agent-eval/optimization/` and reuses v2 reports, suite discovery,
 implementation ablation targets, the TUI runner, Judge adapters, and randomized

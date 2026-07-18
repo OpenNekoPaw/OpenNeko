@@ -6,10 +6,6 @@ const config: KnipConfig = {
     // We keep knip focused on runtime dead code and dependency drift.
     'types',
   ],
-  ignore: [
-    // VS Code loads this CommonJS entry from its extension manifest at Debug Host startup.
-    'scripts/webview-functional/vscode-controller/extension.cjs',
-  ],
   ignoreBinaries: [
     // Root package scripts invoke this local CI wrapper directly.
     'scripts/act-ci.sh',
@@ -54,13 +50,20 @@ const config: KnipConfig = {
         'scripts/agent-eval/protocol-smoke.mjs',
         'scripts/agent-eval/validators/file-validator-cli.mjs',
         'scripts/test-orchestration/fixtures/*.ts',
-        'scripts/webview-functional/*.test.mjs',
       ],
     },
     // ── Layer 0: Library packages ──────────────────────
     'packages/neko-types': {
       // Knip auto-detects entries from package.json exports
       ignoreDependencies: ['react', 'react-dom', 'tailwindcss'], // Optional peer dependencies
+    },
+    'packages/neko-content': {
+      ignoreDependencies: [
+        // Loaded by the Node document runtime according to the source format.
+        'epub2',
+        'mammoth',
+        'pdf-parse',
+      ],
     },
     'packages/neko-client': {},
 
@@ -145,6 +148,7 @@ const config: KnipConfig = {
     },
     'packages/neko-preview/packages/webview': {
       entry: [
+        'scripts/three-reference-preset-feasibility.mts',
         'src/audio/main.tsx',
         'src/video/main.tsx',
         'src/cbz/main.tsx',

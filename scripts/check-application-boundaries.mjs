@@ -6,6 +6,184 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = process.cwd();
 const sourceExtensions = new Set(['.js', '.jsx', '.mjs', '.mts', '.ts', '.tsx']);
+const removedFeaturePackagePaths = [
+  'packages/neko-audio',
+  'packages/neko-auth',
+  'packages/neko-dashboard',
+  'packages/neko-live',
+  'packages/neko-market',
+  'packages/neko-model',
+  'packages/neko-puppet',
+  'packages/neko-sketch',
+  'packages/neko-story',
+];
+const removedProductContractRules = [
+  {
+    file: 'packages/neko-agent/packages/agent-types/src/extension-command-contract.ts',
+    tokens: ['NEKO_PUPPET_EXTENSION_ID'],
+  },
+  {
+    file: 'packages/neko-agent/packages/agent-types/src/external-processor.ts',
+    tokens: ["'market'", 'registerMarketExternalProcessorPackages'],
+  },
+  {
+    file: 'packages/neko-agent/packages/agent/src/provider/provider-card-runtime.ts',
+    tokens: ["layer: 'market'", 'marketRegistration', 'readonly market:'],
+  },
+  {
+    file: 'packages/neko-client/src/index.ts',
+    tokens: ['PuppetCommandAck', 'PuppetCommandEnvelope'],
+  },
+  {
+    file: 'packages/neko-tools/package.json',
+    tokens: [
+      'neko-audio-file',
+      'neko-sketch-file',
+      'neko-puppet-file',
+      'neko-model-file',
+      '".nka"',
+      '".nks"',
+      '".nkp"',
+      '".inp"',
+      '".nkm"',
+    ],
+  },
+  {
+    file: 'packages/neko-tools/themes/neko-file-icon-theme.json',
+    tokens: [
+      '_neko_sketch',
+      '_neko_puppet',
+      '_neko_model',
+      '_neko_story',
+      '"nka"',
+      '"nks"',
+      '"nkp"',
+      '"inp"',
+      '"nkm"',
+      '"fountain"',
+      '"nekostory"',
+    ],
+  },
+  {
+    file: 'packages/neko-types/src/types/index.ts',
+    tokens: [
+      "'./live-compositor'",
+      '"./live-compositor"',
+      "'./model-agent-api'",
+      '"./model-agent-api"',
+      "'./model-ai-preview-scene-modes'",
+      '"./model-ai-preview-scene-modes"',
+      "'./scene'",
+      '"./scene"',
+      "'../generated/scene.engine'",
+      '"../generated/scene.engine"',
+    ],
+  },
+  {
+    file: 'packages/neko-types/src/types/creative-entity-asset-composition.ts',
+    tokens: [
+      "export type AssetRefScheme = 'project' | 'market'",
+      "export type RepresentationTarget = 'story'",
+      "canvas: ['portrait', 'reference', 'puppet-bone'",
+    ],
+  },
+  {
+    file: 'packages/neko-engine/packages/host-cli/src/runner.rs',
+    tokens: ['NkaLoader', 'run_nka_mix_export'],
+  },
+  {
+    file: 'packages/neko-types/src/types/extension-api.ts',
+    tokens: [
+      'NekoAudioAPI',
+      'NekoModelAPI',
+      'NekoPuppetAPI',
+      'NekoSketchAPI',
+      "'neko.neko-auth'",
+      "'neko.neko-model'",
+      "'neko.neko-puppet'",
+      "'neko.neko-sketch'",
+      "'neko.neko-story'",
+    ],
+  },
+  {
+    file: 'packages/neko-types/src/types/tool-names.ts',
+    tokens: [
+      'TOOL_NAMES_AUDIO',
+      'TOOL_NAMES_MODEL',
+      'TOOL_NAMES_PUPPET',
+      'TOOL_NAMES_SKETCH',
+      'TOOL_NAMES_STORY',
+    ],
+  },
+  {
+    file: 'quality/coverage-baseline.json',
+    tokens: [
+      'dashboardWorkItemSource',
+      'packages/neko-entity/src/dashboard/',
+      '"owner": "packages/neko-live',
+      '"owner": "packages/neko-market',
+      '"owner": "packages/neko-model',
+      '"owner": "packages/neko-puppet',
+      '"owner": "packages/neko-sketch',
+      '"owner": "packages/neko-story',
+    ],
+  },
+  {
+    file: '.dependency-cruiser.cjs',
+    tokens: [
+      'packages/neko-auth/packages/core',
+      'packages/neko-market',
+      'packages/neko-model',
+      'packages/neko-audio',
+      'packages/neko-live',
+    ],
+  },
+  {
+    file: 'packages/neko-engine/README.md',
+    tokens: ['runtime-scene', 'runtime-puppet', 'runtime-device', 'runtime-ml'],
+  },
+  {
+    file: 'packages/neko-engine/ARCHITECTURE.md',
+    tokens: ['runtime-scene', 'runtime-puppet', 'runtime-device', 'runtime-ml'],
+  },
+];
+const removedProductContractFiles = [
+  'packages/neko-types/src/types/live-compositor.ts',
+  'packages/neko-types/src/types/__tests__/live-compositor-contract.test.ts',
+  'packages/neko-types/src/types/__fixtures__/live-compositor-scene-v1.json',
+  'packages/neko-types/src/types/model-agent-api.ts',
+  'packages/neko-types/src/types/model-ai-preview-scene-modes.ts',
+  'packages/neko-types/src/types/__tests__/model-agent-api-contract.test.ts',
+  'packages/neko-types/src/types/__tests__/model-ai-preview-scene-modes-contract.test.ts',
+  'packages/neko-types/src/types/__tests__/puppet-agent-tool-contract.test.ts',
+  'packages/neko-types/src/types/__fixtures__/model-ai-preview-scene-modes-v1.json',
+  'packages/neko-proto/scene.proto',
+  'packages/neko-types/src/generated/scene.engine.ts',
+  'packages/neko-types/src/generated/__tests__/scene-contract.test.ts',
+  'packages/neko-types/src/generated/__fixtures__/scene-character-v0.json',
+  'packages/neko-types/src/generated/__fixtures__/scene-contract-v1.json',
+  'packages/neko-types/src/types/scene.ts',
+  'packages/neko-types/src/types/viewport-protocol.ts',
+  'packages/neko-types/src/types/audioProject.ts',
+  'packages/neko-types/src/types/audioProtocol.ts',
+  'packages/neko-types/src/types/auth.ts',
+  'packages/neko-types/src/types/puppet.ts',
+  'packages/neko-types/src/types/sketch.ts',
+  'packages/neko-types/src/types/model-project.ts',
+  'packages/neko-types/src/types/asset/market.ts',
+  'packages/neko-types/src/nka/index.ts',
+  'packages/neko-types/src/nks/index.ts',
+  'packages/neko-types/src/vscode/extension/templates/glb-template.ts',
+  'packages/neko-engine/packages/host-cli/src/nka_loader.rs',
+  'packages/neko-entity/src/providers/story.ts',
+  'packages/neko-ui/src/viewport/index.ts',
+  'packages/neko-assets/src/market/VoicePackInstallTarget.ts',
+  'packages/neko-preview/packages/extension/src/providers/model/modelPreviewProtocol.ts',
+  'packages/neko-tools/themes/icons/file-model.svg',
+  'packages/neko-tools/themes/icons/file-puppet.svg',
+  'packages/neko-tools/themes/icons/file-sketch.svg',
+  'packages/neko-tools/themes/icons/file-story.svg',
+];
 
 export function findApplicationBoundaryViolations(file, content) {
   const normalizedFile = normalizePath(file);
@@ -144,6 +322,22 @@ export function findRetiredProductSurfaceViolations(snapshot) {
       });
     }
   }
+  for (const directory of snapshot.removedFeaturePackages ?? []) {
+    findings.push({
+      ruleId: 'removed-feature-package-must-not-exist',
+      file: directory,
+      message: 'A package outside the retained OpenNeko product set must not be restored.',
+    });
+  }
+  for (const violation of snapshot.removedProductContracts ?? []) {
+    findings.push({
+      ruleId: 'removed-product-contract-must-not-return',
+      file: violation.file,
+      specifier: violation.token,
+      message:
+        'A deleted product contract, manifest association, or stale ownership entry returned.',
+    });
+  }
   return findings;
 }
 
@@ -165,7 +359,27 @@ function discoverProductSurfaces(root) {
           normalizePath(relative(scenarioRoot, path)),
         )
       : [],
+    removedFeaturePackages: removedFeaturePackagePaths.filter((path) =>
+      existsSync(resolve(root, path)),
+    ),
+    removedProductContracts: discoverRemovedProductContracts(root),
   };
+}
+
+function discoverRemovedProductContracts(root) {
+  const violations = [];
+  for (const rule of removedProductContractRules) {
+    const absolutePath = resolve(root, rule.file);
+    if (!existsSync(absolutePath)) continue;
+    const content = readFileSync(absolutePath, 'utf8');
+    for (const token of rule.tokens) {
+      if (content.includes(token)) violations.push({ file: rule.file, token });
+    }
+  }
+  for (const file of removedProductContractFiles) {
+    if (existsSync(resolve(root, file))) violations.push({ file, token: '<file-exists>' });
+  }
+  return violations;
 }
 
 function findDependencyManifests(root, dependencyName) {
@@ -332,6 +546,13 @@ function runSelfTest() {
     retiredTuiDependencies: ['apps/legacy/package.json'],
     rootScripts: ['build:desktop', 'test'],
     functionalScenarios: ['desktop/startup.p0.scenario.json', 'home/startup.p0.scenario.json'],
+    removedFeaturePackages: ['packages/neko-model'],
+    removedProductContracts: [
+      {
+        file: 'packages/neko-client/src/index.ts',
+        token: 'PuppetCommandEnvelope',
+      },
+    ],
   }).map((finding) => finding.ruleId);
   const expectedRetiredProductFindings = [
     'retired-desktop-package-must-not-exist',
@@ -342,6 +563,8 @@ function runSelfTest() {
     'studio-must-not-be-productized',
     'retired-desktop-script-must-not-exist',
     'retired-desktop-scenario-must-not-exist',
+    'removed-feature-package-must-not-exist',
+    'removed-product-contract-must-not-return',
   ];
   if (JSON.stringify(retiredProductFindings) !== JSON.stringify(expectedRetiredProductFindings)) {
     failures.push({

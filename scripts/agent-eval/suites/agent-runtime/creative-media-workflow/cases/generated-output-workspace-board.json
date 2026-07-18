@@ -51,15 +51,76 @@
   ],
   "assertions": [
     { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "workflow-facts" },
-    { "id": "tool", "kind": "tool-call", "name": "GenerateImage", "status": "success", "evidenceRef": "workflow-facts" },
-    { "id": "task", "kind": "task-terminal", "taskType": "image_generation", "status": "completed", "evidenceRef": "workflow-facts" },
-    { "id": "resource", "kind": "artifact", "artifactKind": "generated-asset", "provenanceSource": "generated-asset", "validatorStatus": "valid", "evidenceRef": "workflow-facts" },
-    { "id": "workspace-board", "kind": "workspace-board-projection", "status": "projected", "targetKind": "workspace", "minNodeIds": 3, "revisionRequired": true, "diagnosticsEmpty": true, "evidenceRef": "workflow-facts" },
-    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "backgroundTasksIdle", "mediaDeliveryIdle", "taskResultObservationIdle", "continuationQueueIdle"], "evidenceRef": "workflow-facts" },
-    { "id": "forbidden-paths", "kind": "no-fallback", "forbiddenRefs": ["ListAssets", "GetAsset", "ImportAsset", "AssetEntity", "CanvasBoardIndexService", "AgentCanvasBoardWorkRuntime", "CanvasGeneratedDraftProjectionService", "GeneratedDraftLayer", "active-canvas", ".neko/generated-drafts"], "evidenceRef": "workflow-facts" }
+    {
+      "id": "tool",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "success",
+      "evidenceRef": "workflow-facts"
+    },
+    {
+      "id": "task",
+      "kind": "task-terminal",
+      "taskType": "image_generation",
+      "status": "completed",
+      "evidenceRef": "workflow-facts"
+    },
+    {
+      "id": "resource",
+      "kind": "artifact",
+      "artifactKind": "generated-asset",
+      "provenanceSource": "generated-asset",
+      "validatorStatus": "valid",
+      "evidenceRef": "workflow-facts"
+    },
+    {
+      "id": "workspace-board",
+      "kind": "workspace-board-projection",
+      "status": "projected",
+      "targetKind": "workspace",
+      "minNodeIds": 1,
+      "revisionRequired": true,
+      "diagnosticsEmpty": true,
+      "evidenceRef": "workflow-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": [
+        "turnIdle",
+        "backgroundTasksIdle",
+        "mediaDeliveryIdle",
+        "taskResultObservationIdle",
+        "continuationQueueIdle"
+      ],
+      "evidenceRef": "workflow-facts"
+    },
+    {
+      "id": "forbidden-paths",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "ListAssets",
+        "GetAsset",
+        "ImportAsset",
+        "AssetEntity",
+        "CanvasBoardIndexService",
+        "AgentCanvasBoardWorkRuntime",
+        "CanvasGeneratedDraftProjectionService",
+        "GeneratedDraftLayer",
+        "active-canvas",
+        ".neko/generated-drafts"
+      ],
+      "evidenceRef": "workflow-facts"
+    }
   ],
   "artifactChecks": [
-    { "id": "generated-file", "kind": "directory-files", "evidenceRef": "generated-file-facts", "path": "neko/generated/image", "minFiles": 1 }
+    {
+      "id": "generated-file",
+      "kind": "directory-files",
+      "evidenceRef": "generated-file-facts",
+      "path": "neko/generated/image",
+      "minFiles": 1
+    }
   ],
   "budget": { "timeoutMs": 300000, "repetitions": 1 }
 }

@@ -277,6 +277,10 @@ function projectSnapshot(facts) {
     })),
     tasks: Array.isArray(facts?.tasks) ? facts.tasks : [],
     continuations: Array.isArray(facts?.continuations) ? facts.continuations : [],
+    workspaceBoardProjections: Array.isArray(facts?.workspaceBoardProjections)
+      ? facts.workspaceBoardProjections
+      : [],
+    workspaceBoardDelivery: facts?.workspaceBoardDelivery,
     retries: facts?.retries,
     runtimeErrors: facts?.runtimeErrors,
     evidenceCompleteness: facts?.evidenceCompleteness,

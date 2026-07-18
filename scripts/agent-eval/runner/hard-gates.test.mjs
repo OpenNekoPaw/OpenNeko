@@ -229,10 +229,21 @@ function m2Facts() {
       status: 'projected',
       targetKind: 'workspace',
       revision: HASH,
-      nodeIds: ['workspace-inbox', 'generated-output-1'],
+      nodeIds: ['workspace-content-source-1', 'workspace-content-generated-output-1'],
+      connectionIds: ['workspace-relation-1'],
       diagnosticCodes: [],
     },
   ];
+  facts.workspaceBoardDelivery = {
+    canonicalSubmissionCount: 1,
+    resumeScanCount: 1,
+    legacyFallbackCounts: {
+      activeCanvas: 0,
+      recentCanvas: 0,
+      directWriter: 0,
+      genericSendToCanvas: 0,
+    },
+  };
   Object.assign(facts.evidenceCompleteness, {
     turnToolCalls: { limit: 256, droppedCount: 0 },
     skillActivations: { limit: 128, droppedCount: 0 },
@@ -416,12 +427,20 @@ describe('M2 typed path hard gates', () => {
       status: 'projected',
       targetKind: 'workspace',
       minNodeIds: 2,
+      minConnectionIds: 1,
       revisionRequired: true,
       diagnosticsEmpty: true,
       evidenceRef: 'workspace-board-facts',
     };
 
     expect(evaluateHardGates([assertion], m2Facts())[0]).toMatchObject({ status: 'pass' });
+
+    const legacyGroup = m2Facts();
+    legacyGroup.workspaceBoardProjections[0].nodeIds = ['workspace-inbox', 'generated-output-1'];
+    expect(evaluateHardGates([assertion], legacyGroup)[0]).toMatchObject({
+      status: 'fail',
+      message: expect.stringContaining('legacy visual Group'),
+    });
 
     const incomplete = m2Facts();
     incomplete.evidenceCompleteness.workspaceBoardProjections.droppedCount = 1;
@@ -476,6 +495,35 @@ describe('M2 typed path hard gates', () => {
     expect(result).toMatchObject({
       status: 'fail',
       message: expect.stringContaining('evidence for promptComposition is incomplete'),
+    });
+  });
+
+  it('uses explicit Workspace Board legacy fallback counters', () => {
+    const assertion = {
+      id: 'board-fallback',
+      kind: 'no-fallback',
+      forbiddenRefs: [
+        'active-canvas',
+        'recentCanvas',
+        'NodeWorkspaceBoardProjector',
+        'generic-send-to-canvas',
+      ],
+      evidenceRef: 'board-facts',
+    };
+    expect(evaluateHardGates([assertion], m2Facts())[0]).toMatchObject({ status: 'pass' });
+
+    const observed = m2Facts();
+    observed.workspaceBoardDelivery.legacyFallbackCounts.directWriter = 1;
+    expect(evaluateHardGates([assertion], observed)[0]).toMatchObject({
+      status: 'fail',
+      message: expect.stringContaining('NodeWorkspaceBoardProjector'),
+    });
+
+    const missing = m2Facts();
+    delete missing.workspaceBoardDelivery;
+    expect(evaluateHardGates([assertion], missing)[0]).toMatchObject({
+      status: 'fail',
+      message: expect.stringContaining('legacy fallback counters are unavailable'),
     });
   });
 });

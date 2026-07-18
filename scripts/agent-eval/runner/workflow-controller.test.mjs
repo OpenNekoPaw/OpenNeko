@@ -61,7 +61,19 @@ describe('external TUI workflow controller', () => {
     expect(result.automation.steps.find((step) => step.id === 'queue')).toMatchObject({
       method: 'message.submit',
       queued: true,
-      snapshot: { messageQueue: { pendingCount: 1 } },
+      snapshot: {
+        messageQueue: { pendingCount: 1 },
+        workspaceBoardDelivery: {
+          canonicalSubmissionCount: 1,
+          resumeScanCount: 1,
+          legacyFallbackCounts: {
+            activeCanvas: 0,
+            recentCanvas: 0,
+            directWriter: 0,
+            genericSendToCanvas: 0,
+          },
+        },
+      },
     });
     expect(result.automation.steps.find((step) => step.id === 'feedback')).toMatchObject({
       method: 'message.submit',
@@ -97,17 +109,21 @@ describe('external TUI workflow controller', () => {
       );
 
       await vi.advanceTimersByTimeAsync(34_999);
-      expect(
-        child.requests.filter((request) => request.method === 'message.submit'),
-      ).toHaveLength(1);
-      expect(child.requests.filter((request) => request.method === 'session.create')).toHaveLength(1);
+      expect(child.requests.filter((request) => request.method === 'message.submit')).toHaveLength(
+        1,
+      );
+      expect(child.requests.filter((request) => request.method === 'session.create')).toHaveLength(
+        1,
+      );
 
       await vi.advanceTimersByTimeAsync(1);
       await operation;
-      expect(
-        child.requests.filter((request) => request.method === 'message.submit'),
-      ).toHaveLength(2);
-      expect(child.requests.filter((request) => request.method === 'session.create')).toHaveLength(1);
+      expect(child.requests.filter((request) => request.method === 'message.submit')).toHaveLength(
+        2,
+      );
+      expect(child.requests.filter((request) => request.method === 'session.create')).toHaveLength(
+        1,
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -154,13 +170,13 @@ describe('external TUI workflow controller', () => {
       method: 'session.resume',
       params: { conversationId: 'conversation-1' },
     });
+    expect(result.automation.steps.find((step) => step.id === 'cancel')).toMatchObject({
+      accepted: true,
+    });
     expect(
-      result.automation.steps.find((step) => step.id === 'cancel'),
-    ).toMatchObject({ accepted: true });
-    expect(
-      child.requests.filter((request) => request.method === 'session.dispose').map((request) =>
-        request.params.sessionId,
-      ),
+      child.requests
+        .filter((request) => request.method === 'session.dispose')
+        .map((request) => request.params.sessionId),
     ).toEqual(['s1', 's2']);
   });
 
@@ -371,6 +387,17 @@ function facts(options = {}) {
     ],
     tasks: [],
     continuations: [],
+    workspaceBoardProjections: [],
+    workspaceBoardDelivery: {
+      canonicalSubmissionCount: 1,
+      resumeScanCount: 1,
+      legacyFallbackCounts: {
+        activeCanvas: 0,
+        recentCanvas: 0,
+        directWriter: 0,
+        genericSendToCanvas: 0,
+      },
+    },
     retries: { taskRetryCount: 0, tasksWithRetries: 0 },
     runtimeErrors: [],
     evidenceCompleteness: {

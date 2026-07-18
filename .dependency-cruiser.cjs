@@ -26,8 +26,6 @@ module.exports = {
           '^packages/neko-host/',
           '^packages/neko-client/',
           '^packages/neko-proto/',
-          '^packages/neko-market/packages/core/',
-          '^packages/neko-auth/packages/core/',
         ],
       },
       to: {
@@ -38,8 +36,6 @@ module.exports = {
           '^packages/neko-host/',
           '^packages/neko-client/',
           '^packages/neko-proto/',
-          '^packages/neko-market/packages/core/',
-          '^packages/neko-auth/packages/core/',
         ],
       },
     },
@@ -101,15 +97,6 @@ module.exports = {
       },
     },
     {
-      name: 'no-cross-extension-deps-story',
-      comment: 'neko-story extension must not depend on other extension packages',
-      severity: 'warn',
-      from: { path: '^packages/neko-story/packages/extension/' },
-      to: {
-        path: '^packages/(?!neko-story/)[^/]+/packages/extension/',
-      },
-    },
-    {
       name: 'no-cross-extension-deps-preview',
       comment: 'neko-preview extension must not depend on other extension packages',
       severity: 'warn',
@@ -117,29 +104,6 @@ module.exports = {
       to: {
         path: '^packages/(?!neko-preview/)[^/]+/packages/extension/',
       },
-    },
-    {
-      name: 'no-cross-extension-deps-market',
-      comment: 'neko-market must not depend on other extension packages',
-      severity: 'warn',
-      from: { path: '^packages/neko-market/' },
-      to: {
-        path: '^packages/(?!neko-market/)[^/]+/packages/extension/',
-      },
-    },
-    {
-      name: 'marketplace-webview-no-vscode',
-      comment: 'neko-market webview must not import vscode',
-      severity: 'error',
-      from: { path: '^packages/neko-market/packages/webview/' },
-      to: { path: '^vscode$' },
-    },
-    {
-      name: 'marketplace-extension-no-react',
-      comment: 'neko-market extension must not import React',
-      severity: 'error',
-      from: { path: '^packages/neko-market/packages/extension/' },
-      to: { path: '^react(-dom)?$' },
     },
   ],
 
@@ -154,10 +118,6 @@ module.exports = {
         'packages/neko-engine/packages/host-napi',
         'packages/neko-engine/packages/host-cli',
         'packages/neko-engine/packages/runtime-',
-        // Planned/empty packages
-        'packages/neko-model',
-        'packages/neko-audio',
-        'packages/neko-live',
         // Test files
         '\\.(test|spec)\\.(ts|tsx)$',
         '__mocks__',

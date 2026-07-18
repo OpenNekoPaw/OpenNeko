@@ -137,12 +137,6 @@
       "allowRemovedEntry": true
     },
     {
-      "id": "REQ-LCDR-022",
-      "pathPattern": "packages/neko-types/src/types/live-compositor.ts",
-      "ledgerEntryId": "LCDR-022",
-      "requiredWhileMatched": false
-    },
-    {
       "id": "REQ-LCDR-030",
       "pathPattern": "packages/neko-types/src/local-metadata/*.ts",
       "ledgerEntryId": "LCDR-030"
@@ -827,17 +821,27 @@
       "surface": "Orphaned shared Live compositor contract after Live package pruning",
       "semanticClass": "delete-now",
       "action": "delete",
-      "status": "active",
+      "status": "removed",
       "owner": "neko-types",
       "paths": ["packages/neko-types/src/types/live-compositor.ts"],
       "replacement": "No retained Live product consumer; future live composition must introduce a new owning contract through an active OpenSpec change.",
-      "removeCondition": "Delete the shared contract and root export after confirming no external prelaunch fixture or release entry consumes LiveCompositor symbols.",
+      "removeCondition": "Removed after confirming that only the deleted contract fixture and tests consumed LiveCompositor symbols.",
+      "removedAt": "2026-07-19",
       "validation": {
         "commands": [
           "pnpm check:unused",
-          "rg -n \"LiveCompositor|live-compositor\" packages apps --glob '!packages/neko-types/src/types/live-compositor.ts' --glob '!packages/neko-types/src/types/index.ts'"
+          "rg -n \"LiveCompositor|live-compositor\" packages/neko-types/src/types"
         ]
-      }
+      },
+      "stalePatterns": [
+        {
+          "pattern": "LiveCompositor|live-compositor",
+          "paths": [
+            "packages/neko-types/src/types/**/*.ts",
+            "packages/neko-types/src/types/**/*.json"
+          ]
+        }
+      ]
     },
     {
       "id": "LCDR-023",
