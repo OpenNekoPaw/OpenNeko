@@ -100,7 +100,7 @@ export function ScriptNode({
           </span>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto px-1 py-1" data-node-drag-block="true">
+        <div className="min-h-0 flex-1 overflow-auto px-1 py-1">
           {runtimeState.status === 'idle' || runtimeState.status === 'loading' ? (
             <ScriptState message="正在读取剧本…" />
           ) : runtimeState.status === 'error' ? (

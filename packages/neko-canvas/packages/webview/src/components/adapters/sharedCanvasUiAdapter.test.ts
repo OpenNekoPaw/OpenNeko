@@ -35,7 +35,8 @@ describe('sharedCanvasUiAdapter', () => {
     const group: NodeLibraryGroup = {
       id: 'core',
       label: 'Basic',
-      nodeTypes: ['text', 'media'],
+      nodeTypes: ['text'],
+      presentation: 'node-entries',
     };
 
     const items = mapCanvasNodeLibraryGroupToTreeItems({
@@ -60,15 +61,6 @@ describe('sharedCanvasUiAdapter', () => {
       disabled: false,
     });
     expect(items[0]?.icon).not.toBe('T');
-    expect(items[1]).toMatchObject({
-      id: 'media',
-      draggable: false,
-      disabled: false,
-    });
-    expect(items[1]?.metadata).toMatchObject({
-      kind: 'node-type',
-      nodeType: 'media',
-    });
   });
 
   it('marks subsystem node entries with subsystem metadata', () => {
@@ -76,6 +68,7 @@ describe('sharedCanvasUiAdapter', () => {
       id: 'storyboard',
       label: 'Storyboard',
       nodeTypes: ['shot'],
+      presentation: 'node-entries',
       subsystemId: 'storyboard' as CanvasSubsystemManifest['id'],
     };
 

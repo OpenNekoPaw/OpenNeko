@@ -255,10 +255,13 @@ export interface TuiDebugAutomationMarkdownFacts {
 }
 
 export interface TuiDebugAutomationWorkspaceBoardProjectionFact {
+  readonly deliveryIdHash?: string;
   readonly status: CanvasWorkspaceProjectionResult['status'];
   readonly targetKind?: NonNullable<CanvasWorkspaceProjectionResult['target']>['kind'];
   readonly revision?: string;
   readonly nodeIds: readonly string[];
+  readonly artifactRoleCounts?: Readonly<Record<'source' | 'analysis' | 'output', number>>;
+  readonly writerEpoch?: number;
   readonly diagnosticCodes: readonly string[];
 }
 

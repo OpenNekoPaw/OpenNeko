@@ -13,7 +13,6 @@ import {
   planCanvasConnectionCreation,
   planCanvasNodeCreation,
   planCanvasStoryboardSceneShotCreation,
-  planCanvasWorkspaceBoardProjection,
   ProjectFileStore,
   type CanvasCreateCompositeRequest,
   type CanvasCreateCompositeResult,
@@ -40,13 +39,17 @@ import {
   type CanvasHeadlessCreateStoryboardAuthoringResult,
   type CanvasHeadlessUpdateBlockAuthoringResult,
   type CanvasNodeCreateSpec,
-  type CanvasWorkspaceProjectionRequest,
   type CanvasUpdateBlockRequest,
   type CanvasUpdateBlockResult,
   type ResolvedCanvasHeadlessAuthoringTarget,
 } from '@neko/shared';
 import type { ILogger } from '@neko/shared';
 import { createVSCodeProjectFileIoAdapter } from '@neko/shared/vscode/extension';
+import {
+  createCanvasWorkspaceBoardRevision,
+  type CanvasWorkspaceBoardLoadedDocument,
+  type CanvasWorkspaceBoardMutationPort,
+} from '@neko-canvas/domain';
 import type { CanvasEditorProvider } from '../editor';
 
 export interface CanvasProjectAuthoringServiceOptions {
@@ -54,7 +57,8 @@ export interface CanvasProjectAuthoringServiceOptions {
   readonly canvasEditorProvider: Pick<
     CanvasEditorProvider,
     'getActiveCanvasDocumentUri' | 'applyHostCanvasData' | 'revealCanvasDocument'
-  >;
+  > &
+    Partial<Pick<CanvasEditorProvider, 'getOpenCanvasDocumentSnapshot'>>;
   readonly logger?: Pick<ILogger, 'debug' | 'info' | 'warn' | 'error'>;
 }
 
@@ -64,22 +68,10 @@ interface LoadedCanvasTarget {
   readonly canvasData: CanvasData;
 }
 
-export interface CanvasWorkspaceBoardAuthoringResult {
-  readonly status: 'projected' | 'noop';
-  readonly documentUri: string;
-  readonly nodeIds: readonly string[];
-  readonly projectRef: QualityProjectRef;
-}
-
-interface CanvasWorkspaceBoardMutationResult extends CanvasHeadlessAuthoringResultBase {
-  readonly workspaceBoardStatus: 'projected' | 'noop';
-  readonly workspaceBoardNodeIds: readonly string[];
-}
-
 const STABLE_VARIABLE_PATH_PATTERN = /^\$\{[A-Z][A-Z0-9_]*\}\//;
 const PROJECT_RELATIVE_PATH_PATTERN = /^(?:\.\/)?(?!\/)(?![a-zA-Z]:[\\/])[^:?#]+$/;
 
-export class CanvasProjectAuthoringService {
+export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutationPort {
   private readonly projectFileAdapter = createVSCodeProjectFileIoAdapter({ vscodeApi: vscode });
   private readonly projectFileStore = new ProjectFileStore({
     registry: createDefaultProjectFormatCodecRegistry(),
@@ -88,6 +80,89 @@ export class CanvasProjectAuthoringService {
   });
 
   constructor(private readonly options: CanvasProjectAuthoringServiceOptions) {}
+
+  async loadLatest(input: {
+    readonly documentUri: string;
+    readonly createIfMissing: boolean;
+  }): Promise<CanvasWorkspaceBoardLoadedDocument> {
+    const uri = vscode.Uri.parse(input.documentUri);
+    assertCanvasDocumentUri(uri);
+    const openSnapshot = this.options.canvasEditorProvider.getOpenCanvasDocumentSnapshot?.(
+      uri.toString(),
+    );
+    if (openSnapshot) {
+      if (openSnapshot.dirty) {
+        throw new Error(
+          `projection-conflict: Canvas document ${input.documentUri} has unsaved editor changes.`,
+        );
+      }
+      return {
+        documentUri: uri.toString(),
+        canvasData: openSnapshot.canvasData,
+        revision: createCanvasWorkspaceBoardRevision(openSnapshot.canvasData),
+        exists: true,
+      };
+    }
+    try {
+      await vscode.workspace.fs.stat(uri);
+    } catch (error) {
+      if (!isFileNotFound(error)) throw error;
+      if (!input.createIfMissing) {
+        throw new Error(`Canvas document ${input.documentUri} does not exist.`);
+      }
+      const canvasData = createEmptyCanvasData('Workspace');
+      return {
+        documentUri: uri.toString(),
+        canvasData,
+        revision: createCanvasWorkspaceBoardRevision(canvasData),
+        exists: false,
+      };
+    }
+    const loaded = await this.projectFileStore.load<CanvasData>({
+      filePath: uri.fsPath,
+      formatId: 'nkc',
+      sourcePolicy: nkcSourcePathPolicy,
+      sourcePolicyOptions: {
+        context: this.createCanvasProjectFileContext(uri),
+      },
+    });
+    if (!loaded.ok || !loaded.document) {
+      throw new Error(
+        `Failed to load Canvas document ${uri.toString()}: ${formatDiagnostics(
+          loaded.diagnostics,
+        )}`,
+      );
+    }
+    return {
+      documentUri: uri.toString(),
+      canvasData: loaded.document,
+      revision: createCanvasWorkspaceBoardRevision(loaded.document),
+      exists: true,
+    };
+  }
+
+  async saveAtomic(input: {
+    readonly documentUri: string;
+    readonly expectedRevision: string;
+    readonly canvasData: CanvasData;
+    readonly assertWriter?: () => Promise<void>;
+  }): Promise<{ readonly revision: string }> {
+    const loaded = await this.loadLatest({
+      documentUri: input.documentUri,
+      createIfMissing: true,
+    });
+    if (loaded.revision !== input.expectedRevision) {
+      throw new Error(
+        `stale-revision: expected Canvas revision ${input.expectedRevision}, received ${loaded.revision}.`,
+      );
+    }
+    const uri = vscode.Uri.parse(input.documentUri);
+    assertNoRuntimeResourceIdentity(input.canvasData, 'canvasData');
+    await input.assertWriter?.();
+    await this.saveCanvasData(uri, input.canvasData);
+    this.options.canvasEditorProvider.applyHostCanvasData(uri, input.canvasData);
+    return { revision: createCanvasWorkspaceBoardRevision(input.canvasData) };
+  }
 
   async resolveTarget(
     target: CanvasHeadlessAuthoringTarget | undefined,
@@ -150,46 +225,6 @@ export class CanvasProjectAuthoringService {
         } satisfies CanvasHeadlessApplyOperationsResult,
       };
     });
-  }
-
-  async projectWorkspaceBoard(input: {
-    readonly request: CanvasWorkspaceProjectionRequest;
-    readonly documentUri: string;
-    readonly createIfMissing: boolean;
-  }): Promise<CanvasWorkspaceBoardAuthoringResult> {
-    const uri = vscode.Uri.parse(input.documentUri);
-    assertCanvasDocumentUri(uri);
-    if (input.createIfMissing) {
-      await this.ensureCanvasDocument(uri, 'Workspace');
-    }
-    const result = await this.withMutation<CanvasWorkspaceBoardMutationResult>(
-      { kind: 'file', documentUri: uri.toString() },
-      undefined,
-      (canvasData) => {
-        const plan = planCanvasWorkspaceBoardProjection(canvasData, input.request);
-        return {
-          canvasData: plan.canvasData,
-          result: {
-            version: 1,
-            status: plan.status === 'noop' ? 'noop' : 'success',
-            documentUri: '',
-            target: emptyResolvedTarget(),
-            diagnostics: [],
-            workspaceBoardStatus: plan.status,
-            workspaceBoardNodeIds: plan.nodeIds,
-          } satisfies CanvasWorkspaceBoardMutationResult,
-        };
-      },
-    );
-    if (!result.projectRef) {
-      throw new Error('Workspace Board projection did not return a project revision.');
-    }
-    return {
-      status: result.workspaceBoardStatus,
-      documentUri: result.documentUri,
-      nodeIds: result.workspaceBoardNodeIds,
-      projectRef: result.projectRef,
-    };
   }
 
   async createNode(input: {

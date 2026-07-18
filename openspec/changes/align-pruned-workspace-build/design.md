@@ -134,6 +134,8 @@ Each generated directory has one build owner. In the root Turbo `build` graph, `
 
 Root shell orchestration represents Turbo filters as Bash arrays so an empty optional package group cannot trip `set -e` and shell word-splitting cannot merge filters. `Debug Dev (All)` opens `${env:HOME}/Git/neko-test`, the explicitly designated synthetic workspace. Functional cases create isolated run directories under its `.neko/.functional/` subtree and never use ordinary development workspaces as evidence.
 
+Native Engine compilation has one build owner at `neko-engine#build`. Its package script runs the CLI release build before the N-API release build, so Cargo registry and target locks are not contended by sibling Turbo tasks. The Turbo task does not depend on the host-specific `build:native` tasks; those commands remain direct package entry points for packaging and focused development. Turbo caching is disabled for the native workflow because its platform-specific Cargo and N-API outputs are not represented by the task's `dist/**` output; Cargo's `target` directory remains the rebuild cache. The N-API wrapper performs a visible Cargo metadata preflight before invoking `@napi-rs/cli`, so registry updates and lock waits cannot be hidden behind the CLI's captured metadata subprocess.
+
 ## Risks / Trade-offs
 
 - [Kernel currently imports removed runtimes directly] -> shrink `KernelServices`, facade construction, service modules, Cargo dependencies, and tests together; do not retain placeholder services.

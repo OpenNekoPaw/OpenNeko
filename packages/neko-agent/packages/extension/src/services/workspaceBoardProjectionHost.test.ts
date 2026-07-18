@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createGeneratedAssetRevisionRef, type GeneratedImage } from '@neko/shared';
+import {
+  CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+  createGeneratedAssetsWorkspaceDeliveryBatch,
+  createGeneratedAssetRevisionRef,
+  type GeneratedImage,
+} from '@neko/shared';
 import { WorkspaceBoardProjectionHost } from './workspaceBoardProjectionHost';
 
 vi.mock('vscode', async () => await import('../__mocks__/vscode'));
@@ -7,31 +12,42 @@ vi.mock('vscode', async () => await import('../__mocks__/vscode'));
 describe('WorkspaceBoardProjectionHost', () => {
   it('maps typed generated output facts into the canonical Canvas projector', async () => {
     const project = vi.fn(async (request) => ({
-      version: 1 as const,
+      version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+      deliveryId: request.process.deliveryId,
       status: 'projected' as const,
-      target: { kind: 'workspace' as const, documentUri: request.target.workspaceUri },
+      target: {
+        kind: 'workspace' as const,
+        documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
+      },
       diagnostics: [],
     }));
     const host = new WorkspaceBoardProjectionHost({
+      workspaceId: 'workspace-1',
       getCanvasApi: async () => ({ boards: { project } }),
       getWorkspaceUris: () => ['file:///workspace/project/'],
     });
 
-    await expect(host.projectGeneratedAssets([generatedImage()])).resolves.toMatchObject([
-      { status: 'projected' },
-    ]);
+    await expect(
+      host.deliverBatch(createGeneratedAssetsWorkspaceDeliveryBatch([generatedImage()], 'vscode')),
+    ).resolves.toMatchObject([{ status: 'projected' }]);
     expect(project).toHaveBeenCalledWith(
       expect.objectContaining({
-        target: { workspaceUri: 'file:///workspace/project/' },
-        provenance: expect.objectContaining({
-          projectionId: 'generated-output:generated-1',
-          artifactId: 'generated-1',
+        target: { workspaceId: 'workspace-1', workspaceUri: 'file:///workspace/project/' },
+        process: expect.objectContaining({
+          sourceHost: 'vscode',
           taskId: 'task-1',
+          runId: 'run-1',
         }),
-        artifact: expect.objectContaining({
-          kind: 'image',
-          resourceRef: expect.objectContaining({ kind: 'generated' }),
-        }),
+        artifacts: [
+          expect.objectContaining({
+            kind: 'image',
+            resourceRef: expect.objectContaining({ kind: 'generated' }),
+            provenance: expect.objectContaining({
+              artifactId: 'generated-1',
+              role: 'output',
+            }),
+          }),
+        ],
       }),
     );
     expect(JSON.stringify(project.mock.calls)).not.toContain('/workspace/project/neko/generated');
@@ -39,11 +55,14 @@ describe('WorkspaceBoardProjectionHost', () => {
 
   it('keeps generation successful when Canvas is unavailable', async () => {
     const host = new WorkspaceBoardProjectionHost({
+      workspaceId: 'workspace-1',
       getCanvasApi: async () => undefined,
       getWorkspaceUris: () => ['file:///workspace/project/'],
     });
 
-    await expect(host.projectGeneratedAssets([generatedImage()])).resolves.toMatchObject([
+    await expect(
+      host.deliverBatch(createGeneratedAssetsWorkspaceDeliveryBatch([generatedImage()], 'vscode')),
+    ).resolves.toMatchObject([
       {
         status: 'blocked',
         diagnostics: [expect.objectContaining({ code: 'projection-write-failed' })],
@@ -54,11 +73,14 @@ describe('WorkspaceBoardProjectionHost', () => {
   it('fails visibly for zero or ambiguous workspaces without calling Canvas', async () => {
     const getCanvasApi = vi.fn();
     const host = new WorkspaceBoardProjectionHost({
+      workspaceId: 'workspace-1',
       getCanvasApi,
       getWorkspaceUris: () => [],
     });
 
-    await expect(host.projectGeneratedAssets([generatedImage()])).resolves.toMatchObject([
+    await expect(
+      host.deliverBatch(createGeneratedAssetsWorkspaceDeliveryBatch([generatedImage()], 'vscode')),
+    ).resolves.toMatchObject([
       { status: 'blocked', diagnostics: [expect.objectContaining({ code: 'workspace-required' })] },
     ]);
     expect(getCanvasApi).not.toHaveBeenCalled();

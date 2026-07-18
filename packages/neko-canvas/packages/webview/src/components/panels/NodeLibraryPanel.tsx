@@ -10,7 +10,10 @@ import {
   isNodeLibraryVisibleCreateType,
 } from '../../utils/nodeLibraryPolicy';
 import type { NodeTypeDescriptorRegistry } from '../nodes/nodeTypeDescriptor';
-import { mapCanvasNodeLibraryGroupToTreeItems } from '../adapters/sharedCanvasUiAdapter';
+import {
+  createCanvasNodeLibraryIcon,
+  mapCanvasNodeLibraryGroupToTreeItems,
+} from '../adapters/sharedCanvasUiAdapter';
 
 export interface NodeLibraryPanelProps {
   coreDescriptors: NodeTypeDescriptorRegistry;
@@ -26,6 +29,7 @@ export interface NodeLibraryGroup {
   id: string;
   label: string;
   nodeTypes: readonly CanvasNodeType[];
+  presentation: 'node-entries' | 'source-actions';
   subsystemId?: CanvasSubsystemManifest['id'];
 }
 
@@ -79,10 +83,10 @@ export function NodeLibraryPanel({
       <div className="canvas-node-library-scroll flex-1 overflow-y-auto">
         {groups.map((group) => {
           const isExpanded = expandedGroupIds.has(group.id);
-          const treeItems = mapCanvasNodeLibraryGroupToTreeItems({
-            descriptors,
-            group,
-          });
+          const treeItems =
+            group.presentation === 'node-entries'
+              ? mapCanvasNodeLibraryGroupToTreeItems({ descriptors, group })
+              : [];
           const groupActive =
             group.subsystemId === undefined || activeSubsystemIds.includes(group.subsystemId);
           const groupState = group.subsystemId ? (groupActive ? 'active' : 'available') : 'core';
@@ -141,46 +145,72 @@ export function NodeLibraryPanel({
 
               {isExpanded && (
                 <div className="canvas-node-library-items">
-                  <TreeView
-                    className="border-0 bg-transparent"
-                    height={Math.min(
-                      320,
-                      Math.max(
-                        NODE_LIBRARY_ITEM_HEIGHT,
-                        treeItems.length * NODE_LIBRARY_ITEM_HEIGHT,
-                      ),
-                    )}
-                    items={treeItems}
-                    label={group.label}
-                    showStaticStateIndicators={false}
-                    virtualization={{ itemHeight: NODE_LIBRARY_ITEM_HEIGHT, threshold: 200 }}
-                    onDragStart={(id, event) => {
-                      const nodeType = id as CanvasNodeType;
-                      const creationPolicy = getNodeLibraryCreationPolicy(nodeType);
-                      if (group.subsystemId) {
-                        requestSubsystemLoad(group.subsystemId);
-                      }
-                      if (!creationPolicy.canDragToCreate || !event.dataTransfer) {
-                        event.preventDefault();
-                        return;
-                      }
-                      writeNodeLibraryDragPayload(event.dataTransfer, nodeType);
-                    }}
-                    onSelect={(id) => {
-                      const nodeType = id as CanvasNodeType;
-                      const creationPolicy = getNodeLibraryCreationPolicy(nodeType);
-                      if (group.subsystemId) {
-                        requestSubsystemLoad(group.subsystemId);
-                      }
-                      if (creationPolicy.kind === 'create') {
-                        onCreateNode(nodeType);
-                        return;
-                      }
-                      if (creationPolicy.requiresSourceAdd) {
-                        onPickNodeSource?.(nodeType);
-                      }
-                    }}
-                  />
+                  {group.presentation === 'node-entries' ? (
+                    <TreeView
+                      className="border-0 bg-transparent"
+                      height={Math.min(
+                        320,
+                        Math.max(
+                          NODE_LIBRARY_ITEM_HEIGHT,
+                          treeItems.length * NODE_LIBRARY_ITEM_HEIGHT,
+                        ),
+                      )}
+                      items={treeItems}
+                      label={group.label}
+                      showStaticStateIndicators={false}
+                      virtualization={{ itemHeight: NODE_LIBRARY_ITEM_HEIGHT, threshold: 200 }}
+                      onDragStart={(id, event) => {
+                        const nodeType = id as CanvasNodeType;
+                        const creationPolicy = getNodeLibraryCreationPolicy(nodeType);
+                        if (group.subsystemId) {
+                          requestSubsystemLoad(group.subsystemId);
+                        }
+                        if (!creationPolicy.canDragToCreate || !event.dataTransfer) {
+                          event.preventDefault();
+                          return;
+                        }
+                        writeNodeLibraryDragPayload(event.dataTransfer, nodeType);
+                      }}
+                      onSelect={(id) => {
+                        const nodeType = id as CanvasNodeType;
+                        const creationPolicy = getNodeLibraryCreationPolicy(nodeType);
+                        if (group.subsystemId) {
+                          requestSubsystemLoad(group.subsystemId);
+                        }
+                        if (creationPolicy.kind === 'create') {
+                          onCreateNode(nodeType);
+                          return;
+                        }
+                        if (creationPolicy.requiresSourceAdd) {
+                          onPickNodeSource?.(nodeType);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="canvas-node-library-source-actions">
+                      {group.nodeTypes.map((nodeType) => {
+                        const descriptor = descriptors[nodeType];
+                        const nodeLabel = resolveNodeLibraryLabel(nodeType, descriptor);
+                        const actionLabel = t('library.action.create', { node: nodeLabel });
+                        const pickerLabel = t('library.action.pickFile', { node: nodeLabel });
+                        return (
+                          <button
+                            key={nodeType}
+                            type="button"
+                            className="canvas-node-library-source-action"
+                            data-node-library-source-action={nodeType}
+                            aria-label={pickerLabel}
+                            title={pickerLabel}
+                            disabled={!onPickNodeSource}
+                            onClick={() => onPickNodeSource?.(nodeType)}
+                          >
+                            {createCanvasNodeLibraryIcon(nodeType, descriptor?.tagColor)}
+                            <span className="min-w-0 flex-1 truncate">{actionLabel}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </section>
@@ -218,6 +248,7 @@ export function createNodeLibraryGroups(
       id: 'core',
       label: t('library.basic'),
       nodeTypes: coreVisibleNodeTypes,
+      presentation: 'node-entries',
     });
   }
 
@@ -230,6 +261,7 @@ export function createNodeLibraryGroups(
       id: manifest.id,
       label: t(`library.group.${manifest.id}`),
       nodeTypes: visibleNodeTypes,
+      presentation: 'node-entries',
       subsystemId: manifest.id,
     });
   }
@@ -239,6 +271,7 @@ export function createNodeLibraryGroups(
       id: FILE_REFERENCE_GROUP_ID,
       label: t('library.group.fileReferences'),
       nodeTypes: fileReferenceNodeTypes,
+      presentation: 'source-actions',
     });
   }
 

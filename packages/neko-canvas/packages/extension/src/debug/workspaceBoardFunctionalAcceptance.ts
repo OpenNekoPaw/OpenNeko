@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import * as vscode from 'vscode';
 import {
   createGeneratedAssetRevisionRef,
-  createGeneratedAssetWorkspaceProjectionRequest,
+  createGeneratedAssetWorkspaceDeliveryRequest,
   type GeneratedImage,
 } from '@neko/shared';
 import type { WorkspaceBoardProjector } from '../services/workspaceBoardProjector';
@@ -14,6 +14,7 @@ const WORKSPACE_BOARD_FUNCTIONAL_ACCEPTANCE_COMMAND =
 export function registerWorkspaceBoardFunctionalAcceptance(options: {
   readonly context: vscode.ExtensionContext;
   readonly projector: Pick<WorkspaceBoardProjector, 'project'>;
+  readonly getWorkspaceId: () => string | undefined;
   readonly getActiveDocumentUri: () => vscode.Uri | undefined;
   readonly revealDocument: (uri: vscode.Uri) => Promise<void>;
 }): void {
@@ -22,6 +23,8 @@ export function registerWorkspaceBoardFunctionalAcceptance(options: {
       WORKSPACE_BOARD_FUNCTIONAL_ACCEPTANCE_COMMAND,
       async (value: unknown) => {
         const input = parseInput(value);
+        const workspaceId = options.getWorkspaceId();
+        if (!workspaceId) throw new Error('Workspace Board acceptance requires a workspace ID.');
         const workspaceUri = resolveFixtureWorkspace(options.getActiveDocumentUri());
         const sourceUri = resolveGeneratedImageSource(workspaceUri, input.relativePath);
         const bytes = await vscode.workspace.fs.readFile(sourceUri);
@@ -51,7 +54,11 @@ export function registerWorkspaceBoardFunctionalAcceptance(options: {
           ratio: `${input.width}:${input.height}`,
         };
         const result = await options.projector.project(
-          createGeneratedAssetWorkspaceProjectionRequest(asset, workspaceUri.toString()),
+          createGeneratedAssetWorkspaceDeliveryRequest(asset, {
+            workspaceId,
+            workspaceUri: workspaceUri.toString(),
+            sourceHost: 'vscode',
+          }),
         );
         if (result.target?.documentUri) {
           await options.revealDocument(vscode.Uri.parse(result.target.documentUri));

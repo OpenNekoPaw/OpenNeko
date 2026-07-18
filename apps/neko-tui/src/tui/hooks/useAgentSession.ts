@@ -135,6 +135,7 @@ import {
   projectTuiTaskResultContinuation,
 } from '../core/tui-task-result-continuation';
 import { NodeMediaTaskDeliveryHost } from '../host/node-media-task-delivery-host';
+import { collectCreatorVisibleArtifacts } from '@neko/agent/runtime';
 
 
 interface ExecutePromptOptions {
@@ -568,6 +569,8 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
         const mediaTaskDeliveryHost = new NodeMediaTaskDeliveryHost({
           platform: cliPlatform.platform,
           workspaceRoot: config.workDir,
+          workspaceId: localMetadataBinding.workspaceId,
+          metadataStore: localMetadataBinding.metadataStore,
           assetIndex: generatedAssetIndex,
           onWorkspaceBoardProjection: (results) => {
             workspaceBoardProjectionsRef.current = Object.freeze([
@@ -583,6 +586,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           },
         });
         mediaTaskDeliveryHostRef.current = mediaTaskDeliveryHost;
+        await mediaTaskDeliveryHost.resumePendingWorkspaceBoardDeliveries();
         taskTerminalUnsubscribeRef.current = taskManager.onTerminalTask(
           (event) => {
             void refreshTaskSummary();
@@ -836,6 +840,23 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
         events: piEventAdapter,
         ...(metadata ? { metadata } : {}),
       });
+      const runtimeEvidence = piRuntimeOwner.getRuntimeEvidence();
+      const turnEvidence = runtimeEvidence?.lastTurn;
+      const candidates = collectCreatorVisibleArtifacts({
+        toolResults: piEventAdapter.getTerminalToolResults(),
+      });
+      if (candidates.length > 0 && turnEvidence) {
+        const deliveryHost = mediaTaskDeliveryHostRef.current;
+        if (!deliveryHost) {
+          throw new Error('TUI Workspace Board delivery host is unavailable at turn completion.');
+        }
+        await deliveryHost.deliverCreatorVisibleArtifacts({
+          deliveryId: `agent-turn:${turnEvidence.turnId}`,
+          createdAt: new Date().toISOString(),
+          artifacts: candidates,
+          runId: turnEvidence.runId,
+        });
+      }
       void refreshTaskSummary();
       syncRuntimeProjection();
     },

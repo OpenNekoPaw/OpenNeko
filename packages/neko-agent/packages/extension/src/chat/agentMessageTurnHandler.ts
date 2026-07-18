@@ -69,6 +69,7 @@ const logger = getLogger('AgentMessageTurnHandler');
 export interface AgentMessageTurnHandlerOptions {
   readonly accountAiCatalog?: AccountAiCatalogCache;
   readonly generatedAssetIndex?: GeneratedAssetIndex;
+  readonly workspaceId?: string;
 }
 
 export class AgentMessageTurnHandler {
@@ -85,7 +86,7 @@ export class AgentMessageTurnHandler {
   private readonly _streamProcessor: AgentStreamProcessor;
   private readonly _mediaDeliveryHost: MediaTaskDeliveryHost;
   private readonly _mediaTurnBridge: MediaTurnBridge;
-  private readonly _workspaceBoardProjection = new WorkspaceBoardProjectionHost();
+  private readonly _workspaceBoardProjection: WorkspaceBoardProjectionHost;
   private readonly _agentTurnBridge: AgentTurnBridge;
   private readonly _disposables: vscode.Disposable[] = [];
   private _lastTextEditorUri: vscode.Uri | undefined = vscode.window.activeTextEditor?.document.uri;
@@ -107,6 +108,9 @@ export class AgentMessageTurnHandler {
     private readonly _localResourceAccess?: AgentLocalResourceAccess,
     private readonly _options: AgentMessageTurnHandlerOptions = {},
   ) {
+    this._workspaceBoardProjection = new WorkspaceBoardProjectionHost({
+      workspaceId: this._options.workspaceId,
+    });
     this._attachmentProcessor = new AttachmentProcessor({
       contentAccessRuntime: getCapabilityRuntimeBindings().contentAccessRuntime,
     });
@@ -556,7 +560,7 @@ function createVSCodeEntityMemoryContributionAutomation(): EntityMemoryContribut
           ...(projectRoot ? { projectRoot } : {}),
           contribution,
           options: {
-            mode: 'candidate',
+            mode: 'match-only',
             defaultKind: 'character',
           },
         },

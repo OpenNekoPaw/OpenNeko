@@ -1,0 +1,17 @@
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+.model-preview-bootstrap {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-editor-background);
+  font-family: var(--vscode-font-family);
+}

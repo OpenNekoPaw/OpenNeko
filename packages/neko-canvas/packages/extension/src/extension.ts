@@ -7,6 +7,11 @@
 import * as vscode from 'vscode';
 import * as os from 'node:os';
 import * as path from 'path';
+import { randomUUID } from 'node:crypto';
+import {
+  WorkspaceBoardDeliveryCoordinator,
+  WorkspaceBoardDeliveryLedger,
+} from '@neko-canvas/domain';
 import {
   type CanvasCreativeScope,
   getPanoramicPreviewRoute,
@@ -20,8 +25,16 @@ import {
   type CanvasMarkdownCapabilityInput,
   type ResourceRef,
   type ExternalCreativeAiInvocation,
+  resolveGlobalStorageLayout,
+  type LocalMetadataStore,
 } from '@neko/shared';
 import { createNodeWorkspaceResourceCacheMetadataBinding } from '@neko/shared/local-metadata/node';
+import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
+import { resolveNodeWorkspaceIdentity } from '@neko/shared/local-metadata/node-workspace-identity';
+import {
+  AGENT_STATE_MIGRATIONS,
+  M1_LOCAL_METADATA_MIGRATIONS,
+} from '@neko/shared/local-metadata/sqlite';
 import {
   createVSCodeLogger,
   VSCodeErrorHandler,
@@ -57,6 +70,8 @@ let canvasOutlineProvider: CanvasOutlineProvider;
 let canvasStatusBar: CanvasStatusBar;
 let canvasProjectAuthoringService: CanvasProjectAuthoringService;
 let workspaceBoardProjector: WorkspaceBoardProjector;
+let workspaceBoardMetadataStore: LocalMetadataStore | undefined;
+let workspaceBoardWorkspaceId: string | undefined;
 
 /** Cached assets API reference (resolved once, reused across calls). */
 let assetsAPI: NekoAssetsAPI | undefined;
@@ -202,13 +217,59 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCa
     canvasEditorProvider,
     logger,
   });
+  if (workspaceRoot) {
+    const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: os.homedir() });
+    await metadataStore.open({
+      databasePath: resolveGlobalStorageLayout(os.homedir()).database,
+      busyTimeoutMs: 2_000,
+    });
+    await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
+    await metadataStore.migrateNamespace(AGENT_STATE_MIGRATIONS);
+    workspaceBoardWorkspaceId = (
+      await resolveNodeWorkspaceIdentity({
+        workspaceRoot,
+        homedir: os.homedir(),
+        metadataStore,
+      })
+    ).identity.workspaceId;
+    workspaceBoardMetadataStore = metadataStore;
+    context.subscriptions.push({ dispose: () => void metadataStore.dispose() });
+  }
+  const workspaceBoardCoordinators = new Map<string, WorkspaceBoardDeliveryCoordinator>();
+  const holderId = `vscode-canvas:${process.pid}:${randomUUID()}`;
   workspaceBoardProjector = new WorkspaceBoardProjector({
-    authoring: canvasProjectAuthoringService,
+    getCoordinator: (workspaceId) => {
+      if (!workspaceBoardMetadataStore) {
+        throw new Error('Workspace Board delivery ledger is unavailable without a workspace.');
+      }
+      if (workspaceId !== workspaceBoardWorkspaceId) {
+        throw new Error(
+          `Workspace Board delivery workspace ${workspaceId} does not match the active Canvas workspace.`,
+        );
+      }
+      let coordinator = workspaceBoardCoordinators.get(workspaceId);
+      if (!coordinator) {
+        coordinator = new WorkspaceBoardDeliveryCoordinator({
+          ledger: new WorkspaceBoardDeliveryLedger({
+            metadataStore: workspaceBoardMetadataStore,
+            workspaceId,
+          }),
+          mutation: canvasProjectAuthoringService,
+          holderId,
+        });
+        workspaceBoardCoordinators.set(workspaceId, coordinator);
+        void coordinator.flush().catch((error: unknown) => {
+          logger.warn('Workspace Board pending delivery resume failed.', error);
+        });
+      }
+      return coordinator;
+    },
   });
   if (context.extensionMode === vscode.ExtensionMode.Development) {
     registerWorkspaceBoardFunctionalAcceptance({
       context,
       projector: workspaceBoardProjector,
+      getWorkspaceId: () => workspaceBoardWorkspaceId,
       getActiveDocumentUri: () => canvasEditorProvider.getActiveCanvasDocumentUri(),
       revealDocument: (uri) => canvasEditorProvider.revealCanvasDocument(uri),
     });
@@ -820,15 +881,15 @@ function createMarkdownCanvasName(input: CanvasMarkdownCapabilityInput): string 
 
 function createCompositeCanvasName(
   request: { readonly data?: Readonly<Record<string, unknown>> },
-  fallback: string,
+  defaultName: string,
 ): string {
   const data = request.data ?? {};
   const title =
     asTrimmedString(data['sceneTitle']) ??
     asTrimmedString(data['label']) ??
     asTrimmedString(data['title']) ??
-    fallback;
-  return sanitizeCanvasFileName(title).slice(0, 80) || fallback;
+    defaultName;
+  return sanitizeCanvasFileName(title).slice(0, 80) || defaultName;
 }
 
 function asTrimmedString(value: unknown): string | undefined {

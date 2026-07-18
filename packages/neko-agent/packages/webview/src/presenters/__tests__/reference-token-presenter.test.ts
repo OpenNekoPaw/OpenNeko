@@ -108,6 +108,19 @@ describe('reference-token-presenter', () => {
     });
   });
 
+  it('projects model preview contexts without accepting the removed model-scene path', () => {
+    expect(
+      projectContextPayloadReferenceToken({
+        id: 'model-1',
+        type: 'model-preview',
+        label: 'hero.glb',
+        summary: 'Staged model view',
+        data: {},
+      }),
+    ).toMatchObject({ kind: 'canvas', label: 'hero.glb' });
+    expect(inferReferenceKindFromPath('models/hero.glb')).toBe('file');
+  });
+
   it('formats shared path and size labels consistently', () => {
     expect(formatReferenceBasename('assets/live2d/face.exp3.json')).toBe('face.exp3.json');
     expect(formatReferenceParentPath('assets/live2d/face.exp3.json')).toBe('assets/live2d');

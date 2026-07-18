@@ -232,6 +232,7 @@ export * from './composite-artifact';
 export * from './artifact-projection';
 export * from './character-memory';
 export * from './media-semantic-index';
+export * from './semantic-source';
 export * from './comic-animation-indexing';
 export { QUALITY_ISSUE_CATEGORIES } from './quality';
 export type {
@@ -301,6 +302,7 @@ export * from './generation';
 
 // Agent context types (unified sendToAgent payload)
 export * from './agent-context';
+export * from './model-preview';
 
 // Document reading contracts (Preview ↔ Agent ↔ Platform)
 export * from './document-reading';

@@ -10,7 +10,16 @@ import { injectLocaleAttribute } from '@neko/shared/vscode/extension';
 import { getNonce } from './nonce';
 
 /** Supported preview entry points */
-export type PreviewEntry = 'video' | 'audio' | 'pdf' | 'cbz' | 'epub' | 'docx';
+export type PreviewEntry =
+  | 'video'
+  | 'audio'
+  | 'panorama-image'
+  | 'panorama-video'
+  | 'pdf'
+  | 'cbz'
+  | 'epub'
+  | 'docx'
+  | 'model';
 
 /** Document entries fetch tokenized data from the Preview Node loopback host. */
 const DOCUMENT_ENTRIES = new Set<PreviewEntry>(['pdf', 'cbz', 'epub', 'docx']);
@@ -51,6 +60,9 @@ const ENTRY_TITLES: Record<PreviewEntry, string> = {
   cbz: 'CBZ Preview',
   epub: 'EPUB Preview',
   docx: 'DOCX Preview',
+  'panorama-image': 'Panoramic Image Preview',
+  'panorama-video': 'Panoramic Video Preview',
+  model: '3D Model Preview',
 };
 
 /** Loopback origin shared by the Node document host and Rust media Engine. */
@@ -68,13 +80,16 @@ function getDevHtml(
   const devUrl = `http://localhost:${devPort}`;
   const isDocument = DOCUMENT_ENTRIES.has(entry);
   const isEpub = entry === 'epub';
+  const isModel = entry === 'model';
 
   // All documents connect to the Node host; EPUB also needs blob: for epubjs.
-  const connectSrc = isDocument
-    ? isEpub
-      ? `connect-src blob: ${devUrl} ${LOOPBACK_HTTP};`
-      : `connect-src ${devUrl} ${LOOPBACK_HTTP};`
-    : `connect-src ws://localhost:${devPort} ws://127.0.0.1:* ${devUrl} ${LOOPBACK_HTTP};`;
+  const connectSrc = isModel
+    ? `connect-src ${devUrl};`
+    : isDocument
+      ? isEpub
+        ? `connect-src blob: ${devUrl} ${LOOPBACK_HTTP};`
+        : `connect-src ${devUrl} ${LOOPBACK_HTTP};`
+      : `connect-src ws://localhost:${devPort} ws://127.0.0.1:* ${devUrl} ${LOOPBACK_HTTP};`;
 
   // Document archive resources use the Node loopback origin.
   const imgSrc = isDocument
@@ -133,12 +148,15 @@ function getProdHtml(
 
   const isDocument = DOCUMENT_ENTRIES.has(entry);
   const isEpub = entry === 'epub';
+  const isModel = entry === 'model';
 
-  const connectSrc = isDocument
-    ? isEpub
-      ? `connect-src blob: ${LOOPBACK_HTTP};`
-      : `connect-src ${LOOPBACK_HTTP};`
-    : `connect-src ws://127.0.0.1:* ${LOOPBACK_HTTP};`;
+  const connectSrc = isModel
+    ? `connect-src 'none';`
+    : isDocument
+      ? isEpub
+        ? `connect-src blob: ${LOOPBACK_HTTP};`
+        : `connect-src ${LOOPBACK_HTTP};`
+      : `connect-src ws://127.0.0.1:* ${LOOPBACK_HTTP};`;
 
   const imgSrc = isDocument
     ? `img-src ${csp} ${LOOPBACK_HTTP} data: blob:;`

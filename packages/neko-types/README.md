@@ -58,6 +58,10 @@ src/
 
 ## Deep Dive
 
+### 本地元数据与语义 projection
+
+`@neko/shared/local-metadata/node` 只提供 Host-owned repository/binding；feature package 不直接打开 SQLite 或拼接 SQL。语义 source、segment、mention、candidate cluster 和 freshness 属于用户级 `~/.neko/neko.db` 的可重建 cache projection，按 source 原子替换并递增 workspace partition revision。Confirmed Entity、binding 和显式 candidate review decision 仍由项目事实文件拥有。
+
 ### 使用方式
 
 ```typescript
@@ -92,12 +96,12 @@ operations/
 
 **操作域**：
 
-| 域 | 前缀 | 操作类型 |
-|------|------|------|
-| neko-cut | `track.*` / `element.*` | 轨道/元素 CRUD、移动、修剪、分割 |
-| neko-canvas | `canvas.node.*` / `canvas.connection.*` | 节点/连接 CRUD、分组、重排 |
-| neko-audio | `audio.effect.*` / `audio.marker.*` | 效果链/标记 CRUD、排序、切换 |
-| neko-sketch | `sketch.layer.*` / `sketch.stroke.*` / `sketch.canvas.*` | 图层/笔画/画布操作 |
+| 域          | 前缀                                                     | 操作类型                         |
+| ----------- | -------------------------------------------------------- | -------------------------------- |
+| neko-cut    | `track.*` / `element.*`                                  | 轨道/元素 CRUD、移动、修剪、分割 |
+| neko-canvas | `canvas.node.*` / `canvas.connection.*`                  | 节点/连接 CRUD、分组、重排       |
+| neko-audio  | `audio.effect.*` / `audio.marker.*`                      | 效果链/标记 CRUD、排序、切换     |
+| neko-sketch | `sketch.layer.*` / `sketch.stroke.*` / `sketch.canvas.*` | 图层/笔画/画布操作               |
 
 **使用方式**：
 
@@ -108,11 +112,11 @@ import { applyAudioOperation, invertOperation, createMeta } from '@neko/shared';
 
 ### 设计原则
 
-| 原则 | 说明 |
-|------|------|
+| 原则     | 说明                                               |
+| -------- | -------------------------------------------------- |
 | 三层隔离 | Core 零依赖，VSCode 层隔离 API，Webview 层隔离 DOM |
-| 接口优先 | ILogger / II18nService / IErrorHandler 面向抽象 |
-| 策略模式 | Transport / Bundle / ErrorHandler 可插拔替换 |
-| 向后兼容 | 类型变更用可选属性，不破坏现有 API |
+| 接口优先 | ILogger / II18nService / IErrorHandler 面向抽象    |
+| 策略模式 | Transport / Bundle / ErrorHandler 可插拔替换       |
+| 向后兼容 | 类型变更用可选属性，不破坏现有 API                 |
 
 > ⚠️ **修改影响大**：类型变更会传播到所有 11 个依赖包，请确保向后兼容。

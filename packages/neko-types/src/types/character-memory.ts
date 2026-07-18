@@ -164,6 +164,11 @@ export interface CharacterMemorySourceRange {
   readonly endMs?: number;
   readonly startLine?: number;
   readonly endLine?: number;
+  readonly startColumn?: number;
+  readonly endColumn?: number;
+  readonly startOffset?: number;
+  readonly endOffset?: number;
+  readonly structuredPath?: readonly CharacterMemoryPathSegment[];
   readonly nodeId?: string;
   readonly assetId?: string;
 }

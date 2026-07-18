@@ -32,16 +32,12 @@
     "@neko-engine/host-cli#build:native": {
       "dependsOn": [],
       "outputs": [],
-      "cache": true
+      "cache": false
     },
     "neko-engine#build": {
-      "dependsOn": [
-        "@neko-engine/host-napi#build:native",
-        "@neko-engine/host-cli#build:native",
-        "^build"
-      ],
+      "dependsOn": ["^build"],
       "outputs": ["dist/**"],
-      "cache": true
+      "cache": false
     },
     "neko-engine#compile": {
       "dependsOn": ["@neko-engine/host-napi#build:native", "^build"],

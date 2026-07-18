@@ -245,6 +245,12 @@ export interface SemanticProjectionReplaceRequest {
   readonly updatedAt: string;
 }
 
+export interface SemanticProjectionReplaceSourceRequest {
+  readonly partition: LocalMetadataPartition;
+  readonly source: SemanticProjectionRecord;
+  readonly updatedAt: string;
+}
+
 export interface SemanticProjectionInsertMissingResult {
   readonly insertedSourceIds: readonly string[];
   readonly preservedSourceIds: readonly string[];
@@ -252,7 +258,17 @@ export interface SemanticProjectionInsertMissingResult {
 
 export interface SemanticProjectionRepository {
   list(partition: LocalMetadataPartition): Promise<readonly SemanticProjectionRecord[]>;
+  get(
+    partition: LocalMetadataPartition,
+    sourceId: string,
+  ): Promise<SemanticProjectionRecord | null>;
   replacePartition(request: SemanticProjectionReplaceRequest): Promise<void>;
+  replaceSource(request: SemanticProjectionReplaceSourceRequest): Promise<void>;
+  deleteSource(
+    partition: LocalMetadataPartition,
+    sourceId: string,
+    updatedAt: string,
+  ): Promise<boolean>;
   insertMissing(
     request: SemanticProjectionReplaceRequest,
   ): Promise<SemanticProjectionInsertMissingResult>;

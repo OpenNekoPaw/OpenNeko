@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION } from '@neko/shared';
 import {
   createTuiAutomationAppPort as createProductionTuiAutomationAppPort,
   projectTaskFacts,
@@ -629,7 +630,7 @@ describe('createTuiAutomationAppPort', () => {
         getConversationPersistenceSnapshot: memoryPersistenceSnapshot,
         getWorkspaceBoardProjections: () => [
           {
-            version: 1,
+            version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
             status: 'projected',
             target: {
               kind: 'workspace',

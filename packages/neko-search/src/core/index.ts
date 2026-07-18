@@ -33,6 +33,7 @@ export {
   type ProjectGlobalSearchResult,
 } from './projections';
 export { SimpleEventEmitter } from './simpleEventEmitter';
+export * from './SemanticSourceCoordinator';
 export type {
   ProjectSearchContextResolver,
   ProjectSearchDisposable,

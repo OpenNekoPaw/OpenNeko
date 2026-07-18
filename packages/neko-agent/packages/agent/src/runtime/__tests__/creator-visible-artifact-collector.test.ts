@@ -9,12 +9,12 @@ const sourceRef = {
   id: 'source:document-1',
   scope: 'project' as const,
   provider: 'document',
-  kind: 'source' as const,
+  kind: 'document' as const,
   source: {
-    kind: 'source-file' as const,
+    kind: 'file' as const,
     projectRelativePath: 'materials/brief.md',
   },
-  locator: { kind: 'source-file' as const, projectRelativePath: 'materials/brief.md' },
+  locator: { kind: 'file' as const, path: 'materials/brief.md' },
   fingerprint: { strategy: 'hash' as const, value: 'sha256:source-1' },
 };
 

@@ -246,6 +246,7 @@ export interface ChatViewProviderOptions {
   readonly generatedAssetIndex?: GeneratedAssetIndex;
   readonly piConversations?: ConversationBridgeOptions;
   readonly localMetadata?: {
+    readonly workspaceId: string;
     readonly pollRevisions?: () => Promise<{
       readonly changedDomains: readonly string[];
     }>;
@@ -482,6 +483,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
           {
             accountAiCatalog: this._accountAiCatalog,
             generatedAssetIndex: this._generatedAssetIndex,
+            workspaceId: this._options.localMetadata?.workspaceId,
           },
         );
         const piRuntime = getService(IPiAgentRuntimeManager);

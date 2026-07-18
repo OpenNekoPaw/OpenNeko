@@ -1,6 +1,7 @@
 {
   "neko.preview.displayName": "Neko Preview",
-  "neko.preview.description": "Lightweight media and document preview for video, audio, PDF, EPUB, CBZ and DOCX files",
+  "neko.preview.description": "Lightweight media, document and standard 3D model preview",
+  "neko.preview.modelPreview.displayName": "Neko 3D Model Preview",
   "neko.preview.videoPreview.displayName": "Video Preview",
   "neko.preview.audioPreview.displayName": "Audio Preview",
   "neko.preview.panoramicImage.displayName": "Panoramic Image Preview",

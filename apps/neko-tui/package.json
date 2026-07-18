@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@neko-agent/types": "workspace:*",
+    "@neko-canvas/domain": "workspace:*",
     "@neko/agent": "workspace:*",
     "@neko/ai-sdk": "workspace:*",
     "@neko/asset": "workspace:*",

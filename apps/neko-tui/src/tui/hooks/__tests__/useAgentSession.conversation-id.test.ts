@@ -120,6 +120,7 @@ function ConversationIdProbe(props: {
     service: createNoopService(),
     resumeConversationId: props.resumeConversationId,
     createLocalMetadata: createMemoryLocalMetadataBinding,
+    localMetadataHome: props.config.workDir,
   });
 
   useEffect(() => {

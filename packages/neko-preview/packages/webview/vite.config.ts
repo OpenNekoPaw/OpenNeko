@@ -91,6 +91,7 @@ export default defineConfig({
         cbz: path.resolve(__dirname, 'cbz.html'),
         epub: path.resolve(__dirname, 'epub.html'),
         docx: path.resolve(__dirname, 'docx.html'),
+        model: path.resolve(__dirname, 'model.html'),
       },
       output: {
         entryFileNames: 'assets/[name].js',

@@ -4,7 +4,11 @@ import type {
   CreativeEntityCandidate,
 } from '@neko/shared';
 import { describe, expect, it } from 'vitest';
-import { CreativeEntityService, EntityContributionAutomationService } from '../core';
+import {
+  CreativeEntityService,
+  EntityContributionAutomationService,
+  inspectEntityCandidateFactMigration,
+} from '../core';
 import { resolveCharacterRegistryPath, resolveEntityCandidateFilePath } from '../core/paths';
 import { MemoryEntityFileStore, createFixedClock } from '../testing';
 
@@ -12,6 +16,38 @@ const projectRoot = '/workspace/neko-test';
 const now = '2026-06-07T00:00:00.000Z';
 
 describe('EntityContributionAutomationService', () => {
+  it('audits legacy candidate provenance without deleting project facts', () => {
+    expect(
+      inspectEntityCandidateFactMigration({
+        version: 1,
+        candidates: [
+          {
+            id: 'candidate:auto',
+            kind: 'character',
+            name: 'Auto',
+            status: 'open',
+            identityBasis: 'user-named',
+            provenance: [],
+            sourceRefs: [],
+            metadata: { automationSource: 'entity-memory-contribution' },
+          },
+          {
+            id: 'candidate:user',
+            kind: 'character',
+            name: 'User',
+            status: 'dismissed',
+            identityBasis: 'user-named',
+            provenance: [],
+            sourceRefs: [],
+          },
+        ],
+      }),
+    ).toEqual({
+      totalCandidates: 2,
+      automationGeneratedCandidates: 1,
+      preservedCandidateIds: ['candidate:auto', 'candidate:user'],
+    });
+  });
   it('reuses existing confirmed entities from characters.json', async () => {
     const files = new MemoryEntityFileStore({
       [resolveCharacterRegistryPath(projectRoot)]: {
@@ -48,6 +84,28 @@ describe('EntityContributionAutomationService', () => {
       }),
     ]);
     expect(files.get(resolveEntityCandidateFilePath(projectRoot))).toBeUndefined();
+  });
+
+  it('keeps match-only automation on the read-only path for unknown candidates', async () => {
+    const files = new MemoryEntityFileStore();
+    const service = createAutomation(files);
+
+    const result = await service.processContribution(
+      makeContribution({
+        entityCandidates: [makeCandidate({ name: '未确认角色', confidence: 0.99 })],
+      }),
+      { mode: 'match-only' },
+    );
+
+    expect(result.decisions).toEqual([
+      expect.objectContaining({
+        kind: 'skipped',
+        name: '未确认角色',
+        reason: expect.stringContaining('candidate creation is disabled'),
+      }),
+    ]);
+    expect(files.get(resolveEntityCandidateFilePath(projectRoot))).toBeUndefined();
+    expect(files.get(resolveCharacterRegistryPath(projectRoot))).toBeUndefined();
   });
 
   it('merges evidence into an existing open candidate instead of creating duplicates', async () => {

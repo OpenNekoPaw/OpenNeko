@@ -83,7 +83,6 @@ import { createExtensionAgentContentAccessRuntime } from './services/agentConten
 import { createWorkspaceGeneratedAssetIndex } from './services/generatedAssetOpenResolver';
 import { cleanupLegacyCanvasBoardMetadata } from './services/legacyCanvasBoardMetadataCleanup';
 import { cleanupLegacyConversationWorkspaceState } from './services/legacyConversationWorkspaceStateCleanup';
-import { registerLegacyGeneratedOutputRetainProjectCommand } from './services/legacyGeneratedOutputRetainProjectService';
 import {
   createHostContentMediaPathContext,
   createHostContentPathResolver,
@@ -262,11 +261,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
           logger,
         })
       : undefined;
-  registerLegacyGeneratedOutputRetainProjectCommand({
-    context,
-    ...(workspaceRoot ? { workspaceRoot } : {}),
-    ...(generatedAssetIndex ? { index: generatedAssetIndex } : {}),
-  });
   const engineClientProvider = getEngineClientProvider();
   await engineClientProvider.setAuthorizedReadRoots?.(
     await getHostContentAuthorizedReadRoots({

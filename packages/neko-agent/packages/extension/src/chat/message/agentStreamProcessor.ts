@@ -30,6 +30,7 @@ import {
 import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
 import type { AgentEvent } from '@neko/agent';
 import {
+  createGeneratedAssetsWorkspaceDeliveryBatch,
   type AgentTaskResultDeliveryPolicy,
   type GeneratedAsset,
   type Task,
@@ -108,7 +109,7 @@ export interface AgentStreamProcessorDeps {
   ) => Promise<boolean>;
   /** VSCode-only media delivery host adapter. */
   mediaDeliveryHost?: MediaTaskDeliveryHost;
-  workspaceBoardProjection?: Pick<WorkspaceBoardProjectionHost, 'projectGeneratedAssets'>;
+  workspaceBoardProjection?: Pick<WorkspaceBoardProjectionHost, 'deliverBatch'>;
   /** Optional runtime perception/backfill adapter for completed media tasks. */
   mediaBackfill?: {
     readonly perceptionPipeline?: IPerceptionPipeline;
@@ -311,10 +312,12 @@ export class AgentStreamProcessor {
             this.deps.workspaceBoardProjection &&
             delivery.deliveryPlan.generatedAssets.length > 0
           ) {
-            const projectionResults =
-              await this.deps.workspaceBoardProjection.projectGeneratedAssets(
+            const projectionResults = await this.deps.workspaceBoardProjection.deliverBatch(
+              createGeneratedAssetsWorkspaceDeliveryBatch(
                 delivery.deliveryPlan.generatedAssets,
-              );
+                'vscode',
+              ),
+            );
             for (const projection of projectionResults) {
               if (projection.status === 'blocked') {
                 logger.warn(

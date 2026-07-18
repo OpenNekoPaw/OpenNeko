@@ -18,7 +18,12 @@ import type { MediaTaskProgressDeliveryPlan } from '@neko/platform/media/media-t
 import type { MediaModelCategory, ModelRef } from '@neko-agent/types';
 import { runAgentMediaTurn } from '@neko/agent/runtime';
 import type { AgentFileReference } from '@neko-agent/types';
-import type { AgentTaskResultDeliveryPolicy, GeneratedAsset, Task } from '@neko/shared';
+import {
+  createGeneratedAssetsWorkspaceDeliveryBatch,
+  type AgentTaskResultDeliveryPolicy,
+  type GeneratedAsset,
+  type Task,
+} from '@neko/shared';
 import { getLogger } from '../base';
 import { MediaTaskDeliveryHost } from './mediaTaskDeliveryHost';
 import type { AgentDashboardWorkItemSource } from './dashboardWorkItemSource';
@@ -34,7 +39,7 @@ export interface MediaTurnBridgeDeps {
   dashboardWorkItems?: AgentDashboardWorkItemSource;
   localResourceAccess?: AgentLocalResourceAccess;
   conversations?: ConversationBridge;
-  workspaceBoardProjection?: Pick<WorkspaceBoardProjectionHost, 'projectGeneratedAssets'>;
+  workspaceBoardProjection?: Pick<WorkspaceBoardProjectionHost, 'deliverBatch'>;
   taskResultObservations?: {
     handleTerminalTask(
       task: Task,
@@ -205,7 +210,7 @@ export class MediaTurnBridge {
       typeof this.deps.mediaDeliveryHost.createTaskViewDelivery === 'function'
     ) {
       const delivery = await this.deps.mediaDeliveryHost.createTaskViewDelivery(webview, task);
-      await this.projectGeneratedAssets(delivery.deliveryPlan.generatedAssets);
+      await this.deliverWorkspaceBatch(delivery.deliveryPlan.generatedAssets);
       return {
         view: delivery.view,
         deliveryPlan: delivery.deliveryPlan,
@@ -217,9 +222,11 @@ export class MediaTurnBridge {
     };
   }
 
-  private async projectGeneratedAssets(assets: readonly GeneratedAsset[]): Promise<void> {
+  private async deliverWorkspaceBatch(assets: readonly GeneratedAsset[]): Promise<void> {
     if (!this.deps.workspaceBoardProjection || assets.length === 0) return;
-    const results = await this.deps.workspaceBoardProjection.projectGeneratedAssets(assets);
+    const results = await this.deps.workspaceBoardProjection.deliverBatch(
+      createGeneratedAssetsWorkspaceDeliveryBatch(assets, 'vscode'),
+    );
     for (const result of results) {
       if (result.status === 'blocked') {
         logger.warn('Generated output persisted but Workspace Board projection was blocked', {

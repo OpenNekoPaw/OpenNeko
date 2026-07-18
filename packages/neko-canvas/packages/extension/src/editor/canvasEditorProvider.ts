@@ -307,6 +307,15 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isCanvasDataSnapshot(value: Record<string, unknown>): value is CanvasData {
+  return (
+    typeof value['version'] === 'string' &&
+    typeof value['name'] === 'string' &&
+    Array.isArray(value['nodes']) &&
+    Array.isArray(value['connections'])
+  );
+}
+
 function normalizeCanvasAssetPreviewBindings(value: unknown, bindingPath: string): void {
   if (Array.isArray(value)) {
     value.forEach((item) => normalizeCanvasAssetPreviewBindings(item, bindingPath));
@@ -689,6 +698,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   private readonly documentsByDocumentUri = new Map<string, vscode.CustomDocument>();
   private readonly canvasSnapshotsByDocumentUri = new Map<string, Record<string, unknown>>();
   private readonly canvasRevisionsByDocumentUri = new Map<string, number>();
+  private readonly dirtyCanvasDocumentUris = new Set<string>();
   private readonly canvasPreviewFingerprintsByDocumentUri = new Map<string, string>();
   private readonly canvasDataReadyDocumentUris = new Set<string>();
   private pendingEntityBackfills: CanvasEntityPendingBackfill[] = [];
@@ -1066,6 +1076,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     const documentUri = uri.toString();
     const canvasRecord = canvasData as unknown as Record<string, unknown>;
     this.updateRememberedCanvasSnapshot(documentUri, canvasRecord);
+    this.dirtyCanvasDocumentUris.delete(documentUri);
     const panel = this.webviewPanelsByDocumentUri.get(documentUri);
     const message: CanvasHostAppliedDocumentMessage = {
       type: 'canvas.hostAppliedDocument',
@@ -1092,6 +1103,17 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       return;
     }
     await vscode.commands.executeCommand('vscode.openWith', uri, CanvasEditorProvider.viewType);
+  }
+
+  getOpenCanvasDocumentSnapshot(
+    documentUri: string,
+  ): { readonly canvasData: CanvasData; readonly dirty: boolean } | undefined {
+    const snapshot = this.canvasSnapshotsByDocumentUri.get(documentUri);
+    if (!snapshot || !isCanvasDataSnapshot(snapshot)) return undefined;
+    return {
+      canvasData: snapshot,
+      dirty: this.dirtyCanvasDocumentUris.has(documentUri),
+    };
   }
 
   async revealPlaybackWorkspace(
@@ -1769,6 +1791,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       this.documentsByDocumentUri.delete(documentUri);
       this.canvasSnapshotsByDocumentUri.delete(documentUri);
       this.canvasRevisionsByDocumentUri.delete(documentUri);
+      this.dirtyCanvasDocumentUris.delete(documentUri);
       this.canvasPreviewFingerprintsByDocumentUri.delete(documentUri);
       this.canvasDataReadyDocumentUris.delete(documentUri);
       this.narrativePreviewBridge.handleCanvasEditorClosed(documentUri);
@@ -1831,6 +1854,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     document: vscode.CustomDocument,
     _cancellation: vscode.CancellationToken,
   ): Promise<void> {
+    this.dirtyCanvasDocumentUris.delete(document.uri.toString());
     this.getWebviewPanelForDocument(document)?.webview.postMessage({ type: 'revert' });
   }
 
@@ -2556,6 +2580,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       });
     }
 
+    this.dirtyCanvasDocumentUris.add(document.uri.toString());
     this._onDidChangeCustomDocument.fire({ document });
     const savedUri = await vscode.workspace.save(document.uri);
     if (!savedUri) {
@@ -2595,6 +2620,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     canvasData: CanvasData | Record<string, unknown> | null,
   ): void {
     if (!canvasData) return;
+    this.dirtyCanvasDocumentUris.delete(document.uri.toString());
     const data = canvasData as unknown as Record<string, unknown>;
     this.rememberCanvasSnapshot(document, data);
     if (this.isActiveCanvasDocument(document)) {
@@ -3064,6 +3090,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
 
       case 'operationApplied':
         // EditOperation sync from webview — fire dirty event
+        this.dirtyCanvasDocumentUris.add(document.uri.toString());
         this._onDidChangeCustomDocument.fire({ document });
         this._onDidChangeCanvas.fire(
           mapOperationToCanvasChangeEvent(

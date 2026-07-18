@@ -119,7 +119,6 @@ export function DocumentNode({
           <div
             className="min-h-0 flex-1 overflow-auto px-3 py-2 select-text"
             data-document-text-surface={docType}
-            data-node-drag-block="true"
           >
             {!docPath ? (
               <TextDocumentState message="文本资源缺少可读取的文件路径。" tone="error" />

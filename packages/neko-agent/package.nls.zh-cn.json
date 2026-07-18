@@ -3,7 +3,6 @@
   "neko.aiAssistant.contextualTitle": "OpenNeko AI 助手",
   "neko.ai.chat.title": "与 AI 对话",
   "neko.agent.showLogs.title": "显示 Agent 日志",
-  "neko.agent.retainAndProjectGeneratedOutput.title": "保留并投影生成内容",
   "neko.ai.generateImage.title": "生成图像",
   "neko.ai.generateVideo.title": "生成视频",
   "neko.ai.generateTTS.title": "生成语音 (TTS)",

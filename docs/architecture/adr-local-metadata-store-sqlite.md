@@ -72,6 +72,14 @@
 
 SQLite 是本机结构化状态、账本和查询层，不是项目事实格式，也不是媒体容器。
 
+### Canvas Workspace Board delivery ledger
+
+Canvas Board delivery 是 `tasks` / `task_checkpoints` 的一个受限、Canvas-owned 使用者，不是第 19 张表、workspace DB、transcript outbox 或 Board 重建索引。delivery task 使用 `system:canvas-board-delivery:<deliveryId>`，writer lease 使用 `system:canvas-board-writer:<workspaceId>`；payload 只接受已验证的 typed batch、claim epoch、expiry、attempt、diagnostic 和 compact projected receipt。`system:` rows 按 workspace 分区，但必须从 Agent TaskManager listing、`/tasks`、work-item projection、task continuation 和 generic completed-task cleanup 排除。
+
+账本状态是 queued/claimed/projected/noop/blocked/conflict/discarded。它负责跨 Extension/TUI Host 的 pending、fenced claim、retry、discard 和 receipt ordering；`.nkc` 仍是节点、连接、位置、分组、标题、批注、删除和用户移动的唯一事实源。打开 Board 或 Host 启动只消费 pending rows，不能从全部历史 receipt 自动重建、覆盖或复活已编辑 Board；`.nkc` 缺失时仅允许对仍 pending 的 delivery 创建空 Board。
+
+delivery payload 不得包含 reasoning、日志、secret、token、absolute/runtime path、Webview URI、process handle、DB path/table 或 active/recent Canvas identity。projected/noop 后只保留 artifact identity、target URI、Canvas revision、node IDs、diagnostic 和 completedAt 等 compact receipt，不保留可从 `.nkc` 读取的 Markdown body。LocalMetadata 不可用或损坏时必须 fail-visible；禁止 JSON fallback、raw SQL 暴露、workspace SQLite 或直接写 `.nkc` 绕过 ledger。
+
 ## 为什么不用 workspace DB
 
 用户级 DB 更符合 Extension/TUI 共享和本地产品边界：
@@ -124,26 +132,26 @@ canonical checkout identity descriptor：
 
 长期目标固定为 18 张核心表。触碰时间、quota 与 GC eligibility 合并到 resource row；Run lifecycle 合并到 task；semantic coverage 合并到 source；Entity 与 Asset 的多种图/反向索引合并为 typed projection。临时 job/status/history、provider diagnostic history 和 log index 默认不建表：进程内临时状态留在内存，需要跨重启恢复的后台工作使用 `tasks` / `task_checkpoints`，当前诊断附着在所属 projection/catalog row，原始日志继续使用 JSONL。
 
-| #   | 表                         | 逻辑分类 | 用途 / authority                                                        |
-| --- | -------------------------- | -------- | ----------------------------------------------------------------------- |
-| 1   | `schema_migrations`        | system   | 单一物理数据库的 namespaced migration ledger                            |
-| 2   | `workspaces`               | state    | Workspace identity、portable locator、last-seen、duplicate/orphan state |
-| 3   | `projection_versions`      | system   | Partition/domain revision、freshness 与 rebuild requirement             |
-| 4   | `conversations`            | cache    | 从 Journal metadata 重建的会话列表与搜索 projection                     |
-| 5   | `conversation_preferences` | state    | Pin/favorite 等明确、不可重建的用户选择                                 |
-| 6   | `tasks`                    | state    | 需要跨重启保留的 Task/Run lifecycle                                     |
-| 7   | `task_checkpoints`         | state    | 最小 resumable recovery payload                                         |
-| 8   | `local_drafts`             | state    | 仅保存不可静默丢失的未提升本机草稿                                      |
-| 9   | `dashboard_activities`     | state    | 仅保存 owning package 确认为用户有价值的 activity                       |
-| 10  | `market_installations`     | state    | Installed package 与 trust decision                                     |
-| 11  | `resource_cache_entries`   | cache    | Source/artifact ledger、size、touch、quota、GC eligibility              |
-| 12  | `resource_cache_variants`  | cache    | Thumbnail/proxy/page/preview/generated variants                         |
-| 13  | `media_metadata`           | cache    | 可重建 probe 与本机 availability metadata                               |
-| 14  | `search_documents`         | cache    | Search/FTS source projection                                            |
-| 15  | `semantic_sources`         | cache    | Source fingerprint、provider/schema version 与 coverage                 |
-| 16  | `semantic_evidence`        | cache    | 按 source range 保存的可重建 semantic evidence                          |
-| 17  | `entity_asset_projections` | cache    | Entity occurrence/relationship/binding 与 Asset graph projection        |
-| 18  | `catalog_items`            | cache    | Skill/Command/Processor/Market/provider descriptor 与当前 diagnostic    |
+| #   | 表                         | 逻辑分类 | 用途 / authority                                                              |
+| --- | -------------------------- | -------- | ----------------------------------------------------------------------------- |
+| 1   | `schema_migrations`        | system   | 单一物理数据库的 namespaced migration ledger                                  |
+| 2   | `workspaces`               | state    | Workspace identity、portable locator、last-seen、duplicate/orphan state       |
+| 3   | `projection_versions`      | system   | Partition/domain revision、freshness 与 rebuild requirement                   |
+| 4   | `conversations`            | cache    | 从 Journal metadata 重建的会话列表与搜索 projection                           |
+| 5   | `conversation_preferences` | state    | Pin/favorite 等明确、不可重建的用户选择                                       |
+| 6   | `tasks`                    | state    | 需要跨重启保留的 Task/Run lifecycle                                           |
+| 7   | `task_checkpoints`         | state    | 最小 resumable recovery payload；Canvas Board delivery 的 checkpoint 复用此表 |
+| 8   | `local_drafts`             | state    | 仅保存不可静默丢失的未提升本机草稿                                            |
+| 9   | `dashboard_activities`     | state    | 仅保存 owning package 确认为用户有价值的 activity                             |
+| 10  | `market_installations`     | state    | Installed package 与 trust decision                                           |
+| 11  | `resource_cache_entries`   | cache    | Source/artifact ledger、size、touch、quota、GC eligibility                    |
+| 12  | `resource_cache_variants`  | cache    | Thumbnail/proxy/page/preview/generated variants                               |
+| 13  | `media_metadata`           | cache    | 可重建 probe 与本机 availability metadata                                     |
+| 14  | `search_documents`         | cache    | Search/FTS source projection                                                  |
+| 15  | `semantic_sources`         | cache    | Source fingerprint、provider/schema version 与 coverage                       |
+| 16  | `semantic_evidence`        | cache    | 按 source range 保存的可重建 semantic evidence                                |
+| 17  | `entity_asset_projections` | cache    | Entity occurrence/relationship/binding 与 Asset graph projection              |
+| 18  | `catalog_items`            | cache    | Skill/Command/Processor/Market/provider descriptor 与当前 diagnostic          |
 
 SQLite FTS virtual/shadow tables 和普通 index 是实现 artifact，不计入 18 张核心 schema 表。所有 workspace-scoped row 使用 `workspace_id` 分区；跨项目记录使用显式 global partition。
 
@@ -175,6 +183,8 @@ State-owned transaction 必须独立提交并进入备份/恢复策略；cache-o
 SQLite 中的 Entity 数据只能是 projection：name/alias search、occurrence、relationship、candidate match、semantic evidence、availability 和 reverse lookup。
 
 用户确认或确定性提升后的 Entity ID、名称、状态、语义 metadata、binding、asset requirement 和 visual draft 必须先写 owning project fact。SQLite 更新失败只能标记 projection stale，不能回滚已成功的项目事实，也不能把 DB row 当成 confirmed entity。
+
+语义 source discovery 由 Host 注册工作区和已授权素材库 root，并将文件事件作为低延迟 hint；有界 reconciliation 才是完整性边界。`semantic_sources`、`semantic_evidence` 与 `entity_asset_projections` 的写入必须走 source-scoped atomic replacement。Media Library Search/Tree 可以继续维护文件名、目录和导航 projection，但不得成为语义 source authority，也不得重复触发 Entity 分析。
 
 未确认数据按生命周期分类：
 

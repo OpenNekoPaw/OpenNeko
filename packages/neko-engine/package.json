@@ -110,7 +110,7 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run build",
-    "build": "pnpm run build:napi && pnpm run build:cli && pnpm run compile",
+    "build": "pnpm run build:cli && pnpm run build:napi && pnpm run compile",
     "build:napi": "pnpm --filter @neko-engine/host-napi run build:native",
     "build:cli": "pnpm --filter @neko-engine/host-cli run build:native",
     "typecheck": "tsc --noEmit -p packages/extension/tsconfig.json",

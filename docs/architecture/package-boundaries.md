@@ -9,13 +9,13 @@
 
 ## 分层与依赖方向
 
-| 层级 | 主要包 | 可依赖 | 不得依赖 |
-| --- | --- | --- | --- |
-| L0 host-neutral | `@neko/shared`、`@neko/proto`、`@neko/content`、`@neko/entity`、`@neko/search`、`@neko/markdown`、`@neko/skills` | 更低层纯 contract/utility | VS Code、React、Webview、应用根、功能包内部实现 |
-| L1 host/client | `@neko/host`、`@neko/neko-client`、各功能包 host-neutral core/platform | L0、明确 runtime dependency | React/Webview 实现、`apps/*`、其他功能包内部实现 |
-| L2 browser UI | `@neko/ui`、功能包 Webview | L0、L2 公共 UI、包自有 contract | `vscode`、Node-only API、Extension 实现、Engine native handle |
-| Extension Host | 保留功能包的 Extension、Engine Extension | L0/L1、VS Code API、包自有 host adapter | React/Webview implementation、其他功能扩展内部实现 |
-| Application | `apps/neko-tui`、`apps/neko-vscode` | package public entries | `packages/*/src`、其他应用内部目录、应用级领域副本 |
+| 层级            | 主要包                                                                                                           | 可依赖                                  | 不得依赖                                                      |
+| --------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------- |
+| L0 host-neutral | `@neko/shared`、`@neko/proto`、`@neko/content`、`@neko/entity`、`@neko/search`、`@neko/markdown`、`@neko/skills` | 更低层纯 contract/utility               | VS Code、React、Webview、应用根、功能包内部实现               |
+| L1 host/client  | `@neko/host`、`@neko/neko-client`、各功能包 host-neutral core/platform                                           | L0、明确 runtime dependency             | React/Webview 实现、`apps/*`、其他功能包内部实现              |
+| L2 browser UI   | `@neko/ui`、功能包 Webview                                                                                       | L0、L2 公共 UI、包自有 contract         | `vscode`、Node-only API、Extension 实现、Engine native handle |
+| Extension Host  | 保留功能包的 Extension、Engine Extension                                                                         | L0/L1、VS Code API、包自有 host adapter | React/Webview implementation、其他功能扩展内部实现            |
+| Application     | `apps/neko-tui`、`apps/neko-vscode`                                                                              | package public entries                  | `packages/*/src`、其他应用内部目录、应用级领域副本            |
 
 依赖必须自上而下组合：
 
@@ -79,6 +79,8 @@ Engine hosts -> Host API -> Kernel/runtime
 - Assets 是当前 VS Code Entity runtime、Entity Browser、metadata binding 和 Inspector 的宿主 owner。
 - Canvas、Assets 和 Agent 通过 canonical facade/contract 访问 Entity；不存在 Dashboard fallback。
 - projection 不泄露 store/cache/index 绝对路径、token、Webview URI 或 manifest path。
+- `@neko/search` 的 semantic source coordinator 拥有 source scope、fingerprint、freshness、reconciliation 和 analyzer scheduling；`@neko/entity` 提供 host-neutral deterministic text analyzer，二者通过共享 semantic-source contract 组合。
+- `@neko/entity` analyzer 不监听文件、不打开 SQLite、不写 project facts；VS Code/TUI Host 只能通过 coordinator ports 提供文件、confirmed snapshot 和 projection commit。
 
 ### `@neko/ui`
 
@@ -108,6 +110,12 @@ Extension 包拥有 VS Code 宿主能力：
 
 Extension 不导入 React，不复制 Rust 媒体计算，不直接依赖其他功能扩展内部实现，也不中继高频视频帧或 PCM。
 
+文件发现边界：
+
+- Assets Extension 可以将 workspace 与 `MediaLibrarySettingsService` 解析出的外部 root 注册为 semantic source scope，并负责 watcher、trust、PathResolver、目录读取、取消和生命周期。
+- 文件事件只触发 host-neutral coordinator；发现文件不得直接调用 `AssetFileImportService` 或写 `library.json`。
+- semantic/entity projection 使用 `LocalMetadataStore` 的用户级 SQLite binding；Webview 和功能包不接收数据库路径或 raw SQL。
+
 ## Webview
 
 Webview 负责浏览器沙箱内的 UI、用户交互和可恢复展示状态。
@@ -133,30 +141,30 @@ Engine 当前只拥有媒体能力：文件/Range、probe/capture、编解码、
 
 `packages/neko-agent` 内部继续按职责分层：
 
-| 子包 | 职责 |
-| --- | --- |
-| `agent-types` | Agent/Webview/Extension contract 和状态投影 |
-| `agent` | host-neutral session、workflow、prompt、skill、memory、tool、evaluation |
-| `ai-sdk` | provider/AI SDK adapter |
-| `platform` | host-neutral 配置、provider glue 和平台桥 |
-| `extension` | VS Code command、配置桥、host adapter、会话入口 |
-| `webview` | Chat/Agent UI、消息投影和用户输入 |
-| `test-utils` | 测试支撑 |
+| 子包          | 职责                                                                    |
+| ------------- | ----------------------------------------------------------------------- |
+| `agent-types` | Agent/Webview/Extension contract 和状态投影                             |
+| `agent`       | host-neutral session、workflow、prompt、skill、memory、tool、evaluation |
+| `ai-sdk`      | provider/AI SDK adapter                                                 |
+| `platform`    | host-neutral 配置、provider glue 和平台桥                               |
+| `extension`   | VS Code command、配置桥、host adapter、会话入口                         |
+| `webview`     | Chat/Agent UI、消息投影和用户输入                                       |
+| `test-utils`  | 测试支撑                                                                |
 
 TUI 的产品级组合位于 `apps/neko-tui`。Agent core/platform 不导入 VS Code、React 或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Extension API。Prompt、Skill、capability/tool schema 和宿主副作用按各自边界维护。
 
 ## 保留领域包
 
-| 包 | 主要职责 | 关键边界 |
-| --- | --- | --- |
-| `neko-agent` | Agent session、provider、Skill、capability 与 Chat UI | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation |
-| `neko-assets` | 素材库、元数据、缩略图、Entity VS Code surface | 路径走公共 resolver；Entity 走 canonical facade；缓存不伪装事实 |
-| `neko-canvas` | 画布、创作结构、投影与领域 authoring | Webview 管交互；持久写入走 domain/host contract；复用公共 UI |
-| `neko-cut` | Timeline、视频编辑、媒体控制与导出 | Webview 管时间线交互；Extension 管 editor/export；媒体走 Engine client |
-| `neko-preview` | 保留格式的授权预览 | Extension 管 provider/resource/CSP；Webview 只渲染授权内容 |
-| `neko-tools` | 工具、Media LSP、差异与诊断 | LSP/diagnostic 在 Extension；不得贡献已移除 Device UI |
-| `neko-engine` | 本地 Rust Media Engine 与 VS Code native wrapper | 只暴露保留媒体 contract；native 资源显式释放 |
-| `apps/neko-vscode` | VS Code 产品组合根 | 只拥有 Extension Pack、打包、发布和产品验收 |
+| 包                 | 主要职责                                              | 关键边界                                                                |
+| ------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| `neko-agent`       | Agent session、provider、Skill、capability 与 Chat UI | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation |
+| `neko-assets`      | 素材库、元数据、缩略图、Entity VS Code surface        | 路径走公共 resolver；Entity 走 canonical facade；缓存不伪装事实         |
+| `neko-canvas`      | 画布、创作结构、投影与领域 authoring                  | Webview 管交互；持久写入走 domain/host contract；复用公共 UI            |
+| `neko-cut`         | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Extension 管 editor/export；媒体走 Engine client  |
+| `neko-preview`     | 保留格式的授权预览                                    | Extension 管 provider/resource/CSP；Webview 只渲染授权内容              |
+| `neko-tools`       | 工具、Media LSP、差异与诊断                           | LSP/diagnostic 在 Extension；不得贡献已移除 Device UI                   |
+| `neko-engine`      | 本地 Rust Media Engine 与 VS Code native wrapper      | 只暴露保留媒体 contract；native 资源显式释放                            |
+| `apps/neko-vscode` | VS Code 产品组合根                                    | 只拥有 Extension Pack、打包、发布和产品验收                             |
 
 ## 路径、缓存与用户数据
 

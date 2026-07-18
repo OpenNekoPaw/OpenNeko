@@ -56,6 +56,8 @@ export async function createDirectMediaRuntime(input: {
   const deliveryHost = new NodeMediaTaskDeliveryHost({
     platform: platformResult.platform,
     workspaceRoot: input.workDir,
+    workspaceId: storage.workspaceId,
+    metadataStore: storage.metadataStore,
     assetIndex: generatedAssets,
   });
   const runIdentity = randomUUID();

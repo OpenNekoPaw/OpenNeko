@@ -7,6 +7,7 @@ export * from './node-workspace-entity-asset-metadata-binding';
 export * from './node-workspace-media-metadata-binding';
 export * from './node-workspace-resource-cache-binding';
 export * from './node-workspace-search-metadata-binding';
+export * from './node-workspace-semantic-entity-metadata-binding';
 export * from './node-workspace-storage-inspection';
 export * from './node-workspace-git-hygiene';
 export * from './node-workspace-identity-recovery';

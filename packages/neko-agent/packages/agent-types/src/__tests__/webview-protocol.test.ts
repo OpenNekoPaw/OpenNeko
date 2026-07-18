@@ -691,6 +691,30 @@ describe('webview protocol parser', () => {
     });
   });
 
+  it('rejects legacy and incomplete model context payloads on sendMessage', () => {
+    const base = {
+      type: 'sendMessage',
+      conversationId: 'conversation-1',
+      message: 'Use this model',
+    };
+    expect(
+      parseWebviewToExtensionMessage({
+        ...base,
+        contextPayloads: [
+          { type: 'model-scene', id: 'legacy', label: 'Legacy', summary: '', data: {} },
+        ],
+      }),
+    ).toBeNull();
+    expect(
+      parseWebviewToExtensionMessage({
+        ...base,
+        contextPayloads: [
+          { type: 'model-preview', id: 'model', label: 'Model', summary: '', data: {} },
+        ],
+      }),
+    ).toBeNull();
+  });
+
   it('rejects unknown context types while keeping package-owned context data opaque', () => {
     expect(
       parseSendMessageWebviewMessage({

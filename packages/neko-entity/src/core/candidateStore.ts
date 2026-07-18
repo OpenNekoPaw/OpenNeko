@@ -33,6 +33,12 @@ export interface CreateEntityCandidateInput {
   readonly metadata?: Record<string, unknown>;
 }
 
+export interface EntityCandidateFactMigrationReport {
+  readonly totalCandidates: number;
+  readonly automationGeneratedCandidates: number;
+  readonly preservedCandidateIds: readonly string[];
+}
+
 export class EntityCandidateStore {
   private readonly filePath: string;
   private readonly lock;
@@ -199,6 +205,20 @@ export function createEmptyCreativeEntityCandidateFile(): CreativeEntityCandidat
   return {
     version: 1,
     candidates: [],
+  };
+}
+
+export function inspectEntityCandidateFactMigration(
+  file: CreativeEntityCandidateFile,
+): EntityCandidateFactMigrationReport {
+  const automationGeneratedCandidates = file.candidates.filter((candidate) => {
+    const source = candidate.metadata?.['automationSource'];
+    return typeof source === 'string' && source.length > 0;
+  });
+  return {
+    totalCandidates: file.candidates.length,
+    automationGeneratedCandidates: automationGeneratedCandidates.length,
+    preservedCandidateIds: file.candidates.map((candidate) => candidate.id),
   };
 }
 

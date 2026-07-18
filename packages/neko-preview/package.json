@@ -27,13 +27,17 @@
     "epub",
     "cbz",
     "docx",
-    "document"
+    "document",
+    "3d",
+    "model",
+    "gltf"
   ],
   "extensionKind": [
     "workspace"
   ],
   "activationEvents": [
-    "onCommand:neko.preview.revealDocumentLocator"
+    "onCommand:neko.preview.revealDocumentLocator",
+    "onCustomEditor:neko.modelPreview"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -46,6 +50,16 @@
       }
     ],
     "customEditors": [
+      {
+        "viewType": "neko.modelPreview",
+        "displayName": "%neko.preview.modelPreview.displayName%",
+        "selector": [
+          {
+            "filenamePattern": "*.{glb,gltf,obj,stl,ply}"
+          }
+        ],
+        "priority": "default"
+      },
       {
         "viewType": "neko.videoPreview",
         "displayName": "%neko.preview.videoPreview.displayName%",

@@ -470,6 +470,7 @@ export function BaseNode({
         transformOrigin: 'center center',
       }}
       onMouseDown={dragHandlers.onMouseDown}
+      onDragStart={(event) => event.preventDefault()}
       onClick={handleClick}
       onDoubleClick={(event) => {
         event.stopPropagation();

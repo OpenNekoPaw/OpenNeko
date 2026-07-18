@@ -62,6 +62,12 @@
       "file": "cases/conversation-idle-continuation.json",
       "group": "regression",
       "visibility": "public"
+    },
+    {
+      "id": "workspace-board-delivery-resume",
+      "file": "cases/workspace-board-delivery-resume.json",
+      "group": "failure",
+      "visibility": "public"
     }
   ],
   "rubricRefs": [],

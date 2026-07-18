@@ -315,6 +315,43 @@ body,
   border-left: 1px solid color-mix(in srgb, var(--toolbar-border) 74%, transparent);
 }
 
+.canvas-node-library-source-actions {
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-node-library-source-action {
+  display: flex;
+  min-height: 28px;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 3px 4px 3px 0;
+  background: transparent;
+  color: var(--toolbar-fg);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.canvas-node-library-source-action:hover {
+  background: var(--control-hover);
+}
+
+.canvas-node-library-source-action:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.canvas-node-library-source-action:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 #canvas-right-node-tree-panel .neko-creative-tree-view {
   width: 100%;
   border: 0;

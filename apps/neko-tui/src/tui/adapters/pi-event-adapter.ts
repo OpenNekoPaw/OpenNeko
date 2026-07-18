@@ -1,14 +1,28 @@
 import type { PiProductAgentEvent, PiProductEventSink } from '@neko/agent/pi';
+import type {
+  ToolResultArtifactTransfer,
+  ToolResultAttachment,
+} from '@neko/shared';
 
 import type { TuiConversationStores } from '../runtime/tui-runtime-context';
 
 export interface TuiPiEventAdapter extends PiProductEventSink {
   reset(): void;
+  getTerminalToolResults(): readonly {
+    readonly success: boolean;
+    readonly attachments?: readonly ToolResultAttachment[];
+    readonly artifacts?: readonly ToolResultArtifactTransfer[];
+  }[];
 }
 
 export function createTuiPiEventAdapter(stores: TuiConversationStores): TuiPiEventAdapter {
   let assistantStarted = false;
   let accumulatedText = '';
+  let terminalToolResults: {
+    readonly success: boolean;
+    readonly attachments?: readonly ToolResultAttachment[];
+    readonly artifacts?: readonly ToolResultArtifactTransfer[];
+  }[] = [];
 
   const ensureAssistant = (): void => {
     if (assistantStarted) return;
@@ -50,6 +64,11 @@ export function createTuiPiEventAdapter(stores: TuiConversationStores): TuiPiEve
           return;
         case 'tool.completed': {
           const details = toolResultDetails(event.result);
+          terminalToolResults.push({
+            success: !event.isError,
+            ...(details.attachments ? { attachments: details.attachments } : {}),
+            ...(details.artifacts ? { artifacts: details.artifacts } : {}),
+          });
           stores.conversation.getState().updateToolResult({
             toolCallId: event.toolCallId,
             success: !event.isError,
@@ -100,6 +119,14 @@ export function createTuiPiEventAdapter(stores: TuiConversationStores): TuiPiEve
     reset(): void {
       assistantStarted = false;
       accumulatedText = '';
+      terminalToolResults = [];
+    },
+    getTerminalToolResults(): readonly {
+      readonly success: boolean;
+      readonly attachments?: readonly ToolResultAttachment[];
+      readonly artifacts?: readonly ToolResultArtifactTransfer[];
+    }[] {
+      return structuredClone(terminalToolResults);
     },
   };
 }
@@ -123,13 +150,62 @@ function objectArguments(value: unknown): Record<string, unknown> {
 function toolResultDetails(value: unknown): {
   readonly data: unknown;
   readonly error?: string;
+  readonly attachments?: readonly ToolResultAttachment[];
+  readonly artifacts?: readonly ToolResultArtifactTransfer[];
 } {
-  if (typeof value !== 'object' || value === null || !('details' in value)) {
-    return { data: value };
+  if (!isRecord(value) || !('details' in value)) {
+    return { data: value, ...readToolResultCollections(value) };
   }
   const details = value.details;
-  if (typeof details !== 'object' || details === null) return { data: details };
+  if (!isRecord(details)) {
+    return { data: details, ...readToolResultCollections(details) };
+  }
   const data = 'data' in details ? details.data : details;
   const error = 'error' in details && typeof details.error === 'string' ? details.error : undefined;
-  return { data, ...(error === undefined ? {} : { error }) };
+  return {
+    data,
+    ...(error === undefined ? {} : { error }),
+    ...readToolResultCollections(details),
+  };
+}
+
+function readToolResultCollections(value: unknown): {
+  readonly attachments?: readonly ToolResultAttachment[];
+  readonly artifacts?: readonly ToolResultArtifactTransfer[];
+} {
+  if (!isRecord(value)) return {};
+  const attachments = value['attachments'];
+  const artifacts = value['artifacts'];
+  return {
+    ...(Array.isArray(attachments)
+      ? { attachments: attachments.filter(isToolResultAttachment) }
+      : {}),
+    ...(Array.isArray(artifacts)
+      ? { artifacts: artifacts.filter(isToolResultArtifactTransfer) }
+      : {}),
+  };
+}
+
+function isToolResultAttachment(value: unknown): value is ToolResultAttachment {
+  if (!isRecord(value)) return false;
+  const type = value['type'];
+  return (
+    (type === 'image' || type === 'audio' || type === 'video') &&
+    typeof value['path'] === 'string'
+  );
+}
+
+function isToolResultArtifactTransfer(value: unknown): value is ToolResultArtifactTransfer {
+  if (!isRecord(value)) return false;
+  const type = value['type'];
+  return (
+    type === 'artifactSnapshot' ||
+    type === 'artifactBackfill' ||
+    type === 'artifactBlockPage' ||
+    type === 'artifactExecutionSummary'
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -98,16 +98,16 @@
       "id": "wait-child-toolbar",
       "operation": "wait-visible",
       "selector": {
-        "css": "[data-selection-context-toolbar=\"true\"][data-selection-count=\"1\"] [data-selection-action=\"node:edit\"]",
-        "auditedSelectorReason": "The selection-owned toolbar exposes canonical action identities without relying on translated labels."
+        "css": "[data-selection-context-toolbar=\"true\"][data-selection-count=\"1\"] [data-selection-action=\"node:open-content-overlay\"]",
+        "auditedSelectorReason": "The selection-owned toolbar exposes the current canonical content action identity without relying on translated labels."
       }
     },
     {
       "id": "move-child",
       "operation": "drag",
       "selector": {
-        "css": "[data-node-id=\"text-a\"] .node-header",
-        "auditedSelectorReason": "The foundational node title row is its visible drag chrome; editable content correctly blocks node movement."
+        "css": "[data-node-id=\"text-a\"] [data-canvas-text-display]",
+        "auditedSelectorReason": "The nested foundational node content is an ordinary node-level drag surface; the persisted child identity remains the movement owner."
       },
       "delta": {
         "x": 40,

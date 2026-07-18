@@ -92,6 +92,7 @@ function ReferenceContributorProbe(props: {
     service: createNoopService(),
     capabilityProviders: props.capabilityProviders,
     createLocalMetadata: createMemoryLocalMetadataBinding,
+    localMetadataHome: props.config.workDir,
   });
 
   useEffect(() => {

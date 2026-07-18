@@ -239,10 +239,13 @@ function projectWorkspaceBoardProjectionFacts(
   results: readonly CanvasWorkspaceProjectionResult[],
 ): TuiDebugAutomationSessionFacts['workspaceBoardProjections'] {
   return results.map((result) => ({
+    ...(result.deliveryId ? { deliveryIdHash: hashText(result.deliveryId) } : {}),
     status: result.status,
     ...(result.target ? { targetKind: result.target.kind } : {}),
     ...(result.revision ? { revision: result.revision } : {}),
     nodeIds: [...(result.nodeIds ?? [])],
+    ...(result.artifactRoleCounts ? { artifactRoleCounts: result.artifactRoleCounts } : {}),
+    ...(result.writerEpoch ? { writerEpoch: result.writerEpoch } : {}),
     diagnosticCodes: result.diagnostics.map((diagnostic) => diagnostic.code),
   }));
 }

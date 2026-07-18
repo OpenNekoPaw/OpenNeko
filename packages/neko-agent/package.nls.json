@@ -3,7 +3,6 @@
   "neko.aiAssistant.contextualTitle": "OpenNeko AI Assistant",
   "neko.ai.chat.title": "Chat with AI",
   "neko.agent.showLogs.title": "Show Agent Logs",
-  "neko.agent.retainAndProjectGeneratedOutput.title": "Retain and Project Generated Output",
   "neko.ai.generateImage.title": "Generate Image",
   "neko.ai.generateVideo.title": "Generate Video",
   "neko.ai.generateTTS.title": "Generate TTS",

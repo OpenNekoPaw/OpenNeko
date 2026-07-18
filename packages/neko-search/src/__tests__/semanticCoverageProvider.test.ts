@@ -143,7 +143,10 @@ describe('VSCode semantic coverage provider', () => {
           updatedAt: '2026-07-13T04:00:00.000Z',
         },
       ],
+      get: async () => null,
       replacePartition: async () => undefined,
+      replaceSource: async () => undefined,
+      deleteSource: async () => false,
       insertMissing: async () => ({ insertedSourceIds: [], preservedSourceIds: [] }),
     };
     const provider = createVSCodeSemanticCoverageProvider({
@@ -207,7 +210,10 @@ function createSemanticProjection(): {
           updatedAt: '2026-07-13T04:00:00.000Z',
         },
       ],
+      get: async () => null,
       replacePartition: async () => undefined,
+      replaceSource: async () => undefined,
+      deleteSource: async () => false,
       insertMissing: async () => ({ insertedSourceIds: [], preservedSourceIds: [] }),
     },
     partition: {

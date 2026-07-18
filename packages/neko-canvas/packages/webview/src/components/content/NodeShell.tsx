@@ -90,7 +90,7 @@ export function NodeShell({ section, context, isCollapsed, onToggleCollapse }: N
         icon={headerSource === 'file' ? <FileIcon size={16} strokeWidth={1.7} /> : undefined}
       />
       {!isCollapsed && (
-        <div className={bodyClassName} data-node-drag-block="true">
+        <div className={bodyClassName}>
           {presentation === 'structured' && (
             <ContainerActionBar
               node={node}

@@ -14,15 +14,37 @@ import type {
   SemanticProjectionRecord,
   SemanticProjectionRepository,
 } from '@neko/shared';
+import { resolveGlobalStorageLayout } from '@neko/shared';
+import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
+import { resolveNodeWorkspaceIdentity } from '@neko/shared/local-metadata/node-workspace-identity';
+import {
+  AGENT_STATE_MIGRATIONS,
+  M1_LOCAL_METADATA_MIGRATIONS,
+} from '@neko/shared/local-metadata/sqlite';
 import type { TuiLocalMetadataBinding } from '../../tui-local-metadata-binding';
 
-export async function createMemoryLocalMetadataBinding(): Promise<TuiLocalMetadataBinding> {
+export async function createMemoryLocalMetadataBinding(
+  homedir: string,
+  workDir: string,
+): Promise<TuiLocalMetadataBinding> {
+  const metadataStore = createNodeSqliteLocalMetadataStore({ homedir });
+  await metadataStore.open({
+    databasePath: resolveGlobalStorageLayout(homedir).database,
+    busyTimeoutMs: 2_000,
+  });
+  await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
+  await metadataStore.migrateNamespace(AGENT_STATE_MIGRATIONS);
+  const workspaceResolution = await resolveNodeWorkspaceIdentity({
+    workspaceRoot: workDir,
+    homedir,
+    metadataStore,
+  });
   const resourceCacheManifestStore = createMemoryResourceCacheManifestStore();
   const searchDocuments = createMemorySearchDocumentRepository();
   const semanticProjections = createMemorySemanticProjectionRepository();
   const entityAssetProjections = createMemoryEntityAssetProjectionRepository();
   const catalogItems = createMemoryCatalogProjectionRepository();
-  const workspaceId = '9b2de3b5-5f50-4be4-9551-71fb5b512489';
+  const workspaceId = workspaceResolution.identity.workspaceId;
   const searchPartition = {
     scope: 'workspace' as const,
     workspaceId,
@@ -45,6 +67,7 @@ export async function createMemoryLocalMetadataBinding(): Promise<TuiLocalMetada
       databaseScope: 'isolated-test',
     },
     workspaceId,
+    metadataStore,
     taskStorage: new MemoryTaskStorage(),
     taskRecoveryStorage: new MemoryTaskRecoveryStorage(),
     resourceCacheManifestStore,
@@ -119,7 +142,7 @@ export async function createMemoryLocalMetadataBinding(): Promise<TuiLocalMetada
     readSearchRevision: async () => null,
     readEntityAssetRevision: async () => null,
     pollRevisions: async () => ({ changedDomains: [], revisions: {} }),
-    dispose: async () => undefined,
+    dispose: () => metadataStore.dispose(),
   };
 }
 

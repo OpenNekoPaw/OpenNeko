@@ -113,6 +113,7 @@ describe('NodeLibraryPanel', () => {
       'group',
       'text',
     ]);
+    expect(groups.find((group) => group.id === 'core')?.presentation).toBe('node-entries');
     expect(groups.find((group) => group.id === 'storyboard')?.nodeTypes).toEqual([
       'storyboard',
       'shot',
@@ -128,6 +129,9 @@ describe('NodeLibraryPanel', () => {
       'canvas-embed',
       'project',
     ]);
+    expect(groups.find((group) => group.id === 'file-references')?.presentation).toBe(
+      'source-actions',
+    );
   });
 
   it('renders only foundational creation and file/reference entries for Basic', () => {
@@ -227,7 +231,7 @@ describe('NodeLibraryPanel', () => {
     expect(markup).toContain('Node Library');
   });
 
-  it('keeps file-bound node entries visible in the file references group', () => {
+  it('renders file-bound types as source actions instead of node entries', () => {
     setLocale('zh-cn');
 
     const markup = renderToStaticMarkup(
@@ -243,10 +247,13 @@ describe('NodeLibraryPanel', () => {
     );
 
     expect(markup).toContain('文件引用');
-    expect(markup).toContain('媒体');
-    expect(markup).toContain('文件');
-    expect(markup).toContain('data-node-library-badge="library.badge.file"');
-    expect(markup).not.toContain('draggable="false"');
+    expect(markup).toContain('data-node-library-source-action="media"');
+    expect(markup).toContain('data-node-library-source-action="document"');
+    expect(markup).toContain('添加媒体');
+    expect(markup).toContain('添加文档');
+    expect(markup).not.toContain('data-tree-item-id="media"');
+    expect(markup).not.toContain('data-tree-item-id="document"');
+    expect(markup).not.toContain('data-node-library-source-action="media" draggable');
   });
 
   it('renders subsystem badges with explicit active and available states', () => {
@@ -269,7 +276,7 @@ describe('NodeLibraryPanel', () => {
     expect(markup).toContain('可用');
   });
 
-  it('opens pickers for visible file reference entries', () => {
+  it('opens pickers from source actions without creating nodes directly', () => {
     setLocale('en');
     const onCreateNode = vi.fn();
     const onPickNodeSource = vi.fn();
@@ -289,10 +296,10 @@ describe('NodeLibraryPanel', () => {
     });
 
     act(() => {
-      host.querySelector<HTMLElement>('[data-tree-item-id="media"]')?.click();
-      host.querySelector<HTMLElement>('[data-tree-item-id="script"]')?.click();
-      host.querySelector<HTMLElement>('[data-tree-item-id="document"]')?.click();
-      host.querySelector<HTMLElement>('[data-tree-item-id="model"]')?.click();
+      host.querySelector<HTMLElement>('[data-node-library-source-action="media"]')?.click();
+      host.querySelector<HTMLElement>('[data-node-library-source-action="script"]')?.click();
+      host.querySelector<HTMLElement>('[data-node-library-source-action="document"]')?.click();
+      host.querySelector<HTMLElement>('[data-node-library-source-action="model"]')?.click();
     });
 
     expect(onCreateNode).not.toHaveBeenCalled();

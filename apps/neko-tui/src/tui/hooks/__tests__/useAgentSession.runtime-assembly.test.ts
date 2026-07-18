@@ -534,6 +534,7 @@ function SessionProbe(props: {
     service: createNoopService(),
     capabilityProviders: [],
     createLocalMetadata: createMemoryLocalMetadataBinding,
+    localMetadataHome: props.config.workDir,
     ...(props.resumeConversationId === undefined
       ? {}
       : { resumeConversationId: props.resumeConversationId }),

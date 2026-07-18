@@ -651,8 +651,10 @@
   },
   "dependencies": {
     "@neko/asset": "workspace:*",
+    "@neko/content": "workspace:*",
     "@neko/entity": "workspace:*",
     "@neko/host": "workspace:*",
+    "@neko/search": "workspace:*",
     "@neko/shared": "workspace:*",
     "adm-zip": "^0.5.16"
   },

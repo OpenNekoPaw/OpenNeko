@@ -25,7 +25,8 @@ Extension Host
   ├── Git LFS           → 大文件版本追踪（视频/图片/音频）
   ├── 云同步服务        → GitHub / GitLab / S3 / rclone
   ├── 导入分类器       → RuleClassifier（确定性文件名/路径规则）
-  ├── MediaLibrary      → 增量目录缓存 + FileSystemWatcher
+  ├── MediaLibrary      → 文件名/树投影 + FileSystemWatcher
+  ├── SemanticSource    → 统一文本 source catalog、SQLite projection 与 reconciliation
   └── CI/CD 触发        → 提交后自动渲染
         │
         └── GitHub Actions / GitLab CI
@@ -40,13 +41,15 @@ Extension Host
 
 `MediaLibraryTreeProvider` 对展开过的目录建立内存缓存，并注册 `FileSystemWatcher` 监听文件创建/删除/修改事件，自动失效缓存并触发防抖刷新，避免每次展开/折叠重复扫描磁盘。
 
+媒体库搜索与树只拥有各自的文件名、目录和导航 projection，不负责语义解析或 Entity 候选。`SemanticSourceDiscoveryService` 是工作区和已配置素材库中文本 source 的唯一 watcher/reconciliation owner：事件只触发低延迟提示，启动、焦点恢复、root remap 和手动刷新通过有界扫描补齐遗漏。语义发现不会调用 `AssetFileImportService`，也不会自动写入 `library.json` 或确认 Entity。
+
 ### 云存储支持
 
-| 提供商 | 说明 |
-|--------|------|
-| `github` | GitHub / GitHub LFS |
-| `gitlab` | GitLab / GitLab LFS |
-| `s3` | Amazon S3 兼容存储 |
+| 提供商   | 说明                      |
+| -------- | ------------------------- |
+| `github` | GitHub / GitHub LFS       |
+| `gitlab` | GitLab / GitLab LFS       |
+| `s3`     | Amazon S3 兼容存储        |
 | `rclone` | 40+ 云存储（通过 rclone） |
 
 ## Deep Dive
@@ -68,9 +71,9 @@ jobs:
 
 ### 配置
 
-| 配置 | 默认值 | 说明 |
-|------|--------|------|
-| `neko.assets.cloudProvider` | `github` | 云存储提供商 |
-| `neko.assets.autoSync` | `false` | 保存时自动同步 |
-| `neko.assets.lfsThreshold` | `1048576` | LFS 追踪阈值（1MB） |
-| `neko.assets.cicdEnabled` | `true` | 启用 CI/CD 自动渲染 |
+| 配置                        | 默认值    | 说明                |
+| --------------------------- | --------- | ------------------- |
+| `neko.assets.cloudProvider` | `github`  | 云存储提供商        |
+| `neko.assets.autoSync`      | `false`   | 保存时自动同步      |
+| `neko.assets.lfsThreshold`  | `1048576` | LFS 追踪阈值（1MB） |
+| `neko.assets.cicdEnabled`   | `true`    | 启用 CI/CD 自动渲染 |

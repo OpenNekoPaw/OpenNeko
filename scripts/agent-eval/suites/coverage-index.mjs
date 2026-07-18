@@ -77,6 +77,7 @@ const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'session-workflows',
   'task-recovery',
   'creative-media-workflow',
+  'workspace-board-delivery',
   'tui-event-projection',
 ]);
 const EXPECTED_LEGACY_CASES = Object.freeze([

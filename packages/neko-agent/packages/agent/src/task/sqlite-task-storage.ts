@@ -53,9 +53,9 @@ export class SqliteTaskStorage implements ITaskStorage {
       workspaceId: this.options.workspaceId,
       statuses: RECOVERABLE_TASK_STATUSES,
     });
-    return tasks.map((task) =>
-      parseSerializableTaskRecord(task.payload, `sqlite-task:${task.taskKey}`),
-    );
+    return tasks
+      .filter(isAgentTaskStateRecord)
+      .map((task) => parseSerializableTaskRecord(task.payload, `sqlite-task:${task.taskKey}`));
   }
 
   async loadAll(): Promise<SerializableTask[]> {
@@ -63,9 +63,9 @@ export class SqliteTaskStorage implements ITaskStorage {
       workspaceId: this.options.workspaceId,
       statuses: null,
     });
-    return tasks.map((task) =>
-      parseSerializableTaskRecord(task.payload, `sqlite-task:${task.taskKey}`),
-    );
+    return tasks
+      .filter(isAgentTaskStateRecord)
+      .map((task) => parseSerializableTaskRecord(task.payload, `sqlite-task:${task.taskKey}`));
   }
 
   async delete(scope: TaskRunScope): Promise<void> {
@@ -104,6 +104,10 @@ export class SqliteTaskStorage implements ITaskStorage {
   }
 }
 
+function isAgentTaskStateRecord(record: { readonly taskKey: string }): boolean {
+  return !record.taskKey.startsWith('system:');
+}
+
 export class SqliteTaskRecoveryStorage implements ITaskRecoveryStorage {
   constructor(private readonly options: SqliteTaskStorageOptions) {}
 
@@ -140,12 +144,14 @@ export class SqliteTaskRecoveryStorage implements ITaskRecoveryStorage {
     const checkpoints = await this.options.metadataStore.repositories.taskCheckpoints.list(
       this.options.workspaceId,
     );
-    return checkpoints.map((checkpoint) =>
-      parseTaskRecoveryInfoRecord(
-        checkpoint.payload,
-        `sqlite-task-checkpoint:${checkpoint.taskKey}`,
-      ),
-    );
+    return checkpoints
+      .filter(isAgentTaskStateRecord)
+      .map((checkpoint) =>
+        parseTaskRecoveryInfoRecord(
+          checkpoint.payload,
+          `sqlite-task-checkpoint:${checkpoint.taskKey}`,
+        ),
+      );
   }
 
   async delete(scope: TaskRunScope): Promise<void> {
@@ -167,7 +173,15 @@ export class SqliteTaskRecoveryStorage implements ITaskRecoveryStorage {
     await this.options.metadataStore.transaction(
       { mode: 'state-write', ownership: 'state', operation: 'clear-agent-task-checkpoints' },
       async ({ repositories }) => {
-        const deleted = await repositories.taskCheckpoints.clearWorkspace(this.options.workspaceId);
+        const checkpoints = await repositories.taskCheckpoints.list(this.options.workspaceId);
+        let deleted = 0;
+        for (const checkpoint of checkpoints.filter(isAgentTaskStateRecord)) {
+          if (
+            await repositories.taskCheckpoints.delete(this.options.workspaceId, checkpoint.taskKey)
+          ) {
+            deleted += 1;
+          }
+        }
         if (deleted > 0) {
           await incrementTaskRevision(repositories, this.options.workspaceId, this.now());
         }

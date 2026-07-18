@@ -37,6 +37,20 @@ Root build, compile, package, quality, and smoke orchestration MUST NOT invoke a
 - **WHEN** `Debug Dev (All)` invokes its pre-launch build with no dev-only packages configured
 - **THEN** the build succeeds, forwards each retained Turbo filter as a separate argument, and opens the repository-owned synthetic debug workspace
 
+### Requirement: Native Engine builds have one sequential owner
+
+The retained Engine native release build MUST be owned by `neko-engine#build` as one sequential workflow. Turbo MUST NOT schedule `@neko-engine/host-cli#build:native` or `@neko-engine/host-napi#build:native` as duplicate dependencies of that task, and the workflow MUST run host-cli before host-napi so the Cargo workspace, registry, and target locks are not contended by sibling tasks. Turbo caching MUST remain disabled for tasks whose native outputs are owned by Cargo and are not fully declared as Turbo outputs.
+
+#### Scenario: Inspect the native release task graph
+
+- **WHEN** the Turbo dry-run plan is generated for `neko-engine#build`
+- **THEN** the task has no host-cli or host-napi native dependency edges, its package command contains one ordered CLI-then-N-API native sequence, and Turbo does not cache incomplete native outputs
+
+#### Scenario: Run a direct N-API build with a cold registry
+
+- **WHEN** the host-napi build starts before the Cargo registry metadata is current
+- **THEN** the wrapper exposes the Cargo metadata/index progress and fails before N-API compilation if metadata cannot be resolved
+
 #### Scenario: Validate test and scenario metadata
 
 - **WHEN** test discovery, quality guardrails, and Webview functional scenario selection run

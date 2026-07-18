@@ -27,6 +27,16 @@
 - The focused functional scenario-selection test still encounters the same removed Story/Home scenario baseline; the Dashboard scenario itself was removed and the all-VS-Code expected selection was updated.
 - strict Agent extension typecheck remains blocked by pre-existing errors outside the changed pruning paths.
 
+### Native build orchestration follow-up (2026-07-18)
+
+- `node --test scripts/test-orchestration/native-build-orchestration.test.mjs` proves the Turbo Engine build plan contains no duplicate host-cli/host-napi native tasks, the package command owns one CLI-then-N-API sequence, and incomplete native outputs are not cached by Turbo.
+- `pnpm --dir packages/neko-engine test:scripts` passes 14 script tests plus the retained Rust media dependency-closure check, including visible Cargo metadata preflight and fail-before-N-API behavior.
+- A clean-source release `pnpm --filter @neko-engine/host-napi build:native` completed in 9m46s; the immediate warm-cache repeat completed in 1.86s with Cargo reporting 0.20s.
+- `otool -L packages/neko-engine/packages/host-napi/neko-engine.darwin-arm64.node` confirms the resulting host binary links the Homebrew FFmpeg 8 `libav*` and `libsw*` dylibs.
+- `pnpm turbo run build --filter=neko-engine --force` passed as one uncached Turbo task and executed host-cli, host-napi, then the TypeScript Extension bundle in order; overlapping top-level builds produced visible Cargo lock waits rather than sibling native task contention.
+- `pnpm check:test-orchestration` passed 79 tests plus ownership, coverage, and Webview scenario dry-run audits.
+- `openspec validate align-pruned-workspace-build --strict`, focused Prettier checks, and `git diff --check` pass.
+
 ### Runtime residual risk
 
 - Preview document migration: a VS Code Debugger Development Host rooted at `${HOME}/Git/neko-test` opened isolated synthetic PDF, EPUB, DOCX, and CBZ files while `neko.neko-engine` was unavailable. The Preview Node service listened on loopback and returned its document-specific CORS/PNA route diagnostic. The declarative DOM/console scenario remains blocked because the parent VS Code renderer was not started with the dedicated CDP endpoint; the generated report classifies this as infrastructure failure before assertions.

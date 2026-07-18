@@ -1,5 +1,6 @@
 import {
   hashStableValue,
+  validateDurableResourceRef,
   validateCompositeArtifact,
   type CanvasWorkspaceProjectionKind,
   type DocumentArchiveResourceRef,
@@ -44,6 +45,7 @@ export function collectCreatorVisibleArtifacts(
       const resourceRef = attachment.assetRef?.resourceRef;
       const documentResourceRef = attachment.assetRef?.documentResourceRef;
       if (!resourceRef && !documentResourceRef) continue;
+      if (resourceRef && !validateDurableResourceRef(resourceRef).ok) continue;
       const sourceId =
         resourceRef?.id ??
         (documentResourceRef

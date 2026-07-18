@@ -30,6 +30,7 @@
     { "kind": "agent-runtime-capability", "id": "session-workflows", "disposition": "suite", "suiteIds": ["agent-runtime.single-message-tui", "agent-runtime.workflow-controller"] },
     { "kind": "agent-runtime-capability", "id": "task-recovery", "disposition": "suite", "suiteIds": ["agent-runtime.workflow-controller", "agent-runtime.creative-media-workflow"] },
     { "kind": "agent-runtime-capability", "id": "creative-media-workflow", "disposition": "suite", "suiteIds": ["agent-runtime.creative-media-workflow"] },
+    { "kind": "agent-runtime-capability", "id": "workspace-board-delivery", "disposition": "suite", "suiteIds": ["agent-runtime.creative-media-workflow", "agent-runtime.workflow-controller"] },
     { "kind": "agent-runtime-capability", "id": "tui-event-projection", "disposition": "suite", "suiteIds": ["agent-runtime.stream-delivery", "agent-runtime.tui-markdown"] }
   ],
   "legacyCases": [

@@ -10,3 +10,7 @@
 - 稳定系统约束提升到 [`../architecture/`](../architecture/)。
 
 不要创建 `current.md`、`latest.md`、`todo.md` 或 `plan.md`，以免历史快照被误认为当前事实。
+
+## 快照
+
+- [`2026-07-18-text-entity-extraction-gap.md`](2026-07-18-text-entity-extraction-gap.md)：统一实体文本抽取、动态工作区/素材库发现、SQLite 候选边界与第一阶段 Gap。

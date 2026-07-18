@@ -372,6 +372,8 @@ export interface GroupCanvasNode extends CanvasNodeBase {
     label?: string;
     /** Group color (hex) */
     color?: string;
+    /** Stable projection lineage for generated processing groups. */
+    provenance?: CanvasSerializableRecord;
   };
 }
 

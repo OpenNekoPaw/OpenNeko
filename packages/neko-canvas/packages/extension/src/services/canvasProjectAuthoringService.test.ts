@@ -3,6 +3,7 @@ import {
   CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
   createEmptyCanvasData,
   loadNkc,
+  planCanvasWorkspaceBoardProjection,
   saveNkc,
   type CanvasWorkspaceProjectionRequest,
   type ResourceRef,
@@ -139,23 +140,33 @@ const generatedRef: ResourceRef = {
 function workspaceProjectionRequest(): CanvasWorkspaceProjectionRequest {
   return {
     version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
-    target: { workspaceUri: 'file:///workspace/project/' },
-    provenance: {
-      version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
-      projectionId: 'projection:shot-1',
-      artifactId: 'shot-1',
-      revision: 'generated:sha256:shot-1',
-      kind: 'image',
-      sourceId: 'generated-output:shot-1',
+    target: { workspaceId: 'workspace-1', workspaceUri: 'file:///workspace/project/' },
+    process: {
+      deliveryId: 'delivery:shot-1',
+      sourceHost: 'vscode',
+      runId: 'run-1',
       taskId: 'task-1',
       createdAt: '2026-07-15T00:00:00.000Z',
     },
-    artifact: {
-      kind: 'image',
-      title: 'Shot 1',
-      mimeType: 'image/png',
-      resourceRef: generatedRef,
-    },
+    artifacts: [
+      {
+        kind: 'image',
+        title: 'Shot 1',
+        mimeType: 'image/png',
+        resourceRef: generatedRef,
+        provenance: {
+          version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+          deliveryId: 'delivery:shot-1',
+          artifactId: 'shot-1',
+          revision: 'generated:sha256:shot-1',
+          kind: 'image',
+          role: 'output',
+          sourceId: 'generated-output:shot-1',
+          taskId: 'task-1',
+          createdAt: '2026-07-15T00:00:00.000Z',
+        },
+      },
+    ],
   };
 }
 
@@ -181,18 +192,22 @@ describe('CanvasProjectAuthoringService', () => {
       canvasEditorProvider: provider,
     });
 
-    const result = await service.projectWorkspaceBoard({
-      request: workspaceProjectionRequest(),
-      documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
-      createIfMissing: true,
+    const documentUri = 'file:///workspace/project/neko/boards/workspace.nkc';
+    const loaded = await service.loadLatest({ documentUri, createIfMissing: true });
+    const planned = planCanvasWorkspaceBoardProjection(
+      loaded.canvasData,
+      workspaceProjectionRequest(),
+    );
+    const result = await service.saveAtomic({
+      documentUri,
+      expectedRevision: loaded.revision,
+      canvasData: planned.canvasData,
     });
 
     expect(result).toMatchObject({
-      status: 'projected',
-      documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
-      projectRef: { projectRevision: expect.stringMatching(/^nkc:/) },
+      revision: expect.stringMatching(/^nkc:/),
     });
-    expect(vscodeMockState.createDirectory).toHaveBeenCalledOnce();
+    expect(vscodeMockState.writeFile).toHaveBeenCalled();
     expect(provider.getActiveCanvasDocumentUri).not.toHaveBeenCalled();
     const reopened = loadNkc(
       new TextDecoder().decode(
@@ -200,8 +215,7 @@ describe('CanvasProjectAuthoringService', () => {
       ),
     );
     expect(reopened.validation.valid).toBe(true);
-    expect(reopened.data.nodes.map((node) => node.type)).toEqual(['group', 'media']);
-    expect(provider.revealCanvasDocument).not.toHaveBeenCalled();
+    expect(reopened.data.nodes.map((node) => node.type)).toEqual(['group', 'group', 'media']);
     expect(provider.applyHostCanvasData).toHaveBeenLastCalledWith(
       expect.objectContaining({ fsPath: '/workspace/project/neko/boards/workspace.nkc' }),
       expect.objectContaining({ nodes: expect.any(Array) }),
@@ -219,8 +233,7 @@ describe('CanvasProjectAuthoringService', () => {
     });
 
     await expect(
-      service.projectWorkspaceBoard({
-        request: workspaceProjectionRequest(),
+      service.loadLatest({
         documentUri: `file://${documentPath}`,
         createIfMissing: true,
       }),

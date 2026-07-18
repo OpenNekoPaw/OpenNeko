@@ -11,6 +11,7 @@
     "lint": "eslint src --ext ts"
   },
   "dependencies": {
+    "@neko-canvas/domain": "workspace:*",
     "@neko/content": "workspace:*",
     "@neko/neko-client": "workspace:*",
     "@neko/shared": "workspace:*"

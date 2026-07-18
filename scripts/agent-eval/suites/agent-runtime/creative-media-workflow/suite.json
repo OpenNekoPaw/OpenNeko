@@ -37,6 +37,13 @@
       "source": "repository",
       "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
       "mutable": true
+    },
+    {
+      "id": "creative-planning-workspace",
+      "root": "shared-fixtures/creative-planning-workspace",
+      "source": "repository",
+      "digest": "sha256:e0886a2114d2d964afbde9ae7fad0c7d4fdc73a2f0bf5f50d8c6ee251d79cfb8",
+      "mutable": true
     }
   ],
   "cases": [
@@ -49,6 +56,12 @@
     {
       "id": "generated-output-workspace-board",
       "file": "cases/generated-output-workspace-board.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "workspace-board-material-analysis",
+      "file": "cases/workspace-board-material-analysis.json",
       "group": "workflow",
       "visibility": "public"
     }

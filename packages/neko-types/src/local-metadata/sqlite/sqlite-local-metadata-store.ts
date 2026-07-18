@@ -59,6 +59,7 @@ import type {
   SemanticProjectionInsertMissingResult,
   SemanticProjectionRecord,
   SemanticProjectionReplaceRequest,
+  SemanticProjectionReplaceSourceRequest,
   SemanticProjectionRepository,
   TaskCheckpointRecord,
   TaskCheckpointRepository,
@@ -1574,6 +1575,32 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
     );
   }
 
+  async get(
+    partition: LocalMetadataPartition,
+    sourceId: string,
+  ): Promise<SemanticProjectionRecord | null> {
+    assertSemanticProjectionPartition(partition);
+    assertNonEmptyProjectionFilter(sourceId, 'sourceId');
+    const key = partitionKey(partition);
+    const sourceRows = await this.connection().all(
+      `SELECT source_id, source_ref_json, source_fingerprint, provider_json,
+              coverage_json, freshness, index_json, updated_at
+         FROM semantic_sources
+        WHERE partition_key = ? AND source_id = ?`,
+      [key, sourceId],
+    );
+    const sourceRow = sourceRows[0];
+    if (!sourceRow) return null;
+    const evidenceRows = await this.connection().all(
+      `SELECT source_id, evidence_kind, evidence_id, ordinal, evidence_json
+         FROM semantic_evidence
+        WHERE partition_key = ? AND source_id = ?
+        ORDER BY ordinal, evidence_kind, evidence_id`,
+      [key, sourceId],
+    );
+    return decodeSemanticProjection(sourceRow, evidenceRows);
+  }
+
   async replacePartition(request: SemanticProjectionReplaceRequest): Promise<void> {
     assertSemanticProjectionPartition(request.partition);
     parseMetadataTimestamp(request.updatedAt, 'replace-semantic-projection');
@@ -1593,6 +1620,56 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
       ...projectionFreshnessUpdate(request.sources, 'semantic-sources-not-fresh'),
       updatedAt: request.updatedAt,
     });
+  }
+
+  async replaceSource(request: SemanticProjectionReplaceSourceRequest): Promise<void> {
+    assertSemanticProjectionPartition(request.partition);
+    parseMetadataTimestamp(request.updatedAt, 'replace-semantic-projection-source');
+    if (request.source.updatedAt !== request.updatedAt) {
+      throw new LocalMetadataError({
+        code: 'metadata-transaction-failed',
+        operation: 'replace-semantic-projection-source',
+        message: 'Semantic source replacement timestamp must match its source record',
+      });
+    }
+    const prepared = {
+      source: request.source,
+      ...splitSemanticIndex(request.source.index),
+    };
+    assertSemanticProjectionRecord(request.source, new Set<string>());
+    await this.connection().run(
+      'DELETE FROM semantic_sources WHERE partition_key = ? AND source_id = ?',
+      [partitionKey(request.partition), request.source.sourceId],
+    );
+    await this.insertSource(request.partition, prepared);
+    const currentSources = await this.list(request.partition);
+    await this.projectionVersions.increment({
+      partition: request.partition,
+      ...projectionFreshnessUpdate(currentSources, 'semantic-sources-not-fresh'),
+      updatedAt: request.updatedAt,
+    });
+  }
+
+  async deleteSource(
+    partition: LocalMetadataPartition,
+    sourceId: string,
+    updatedAt: string,
+  ): Promise<boolean> {
+    assertSemanticProjectionPartition(partition);
+    assertNonEmptyProjectionFilter(sourceId, 'sourceId');
+    parseMetadataTimestamp(updatedAt, 'delete-semantic-projection-source');
+    const result = await this.connection().run(
+      'DELETE FROM semantic_sources WHERE partition_key = ? AND source_id = ?',
+      [partitionKey(partition), sourceId],
+    );
+    if (result.changes === 0) return false;
+    const currentSources = await this.list(partition);
+    await this.projectionVersions.increment({
+      partition,
+      ...projectionFreshnessUpdate(currentSources, 'semantic-sources-not-fresh'),
+      updatedAt,
+    });
+    return true;
   }
 
   async insertMissing(
@@ -3240,9 +3317,32 @@ class ExclusiveSemanticProjectionRepository implements SemanticProjectionReposit
     return this.exclusive.run(() => this.raw.list(partition));
   }
 
+  get(
+    partition: LocalMetadataPartition,
+    sourceId: string,
+  ): Promise<SemanticProjectionRecord | null> {
+    return this.exclusive.run(() => this.raw.get(partition, sourceId));
+  }
+
   replacePartition(request: SemanticProjectionReplaceRequest): Promise<void> {
     return this.exclusive.run(() =>
       this.transaction('cache-write', () => this.raw.replacePartition(request)),
+    );
+  }
+
+  replaceSource(request: SemanticProjectionReplaceSourceRequest): Promise<void> {
+    return this.exclusive.run(() =>
+      this.transaction('cache-write', () => this.raw.replaceSource(request)),
+    );
+  }
+
+  deleteSource(
+    partition: LocalMetadataPartition,
+    sourceId: string,
+    updatedAt: string,
+  ): Promise<boolean> {
+    return this.exclusive.run(() =>
+      this.transaction('cache-write', () => this.raw.deleteSource(partition, sourceId, updatedAt)),
     );
   }
 

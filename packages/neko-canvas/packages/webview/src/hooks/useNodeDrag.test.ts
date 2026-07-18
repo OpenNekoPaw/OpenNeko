@@ -51,6 +51,30 @@ describe('shouldStartNodeDrag', () => {
     });
   });
 
+  it('keeps content draggable while preserving explicit interaction ownership', () => {
+    const content = document.createElement('div');
+    const ordinaryMaterial = document.createElement('span');
+    const button = document.createElement('button');
+    const complexSurface = document.createElement('div');
+    complexSurface.dataset.nodeDragBlock = 'true';
+    const complexSurfaceChild = document.createElement('span');
+    complexSurface.appendChild(complexSurfaceChild);
+    content.append(ordinaryMaterial, button, complexSurface);
+
+    expect(getNodeDragStartDecision(mouseDown(ordinaryMaterial, 10, 10))).toEqual({
+      canStart: true,
+      stopPropagation: false,
+    });
+    expect(getNodeDragStartDecision(mouseDown(button, 10, 10))).toEqual({
+      canStart: false,
+      stopPropagation: true,
+    });
+    expect(getNodeDragStartDecision(mouseDown(complexSurfaceChild, 10, 10))).toEqual({
+      canStart: false,
+      stopPropagation: true,
+    });
+  });
+
   it('allows an explicitly eligible keyboard control to remain Group drag chrome', () => {
     const name = document.createElement('span');
     name.setAttribute('role', 'button');

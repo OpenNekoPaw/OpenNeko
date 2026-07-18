@@ -97,6 +97,7 @@ import {
 } from './services/EntityFacadeReaders';
 import { RecordingPromotionService } from './services/RecordingPromotionService';
 import { AssetFileImportService } from './services/AssetFileImportService';
+import { SemanticSourceDiscoveryService } from './services/SemanticSourceDiscoveryService';
 
 const logger = getLogger('Extension');
 
@@ -409,6 +410,45 @@ export async function activate(
     mediaSettingsService = settingsService;
     await settingsService.load();
     context.subscriptions.push(settingsService);
+
+    const semanticSourceService = new SemanticSourceDiscoveryService({
+      workspaceRoot,
+      settingsService,
+      entityService: entityRuntimeRegistry.get(workspaceRoot).service,
+      homedir: os.homedir(),
+    });
+    await semanticSourceService.start();
+    context.subscriptions.push(
+      semanticSourceService,
+      vscode.languages.registerDocumentSymbolProvider([{ scheme: 'file' }], semanticSourceService),
+      vscode.commands.registerCommand('neko.assets.refreshSemanticSources', () =>
+        semanticSourceService.refresh(),
+      ),
+      vscode.commands.registerCommand('neko.assets.listSemanticCandidateReviews', () =>
+        semanticSourceService.listCandidateReviews(),
+      ),
+      vscode.commands.registerCommand(
+        'neko.assets.saveSemanticCandidateForReview',
+        (candidateId: string) => semanticSourceService.saveCandidateForReview(candidateId),
+      ),
+      vscode.commands.registerCommand(
+        'neko.assets.dismissSemanticCandidate',
+        (candidateId: string) => semanticSourceService.dismissCandidate(candidateId),
+      ),
+      vscode.commands.registerCommand(
+        'neko.assets.promoteSemanticCandidate',
+        (candidateId: string) => semanticSourceService.promoteCandidate(candidateId),
+      ),
+      vscode.commands.registerCommand(
+        'neko.assets.rejectSemanticCandidate',
+        (candidateId: string) => semanticSourceService.rejectCandidate(candidateId),
+      ),
+      vscode.commands.registerCommand(
+        'neko.assets.mergeSemanticCandidate',
+        (candidateId: string, entityId: string, asAlias?: boolean) =>
+          semanticSourceService.mergeCandidate(candidateId, entityId, asAlias),
+      ),
+    );
 
     // Sync path variables into library (must happen before health check)
     library.updatePathVariables(

@@ -6,5 +6,6 @@ export * from './factStores';
 export * from './entityStore';
 export * from './candidateStore';
 export * from './contributionAutomation';
+export * from './textEntityAnalyzer';
 export * from './representationResolver';
 export * from './CreativeEntityService';

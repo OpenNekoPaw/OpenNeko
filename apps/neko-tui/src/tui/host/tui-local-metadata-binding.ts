@@ -14,6 +14,7 @@ import {
   type EntityAssetProjectionRepository,
   type LocalMetadataPartition,
   type LocalMetadataPartitionRevision,
+  type LocalMetadataStore,
   type ResourceCacheManifestStore,
   type SearchDocumentRepository,
   type SemanticProjectionRepository,
@@ -45,6 +46,7 @@ import { createTuiLocalMetadataStore } from './tui-local-metadata-store';
 export interface TuiLocalMetadataBinding {
   readonly persistenceBackend: TuiConversationPersistenceBackend;
   readonly workspaceId: string;
+  readonly metadataStore: LocalMetadataStore;
   readonly taskStorage: ITaskStorage;
   readonly taskRecoveryStorage: ITaskRecoveryStorage;
   readonly resourceCacheManifestStore: ResourceCacheManifestStore;
@@ -167,6 +169,7 @@ export async function createTuiLocalMetadataBinding(options: {
         databaseScope: 'user-global',
       },
       workspaceId,
+      metadataStore,
       taskStorage: new SqliteTaskStorage({
         workspaceId,
         metadataStore,

@@ -1,15 +1,15 @@
 import * as vscode from 'vscode';
 import {
   CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
-  createGeneratedAssetWorkspaceProjectionRequest,
   NEKO_EXTENSION_IDS,
+  type CanvasWorkspaceDeliveryBatch,
   type CanvasWorkspaceProjectionDiagnostic,
   type CanvasWorkspaceProjectionResult,
-  type GeneratedAsset,
   type NekoCanvasAPI,
 } from '@neko/shared';
 
 export interface WorkspaceBoardProjectionHostOptions {
+  readonly workspaceId?: string;
   readonly getCanvasApi?: () => Promise<Pick<NekoCanvasAPI, 'boards'> | undefined>;
   readonly getWorkspaceUris?: () => readonly string[];
 }
@@ -17,39 +17,40 @@ export interface WorkspaceBoardProjectionHostOptions {
 export class WorkspaceBoardProjectionHost {
   constructor(private readonly options: WorkspaceBoardProjectionHostOptions = {}) {}
 
-  async projectGeneratedAssets(
-    assets: readonly GeneratedAsset[],
+  async deliverBatch(
+    batch: CanvasWorkspaceDeliveryBatch,
   ): Promise<readonly CanvasWorkspaceProjectionResult[]> {
-    if (assets.length === 0) return [];
+    if (batch.artifacts.length === 0) return [];
     const workspaceUris = this.options.getWorkspaceUris?.() ?? readWorkspaceUris();
-    if (workspaceUris.length !== 1) {
-      return assets.map(() =>
-        blocked('workspace-required', 'Canvas projection requires one workspace.'),
-      );
+    if (workspaceUris.length !== 1 || !this.options.workspaceId) {
+      return [blocked('workspace-required', 'Canvas delivery requires one resolved workspace.')];
     }
     const canvasApi = await (this.options.getCanvasApi?.() ?? getCanvasApi());
     if (!canvasApi?.boards?.project) {
-      return assets.map(() =>
+      return [
         blocked(
           'projection-write-failed',
-          'Canvas authoring capability is unavailable; generated output remains in the workspace.',
+          'Canvas delivery is unavailable; generated output remains durable in the workspace.',
         ),
-      );
+      ];
     }
 
-    return Promise.all(
-      assets.map(async (asset) => {
-        if (!asset.lifecycle) {
-          return blocked(
-            'invalid-resource-ref',
-            `Generated output ${asset.id} has no durable lifecycle reference.`,
-          );
-        }
-        return canvasApi.boards.project(
-          createGeneratedAssetWorkspaceProjectionRequest(asset, workspaceUris[0]!),
-        );
-      }),
-    );
+    try {
+      const result = await canvasApi.boards.project({
+        version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+        target: {
+          workspaceId: this.options.workspaceId,
+          workspaceUri: workspaceUris[0]!,
+        },
+        process: batch.process,
+        artifacts: batch.artifacts,
+      });
+      return [result];
+    } catch (error) {
+      return [
+        blocked('projection-write-failed', error instanceof Error ? error.message : String(error)),
+      ];
+    }
   }
 }
 

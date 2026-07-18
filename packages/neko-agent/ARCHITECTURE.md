@@ -440,6 +440,10 @@ Agent core 和 session 不拥有 Canvas destination、Board work session、conve
 
 普通问答、reasoning、日志、provider scratch、未选搜索结果、runtime handle 和 non-reviewable failure 不投影。目标缺失、权限失败或 revision conflict 只产生 projection diagnostic；生成文件继续由 generated-output owner 保留，不重新解析或改投其他 Canvas。
 
+一次 terminal creator-visible 结果以 `CanvasWorkspaceProjectionRequest` 批次提交，而不是逐 asset 写入。Host 在结果 owner 已确认 durable 后收集实际消费的 `ResourceRef`/`DocumentArchiveResourceRef`、命名 reviewable Markdown 和生成生命周期，按 `source → analysis → output` 角色交给 Canvas-owned coordinator。批次通过用户级 `LocalMetadataStore` 的 `tasks` / `task_checkpoints` 账本排队、claim、receipt 和恢复；`system:canvas-board-*` 行不会进入 Agent TaskManager、`/tasks` 或通用 cleanup。SQLite 只保存投递状态，`.nkc` 仍保存节点、布局和用户编辑事实。
+
+多 Host 通过 workspace-scoped fenced writer epoch 串行化 load-plan-save；保存前重新校验 epoch 与 revision。重复 delivery 返回同一 receipt/no-op，dirty 的已打开 Canvas 返回 conflict，失效 Host 不得写入或将结果改投另一个 Canvas。Board 投递失败不影响已 durable 的 artifact，presentation 分开显示 artifact durability 与 Board 状态。
+
 下面的 handoff 仅服务未参与当前 typed delivery 的历史/外部内容和显式专业 authoring，不是新结果的默认保留流程。
 
 Agent 是 Canvas Skill activation 和 tool selection 的拥有者。Agent Webview 的显式 Add/Import to Board Canvas 不直接调用 Canvas command，也不选择 `canvas.ingestMarkdown`、`canvas_create_node` 或 `neko.canvas.importAsset`。它只发送 `requestCanvasAuthoringHandoff`，携带 source content、source kind、stable resource refs、semantic stable refs、diagnostics、prompt spans、provenance、user intent 和 target hints。

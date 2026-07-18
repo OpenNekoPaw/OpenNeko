@@ -79,11 +79,22 @@
       "timeoutMs": 60000
     },
     {
-      "id": "wait-basic-document-entry",
+      "id": "wait-basic-document-source-action",
       "operation": "wait-visible",
       "selector": {
+        "css": "[data-right-dock-group=\"basic\"] [data-node-library-source-action=\"document\"]",
+        "auditedSelectorReason": "Basic mode exposes Document as a source-selection action through its stable node type identity without presenting an empty creatable node."
+      }
+    },
+    {
+      "id": "confirm-basic-document-node-entry-hidden",
+      "operation": "wait-state",
+      "selector": {
         "css": "[data-right-dock-group=\"basic\"] [data-tree-item-id=\"document\"]",
-        "auditedSelectorReason": "Basic mode reuses the owning Document descriptor through its stable node type identity."
+        "auditedSelectorReason": "File-bound Document must not remain available through the draggable node-entry path."
+      },
+      "state": {
+        "kind": "hidden"
       }
     },
     {

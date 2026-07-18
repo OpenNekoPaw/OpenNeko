@@ -24,6 +24,7 @@
 - [x] 3.6 Remove Dashboard Webview/Extension/package code, Dashboard-only Cut task aggregation, and obsolete shared/quality metadata without a compatibility extension or fallback command.
 - [x] 3.7 Remove the Tools Device Activity Bar/view/commands/menus/localization and all remaining Device client/type/quality surfaces; assert the retained manifest cannot advertise a providerless Device view.
 - [x] 3.8 Remove Cut's left rail and self-hiding timeline-control state; move package and property-panel controls into the continuously visible timeline header while retaining its canonical export action.
+- [x] 3.9 Make `neko-engine#build` the single sequential native owner, remove duplicate Turbo native dependencies, and order host-cli before host-napi to avoid Cargo lock contention.
 
 ## 4. Resolve and validate
 
@@ -38,3 +39,4 @@
 - [x] 4.7 Remove stale test, quality-script, and Webview functional scenario references to pruned packages; keep guardrails scoped to retained canonical paths and verify focused tests and change detection.
 - [x] 4.8 Synchronize stable `docs/` architecture facts and navigation with the retained TUI/VS Code product roots, retained package set, and pruned Rust Media Engine; mark superseded Home, Workbench Core, and Market material as historical.
 - [ ] 4.9 Restore CI closure by enforcing one-shot Vitest coverage invocation, formatting retained TypeScript sources, updating the retained Rust dependency graph past active advisories and unmaintained text dependencies, and passing Clippy, Cargo Deny, and ACT gates.
+- [x] 4.10 Add a native build orchestration regression test and make N-API Cargo metadata/index progress visible before compilation.

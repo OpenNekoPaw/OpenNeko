@@ -19,8 +19,8 @@
   },
   "scripts": {
     "build:native": "pnpm run build:napi",
-    "build:napi": "node ../../scripts/run-with-ffmpeg-env.js -- pnpm exec napi build --platform --release",
-    "build:debug": "node ../../scripts/run-with-ffmpeg-env.js -- pnpm exec napi build --platform",
+    "build:napi": "node ../../scripts/build-napi.js --release",
+    "build:debug": "node ../../scripts/build-napi.js",
     "artifacts": "pnpm exec @napi-rs/cli artifacts",
     "prepublishOnly": "pnpm exec @napi-rs/cli prepublish -t npm",
     "universal": "pnpm exec @napi-rs/cli universal"

@@ -72,10 +72,28 @@ describe('SQLite Agent task storage', () => {
 
     await taskStorage.save(task);
     await recoveryStorage.save(recovery);
+    await store.repositories.tasks.upsert({
+      workspaceId: WORKSPACE_ID,
+      taskKey: 'system:canvas-board-delivery:delivery-1',
+      taskId: 'delivery-1',
+      status: 'queued',
+      payload: { kind: 'canvas-workspace-board-delivery' },
+      createdAt: 1_752_364_800_000,
+      updatedAt: 1_752_368_400_000,
+    });
+    await store.repositories.taskCheckpoints.upsert({
+      workspaceId: WORKSPACE_ID,
+      taskKey: 'system:canvas-board-delivery:delivery-1',
+      taskId: 'delivery-1',
+      payload: { kind: 'canvas-workspace-board-delivery' },
+      updatedAt: 1_752_368_400_000,
+    });
 
     await expect(taskStorage.load(scope)).resolves.toEqual(task);
     await expect(taskStorage.loadPending()).resolves.toEqual([task]);
     await expect(recoveryStorage.load(scope)).resolves.toEqual(recovery);
+    await expect(taskStorage.loadAll()).resolves.toEqual([task]);
+    await expect(recoveryStorage.loadAll()).resolves.toEqual([recovery]);
     await expect(
       store.repositories.tasks.get(WORKSPACE_ID, formatTaskRunScope(scope)),
     ).resolves.toMatchObject({
@@ -90,7 +108,13 @@ describe('SQLite Agent task storage', () => {
       }),
     ).resolves.toMatchObject({ revision: 2, freshness: 'fresh' });
 
-    await recoveryStorage.delete(scope);
+    await recoveryStorage.clear();
+    await expect(
+      store.repositories.taskCheckpoints.get(
+        WORKSPACE_ID,
+        'system:canvas-board-delivery:delivery-1',
+      ),
+    ).resolves.toBeDefined();
     await taskStorage.delete(scope);
     await expect(taskStorage.load(scope)).resolves.toBeUndefined();
     await expect(recoveryStorage.load(scope)).resolves.toBeUndefined();
