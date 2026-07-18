@@ -77,6 +77,7 @@ describe('ModelViewer', () => {
       protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
       sessionId: 'session-1',
     });
+    expect(runtime.resize).toHaveBeenCalledWith(800, 600);
 
     const load = loadMessage();
     const sourceSnapshot = JSON.stringify(load.panelSubject);
@@ -524,6 +525,7 @@ function fakeRuntime() {
   const setGroundGridVisible = vi.fn();
   const setPanoramaEnvironment = vi.fn(async () => undefined);
   const capturePurpose = vi.fn(() => 'data:image/png;base64,AA==');
+  const resize = vi.fn();
   const value: ThreeModelRuntimePort = {
     load,
     loadPreset,
@@ -560,7 +562,7 @@ function fakeRuntime() {
     setCameraGuide,
     frameCamera,
     frameModel,
-    resize: vi.fn(),
+    resize,
     capture,
     dispose,
   };
@@ -578,6 +580,7 @@ function fakeRuntime() {
     setGroundGridVisible,
     setPanoramaEnvironment,
     capturePurpose,
+    resize,
   };
 }
 

@@ -36,7 +36,7 @@
 - [x] 5.3 Add visible independent appearance, pose, camera, and panoramic-scene purpose controls with capability-derived availability and a persistent “guide only, not appearance reference” label for restricted presets.
 - [x] 5.4 Add pose preset and constrained joint controls for supported subjects, explicit unsupported states for static/non-articulated models, and no animation timeline, IK, retargeting, or source writeback.
 - [x] 5.5 Add camera, shot/aspect, panorama orientation, environment, capture, and output-preview controls without resetting the live orbit view during unrelated edits.
-- [ ] 5.6 Add focused accessibility, keyboard/focus, theme, panel-switching, resize, role-selection, stale-state, and multi-root Webview tests.
+- [x] 5.6 Add focused accessibility, keyboard/focus, theme, panel-switching, resize, role-selection, stale-state, and multi-root Webview tests.
 
 ## 6. Replace Agent, Canvas, and media delivery
 

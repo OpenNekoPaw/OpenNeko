@@ -32,8 +32,8 @@ body,
 }
 
 body {
-  color: #202124;
-  background: #f5f6f8;
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size, 13px);
 }
@@ -44,38 +44,14 @@ input {
 }
 
 .model-preview {
-  --vscode-editor-background: #f5f6f8;
-  --vscode-editor-foreground: #202124;
-  --vscode-foreground: #202124;
-  --vscode-descriptionForeground: #70757d;
-  --vscode-sideBar-background: #ffffff;
-  --vscode-input-background: #f8f9fa;
-  --vscode-input-foreground: #202124;
-  --vscode-input-placeholderForeground: #969ba3;
-  --vscode-input-border: #dfe2e6;
-  --vscode-panel-border: #e3e5e8;
-  --vscode-widget-border: #e3e5e8;
-  --vscode-editorWidget-background: #ffffff;
-  --vscode-list-hoverBackground: #f2f4f7;
-  --vscode-list-activeSelectionBackground: #eaf1ff;
-  --vscode-list-activeSelectionForeground: #1f2937;
-  --vscode-button-background: #1f2125;
-  --vscode-button-hoverBackground: #090a0c;
-  --vscode-button-foreground: #ffffff;
-  --vscode-focusBorder: #4e7de9;
-  --neko-surface: #f7f8fa;
-  --neko-hover: #f1f3f5;
-  --neko-border: #e3e5e8;
-  --neko-accent: #1f2125;
-  --neko-accent-muted: #eaf1ff;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr) 340px;
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
-  color: #202124;
-  background: #f5f6f8;
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
 }
 
 .model-preview__scene-panel,
@@ -84,7 +60,7 @@ input {
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
 }
 
 .model-preview__scene-panel {
@@ -110,7 +86,7 @@ input {
 .model-preview__panel-header h2,
 .model-preview__inspector-header h1 {
   margin: 0;
-  color: #202124;
+  color: var(--vscode-foreground);
   font-size: 13px;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -129,10 +105,10 @@ input {
   height: 24px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid #e6e8eb;
+  border: 1px solid var(--neko-border);
   border-radius: 7px;
-  color: #656a72;
-  background: #f8f9fa;
+  color: var(--vscode-descriptionForeground);
+  background: var(--neko-surface);
 }
 
 .model-preview__count {
@@ -142,8 +118,8 @@ input {
   place-items: center;
   padding: 0 6px;
   border-radius: 999px;
-  color: #676c74;
-  background: #f0f2f4;
+  color: var(--vscode-descriptionForeground);
+  background: var(--neko-hover);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
@@ -167,7 +143,7 @@ input {
 
 .model-preview__search:focus-within {
   border-color: var(--vscode-focusBorder);
-  background: #ffffff;
+  background: var(--vscode-input-background);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-focusBorder) 16%, transparent);
 }
 
@@ -202,14 +178,14 @@ input {
   padding: 0;
   border: 0;
   border-radius: 6px;
-  color: #7b8088;
+  color: var(--vscode-descriptionForeground);
   background: transparent;
   cursor: pointer;
 }
 
 .model-preview__search-clear:hover {
-  color: #30343a;
-  background: #e9ebee;
+  color: var(--vscode-foreground);
+  background: var(--neko-hover);
 }
 
 .model-preview__search-clear:focus-visible {
@@ -224,7 +200,7 @@ input {
 
 .model-preview__tree [data-tree-item-id^='model-group:'] {
   margin-top: 5px;
-  color: #60656d;
+  color: var(--vscode-descriptionForeground);
   font-weight: 650;
 }
 
@@ -242,7 +218,7 @@ input {
 }
 
 .model-preview__tree [data-tree-item-id^='model-selection:camera:'] button {
-  color: #767b83;
+  color: var(--vscode-descriptionForeground);
 }
 
 .model-preview__empty {
@@ -257,7 +233,7 @@ input {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: #f5f6f8;
+  background: var(--vscode-editor-background);
 }
 
 .model-preview__viewport canvas {
@@ -306,7 +282,7 @@ input {
 
 .model-preview__orientation-ring {
   fill: rgba(250, 251, 252, 0.82);
-  stroke: #d9dde2;
+  stroke: var(--neko-border);
   stroke-width: 1.2;
 }
 
@@ -321,24 +297,24 @@ input {
 }
 
 .model-preview__orientation-origin {
-  fill: #b8bdc5;
+  fill: var(--vscode-descriptionForeground);
 }
 
 .model-preview__orientation button {
   height: 24px;
   padding: 0 10px;
-  border: 1px solid #dde1e6;
+  border: 1px solid var(--neko-border);
   border-radius: 999px;
-  color: #666c75;
-  background: #ffffff;
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
   font-size: 10px;
   cursor: pointer;
 }
 
 .model-preview__orientation button:hover {
-  color: #25292f;
-  border-color: #c8cdd4;
-  background: #f7f8fa;
+  color: var(--vscode-foreground);
+  border-color: var(--vscode-focusBorder);
+  background: var(--neko-surface);
 }
 
 .model-preview__orientation button:focus-visible {
@@ -381,7 +357,11 @@ input {
   min-height: 88px;
   padding: 15px 16px 13px;
   border-bottom: 1px solid var(--neko-border);
-  background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%);
+  background: linear-gradient(
+    180deg,
+    var(--vscode-sideBar-background, var(--vscode-editor-background)) 0%,
+    var(--vscode-editorWidget-background, var(--vscode-editor-background)) 100%
+  );
 }
 
 .model-preview__inspector-title-row {
@@ -404,17 +384,17 @@ input {
   height: 30px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid #e2e5e9;
+  border: 1px solid var(--neko-border);
   border-radius: 9px;
-  color: #525860;
-  background: #f7f8fa;
+  color: var(--vscode-foreground);
+  background: var(--neko-surface);
   font-size: 15px;
 }
 
 .model-preview__eyebrow {
   display: block;
   margin-bottom: 3px;
-  color: #8b9098;
+  color: var(--vscode-descriptionForeground);
   font-size: 9px;
   font-weight: 650;
   letter-spacing: 0.08em;
@@ -429,10 +409,10 @@ input {
   align-items: center;
   gap: 4px;
   padding: 0 7px;
-  border: 1px solid #e2e5e9;
+  border: 1px solid var(--neko-border);
   border-radius: 999px;
-  color: #666b73;
-  background: #f7f8fa;
+  color: var(--vscode-descriptionForeground);
+  background: var(--neko-surface);
   font-size: 9px;
   white-space: nowrap;
 }
@@ -452,7 +432,7 @@ input {
   gap: 0;
   padding: 0 14px 18px;
   overflow: auto;
-  scrollbar-color: #c8cbd0 transparent;
+  scrollbar-color: var(--vscode-scrollbarSlider-background) transparent;
   scrollbar-width: thin;
 }
 
@@ -504,7 +484,7 @@ input {
 }
 
 .model-preview__inspector-section h3 {
-  color: #32363c;
+  color: var(--vscode-foreground);
   font-size: 11px;
   letter-spacing: 0.035em;
 }
@@ -534,7 +514,7 @@ input {
 .model-preview__light-group {
   margin: 2px 0;
   padding: 3px 0 3px 7px;
-  border-left: 2px solid #e8eaed;
+  border-left: 2px solid var(--neko-border);
 }
 
 .model-preview__selection-empty {
@@ -544,10 +524,10 @@ input {
   gap: 7px;
   margin: 0 2px;
   padding: 7px 9px;
-  border: 1px dashed #dfe2e6;
+  border: 1px dashed var(--neko-border);
   border-radius: 8px;
-  color: #858a92;
-  background: #fafbfc;
+  color: var(--vscode-descriptionForeground);
+  background: var(--neko-surface);
   font-size: 10px;
 }
 
@@ -594,10 +574,10 @@ input {
 .model-preview__pose-note {
   margin: 10px 2px 0;
   padding: 9px 10px;
-  border: 1px dashed #dde1e6;
+  border: 1px dashed var(--neko-border);
   border-radius: 8px;
-  color: #858a92;
-  background: #fafbfc;
+  color: var(--vscode-descriptionForeground);
+  background: var(--neko-surface);
   font-size: 10px;
   line-height: 1.45;
 }
@@ -639,7 +619,7 @@ input {
   padding: 7px 8px;
   border: 1px solid var(--neko-border);
   border-radius: 8px;
-  background: #f8f9fa;
+  background: var(--neko-surface);
   font-size: 10px;
 }
 
@@ -653,7 +633,7 @@ input {
 }
 
 .model-preview__facts dd {
-  color: #30343a;
+  color: var(--vscode-foreground);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
@@ -662,7 +642,7 @@ input {
   flex: 0 0 auto;
   padding: 10px 12px 12px;
   border-top: 1px solid var(--neko-border);
-  background: #ffffff;
+  background: var(--vscode-button-foreground);
 }
 
 .model-preview__send {
@@ -673,11 +653,11 @@ input {
 }
 
 .model-preview__send[data-delivery-status='succeeded'] {
-  background: #216e4e;
+  background: var(--vscode-testing-iconPassed, var(--vscode-button-background));
 }
 
 .model-preview__send[data-delivery-status='error'] {
-  background: #a33a32;
+  background: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
 }
 
 .model-preview__send[data-delivery-status='sending'] .codicon-loading {
