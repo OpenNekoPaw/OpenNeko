@@ -53,16 +53,16 @@
   - 构建：pnpm 10 + Turborepo 2
   - 测试：Vitest、cargo test
 - 共享基础核心包：
-  - `packages/neko-engine`：Rust 媒体引擎（GPU/FFmpeg/HTTP + ONNX 原生推理）
+  - `packages/neko-engine`：Rust 媒体引擎（GPU/FFmpeg/音频/HTTP）
   - `packages/neko-types`：共享基础设施（Logger、i18n、Theme、Errors）
   - `packages/neko-client`：流媒体客户端与 `EngineClient`
   - `packages/neko-proto`：Protobuf IDL，类型契约单一事实来源
-- 功能扩展包：`neko-cut`（视频）、`neko-agent`（AI）、`neko-canvas`（画布）、`neko-model`（3D）、`neko-sketch`（2D 绘画）、`neko-puppet`（2D 骨骼）、`neko-story`（剧本）、`neko-preview`（预览）、`neko-tools`、`neko-assets`、`neko-market`、`neko-audio`、`neko-auth`、`neko-live`、`neko-suite` 等。完整清单与职责见 `ARCHITECTURE_CN.md` 与 `README_CN.md`。
+- 保留产品包：`neko-agent`（AI）、`neko-assets`（素材）、`neko-canvas`（画布）、`neko-cut`（视频）、`neko-preview`（授权只读预览）、`neko-tools`（工具与诊断）、`neko-engine`（媒体引擎），以及 `apps/neko-tui` / `apps/neko-vscode` 宿主。完整边界见 `docs/architecture/package-boundaries.md`。
 
 ## 开发前先读
 
 - 功能背景先看 `README_CN.md`，必要时对照 `README.md`。
-- 总体架构先看 `ARCHITECTURE_CN.md`，必要时对照 `ARCHITECTURE.md`。
+- 总体架构先看 `docs/architecture/README.md` 与 `docs/architecture/package-boundaries.md`。
 - 文档导航先看 `docs/README.md`，不要猜测具体文档路径。
 - 系统级架构、ADR 和跨领域约束从 `docs/architecture/README.md` 进入。
 - 子包边界、UI 层、公共代码、Extension/Webview/Engine 约束先看 `docs/architecture/package-boundaries.md`。
@@ -74,7 +74,7 @@
 
 ## 文档治理
 
-- 根目录 `README_CN.md` / `README.md` 是项目入口；`ARCHITECTURE_CN.md` / `ARCHITECTURE.md` 是系统架构总览入口。
+- 根目录 `README_CN.md` / `README.md` 是项目入口；`docs/architecture/README.md` 是系统架构总览入口。
 - `docs/architecture/` 只放系统级约束、ADR 和跨领域不变量。
 - `docs/domains/<domain>/` 放领域能力模型、领域数据流和领域内部架构；领域架构文件命名为 `architecture.md`。
 - `docs/research/` 放调研、竞品、市场、技术 spike 和 UX 分析；此类文档必须带日期、来源或不确定性说明。

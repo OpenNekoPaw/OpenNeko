@@ -70,6 +70,7 @@ Engine hosts -> Host API -> Kernel/runtime
 - 通过 runtime deps 注入文本、二进制和 container 读取能力。
 - 不管理 cache root、Webview URI、Engine token、workspace 生命周期或 UI 状态。
 - Agent 和领域包复用公共入口，不重新实现 document reader/cache/path/media catalog。
+- 文本实体分析复用 `DocumentAccessService` manifest/cursor/range：PDF page、EPUB chapter、DOCX section/paragraph 的正文只在 transient analysis batch 中存在；Content 返回 locator、hash 与 `ResourceRef`，不拥有 SQLite projection。
 
 ### `@neko/entity` 与 `@neko/search`
 
@@ -81,6 +82,7 @@ Engine hosts -> Host API -> Kernel/runtime
 - projection 不泄露 store/cache/index 绝对路径、token、Webview URI 或 manifest path。
 - `@neko/search` 的 semantic source coordinator 拥有 source scope、fingerprint、freshness、reconciliation 和 analyzer scheduling；`@neko/entity` 提供 host-neutral deterministic text analyzer，二者通过共享 semantic-source contract 组合。
 - `@neko/entity` analyzer 不监听文件、不打开 SQLite、不写 project facts；VS Code/TUI Host 只能通过 coordinator ports 提供文件、confirmed snapshot 和 projection commit。
+- `@neko/search` 只调度 eligible 创作文档；普通 JSON/YAML 和媒体文件不进入文本 analyzer。Entity/record 查询返回 compact occurrence relation，可见上下文由 Host 经 Content locator 回读。
 
 ### `@neko/ui`
 
@@ -161,7 +163,7 @@ TUI 的产品级组合位于 `apps/neko-tui`。Agent core/platform 不导入 VS 
 | `neko-assets`      | 素材库、元数据、缩略图、Entity VS Code surface        | 路径走公共 resolver；Entity 走 canonical facade；缓存不伪装事实         |
 | `neko-canvas`      | 画布、创作结构、投影与领域 authoring                  | Webview 管交互；持久写入走 domain/host contract；复用公共 UI            |
 | `neko-cut`         | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Extension 管 editor/export；媒体走 Engine client  |
-| `neko-preview`     | 保留格式的授权预览                                    | Extension 管 provider/resource/CSP；Webview 只渲染授权内容              |
+| `neko-preview`     | 保留媒体、文档与标准 3D 格式的授权只读预览            | Extension 管 provider/resource/CSP；Webview 只渲染授权内容；Three.js 仅属于独立模型 Webview，不恢复 Engine Model/Scene 或新项目格式 |
 | `neko-tools`       | 工具、Media LSP、差异与诊断                           | LSP/diagnostic 在 Extension；不得贡献已移除 Device UI                   |
 | `neko-engine`      | 本地 Rust Media Engine 与 VS Code native wrapper      | 只暴露保留媒体 contract；native 资源显式释放                            |
 | `apps/neko-vscode` | VS Code 产品组合根                                    | 只拥有 Extension Pack、打包、发布和产品验收                             |

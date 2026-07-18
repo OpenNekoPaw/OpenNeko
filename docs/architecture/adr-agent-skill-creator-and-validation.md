@@ -414,7 +414,7 @@ Neko 不复制 Codex overlay 的所有字段。只有存在明确 Neko consumer 
 4. 实现 `PortableSkillValidator` 与 `NekoOverlayValidator`。
 5. 实现 `SkillCompatibilityResolver` 和 Host projection，重接 catalog/`GetContext`。
 6. 实现 typed `CreateSkill`：完整输入、path safety、原子写入、conflict、rescan。
-7. 更新 Dashboard/Extension create UX，不再只传名称或生成 blank placeholder。
+7. 更新 Extension create UX，不再只传名称或生成 blank placeholder。
 8. 将 Neko 内置 prompt/locale/domain 规则收敛到 `NekoFirstPartyQualityValidator`。
 9. 增加 system `skill-creator` 指导与聚焦 Agent evaluation，但不让它成为唯一创建入口。
 

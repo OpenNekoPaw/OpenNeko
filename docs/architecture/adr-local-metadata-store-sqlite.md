@@ -3,7 +3,7 @@
 状态：Accepted
 原始日期：2026-06-27
 修订日期：2026-07-14
-范围：`~/.neko/`、workspace `neko/`、workspace `.neko/`、workspace `.neko/.cache/`、VS Code `globalStorageUri`、ContentAccess、ResourceCache、Search、Assets、Entity、Agent、Market、Dashboard 和各创作领域的本地元数据。
+范围：`~/.neko/`、workspace `neko/`、workspace `.neko/`、workspace `.neko/.cache/`、VS Code `globalStorageUri`、ContentAccess、ResourceCache、Search、Assets、Entity、Agent、Market 和各创作领域的本地元数据。
 
 本文定义 OpenNeko 哪些结构化本地数据进入用户级 SQLite，哪些内容继续使用 JSON/Markdown/TOML/JSONL/`nk*` 或文件 artifact。它补充 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)、[`asset-library.md`](asset-library.md)、[`unified-entity.md`](unified-entity.md) 和 `normalize-neko-storage-scopes` OpenSpec。
 
@@ -149,7 +149,7 @@ canonical checkout identity descriptor：
 | 13  | `media_metadata`           | cache    | 可重建 probe 与本机 availability metadata                                     |
 | 14  | `search_documents`         | cache    | Search/FTS source projection                                                  |
 | 15  | `semantic_sources`         | cache    | Source fingerprint、provider/schema version 与 coverage                       |
-| 16  | `semantic_evidence`        | cache    | 按 source range 保存的可重建 semantic evidence                                |
+| 16  | `semantic_evidence`        | cache    | locator/range/hash、mention 与 provider version 等 compact evidence；不含正文 |
 | 17  | `entity_asset_projections` | cache    | Entity occurrence/relationship/binding 与 Asset graph projection              |
 | 18  | `catalog_items`            | cache    | Skill/Command/Processor/Market/provider descriptor 与当前 diagnostic          |
 
@@ -185,6 +185,8 @@ SQLite 中的 Entity 数据只能是 projection：name/alias search、occurrence
 用户确认或确定性提升后的 Entity ID、名称、状态、语义 metadata、binding、asset requirement 和 visual draft 必须先写 owning project fact。SQLite 更新失败只能标记 projection stale，不能回滚已成功的项目事实，也不能把 DB row 当成 confirmed entity。
 
 语义 source discovery 由 Host 注册工作区和已授权素材库 root，并将文件事件作为低延迟 hint；有界 reconciliation 才是完整性边界。`semantic_sources`、`semantic_evidence` 与 `entity_asset_projections` 的写入必须走 source-scoped atomic replacement。Media Library Search/Tree 可以继续维护文件名、目录和导航 projection，但不得成为语义 source authority，也不得重复触发 Entity 分析。
+
+`semantic_evidence` 不得保存完整 page、chapter、section、paragraph、segment text、文档二进制或内嵌媒体。分析期正文只能存在于有界 transient segment；搜索或导航需要上下文时，消费者使用 source locator 通过 `DocumentAccessService.readRange()` 回读源文件，并在读取前后校验 fingerprint。旧 body-bearing semantic cache 是可重建 cache，只能通过 allowlisted source cleanup 清理；不得 dual-read、迁移为项目事实或保留 legacy fallback。
 
 未确认数据按生命周期分类：
 

@@ -24,7 +24,7 @@ OpenNeko is for creators who want control over their project files, model connec
 | Canvas                | Organize ideas, references, storyboards, media, and generated results   |
 | Video Timeline        | Arrange audio, video, effects, and transitions, then preview and export |
 | Assets and Characters | Manage media, characters, variants, references, and reusable packs      |
-| Preview and Tools     | Preview common media and documents, compare assets, and return feedback |
+| Preview and Tools     | Preview common media, documents, and standard 3D models, compare assets, and return feedback |
 
 Available generation and understanding features depend on your configured APIs, model access, and local services.
 

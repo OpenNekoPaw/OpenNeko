@@ -37,7 +37,7 @@
 
 1. 没有统一 source catalog 和 reconciliation coordinator；多个 watcher 各自刷新不同 projection。
 2. 依赖显式导入或单次文件事件无法保证外部复制、Git checkout、睡眠恢复、网络盘和同步工具变化最终被发现。
-3. 工作区普通文本与素材库 document 没有进入统一格式解析、mention 抽取和 confirmed entity linking。
+3. 工作区普通文本与素材库 document 已进入统一 source path；本轮补齐 PDF/EPUB/DOCX unit reader、creative-schema gating 和 compact evidence，剩余风险转为真实 Extension Host 验收。
 4. 自动候选按 contribution 写项目文件，容易产生 Git churn 和大批量人工审批；可重建候选与显式用户决策没有分层。
 5. 缺少 source fingerprint、analysis revision 和提交前 freshness 校验的完整调用链，文件变化期间可能产生 stale 结果。
 6. 缺少统一的 root trust、overlap、symlink、exclude、size、encoding、取消和资源释放契约。
@@ -47,22 +47,25 @@
 
 - 文件事件只作为提示；启动、焦点恢复、root 变化、显式刷新和有界周期 reconciliation 共同保证最终一致。
 - Search/domain-neutral coordinator 拥有 source identity、fingerprint、freshness、调度和 repository replacement；Content 拥有格式 segment；Entity analyzer 拥有 mention/link/candidate。
-- 自动 source、evidence、occurrence、match 与 candidate cluster 写用户级 SQLite cache；confirmed entity、binding 与显式 candidate decision 继续写项目事实。
-- Generic Markdown/TXT/JSON/YAML 默认只链接已有实体；Fountain/Story 或显式启用 root 才发现新候选。
+- 自动 source、compact evidence、occurrence、match 与 candidate cluster 写用户级 SQLite cache；正文和文档二进制仍只在源文件，confirmed entity、binding 与显式 candidate decision 继续写项目事实。
+- Generic Markdown/TXT 与 PDF/EPUB/DOCX 默认只链接已有实体；Fountain/Story、已注册创作 schema 或显式启用 root 才发现新候选。普通 JSON/YAML 不进入 analyzer。
 - 自动处理执行精确链接、聚类、证据累计和降噪；默认 review 只展示 suggested/ambiguous cluster。
 - 发现文件不等于导入 Asset；素材库文件只有显式 import/promote 后才成为 `AssetEntity`。
 - 第一期不采用 OCR、ASR、媒体内容分析、embedding、TurboVec 或向量最近邻自动确认身份。
+- Entity → occurrence 与 occurrence/locator → Entity/Candidate 使用同一 SQLite relation projection；上下文通过 fingerprint-checked `DocumentAccessService.readRange()` 实时读取。
 
 ## 已知限制
 
 - 已通过 fake-filesystem/真实临时目录的 Host 集成测试；当前仍缺少可重复的独立 Extension Development Host 场景脚本来从 CDP 触发外部目录变更并读取 SQLite projection。当前 CDP 只确认已有 Development Host 窗口可连接。
 - Generic workspace include policy、candidate project-decision schema 和 session-only hide 行为已在 OpenSpec design 收敛：通用文本默认 `link-existing`，候选决策沿用显式项目事实，默认 review 隐藏低信号 projection。
+- 含完整 `MediaTextSegment.text` 的旧 SQLite rows 不再兼容；workspace binding 启动时只清理对应 cache source 与 entity projection，随后由 reconciliation 重建 compact projection，不触碰源文件或项目事实。
 - 中文自由文本的新实体召回在确定性一期中有限；需要后续 model-assisted NER spike，但不能改变事实与确认边界。
 
 ## 2026-07-18 验证记录
 
-- OpenSpec strict validation、`git diff --check`、Prettier、Content/Entity/Search/Assets 聚焦测试、Entity/Search 类型检查、Assets compile、Node/Bun SQLite contract tests 均通过。
-- `check:deps`、`check:legacy-debt`、`check:unused` 通过；全仓 `pnpm test` 被既有 Agent runtime boundary 与性能超时阻塞，未归因于本变更。
-- `pnpm build` 已启动并完成部分 Webview/TypeScript 任务，但 Rust Engine release/native 任务长时间等待 Cargo/依赖索引后停止；需在稳定 Rust/Cargo 环境重试。
-- `pnpm test:agent:eval` 的 key-free harness 因仓库现有 scenario schema 字段漂移失败，未进入真实 Agent case；不得把该结果描述为 Agent 行为验收。
-- `pnpm check:quality` 在 `check:webview-boundaries` 因既有 `packages/neko-agent/packages/webview/src/components/AppShell.tsx` obsolete keyboard reporter import 停止；本变更未触碰该文件。
+- OpenSpec strict validation、`git diff --check`、Prettier、Content 65、Entity 93、Search 57、Assets 91、shared/SQLite 34 项聚焦测试均通过；Node/Bun SQLite round-trip 已包含在 shared 聚焦测试中。
+- Entity 与 Search 独立 typecheck、Assets compile、`pnpm build`、`pnpm check:deps` 和 `pnpm check:legacy-debt` 通过。质量审查发现并修复 kind-aware 精确链接、compact index 解码类型、媒体/text range 联合与重复 structured path 投影问题。
+- 全仓 `pnpm test` 仅因并行 model preview 改动触发 `local-resource-access-guardrails` 失败；`pnpm check` / `pnpm check:unused` 仅报告同一并行改动的 3 个未使用文件和 `DEFAULT_MODEL_SOURCE_LIMITS` 未使用导出，本变更聚焦路径无失败。
+- CDP 已连接到真实 Extension Development Host，但当前只暴露 `neko-preview` Webview；仓库没有动态 source discovery/review 的隔离 fixture/scenario，现有 Host 又指向真实 `~/Git/neko-test`。依据用户数据保护约束未在真实工作区制造素材，因此运行态验收记录为环境阻塞。
+- 本轮未改变 prompt、Skill、capability/tool routing、provider/model 或 AgentSession，故 9.9 不触发新的 Agent evaluation；此前 8.4 的 Agent 自动候选写入路径已有独立评估记录。
+- 性能证据覆盖 unit 数、单 unit 字符数、source 总字符数、elapsed time、取消和容器 bytes 分离的 fail-closed fixture；尚未建立真实超大 PDF/EPUB/DOCX 基准，第一阶段仍以 500 units、50 万提取字符和 30 秒默认预算控制风险。

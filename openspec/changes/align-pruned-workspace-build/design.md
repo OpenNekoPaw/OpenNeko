@@ -52,6 +52,12 @@ Cut's Dashboard-only task source and command are removed because no retained con
 
 Device capture/enumeration has no retained runtime or product caller. Tools therefore removes the `neko-devices` container, `neko.devices` view, all `neko.devices.*` commands and menus, Device/Live localization, and removed file-type metadata that exists only for deleted products. Shared/client Device exports and quality metadata are removed vertically. The view is not hidden or left empty because that would preserve a false supported surface.
 
+### Close residual removed-product contracts in two data-safe stages
+
+A post-implementation audit found that the release set and Rust dependency closure are pruned, but retained TypeScript packages still advertise removed product owners through extension IDs, client re-exports, tool/API contracts, file-icon contributions, generated Scene Proto surfaces, quality ownership, and stale architecture text. Those surfaces have no user-data ownership and are deleted first, with a repository guard that distinguishes the retained Preview `model-preview` and Canvas narrative `scene` semantics from removed `neko-model`, `neko-puppet`, Engine Scene, and Dashboard product paths.
+
+The same audit found `.nka`/`.nks`/`.nkm`/`.nkp` codecs, Canvas project preview labels/readers, native character export parsing, and Cut `scene3d`/`puppet` timeline elements still have executable consumers. Removing them changes whether existing local project data can be opened, previewed, or exported, so they are not treated as metadata cleanup. Before deletion, the change must define one fail-visible data strategy: migrate the valuable source facts to a retained format, preserve a bounded import-only reader with an explicit removal condition, or reject the format without modifying the file. No default registry, compatibility extension, successful no-op, or Engine fallback may keep the removed product path alive.
+
 ### Consolidate Cut workbench controls
 
 Cut removes its package-specific left rail from both the editor and host-adapter projection. The shared creative shell omits the rail container when no rail is supplied, so removal does not leave an empty border or reserved column. Timeline controls stay continuously visible; the obsolete `mainPanelToolsVisible` state and self-hiding action are deleted rather than made unreachable.
@@ -135,6 +141,22 @@ Each generated directory has one build owner. In the root Turbo `build` graph, `
 Root shell orchestration represents Turbo filters as Bash arrays so an empty optional package group cannot trip `set -e` and shell word-splitting cannot merge filters. `Debug Dev (All)` opens `${env:HOME}/Git/neko-test`, the explicitly designated synthetic workspace. Functional cases create isolated run directories under its `.neko/.functional/` subtree and never use ordinary development workspaces as evidence.
 
 Native Engine compilation has one build owner at `neko-engine#build`. Its package script runs the CLI release build before the N-API release build, so Cargo registry and target locks are not contended by sibling Turbo tasks. The Turbo task does not depend on the host-specific `build:native` tasks; those commands remain direct package entry points for packaging and focused development. Turbo caching is disabled for the native workflow because its platform-specific Cargo and N-API outputs are not represented by the task's `dist/**` output; Cargo's `target` directory remains the rebuild cache. The N-API wrapper performs a visible Cargo metadata preflight before invoking `@napi-rs/cli`, so registry updates and lock waits cannot be hidden behind the CLI's captured metadata subprocess.
+
+### Reject removed project formats without modifying user files
+
+The retained distribution supports `.nkv` and `.nkc` as editable project formats. `.nka`, `.nks`, `.nkm`, and `.nkp` are removed-product formats and are not registered in the default project codec registry, Canvas project inference, project preview, picker, or delegated editor routes. A retained caller that attempts to load or save one of these paths receives an explicit unsupported-format diagnostic before any write. The original file remains untouched; there is no implicit conversion, empty-document fallback, or import-only success path in this change.
+
+Assets keeps generic character/entity export, but native `.nkp` puppet export is removed. If a requested character export depends on an `.nkp` native binding, the export fails before creating an output file and identifies the unsupported binding. It does not silently omit the binding, choose an optional Live2D representation, or mutate the source.
+
+Cut supports media, audio, text, shape, subtitle, and effect timeline behavior. `scene3d` and `puppet` tracks/elements are removed from the editable TypeScript and Proto contracts. The JSON NKV validator rejects these legacy discriminants before the parsed value can become `ProjectData`; save validation rejects the same values. This preserves old `.nkv` bytes while ensuring removed Engine render paths cannot participate or report success.
+
+### Replace removed inter-extension routes with retained owners
+
+Fountain parsing is host-neutral text analysis owned by `@neko/content`. Canvas and Agent read the source file and build their scene/character projection through that retained parser; they do not discover or activate a Story extension. Entity character lookup uses the retained Entity facade owned by Assets.
+
+Market-specific shader discovery, package-status checks, and Model-node installation UI are removed because no retained package owns installation state. Retained local assets continue through Assets-owned indexes and paths. Agent plugin transfer advertises only Canvas, Cut, and Explorer targets; Sketch and Model command plans are absent.
+
+The retained Agent is configured through its local provider configuration and PI credential services. The removed Auth extension's SSO messages, account UI, catalog cache, session subscription, and account-gateway credential resolver are deleted together. Selecting a removed account-owned provider is not represented as an available configuration and cannot fall back to an optional extension.
 
 ## Risks / Trade-offs
 

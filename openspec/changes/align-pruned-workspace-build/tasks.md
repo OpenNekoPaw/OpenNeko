@@ -40,3 +40,12 @@
 - [x] 4.8 Synchronize stable `docs/` architecture facts and navigation with the retained TUI/VS Code product roots, retained package set, and pruned Rust Media Engine; mark superseded Home, Workbench Core, and Market material as historical.
 - [ ] 4.9 Restore CI closure by enforcing one-shot Vitest coverage invocation, formatting retained TypeScript sources, updating the retained Rust dependency graph past active advisories and unmaintained text dependencies, and passing Clippy, Cargo Deny, and ACT gates.
 - [x] 4.10 Add a native build orchestration regression test and make N-API Cargo metadata/index progress visible before compilation.
+
+## 5. Close post-pruning residual surfaces
+
+- [x] 5.1 Record the residual contract audit and separate retained Preview/model and Canvas/scene semantics from removed Model/Puppet/Scene/Dashboard product ownership.
+- [x] 5.2 Remove unconsumed no-owner extension IDs, client re-exports, file-icon contributions, Dashboard coverage ownership, removed-package quality entries, and stale dependency/documentation metadata without touching user project files.
+- [x] 5.3 Add a retained-product absence guard covering public exports, extension discovery, manifests, quality ownership, and stable architecture documentation.
+- [x] 5.4 Define and implement the user-data strategy for `.nka`/`.nks`/`.nkm`/`.nkp`, Canvas project previews, Assets native character export, and Cut `scene3d`/`puppet` timeline contracts; prove removed Engine/product paths cannot return success.
+- [x] 5.5 Replace active Story/Auth/Market/Sketch/Model/Puppet inter-extension routes with retained package-owned services or remove the owning UI/action; do not preserve optional-extension fallbacks.
+- [x] 5.6 Run focused shared/client/Agent/Tools tests, retained builds, dependency and unused checks, strict OpenSpec validation, and record Agent Evaluation disposition plus remaining data/runtime risk.

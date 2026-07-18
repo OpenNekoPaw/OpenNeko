@@ -125,3 +125,41 @@ Obsolete scripts and commands dedicated to removed Home, Market, Auth, Live, Mod
 
 - **WHEN** a caller inspects workspace and package scripts
 - **THEN** only retained canonical commands exist and removed native/product entry points are absent
+
+### Requirement: Removed project data is rejected without mutation
+
+The retained distribution MUST edit only `.nkv` and `.nkc` project formats. `.nka`, `.nks`, `.nkm`, and `.nkp` MUST NOT be registered as editable codecs, Canvas projects, previews, picker choices, delegated editor targets, or successful character-export inputs. Cut MUST reject `scene3d` and `puppet` timeline tracks/elements before they enter the retained project model. Rejection MUST happen before a write and MUST NOT replace the source with an empty or converted document.
+
+#### Scenario: Open a removed project format
+
+- **WHEN** a retained caller attempts to load or save `.nka`, `.nks`, `.nkm`, or `.nkp`
+- **THEN** it receives an unsupported-format diagnostic, no removed editor/Engine path runs, and the source bytes remain unchanged
+
+#### Scenario: Export a native puppet character binding
+
+- **WHEN** Assets is asked to export a character whose requested representation depends on native `.nkp` data
+- **THEN** export fails before creating output and does not omit, convert, or fall back to another representation
+
+#### Scenario: Load a removed Cut timeline element
+
+- **WHEN** an `.nkv` document contains a `scene3d` or `puppet` track or element
+- **THEN** validation rejects the document and neither the Webview nor Engine reports a successful render path
+
+### Requirement: Retained packages do not discover removed product extensions
+
+Retained packages MUST NOT discover, activate, or invoke Story, Auth, Market, Sketch, Model, or Puppet extensions. A retained package-owned service MAY preserve domain behavior only when it has an explicit owner and no removed-product fallback.
+
+#### Scenario: Parse a Fountain source
+
+- **WHEN** Canvas or Agent needs screenplay structure
+- **THEN** it reads the source through retained host IO and uses the host-neutral `@neko/content` Fountain projection without activating Story
+
+#### Scenario: Inspect Agent transfer targets and account actions
+
+- **WHEN** the Agent UI and plugin-transfer catalog are loaded
+- **THEN** Sketch/Model targets and Auth SSO/account actions are absent, while local provider configuration remains available
+
+#### Scenario: Activate retained Cut and Canvas
+
+- **WHEN** retained editors initialize
+- **THEN** they do not start Market shader discovery or issue Market installation commands

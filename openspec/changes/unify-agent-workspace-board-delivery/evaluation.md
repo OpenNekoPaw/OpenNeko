@@ -10,13 +10,13 @@
 ## Cases
 
 - Reused, updated, created, or excluded:
-  - `update` `agent-runtime.creative-media-workflow/generated-output-workspace-board`，保留真实生成正例并增加 ledger、writer epoch、processing Group、receipt与legacy writer poison。
-  - `create` `agent-runtime.creative-media-workflow/workspace-board-material-analysis`，使用隔离 fixture中的已选/未选素材，要求真实读取已选素材、生成命名reviewable Markdown artifact并自动投影 source+analysis Group。
+  - `update` `agent-runtime.creative-media-workflow/generated-output-workspace-board`，保留真实生成正例并增加 ledger、writer epoch、顶层内容节点、receipt与legacy writer/visual Group poison。
+  - `create` `agent-runtime.creative-media-workflow/workspace-board-material-analysis`，使用隔离 fixture中的已选/未选素材，要求真实读取已选素材、生成命名reviewable Markdown artifact，并自动投影去重的 source+analysis 顶层节点和 `derived-from` connection。
   - `create` `agent-runtime.workflow-controller/workspace-board-delivery-resume`，在delivery持久化后终止首个TUI owner，由第二 owner接管并完成一次投影。
   - `excluded` multi-Agent file race、stale epoch、crash-after-save-before-receipt、explicit Canvas no-mirror、SQLite corrupt/unsupported runtime；这些不依赖模型判断，由双 store/双 coordinator、poison adapter和revision tests确定性证明。
 - Evidence and coverage:
   - canonical: Tool/task/turn终态、stable ResourceRef/artifact snapshot、delivery ledger status、writer epoch、Canvas revision/node IDs、terminal idle。
-  - artifact: owning ResourceRef validator、Markdown artifact digest、`.nkc` codec/Canvas validator、processing Group及role/provenance路径断言。
+  - artifact: owning ResourceRef validator、Markdown artifact digest、`.nkc` codec/Canvas validator、canonical content node identity、connection identity及role/provenance路径断言；`workspace-inbox`/`workspace-process-*` 作为禁用路径。
   - workflow: enqueue → claim → save → receipt顺序，以及restart/takeover后同一delivery identity。
   - boundary/failure: 未使用fixture素材不投影；无workspace、blocked ledger、stale epoch、active Canvas fallback、AssetLibrary/legacy writer参与均失败。
   - regression: current generated image delivery、task continuation、conversation persistence resume保持通过。

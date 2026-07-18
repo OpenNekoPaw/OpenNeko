@@ -41,3 +41,25 @@
 
 - Preview document migration: a VS Code Debugger Development Host rooted at `${HOME}/Git/neko-test` opened isolated synthetic PDF, EPUB, DOCX, and CBZ files while `neko.neko-engine` was unavailable. The Preview Node service listened on loopback and returned its document-specific CORS/PNA route diagnostic. The declarative DOM/console scenario remains blocked because the parent VS Code renderer was not started with the dedicated CDP endpoint; the generated report classifies this as infrastructure failure before assertions.
 - A real TUI evaluation cannot observe the VS Code Engine extension capability catalogue; no mock result is claimed as real Agent behavior acceptance.
+
+## Post-pruning residual cleanup (2026-07-19)
+
+### Passed
+
+- Removed project formats now have one fail-closed policy: `.nka`, `.nks`, `.nkm`, and `.nkp` are rejected before source reads, mutations, output creation, or Engine dispatch. The Rust CLI `.nka` loader is deleted, and Assets rejects native `.nkp` export before opening an output file.
+- Cut no longer accepts `scene3d` or `puppet` elements in Proto, generated types, schema, Extension, or Webview paths. The reserved Proto names prevent accidental field reuse without preserving a successful runtime path.
+- Active Story/Auth/Market/Sketch/Model/Puppet routes and optional-extension fallbacks are removed. Retained Fountain parsing is host-neutral; Agent plugin availability and transfer contracts expose only retained Canvas/Cut destinations.
+- Scene Proto/generated contracts, the no-owner viewport stack, Model project templates, Story provider adapter, Market client/contracts, VoicePack install target, Auth gateway/SSO paths, and unused Preview staging/protocol modules are absent.
+- `pnpm check`, `pnpm check:legacy-debt`, `node scripts/check-application-boundaries.mjs --self-test`, the full application-boundary scan, strict OpenSpec validation, and `git diff --check` pass. The unused-code check has no findings, dependency-cruiser reports no violations, and the legacy-debt gate has zero blocking findings.
+- `pnpm build` passes all 10 root Turbo build tasks, including the release Rust CLI/N-API build. Retained UI, Assets, Agent, Preview, Canvas, Cut, and Tools package builds also pass independently.
+- Focused format, export, plugin-transfer, Storyboard, Preview isolation, stream-descriptor, Search, Entity, Canvas, Cut, Agent provider/profile/runtime, and Rust CLI regressions pass. `pnpm test:agent:eval` passes 39 files/278 tests and the 23-suite/47-case dry-run.
+- Proto generation is idempotent after deletion: `pnpm generate:types` discovers only `diff.proto` and `timeline.proto`, and the generated-tree SHA is unchanged by a second generation pass.
+
+### Remaining risk and disposition
+
+- Preservation-only Market settings and SQLite installation receipts remain because deleting user settings or install records requires a separate migration. They have no active Market route, client, provider-card layer, or successful asset resolution path.
+- `puppet-bone` remains recognized only as a persisted `EntityAssetBindingRole` so existing metadata can be diagnosed safely. It is not an active `RepresentationKind`, is not selected by fallback, and native export rejects it before writing.
+- Preview's read-only standard 3D model inspection and Canvas narrative `scene` semantics are retained product capabilities; the absence guard deliberately distinguishes them from removed Model/Scene authoring products.
+- Agent Evaluation disposition: prompt/Skill and capability examples changed, so the focused media-production and script-generation cases were validated in dry-run and the full key-free harness passed. No credentialed provider run was performed, so the result is not claimed as real Agent behavior acceptance.
+- The second root `pnpm test` run reached unrelated current-work failures: Preview `ModelPreviewSourceSession.ts` violates an existing local-resource-root guard, and Canvas foundational media now renders `object-contain` while its test expects `object-cover`. Cleanup-specific narrative and plugin-transfer failures found during that run were corrected and pass focused reruns.
+- `pnpm check:quality` progresses through release, brand, debt, content, application, Agent, and Canvas boundaries, then stops on an unrelated obsolete keyboard-reporter import in Agent `AppShell.tsx`. Those active user changes were preserved rather than folded into this cleanup.

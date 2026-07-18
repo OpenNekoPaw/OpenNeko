@@ -7,7 +7,7 @@
 
 本文记录 OpenNeko 对 3D Preview 产品定位、四类参考用途、无模型引导会话、内置模型、角色隔离和下游路由的稳定决策。它补充 [`package-boundaries.md`](package-boundaries.md)、[`webview-media-security.md`](webview-media-security.md)、[`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md) 和 [`adr-agent-driven-avatar-preview-runtime-boundary.md`](adr-agent-driven-avatar-preview-runtime-boundary.md)。
 
-现有 [`add-standard-3d-model-preview`](../../openspec/changes/add-standard-3d-model-preview/) 只实现真实标准模型的只读检查、临时 camera/light/transform 和通用截图上下文；本文不把尚未实施的内置素体、姿势编辑或全景环境描述成现有能力。
+已归档的 [`add-standard-3d-model-preview`](../../openspec/changes/archive/2026-07-18-add-standard-3d-model-preview/) 只实现真实标准模型的只读检查、临时 camera/light/transform 和通用截图上下文；本文不把尚未实施的内置素体、姿势编辑或全景环境描述成现有能力。
 
 ## 背景
 
