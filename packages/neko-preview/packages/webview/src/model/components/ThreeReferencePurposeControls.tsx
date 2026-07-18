@@ -8,6 +8,7 @@ import {
 } from '@neko/ui';
 import type {
   ThreeReferencePanelSubject,
+  ThreeReferencePanoramaOrientation,
   ThreeReferencePoseControlMode,
   ThreeReferencePoseState,
   ThreeReferencePurpose,
@@ -21,12 +22,15 @@ export interface ThreeReferencePurposeControlsProps {
   readonly eligiblePurposes: readonly ThreeReferencePurpose[];
   readonly panelSubject?: ThreeReferencePanelSubject;
   readonly staging?: ThreeReferenceStagingSnapshot;
+  readonly outputPreview?: string;
   readonly onPurposeChange: (purposes: readonly ThreeReferencePurpose[]) => void;
   readonly onPoseChange: (pose: ThreeReferencePoseState) => void;
   readonly onCapture: (
     purpose: ThreeReferencePurpose,
     poseControlMode?: ThreeReferencePoseControlMode,
   ) => void;
+  readonly onCameraAspectRatioChange: (aspectRatio: number) => void;
+  readonly onPanoramaOrientationChange: (orientation: ThreeReferencePanoramaOrientation) => void;
 }
 
 const PURPOSES: readonly ThreeReferencePurpose[] = [
@@ -40,9 +44,12 @@ export function ThreeReferencePurposeControls({
   disabled,
   eligiblePurposes,
   onCapture,
+  onCameraAspectRatioChange,
+  onPanoramaOrientationChange,
   onPoseChange,
   onPurposeChange,
   panelSubject,
+  outputPreview,
   staging,
 }: ThreeReferencePurposeControlsProps): React.JSX.Element {
   const { t } = useTranslation();
@@ -53,6 +60,7 @@ export function ThreeReferencePurposeControls({
   const [selectedJointId, setSelectedJointId] = useState<string>('');
   const [poseControlMode, setPoseControlMode] = useState<ThreeReferencePoseControlMode>('pose');
   const selectedJoint = capabilities?.joints.find((joint) => joint.jointId === selectedJointId);
+  const environment = staging?.environment;
   const jointRotation = useMemo(
     () =>
       staging?.pose?.joints.find((joint) => joint.jointId === selectedJoint?.jointId)?.rotation ?? {
@@ -133,6 +141,61 @@ export function ThreeReferencePurposeControls({
         className="model-preview__inspector-section"
         density="compact"
         disabled={disabled}
+        title={t('preview.model.cameraComposition')}
+      >
+        <SelectPropertyRow
+          density="compact"
+          disabled={disabled}
+          id="reference-camera-aspect"
+          label={t('preview.model.aspectRatio')}
+          options={[
+            { value: '1', label: '1:1' },
+            { value: String(16 / 9), label: '16:9' },
+            { value: String(9 / 16), label: '9:16' },
+            { value: String(4 / 3), label: '4:3' },
+          ]}
+          value={String(staging?.camera.aspectRatio ?? 1)}
+          onCommit={(_, value) => onCameraAspectRatioChange(requirePositiveNumber(value))}
+        />
+      </PanelSection>
+      {environment ? (
+        <PanelSection
+          className="model-preview__inspector-section"
+          density="compact"
+          disabled={disabled}
+          title={t('preview.model.panoramaOrientation')}
+        >
+          {(
+            [
+              ['yawDeg', -180, 180, t('preview.model.panoramaYaw')],
+              ['pitchDeg', -90, 90, t('preview.model.panoramaPitch')],
+              ['fieldOfViewDeg', 30, 120, t('preview.model.fieldOfView')],
+            ] as const
+          ).map(([property, min, max, label]) => (
+            <SliderPropertyRow
+              key={property}
+              density="compact"
+              disabled={disabled}
+              id={`reference-panorama-${property}`}
+              label={label}
+              min={min}
+              max={max}
+              step={1}
+              value={environment.orientation[property]}
+              onCommit={(_, value) =>
+                onPanoramaOrientationChange({
+                  ...environment.orientation,
+                  [property]: value,
+                })
+              }
+            />
+          ))}
+        </PanelSection>
+      ) : null}
+      <PanelSection
+        className="model-preview__inspector-section"
+        density="compact"
+        disabled={disabled}
         title={t('preview.model.captureReference')}
       >
         <div className="model-preview__capture-actions">
@@ -150,6 +213,13 @@ export function ThreeReferencePurposeControls({
             </Button>
           ))}
         </div>
+        {outputPreview ? (
+          <img
+            className="model-preview__output-preview"
+            src={outputPreview}
+            alt={t('preview.model.outputPreview')}
+          />
+        ) : null}
       </PanelSection>
     </div>
   );
@@ -280,4 +350,12 @@ function updateJointRotation(
 function requirePoseControlMode(value: string): ThreeReferencePoseControlMode {
   if (value === 'pose' || value === 'depth') return value;
   throw new Error(`Unknown 3D Reference pose control mode: ${value}`);
+}
+
+function requirePositiveNumber(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Invalid 3D Reference aspect ratio: ${value}`);
+  }
+  return parsed;
 }

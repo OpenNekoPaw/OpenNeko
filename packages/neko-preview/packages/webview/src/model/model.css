@@ -486,6 +486,17 @@ input {
   justify-content: center;
 }
 
+.model-preview__output-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  margin-top: 8px;
+  border: 1px solid var(--neko-border);
+  border-radius: 8px;
+  object-fit: contain;
+  background: var(--vscode-editor-background);
+}
+
 .model-preview__inspector-section {
   gap: 9px !important;
   padding: 14px 1px 12px !important;

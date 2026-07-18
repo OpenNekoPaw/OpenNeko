@@ -173,6 +173,12 @@ const preview: MessageBundle = {
   'preview.model.previewControlOutput': 'Preview control output',
   'preview.model.captureReference': 'Reference output',
   'preview.model.capturePurpose': 'Capture {purpose}',
+  'preview.model.cameraComposition': 'Camera and shot',
+  'preview.model.aspectRatio': 'Aspect ratio',
+  'preview.model.panoramaOrientation': 'Panorama orientation',
+  'preview.model.panoramaYaw': 'Horizontal rotation',
+  'preview.model.panoramaPitch': 'Vertical rotation',
+  'preview.model.outputPreview': 'Latest 3D reference output preview',
   'preview.model.poseUnavailable':
     'Pose authoring is unavailable in read-only Model Preview; node transforms remain temporary.',
   'preview.model.background': 'Background',

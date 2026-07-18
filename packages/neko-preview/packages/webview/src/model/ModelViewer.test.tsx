@@ -190,6 +190,19 @@ describe('ModelViewer', () => {
       runtime: environmentMessage.runtime,
       orientation: environmentMessage.staging.environment.orientation,
     });
+    expect(
+      container.querySelector('[data-property-id="reference-panorama-yawDeg"]'),
+    ).not.toBeNull();
+    const captureAppearance = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === 'Capture Appearance',
+    );
+    await act(async () => captureAppearance?.click());
+    expect(runtime.capturePurpose).toHaveBeenCalledWith(
+      'appearance',
+      { width: 1024, height: 1024 },
+      { poseControlMode: undefined },
+    );
+    expect(container.querySelector('.model-preview__output-preview')).not.toBeNull();
 
     expect(
       [...container.querySelectorAll('button')].find((button) =>
@@ -510,13 +523,14 @@ function fakeRuntime() {
   const setCameraGuide = vi.fn();
   const setGroundGridVisible = vi.fn();
   const setPanoramaEnvironment = vi.fn(async () => undefined);
+  const capturePurpose = vi.fn(() => 'data:image/png;base64,AA==');
   const value: ThreeModelRuntimePort = {
     load,
     loadPreset,
     applyReferencePose,
     setPanoramaEnvironment,
     clearPanoramaEnvironment: vi.fn(),
-    capturePurpose: vi.fn(() => 'data:image/png;base64,AA=='),
+    capturePurpose,
     applyStaging,
     getNodes: () => [
       {
@@ -563,6 +577,7 @@ function fakeRuntime() {
     setCameraGuide,
     setGroundGridVisible,
     setPanoramaEnvironment,
+    capturePurpose,
   };
 }
 

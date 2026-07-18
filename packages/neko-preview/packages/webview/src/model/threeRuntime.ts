@@ -474,6 +474,8 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       0,
     );
     this.scene.environmentRotation.copy(this.scene.backgroundRotation);
+    this.camera.fov = environment.orientation.fieldOfViewDeg;
+    this.camera.updateProjectionMatrix();
     this.requestRender();
   }
 

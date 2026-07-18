@@ -13,6 +13,7 @@ import {
   type NormalizedModelFacts,
   type ThreeReferenceExtensionMessage,
   type ThreeReferencePanelSubject,
+  type ThreeReferencePanoramaRuntimeDescriptor,
   type ThreeReferencePoseState,
   type ThreeReferencePurpose,
   type ThreeReferenceStagingSnapshot,
@@ -75,6 +76,8 @@ export function ModelViewer({
   const [panelSubject, setPanelSubject] = useState<ThreeReferencePanelSubject>();
   const [eligiblePurposes, setEligiblePurposes] = useState<readonly ThreeReferencePurpose[]>([]);
   const [referenceStaging, setReferenceStaging] = useState<ThreeReferenceStagingSnapshot>();
+  const [panoramaRuntime, setPanoramaRuntime] = useState<ThreeReferencePanoramaRuntimeDescriptor>();
+  const [outputPreview, setOutputPreview] = useState<string>();
   const sessionId = sessionIdOverride ?? document.body.dataset.modelSessionId;
   const vscode = useMemo(() => getVscodeApi(), []);
 
@@ -162,6 +165,7 @@ export function ModelViewer({
         setPanelSubject,
         setEligiblePurposes,
         setReferenceStaging,
+        setPanoramaRuntime,
         setDiagnostic,
         stagingRef,
         referenceStagingRef,
@@ -345,16 +349,18 @@ export function ModelViewer({
           eligiblePurposes={eligiblePurposes}
           panelSubject={panelSubject}
           staging={referenceStaging}
+          outputPreview={outputPreview}
           onCapture={(purpose, poseControlMode) => {
             const current = referenceStagingRef.current;
             if (!current) throw new Error('3D Reference staging is unavailable.');
-            runtimeRef.current?.capturePurpose(
+            const image = runtimeRef.current?.capturePurpose(
               purpose,
               staging?.capture ?? { width: 1024, height: 1024 },
               {
                 poseControlMode,
               },
             );
+            setOutputPreview(image);
             vscode.postMessage({
               type: '3d-reference/capture-requested',
               requestId: crypto.randomUUID(),
@@ -369,6 +375,37 @@ export function ModelViewer({
           onPurposeChange={(purposes) =>
             updateReferenceStaging((current) => ({ ...current, selectedPurposes: purposes }))
           }
+          onCameraAspectRatioChange={(aspectRatio) =>
+            updateReferenceStaging((current) => ({
+              ...current,
+              camera: { ...current.camera, aspectRatio },
+            }))
+          }
+          onPanoramaOrientationChange={(orientation) => {
+            if (!panoramaRuntime) {
+              throw new Error('3D Reference panorama runtime is unavailable.');
+            }
+            const projection = runtimeRef.current?.setPanoramaEnvironment({
+              runtime: panoramaRuntime,
+              orientation,
+            });
+            void projection?.catch((error: unknown) => {
+              setDiagnostic({
+                code: 'load-failed',
+                message: error instanceof Error ? error.message : String(error),
+                severity: 'error',
+              });
+            });
+            updateReferenceStaging((current) => {
+              if (!current.environment) {
+                throw new Error('3D Reference panorama environment is unavailable.');
+              }
+              return {
+                ...current,
+                environment: { ...current.environment, orientation },
+              };
+            });
+          }}
         />
       </ModelInspectorPanel>
     </main>
@@ -388,6 +425,7 @@ async function handleExtensionMessage(input: {
   readonly setPanelSubject: (subject: ThreeReferencePanelSubject) => void;
   readonly setEligiblePurposes: (purposes: readonly ThreeReferencePurpose[]) => void;
   readonly setReferenceStaging: (staging: ThreeReferenceStagingSnapshot) => void;
+  readonly setPanoramaRuntime: (runtime: ThreeReferencePanoramaRuntimeDescriptor) => void;
   readonly setDiagnostic: (diagnostic: ModelPreviewDiagnostic | undefined) => void;
   readonly stagingRef: React.MutableRefObject<ModelPreviewStagingState | undefined>;
   readonly referenceStagingRef: React.MutableRefObject<ThreeReferenceStagingSnapshot | undefined>;
@@ -445,6 +483,7 @@ async function handleExtensionMessage(input: {
         if (message.identity.sessionId !== input.sessionId) return;
         input.referenceStagingRef.current = message.staging;
         input.setReferenceStaging(message.staging);
+        input.setPanoramaRuntime(message.runtime);
         const viewportStaging = toViewportStaging(message.staging);
         input.stagingRef.current = viewportStaging;
         input.setStaging(viewportStaging);
