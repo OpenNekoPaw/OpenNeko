@@ -35,21 +35,23 @@ export interface WebviewHtmlOptions {
   devMode?: boolean;
   /** Vite dev server port */
   devPort?: number;
+  /** Model Preview panel identity injected before Webview startup. */
+  modelSessionId?: string;
 }
 
 /**
  * Generate HTML content for the preview webview
  */
 export function getWebviewHtml(options: WebviewHtmlOptions): string {
-  const { webview, extensionUri, entry, devMode = false, devPort = 5174 } = options;
+  const { webview, extensionUri, entry, devMode = false, devPort = 5174, modelSessionId } = options;
   const nonce = getNonce();
   const localeAttr = injectLocaleAttribute();
 
   if (devMode) {
-    return getDevHtml(nonce, entry, devPort, localeAttr);
+    return getDevHtml(webview.cspSource, nonce, entry, devPort, localeAttr, modelSessionId);
   }
 
-  return getProdHtml(webview, extensionUri, nonce, entry, localeAttr);
+  return getProdHtml(webview, extensionUri, nonce, entry, localeAttr, modelSessionId);
 }
 
 /** Display names for entry types */
@@ -72,10 +74,12 @@ const LOOPBACK_HTTP = 'http://127.0.0.1:*';
  * Dev mode: connect to Vite dev server for HMR
  */
 function getDevHtml(
+  cspSource: string,
   nonce: string,
   entry: PreviewEntry,
   devPort: number,
   localeAttr: string,
+  modelSessionId?: string,
 ): string {
   const devUrl = `http://localhost:${devPort}`;
   const isDocument = DOCUMENT_ENTRIES.has(entry);
@@ -84,7 +88,7 @@ function getDevHtml(
 
   // All documents connect to the Node host; EPUB also needs blob: for epubjs.
   const connectSrc = isModel
-    ? `connect-src ${devUrl};`
+    ? `connect-src blob: ${devUrl} ${cspSource};`
     : isDocument
       ? isEpub
         ? `connect-src blob: ${devUrl} ${LOOPBACK_HTTP};`
@@ -92,9 +96,11 @@ function getDevHtml(
       : `connect-src ws://localhost:${devPort} ws://127.0.0.1:* ${devUrl} ${LOOPBACK_HTTP};`;
 
   // Document archive resources use the Node loopback origin.
-  const imgSrc = isDocument
-    ? `img-src ${devUrl} ${LOOPBACK_HTTP} data: blob:;`
-    : `img-src ${devUrl} data: blob:;`;
+  const imgSrc = isModel
+    ? `img-src ${devUrl} ${cspSource} data: blob:;`
+    : isDocument
+      ? `img-src ${devUrl} ${LOOPBACK_HTTP} data: blob:;`
+      : `img-src ${devUrl} data: blob:;`;
   const styleSrc = isDocument
     ? `style-src 'unsafe-inline' blob: ${devUrl} ${LOOPBACK_HTTP};`
     : `style-src 'unsafe-inline' ${devUrl};`;
@@ -123,7 +129,7 @@ function getDevHtml(
 	" />
 	<title>${ENTRY_TITLES[entry]}</title>
 </head>
-<body>
+<body${modelSessionAttribute(entry, modelSessionId)}>
 	<div id="root"></div>
 	<script nonce="${nonce}" type="module" src="${devUrl}/@vite/client"></script>
 	<script nonce="${nonce}" type="module" src="${devUrl}/src/${entry}/main.tsx"></script>
@@ -140,6 +146,7 @@ function getProdHtml(
   nonce: string,
   entry: PreviewEntry,
   localeAttr: string,
+  modelSessionId?: string,
 ): string {
   const distUri = vscode.Uri.joinPath(extensionUri, 'dist', 'webview');
   const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(distUri, 'assets', `${entry}.js`));
@@ -151,7 +158,7 @@ function getProdHtml(
   const isModel = entry === 'model';
 
   const connectSrc = isModel
-    ? `connect-src 'none';`
+    ? `connect-src blob: ${csp};`
     : isDocument
       ? isEpub
         ? `connect-src blob: ${LOOPBACK_HTTP};`
@@ -188,9 +195,23 @@ function getProdHtml(
 	<link rel="stylesheet" href="${styleUri}" />
 	<title>${ENTRY_TITLES[entry]}</title>
 </head>
-<body>
+<body${modelSessionAttribute(entry, modelSessionId)}>
 	<div id="root"></div>
 	<script nonce="${nonce}" type="module" src="${scriptUri}"></script>
 </body>
 </html>`;
+}
+
+function modelSessionAttribute(entry: PreviewEntry, sessionId: string | undefined): string {
+  if (entry !== 'model') return '';
+  if (!sessionId) throw new Error('Model Preview HTML requires a session identity.');
+  return ` data-model-session-id="${escapeHtmlAttribute(sessionId)}"`;
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }

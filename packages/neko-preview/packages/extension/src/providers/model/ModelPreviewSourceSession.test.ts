@@ -18,7 +18,10 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { ModelPreviewSourceSession } from './ModelPreviewSourceSession';
+import {
+  ModelPreviewSourceSession,
+  type ModelPreviewProjectionFileSystem,
+} from './ModelPreviewSourceSession';
 
 const workspace = '/workspace/project';
 const sourcePath = '/workspace/project/model/scene.gltf';
@@ -29,6 +32,9 @@ describe('ModelPreviewSourceSession', () => {
     options: Record<string, unknown>;
     asWebviewUri: ReturnType<typeof vi.fn>;
   };
+  let projectionFileSystem: ModelPreviewProjectionFileSystem;
+  let copyFile: ReturnType<typeof vi.fn<(sourcePath: string, targetPath: string) => Promise<void>>>;
+  let remove: ReturnType<typeof vi.fn<(rootPath: string) => void>>;
 
   beforeEach(() => {
     webview = {
@@ -37,12 +43,20 @@ describe('ModelPreviewSourceSession', () => {
         toString: () => `webview:${uri.fsPath}`,
       })),
     };
+    copyFile = vi.fn(async (_sourcePath: string, _targetPath: string) => undefined);
+    remove = vi.fn((_rootPath: string) => undefined);
+    projectionFileSystem = {
+      prepare: vi.fn(async (_rootPath: string) => undefined),
+      copyFile,
+      remove,
+    };
   });
 
   it('authorizes and projects only the exact enumerated files', async () => {
     const session = await ModelPreviewSourceSession.open({
       sessionId: 'session-1',
       sourcePath,
+      projectionRoot: '/global/model-preview/session-1',
       workspaceRoot: workspace,
       authorizedRoots: [workspace],
       extensionUri: uri('/extension'),
@@ -52,20 +66,28 @@ describe('ModelPreviewSourceSession', () => {
         [sourcePath]: json({ asset: { version: '2.0' }, buffers: [{ uri: 'scene.bin' }] }),
         [bufferPath]: bytes('buffer'),
       }),
+      projectionFileSystem,
     });
 
-    expect(session.descriptor.entryUri).toBe(`webview:${sourcePath}`);
+    expect(session.descriptor.entryUri).toBe(
+      'webview:/global/model-preview/session-1/000-scene.gltf',
+    );
     expect(session.descriptor.uriMap).toEqual({
-      'scene.gltf': `webview:${sourcePath}`,
-      'scene.bin': `webview:${bufferPath}`,
+      'scene.gltf': 'webview:/global/model-preview/session-1/000-scene.gltf',
+      'scene.bin': 'webview:/global/model-preview/session-1/001-scene.bin',
     });
     expect(webview.options.localResourceRoots).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ fsPath: sourcePath }),
-        expect.objectContaining({ fsPath: bufferPath }),
+        expect.objectContaining({ fsPath: '/global/model-preview/session-1' }),
       ]),
     );
+    expect(copyFile.mock.calls).toEqual([
+      [sourcePath, '/global/model-preview/session-1/000-scene.gltf'],
+      [bufferPath, '/global/model-preview/session-1/001-scene.bin'],
+    ]);
     session.assertLive('session-1', session.descriptor.sourceFingerprint);
+    session.dispose();
+    expect(remove).toHaveBeenCalledWith('/global/model-preview/session-1');
   });
 
   it('rejects unauthorized, stale, and disposed sessions visibly', async () => {
@@ -73,22 +95,26 @@ describe('ModelPreviewSourceSession', () => {
       ModelPreviewSourceSession.open({
         sessionId: 'session-1',
         sourcePath,
+        projectionRoot: '/global/model-preview/session-1',
         authorizedRoots: [workspace],
         extensionUri: uri('/extension'),
         webview: webview as never,
         authorization: authorization(false),
         fileSystem: memoryFileSystem({ [sourcePath]: json({ asset: { version: '2.0' } }) }),
+        projectionFileSystem,
       }),
     ).rejects.toMatchObject({ diagnostic: { code: 'source-unauthorized' } });
 
     const session = await ModelPreviewSourceSession.open({
       sessionId: 'session-1',
       sourcePath,
+      projectionRoot: '/global/model-preview/session-1',
       authorizedRoots: [workspace],
       extensionUri: uri('/extension'),
       webview: webview as never,
       authorization: authorization(true),
       fileSystem: memoryFileSystem({ [sourcePath]: json({ asset: { version: '2.0' } }) }),
+      projectionFileSystem,
     });
     expect(() =>
       session.assertLive('other-session', session.descriptor.sourceFingerprint),
@@ -106,12 +132,14 @@ describe('ModelPreviewSourceSession', () => {
       ModelPreviewSourceSession.open({
         sessionId: 'session-1',
         sourcePath,
+        projectionRoot: '/global/model-preview/session-1',
         authorizedRoots: [workspace],
         extensionUri: uri('/extension'),
         webview: webview as never,
         authorization: authorization(true),
         fileSystem: memoryFileSystem({ [sourcePath]: json({ asset: { version: '2.0' } }) }),
         signal: controller.signal,
+        projectionFileSystem,
       }),
     ).rejects.toThrow('cancelled');
     expect(webview.options.localResourceRoots).toEqual([]);

@@ -38,6 +38,8 @@ export class VideoPreviewProvider implements vscode.CustomReadonlyEditorProvider
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _statusBar: StatusBarManager,
+    private readonly _resolvePreviewService: () => Promise<PreviewService | null> = () =>
+      PreviewService.tryCreate(),
   ) {}
 
   /** Inject a shared PreviewService instance (avoids duplicate NativeEngine) */
@@ -77,7 +79,7 @@ export class VideoPreviewProvider implements vscode.CustomReadonlyEditorProvider
     // Probe media in background — message handler awaits this before responding
     const mediaInfoPromise = (async (): Promise<MediaInfo | null> => {
       if (!this._previewService) {
-        this._previewService = await PreviewService.tryCreate();
+        this._previewService = await this._resolvePreviewService();
       }
       if (!this._previewService?.isAvailable) {
         webviewPanel.webview.html = getPreviewErrorHtml(

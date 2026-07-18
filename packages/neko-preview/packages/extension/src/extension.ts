@@ -25,6 +25,8 @@ import {
   type EpubActiveLocation,
 } from './providers/document/EpubPreviewProvider';
 import { DocxPreviewProvider } from './providers/document/DocxPreviewProvider';
+import { ModelPreviewProvider } from './providers/model/ModelPreviewProvider';
+import { ModelAgentContextBridge } from './providers/model/modelAgentContext';
 import { registerOpenCommand } from './providers/document/documentProviderHelper';
 import { previewFileServer } from './providers/document/PreviewFileServer';
 import {
@@ -62,6 +64,7 @@ let pdfProvider: PdfPreviewProvider | null = null;
 let cbzProvider: CbzPreviewProvider | null = null;
 let epubProvider: EpubPreviewProvider | null = null;
 let docxProvider: DocxPreviewProvider | null = null;
+let modelProvider: ModelPreviewProvider | null = null;
 let statusBarManager: StatusBarManager | null = null;
 let sharedPreviewService: PreviewService | null = null;
 
@@ -76,6 +79,7 @@ interface RevealDocumentLocatorInput {
 // =============================================================================
 
 export async function activate(context: vscode.ExtensionContext): Promise<NekoPreviewAPI> {
+  sharedPreviewService = null;
   const rootLogger = createVSCodeLogger(
     'Neko Preview',
     'NekoPreview',
@@ -88,22 +92,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
 
   logger.info('Activating extension...');
 
-  // Create shared PreviewService singleton (NativeEngine + frame server)
-  sharedPreviewService = await PreviewService.tryCreate();
-  if (sharedPreviewService) {
-    context.subscriptions.push(sharedPreviewService);
-    logger.info(`Shared PreviewService ready (port: ${sharedPreviewService.port})`);
-  } else {
-    logger.warn('Failed to create PreviewService — native engine unavailable');
-  }
+  let sharedPreviewServicePromise: Promise<PreviewService | null> | null = null;
+  const resolveSharedPreviewService = (): Promise<PreviewService | null> => {
+    if (!sharedPreviewServicePromise) {
+      sharedPreviewServicePromise = PreviewService.tryCreate().then((service) => {
+        sharedPreviewService = service;
+        if (service) {
+          context.subscriptions.push(service);
+          logger.info(`Shared PreviewService ready (port: ${service.port})`);
+        } else {
+          logger.warn('Failed to create PreviewService — native engine unavailable');
+        }
+        return service;
+      });
+    }
+    return sharedPreviewServicePromise;
+  };
 
   // Create shared status bar
   statusBarManager = new StatusBarManager();
   context.subscriptions.push(statusBarManager);
 
   // Create providers and inject shared PreviewService
-  videoProvider = new VideoPreviewProvider(context.extensionUri, statusBarManager);
-  audioProvider = new AudioPreviewProvider(context.extensionUri, statusBarManager);
+  videoProvider = new VideoPreviewProvider(
+    context.extensionUri,
+    statusBarManager,
+    resolveSharedPreviewService,
+  );
+  audioProvider = new AudioPreviewProvider(
+    context.extensionUri,
+    statusBarManager,
+    resolveSharedPreviewService,
+  );
   const panoramicEnabled = vscode.workspace
     .getConfiguration('neko.preview')
     .get<boolean>('viewer.panoramic.enabled', true);
@@ -114,23 +134,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
     panoramicImageProvider = new PanoramicImagePreviewProvider(
       context.extensionUri,
       statusBarManager,
+      resolveSharedPreviewService,
     );
   }
   if (panoramicVideoEnabled) {
     panoramicVideoProvider = new PanoramicVideoPreviewProvider(
       context.extensionUri,
       statusBarManager,
+      resolveSharedPreviewService,
     );
   }
 
-  if (sharedPreviewService) {
-    videoProvider.setPreviewService(sharedPreviewService);
-    audioProvider.setPreviewService(sharedPreviewService);
-    panoramicImageProvider?.setPreviewService(sharedPreviewService);
-    panoramicVideoProvider?.setPreviewService(sharedPreviewService);
-  }
+  const modelAgentContextBridge = new ModelAgentContextBridge();
+  modelProvider = new ModelPreviewProvider(context.extensionUri, context, {
+    deliverCapture: (input) => modelAgentContextBridge.deliver(input),
+  });
 
   // Register custom editors
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(ModelPreviewProvider.viewType, modelProvider, {
+      webviewOptions: { retainContextWhenHidden: true },
+      supportsMultipleEditorsPerDocument: false,
+    }),
+  );
+
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(VideoPreviewProvider.viewType, videoProvider, {
       webviewOptions: { retainContextWhenHidden: true },
@@ -277,6 +304,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
   // Register providers for disposal
   context.subscriptions.push(videoProvider);
   context.subscriptions.push(audioProvider);
+  context.subscriptions.push(modelProvider);
   if (panoramicImageProvider) {
     context.subscriptions.push(panoramicImageProvider);
   }
@@ -705,6 +733,9 @@ export function deactivate(): void {
 
   docxProvider?.dispose();
   docxProvider = null;
+
+  modelProvider?.dispose();
+  modelProvider = null;
 
   statusBarManager?.dispose();
   statusBarManager = null;

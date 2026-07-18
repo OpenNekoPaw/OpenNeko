@@ -11,7 +11,7 @@ import {
 } from '@neko/shared';
 import { requireModelFormatAdapter } from './modelFormatAdapters';
 
-export const DEFAULT_MODEL_SOURCE_LIMITS = Object.freeze({
+const DEFAULT_MODEL_SOURCE_LIMITS = Object.freeze({
   maxSourceBytes: 128 * 1024 * 1024,
   maxTextBytes: 8 * 1024 * 1024,
   maxDependencyCount: 64,
@@ -428,11 +428,13 @@ function addUniqueDeclaration(
   seen: Set<string>,
   declarations: ModelSourceDependencyDeclaration[],
 ): void {
-  const key = path.normalize(declaration.filePath);
-  if (seen.has(key)) {
+  const pathKey = `path:${path.normalize(declaration.filePath)}`;
+  const referenceKey = `reference:${declaration.reference}`;
+  if (seen.has(pathKey) || seen.has(referenceKey)) {
     throw sourceError('unsafe-dependency', `Duplicate model dependency: ${declaration.reference}`);
   }
-  seen.add(key);
+  seen.add(pathKey);
+  seen.add(referenceKey);
   declarations.push(declaration);
 }
 

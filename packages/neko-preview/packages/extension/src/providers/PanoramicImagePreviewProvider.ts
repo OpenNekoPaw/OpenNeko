@@ -30,6 +30,8 @@ export class PanoramicImagePreviewProvider implements vscode.CustomReadonlyEdito
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _statusBar: StatusBarManager,
+    private readonly _resolvePreviewService: () => Promise<PreviewService | null> = () =>
+      PreviewService.tryCreate(),
   ) {}
 
   setPreviewService(service: PreviewService): void {
@@ -243,7 +245,7 @@ export class PanoramicImagePreviewProvider implements vscode.CustomReadonlyEdito
     fileName: string,
   ): Promise<PreviewManifest | null> {
     if (!this._previewService) {
-      this._previewService = await PreviewService.tryCreate();
+      this._previewService = await this._resolvePreviewService();
     }
     if (!this._previewService?.isAvailable) {
       webviewPanel.webview.html = getPreviewErrorHtml(

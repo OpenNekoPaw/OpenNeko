@@ -146,6 +146,7 @@ export type ModelPreviewDiagnosticCode =
   | 'context-invalid'
   | 'agent-unavailable'
   | 'agent-rejected'
+  | 'delivery-succeeded'
   | 'disposed';
 
 export interface ModelPreviewDiagnostic {

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   MODEL_PREVIEW_PROTOCOL_VERSION,
@@ -34,6 +35,7 @@ interface ModelPreviewSourceSessionPort extends vscode.Disposable {
 export interface ModelPreviewCaptureDeliveryInput {
   readonly source: ModelPreviewSourceDescriptor;
   readonly capture: ModelPreviewCaptureResult;
+  readonly workspaceRoot?: string;
 }
 
 export interface ModelPreviewProviderDependencies {
@@ -48,6 +50,7 @@ export interface ModelPreviewProviderDependencies {
   readonly openSourceSession?: (input: {
     readonly sessionId: string;
     readonly sourcePath: string;
+    readonly projectionRoot: string;
     readonly webview: vscode.Webview;
     readonly extensionUri: vscode.Uri;
     readonly authorization: LocalResourceAccessService;
@@ -64,6 +67,7 @@ interface ModelPreviewPanelState {
   readonly sourceSession: ModelPreviewSourceSessionPort;
   readonly abortController: AbortController;
   readonly disposables: vscode.Disposable[];
+  readonly workspaceRoot?: string;
   staging: ModelPreviewStagingState;
   pendingCaptureRequestId?: string;
   disposed: boolean;
@@ -76,6 +80,7 @@ export class ModelPreviewProvider
 
   private readonly panels = new Map<vscode.WebviewPanel, ModelPreviewPanelState>();
   private readonly contentAccess;
+  private readonly localResourceAccess: LocalResourceAccessService;
   private readonly createSessionId: () => string;
   private readonly loadPathPolicy: NonNullable<ModelPreviewProviderDependencies['loadPathPolicy']>;
   private readonly openSourceSession: NonNullable<
@@ -99,6 +104,7 @@ export class ModelPreviewProvider
     if (!this.contentAccess.localResourceAccess) {
       throw new Error('Model Preview requires LocalResourceAccessService.');
     }
+    this.localResourceAccess = this.contentAccess.localResourceAccess;
     this.createSessionId = dependencies.createSessionId ?? randomUUID;
     this.loadPathPolicy =
       dependencies.loadPathPolicy ??
@@ -160,9 +166,14 @@ export class ModelPreviewProvider
       const sourceSession = await this.openSourceSession({
         sessionId,
         sourcePath: document.uri.fsPath,
+        projectionRoot: path.join(
+          this.context.globalStorageUri.fsPath,
+          'model-preview-projections',
+          sessionId,
+        ),
         webview: panel.webview,
         extensionUri: this.extensionUri,
-        authorization: this.contentAccess.localResourceAccess,
+        authorization: this.localResourceAccess,
         authorizedRoots: policy.authorizedRoots,
         ...(workspaceRoot ? { workspaceRoot } : {}),
         pathResolver: policy.pathResolver,
@@ -187,6 +198,7 @@ export class ModelPreviewProvider
         sourceSession,
         abortController,
         staging,
+        ...(workspaceRoot ? { workspaceRoot } : {}),
         disposables: [cancellation, panelDisposal],
         disposed: false,
       };
@@ -200,6 +212,7 @@ export class ModelPreviewProvider
         webview: panel.webview,
         extensionUri: this.extensionUri,
         entry: 'model',
+        modelSessionId: sessionId,
       });
       if (stored !== undefined && !restored) {
         await this.postDiagnostic(state, {
@@ -296,6 +309,7 @@ export class ModelPreviewProvider
           await this.deliverCapture({
             source: state.sourceSession.descriptor,
             capture: message.capture,
+            ...(state.workspaceRoot ? { workspaceRoot: state.workspaceRoot } : {}),
           });
           await state.panel.webview.postMessage({
             type: 'model-preview/send-succeeded',
