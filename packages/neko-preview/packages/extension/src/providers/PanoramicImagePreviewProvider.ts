@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import type {
-  EnvironmentPlacement,
   PanoramaCoverageAngle,
   PanoramaViewState,
   PreviewManifest,
@@ -19,6 +18,7 @@ import {
   getPreviewFileName,
   setupPreviewWebviewPanel,
 } from './previewProviderHelper';
+import { requirePanoramicImageSourceFormat } from './panoramicSourceAuthorization';
 
 const logger = getLogger('PanoramicImagePreview');
 
@@ -148,13 +148,6 @@ export class PanoramicImagePreviewProvider implements vscode.CustomReadonlyEdito
             await this.requestVariant(webviewPanel, manifest.assetId, request);
             break;
           }
-          case 'panorama:sendToModel': {
-            const manifest = activeManifest ?? (await manifestPromise);
-            if (!manifest) return;
-            const viewState = parsePanoramaViewState(message.viewState);
-            await this.sendToModel(document.uri, manifest, viewState);
-            break;
-          }
         }
       },
     );
@@ -220,23 +213,6 @@ export class PanoramicImagePreviewProvider implements vscode.CustomReadonlyEdito
     }
   }
 
-  private async sendToModel(
-    uri: vscode.Uri,
-    manifest: PreviewManifest,
-    viewState: PanoramaViewState | null,
-  ): Promise<void> {
-    const placement: EnvironmentPlacement = {
-      sourceAssetId: manifest.assetId,
-      sourceUri: uri.toString(),
-      mode: 'background-and-ibl',
-      rotationDeg: 0,
-      intensity: 1,
-      exposure: viewState?.exposure ?? manifest.defaultViewState?.exposure ?? 0,
-      visibleAsBackground: true,
-    };
-    await vscode.commands.executeCommand('neko.model.useEnvironment', placement);
-  }
-
   dispose(): void {}
 
   private async registerManifest(
@@ -244,6 +220,16 @@ export class PanoramicImagePreviewProvider implements vscode.CustomReadonlyEdito
     webviewPanel: vscode.WebviewPanel,
     fileName: string,
   ): Promise<PreviewManifest | null> {
+    try {
+      requirePanoramicImageSourceFormat(filePath);
+    } catch (error) {
+      webviewPanel.webview.html = getPreviewErrorHtml(
+        error instanceof Error ? error.message : String(error),
+        'Panoramic Preview Error',
+      );
+      this._statusBar.hide();
+      return null;
+    }
     if (!this._previewService) {
       this._previewService = await this._resolvePreviewService();
     }

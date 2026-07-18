@@ -239,6 +239,33 @@ describe('PanoramicImagePreviewProvider', () => {
     expect(panel.webview.html).toContain('Panoramic Preview Error');
   });
 
+  it('rejects unsupported panoramic source formats before engine registration', async () => {
+    const service = {
+      isAvailable: true,
+      registerPreviewAsset: vi.fn(),
+    };
+    const provider = new PanoramicImagePreviewProvider(
+      vscode.Uri.file('/ext'),
+      createStatusBar() as never,
+    );
+    provider.setPreviewService(service as never);
+    const panel = createPanel();
+    await provider.resolveCustomEditor(
+      {
+        uri: vscode.Uri.file('/project/not-panorama.txt'),
+        dispose: vi.fn(),
+      } as vscode.CustomDocument,
+      panel as unknown as vscode.WebviewPanel,
+      {} as vscode.CancellationToken,
+    );
+    const readyHandler = (
+      panel as unknown as { messageHandler: (message: Record<string, unknown>) => Promise<void> }
+    ).messageHandler;
+    await readyHandler({ type: 'ready' });
+    expect(panel.webview.html).toContain('Unsupported panoramic image format');
+    expect(service.registerPreviewAsset).not.toHaveBeenCalled();
+  });
+
   it('persists heuristic projection confirmation through engine metadata', async () => {
     const manifest = createManifest();
     const updatedManifest: PreviewManifest = {
@@ -565,61 +592,6 @@ describe('PanoramicImagePreviewProvider', () => {
         toneMapping: 'aces',
       },
     });
-  });
-
-  it('sends EnvironmentPlacement to model without mapping preview yaw to rotation', async () => {
-    const manifest = createManifest();
-    const service = {
-      isAvailable: true,
-      getPreviewBaseUrl: vi.fn(() => 'http://127.0.0.1:3456'),
-      registerPreviewAsset: vi.fn().mockResolvedValue(manifest),
-      requestPreviewVariant: vi.fn(),
-      updatePreviewAssetMetadata: vi.fn(),
-      unregisterPreviewAsset: vi.fn().mockResolvedValue(undefined),
-    };
-    const provider = new PanoramicImagePreviewProvider(
-      vscode.Uri.file('/ext'),
-      createStatusBar() as never,
-    );
-    provider.setPreviewService(service as never);
-    const panel = createPanel();
-
-    await provider.resolveCustomEditor(
-      {
-        uri: vscode.Uri.file('/project/studio_360.jpg'),
-        dispose: vi.fn(),
-      } as vscode.CustomDocument,
-      panel as unknown as vscode.WebviewPanel,
-      {} as vscode.CancellationToken,
-    );
-    const handler = (
-      panel as unknown as {
-        messageHandler: (message: Record<string, unknown>) => Promise<void>;
-      }
-    ).messageHandler;
-    await handler({ type: 'ready' });
-    await handler({
-      type: 'panorama:sendToModel',
-      assetId: 'asset-1',
-      viewState: {
-        mode: 'sphere',
-        yawDeg: 135,
-        pitchDeg: 20,
-        rollDeg: 0,
-        fovDeg: 75,
-        exposure: 1,
-        toneMapping: 'aces',
-      },
-    });
-
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
-      'neko.model.useEnvironment',
-      expect.objectContaining({
-        sourceAssetId: 'asset-1',
-        rotationDeg: 0,
-        exposure: 1,
-      }),
-    );
   });
 
   it('uses the panoramic image Webview entry', async () => {

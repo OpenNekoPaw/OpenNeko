@@ -183,6 +183,54 @@ describe('3D Reference provider session boundary', () => {
     expect(signal.aborted).toBe(true);
   });
 
+  it('reuses the package panoramic authorization helper without nesting another provider', async () => {
+    const authorizePanoramicImageSource = vi.fn(async () => ({
+      sourceRef: resourceRef('panorama'),
+      fingerprint: 'panorama-fingerprint',
+      mediaType: 'image/png' as const,
+      sizeBytes: 1024,
+      webviewUri: 'webview:/workspace/scene_360.png',
+    }));
+    const provider = providerWith(extensionContext(), () => 'environment-session', {
+      authorizePanoramicImageSource,
+    });
+    const environmentPanel = panel();
+    await provider.resolveEnvironmentOnlyPanel(environmentPanel.value, token());
+    const result = await provider.authorizePanoramicEnvironment(
+      environmentPanel.value,
+      uri('/workspace/scene_360.png'),
+    );
+    expect(result.fingerprint).toBe('panorama-fingerprint');
+    expect(authorizePanoramicImageSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourcePath: '/workspace/scene_360.png',
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it('keeps a failed real panorama visible and never substitutes the bundled panorama grid', async () => {
+    const authorizePanoramicImageSource = vi.fn(async () => {
+      throw new Error('panorama authorization failed');
+    });
+    const provider = providerWith(extensionContext(), () => 'environment-session', {
+      authorizePanoramicImageSource,
+    });
+    const environmentPanel = panel();
+    await provider.resolveEnvironmentOnlyPanel(environmentPanel.value, token());
+    await expect(
+      provider.authorizePanoramicEnvironment(
+        environmentPanel.value,
+        uri('/workspace/broken_360.png'),
+      ),
+    ).rejects.toThrow('panorama authorization failed');
+    await ready(environmentPanel, 'environment-session');
+    expect(environmentPanel.messages.at(-1)).toMatchObject({
+      panelSubject: { kind: 'environment-only' },
+    });
+    expect(JSON.stringify(environmentPanel.messages)).not.toContain('guide-neutral-panorama-grid');
+  });
+
   it('does not fall back to a built-in preset when source loading fails', async () => {
     const context = extensionContext();
     const provider = providerWith(context, () => 'session-a', {

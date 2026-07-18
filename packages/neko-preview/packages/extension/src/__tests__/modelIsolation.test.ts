@@ -7,9 +7,7 @@ const productionFiles = [
   'ModelPreviewProvider.ts',
   'ModelPreviewSourceSession.ts',
   'modelFormatAdapters.ts',
-  'modelPreviewProtocol.ts',
   'modelSourceInspection.ts',
-  'modelStagingState.ts',
 ];
 
 describe('model preview canonical path isolation', () => {
@@ -19,6 +17,7 @@ describe('model preview canonical path isolation', () => {
       .join('\n');
     expect(source).not.toMatch(/EngineClient|PreviewService|neko\.model\.|neko\.scene\./);
     expect(source).not.toMatch(/vscode\.openWith|3D Viewer for VSCode|external viewer/i);
+    expect(source).not.toMatch(/Panoramic(Image|Video)PreviewProvider/);
     expect(source).not.toMatch(/providerId\s*:|modelId\s*:|generateVideo|mediaTask/i);
   });
 

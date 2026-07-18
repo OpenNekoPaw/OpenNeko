@@ -17,6 +17,10 @@ import {
 } from '@neko/shared/vscode/extension';
 import { getWebviewHtml } from '../../utils/html';
 import { getPreviewErrorHtml } from '../previewProviderHelper';
+import {
+  authorizePanoramicImageSource,
+  type AuthorizedPanoramicImageSource,
+} from '../panoramicSourceAuthorization';
 import { ModelPreviewSourceSession } from './ModelPreviewSourceSession';
 import { ModelSourceInspectionError } from './modelSourceInspection';
 import { parseThreeReferenceWebviewMessage } from './threeReferenceProtocol';
@@ -71,6 +75,7 @@ export interface ModelPreviewProviderDependencies {
     readonly signal: AbortSignal;
   }) => Promise<SourceSessionPort>;
   readonly onCaptureRequested?: (request: ThreeReferenceCaptureRequest) => Promise<void>;
+  readonly authorizePanoramicImageSource?: typeof authorizePanoramicImageSource;
 }
 
 interface PanelState {
@@ -103,6 +108,7 @@ export class ModelPreviewProvider
     ModelPreviewProviderDependencies['openSourceSession']
   >;
   private readonly onCaptureRequested?: ModelPreviewProviderDependencies['onCaptureRequested'];
+  private readonly authorizePanoramicImageSource: typeof authorizePanoramicImageSource;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -124,6 +130,8 @@ export class ModelPreviewProvider
     this.createSessionId = dependencies.createSessionId ?? randomUUID;
     this.presetCatalog = dependencies.presetCatalog ?? THREE_REFERENCE_PRESET_CATALOG;
     this.onCaptureRequested = dependencies.onCaptureRequested;
+    this.authorizePanoramicImageSource =
+      dependencies.authorizePanoramicImageSource ?? authorizePanoramicImageSource;
     this.loadPathPolicy =
       dependencies.loadPathPolicy ??
       (async ({ documentUri, workspaceRoot }) => {
@@ -186,6 +194,33 @@ export class ModelPreviewProvider
     token: vscode.CancellationToken,
   ): Promise<void> {
     await this.resolvePanel({ kind: 'environment-only' }, panel, token);
+  }
+
+  async authorizePanoramicEnvironment(
+    panel: vscode.WebviewPanel,
+    sourceUri: vscode.Uri,
+  ): Promise<AuthorizedPanoramicImageSource> {
+    const state = this.panels.get(panel);
+    if (!state || state.disposed) {
+      throw new Error('3D Reference panel is not live.');
+    }
+    const workspaceRoot =
+      vscode.workspace.getWorkspaceFolder(sourceUri)?.uri.fsPath ??
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const policy = await this.loadPathPolicy({
+      documentUri: sourceUri,
+      ...(workspaceRoot ? { workspaceRoot } : {}),
+    });
+    state.abortController.signal.throwIfAborted();
+    return this.authorizePanoramicImageSource({
+      sourcePath: sourceUri.fsPath,
+      webview: state.panel.webview,
+      authorization: this.localResourceAccess,
+      authorizedRoots: policy.authorizedRoots,
+      ...(workspaceRoot ? { workspaceRoot } : {}),
+      pathResolver: policy.pathResolver,
+      signal: state.abortController.signal,
+    });
   }
 
   dispose(): void {
