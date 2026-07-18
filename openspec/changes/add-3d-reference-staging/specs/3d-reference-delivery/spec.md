@@ -45,10 +45,22 @@ Agent/media capability negotiation SHALL validate the selected provider/model ag
 
 The Extension SHALL validate session identity, subject/environment fingerprints, revision, selected purposes, output dimensions, MIME, role eligibility, and resource consistency before materialization or delivery. Payloads MUST use stable `ResourceRef` identities and MUST NOT contain raw model binaries, absolute local paths, Webview URIs, blob URLs, Engine tokens, renderer objects, cache layout, or unauthorized source bytes.
 
+Rebuildable capture bytes SHALL be materialized inside the owning workspace resource cache before PreviewAsset registration. Preview extension-private global storage MUST NOT be used as a cross-extension capture source. If no owning workspace can be selected unambiguously, materialization MUST fail before any file write.
+
 #### Scenario: Reject stale mixed outputs
 
 - **WHEN** an output resource was captured from a different revision, preset version, source, environment, or camera than the current staging snapshot
 - **THEN** Preview rejects the entire delivery and retains the live staging for an explicit retry
+
+#### Scenario: Materialize a capture for Agent handoff
+
+- **WHEN** Preview captures a selected purpose in a workspace-owned 3D Reference session
+- **THEN** it writes the bounded PNG under that workspace's managed resource cache, registers the workspace-local file as a PreviewAsset, and sends only the stable `ResourceRef`
+
+#### Scenario: Reject capture without an owning workspace
+
+- **WHEN** a capture is requested without a workspace or in an ambiguous multi-root guide session
+- **THEN** Preview reports a visible materialization error before writing bytes instead of falling back to extension global storage
 
 ### Requirement: Preview does not choose a provider or submit generation
 

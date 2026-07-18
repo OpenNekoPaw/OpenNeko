@@ -51,6 +51,7 @@ Host: VS Code Extension Development Host on macOS, verified through the existing
 - External GLB resource load measured 170 ms in the supported host (cached transfer size is unavailable; decoded size was 33,859,320 bytes).
 - Closing the editor removed the Preview Webview CDP target within the first 500 ms poll. Provider/runtime unit tests additionally assert idempotent recursive disposal and simultaneous-panel isolation.
 - Console inspection reported no Preview runtime errors; the only message was VS Code's unrelated `local-network-access` feature warning.
+- Capturing appearance and camera outputs materialized two 140,949-byte PNGs under the external workspace's `.neko/.cache/resources/three-reference-captures/` directory. No new capture was written to Preview `globalStorageUri`, and the previous “File access path outside allowed roots” diagnostic did not recur. Delivery without an active Agent conversation remained correctly fail-visible and did not change the capture location.
 
 Manual screenshots were kept outside the repository at `/tmp/neko-3d-reference-test-glb-latest.png`, `/tmp/neko-3d-reference-test-glb-rotated.png`, and `/tmp/neko-3d-reference-builtin-guide.png`.
 
@@ -65,6 +66,12 @@ pnpm --dir packages/neko-preview build
 
 pnpm --dir packages/neko-preview compile:webview
 # production Vite build passed; model.js 908.18 kB / 242.46 kB gzip
+
+pnpm --dir packages/neko-preview exec vitest run packages/extension/src/providers/model/threeReferenceCaptureMaterialization.test.ts packages/extension/src/providers/model/ThreeReferenceOutputCollector.test.ts packages/extension/src/__tests__/extension.test.ts
+# 3 files, 25 tests passed
+
+pnpm --dir packages/neko-preview compile:extension
+# production Extension bundle passed; extension.js 693.3 kB
 ```
 
 Earlier focused contract/provider/runtime/UI/materialization groups passed 28 tests in 6 files, and the cumulative focused Preview groups passed 44 tests. Relevant ESLint and `git diff --check` checks passed at their implementation checkpoints.
@@ -78,3 +85,5 @@ Agent Evaluation disposition is `update` for `agent-runtime.creative-media-workf
 3. System ADR, architecture index, and package-boundary files already have unrelated edits. Task 8.2 remains open; only clean Preview-owned documentation was updated.
 4. Real-model appearance/camera acceptance is complete, but real-source panorama composition and final role-isolated Agent delivery are not; task 7.3 remains open.
 5. Full repository `pnpm build`, `pnpm test`, `pnpm check`, legacy-debt, unused, functional, and real Agent evaluation gates have not yet been accepted for this change. Task 7.5 and final verification task 8.3 remain open.
+6. The full Preview Vitest run passed 320 of 321 tests; the unrelated standard-format matrix test is blocked because its repository fixture `triangle.glb` is absent. The focused capture/collector/extension regression group passed completely.
+7. The Preview Extension `tsc --noEmit` command remains blocked by pre-existing DOM/WebCodecs library configuration errors in `neko-client` plus existing unrelated Preview strict-test errors; the production Extension bundle and focused regression tests pass.

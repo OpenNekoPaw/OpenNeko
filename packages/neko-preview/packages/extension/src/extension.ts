@@ -27,7 +27,10 @@ import {
 import { DocxPreviewProvider } from './providers/document/DocxPreviewProvider';
 import { ModelPreviewProvider } from './providers/model/ModelPreviewProvider';
 import { ThreeReferenceOutputCollector } from './providers/model/ThreeReferenceOutputCollector';
-import { materializeThreeReferenceCapture } from './providers/model/threeReferenceCaptureMaterialization';
+import {
+  materializeThreeReferenceCapture,
+  resolveThreeReferenceCaptureWorkspaceUri,
+} from './providers/model/threeReferenceCaptureMaterialization';
 import { registerOpenCommand } from './providers/document/documentProviderHelper';
 import { previewFileServer } from './providers/document/PreviewFileServer';
 import {
@@ -150,7 +153,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
     materializeCapture: (request) =>
       materializeThreeReferenceCapture({
         request,
-        storageUri: context.globalStorageUri,
+        workspaceUri: resolveThreeReferenceCaptureWorkspaceUri({
+          request,
+          workspaceFolders: vscode.workspace.workspaceFolders,
+          getWorkspaceFolder: (sourceUri) => vscode.workspace.getWorkspaceFolder(sourceUri),
+        }),
         resolvePreviewService: resolveSharedPreviewService,
       }),
     deliverContext: async (payload) => {

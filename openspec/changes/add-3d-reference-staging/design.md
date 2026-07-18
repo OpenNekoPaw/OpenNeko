@@ -161,6 +161,12 @@ Preview reuses the current shared floating toolbar, tree shell, property rows, a
 
 Preview constructs validated context but never chooses a provider or submits generation. Agent/Canvas map pose/depth outputs to existing `controlImage` fields, appearance to explicit reference fields, and camera/panorama to declared semantic controls. The media platform validates the selected provider/model before submission. Unsupported controls fail visibly; no prompt-only, ordinary-image, other-provider, or dropped-control fallback can report success.
 
+### Materialize captures inside the owning workspace
+
+Purpose capture PNGs are rebuildable resources and are written under the owning workspace's `.neko/.cache/resources/three-reference-captures/` directory before PreviewAsset registration. Source-model and panoramic sessions select the workspace that owns their authorized source; a single-root guide session uses that root. A session with no workspace, or a guide session whose multi-root workspace cannot be selected unambiguously, fails visibly before writing bytes.
+
+VS Code `globalStorageUri` is not a valid handoff location for these captures: it is private to Preview and is outside Agent's authorized workspace roots. The fix does not broaden local-file authorization or introduce a second cache manager; it places the rebuildable source in the existing workspace cache boundary and continues to hand consumers a stable `ResourceRef`.
+
 ## Risks / Trade-offs
 
 - [A shaded mannequin may still visually bias appearance] → ship an abstract untextured form, disable appearance in catalog and contract, generate skeleton/depth control passes, and never route its viewport RGB as appearance.

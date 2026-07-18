@@ -41,6 +41,7 @@
 ## 6. Replace Agent, Canvas, and media delivery
 
 - [x] 6.1 Materialize exact bounded purpose resources through the existing rebuildable resource boundary and build one validated `3d-reference` context containing only outputs selected for the live session revision.
+- [x] 6.1.1 Store capture sources in the owning workspace resource cache, reject missing/ambiguous workspace ownership before writes, and add a regression test proving Preview global storage is not used for Agent handoff.
 - [ ] 6.2 Update Agent context parsing, chips, prompt/evidence projection, reference tokens, and multimodal attachment handling so every output retains appearance/pose/camera/panorama role and guide restrictions.
 - [ ] 6.3 Update Canvas/Agent media projection to map pose/depth only to `controlImage` plus matching `controlMode`, appearance only to explicit ordinary/IP-Adapter references, and camera/panorama only to declared structured controls.
 - [ ] 6.4 Add capability negotiation and red/green tests proving unsupported provider/model controls fail before submission and cannot be dropped, converted to prompt-only success, rerouted to another provider, or attached as ordinary appearance.
