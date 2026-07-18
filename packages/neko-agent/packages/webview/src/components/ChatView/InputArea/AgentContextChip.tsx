@@ -27,14 +27,16 @@ export function AgentContextChip({
 }: AgentContextChipProps) {
   const projection = projectContextPayloadReferenceToken(payload);
   return (
-    <ReferenceToken
-      kind={projection.kind}
-      label={projection.label}
-      variant={variant}
-      title={projection.title}
-      meta={projection.meta}
-      onClick={onClick}
-      onRemove={onRemove ? () => onRemove(payload.id) : undefined}
-    />
+    <span data-agent-context-type={payload.type}>
+      <ReferenceToken
+        kind={projection.kind}
+        label={projection.label}
+        variant={variant}
+        title={projection.title}
+        meta={projection.meta}
+        onClick={onClick}
+        onRemove={onRemove ? () => onRemove(payload.id) : undefined}
+      />
+    </span>
   );
 }
