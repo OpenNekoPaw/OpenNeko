@@ -113,6 +113,44 @@ Each open model preview panel SHALL own an explicit session identity, source fin
 - **WHEN** the Extension or Webview receives a staging, capture, or send request with a missing, mismatched, disposed, or stale session identity
 - **THEN** the request fails with a protocol diagnostic and no other model preview session participates
 
+### Requirement: Scene hierarchy and inspector follow one contextual selection
+
+The model Webview SHALL project scene, camera preset, and model-node entries through one package-local hierarchy selection. The right inspector SHALL render only controls owned by the selected kind: scene facts/light/background/output for scene, preset name/position/target/field of view for camera, and temporary transform controls for a model node. Context selection MUST NOT create another shared DTO or alter source bytes.
+
+#### Scenario: Switch inspector context
+
+- **WHEN** the creator selects the scene, a camera preset, or a model node in the hierarchy
+- **THEN** the inspector changes to the matching scene, camera, or node panel without resetting the live orbit view
+
+#### Scenario: Select a source model node
+
+- **WHEN** the creator selects a model node and changes its temporary transform
+- **THEN** Preview updates the existing transform staging for that stable node path while duplicate, rename, and delete source operations remain unavailable
+
+### Requirement: Camera presets support explicit hierarchy operations
+
+Camera hierarchy rows SHALL expose accessible edit, duplicate, view-through, and remove operations. Duplicate and remove SHALL update only recoverable camera preset staging, preset identifiers SHALL remain unique, at least one camera SHALL always remain, and removing the active camera SHALL select a deterministic remaining preset. Merely selecting or editing a camera SHALL preserve the live orbit pose; only view-through-camera SHALL apply the preset pose.
+
+#### Scenario: Inspect and adjust a camera
+
+- **WHEN** the creator selects a camera and edits its name, position, target, or field of view
+- **THEN** Preview updates the camera preset and its temporary viewport helper while preserving the current orbit position, target, and distance
+
+#### Scenario: Duplicate and remove cameras
+
+- **WHEN** the creator duplicates a preset and later removes a removable preset
+- **THEN** Preview creates a uniquely identified copy, keeps selection deterministic, and refuses removal when it would leave no camera
+
+#### Scenario: View through a selected camera
+
+- **WHEN** the creator invokes the view-through action for a selected preset
+- **THEN** Preview explicitly applies that preset to the live camera and records it as the active staging camera
+
+#### Scenario: Capture while a camera helper is visible
+
+- **WHEN** a selected camera helper is visible and the creator captures the staged model view
+- **THEN** the helper is excluded from the capture and restored afterward as editor-only chrome
+
 ### Requirement: Model preview capture is bounded and deterministic
 
 The Webview SHALL capture the current authorized model projection as a bounded image with the active staging camera, lights, transforms, background, and output dimensions represented in the capture metadata. Capture MUST fail visibly when the renderer is unavailable, the panel identity is stale, the dimensions exceed the configured limit, or the canvas cannot produce an untainted image.

@@ -41,6 +41,8 @@
 - [x] 5.6 Add Webview tests for staging serialization, camera/light/transform behavior, accessibility, source-byte immutability, stale state, capture validation, and multiple independent panel roots.
 - [x] 5.7 Make canonical front framing the initial/reset pose and project camera presets differentially so non-camera inspector changes preserve the live orbit position, target, and distance; advance incompatible recoverable staging explicitly and add red/green regressions.
 - [x] 5.8 Add the bounds-scaled ground grid, live screen-space XYZ orientation indicator, and updated accessible bottom toolbar with panel-local guide toggles; verify the real external development GLB in the Extension Development Host.
+- [x] 5.9 Project one package-local scene/camera/node hierarchy selection, add accessible camera edit/duplicate/view/remove operations, and render/dispose a capture-excluded camera helper without changing source bytes or the shared staging shape.
+- [x] 5.10 Refactor the right inspector into contextual scene, camera, and node panels using existing `@neko/ui` property primitives; add regression coverage and verify switching/editing with the external development GLB without resetting the live orbit view.
 
 ## 6. Deliver canonical Model Preview context to Agent
 

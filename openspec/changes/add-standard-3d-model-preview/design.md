@@ -102,6 +102,12 @@ Camera pose projection is intent-based rather than a side effect of every stagin
 
 The model Webview owns two non-source viewport guides: a bounds-scaled ground grid positioned at the model's lowest Y bound, and a screen-space XYZ orientation indicator derived from the live camera orientation. They are renderer/UI aids only, remain outside shared staging and Agent context, default to visible, and are controlled from the package-local viewport toolbar. This avoids persisting editor chrome as model truth or adding another shared scene contract.
 
+The scene panel projects one package-local discriminated selection with exactly three kinds: scene, camera preset, or model node. This selection decides which inspector is rendered but is not persisted as project or source truth. Camera rows are projections of the existing staging camera presets and may be duplicated, selected for editing, explicitly viewed through, renamed, or removed while at least one preset remains. Model-node rows continue to reference stable loader-derived paths and cannot be duplicated, renamed, or deleted because the source stays read-only.
+
+Selecting a camera for editing MUST NOT move the live orbit camera. The Three runtime renders a temporary camera helper from the selected preset so its position, target, and field of view can be inspected from the current editor view. Only the explicit view-through-camera action applies that preset to the live orbit camera. The helper is package-local renderer chrome, is hidden from capture, and is disposed with the panel.
+
+The right inspector is contextual rather than cumulative: scene selection owns model facts, lighting, background, and capture output; camera selection owns the selected preset name, position, target, field of view, and explicit camera actions; model-node selection owns temporary transform staging. This keeps unrelated controls out of each editing context and avoids introducing a second property system by continuing to compose `@neko/ui` property primitives.
+
 ### Materialize captures as derived preview resources
 
 The Webview produces a bounded PNG from the current untainted canvas together with the exact staging identity and capture metadata. The Extension validates the live session, size, MIME, and revision, then materializes the PNG through the existing rebuildable preview/cache resource boundary and creates a stable preview-image `ResourceRef`.
