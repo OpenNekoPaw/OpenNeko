@@ -456,6 +456,36 @@ input {
   scrollbar-width: thin;
 }
 
+.model-preview__reference-controls {
+  display: grid;
+}
+
+.model-preview__guide-only {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 1px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--vscode-charts-yellow, #b89500) 34%, transparent);
+  border-radius: 8px;
+  color: var(--vscode-descriptionForeground);
+  background: color-mix(in srgb, var(--vscode-charts-yellow, #b89500) 9%, transparent);
+  font-size: 11px;
+}
+
+.model-preview__purpose-grid,
+.model-preview__capture-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.model-preview__purpose-grid button,
+.model-preview__capture-actions button {
+  min-width: 0;
+  justify-content: center;
+}
+
 .model-preview__inspector-section {
   gap: 9px !important;
   padding: 14px 1px 12px !important;

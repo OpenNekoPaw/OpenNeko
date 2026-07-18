@@ -30,6 +30,7 @@ import {
 import type { ModelPreviewNode } from '../threeRuntime';
 
 export interface ModelInspectorPanelProps {
+  readonly children?: React.ReactNode;
   readonly staging?: ModelPreviewStagingState;
   readonly facts?: NormalizedModelFacts;
   readonly nodes: readonly ModelPreviewNode[];
@@ -43,6 +44,7 @@ export interface ModelInspectorPanelProps {
 }
 
 export function ModelInspectorPanel({
+  children,
   diagnostic,
   disabled,
   facts,
@@ -95,6 +97,7 @@ export function ModelInspectorPanel({
         </p>
       ) : null}
       <div className="model-preview__inspector-content">
+        {children}
         {selection.kind === 'scene' ? (
           <SceneInspector
             disabled={disabled}

@@ -115,7 +115,12 @@ describe('ModelViewer', () => {
       'Read-only source',
     );
     expect(container.querySelectorAll('.model-preview__facts > div')).toHaveLength(4);
-    expect(container.querySelectorAll('.model-preview__inspector-section')).toHaveLength(2);
+    expect(
+      container.querySelectorAll(
+        '[data-testid="model-preview-scene-inspector"] .model-preview__inspector-section',
+      ),
+    ).toHaveLength(2);
+    expect(container.querySelector('[data-testid="3d-reference-controls"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="model-preview-scene-inspector"]')).not.toBeNull();
     const viewportToolbar = container.querySelector<HTMLElement>(
       '[data-testid="model-preview-viewport-toolbar"]',
@@ -237,6 +242,18 @@ describe('ModelViewer', () => {
     expect(runtime.load).not.toHaveBeenCalled();
     expect(runtime.loadPreset).toHaveBeenCalledWith(message.panelSubject);
     expect(runtime.applyReferencePose).toHaveBeenCalledWith(message.staging.pose);
+    expect(container.querySelector('[role="note"]')?.textContent).toContain(
+      'Guide only — not an appearance reference',
+    );
+    const appearancePurpose = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === 'Appearance',
+    );
+    const posePurpose = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === 'Pose',
+    );
+    expect(appearancePurpose?.disabled).toBe(true);
+    expect(posePurpose?.getAttribute('aria-pressed')).toBe('true');
+    expect(container.querySelector('[data-property-id="reference-pose-preset"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
       'dataset.viewerStatus',
       'ready',

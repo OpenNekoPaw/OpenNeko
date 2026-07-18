@@ -13,6 +13,8 @@ import {
   type NormalizedModelFacts,
   type ThreeReferenceExtensionMessage,
   type ThreeReferencePanelSubject,
+  type ThreeReferencePoseState,
+  type ThreeReferencePurpose,
   type ThreeReferenceStagingSnapshot,
 } from '@neko/shared';
 import { useTranslation } from '../i18n/I18nContext';
@@ -36,6 +38,7 @@ import type { ModelSceneSelection } from './modelSceneSelection';
 import { ModelInspectorPanel } from './components/ModelInspectorPanel';
 import { ModelScenePanel } from './components/ModelScenePanel';
 import { ModelOrientationGizmo } from './components/ModelOrientationGizmo';
+import { ThreeReferencePurposeControls } from './components/ThreeReferencePurposeControls';
 import {
   ModelViewportControls,
   type ModelTransformMode,
@@ -69,6 +72,9 @@ export function ModelViewer({
   const [axesVisible, setAxesVisible] = useState(true);
   const [viewState, setViewState] = useState<ModelViewState>(DEFAULT_MODEL_VIEW_STATE);
   const [sceneSelection, setSceneSelection] = useState<ModelSceneSelection>({ kind: 'scene' });
+  const [panelSubject, setPanelSubject] = useState<ThreeReferencePanelSubject>();
+  const [eligiblePurposes, setEligiblePurposes] = useState<readonly ThreeReferencePurpose[]>([]);
+  const [referenceStaging, setReferenceStaging] = useState<ThreeReferenceStagingSnapshot>();
   const sessionId = sessionIdOverride ?? document.body.dataset.modelSessionId;
   const vscode = useMemo(() => getVscodeApi(), []);
 
@@ -153,6 +159,9 @@ export function ModelViewer({
         setFacts,
         setNodes,
         setSceneSelection,
+        setPanelSubject,
+        setEligiblePurposes,
+        setReferenceStaging,
         setDiagnostic,
         stagingRef,
         referenceStagingRef,
@@ -177,7 +186,21 @@ export function ModelViewer({
     setStaging(next);
     const referenceStaging = referenceStagingRef.current;
     if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
-    referenceStagingRef.current = postState(vscode, next, referenceStaging);
+    const nextReferenceStaging = postState(vscode, next, referenceStaging);
+    referenceStagingRef.current = nextReferenceStaging;
+    setReferenceStaging(nextReferenceStaging);
+  };
+  const updateReferenceStaging = (
+    update: (current: ThreeReferenceStagingSnapshot) => ThreeReferenceStagingSnapshot,
+  ): void => {
+    const current = referenceStagingRef.current;
+    if (!current) throw new Error('3D Reference staging is unavailable.');
+    const candidate = update(current);
+    const next = { ...candidate, revision: current.revision + 1 };
+    referenceStagingRef.current = next;
+    setReferenceStaging(next);
+    vscode.setState({ threeReferenceStaging: next });
+    vscode.postMessage({ type: '3d-reference/staging-changed', staging: next });
   };
   const controlsDisabled = !staging || status !== 'ready';
   const duplicateCamera = (cameraId: string): void => {
@@ -316,7 +339,38 @@ export function ModelViewer({
         onRemoveCamera={removeCamera}
         onUpdateStaging={updateStaging}
         onViewCamera={viewCamera}
-      />
+      >
+        <ThreeReferencePurposeControls
+          disabled={controlsDisabled}
+          eligiblePurposes={eligiblePurposes}
+          panelSubject={panelSubject}
+          staging={referenceStaging}
+          onCapture={(purpose, poseControlMode) => {
+            const current = referenceStagingRef.current;
+            if (!current) throw new Error('3D Reference staging is unavailable.');
+            runtimeRef.current?.capturePurpose(
+              purpose,
+              staging?.capture ?? { width: 1024, height: 1024 },
+              {
+                poseControlMode,
+              },
+            );
+            vscode.postMessage({
+              type: '3d-reference/capture-requested',
+              requestId: crypto.randomUUID(),
+              identity: referenceIdentityOf(current),
+              purpose,
+            });
+          }}
+          onPoseChange={(pose: ThreeReferencePoseState) => {
+            runtimeRef.current?.applyReferencePose(pose);
+            updateReferenceStaging((current) => ({ ...current, pose }));
+          }}
+          onPurposeChange={(purposes) =>
+            updateReferenceStaging((current) => ({ ...current, selectedPurposes: purposes }))
+          }
+        />
+      </ModelInspectorPanel>
     </main>
   );
 }
@@ -331,6 +385,9 @@ async function handleExtensionMessage(input: {
   readonly setFacts: (facts: NormalizedModelFacts | undefined) => void;
   readonly setNodes: (nodes: readonly ModelPreviewNode[]) => void;
   readonly setSceneSelection: (selection: ModelSceneSelection) => void;
+  readonly setPanelSubject: (subject: ThreeReferencePanelSubject) => void;
+  readonly setEligiblePurposes: (purposes: readonly ThreeReferencePurpose[]) => void;
+  readonly setReferenceStaging: (staging: ThreeReferenceStagingSnapshot) => void;
   readonly setDiagnostic: (diagnostic: ModelPreviewDiagnostic | undefined) => void;
   readonly stagingRef: React.MutableRefObject<ModelPreviewStagingState | undefined>;
   readonly referenceStagingRef: React.MutableRefObject<ThreeReferenceStagingSnapshot | undefined>;
@@ -346,6 +403,9 @@ async function handleExtensionMessage(input: {
         input.setDiagnostic(undefined);
         input.setSceneSelection({ kind: 'scene' });
         input.referenceStagingRef.current = message.staging;
+        input.setPanelSubject(message.panelSubject);
+        input.setEligiblePurposes(message.eligiblePurposes);
+        input.setReferenceStaging(message.staging);
         const viewportStaging = toViewportStaging(message.staging);
         input.stagingRef.current = viewportStaging;
         input.setStaging(viewportStaging);
@@ -384,6 +444,7 @@ async function handleExtensionMessage(input: {
       case '3d-reference/environment-runtime': {
         if (message.identity.sessionId !== input.sessionId) return;
         input.referenceStagingRef.current = message.staging;
+        input.setReferenceStaging(message.staging);
         const viewportStaging = toViewportStaging(message.staging);
         input.stagingRef.current = viewportStaging;
         input.setStaging(viewportStaging);
