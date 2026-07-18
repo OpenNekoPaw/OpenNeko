@@ -64,7 +64,7 @@ const ENTRY_TITLES: Record<PreviewEntry, string> = {
   docx: 'DOCX Preview',
   'panorama-image': 'Panoramic Image Preview',
   'panorama-video': 'Panoramic Video Preview',
-  model: '3D Model Preview',
+  model: '3D Reference',
 };
 
 /** Loopback origin shared by the Node document host and Rust media Engine. */

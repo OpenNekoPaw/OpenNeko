@@ -72,7 +72,7 @@ describe('preview webview CSP', () => {
     expect(html).toContain('img-src https://webview.csp data: blob:;');
     expect(html).not.toContain('ws://127.0.0.1');
     expect(html).not.toContain('http://127.0.0.1');
-    expect(html).toContain('<title>3D Model Preview</title>');
+    expect(html).toContain('<title>3D Reference</title>');
     expect(html).toContain('data-model-session-id="session-1"');
   });
 
