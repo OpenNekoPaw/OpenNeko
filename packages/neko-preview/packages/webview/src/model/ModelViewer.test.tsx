@@ -3,7 +3,11 @@
 import { act } from 'react';
 import ReactDOM from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createResourceFingerprint, createResourceRef } from '@neko/shared';
+import {
+  createResourceFingerprint,
+  createResourceRef,
+  MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
+} from '@neko/shared';
 import { installMockWebviewWindow } from '@neko/shared/vscode/test-utils';
 import { I18nProvider } from '../i18n/I18nContext';
 import { i18nService } from '../i18n';
@@ -39,7 +43,20 @@ describe('ModelViewer', () => {
   it('loads, stages, captures, and disposes through a fakeable panel-owned runtime', async () => {
     const mockWindow = installMockWebviewWindow();
     const runtime = fakeRuntime();
-    const factory: ThreeModelRuntimeFactory = { create: vi.fn(() => runtime.value) };
+    const factory: ThreeModelRuntimeFactory = {
+      create: vi.fn((_canvas, callbacks) => {
+        callbacks?.onViewChanged?.({
+          orientation: {
+            x: { x: 0, y: 0, depth: 1 },
+            y: { x: 0, y: -1, depth: 0 },
+            z: { x: 1, y: 0, depth: 0 },
+          },
+          distance: 7,
+          target: { x: 1, y: 2, z: 3 },
+        });
+        return runtime.value;
+      }),
+    };
     const container = document.createElement('div');
     document.body.append(container);
     const root = ReactDOM.createRoot(container);
@@ -72,6 +89,8 @@ describe('ModelViewer', () => {
         activeCameraId: 'camera-default',
         keyLightIntensity: '3',
         deliveryStatus: 'idle',
+        viewDistance: '7',
+        viewTarget: '1,2,3',
       }),
     });
     expect(
@@ -88,6 +107,29 @@ describe('ModelViewer', () => {
     expect(
       container.querySelector('[data-testid="model-preview-viewport-toolbar"]'),
     ).not.toBeNull();
+    expect(container.querySelector('[data-testid="model-preview-orientation"]')).not.toBeNull();
+    const resetView = container.querySelector<HTMLButtonElement>('button[aria-label="Reset view"]');
+    await act(async () => resetView?.click());
+    expect(runtime.frameModel).toHaveBeenCalledOnce();
+
+    const gridToggle = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Hide ground grid"]',
+    );
+    expect(gridToggle?.getAttribute('aria-pressed')).toBe('true');
+    await act(async () => gridToggle?.click());
+    expect(runtime.setGroundGridVisible).toHaveBeenCalledWith(false);
+    expect(container.querySelector('button[aria-label="Show ground grid"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
+      'dataset.stagingRevision',
+      '0',
+    );
+
+    const axesToggle = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Hide XYZ axes"]',
+    );
+    await act(async () => axesToggle?.click());
+    expect(container.querySelector('[data-testid="model-preview-orientation"]')).toBeNull();
+    expect(container.querySelector('button[aria-label="Show XYZ axes"]')).not.toBeNull();
     expect(
       container.querySelector('aside[aria-label="Temporary model staging controls"]'),
     ).not.toBeNull();
@@ -272,6 +314,8 @@ function fakeRuntime() {
   const applyStaging = vi.fn();
   const capture = vi.fn(() => 'data:image/png;base64,AA==');
   const dispose = vi.fn();
+  const frameModel = vi.fn();
+  const setGroundGridVisible = vi.fn();
   const value: ThreeModelRuntimePort = {
     load,
     applyStaging,
@@ -299,12 +343,13 @@ function fakeRuntime() {
     ],
     setTransformMode: vi.fn(),
     setTransformEnabled: vi.fn(),
-    frameModel: vi.fn(),
+    setGroundGridVisible,
+    frameModel,
     resize: vi.fn(),
     capture,
     dispose,
   };
-  return { value, load, applyStaging, capture, dispose };
+  return { value, load, applyStaging, capture, dispose, frameModel, setGroundGridVisible };
 }
 
 function loadMessage() {
@@ -326,7 +371,7 @@ function loadMessage() {
       sizeBytes: 12,
     },
     staging: {
-      schemaVersion: 2 as const,
+      schemaVersion: MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
       sessionId: 'session-1',
       sourceFingerprint: 'fingerprint-1',
       revision: 0,

@@ -3,6 +3,7 @@ import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
   createResourceFingerprint,
   createResourceRef,
+  MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
   type AgentContextPayload,
 } from '@neko/shared';
 import {
@@ -1859,7 +1860,7 @@ function modelPreviewContext(): AgentContextPayload {
         animationCount: 0,
       },
       staging: {
-        schemaVersion: 2,
+        schemaVersion: MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
         sessionId: 'session-model',
         sourceFingerprint: 'model-fingerprint',
         revision: 2,

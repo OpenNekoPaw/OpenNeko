@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ModelPreviewStagingState } from '@neko/shared';
+import { MODEL_PREVIEW_STAGING_SCHEMA_VERSION, type ModelPreviewStagingState } from '@neko/shared';
 import {
   patchModelTransform,
   selectModelCamera,
@@ -44,7 +44,7 @@ describe('model staging store', () => {
 
 function initialState(): ModelPreviewStagingState {
   return {
-    schemaVersion: 2,
+    schemaVersion: MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
     sessionId: 'session-1',
     sourceFingerprint: 'fingerprint-1',
     revision: 0,

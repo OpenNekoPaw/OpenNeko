@@ -8,9 +8,12 @@ import {
   createGeometryMaterial,
   createRenderScheduler,
   disposeObjectTree,
+  getModelGroundGridLayout,
   getModelPixelRatio,
   getOrbitDistanceBounds,
   promoteOpaqueBlendMaterials,
+  projectModelViewOrientation,
+  shouldApplyModelCameraPose,
 } from './threeRuntime';
 
 describe('Three model runtime helpers', () => {
@@ -133,6 +136,28 @@ describe('Three model runtime helpers', () => {
 
   it('keeps orbit navigation outside model bounds', () => {
     expect(getOrbitDistanceBounds(4)).toEqual({ minDistance: 4.2, maxDistance: 80 });
+  });
+
+  it('applies camera pose only for initial projection or an explicit preset change', () => {
+    expect(shouldApplyModelCameraPose(undefined, 'camera-front')).toBe(true);
+    expect(shouldApplyModelCameraPose('camera-front', 'camera-front')).toBe(false);
+    expect(shouldApplyModelCameraPose('camera-front', 'camera-default')).toBe(true);
+  });
+
+  it('anchors a bounds-scaled ground grid below the model', () => {
+    const bounds = new THREE.Box3(new THREE.Vector3(-2, -3, -1), new THREE.Vector3(2, 5, 1));
+    expect(getModelGroundGridLayout(bounds)).toEqual({
+      size: 12,
+      divisions: 24,
+      y: -3.016,
+    });
+  });
+
+  it('projects world XYZ axes into screen-space orientation', () => {
+    const orientation = projectModelViewOrientation(new THREE.Quaternion());
+    expect(orientation.x).toEqual({ x: 1, y: -0, depth: 0 });
+    expect(orientation.y).toEqual({ x: 0, y: -1, depth: 0 });
+    expect(orientation.z).toEqual({ x: 0, y: -0, depth: 1 });
   });
 
   it('promotes fully opaque blend materials without changing real alpha layers', async () => {

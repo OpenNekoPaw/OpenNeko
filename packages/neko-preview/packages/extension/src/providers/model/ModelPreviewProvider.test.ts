@@ -34,12 +34,17 @@ describe('ModelPreviewProvider', () => {
   it('uses the light neutral canvas for new model sessions', () => {
     const staging = createDefaultModelStagingState('session-a', 'fingerprint:a.glb');
     expect(staging).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: MODEL_PREVIEW_STAGING_SCHEMA_VERSION,
       background: '#f5f6f8',
+      activeCameraId: 'camera-front',
       revision: 0,
     });
+    expect(staging.cameraPresets.find((camera) => camera.id === 'camera-front')).toMatchObject({
+      position: { x: 0 },
+      target: { x: 0 },
+    });
     expect(
-      restoreModelStagingState({ ...staging, schemaVersion: 1 }, 'session-a', 'fingerprint:a.glb'),
+      restoreModelStagingState({ ...staging, schemaVersion: 2 }, 'session-a', 'fingerprint:a.glb'),
     ).toBeUndefined();
   });
 
