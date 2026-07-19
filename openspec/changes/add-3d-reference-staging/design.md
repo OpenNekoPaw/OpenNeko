@@ -159,6 +159,10 @@ Initial pose authoring is preset selection plus constrained joint rotations and 
 
 Preview reuses the current shared floating toolbar, tree shell, property rows, axis controls, sliders, segmented controls, badges, empty states, focus/keyboard boundaries, theme tokens, i18n runtime, and 24×24 SVG icon family. Generic viewport actions belong to `@neko/ui/icons`; Preview and Canvas consume that neutral entrypoint instead of mixing Codicon font glyphs with package-local SVG artwork. 3D-reference source/purpose/preset/pose panels stay package-local typed components; they do not create a generic UI schema or copy a design system.
 
+### Expose the fixed three-point directional rig as temporary editor helpers
+
+The existing key, fill, and rim entries remain the only initial light rig. They are `DirectionalLight` controls, not physical point lights: each stored position is normalized to the subject bounds and defines a direction toward the subject center, so distance does not attenuate intensity. Preview exposes them as a Lights group in the scene tree, a selected-light inspector, and bounded viewport helpers composed from Three.js editor geometry. The selected helper reuses the runtime's translate transform control; moving it updates the existing light position contract and panel revision. Helpers, guide lines, and transform gizmos are editor chrome and are hidden from every purpose capture. Initial scope does not add/remove lights, edit targets, enable shadows, persist a scene, or introduce point/spot/area light types.
+
 ### Preserve downstream capability negotiation
 
 Preview constructs validated context but never chooses a provider or submits generation. Agent/Canvas map pose/depth outputs to existing `controlImage` fields, appearance to explicit reference fields, and camera/panorama to declared semantic controls. The media platform validates the selected provider/model before submission. Unsupported controls fail visibly; no prompt-only, ordinary-image, other-provider, or dropped-control fallback can report success.

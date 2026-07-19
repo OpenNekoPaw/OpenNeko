@@ -34,6 +34,7 @@
 - [x] 5.1 Rename the user-facing surface to 3D Reference/3D 参考 while retaining source-read-only and temporary-staging messaging; update Chinese and English localization together.
 - [x] 5.2 Add package-local typed source/preset/environment composition using existing tree, panel, property, segmented-control, badge, empty-state, floating-toolbar, focus, keyboard, theme, and i18n primitives; do not add a package-local design system or generic property adapter.
 - [x] 5.7 Align Preview viewport actions with the shared Canvas SVG icon family, including consistent 24×24 geometry, 18px display size, stroke weight, and active-state color behavior.
+- [ ] 5.8 Expose the fixed key/fill/rim directional rig through selectable scene-tree entries, a light-specific inspector, normalized viewport helpers, translate interaction, capture exclusion, accessibility/i18n, and focused runtime/UI tests without adding persistent or physical point-light authoring.
 - [x] 5.3 Add visible independent appearance, pose, camera, and panoramic-scene purpose controls with capability-derived availability and a persistent “guide only, not appearance reference” label for restricted presets.
 - [x] 5.4 Add pose preset and constrained joint controls for supported subjects, explicit unsupported states for static/non-articulated models, and no animation timeline, IK, retargeting, or source writeback.
 - [x] 5.5 Add camera, shot/aspect, panorama orientation, environment, capture, and output-preview controls without resetting the live orbit view during unrelated edits.

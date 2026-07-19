@@ -51,6 +51,20 @@ Preview SHALL keep camera identity, position, target, field of view, aspect rati
 - **WHEN** the creator adjusts the camera in a mannequin guide session
 - **THEN** Preview advances the camera staging revision without enabling appearance reference or changing the mannequin's role restrictions
 
+### Requirement: The temporary light rig exposes spatial directional-light controls
+
+Preview SHALL expose its fixed key, fill, and rim directional lights as selectable temporary scene entries. A selected light SHALL have a visible viewport helper and inspector controls for color, intensity, and normalized position/direction toward the subject center. Light helpers and transform gizmos are editor chrome and MUST NOT appear in appearance, pose, camera, or panoramic-scene outputs. The initial capability MUST NOT add durable scene lights or reinterpret these controls as attenuating point lights.
+
+#### Scenario: Reposition the key light
+
+- **WHEN** the creator selects the key light and moves its viewport helper
+- **THEN** Preview updates only that panel's normalized key-light position and revision while preserving the active camera, subject transform, other lights, and source bytes
+
+#### Scenario: Capture with light helpers visible
+
+- **WHEN** a light helper is visible in the interactive viewport and the creator captures any reference purpose
+- **THEN** Preview excludes every light helper, guide line, label, and transform gizmo from the output
+
 ### Requirement: Panoramic scene reference reuses authorized Preview content boundaries
 
 Preview SHALL accept an authorized 720°/equirectangular panoramic image or supported panoramic video as a temporary environment, preserve its stable source reference and orientation, and project it into the Three.js reference viewport through an Extension-authorized URI. The Webview MUST NOT read arbitrary local paths, probe companion directories, or persist Webview URIs.
