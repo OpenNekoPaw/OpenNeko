@@ -31,6 +31,7 @@ function getSupportedTargets() {
 /**
  * @param {string} targetKey
  * @returns {null | {
+ *   rustTarget: string;
  *   nodeFile: string;
  *   ffmpeg: { source: 'homebrew'; brewPrefix: string } | { source: 'btbn'; archive: string };
  * }}
@@ -65,10 +66,25 @@ function getTargetConfig(targetKey) {
     : null;
 
   return {
+    rustTarget: target.rustTarget,
     nodeFile: target.nodeFile,
     ffmpeg,
     ffmpegDev,
   };
+}
+
+/**
+ * @param {string} rustTarget
+ * @returns {string | null}
+ */
+function getTargetByRustTriple(rustTarget) {
+  for (const targetKey of getSupportedTargets()) {
+    if (rawConfig.targets[targetKey].rustTarget === rustTarget) {
+      return targetKey;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -85,9 +101,6 @@ function getFfmpegLibs() {
   return [...rawConfig.ffmpegLibs];
 }
 
-/**
- * @returns {string}
- */
 /**
  * @param {string} targetKey
  * @returns {string}
@@ -111,6 +124,7 @@ module.exports = {
   getCurrentPlatformKey,
   getFfmpegLibs,
   getSupportedTargets,
+  getTargetByRustTriple,
   getTargetConfig,
   resolveNodeBinaryPath,
 };

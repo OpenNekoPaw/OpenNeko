@@ -42,7 +42,7 @@ Default jobs:
   build, test-ts, code-quality, cargo-deny
 
 Notes:
-  - This intentionally excludes test-rust because CI runs it on macos-latest.
+  - This intentionally excludes test-rust because CI runs it on macos-15 (Apple Silicon).
     Use `pnpm ci:local:rust` for Rust checks and GitHub Actions for the final
     macOS runner signal.
   - The default prepared image caches Linux FFmpeg and native build packages.
@@ -94,7 +94,7 @@ list_jobs() {
   printf '  %s\n' "${DEFAULT_JOBS[@]}"
   echo ""
   echo "Excluded by design:"
-  echo "  test-rust       macos-latest; use pnpm ci:local:rust locally"
+  echo "  test-rust       macos-15 (Apple Silicon); use pnpm ci:local:rust locally"
   echo "  dependency-review, package-*  PR/release-only GitHub runner checks"
 }
 

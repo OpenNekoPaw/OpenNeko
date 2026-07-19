@@ -12,6 +12,7 @@
   ],
   "targets": {
     "darwin-arm64": {
+      "rustTarget": "aarch64-apple-darwin",
       "nodeFile": "neko-engine.darwin-arm64.node",
       "ffmpeg": {
         "source": "homebrew",
@@ -22,18 +23,8 @@
         "brewPrefix": "/opt/homebrew/opt/ffmpeg"
       }
     },
-    "darwin-x64": {
-      "nodeFile": "neko-engine.darwin-x64.node",
-      "ffmpeg": {
-        "source": "homebrew",
-        "brewPrefix": "/usr/local/opt/ffmpeg"
-      },
-      "ffmpegDev": {
-        "source": "homebrew",
-        "brewPrefix": "/usr/local/opt/ffmpeg"
-      }
-    },
     "linux-x64": {
+      "rustTarget": "x86_64-unknown-linux-gnu",
       "nodeFile": "neko-engine.linux-x64-gnu.node",
       "ffmpeg": {
         "source": "btbn",
@@ -45,6 +36,7 @@
       }
     },
     "win32-x64": {
+      "rustTarget": "x86_64-pc-windows-msvc",
       "nodeFile": "neko-engine.win32-x64-msvc.node",
       "ffmpeg": {
         "source": "btbn",

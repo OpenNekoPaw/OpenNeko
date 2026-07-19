@@ -432,7 +432,7 @@ describe('AssetManifest v4 contract', () => {
             networkHosts: ['api.example.com'],
             engineRequirements: {
               minVersion: '1.0',
-              targetTriple: 'x86_64-apple-darwin',
+              targetTriple: 'aarch64-apple-darwin',
               runtimeArtifacts: ['cdylib'],
             },
           },

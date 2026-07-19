@@ -108,7 +108,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -176,7 +176,7 @@ jobs:
   # ── Rust: Format, Lint & Test ──────────────
   test-rust:
     name: Rust Tests
-    runs-on: macos-latest
+    runs-on: macos-15
     needs: changes
     if: needs.changes.outputs.rust == 'true' || github.event_name == 'push'
     steps:
@@ -438,12 +438,8 @@ jobs:
       matrix:
         include:
           - target: darwin-arm64
-            os: macos-14
+            os: macos-15
             rust-target: aarch64-apple-darwin
-            ffmpeg-install: brew install ffmpeg pkg-config
-          - target: darwin-x64
-            os: macos-13
-            rust-target: x86_64-apple-darwin
             ffmpeg-install: brew install ffmpeg pkg-config
           - target: linux-x64
             os: ubuntu-latest

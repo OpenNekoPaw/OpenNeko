@@ -48,7 +48,8 @@ vendor/**
 
 # Sub-packages — exclude all, then re-include runtime files
 packages/**
-!packages/host-napi/index.js
+!packages/host-napi/loader.js
+!packages/host-napi/native-binding-loader.js
 !packages/host-napi/index.d.ts
 !packages/host-napi/neko-engine.*.node
 

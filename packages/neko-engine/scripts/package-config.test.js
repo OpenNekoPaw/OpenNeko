@@ -8,16 +8,28 @@ const path = require('path');
 const {
   NAPI_DIR,
   getSupportedTargets,
+  getTargetByRustTriple,
   getTargetConfig,
   resolveNodeBinaryPath,
 } = require('./package-config');
+const { setupPlatform } = require('./download-ffmpeg');
 
 const ENGINE_ROOT = path.resolve(__dirname, '..');
 
 test('package config resolves supported media engine targets', () => {
-  assert.deepEqual(getSupportedTargets(), ['darwin-arm64', 'darwin-x64', 'linux-x64', 'win32-x64']);
+  assert.deepEqual(getSupportedTargets(), ['darwin-arm64', 'linux-x64', 'win32-x64']);
   assert.equal(getTargetConfig('darwin-arm64')?.ffmpeg.source, 'homebrew');
   assert.equal(getTargetConfig('linux-x64')?.ffmpeg.source, 'btbn');
+  assert.equal(getTargetConfig('darwin-x64'), null);
+  assert.equal(getTargetByRustTriple('aarch64-apple-darwin'), 'darwin-arm64');
+  assert.equal(getTargetByRustTriple('x86_64-apple-darwin'), null);
+});
+
+test('FFmpeg setup rejects unsupported platforms instead of skipping them', () => {
+  assert.throws(
+    () => setupPlatform('linux-arm64', { force: false }),
+    /No ffmpegDev config for platform "linux-arm64"/u,
+  );
 });
 
 test('package config resolves host-napi binary paths from the shared target map', () => {

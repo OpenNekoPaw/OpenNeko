@@ -249,8 +249,9 @@ function main() {
   const platformKey = args.explicitPlatform ?? getCurrentPlatformKey();
 
   if (!getTargetConfig(platformKey)) {
-    console.warn(`Warning: no config for platform "${platformKey}". Skipping.`);
-    return;
+    throw new Error(
+      `Unsupported platform "${platformKey}". Valid platforms: ${getSupportedTargets().join(', ')}`,
+    );
   }
 
   console.log(`Setting up FFmpeg ${config.ffmpegVersion} dev libraries for: ${platformKey}`);

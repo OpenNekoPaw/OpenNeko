@@ -36,6 +36,16 @@ OpenNeko is currently in **Alpha** and is primarily intended for source-based pr
 
 Requires Node.js 24+, pnpm 10, and VS Code 1.128+; the repository development toolchain is pinned to Node.js 24.18.0 LTS.
 
+Supported release platforms are limited to:
+
+| System  | Architecture | Release target   |
+| ------- | ------------ | ---------------- |
+| macOS   | ARM64        | `darwin-arm64`   |
+| Linux   | x64          | `linux-x64`      |
+| Windows | x64          | `win32-x64`      |
+
+Intel Macs, Linux ARM64/musl, Windows ARM64, and other systems or architectures do not receive release packages.
+
 ```bash
 pnpm install
 pnpm build

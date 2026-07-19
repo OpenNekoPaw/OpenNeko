@@ -2,7 +2,7 @@
 #
 # Jobs:
 #   1. release-ts:     Build + test + package TS-only extensions (ubuntu)
-#   2. release-engine: Build neko-engine per platform (4x matrix)
+#   2. release-engine: Build neko-engine per platform (3x matrix)
 #   3. create-release: Collect all VSIX and create GitHub Release
 #
 # Usage:
@@ -90,12 +90,8 @@ jobs:
       matrix:
         include:
           - target: darwin-arm64
-            os: macos-14
+            os: macos-15
             rust-target: aarch64-apple-darwin
-            ffmpeg-install: brew install ffmpeg pkg-config
-          - target: darwin-x64
-            os: macos-13
-            rust-target: x86_64-apple-darwin
             ffmpeg-install: brew install ffmpeg pkg-config
           - target: linux-x64
             os: ubuntu-latest

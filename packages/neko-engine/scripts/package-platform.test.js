@@ -33,6 +33,10 @@ test('package-platform parses target from either positional or named flag', () =
   });
 });
 
+test('packageTarget rejects unsupported targets before accessing packaging state', () => {
+  assert.throws(() => packageTarget('darwin-x64'), /Unknown target "darwin-x64"/u);
+});
+
 test('ensureNativeBinary auto-builds the host target when the native artifact is missing', () => {
   const nativeBinaryPath = resolveNodeBinaryPath('darwin-arm64');
   const existingFiles = new Set();

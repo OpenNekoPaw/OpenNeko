@@ -36,6 +36,16 @@ OpenNeko 目前处于 **Alpha** 阶段，以源码体验和产品验证为主。
 
 要求 Node.js 24+、pnpm 10 和 VS Code 1.128+；仓库开发工具链固定为 Node.js 24.18.0 LTS。
 
+支持的平台仅限：
+
+| 系统    | 架构  | 发布目标       |
+| ------- | ----- | -------------- |
+| macOS   | ARM64 | `darwin-arm64` |
+| Linux   | x64   | `linux-x64`    |
+| Windows | x64   | `win32-x64`    |
+
+Intel Mac、Linux ARM64/musl、Windows ARM64 及其他系统/架构不提供发布包。
+
 ```bash
 pnpm install
 pnpm build

@@ -59,6 +59,9 @@ cargo test --workspace
 ```bash
 pnpm package:platform -- --target darwin-arm64
 pnpm package:platform -- --target linux-x64 --skip-native-build
+pnpm package:platform -- --target win32-x64 --skip-native-build
 ```
+
+发布平台仅限 macOS Apple Silicon、Linux x64 和 Windows x64。Intel macOS 和其他系统/架构不会生成兼容包，运行时会返回明确的不支持平台诊断。
 
 非当前主机平台需要预先准备目标平台的 `.node` 文件；当前主机缺少绑定时，打包脚本会调用 `host-napi` 的 native build。

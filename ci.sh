@@ -2,7 +2,7 @@
 
 # OpenNeko Local CI Script
 # Mirrors .github/workflows/ci.yml checks for local pre-push verification.
-# Supports Linux, macOS, and Windows (Git Bash / WSL).
+# Supports macOS ARM64, Linux x64, and Windows x64 (Git Bash / WSL).
 #
 # Usage:
 #   ./ci.sh                Full check (TS + Rust)
@@ -38,17 +38,27 @@ detect_vscode_target() {
     Darwin)
       case "$arch" in
         arm64)  echo "darwin-arm64" ;;
-        x86_64) echo "darwin-x64" ;;
+        *) return 1 ;;
       esac ;;
     Linux)
-      echo "linux-x64" ;;
+      case "$arch" in
+        x86_64|amd64) echo "linux-x64" ;;
+        *) return 1 ;;
+      esac ;;
     MINGW*|MSYS*|CYGWIN*)
-      echo "win32-x64" ;;
+      case "$arch" in
+        x86_64|amd64) echo "win32-x64" ;;
+        *) return 1 ;;
+      esac ;;
+    *) return 1 ;;
   esac
 }
 
 PLATFORM="$(detect_platform)"
-VSCODE_TARGET="$(detect_vscode_target)"
+if ! VSCODE_TARGET="$(detect_vscode_target)"; then
+  echo "Unsupported host: $(uname -s)-$(uname -m). Supported targets: darwin-arm64, linux-x64, win32-x64." >&2
+  exit 1
+fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENGINE_DIR="$SCRIPT_DIR/packages/neko-engine"
 
@@ -294,7 +304,7 @@ release_engine() {
   echo ""
   echo "  Cross-platform note:"
   echo "    Local build targets: $VSCODE_TARGET (current host)"
-  echo "    Full matrix (darwin-arm64, darwin-x64, linux-x64, win32-x64)"
+  echo "    Full matrix (darwin-arm64, linux-x64, win32-x64)"
   echo "    is built by GitHub Actions on push to main or tag push."
   echo ""
 
