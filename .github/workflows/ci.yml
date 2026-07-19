@@ -448,7 +448,7 @@ jobs:
           - target: win32-x64
             os: windows-latest
             rust-target: x86_64-pc-windows-msvc
-            ffmpeg-install: choco install ffmpeg-shared
+            ffmpeg-install: node packages/neko-engine/scripts/download-ffmpeg.js --platform win32-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -472,6 +472,7 @@ jobs:
 
       - name: Install FFmpeg
         run: ${{ matrix.ffmpeg-install }}
+        shell: bash
 
       - run: pnpm install --frozen-lockfile
 

@@ -65,3 +65,9 @@ pnpm package:platform -- --target win32-x64 --skip-native-build
 发布平台仅限 macOS Apple Silicon、Linux x64 和 Windows x64。Intel macOS 和其他系统/架构不会生成兼容包，运行时会返回明确的不支持平台诊断。
 
 非当前主机平台需要预先准备目标平台的 `.node` 文件；当前主机缺少绑定时，打包脚本会调用 `host-napi` 的 native build。
+
+## FFmpeg 构建产物
+
+Linux 与 Windows 的 FFmpeg development/runtime 归档由 `scripts/package-config.json` 统一声明。每个 BtbN 归档必须固定不可变 release tag、精确文件名和 SHA256；`setup:ffmpeg` 与平台打包会在解压前校验，不允许 `latest`、跳过校验或回退到其他安装器。
+
+升级 FFmpeg 时，应从同一个 BtbN release 的 `checksums.sha256` 获取摘要，并在一次变更中同时更新 `ffmpegVersion`、`btbnTag`、所有受影响的 `archive` 与 `sha256`。CI 和 Release workflow 只调用 package-owned setup，不保存供应商 URL、版本或摘要副本。

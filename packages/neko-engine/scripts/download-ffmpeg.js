@@ -24,6 +24,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+const { assertFileSha256 } = require('./ffmpeg-artifact');
+
 const {
   BTBN_BASE_URL,
   DEPS_DIR,
@@ -51,7 +53,9 @@ function isAlreadyPresent() {
 
   const libEntries = fs.readdirSync(libDir);
   return libEntries.some(
-    (entry) => entry.includes('avutil') && (entry.endsWith('.dylib') || entry.includes('.so') || entry.endsWith('.lib')),
+    (entry) =>
+      entry.includes('avutil') &&
+      (entry.endsWith('.dylib') || entry.includes('.so') || entry.endsWith('.lib')),
   );
 }
 
@@ -122,9 +126,10 @@ function setupFromHomebrew(brewPrefix) {
 
 /**
  * Download and extract FFmpeg shared build from BtbN.
- * @param {string} archive - Archive filename
+ * @param {{ archive: string; sha256: string }} artifact
  */
-function setupFromBtbn(archive) {
+function setupFromBtbn(artifact) {
+  const { archive, sha256 } = artifact;
   const url = `${BTBN_BASE_URL}/${config.btbnTag}/${archive}`;
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ffmpeg-dev-'));
 
@@ -133,12 +138,16 @@ function setupFromBtbn(archive) {
 
     console.log(`  [download] ${archive}`);
     execFileSync('curl', ['-fsSL', '--retry', '3', '-o', archivePath, url], { stdio: 'inherit' });
+    assertFileSha256(archivePath, sha256);
+    console.log(`  [verify] ${sha256}`);
 
     const extractDir = path.join(tmpDir, 'extracted');
     fs.mkdirSync(extractDir);
 
     if (archive.endsWith('.tar.xz')) {
-      execFileSync('tar', ['xJf', archivePath, '-C', extractDir, '--strip-components=1'], { stdio: 'inherit' });
+      execFileSync('tar', ['xJf', archivePath, '-C', extractDir, '--strip-components=1'], {
+        stdio: 'inherit',
+      });
     } else {
       execFileSync('unzip', ['-o', archivePath, '-d', extractDir], { stdio: 'inherit' });
       // Handle nested directory in zip
@@ -229,7 +238,7 @@ function setupPlatform(platformKey, options) {
   if (cfg.ffmpegDev.source === 'homebrew') {
     setupFromHomebrew(cfg.ffmpegDev.brewPrefix);
   } else {
-    setupFromBtbn(cfg.ffmpegDev.archive);
+    setupFromBtbn(cfg.ffmpegDev);
   }
 }
 
@@ -239,7 +248,7 @@ function setupPlatform(platformKey, options) {
 function parseArgs(argv) {
   const platformIdx = argv.indexOf('--platform');
   return {
-    explicitPlatform: platformIdx === -1 ? null : argv[platformIdx + 1] ?? null,
+    explicitPlatform: platformIdx === -1 ? null : (argv[platformIdx + 1] ?? null),
     force: argv.includes('--force'),
   };
 }

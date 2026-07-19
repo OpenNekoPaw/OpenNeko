@@ -113,6 +113,38 @@ test('resolveFfmpegEnv discovers Chocolatey FFmpeg installs on Windows runners',
   });
 });
 
+test('resolveFfmpegEnv uses the prepared workspace FFmpeg on Windows CI', () => {
+  const workspaceDir = path.join(DEPS_DIR, 'ffmpeg');
+  const existing = new Set([
+    path.join(workspaceDir, 'include', 'libavutil', 'avutil.h'),
+    path.join(workspaceDir, 'lib'),
+    path.join(workspaceDir, 'lib', 'pkgconfig'),
+  ]);
+
+  const resolved = resolveFfmpegEnv({
+    env: {
+      ProgramData: '/programdata',
+    },
+    platform: 'win32',
+    platformKey: 'win32-x64',
+    existsSync(filePath) {
+      return existing.has(filePath);
+    },
+    readdirSync() {
+      return [];
+    },
+    execFileSync() {
+      return '';
+    },
+  });
+
+  assert.deepEqual(resolved, {
+    ffmpegDir: workspaceDir,
+    pkgConfigPath: path.join(workspaceDir, 'lib', 'pkgconfig'),
+    source: 'workspace',
+  });
+});
+
 test('resolveFfmpegEnv accepts Ubuntu multiarch FFmpeg dev package layout', () => {
   const systemPrefix = '/usr';
   const existing = new Set([

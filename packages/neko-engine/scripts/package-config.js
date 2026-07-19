@@ -9,16 +9,47 @@ const NAPI_DIR = path.join(ENGINE_DIR, 'packages', 'host-napi');
 const BIN_DIR = path.join(ENGINE_DIR, 'bin');
 const DEPS_DIR = path.join(ENGINE_DIR, 'deps');
 const BTBN_BASE_URL = 'https://github.com/BtbN/FFmpeg-Builds/releases/download';
+const BTBN_TAG_PATTERN = /^autobuild-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$/u;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 
-/**
- * @param {string} template
- * @returns {string}
- */
-function expandTemplate(template) {
-  return template
-    .replaceAll('{ffmpegVersion}', rawConfig.ffmpegVersion)
-    .replaceAll('{btbnVersion}', rawConfig.btbnVersion)
-    .replaceAll('{btbnTag}', rawConfig.btbnTag);
+function projectFfmpegArtifact(artifact, label) {
+  if (artifact.source === 'homebrew') {
+    if (typeof artifact.brewPrefix !== 'string' || artifact.brewPrefix.length === 0) {
+      throw new Error(`Invalid Homebrew FFmpeg prefix for ${label}.`);
+    }
+
+    return {
+      source: 'homebrew',
+      brewPrefix: artifact.brewPrefix,
+    };
+  }
+
+  if (artifact.source !== 'btbn') {
+    throw new Error(
+      `Unknown FFmpeg artifact source for ${label}: ${JSON.stringify(artifact.source)}`,
+    );
+  }
+  if (!BTBN_TAG_PATTERN.test(rawConfig.btbnTag)) {
+    throw new Error(`Invalid immutable BtbN release tag: ${JSON.stringify(rawConfig.btbnTag)}`);
+  }
+  if (
+    typeof artifact.archive !== 'string' ||
+    !/^ffmpeg-.+\.(?:zip|tar\.xz)$/u.test(artifact.archive) ||
+    artifact.archive.includes('latest')
+  ) {
+    throw new Error(
+      `Invalid immutable BtbN archive for ${label}: ${JSON.stringify(artifact.archive)}`,
+    );
+  }
+  if (typeof artifact.sha256 !== 'string' || !SHA256_PATTERN.test(artifact.sha256)) {
+    throw new Error(`Invalid BtbN SHA256 for ${label}: ${JSON.stringify(artifact.sha256)}`);
+  }
+
+  return {
+    source: 'btbn',
+    archive: artifact.archive,
+    sha256: artifact.sha256,
+  };
 }
 
 /**
@@ -33,7 +64,7 @@ function getSupportedTargets() {
  * @returns {null | {
  *   rustTarget: string;
  *   nodeFile: string;
- *   ffmpeg: { source: 'homebrew'; brewPrefix: string } | { source: 'btbn'; archive: string };
+ *   ffmpeg: { source: 'homebrew'; brewPrefix: string } | { source: 'btbn'; archive: string; sha256: string };
  * }}
  */
 function getTargetConfig(targetKey) {
@@ -42,27 +73,9 @@ function getTargetConfig(targetKey) {
     return null;
   }
 
-  const ffmpeg =
-    target.ffmpeg.source === 'homebrew'
-      ? {
-          source: 'homebrew',
-          brewPrefix: target.ffmpeg.brewPrefix,
-        }
-      : {
-          source: 'btbn',
-          archive: expandTemplate(target.ffmpeg.archiveTemplate),
-        };
-
+  const ffmpeg = projectFfmpegArtifact(target.ffmpeg, `${targetKey}.ffmpeg`);
   const ffmpegDev = target.ffmpegDev
-    ? target.ffmpegDev.source === 'homebrew'
-      ? {
-          source: 'homebrew',
-          brewPrefix: target.ffmpegDev.brewPrefix,
-        }
-      : {
-          source: 'btbn',
-          archive: expandTemplate(target.ffmpegDev.archiveTemplate),
-        }
+    ? projectFfmpegArtifact(target.ffmpegDev, `${targetKey}.ffmpegDev`)
     : null;
 
   return {

@@ -23,6 +23,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+const { assertFileSha256 } = require('./ffmpeg-artifact');
+
 const {
   BTBN_BASE_URL,
   NAPI_DIR,
@@ -67,7 +69,12 @@ function bundleMacOS(cfg) {
   for (const lib of FFMPEG_LIBS) {
     const files = fs
       .readdirSync(libDir)
-      .filter((entry) => entry.startsWith(`lib${lib}.`) && entry.endsWith('.dylib') && !entry.endsWith('.dylib.dSYM'));
+      .filter(
+        (entry) =>
+          entry.startsWith(`lib${lib}.`) &&
+          entry.endsWith('.dylib') &&
+          !entry.endsWith('.dylib.dSYM'),
+      );
 
     const sorted = files.sort((left, right) => left.length - right.length);
     const mainLib = sorted.find((entry) => /^lib\w+\.\d+\.dylib$/.test(entry)) || sorted[0];
@@ -91,10 +98,14 @@ function bundleMacOS(cfg) {
       const oldPath = path.join(libDir, lib);
       const newPath = `@loader_path/${lib}`;
       try {
-        execFileSync('install_name_tool', ['-change', oldPath, newPath, nodeFile], { stdio: 'pipe' });
+        execFileSync('install_name_tool', ['-change', oldPath, newPath, nodeFile], {
+          stdio: 'pipe',
+        });
       } catch {
         try {
-          execFileSync('install_name_tool', ['-change', `@rpath/${lib}`, newPath, nodeFile], { stdio: 'pipe' });
+          execFileSync('install_name_tool', ['-change', `@rpath/${lib}`, newPath, nodeFile], {
+            stdio: 'pipe',
+          });
         } catch {
           // Ignore — path may already be correct
         }
@@ -126,14 +137,16 @@ function bundleMacOS(cfg) {
     execFileSync('codesign', ['--force', '--sign', '-', nodeFile], { stdio: 'pipe' });
   }
   for (const lib of copied) {
-    execFileSync('codesign', ['--force', '--sign', '-', path.join(NAPI_DIR, lib)], { stdio: 'pipe' });
+    execFileSync('codesign', ['--force', '--sign', '-', path.join(NAPI_DIR, lib)], {
+      stdio: 'pipe',
+    });
   }
 
   return copied;
 }
 
 function bundleBtbN(cfg, platform) {
-  const archive = cfg.ffmpeg.archive;
+  const { archive, sha256 } = cfg.ffmpeg;
   const url = `${BTBN_BASE_URL}/${config.btbnTag}/${archive}`;
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ffmpeg-'));
   const archivePath = path.join(tmpDir, archive);
@@ -141,12 +154,16 @@ function bundleBtbN(cfg, platform) {
   try {
     log(`[download] ${archive}`);
     execFileSync('curl', ['-fsSL', '--retry', '3', '-o', archivePath, url], { stdio: 'inherit' });
+    assertFileSha256(archivePath, sha256);
+    log(`[verify] ${sha256}`);
 
     const extractDir = path.join(tmpDir, 'extracted');
     fs.mkdirSync(extractDir);
 
     if (archive.endsWith('.tar.xz')) {
-      execFileSync('tar', ['xJf', archivePath, '-C', extractDir, '--strip-components=1'], { stdio: 'inherit' });
+      execFileSync('tar', ['xJf', archivePath, '-C', extractDir, '--strip-components=1'], {
+        stdio: 'inherit',
+      });
     } else {
       execFileSync('unzip', ['-o', archivePath, '-d', extractDir], { stdio: 'inherit' });
       const entries = fs.readdirSync(extractDir);
@@ -174,7 +191,9 @@ function bundleBtbN(cfg, platform) {
 
     for (const lib of FFMPEG_LIBS) {
       if (isWindows) {
-        const dll = fs.readdirSync(libDir).find((entry) => entry.startsWith(`${lib}-`) && entry.endsWith('.dll'));
+        const dll = fs
+          .readdirSync(libDir)
+          .find((entry) => entry.startsWith(`${lib}-`) && entry.endsWith('.dll'));
         if (dll) {
           fs.copyFileSync(path.join(libDir, dll), path.join(NAPI_DIR, dll));
           copied.push(dll);
@@ -222,7 +241,8 @@ function main() {
   }
 
   const platformIdx = args.indexOf('--platform');
-  const platformKey = platformIdx !== -1 ? args[platformIdx + 1] ?? null : getCurrentPlatformKey();
+  const platformKey =
+    platformIdx !== -1 ? (args[platformIdx + 1] ?? null) : getCurrentPlatformKey();
   const cfg = platformKey ? getTargetConfig(platformKey) : null;
   if (!cfg) {
     console.error(`Unknown platform: "${platformKey}"`);

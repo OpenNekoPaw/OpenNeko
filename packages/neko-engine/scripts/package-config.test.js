@@ -7,6 +7,7 @@ const path = require('path');
 
 const {
   NAPI_DIR,
+  config,
   getSupportedTargets,
   getTargetByRustTriple,
   getTargetConfig,
@@ -23,6 +24,39 @@ test('package config resolves supported media engine targets', () => {
   assert.equal(getTargetConfig('darwin-x64'), null);
   assert.equal(getTargetByRustTriple('aarch64-apple-darwin'), 'darwin-arm64');
   assert.equal(getTargetByRustTriple('x86_64-apple-darwin'), null);
+});
+
+test('BtbN FFmpeg artifacts use immutable release identities and SHA256 digests', () => {
+  assert.match(config.btbnTag, /^autobuild-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}$/u);
+
+  for (const targetName of getSupportedTargets()) {
+    const target = getTargetConfig(targetName);
+    assert.ok(target);
+
+    for (const artifact of [target.ffmpeg, target.ffmpegDev]) {
+      if (!artifact || artifact.source !== 'btbn') {
+        continue;
+      }
+
+      assert.match(artifact.archive, /^ffmpeg-.+\.(?:zip|tar\.xz)$/u);
+      assert.match(artifact.sha256, /^[a-f0-9]{64}$/u);
+      assert.doesNotMatch(artifact.archive, /latest/u);
+    }
+  }
+});
+
+test('package config rejects mutable BtbN release aliases before download', () => {
+  const originalTag = config.btbnTag;
+  config.btbnTag = 'latest';
+
+  try {
+    assert.throws(
+      () => getTargetConfig('win32-x64'),
+      /Invalid immutable BtbN release tag: "latest"/u,
+    );
+  } finally {
+    config.btbnTag = originalTag;
+  }
 });
 
 test('FFmpeg setup rejects unsupported platforms instead of skipping them', () => {

@@ -1,15 +1,7 @@
 {
-  "ffmpegVersion": "8.1",
-  "btbnTag": "latest",
-  "btbnVersion": "8.1",
-  "ffmpegLibs": [
-    "avcodec",
-    "avfilter",
-    "avformat",
-    "avutil",
-    "swresample",
-    "swscale"
-  ],
+  "ffmpegVersion": "8.1.2",
+  "btbnTag": "autobuild-2026-07-19-13-12",
+  "ffmpegLibs": ["avcodec", "avfilter", "avformat", "avutil", "swresample", "swscale"],
   "targets": {
     "darwin-arm64": {
       "rustTarget": "aarch64-apple-darwin",
@@ -28,11 +20,13 @@
       "nodeFile": "neko-engine.linux-x64-gnu.node",
       "ffmpeg": {
         "source": "btbn",
-        "archiveTemplate": "ffmpeg-n{btbnVersion}-{btbnTag}-linux64-gpl-shared-{btbnVersion}.tar.xz"
+        "archive": "ffmpeg-n8.1.2-22-g94138f6973-linux64-gpl-shared-8.1.tar.xz",
+        "sha256": "af77222e1fb4f22913dd6e1d91dd8cb918c7d96f5817d0259e2ba8dec4a455d0"
       },
       "ffmpegDev": {
         "source": "btbn",
-        "archiveTemplate": "ffmpeg-n{ffmpegVersion}-{btbnTag}-linux64-lgpl-shared-{ffmpegVersion}.tar.xz"
+        "archive": "ffmpeg-n8.1.2-22-g94138f6973-linux64-lgpl-shared-8.1.tar.xz",
+        "sha256": "8e14f666972bdb64a1529282c0d3c85b1e625589b419bed9db82acb65f063e1b"
       }
     },
     "win32-x64": {
@@ -40,11 +34,13 @@
       "nodeFile": "neko-engine.win32-x64-msvc.node",
       "ffmpeg": {
         "source": "btbn",
-        "archiveTemplate": "ffmpeg-n{btbnVersion}-{btbnTag}-win64-gpl-shared-{btbnVersion}.zip"
+        "archive": "ffmpeg-n8.1.2-22-g94138f6973-win64-gpl-shared-8.1.zip",
+        "sha256": "6b261d9053728ee09cd4f9c9ce008c91a020a938bbf983210ca84f41ef22d0fa"
       },
       "ffmpegDev": {
         "source": "btbn",
-        "archiveTemplate": "ffmpeg-n{ffmpegVersion}-{btbnTag}-win64-lgpl-shared-{ffmpegVersion}.zip"
+        "archive": "ffmpeg-n8.1.2-22-g94138f6973-win64-lgpl-shared-8.1.zip",
+        "sha256": "0e3f8464f61df7887af07aa039b97eaa27ec9c7377d256db0f3f847f161dcab2"
       }
     }
   }

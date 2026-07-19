@@ -5,9 +5,9 @@ import { describe, it } from 'node:test';
 import { parse } from 'yaml';
 
 const require = createRequire(import.meta.url);
-const { SUPPORTED_TARGET_NAMES } = require(
-  '../../packages/neko-engine/packages/host-napi/native-binding-loader',
-);
+const {
+  SUPPORTED_TARGET_NAMES,
+} = require('../../packages/neko-engine/packages/host-napi/native-binding-loader');
 
 const EXPECTED_TARGETS = ['darwin-arm64', 'linux-x64', 'win32-x64'];
 const EXPECTED_MATRIX = [
@@ -59,8 +59,13 @@ describe('supported release platform orchestration', () => {
       readFile('.github/workflows/release.yml', 'utf8').then(parse),
     ]);
 
-    assert.deepEqual(projectMatrix(ciWorkflow.jobs['package-engine-vsix']), EXPECTED_MATRIX);
-    assert.deepEqual(projectMatrix(releaseWorkflow.jobs['release-engine']), EXPECTED_MATRIX);
+    const ciEngineJob = ciWorkflow.jobs['package-engine-vsix'];
+    const releaseEngineJob = releaseWorkflow.jobs['release-engine'];
+
+    assert.deepEqual(projectMatrix(ciEngineJob), EXPECTED_MATRIX);
+    assert.deepEqual(projectMatrix(releaseEngineJob), EXPECTED_MATRIX);
+    assertWindowsFfmpegSetup(ciEngineJob);
+    assertWindowsFfmpegSetup(releaseEngineJob);
     assert.equal(ciWorkflow.jobs['test-rust']['runs-on'], 'macos-15');
     assert.deepEqual(ciWorkflow.jobs['local-metadata-runtime'].strategy.matrix.os, [
       'ubuntu-latest',
@@ -88,4 +93,18 @@ function projectMatrix(job) {
     os: entry.os,
     rustTarget: entry['rust-target'],
   }));
+}
+
+function assertWindowsFfmpegSetup(job) {
+  const windowsTarget = job.strategy.matrix.include.find((entry) => entry.target === 'win32-x64');
+  assert.ok(windowsTarget);
+  assert.equal(
+    windowsTarget['ffmpeg-install'],
+    'node packages/neko-engine/scripts/download-ffmpeg.js --platform win32-x64',
+  );
+  assert.doesNotMatch(windowsTarget['ffmpeg-install'], /choco|chocolatey/iu);
+
+  const installStep = job.steps.find((step) => step.name === 'Install FFmpeg');
+  assert.ok(installStep);
+  assert.equal(installStep.shell, 'bash');
 }
