@@ -134,6 +134,14 @@ describe('ModelViewer', () => {
     expect(viewportToolbar?.dataset.shape).toBe('pill');
     expect(viewportToolbar?.getAttribute('role')).toBe('toolbar');
     expect(viewportToolbar?.getAttribute('aria-orientation')).toBe('horizontal');
+    expect(viewportToolbar?.querySelector('.codicon')).toBeNull();
+    const viewportIcons = viewportToolbar?.querySelectorAll('button svg');
+    expect(viewportIcons).toHaveLength(8);
+    viewportIcons?.forEach((icon) => {
+      expect(icon.getAttribute('width')).toBe('18');
+      expect(icon.getAttribute('height')).toBe('18');
+      expect(icon.getAttribute('viewBox')).toBe('0 0 24 24');
+    });
     const navigationGroup = viewportToolbar?.querySelector(
       '[data-model-preview-toolbar-group="navigation"]',
     );

@@ -1,4 +1,14 @@
-import { SegmentedControl, ToolbarButton, ToolbarSeparator, toCodiconClassName } from '@neko/ui';
+import { SegmentedControl, ToolbarButton, ToolbarSeparator } from '@neko/ui';
+import {
+  AxesIcon,
+  FrameSelectionIcon,
+  GridIcon,
+  InspectIcon,
+  MoveIcon,
+  PointerIcon,
+  RotateIcon,
+  ScaleIcon,
+} from '@neko/ui/icons';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { useTranslation } from '../../i18n/I18nContext';
 
@@ -75,14 +85,14 @@ export function ModelViewportControls({
           <ToolbarButton
             active={viewportMode === 'navigate'}
             disabled={disabled}
-            icon={<span className={toCodiconClassName('cursor')} />}
+            icon={<PointerIcon size={18} />}
             title={t('preview.model.view.navigate')}
             onClick={() => onViewportModeChange('navigate')}
           />
           <ToolbarButton
             active={viewportMode === 'inspect'}
             disabled={disabled}
-            icon={<span className={toCodiconClassName('inspect')} />}
+            icon={<InspectIcon size={18} />}
             title={t('preview.model.view.inspect')}
             onClick={() => onViewportModeChange('inspect')}
           />
@@ -93,7 +103,7 @@ export function ModelViewportControls({
             key={mode}
             active={viewportMode === 'inspect' && transformMode === mode}
             disabled={transformDisabled}
-            icon={<span className={toCodiconClassName(transformIcon(mode))} />}
+            icon={transformModeIcon(mode)}
             title={t(`preview.model.transform.${mode}`)}
             onClick={() => onTransformModeChange(mode)}
           />
@@ -102,7 +112,7 @@ export function ModelViewportControls({
         <ToolbarButton
           active={gridVisible}
           disabled={disabled}
-          icon={<span className={toCodiconClassName('table')} />}
+          icon={<GridIcon size={18} />}
           title={
             gridVisible ? t('preview.model.hideGroundGrid') : t('preview.model.showGroundGrid')
           }
@@ -111,14 +121,14 @@ export function ModelViewportControls({
         <ToolbarButton
           active={axesVisible}
           disabled={disabled}
-          icon={<span className={toCodiconClassName('type-hierarchy')} />}
+          icon={<AxesIcon size={18} />}
           title={axesVisible ? t('preview.model.hideAxes') : t('preview.model.showAxes')}
           onClick={() => onAxesVisibleChange(!axesVisible)}
         />
         <ToolbarSeparator orientation="vertical" />
         <ToolbarButton
           disabled={disabled}
-          icon={<span className={toCodiconClassName('screen-normal')} />}
+          icon={<FrameSelectionIcon size={18} />}
           title={t('preview.model.frameModel')}
           onClick={onFrameModel}
         />
@@ -132,13 +142,13 @@ function asViewportMode(value: string): ModelViewportMode {
   throw new Error(`Unknown Model Preview viewport mode: ${value}`);
 }
 
-function transformIcon(mode: ModelTransformMode): 'move' | 'symbol-ruler' | 'sync' {
+function transformModeIcon(mode: ModelTransformMode): React.JSX.Element {
   switch (mode) {
     case 'translate':
-      return 'move';
+      return <MoveIcon size={18} />;
     case 'rotate':
-      return 'sync';
+      return <RotateIcon size={18} />;
     case 'scale':
-      return 'symbol-ruler';
+      return <ScaleIcon size={18} />;
   }
 }
