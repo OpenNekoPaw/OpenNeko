@@ -19,7 +19,7 @@ export interface ModelViewportControlsProps {
   readonly axesVisible: boolean;
   readonly disabled: boolean;
   readonly gridVisible: boolean;
-  readonly transformSelectionKind?: 'node' | 'light';
+  readonly hasTransformSelection: boolean;
   readonly viewportMode: ModelViewportMode;
   readonly transformMode: ModelTransformMode;
   readonly onViewportModeChange: (mode: ModelViewportMode) => void;
@@ -39,11 +39,11 @@ export function ModelViewportControls({
   onTransformModeChange,
   onViewportModeChange,
   transformMode,
-  transformSelectionKind,
+  hasTransformSelection,
   viewportMode,
 }: ModelViewportControlsProps): React.JSX.Element {
   const { t } = useTranslation();
-  const transformDisabled = disabled || !transformSelectionKind || viewportMode !== 'inspect';
+  const transformDisabled = disabled || !hasTransformSelection || viewportMode !== 'inspect';
 
   return (
     <>
@@ -102,9 +102,7 @@ export function ModelViewportControls({
           <ToolbarButton
             key={mode}
             active={viewportMode === 'inspect' && transformMode === mode}
-            disabled={
-              transformDisabled || (transformSelectionKind === 'light' && mode !== 'translate')
-            }
+            disabled={transformDisabled}
             icon={transformModeIcon(mode)}
             title={t(`preview.model.transform.${mode}`)}
             onClick={() => onTransformModeChange(mode)}

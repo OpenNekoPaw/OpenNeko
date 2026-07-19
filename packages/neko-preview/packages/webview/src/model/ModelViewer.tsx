@@ -34,6 +34,7 @@ import {
   removeModelCamera,
   selectModelCamera,
   selectModelNode,
+  updateModelCamera,
   updateModelLight,
 } from './modelStagingStore';
 import type { ModelSceneSelection } from './modelSceneSelection';
@@ -89,8 +90,11 @@ export function ModelViewer({
 
   useEffect(() => {
     runtimeRef.current?.setTransformEnabled(
+      viewportMode === 'inspect' && sceneSelection.kind === 'node',
+    );
+    runtimeRef.current?.setDirectDragEnabled(
       viewportMode === 'inspect' &&
-        (sceneSelection.kind === 'node' || sceneSelection.kind === 'light'),
+        (sceneSelection.kind === 'camera' || sceneSelection.kind === 'light'),
     );
   }, [sceneSelection.kind, viewportMode]);
 
@@ -138,6 +142,19 @@ export function ModelViewer({
           const light = current.lightRig.lights.find((entry) => entry.id === lightId);
           if (!light) throw new Error(`Unknown Model Preview light: ${lightId}`);
           const next = updateModelLight(current, { ...light, position });
+          stagingRef.current = next;
+          const referenceStaging = referenceStagingRef.current;
+          if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
+          referenceStagingRef.current = postState(vscode, next, referenceStaging);
+          return next;
+        });
+      },
+      onCameraPositionChanged(cameraId, position) {
+        setStaging((current) => {
+          if (!current) return current;
+          const camera = current.cameraPresets.find((entry) => entry.id === cameraId);
+          if (!camera) throw new Error(`Unknown Model Preview camera: ${cameraId}`);
+          const next = updateModelCamera(current, { ...camera, position });
           stagingRef.current = next;
           const referenceStaging = referenceStagingRef.current;
           if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
@@ -242,7 +259,7 @@ export function ModelViewer({
     if (!duplicate) throw new Error('Model Preview camera duplication produced no camera.');
     updateStaging(next);
     setSceneSelection({ kind: 'camera', cameraId: duplicate.id });
-    setViewportMode('navigate');
+    setViewportMode('inspect');
   };
   const removeCamera = (cameraId: string): void => {
     if (!staging) throw new Error('Model Preview staging is unavailable.');
@@ -288,7 +305,7 @@ export function ModelViewer({
           switch (action) {
             case 'edit':
               setSceneSelection({ kind: 'camera', cameraId });
-              setViewportMode('navigate');
+              setViewportMode('inspect');
               break;
             case 'duplicate': {
               duplicateCamera(cameraId);
@@ -310,9 +327,7 @@ export function ModelViewer({
             if (!staging) throw new Error('Model Preview staging is unavailable.');
             updateStaging(selectModelNode(staging, selection.nodePath));
             setViewportMode('inspect');
-          } else if (selection.kind === 'light') {
-            runtimeRef.current?.setTransformMode('translate');
-            setTransformMode('translate');
+          } else if (selection.kind === 'light' || selection.kind === 'camera') {
             setViewportMode('inspect');
           } else {
             setViewportMode('navigate');
@@ -332,12 +347,8 @@ export function ModelViewer({
           axesVisible={axesVisible}
           disabled={controlsDisabled}
           gridVisible={gridVisible}
-          transformSelectionKind={
+          hasTransformSelection={
             sceneSelection.kind === 'node' && staging?.selectedNodePath !== undefined
-              ? 'node'
-              : sceneSelection.kind === 'light'
-                ? 'light'
-                : undefined
           }
           viewportMode={viewportMode}
           transformMode={transformMode}

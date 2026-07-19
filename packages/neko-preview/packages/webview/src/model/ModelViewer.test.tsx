@@ -360,8 +360,11 @@ describe('ModelViewer', () => {
     );
     expect(container.querySelector('[data-testid="model-preview-light-inspector"]')).not.toBeNull();
     expect(runtime.setLightGuide).toHaveBeenLastCalledWith('key');
-    expect(runtime.setTransformMode).toHaveBeenLastCalledWith('translate');
-    expect(runtime.setTransformEnabled).toHaveBeenLastCalledWith(true);
+    expect(runtime.setTransformEnabled).toHaveBeenLastCalledWith(false);
+    expect(runtime.setDirectDragEnabled).toHaveBeenLastCalledWith(true);
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Move"]')?.disabled).toBe(
+      true,
+    );
     expect(
       container.querySelector<HTMLButtonElement>('button[aria-label="Rotate"]')?.disabled,
     ).toBe(true);
@@ -404,6 +407,19 @@ describe('ModelViewer', () => {
     expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
       'dataset.stagingRevision',
       '0',
+    );
+    expect(runtime.setTransformEnabled).toHaveBeenLastCalledWith(false);
+    expect(runtime.setDirectDragEnabled).toHaveBeenLastCalledWith(true);
+    await act(async () => {
+      callbacks?.onCameraPositionChanged?.('camera-default', { x: 1, y: 2, z: 3 });
+    });
+    expect(runtime.applyStaging).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        revision: 1,
+        cameraPresets: expect.arrayContaining([
+          expect.objectContaining({ id: 'camera-default', position: { x: 1, y: 2, z: 3 } }),
+        ]),
+      }),
     );
 
     await act(async () => {
@@ -572,6 +588,7 @@ function fakeRuntime() {
   const frameModel = vi.fn();
   const frameCamera = vi.fn();
   const setCameraGuide = vi.fn();
+  const setDirectDragEnabled = vi.fn();
   const setLightGuide = vi.fn();
   const setGroundGridVisible = vi.fn();
   const setPanoramaEnvironment = vi.fn(async () => undefined);
@@ -611,6 +628,7 @@ function fakeRuntime() {
     setTransformEnabled: vi.fn(),
     setGroundGridVisible,
     setCameraGuide,
+    setDirectDragEnabled,
     setLightGuide,
     frameCamera,
     frameModel,
@@ -629,6 +647,7 @@ function fakeRuntime() {
     frameCamera,
     frameModel,
     setCameraGuide,
+    setDirectDragEnabled,
     setLightGuide,
     setTransformEnabled: value.setTransformEnabled,
     setTransformMode: value.setTransformMode,

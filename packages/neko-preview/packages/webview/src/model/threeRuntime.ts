@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DragControls } from 'three/addons/controls/DragControls.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -59,6 +60,7 @@ export interface ModelViewState {
 
 export interface ThreeModelRuntimeCallbacks {
   readonly onTransformChanged?: (nodePath: string, transform: ModelPreviewTransform) => void;
+  readonly onCameraPositionChanged?: (cameraId: string, position: ModelPreviewVector3) => void;
   readonly onLightPositionChanged?: (
     lightId: ModelPreviewLightEntry['id'],
     position: ModelPreviewVector3,
@@ -88,6 +90,7 @@ export interface ThreeModelRuntimePort {
   getNodes(): readonly ModelPreviewNode[];
   setTransformMode(mode: 'translate' | 'rotate' | 'scale'): void;
   setTransformEnabled(enabled: boolean): void;
+  setDirectDragEnabled(enabled: boolean): void;
   setGroundGridVisible(visible: boolean): void;
   setCameraGuide(camera: ModelPreviewCameraPreset | undefined): void;
   setLightGuide(lightId: ModelPreviewLightEntry['id'] | undefined): void;
@@ -229,7 +232,21 @@ export function getModelLightGuidePose(
   };
 }
 
+export function getNormalizedModelCameraPosition(
+  bounds: THREE.Box3,
+  position: THREE.Vector3,
+): ModelPreviewVector3 {
+  return getNormalizedModelEditorPosition(bounds, position);
+}
+
 export function getNormalizedModelLightPosition(
+  bounds: THREE.Box3,
+  position: THREE.Vector3,
+): ModelPreviewVector3 {
+  return getNormalizedModelEditorPosition(bounds, position);
+}
+
+function getNormalizedModelEditorPosition(
   bounds: THREE.Box3,
   position: THREE.Vector3,
 ): ModelPreviewVector3 {
@@ -237,6 +254,70 @@ export function getNormalizedModelLightPosition(
   const size = bounds.getSize(new THREE.Vector3());
   const radius = Math.max(size.length() / 2, 0.001);
   return fromThreeVector(position.clone().sub(center).divideScalar(radius));
+}
+
+export function createModelCameraHandle(radius: number): THREE.Group {
+  const unit = Math.max(radius * 0.12, 0.012);
+  const handle = new THREE.Group();
+  handle.name = 'Model Preview camera object';
+  const bodyMaterial = createEditorHandleMaterial(0xd97706);
+  const detailMaterial = createEditorHandleMaterial(0x1f2937);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(unit * 1.45, unit, unit * 0.72), bodyMaterial);
+  const lens = new THREE.Mesh(
+    new THREE.CylinderGeometry(unit * 0.34, unit * 0.42, unit * 0.58, 18),
+    detailMaterial,
+  );
+  lens.rotation.x = Math.PI / 2;
+  lens.position.z = -unit * 0.62;
+  const viewfinder = new THREE.Mesh(
+    new THREE.BoxGeometry(unit * 0.48, unit * 0.26, unit * 0.34),
+    bodyMaterial,
+  );
+  viewfinder.position.set(-unit * 0.28, unit * 0.62, 0);
+  const grip = new THREE.Mesh(
+    new THREE.BoxGeometry(unit * 0.28, unit * 0.76, unit * 0.52),
+    bodyMaterial,
+  );
+  grip.position.x = unit * 0.82;
+  handle.add(body, lens, viewfinder, grip);
+  configureEditorHandle(handle);
+  return handle;
+}
+
+export function createModelLightHandle(
+  lightId: ModelPreviewLightEntry['id'],
+  radius: number,
+): THREE.Group {
+  const unit = Math.max(radius * 0.085, 0.009);
+  const color = MODEL_PREVIEW_LIGHT_GUIDE_COLORS[lightId];
+  const handle = new THREE.Group();
+  handle.name = `Model Preview light object: ${lightId}`;
+  const material = createEditorHandleMaterial(color);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(unit, 20, 14), material);
+  const ringA = new THREE.Mesh(new THREE.TorusGeometry(unit * 1.38, unit * 0.12, 8, 24), material);
+  const ringB = new THREE.Mesh(new THREE.TorusGeometry(unit * 1.38, unit * 0.12, 8, 24), material);
+  ringB.rotation.x = Math.PI / 2;
+  const ringC = new THREE.Mesh(new THREE.TorusGeometry(unit * 1.38, unit * 0.12, 8, 24), material);
+  ringC.rotation.y = Math.PI / 2;
+  handle.add(core, ringA, ringB, ringC);
+  configureEditorHandle(handle);
+  return handle;
+}
+
+function createEditorHandleMaterial(color: number): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  });
+}
+
+function configureEditorHandle(handle: THREE.Object3D): void {
+  handle.renderOrder = 4;
+  handle.traverse((object) => {
+    object.renderOrder = 4;
+  });
 }
 
 export function projectModelViewOrientation(
@@ -336,11 +417,25 @@ const MODEL_PREVIEW_LIGHT_GUIDE_COLORS: Readonly<Record<ModelPreviewLightEntry['
   rim: 0xa855f7,
 };
 
+interface ModelCameraGuideObjects {
+  readonly cameraId: string;
+  readonly handle: THREE.Group;
+  readonly helperCamera: THREE.PerspectiveCamera;
+  readonly frustum: THREE.CameraHelper;
+  readonly target: THREE.Vector3;
+}
+
+interface ModelLightGuideObjects {
+  readonly handle: THREE.Group;
+  readonly arrow: THREE.ArrowHelper;
+}
+
 class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(45, 1, 0.01, 10000);
   private readonly renderer: THREE.WebGLRenderer;
   private readonly orbit: OrbitControls;
+  private readonly directDrag: DragControls;
   private readonly transform: TransformControls;
   private readonly transformHelper: THREE.Object3D;
   private readonly renderScheduler: RenderScheduler;
@@ -349,18 +444,16 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     ModelPreviewLightEntry['id'],
     THREE.DirectionalLight
   >();
-  private readonly lightGuides = new Map<
-    ModelPreviewLightEntry['id'],
-    { readonly marker: THREE.Mesh; readonly arrow: THREE.ArrowHelper }
-  >();
+  private readonly lightGuides = new Map<ModelPreviewLightEntry['id'], ModelLightGuideObjects>();
   private readonly lightGuideIds = new WeakMap<THREE.Object3D, ModelPreviewLightEntry['id']>();
+  private readonly cameraGuideIds = new WeakMap<THREE.Object3D, string>();
   private readonly callbacks: ThreeModelRuntimeCallbacks;
   private readonly nodes = new Map<string, THREE.Object3D>();
   private readonly paths = new WeakMap<THREE.Object3D, string>();
   private modelRoot: THREE.Object3D | undefined;
   private modelBounds: THREE.Box3 | undefined;
   private groundGrid: THREE.GridHelper | undefined;
-  private cameraGuide: THREE.CameraHelper | undefined;
+  private cameraGuide: ModelCameraGuideObjects | undefined;
   private groundGridVisible = true;
   private activeCameraPreset: ModelPreviewCameraPreset | undefined;
   private appliedCameraId: string | undefined;
@@ -368,6 +461,8 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   private selectedLightId: ModelPreviewLightEntry['id'] | undefined;
   private appliedLights: readonly ModelPreviewLightEntry[] = [];
   private transformEnabled = false;
+  private directDragEnabled = false;
+  private directDragging = false;
   private facts: NormalizedModelFacts | undefined;
   private mannequin: NeutralMannequinRuntime | undefined;
   private panoramaTexture: THREE.Texture | undefined;
@@ -379,23 +474,45 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   private panoramaEpoch = 0;
   private disposed = false;
   private readonly requestRender = (): void => this.renderScheduler.request();
-  private readonly handleTransformChange = (): void => {
-    const object = this.transform.object;
-    const lightId = object ? this.lightGuideIds.get(object) : undefined;
-    if (lightId) {
-      const light = this.directionalLights.get(lightId);
-      if (!light) throw new Error(`Model Preview light is missing: ${lightId}`);
-      light.position.copy(object.position);
-      this.syncLightGuideDirection(lightId);
-    }
-    this.requestRender();
-  };
+  private readonly handleTransformChange = (): void => this.requestRender();
   private readonly commitTransformChange = (): void => this.emitTransformChange();
   private readonly handleTransformDraggingChanged = (event: { readonly value: unknown }): void => {
     const dragging = event.value === true;
     this.orbit.enabled = !dragging;
     if (dragging) this.beginInteraction();
     else this.endInteraction();
+  };
+  private readonly handleDirectDragStart = (): void => {
+    if (this.directDragging) return;
+    this.directDragging = true;
+    this.orbit.enabled = false;
+    this.renderer.domElement.style.cursor = 'grabbing';
+    this.beginInteraction();
+  };
+  private readonly handleDirectDrag = (event: { readonly object: THREE.Object3D }): void => {
+    this.syncDirectDragObject(event.object);
+    this.requestRender();
+  };
+  private readonly handleDirectDragEnd = (event: { readonly object: THREE.Object3D }): void => {
+    try {
+      this.syncDirectDragObject(event.object);
+      this.emitDirectDragChange(event.object);
+    } finally {
+      this.directDragging = false;
+      this.orbit.enabled = true;
+      this.renderer.domElement.style.cursor = '';
+      this.endInteraction();
+      this.requestRender();
+    }
+  };
+  private readonly handleDirectDragHoverOn = (): void => {
+    this.orbit.enabled = false;
+    this.renderer.domElement.style.cursor = 'grab';
+  };
+  private readonly handleDirectDragHoverOff = (): void => {
+    if (this.directDragging) return;
+    this.orbit.enabled = true;
+    this.renderer.domElement.style.cursor = '';
   };
   private readonly handleOrbitChange = (): void => {
     this.requestRender();
@@ -421,6 +538,10 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.renderer.setPixelRatio(getModelPixelRatio(window.devicePixelRatio || 1, false));
     this.orbit = new OrbitControls(this.camera, canvas);
     this.orbit.enableDamping = true;
+    this.directDrag = new DragControls([], this.camera, canvas);
+    this.directDrag.enabled = false;
+    this.directDrag.recursive = true;
+    this.directDrag.transformGroup = true;
     this.transform = new TransformControls(this.camera, canvas);
     this.transformHelper = this.transform.getHelper();
     this.renderScheduler = createRenderScheduler(() => {
@@ -431,6 +552,11 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.transform.addEventListener('dragging-changed', this.handleTransformDraggingChanged);
     this.transform.addEventListener('change', this.handleTransformChange);
     this.transform.addEventListener('mouseUp', this.commitTransformChange);
+    this.directDrag.addEventListener('dragstart', this.handleDirectDragStart);
+    this.directDrag.addEventListener('drag', this.handleDirectDrag);
+    this.directDrag.addEventListener('dragend', this.handleDirectDragEnd);
+    this.directDrag.addEventListener('hoveron', this.handleDirectDragHoverOn);
+    this.directDrag.addEventListener('hoveroff', this.handleDirectDragHoverOff);
     this.orbit.addEventListener('change', this.handleOrbitChange);
     this.orbit.addEventListener('start', this.beginOrbitInteraction);
     this.orbit.addEventListener('end', this.endOrbitInteraction);
@@ -623,9 +749,6 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
 
   setTransformMode(mode: 'translate' | 'rotate' | 'scale'): void {
     this.assertLive();
-    if (this.selectedLightId && mode !== 'translate') {
-      throw new Error('Model Preview directional-light helpers only support translation.');
-    }
     this.transform.setMode(mode);
   }
 
@@ -633,6 +756,13 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.assertLive();
     this.transformEnabled = enabled;
     this.syncTransformAttachment();
+    this.requestRender();
+  }
+
+  setDirectDragEnabled(enabled: boolean): void {
+    this.assertLive();
+    this.directDragEnabled = enabled;
+    this.syncDirectDragTarget();
     this.requestRender();
   }
 
@@ -661,11 +791,22 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     helperCamera.position.copy(pose.position);
     helperCamera.lookAt(pose.target);
     helperCamera.updateMatrixWorld(true);
-    const helper = new THREE.CameraHelper(helperCamera);
-    helper.name = `Model Preview camera guide: ${camera.id}`;
-    helper.renderOrder = 2;
-    this.cameraGuide = helper;
-    this.scene.add(helper);
+    const frustum = new THREE.CameraHelper(helperCamera);
+    frustum.name = `Model Preview camera frustum: ${camera.id}`;
+    frustum.renderOrder = 2;
+    const handle = createModelCameraHandle(pose.radius);
+    handle.position.copy(pose.position);
+    handle.lookAt(pose.target);
+    this.cameraGuideIds.set(handle, camera.id);
+    this.cameraGuide = {
+      cameraId: camera.id,
+      handle,
+      helperCamera,
+      frustum,
+      target: pose.target,
+    };
+    this.scene.add(frustum, handle);
+    this.syncDirectDragTarget();
     this.requestRender();
   }
 
@@ -675,13 +816,12 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       throw new Error(`Unknown Model Preview light: ${lightId}`);
     }
     this.selectedLightId = lightId;
-    if (lightId) this.transform.setMode('translate');
     for (const [candidateId, guide] of this.lightGuides) {
       const visible = candidateId === lightId;
-      guide.marker.visible = visible;
+      guide.handle.visible = visible;
       guide.arrow.visible = visible;
     }
-    this.syncTransformAttachment();
+    this.syncDirectDragTarget();
     this.requestRender();
   }
 
@@ -738,13 +878,12 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     const previousPixelRatio = this.renderer.getPixelRatio();
     const previousAspect = this.camera.aspect;
     const gridWasVisible = this.groundGrid?.visible ?? false;
-    const cameraGuideWasVisible = this.cameraGuide?.visible ?? false;
     const editorHelpers = [
       this.transformHelper,
-      ...[...this.lightGuides.values()].flatMap((guide) => [guide.marker, guide.arrow]),
+      ...(this.cameraGuide ? [this.cameraGuide.handle, this.cameraGuide.frustum] : []),
+      ...[...this.lightGuides.values()].flatMap((guide) => [guide.handle, guide.arrow]),
     ];
     if (this.groundGrid) this.groundGrid.visible = false;
-    if (this.cameraGuide) this.cameraGuide.visible = false;
     try {
       return withObjectsHidden(editorHelpers, () => {
         this.renderer.setPixelRatio(1);
@@ -760,7 +899,6 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       });
     } finally {
       if (this.groundGrid) this.groundGrid.visible = gridWasVisible;
-      if (this.cameraGuide) this.cameraGuide.visible = cameraGuideWasVisible;
       this.renderer.setPixelRatio(previousPixelRatio);
       this.renderer.setSize(previousSize.x, previousSize.y, false);
       this.camera.aspect = previousAspect;
@@ -777,6 +915,11 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.transform.removeEventListener('dragging-changed', this.handleTransformDraggingChanged);
     this.transform.removeEventListener('change', this.handleTransformChange);
     this.transform.removeEventListener('mouseUp', this.commitTransformChange);
+    this.directDrag.removeEventListener('dragstart', this.handleDirectDragStart);
+    this.directDrag.removeEventListener('drag', this.handleDirectDrag);
+    this.directDrag.removeEventListener('dragend', this.handleDirectDragEnd);
+    this.directDrag.removeEventListener('hoveron', this.handleDirectDragHoverOn);
+    this.directDrag.removeEventListener('hoveroff', this.handleDirectDragHoverOff);
     this.orbit.removeEventListener('change', this.handleOrbitChange);
     this.orbit.removeEventListener('start', this.beginOrbitInteraction);
     this.orbit.removeEventListener('end', this.endOrbitInteraction);
@@ -784,6 +927,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.transform.detach();
     this.transform.dispose();
     this.scene.remove(this.transformHelper);
+    this.directDrag.dispose();
     this.orbit.dispose();
     this.detachModel();
     this.panoramaEpoch += 1;
@@ -859,18 +1003,8 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     const radius = Math.max(size.length() / 2, 0.001);
     for (const lightId of MODEL_PREVIEW_LIGHT_IDS) {
       const color = MODEL_PREVIEW_LIGHT_GUIDE_COLORS[lightId];
-      const marker = new THREE.Mesh(
-        new THREE.SphereGeometry(Math.max(radius * 0.055, 0.006), 18, 12),
-        new THREE.MeshBasicMaterial({
-          color,
-          depthTest: false,
-          depthWrite: false,
-          toneMapped: false,
-        }),
-      );
-      marker.name = `Model Preview light guide: ${lightId}`;
-      marker.renderOrder = 4;
-      marker.visible = lightId === this.selectedLightId;
+      const handle = createModelLightHandle(lightId, radius);
+      handle.visible = lightId === this.selectedLightId;
       const arrow = new THREE.ArrowHelper(
         new THREE.Vector3(0, -1, 0),
         bounds.getCenter(new THREE.Vector3()),
@@ -892,11 +1026,11 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
         }
         object.renderOrder = 3;
       });
-      this.lightGuides.set(lightId, { marker, arrow });
-      this.lightGuideIds.set(marker, lightId);
-      this.scene.add(arrow, marker);
+      this.lightGuides.set(lightId, { handle, arrow });
+      this.lightGuideIds.set(handle, lightId);
+      this.scene.add(arrow, handle);
     }
-    this.syncTransformAttachment();
+    this.syncDirectDragTarget();
   }
 
   private applyLightRig(lights: readonly ModelPreviewLightEntry[]): void {
@@ -912,7 +1046,7 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       light.position.copy(pose.position);
       light.target.position.copy(pose.target);
       if (!light.target.parent) this.scene.add(light.target);
-      guide.marker.position.copy(pose.position);
+      guide.handle.position.copy(pose.position);
       this.syncLightGuideDirection(entry.id);
     }
   }
@@ -922,12 +1056,12 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     const guide = this.lightGuides.get(lightId);
     if (!bounds || !guide) return;
     const target = bounds.getCenter(new THREE.Vector3());
-    const direction = target.clone().sub(guide.marker.position);
+    const direction = target.clone().sub(guide.handle.position);
     const distance = direction.length();
     const radius = Math.max(bounds.getSize(new THREE.Vector3()).length() / 2, 0.001);
     if (distance === 0) direction.set(0, -1, 0);
     else direction.divideScalar(distance);
-    guide.arrow.position.copy(guide.marker.position);
+    guide.arrow.position.copy(guide.handle.position);
     guide.arrow.setDirection(direction);
     guide.arrow.setLength(Math.max(distance, radius * 0.05), radius * 0.18, radius * 0.1);
   }
@@ -937,15 +1071,91 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       this.transform.detach();
       return;
     }
-    if (this.selectedLightId) {
-      const guide = this.lightGuides.get(this.selectedLightId);
-      if (guide) this.transform.attach(guide.marker);
-      else this.transform.detach();
-      return;
-    }
     const selected = this.selectedNodePath ? this.nodes.get(this.selectedNodePath) : undefined;
     if (selected) this.transform.attach(selected);
     else this.transform.detach();
+  }
+
+  private syncDirectDragTarget(): void {
+    const lightHandle = this.selectedLightId
+      ? this.lightGuides.get(this.selectedLightId)?.handle
+      : undefined;
+    const target = this.selectedLightId ? lightHandle : this.cameraGuide?.handle;
+    this.directDrag.objects.splice(0, this.directDrag.objects.length, ...(target ? [target] : []));
+    this.directDrag.enabled = this.directDragEnabled && target !== undefined;
+    this.directDrag.transformGroup = true;
+    if (!this.directDrag.enabled) {
+      this.renderer.domElement.style.cursor = '';
+      this.orbit.enabled = true;
+    }
+  }
+
+  private clearDirectDragTarget(): void {
+    this.directDrag.objects.splice(0, this.directDrag.objects.length);
+    this.directDrag.enabled = false;
+    this.renderer.domElement.style.cursor = '';
+    this.orbit.enabled = true;
+    if (this.directDragging) {
+      this.directDragging = false;
+      this.endInteraction();
+    }
+  }
+
+  private syncDirectDragObject(object: THREE.Object3D): void {
+    const handle = this.resolveDirectDragHandle(object);
+    const lightId = this.lightGuideIds.get(handle);
+    if (lightId) {
+      const light = this.directionalLights.get(lightId);
+      if (!light) throw new Error(`Model Preview light is missing: ${lightId}`);
+      light.position.copy(handle.position);
+      this.syncLightGuideDirection(lightId);
+      return;
+    }
+    const cameraId = this.cameraGuideIds.get(handle);
+    if (cameraId) {
+      const guide = this.cameraGuide;
+      if (!guide || guide.cameraId !== cameraId || guide.handle !== handle) {
+        throw new Error(`Model Preview camera guide is missing: ${cameraId}`);
+      }
+      guide.helperCamera.position.copy(handle.position);
+      guide.helperCamera.lookAt(guide.target);
+      guide.helperCamera.updateMatrixWorld(true);
+      guide.frustum.update();
+      handle.lookAt(guide.target);
+      return;
+    }
+    throw new Error('Model Preview direct-drag target is not registered.');
+  }
+
+  private emitDirectDragChange(object: THREE.Object3D): void {
+    if (!this.modelBounds) throw new Error('Model Preview renderer has no loaded model bounds.');
+    const handle = this.resolveDirectDragHandle(object);
+    const lightId = this.lightGuideIds.get(handle);
+    if (lightId) {
+      this.callbacks.onLightPositionChanged?.(
+        lightId,
+        getNormalizedModelLightPosition(this.modelBounds, handle.position),
+      );
+      return;
+    }
+    const cameraId = this.cameraGuideIds.get(handle);
+    if (cameraId) {
+      this.callbacks.onCameraPositionChanged?.(
+        cameraId,
+        getNormalizedModelCameraPosition(this.modelBounds, handle.position),
+      );
+      return;
+    }
+    throw new Error('Model Preview direct-drag target is not registered.');
+  }
+
+  private resolveDirectDragHandle(object: THREE.Object3D): THREE.Object3D {
+    let candidate: THREE.Object3D | null = object;
+    while (candidate) {
+      if (this.lightGuideIds.has(candidate) || this.cameraGuideIds.has(candidate)) return candidate;
+      candidate = candidate.parent;
+    }
+    throw new Error('Model Preview direct-drag object has no registered handle.');
   }
 
   private detachGroundGrid(): void {
@@ -956,21 +1166,24 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   }
 
   private detachLightGuides(): void {
-    const transformTarget = this.transform.object;
-    if (transformTarget && this.lightGuideIds.has(transformTarget)) this.transform.detach();
+    this.clearDirectDragTarget();
     for (const guide of this.lightGuides.values()) {
-      this.scene.remove(guide.marker, guide.arrow);
-      disposeObjectTree(guide.marker);
+      this.scene.remove(guide.handle, guide.arrow);
+      disposeObjectTree(guide.handle);
       disposeObjectTree(guide.arrow);
     }
     this.lightGuides.clear();
+    this.syncDirectDragTarget();
   }
 
   private detachCameraGuide(): void {
     if (!this.cameraGuide) return;
-    this.scene.remove(this.cameraGuide);
-    disposeObjectTree(this.cameraGuide);
+    this.clearDirectDragTarget();
+    this.scene.remove(this.cameraGuide.handle, this.cameraGuide.frustum);
+    disposeObjectTree(this.cameraGuide.handle);
+    disposeObjectTree(this.cameraGuide.frustum);
     this.cameraGuide = undefined;
+    this.syncDirectDragTarget();
   }
 
   private emitViewState(): void {
@@ -1016,15 +1229,6 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
   private emitTransformChange(): void {
     const object = this.transform.object;
     if (!object) return;
-    const lightId = this.lightGuideIds.get(object);
-    if (lightId) {
-      if (!this.modelBounds) throw new Error('Model Preview renderer has no loaded model bounds.');
-      this.callbacks.onLightPositionChanged?.(
-        lightId,
-        getNormalizedModelLightPosition(this.modelBounds, object.position),
-      );
-      return;
-    }
     const nodePath = this.paths.get(object);
     if (!nodePath) throw new Error('Model Preview transform target is not registered.');
     this.callbacks.onTransformChanged?.(nodePath, serializeTransform(object));

@@ -5,6 +5,8 @@ import {
   assertPurposeCaptureAllowed,
   configureModelRendererColorPipeline,
   collectNormalizedFacts,
+  createModelCameraHandle,
+  createModelLightHandle,
   createExactUrlModifier,
   createGeometryMaterial,
   createRenderScheduler,
@@ -12,6 +14,7 @@ import {
   getModelGroundGridLayout,
   getModelCameraGuidePose,
   getModelLightGuidePose,
+  getNormalizedModelCameraPosition,
   getNormalizedModelLightPosition,
   getModelPixelRatio,
   getOrbitDistanceBounds,
@@ -187,6 +190,22 @@ describe('Three model runtime helpers', () => {
     expect(pose.radius).toBeCloseTo(Math.sqrt(6));
     expect(pose.position.toArray()).toEqual([0, Math.sqrt(6) / 2, Math.sqrt(6) * 2]);
     expect(pose.target.toArray()).toEqual([0, 1, 0]);
+    expect(getNormalizedModelCameraPosition(bounds, pose.position)).toEqual({
+      x: 0,
+      y: 0.5,
+      z: 2,
+    });
+  });
+
+  it('builds recognizable camera and light objects for direct pointer dragging', () => {
+    const camera = createModelCameraHandle(2);
+    const light = createModelLightHandle('key', 2);
+    expect(camera.name).toBe('Model Preview camera object');
+    expect(camera.children.filter((child) => child instanceof THREE.Mesh).length).toBeGreaterThan(
+      2,
+    );
+    expect(light.name).toBe('Model Preview light object: key');
+    expect(light.children.filter((child) => child instanceof THREE.Mesh).length).toBeGreaterThan(1);
   });
 
   it('round-trips a directional-light helper through normalized model bounds', () => {
