@@ -12,6 +12,7 @@ import {
 import type {
   ModelPreviewCameraPreset,
   ModelPreviewDiagnostic,
+  ModelPreviewLightEntry,
   ModelPreviewStagingState,
   ModelPreviewTransform,
   ModelPreviewVector3,
@@ -63,7 +64,17 @@ export function ModelInspectorPanel({
       : undefined;
   const selectedNode =
     selection.kind === 'node' ? nodes.find((node) => node.path === selection.nodePath) : undefined;
-  const presentation = inspectorPresentation(selection, selectedCamera, selectedNode, t);
+  const selectedLight =
+    selection.kind === 'light'
+      ? staging?.lightRig.lights.find((light) => light.id === selection.lightId)
+      : undefined;
+  const presentation = inspectorPresentation(
+    selection,
+    selectedCamera,
+    selectedLight,
+    selectedNode,
+    t,
+  );
 
   return (
     <aside
@@ -118,6 +129,14 @@ export function ModelInspectorPanel({
             onViewCamera={onViewCamera}
           />
         ) : null}
+        {selection.kind === 'light' ? (
+          <LightInspector
+            disabled={disabled}
+            light={selectedLight}
+            staging={staging}
+            onUpdateStaging={onUpdateStaging}
+          />
+        ) : null}
         {selection.kind === 'node' ? (
           <NodeInspector
             disabled={disabled}
@@ -165,41 +184,6 @@ function SceneInspector({
               if (staging) onUpdateStaging(updateModelEnvironmentIntensity(staging, value));
             }}
           />
-          {(staging?.lightRig.lights ?? []).map((light) => (
-            <div
-              className="model-preview__light-group"
-              key={light.id}
-              data-testid={`model-preview-light-${light.id}`}
-            >
-              <SliderPropertyRow
-                density="compact"
-                disabled={disabled}
-                id={`model-light-${light.id}`}
-                label={t(`preview.model.light.${light.id}`)}
-                min={0}
-                max={10}
-                step={0.1}
-                value={light.intensity}
-                onCommit={(_, value) => {
-                  if (staging) {
-                    onUpdateStaging(updateModelLight(staging, { ...light, intensity: value }));
-                  }
-                }}
-              />
-              <ColorPropertyRow
-                density="compact"
-                disabled={disabled}
-                id={`model-light-${light.id}-color`}
-                label={t('preview.model.color')}
-                value={normalizeColor(light.color)}
-                onCommit={(_, value) => {
-                  if (staging) {
-                    onUpdateStaging(updateModelLight(staging, { ...light, color: value }));
-                  }
-                }}
-              />
-            </div>
-          ))}
         </div>
       </PanelSection>
       <PanelSection
@@ -247,6 +231,61 @@ function SceneInspector({
             if (staging)
               onUpdateStaging(updateModelCapture(staging, { ...staging.capture, height }));
           }}
+        />
+      </PanelSection>
+    </div>
+  );
+}
+
+function LightInspector({
+  disabled,
+  light,
+  onUpdateStaging,
+  staging,
+}: {
+  readonly disabled: boolean;
+  readonly light?: ModelPreviewLightEntry;
+  readonly staging?: ModelPreviewStagingState;
+  readonly onUpdateStaging: (staging: ModelPreviewStagingState) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  if (!light || !staging) {
+    return <p className="model-preview__selection-empty">{t('preview.model.lightMissing')}</p>;
+  }
+  const updateLight = (next: ModelPreviewLightEntry): void =>
+    onUpdateStaging(updateModelLight(staging, next));
+  return (
+    <div data-testid="model-preview-light-inspector">
+      <PanelSection
+        className="model-preview__inspector-section"
+        density="compact"
+        disabled={disabled}
+        title={t('preview.model.lightProperties')}
+        description={t('preview.model.lightDirectionDescription')}
+      >
+        <SliderPropertyRow
+          density="compact"
+          disabled={disabled}
+          id={`model-light-${light.id}`}
+          label={t('preview.model.intensity')}
+          min={0}
+          max={10}
+          step={0.1}
+          value={light.intensity}
+          onCommit={(_, intensity) => updateLight({ ...light, intensity })}
+        />
+        <ColorPropertyRow
+          density="compact"
+          disabled={disabled}
+          id={`model-light-${light.id}-color`}
+          label={t('preview.model.color')}
+          value={normalizeColor(light.color)}
+          onCommit={(_, color) => updateLight({ ...light, color })}
+        />
+        <TransformAxisGroup
+          label={t('preview.model.lightPosition')}
+          value={light.position}
+          onCommit={(position) => updateLight({ ...light, position })}
         />
       </PanelSection>
     </div>
@@ -443,6 +482,7 @@ function NodeInspector({
 function inspectorPresentation(
   selection: ModelSceneSelection,
   camera: ModelPreviewCameraPreset | undefined,
+  light: ModelPreviewLightEntry | undefined,
   node: ModelPreviewNode | undefined,
   t: ReturnType<typeof useTranslation>['t'],
 ): {
@@ -450,7 +490,7 @@ function inspectorPresentation(
   readonly badgeIcon: 'lock' | 'edit';
   readonly description: string;
   readonly eyebrow: string;
-  readonly icon: 'device-camera' | 'person' | 'symbol-namespace';
+  readonly icon: 'device-camera' | 'lightbulb' | 'person' | 'symbol-namespace';
   readonly title: string;
 } {
   switch (selection.kind) {
@@ -471,6 +511,15 @@ function inspectorPresentation(
         eyebrow: t('preview.model.camera'),
         icon: 'device-camera',
         title: camera?.label ?? t('preview.model.cameraMissing'),
+      };
+    case 'light':
+      return {
+        badge: t('preview.model.temporaryLight'),
+        badgeIcon: 'edit',
+        description: t('preview.model.lightInspectorDescription'),
+        eyebrow: t('preview.model.lighting'),
+        icon: 'lightbulb',
+        title: light ? t(`preview.model.light.${light.id}`) : t('preview.model.lightMissing'),
       };
     case 'node':
       return {

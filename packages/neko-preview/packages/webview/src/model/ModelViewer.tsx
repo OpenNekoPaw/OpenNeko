@@ -34,6 +34,7 @@ import {
   removeModelCamera,
   selectModelCamera,
   selectModelNode,
+  updateModelLight,
 } from './modelStagingStore';
 import type { ModelSceneSelection } from './modelSceneSelection';
 import { ModelInspectorPanel } from './components/ModelInspectorPanel';
@@ -88,9 +89,16 @@ export function ModelViewer({
 
   useEffect(() => {
     runtimeRef.current?.setTransformEnabled(
-      viewportMode === 'inspect' && sceneSelection.kind === 'node',
+      viewportMode === 'inspect' &&
+        (sceneSelection.kind === 'node' || sceneSelection.kind === 'light'),
     );
   }, [sceneSelection.kind, viewportMode]);
+
+  useEffect(() => {
+    runtimeRef.current?.setLightGuide(
+      sceneSelection.kind === 'light' ? sceneSelection.lightId : undefined,
+    );
+  }, [sceneSelection]);
 
   useEffect(() => {
     const camera =
@@ -117,6 +125,19 @@ export function ModelViewer({
         setStaging((current) => {
           if (!current) return current;
           const next = patchModelTransform(current, nodePath, transform);
+          stagingRef.current = next;
+          const referenceStaging = referenceStagingRef.current;
+          if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
+          referenceStagingRef.current = postState(vscode, next, referenceStaging);
+          return next;
+        });
+      },
+      onLightPositionChanged(lightId, position) {
+        setStaging((current) => {
+          if (!current) return current;
+          const light = current.lightRig.lights.find((entry) => entry.id === lightId);
+          if (!light) throw new Error(`Unknown Model Preview light: ${lightId}`);
+          const next = updateModelLight(current, { ...light, position });
           stagingRef.current = next;
           const referenceStaging = referenceStagingRef.current;
           if (!referenceStaging) throw new Error('3D Reference staging is unavailable.');
@@ -289,6 +310,10 @@ export function ModelViewer({
             if (!staging) throw new Error('Model Preview staging is unavailable.');
             updateStaging(selectModelNode(staging, selection.nodePath));
             setViewportMode('inspect');
+          } else if (selection.kind === 'light') {
+            runtimeRef.current?.setTransformMode('translate');
+            setTransformMode('translate');
+            setViewportMode('inspect');
           } else {
             setViewportMode('navigate');
           }
@@ -307,7 +332,13 @@ export function ModelViewer({
           axesVisible={axesVisible}
           disabled={controlsDisabled}
           gridVisible={gridVisible}
-          hasSelection={sceneSelection.kind === 'node' && staging?.selectedNodePath !== undefined}
+          transformSelectionKind={
+            sceneSelection.kind === 'node' && staging?.selectedNodePath !== undefined
+              ? 'node'
+              : sceneSelection.kind === 'light'
+                ? 'light'
+                : undefined
+          }
           viewportMode={viewportMode}
           transformMode={transformMode}
           onAxesVisibleChange={setAxesVisible}

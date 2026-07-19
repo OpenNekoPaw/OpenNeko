@@ -11,11 +11,14 @@ import {
   disposeObjectTree,
   getModelGroundGridLayout,
   getModelCameraGuidePose,
+  getModelLightGuidePose,
+  getNormalizedModelLightPosition,
   getModelPixelRatio,
   getOrbitDistanceBounds,
   promoteOpaqueBlendMaterials,
   projectModelViewOrientation,
   shouldApplyModelCameraPose,
+  withObjectsHidden,
 } from './threeRuntime';
 
 describe('Three model runtime helpers', () => {
@@ -135,6 +138,24 @@ describe('Three model runtime helpers', () => {
     expect(pending).toHaveLength(0);
   });
 
+  it('hides editor helpers only for the capture operation and restores their visibility', () => {
+    const selectedLightMarker = new THREE.Object3D();
+    const selectedLightArrow = new THREE.Object3D();
+    const transformHelper = new THREE.Object3D();
+    selectedLightArrow.visible = false;
+
+    expect(
+      withObjectsHidden([selectedLightMarker, selectedLightArrow, transformHelper], () => [
+        selectedLightMarker.visible,
+        selectedLightArrow.visible,
+        transformHelper.visible,
+      ]),
+    ).toEqual([false, false, false]);
+    expect(selectedLightMarker.visible).toBe(true);
+    expect(selectedLightArrow.visible).toBe(false);
+    expect(transformHelper.visible).toBe(true);
+  });
+
   it('keeps orbit navigation outside model bounds', () => {
     expect(getOrbitDistanceBounds(4)).toEqual({ minDistance: 4.2, maxDistance: 80 });
   });
@@ -166,6 +187,20 @@ describe('Three model runtime helpers', () => {
     expect(pose.radius).toBeCloseTo(Math.sqrt(6));
     expect(pose.position.toArray()).toEqual([0, Math.sqrt(6) / 2, Math.sqrt(6) * 2]);
     expect(pose.target.toArray()).toEqual([0, 1, 0]);
+  });
+
+  it('round-trips a directional-light helper through normalized model bounds', () => {
+    const bounds = new THREE.Box3(new THREE.Vector3(-1, -2, -1), new THREE.Vector3(1, 2, 1));
+    const pose = getModelLightGuidePose(bounds, {
+      id: 'key',
+      color: '#ffffff',
+      intensity: 3,
+      position: { x: 3, y: 4, z: 4 },
+    });
+    expect(pose.radius).toBeCloseTo(Math.sqrt(6));
+    expect(pose.target.toArray()).toEqual([0, 0, 0]);
+    expect(pose.position.toArray()).toEqual([Math.sqrt(6) * 3, Math.sqrt(6) * 4, Math.sqrt(6) * 4]);
+    expect(getNormalizedModelLightPosition(bounds, pose.position)).toEqual({ x: 3, y: 4, z: 4 });
   });
 
   it('projects world XYZ axes into screen-space orientation', () => {

@@ -57,9 +57,12 @@ export function ModelScenePanel({
         </div>
         <span
           className="model-preview__count"
-          aria-label={`${nodes.length + (staging?.cameraPresets.length ?? 0) + 1}`}
+          aria-label={`${nodes.length + (staging?.cameraPresets.length ?? 0) + (staging?.lightRig.lights.length ?? 0) + 1}`}
         >
-          {nodes.length + (staging?.cameraPresets.length ?? 0) + 1}
+          {nodes.length +
+            (staging?.cameraPresets.length ?? 0) +
+            (staging?.lightRig.lights.length ?? 0) +
+            1}
         </span>
       </header>
       <div className="model-preview__search">
@@ -133,6 +136,14 @@ function buildModelSceneTree(
       actions: cameraActions(staging?.cameraPresets.length === 1, t),
     }));
   const characterItems = buildCharacterItems(nodes, normalizedQuery);
+  const lightItems = (staging?.lightRig.lights ?? [])
+    .map((light) => ({ light, label: t(`preview.model.light.${light.id}`) }))
+    .filter(({ label }) => matches(label))
+    .map(({ light, label }): TreeViewItem => ({
+      id: modelSceneSelectionId({ kind: 'light', lightId: light.id }),
+      label,
+      icon: icon('lightbulb'),
+    }));
   const sceneLabel = t('preview.model.sceneSettings');
   const items: TreeViewItem[] = [];
   if (matches(sceneLabel)) {
@@ -150,6 +161,16 @@ function buildModelSceneTree(
       icon: icon('device-camera'),
       expanded: true,
       children: cameraItems,
+    });
+  }
+  if (lightItems.length > 0 || normalizedQuery.length === 0) {
+    items.push({
+      id: 'model-group:lights',
+      label: t('preview.model.lights'),
+      description: `${staging?.lightRig.lights.length ?? 0}`,
+      icon: icon('lightbulb'),
+      expanded: true,
+      children: lightItems,
     });
   }
   if (characterItems.length > 0 || normalizedQuery.length === 0) {

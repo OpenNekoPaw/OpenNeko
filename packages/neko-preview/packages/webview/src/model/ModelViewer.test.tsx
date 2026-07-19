@@ -320,10 +320,16 @@ describe('ModelViewer', () => {
     mockWindow.dispose();
   });
 
-  it('switches scene, camera, and node inspectors while camera operations stay temporary', async () => {
+  it('switches scene, camera, light, and node inspectors while staging stays temporary', async () => {
     const mockWindow = installMockWebviewWindow();
     const runtime = fakeRuntime();
-    const factory: ThreeModelRuntimeFactory = { create: vi.fn(() => runtime.value) };
+    let callbacks: ThreeModelRuntimeCallbacks | undefined;
+    const factory: ThreeModelRuntimeFactory = {
+      create: vi.fn((_canvas, nextCallbacks) => {
+        callbacks = nextCallbacks;
+        return runtime.value;
+      }),
+    };
     const container = document.createElement('div');
     document.body.append(container);
     const root = ReactDOM.createRoot(container);
@@ -343,6 +349,41 @@ describe('ModelViewer', () => {
       'dataset.inspectorKind',
       'scene',
     );
+    const lightRow = container.querySelector<HTMLElement>(
+      '[data-tree-item-id="model-selection:light:key"]',
+    );
+    expect(lightRow).not.toBeNull();
+    await act(async () => lightRow?.click());
+    expect(container.querySelector('[data-testid="model-preview-inspector"]')).toHaveProperty(
+      'dataset.inspectorKind',
+      'light',
+    );
+    expect(container.querySelector('[data-testid="model-preview-light-inspector"]')).not.toBeNull();
+    expect(runtime.setLightGuide).toHaveBeenLastCalledWith('key');
+    expect(runtime.setTransformMode).toHaveBeenLastCalledWith('translate');
+    expect(runtime.setTransformEnabled).toHaveBeenLastCalledWith(true);
+    expect(
+      container.querySelector<HTMLButtonElement>('button[aria-label="Rotate"]')?.disabled,
+    ).toBe(true);
+    await act(async () => {
+      callbacks?.onLightPositionChanged?.('key', { x: 2, y: 3, z: 4 });
+    });
+    expect(runtime.applyStaging).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        revision: 1,
+        lightRig: expect.objectContaining({
+          lights: expect.arrayContaining([
+            expect.objectContaining({ id: 'key', position: { x: 2, y: 3, z: 4 } }),
+          ]),
+        }),
+      }),
+    );
+
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent('message', { data: loadMessage() }));
+      await Promise.resolve();
+    });
+    expect(runtime.setLightGuide).toHaveBeenLastCalledWith(undefined);
     runtime.setCameraGuide.mockClear();
     const cameraRow = container.querySelector<HTMLElement>(
       '[data-tree-item-id="model-selection:camera:camera-default"]',
@@ -531,6 +572,7 @@ function fakeRuntime() {
   const frameModel = vi.fn();
   const frameCamera = vi.fn();
   const setCameraGuide = vi.fn();
+  const setLightGuide = vi.fn();
   const setGroundGridVisible = vi.fn();
   const setPanoramaEnvironment = vi.fn(async () => undefined);
   const capturePurpose = vi.fn(() => 'data:image/png;base64,AA==');
@@ -569,6 +611,7 @@ function fakeRuntime() {
     setTransformEnabled: vi.fn(),
     setGroundGridVisible,
     setCameraGuide,
+    setLightGuide,
     frameCamera,
     frameModel,
     resize,
@@ -586,6 +629,9 @@ function fakeRuntime() {
     frameCamera,
     frameModel,
     setCameraGuide,
+    setLightGuide,
+    setTransformEnabled: value.setTransformEnabled,
+    setTransformMode: value.setTransformMode,
     setGroundGridVisible,
     setPanoramaEnvironment,
     capturePurpose,

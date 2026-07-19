@@ -20,6 +20,7 @@ export type CodiconName =
   | 'inbox'
   | 'inspect'
   | 'loading'
+  | 'lightbulb'
   | 'package'
   | 'lock'
   | 'move'

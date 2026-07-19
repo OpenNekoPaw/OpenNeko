@@ -91,6 +91,7 @@ const preview: MessageBundle = {
   'preview.model.searchHierarchy': 'Search scene items',
   'preview.model.sceneSettings': '3D scene',
   'preview.model.cameras': 'Cameras',
+  'preview.model.lights': 'Lights',
   'preview.model.characters': 'Characters',
   'preview.model.character': 'Character',
   'preview.model.searchNodes': 'Search model nodes',
@@ -145,6 +146,15 @@ const preview: MessageBundle = {
   'preview.model.light.key': 'Key',
   'preview.model.light.fill': 'Fill',
   'preview.model.light.rim': 'Rim',
+  'preview.model.lightMissing': 'Light unavailable',
+  'preview.model.lightProperties': 'Directional light',
+  'preview.model.lightPosition': 'Direction position',
+  'preview.model.lightDirectionDescription':
+    'Move the helper around the subject. Directional-light distance does not change brightness.',
+  'preview.model.lightInspectorDescription':
+    'Adjust this temporary directional light aimed at the subject center.',
+  'preview.model.temporaryLight': 'Temporary light',
+  'preview.model.intensity': 'Intensity',
   'preview.model.color': 'Color',
   'preview.model.output': 'Background and output',
   'preview.model.backgroundOutput': 'Background and output',
