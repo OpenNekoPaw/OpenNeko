@@ -26,6 +26,7 @@
 - [x] 3.7 Prove two purpose-model tools can run concurrently and that cancellation, usage, results, and later configuration changes remain isolated by conversation/turn/run snapshot.
 - [x] 3.8 Make Ask-mode non-read Tool confirmation Timeline-owned and ordering-safe in the VS Code Webview, add a bounded fail-visible wait, and prove no media task/provider request begins before approval.
 - [x] 3.9 Materialize NewAPI image `b64_json` or URL results at the owning provider boundary without forcing unsupported optional response parameters; classify a connection loss after synchronous submission as outcome-unknown and non-retryable, and prove neither normal materialization nor ambiguous failure automatically resubmits paid provider work.
+- [x] 3.10 Preserve complete nested semantic Tool schemas and Pi failure diagnostics across Hosts; make `ReadDocument` expose the discriminated `DocumentLocator` contract, reject incomplete chapter ranges before ContentAccess, and project the specific Pi error instead of empty data or a generic replacement message.
 
 ## 4. Eliminate replaced paths
 
@@ -42,3 +43,4 @@
 - [x] 5.3 Run the focused cases through the real TUI with available provider credentials/models, retain assertion-level reports and usage/cost evidence, and record exact blockers for any unexecuted real case.
 - [x] 5.4 Run affected package tests/typechecks/build plus repository Agent boundary, legacy-debt, unused-dependency, and OpenSpec strict checks.
 - [ ] 5.5 Measure the production VS Code Agent bundle and activation time; audit Pi/provider licenses, secrets/provenance, OAuth callback/port/cancellation, and absolute/cache-path disclosure boundaries; document residual risk before declaring migration complete.
+- [x] 5.6 Add deterministic schema/execution/event/Host projection regressions for incomplete `ReadDocument` chapter locators, run affected package tests/build/checks plus key-free Agent evaluation validation, and record the focused real-Agent evidence or exact fixture/infrastructure blocker.

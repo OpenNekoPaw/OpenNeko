@@ -56,6 +56,10 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/neko-agent/packages/agent/src/subagent/task-tool.ts',
         'packages/neko-agent/packages/agent/src/task/task-runtime.ts',
         'packages/neko-agent/packages/platform/src/media/media-task-executor.ts',
+        'packages/neko-content/src/document/read-document-tool.ts',
+        'packages/neko-agent/packages/agent/src/pi/event-projector.ts',
+        'packages/neko-agent/packages/extension/src/chat/message/piAgentStreamProcessor.ts',
+        'apps/neko-tui/src/tui/adapters/pi-event-adapter.ts',
         'apps/neko-tui/src/tui/core/tui-media-background-tasks.ts',
         'apps/neko-tui/src/tui/core/debug-automation/types.ts',
         'apps/neko-tui/src/tui/markdown/controller.ts',
@@ -93,6 +97,11 @@ describe('Agent Evaluation change-to-suite selector', () => {
           behaviorId: 'creative-media-workflow',
           suiteId: 'agent-runtime.creative-media-workflow',
           suiteIds: ['agent-runtime.creative-media-workflow'],
+        }),
+        expect.objectContaining({
+          behaviorId: 'tool-result-delivery',
+          suiteId: 'agent-runtime.stream-delivery',
+          suiteIds: ['agent-runtime.stream-delivery'],
         }),
         expect.objectContaining({
           behaviorId: 'tui-debug-facts',

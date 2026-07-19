@@ -170,6 +170,30 @@ describe('content access tools', () => {
     });
   });
 
+  it('rejects an incomplete chapter locator before invoking AgentContentAccessRuntime', async () => {
+    const runtime = createRuntime();
+
+    const result = await createReadDocumentTool({ contentAccessRuntime: runtime }).execute({
+      source: { kind: 'file', path: '${A}/books/book.epub' },
+      mode: 'range',
+      range: {
+        locator: { kind: 'chapter', spineIndex: 304 },
+        endLocator: { kind: 'chapter', spineIndex: 401 },
+        limit: { maxChars: 1000, maxImages: 100 },
+      },
+      include_images: true,
+      max_chars: 1000,
+      max_images: 100,
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error:
+        'ReadDocument range.locator must match a DocumentLocator; chapter locators require chapterHref.',
+    });
+    expect(runtime.resolveDocumentContent).not.toHaveBeenCalled();
+  });
+
   it('localizes generated ReadDocument image-only placeholder text for Chinese prompt context', async () => {
     const runtime = createRuntime();
     runtime.resolveDocumentContent.mockResolvedValueOnce({

@@ -21,6 +21,12 @@ const RULES = Object.freeze([
     'scripts/agent-eval/',
     '.codex/skills/neko-agent-evaluation/',
   ]),
+  rule('tool-result-delivery', 'agent-runtime.stream-delivery', [
+    'packages/neko-content/src/document/read-document-tool.ts',
+    'packages/neko-agent/packages/agent/src/pi/event-projector.ts',
+    'packages/neko-agent/packages/extension/src/chat/message/piAgentStreamProcessor.ts',
+    'apps/neko-tui/src/tui/adapters/pi-event-adapter.ts',
+  ]),
   rule('tui-debug-facts', 'agent-runtime.single-message-tui', [
     'apps/neko-tui/src/tui/core/debug-automation/',
   ]),
@@ -131,6 +137,7 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('apps/neko-tui/') ||
     path.startsWith('packages/neko-agent/packages/extension/src/tools/') ||
     path.startsWith('packages/neko-agent/packages/platform/src/') ||
+    path === 'packages/neko-content/src/document/read-document-tool.ts' ||
     path.startsWith('scripts/agent-eval/')
   );
 }

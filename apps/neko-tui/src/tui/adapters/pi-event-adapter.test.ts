@@ -93,5 +93,12 @@ describe('TUI Pi event adapter', () => {
         error: 'denied',
       }),
     ]);
+    expect(adapter.getTerminalToolResults()).toEqual([
+      {
+        name: 'InspectAsset',
+        success: false,
+        data: undefined,
+      },
+    ]);
   });
 });

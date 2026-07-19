@@ -73,6 +73,8 @@ Tool registration first filters unavailable purpose bindings and host requiremen
 
 Existing domain schemas are converted once at registration. Invalid schema or arguments fail visibly. Experimental Skill `allowed-tools` metadata is preserved for display/round-trip only and does not mutate the runtime registry or permission result.
 
+Model-visible nested Tool schemas must preserve the owning domain contract rather than collapsing semantic objects to unconstrained `object` placeholders. In particular, `ReadDocument` exposes the complete discriminated `DocumentLocator` union so Pi rejects an incomplete chapter locator before ContentAccess runs. Pi error results use text content as the canonical diagnostic when the upstream result has no structured details; the Pi-event-to-product boundary normalizes that diagnostic into a failed `ToolResult` for every Host instead of projecting empty data or a generic replacement message.
+
 Domain tool names remain OpenNeko identities and may contain package separators such as `.` or `:`. The Pi boundary projects only incompatible names to stable, distinct OpenAI-compatible wire names of at most 64 characters. Permission, execution, diagnostics, and product events resolve the wire name back to the original domain identity. A projection collision or unknown wire name fails visibly; owning packages do not learn provider naming rules and no parallel tool registry is introduced.
 
 ### Skill Host is metadata plus Pi Skill

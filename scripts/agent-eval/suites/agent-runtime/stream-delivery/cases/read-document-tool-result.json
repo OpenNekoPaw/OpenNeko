@@ -1,0 +1,75 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "read-document-tool-result",
+  "suiteId": "agent-runtime.stream-delivery",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Read a committed synthetic document through ReadDocument and deliver its structured Tool result through the Pi runtime.",
+    "canonicalPath": [
+      "TUI input queue",
+      "Pi Agent Tool schema",
+      "ReadDocument",
+      "Pi Tool result projector",
+      "terminal answer"
+    ],
+    "forbiddenFallback": [
+      "private EPUB fixture",
+      "direct Host file read",
+      "empty Tool result projection",
+      "textual Tool imitation"
+    ],
+    "observables": [
+      {
+        "ref": "read-document-facts",
+        "kind": "runtime-fact",
+        "description": "Pi runtime identity, successful ReadDocument Tool result, and terminal answer facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "ReadDocument accepts its projected schema, reads the synthetic Fountain document once, and returns a successful Tool result before the final marker.",
+    "expectedFailure": "Provider schema rejection, missing or failed ReadDocument execution, runtime diagnostics, or a missing terminal marker fails visibly."
+  },
+  "fixtureRefs": ["creative-planning-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "调用 ReadDocument 一次，以 content mode 读取 ${A}/screenplay.fountain，include_images=false、max_chars=1000；不要调用其他工具。读取成功后，简短说明场景地点并单独输出 READ_DOCUMENT_DELIVERY_OK。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "read-document-facts" },
+    { "id": "idle", "kind": "fully-idle", "evidenceRef": "read-document-facts" },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "evidenceRef": "read-document-facts"
+    },
+    {
+      "id": "tool",
+      "kind": "tool-call",
+      "name": "ReadDocument",
+      "status": "success",
+      "evidenceRef": "read-document-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["READ_DOCUMENT_DELIVERY_OK"],
+      "evidenceRef": "read-document-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

@@ -165,7 +165,12 @@ function toolResultDetails(value: unknown): {
   if (!isRecord(details)) {
     return { data: details, ...readToolResultCollections(details) };
   }
-  const data = 'data' in details ? details.data : details;
+  const data =
+    typeof details.success === 'boolean'
+      ? details.data
+      : 'data' in details
+        ? details.data
+        : details;
   const error = 'error' in details && typeof details.error === 'string' ? details.error : undefined;
   return {
     data,

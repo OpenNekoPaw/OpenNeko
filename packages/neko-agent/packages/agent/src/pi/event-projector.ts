@@ -141,7 +141,7 @@ export class PiEventProjector {
           type: 'tool.completed',
           toolCallId: event.toolCallId,
           toolName: this.resolveToolName(event.toolName),
-          result: structuredClone(event.result),
+          result: projectToolResult(event.result, event.isError),
           isError: event.isError,
         });
         return;
@@ -251,4 +251,51 @@ function validateIdentity(identity: PiToolRunIdentity): void {
 
 function identityToolName(toolName: string): string {
   return toolName;
+}
+
+function projectToolResult(result: unknown, isError: boolean): unknown {
+  const snapshot = structuredClone(result);
+  if (!isError) return snapshot;
+
+  const resultRecord = asRecord(snapshot);
+  const details = asRecord(resultRecord?.['details']);
+  if (details?.['success'] === false && typeof details['error'] === 'string') {
+    return snapshot;
+  }
+
+  const error = readToolErrorText(resultRecord?.['content']);
+  const preservedData =
+    details && Object.keys(details).length > 0
+      ? (details['data'] ?? details)
+      : resultRecord === undefined
+        ? snapshot
+        : undefined;
+  return {
+    ...(resultRecord ?? {}),
+    details: {
+      success: false,
+      ...(preservedData === undefined ? {} : { data: preservedData }),
+      error: error ?? 'Pi tool execution failed without a diagnostic.',
+    },
+  };
+}
+
+function readToolErrorText(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const text = value
+    .flatMap((part) => {
+      const record = asRecord(part);
+      return record?.['type'] === 'text' && typeof record['text'] === 'string'
+        ? [record['text'].trim()]
+        : [];
+    })
+    .filter((part) => part.length > 0)
+    .join('\n');
+  return text.length > 0 ? text : undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }

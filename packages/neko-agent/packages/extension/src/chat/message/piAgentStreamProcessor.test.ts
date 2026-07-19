@@ -156,6 +156,65 @@ describe('Pi Agent Webview stream projection', () => {
     );
     expect(phases).toContainEqual({ phase: 'acting', toolName: 'ReadProject' });
   });
+
+  it('projects a specific failed Tool diagnostic without empty data or a generic replacement', async () => {
+    const webviewMessages: unknown[] = [];
+    const session = createPiAgentStreamSession({
+      webview: { postMessage: async (message: unknown) => webviewMessages.push(message) } as never,
+      conversationId: 'conversation-1',
+      messageId: 'message-1',
+      projection: { conversationId: 'conversation-1', apply: vi.fn() } as never,
+      onPhaseChange: vi.fn(),
+      projectMessage: async (message) => message,
+      isActive: () => true,
+    });
+
+    await emit(session.events, { type: 'turn.started' });
+    await emit(session.events, {
+      type: 'tool.started',
+      toolCallId: 'tool-read-document',
+      toolName: 'ReadDocument',
+      args: { range: { locator: { kind: 'chapter', spineIndex: 304 } } },
+    });
+    await emit(session.events, {
+      type: 'tool.completed',
+      toolCallId: 'tool-read-document',
+      toolName: 'ReadDocument',
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: 'ReadDocument range.locator: chapter locators require chapterHref.',
+          },
+        ],
+        details: {
+          success: false,
+          error: 'ReadDocument range.locator: chapter locators require chapterHref.',
+        },
+      },
+      isError: true,
+    });
+    await emit(session.events, { type: 'turn.completed' });
+
+    expect(session.result().collectedToolCalls).toContainEqual(
+      expect.objectContaining({
+        id: 'tool-read-document',
+        result: {
+          success: false,
+          data: undefined,
+          error: 'ReadDocument range.locator: chapter locators require chapterHref.',
+        },
+      }),
+    );
+    expect(webviewMessages).toContainEqual({
+      type: 'toolResult',
+      conversationId: 'conversation-1',
+      messageId: 'message-1',
+      toolCallId: 'tool-read-document',
+      success: false,
+      data: undefined,
+    });
+  });
 });
 
 async function emit(

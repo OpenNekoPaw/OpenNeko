@@ -43,6 +43,107 @@ const CONTENT_SOURCE_REF_PARAMETER: ToolParameterProperty = {
   additionalProperties: true,
 };
 
+const DOCUMENT_LOCATOR_PARAMETER: ToolParameterProperty = {
+  type: 'object',
+  description:
+    'Semantic locator copied from ReadDocument manifest output. Chapter locators require chapterHref; spineIndex alone is invalid.',
+  anyOf: [
+    {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['page'] },
+        pageNumber: { type: 'number' },
+        pageIndex: { type: 'number' },
+        entryName: { type: 'string', minLength: 1 },
+      },
+      required: ['kind', 'pageNumber', 'pageIndex'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['chapter'] },
+        chapterHref: {
+          type: 'string',
+          minLength: 1,
+          description: 'Required chapter href copied exactly from the document manifest.',
+        },
+        spineIndex: { type: 'integer', minimum: 0 },
+        title: { type: 'string', minLength: 1 },
+        cfi: { type: 'string', minLength: 1 },
+      },
+      required: ['kind', 'chapterHref'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['slide'] },
+        slideNumber: { type: 'number' },
+        slideIndex: { type: 'number' },
+      },
+      required: ['kind', 'slideNumber', 'slideIndex'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['text-range'] },
+        startChar: { type: 'number' },
+        endChar: { type: 'number' },
+        startLine: { type: 'number' },
+        endLine: { type: 'number' },
+        paragraphIndex: { type: 'number' },
+        heading: { type: 'string', minLength: 1 },
+      },
+      required: ['kind'],
+      additionalProperties: false,
+    },
+    {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['region'] },
+        pageNumber: { type: 'number' },
+        pageIndex: { type: 'number' },
+        entryName: { type: 'string', minLength: 1 },
+        region: {
+          type: 'object',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            width: { type: 'number' },
+            height: { type: 'number' },
+          },
+          required: ['x', 'y', 'width', 'height'],
+          additionalProperties: false,
+        },
+      },
+      required: ['kind', 'pageNumber', 'region'],
+      additionalProperties: false,
+    },
+  ],
+};
+
+const DOCUMENT_RANGE_PARAMETER: ToolParameterProperty = {
+  type: 'object',
+  description:
+    'Semantic document range for mode="range". Copy complete locator values from the document manifest.',
+  properties: {
+    locator: DOCUMENT_LOCATOR_PARAMETER,
+    endLocator: DOCUMENT_LOCATOR_PARAMETER,
+    limit: {
+      type: 'object',
+      properties: {
+        maxChars: { type: 'integer', minimum: 1 },
+        maxImages: { type: 'integer', minimum: 1 },
+      },
+      additionalProperties: false,
+    },
+  },
+  required: ['locator'],
+  additionalProperties: false,
+};
+
 type ReadDocumentMode = 'content' | 'manifest' | 'range' | 'next';
 
 export interface ReadDocumentToolDeps {
@@ -134,9 +235,7 @@ export function createReadDocumentTool(deps: ReadDocumentToolDeps): Tool {
             'Read mode. content returns document text; manifest returns structure; range reads a semantic locator; next continues a batch cursor.',
         },
         range: {
-          type: 'object',
-          description:
-            'Semantic document range for mode="range": { locator: <DocumentLocator>, endLocator?: <DocumentLocator>, limit?: { maxChars?, maxImages? } }.',
+          ...DOCUMENT_RANGE_PARAMETER,
         },
         cursor: {
           type: 'object',
@@ -213,7 +312,7 @@ async function executeReadDocument(
   const mode = readMode(args['mode']);
   const range = args['range'] === undefined ? undefined : readDocumentRange(args['range']);
   if (mode === 'range' && !range) {
-    return { success: false, error: 'ReadDocument range mode requires a valid range.' };
+    return { success: false, error: describeInvalidDocumentRange(args['range']) };
   }
   const cursor = args['cursor'] === undefined ? undefined : readDocumentCursor(args['cursor']);
   if (mode === 'next' && !cursor) {
@@ -322,6 +421,31 @@ function readDocumentRange(value: unknown): DocumentRange | undefined {
     ...(endLocator ? { endLocator } : {}),
     ...(limit ? { limit } : {}),
   };
+}
+
+function describeInvalidDocumentRange(value: unknown): string {
+  const range = asRecord(value);
+  if (!range) {
+    return 'ReadDocument range must be an object with a valid locator.';
+  }
+  const locator = asRecord(range['locator']);
+  if (locator?.['kind'] === 'chapter' && !readString(locator['chapterHref'])) {
+    return 'ReadDocument range.locator must match a DocumentLocator; chapter locators require chapterHref.';
+  }
+  if (!parseDocumentLocator(range['locator'])) {
+    return 'ReadDocument range.locator must match a DocumentLocator.';
+  }
+  const endLocator = asRecord(range['endLocator']);
+  if (endLocator?.['kind'] === 'chapter' && !readString(endLocator['chapterHref'])) {
+    return 'ReadDocument range.endLocator must match a DocumentLocator; chapter locators require chapterHref.';
+  }
+  if (range['endLocator'] !== undefined && !parseDocumentLocator(range['endLocator'])) {
+    return 'ReadDocument range.endLocator must match a DocumentLocator.';
+  }
+  if (readDocumentLimit(range['limit']) === null) {
+    return 'ReadDocument range.limit must contain positive integer maxChars/maxImages values.';
+  }
+  return 'ReadDocument range must contain a valid locator and optional endLocator/limit.';
 }
 
 function readDocumentLimit(value: unknown): DocumentRange['limit'] | null | undefined {

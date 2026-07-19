@@ -130,6 +130,44 @@ describe('PiEventProjector', () => {
       'arrived after terminal turn state',
     );
   });
+
+  it('preserves a Pi text diagnostic when failed Tool details are empty', async () => {
+    const events: PiProductAgentEvent[] = [];
+    const projector = new PiEventProjector(identity, {
+      emit: (event) => {
+        events.push(event);
+      },
+    });
+
+    await projector.project({
+      type: 'tool_execution_end',
+      toolCallId: 'tool-read-document',
+      toolName: 'ReadDocument',
+      result: {
+        content: [
+          {
+            type: 'text',
+            text: 'ReadDocument range.locator: chapter locators require chapterHref.',
+          },
+        ],
+        details: {},
+      },
+      isError: true,
+    });
+
+    expect(events).toEqual([
+      expect.objectContaining({
+        type: 'tool.completed',
+        result: expect.objectContaining({
+          details: {
+            success: false,
+            error: 'ReadDocument range.locator: chapter locators require chapterHref.',
+          },
+        }),
+        isError: true,
+      }),
+    ]);
+  });
 });
 
 function messageUpdate(

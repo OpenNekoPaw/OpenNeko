@@ -72,6 +72,16 @@ Unknown tools, invalid arguments, missing host requirements, cancelled work, pro
 - **WHEN** Pi produces arguments that fail the registered semantic tool schema
 - **THEN** execution is rejected with a diagnostic and the owning capability is not invoked
 
+#### Scenario: Reject an incomplete document chapter locator
+
+- **WHEN** Pi calls `ReadDocument` range mode with a chapter locator that contains `spineIndex` but omits the required `chapterHref`
+- **THEN** the registered discriminated locator schema rejects the call before ContentAccess or the EPUB reader runs and reports the missing semantic locator contract
+
+#### Scenario: Project a Pi tool failure to product Hosts
+
+- **WHEN** Pi reports a failed Tool result whose diagnostic is present in result content while structured details are empty
+- **THEN** the Pi event boundary preserves that diagnostic as a failed product Tool result for TUI and VS Code, and neither Host receives empty data with a generic replacement error
+
 ### Requirement: Pi Provider and Auth contracts are canonical for supported main models
 
 For Pi-supported main/chat providers, the system MUST use Pi provider/model registration, credential interpretation, OAuth login/refresh/logout, and `CredentialStore` contracts. The legacy Platform provider/auth path MUST NOT provide fallback success.

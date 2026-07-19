@@ -14,11 +14,13 @@ import {
   type SimpleStreamOptions,
 } from '@earendil-works/pi-ai';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
+import { createReadDocumentTool } from '@neko/content/document';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PiConversationRuntime } from '../conversation-runtime';
 import { DEFAULT_PI_MODEL_REQUEST_TIMEOUT_MS, resolveAgentModelPolicy } from '../model-policy';
 import { NodePiConversationAuthority } from '../node-conversation-authority';
+import { projectOpenNekoTool } from '../openneko-tool';
 import { PiSkillHost } from '../skill-host';
 import type { PiProductAgentEvent } from '../event-projector';
 
@@ -136,6 +138,84 @@ describe('PiConversationRuntime', () => {
       }),
       expect.objectContaining({ role: 'assistant' }),
     ]);
+    runtime.dispose();
+  });
+
+  it('rejects an incomplete ReadDocument chapter locator before capability execution', async () => {
+    const lease = authority.acquireLease('conversation-1');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+    });
+    const responses = [
+      assistantContent('toolUse', [
+        {
+          type: 'toolCall' as const,
+          id: 'read-document-1',
+          name: 'ReadDocument',
+          arguments: {
+            source: { kind: 'file', path: '${A}/books/book.epub' },
+            mode: 'range',
+            range: {
+              locator: { kind: 'chapter', spineIndex: 304 },
+              endLocator: { kind: 'chapter', spineIndex: 401 },
+            },
+          },
+        },
+      ]),
+      assistant('stop', 'invalid document range rejected'),
+    ];
+    const models = createFixtureModels(() => {
+      const response = responses.shift();
+      if (response === undefined) throw new Error('Unexpected extra Pi model turn.');
+      return completedStream(response);
+    });
+    const modelPolicy = policy();
+    const resolveDocumentContent = vi.fn();
+    const permissionPreflight = vi.fn(() => ({ allowed: true as const }));
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'OpenNeko fixture',
+    });
+    const events: PiProductAgentEvent[] = [];
+
+    await runtime.execute({
+      turnId: 'turn-read-document',
+      runId: 'run-read-document',
+      prompt: 'read the document range',
+      modelPolicy,
+      skillSnapshot: await emptySkills(),
+      capabilityTools: [
+        projectOpenNekoTool(
+          createReadDocumentTool({ contentAccessRuntime: { resolveDocumentContent } }),
+        ),
+      ],
+      permissionPolicy: { preflight: permissionPreflight },
+      workspaceTrusted: true,
+      events: collect(events),
+    });
+
+    expect(resolveDocumentContent).not.toHaveBeenCalled();
+    expect(permissionPreflight).not.toHaveBeenCalled();
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'tool.completed',
+        toolCallId: 'read-document-1',
+        isError: true,
+        result: expect.objectContaining({
+          details: expect.objectContaining({
+            success: false,
+            error: expect.stringContaining('chapterHref'),
+          }),
+        }),
+      }),
+    );
     runtime.dispose();
   });
 

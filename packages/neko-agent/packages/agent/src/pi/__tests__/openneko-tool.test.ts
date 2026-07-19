@@ -4,6 +4,8 @@ import {
   TOOL_NAMES_QUALITY,
   type Tool,
 } from '@neko/shared';
+import { createReadDocumentTool } from '@neko/content/document';
+import { Value } from 'typebox/value';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -82,6 +84,34 @@ describe('OpenNeko tool projection to Pi', () => {
     expect(projected.requirements).toEqual({ workspaceTrust: true });
     expect(projected.isReadOnly).toBe(true);
     expect(projected.requiresConfirmation).toBe(false);
+  });
+
+  it('projects the complete ReadDocument chapter locator contract to Pi', () => {
+    const projected = projectOpenNekoTool(createReadDocumentTool({}));
+    const base = {
+      source: { kind: 'file', path: '${A}/books/book.epub' },
+      mode: 'range',
+      range: {
+        locator: { kind: 'chapter', spineIndex: 304 },
+        endLocator: { kind: 'chapter', spineIndex: 401 },
+        limit: { maxChars: 1000, maxImages: 100 },
+      },
+      include_images: true,
+      max_chars: 1000,
+      max_images: 100,
+    };
+
+    expect(Value.Check(projected.parameters, base)).toBe(false);
+    expect(
+      Value.Check(projected.parameters, {
+        ...base,
+        range: {
+          ...base.range,
+          locator: { kind: 'chapter', chapterHref: 'page-305.xhtml', spineIndex: 304 },
+          endLocator: { kind: 'chapter', chapterHref: 'page-402.xhtml', spineIndex: 401 },
+        },
+      }),
+    ).toBe(true);
   });
 
   it('executes through the owning Tool with explicit identity and model facts', async () => {
