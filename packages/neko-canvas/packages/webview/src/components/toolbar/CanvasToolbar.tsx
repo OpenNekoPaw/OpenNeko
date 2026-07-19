@@ -21,6 +21,7 @@ import {
   RedoIcon,
   LayersIcon,
   PackageIcon,
+  PointerIcon,
   RightPanelIcon,
   RightPanelOffIcon,
 } from '@neko/ui/icons';
@@ -102,7 +103,7 @@ export function CanvasToolbar({
         <ToolbarButton
           data-canvas-toolbar-action="select-tool"
           data-canvas-toolbar-kind="tool-mode"
-          icon={<SelectToolIcon />}
+          icon={<PointerIcon size={18} />}
           title={`${t('toolbar.selectTool')} (V)`}
           active={isSelectMode}
           onClick={onSelectTool}
@@ -216,18 +217,6 @@ export function CanvasToolbar({
         />
       )}
     </VerticalToolbar>
-  );
-}
-
-function SelectToolIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-      <path
-        d="M5 3l12 9-5 1.2 3.4 5.9-2.5 1.4-3.3-5.8L6 18z"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 

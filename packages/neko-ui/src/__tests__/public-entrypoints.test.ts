@@ -33,6 +33,8 @@ describe('@neko/ui public entrypoints', () => {
     expect(primitives.buildMenuSection).toBe(ui.buildMenuSection);
     expect(primitives.SegmentedControl).toBe(ui.SegmentedControl);
     expect(icons.toCodiconClassName('play')).toBe('codicon codicon-play');
+    expect(icons.PointerIcon).toBe(ui.PointerIcon);
+    expect(icons.FrameSelectionIcon).toBe(ui.FrameSelectionIcon);
     expect(hooks.useResizable).toBeTypeOf('function');
     expect(workbench.CreativeWorkbenchShell).toBe(ui.CreativeWorkbenchShell);
     expect(workbench.CreativeLeftRail).toBe(ui.CreativeLeftRail);

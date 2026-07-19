@@ -56,3 +56,14 @@ export {
   RightPanelOffIcon,
   SettingsIcon,
 } from './editor';
+
+export {
+  PointerIcon,
+  InspectIcon,
+  MoveIcon,
+  RotateIcon,
+  ScaleIcon,
+  GridIcon,
+  AxesIcon,
+  FrameSelectionIcon,
+} from './viewport';

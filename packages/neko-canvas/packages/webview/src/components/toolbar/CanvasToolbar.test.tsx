@@ -11,6 +11,7 @@ vi.mock('@neko/ui/icons', () => ({
   LayersIcon: ({ size = 16 }: { size?: number }) => <span data-icon="layers">{size}</span>,
   PackageIcon: ({ size = 16 }: { size?: number }) => <span data-icon="package">{size}</span>,
   PlayIcon: ({ size = 16 }: { size?: number }) => <span data-icon="play">{size}</span>,
+  PointerIcon: ({ size = 16 }: { size?: number }) => <span data-icon="pointer">{size}</span>,
   RedoIcon: ({ size = 16 }: { size?: number }) => <span data-icon="redo">{size}</span>,
   RightPanelIcon: ({ size = 16 }: { size?: number }) => <span data-icon="right-panel">{size}</span>,
   RightPanelOffIcon: ({ size = 16 }: { size?: number }) => (
