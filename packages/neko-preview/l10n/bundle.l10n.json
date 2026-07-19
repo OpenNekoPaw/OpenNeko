@@ -1,2 +1,7 @@
 {
+  "preview.threeReference.preset.femaleMannequin": "Adult female mannequin",
+  "preview.threeReference.preset.maleMannequin": "Adult male mannequin",
+  "preview.threeReference.preset.childMannequin": "Child mannequin",
+  "preview.threeReference.preset.guideDescription": "Guide only · Pose and camera",
+  "preview.threeReference.preset.choosePlaceholder": "Choose a base mannequin"
 }

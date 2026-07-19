@@ -37,9 +37,11 @@ vi.mock('vscode', () => {
   return {
     Uri,
     EventEmitter: MockEventEmitter,
+    l10n: { t: vi.fn((key: string) => key) },
     window: {
       registerCustomEditorProvider: vi.fn(() => ({ dispose: vi.fn() })),
       showOpenDialog: vi.fn(),
+      showQuickPick: vi.fn(),
       showWarningMessage: vi.fn(),
       createStatusBarItem: vi.fn(() => ({
         text: '',
@@ -210,6 +212,10 @@ function createMockContext(): vscode.ExtensionContext {
 describe('extension', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(vscode.window.showQuickPick).mockImplementation(async (items) => {
+      const resolvedItems = await items;
+      return resolvedItems[0];
+    });
     mockPreviewService.isAvailable = true;
     mockPreviewService.port = 9090;
   });
@@ -292,7 +298,17 @@ describe('extension', () => {
       expect(registration).toBeDefined();
       await registration?.[1]();
       const provider = vi.mocked(ModelPreviewProvider).mock.results[0]?.value;
-      expect(provider.openBuiltinPresetPanel).toHaveBeenCalledWith('guide-neutral-mannequin');
+      expect(vscode.window.showQuickPick).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({ presetId: 'guide-mannequin-female' }),
+          expect.objectContaining({ presetId: 'guide-mannequin-male' }),
+          expect.objectContaining({ presetId: 'guide-mannequin-child' }),
+        ],
+        expect.objectContaining({
+          placeHolder: 'preview.threeReference.preset.choosePlaceholder',
+        }),
+      );
+      expect(provider.openBuiltinPresetPanel).toHaveBeenCalledWith('guide-mannequin-female');
       expect(vscode.window.showOpenDialog).not.toHaveBeenCalled();
     });
 

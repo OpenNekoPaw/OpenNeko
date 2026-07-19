@@ -26,6 +26,7 @@ import {
 } from './providers/document/EpubPreviewProvider';
 import { DocxPreviewProvider } from './providers/document/DocxPreviewProvider';
 import { ModelPreviewProvider } from './providers/model/ModelPreviewProvider';
+import { THREE_REFERENCE_PRESET_CATALOG } from './providers/model/threeReferencePresetCatalog';
 import { ThreeReferenceOutputCollector } from './providers/model/ThreeReferenceOutputCollector';
 import {
   materializeThreeReferenceCapture,
@@ -222,7 +223,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
       if (!modelProvider) {
         throw new Error('3D Reference provider is unavailable.');
       }
-      await modelProvider.openBuiltinPresetPanel('guide-neutral-mannequin');
+      const mannequinPresets = THREE_REFERENCE_PRESET_CATALOG.filter(
+        (entry) => entry.presetKind === 'mannequin',
+      ).map((entry) => ({
+        label: mannequinPresetLabel(entry.presetId),
+        description: vscode.l10n.t('preview.threeReference.preset.guideDescription'),
+        presetId: entry.presetId,
+      }));
+      const picked = await vscode.window.showQuickPick(mannequinPresets, {
+        placeHolder: vscode.l10n.t('preview.threeReference.preset.choosePlaceholder'),
+        matchOnDescription: true,
+      });
+      if (picked) await modelProvider.openBuiltinPresetPanel(picked.presetId);
     }),
   );
 
@@ -659,6 +671,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
   };
 
   return api;
+}
+
+function mannequinPresetLabel(presetId: string): string {
+  switch (presetId) {
+    case 'guide-mannequin-female':
+      return vscode.l10n.t('preview.threeReference.preset.femaleMannequin');
+    case 'guide-mannequin-male':
+      return vscode.l10n.t('preview.threeReference.preset.maleMannequin');
+    case 'guide-mannequin-child':
+      return vscode.l10n.t('preview.threeReference.preset.childMannequin');
+    default:
+      throw new Error(`Unknown built-in mannequin preset label: ${presetId}`);
+  }
 }
 
 async function revealDocumentLocator(input: RevealDocumentLocatorInput): Promise<void> {

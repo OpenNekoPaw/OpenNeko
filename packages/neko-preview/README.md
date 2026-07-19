@@ -26,7 +26,7 @@
 | 机位 | 模型、素体或环境场景 | 相机画幅和捕获图；修改其它面板项不会重置当前 orbit |
 | 720° 场景 | 经 Extension 授权的全景图 | 保留 yaw、pitch、FOV 与环境身份；不转成形象参考 |
 
-内置目录由 Preview 以不可变 ID/version/fingerprint 声明，当前内容均为项目自制的程序化几何，二进制资产增量为 0 B，许可证标记为 `LicenseRef-OpenNeko`。`guide-neutral-mannequin`、blockout props/studio 和中性全景方向网格只用于构图、姿势与空间指示，不是角色形象参考。
+内置目录由 Preview 以不可变 ID/version/fingerprint 声明，当前内容均为项目自制的程序化几何，二进制资产增量为 0 B。成年女性、成年男性和儿童三种平滑素体，以及 blockout props/studio 和中性全景方向网格，只用于构图、姿势与空间指示，不是角色形象参考。
 
 ### 标准 3D 格式
 
