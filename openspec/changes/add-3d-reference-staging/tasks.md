@@ -10,8 +10,8 @@
 - [x] 2.1 Implement a bounded feasibility spike comparing corrected project-owned procedural geometry with one audited rigged GLB for mannequin articulation, landmarks, pose output, package size, load time, render quality, and recursive disposal; record the decision in `design.md` before production implementation.
 - [x] 2.2 Define the immutable Preview-owned preset catalog contract with stable ID/version/fingerprint, kind, allowed purposes, default scale, pose/environment capabilities, exact packaged dependencies, provenance, and license metadata.
 - [x] 2.3 Add red catalog validation tests for duplicate/unknown IDs, incompatible versions, fingerprint mismatch, invalid joint/render-pass metadata, undeclared dependencies, missing notices, and guide presets that expose appearance.
-- [x] 2.4 Add the minimum project-authored or redistribution-safe guide catalog: abstract articulated mannequin, primitive/blockout props, studio/room blockout, and neutral panoramic orientation grid; include audited notice/provenance records.
-- [x] 2.5 Add build ownership and lazy-load tests proving non-3D Preview entries do not fetch or instantiate preset assets; record actual per-asset/aggregate bundle size and supported-host load/disposal measurements.
+- [ ] 2.4 Add the minimum project-authored guide catalog: smooth adult-male, adult-female, and child articulated mannequins, primitive/blockout props, studio/room blockout, and neutral panoramic orientation grid; include audited notice/provenance records and reject the former single placeholder mannequin identity.
+- [ ] 2.5 Add build ownership and lazy-load tests proving non-3D Preview entries do not fetch or instantiate preset assets; record the revised aggregate bundle size plus supported-host construction/render/disposal measurements for all three mannequins.
 
 ## 3. Extend the Preview Extension session boundary
 
@@ -24,7 +24,7 @@
 ## 4. Implement Three.js reference staging
 
 - [x] 4.1 Extend the fakeable Three runtime port with declared preset load, pose capability/constraints, pose preset and joint operations, panorama environment projection, purpose render passes, and exact disposal contracts.
-- [x] 4.2 Implement the neutral mannequin and blockout runtime without detailed appearance cues; validate catalog-declared joints, hierarchy, constraints, landmarks, and compatible pose presets rather than guessing node semantics.
+- [ ] 4.2 Implement smooth adult-male, adult-female, and child mannequin variants without identity, clothing, texture, or style cues; validate catalog-declared joints, hierarchy, constraints, landmarks, and complete joint-valued pose presets rather than guessing node semantics.
 - [x] 4.3 Implement bounded pose/skeleton and supported depth control render passes that exclude toolbar, grid, XYZ, camera helper, labels, and other editor chrome unless explicitly required by that output contract.
 - [x] 4.4 Implement panorama texture/orientation staging with authorized local resources, bounded MIME/size handling, untainted capture, renderer-loss diagnostics, and recursive texture/GPU disposal.
 - [x] 4.5 Preserve current camera front/reset, orbit, grid, XYZ, light, material, depth, and source-model correctness; use only external `~/Git/neko-test/test.glb` for manual real-model acceptance and never copy that model into the repository.
@@ -36,7 +36,7 @@
 - [x] 5.7 Align Preview viewport actions with the shared Canvas SVG icon family, including consistent 24×24 geometry, 18px display size, stroke weight, and active-state color behavior.
 - [ ] 5.8 Expose camera and the fixed key/fill/rim directional rig through selectable scene-tree entries, recognizable viewport objects, camera-facing direct drag without XYZ transform gizmos, normalized staging updates, capture exclusion, accessibility/i18n, and focused runtime/UI tests without adding persistent or physical point-light authoring.
 - [x] 5.3 Add visible independent appearance, pose, camera, and panoramic-scene purpose controls with capability-derived availability and a persistent “guide only, not appearance reference” label for restricted presets.
-- [x] 5.4 Add pose preset and constrained joint controls for supported subjects, explicit unsupported states for static/non-articulated models, and no animation timeline, IK, retargeting, or source writeback.
+- [ ] 5.4 Add a visual pose-card gallery backed by real joint values, grouped constrained body/torso/head/arm/leg controls for supported mannequins, explicit unsupported states for static/non-articulated models, and no animation timeline, IK, retargeting, multi-character scene, or source writeback.
 - [x] 5.5 Add camera, shot/aspect, panorama orientation, environment, capture, and output-preview controls without resetting the live orbit view during unrelated edits.
 - [x] 5.6 Add focused accessibility, keyboard/focus, theme, panel-switching, resize, role-selection, stale-state, and multi-root Webview tests.
 

@@ -35,7 +35,12 @@ Preview SHALL allow a guide mannequin or a supported articulated model to apply 
 #### Scenario: Apply a built-in pose preset
 
 - **WHEN** the creator applies a declared pose preset to a compatible built-in mannequin
-- **THEN** Preview updates the instance-scoped pose state and revision while leaving the immutable preset asset unchanged
+- **THEN** Preview applies that preset's complete declared joint rotations, updates the instance-scoped pose state and revision, and leaves the immutable preset asset unchanged
+
+#### Scenario: Adjust a preset pose
+
+- **WHEN** the creator selects a body, torso, head, arm, or leg joint and changes a bounded rotation after applying a preset
+- **THEN** Preview changes only that panel's selected joint value while preserving the selected mannequin, the remaining preset joint values, and every other open panel
 
 #### Scenario: Reject unsupported pose editing
 

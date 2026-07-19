@@ -5,7 +5,7 @@ The current 3D Preview treats one staged RGB capture as a generic visual/model r
 ## What Changes
 
 - Reposition the existing Preview-owned Three.js surface as a temporary **3D Reference** staging surface with four explicit reference purposes: appearance, pose, camera, and 720° panoramic scene.
-- Add an explicit guide session that can open without a user model and load code-owned, versioned built-in presets such as a neutral articulated mannequin, primitive props, a blockout studio, and a neutral panoramic grid.
+- Add an explicit guide session that can open without a user model and load code-owned, versioned built-in presets including high-quality neutral adult-male, adult-female, and child articulated mannequins, primitive props, a blockout studio, and a neutral panoramic grid.
 - Keep user model and panoramic sources read-only and authorized through existing Preview content-access boundaries; built-in assets remain immutable extension resources and never masquerade as workspace sources.
 - Add purpose selection and visible role gating. Guide mannequins can contribute pose and camera controls but cannot contribute appearance; real models and licensed appearance presets may opt into appearance reference explicitly.
 - Produce purpose-specific outputs instead of treating one viewport screenshot as every kind of reference: RGB appearance evidence, pose/skeleton or depth control evidence, structured camera data, and panoramic source/orientation data.

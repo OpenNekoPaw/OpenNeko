@@ -20,7 +20,7 @@ This is an L3 cross-cutting change across Preview Extension/Webview, shared cont
 
 - Present one coherent 3D Reference UI with source-model, bundled-guide, and environment-only sessions.
 - Support independently selected appearance, pose, camera, and panoramic scene outputs.
-- Provide a small licensed built-in catalog with an abstract articulated mannequin, blockout props/studio, and neutral panorama guide.
+- Provide a small licensed built-in catalog with high-quality project-authored adult-male, adult-female, and child articulated mannequins, blockout props/studio, and neutral panorama guide.
 - Guarantee that guide-only assets and pose/depth outputs cannot reach appearance/IP-Adapter paths.
 - Reuse existing Preview authorization, Three.js runtime, panorama handling, capture, shared UI, Agent context, Canvas control, and media capability boundaries.
 - Keep every session isolated, recoverable, source-read-only, fail-visible, bounded, and disposable.
@@ -117,7 +117,7 @@ Measured on Node `v25.6.1`, macOS arm64, over 25 construction/parse samples afte
 | Production recursive disposal            |                          15 geometries and all material dispose events observed |     1 geometry and 1 material dispose event observed |
 | Render-quality proxy                     | complete neutral head/torso/limb silhouette, intentionally no appearance detail | valid skinning-test shape, not a humanoid silhouette |
 
-Decision: use corrected project-owned procedural geometry for the initial neutral mannequin. Its stable named pivots directly satisfy pose output and landmark contracts, it adds no binary asset/license payload, and it is structurally incapable of supplying detailed appearance. `RiggedSimple` remains useful evidence that the loader and recursive disposer handle a real skin, but its two-bone test geometry is not a viable mannequin. Actual supported-host render appearance and load/disposal acceptance remain required in tasks 2.5 and 7.2; this Node metric is a feasibility comparison, not Webview visual acceptance.
+Decision: use project-owned procedural geometry for the mannequin family. The initial box/cylinder feasibility candidate proves the pivot and output contracts but is not the production quality bar. Production replaces it with smooth anatomical guide geometry for adult-male, adult-female, and child proportions while retaining the same declared joint identity, immutable guide-only role, zero third-party binary payload, and deterministic disposal. `RiggedSimple` remains useful evidence that the loader and recursive disposer handle a real skin, but its two-bone test geometry is not a viable mannequin. Actual supported-host render appearance and load/disposal acceptance remain required in tasks 2.5 and 7.2; this Node metric is a feasibility comparison, not Webview visual acceptance.
 
 Reproduction downloads the audited input outside the repository and runs:
 
@@ -129,7 +129,7 @@ Preview Extension owns a code-declared catalog with preset ID/version, packaged 
 
 The first catalog is intentionally small:
 
-1. one abstract articulated neutral mannequin;
+1. three smooth articulated neutral mannequin proportions: adult male, adult female, and child;
 2. primitive/blockout prop set;
 3. simple room/studio blockout;
 4. neutral panoramic orientation grid;
@@ -153,7 +153,7 @@ Compressed decoders are not introduced solely for the initial low-poly catalog. 
 
 Built-in mannequin metadata declares stable joint IDs, hierarchy, constraints, landmarks, and compatible presets. Arbitrary source models expose pose only when an explicit adapter can produce the same stable descriptor (for example a future VRM humanoid adapter); node-name heuristics do not create durable semantics. Static models keep object transforms but cannot claim pose.
 
-Initial pose authoring is preset selection plus constrained joint rotations and reset. It does not add animation tracks, keyframes, IK solvers, retargeting, physics, or source writeback.
+Initial pose authoring is a visual gallery of catalog-declared, full joint-valued pose presets plus grouped constrained joint rotations and reset. Preset selection copies the complete declared pose into panel-owned staging; it is not an ID-only display state. The same semantic skeleton and preset library apply across the three body proportions. This does not add animation tracks, keyframes, IK solvers, retargeting, physics, multi-character scenes, or source writeback.
 
 ### Reuse shared UI primitives while keeping domain composition local
 

@@ -32,18 +32,23 @@ Built-in presets SHALL be packaged with Preview, projected through the existing 
 - **WHEN** a live guide session selects a catalog mannequin
 - **THEN** the Extension validates its catalog entry and fingerprint, projects the exact packaged files with `webview.asWebviewUri()`, and sends only the identity-bearing descriptor to that panel
 
-### Requirement: The initial catalog is intentionally small and neutral
+### Requirement: The initial catalog is intentionally small, neutral, and proportionally useful
 
-The initial catalog SHALL include only the bounded assets needed for the four reference workflows: at least one abstract articulated mannequin, primitive/blockout props, a simple room or studio guide, and a neutral panoramic orientation grid. Guide assets MUST avoid detailed face, hair, clothing, texture, demographic, or style cues that could be mistaken for intended appearance.
+The initial catalog SHALL include only the bounded assets needed for the four reference workflows: high-quality neutral adult-male, adult-female, and child articulated mannequins; primitive/blockout props; a simple room or studio guide; and a neutral panoramic orientation grid. Each mannequin SHALL use a smooth, complete human silhouette with age/body-proportion differences that are useful for staging while avoiding detailed identity, hair, clothing, textures, or style cues that could be mistaken for intended appearance.
 
 #### Scenario: Inspect the initial mannequin
 
 - **WHEN** the neutral mannequin is rendered or captured for pose control
-- **THEN** its presentation remains abstract and visibly labeled as a guide rather than a character design
+- **THEN** its head, torso, hands, feet, limbs, and joints form a visually complete smooth guide silhouette, and it remains visibly labeled as a guide rather than a character design
+
+#### Scenario: Choose a body proportion
+
+- **WHEN** the creator opens a no-source 3D Reference guide
+- **THEN** Preview offers adult-male, adult-female, and child mannequin presets as explicit choices without opening multiple characters or silently substituting one variant
 
 ### Requirement: Preset capabilities are declared rather than guessed
 
-Articulation, joint constraints, pose presets, landmarks, render passes, environment support, and appearance eligibility SHALL be declared by the catalog and validated against the packaged asset. Preview MUST NOT infer stable pose semantics from arbitrary mesh or node names.
+Articulation, joint constraints, full joint-valued pose presets, landmarks, render passes, environment support, and appearance eligibility SHALL be declared by the catalog and validated against the packaged asset. A pose preset ID without declared joint rotations is invalid. Preview MUST NOT infer stable pose semantics from arbitrary mesh or node names.
 
 #### Scenario: Load a preset with invalid capability metadata
 
