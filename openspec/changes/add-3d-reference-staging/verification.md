@@ -55,8 +55,9 @@ Host: VS Code Extension Development Host on macOS, verified through the existing
 - Starting from the canonical empty Agent entry state (`activeTabId: null`, no open tabs), Preview created and bound a local conversation before context injection. The Agent Webview displayed one `3d-reference` chip with `appearance · camera`, no alert, and no recurrence of “Cannot send context payload without an active conversation Tab.” No provider request was submitted during this acceptance check.
 - Reproduced camera-only handoff failure in the Development Host: with appearance and camera enabled, clicking only “Capture Camera Reference” left Agent with zero contexts. The red collector regression proved `deliverContext` received zero calls because it waited for every enabled purpose. The collector now emits an action-scoped context immediately, with no cross-action pending map. After rebuild/reload, camera capture produced a `camera` chip; a later appearance capture produced a separate `appearance` chip, and both remained visible without alerts. No provider request was submitted.
 - The Preview toolbar uses the shared floating-toolbar compact density rather than package-local button styling. Development Host measurement changed from 383 × 54 px with 36 px buttons to 307 × 44 px with 30 px buttons; the horizontal pill shape, active-button indicator, theme tokens, keyboard boundary, and tool ordering were preserved.
+- Preview and Canvas now consume the same neutral `@neko/ui/icons` SVG family for viewport actions. With `~/Git/neko-test/test.glb` open, Development Host inspection found 8/8 Preview toolbar icons at 18 × 18 px with a `0 0 24 24` view box and zero Codicon glyphs; the Canvas pointer reported the same geometry and active theme color. The Preview toolbar remained 307 × 44 px and the model loaded successfully.
 
-Manual screenshots were kept outside the repository at `/tmp/neko-3d-reference-test-glb-latest.png`, `/tmp/neko-3d-reference-test-glb-rotated.png`, and `/tmp/neko-3d-reference-builtin-guide.png`.
+Manual screenshots were kept outside the repository at `/tmp/neko-3d-reference-test-glb-latest.png`, `/tmp/neko-3d-reference-test-glb-rotated.png`, `/tmp/neko-3d-reference-builtin-guide.png`, and `/tmp/neko-preview-shared-svg-toolbar.png`.
 
 ## Focused validation completed
 
@@ -84,6 +85,26 @@ pnpm --dir packages/neko-types exec vitest run src/theme/tokens.test.ts
 
 pnpm --dir packages/neko-preview compile:webview
 # production Webview build passed; model.js 908.21 kB / 242.47 kB gzip
+
+pnpm exec vitest run src/icons/viewport.test.ts
+# neko-types shared viewport icon contract: 1 file, 1 test passed
+
+pnpm exec vitest run src/__tests__/public-entrypoints.test.ts
+# @neko/ui public icon entrypoint: 1 file, 1 test passed
+
+pnpm exec vitest run src/model/ModelViewer.test.tsx
+# Preview toolbar SVG path and interactions: 1 file, 5 tests passed
+
+pnpm exec vitest run src/components/toolbar/CanvasToolbar.test.tsx
+# Canvas shared pointer consumption and toolbar behavior: 1 file, 8 tests passed
+
+pnpm --filter @neko/preview-webview build
+pnpm --filter @neko-canvas/webview build
+pnpm --filter neko-preview build
+# Preview Webview, Canvas Webview, and packaged Preview Extension builds passed
+
+pnpm check
+# Knip and dependency-cruiser passed; 1,549 modules / 5,533 dependencies, no violations
 
 pnpm exec vitest run packages/neko-agent/packages/agent/src/runtime/__tests__/message-runtime.test.ts
 # 1 file, 68 tests passed
@@ -117,7 +138,7 @@ Agent Evaluation disposition is `update` for `agent-runtime.creative-media-workf
 2. Agent task 6.2 is complete: invalid `3d-reference` payloads fail visibly, role-labelled prompt/evidence projection and chips are canonical, exact ResourceRefs become multimodal attachments, and empty-entry injection creates a conversation through the existing bridge. Canvas/media projection and capability negotiation in tasks 6.3–6.5 remain open; overlapping unrelated work in those files must still be preserved.
 3. System ADR, architecture index, and package-boundary files already have unrelated edits. Task 8.2 remains open; only clean Preview-owned documentation was updated.
 4. Real-model appearance/camera capture and role-labelled Agent context injection are complete, but real-source panorama composition and provider-level role-isolated generation are not; task 7.3 remains open.
-5. Full repository `pnpm build` and `pnpm check` pass. `pnpm test` is blocked by the unrelated Agent `plugin-transfer-adapter.test.ts` expectation mismatch (`executed` expected 1, received 0) after eight package tasks passed; Preview did not start before Turbo stopped. Legacy-debt, functional, and real Agent evaluation gates have not yet been accepted for this change, so task 7.5 and final verification task 8.3 remain open.
+5. The current focused Preview/Canvas builds and repository `pnpm check` pass. A later full `pnpm build` rerun on the concurrently modified workspace is blocked outside this change by `@neko/asset` tests that still construct the removed `recording` provenance value; a prior clean checkpoint completed all build tasks. `pnpm test` remains blocked by the unrelated Agent `plugin-transfer-adapter.test.ts` expectation mismatch (`executed` expected 1, received 0) after 621 Agent Extension tests passed; Preview did not start before Turbo stopped. Legacy-debt, functional, and real Agent evaluation gates have not yet been accepted for this change, so task 7.5 and final verification task 8.3 remain open.
 6. The full Preview Vitest run passed 321 of 322 tests; the unrelated standard-format matrix test is blocked because its repository fixture `triangle.glb` is absent. The focused capture/collector/extension regression group passed completely.
 7. The Preview Extension `tsc --noEmit` command remains blocked by pre-existing DOM/WebCodecs library configuration errors in `neko-client` plus existing unrelated Preview strict-test errors; the production Extension bundle and focused regression tests pass.
 8. The full shared `neko-types` Vitest run passed 1,440 of 1,441 tests. The unrelated local-resource guardrail currently reports the pre-existing `ModelPreviewSourceSession.ts` Webview-root assembly path; the focused shared theme test passes.

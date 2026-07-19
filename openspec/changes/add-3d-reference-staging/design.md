@@ -157,7 +157,7 @@ Initial pose authoring is preset selection plus constrained joint rotations and 
 
 ### Reuse shared UI primitives while keeping domain composition local
 
-Preview reuses the current shared floating toolbar, tree shell, property rows, axis controls, sliders, segmented controls, badges, empty states, focus/keyboard boundaries, theme tokens, and i18n runtime. 3D-reference source/purpose/preset/pose panels stay package-local typed components; they do not create a generic UI schema or copy a design system.
+Preview reuses the current shared floating toolbar, tree shell, property rows, axis controls, sliders, segmented controls, badges, empty states, focus/keyboard boundaries, theme tokens, i18n runtime, and 24×24 SVG icon family. Generic viewport actions belong to `@neko/ui/icons`; Preview and Canvas consume that neutral entrypoint instead of mixing Codicon font glyphs with package-local SVG artwork. 3D-reference source/purpose/preset/pose panels stay package-local typed components; they do not create a generic UI schema or copy a design system.
 
 ### Preserve downstream capability negotiation
 
