@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import {
   CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION,
   CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
+  type ResourceRef,
+  type ThreeReferenceContextData,
 } from '@neko/shared';
 import {
   CanvasGenerationRuntime,
@@ -405,4 +407,113 @@ describe('canvas generation runtime', () => {
     expect(normalizeCanvasControlMode('pose')).toBe('pose');
     expect(normalizeCanvasControlMode('unknown')).toBeUndefined();
   });
+
+  it('projects 3D reference roles into Canvas control and appearance fields', () => {
+    const request = buildCanvasImageGenerationRequest({
+      ownerScope: OWNER_SCOPE,
+      nodeId: 'shot-3d',
+      prompt: 'hero portrait',
+      threeReferenceContexts: [
+        createThreeReferenceContext('pose'),
+        createThreeReferenceContext('appearance'),
+      ],
+    });
+
+    expect(request.controlImageRef?.id).toBe('preview:pose-control');
+    expect(request.controlMode).toBe('pose');
+    expect(request.ipAdapterRefs).toEqual([
+      expect.objectContaining({ imageRef: expect.objectContaining({ id: 'preview:appearance' }) }),
+    ]);
+    expect(request).not.toHaveProperty('controlImageBase64');
+    expect(request).not.toHaveProperty('referenceImageBase64');
+  });
+
+  it('rejects Canvas control bytes when a 3D control role is present', () => {
+    expect(() =>
+      buildCanvasImageGenerationRequest({
+        ownerScope: OWNER_SCOPE,
+        nodeId: 'shot-3d',
+        prompt: 'hero portrait',
+        controlImageBase64: 'legacy',
+        threeReferenceContexts: [createThreeReferenceContext('pose')],
+      }),
+    ).toThrow('cannot be combined');
+  });
 });
+
+function createThreeReferenceContext(kind: 'pose' | 'appearance'): ThreeReferenceContextData {
+  const sessionId = `session-${kind}`;
+  const revision = 1;
+  const camera = {
+    cameraId: 'front',
+    position: { x: 0, y: 1, z: 3 },
+    target: { x: 0, y: 1, z: 0 },
+    fieldOfViewDeg: 45,
+    aspectRatio: 1,
+  } as const;
+  const control = resourceRef(`${kind}-control`);
+  const source = resourceRef('source-model');
+  const subject =
+    kind === 'appearance'
+      ? {
+          kind: 'source-model' as const,
+          source,
+          fingerprint: source.fingerprint.value,
+          format: 'glb' as const,
+        }
+      : {
+          kind: 'builtin-preset' as const,
+          presetId: 'guide-mannequin',
+          presetVersion: 1,
+          fingerprint: 'preset-fingerprint',
+          presetKind: 'mannequin' as const,
+          appearancePolicy: 'guide-only' as const,
+          allowedPurposes: ['pose'] as const,
+        };
+  const staging = {
+    schemaVersion: 1 as const,
+    sessionId,
+    revision,
+    subject,
+    selectedPurposes: [kind] as const,
+    camera,
+    ...(kind === 'pose' ? { pose: { poseId: 'standing', joints: [] as const } } : {}),
+  };
+  return {
+    contractVersion: 1,
+    staging,
+    outputs:
+      kind === 'pose'
+        ? [
+            {
+              kind: 'pose' as const,
+              sessionId,
+              revision,
+              controlImage: control,
+              controlMode: 'pose' as const,
+              joints: [],
+            },
+          ]
+        : [
+            {
+              kind: 'appearance' as const,
+              sessionId,
+              revision,
+              image: resourceRef('appearance'),
+              source,
+            },
+          ],
+  };
+}
+
+function resourceRef(id: string): ResourceRef {
+  return {
+    id: `preview:${id}`,
+    scope: 'project',
+    provider: 'preview-asset',
+    kind: 'preview',
+    source: { kind: 'preview-asset', previewAssetId: id },
+    locator: { kind: 'preview-asset', assetId: id },
+    fingerprint: { strategy: 'provider', value: `preview:${id}` },
+  };
+}

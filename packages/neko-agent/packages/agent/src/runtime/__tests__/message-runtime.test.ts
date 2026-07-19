@@ -847,6 +847,58 @@ describe('message runtime helpers', () => {
     expect(executeAgentTurn).not.toHaveBeenCalled();
   });
 
+  it('projects 3D reference roles into direct image media controls', async () => {
+    const executeMediaTurn = vi.fn(async () => undefined);
+
+    await expect(
+      runAgentMessageTurnRuntime({
+        request: {
+          conversationId: 'conv-1',
+          messageText: 'render image',
+          sessionMode: 'image',
+          mediaModel: { providerId: 'fal', modelId: 'flux-control', category: 'image' },
+          contextPayloads: [threeReferencePayload()],
+        },
+        processAttachments: async () => ({ textContent: '', imageAttachments: [] }),
+        processContextImageResources: async (resources) =>
+          resources.map((resource) => ({
+            type: 'base64' as const,
+            media_type: 'image/png',
+            data: resource.resource.id,
+          })),
+        persistUserMessage: vi.fn(),
+        postMessage: vi.fn(),
+        executeMediaTurn,
+        generateMessageId: () => 'user-1',
+      }),
+    ).resolves.toEqual({ status: 'media-dispatched' });
+
+    expect(executeMediaTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        mediaModel: { providerId: 'fal', modelId: 'flux-control', category: 'image' },
+        threeReferenceControls: {
+          appearanceReferences: [],
+          controlImage: {
+            imageRef: resourceRef('pose-control'),
+            mode: 'depth',
+            identity: { sessionId: 'session-1', revision: 2 },
+          },
+          camera: {
+            value: {
+              cameraId: 'front',
+              position: { x: 0, y: 1, z: 3 },
+              target: { x: 0, y: 1, z: 0 },
+              fieldOfViewDeg: 45,
+              aspectRatio: 1,
+            },
+            identity: { sessionId: 'session-1', revision: 2 },
+          },
+        },
+      }),
+    );
+  });
+
   it('returns an unmet precondition with a scoped error when no agent runtime is available', async () => {
     const postMessage = vi.fn();
     const persistErrorMessage = vi.fn();

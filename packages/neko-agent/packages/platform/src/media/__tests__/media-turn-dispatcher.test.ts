@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { observeMediaTaskProgress, runMediaTurn, submitMediaTurn } from '../media-turn-dispatcher';
-import type { TaskRunScope } from '@neko/shared';
+import type { ResourceRef, TaskRunScope } from '@neko/shared';
 import type { MediaTask, MediaProgressCallback } from '../types';
 
 describe('submitMediaTurn', () => {
@@ -39,6 +39,82 @@ describe('submitMediaTurn', () => {
       modelId: 'flux-pro',
       metadata: { source: 'chat', conversationId: 'conv-1' },
     });
+  });
+
+  it('maps stable 3D reference roles into an image request without generic fallback', async () => {
+    const media = createMediaServiceMock();
+    media.generateImage.mockResolvedValue({ id: 'image-task' });
+    const poseRef = resourceRef('pose');
+    const appearanceRef = resourceRef('appearance');
+    const panoramaRef = resourceRef('panorama');
+
+    await submitMediaTurn(media, {
+      prompt: 'character in scene',
+      mediaModel: { providerId: 'fal', modelId: 'flux-control', category: 'image' },
+      threeReferenceControls: {
+        appearanceReferences: [
+          {
+            imageRef: appearanceRef,
+            sourceRef: resourceRef('source-model'),
+            identity: { sessionId: 'appearance-session', revision: 1 },
+          },
+        ],
+        controlImage: {
+          imageRef: poseRef,
+          mode: 'pose',
+          identity: { sessionId: 'pose-session', revision: 2 },
+        },
+        camera: {
+          value: {
+            cameraId: 'front',
+            position: { x: 0, y: 1, z: 3 },
+            target: { x: 0, y: 1, z: 0 },
+            fieldOfViewDeg: 45,
+            aspectRatio: 1,
+          },
+          identity: { sessionId: 'camera-session', revision: 3 },
+        },
+        panorama: {
+          imageRef: panoramaRef,
+          orientation: { yawDeg: 10, pitchDeg: 0, fieldOfViewDeg: 70 },
+          identity: { sessionId: 'panorama-session', revision: 4 },
+        },
+      },
+    });
+
+    expect(media.generateImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        controlImageRef: poseRef,
+        controlMode: 'pose',
+        ipAdapterRefs: [{ imageRef: appearanceRef, mode: 'subject' }],
+        cameraReference: expect.objectContaining({
+          identity: { sessionId: 'camera-session', revision: 3 },
+        }),
+        panoramaReference: expect.objectContaining({ imageRef: panoramaRef }),
+      }),
+    );
+    const request = media.generateImage.mock.calls[0]?.[0];
+    expect(request).not.toHaveProperty('referenceImageUrl');
+    expect(request).not.toHaveProperty('referenceImageBase64');
+  });
+
+  it('rejects 3D controls on non-image direct turns before submission', async () => {
+    const media = createMediaServiceMock();
+    await expect(
+      submitMediaTurn(media, {
+        prompt: 'animate',
+        mediaModel: { providerId: 'runway', modelId: 'gen-4', category: 'video' },
+        threeReferenceControls: {
+          appearanceReferences: [],
+          controlImage: {
+            imageRef: resourceRef('pose'),
+            mode: 'pose',
+            identity: { sessionId: 'pose-session', revision: 1 },
+          },
+        },
+      }),
+    ).rejects.toThrow('not supported for video turns');
+    expect(media.generateVideo).not.toHaveBeenCalled();
   });
 
   it('dispatches video turns to video generation', async () => {
@@ -286,5 +362,17 @@ function createMediaTask(
         runId: `run-${conversationId}`,
       },
     },
+  };
+}
+
+function resourceRef(id: string): ResourceRef {
+  return {
+    id: `preview:${id}`,
+    scope: 'project',
+    provider: 'preview-asset',
+    kind: 'preview',
+    source: { kind: 'preview-asset', previewAssetId: id },
+    locator: { kind: 'preview-asset', assetId: id },
+    fingerprint: { strategy: 'provider', value: `preview:${id}` },
   };
 }

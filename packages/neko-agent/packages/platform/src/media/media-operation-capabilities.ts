@@ -165,19 +165,152 @@ export function validateProviderVideoRequest(
 export function validateProviderImageRequest(
   providerType: ProviderType,
   request: ImageGenerationRequest,
+  modelCapabilities: readonly string[] = [],
 ): readonly CreativeMediaOperationDiagnostic[] {
   const operationId = resolveCanonicalImageOperation(request);
-  if (['generate', 'edit', 'inpaint', 'style-transfer'].includes(operationId)) {
-    return [];
+  if (!['generate', 'edit', 'inpaint', 'style-transfer'].includes(operationId)) {
+    return [
+      {
+        code: 'operation-unsupported',
+        severity: 'error',
+        message: `${providerType} media generation does not declare canonical image operation ${operationId}; use an owning Image adapter.`,
+        details: { providerType, operationId },
+      },
+    ];
   }
-  return [
-    {
-      code: 'operation-unsupported',
+
+  const diagnostics: CreativeMediaOperationDiagnostic[] = [];
+  if (request.controlImageRef && (request.controlImageBase64 || request.controlImageUri)) {
+    diagnostics.push({
+      code: 'invalid-operation-request',
       severity: 'error',
-      message: `${providerType} media generation does not declare canonical image operation ${operationId}; use an owning Image adapter.`,
-      details: { providerType, operationId },
-    },
-  ];
+      message: 'Stable controlImageRef cannot be combined with legacy control image inputs.',
+      details: { providerType, operationId, control: 'pose-control', owner: 'request' },
+    });
+  }
+  if (
+    request.controlImageRef &&
+    request.controlMode !== 'pose' &&
+    request.controlMode !== 'depth'
+  ) {
+    diagnostics.push({
+      code: 'unsupported-operation-control',
+      severity: 'error',
+      message: 'Stable 3D controlImageRef requires an exact pose or depth control mode.',
+      details: { providerType, operationId, control: request.controlMode, owner: 'request' },
+    });
+  }
+  const stableAppearanceReferences =
+    request.ipAdapterRefs?.filter((reference) => reference.imageRef) ?? [];
+  if (stableAppearanceReferences.some((reference) => reference.imageBase64)) {
+    diagnostics.push({
+      code: 'invalid-operation-request',
+      severity: 'error',
+      message: 'Stable IP-Adapter imageRef cannot be combined with materialized imageBase64.',
+      details: { providerType, operationId, control: 'appearance-reference', owner: 'request' },
+    });
+  }
+  const adapterControls = providerThreeReferenceImageControls(providerType, modelCapabilities);
+  for (const requirement of requestedThreeReferenceImageControls(request)) {
+    if (!adapterControls.includes(requirement.control)) {
+      diagnostics.push({
+        code: 'unsupported-operation-control',
+        severity: 'error',
+        message: `${providerType} does not declare audited support for requested image control ${requirement.control}.`,
+        details: { providerType, operationId, control: requirement.control, owner: 'adapter' },
+      });
+    }
+    if (!modelCapabilities.includes(requirement.modelCapability)) {
+      diagnostics.push({
+        code: 'unsupported-operation-control',
+        severity: 'error',
+        message: `Selected model does not declare required capability ${requirement.modelCapability}.`,
+        details: {
+          providerType,
+          operationId,
+          control: requirement.control,
+          requiredCapability: requirement.modelCapability,
+          owner: 'model',
+        },
+      });
+    }
+  }
+  if (stableAppearanceReferences.length > 0 && (request.ipAdapterRefs?.length ?? 0) > 1) {
+    diagnostics.push({
+      code: 'operation-limit-exceeded',
+      severity: 'error',
+      message: 'Audited 3D appearance-reference adapters accept exactly one image reference.',
+      details: { providerType, operationId, control: 'appearance-reference', maxInputCount: 1 },
+    });
+  }
+  return diagnostics;
+}
+
+interface ThreeReferenceImageControlRequirement {
+  readonly control: Extract<
+    CreativeMediaControlId,
+    | 'pose-control'
+    | 'depth-control'
+    | 'appearance-reference'
+    | 'camera-reference'
+    | 'panorama-reference'
+  >;
+  readonly modelCapability:
+    | 'image.control.pose'
+    | 'image.control.depth'
+    | 'image.reference.ip-adapter'
+    | 'image.control.camera'
+    | 'image.control.panorama';
+}
+
+function requestedThreeReferenceImageControls(
+  request: ImageGenerationRequest,
+): readonly ThreeReferenceImageControlRequirement[] {
+  const requirements: ThreeReferenceImageControlRequirement[] = [];
+  if (request.controlImageRef && request.controlMode === 'pose') {
+    requirements.push({ control: 'pose-control', modelCapability: 'image.control.pose' });
+  }
+  if (request.controlImageRef && request.controlMode === 'depth') {
+    requirements.push({ control: 'depth-control', modelCapability: 'image.control.depth' });
+  }
+  if (request.ipAdapterRefs?.some((reference) => reference.imageRef)) {
+    requirements.push({
+      control: 'appearance-reference',
+      modelCapability: 'image.reference.ip-adapter',
+    });
+  }
+  if (request.cameraReference) {
+    requirements.push({ control: 'camera-reference', modelCapability: 'image.control.camera' });
+  }
+  if (request.panoramaReference) {
+    requirements.push({
+      control: 'panorama-reference',
+      modelCapability: 'image.control.panorama',
+    });
+  }
+  return requirements;
+}
+
+function providerThreeReferenceImageControls(
+  providerType: ProviderType,
+  modelCapabilities: readonly string[],
+): readonly ThreeReferenceImageControlRequirement['control'][] {
+  if (providerType === 'fal') {
+    return ['pose-control', 'depth-control', 'appearance-reference'];
+  }
+  if (providerType === 'dashscope') {
+    return ['pose-control', 'depth-control'];
+  }
+  const usesChatImageRuntime =
+    modelCapabilities.includes('chat') &&
+    (modelCapabilities.includes('image_generation') || modelCapabilities.includes('text_to_image'));
+  if (
+    !usesChatImageRuntime &&
+    ['generic', 'newapi', 'oneapi', 'xai', 'kling'].includes(providerType)
+  ) {
+    return ['pose-control', 'depth-control'];
+  }
+  return [];
 }
 
 export function resolveCanonicalImageOperation(request: ImageGenerationRequest): ImageOperationId {

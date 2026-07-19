@@ -12,6 +12,7 @@ export async function materializeImageRequestFileUris(
   request: ImageGenerationRequest,
   materializer?: MediaRequestAssetMaterializer,
 ): Promise<ImageGenerationRequest> {
+  assertUnambiguousStableImageRefs(request);
   let next = request;
 
   if (request.referenceImageUri && !request.referenceImageBase64) {
@@ -35,7 +36,47 @@ export async function materializeImageRequestFileUris(
     };
   }
 
+  if (request.controlImageRef) {
+    next = {
+      ...next,
+      controlImageBase64: await readResourceAsBase64(request.controlImageRef, materializer),
+    };
+    delete next.controlImageRef;
+  }
+
+  if (request.ipAdapterRefs?.some((reference) => reference.imageRef)) {
+    next = {
+      ...next,
+      ipAdapterRefs: await Promise.all(
+        request.ipAdapterRefs.map(async (reference) => {
+          if (!reference.imageRef) return reference;
+          const { imageRef, ...rest } = reference;
+          return {
+            ...rest,
+            imageBase64: await readResourceAsBase64(imageRef, materializer),
+          };
+        }),
+      ),
+    };
+  }
+
   return next;
+}
+
+function assertUnambiguousStableImageRefs(request: ImageGenerationRequest): void {
+  if (request.controlImageRef && (request.controlImageBase64 || request.controlImageUri)) {
+    throw new Error('Stable controlImageRef cannot be combined with legacy control image inputs.');
+  }
+  for (const reference of request.ipAdapterRefs ?? []) {
+    if (reference.imageRef && reference.imageBase64) {
+      throw new Error(
+        'Stable IP-Adapter imageRef cannot be combined with materialized imageBase64.',
+      );
+    }
+    if (!reference.imageRef && !reference.imageBase64) {
+      throw new Error('IP-Adapter reference requires exactly one image identity.');
+    }
+  }
 }
 
 export async function materializeVideoRequestFileUris(

@@ -374,6 +374,10 @@ export class MediaTaskExecutor {
         if (imgReq.aspectRatio !== undefined)
           nekoProviderOptions['aspectRatio'] = imgReq.aspectRatio;
         if (imgReq.quality !== undefined) nekoProviderOptions['quality'] = imgReq.quality;
+        if (imgReq.cameraReference !== undefined)
+          nekoProviderOptions['cameraReference'] = imgReq.cameraReference;
+        if (imgReq.panoramaReference !== undefined)
+          nekoProviderOptions['panoramaReference'] = imgReq.panoramaReference;
 
         const result = await runProviderCallWithTimeout({
           timeoutMs: this.imageTaskTimeoutMs,

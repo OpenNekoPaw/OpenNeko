@@ -20,6 +20,7 @@ import { runAgentMediaTurn } from '@neko/agent/runtime';
 import type { AgentFileReference } from '@neko-agent/types';
 import {
   createGeneratedAssetsWorkspaceDeliveryBatch,
+  type ThreeReferenceMediaControls,
   type AgentTaskResultDeliveryPolicy,
   type GeneratedAsset,
   type Task,
@@ -58,6 +59,7 @@ export interface ExecuteMediaTurnForWebviewInput {
   conversationId: string;
   prompt: string;
   mediaModel: ModelRef<MediaModelCategory>;
+  threeReferenceControls?: ThreeReferenceMediaControls;
   selectedFileReferences?: readonly AgentFileReference[];
 }
 
@@ -96,6 +98,9 @@ export class MediaTurnBridge {
                 prompt: runtimeInput.prompt,
                 mediaModel: runtimeInput.mediaModel,
                 conversationId: runtimeInput.conversationId,
+                ...(input.threeReferenceControls
+                  ? { threeReferenceControls: input.threeReferenceControls }
+                  : {}),
                 createTaskView: (task) => this.createTaskDelivery(input.webview, task),
                 createRecoveryTaskView: (task): MediaTurnTaskDelivery => ({
                   view: createMediaTaskView(task),

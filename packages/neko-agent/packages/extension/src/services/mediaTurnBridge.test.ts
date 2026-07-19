@@ -2,11 +2,68 @@ import { describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { MediaTurnBridge } from './mediaTurnBridge';
 import type { MediaTask } from '@neko/platform';
-import { createGeneratedAssetRevisionRef, type GeneratedAsset, type Task } from '@neko/shared';
+import {
+  createGeneratedAssetRevisionRef,
+  type GeneratedAsset,
+  type ResourceRef,
+  type Task,
+} from '@neko/shared';
 
 vi.mock('vscode', async () => await import('../__mocks__/vscode'));
 
 describe('MediaTurnBridge', () => {
+  it('forwards stable 3D reference controls to the selected image request', async () => {
+    const created = createMediaTask({ status: 'pending', progress: 0 });
+    const poseRef = resourceRef('pose');
+    const generateImage = vi.fn().mockResolvedValue(created);
+    const bridge = new MediaTurnBridge({
+      platform: {
+        media: {
+          generateImage,
+          getTask: vi.fn().mockResolvedValue(undefined),
+          onProgress: vi.fn().mockReturnValue(vi.fn()),
+        },
+      } as never,
+      mediaDeliveryHost: {
+        createTaskView: vi.fn(async () => ({
+          id: 'task-1',
+          type: 'image',
+          status: 'pending',
+          progress: 0,
+          providerId: 'fal',
+          modelId: 'flux-control',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+          request: { prompt: 'match pose' },
+        })),
+      } as never,
+    });
+
+    await bridge.execute({
+      webview: createWebview(),
+      conversationId: 'conv-1',
+      prompt: 'match pose',
+      mediaModel: { providerId: 'fal', modelId: 'flux-control', category: 'image' },
+      threeReferenceControls: {
+        appearanceReferences: [],
+        controlImage: {
+          imageRef: poseRef,
+          mode: 'pose',
+          identity: { sessionId: 'pose-session', revision: 1 },
+        },
+      },
+    });
+
+    expect(generateImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'fal',
+        modelId: 'flux-control',
+        controlImageRef: poseRef,
+        controlMode: 'pose',
+      }),
+    );
+  });
+
   it('posts stream completion and idle phase after a direct media task reaches a terminal state', async () => {
     const created = createMediaTask({ status: 'pending', progress: 0 });
     const completed = createMediaTask({ status: 'completed', progress: 100 });
@@ -314,5 +371,17 @@ function createGeneratedImageAsset(localPath: string): GeneratedAsset {
         modelId: 'gpt-image-1',
       },
     }),
+  };
+}
+
+function resourceRef(id: string): ResourceRef {
+  return {
+    id: `preview:${id}`,
+    scope: 'project',
+    provider: 'preview-asset',
+    kind: 'preview',
+    source: { kind: 'preview-asset', previewAssetId: id },
+    locator: { kind: 'preview-asset', assetId: id },
+    fingerprint: { strategy: 'provider', value: `preview:${id}` },
   };
 }

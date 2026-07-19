@@ -265,12 +265,19 @@ export class AgentMessageTurnHandler {
         void webview.postMessage(message);
       },
       executeMediaTurn: this._platform?.media
-        ? ({ conversationId, prompt, mediaModel, selectedFileReferences }) =>
+        ? ({
+            conversationId,
+            prompt,
+            mediaModel,
+            threeReferenceControls,
+            selectedFileReferences,
+          }) =>
             this._mediaTurnBridge.execute({
               webview,
               conversationId,
               prompt,
               mediaModel,
+              ...(threeReferenceControls ? { threeReferenceControls } : {}),
               ...(selectedFileReferences ? { selectedFileReferences } : {}),
             })
         : undefined,

@@ -36,6 +36,25 @@ export interface IMediaTaskManager extends ITaskManager {
   updateOutputData?(scope: TaskRunScope, outputData: Record<string, unknown>): Promise<boolean>;
 }
 
+function hasThreeReferenceImageControls(
+  request: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest,
+): request is ImageGenerationRequest {
+  if (!(
+    'controlImageRef' in request ||
+    'ipAdapterRefs' in request ||
+    'cameraReference' in request ||
+    'panoramaReference' in request
+  )) {
+    return false;
+  }
+  return Boolean(
+    request.controlImageRef ||
+    request.ipAdapterRefs?.some((reference) => reference.imageRef) ||
+    request.cameraReference ||
+    request.panoramaReference,
+  );
+}
+
 /**
  * Media generation service options
  */
@@ -189,10 +208,22 @@ export class MediaGenerationService {
     if (!provider) {
       throw new Error(`Configured media provider ${routing.providerId} is unavailable.`);
     }
+    const requiresPreciseImageCapabilities =
+      generationType.includes('image') && hasThreeReferenceImageControls(request);
+    const model = requiresPreciseImageCapabilities
+      ? this.configManager.getModel(routing.modelId)
+      : undefined;
+    if (requiresPreciseImageCapabilities && !model) {
+      throw new Error(`Configured media model ${routing.modelId} is unavailable.`);
+    }
     const capabilityDiagnostics = generationType.includes('video')
       ? validateProviderVideoRequest(provider.type, request as VideoGenerationRequest)
       : generationType.includes('image')
-        ? validateProviderImageRequest(provider.type, request as ImageGenerationRequest)
+        ? validateProviderImageRequest(
+            provider.type,
+            request as ImageGenerationRequest,
+            model?.capabilities ?? [],
+          )
         : [];
     const capabilityErrors = capabilityDiagnostics.filter(
       (diagnostic) => diagnostic.severity === 'error',

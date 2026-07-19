@@ -37,12 +37,14 @@ import type {
   ThreeReferenceContextData,
   ThreeReferenceOutput,
   ThreeReferencePurpose,
+  ThreeReferenceMediaControls,
   ResourceRef,
 } from '@neko/shared';
 import {
   isAgentResolvedEntityContextData,
   isDocumentFile,
   isThreeReferenceContextData,
+  projectThreeReferenceMediaControls,
 } from '@neko/shared';
 import type { AgentEvent } from '../../session/types';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
@@ -253,6 +255,7 @@ export interface AgentMessageTurnMediaExecutionInput {
   readonly conversationId: string;
   readonly prompt: string;
   readonly mediaModel: ModelRef<MediaModelCategory>;
+  readonly threeReferenceControls?: ThreeReferenceMediaControls;
   readonly selectedFileReferences?: readonly AgentFileReference[];
 }
 
@@ -1032,10 +1035,14 @@ export async function runAgentMessageTurnRuntime(
   input.postMessage(buildThinkingMessage(conversationId));
 
   if (prepared.route.kind === 'media' && input.executeMediaTurn) {
+    const threeReferenceControls = projectAgentThreeReferenceMediaControls(
+      input.request.contextPayloads,
+    );
     await input.executeMediaTurn({
       conversationId,
       prompt: prepared.enhancedMessage,
       mediaModel: prepared.route.mediaModel,
+      ...(threeReferenceControls ? { threeReferenceControls } : {}),
       ...(input.request.fileReferences
         ? { selectedFileReferences: input.request.fileReferences }
         : {}),
@@ -1100,6 +1107,19 @@ export async function runAgentMessageTurnRuntime(
     }),
   );
   return { status: 'precondition-unmet', reason: 'no-agent-runtime' };
+}
+
+export function projectAgentThreeReferenceMediaControls(
+  payloads: readonly AgentContextPayload[] | undefined,
+): ThreeReferenceMediaControls | undefined {
+  const contexts = (payloads ?? []).flatMap((payload): readonly ThreeReferenceContextData[] => {
+    if (payload.type !== '3d-reference') return [];
+    if (!isThreeReferenceContextData(payload.data)) {
+      throw new Error(`Invalid 3d-reference context payload: ${payload.id}`);
+    }
+    return [payload.data];
+  });
+  return contexts.length > 0 ? projectThreeReferenceMediaControls(contexts) : undefined;
 }
 
 export function buildEnhancedAgentMessage(input: BuildEnhancedAgentMessageInput): string {

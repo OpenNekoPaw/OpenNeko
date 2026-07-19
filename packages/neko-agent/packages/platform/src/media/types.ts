@@ -16,6 +16,8 @@ import type {
   VideoOperationId,
   ImageOutpaintExpansion,
   ImageSplitProfileOptions,
+  ThreeReferenceCameraMediaReference,
+  ThreeReferencePanoramaMediaReference,
 } from '@neko/shared';
 
 // =============================================================================
@@ -62,7 +64,9 @@ export type ControlMode =
  */
 export interface IPAdapterReference {
   /** Reference image as base64-encoded bytes (no data: prefix) */
-  imageBase64: string;
+  imageBase64?: string;
+  /** Stable appearance image identity, materialized by the authorized host before execution. */
+  imageRef?: ResourceRef;
   /** MIME type of `imageBase64` (e.g. `image/jpeg`, `image/webp`); defaults to `image/png` when omitted */
   mimeType?: string;
   /** Influence strength 0.0–1.0 */
@@ -123,6 +127,8 @@ export interface ImageGenerationRequest extends MediaGenerationRequestBase {
   style?: string;
   /** ControlNet conditioning image as base64-encoded PNG */
   controlImageBase64?: string;
+  /** Stable ControlNet conditioning image identity, materialized before provider execution. */
+  controlImageRef?: ResourceRef;
   /** ControlNet conditioning image local URI/path (materialized to base64 before provider execution) */
   controlImageUri?: string;
   /** ControlNet mode (canny, depth, pose, etc.) */
@@ -131,6 +137,10 @@ export interface ImageGenerationRequest extends MediaGenerationRequestBase {
   controlStrength?: number;
   /** IP-Adapter references for style/subject transfer */
   ipAdapterRefs?: IPAdapterReference[];
+  /** Structured 3D camera reference; never flattened into prompt text. */
+  cameraReference?: ThreeReferenceCameraMediaReference;
+  /** Structured panoramic-scene reference; never flattened into prompt text. */
+  panoramaReference?: ThreeReferencePanoramaMediaReference;
   /** Natural language instruction for edit (e.g., "make it night time") */
   editInstruction?: string;
   /** Explicit outpaint canvas expansion; required for the canonical outpaint operation. */

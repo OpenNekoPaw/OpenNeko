@@ -286,6 +286,11 @@ export type ModelCapability =
   | 'video_edit'
   | 'controlnet'
   | 'ip_adapter'
+  | 'image.control.pose'
+  | 'image.control.depth'
+  | 'image.reference.ip-adapter'
+  | 'image.control.camera'
+  | 'image.control.panorama'
   // Legacy aliases (for backwards compatibility)
   | 'image_generation'
   | 'video_generation';
@@ -331,6 +336,11 @@ export const KNOWN_MODEL_CAPABILITIES = [
   'video_edit',
   'controlnet',
   'ip_adapter',
+  'image.control.pose',
+  'image.control.depth',
+  'image.reference.ip-adapter',
+  'image.control.camera',
+  'image.control.panorama',
   'image_generation',
   'video_generation',
 ] as const satisfies readonly ModelCapability[];

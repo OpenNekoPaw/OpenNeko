@@ -57,6 +57,11 @@ export const CREATIVE_MEDIA_CONTROL_IDS = [
   'output-count',
   'outpaint-expansion',
   'split-profile',
+  'pose-control',
+  'depth-control',
+  'appearance-reference',
+  'camera-reference',
+  'panorama-reference',
 ] as const;
 
 export const CREATIVE_MEDIA_SUPPORT_LEVELS = ['supported', 'degraded', 'unsupported'] as const;

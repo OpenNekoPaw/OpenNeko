@@ -205,6 +205,129 @@ export interface ThreeReferenceContextData {
   readonly outputs: readonly ThreeReferenceOutput[];
 }
 
+export interface ThreeReferenceMediaOutputIdentity {
+  readonly sessionId: string;
+  readonly revision: number;
+}
+
+export interface ThreeReferenceAppearanceMediaReference {
+  readonly imageRef: ResourceRef;
+  readonly sourceRef: ResourceRef;
+  readonly identity: ThreeReferenceMediaOutputIdentity;
+}
+
+export interface ThreeReferenceControlImageMediaReference {
+  readonly imageRef: ResourceRef;
+  readonly mode: ThreeReferencePoseControlMode;
+  readonly identity: ThreeReferenceMediaOutputIdentity;
+}
+
+export interface ThreeReferenceCameraMediaReference {
+  readonly value: ThreeReferenceCamera;
+  readonly identity: ThreeReferenceMediaOutputIdentity;
+}
+
+export interface ThreeReferencePanoramaMediaReference {
+  readonly imageRef: ResourceRef;
+  readonly orientation: ThreeReferencePanoramaOrientation;
+  readonly identity: ThreeReferenceMediaOutputIdentity;
+}
+
+export interface ThreeReferenceMediaControls {
+  readonly appearanceReferences: readonly ThreeReferenceAppearanceMediaReference[];
+  readonly controlImage?: ThreeReferenceControlImageMediaReference;
+  readonly camera?: ThreeReferenceCameraMediaReference;
+  readonly panorama?: ThreeReferencePanoramaMediaReference;
+}
+
+export type ThreeReferenceMediaProjectionErrorCode =
+  | 'invalid-3d-reference-context'
+  | 'ambiguous-pose-control'
+  | 'ambiguous-camera-control'
+  | 'ambiguous-panorama-control';
+
+export class ThreeReferenceMediaProjectionError extends Error {
+  constructor(
+    readonly code: ThreeReferenceMediaProjectionErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ThreeReferenceMediaProjectionError';
+  }
+}
+
+export function projectThreeReferenceMediaControls(
+  contexts: readonly ThreeReferenceContextData[],
+): ThreeReferenceMediaControls {
+  const appearanceReferences: ThreeReferenceAppearanceMediaReference[] = [];
+  let controlImage: ThreeReferenceControlImageMediaReference | undefined;
+  let camera: ThreeReferenceCameraMediaReference | undefined;
+  let panorama: ThreeReferencePanoramaMediaReference | undefined;
+
+  for (const context of contexts) {
+    if (!isThreeReferenceContextData(context)) {
+      throw new ThreeReferenceMediaProjectionError(
+        'invalid-3d-reference-context',
+        'Media projection requires a valid versioned 3d-reference context.',
+      );
+    }
+    for (const output of context.outputs) {
+      const identity = { sessionId: output.sessionId, revision: output.revision };
+      switch (output.kind) {
+        case 'appearance':
+          appearanceReferences.push({
+            imageRef: output.image,
+            sourceRef: output.source,
+            identity,
+          });
+          break;
+        case 'pose':
+          if (controlImage) {
+            throw new ThreeReferenceMediaProjectionError(
+              'ambiguous-pose-control',
+              'A media request cannot contain more than one 3D pose/depth control.',
+            );
+          }
+          controlImage = {
+            imageRef: output.controlImage,
+            mode: output.controlMode,
+            identity,
+          };
+          break;
+        case 'camera':
+          if (camera) {
+            throw new ThreeReferenceMediaProjectionError(
+              'ambiguous-camera-control',
+              'A media request cannot contain more than one 3D camera reference.',
+            );
+          }
+          camera = { value: output.camera, identity };
+          break;
+        case 'panorama-scene':
+          if (panorama) {
+            throw new ThreeReferenceMediaProjectionError(
+              'ambiguous-panorama-control',
+              'A media request cannot contain more than one 3D panorama reference.',
+            );
+          }
+          panorama = {
+            imageRef: output.panorama,
+            orientation: output.orientation,
+            identity,
+          };
+          break;
+      }
+    }
+  }
+
+  return {
+    appearanceReferences,
+    ...(controlImage ? { controlImage } : {}),
+    ...(camera ? { camera } : {}),
+    ...(panorama ? { panorama } : {}),
+  };
+}
+
 export type ThreeReferenceExtensionMessage =
   | {
       readonly type: '3d-reference/session-init';

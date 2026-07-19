@@ -128,6 +128,149 @@ describe('media provider capability negotiation', () => {
     ]);
   });
 
+  it('requires both audited adapter mapping and precise selected-model capabilities', () => {
+    const request: ImageGenerationRequest = {
+      prompt: 'match the pose',
+      controlImageRef: resourceRef('preview:pose'),
+      controlMode: 'pose',
+    };
+
+    expect(validateProviderImageRequest('dashscope', request, ['image.control.pose'])).toEqual([]);
+    expect(validateProviderImageRequest('dashscope', request, ['controlnet'])).toEqual([
+      expect.objectContaining({
+        code: 'unsupported-operation-control',
+        details: expect.objectContaining({ owner: 'model' }),
+      }),
+    ]);
+    expect(validateProviderImageRequest('runway', request, ['image.control.pose'])).toEqual([
+      expect.objectContaining({
+        code: 'unsupported-operation-control',
+        details: expect.objectContaining({ owner: 'adapter' }),
+      }),
+    ]);
+  });
+
+  it('rejects runtimes that ignore or prompt-project precise controls', () => {
+    const request: ImageGenerationRequest = {
+      prompt: 'match the pose',
+      controlImageRef: resourceRef('preview:pose'),
+      controlMode: 'pose',
+    };
+
+    expect(validateProviderImageRequest('openai', request, ['image.control.pose'])).toEqual([
+      expect.objectContaining({
+        code: 'unsupported-operation-control',
+        details: expect.objectContaining({ owner: 'adapter' }),
+      }),
+    ]);
+    expect(
+      validateProviderImageRequest('newapi', request, [
+        'chat',
+        'image_generation',
+        'image.control.pose',
+      ]),
+    ).toEqual([
+      expect.objectContaining({
+        code: 'unsupported-operation-control',
+        details: expect.objectContaining({ owner: 'adapter' }),
+      }),
+    ]);
+    expect(
+      validateProviderImageRequest('oneapi', request, ['text_to_image', 'image.control.pose']),
+    ).toEqual([]);
+  });
+
+  it('fails structured camera and panorama references while no adapter owns them', () => {
+    const request: ImageGenerationRequest = {
+      prompt: 'match the composition',
+      cameraReference: {
+        value: {
+          cameraId: 'front',
+          position: { x: 0, y: 1, z: 3 },
+          target: { x: 0, y: 1, z: 0 },
+          fieldOfViewDeg: 45,
+          aspectRatio: 1,
+        },
+        identity: { sessionId: 'camera-session', revision: 1 },
+      },
+      panoramaReference: {
+        imageRef: resourceRef('preview:panorama'),
+        orientation: { yawDeg: 0, pitchDeg: 0, fieldOfViewDeg: 70 },
+        identity: { sessionId: 'panorama-session', revision: 1 },
+      },
+    };
+
+    const diagnostics = validateProviderImageRequest('fal', request, [
+      'image.control.camera',
+      'image.control.panorama',
+    ]);
+    expect(diagnostics).toEqual([
+      expect.objectContaining({ details: expect.objectContaining({ owner: 'adapter' }) }),
+      expect.objectContaining({ details: expect.objectContaining({ owner: 'adapter' }) }),
+    ]);
+  });
+
+  it('accepts one audited stable appearance reference and rejects silent truncation', () => {
+    const appearance = (id: string) => ({ imageRef: resourceRef(id), mode: 'subject' as const });
+    expect(
+      validateProviderImageRequest(
+        'fal',
+        { prompt: 'same character', ipAdapterRefs: [appearance('appearance:1')] },
+        ['image.reference.ip-adapter'],
+      ),
+    ).toEqual([]);
+    expect(
+      validateProviderImageRequest(
+        'fal',
+        {
+          prompt: 'ambiguous character',
+          ipAdapterRefs: [appearance('appearance:1'), appearance('appearance:2')],
+        },
+        ['image.reference.ip-adapter'],
+      ),
+    ).toEqual([expect.objectContaining({ code: 'operation-limit-exceeded', severity: 'error' })]);
+    expect(
+      validateProviderImageRequest(
+        'fal',
+        {
+          prompt: 'mixed character references',
+          ipAdapterRefs: [
+            { imageBase64: 'legacy-reference', mode: 'subject' },
+            appearance('appearance:1'),
+          ],
+        },
+        ['image.reference.ip-adapter'],
+      ),
+    ).toEqual([expect.objectContaining({ code: 'operation-limit-exceeded', severity: 'error' })]);
+  });
+
+  it('rejects ambiguous stable control identities before execution', () => {
+    expect(
+      validateProviderImageRequest(
+        'dashscope',
+        {
+          prompt: 'ambiguous pose',
+          controlImageRef: resourceRef('preview:pose'),
+          controlImageBase64: 'legacy-control',
+          controlMode: 'pose',
+        },
+        ['image.control.pose'],
+      ),
+    ).toEqual([expect.objectContaining({ code: 'invalid-operation-request', severity: 'error' })]);
+    expect(
+      validateProviderImageRequest(
+        'dashscope',
+        { prompt: 'missing role', controlImageRef: resourceRef('preview:control') },
+        ['image.control.pose'],
+      ),
+    ).toEqual([
+      expect.objectContaining({
+        code: 'unsupported-operation-control',
+        details: expect.objectContaining({ owner: 'request' }),
+      }),
+    ]);
+  });
+
   it('audits every canonical image operation as supported, degraded, or unsupported', () => {
     const auditedIds = new Set(AUDITED_IMAGE_CAPABILITY_MATRIX.map((entry) => entry.operationId));
     expect(IMAGE_OPERATION_IDS.filter((operationId) => !auditedIds.has(operationId))).toEqual([]);

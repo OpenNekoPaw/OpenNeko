@@ -262,6 +262,9 @@ export class FalMediaAdapter extends BaseMediaAdapter {
     // ControlNet conditioning
     if (request.controlImageBase64) {
       input.control_image = `data:image/png;base64,${request.controlImageBase64}`;
+      if (request.controlMode) {
+        input.control_mode = request.controlMode;
+      }
       if (request.controlStrength != null) {
         input.controlnet_conditioning_scale = request.controlStrength;
       }

@@ -1,9 +1,14 @@
 import {
+  projectThreeReferenceMediaControls,
   projectShotDataPrompt,
   type CanvasShotPromptProjectableData,
   type CanvasStoryboardPromptState,
   type ConversationRunScope,
+  type ResourceRef,
   type TaskRunScope,
+  type ThreeReferenceCameraMediaReference,
+  type ThreeReferenceContextData,
+  type ThreeReferencePanoramaMediaReference,
 } from '@neko/shared';
 import type { ReferenceDescriptor } from '@neko/shared';
 
@@ -48,7 +53,8 @@ export interface CanvasIpAdapterReferenceInput {
 }
 
 export interface CanvasIpAdapterReference {
-  readonly imageBase64: string;
+  readonly imageBase64?: string;
+  readonly imageRef?: ResourceRef;
   readonly mimeType?: string;
   readonly strength?: number;
   readonly mode?: 'style' | 'subject' | 'both';
@@ -76,6 +82,7 @@ export interface CanvasGenerationInput {
   readonly maskBase64?: string;
   readonly inpaintStrength?: number;
   readonly editInstruction?: string;
+  readonly threeReferenceContexts?: readonly ThreeReferenceContextData[];
 }
 
 export interface CanvasGenerationProgress {
@@ -95,12 +102,15 @@ export interface CanvasImageGenerationRequest {
   readonly style?: string;
   readonly negativePrompt?: string;
   readonly controlImageBase64?: string;
+  readonly controlImageRef?: ResourceRef;
   readonly controlMode?: CanvasControlMode;
   readonly controlStrength?: number;
   readonly ipAdapterRefs?: CanvasIpAdapterReference[];
   readonly maskBase64?: string;
   readonly inpaintStrength?: number;
   readonly editInstruction?: string;
+  readonly cameraReference?: ThreeReferenceCameraMediaReference;
+  readonly panoramaReference?: ThreeReferencePanoramaMediaReference;
 }
 
 export interface CanvasMediaOutput {
@@ -490,7 +500,31 @@ export function buildCanvasImageGenerationRequest(
     metadata['referenceDescriptors'] = referenceDescriptors;
   }
 
-  const controlMode = normalizeCanvasControlMode(input.controlMode);
+  const threeReferenceControls = input.threeReferenceContexts?.length
+    ? projectThreeReferenceMediaControls(input.threeReferenceContexts)
+    : undefined;
+  if (threeReferenceControls?.controlImage && input.controlImageBase64) {
+    throw new Error(
+      '3D reference controlImageRef cannot be combined with Canvas controlImageBase64.',
+    );
+  }
+  const controlMode =
+    threeReferenceControls?.controlImage?.mode ?? normalizeCanvasControlMode(input.controlMode);
+  if (
+    threeReferenceControls?.controlImage &&
+    input.controlMode &&
+    normalizeCanvasControlMode(input.controlMode) !== threeReferenceControls.controlImage.mode
+  ) {
+    throw new Error('Canvas controlMode conflicts with the 3D reference pose/depth role.');
+  }
+  const projectedAppearanceRefs = threeReferenceControls?.appearanceReferences.map(
+    (reference): CanvasIpAdapterReference => ({
+      imageRef: reference.imageRef,
+      strength: 0.6,
+      mode: 'subject',
+    }),
+  );
+  const combinedIpAdapterRefs = [...(ipAdapterRefs ?? []), ...(projectedAppearanceRefs ?? [])];
 
   return {
     prompt: buildCanvasGenerationPrompt(input),
@@ -500,12 +534,19 @@ export function buildCanvasImageGenerationRequest(
     ...(input.style ? { style: input.style } : {}),
     ...(input.negativePrompt ? { negativePrompt: input.negativePrompt } : {}),
     ...(input.controlImageBase64 ? { controlImageBase64: input.controlImageBase64 } : {}),
+    ...(threeReferenceControls?.controlImage
+      ? { controlImageRef: threeReferenceControls.controlImage.imageRef }
+      : {}),
     ...(controlMode ? { controlMode } : {}),
     ...(input.controlStrength !== undefined ? { controlStrength: input.controlStrength } : {}),
-    ...(ipAdapterRefs && ipAdapterRefs.length > 0 ? { ipAdapterRefs: [...ipAdapterRefs] } : {}),
+    ...(combinedIpAdapterRefs.length > 0 ? { ipAdapterRefs: combinedIpAdapterRefs } : {}),
     ...(input.maskBase64 ? { maskBase64: input.maskBase64 } : {}),
     ...(input.inpaintStrength !== undefined ? { inpaintStrength: input.inpaintStrength } : {}),
     ...(input.editInstruction ? { editInstruction: input.editInstruction } : {}),
+    ...(threeReferenceControls?.camera ? { cameraReference: threeReferenceControls.camera } : {}),
+    ...(threeReferenceControls?.panorama
+      ? { panoramaReference: threeReferenceControls.panorama }
+      : {}),
   };
 }
 

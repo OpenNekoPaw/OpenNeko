@@ -1,6 +1,7 @@
 import type { MediaGenerationService } from './media-generation-service';
 import type { MediaTask } from './types';
 import type { TaskRunScope } from '@neko/shared';
+import type { ThreeReferenceMediaControls } from '@neko/shared';
 import { isTerminalMediaTaskStatus } from './media-task-progress-plan';
 import { matchesMediaTaskConversation } from './media-task-view';
 
@@ -22,6 +23,7 @@ export interface SubmitMediaTurnInput {
   readonly mediaModel: MediaTurnModelRef;
   readonly conversationId?: string;
   readonly metadata?: Record<string, unknown>;
+  readonly threeReferenceControls?: ThreeReferenceMediaControls;
 }
 
 export async function submitMediaTurn(
@@ -41,13 +43,46 @@ export async function submitMediaTurn(
 
   switch (input.mediaModel.category) {
     case 'image':
-      return media.generateImage(request);
+      return media.generateImage({
+        ...request,
+        ...(input.threeReferenceControls?.controlImage
+          ? {
+              controlImageRef: input.threeReferenceControls.controlImage.imageRef,
+              controlMode: input.threeReferenceControls.controlImage.mode,
+            }
+          : {}),
+        ...(input.threeReferenceControls?.appearanceReferences.length
+          ? {
+              ipAdapterRefs: input.threeReferenceControls.appearanceReferences.map((reference) => ({
+                imageRef: reference.imageRef,
+                mode: 'subject' as const,
+              })),
+            }
+          : {}),
+        ...(input.threeReferenceControls?.camera
+          ? { cameraReference: input.threeReferenceControls.camera }
+          : {}),
+        ...(input.threeReferenceControls?.panorama
+          ? { panoramaReference: input.threeReferenceControls.panorama }
+          : {}),
+      });
     case 'video':
+      assertNoThreeReferenceControls(input);
       return media.generateVideo(request);
     case 'audio':
+      assertNoThreeReferenceControls(input);
       return media.generateAudio(request);
     case 'music':
+      assertNoThreeReferenceControls(input);
       return media.generateAudio({ ...request, isMusic: true });
+  }
+}
+
+function assertNoThreeReferenceControls(input: SubmitMediaTurnInput): void {
+  if (input.threeReferenceControls) {
+    throw new Error(
+      `3D reference media controls are not supported for ${input.mediaModel.category} turns.`,
+    );
   }
 }
 

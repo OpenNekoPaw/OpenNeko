@@ -50,6 +50,8 @@ describe('MediaGenerationService', () => {
   };
 
   beforeEach(() => {
+    mockProvider.type = 'openai';
+    mockModel.capabilities = ['text_to_image'];
     // Setup adapter registry
     const registry = getMediaAdapterRegistry();
     registry.registerBuiltin('openai', new OpenAICompatMediaAdapter());
@@ -95,6 +97,72 @@ describe('MediaGenerationService', () => {
       expect(task.status).toBe('pending');
       expect(task.providerId).toBe('openai-provider');
       expect(task.modelId).toBe('dalle-model');
+    });
+
+    it('rejects a 3D control before creating a task when the selected model lacks precise support', async () => {
+      const submit = vi.spyOn(taskManager, 'submit');
+
+      await expect(
+        service.generateImage({
+          prompt: 'match the pose',
+          metadata: OWNER_METADATA,
+          controlImageRef: {
+            id: 'preview:pose',
+            scope: 'project',
+            provider: 'preview-asset',
+            kind: 'preview',
+            source: { kind: 'preview-asset', previewAssetId: 'pose' },
+            locator: { kind: 'preview-asset', assetId: 'pose' },
+            fingerprint: { strategy: 'provider', value: 'preview:pose' },
+          },
+          controlMode: 'pose',
+        }),
+      ).rejects.toThrow('image.control.pose');
+
+      expect(submit).not.toHaveBeenCalled();
+    });
+
+    it('rejects a precise control when the selected runtime cannot map it', async () => {
+      mockModel.capabilities = ['text_to_image', 'image.control.pose'];
+
+      await expect(
+        service.generateImage({
+          prompt: 'match the pose',
+          metadata: OWNER_METADATA,
+          controlImageRef: {
+            id: 'preview:pose',
+            scope: 'project',
+            provider: 'preview-asset',
+            kind: 'preview',
+            source: { kind: 'preview-asset', previewAssetId: 'pose' },
+            locator: { kind: 'preview-asset', assetId: 'pose' },
+            fingerprint: { strategy: 'provider', value: 'preview:pose' },
+          },
+          controlMode: 'pose',
+        }),
+      ).rejects.toThrow('does not declare audited support');
+    });
+
+    it('accepts a 3D control only after the adapter and model declare exact support', async () => {
+      mockProvider.type = 'dashscope';
+      mockModel.capabilities = ['text_to_image', 'image.control.pose'];
+
+      const task = await service.generateImage({
+        prompt: 'match the pose',
+        metadata: OWNER_METADATA,
+        controlImageRef: {
+          id: 'preview:pose',
+          scope: 'project',
+          provider: 'preview-asset',
+          kind: 'preview',
+          source: { kind: 'preview-asset', previewAssetId: 'pose' },
+          locator: { kind: 'preview-asset', assetId: 'pose' },
+          fingerprint: { strategy: 'provider', value: 'preview:pose' },
+        },
+        controlMode: 'pose',
+      });
+
+      expect(task.status).toBe('pending');
     });
 
     it('stores the routed provider and model in the queued task payload', async () => {

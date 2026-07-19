@@ -103,6 +103,69 @@ describe('media request asset materialization', () => {
     expect(request.sourceVideoUrl).toBe('authorized://asset:video:source');
   });
 
+  it('materializes stable 3D control and appearance refs without changing structured controls', async () => {
+    const controlImageRef = createResourceRef('preview:pose:1');
+    const appearanceRef = createResourceRef('preview:appearance:1');
+    const panoramaRef = createResourceRef('preview:panorama:1');
+    const readResourceAsBase64 = vi.fn(async (ref: ResourceRef) => `base64:${ref.id}`);
+    const cameraReference = {
+      value: {
+        cameraId: 'camera-front',
+        position: { x: 0, y: 1.4, z: 4 },
+        target: { x: 0, y: 1, z: 0 },
+        fieldOfViewDeg: 45,
+        aspectRatio: 1,
+      },
+      identity: { sessionId: 'session-camera', revision: 2 },
+    } as const;
+    const panoramaReference = {
+      imageRef: panoramaRef,
+      orientation: { yawDeg: 10, pitchDeg: -5, fieldOfViewDeg: 70 },
+      identity: { sessionId: 'session-panorama', revision: 3 },
+    } as const;
+
+    const request = await materializeImageRequestFileUris(
+      {
+        prompt: 'role isolated references',
+        controlImageRef,
+        controlMode: 'pose',
+        ipAdapterRefs: [{ imageRef: appearanceRef, mode: 'subject' }],
+        cameraReference,
+        panoramaReference,
+      },
+      { readAsBase64: vi.fn(), readResourceAsBase64 },
+    );
+
+    expect(request.controlImageBase64).toBe('base64:preview:pose:1');
+    expect(request.ipAdapterRefs).toEqual([
+      { imageBase64: 'base64:preview:appearance:1', mode: 'subject' },
+    ]);
+    expect(request.cameraReference).toBe(cameraReference);
+    expect(request.panoramaReference).toBe(panoramaReference);
+    expect(readResourceAsBase64).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects mixed stable and materialized image control identities', async () => {
+    await expect(
+      materializeImageRequestFileUris({
+        prompt: 'ambiguous control',
+        controlImageRef: createResourceRef('preview:pose:1'),
+        controlImageBase64: 'legacy-control',
+      }),
+    ).rejects.toThrow('Stable controlImageRef cannot be combined');
+    await expect(
+      materializeImageRequestFileUris({
+        prompt: 'ambiguous appearance',
+        ipAdapterRefs: [
+          {
+            imageRef: createResourceRef('preview:appearance:1'),
+            imageBase64: 'legacy-appearance',
+          },
+        ],
+      }),
+    ).rejects.toThrow('Stable IP-Adapter imageRef cannot be combined');
+  });
+
   it('rejects ambiguous stable and legacy video identities', async () => {
     await expect(
       materializeVideoRequestFileUris({
