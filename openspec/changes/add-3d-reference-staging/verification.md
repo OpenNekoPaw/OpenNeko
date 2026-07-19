@@ -53,6 +53,8 @@ Host: VS Code Extension Development Host on macOS, verified through the existing
 - Console inspection reported no Preview runtime errors; the only message was VS Code's unrelated `local-network-access` feature warning.
 - Capturing appearance and camera outputs materialized two 140,949-byte PNGs under the external workspace's `.neko/.cache/resources/three-reference-captures/` directory. No new capture was written to Preview `globalStorageUri`, and the previous “File access path outside allowed roots” diagnostic did not recur.
 - Starting from the canonical empty Agent entry state (`activeTabId: null`, no open tabs), Preview created and bound a local conversation before context injection. The Agent Webview displayed one `3d-reference` chip with `appearance · camera`, no alert, and no recurrence of “Cannot send context payload without an active conversation Tab.” No provider request was submitted during this acceptance check.
+- Reproduced camera-only handoff failure in the Development Host: with appearance and camera enabled, clicking only “Capture Camera Reference” left Agent with zero contexts. The red collector regression proved `deliverContext` received zero calls because it waited for every enabled purpose. The collector now emits an action-scoped context immediately, with no cross-action pending map. After rebuild/reload, camera capture produced a `camera` chip; a later appearance capture produced a separate `appearance` chip, and both remained visible without alerts. No provider request was submitted.
+- The Preview toolbar uses the shared floating-toolbar compact density rather than package-local button styling. Development Host measurement changed from 383 × 54 px with 36 px buttons to 307 × 44 px with 30 px buttons; the horizontal pill shape, active-button indicator, theme tokens, keyboard boundary, and tool ordering were preserved.
 
 Manual screenshots were kept outside the repository at `/tmp/neko-3d-reference-test-glb-latest.png`, `/tmp/neko-3d-reference-test-glb-rotated.png`, and `/tmp/neko-3d-reference-builtin-guide.png`.
 
@@ -74,6 +76,15 @@ pnpm --dir packages/neko-preview exec vitest run packages/extension/src/provider
 pnpm --dir packages/neko-preview compile:extension
 # production Extension bundle passed; extension.js 693.3 kB
 
+pnpm --dir packages/neko-preview exec vitest run packages/extension/src/providers/model/ThreeReferenceOutputCollector.test.ts packages/webview/src/model/ModelViewer.test.tsx
+# 2 files, 8 tests passed
+
+pnpm --dir packages/neko-types exec vitest run src/theme/tokens.test.ts
+# 1 file, 3 tests passed
+
+pnpm --dir packages/neko-preview compile:webview
+# production Webview build passed; model.js 908.21 kB / 242.47 kB gzip
+
 pnpm exec vitest run packages/neko-agent/packages/agent/src/runtime/__tests__/message-runtime.test.ts
 # 1 file, 68 tests passed
 
@@ -85,6 +96,15 @@ pnpm exec vitest run packages/neko-agent/packages/webview/src/presenters/__tests
 
 pnpm --dir packages/neko-agent run compile
 # production Agent Extension and Webview builds passed
+
+pnpm build
+# passed: 10/10 Turbo build tasks, including Preview, shared theme consumers, Agent/Canvas Webviews, and Rust release/N-API builds
+
+pnpm check
+# passed: knip plus dependency-cruiser; 1,551 modules / 5,537 dependencies, no dependency violations
+
+pnpm test
+# blocked outside this change after 8 successful package tasks: existing Agent plugin-transfer-adapter expectation mismatch (expected executed=1, received 0); Preview had not started in the Turbo queue
 ```
 
 Earlier focused contract/provider/runtime/UI/materialization groups passed 28 tests in 6 files, and the cumulative focused Preview groups passed 44 tests. Relevant ESLint and `git diff --check` checks passed at their implementation checkpoints.
@@ -93,10 +113,11 @@ Agent Evaluation disposition is `update` for `agent-runtime.creative-media-workf
 
 ## Active blockers and residual risk
 
-1. `scripts/webview-functional/` is entirely deleted in the current user worktree, including its VS Code controller and Preview scenario fixtures. Restoring or extending it would overwrite user-owned deletions, so tasks 7.1 and 7.2 remain open. This also explains the reported missing `scripts/webview-functional/vscode-controller` path.
+1. The shared `scripts/webview-functional/` runner is present again, but owning Preview scenarios for the new guide/capture/reload/multi-panel path have not yet been added or accepted; tasks 7.1 and 7.2 remain open.
 2. Agent task 6.2 is complete: invalid `3d-reference` payloads fail visibly, role-labelled prompt/evidence projection and chips are canonical, exact ResourceRefs become multimodal attachments, and empty-entry injection creates a conversation through the existing bridge. Canvas/media projection and capability negotiation in tasks 6.3–6.5 remain open; overlapping unrelated work in those files must still be preserved.
 3. System ADR, architecture index, and package-boundary files already have unrelated edits. Task 8.2 remains open; only clean Preview-owned documentation was updated.
 4. Real-model appearance/camera capture and role-labelled Agent context injection are complete, but real-source panorama composition and provider-level role-isolated generation are not; task 7.3 remains open.
-5. Full repository `pnpm build`, `pnpm test`, `pnpm check`, legacy-debt, unused, functional, and real Agent evaluation gates have not yet been accepted for this change. Task 7.5 and final verification task 8.3 remain open.
-6. The full Preview Vitest run passed 320 of 321 tests; the unrelated standard-format matrix test is blocked because its repository fixture `triangle.glb` is absent. The focused capture/collector/extension regression group passed completely.
+5. Full repository `pnpm build` and `pnpm check` pass. `pnpm test` is blocked by the unrelated Agent `plugin-transfer-adapter.test.ts` expectation mismatch (`executed` expected 1, received 0) after eight package tasks passed; Preview did not start before Turbo stopped. Legacy-debt, functional, and real Agent evaluation gates have not yet been accepted for this change, so task 7.5 and final verification task 8.3 remain open.
+6. The full Preview Vitest run passed 321 of 322 tests; the unrelated standard-format matrix test is blocked because its repository fixture `triangle.glb` is absent. The focused capture/collector/extension regression group passed completely.
 7. The Preview Extension `tsc --noEmit` command remains blocked by pre-existing DOM/WebCodecs library configuration errors in `neko-client` plus existing unrelated Preview strict-test errors; the production Extension bundle and focused regression tests pass.
+8. The full shared `neko-types` Vitest run passed 1,440 of 1,441 tests. The unrelated local-resource guardrail currently reports the pre-existing `ModelPreviewSourceSession.ts` Webview-root assembly path; the focused shared theme test passes.
