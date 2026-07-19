@@ -129,6 +129,7 @@ describe('ModelViewer', () => {
     expect(viewportToolbar?.classList.contains('neko-vtoolbar')).toBe(false);
     expect(viewportToolbar?.classList.contains('neko-floating-toolbar')).toBe(true);
     expect(viewportToolbar?.dataset.activeIndicator).toBe('button');
+    expect(viewportToolbar?.dataset.density).toBe('compact');
     expect(viewportToolbar?.dataset.orientation).toBe('horizontal');
     expect(viewportToolbar?.dataset.shape).toBe('pill');
     expect(viewportToolbar?.getAttribute('role')).toBe('toolbar');

@@ -51,6 +51,7 @@ export function ModelViewportControls({
       <div
         className="model-preview__viewport-toolbar neko-floating-toolbar"
         data-active-indicator="button"
+        data-density="compact"
         data-testid="model-preview-viewport-toolbar"
         data-orientation="horizontal"
         data-shape="pill"

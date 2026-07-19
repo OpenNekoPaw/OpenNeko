@@ -127,6 +127,15 @@ export const nekoTailwindPreset = {
           'flex-direction': 'row',
           padding: '6px 10px',
         },
+        '.neko-floating-toolbar[data-density="compact"]': {
+          gap: '4px',
+        },
+        '.neko-floating-toolbar[data-density="compact"][data-orientation="horizontal"]': {
+          padding: '4px 8px',
+        },
+        '.neko-floating-toolbar[data-density="compact"][data-orientation="vertical"]': {
+          padding: '8px 4px',
+        },
         '.neko-floating-toolbar .neko-toolbar-btn': {
           position: 'relative',
           width: '36px',
@@ -134,6 +143,10 @@ export const nekoTailwindPreset = {
           flex: '0 0 auto',
           'border-radius': '999px',
           color: 'var(--neko-toolbar-foreground-secondary)',
+        },
+        '.neko-floating-toolbar[data-density="compact"] .neko-toolbar-btn': {
+          width: '30px',
+          height: '30px',
         },
         '.neko-toolbar-mode-group': {
           display: 'flex',
@@ -182,6 +195,10 @@ export const nekoTailwindPreset = {
             'box-shadow': '0 1px 5px var(--neko-toolbar-accent-glow)',
             'pointer-events': 'none',
           },
+        '.neko-floating-toolbar[data-density="compact"] .neko-toolbar-btn.active::after, .neko-floating-toolbar[data-density="compact"] .neko-toolbar-btn[aria-pressed="true"]::after':
+          {
+            inset: '2px',
+          },
         '.neko-floating-toolbar .neko-toolbar-btn > svg, .neko-floating-toolbar .neko-toolbar-btn > .codicon':
           {
             position: 'relative',
@@ -201,6 +218,11 @@ export const nekoTailwindPreset = {
           height: '26px',
           margin: '0 2px',
         },
+        '.neko-floating-toolbar[data-density="compact"] .neko-toolbar-sep[data-orientation="vertical"]':
+          {
+            height: '20px',
+            margin: '0 1px',
+          },
 
         // ── Collapsible Section ───────────────────────────────────────────
         '.neko-collapsible': {
