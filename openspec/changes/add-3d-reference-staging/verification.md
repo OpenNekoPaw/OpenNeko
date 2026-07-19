@@ -57,6 +57,14 @@ Host: VS Code Extension Development Host on macOS, verified through the existing
 - The Preview toolbar uses the shared floating-toolbar compact density rather than package-local button styling. Development Host measurement changed from 383 × 54 px with 36 px buttons to 307 × 44 px with 30 px buttons; the horizontal pill shape, active-button indicator, theme tokens, keyboard boundary, and tool ordering were preserved.
 - Preview and Canvas now consume the same neutral `@neko/ui/icons` SVG family for viewport actions. With `~/Git/neko-test/test.glb` open, Development Host inspection found 8/8 Preview toolbar icons at 18 × 18 px with a `0 0 24 24` view box and zero Codicon glyphs; the Canvas pointer reported the same geometry and active theme color. The Preview toolbar remained 307 × 44 px and the model loaded successfully.
 
+### Directional-light controls implementation checkpoint
+
+- The fixed key/fill/rim rig remains three `DirectionalLight` instances. No point-light attenuation, add/remove operation, shadow authoring, durable scene state, or source writeback was added.
+- Preview now exposes a Lights tree group and one selected-light inspector with shared tree, panel, slider, color, axis, theme, icon, and i18n primitives. Selecting a light reuses the single runtime `TransformControls` instance in translate-only mode.
+- Light positions round-trip through subject-bounds-normalized coordinates. Drag changes update the live direction light and direction guide; mouse-up advances the existing temporary panel revision without changing camera or model-transform contracts.
+- Runtime helpers, arrows, camera helpers, grid, and transform gizmos are excluded from captures and their prior visibility is restored even if capture throws. Helper geometry and listeners are detached and disposed with the model/runtime lifecycle.
+- Focused automated coverage passes, but this checkpoint has not been accepted in an Extension Development Host: the required VS Code CDP preflight reports no existing endpoint on port 9222, and the debugger workflow forbids launching or restarting VS Code to enable one. Task 5.8 therefore remains open. When the endpoint is available, acceptance must use only `~/Git/neko-test/test.glb` without copying it into this repository.
+
 Manual screenshots were kept outside the repository at `/tmp/neko-3d-reference-test-glb-latest.png`, `/tmp/neko-3d-reference-test-glb-rotated.png`, `/tmp/neko-3d-reference-builtin-guide.png`, and `/tmp/neko-preview-shared-svg-toolbar.png`.
 
 ## Focused validation completed
@@ -124,8 +132,20 @@ pnpm build
 pnpm check
 # passed: knip plus dependency-cruiser; 1,551 modules / 5,537 dependencies, no dependency violations
 
+pnpm exec vitest run
+# Preview Webview: 14 files / 52 tests passed, including tree/selection, normalized light coordinates, translate-only UI, staging revision, and capture-helper exclusion
+
+pnpm --filter @neko/ui test -- --run
+# shared UI: 35 files / 149 tests passed
+
+pnpm build
+# latest checkpoint passed: 10/10 Turbo build tasks, including Preview Webview/Extension and shared UI consumers
+
+pnpm check
+# latest checkpoint passed: Knip and dependency-cruiser, 1,549 modules / 5,533 dependencies, no violations
+
 pnpm test
-# blocked outside this change after 8 successful package tasks: existing Agent plugin-transfer-adapter expectation mismatch (expected executed=1, received 0); Preview had not started in the Turbo queue
+# blocked outside this change: Preview's repository-owned matrix fixture triangle.glb is absent, and three concurrently modified TUI Workspace Board tests expect group nodes that are not present
 ```
 
 Earlier focused contract/provider/runtime/UI/materialization groups passed 28 tests in 6 files, and the cumulative focused Preview groups passed 44 tests. Relevant ESLint and `git diff --check` checks passed at their implementation checkpoints.
@@ -138,7 +158,8 @@ Agent Evaluation disposition is `update` for `agent-runtime.creative-media-workf
 2. Agent task 6.2 is complete: invalid `3d-reference` payloads fail visibly, role-labelled prompt/evidence projection and chips are canonical, exact ResourceRefs become multimodal attachments, and empty-entry injection creates a conversation through the existing bridge. Canvas/media projection and capability negotiation in tasks 6.3–6.5 remain open; overlapping unrelated work in those files must still be preserved.
 3. System ADR, architecture index, and package-boundary files already have unrelated edits. Task 8.2 remains open; only clean Preview-owned documentation was updated.
 4. Real-model appearance/camera capture and role-labelled Agent context injection are complete, but real-source panorama composition and provider-level role-isolated generation are not; task 7.3 remains open.
-5. The current focused Preview/Canvas builds and repository `pnpm check` pass. A later full `pnpm build` rerun on the concurrently modified workspace is blocked outside this change by `@neko/asset` tests that still construct the removed `recording` provenance value; a prior clean checkpoint completed all build tasks. `pnpm test` remains blocked by the unrelated Agent `plugin-transfer-adapter.test.ts` expectation mismatch (`executed` expected 1, received 0) after 621 Agent Extension tests passed; Preview did not start before Turbo stopped. Legacy-debt, functional, and real Agent evaluation gates have not yet been accepted for this change, so task 7.5 and final verification task 8.3 remain open.
-6. The full Preview Vitest run passed 321 of 322 tests; the unrelated standard-format matrix test is blocked because its repository fixture `triangle.glb` is absent. The focused capture/collector/extension regression group passed completely.
-7. The Preview Extension `tsc --noEmit` command remains blocked by pre-existing DOM/WebCodecs library configuration errors in `neko-client` plus existing unrelated Preview strict-test errors; the production Extension bundle and focused regression tests pass.
+5. The latest repository `pnpm build` and `pnpm check` pass. `pnpm test` remains blocked outside this change by the absent Preview `triangle.glb` matrix fixture and three concurrently modified TUI Workspace Board group-node expectations. Legacy-debt, functional, and real Agent evaluation gates have not yet been accepted for this change, so task 7.5 and final verification task 8.3 remain open.
+6. The latest full Preview run passed 323 of 324 tests; the unrelated standard-format matrix test is blocked because its repository fixture `triangle.glb` is absent. The focused Preview Webview run passed all 52 tests, including the new light-control paths.
+7. Preview Webview `tsc --noEmit` is blocked by three existing errors outside the new light-control files: the unsupported `shield` Codicon and empty `PanelSection` in `ThreeReferencePurposeControls.tsx`, plus a non-tuple spread in `threeReferencePresetRuntime.ts`. Production builds and focused ESLint/tests pass.
 8. The full shared `neko-types` Vitest run passed 1,440 of 1,441 tests. The unrelated local-resource guardrail currently reports the pre-existing `ModelPreviewSourceSession.ts` Webview-root assembly path; the focused shared theme test passes.
+9. Directional-light visual/interaction acceptance is blocked because no verified VS Code CDP endpoint is listening on port 9222. No browser/Vite substitute was used; task 5.8 stays open until the Extension Development Host can verify helper visibility, drag responsiveness, capture exclusion, console output, and cleanup against `~/Git/neko-test/test.glb`.
