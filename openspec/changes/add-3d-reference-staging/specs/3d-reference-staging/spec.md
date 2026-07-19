@@ -51,9 +51,14 @@ Preview SHALL keep camera identity, position, target, field of view, aspect rati
 - **WHEN** the creator adjusts the camera in a mannequin guide session
 - **THEN** Preview advances the camera staging revision without enabling appearance reference or changing the mannequin's role restrictions
 
+#### Scenario: Directly drag the camera object
+
+- **WHEN** the creator selects and drags the rendered camera body in the viewport
+- **THEN** Preview moves it on the camera-facing drag plane, updates its normalized staged position and frustum, and does not display or require an XYZ transform gizmo
+
 ### Requirement: The temporary light rig exposes spatial directional-light controls
 
-Preview SHALL expose its fixed key, fill, and rim directional lights as selectable temporary scene entries. A selected light SHALL have a visible viewport helper and inspector controls for color, intensity, and normalized position/direction toward the subject center. Light helpers and transform gizmos are editor chrome and MUST NOT appear in appearance, pose, camera, or panoramic-scene outputs. The initial capability MUST NOT add durable scene lights or reinterpret these controls as attenuating point lights.
+Preview SHALL expose its fixed key, fill, and rim directional lights as selectable temporary scene entries. A selected light SHALL have a visible viewport object and inspector controls for color, intensity, and normalized position/direction toward the subject center. The light object SHALL support direct pointer dragging on a camera-facing plane without displaying or requiring an XYZ transform gizmo. Light objects, direction guides, and transform gizmos are editor chrome and MUST NOT appear in appearance, pose, camera, or panoramic-scene outputs. The initial capability MUST NOT add durable scene lights or reinterpret these controls as attenuating point lights.
 
 #### Scenario: Reposition the key light
 
