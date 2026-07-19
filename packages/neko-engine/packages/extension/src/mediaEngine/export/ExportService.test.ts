@@ -123,8 +123,17 @@ describe('ExportService', () => {
       expect.any(String),
     );
 
-    const [, , , requestJson] = engine.dispatchAction.mock.calls[0];
-    const request = JSON.parse(requestJson as string);
+    const dispatchCall = engine.dispatchAction.mock.calls[0];
+    expect(dispatchCall).toBeDefined();
+    if (!dispatchCall) {
+      throw new Error('Expected timelines:export to dispatch exactly once');
+    }
+    const requestJson = dispatchCall[3];
+    expect(requestJson).toEqual(expect.any(String));
+    if (typeof requestJson !== 'string') {
+      throw new Error('Expected timelines:export to dispatch a JSON request');
+    }
+    const request = JSON.parse(requestJson);
 
     expect(request).toMatchObject({
       outputPath: '/tmp/output.mp4',

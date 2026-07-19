@@ -166,6 +166,10 @@ describe('NativeMediaEngine', () => {
       }),
     );
     expect(frame).not.toBeNull();
+    expect(frame?.type).toBe('audio');
+    if (frame?.type !== 'audio') {
+      throw new Error('Expected the audio decoder to return an audio frame');
+    }
     expect(frame).toMatchObject({
       type: 'audio',
       sampleRate: 44100,
@@ -174,7 +178,7 @@ describe('NativeMediaEngine', () => {
       timestamp: 1.5,
       duration: 0.1,
     });
-    expect(Array.from(frame?.data ?? [])).toEqual([0.25, -0.25]);
+    expect(Array.from(frame.data)).toEqual([0.25, -0.25]);
   });
 
   it('stops the embedded frame server when disposing the wrapper', async () => {
