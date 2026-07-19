@@ -86,6 +86,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: actions/cache@v5
+        if: ${{ env.ACT != 'true' }}
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
@@ -95,22 +96,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - name: Install native build dependencies
+        if: ${{ env.ACT != 'true' || env.ACT_NATIVE_DEPS_READY != 'true' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            clang \
-            libclang-dev \
-            libavcodec-dev \
-            libavdevice-dev \
-            libavfilter-dev \
-            libavformat-dev \
-            libavutil-dev \
-            libssl-dev \
-            libswresample-dev \
-            libswscale-dev \
-            libva-dev \
-            libvulkan-dev \
-            pkg-config
+          xargs sudo apt-get install -y < scripts/act/native-build-packages.txt
 
       - run: pnpm check:build
 
@@ -158,6 +147,7 @@ jobs:
         run: corepack enable
 
       - uses: actions/cache@v5
+        if: ${{ env.ACT != 'true' }}
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
@@ -276,6 +266,7 @@ jobs:
         run: corepack enable
 
       - uses: actions/cache@v5
+        if: ${{ env.ACT != 'true' }}
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
@@ -379,6 +370,7 @@ jobs:
         run: corepack enable
 
       - uses: actions/cache@v5
+        if: ${{ env.ACT != 'true' }}
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}

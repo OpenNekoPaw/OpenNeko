@@ -1,0 +1,13 @@
+clang
+libclang-dev
+libavcodec-dev
+libavdevice-dev
+libavfilter-dev
+libavformat-dev
+libavutil-dev
+libssl-dev
+libswresample-dev
+libswscale-dev
+libva-dev
+libvulkan-dev
+pkg-config
