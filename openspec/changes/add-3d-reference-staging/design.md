@@ -59,6 +59,8 @@ Opening a guide is an explicit command/action. A failed real source remains fail
 
 Purposes are a set, not one session-wide enum, because a real model may contribute appearance and pose while the same session contributes camera and panorama. The active subject/environment declares eligible purposes; the creator selects a subset for delivery. UI badges and disabled controls project this contract.
 
+Each visible purpose-capture action is an independent delivery action. The produced context narrows its staging snapshot to that captured purpose and receives a purpose-qualified identity. Preview does not keep a hidden cross-action batch waiting for every enabled purpose: separate clicks can occur after camera or pose revisions change, so implicit pending state would strand valid captures and couple unrelated user actions.
+
 Guide-only presets omit `appearance` at the catalog level. That restriction is checked again when constructing capture outputs, Agent context, Canvas projection, and media requests. Repeated checks are justified because these are separate trust/serialization boundaries, not internal fallback guards.
 
 ### Use purpose-specific outputs, not one generic screenshot

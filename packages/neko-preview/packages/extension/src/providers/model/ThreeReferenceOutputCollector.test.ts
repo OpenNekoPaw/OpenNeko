@@ -4,7 +4,29 @@ import { ThreeReferenceOutputCollector } from './ThreeReferenceOutputCollector';
 import type { ThreeReferenceCaptureRequest } from './ModelPreviewProvider';
 
 describe('ThreeReferenceOutputCollector', () => {
-  it('delivers one exact context only after every selected role is materialized', async () => {
+  it('delivers a camera-only context immediately when the camera capture action is used', async () => {
+    const deliverContext = vi.fn(async () => undefined);
+    const collector = new ThreeReferenceOutputCollector({
+      materializeCapture: async (request) => resource(`capture-${request.purpose}`),
+      deliverContext,
+    });
+    const staging = sourceStaging();
+
+    await collector.collect(request(staging, 'camera'));
+
+    expect(deliverContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: '3d-reference',
+        id: '3d-reference:session-1:2:camera',
+        data: expect.objectContaining({
+          staging: { ...staging, selectedPurposes: ['camera'] },
+          outputs: [expect.objectContaining({ kind: 'camera' })],
+        }),
+      }),
+    );
+  });
+
+  it('delivers independently captured roles without cross-action pending state', async () => {
     const deliverContext = vi.fn(async () => undefined);
     const collector = new ThreeReferenceOutputCollector({
       materializeCapture: async (request) => resource(`capture-${request.purpose}`),
@@ -12,20 +34,28 @@ describe('ThreeReferenceOutputCollector', () => {
     });
     const staging = sourceStaging();
     await collector.collect(request(staging, 'appearance'));
-    expect(deliverContext).not.toHaveBeenCalled();
     await collector.collect(request(staging, 'camera'));
-    expect(deliverContext).toHaveBeenCalledWith(
+    expect(deliverContext).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
-        type: '3d-reference',
+        id: '3d-reference:session-1:2:appearance',
         data: expect.objectContaining({
-          staging,
-          outputs: [
-            expect.objectContaining({ kind: 'appearance' }),
-            expect.objectContaining({ kind: 'camera' }),
-          ],
+          staging: { ...staging, selectedPurposes: ['appearance'] },
+          outputs: [expect.objectContaining({ kind: 'appearance' })],
         }),
       }),
     );
+    expect(deliverContext).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        id: '3d-reference:session-1:2:camera',
+        data: expect.objectContaining({
+          staging: { ...staging, selectedPurposes: ['camera'] },
+          outputs: [expect.objectContaining({ kind: 'camera' })],
+        }),
+      }),
+    );
+    expect(deliverContext).toHaveBeenCalledTimes(2);
   });
 
   it('rejects appearance output from guide-only staging', async () => {

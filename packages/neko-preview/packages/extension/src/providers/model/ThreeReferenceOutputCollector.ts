@@ -5,7 +5,6 @@ import {
   type ResourceRef,
   type ThreeReferenceContextData,
   type ThreeReferenceOutput,
-  type ThreeReferencePurpose,
 } from '@neko/shared';
 import type { ThreeReferenceCaptureRequest } from './ModelPreviewProvider';
 
@@ -14,52 +13,32 @@ export interface ThreeReferenceOutputCollectorDependencies {
   readonly deliverContext: (payload: AgentContextPayload) => Promise<void>;
 }
 
-interface PendingOutputs {
-  readonly staging: ThreeReferenceCaptureRequest['staging'];
-  readonly outputs: Map<ThreeReferencePurpose, ThreeReferenceOutput>;
-}
-
 export class ThreeReferenceOutputCollector {
-  private readonly pending = new Map<string, PendingOutputs>();
-
   constructor(private readonly dependencies: ThreeReferenceOutputCollectorDependencies) {}
 
   async collect(request: ThreeReferenceCaptureRequest): Promise<void> {
     request.signal.throwIfAborted();
     const image = await this.dependencies.materializeCapture(request);
     request.signal.throwIfAborted();
-    const key = `${request.identity.sessionId}:${request.identity.revision}`;
-    const current = this.pending.get(key) ?? {
-      staging: request.staging,
-      outputs: new Map<ThreeReferencePurpose, ThreeReferenceOutput>(),
-    };
-    if (current.staging !== request.staging) {
-      throw new Error('3D Reference output collection received divergent staging snapshots.');
-    }
-    current.outputs.set(request.purpose, projectOutput(request, image));
-    this.pending.set(key, current);
-    if (!request.staging.selectedPurposes.every((purpose) => current.outputs.has(purpose))) return;
-    const outputs = request.staging.selectedPurposes.map((purpose) => {
-      const output = current.outputs.get(purpose);
-      if (!output) throw new Error(`3D Reference output is missing: ${purpose}`);
-      return output;
-    });
+    const output = projectOutput(request, image);
     const context: ThreeReferenceContextData = {
       contractVersion: THREE_REFERENCE_CONTEXT_VERSION,
-      staging: request.staging,
-      outputs,
+      staging: {
+        ...request.staging,
+        selectedPurposes: [request.purpose],
+      },
+      outputs: [output],
     };
     if (!isThreeReferenceContextData(context)) {
       throw new Error('3D Reference output collection produced an invalid context.');
     }
     await this.dependencies.deliverContext({
       type: '3d-reference',
-      id: `3d-reference:${request.identity.sessionId}:${request.identity.revision}`,
+      id: `3d-reference:${request.identity.sessionId}:${request.identity.revision}:${request.purpose}`,
       label: labelFor(request),
-      summary: request.staging.selectedPurposes.join(', '),
+      summary: request.purpose,
       data: context,
     });
-    this.pending.delete(key);
   }
 }
 

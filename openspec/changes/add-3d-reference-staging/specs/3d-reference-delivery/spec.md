@@ -4,10 +4,10 @@
 
 The system SHALL deliver staged 3D reference context through one versioned `3d-reference` payload containing exact session identity, revision, selected purposes, subject/environment descriptors, structured staging, and purpose-specific output resources. The prelaunch `model-preview` discriminator and generic staged-image success path MUST be removed or poisoned and MUST NOT remain as fallback.
 
-#### Scenario: Deliver selected purposes
+#### Scenario: Deliver an independently captured purpose
 
-- **WHEN** the creator sends a live session with pose and camera selected
-- **THEN** the payload contains only validated pose and camera outputs for the exact live revision and excludes appearance and panoramic outputs
+- **WHEN** the creator invokes the camera capture action while appearance and camera are both enabled in the live session
+- **THEN** Preview immediately sends a valid camera-only payload for the exact live revision and does not wait for an appearance capture or retain cross-action pending state
 
 #### Scenario: Reject legacy context
 
