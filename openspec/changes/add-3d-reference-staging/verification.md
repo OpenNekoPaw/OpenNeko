@@ -24,7 +24,7 @@ Measured output:
 
 | Item                               |       Raw |      Gzip | Notes                                                                                |
 | ---------------------------------- | --------: | --------: | ------------------------------------------------------------------------------------ |
-| `assets/model.js`                  | 908.18 kB | 242.46 kB | Only `model.html` loads the 3D entry                                                 |
+| `assets/model.js`                  | 926.69 kB | 246.49 kB | Only `model.html` loads the 3D entry; includes direct-drag editor controls           |
 | Built-in preset binaries           |       0 B |       0 B | Mannequin, props, studio, and panorama grid are project-authored procedural geometry |
 | Catalog aggregate binary increment |       0 B |       0 B | No Draco, Meshopt, KTX2, worker, or third-party model payload                        |
 
@@ -57,13 +57,14 @@ Host: VS Code Extension Development Host on macOS, verified through the existing
 - The Preview toolbar uses the shared floating-toolbar compact density rather than package-local button styling. Development Host measurement changed from 383 × 54 px with 36 px buttons to 307 × 44 px with 30 px buttons; the horizontal pill shape, active-button indicator, theme tokens, keyboard boundary, and tool ordering were preserved.
 - Preview and Canvas now consume the same neutral `@neko/ui/icons` SVG family for viewport actions. With `~/Git/neko-test/test.glb` open, Development Host inspection found 8/8 Preview toolbar icons at 18 × 18 px with a `0 0 24 24` view box and zero Codicon glyphs; the Canvas pointer reported the same geometry and active theme color. The Preview toolbar remained 307 × 44 px and the model loaded successfully.
 
-### Directional-light controls implementation checkpoint
+### Camera and directional-light object controls implementation checkpoint
 
 - The fixed key/fill/rim rig remains three `DirectionalLight` instances. No point-light attenuation, add/remove operation, shadow authoring, durable scene state, or source writeback was added.
-- Preview now exposes a Lights tree group and one selected-light inspector with shared tree, panel, slider, color, axis, theme, icon, and i18n primitives. Selecting a light reuses the single runtime `TransformControls` instance in translate-only mode.
-- Light positions round-trip through subject-bounds-normalized coordinates. Drag changes update the live direction light and direction guide; mouse-up advances the existing temporary panel revision without changing camera or model-transform contracts.
-- Runtime helpers, arrows, camera helpers, grid, and transform gizmos are excluded from captures and their prior visibility is restored even if capture throws. Helper geometry and listeners are detached and disposed with the model/runtime lifecycle.
-- Focused automated coverage passes, but this checkpoint has not been accepted in an Extension Development Host: the required VS Code CDP preflight reports no existing endpoint on port 9222, and the debugger workflow forbids launching or restarting VS Code to enable one. Task 5.8 therefore remains open. When the endpoint is available, acceptance must use only `~/Git/neko-test/test.glb` without copying it into this repository.
+- Preview now exposes a Lights tree group and one selected-light inspector with shared tree, panel, slider, color, axis, theme, icon, and i18n primitives. Camera selection renders an orange camera body with its frustum; light selection renders a role-colored solid light object with its direction arrow.
+- Camera and light objects use one panel-owned `DragControls` instance for direct camera-facing-plane pointer drag. They never attach to the XYZ `TransformControls` gizmo, which remains reserved for model nodes. Hover and drag pause orbit navigation, and drag end restores it.
+- Camera and light positions round-trip through subject-bounds-normalized coordinates. Drag changes update the live camera frustum or direction light/arrow; drag end advances the existing temporary panel revision without changing source bytes or model-transform contracts.
+- Runtime objects, arrows, camera frusta, grid, and transform gizmos are excluded from captures and their prior visibility is restored even if capture throws. Handle geometry, materials, controls, and listeners are detached and disposed with the model/runtime lifecycle.
+- Focused automated coverage passes, but this checkpoint has not been accepted in an Extension Development Host: port 9222 is reachable but exposes no VS Code workbench target, and the debugger workflow forbids launching or restarting VS Code to replace it. Task 5.8 therefore remains open. When a verified endpoint is available, acceptance must use only `~/Git/neko-test/test.glb` without copying it into this repository.
 
 Manual screenshots were kept outside the repository at `/tmp/neko-3d-reference-test-glb-latest.png`, `/tmp/neko-3d-reference-test-glb-rotated.png`, `/tmp/neko-3d-reference-builtin-guide.png`, and `/tmp/neko-preview-shared-svg-toolbar.png`.
 
@@ -130,10 +131,10 @@ pnpm build
 # passed: 10/10 Turbo build tasks, including Preview, shared theme consumers, Agent/Canvas Webviews, and Rust release/N-API builds
 
 pnpm check
-# passed: knip plus dependency-cruiser; 1,551 modules / 5,537 dependencies, no dependency violations
+# passed: knip plus dependency-cruiser; 1,549 modules / 5,533 dependencies, no dependency violations
 
 pnpm exec vitest run
-# Preview Webview: 14 files / 52 tests passed, including tree/selection, normalized light coordinates, translate-only UI, staging revision, and capture-helper exclusion
+# Preview Webview: 14 files / 53 tests passed, including camera/light object construction, direct-drag routing without XYZ controls, normalized coordinates, staging revision, and capture-helper exclusion
 
 pnpm --filter @neko/ui test -- --run
 # shared UI: 35 files / 149 tests passed
@@ -159,7 +160,7 @@ Agent Evaluation disposition is `update` for `agent-runtime.creative-media-workf
 3. System ADR, architecture index, and package-boundary files already have unrelated edits. Task 8.2 remains open; only clean Preview-owned documentation was updated.
 4. Real-model appearance/camera capture and role-labelled Agent context injection are complete, but real-source panorama composition and provider-level role-isolated generation are not; task 7.3 remains open.
 5. The latest repository `pnpm build` and `pnpm check` pass. `pnpm test` remains blocked outside this change by the absent Preview `triangle.glb` matrix fixture and three concurrently modified TUI Workspace Board group-node expectations. Legacy-debt, functional, and real Agent evaluation gates have not yet been accepted for this change, so task 7.5 and final verification task 8.3 remain open.
-6. The latest full Preview run passed 323 of 324 tests; the unrelated standard-format matrix test is blocked because its repository fixture `triangle.glb` is absent. The focused Preview Webview run passed all 52 tests, including the new light-control paths.
+6. The latest full Preview run passed 323 of 324 tests; the unrelated standard-format matrix test is blocked because its repository fixture `triangle.glb` is absent. The focused Preview Webview run passed all 53 tests, including the camera/light object and direct-drag paths.
 7. Preview Webview `tsc --noEmit` is blocked by three existing errors outside the new light-control files: the unsupported `shield` Codicon and empty `PanelSection` in `ThreeReferencePurposeControls.tsx`, plus a non-tuple spread in `threeReferencePresetRuntime.ts`. Production builds and focused ESLint/tests pass.
 8. The full shared `neko-types` Vitest run passed 1,440 of 1,441 tests. The unrelated local-resource guardrail currently reports the pre-existing `ModelPreviewSourceSession.ts` Webview-root assembly path; the focused shared theme test passes.
-9. Directional-light visual/interaction acceptance is blocked because no verified VS Code CDP endpoint is listening on port 9222. No browser/Vite substitute was used; task 5.8 stays open until the Extension Development Host can verify helper visibility, drag responsiveness, capture exclusion, console output, and cleanup against `~/Git/neko-test/test.glb`.
+9. Camera/light object visual and direct-drag acceptance is blocked because port 9222 is reachable but is not a verified VS Code CDP endpoint: it exposes no VS Code workbench page target. No browser/Vite substitute was used; task 5.8 stays open until the Extension Development Host can verify object visibility, drag responsiveness without XYZ gizmos, capture exclusion, console output, and cleanup against `~/Git/neko-test/test.glb`.
