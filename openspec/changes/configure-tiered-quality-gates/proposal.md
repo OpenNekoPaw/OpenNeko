@@ -6,9 +6,11 @@
 
 - 定义本地、分支和 main 三层质量门禁及稳定命令入口。
 - 本地门禁执行不带 coverage 的完整 TypeScript 开发验证，保留格式、lint、build、workspace tests、unused、legacy 与架构检查。
+- 本地测试入口额外拥有本机 VS Code 配置审计，并为 Extension Host/GUI 与真实 API 场景保留显式 local-only 命令。
 - Pull Request 分支门禁继续执行 coverage 测试和仓库质量检查，并提供单一可设为 required check 的聚合结果。
 - main 门禁在分支级检查之上聚合 Rust、Proto、OpenSpec 和平台打包结果。
 - 保持 Agent Evaluation 为显式本地命令，禁止 GitHub Actions、通用 CI 命令和门禁聚合间接触发 Evaluation。
+- 远端门禁只发现干净 checkout 可重现的构建、固定单元测试、coverage 与静态质量检查，不读取 gitignored `.vscode` 配置，也不启动 VS Code、GUI 或真实 provider/API。
 - 不新增本地化专项测试，也不改变现有 package 测试的业务覆盖范围。
 
 ## Capabilities

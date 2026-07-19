@@ -61,7 +61,7 @@ OpenNeko 使用成本递增且职责分离的三层门禁：
 
 | 层级          | 稳定入口           | 阻断范围                                                                                                        | 权威信号                     |
 | ------------- | ------------------ | --------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| 本地提交前    | `pnpm gate:local`  | format、lint、build、普通 workspace tests（无 coverage）、Knip、dependency boundaries、legacy ledger 与架构门禁 | 本地命令退出码               |
+| 本地提交前    | `pnpm gate:local`  | format、lint、build、普通 workspace tests（无 coverage）、仓库质量门禁，以及存在时的本机 VS Code 配置审计      | 本地命令退出码               |
 | Pull Request  | `pnpm gate:branch` | build、coverage tests、repository quality，以及按路径触发的 Rust、Proto、OpenSpec、dependency review            | GitHub Actions `Branch Gate` |
 | main 发布验证 | `pnpm gate:main`   | branch 源码级门禁加 Proto 同步；GitHub 额外聚合完整 Rust、Cargo Deny、OpenSpec 与多平台 VSIX 打包               | GitHub Actions `Main Gate`   |
 
@@ -69,7 +69,9 @@ OpenNeko 使用成本递增且职责分离的三层门禁：
 
 main 分支保护应将 `Branch Gate` 配置为 required check。新增确定性阻断 job 时，必须同步加入对应 aggregate job 的 `needs` 与 required-success 列表；路径条件 job 可以显式 `skipped`，required job 缺失、跳过、失败、取消或返回未知状态必须 fail-visible。
 
-Agent Evaluation、provider-backed Agent case 和 Webview functional acceptance 不属于三层通用门禁，必须由开发者按变更影响显式运行。通用门禁不得上传 Evaluation 报告或要求 Evaluation credential。现有 package 单元测试的发现范围仍由 owning package 管理，门禁编排不得借机新增本地化专项测试或复制业务测试逻辑。
+远端 `gate:branch` / `gate:main` 只允许运行干净 checkout 可重现的 build、固定 unit/contract tests、coverage、静态质量与发布矩阵；不得读取 gitignored `.vscode`、启动 VS Code/GUI、依赖真实用户 fixture、读取 provider credential 或访问真实 API。现有 package 单元测试的发现范围仍由 owning package 管理，门禁编排不得借机复制业务测试逻辑。
+
+本地 VS Code 配置审计由 `test:local:vscode` 显式拥有并接入 `gate:local`；配置完全不存在时报告 skip，只存在 `launch.json` / `tasks.json` 之一时 fail-visible。GUI/Extension Development Host 与真实 API/provider 验收分别通过 `test:local:ui`、`test:local:api` 及对应 Skill/runner 显式执行，不作为普通本地 gate 的隐式依赖，避免自动打开窗口、消耗外部额度或读取凭据。
 
 ## 验证命令矩阵
 
@@ -86,6 +88,9 @@ Agent Evaluation、provider-backed Agent case 和 Webview functional acceptance 
 | 未使用/冗余代码                 | `pnpm check:unused`                            |
 | Agent 边界                      | `pnpm check:agent-boundaries`                  |
 | Agent eval harness（key-free）  | `pnpm test:agent:eval`                         |
+| 本机 VS Code 配置审计           | `pnpm test:local:vscode`                       |
+| 本机 Webview/GUI target 预检    | `pnpm test:local:ui`                           |
+| 真实 API/provider Agent case    | `pnpm test:local:api -- --mode ...`             |
 | 3D Route A 边界                 | `pnpm check:3d-route-a-boundaries`             |
 | 残留/债务关键词扫描             | `pnpm check:legacy-debt`                       |
 | 代码债务台账                    | `pnpm check:legacy-debt:ledger`                |

@@ -10,7 +10,7 @@ describe('tiered quality gate orchestration', () => {
 
     assert.equal(
       scripts['gate:local'],
-      'pnpm check:build && pnpm test && pnpm check:repository-quality',
+      'pnpm check:build && pnpm test && pnpm check:repository-quality && pnpm test:local:vscode',
     );
     assert.equal(scripts['gate:branch'], 'pnpm check:ci');
     assert.equal(scripts['gate:main'], 'pnpm gate:branch && pnpm check:proto-sync');
@@ -18,6 +18,8 @@ describe('tiered quality gate orchestration', () => {
     assert.equal(scripts['ci:branch'], 'pnpm gate:branch');
     assert.equal(scripts['ci:main'], 'pnpm gate:main');
     assert.doesNotMatch(scripts['gate:local'], /coverage/u);
+    assert.doesNotMatch(scripts['gate:branch'], /test:local:/u);
+    assert.doesNotMatch(scripts['gate:main'], /test:local:/u);
   });
 
   it('publishes stable Branch Gate and Main Gate aggregate jobs', async () => {

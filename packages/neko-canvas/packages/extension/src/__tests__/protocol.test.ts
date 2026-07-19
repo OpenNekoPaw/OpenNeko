@@ -301,7 +301,8 @@ describe('canvasEditorProvider message contracts', () => {
 
       expect(actions).toContain("case 'saveCanvasMaterialToAssetLibrary':");
       expect(actions).toContain("'neko.assets.importFile'");
-      expect(actions).toContain('vscode.workspace.fs.readFile');
+      expect(actions).toContain('this.resolveCanvasMaterialLocalFilePath(');
+      expect(actions).not.toContain('vscode.workspace.fs.readFile');
       expect(resolver).toContain('this.resolvePreviewResourceRef(');
       expect(resolver).toContain('this.resolveResourceRefLocalPreviewPath(');
       expect(resolver).toContain('this.resolveCanvasMediaLocalFilePath(');

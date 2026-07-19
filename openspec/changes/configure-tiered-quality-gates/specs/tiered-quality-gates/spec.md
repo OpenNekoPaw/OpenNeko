@@ -8,6 +8,7 @@ The repository SHALL provide a stable local gate command that runs format, lint,
 
 - **WHEN** a developer invokes the documented local gate from a checkout
 - **THEN** the command SHALL run the complete deterministic development gate without invoking Agent Evaluation or provider-backed acceptance
+- **AND** it SHALL audit a complete local VS Code launch/tasks pair when that gitignored configuration is present
 
 ### Requirement: Pull Request gate blocks deterministic repository regressions
 
@@ -64,3 +65,19 @@ Generic local, branch, and main gate commands SHALL NOT invoke Agent Evaluation,
 
 - **WHEN** tiered gates are introduced
 - **THEN** the change SHALL NOT add localization-specific test content or alter package test discovery solely for gate composition
+
+### Requirement: Remote gates exclude local runtime dependencies
+
+Pull Request and main gates SHALL only execute tests that are reproducible from a clean checkout without local VS Code configuration, GUI state, real user fixtures, provider credentials, or external API access.
+
+#### Scenario: GitHub discovers orchestration tests
+
+- **WHEN** the remote repository quality gate runs orchestration tests
+- **THEN** it SHALL NOT discover or execute `.local.mjs` VS Code configuration tests
+- **AND** no remote workflow or remotely reachable root script SHALL reference local VS Code, GUI, Extension Development Host, or real API commands
+
+#### Scenario: Developer runs local runtime checks
+
+- **WHEN** a developer explicitly invokes the local VS Code, UI, or real API command
+- **THEN** the command MAY use gitignored configuration, an already-running Extension Development Host, isolated local fixtures, or provider credentials
+- **AND** missing partial VS Code configuration SHALL fail visibly while completely absent optional configuration MAY be reported as skipped
