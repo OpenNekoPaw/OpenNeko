@@ -45,6 +45,7 @@ export {
   createWorkspaceLocalResourceRootProvider,
   isRemoteUrl,
   normalizeLocalFilePath,
+  revokeWebviewLocalResourceAccess,
 } from './local-resource-access';
 export type {
   DefaultLocalResourceAccessServiceOptions,

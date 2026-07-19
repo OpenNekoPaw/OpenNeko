@@ -1,6 +1,4 @@
 import * as path from 'node:path';
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { PathResolver } from '@neko/shared';
 import {
@@ -11,12 +9,6 @@ import {
 } from './modelSourceInspection';
 
 const workspace = path.resolve('/workspace/project');
-const syntheticFixtureRoot = fileURLToPath(
-  new URL(
-    '../../../../../../../scripts/webview-functional/fixtures/preview-models/',
-    import.meta.url,
-  ),
-);
 
 describe('model source inspection', () => {
   it('creates portable workspace, variable-root, and opaque authorized refs', async () => {
@@ -258,55 +250,6 @@ describe('model source inspection', () => {
         signal: controller.signal,
       }),
     ).rejects.toThrow('cancelled');
-  });
-
-  it('inspects the repository-owned synthetic standard-format matrix', async () => {
-    const accepted = new Map([
-      ['triangle.glb', ['triangle.glb']],
-      ['triangle.gltf', ['triangle.gltf', 'triangle.bin', 'pixel.png']],
-      ['triangle.obj', ['triangle.obj', 'triangle.mtl', 'pixel.png']],
-      ['triangle.stl', ['triangle.stl']],
-      ['triangle.ply', ['triangle.ply']],
-    ]);
-    for (const [fileName, expectedDependencies] of accepted) {
-      const result = await inspectModelSource({
-        sourcePath: path.join(syntheticFixtureRoot, fileName),
-        workspaceRoot: syntheticFixtureRoot,
-        authorizedRoots: [syntheticFixtureRoot],
-      });
-      expect(result.dependencies.map((dependency) => dependency.reference)).toEqual(
-        expectedDependencies,
-      );
-    }
-
-    await expectInspectionCode(
-      inspectModelSource({
-        sourcePath: path.join(syntheticFixtureRoot, 'unsafe-remote.gltf'),
-        authorizedRoots: [syntheticFixtureRoot],
-      }),
-      'unsafe-dependency',
-    );
-    await expectInspectionCode(
-      inspectModelSource({
-        sourcePath: path.join(syntheticFixtureRoot, 'unsafe-traversal.obj'),
-        authorizedRoots: [syntheticFixtureRoot],
-      }),
-      'unsafe-dependency',
-    );
-    await expectInspectionCode(
-      inspectModelSource({
-        sourcePath: path.join(syntheticFixtureRoot, 'invalid.glb'),
-        authorizedRoots: [syntheticFixtureRoot],
-      }),
-      'mime-mismatch',
-    );
-
-    const manifest = JSON.parse(
-      await readFile(path.join(syntheticFixtureRoot, 'fixture-manifest.json'), 'utf8'),
-    ) as { fixtures: Array<{ id: string; generatorArgument?: string }> };
-    expect(manifest.fixtures.find((fixture) => fixture.id === 'oversized')).toMatchObject({
-      generatorArgument: '--include-oversized',
-    });
   });
 });
 

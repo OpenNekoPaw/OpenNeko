@@ -249,6 +249,13 @@ export class VSCodeLocalResourceAccessService implements LocalResourceAccessServ
   }
 }
 
+export function revokeWebviewLocalResourceAccess(webview: Pick<vscode.Webview, 'options'>): void {
+  webview.options = {
+    ...webview.options,
+    localResourceRoots: [],
+  };
+}
+
 export function createStaticLocalResourceRootProvider(
   id: string,
   kind: LocalResourceRootKind,

@@ -6,6 +6,7 @@ import type { ModelPreviewSourceDescriptor, PathResolver } from '@neko/shared';
 import {
   createExtensionAssetLocalResourceRootProvider,
   createStaticLocalResourceRootProvider,
+  revokeWebviewLocalResourceAccess,
   VSCodeLocalResourceAccessService,
   type LocalResourceAccessService,
 } from '@neko/shared/vscode/extension';
@@ -154,7 +155,7 @@ export class ModelPreviewSourceSession implements vscode.Disposable {
     } catch (error) {
       abortController.abort(error);
       projectionFileSystem.remove(input.projectionRoot);
-      input.webview.options = { ...input.webview.options, localResourceRoots: [] };
+      revokeWebviewLocalResourceAccess(input.webview);
       throw error;
     } finally {
       removeExternalAbort();
@@ -182,7 +183,7 @@ export class ModelPreviewSourceSession implements vscode.Disposable {
     if (this.disposed) return;
     this.disposed = true;
     this.abortController.abort(new Error('Model Preview source session disposed.'));
-    this.webview.options = { ...this.webview.options, localResourceRoots: [] };
+    revokeWebviewLocalResourceAccess(this.webview);
     this.projectionFileSystem.remove(this.projectionRoot);
   }
 }

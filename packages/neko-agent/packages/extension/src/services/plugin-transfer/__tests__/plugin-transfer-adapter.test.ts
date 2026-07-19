@@ -97,13 +97,13 @@ describe('neko-suite plugin transfer host adapters', () => {
           {
             code: 'missing-authoring-target',
             severity: 'error',
-            message: 'Sketch image import authoring requires documentUri.',
+            message: 'Canvas image import authoring requires documentUri.',
           },
         ],
       })),
     };
     const plan = buildNekoSuitePluginTransferPlan({
-      target: 'sketch',
+      target: 'canvas',
       payload: {
         kind: 'singleAsset',
         asset: { path: '/workspace/generated/frame.png', mediaType: 'image' },
@@ -111,14 +111,14 @@ describe('neko-suite plugin transfer host adapters', () => {
     });
 
     await expect(
-      executeNekoSuitePluginTransferPlan(plan, adapter, { target: 'sketch' }),
+      executeNekoSuitePluginTransferPlan(plan, adapter, { target: 'canvas' }),
     ).resolves.toMatchObject({
       success: false,
       executed: 1,
       unsupported: [
         {
-          target: 'sketch',
-          reason: 'missing-authoring-target: Sketch image import authoring requires documentUri.',
+          target: 'canvas',
+          reason: 'missing-authoring-target: Canvas image import authoring requires documentUri.',
         },
       ],
     });

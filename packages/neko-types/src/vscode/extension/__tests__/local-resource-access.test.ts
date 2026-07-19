@@ -11,6 +11,7 @@ import {
   createWorkspaceCacheLocalResourceRootProvider,
   createWorkspaceLocalResourceRootProvider,
   normalizeLocalFilePath,
+  revokeWebviewLocalResourceAccess,
 } from '../local-resource-access';
 
 vi.mock('vscode', () => ({
@@ -284,6 +285,25 @@ describe('VSCodeLocalResourceAccessService', () => {
       retainContextWhenHidden: true,
       enableScripts: true,
       localResourceRoots: [expect.objectContaining({ fsPath: '/assets' })],
+    });
+  });
+
+  it('revokes webview roots without dropping unrelated options', async () => {
+    const vscode = await import('vscode');
+    const webview: Pick<vscode.Webview, 'options'> = {
+      options: {
+        enableScripts: true,
+        enableCommandUris: true,
+        localResourceRoots: [vscode.Uri.file('/assets')],
+      },
+    };
+
+    revokeWebviewLocalResourceAccess(webview);
+
+    expect(webview.options).toEqual({
+      enableScripts: true,
+      enableCommandUris: true,
+      localResourceRoots: [],
     });
   });
 

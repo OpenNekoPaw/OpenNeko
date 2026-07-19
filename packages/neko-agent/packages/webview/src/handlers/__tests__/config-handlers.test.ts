@@ -188,7 +188,7 @@ describe('configHandlers', () => {
     );
   });
 
-  it('prefers explicit config LLM models over account gateway models for automatic hydration', () => {
+  it('preserves projected LLM order when all models come from explicit config', () => {
     const context = createContext();
 
     dispatch(
@@ -222,13 +222,13 @@ describe('configHandlers', () => {
 
     expect(context.hydrateConversationSettings).toHaveBeenCalledWith(
       'conversation-1',
-      expect.objectContaining({ selectedModel: 'deepseek-direct:deepseek-chat' }),
+      expect.objectContaining({ selectedModel: 'configured-gateway:auto' }),
     );
     expect(context.updateSettings).not.toHaveBeenCalled();
     expect(messageMocks.updateSettingsMessage).toHaveBeenCalledWith(
       {
-        providerId: 'deepseek-direct',
-        modelId: 'deepseek-chat',
+        providerId: 'configured-gateway',
+        modelId: 'auto',
       },
       'conversation-1',
     );
