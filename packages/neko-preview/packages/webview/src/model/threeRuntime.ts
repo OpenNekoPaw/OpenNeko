@@ -288,9 +288,10 @@ export function createModelCameraHandle(radius: number): THREE.Group {
 export function createModelLightHandle(
   lightId: ModelPreviewLightEntry['id'],
   radius: number,
+  index = 0,
 ): THREE.Group {
   const unit = Math.max(radius * 0.085, 0.009);
-  const color = MODEL_PREVIEW_LIGHT_GUIDE_COLORS[lightId];
+  const color = modelLightGuideColor(lightId, index);
   const handle = new THREE.Group();
   handle.name = `Model Preview light object: ${lightId}`;
   const material = createEditorHandleMaterial(color);
@@ -405,18 +406,6 @@ export function assertPurposeCaptureAllowed(input: {
       return;
   }
 }
-
-const MODEL_PREVIEW_LIGHT_IDS = [
-  'key',
-  'fill',
-  'rim',
-] as const satisfies readonly ModelPreviewLightEntry['id'][];
-
-const MODEL_PREVIEW_LIGHT_GUIDE_COLORS: Readonly<Record<ModelPreviewLightEntry['id'], number>> = {
-  key: 0xf59e0b,
-  fill: 0x3b82f6,
-  rim: 0xa855f7,
-};
 
 interface ModelCameraGuideObjects {
   readonly cameraId: string;
@@ -563,11 +552,6 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.orbit.addEventListener('end', this.endOrbitInteraction);
     canvas.addEventListener('webglcontextlost', this.handleContextLost);
     this.scene.add(this.environmentLight, this.transformHelper);
-    for (const id of MODEL_PREVIEW_LIGHT_IDS) {
-      const light = new THREE.DirectionalLight(0xffffff, 1);
-      this.directionalLights.set(id, light);
-      this.scene.add(light);
-    }
     this.camera.position.set(0, 0.15, 3.5);
     this.orbit.update();
     this.emitViewState();
@@ -1005,9 +989,10 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     this.detachLightGuides();
     const size = bounds.getSize(new THREE.Vector3());
     const radius = Math.max(size.length() / 2, 0.001);
-    for (const lightId of MODEL_PREVIEW_LIGHT_IDS) {
-      const color = MODEL_PREVIEW_LIGHT_GUIDE_COLORS[lightId];
-      const handle = createModelLightHandle(lightId, radius);
+    for (const [index, light] of this.appliedLights.entries()) {
+      const lightId = light.id;
+      const color = modelLightGuideColor(lightId, index);
+      const handle = createModelLightHandle(lightId, radius, index);
       handle.visible = lightId === this.selectedLightId;
       const arrow = new THREE.ArrowHelper(
         new THREE.Vector3(0, -1, 0),
@@ -1039,6 +1024,11 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
 
   private applyLightRig(lights: readonly ModelPreviewLightEntry[]): void {
     if (!this.modelBounds) throw new Error('Model Preview renderer has no loaded model bounds.');
+    this.syncDirectionalLightSet(lights);
+    const guideIds = new Set(this.lightGuides.keys());
+    if (guideIds.size !== lights.length || lights.some((entry) => !guideIds.has(entry.id))) {
+      this.replaceLightGuides(this.modelBounds);
+    }
     for (const entry of lights) {
       const light = this.directionalLights.get(entry.id);
       if (!light) throw new Error(`Model Preview light is missing: ${entry.id}`);
@@ -1052,6 +1042,21 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
       if (!light.target.parent) this.scene.add(light.target);
       guide.handle.position.copy(pose.position);
       this.syncLightGuideDirection(entry.id);
+    }
+  }
+
+  private syncDirectionalLightSet(lights: readonly ModelPreviewLightEntry[]): void {
+    const desiredIds = new Set(lights.map((light) => light.id));
+    for (const [lightId, light] of this.directionalLights) {
+      if (desiredIds.has(lightId)) continue;
+      this.scene.remove(light, light.target);
+      this.directionalLights.delete(lightId);
+    }
+    for (const entry of lights) {
+      if (this.directionalLights.has(entry.id)) continue;
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      this.directionalLights.set(entry.id, light);
+      this.scene.add(light);
     }
   }
 
@@ -1320,6 +1325,21 @@ function requireMannequinPoseCapabilities(
     throw new Error('Neutral mannequin preset is missing declared pose capabilities.');
   }
   return capabilities;
+}
+
+function modelLightGuideColor(lightId: string, index: number): number {
+  switch (lightId) {
+    case 'key':
+      return 0xf59e0b;
+    case 'fill':
+      return 0x3b82f6;
+    case 'rim':
+      return 0xa855f7;
+    default: {
+      const palette = [0x22c55e, 0x06b6d4, 0xef4444, 0xeab308, 0xec4899] as const;
+      return palette[index % palette.length] ?? 0x22c55e;
+    }
+  }
 }
 
 function toNeutralMannequinVariant(implementationId: string): NeutralMannequinVariant | undefined {

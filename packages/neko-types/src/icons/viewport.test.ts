@@ -6,6 +6,10 @@ import {
   FrameSelectionIcon,
   GridIcon,
   InspectIcon,
+  CubeIcon,
+  LightIcon,
+  MannequinIcon,
+  PanoramaIcon,
   MoveIcon,
   PointerIcon,
   RotateIcon,
@@ -23,6 +27,10 @@ describe('viewport icons', () => {
       GridIcon,
       AxesIcon,
       FrameSelectionIcon,
+      MannequinIcon,
+      CubeIcon,
+      LightIcon,
+      PanoramaIcon,
     ];
 
     for (const Icon of icons) {

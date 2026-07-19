@@ -5,6 +5,7 @@ import {
   isThreeReferenceIdentity,
   isThreeReferencePanoramaRuntimeDescriptor,
   isThreeReferencePanelSubject,
+  isThreeReferencePresetOption,
   isThreeReferencePurpose,
   isThreeReferenceStagingSnapshot,
   type ModelPreviewDiagnostic,
@@ -14,6 +15,7 @@ import {
   type ThreeReferenceExtensionMessage,
   type ThreeReferencePanelSubject,
   type ThreeReferencePanoramaRuntimeDescriptor,
+  type ThreeReferencePresetOption,
   type ThreeReferencePoseState,
   type ThreeReferencePurpose,
   type ThreeReferenceStagingSnapshot,
@@ -29,7 +31,9 @@ import {
   type ThreeModelRuntimePort,
 } from './threeRuntime';
 import {
+  addModelLight,
   duplicateModelCamera,
+  MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS,
   patchModelTransform,
   removeModelCamera,
   selectModelCamera,
@@ -77,6 +81,9 @@ export function ModelViewer({
   const [sceneSelection, setSceneSelection] = useState<ModelSceneSelection>({ kind: 'scene' });
   const [panelSubject, setPanelSubject] = useState<ThreeReferencePanelSubject>();
   const [eligiblePurposes, setEligiblePurposes] = useState<readonly ThreeReferencePurpose[]>([]);
+  const [availablePresets, setAvailablePresets] = useState<readonly ThreeReferencePresetOption[]>(
+    [],
+  );
   const [referenceStaging, setReferenceStaging] = useState<ThreeReferenceStagingSnapshot>();
   const [panoramaRuntime, setPanoramaRuntime] = useState<ThreeReferencePanoramaRuntimeDescriptor>();
   const [outputPreview, setOutputPreview] = useState<string>();
@@ -201,6 +208,7 @@ export function ModelViewer({
         setNodes,
         setSceneSelection,
         setPanelSubject,
+        setAvailablePresets,
         setEligiblePurposes,
         setReferenceStaging,
         setPanoramaRuntime,
@@ -259,6 +267,16 @@ export function ModelViewer({
     if (!duplicate) throw new Error('Model Preview camera duplication produced no camera.');
     updateStaging(next);
     setSceneSelection({ kind: 'camera', cameraId: duplicate.id });
+    setViewportMode('inspect');
+  };
+  const addLight = (): void => {
+    if (!staging) throw new Error('Model Preview staging is unavailable.');
+    const previousIds = new Set(staging.lightRig.lights.map((light) => light.id));
+    const next = addModelLight(staging);
+    const added = next.lightRig.lights.find((light) => !previousIds.has(light.id));
+    if (!added) throw new Error('Model Preview light creation produced no light.');
+    updateStaging(next);
+    setSceneSelection({ kind: 'light', lightId: added.id });
     setViewportMode('inspect');
   };
   const removeCamera = (cameraId: string): void => {
@@ -344,7 +362,15 @@ export function ModelViewer({
           />
         ) : null}
         <ModelViewportControls
+          activePresetId={
+            panelSubject?.kind === 'builtin-preset' ? panelSubject.subject.presetId : undefined
+          }
           axesVisible={axesVisible}
+          availablePresets={availablePresets}
+          canAddLight={
+            (staging?.lightRig.lights.length ?? MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS) <
+            MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS
+          }
           disabled={controlsDisabled}
           gridVisible={gridVisible}
           hasTransformSelection={
@@ -353,9 +379,31 @@ export function ModelViewer({
           viewportMode={viewportMode}
           transformMode={transformMode}
           onAxesVisibleChange={setAxesVisible}
+          onAddCamera={() => {
+            if (!staging) throw new Error('Model Preview staging is unavailable.');
+            duplicateCamera(staging.activeCameraId);
+          }}
+          onAddLight={addLight}
           onGridVisibleChange={(visible) => {
             runtimeRef.current?.setGroundGridVisible(visible);
             setGridVisible(visible);
+          }}
+          onPanoramaRequest={() => {
+            const current = referenceStagingRef.current;
+            if (!current) throw new Error('3D Reference staging is unavailable.');
+            vscode.postMessage({
+              type: '3d-reference/panorama-picker-requested',
+              identity: referenceIdentityOf(current),
+            });
+          }}
+          onPresetRequest={(presetId) => {
+            const current = referenceStagingRef.current;
+            if (!current) throw new Error('3D Reference staging is unavailable.');
+            vscode.postMessage({
+              type: '3d-reference/preset-subject-requested',
+              identity: referenceIdentityOf(current),
+              presetId,
+            });
           }}
           onViewportModeChange={setViewportMode}
           onTransformModeChange={(mode) => {
@@ -470,7 +518,10 @@ async function handleExtensionMessage(input: {
   readonly setNodes: (nodes: readonly ModelPreviewNode[]) => void;
   readonly setSceneSelection: (selection: ModelSceneSelection) => void;
   readonly setPanelSubject: (subject: ThreeReferencePanelSubject) => void;
-  readonly setEligiblePurposes: (purposes: readonly ThreeReferencePurpose[]) => void;
+  readonly setAvailablePresets: (presets: readonly ThreeReferencePresetOption[]) => void;
+  readonly setEligiblePurposes: React.Dispatch<
+    React.SetStateAction<readonly ThreeReferencePurpose[]>
+  >;
   readonly setReferenceStaging: (staging: ThreeReferenceStagingSnapshot) => void;
   readonly setPanoramaRuntime: (runtime: ThreeReferencePanoramaRuntimeDescriptor) => void;
   readonly setDiagnostic: (diagnostic: ModelPreviewDiagnostic | undefined) => void;
@@ -489,9 +540,10 @@ async function handleExtensionMessage(input: {
         input.setSceneSelection({ kind: 'scene' });
         input.referenceStagingRef.current = message.staging;
         input.setPanelSubject(message.panelSubject);
+        input.setAvailablePresets(message.availablePresets);
         input.setEligiblePurposes(message.eligiblePurposes);
         input.setReferenceStaging(message.staging);
-        const viewportStaging = toViewportStaging(message.staging);
+        const viewportStaging = toViewportStaging(message.staging, input.stagingRef.current);
         input.stagingRef.current = viewportStaging;
         input.setStaging(viewportStaging);
         let facts: NormalizedModelFacts | undefined;
@@ -531,7 +583,10 @@ async function handleExtensionMessage(input: {
         input.referenceStagingRef.current = message.staging;
         input.setReferenceStaging(message.staging);
         input.setPanoramaRuntime(message.runtime);
-        const viewportStaging = toViewportStaging(message.staging);
+        input.setEligiblePurposes((current) =>
+          current.includes('panorama-scene') ? current : [...current, 'panorama-scene'],
+        );
+        const viewportStaging = toViewportStaging(message.staging, input.stagingRef.current, true);
         input.stagingRef.current = viewportStaging;
         input.setStaging(viewportStaging);
         await input.runtime.setPanoramaEnvironment({
@@ -657,6 +712,8 @@ function parseExtensionMessage(value: unknown): ThreeReferenceExtensionMessage |
     case '3d-reference/session-init':
       return value['protocolVersion'] === THREE_REFERENCE_PROTOCOL_VERSION &&
         isThreeReferencePanelSubject(value['panelSubject']) &&
+        Array.isArray(value['availablePresets']) &&
+        value['availablePresets'].every(isThreeReferencePresetOption) &&
         Array.isArray(value['eligiblePurposes']) &&
         value['eligiblePurposes'].every(isThreeReferencePurpose) &&
         isThreeReferenceStagingSnapshot(value['staging'])
@@ -664,6 +721,7 @@ function parseExtensionMessage(value: unknown): ThreeReferenceExtensionMessage |
             type: '3d-reference/session-init',
             protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
             panelSubject: value['panelSubject'],
+            availablePresets: value['availablePresets'],
             eligiblePurposes: value['eligiblePurposes'],
             staging: value['staging'],
           }
@@ -726,7 +784,26 @@ function toModelSourceDescriptor(
   };
 }
 
-function toViewportStaging(staging: ThreeReferenceStagingSnapshot): ModelPreviewStagingState {
+function toViewportStaging(
+  staging: ThreeReferenceStagingSnapshot,
+  previous?: ModelPreviewStagingState,
+  preserveLocalState = false,
+): ModelPreviewStagingState {
+  const sourceFingerprint = subjectFingerprint(staging);
+  if (
+    previous?.sessionId === staging.sessionId &&
+    (preserveLocalState || previous.sourceFingerprint !== sourceFingerprint)
+  ) {
+    const hasReferenceCamera = previous.cameraPresets.some(
+      (camera) => camera.id === staging.camera.cameraId,
+    );
+    return {
+      ...previous,
+      sourceFingerprint,
+      transformPatches: [],
+      ...(hasReferenceCamera ? { activeCameraId: staging.camera.cameraId } : {}),
+    };
+  }
   return {
     schemaVersion: 3,
     sessionId: staging.sessionId,

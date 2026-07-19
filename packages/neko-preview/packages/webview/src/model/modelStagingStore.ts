@@ -6,6 +6,8 @@ import type {
   ModelPreviewTransform,
 } from '@neko/shared';
 
+export const MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS = 8;
+
 export function selectModelNode(
   state: ModelPreviewStagingState,
   nodePath: string | undefined,
@@ -107,6 +109,30 @@ export function updateModelLight(
   });
 }
 
+export function addModelLight(state: ModelPreviewStagingState): ModelPreviewStagingState {
+  if (state.lightRig.lights.length >= MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS) {
+    throw new Error(
+      `Model Preview supports at most ${MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS} directional lights.`,
+    );
+  }
+  const id = nextLightId(state);
+  const ordinal = state.lightRig.lights.length;
+  const angle = (ordinal / MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS) * Math.PI * 2;
+  const light: ModelPreviewLightEntry = {
+    id,
+    color: '#ffffff',
+    intensity: 1,
+    position: {
+      x: Number((Math.cos(angle) * 3).toFixed(4)),
+      y: 2.5,
+      z: Number((Math.sin(angle) * 3).toFixed(4)),
+    },
+  };
+  return nextRevision(state, {
+    lightRig: { ...state.lightRig, lights: [...state.lightRig.lights, light] },
+  });
+}
+
 export function updateModelEnvironmentIntensity(
   state: ModelPreviewStagingState,
   environmentIntensity: number,
@@ -144,4 +170,11 @@ function nextCameraCopyId(state: ModelPreviewStagingState, cameraId: string): st
   let suffix = 2;
   while (existingIds.has(`${baseId}-${suffix}`)) suffix += 1;
   return `${baseId}-${suffix}`;
+}
+
+function nextLightId(state: ModelPreviewStagingState): string {
+  const existingIds = new Set(state.lightRig.lights.map((light) => light.id));
+  let suffix = 1;
+  while (existingIds.has(`light-${suffix}`)) suffix += 1;
+  return `light-${suffix}`;
 }

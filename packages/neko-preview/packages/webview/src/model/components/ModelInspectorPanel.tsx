@@ -519,7 +519,7 @@ function inspectorPresentation(
         description: t('preview.model.lightInspectorDescription'),
         eyebrow: t('preview.model.lighting'),
         icon: 'lightbulb',
-        title: light ? t(`preview.model.light.${light.id}`) : t('preview.model.lightMissing'),
+        title: light ? inspectorLightLabel(light.id, t) : t('preview.model.lightMissing'),
       };
     case 'node':
       return {
@@ -531,6 +531,15 @@ function inspectorPresentation(
         title: node?.label ?? t('preview.model.noSelection'),
       };
   }
+}
+
+function inspectorLightLabel(lightId: string, t: ReturnType<typeof useTranslation>['t']): string {
+  if (lightId === 'key' || lightId === 'fill' || lightId === 'rim') {
+    return t(`preview.model.light.${lightId}`);
+  }
+  return t('preview.model.light.custom', {
+    index: lightId.startsWith('light-') ? lightId.slice('light-'.length) : lightId,
+  });
 }
 
 function TransformAxisGroup({

@@ -44,7 +44,7 @@ export interface ModelPreviewCameraPreset {
 }
 
 export interface ModelPreviewLightEntry {
-  readonly id: 'key' | 'fill' | 'rim';
+  readonly id: string;
   readonly color: string;
   readonly intensity: number;
   readonly position: ModelPreviewVector3;
@@ -195,14 +195,20 @@ function isCameraPreset(value: unknown): value is ModelPreviewCameraPreset {
 function isLightRig(value: unknown): value is ModelPreviewLightRig {
   if (!isRecord(value) || !isFiniteNumber(value['environmentIntensity'])) return false;
   if (value['environmentIntensity'] < 0 || value['environmentIntensity'] > 10) return false;
-  if (!isArrayOf(value['lights'], isLightEntry) || value['lights'].length !== 3) return false;
-  return new Set(value['lights'].map((light) => light.id)).size === 3;
+  if (
+    !isArrayOf(value['lights'], isLightEntry) ||
+    value['lights'].length < 1 ||
+    value['lights'].length > 8
+  ) {
+    return false;
+  }
+  return new Set(value['lights'].map((light) => light.id)).size === value['lights'].length;
 }
 
 function isLightEntry(value: unknown): value is ModelPreviewLightEntry {
   return (
     isRecord(value) &&
-    (value['id'] === 'key' || value['id'] === 'fill' || value['id'] === 'rim') &&
+    isNonEmptyString(value['id']) &&
     isNonEmptyString(value['color']) &&
     isFiniteNumber(value['intensity']) &&
     value['intensity'] >= 0 &&

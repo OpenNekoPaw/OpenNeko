@@ -84,6 +84,14 @@ describe('@neko/ui toolbar primitives', () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
+  it('forwards the button ref for popover and tooltip composition', () => {
+    const ref = React.createRef<HTMLButtonElement>();
+    act(() => {
+      root.render(<ToolbarButton ref={ref} icon={<span />} title="Composed" />);
+    });
+    expect(ref.current).toBe(host.querySelector('button'));
+  });
+
   it('renders separator and spacer compatibility elements', () => {
     act(() => {
       root.render(

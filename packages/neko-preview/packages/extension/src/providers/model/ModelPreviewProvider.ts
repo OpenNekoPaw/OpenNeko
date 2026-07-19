@@ -81,13 +81,14 @@ export interface ModelPreviewProviderDependencies {
   readonly onCaptureRequested?: (request: ThreeReferenceCaptureRequest) => Promise<void>;
   readonly authorizePanoramicImageSource?: typeof authorizePanoramicImageSource;
   readonly projectPresetRuntime?: typeof projectThreeReferencePresetRuntime;
+  readonly pickPanoramicImage?: () => Promise<vscode.Uri | undefined>;
 }
 
 interface PanelState {
   readonly panel: vscode.WebviewPanel;
-  readonly panelSubject: ThreeReferencePanelSubject;
-  readonly eligiblePurposes: readonly ThreeReferencePurpose[];
-  readonly sourceSession?: SourceSessionPort;
+  panelSubject: ThreeReferencePanelSubject;
+  eligiblePurposes: readonly ThreeReferencePurpose[];
+  sourceSession?: SourceSessionPort;
   readonly abortController: AbortController;
   readonly disposables: vscode.Disposable[];
   staging: ThreeReferenceStagingSnapshot;
@@ -115,6 +116,7 @@ export class ModelPreviewProvider
   private readonly onCaptureRequested?: ModelPreviewProviderDependencies['onCaptureRequested'];
   private readonly authorizePanoramicImageSource: typeof authorizePanoramicImageSource;
   private readonly projectPresetRuntime: typeof projectThreeReferencePresetRuntime;
+  private readonly pickPanoramicImage: () => Promise<vscode.Uri | undefined>;
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -140,6 +142,18 @@ export class ModelPreviewProvider
       dependencies.authorizePanoramicImageSource ?? authorizePanoramicImageSource;
     this.projectPresetRuntime =
       dependencies.projectPresetRuntime ?? projectThreeReferencePresetRuntime;
+    this.pickPanoramicImage =
+      dependencies.pickPanoramicImage ??
+      (async () =>
+        (
+          await vscode.window.showOpenDialog({
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            filters: { 'Panoramic Images': ['jpg', 'jpeg', 'png', 'webp', 'hdr', 'exr'] },
+            title: 'Add 720° Environment',
+          })
+        )?.[0]);
     this.loadPathPolicy =
       dependencies.loadPathPolicy ??
       (async ({ documentUri, workspaceRoot }) => {
@@ -243,6 +257,7 @@ export class ModelPreviewProvider
         },
       },
     };
+    state.eligiblePurposes = withPanoramaPurpose(state.eligiblePurposes, staging.environment);
     state.staging = staging;
     await this.context.workspaceState.update(
       threeReferenceStagingStateKey(state.panelSubject.subject),
@@ -291,6 +306,8 @@ export class ModelPreviewProvider
       stop(new Error('3D Reference panel disposed during resolution.')),
     );
     try {
+      await this.localResourceAccess.configureWebview(webview, { enableScripts: true });
+      abortController.signal.throwIfAborted();
       const initialized = await this.initializePanelSubject(
         request,
         panel,
@@ -474,6 +491,7 @@ export class ModelPreviewProvider
             type: '3d-reference/session-init',
             protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
             panelSubject: state.panelSubject,
+            availablePresets: this.presetCatalog.map(toPresetOption),
             eligiblePurposes: state.eligiblePurposes,
             staging: state.staging,
           });
@@ -489,6 +507,16 @@ export class ModelPreviewProvider
             state.staging,
           );
           break;
+        case '3d-reference/preset-subject-requested':
+          this.assertIdentity(state, message.identity);
+          await this.replacePanelPreset(state, message.presetId);
+          break;
+        case '3d-reference/panorama-picker-requested': {
+          this.assertIdentity(state, message.identity);
+          const sourceUri = await this.pickPanoramicImage();
+          if (sourceUri) await this.authorizePanoramicEnvironment(state.panel, sourceUri);
+          break;
+        }
         case '3d-reference/capture-requested':
           this.assertIdentity(state, message.identity);
           if (
@@ -540,6 +568,67 @@ export class ModelPreviewProvider
     }
   }
 
+  private async replacePanelPreset(state: PanelState, presetId: string): Promise<void> {
+    const candidate = this.presetCatalog.find((entry) => entry.presetId === presetId);
+    if (!candidate)
+      throw protocolError('preset-invalid', `Unknown 3D Reference preset: ${presetId}`);
+    if (candidate.presetKind === 'panorama-grid') {
+      throw protocolError(
+        'preset-invalid',
+        'Panorama-grid presets belong to the environment slot, not the primary subject slot.',
+      );
+    }
+    const subject = {
+      kind: 'builtin-preset',
+      presetId: candidate.presetId,
+      presetVersion: candidate.presetVersion,
+      fingerprint: candidate.fingerprint,
+      presetKind: candidate.presetKind,
+      appearancePolicy: candidate.appearancePolicy,
+      allowedPurposes: candidate.allowedPurposes,
+    } as const;
+    resolveThreeReferencePreset(this.presetCatalog, subject);
+    const runtime = await this.projectPresetRuntime({
+      entry: candidate,
+      webview: state.panel.webview,
+      extensionUri: this.extensionUri,
+      authorization: this.localResourceAccess,
+      signal: state.abortController.signal,
+    });
+    state.abortController.signal.throwIfAborted();
+    const base = createBuiltinPresetStaging(state.staging.sessionId, candidate);
+    const eligiblePurposes = withPanoramaPurpose(
+      candidate.allowedPurposes,
+      state.staging.environment,
+    );
+    const selectedPurposes = base.selectedPurposes.filter((purpose) =>
+      eligiblePurposes.includes(purpose),
+    );
+    const staging: ThreeReferenceStagingSnapshot = {
+      ...base,
+      revision: state.staging.revision + 1,
+      camera: state.staging.camera,
+      ...(state.staging.environment ? { environment: state.staging.environment } : {}),
+      selectedPurposes,
+    };
+    state.sourceSession?.dispose();
+    delete state.sourceSession;
+    await this.localResourceAccess.configureWebview(state.panel.webview, { enableScripts: true });
+    state.abortController.signal.throwIfAborted();
+    state.panelSubject = { kind: 'builtin-preset', subject, runtime };
+    state.eligiblePurposes = eligiblePurposes;
+    state.staging = staging;
+    await this.context.workspaceState.update(threeReferenceStagingStateKey(subject), staging);
+    await state.panel.webview.postMessage({
+      type: '3d-reference/session-init',
+      protocolVersion: THREE_REFERENCE_PROTOCOL_VERSION,
+      panelSubject: state.panelSubject,
+      availablePresets: this.presetCatalog.map(toPresetOption),
+      eligiblePurposes,
+      staging,
+    });
+  }
+
   private assertIdentity(state: PanelState, identity: ThreeReferenceIdentity): void {
     if (identity.sessionId !== state.staging.sessionId) {
       throw protocolError('session-mismatch', '3D Reference message belongs to another panel.');
@@ -572,6 +661,22 @@ export class ModelPreviewProvider
 
 function identityOf(staging: ThreeReferenceStagingSnapshot): ThreeReferenceIdentity {
   return { sessionId: staging.sessionId, revision: staging.revision };
+}
+
+function toPresetOption(entry: ThreeReferencePresetCatalogEntry) {
+  return {
+    presetId: entry.presetId,
+    presetKind: entry.presetKind,
+    labelKey: entry.labelKey,
+  } as const;
+}
+
+function withPanoramaPurpose(
+  purposes: readonly ThreeReferencePurpose[],
+  environment: ThreeReferenceStagingSnapshot['environment'],
+): readonly ThreeReferencePurpose[] {
+  if (!environment || purposes.includes('panorama-scene')) return purposes;
+  return [...purposes, 'panorama-scene'];
 }
 
 function samePanelSubject(

@@ -40,5 +40,5 @@ export function parseModelSceneSelection(id: string): ModelSceneSelection | unde
 }
 
 function isModelPreviewLightId(value: string): value is ModelPreviewLightEntry['id'] {
-  return value === 'key' || value === 'fill' || value === 'rim';
+  return value.length > 0;
 }

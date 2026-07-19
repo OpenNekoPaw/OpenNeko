@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_PREVIEW_STAGING_SCHEMA_VERSION, type ModelPreviewStagingState } from '@neko/shared';
 import {
+  addModelLight,
   duplicateModelCamera,
   patchModelTransform,
   removeModelCamera,
@@ -73,6 +74,18 @@ describe('model staging store', () => {
     );
     const singleCamera = { ...state, cameraPresets: [state.cameraPresets[0]!] };
     expect(() => removeModelCamera(singleCamera, 'default')).toThrow(/at least one camera/);
+  });
+
+  it('adds bounded temporary directional lights with deterministic identities', () => {
+    let state = initialState();
+    state = addModelLight(state);
+    expect(state.lightRig.lights.at(-1)).toMatchObject({
+      id: 'light-1',
+      color: '#ffffff',
+      intensity: 1,
+    });
+    while (state.lightRig.lights.length < 8) state = addModelLight(state);
+    expect(() => addModelLight(state)).toThrow(/at most 8 directional lights/);
   });
 });
 

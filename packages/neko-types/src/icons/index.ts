@@ -66,4 +66,8 @@ export {
   GridIcon,
   AxesIcon,
   FrameSelectionIcon,
+  MannequinIcon,
+  CubeIcon,
+  LightIcon,
+  PanoramaIcon,
 } from './viewport';

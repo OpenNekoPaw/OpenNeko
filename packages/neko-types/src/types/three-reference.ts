@@ -6,7 +6,7 @@ import {
 import { isResourceRef, type ResourceRef } from './resource-cache.js';
 
 export const THREE_REFERENCE_CONTEXT_VERSION = 1 as const;
-export const THREE_REFERENCE_PROTOCOL_VERSION = 1 as const;
+export const THREE_REFERENCE_PROTOCOL_VERSION = 2 as const;
 export const THREE_REFERENCE_STAGING_SCHEMA_VERSION = 1 as const;
 
 export const THREE_REFERENCE_PURPOSES = ['appearance', 'pose', 'camera', 'panorama-scene'] as const;
@@ -40,6 +40,12 @@ export interface ThreeReferencePresetIdentity {
   readonly presetKind: ThreeReferencePresetKind;
   readonly appearancePolicy: ThreeReferenceAppearancePolicy;
   readonly allowedPurposes: readonly ThreeReferencePurpose[];
+}
+
+export interface ThreeReferencePresetOption {
+  readonly presetId: string;
+  readonly presetKind: ThreeReferencePresetKind;
+  readonly labelKey: string;
 }
 
 export type ThreeReferenceSubject =
@@ -204,6 +210,7 @@ export type ThreeReferenceExtensionMessage =
       readonly type: '3d-reference/session-init';
       readonly protocolVersion: typeof THREE_REFERENCE_PROTOCOL_VERSION;
       readonly panelSubject: ThreeReferencePanelSubject;
+      readonly availablePresets: readonly ThreeReferencePresetOption[];
       readonly eligiblePurposes: readonly ThreeReferencePurpose[];
       readonly staging: ThreeReferenceStagingSnapshot;
     }
@@ -237,6 +244,15 @@ export type ThreeReferenceWebviewMessage =
   | {
       readonly type: '3d-reference/staging-changed';
       readonly staging: ThreeReferenceStagingSnapshot;
+    }
+  | {
+      readonly type: '3d-reference/preset-subject-requested';
+      readonly identity: ThreeReferenceIdentity;
+      readonly presetId: string;
+    }
+  | {
+      readonly type: '3d-reference/panorama-picker-requested';
+      readonly identity: ThreeReferenceIdentity;
     }
   | {
       readonly type: '3d-reference/capture-requested';
@@ -287,6 +303,18 @@ export interface ThreeReferenceDiagnostic {
 
 export function isThreeReferencePurpose(value: unknown): value is ThreeReferencePurpose {
   return THREE_REFERENCE_PURPOSES.some((purpose) => purpose === value);
+}
+
+export function isThreeReferencePresetOption(value: unknown): value is ThreeReferencePresetOption {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value['presetId']) &&
+    (value['presetKind'] === 'mannequin' ||
+      value['presetKind'] === 'prop' ||
+      value['presetKind'] === 'environment' ||
+      value['presetKind'] === 'panorama-grid') &&
+    isNonEmptyString(value['labelKey'])
+  );
 }
 
 export function isThreeReferenceIdentity(value: unknown): value is ThreeReferenceIdentity {

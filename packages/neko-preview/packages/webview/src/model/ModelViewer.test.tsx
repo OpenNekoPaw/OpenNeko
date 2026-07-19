@@ -136,7 +136,7 @@ describe('ModelViewer', () => {
     expect(viewportToolbar?.getAttribute('aria-orientation')).toBe('horizontal');
     expect(viewportToolbar?.querySelector('.codicon')).toBeNull();
     const viewportIcons = viewportToolbar?.querySelectorAll('button svg');
-    expect(viewportIcons).toHaveLength(8);
+    expect(viewportIcons).toHaveLength(13);
     viewportIcons?.forEach((icon) => {
       expect(icon.getAttribute('width')).toBe('18');
       expect(icon.getAttribute('height')).toBe('18');
@@ -300,6 +300,83 @@ describe('ModelViewer', () => {
       'dataset.viewerStatus',
       'ready',
     );
+    await act(async () => root.unmount());
+    mockWindow.dispose();
+  });
+
+  it('creates temporary cameras and lights and routes preset and 720 requests to the host', async () => {
+    const mockWindow = installMockWebviewWindow();
+    const runtime = fakeRuntime();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = ReactDOM.createRoot(container);
+    await act(async () => {
+      root.render(
+        <I18nProvider service={i18nService}>
+          <ModelViewer runtimeFactory={{ create: () => runtime.value }} sessionId="session-1" />
+        </I18nProvider>,
+      );
+    });
+    const load = loadMessage();
+    await act(async () => {
+      window.dispatchEvent(new MessageEvent('message', { data: load }));
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Add camera"]')?.click();
+    });
+    expect(
+      container.querySelector('[data-tree-item-id="model-selection:camera:camera-default-copy"]'),
+    ).not.toBeNull();
+    expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
+      'dataset.selectionKind',
+      'camera',
+    );
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Add directional light"]')
+        ?.click();
+    });
+    expect(
+      container.querySelector('[data-tree-item-id="model-selection:light:light-1"]'),
+    ).not.toBeNull();
+    expect(runtime.applyStaging).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        lightRig: expect.objectContaining({
+          lights: expect.arrayContaining([expect.objectContaining({ id: 'light-1' })]),
+        }),
+      }),
+    );
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Add 720° environment"]')
+        ?.click();
+    });
+    expect(mockWindow.api.postedMessages).toContainEqual({
+      type: '3d-reference/panorama-picker-requested',
+      identity: { sessionId: 'session-1', revision: 2 },
+    });
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Add or replace mannequin"]')
+        ?.click();
+      await Promise.resolve();
+    });
+    const malePreset = document.body.querySelector<HTMLButtonElement>(
+      'button[data-preset-id="guide-mannequin-male"]',
+    );
+    expect(malePreset).not.toBeNull();
+    await act(async () => malePreset?.click());
+    expect(mockWindow.api.postedMessages).toContainEqual({
+      type: '3d-reference/preset-subject-requested',
+      identity: { sessionId: 'session-1', revision: 2 },
+      presetId: 'guide-mannequin-male',
+    });
+
     await act(async () => root.unmount());
     mockWindow.dispose();
   });
@@ -705,6 +782,7 @@ function loadMessage() {
         sizeBytes: 12,
       },
     },
+    availablePresets: referencePresetOptions(),
     eligiblePurposes: ['appearance', 'camera'] as const,
     staging: {
       schemaVersion: THREE_REFERENCE_STAGING_SCHEMA_VERSION,
@@ -784,6 +862,7 @@ function builtinPresetMessage() {
         },
       },
     },
+    availablePresets: referencePresetOptions(),
     eligiblePurposes: ['pose', 'camera'] as const,
     staging: {
       schemaVersion: THREE_REFERENCE_STAGING_SCHEMA_VERSION,
@@ -809,6 +888,26 @@ function builtinPresetMessage() {
       pose: { poseId: 'standing', joints: [] },
     },
   };
+}
+
+function referencePresetOptions() {
+  return [
+    {
+      presetId: 'guide-mannequin-female',
+      presetKind: 'mannequin' as const,
+      labelKey: 'preview.threeReference.preset.femaleMannequin',
+    },
+    {
+      presetId: 'guide-mannequin-male',
+      presetKind: 'mannequin' as const,
+      labelKey: 'preview.threeReference.preset.maleMannequin',
+    },
+    {
+      presetId: 'guide-primitive-blockout-props',
+      presetKind: 'prop' as const,
+      labelKey: 'preview.threeReference.preset.primitiveBlockoutProps',
+    },
+  ];
 }
 
 function panoramaEnvironmentMessage(load: ReturnType<typeof loadMessage>) {

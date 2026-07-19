@@ -137,7 +137,7 @@ function buildModelSceneTree(
     }));
   const characterItems = buildCharacterItems(nodes, normalizedQuery);
   const lightItems = (staging?.lightRig.lights ?? [])
-    .map((light) => ({ light, label: t(`preview.model.light.${light.id}`) }))
+    .map((light, index) => ({ light, label: lightLabel(light.id, index, t) }))
     .filter(({ label }) => matches(label))
     .map(({ light, label }): TreeViewItem => ({
       id: modelSceneSelectionId({ kind: 'light', lightId: light.id }),
@@ -184,6 +184,17 @@ function buildModelSceneTree(
     });
   }
   return items;
+}
+
+function lightLabel(
+  lightId: string,
+  index: number,
+  t: ReturnType<typeof useTranslation>['t'],
+): string {
+  if (lightId === 'key' || lightId === 'fill' || lightId === 'rim') {
+    return t(`preview.model.light.${lightId}`);
+  }
+  return t('preview.model.light.custom', { index: index + 1 });
 }
 
 function buildCharacterItems(

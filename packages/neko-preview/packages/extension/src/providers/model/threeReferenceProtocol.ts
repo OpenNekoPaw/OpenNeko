@@ -35,6 +35,21 @@ export function parseThreeReferenceWebviewMessage(
       return isThreeReferenceStagingSnapshot(value['staging'])
         ? { type: '3d-reference/staging-changed', staging: value['staging'] }
         : undefined;
+    case '3d-reference/preset-subject-requested':
+      return isThreeReferenceIdentity(value['identity']) && isNonEmptyString(value['presetId'])
+        ? {
+            type: '3d-reference/preset-subject-requested',
+            identity: value['identity'],
+            presetId: value['presetId'],
+          }
+        : undefined;
+    case '3d-reference/panorama-picker-requested':
+      return isThreeReferenceIdentity(value['identity'])
+        ? {
+            type: '3d-reference/panorama-picker-requested',
+            identity: value['identity'],
+          }
+        : undefined;
     case '3d-reference/capture-requested':
       return isNonEmptyString(value['requestId']) &&
         isThreeReferenceIdentity(value['identity']) &&

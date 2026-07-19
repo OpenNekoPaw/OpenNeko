@@ -24,8 +24,24 @@ vi.mock('vscode', () => ({
 }));
 
 vi.mock('@neko/shared/vscode/extension', () => ({
-  createHostContentAccessRuntime: () => ({
-    localResourceAccess: { isAuthorizedPath: vi.fn(async () => true) },
+  createHostContentAccessRuntime: ({ extensionUri }: { extensionUri: { fsPath: string } }) => ({
+    localResourceAccess: {
+      configureWebview: vi.fn(
+        async (
+          webview: { options: Record<string, unknown> },
+          options: { enableScripts?: boolean },
+        ) => {
+          webview.options = {
+            ...webview.options,
+            ...(options.enableScripts === undefined
+              ? {}
+              : { enableScripts: options.enableScripts }),
+            localResourceRoots: [uri(`${extensionUri.fsPath}/dist/webview`)],
+          };
+        },
+      ),
+      isAuthorizedPath: vi.fn(async () => true),
+    },
   }),
   loadHostContentPathPolicy: vi.fn(),
 }));
@@ -50,6 +66,9 @@ describe('3D Reference provider session boundary', () => {
       vscode.ViewColumn.Active,
       { enableScripts: true, retainContextWhenHidden: true },
     );
+    expect(guidePanel.webview.options.localResourceRoots).toEqual([
+      expect.objectContaining({ fsPath: '/extension/dist/webview' }),
+    ]);
     expect(guidePanel.messages.at(-1)).toMatchObject({
       panelSubject: { kind: 'builtin-preset' },
       staging: { subject: { presetId: 'guide-mannequin-female' } },
@@ -118,6 +137,76 @@ describe('3D Reference provider session boundary', () => {
       panelSubject: { kind: 'environment-only' },
       eligiblePurposes: ['camera', 'panorama-scene'],
       staging: { selectedPurposes: ['camera'] },
+    });
+  });
+
+  it('replaces the primary subject through the preset catalog without changing panel identity', async () => {
+    const sourcePanel = panel();
+    sourcePanel.webview.options.localResourceRoots = [uri('/extension/dist/webview')];
+    const source = sourceSession('session-a', '/workspace/a.glb');
+    source.dispose.mockImplementation(() => {
+      sourcePanel.webview.options.localResourceRoots = [];
+    });
+    const provider = providerWith(extensionContext(), () => 'session-a', {
+      openSourceSession: async () => source,
+    });
+    await provider.resolveCustomEditor(document('/workspace/a.glb'), sourcePanel.value, token());
+    await ready(sourcePanel, 'session-a');
+
+    await sourcePanel.receive({
+      type: '3d-reference/preset-subject-requested',
+      identity: { sessionId: 'session-a', revision: 0 },
+      presetId: 'guide-mannequin-male',
+    });
+
+    expect(source.dispose).toHaveBeenCalledOnce();
+    expect(sourcePanel.webview.options.localResourceRoots).toEqual([
+      expect.objectContaining({ fsPath: '/extension/dist/webview' }),
+    ]);
+    expect(sourcePanel.messages.at(-1)).toMatchObject({
+      type: '3d-reference/session-init',
+      panelSubject: {
+        kind: 'builtin-preset',
+        subject: { presetId: 'guide-mannequin-male', presetKind: 'mannequin' },
+      },
+      staging: {
+        sessionId: 'session-a',
+        revision: 1,
+        subject: { presetId: 'guide-mannequin-male' },
+      },
+    });
+  });
+
+  it('opens the host-owned 720 picker and authorizes its selected workspace image', async () => {
+    const pickPanoramicImage = vi.fn(async () => uri('/workspace/scene_360.png'));
+    const authorizePanoramicImageSource = vi.fn(async () => ({
+      sourceRef: resourceRef('panorama'),
+      fingerprint: 'panorama-fingerprint',
+      mediaType: 'image/png' as const,
+      sizeBytes: 1024,
+      webviewUri: 'webview:/workspace/scene_360.png',
+    }));
+    const provider = providerWith(extensionContext(), () => 'environment-session', {
+      pickPanoramicImage,
+      authorizePanoramicImageSource,
+    });
+    const environmentPanel = panel();
+    await provider.resolveEnvironmentOnlyPanel(environmentPanel.value, token());
+    await ready(environmentPanel, 'environment-session');
+
+    await environmentPanel.receive({
+      type: '3d-reference/panorama-picker-requested',
+      identity: { sessionId: 'environment-session', revision: 0 },
+    });
+
+    expect(pickPanoramicImage).toHaveBeenCalledOnce();
+    expect(authorizePanoramicImageSource).toHaveBeenCalledWith(
+      expect.objectContaining({ sourcePath: '/workspace/scene_360.png' }),
+    );
+    expect(environmentPanel.messages.at(-1)).toMatchObject({
+      type: '3d-reference/environment-runtime',
+      identity: { sessionId: 'environment-session', revision: 1 },
+      staging: { environment: { fingerprint: 'panorama-fingerprint' } },
     });
   });
 
@@ -247,7 +336,7 @@ describe('3D Reference provider session boundary', () => {
     expect(environmentPanel.messages.at(-1)).toMatchObject({
       panelSubject: { kind: 'environment-only' },
     });
-    expect(JSON.stringify(environmentPanel.messages)).not.toContain('guide-neutral-panorama-grid');
+    expect(sessionInit(environmentPanel).staging.subject).toEqual({ kind: 'environment-only' });
   });
 
   it('does not fall back to a built-in preset when source loading fails', async () => {
@@ -502,6 +591,7 @@ function panel() {
   } as never;
   return {
     value,
+    webview,
     messages,
     get html() {
       return html;

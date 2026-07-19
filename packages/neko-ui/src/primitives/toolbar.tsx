@@ -38,30 +38,28 @@ export interface ToolbarButtonProps extends Omit<
   readonly active?: boolean;
 }
 
-export function ToolbarButton({
-  active,
-  className,
-  disabled,
-  icon,
-  onClick,
-  title,
-  ...buttonProps
-}: ToolbarButtonProps): React.ReactElement {
-  return (
-    <button
-      {...buttonProps}
-      aria-label={title}
-      aria-pressed={active}
-      className={cn('neko-toolbar-btn', active ? 'active' : null, className)}
-      disabled={disabled}
-      onClick={onClick}
-      title={title}
-      type="button"
-    >
-      {icon}
-    </button>
-  );
-}
+export const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
+  function ToolbarButton(
+    { active, className, disabled, icon, onClick, title, ...buttonProps },
+    ref,
+  ): React.ReactElement {
+    return (
+      <button
+        {...buttonProps}
+        ref={ref}
+        aria-label={title}
+        aria-pressed={active}
+        className={cn('neko-toolbar-btn', active ? 'active' : null, className)}
+        disabled={disabled}
+        onClick={onClick}
+        title={title}
+        type="button"
+      >
+        {icon}
+      </button>
+    );
+  },
+);
 
 export interface ToolbarSeparatorProps {
   readonly orientation?: 'horizontal' | 'vertical';

@@ -335,6 +335,47 @@ input {
   transform: translateX(-50%);
 }
 
+.model-preview__creation-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.model-preview__creation-menu {
+  display: grid;
+  min-width: 190px;
+  gap: 2px;
+}
+
+.model-preview__creation-menu-item {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--neko-radius-sm, 6px);
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.model-preview__creation-menu-item:hover:not(:disabled),
+.model-preview__creation-menu-item:focus-visible {
+  color: var(--vscode-menu-selectionForeground, var(--vscode-foreground));
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+  outline: none;
+}
+
+.model-preview__creation-menu-item:disabled {
+  color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+  cursor: default;
+  opacity: 0.75;
+}
+
 .model-preview__overlay {
   position: absolute;
   z-index: 4;

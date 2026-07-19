@@ -1,15 +1,21 @@
-import { SegmentedControl, ToolbarButton, ToolbarSeparator } from '@neko/ui';
+import { Popover, SegmentedControl, ToolbarButton, ToolbarSeparator } from '@neko/ui';
 import {
   AxesIcon,
+  CameraIcon,
+  CubeIcon,
   FrameSelectionIcon,
   GridIcon,
   InspectIcon,
+  LightIcon,
+  MannequinIcon,
   MoveIcon,
+  PanoramaIcon,
   PointerIcon,
   RotateIcon,
   ScaleIcon,
 } from '@neko/ui/icons';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
+import type { ThreeReferencePresetOption } from '@neko/shared';
 import { useTranslation } from '../../i18n/I18nContext';
 
 export type ModelViewportMode = 'navigate' | 'inspect';
@@ -22,20 +28,34 @@ export interface ModelViewportControlsProps {
   readonly hasTransformSelection: boolean;
   readonly viewportMode: ModelViewportMode;
   readonly transformMode: ModelTransformMode;
+  readonly activePresetId?: string;
+  readonly availablePresets: readonly ThreeReferencePresetOption[];
+  readonly canAddLight: boolean;
   readonly onViewportModeChange: (mode: ModelViewportMode) => void;
   readonly onTransformModeChange: (mode: ModelTransformMode) => void;
   readonly onFrameModel: () => void;
   readonly onAxesVisibleChange: (visible: boolean) => void;
   readonly onGridVisibleChange: (visible: boolean) => void;
+  readonly onPresetRequest: (presetId: string) => void;
+  readonly onAddCamera: () => void;
+  readonly onAddLight: () => void;
+  readonly onPanoramaRequest: () => void;
 }
 
 export function ModelViewportControls({
   axesVisible,
+  activePresetId,
+  availablePresets,
+  canAddLight,
   disabled,
   gridVisible,
   onAxesVisibleChange,
   onFrameModel,
   onGridVisibleChange,
+  onAddCamera,
+  onAddLight,
+  onPanoramaRequest,
+  onPresetRequest,
   onTransformModeChange,
   onViewportModeChange,
   transformMode,
@@ -98,6 +118,50 @@ export function ModelViewportControls({
           />
         </div>
         <ToolbarSeparator orientation="vertical" />
+        <div
+          aria-label={t('preview.model.addReferenceContent')}
+          className="model-preview__creation-group"
+          data-model-preview-toolbar-group="creation"
+          role="group"
+        >
+          <PresetMenu
+            activePresetId={activePresetId}
+            disabled={disabled}
+            icon={<MannequinIcon size={18} />}
+            options={availablePresets.filter((preset) => preset.presetKind === 'mannequin')}
+            title={t('preview.model.addMannequin')}
+            onSelect={onPresetRequest}
+          />
+          <PresetMenu
+            activePresetId={activePresetId}
+            disabled={disabled}
+            icon={<CubeIcon size={18} />}
+            options={availablePresets.filter(
+              (preset) => preset.presetKind === 'prop' || preset.presetKind === 'environment',
+            )}
+            title={t('preview.model.addObject')}
+            onSelect={onPresetRequest}
+          />
+          <ToolbarButton
+            disabled={disabled}
+            icon={<PanoramaIcon size={18} />}
+            title={t('preview.model.addPanorama')}
+            onClick={onPanoramaRequest}
+          />
+          <ToolbarButton
+            disabled={disabled}
+            icon={<CameraIcon size={18} />}
+            title={t('preview.model.addCamera')}
+            onClick={onAddCamera}
+          />
+          <ToolbarButton
+            disabled={disabled || !canAddLight}
+            icon={<LightIcon size={18} />}
+            title={canAddLight ? t('preview.model.addLight') : t('preview.model.lightLimitReached')}
+            onClick={onAddLight}
+          />
+        </div>
+        <ToolbarSeparator orientation="vertical" />
         {(['translate', 'rotate', 'scale'] as const).map((mode) => (
           <ToolbarButton
             key={mode}
@@ -134,6 +198,55 @@ export function ModelViewportControls({
         />
       </div>
     </>
+  );
+}
+
+function PresetMenu({
+  activePresetId,
+  disabled,
+  icon,
+  onSelect,
+  options,
+  title,
+}: {
+  readonly activePresetId?: string;
+  readonly disabled: boolean;
+  readonly icon: React.JSX.Element;
+  readonly options: readonly ThreeReferencePresetOption[];
+  readonly title: string;
+  readonly onSelect: (presetId: string) => void;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <Popover
+      align="start"
+      side="top"
+      trigger={
+        <ToolbarButton
+          active={options.some((option) => option.presetId === activePresetId)}
+          disabled={disabled || options.length === 0}
+          icon={icon}
+          title={title}
+        />
+      }
+    >
+      <div className="model-preview__creation-menu" aria-label={title} role="menu">
+        {options.map((option) => (
+          <button
+            key={option.presetId}
+            className="model-preview__creation-menu-item"
+            data-preset-id={option.presetId}
+            disabled={option.presetId === activePresetId}
+            role="menuitem"
+            type="button"
+            onClick={() => onSelect(option.presetId)}
+          >
+            <span>{t(option.labelKey)}</span>
+            {option.presetId === activePresetId ? <span aria-hidden="true">✓</span> : null}
+          </button>
+        ))}
+      </div>
+    </Popover>
   );
 }
 

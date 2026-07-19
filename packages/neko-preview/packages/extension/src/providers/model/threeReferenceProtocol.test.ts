@@ -27,6 +27,26 @@ describe('3D Reference panel protocol', () => {
     ).toEqual({ type: '3d-reference/staging-changed', staging });
     expect(
       parseThreeReferenceWebviewMessage({
+        type: '3d-reference/preset-subject-requested',
+        identity: { sessionId: 'session-a', revision: 0 },
+        presetId: 'guide-mannequin-male',
+      }),
+    ).toEqual({
+      type: '3d-reference/preset-subject-requested',
+      identity: { sessionId: 'session-a', revision: 0 },
+      presetId: 'guide-mannequin-male',
+    });
+    expect(
+      parseThreeReferenceWebviewMessage({
+        type: '3d-reference/panorama-picker-requested',
+        identity: { sessionId: 'session-a', revision: 0 },
+      }),
+    ).toEqual({
+      type: '3d-reference/panorama-picker-requested',
+      identity: { sessionId: 'session-a', revision: 0 },
+    });
+    expect(
+      parseThreeReferenceWebviewMessage({
         type: '3d-reference/capture-requested',
         requestId: 'capture-a',
         identity: { sessionId: 'session-a', revision: 0 },
