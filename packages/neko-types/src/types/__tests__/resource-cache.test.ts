@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  areResourceRefsContentCompatible,
   asProjectCachePath,
   asProjectFactPath,
+  compareResourceRefObservationStrength,
+  createResourceContentIdentity,
   createResourceFingerprint,
+  createResourceLogicalContentIdentity,
   createResourceRef,
   createResourceRefId,
   createResourceVariantKey,
@@ -77,6 +81,42 @@ describe('resource cache contracts', () => {
         locator: { kind: 'document', locator: { kind: 'bad' } },
       }),
     ).toBe(false);
+  });
+
+  it('distinguishes logical file identity from durable resource revisions', () => {
+    const portablePath = '${A}/epub/animation/Blame/volume-01.epub';
+    const fallback: ResourceRef = {
+      id: 'res_fallback',
+      scope: 'project',
+      provider: 'source-file-content-access',
+      kind: 'document',
+      source: { kind: 'file', projectRelativePath: portablePath },
+      locator: { kind: 'file', path: portablePath },
+      fingerprint: { strategy: 'none', value: portablePath },
+    };
+    const firstRevision: ResourceRef = {
+      ...fallback,
+      id: 'res_hash_1',
+      fingerprint: { strategy: 'hash', value: 'sha256:volume-01-v1' },
+    };
+    const secondRevision: ResourceRef = {
+      ...fallback,
+      id: 'res_hash_2',
+      fingerprint: { strategy: 'hash', value: 'sha256:volume-01-v2' },
+    };
+
+    expect(createResourceLogicalContentIdentity(fallback)).toBe(
+      createResourceLogicalContentIdentity(firstRevision),
+    );
+    expect(areResourceRefsContentCompatible(fallback, firstRevision)).toBe(true);
+    expect(compareResourceRefObservationStrength(firstRevision, fallback)).toBeGreaterThan(0);
+    expect(createResourceContentIdentity(fallback)).not.toBe(
+      createResourceContentIdentity(firstRevision),
+    );
+    expect(areResourceRefsContentCompatible(firstRevision, secondRevision)).toBe(false);
+    expect(createResourceContentIdentity(firstRevision)).not.toBe(
+      createResourceContentIdentity(secondRevision),
+    );
   });
 
   it('creates deterministic variant keys and validates variants', () => {

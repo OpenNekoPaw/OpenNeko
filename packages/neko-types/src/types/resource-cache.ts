@@ -291,6 +291,83 @@ export function createResourceRefId(
   })}`;
 }
 
+export function createResourceLogicalContentIdentity(resourceRef: ResourceRef): string {
+  return hashStableValue({
+    kind: 'resource-content',
+    scope: resourceRef.scope,
+    resourceKind: resourceRef.kind,
+    identity: resourceRef.locator
+      ? { locator: resourceRef.locator }
+      : createResourceSourceContentLocator(resourceRef),
+  });
+}
+
+export function createResourceContentIdentity(resourceRef: ResourceRef): string {
+  const logicalIdentity = createResourceLogicalContentIdentity(resourceRef);
+  if (resourceRef.fingerprint.strategy === 'none') return logicalIdentity;
+  return hashStableValue({
+    kind: 'resource-revision',
+    logicalIdentity,
+    fingerprint: {
+      strategy: resourceRef.fingerprint.strategy,
+      value: resourceRef.fingerprint.value,
+      ...(resourceRef.fingerprint.providerId
+        ? { providerId: resourceRef.fingerprint.providerId }
+        : {}),
+    },
+  });
+}
+
+export function areResourceRefsContentCompatible(left: ResourceRef, right: ResourceRef): boolean {
+  if (createResourceLogicalContentIdentity(left) !== createResourceLogicalContentIdentity(right)) {
+    return false;
+  }
+  if (left.fingerprint.strategy === 'none' || right.fingerprint.strategy === 'none') return true;
+  return (
+    left.fingerprint.strategy === right.fingerprint.strategy &&
+    left.fingerprint.value === right.fingerprint.value &&
+    left.fingerprint.providerId === right.fingerprint.providerId
+  );
+}
+
+export function compareResourceRefObservationStrength(
+  left: ResourceRef,
+  right: ResourceRef,
+): number {
+  return (
+    fingerprintStrength(left.fingerprint.strategy) - fingerprintStrength(right.fingerprint.strategy)
+  );
+}
+
+function createResourceSourceContentLocator(resourceRef: ResourceRef): Record<string, unknown> {
+  const source = resourceRef.source;
+  const locator = {
+    kind: source.kind,
+    ...(source.projectRelativePath ? { projectRelativePath: source.projectRelativePath } : {}),
+    ...(source.filePath ? { filePath: source.filePath } : {}),
+    ...(source.uri ? { uri: source.uri } : {}),
+    ...(source.mediaLibraryId ? { mediaLibraryId: source.mediaLibraryId } : {}),
+    ...(source.generatedAssetId ? { generatedAssetId: source.generatedAssetId } : {}),
+    ...(source.previewAssetId ? { previewAssetId: source.previewAssetId } : {}),
+    ...(source.document ? { document: source.document } : {}),
+  };
+  return Object.keys(locator).length > 1 ? locator : { resourceId: resourceRef.id };
+}
+
+function fingerprintStrength(strategy: ResourceFingerprint['strategy']): number {
+  switch (strategy) {
+    case 'hash':
+      return 4;
+    case 'identity':
+    case 'provider':
+      return 3;
+    case 'mtime-size':
+      return 2;
+    case 'none':
+      return 0;
+  }
+}
+
 export function createResourceVariantKey(
   variant: ResourceVariantRef | ResourceVariantRequest,
 ): string {

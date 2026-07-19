@@ -47,6 +47,11 @@ interface CanvasWorkspaceProjectionArtifactBase {
   readonly provenance: CanvasWorkspaceProjectionProvenance;
 }
 
+export interface CanvasWorkspaceArtifactDimensions {
+  readonly width: number;
+  readonly height: number;
+}
+
 export type CanvasWorkspaceProjectionArtifact = CanvasWorkspaceProjectionArtifactBase &
   (
     | {
@@ -61,6 +66,8 @@ export type CanvasWorkspaceProjectionArtifact = CanvasWorkspaceProjectionArtifac
         readonly resourceRef?: ResourceRef;
         readonly documentResourceRef?: DocumentArchiveResourceRef;
         readonly generationContext?: CanvasMaterialGenerationContext;
+        /** Portable intrinsic pixel dimensions used to size newly projected image nodes. */
+        readonly intrinsicDimensions?: CanvasWorkspaceArtifactDimensions;
       }
   );
 
@@ -740,6 +747,19 @@ function validateArtifact(
       ),
     );
   }
+  if (
+    artifact['kind'] !== 'markdown' &&
+    artifact['intrinsicDimensions'] !== undefined &&
+    !isCanvasWorkspaceArtifactDimensions(artifact['intrinsicDimensions'])
+  ) {
+    diagnostics.push(
+      diagnostic(
+        'runtime-value-forbidden',
+        'Canvas artifact dimensions must contain positive finite pixel dimensions.',
+        [...path, 'intrinsicDimensions'],
+      ),
+    );
+  }
   if (artifact.kind === 'markdown') {
     if (!isNonEmptyString(artifact['title']) || !isNonEmptyString(artifact['markdown'])) {
       diagnostics.push(
@@ -876,6 +896,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isArtifactRecord(value: unknown): value is ArtifactRecord {
   return isRecord(value) && isRecord(value['provenance']);
+}
+
+function isCanvasWorkspaceArtifactDimensions(
+  value: unknown,
+): value is CanvasWorkspaceArtifactDimensions {
+  if (!isRecord(value) || Object.keys(value).some((key) => key !== 'width' && key !== 'height')) {
+    return false;
+  }
+  return (
+    typeof value['width'] === 'number' &&
+    Number.isFinite(value['width']) &&
+    value['width'] > 0 &&
+    typeof value['height'] === 'number' &&
+    Number.isFinite(value['height']) &&
+    value['height'] > 0
+  );
 }
 
 function isProjectionKind(value: unknown): value is CanvasWorkspaceProjectionKind {

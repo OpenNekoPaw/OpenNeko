@@ -83,6 +83,28 @@ describe('Canvas Workspace Board delivery contract', () => {
     );
   });
 
+  it('accepts portable intrinsic image dimensions and rejects malformed dimensions', () => {
+    expect(
+      validateCanvasWorkspaceProjectionRequest(
+        request({
+          artifacts: [{ ...outputArtifact(), intrinsicDimensions: { width: 1024, height: 1536 } }],
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      validateCanvasWorkspaceProjectionRequest(
+        request({
+          artifacts: [
+            {
+              ...outputArtifact(),
+              intrinsicDimensions: { width: 1024, height: 0 },
+            },
+          ],
+        }),
+      ).map(({ code }) => code),
+    ).toContain('runtime-value-forbidden');
+  });
+
   it('rejects unresolved, self-referencing, and duplicate creative-content relations', () => {
     const unresolved = request({
       artifacts: [

@@ -29,14 +29,14 @@ const stores: LocalMetadataStore[] = [];
 afterEach(async () => {
   await Promise.all(stores.splice(0).map((store) => store.dispose()));
   await Promise.all(
-    temporaryDirectories.splice(0).map((directory) =>
-      fs.rm(directory, { recursive: true, force: true }),
-    ),
+    temporaryDirectories
+      .splice(0)
+      .map((directory) => fs.rm(directory, { recursive: true, force: true })),
   );
 });
 
 describe('NodeWorkspaceBoardMutationPort', () => {
-  it('persists and reopens one coordinator-owned processing Group without a Webview', async () => {
+  it('persists and reopens flat coordinator-owned content without a Webview', async () => {
     const root = await createTemporaryDirectory('neko-tui-workspace-board-');
     const homedir = await createTemporaryDirectory('neko-tui-workspace-board-home-');
     const store = await createStore(homedir);
@@ -58,12 +58,8 @@ describe('NodeWorkspaceBoardMutationPort', () => {
     const reopened = loadNkc(await fs.readFile(boardPath, 'utf8'));
 
     expect(reopened.validation.valid).toBe(true);
-    expect(reopened.data.nodes.map((node) => node.type)).toEqual(['group', 'group', 'media']);
-    expect(
-      reopened.data.nodes.filter(
-        (node) => node.type === 'group' && node.data.label !== 'Inbox',
-      ),
-    ).toHaveLength(1);
+    expect(reopened.data.nodes.map((node) => node.type)).toEqual(['media']);
+    expect(reopened.data.nodes.some((node) => node.type === 'group')).toBe(false);
   });
 
   it('rejects a document outside the TUI workspace instead of falling back', async () => {

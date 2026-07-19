@@ -105,6 +105,49 @@ describe('WorkspaceBoardProjectionHost', () => {
     expect(JSON.stringify(project.mock.calls)).not.toContain('/workspace/project/neko/generated');
   });
 
+  it('forwards intrinsic image dimensions into the Canvas projection contract', async () => {
+    const project = vi.fn(async (request) => ({
+      version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+      deliveryId: request.process.deliveryId,
+      status: 'projected' as const,
+      target: {
+        kind: 'workspace' as const,
+        documentUri: 'file:///workspace/project/neko/boards/workspace.nkc',
+      },
+      diagnostics: [],
+    }));
+    const host = new WorkspaceBoardProjectionHost({
+      workspaceId: 'workspace-1',
+      getCanvasApi: async () => ({ boards: { project } }),
+      getWorkspaceUris: () => ['file:///workspace/project/'],
+    });
+
+    await host.deliverCreatorVisibleArtifacts({
+      deliveryId: 'agent-turn:image-1',
+      createdAt: '2026-07-19T00:00:00.000Z',
+      artifacts: [
+        {
+          artifactId: 'image-1',
+          revision: 'image:1',
+          role: 'output',
+          kind: 'image',
+          title: 'Portrait',
+          sourceId: 'source:image-1',
+          intrinsicDimensions: { width: 1024, height: 1536 },
+          resourceRef: generatedRefForCandidate(),
+        },
+      ],
+    });
+
+    expect(project).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artifacts: [
+          expect.objectContaining({ intrinsicDimensions: { width: 1024, height: 1536 } }),
+        ],
+      }),
+    );
+  });
+
   it('keeps generation successful when Canvas is unavailable', async () => {
     const host = new WorkspaceBoardProjectionHost({
       workspaceId: 'workspace-1',
@@ -182,4 +225,14 @@ function generatedImage(): GeneratedImage {
     height: 1024,
     ratio: '1:1',
   };
+}
+
+function generatedRefForCandidate() {
+  return createGeneratedAssetRevisionRef({
+    assetId: 'image-1',
+    contentDigest: 'sha256:image-1',
+    mediaKind: 'image',
+    mimeType: 'image/png',
+    generation: { taskId: 'task-image-1' },
+  }).resourceRef;
 }

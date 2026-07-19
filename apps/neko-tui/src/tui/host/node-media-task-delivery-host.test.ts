@@ -86,7 +86,7 @@ describe('NodeMediaTaskDeliveryHost Workspace Board delivery', () => {
     expect(replay).toEqual(first);
 
     const board = await readWorkspaceBoard(fixture.workspaceRoot);
-    expect(board.data.nodes.filter((node) => node.type === 'group')).toHaveLength(2);
+    expect(board.data.nodes.filter((node) => node.type === 'group')).toHaveLength(0);
     expect(board.data.nodes.filter((node) => node.type === 'document')).toHaveLength(1);
     expect(board.data.nodes.filter((node) => node.type === 'text')).toHaveLength(1);
     expect(JSON.stringify(board.data.nodes)).toContain('run-material-analysis');
@@ -100,6 +100,21 @@ describe('NodeMediaTaskDeliveryHost Workspace Board delivery', () => {
         genericSendToCanvas: 0,
       },
     });
+  });
+
+  it('preserves intrinsic image dimensions through the TUI projection adapter', async () => {
+    const fixture = await createFixture();
+    const host = createHost(fixture);
+
+    await host.deliverCreatorVisibleArtifacts({
+      deliveryId: 'agent-turn:portrait-image',
+      createdAt: '2026-07-19T00:00:00.000Z',
+      artifacts: [portraitImageArtifact()],
+    });
+
+    const board = await readWorkspaceBoard(fixture.workspaceRoot);
+    const node = board.data.nodes.find((candidate) => candidate.type === 'media')!;
+    expect(node.size.width / node.size.height).toBeCloseTo(2 / 3, 8);
   });
 
   it('resumes a pending delivery through a new TUI Host without changing identity', async () => {
@@ -120,7 +135,7 @@ describe('NodeMediaTaskDeliveryHost Workspace Board delivery', () => {
       state: 'projected',
     });
     const board = await readWorkspaceBoard(fixture.workspaceRoot);
-    expect(board.data.nodes.filter((node) => node.type === 'group')).toHaveLength(2);
+    expect(board.data.nodes.filter((node) => node.type === 'group')).toHaveLength(0);
     expect(host.getWorkspaceBoardDeliveryObservability()).toMatchObject({
       canonicalSubmissionCount: 0,
       resumeScanCount: 1,
@@ -230,6 +245,31 @@ function creatorVisibleArtifacts(): readonly CreatorVisibleArtifactCandidate[] {
       markdown: '# Findings\n\nThe selected brief establishes the direction.',
     },
   ];
+}
+
+function portraitImageArtifact(): CreatorVisibleArtifactCandidate {
+  return {
+    artifactId: 'portrait-image',
+    revision: 'sha256:portrait-image',
+    role: 'output',
+    kind: 'image',
+    title: 'Portrait image',
+    sourceId: 'source:portrait-image',
+    intrinsicDimensions: { width: 1024, height: 1536 },
+    resourceRef: {
+      id: 'source:portrait-image',
+      scope: 'project',
+      provider: 'generated-output',
+      kind: 'generated',
+      source: {
+        kind: 'generated-asset',
+        generatedAssetId: 'portrait-image',
+        projectRelativePath: 'neko/generated/image/portrait-image.png',
+      },
+      locator: { kind: 'generated-asset', assetId: 'portrait-image' },
+      fingerprint: { strategy: 'hash', value: 'sha256:portrait-image' },
+    },
+  };
 }
 
 function pendingMarkdownDelivery(workspaceRoot: string): CanvasWorkspaceProjectionRequest {

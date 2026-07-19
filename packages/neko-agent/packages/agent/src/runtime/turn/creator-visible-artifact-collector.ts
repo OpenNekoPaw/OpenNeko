@@ -1,8 +1,14 @@
 import {
+  areResourceRefsContentCompatible,
+  compareResourceRefObservationStrength,
+  createResourceLogicalContentIdentity,
   hashStableValue,
+  isDocumentArchiveResourceRef,
   isResourceRef,
+  TOOL_NAMES_SYSTEM,
   validateDurableResourceRef,
   validateCompositeArtifact,
+  type CanvasWorkspaceArtifactDimensions,
   type CanvasWorkspaceProjectionKind,
   type DocumentArchiveResourceRef,
   type GeneratedAssetRevisionRef,
@@ -23,6 +29,7 @@ export interface CreatorVisibleArtifactCandidate {
   readonly markdown?: string;
   readonly resourceRef?: ResourceRef;
   readonly documentResourceRef?: DocumentArchiveResourceRef;
+  readonly intrinsicDimensions?: CanvasWorkspaceArtifactDimensions;
 }
 
 export interface CreatorVisibleArtifactCollectionInput {
@@ -50,6 +57,10 @@ export function collectCreatorVisibleArtifacts(
       const source = collectReadDocumentSource(result.data);
       if (source) candidates.push(source);
     }
+    const imageDimensions =
+      result.name === TOOL_NAMES_SYSTEM.READ_IMAGE
+        ? collectReadImageDimensions(result.data)
+        : EMPTY_IMAGE_DIMENSIONS;
     for (const attachment of result.attachments ?? []) {
       const resourceRef = attachment.assetRef?.resourceRef;
       const documentResourceRef = attachment.assetRef?.documentResourceRef;
@@ -62,6 +73,9 @@ export function collectCreatorVisibleArtifacts(
           : undefined);
       if (!sourceId) continue;
       if (input.consumedResourceIds && !input.consumedResourceIds.has(sourceId)) continue;
+      const intrinsicDimensions = imageDimensions.get(
+        createImageResourceIdentity(resourceRef ?? documentResourceRef),
+      );
       candidates.push({
         artifactId: attachment.assetRef?.assetId ?? sourceId,
         revision: resourceRevision(resourceRef) ?? `attachment:${hashStableValue(attachment)}`,
@@ -71,6 +85,7 @@ export function collectCreatorVisibleArtifacts(
         sourceId,
         ...(resourceRef ? { resourceRef } : {}),
         ...(documentResourceRef ? { documentResourceRef } : {}),
+        ...(intrinsicDimensions ? { intrinsicDimensions } : {}),
       });
     }
     for (const transfer of result.artifacts ?? []) {
@@ -97,6 +112,43 @@ export function collectCreatorVisibleArtifacts(
   return deduplicateCandidates(
     reviewable ? candidates : candidates.filter((candidate) => candidate.role !== 'source'),
   );
+}
+
+const EMPTY_IMAGE_DIMENSIONS: ReadonlyMap<string, CanvasWorkspaceArtifactDimensions> = new Map();
+
+function collectReadImageDimensions(
+  data: unknown,
+): ReadonlyMap<string, CanvasWorkspaceArtifactDimensions> {
+  if (!isRecord(data) || !Array.isArray(data['images'])) return EMPTY_IMAGE_DIMENSIONS;
+  const dimensions = new Map<string, CanvasWorkspaceArtifactDimensions>();
+  for (const image of data['images']) {
+    if (!isRecord(image)) continue;
+    const resourceRef = image['resourceRef'];
+    if (!isResourceRef(resourceRef) && !isDocumentArchiveResourceRef(resourceRef)) continue;
+    const width = readPositiveFiniteNumber(image['width']);
+    const height = readPositiveFiniteNumber(image['height']);
+    if (width === undefined || height === undefined) continue;
+    const identity = createImageResourceIdentity(resourceRef);
+    const existing = dimensions.get(identity);
+    if (existing && (existing.width !== width || existing.height !== height)) {
+      throw new Error(`ReadImage returned conflicting dimensions for ${identity}.`);
+    }
+    dimensions.set(identity, { width, height });
+  }
+  return dimensions;
+}
+
+function createImageResourceIdentity(
+  resourceRef: ResourceRef | DocumentArchiveResourceRef | undefined,
+): string {
+  if (!resourceRef) return 'missing';
+  return isResourceRef(resourceRef)
+    ? `resource:${resourceRef.id}`
+    : `document:${hashStableValue(resourceRef)}`;
+}
+
+function readPositiveFiniteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 function collectMarkdownArtifact(
@@ -227,11 +279,83 @@ function resourceRevision(resourceRef: ResourceRef | undefined): string | undefi
 function deduplicateCandidates(
   candidates: readonly CreatorVisibleArtifactCandidate[],
 ): readonly CreatorVisibleArtifactCandidate[] {
+  const retained: CreatorVisibleArtifactCandidate[] = [];
   const seen = new Set<string>();
-  return candidates.filter((candidate) => {
+  const resourceIndexes = new Map<string, number[]>();
+  const aliases = new Map<string, string>();
+
+  for (const candidate of candidates) {
+    if (candidate.resourceRef) {
+      const resourceRef = candidate.resourceRef;
+      const logicalIdentity = createResourceLogicalContentIdentity(resourceRef);
+      const indexes = resourceIndexes.get(logicalIdentity) ?? [];
+      const compatibleIndex = indexes.find((index) => {
+        const existing = retained[index];
+        return (
+          existing?.resourceRef !== undefined &&
+          areResourceRefsContentCompatible(existing.resourceRef, resourceRef)
+        );
+      });
+      if (compatibleIndex !== undefined) {
+        const existing = retained[compatibleIndex];
+        if (!existing) throw new Error('Creator-visible artifact deduplication index is invalid.');
+        if (
+          existing.resourceRef &&
+          compareResourceRefObservationStrength(resourceRef, existing.resourceRef) > 0
+        ) {
+          retained[compatibleIndex] = mergeIntrinsicDimensions(candidate, existing);
+          aliases.set(existing.artifactId, candidate.artifactId);
+        } else {
+          retained[compatibleIndex] = mergeIntrinsicDimensions(existing, candidate);
+          aliases.set(candidate.artifactId, existing.artifactId);
+        }
+        continue;
+      }
+      indexes.push(retained.length);
+      resourceIndexes.set(logicalIdentity, indexes);
+      retained.push(candidate);
+      continue;
+    }
     const identity = `${candidate.artifactId}:${candidate.revision}`;
-    if (seen.has(identity)) return false;
+    if (seen.has(identity)) continue;
     seen.add(identity);
-    return true;
-  });
+    retained.push(candidate);
+  }
+
+  return retained.map((candidate) => rewriteSourceArtifactAliases(candidate, aliases));
+}
+
+function mergeIntrinsicDimensions(
+  preferred: CreatorVisibleArtifactCandidate,
+  alternate: CreatorVisibleArtifactCandidate,
+): CreatorVisibleArtifactCandidate {
+  return preferred.intrinsicDimensions || !alternate.intrinsicDimensions
+    ? preferred
+    : { ...preferred, intrinsicDimensions: alternate.intrinsicDimensions };
+}
+
+function rewriteSourceArtifactAliases(
+  candidate: CreatorVisibleArtifactCandidate,
+  aliases: ReadonlyMap<string, string>,
+): CreatorVisibleArtifactCandidate {
+  if (!candidate.sourceArtifactIds) return candidate;
+  const sourceArtifactIds = [
+    ...new Set(
+      candidate.sourceArtifactIds.map((artifactId) => resolveArtifactAlias(artifactId, aliases)),
+    ),
+  ];
+  return { ...candidate, sourceArtifactIds };
+}
+
+function resolveArtifactAlias(artifactId: string, aliases: ReadonlyMap<string, string>): string {
+  let resolved = artifactId;
+  const visited = new Set<string>();
+  while (aliases.has(resolved)) {
+    if (visited.has(resolved)) throw new Error('Creator-visible artifact alias cycle.');
+    visited.add(resolved);
+    const next = aliases.get(resolved);
+    if (!next) throw new Error('Creator-visible artifact alias is invalid.');
+    resolved = next;
+  }
+  return resolved;
 }

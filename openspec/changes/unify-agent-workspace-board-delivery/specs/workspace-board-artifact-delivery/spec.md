@@ -118,6 +118,17 @@ The Canvas-owned projector SHALL atomically create or reuse top-level ordinary D
 - **WHEN** two deliveries contain the same stable resource identity and fingerprint under different run, task, delivery, or artifact observation identities
 - **THEN** the Board SHALL contain one content node for that resource revision and both deliveries SHALL reuse it without changing its user-owned position, size, title, grouping, or annotations
 
+#### Scenario: One portable file is observed without and with a durable fingerprint
+
+- **WHEN** one batch or repeated deliveries observe the same scoped resource kind and locator first with fingerprint strategy `none` and later with a durable fingerprint
+- **THEN** the collector and projector SHALL treat both observations as one logical file, prefer the strongest observation for a newly created node, and SHALL NOT create or reposition a second content node
+- **AND** when the reused node still stores only the weak observation, the projector SHALL upgrade only its `resourceRef` identity metadata while preserving all user-owned node data and layout so later strong revisions remain distinguishable
+
+#### Scenario: One portable file has two durable revisions
+
+- **WHEN** observations have the same scoped resource kind and locator but two different non-`none` fingerprints
+- **THEN** the projector SHALL retain two content nodes as distinct durable revisions rather than merging them through locator identity alone
+
 #### Scenario: A proven creative dependency is delivered repeatedly
 
 - **WHEN** an artifact identifies another artifact in the same batch through `sourceArtifactIds`
@@ -146,7 +157,17 @@ The Canvas-owned projector SHALL atomically create or reuse top-level ordinary D
 #### Scenario: An image artifact is rendered on the Workspace Board
 
 - **WHEN** a generated or referenced image is shown as an inline Canvas node preview
-- **THEN** the Webview SHALL display the complete image using contain semantics, MAY preserve a uniform card frame with letterboxing, and SHALL NOT crop the image with cover semantics
+- **THEN** the Webview SHALL display the complete image using contain semantics and SHALL NOT crop the image with cover semantics
+
+#### Scenario: A new image artifact carries portable intrinsic dimensions
+
+- **WHEN** a generated image or a `ReadImage` document-entry attachment is projected for the first time with positive intrinsic width and height
+- **THEN** the shared projection path SHALL create the image node with the same aspect ratio while satisfying Canvas minimum dimensions
+
+#### Scenario: An existing image node has creator-owned sizing
+
+- **WHEN** an equivalent image artifact is delivered again after the creator resized its Canvas node
+- **THEN** the projector SHALL reuse that node without replacing its stored width or height from intrinsic metadata
 
 #### Scenario: Runtime identity appears in a batch
 

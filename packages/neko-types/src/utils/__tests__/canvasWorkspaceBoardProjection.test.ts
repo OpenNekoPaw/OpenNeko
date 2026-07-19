@@ -42,6 +42,76 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     );
   });
 
+  it('sizes a newly projected image node to the generated image aspect ratio', () => {
+    const image = outputArtifact('delivery:portrait-image');
+    const portraitImage = {
+      ...image,
+      generationContext: {
+        ...image.generationContext,
+        aspectRatio: '2:3',
+        width: 1024,
+        height: 1536,
+      },
+    } satisfies CanvasWorkspaceProjectionArtifact;
+
+    const plan = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      request({ deliveryId: 'delivery:portrait-image', artifacts: [portraitImage] }),
+    );
+
+    const node = plan.canvasData.nodes[0]!;
+    expect(node.type).toBe('media');
+    expect(node.size.width / node.size.height).toBeCloseTo(1024 / 1536, 8);
+  });
+
+  it('sizes a newly projected referenced image node to its intrinsic aspect ratio', () => {
+    const image = {
+      ...outputArtifact('delivery:referenced-portrait'),
+      generationContext: undefined,
+      intrinsicDimensions: { width: 900, height: 1600 },
+    } satisfies CanvasWorkspaceProjectionArtifact;
+
+    const plan = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      request({ deliveryId: 'delivery:referenced-portrait', artifacts: [image] }),
+    );
+
+    const node = plan.canvasData.nodes[0]!;
+    expect(node.type).toBe('media');
+    expect(node.size.width / node.size.height).toBeCloseTo(900 / 1600, 8);
+  });
+
+  it('preserves creator sizing when an intrinsic image is projected again', () => {
+    const firstImage = {
+      ...outputArtifact('delivery:image-first'),
+      intrinsicDimensions: { width: 900, height: 1600 },
+    } satisfies CanvasWorkspaceProjectionArtifact;
+    const first = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      request({ deliveryId: 'delivery:image-first', artifacts: [firstImage] }),
+    );
+    const existing = first.canvasData.nodes[0]!;
+    const creatorSize = { width: 460, height: 240 };
+    const edited = {
+      ...first.canvasData,
+      nodes: first.canvasData.nodes.map((node) =>
+        node.id === existing.id ? { ...node, size: creatorSize } : node,
+      ),
+    };
+    const replayImage = {
+      ...outputArtifact('delivery:image-replay'),
+      intrinsicDimensions: { width: 900, height: 1600 },
+    } satisfies CanvasWorkspaceProjectionArtifact;
+
+    const replay = planCanvasWorkspaceBoardProjection(
+      edited,
+      request({ deliveryId: 'delivery:image-replay', artifacts: [replayImage] }),
+    );
+
+    expect(replay.canvasData.nodes).toHaveLength(1);
+    expect(replay.canvasData.nodes[0]).toMatchObject({ id: existing.id, size: creatorSize });
+  });
+
   it('deduplicates stable resource revisions across deliveries and preserves creator layout', () => {
     const first = planCanvasWorkspaceBoardProjection(
       createEmptyCanvasData('Workspace'),
@@ -91,6 +161,121 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(second.canvasData.connections).toEqual([
       expect.objectContaining({ sourceId: source.id, targetId: projectedOutput.id }),
     ]);
+  });
+
+  it('deduplicates one portable source file observed with weak and hashed fingerprints', () => {
+    const portablePath = '${A}/epub/animation/Blame/volume-01.epub';
+    const weak = sourceDocumentArtifact({
+      artifactId: 'source-weak',
+      resourceId: 'res_weak',
+      portablePath,
+      fingerprint: { strategy: 'none', value: portablePath },
+      revision: portablePath,
+    });
+    const hashedSource = sourceDocumentArtifact({
+      artifactId: 'source-hashed',
+      resourceId: 'res_hashed',
+      portablePath,
+      fingerprint: { strategy: 'hash', value: 'sha256:volume-01' },
+      revision: 'sha256:volume-01',
+    });
+    const hashed = {
+      ...hashedSource,
+      provenance: { ...hashedSource.provenance, role: 'output' as const },
+    } satisfies CanvasWorkspaceProjectionArtifact;
+
+    const plan = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      request({ artifacts: [weak, hashed] }),
+    );
+
+    expect(plan.status).toBe('projected');
+    expect(plan.canvasData.nodes).toHaveLength(1);
+    expect(plan.canvasData.nodes[0]).toMatchObject({
+      type: 'document',
+      data: {
+        resourceRef: {
+          locator: { kind: 'file', path: portablePath },
+          fingerprint: { strategy: 'hash', value: 'sha256:volume-01' },
+        },
+      },
+    });
+    expect(new Set(plan.nodeIds)).toEqual(new Set([plan.canvasData.nodes[0]!.id]));
+  });
+
+  it('strengthens an existing weak file observation without changing creator layout', () => {
+    const portablePath = '${A}/epub/animation/Blame/volume-01.epub';
+    const weak = sourceDocumentArtifact({
+      artifactId: 'source-weak',
+      resourceId: 'res_weak',
+      portablePath,
+      fingerprint: { strategy: 'none', value: portablePath },
+      revision: portablePath,
+    });
+    const first = planCanvasWorkspaceBoardProjection(
+      createEmptyCanvasData('Workspace'),
+      request({ artifacts: [weak] }),
+    );
+    const existing = first.canvasData.nodes[0]!;
+    const moved = {
+      ...first.canvasData,
+      nodes: [{ ...existing, position: { x: 640, y: 320 } }],
+    };
+    const hashedSource = sourceDocumentArtifact({
+      artifactId: 'source-hashed',
+      resourceId: 'res_hashed',
+      portablePath,
+      fingerprint: { strategy: 'hash', value: 'sha256:volume-01' },
+      revision: 'sha256:volume-01',
+    });
+    const hashed = {
+      ...hashedSource,
+      provenance: { ...hashedSource.provenance, deliveryId: 'delivery:batch-2' },
+    } satisfies CanvasWorkspaceProjectionArtifact;
+
+    const second = planCanvasWorkspaceBoardProjection(
+      moved,
+      request({ deliveryId: 'delivery:batch-2', artifacts: [hashed] }),
+    );
+
+    expect(second.status).toBe('projected');
+    expect(second.canvasData.nodes).toEqual([
+      expect.objectContaining({
+        id: existing.id,
+        position: { x: 640, y: 320 },
+        data: expect.objectContaining({
+          resourceRef: expect.objectContaining({
+            fingerprint: { strategy: 'hash', value: 'sha256:volume-01' },
+          }),
+        }),
+      }),
+    ]);
+
+    const secondRevisionSource = sourceDocumentArtifact({
+      artifactId: 'source-hashed-v2',
+      resourceId: 'res_hashed_v2',
+      portablePath,
+      fingerprint: { strategy: 'hash', value: 'sha256:volume-01-v2' },
+      revision: 'sha256:volume-01-v2',
+    });
+    const secondRevision = {
+      ...secondRevisionSource,
+      provenance: {
+        ...secondRevisionSource.provenance,
+        deliveryId: 'delivery:batch-3',
+      },
+    } satisfies CanvasWorkspaceProjectionArtifact;
+    const third = planCanvasWorkspaceBoardProjection(
+      second.canvasData,
+      request({ deliveryId: 'delivery:batch-3', artifacts: [secondRevision] }),
+    );
+
+    expect(third.status).toBe('projected');
+    expect(third.canvasData.nodes).toHaveLength(2);
+    expect(third.canvasData.nodes[0]).toMatchObject({
+      id: existing.id,
+      position: { x: 640, y: 320 },
+    });
   });
 
   it('treats an equivalent repeated content graph as a noop', () => {
@@ -295,6 +480,35 @@ function outputArtifact(
       'image',
       'output',
       sourceArtifactIds,
+    ),
+  };
+}
+
+function sourceDocumentArtifact(input: {
+  readonly artifactId: string;
+  readonly resourceId: string;
+  readonly portablePath: string;
+  readonly fingerprint: ResourceRef['fingerprint'];
+  readonly revision: string;
+}): CanvasWorkspaceProjectionArtifact {
+  return {
+    kind: 'file-reference',
+    title: input.portablePath,
+    resourceRef: {
+      id: input.resourceId,
+      scope: 'project',
+      provider: 'source-file-content-access',
+      kind: 'document',
+      source: { kind: 'file', projectRelativePath: input.portablePath },
+      locator: { kind: 'file', path: input.portablePath },
+      fingerprint: input.fingerprint,
+    },
+    provenance: provenance(
+      'delivery:batch-1',
+      input.artifactId,
+      input.revision,
+      'file-reference',
+      'source',
     ),
   };
 }

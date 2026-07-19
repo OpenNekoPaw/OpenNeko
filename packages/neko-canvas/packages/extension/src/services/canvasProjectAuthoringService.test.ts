@@ -223,7 +223,7 @@ describe('CanvasProjectAuthoringService', () => {
       ),
     );
     expect(reopened.validation.valid).toBe(true);
-    expect(reopened.data.nodes.map((node) => node.type)).toEqual(['group', 'group', 'media']);
+    expect(reopened.data.nodes.map((node) => node.type)).toEqual(['media']);
     expect(provider.applyHostCanvasData).toHaveBeenLastCalledWith(
       expect.objectContaining({ fsPath: '/workspace/project/neko/boards/workspace.nkc' }),
       expect.objectContaining({ nodes: expect.any(Array) }),

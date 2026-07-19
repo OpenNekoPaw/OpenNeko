@@ -246,6 +246,7 @@ function toProjectionArtifact(
     title: artifact.title,
     ...(artifact.resourceRef ? { resourceRef: artifact.resourceRef } : {}),
     ...(artifact.documentResourceRef ? { documentResourceRef: artifact.documentResourceRef } : {}),
+    ...(artifact.intrinsicDimensions ? { intrinsicDimensions: artifact.intrinsicDimensions } : {}),
     provenance,
   };
 }

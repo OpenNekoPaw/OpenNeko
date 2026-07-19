@@ -158,6 +158,40 @@ describe('Workspace Board functional acceptance', () => {
       request.artifacts[0]?.provenance.artifactId,
     ]);
   });
+
+  it('can submit fallback and hashed observations of one fixture file', async () => {
+    const project = vi.fn(async (request) => ({
+      version: 2 as const,
+      deliveryId: request.process.deliveryId,
+      status: 'projected' as const,
+      diagnostics: [],
+    }));
+    registerWorkspaceBoardFunctionalAcceptance(createOptions({ project }));
+
+    await invoke({
+      action: 'project-editor-owner',
+      sourceHost: 'vscode',
+      duplicateSourceFileRelativePath: 'neko/materials/source.epub',
+    });
+
+    const request = project.mock.calls[0]?.[0];
+    expect(request.artifacts.slice(0, 2)).toMatchObject([
+      {
+        kind: 'file-reference',
+        resourceRef: {
+          locator: { kind: 'file', path: 'neko/materials/source.epub' },
+          fingerprint: { strategy: 'none', value: 'neko/materials/source.epub' },
+        },
+      },
+      {
+        kind: 'file-reference',
+        resourceRef: {
+          locator: { kind: 'file', path: 'neko/materials/source.epub' },
+          fingerprint: { strategy: 'hash', value: expect.stringMatching(/^sha256:/u) },
+        },
+      },
+    ]);
+  });
 });
 
 function createOptions(
@@ -198,6 +232,7 @@ async function invoke(
     readonly assetId: string;
     readonly taskId: string;
     readonly sourceTitle: string;
+    readonly duplicateSourceFileRelativePath: string;
   }> = {},
 ): Promise<unknown> {
   const callback = vscodeMockState.commands.get(COMMAND);

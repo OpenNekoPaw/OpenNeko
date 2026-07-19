@@ -124,4 +124,88 @@ describe('collectCreatorVisibleArtifacts', () => {
       }),
     ).toEqual([]);
   });
+
+  it('keeps ReadImage intrinsic dimensions with a document-entry attachment', () => {
+    const documentResourceRef = {
+      kind: 'document-entry' as const,
+      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      entryPath: 'OEBPS/images/cover.jpg',
+      versionPolicy: 'read-only-source' as const,
+    };
+
+    const collected = collectCreatorVisibleArtifacts({
+      toolResults: [
+        {
+          name: 'ReadImage',
+          success: true,
+          data: {
+            mode: 'metadata',
+            images: [{ resourceRef: documentResourceRef, width: 1024, height: 1536 }],
+          },
+          attachments: [
+            {
+              type: 'image',
+              path: 'document-entry://cover',
+              assetRef: {
+                assetId: 'cover-image',
+                uri: 'document-entry://cover',
+                mimeType: 'image/jpeg',
+                documentResourceRef,
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(collected).toEqual([
+      expect.objectContaining({
+        artifactId: 'cover-image',
+        kind: 'image',
+        intrinsicDimensions: { width: 1024, height: 1536 },
+      }),
+    ]);
+  });
+
+  it('coalesces weak and hashed observations of one portable source file', () => {
+    const portablePath = '${A}/epub/animation/Blame/volume-01.epub';
+    const weakRef = {
+      ...sourceRef,
+      id: 'res_weak',
+      source: { kind: 'file' as const, projectRelativePath: portablePath },
+      locator: { kind: 'file' as const, path: portablePath },
+      fingerprint: { strategy: 'none' as const, value: portablePath },
+    };
+    const hashedRef = {
+      ...weakRef,
+      id: 'res_hashed',
+      fingerprint: { strategy: 'hash' as const, value: 'sha256:volume-01' },
+    };
+
+    const collected = collectCreatorVisibleArtifacts({
+      toolResults: [
+        { name: 'ReadDocument', success: true, data: { resourceRef: weakRef } },
+        { name: 'ReadDocument', success: true, data: { resourceRef: hashedRef } },
+      ],
+      assistantMarkdown: `~~~NEKO\n${JSON.stringify({
+        schemaVersion: 1,
+        kind: 'composite-artifact',
+        artifactId: 'analysis-1',
+        title: 'Material Analysis',
+        provenance: { sourceArtifactIds: ['res_weak'] },
+        blocks: [{ blockId: 'findings', kind: 'text', text: 'Findings.' }],
+      })}\n~~~`,
+    });
+
+    expect(collected.filter((candidate) => candidate.role === 'source')).toEqual([
+      expect.objectContaining({
+        artifactId: 'res_hashed',
+        revision: 'sha256:volume-01',
+        resourceRef: hashedRef,
+      }),
+    ]);
+    expect(collected.find((candidate) => candidate.role === 'analysis')).toMatchObject({
+      sourceArtifactIds: ['res_hashed'],
+    });
+  });
 });

@@ -75,9 +75,16 @@ export function registerWorkspaceBoardFunctionalAcceptance(options: {
           workspaceUri: workspaceUri.toString(),
           sourceHost: input.sourceHost,
         });
-        const request = input.sourceTitle
+        const creativeRequest = input.sourceTitle
           ? withCreativeSourceRelation(generatedAssetRequest, input.sourceTitle)
           : generatedAssetRequest;
+        const request = input.duplicateSourceFileRelativePath
+          ? await withDuplicateSourceFileObservations(
+              creativeRequest,
+              workspaceUri,
+              input.duplicateSourceFileRelativePath,
+            )
+          : creativeRequest;
         await options.whenEditorOwnerIdle();
         const result = await runAcceptanceAction(input.action, request, options);
         if (result.target?.documentUri) {
@@ -104,6 +111,7 @@ interface WorkspaceBoardFunctionalAcceptanceInput {
   readonly width: number;
   readonly height: number;
   readonly sourceTitle?: string;
+  readonly duplicateSourceFileRelativePath?: string;
 }
 
 function parseInput(value: unknown): WorkspaceBoardFunctionalAcceptanceInput {
@@ -122,6 +130,66 @@ function parseInput(value: unknown): WorkspaceBoardFunctionalAcceptanceInput {
     ...(value['sourceTitle'] === undefined
       ? {}
       : { sourceTitle: requireString(value['sourceTitle'], 'sourceTitle') }),
+    ...(value['duplicateSourceFileRelativePath'] === undefined
+      ? {}
+      : {
+          duplicateSourceFileRelativePath: requireString(
+            value['duplicateSourceFileRelativePath'],
+            'duplicateSourceFileRelativePath',
+          ),
+        }),
+  };
+}
+
+async function withDuplicateSourceFileObservations(
+  request: CanvasWorkspaceProjectionRequest,
+  workspaceUri: vscode.Uri,
+  relativePath: string,
+): Promise<CanvasWorkspaceProjectionRequest> {
+  const normalizedPath = normalizeFixtureRelativePath(relativePath);
+  const sourceUri = resolveFixtureSource(workspaceUri, normalizedPath);
+  const bytes = await vscode.workspace.fs.readFile(sourceUri);
+  const sourceDigest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+  const output = request.artifacts[request.artifacts.length - 1];
+  if (!output) throw new Error('Workspace Board acceptance output artifact is missing.');
+  const baseArtifactId = `functional-file:${createHash('sha256')
+    .update(normalizedPath)
+    .digest('hex')
+    .slice(0, 12)}`;
+  const createSourceArtifact = (
+    suffix: 'weak' | 'hashed',
+    fingerprint:
+      | { readonly strategy: 'none'; readonly value: string }
+      | { readonly strategy: 'hash'; readonly value: string },
+  ) => ({
+    kind: 'file-reference' as const,
+    title: path.basename(normalizedPath),
+    resourceRef: {
+      id: `${baseArtifactId}:${suffix}`,
+      scope: 'project' as const,
+      provider: 'source-file-content-access',
+      kind: 'document' as const,
+      source: { kind: 'file' as const, projectRelativePath: normalizedPath },
+      locator: { kind: 'file' as const, path: normalizedPath },
+      fingerprint,
+    },
+    provenance: {
+      ...output.provenance,
+      artifactId: `${baseArtifactId}:${suffix}`,
+      revision: fingerprint.value,
+      kind: 'file-reference' as const,
+      role: 'source' as const,
+      sourceId: `functional-source:${baseArtifactId}:${suffix}`,
+      sourceArtifactIds: undefined,
+    },
+  });
+  return {
+    ...request,
+    artifacts: [
+      createSourceArtifact('weak', { strategy: 'none', value: normalizedPath }),
+      createSourceArtifact('hashed', { strategy: 'hash', value: sourceDigest }),
+      ...request.artifacts,
+    ],
   };
 }
 
@@ -232,6 +300,24 @@ function resolveGeneratedImageSource(workspaceUri: vscode.Uri, relativePath: str
   const relative = path.relative(workspaceRoot, sourcePath);
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error('Workspace Board acceptance source escapes the workspace.');
+  }
+  return vscode.Uri.file(sourcePath);
+}
+
+function normalizeFixtureRelativePath(relativePath: string): string {
+  const normalized = relativePath.replace(/\\/gu, '/');
+  if (!normalized || normalized.startsWith('/') || normalized.includes('../')) {
+    throw new Error('Workspace Board acceptance fixture source must be workspace-relative.');
+  }
+  return normalized;
+}
+
+function resolveFixtureSource(workspaceUri: vscode.Uri, relativePath: string): vscode.Uri {
+  const workspaceRoot = path.resolve(workspaceUri.fsPath);
+  const sourcePath = path.resolve(workspaceRoot, relativePath);
+  const relative = path.relative(workspaceRoot, sourcePath);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Workspace Board acceptance fixture source escapes the workspace.');
   }
   return vscode.Uri.file(sourcePath);
 }
