@@ -128,7 +128,8 @@ describe('NodeContentDispatcher', () => {
       'flex-1',
     );
     expect(readClassName(markup, 'data-preview-surface', 'visual')).not.toContain('border');
-    expect(markup).toContain('object-cover');
+    expect(markup).toContain('object-contain');
+    expect(markup).not.toContain('object-cover');
     expect(markup).toContain('aria-label="Fullscreen"');
     expect(markup.match(/<button/g)).toHaveLength(4);
   });

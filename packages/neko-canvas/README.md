@@ -87,7 +87,7 @@ Webview 端通过 `canvasOperationStore` 作为运行时桥接层生成 `EditOpe
 
 Creator-visible generated output 在投影前已由 owning service 持久化到 `neko/generated/<kind>/`。Canvas 将其稳定 generated-output `ResourceRef` 写成普通持久 Inbox Group/Media/Document 节点，不要求先加入 AssetLibrary，也不创建 runtime-only review Group。AssetLibrary promotion 是独立的显式整理动作；`.nkc` 不保存 cache path、render URI、Webview URI 或 runtime Group ID。
 
-选中引用或生成素材时，Canvas 通过统一的素材展示解析器提供预览、复制、图片编辑、存入素材库和全屏等操作；Webview 只发送带节点与稳定资源身份的动作消息，文件读取、资源解析、Sketch 编辑和 AssetLibrary 导入均由 Extension Host 执行。不可用的能力不会显示，也不会以空操作或运行时路径兜底。
+选中引用或生成素材时，Canvas 通过统一的素材展示解析器提供预览、复制、存入素材库和全屏等当前保留的操作；Webview 只发送带节点与稳定资源身份的动作消息，文件读取、资源解析和 AssetLibrary 导入均由 Extension Host 执行。已移除或不可用的能力不会显示，也不会以空操作或运行时路径兜底。
 
 生成素材可在节点下方展示持久化的生成提示词、模型与画面参数。只有生成上下文包含仍存在的 Shot 来源时才显示“再次生成”，并复用该 Shot 的 `GenerationPromptPanel` 与 Canvas creative action；缺少来源或历史提示词时只展示可验证的信息，不把 Media 节点伪装成新的生成目标。
 

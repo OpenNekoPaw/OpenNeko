@@ -10,15 +10,15 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useReportWebviewKeyboardEditable,
+  useReportWebviewKeyboardFocus,
+  type WebviewKeyboardEditableMessage,
+  type WebviewKeyboardFocusMessage,
+} from '@neko/ui/keyboard';
 import { Header } from '@/components/Header';
 import { OnboardingFlow } from '@/components/OnboardingFlow';
-import {
-  useConfigState,
-  useResourceState,
-  useWebviewKeyboardEditableReporting,
-  useWebviewKeyboardFocusReporting,
-} from '@/hooks';
-import { createAgentWebviewKeyboardReporter } from '@/hooks/useWebviewKeyboardReporting';
+import { useConfigState, useResourceState } from '@/hooks';
 import { useAgentHostRuntimeAdapter } from '@/host-runtime-context';
 import { ConversationController } from './ConversationController';
 
@@ -26,11 +26,15 @@ export function AppShell() {
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRuntimeAdapter = useAgentHostRuntimeAdapter();
   const keyboardReporter = useMemo(
-    () => createAgentWebviewKeyboardReporter(hostRuntimeAdapter),
+    () => ({
+      postMessage(message: WebviewKeyboardFocusMessage | WebviewKeyboardEditableMessage): void {
+        hostRuntimeAdapter.send(message);
+      },
+    }),
     [hostRuntimeAdapter],
   );
-  useWebviewKeyboardFocusReporting(rootRef, keyboardReporter);
-  useWebviewKeyboardEditableReporting(keyboardReporter);
+  useReportWebviewKeyboardFocus(rootRef, keyboardReporter);
+  useReportWebviewKeyboardEditable(keyboardReporter);
 
   const config = useConfigState();
   const resource = useResourceState();

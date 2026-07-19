@@ -4,7 +4,7 @@ import { createResourceRef, type CanvasNode, type GroupCanvasNode } from '@neko/
 import { SelectionContextToolbar } from './SelectionContextToolbar';
 
 describe('SelectionContextToolbar', () => {
-  it('keeps supported material actions primary and dangerous deletion in overflow', () => {
+  it('keeps retained material actions primary and dangerous deletion in overflow', () => {
     const node: CanvasNode = {
       id: 'media',
       type: 'media',
@@ -35,7 +35,7 @@ describe('SelectionContextToolbar', () => {
     );
 
     expect(markup).toContain('data-selection-overflow="true"');
-    expect(markup).toContain('data-selection-action="node:edit-media"');
+    expect(markup).not.toContain('data-selection-action="node:edit-media"');
     expect(markup).toContain('data-selection-action="node:open-media-preview"');
     expect(markup).toContain('data-selection-action="node:duplicate"');
     expect(markup).toContain('data-selection-action="node:save-to-asset-library"');

@@ -43,8 +43,3 @@ export {
   type UseChatActionsProps,
   type UseChatActionsReturn,
 } from './useChatActions';
-
-export {
-  useWebviewKeyboardEditableReporting,
-  useWebviewKeyboardFocusReporting,
-} from './useWebviewKeyboardReporting';

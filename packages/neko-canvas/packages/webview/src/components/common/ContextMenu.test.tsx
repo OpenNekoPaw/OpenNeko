@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MenuAction } from '@neko/ui/primitives';
 import { buildNodeMenuItems, ContextMenu } from './ContextMenu';
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
 describe('Canvas ContextMenu builders', () => {
   let host: HTMLDivElement;
   let root: Root;

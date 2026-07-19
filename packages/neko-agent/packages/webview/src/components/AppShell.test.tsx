@@ -1,25 +1,35 @@
 import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { SettingsState } from '@neko-agent/types';
+import type {
+  WebviewKeyboardEditableReporter,
+  WebviewKeyboardFocusReporter,
+} from '@neko/ui/keyboard';
 import { AppShell } from './AppShell';
+
+const hostRuntimeMocks = vi.hoisted(() => ({ send: vi.fn() }));
+const keyboardMocks = vi.hoisted(() => ({
+  useReportWebviewKeyboardEditable: vi.fn<(reporter: WebviewKeyboardEditableReporter) => void>(),
+  useReportWebviewKeyboardFocus:
+    vi.fn<(rootRef: unknown, reporter: WebviewKeyboardFocusReporter) => void>(),
+}));
 
 vi.mock('@/host-runtime-context', () => ({
   useAgentHostRuntimeAdapter: () => ({
     hostKind: 'vscode',
     runtimeId: 'app-shell-test',
-    send: vi.fn(),
+    send: hostRuntimeMocks.send,
     subscribe: vi.fn(),
     getState: vi.fn(),
     setState: vi.fn(),
   }),
 }));
 
-vi.mock('@/hooks', async () => {
-  const actual = await vi.importActual<typeof import('@/hooks')>('@/hooks');
+vi.mock('@neko/ui/keyboard', async () => {
+  const actual = await vi.importActual<typeof import('@neko/ui/keyboard')>('@neko/ui/keyboard');
   return {
     ...actual,
-    useWebviewKeyboardEditableReporting: vi.fn(),
-    useWebviewKeyboardFocusReporting: vi.fn(),
+    ...keyboardMocks,
   };
 });
 
@@ -77,6 +87,28 @@ vi.mock('./ConversationController', () => ({
 }));
 
 describe('AppShell onboarding lifecycle', () => {
+  it('routes shared keyboard reports through the Agent host runtime adapter', () => {
+    render(<AppShell />);
+
+    const focusReporter = keyboardMocks.useReportWebviewKeyboardFocus.mock.calls.at(-1)?.[1];
+    const editableReporter = keyboardMocks.useReportWebviewKeyboardEditable.mock.calls.at(-1)?.[0];
+
+    expect(focusReporter).toBeDefined();
+    expect(editableReporter).toBe(focusReporter);
+
+    focusReporter?.postMessage({ type: 'webviewKeyboardFocus', focused: true });
+    editableReporter?.postMessage({ type: 'webviewKeyboardEditable', editable: true });
+
+    expect(hostRuntimeMocks.send).toHaveBeenNthCalledWith(1, {
+      type: 'webviewKeyboardFocus',
+      focused: true,
+    });
+    expect(hostRuntimeMocks.send).toHaveBeenNthCalledWith(2, {
+      type: 'webviewKeyboardEditable',
+      editable: true,
+    });
+  });
+
   it('does not show onboarding before the first config snapshot arrives', () => {
     render(<AppShell />);
 
