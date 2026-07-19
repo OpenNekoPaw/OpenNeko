@@ -8,6 +8,10 @@ export interface SharedCoverageOptions extends Record<string, unknown> {
   exclude?: readonly string[];
 }
 
+export function resolveActVitestMaxWorkers(maxWorkers = 4): number | undefined {
+  return process.env['ACT'] === 'true' ? maxWorkers : undefined;
+}
+
 export function sharedCoverage(options: SharedCoverageOptions): Record<string, unknown> {
   const { include, exclude = [], ...overrides } = options;
   if (include.length === 0) {

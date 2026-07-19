@@ -18,6 +18,11 @@ The retained Agent and Engine extension dependency graphs MUST compile under the
 - **WHEN** the strict-extension TypeScript gate compiles the retained Agent and Engine extension graphs
 - **THEN** permission unions, ProjectQuality evidence, LLM options, generated-output filesystem entries, semantic document formats, workspace identity actions, and metadata freshness projections typecheck through their canonical boundaries
 
+#### Scenario: Compile Engine unit tests consistently across hosts
+
+- **WHEN** the Engine Extension strict graph is compiled on case-insensitive macOS or case-sensitive Linux filesystems
+- **THEN** the same lowercase `.test.ts` unit tests participate, standalone manual integration scripts remain explicitly excluded, and frame or mock-call unions are narrowed before their values are consumed
+
 ### Requirement: Removed composition packages stay removed
 
 The distribution SHALL NOT retain `@neko/workbench-core`, `@neko/market-core`, or a removed product merely to satisfy stale metadata. Retained feature Webviews SHALL expose their package-owned host adapters directly.

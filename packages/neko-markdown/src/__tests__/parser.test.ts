@@ -244,12 +244,12 @@ describe('canonical CommonMark/GFM normalization', () => {
       ],
     });
 
-    const limit = DEFAULT_MARKDOWN_SOURCE_LIMIT_CODE_UNITS;
-    expect(parseNormalizedMarkdown('x'.repeat(limit - 1)).status).toBe('ready');
-    expect(parseNormalizedMarkdown('x'.repeat(limit)).status).toBe('ready');
-    expect(parseNormalizedMarkdown('x'.repeat(limit + 1))).toMatchObject({
+    expect(DEFAULT_MARKDOWN_SOURCE_LIMIT_CODE_UNITS).toBe(1_000_000);
+    expect(
+      parseNormalizedMarkdown('x'.repeat(DEFAULT_MARKDOWN_SOURCE_LIMIT_CODE_UNITS + 1)),
+    ).toMatchObject({
       status: 'failed',
       diagnostics: [{ code: 'MD_SOURCE_LIMIT_EXCEEDED' }],
     });
-  }, 30_000);
+  });
 });

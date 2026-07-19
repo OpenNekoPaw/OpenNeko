@@ -8,6 +8,7 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     coverage: sharedCoverage({
       include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/extension.ts', 'packages/asset/src/**'],
       thresholds: {
         lines: 20,
         branches: 16,

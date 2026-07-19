@@ -34,7 +34,7 @@ OpenNeko is currently in **Alpha** and is primarily intended for source-based pr
 
 ## Start From Source
 
-Requires Node.js 24+, pnpm 10, and VS Code 1.128+.
+Requires Node.js 24+, pnpm 10, and VS Code 1.128+; the repository development toolchain is pinned to Node.js 24.18.0 LTS.
 
 ```bash
 pnpm install

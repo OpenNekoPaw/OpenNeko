@@ -35,7 +35,10 @@ afterEach(async () => {
 describe('useAgentSession conversation identity', () => {
   it('starts new Ink TUI sessions with canonical workspace conversation ids', async () => {
     const conversationIds: string[] = [];
-    let sessionReady = false;
+    let resolveReady!: (conversationId: string) => void;
+    const readyConversationId = new Promise<string>((resolve) => {
+      resolveReady = resolve;
+    });
 
     const config = {
       ...DEFAULT_CLI_CONFIG,
@@ -48,19 +51,14 @@ describe('useAgentSession conversation identity', () => {
         onConversationId: (conversationId: string) => {
           conversationIds.push(conversationId);
         },
-        onReady: () => {
-          sessionReady = true;
-        },
+        onReady: resolveReady,
       }),
       config,
     );
 
-    await waitFor(
-      () =>
-        sessionReady &&
-        conversationIds.some((conversationId) => isCanonicalConversationId(conversationId)),
-    );
+    const conversationId = await readyConversationId;
 
+    expect(isCanonicalConversationId(conversationId)).toBe(true);
     expect(conversationIds.every((conversationId) => !conversationId.startsWith('cli-'))).toBe(
       true,
     );
@@ -111,7 +109,7 @@ function ConversationIdProbe(props: {
   readonly config: CLIConfig;
   readonly resumeConversationId?: string;
   readonly onConversationId: (conversationId: string) => void;
-  readonly onReady?: () => void;
+  readonly onReady?: (conversationId: string) => void;
 }): React.JSX.Element {
   const session = useAgentSession({
     config: props.config,
@@ -129,9 +127,9 @@ function ConversationIdProbe(props: {
 
   useEffect(() => {
     if (session.isReady) {
-      props.onReady?.();
+      props.onReady?.(session.getCurrentConversationId());
     }
-  }, [props.onReady, session.isReady]);
+  }, [props.onReady, session.getCurrentConversationId, session.isReady]);
 
   return React.createElement(Text, null, 'conversation-id-probe');
 }

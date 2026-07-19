@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +19,7 @@ const WORKSPACE_ID = '9b2de3b5-5f50-4be4-9551-71fb5b512489';
 const RECENT_ORPHAN_WORKSPACE_ID = 'bd82b3ee-b9d9-4aa0-a635-23fa356e67df';
 const temporaryDirectories: string[] = [];
 const execFileAsync = promisify(execFile);
+const hasBunRuntime = spawnSync('bun', ['--version'], { stdio: 'ignore' }).status === 0;
 
 async function createTemporaryHome(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'neko-node-sqlite-'));
@@ -41,7 +42,7 @@ describe('node:sqlite local metadata store', () => {
       backupHome: await createTemporaryHome(),
       createStore: (homedir) => createNodeSqliteLocalMetadataStore({ homedir }),
     });
-  });
+  }, 30_000);
 
   it('opens the canonical database, migrates M1, and persists a workspace', async () => {
     const homedir = await createTemporaryHome();
@@ -449,56 +450,62 @@ describe('node:sqlite local metadata store', () => {
     }
   });
 
-  it('round-trips repository records between live Node and Bun processes', async () => {
-    const homedir = await createTemporaryHome();
-    const layout = resolveGlobalStorageLayout(homedir);
-    const store = createNodeSqliteLocalMetadataStore({ homedir });
-    await store.open({ databasePath: layout.database, busyTimeoutMs: 2_000 });
-    await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
-    await store.migrateNamespace(RESOURCE_CACHE_MIGRATIONS);
-    await store.repositories.conversations.upsert({
-      conversationId: 'node-conversation',
-      workspaceId: null,
-      journalId: 'node-journal',
-      title: 'Written by Node',
-      source: 'vscode',
-      model: null,
-      createdAt: '2026-07-13T01:00:00.000Z',
-      updatedAt: '2026-07-13T01:00:00.000Z',
-    });
-    await store.repositories.resourceCache.replacePartition({
-      partition: { scope: 'global', workspaceId: null, domain: 'resource-cache' },
-      updatedAt: '2026-07-13T01:00:00.000Z',
-      entries: [createGlobalResourceCacheEntry('node-resource', 'node/thumbnail.jpg')],
-    });
-
-    const bunFixture = fileURLToPath(
-      new URL(
-        '../../../../../../scripts/test-orchestration/fixtures/bun-tui-sqlite-roundtrip.ts',
-        import.meta.url,
-      ),
-    );
-    await execFileAsync('bun', [bunFixture], {
-      env: { ...process.env, NEKO_SQLITE_TEST_HOME: homedir },
-    });
-
-    await expect(store.repositories.conversations.get('bun-conversation')).resolves.toMatchObject({
-      journalId: 'bun-journal',
-      source: 'tui',
-      title: 'Written by Bun',
-    });
-    await expect(
-      store.repositories.resourceCache.list({
-        scope: 'global',
+  it.runIf(hasBunRuntime)(
+    'round-trips repository records between live Node and Bun processes',
+    async () => {
+      const homedir = await createTemporaryHome();
+      const layout = resolveGlobalStorageLayout(homedir);
+      const store = createNodeSqliteLocalMetadataStore({ homedir });
+      await store.open({ databasePath: layout.database, busyTimeoutMs: 2_000 });
+      await store.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
+      await store.migrateNamespace(RESOURCE_CACHE_MIGRATIONS);
+      await store.repositories.conversations.upsert({
+        conversationId: 'node-conversation',
         workspaceId: null,
-        domain: 'resource-cache',
-      }),
-    ).resolves.toEqual([
-      expect.objectContaining({ resource: expect.objectContaining({ id: 'bun-resource' }) }),
-    ]);
-    await expect(store.integrityCheck()).resolves.toMatchObject({ ok: true });
-    await store.dispose();
-  });
+        journalId: 'node-journal',
+        title: 'Written by Node',
+        source: 'vscode',
+        model: null,
+        createdAt: '2026-07-13T01:00:00.000Z',
+        updatedAt: '2026-07-13T01:00:00.000Z',
+      });
+      await store.repositories.resourceCache.replacePartition({
+        partition: { scope: 'global', workspaceId: null, domain: 'resource-cache' },
+        updatedAt: '2026-07-13T01:00:00.000Z',
+        entries: [createGlobalResourceCacheEntry('node-resource', 'node/thumbnail.jpg')],
+      });
+
+      const bunFixture = fileURLToPath(
+        new URL(
+          '../../../../../../scripts/test-orchestration/fixtures/bun-tui-sqlite-roundtrip.ts',
+          import.meta.url,
+        ),
+      );
+      await execFileAsync('bun', [bunFixture], {
+        env: { ...process.env, NEKO_SQLITE_TEST_HOME: homedir },
+      });
+
+      await expect(store.repositories.conversations.get('bun-conversation')).resolves.toMatchObject(
+        {
+          journalId: 'bun-journal',
+          source: 'tui',
+          title: 'Written by Bun',
+        },
+      );
+      await expect(
+        store.repositories.resourceCache.list({
+          scope: 'global',
+          workspaceId: null,
+          domain: 'resource-cache',
+        }),
+      ).resolves.toEqual([
+        expect.objectContaining({ resource: expect.objectContaining({ id: 'bun-resource' }) }),
+      ]);
+      await expect(store.integrityCheck()).resolves.toMatchObject({ ok: true });
+      await store.dispose();
+    },
+    30_000,
+  );
 
   it('restores a verified backup into the canonical database while closed', async () => {
     const homedir = await createTemporaryHome();
@@ -649,7 +656,7 @@ describe('node:sqlite local metadata store', () => {
     );
     await expect(store.integrityCheck()).resolves.toMatchObject({ ok: true });
     await store.dispose();
-  });
+  }, 30_000);
 
   it('fails visibly instead of initializing a corrupt database as empty', async () => {
     const homedir = await createTemporaryHome();

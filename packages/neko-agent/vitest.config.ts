@@ -1,11 +1,12 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
-import { sharedCoverage } from '../../vitest.shared';
+import { resolveActVitestMaxWorkers, sharedCoverage } from '../../vitest.shared';
 
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    maxWorkers: resolveActVitestMaxWorkers(),
     include: [
       'packages/platform/src/**/*.test.ts',
       'packages/ai-sdk/src/**/*.test.ts',

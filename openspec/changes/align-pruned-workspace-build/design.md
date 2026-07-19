@@ -28,6 +28,8 @@ The strict Agent/Engine extension graph compiles shared Agent, Platform, Content
 
 These are compile-time and deterministic unit-test paths. They do not require provider credentials, browser/Webview automation, or a VS Code Development Host.
 
+The Engine Extension strict graph also uses host-independent test discovery. Its tsconfig excludes the standalone manual `ExportIntegrationTest.ts` by exact path instead of a case-ambiguous `*Test.*` glob, so lowercase `.test.ts` unit tests compile on both case-insensitive macOS and case-sensitive Linux filesystems. Test fixtures narrow decoded-frame discriminants and validate mock-call presence before reading payloads; they do not use assertions to hide optional or union states.
+
 ## Goals / Non-Goals
 
 **Goals:**

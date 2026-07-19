@@ -34,7 +34,7 @@ OpenNeko 目前处于 **Alpha** 阶段，以源码体验和产品验证为主。
 
 ## 从源码开始
 
-要求 Node.js 24+、pnpm 10 和 VS Code 1.128+。
+要求 Node.js 24+、pnpm 10 和 VS Code 1.128+；仓库开发工具链固定为 Node.js 24.18.0 LTS。
 
 ```bash
 pnpm install

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let activeExtension: { deactivate?: () => Promise<void> } | undefined;
 
@@ -220,6 +220,13 @@ async function activateExtension() {
 }
 
 describe('neko-engine extension command bridge', () => {
+  beforeAll(async () => {
+    // Keep the first Vite transform outside individual test timeouts. Under
+    // Linux/amd64 emulation, compiling this extension entry can exceed 5s.
+    await import('./extension');
+    vi.resetModules();
+  }, 30_000);
+
   beforeEach(async () => {
     await activeExtension?.deactivate?.();
     activeExtension = undefined;
