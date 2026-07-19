@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ProjectAssetDependencyManifestService } from './ProjectAssetDependencyManifestService';
 
 describe('ProjectAssetDependencyManifestService', () => {
-  it('writes and reads sorted import, market, and workspace dependency records', async () => {
+  it('writes and reads sorted import and workspace dependency records', async () => {
     const fs = createFs();
     const service = new ProjectAssetDependencyManifestService({
       projectRoot: '/repo',
@@ -10,15 +10,6 @@ describe('ProjectAssetDependencyManifestService', () => {
       now: () => new Date('2026-05-20T00:00:00.000Z'),
     });
 
-    await service.upsert(
-      service.createMarketDependency({
-        id: 'z-market',
-        packageId: '@studio/sakura-motion',
-        version: '1.0.0',
-        mediaKind: 'live2d-motion',
-        dimensions: ['motion'],
-      }),
-    );
     await service.upsert(
       service.createImportDependency({
         id: 'a-import',
@@ -44,7 +35,6 @@ describe('ProjectAssetDependencyManifestService', () => {
     expect(manifest.dependencies.map((dependency) => dependency.id)).toEqual([
       'a-import',
       'm-workspace',
-      'z-market',
     ]);
     expect(fs.files.get('/repo/neko/assets/manifest.json')).toContain('"sourceKind": "import"');
   });
@@ -74,7 +64,7 @@ describe('ProjectAssetDependencyManifestService', () => {
     });
   });
 
-  it('reports missing disk destinations, missing market packages, and hash mismatches', async () => {
+  it('rejects legacy Market sources and reports missing destinations and hash mismatches', async () => {
     const fs = createFs({
       '/repo/downloads/hero.zip': new Uint8Array([9]),
       '/repo/assets/studio.hdr': new Uint8Array([7]),
@@ -82,43 +72,44 @@ describe('ProjectAssetDependencyManifestService', () => {
     const service = new ProjectAssetDependencyManifestService({
       projectRoot: '/repo',
       fs,
-      market: { isInstalled: vi.fn(() => false) },
       now: () => new Date('2026-05-20T00:00:00.000Z'),
     });
-    await service.upsert(
-      service.createImportDependency({
-        id: 'hero',
-        originalFile: '/repo/downloads/hero.zip',
-        mediaKind: 'model-3d',
-        dimensions: ['model'],
-        storageMode: 'disk',
-        contentHash: 'sha256:stale',
-        importDestination: '/repo/.neko/imports/models/hero',
-      }),
-    );
-    await service.upsert(
-      service.createMarketDependency({
-        id: 'motion-pack',
-        packageId: '@studio/motion-pack',
-        mediaKind: 'model-motion',
-        dimensions: ['motion'],
-      }),
-    );
-    await service.upsert(
-      service.createWorkspaceDependency({
-        id: 'workspace-hdr',
-        workspacePath: '/repo/assets/studio.hdr',
-        mediaKind: 'model-config',
-        dimensions: ['config'],
-        contentHash: 'sha256:stale',
-      }),
-    );
+    await service.write({
+      version: 1,
+      generatedAt: '2026-05-20T00:00:00.000Z',
+      dependencies: [
+        service.createImportDependency({
+          id: 'hero',
+          originalFile: '/repo/downloads/hero.zip',
+          mediaKind: 'model-3d',
+          dimensions: ['model'],
+          storageMode: 'disk',
+          contentHash: 'sha256:stale',
+          importDestination: '/repo/.neko/imports/models/hero',
+        }),
+        {
+          id: 'motion-pack',
+          sourceKind: 'market',
+          packageId: '@studio/motion-pack',
+          mediaKind: 'model-motion',
+          dimensions: ['motion'],
+          storageMode: 'bundle-memory',
+        },
+        service.createWorkspaceDependency({
+          id: 'workspace-hdr',
+          workspacePath: '/repo/assets/studio.hdr',
+          mediaKind: 'model-config',
+          dimensions: ['config'],
+          contentHash: 'sha256:stale',
+        }),
+      ],
+    });
 
     const result = await service.validate();
 
     expect(result.issues.map((issue) => issue.code).sort()).toEqual([
       'missing-import-destination',
-      'missing-market-package',
+      'removed-market-source',
       'source-hash-mismatch',
       'source-hash-mismatch',
     ]);
@@ -130,7 +121,7 @@ describe('ProjectAssetDependencyManifestService', () => {
         }),
         expect.objectContaining({
           dependencyId: 'motion-pack',
-          code: 'missing-market-package',
+          code: 'removed-market-source',
           packageId: '@studio/motion-pack',
         }),
       ]),

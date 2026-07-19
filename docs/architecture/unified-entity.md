@@ -135,7 +135,7 @@ Inspector / Search / Agent projection
 | 字段                  | 语义                                                                       |
 | --------------------- | -------------------------------------------------------------------------- |
 | `entityId/entityKind` | 绑定属于哪个实体                                                           |
-| `assetRef`            | 指向素材库、市场安装、共享库或外部来源的稳定引用                           |
+| `assetRef`            | 指向项目素材、共享库或外部来源的稳定引用                                   |
 | `role`                | `portrait`, `reference`, `live2d`, `live3d`, `voice`, `motion`, `style` 等 |
 | `status`              | `suggested`, `confirmed`, `rejected`                                       |
 | `availability`        | `active`, `orphaned`, `archived`                                           |
@@ -144,15 +144,13 @@ Inspector / Search / Agent projection
 
 表现解析器按 target 选择合适素材表现：
 
-| Target   | 默认回退                                                   |
-| -------- | ---------------------------------------------------------- |
-| `story`  | `reference -> portrait`                                    |
-| `canvas` | `portrait -> reference -> puppet-bone -> live2d -> live3d` |
-| `agent`  | `reference -> portrait -> puppet-bone -> live2d -> live3d` |
-| `live`   | `live3d -> puppet-bone -> live2d`                          |
-| `cut`    | `video -> puppet-bone -> live2d -> live3d -> portrait`     |
+| Target   | 默认回退                                    |
+| -------- | ------------------------------------------- |
+| `canvas` | `portrait -> reference -> live2d -> live3d` |
+| `agent`  | `reference -> portrait -> live2d -> live3d` |
+| `cut`    | `video -> live2d -> live3d -> portrait`     |
 
-Live 场景不能静默降级到不可驱动的 portrait；如果缺少 live2d/live3d/puppet 表现，应返回 `missing-representation` 和可解释建议。
+解析器只接受当前 `canvas | agent | cut` target。`puppet-bone` 仅作为历史绑定诊断角色保留，不进入默认表现回退；缺少请求表现时返回 `missing-representation` 和可解释建议。
 
 ## 视觉草案与 AI 建议
 
@@ -249,7 +247,7 @@ workspace / configured media-library creative document
 
 ## 与素材库的关系
 
-统一实体不解析素材文件，不拥有缩略图，不决定市场安装路径。它只保存 identity、binding 和 requirement。
+统一实体不解析素材文件，不拥有缩略图，也不拥有外部包导入或安装路径。它只保存 identity、binding 和 requirement。
 
 ```text
 CreativeEntity

@@ -50,3 +50,7 @@
 - [x] 5.5 Replace active Story/Auth/Market/Sketch/Model/Puppet inter-extension routes with retained package-owned services or remove the owning UI/action; do not preserve optional-extension fallbacks.
 - [x] 5.6 Run focused shared/client/Agent/Tools tests, retained builds, dependency and unused checks, strict OpenSpec validation, and record Agent Evaluation disposition plus remaining data/runtime risk.
 - [x] 5.7 Remove the retired Webview functional harness from CI change detection and root CI quality composition; add a regression proving UI runtime tests cannot re-enter GitHub workflows while retaining static removed-product metadata guards.
+- [x] 5.8 Remove the no-owner recording-promotion, tracking, Live Entity-source, and removed Canvas delegate-target contracts with their registrations and tests.
+- [x] 5.9 Remove the callable Market installation repository without dropping user database bytes, keep Auth/Market settings explicitly preservation-only, and update Assets legacy Market dependency rejection tests.
+- [x] 5.10 Synchronize stable architecture, package README, comments, and fixtures so removed product names are not presented as current owners while retained media/model/scene/OAuth semantics remain explicit.
+- [x] 5.11 Extend the retained-product absence guard and run focused shared/Assets/Canvas tests, affected builds, debt/unused/orchestration/media-closure gates, strict OpenSpec validation, and `git diff --check`.

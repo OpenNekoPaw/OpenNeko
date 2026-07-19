@@ -6,7 +6,7 @@
 
 ## 系统定位
 
-neko-canvas 是 OpenNeko 的可视化编排工具。以 VSCode CustomEditor 方式打开 `.nkc` 画布文件，提供无限画布上的节点摆放、连接、媒体内联播放、分镜生成审阅、上下文引用组织等能力。它也是连接 neko-agent、neko-story、neko-sketch、neko-cut 的语义中枢。
+neko-canvas 是 OpenNeko 的可视化编排工具。以 VSCode CustomEditor 方式打开 `.nkc` 画布文件，提供无限画布上的节点摆放、连接、媒体内联播放、分镜生成审阅、上下文引用组织等能力。它通过共享契约连接 neko-agent、neko-assets、neko-preview 与 neko-cut，不发现或激活已删除的 Story/Sketch 扩展。
 
 `neko/boards/*.nkc` 不构成新文档类型。未给出显式 Canvas target 时，Canvas-owned Workspace Board projector 只写 `neko/boards/workspace.nkc`；调用方也可以显式指定其他普通 `.nkc`。系统不通过目录索引、会话 binding、scope、活动或最近编辑器推断目标，Agent 也不解析或直接写 `.nkc`。
 

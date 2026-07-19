@@ -163,3 +163,35 @@ Retained packages MUST NOT discover, activate, or invoke Story, Auth, Market, Sk
 
 - **WHEN** retained editors initialize
 - **THEN** they do not start Market shader discovery or issue Market installation commands
+
+### Requirement: No-owner removed-product contracts are absent
+
+Retained packages MUST NOT export or register the removed Live/Audio recording-promotion contract, tracking service contract, `live` Entity asset-requirement source, or Sketch/Puppet Canvas delegate targets. Retained media audio, Preview model-file handling, and Canvas narrative scene semantics SHALL remain available under their current owners.
+
+#### Scenario: Audit retained public contracts and commands
+
+- **WHEN** shared exports, Assets activation, Entity composition, and Canvas delegate targets are inspected
+- **THEN** no no-owner recording, tracking, Live, Sketch, or Puppet surface is callable, while retained media and preview paths continue to typecheck
+
+### Requirement: Preserved removed-product data cannot create active capability
+
+Cleanup MUST NOT silently delete existing Market/Auth settings or SQLite bytes, but retained runtime repositories, commands, creation APIs, and extension routes MUST NOT expose them as active Market/Auth capability. A legacy project dependency whose source is Market MUST be rejected with a removed-source diagnostic.
+
+#### Scenario: Read legacy Market project metadata
+
+- **WHEN** Assets validates a project manifest containing a Market source
+- **THEN** it reports `removed-market-source` and does not query an installation repository, activate an extension, or rewrite the manifest
+
+#### Scenario: Preserve user-owned configuration during cleanup
+
+- **WHEN** retained configuration is normalized or serialized before an explicit migration exists
+- **THEN** existing Market/Auth sections remain round-trippable but do not register a product route, repository, command, provider fallback, or successful no-op
+
+### Requirement: Stable documentation distinguishes retained semantics
+
+Current architecture, package documentation, comments, and test fixtures MUST distinguish retained media audio, AI model selection, Preview model/scene rendering, and Agent provider OAuth from removed Audio, Model, Scene, Live, Market, and Auth products.
+
+#### Scenario: Read current documentation and examples
+
+- **WHEN** a contributor follows stable architecture and package documentation
+- **THEN** removed products are not listed as current owners or example operation domains, except inside explicitly historical or migration-only material

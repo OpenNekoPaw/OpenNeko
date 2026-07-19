@@ -392,7 +392,7 @@ export interface VisualIdentityDraftFile {
   readonly drafts: readonly VisualIdentityDraft[];
 }
 
-export type EntityAssetRequirementSource = 'story' | 'canvas' | 'agent' | 'live';
+export type EntityAssetRequirementSource = 'story' | 'canvas' | 'agent';
 
 export type EntityAssetRequirementStatus =
   'missing' | 'suggested' | 'generated' | 'bound' | 'dismissed';
@@ -895,7 +895,7 @@ function isVisualIdentityDraftStatus(value: unknown): value is VisualIdentityDra
 }
 
 function isEntityAssetRequirementSource(value: unknown): value is EntityAssetRequirementSource {
-  return value === 'story' || value === 'canvas' || value === 'agent' || value === 'live';
+  return value === 'story' || value === 'canvas' || value === 'agent';
 }
 
 function isEntityAssetRequirementStatus(value: unknown): value is EntityAssetRequirementStatus {

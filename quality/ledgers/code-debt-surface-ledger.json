@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "scope": "non-agent",
   "owner": "architecture",
-  "updatedAt": "2026-07-18",
+  "updatedAt": "2026-07-19",
   "scanner": "node scripts/check-legacy-debt-surfaces.mjs --validate-ledger",
   "qualityGate": {
     "failingProductionSemanticClasses": ["delete-now", "migrate-now", "needs-review"],
@@ -155,6 +155,11 @@
       "id": "REQ-LCDR-033",
       "pathPattern": "packages/neko-canvas/packages/extension/src/markdownCapabilities.ts",
       "ledgerEntryId": "LCDR-033"
+    },
+    {
+      "id": "REQ-LCDR-034",
+      "pathPattern": "packages/neko-types/src/config/*.ts",
+      "ledgerEntryId": "LCDR-034"
     }
   ],
   "entries": [
@@ -948,7 +953,7 @@
         "packages/neko-search/src/host-vscode/compatAdapters.ts",
         "packages/neko-search/src/host-vscode/commands.ts"
       ],
-      "replacement": "Per-domain ProjectSearchAdapter providers registered by Story, Assets, Entity, Generated Assets, and Media Library owners through neko-search host integration.",
+      "replacement": "Owner-provided ProjectSearchAdapter registrations for Content/Fountain, Assets, Entity, Generated Assets, and Media Library through neko-search host integration.",
       "removeCondition": "Remove only after registerProjectSearchService() no longer needs createCompatibilityProjectSearchAdapters() as a default provider set and Agent creates its adapters exclusively from owner-provided provider registrations.",
       "validation": {
         "commands": [
@@ -958,16 +963,16 @@
       },
       "sunsetProviders": [
         {
-          "provider": "Story symbols",
-          "currentPath": "StorySymbolProjectSearchAdapter reads story files through VSCode host APIs and optional neko-story parseScript export.",
-          "replacement": "neko-story registers a ProjectSearchAdapter/provider with neko-search host integration.",
-          "removalTrigger": "Story partition tests pass without StorySymbolProjectSearchAdapter in compatAdapters.ts."
+          "provider": "Fountain symbols",
+          "currentPath": "StorySymbolProjectSearchAdapter reads Fountain files through VSCode host APIs and the retained host-neutral @neko/content parser.",
+          "replacement": "A Content/Fountain owner registers a ProjectSearchAdapter/provider with neko-search host integration.",
+          "removalTrigger": "Fountain partition tests pass without StorySymbolProjectSearchAdapter in compatAdapters.ts."
         },
         {
           "provider": "Asset/media/generated assets",
           "currentPath": "AssetLibraryProjectSearchAdapter, MediaLibraryProjectSearchAdapter, and GeneratedAssetProjectSearchAdapter read current project cache/fact files through host JSON reader.",
           "replacement": "neko-assets and generated-asset owner register ProjectSearchAdapter providers or a neutral cache provider API.",
-          "removalTrigger": "Asset, media, document, puppet/model dimension, and generated asset search tests pass without compatAdapters.ts default adapters."
+          "removalTrigger": "Asset, media, document, character-asset dimension, and generated asset search tests pass without compatAdapters.ts default adapters."
         },
         {
           "provider": "Creative entities",
@@ -1059,6 +1064,29 @@
         ]
       },
       "notes": "displayFallback selects the generic-table review presentation and never invokes an old runtime path or compatibility reader."
+    },
+    {
+      "id": "LCDR-034",
+      "package": "@neko/shared",
+      "surface": "Preservation-only Auth and Market config.toml sections",
+      "semanticClass": "boundary-canonicalizer",
+      "action": "preserve",
+      "status": "active",
+      "owner": "neko-types-config",
+      "paths": [
+        "packages/neko-types/src/config/types.ts",
+        "packages/neko-types/src/config/config-normalizer.ts",
+        "packages/neko-types/src/config/toml-config.ts"
+      ],
+      "replacement": "Provider-owned credential/OAuth configuration and no retained Market registry configuration; old config sections remain opaque round-trippable user data only.",
+      "removeCondition": "Remove these sections only after an explicit migration or rejection flow preserves valuable user settings and config round-trip tests no longer require the old keys.",
+      "validation": {
+        "commands": [
+          "pnpm --dir packages/neko-types exec vitest run src/config/config-normalizer.test.ts src/config/toml-config.test.ts",
+          "rg -n \"auth|market\" packages/neko-types/src/config"
+        ]
+      },
+      "notes": "No retained product route, repository, command, provider fallback, or successful no-op consumes these sections."
     }
   ]
 }

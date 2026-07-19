@@ -117,12 +117,12 @@ export interface UnifiedConfig {
   mcpServerOverrides?: Record<string, Partial<MCPServerConfig>>;
 
   // ==========================================================================
-  // Auth & Credentials
+  // Preserved removed-product settings & current credentials
   // ==========================================================================
 
   /**
-   * OAuth 2.0 configuration.
-   * OAuth settings used by local provider adapters and CLI hosts.
+   * Preservation-only settings left by the removed Auth product.
+   * Current provider OAuth is owned by provider-specific credential services.
    */
   auth?: AuthConfigJson;
 
@@ -137,8 +137,8 @@ export interface UnifiedConfig {
   credentials?: CredentialsConfig;
 
   /**
-   * Marketplace configuration.
-   * Registry URL override for private deployments.
+   * Preservation-only settings left by the removed Market product.
+   * No retained runtime reads this section as an active registry.
    */
   market?: MarketConfig;
 }
@@ -233,8 +233,8 @@ export const CONFIG_FILE_NAME = 'config.toml';
 // =============================================================================
 
 /**
- * OAuth 2.0 configuration stored in config.toml.
- * Mirrors AuthConfig from types/auth.ts but all fields optional for partial config.
+ * Preservation-only Auth product configuration stored in config.toml.
+ * Fields remain round-trippable until an explicit user-data migration is defined.
  */
 export interface AuthConfigJson {
   clientId?: string;
@@ -259,9 +259,9 @@ export interface CredentialsConfig {
 }
 
 /**
- * Marketplace configuration.
+ * Preservation-only Market product configuration.
  */
 export interface MarketConfig {
-  /** Registry API base URL (default: https://market.neko.dev/api/v1) */
+  /** Former registry API base URL; not consumed by the retained runtime. */
   registryUrl?: string;
 }

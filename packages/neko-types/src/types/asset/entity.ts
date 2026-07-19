@@ -7,7 +7,6 @@
 
 import type { BundleEntryLocator, MediaAssetStorageMode } from '../bundle-locator';
 import type { CharacterAssetDimension, CharacterAssetMediaKind } from '../media-import';
-import type { RecordingProjectFactProvenance } from '../recording-artifact';
 
 // =============================================================================
 // Entity Categories
@@ -162,7 +161,7 @@ export interface AssetOwnership {
 /** Asset source information */
 export interface AssetSource {
   /** Source type */
-  type: 'manual' | 'ai-generated' | 'imported' | 'stock' | 'recording';
+  type: 'manual' | 'ai-generated' | 'imported' | 'stock';
   /** AI provider name (if ai-generated) */
   provider?: string;
   /** Generation prompt (if ai-generated) */
@@ -171,8 +170,6 @@ export interface AssetSource {
   license?: string;
   /** Original source URL */
   sourceUrl?: string;
-  /** Stable provenance for promoted Live/Audio recordings. */
-  recording?: RecordingProjectFactProvenance;
   /** Stable provenance for an explicitly promoted generated candidate. */
   generated?: {
     readonly projectionId: string;

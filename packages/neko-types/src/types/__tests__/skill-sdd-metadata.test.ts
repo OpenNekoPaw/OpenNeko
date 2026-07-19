@@ -115,9 +115,9 @@ describe('validateSkill — runtime projection compatibility', () => {
           requiredSubpackages: [
             { id: 'neko-cut', required: true, minVersion: '1.0.0' },
             {
-              id: 'neko-audio',
+              id: 'optional-media-tools',
               required: false,
-              fallback: { message: 'no BGM without neko-audio' },
+              fallback: { message: 'continue without optional media tooling' },
             },
           ],
         }),
@@ -340,7 +340,11 @@ describe('validateSkillManifest — explicit legacy compatibility pass', () => {
       domain: 'cut',
       requiredSubpackages: [
         { id: 'neko-cut', required: true, minVersion: '1.0.0' },
-        { id: 'neko-audio', required: false, fallback: { message: 'no BGM' } },
+        {
+          id: 'optional-media-tools',
+          required: false,
+          fallback: { message: 'continue without optional media tooling' },
+        },
       ],
       autoInvoke: true,
       referencedAssets: [

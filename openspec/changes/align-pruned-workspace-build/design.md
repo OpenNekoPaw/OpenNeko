@@ -58,6 +58,18 @@ A post-implementation audit found that the release set and Rust dependency closu
 
 The same audit found `.nka`/`.nks`/`.nkm`/`.nkp` codecs, Canvas project preview labels/readers, native character export parsing, and Cut `scene3d`/`puppet` timeline elements still have executable consumers. Removing them changes whether existing local project data can be opened, previewed, or exported, so they are not treated as metadata cleanup. Before deletion, the change must define one fail-visible data strategy: migrate the valuable source facts to a retained format, preserve a bounded import-only reader with an explicit removal condition, or reject the format without modifying the file. No default registry, compatibility extension, successful no-op, or Engine fallback may keep the removed product path alive.
 
+### Close second-pass orphaned Live, Audio, Tracking, and Market surfaces
+
+A second producer/consumer audit applies the same five-layer boundary to contracts that survived the package deletion:
+
+- **Responsibility:** no retained package owns `neko.assets.promoteRecording`, the `neko-live`/`neko-audio` recording producer contract, or the tracking service contract. Their command, service, public types, and tests are deleted together. Retained Engine/Cut/Preview audio processing remains media behavior and is not a deleted Audio-product surface.
+- **Dependency:** Canvas delegation retains only destinations with a real consumer. Removed Sketch and Puppet targets are deleted; retained Preview/model-file and Cut/audio-file routes remain because they resolve to current packages rather than removed product owners. The `live` Entity asset-requirement source is deleted because no producer exists.
+- **Interface:** Market installation receipts are not exposed through `LocalMetadataRepositories`; removing the repository code does not drop an existing SQLite table or mutate its bytes. Global `auth` and `market` configuration sections remain preservation-only until an explicit user-config migration defines whether to remove or transform them, and are tracked as bounded debt rather than active product capability.
+- **Extension:** legacy project manifests may still contain `sourceKind: market`; Assets keeps only the fail-visible reader/rejection path so it can report `removed-market-source`. It does not provide a creation API, installation lookup, fallback, or Market activation path. Current PI/provider OAuth credentials remain Agent-owned authentication and are distinct from the removed Auth product configuration.
+- **Testing:** absence guards reject reintroduction of no-owner files and discriminants; focused contract tests prove legacy Market manifest rejection; metadata/config tests prove cleanup neither creates an active Market path nor silently deletes preserved settings or database bytes.
+
+Stable documentation and examples must use the retained ownership vocabulary. Historical documents may name removed products when they are explicitly marked historical; current architecture, package READMEs, comments, and fixtures must not present them as supported domains.
+
 ### Consolidate Cut workbench controls
 
 Cut removes its package-specific left rail from both the editor and host-adapter projection. The shared creative shell omits the rail container when no rail is supplied, so removal does not leave an empty border or reserved column. Timeline controls stay continuously visible; the obsolete `mainPanelToolsVisible` state and self-hiding action are deleted rather than made unreachable.

@@ -180,8 +180,8 @@ describe('Project source add Webview client', () => {
       validateProjectSourceAddRequest({
         requestId: 'picker-1',
         kind: 'file-picker',
-        formatId: 'nka',
-        destination: { kind: 'project', directory: 'audio', copyMode: 'link' },
+        formatId: 'nkv',
+        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
         ingestMode: 'link',
       }),
     ).toEqual([]);
@@ -190,8 +190,8 @@ describe('Project source add Webview client', () => {
       validateProjectSourceAddRequest({
         requestId: 'drag-1',
         kind: 'drag-drop',
-        formatId: 'nka',
-        destination: { kind: 'project', directory: 'audio', copyMode: 'link' },
+        formatId: 'nkv',
+        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
         ingestMode: 'link',
       }),
     ).toEqual([expect.objectContaining({ code: 'missing-source' })]);

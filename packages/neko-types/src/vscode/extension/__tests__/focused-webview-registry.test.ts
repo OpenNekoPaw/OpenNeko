@@ -298,13 +298,13 @@ describe('FocusedWebviewRegistry', () => {
     const registry = new FocusedWebviewRegistry();
     registry.register({
       id: 'first',
-      viewType: 'neko.modelEditor',
+      viewType: 'neko.modelPreview',
       panel: createPanel(),
       visible: true,
     });
     registry.register({
       id: 'second',
-      viewType: 'neko.modelEditor',
+      viewType: 'neko.modelPreview',
       panel: createPanel(),
       visible: true,
     });
@@ -313,13 +313,13 @@ describe('FocusedWebviewRegistry', () => {
     registry.markActive('second');
     registry.markVisible('second', false);
 
-    expect(registry.resolve({ viewType: 'neko.modelEditor' })?.id).toBe('first');
+    expect(registry.resolve({ viewType: 'neko.modelPreview' })?.id).toBe('first');
   });
 
   it('fails command delivery when no target can be resolved', async () => {
     const registry = new FocusedWebviewRegistry();
     const posted = await registry.postKeyboardAction('delete', {
-      viewType: 'neko.sketchEditor',
+      viewType: 'neko.canvasEditor',
       allowRecentVisibleFallback: false,
     });
 
@@ -333,14 +333,14 @@ describe('FocusedWebviewRegistry', () => {
 
     const disposable = registry.register({
       id: 'first',
-      viewType: 'neko.sketchEditor',
+      viewType: 'neko.canvasEditor',
       panel: first,
       visible: true,
       active: true,
     });
     registry.register({
       id: 'second',
-      viewType: 'neko.sketchEditor',
+      viewType: 'neko.canvasEditor',
       panel: second,
       visible: true,
     });
@@ -348,7 +348,7 @@ describe('FocusedWebviewRegistry', () => {
     registry.markActive('second');
     disposable.dispose();
 
-    expect(registry.resolve({ viewType: 'neko.sketchEditor', id: 'first' })).toBeUndefined();
+    expect(registry.resolve({ viewType: 'neko.canvasEditor', id: 'first' })).toBeUndefined();
     expect(first.webview.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'keyboardFocus', focused: false }),
     );

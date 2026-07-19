@@ -1,4 +1,4 @@
-//! AudioMixdown — Multi-track audio mixing for neko-audio projects.
+//! AudioMixdown — Multi-track audio mixing for retained timeline/media workflows.
 //!
 //! Unlike AudioMixer (which is frame-aligned for video export), AudioMixdown
 //! operates on sample-aligned buffers for audio-only projects.

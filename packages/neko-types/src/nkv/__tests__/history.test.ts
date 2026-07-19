@@ -35,32 +35,19 @@ function createMockOperation(type: string, id: string): EditOperation {
   } as EditOperation;
 }
 
-function createSketchStrokeOp(base64Data: string): EditOperation {
+function createLargeElementUpdateOp(base64Data: string): EditOperation {
   return {
-    type: 'sketch.stroke.apply',
-    meta: { id: 'stroke-1', timestamp: Date.now(), source: 'user' },
+    type: 'element.update',
+    meta: { id: 'large-update-1', timestamp: Date.now(), source: 'user' },
     payload: {
-      layerId: 'layer-1',
-      regionAfter: {
-        layerId: 'layer-1',
-        x: 0,
-        y: 0,
-        width: 100,
-        height: 100,
-        data: base64Data,
-      },
+      trackId: 'track-1',
+      elementId: 'element-1',
+      updates: { name: base64Data },
     },
     before: {
-      regionBefore: {
-        layerId: 'layer-1',
-        x: 0,
-        y: 0,
-        width: 100,
-        height: 100,
-        data: base64Data,
-      },
+      updates: { name: base64Data },
     },
-  } as EditOperation;
+  };
 }
 
 // =============================================================================
@@ -106,16 +93,20 @@ describe('Operation History Persistence', () => {
     it('should strip large base64 binary data', () => {
       // Create a large base64 string (>1024 chars)
       const largeBase64 = 'A'.repeat(2000) + '==';
-      const ops = [createSketchStrokeOp(largeBase64)];
+      const ops = [createLargeElementUpdateOp(largeBase64)];
 
       const snapshot = serializeHistory(ops, [], MOCK_PROJECT);
 
       // The large data should be replaced with sentinel
-      const serializedPayload = snapshot.undoStack[0]!.payload as Record<string, any>;
-      expect(serializedPayload['regionAfter']['data']).toBe('__skipped__');
+      const serializedPayload = snapshot.undoStack[0]!.payload as {
+        readonly updates: { readonly name: string };
+      };
+      expect(serializedPayload.updates.name).toBe('__skipped__');
 
-      const serializedBefore = snapshot.undoStack[0]!.before as Record<string, any>;
-      expect(serializedBefore['regionBefore']['data']).toBe('__skipped__');
+      const serializedBefore = snapshot.undoStack[0]!.before as {
+        readonly updates: { readonly name: string };
+      };
+      expect(serializedBefore.updates.name).toBe('__skipped__');
     });
 
     it('should preserve small strings', () => {

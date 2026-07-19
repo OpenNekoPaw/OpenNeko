@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface StatusBarItemConfig {
-  /** Unique identifier, e.g. 'neko.audio.duration' */
+  /** Unique identifier, e.g. 'neko.media.duration' */
   id: string;
   alignment: vscode.StatusBarAlignment;
   priority: number;
@@ -27,7 +27,7 @@ export interface StatusBarItemSpec extends Omit<StatusBarItemConfig, 'visible'> 
    */
   text?: string;
   /**
-   * Readable business metadata, e.g. "activeCustomEditorId == neko.modelEditor".
+   * Readable business metadata, e.g. "activeCustomEditorId == neko.canvasEditor".
    * Programmatic StatusBarItems do not receive this as a VSCode `when` clause.
    */
   visibilityCondition?: string;
@@ -50,14 +50,14 @@ export interface StatusBarProjectionManagerOptions {
  * Usage:
  * ```ts
  * const bar = new StatusBarGroup([
- *   { id: 'neko.audio.duration', alignment: Left, priority: 100, name: 'Duration' },
- *   { id: 'neko.audio.codec',    alignment: Left, priority: 99,  name: 'Codec' },
- *   { id: 'neko.audio.selection', alignment: Left, priority: 98,  visible: 'conditional' },
+ *   { id: 'neko.media.duration', alignment: Left, priority: 100, name: 'Duration' },
+ *   { id: 'neko.media.codec',    alignment: Left, priority: 99,  name: 'Codec' },
+ *   { id: 'neko.media.selection', alignment: Left, priority: 98, visible: 'conditional' },
  * ]);
  *
- * bar.update('neko.audio.duration', '$(clock) 3:45');
+ * bar.update('neko.media.duration', '$(clock) 3:45');
  * bar.show();
- * bar.setVisible('neko.audio.selection', true);
+ * bar.setVisible('neko.media.selection', true);
  * // ...
  * bar.dispose();
  * ```

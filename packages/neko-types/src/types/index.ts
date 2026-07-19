@@ -303,8 +303,6 @@ export * from './agent-capability';
 export * from './agent-observation';
 export * from './multimodal-context';
 
-// Live tracking contracts
-export * from './tracking';
 export * from './decision-rationale';
 export * from './recovery-guidance';
 export * from './subagent-reviewer';
@@ -327,4 +325,3 @@ export * from './creative-media-operations';
 export * from './creative-media-capability-registry';
 export * from './media-production';
 export * from './media-quality';
-export * from './recording-artifact';

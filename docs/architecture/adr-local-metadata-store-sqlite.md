@@ -130,7 +130,7 @@ canonical checkout identity descriptor：
 
 ## Schema 与数据分类
 
-长期目标固定为 18 张核心表。触碰时间、quota 与 GC eligibility 合并到 resource row；Run lifecycle 合并到 task；semantic coverage 合并到 source；Entity 与 Asset 的多种图/反向索引合并为 typed projection。临时 job/status/history、provider diagnostic history 和 log index 默认不建表：进程内临时状态留在内存，需要跨重启恢复的后台工作使用 `tasks` / `task_checkpoints`，当前诊断附着在所属 projection/catalog row，原始日志继续使用 JSONL。
+长期目标固定为 16 张核心表。触碰时间、quota 与 GC eligibility 合并到 resource row；Run lifecycle 合并到 task；semantic coverage 合并到 source；Entity 与 Asset 的多种图/反向索引合并为 typed projection。临时 job/status/history、provider diagnostic history 和 log index 默认不建表：进程内临时状态留在内存，需要跨重启恢复的后台工作使用 `tasks` / `task_checkpoints`，当前诊断附着在所属 projection/catalog row，原始日志继续使用 JSONL。已删除 Dashboard/Market 产品不再拥有活动仓储；旧 SQLite 中若存在对应表，其字节保留到显式用户数据迁移，不由当前 runtime 暴露或改写。
 
 | #   | 表                         | 逻辑分类 | 用途 / authority                                                              |
 | --- | -------------------------- | -------- | ----------------------------------------------------------------------------- |
@@ -142,16 +142,14 @@ canonical checkout identity descriptor：
 | 6   | `tasks`                    | state    | 需要跨重启保留的 Task/Run lifecycle                                           |
 | 7   | `task_checkpoints`         | state    | 最小 resumable recovery payload；Canvas Board delivery 的 checkpoint 复用此表 |
 | 8   | `local_drafts`             | state    | 仅保存不可静默丢失的未提升本机草稿                                            |
-| 9   | `dashboard_activities`     | state    | 仅保存 owning package 确认为用户有价值的 activity                             |
-| 10  | `market_installations`     | state    | Installed package 与 trust decision                                           |
-| 11  | `resource_cache_entries`   | cache    | Source/artifact ledger、size、touch、quota、GC eligibility                    |
-| 12  | `resource_cache_variants`  | cache    | Thumbnail/proxy/page/preview/generated variants                               |
-| 13  | `media_metadata`           | cache    | 可重建 probe 与本机 availability metadata                                     |
-| 14  | `search_documents`         | cache    | Search/FTS source projection                                                  |
-| 15  | `semantic_sources`         | cache    | Source fingerprint、provider/schema version 与 coverage                       |
-| 16  | `semantic_evidence`        | cache    | locator/range/hash、mention 与 provider version 等 compact evidence；不含正文 |
-| 17  | `entity_asset_projections` | cache    | Entity occurrence/relationship/binding 与 Asset graph projection              |
-| 18  | `catalog_items`            | cache    | Skill/Command/Processor/Market/provider descriptor 与当前 diagnostic          |
+| 9   | `resource_cache_entries`   | cache    | Source/artifact ledger、size、touch、quota、GC eligibility                    |
+| 10  | `resource_cache_variants`  | cache    | Thumbnail/proxy/page/preview/generated variants                               |
+| 11  | `media_metadata`           | cache    | 可重建 probe 与本机 availability metadata                                     |
+| 12  | `search_documents`         | cache    | Search/FTS source projection                                                  |
+| 13  | `semantic_sources`         | cache    | Source fingerprint、provider/schema version 与 coverage                       |
+| 14  | `semantic_evidence`        | cache    | locator/range/hash、mention 与 provider version 等 compact evidence；不含正文 |
+| 15  | `entity_asset_projections` | cache    | Entity occurrence/relationship/binding 与 Asset graph projection              |
+| 16  | `catalog_items`            | cache    | Skill/Command/Processor/provider descriptor 与当前 diagnostic                 |
 
 SQLite FTS virtual/shadow tables 和普通 index 是实现 artifact，不计入 18 张核心 schema 表。所有 workspace-scoped row 使用 `workspace_id` 分区；跨项目记录使用显式 global partition。
 

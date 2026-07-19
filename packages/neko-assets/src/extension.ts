@@ -36,10 +36,7 @@ import {
   resolveStorageLayout,
   parseEntityUri,
   PathResolver,
-  RECORDING_PROMOTION_COMMAND,
-  isRecordingPromotionRequest,
   type CreativeEntityKind,
-  type RecordingProjectFactInput,
   type WorkspaceMediaPathContext,
   type ResourceVariantRequest,
 } from '@neko/shared';
@@ -93,7 +90,6 @@ import {
   createEntityFacadeReaders,
   type EntityFacadeReaders,
 } from './services/EntityFacadeReaders';
-import { RecordingPromotionService } from './services/RecordingPromotionService';
 import { AssetFileImportService } from './services/AssetFileImportService';
 import { SemanticSourceDiscoveryService } from './services/SemanticSourceDiscoveryService';
 
@@ -1202,50 +1198,6 @@ function registerAssetManagerCommands(
 // =============================================================================
 
 function registerAssetCommands(context: vscode.ExtensionContext): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(RECORDING_PROMOTION_COMMAND, async (input: unknown) => {
-      if (!isRecordingPromotionRequest(input)) {
-        throw new Error('Invalid recording promotion request.');
-      }
-      const assetLibrary = library;
-      if (!assetLibrary) {
-        throw new Error('AssetLibrary is unavailable for recording promotion.');
-      }
-      const service = new RecordingPromotionService({
-        registerProjectFact: async (fact: RecordingProjectFactInput) => {
-          const imported = await assetLibrary.importFile(fact.destinationPath, {
-            entityInput: {
-              name: path.parse(fact.destinationPath).name,
-              category: fact.mediaType === 'audio' ? 'audio' : 'object',
-              metadata: {
-                source: {
-                  type: 'recording',
-                  recording: fact.provenance,
-                },
-              },
-              tags: ['recording', fact.mediaType, fact.provenance.producer],
-              ownership: { scope: 'project', access: 'editable' },
-            },
-            variantInput: {
-              name: 'Recorded take',
-              attributes: {},
-              tags: ['recording'],
-            },
-          });
-          await assetLibrary.flush();
-          entityChangeEmitter?.fire();
-          return {
-            entityId: imported.entity.id,
-            variantId: imported.variant.id,
-            fileId: imported.file.id,
-            storedPath: imported.file.path,
-          };
-        },
-      });
-      return service.promote(input);
-    }),
-  );
-
   // Add to Timeline (neko-cut)
   context.subscriptions.push(
     vscode.commands.registerCommand('neko.assets.addToTimeline', async (uri?: vscode.Uri) => {

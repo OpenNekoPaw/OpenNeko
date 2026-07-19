@@ -67,6 +67,10 @@ const removedProductContractRules = [
   {
     file: 'packages/neko-types/src/types/index.ts',
     tokens: [
+      "'./recording-artifact'",
+      '"./recording-artifact"',
+      "'./tracking'",
+      '"./tracking"',
       "'./live-compositor'",
       '"./live-compositor"',
       "'./model-agent-api'",
@@ -85,7 +89,20 @@ const removedProductContractRules = [
       "export type AssetRefScheme = 'project' | 'market'",
       "export type RepresentationTarget = 'story'",
       "canvas: ['portrait', 'reference', 'puppet-bone'",
+      "| 'live';",
     ],
+  },
+  {
+    file: 'packages/neko-types/src/types/canvas-layered.ts',
+    tokens: ["| 'sketch'", "| 'puppet'"],
+  },
+  {
+    file: 'packages/neko-assets/src/extension.ts',
+    tokens: ['neko.assets.promoteRecording', 'RecordingPromotionService'],
+  },
+  {
+    file: 'packages/neko-types/src/local-metadata/repositories.ts',
+    tokens: ['MarketInstallationRepository', 'MarketInstallationRecord', 'marketInstallations'],
   },
   {
     file: 'packages/neko-engine/packages/host-cli/src/runner.rs',
@@ -148,6 +165,13 @@ const removedProductContractRules = [
   },
 ];
 const removedProductContractFiles = [
+  'packages/neko-types/src/types/recording-artifact.ts',
+  'packages/neko-types/src/types/tracking.ts',
+  'packages/neko-types/src/types/__tests__/tracking-contracts.test.ts',
+  'packages/neko-assets/src/services/RecordingPromotionService.ts',
+  'packages/neko-assets/src/services/RecordingPromotionService.test.ts',
+  'packages/neko-types/src/local-metadata/sqlite/market-installation-schema.ts',
+  'packages/neko-types/src/local-metadata/__tests__/market-installation-repository.test.ts',
   'packages/neko-types/src/types/live-compositor.ts',
   'packages/neko-types/src/types/__tests__/live-compositor-contract.test.ts',
   'packages/neko-types/src/types/__fixtures__/live-compositor-scene-v1.json',

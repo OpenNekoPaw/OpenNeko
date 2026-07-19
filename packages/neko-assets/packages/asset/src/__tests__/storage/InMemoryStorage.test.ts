@@ -141,12 +141,12 @@ describe('InMemoryStorage', () => {
           updatedAt: Date.now(),
         },
         {
-          id: 'recording-1',
-          name: 'Recorded Dialogue',
+          id: 'imported-1',
+          name: 'Imported Dialogue',
           category: 'object',
-          metadata: { source: { type: 'recording' } },
+          metadata: { source: { type: 'imported' } },
           variants: [],
-          tags: ['recording'],
+          tags: ['imported'],
           usageCount: 1,
           createdAt: Date.now() - 2000,
           updatedAt: Date.now(),
@@ -179,9 +179,9 @@ describe('InMemoryStorage', () => {
       expect(result.total).toBe(2);
     });
 
-    it('should search promoted recordings by source type', async () => {
-      const result = await storage.search({ sourceTypes: ['recording'] });
-      expect(result.entities.map((entity) => entity.id)).toEqual(['recording-1']);
+    it('should search imported assets by source type', async () => {
+      const result = await storage.search({ sourceTypes: ['imported'] });
+      expect(result.entities.map((entity) => entity.id)).toEqual(['imported-1']);
     });
 
     it('should sort by usage count', async () => {

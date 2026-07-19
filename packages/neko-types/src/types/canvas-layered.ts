@@ -235,7 +235,7 @@ export interface PlaybackCapability {
 }
 
 export type DelegateTarget =
-  'preview' | 'model' | 'cut' | 'audio' | 'document' | 'sketch' | 'puppet' | 'project' | 'external';
+  'preview' | 'model' | 'cut' | 'audio' | 'document' | 'project' | 'external';
 
 export interface DelegateAction {
   id: string;

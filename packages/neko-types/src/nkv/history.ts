@@ -155,12 +155,12 @@ function deserializeOperation(serialized: SerializedOperation): EditOperation {
 
 /**
  * Deep-clone a record, replacing large base64 strings with a sentinel.
- * Targets sketch RegionSnapshot.data fields (typically >1KB base64).
+ * Applies to any large base64-like operation field, independent of the owning domain.
  */
 function stripBinaryData(obj: Record<string, unknown>): Record<string, unknown> {
   return JSON.parse(
     JSON.stringify(obj, (_key, value) => {
-      // Skip large base64 strings (RegionSnapshot.data)
+      // Skip large base64 strings before history persistence.
       if (typeof value === 'string' && value.length > 1024 && isBase64Like(value)) {
         return SKIPPED_SENTINEL;
       }

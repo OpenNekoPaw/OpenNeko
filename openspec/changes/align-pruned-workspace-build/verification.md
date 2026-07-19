@@ -54,14 +54,18 @@
 - `pnpm build` passes all 10 root Turbo build tasks, including the release Rust CLI/N-API build. Retained UI, Assets, Agent, Preview, Canvas, Cut, and Tools package builds also pass independently.
 - Focused format, export, plugin-transfer, Storyboard, Preview isolation, stream-descriptor, Search, Entity, Canvas, Cut, Agent provider/profile/runtime, and Rust CLI regressions pass. `pnpm test:agent:eval` passes 39 files/278 tests and the 23-suite/47-case dry-run.
 - Proto generation is idempotent after deletion: `pnpm generate:types` discovers only `diff.proto` and `timeline.proto`, and the generated-tree SHA is unchanged by a second generation pass.
+- The second-pass audit removed the no-owner recording-promotion command/service/contracts, Live tracking contract, `live` Entity requirement source, and Sketch/Puppet Canvas delegate targets. Shared focused tests pass, and the Assets extension plus `@neko/asset` build successfully.
+- The callable Market installation repository, public receipt types, SQLite schema export, and repository tests are removed. A focused preservation test proves an existing `market_installations` table and its bytes survive opening/migrating the retained store while `LocalMetadataRepositories` exposes no Market repository.
+- `pnpm build`, `pnpm check`, application-boundary/absence checks, legacy-debt ledger validation, test orchestration, Engine media-closure validation, strict OpenSpec validation, and `git diff --check` pass after the second-pass cleanup.
 
 ### Remaining risk and disposition
 
-- Preservation-only Market settings and SQLite installation receipts remain because deleting user settings or install records requires a separate migration. They have no active Market route, client, provider-card layer, or successful asset resolution path.
+- Preservation-only Auth/Market config sections remain round-trippable because deleting user settings requires a separate migration. Existing SQLite Market table bytes are not dropped, but the retained runtime no longer exports a schema migration, repository, receipt type, route, client, provider-card layer, or successful asset resolution path.
 - `puppet-bone` remains recognized only as a persisted `EntityAssetBindingRole` so existing metadata can be diagnosed safely. It is not an active `RepresentationKind`, is not selected by fallback, and native export rejects it before writing.
 - Preview's read-only standard 3D model inspection and Canvas narrative `scene` semantics are retained product capabilities; the absence guard deliberately distinguishes them from removed Model/Scene authoring products.
 - Agent Evaluation disposition: prompt/Skill and capability examples changed, so the focused media-production and script-generation cases were validated in dry-run and the full key-free harness passed. No credentialed provider run was performed, so the result is not claimed as real Agent behavior acceptance.
 - The second root `pnpm test` run reached unrelated current-work failures: Preview `ModelPreviewSourceSession.ts` violates an existing local-resource-root guard, and Canvas foundational media now renders `object-contain` while its test expects `object-cover`. Cleanup-specific narrative and plugin-transfer failures found during that run were corrected and pass focused reruns.
+- The latest root `pnpm test` run stops on an unrelated active Agent Webview configuration expectation (`configured-gateway:auto` versus `deepseek-direct:deepseek-chat`); the full shared run separately reaches 1438/1439 tests with only the concurrently edited Preview resource-root guard failing. Cleanup-specific focused suites pass.
 - `pnpm check:quality` progresses through release, brand, debt, content, application, Agent, and Canvas boundaries, then stops on an unrelated obsolete keyboard-reporter import in Agent `AppShell.tsx`. Those active user changes were preserved rather than folded into this cleanup.
 
 ### CI UI-test closure (2026-07-19)

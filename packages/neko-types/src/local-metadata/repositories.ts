@@ -2,12 +2,6 @@ import type { WorkspaceIdentityDescriptor, WorkspacePortableLocator } from '../t
 import type { ResourceCacheEntry } from '../types/resource-cache';
 import type { MediaFileMetadata } from '../types/asset/entity';
 import type {
-  AssetManifest,
-  AssetType,
-  LocalAssetStorageMode,
-  ProxyVariant,
-} from '../types/asset/manifest';
-import type {
   CompactMediaSemanticIndex,
   SemanticEvidenceProjection,
 } from '../types/semantic-source';
@@ -408,71 +402,6 @@ export interface CatalogProjectionRepository {
   replaceSlice(request: CatalogProjectionReplaceSliceRequest): Promise<void>;
 }
 
-export type MarketInstallationTrustSource = 'vscode-workspace' | 'tui-policy' | 'migration';
-
-/** Preservation-only shape for installation receipts left by the removed Market product. */
-export type InstalledPackageStatus =
-  'active' | 'expiring-soon' | 'expired' | 'incompatible' | 'deprecated';
-
-export interface InstalledLargeAssetState {
-  readonly state: 'not-owned' | 'owned' | 'manifest-only' | 'proxy' | 'partial' | 'full';
-  readonly selectedItems?: readonly string[];
-  readonly downloadedItems?: readonly string[];
-  readonly selectedVariantId?: string;
-  readonly proxyQuality?: ProxyVariant['qualityTag'];
-  readonly totalSize?: number;
-  readonly downloadedSize?: number;
-}
-
-export interface InstalledPackageSource {
-  readonly kind: 'market' | 'local' | 'local-link' | 'ai-generated';
-  readonly storageMode?: LocalAssetStorageMode;
-  readonly path?: string;
-  readonly originalPath?: string;
-}
-
-export type WorkspaceTrustLevel = 'trusted' | 'restricted' | 'limited';
-
-export interface MarketInstallationTrustDecision {
-  readonly level: WorkspaceTrustLevel;
-  readonly source: MarketInstallationTrustSource;
-  readonly decidedAt: number;
-}
-
-export interface MarketInstallationCompatibilityIssue {
-  readonly detectedAt: number;
-  readonly reason: string;
-  readonly suggestedAction?: string;
-}
-
-export interface MarketInstallationRecord {
-  readonly packageId: string;
-  readonly version: string;
-  readonly type: AssetType;
-  readonly installedAt: number;
-  readonly installLocation: string;
-  readonly manifest: AssetManifest;
-  readonly source: InstalledPackageSource | null;
-  readonly enabled: boolean;
-  readonly requested: boolean;
-  readonly status: InstalledPackageStatus;
-  readonly expiresAt: number | null;
-  readonly graceEndsAt: number | null;
-  readonly lastUsedAt: number | null;
-  readonly compatibilityIssue: MarketInstallationCompatibilityIssue | null;
-  readonly largeAsset: InstalledLargeAssetState | null;
-  readonly referenceOwners: readonly string[];
-  readonly trustDecision: MarketInstallationTrustDecision | null;
-  readonly updatedAt: number;
-}
-
-export interface MarketInstallationRepository {
-  get(packageId: string): Promise<MarketInstallationRecord | null>;
-  list(): Promise<readonly MarketInstallationRecord[]>;
-  upsert(record: MarketInstallationRecord): Promise<void>;
-  delete(packageId: string): Promise<boolean>;
-}
-
 export type LocalMetadataCacheTable =
   | 'conversations'
   | 'resource_cache_entries'
@@ -563,6 +492,5 @@ export interface LocalMetadataRepositories {
   readonly semanticProjections: SemanticProjectionRepository;
   readonly entityAssetProjections: EntityAssetProjectionRepository;
   readonly catalogItems: CatalogProjectionRepository;
-  readonly marketInstallations: MarketInstallationRepository;
   readonly cacheMaintenance: LocalMetadataCacheMaintenanceRepository;
 }

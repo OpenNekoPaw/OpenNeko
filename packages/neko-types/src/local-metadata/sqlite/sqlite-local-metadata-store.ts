@@ -41,8 +41,6 @@ import type {
   LocalMetadataOrphanCacheGcRequest,
   LocalMetadataOrphanCacheGcResult,
   LocalMetadataRepositories,
-  MarketInstallationRecord,
-  MarketInstallationRepository,
   MediaMetadataRecord,
   MediaMetadataRepository,
   MediaMetadataUpsertRequest,
@@ -71,7 +69,6 @@ import type {
   WorkspaceRegistryRecord,
   WorkspaceRegistryRepository,
 } from '../repositories';
-import { isAssetType, parseAssetManifest, type AssetManifest } from '../../types/asset/manifest';
 import {
   isCreativeEntityCandidate,
   isCreativeEntityKind,
@@ -283,183 +280,6 @@ function decodeConversation(row: SqliteRow): ConversationCatalogRecord {
     createdAt: readString(row, 'created_at'),
     updatedAt: readString(row, 'updated_at'),
   };
-}
-
-function decodeMarketInstallation(row: SqliteRow): MarketInstallationRecord {
-  const value = parseJsonColumn(
-    readString(row, 'receipt_json'),
-    'decode-market-installation-receipt',
-  );
-  assertMarketInstallationRecord(value, 'metadata-integrity-failed');
-  if (
-    value.packageId !== readString(row, 'package_id') ||
-    value.installLocation !== readString(row, 'install_location') ||
-    value.updatedAt !== readNumber(row, 'updated_at')
-  ) {
-    throw new LocalMetadataError({
-      code: 'metadata-integrity-failed',
-      operation: 'decode-market-installation-receipt',
-      message: `Stored Market installation columns do not match receipt: ${value.packageId}`,
-    });
-  }
-  return value;
-}
-
-function assertMarketInstallationRecord(
-  value: unknown,
-  code: 'metadata-integrity-failed' | 'metadata-transaction-failed',
-): asserts value is MarketInstallationRecord {
-  const operation =
-    code === 'metadata-integrity-failed'
-      ? 'decode-market-installation-receipt'
-      : 'upsert-market-installation';
-  if (!isRecord(value)) {
-    throw new LocalMetadataError({
-      code,
-      operation,
-      message: 'Market installation receipt must be an object',
-    });
-  }
-  const record = value;
-  const fail = (message: string): never => {
-    throw new LocalMetadataError({
-      code,
-      operation,
-      message,
-    });
-  };
-  if (typeof record['packageId'] !== 'string' || !record['packageId'].trim()) {
-    fail('Market installation packageId must be non-empty');
-  }
-  if (typeof record['version'] !== 'string' || !record['version'].trim()) {
-    fail(`Market installation version is invalid: ${record['packageId']}`);
-  }
-  if (!isAssetType(record['type'])) {
-    fail(`Market installation asset type is invalid: ${record['packageId']}`);
-  }
-  assertNonNegativeInteger(record['installedAt'], 'installedAt', fail);
-  assertPortableInstallLocation(record['installLocation'], fail);
-  let manifest: AssetManifest;
-  try {
-    manifest = parseAssetManifest(record['manifest']);
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : 'Market installation manifest is invalid');
-  }
-  if (
-    manifest.id !== record['packageId'] ||
-    manifest.version !== record['version'] ||
-    manifest.type !== record['type']
-  ) {
-    fail(`Market installation manifest identity does not match receipt: ${record['packageId']}`);
-  }
-  if (record['source'] !== null && !isInstalledPackageSource(record['source'])) {
-    fail(`Market installation source is invalid: ${record['packageId']}`);
-  }
-  if (typeof record['enabled'] !== 'boolean' || typeof record['requested'] !== 'boolean') {
-    fail(`Market installation flags are invalid: ${record['packageId']}`);
-  }
-  if (!isInstalledPackageStatus(record['status'])) {
-    fail(`Market installation status is invalid: ${record['packageId']}`);
-  }
-  for (const field of ['expiresAt', 'graceEndsAt', 'lastUsedAt'] as const) {
-    if (record[field] !== null) assertNonNegativeInteger(record[field], field, fail);
-  }
-  if (
-    record['compatibilityIssue'] !== null &&
-    !isCompatibilityIssue(record['compatibilityIssue'])
-  ) {
-    fail(`Market installation compatibility issue is invalid: ${record['packageId']}`);
-  }
-  if (record['largeAsset'] !== null && !isRecord(record['largeAsset'])) {
-    fail(`Market installation large asset state is invalid: ${record['packageId']}`);
-  }
-  if (
-    !Array.isArray(record['referenceOwners']) ||
-    record['referenceOwners'].some((owner) => typeof owner !== 'string' || !owner.trim()) ||
-    new Set(record['referenceOwners']).size !== record['referenceOwners'].length
-  ) {
-    fail(`Market installation reference owners are invalid: ${record['packageId']}`);
-  }
-  if (record['trustDecision'] !== null && !isMarketTrustDecision(record['trustDecision'])) {
-    fail(`Market installation trust decision is invalid: ${record['packageId']}`);
-  }
-  assertNonNegativeInteger(record['updatedAt'], 'updatedAt', fail);
-}
-
-function assertPortableInstallLocation(
-  value: unknown,
-  fail: (message: string) => never,
-): asserts value is string {
-  if (typeof value !== 'string' || !value.trim()) {
-    fail('Market installation location must be non-empty');
-  }
-  const normalized = value.replace(/\\/gu, '/');
-  if (
-    normalized.startsWith('/') ||
-    /^[A-Za-z]:\//u.test(normalized) ||
-    normalized.startsWith('//')
-  ) {
-    fail(`Market installation location must be portable: ${value}`);
-  }
-}
-
-function assertNonNegativeInteger(
-  value: unknown,
-  field: string,
-  fail: (message: string) => never,
-): asserts value is number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) {
-    fail(`Market installation ${field} must be a non-negative safe integer`);
-  }
-}
-
-function isInstalledPackageSource(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    (value['kind'] === 'market' ||
-      value['kind'] === 'local' ||
-      value['kind'] === 'local-link' ||
-      value['kind'] === 'ai-generated') &&
-    (value['path'] === undefined ||
-      (typeof value['path'] === 'string' && value['path'].trim().length > 0)) &&
-    (value['originalPath'] === undefined ||
-      (typeof value['originalPath'] === 'string' && value['originalPath'].trim().length > 0))
-  );
-}
-
-function isInstalledPackageStatus(value: unknown): boolean {
-  return (
-    value === 'active' ||
-    value === 'expiring-soon' ||
-    value === 'expired' ||
-    value === 'incompatible' ||
-    value === 'deprecated'
-  );
-}
-
-function isCompatibilityIssue(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    Number.isSafeInteger(value['detectedAt']) &&
-    (value['detectedAt'] as number) >= 0 &&
-    typeof value['reason'] === 'string' &&
-    value['reason'].trim().length > 0 &&
-    (value['suggestedAction'] === undefined || typeof value['suggestedAction'] === 'string')
-  );
-}
-
-function isMarketTrustDecision(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    (value['level'] === 'trusted' ||
-      value['level'] === 'restricted' ||
-      value['level'] === 'limited') &&
-    (value['source'] === 'vscode-workspace' ||
-      value['source'] === 'tui-policy' ||
-      value['source'] === 'migration') &&
-    Number.isSafeInteger(value['decidedAt']) &&
-    (value['decidedAt'] as number) >= 0
-  );
 }
 
 function decodeTaskState(row: SqliteRow): TaskStateRecord {
@@ -2054,54 +1874,6 @@ class RawCatalogProjectionRepository implements CatalogProjectionRepository {
   }
 }
 
-class RawMarketInstallationRepository implements MarketInstallationRepository {
-  constructor(private readonly connection: () => SqliteConnection) {}
-
-  async get(packageId: string): Promise<MarketInstallationRecord | null> {
-    const rows = await this.connection().all(
-      `SELECT package_id, install_location, receipt_json, updated_at
-         FROM market_installations WHERE package_id = ?`,
-      [packageId],
-    );
-    return rows[0] ? decodeMarketInstallation(rows[0]) : null;
-  }
-
-  async list(): Promise<readonly MarketInstallationRecord[]> {
-    const rows = await this.connection().all(
-      `SELECT package_id, install_location, receipt_json, updated_at
-         FROM market_installations ORDER BY updated_at DESC, package_id`,
-    );
-    return rows.map(decodeMarketInstallation);
-  }
-
-  async upsert(record: MarketInstallationRecord): Promise<void> {
-    assertMarketInstallationRecord(record, 'metadata-transaction-failed');
-    await this.connection().run(
-      `INSERT INTO market_installations (
-        package_id, install_location, receipt_json, updated_at
-      ) VALUES (?, ?, ?, ?)
-      ON CONFLICT(package_id) DO UPDATE SET
-        install_location = excluded.install_location,
-        receipt_json = excluded.receipt_json,
-        updated_at = excluded.updated_at`,
-      [
-        record.packageId,
-        record.installLocation,
-        serializeJsonPayload(record, 'upsert-market-installation'),
-        record.updatedAt,
-      ],
-    );
-  }
-
-  async delete(packageId: string): Promise<boolean> {
-    const result = await this.connection().run(
-      'DELETE FROM market_installations WHERE package_id = ?',
-      [packageId],
-    );
-    return result.changes > 0;
-  }
-}
-
 function decodeCatalogItem(row: SqliteRow): CatalogItemRecord {
   const kind = readString(row, 'item_kind');
   const source = readString(row, 'source_scope');
@@ -3483,35 +3255,6 @@ class ExclusiveCatalogProjectionRepository implements CatalogProjectionRepositor
   }
 }
 
-class ExclusiveMarketInstallationRepository implements MarketInstallationRepository {
-  constructor(
-    private readonly raw: MarketInstallationRepository,
-    private readonly exclusive: ExclusiveCoordinator,
-    private readonly transaction: <T>(
-      mode: LocalMetadataTransactionMode,
-      operation: () => Promise<T>,
-    ) => Promise<T>,
-  ) {}
-
-  get(packageId: string): Promise<MarketInstallationRecord | null> {
-    return this.exclusive.run(() => this.raw.get(packageId));
-  }
-
-  list(): Promise<readonly MarketInstallationRecord[]> {
-    return this.exclusive.run(() => this.raw.list());
-  }
-
-  upsert(record: MarketInstallationRecord): Promise<void> {
-    return this.exclusive.run(() => this.transaction('state-write', () => this.raw.upsert(record)));
-  }
-
-  delete(packageId: string): Promise<boolean> {
-    return this.exclusive.run(() =>
-      this.transaction('state-write', () => this.raw.delete(packageId)),
-    );
-  }
-}
-
 class ExclusiveProjectionVersionRepository implements ProjectionVersionRepository {
   constructor(
     private readonly raw: ProjectionVersionRepository,
@@ -3586,7 +3329,6 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
       projectionVersions,
     );
     const catalogItems = new RawCatalogProjectionRepository(getConnection, projectionVersions);
-    const marketInstallations = new RawMarketInstallationRepository(getConnection);
     const cacheMaintenance = new RawCacheMaintenanceRepository(
       getConnection,
       workspaces,
@@ -3603,7 +3345,6 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
       semanticProjections,
       entityAssetProjections,
       catalogItems,
-      marketInstallations,
       projectionVersions,
       cacheMaintenance,
     };
@@ -3649,11 +3390,6 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
       ),
       catalogItems: new ExclusiveCatalogProjectionRepository(
         catalogItems,
-        this.exclusive,
-        (mode, operation) => this.executeTransaction(mode, operation),
-      ),
-      marketInstallations: new ExclusiveMarketInstallationRepository(
-        marketInstallations,
         this.exclusive,
         (mode, operation) => this.executeTransaction(mode, operation),
       ),

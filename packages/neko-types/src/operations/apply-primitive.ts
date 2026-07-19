@@ -5,8 +5,8 @@
 // See: docs/architecture/agent-unified-workflow.md §2, §11.6
 //      plan v2 P2 W6 (Apply primitive abstraction)
 //
-// Background: every sub-package (sketch, canvas, audio, timeline, etc.)
-// has its own `applyXxxOperation(data, op)` function. Q3's
+// Background: retained Canvas and timeline owners each have an
+// `applyXxxOperation(data, op)` function. Q3's
 // recovery guidance and retained media operations both need to say
 // "Apply this operation" without caring which sub-system owns it.
 //
@@ -16,7 +16,7 @@
 //   2. An `ApplyDescriptor<TData, TOp>` that pairs the function with
 //      an operation-kind discriminator.
 //   3. A tiny `ApplyRegistry` so callers can dispatch by kind string
-//      (`'sketch.layer.add'`, `'canvas.node.update'`, ...) without
+//      (`'canvas.node.update'`, `'element.update'`, ...) without
 //      importing every concrete module.
 //
 // Pure types + in-memory registry. No side effects.
@@ -34,7 +34,7 @@ export type ApplyFn<TData, TOp> = (data: TData, op: TOp) => TData;
  * layer to route a generic Apply request to the right sub-system.
  */
 export interface ApplyDescriptor<TData = unknown, TOp = unknown> {
-  /** Namespace key — e.g. 'sketch', 'canvas', 'audio', 'timeline'. */
+  /** Namespace key — e.g. 'canvas' or 'timeline'. */
   namespace: string;
   /**
    * Whether running the same op twice produces the same result (pure

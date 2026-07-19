@@ -88,7 +88,7 @@ import { nekoTailwindPreset } from '@neko/shared/theme/tailwind-preset';
 
 ```
 operations/
-├── types.ts      # 操作类型定义（audio / canvas / sketch + neko-cut 原有）
+├── types.ts      # 操作类型定义（Canvas + Cut timeline）
 ├── apply.ts      # applyOperation() — 将操作应用到项目数据
 ├── invert.ts     # invertOperation() — 生成逆操作（用于 undo）
 └── helpers.ts    # createMeta() / isUserOperation() 等工具函数
@@ -96,18 +96,16 @@ operations/
 
 **操作域**：
 
-| 域          | 前缀                                                     | 操作类型                         |
-| ----------- | -------------------------------------------------------- | -------------------------------- |
-| neko-cut    | `track.*` / `element.*`                                  | 轨道/元素 CRUD、移动、修剪、分割 |
-| neko-canvas | `canvas.node.*` / `canvas.connection.*`                  | 节点/连接 CRUD、分组、重排       |
-| neko-audio  | `audio.effect.*` / `audio.marker.*`                      | 效果链/标记 CRUD、排序、切换     |
-| neko-sketch | `sketch.layer.*` / `sketch.stroke.*` / `sketch.canvas.*` | 图层/笔画/画布操作               |
+| 域          | 前缀                                    | 操作类型                        |
+| ----------- | --------------------------------------- | ------------------------------- |
+| neko-cut    | `track.*` / `element.*` / `shape.*`     | 轨道/元素/形状 CRUD、移动与分割 |
+| neko-canvas | `canvas.node.*` / `canvas.connection.*` | 节点/连接 CRUD、分组、重排      |
 
 **使用方式**：
 
 ```typescript
 import type { EditOperation } from '@neko/shared';
-import { applyAudioOperation, invertOperation, createMeta } from '@neko/shared';
+import { applyOperation, invertOperation, createMeta } from '@neko/shared';
 ```
 
 ### 设计原则
