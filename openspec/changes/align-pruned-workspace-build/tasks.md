@@ -39,6 +39,7 @@
 - [x] 4.7 Remove stale test, quality-script, and Webview functional scenario references to pruned packages; keep guardrails scoped to retained canonical paths and verify focused tests and change detection.
 - [x] 4.8 Synchronize stable `docs/` architecture facts and navigation with the retained TUI/VS Code product roots, retained package set, and pruned Rust Media Engine; mark superseded Home, Workbench Core, and Market material as historical.
 - [ ] 4.9 Restore CI closure by enforcing one-shot Vitest coverage invocation, formatting retained TypeScript sources, updating the retained Rust dependency graph past active advisories and unmaintained text dependencies, and passing Clippy, Cargo Deny, and ACT gates.
+  - [x] 4.9a Close the retained strict-extension TypeScript graph without unsafe assertions or compatibility fallbacks; run focused Agent, Platform, Content, and local-metadata regressions.
 - [x] 4.10 Add a native build orchestration regression test and make N-API Cargo metadata/index progress visible before compilation.
 
 ## 5. Close post-pruning residual surfaces

@@ -77,6 +77,25 @@ describe('collectProjectQualityEvidence', () => {
     expect(facade.getProjectSnapshot).not.toHaveBeenCalled();
   });
 
+  it('projects failed runtime and readiness results without reading absent data', async () => {
+    const facade = createFacade({ runtimeOk: false, readinessOk: false });
+
+    const evidence = await collectProjectQualityEvidence(target, {
+      resolve: vi.fn(async () => facade),
+    });
+
+    expect(evidence[1]).toMatchObject({
+      evaluator: { evaluatorClass: 'technical' },
+      metrics: [{ id: 'project.runtime.available', value: false, passed: false }],
+      issues: [expect.objectContaining({ category: 'runtime-unavailable', severity: 'error' })],
+    });
+    expect(evidence[2]).toMatchObject({
+      evaluator: { evaluatorClass: 'policy' },
+      metrics: [{ id: 'project.export.ready', value: false, passed: false }],
+      issues: [expect.objectContaining({ category: 'export-not-ready', severity: 'error' })],
+    });
+  });
+
   it('does not import or duplicate owning .nk* parsers', () => {
     const source = readFileSync(
       new URL('../projectQualityOrchestration.ts', import.meta.url),
@@ -100,7 +119,13 @@ describe('collectProjectQualityEvidence', () => {
   });
 });
 
-function createFacade(options: { readonly validationOk?: boolean } = {}): ProjectQualityFacade & {
+function createFacade(
+  options: {
+    readonly validationOk?: boolean;
+    readonly runtimeOk?: boolean;
+    readonly readinessOk?: boolean;
+  } = {},
+): ProjectQualityFacade & {
   readonly validateProject: ReturnType<typeof vi.fn>;
   readonly getProjectSnapshot: ReturnType<typeof vi.fn>;
   readonly renderPreview: ReturnType<typeof vi.fn>;
@@ -108,6 +133,8 @@ function createFacade(options: { readonly validationOk?: boolean } = {}): Projec
   readonly checkExportReadiness: ReturnType<typeof vi.fn>;
 } {
   const validationOk = options.validationOk ?? true;
+  const runtimeOk = options.runtimeOk ?? true;
+  const readinessOk = options.readinessOk ?? true;
   return {
     validateProject: vi.fn(async (request) => ({
       version: PROJECT_QUALITY_CONTRACT_VERSION,
@@ -138,17 +165,37 @@ function createFacade(options: { readonly validationOk?: boolean } = {}): Projec
       version: PROJECT_QUALITY_CONTRACT_VERSION,
       requestId: request.requestId,
       operation: 'probe-runtime' as const,
-      ok: true,
-      data: { project, available: true, profileId: '3d', diagnostics: [] },
-      diagnostics: [],
+      ok: runtimeOk,
+      ...(runtimeOk
+        ? { data: { project, available: true, profileId: '3d', diagnostics: [] } }
+        : {}),
+      diagnostics: runtimeOk
+        ? []
+        : [
+            {
+              code: 'runtime-unavailable' as const,
+              severity: 'error' as const,
+              message: 'Runtime is unavailable.',
+            },
+          ],
     })),
     checkExportReadiness: vi.fn(async (request) => ({
       version: PROJECT_QUALITY_CONTRACT_VERSION,
       requestId: request.requestId,
       operation: 'check-export-readiness' as const,
-      ok: true,
-      data: { project, ready: true, requiredEvidenceIds: [], diagnostics: [] },
-      diagnostics: [],
+      ok: readinessOk,
+      ...(readinessOk
+        ? { data: { project, ready: true, requiredEvidenceIds: [], diagnostics: [] } }
+        : {}),
+      diagnostics: readinessOk
+        ? []
+        : [
+            {
+              code: 'export-not-ready' as const,
+              severity: 'error' as const,
+              message: 'Export is not ready.',
+            },
+          ],
     })),
   };
 }

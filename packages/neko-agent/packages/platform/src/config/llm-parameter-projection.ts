@@ -8,6 +8,7 @@ import type {
   AgentVerbosityPreset,
 } from '@neko-agent/types';
 import type { ChatModelOption } from '@neko/shared';
+import type { Model, Provider } from '../types/provider';
 
 interface ProjectedLlmOptions {
   readonly temperature?: number;
@@ -15,7 +16,10 @@ interface ProjectedLlmOptions {
   readonly maxTokens?: number;
   readonly thinkingBudget?: number;
 }
-import type { Model, Provider } from '../types/provider';
+
+type MutableProjectedLlmOptions = {
+  -readonly [Key in keyof ProjectedLlmOptions]: ProjectedLlmOptions[Key];
+};
 
 export type LlmProviderFamily = 'openai' | 'anthropic' | 'generic-openai' | 'local-ollama';
 
@@ -267,7 +271,7 @@ export function projectLlmParameters(input: LlmParameterProjectionInput): LlmPar
     input.llmConfig?.advanced?.thinkingBudget !== undefined ||
     input.runtimeDefaults?.thinkingBudget !== undefined;
   const diagnostics: LlmParameterDiagnostic[] = [];
-  const chatOptions: ProjectedLlmOptions = {};
+  const chatOptions: MutableProjectedLlmOptions = {};
   const providerOptions: Record<string, unknown> = {};
 
   applyCommonOptions({
@@ -376,7 +380,7 @@ function applyCommonOptions(input: {
   readonly presetIntent: AgentPresetIntent;
   readonly capabilities: LlmModelCapabilities;
   readonly diagnostics: LlmParameterDiagnostic[];
-  readonly chatOptions: ProjectedLlmOptions;
+  readonly chatOptions: MutableProjectedLlmOptions;
   readonly diagnoseUnsupported?: boolean;
 }): void {
   const {
@@ -467,7 +471,7 @@ function applyAnthropicOptions(input: {
   readonly presetIntent: AgentPresetIntent;
   readonly capabilities: LlmModelCapabilities;
   readonly diagnostics: LlmParameterDiagnostic[];
-  readonly chatOptions: ProjectedLlmOptions;
+  readonly chatOptions: MutableProjectedLlmOptions;
   readonly providerOptions: Record<string, unknown>;
   readonly supportsBeta: boolean;
   readonly hasExplicitThinkingBudget: boolean;

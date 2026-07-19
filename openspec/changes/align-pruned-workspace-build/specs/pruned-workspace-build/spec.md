@@ -9,6 +9,15 @@ Every `workspace:*` dependency declared by a retained project MUST resolve to ex
 - **WHEN** dependencies are installed from the repository root with the frozen lockfile enabled
 - **THEN** pnpm completes without unresolved workspace packages or stale-lockfile diagnostics
 
+### Requirement: Retained TypeScript contract consumers stay synchronized
+
+The retained Agent and Engine extension dependency graphs MUST compile under the repository strict TypeScript settings. Consumers MUST project internal state into canonical shared contracts explicitly and MUST NOT use unsafe assertions, mutable public DTOs, or compatibility fallbacks to hide contract drift.
+
+#### Scenario: Compile retained extensions strictly
+
+- **WHEN** the strict-extension TypeScript gate compiles the retained Agent and Engine extension graphs
+- **THEN** permission unions, ProjectQuality evidence, LLM options, generated-output filesystem entries, semantic document formats, workspace identity actions, and metadata freshness projections typecheck through their canonical boundaries
+
 ### Requirement: Removed composition packages stay removed
 
 The distribution SHALL NOT retain `@neko/workbench-core`, `@neko/market-core`, or a removed product merely to satisfy stale metadata. Retained feature Webviews SHALL expose their package-owned host adapters directly.

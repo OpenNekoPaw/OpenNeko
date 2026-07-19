@@ -14,6 +14,20 @@ The retained product audit also found that Dashboard primarily duplicates projec
 - **Extension:** new media behavior extends existing service/controller/action contracts. It does not reintroduce product runtimes or feature-package-local FFmpeg wrappers.
 - **Testing:** Cargo metadata proves the native closure; Kernel/Host/N-API/CLI tests prove producer behavior; Assets/Canvas Entity tests prove the migrated canonical path; manifest tests prove Dashboard and Device absence; client and consumer tests prove retained media paths; Range/seek/stream fixtures prove loading behavior.
 
+### Close retained strict-extension contract drift
+
+The strict Agent/Engine extension graph compiles shared Agent, Platform, Content, and local-metadata consumers together, so it is the authoritative feedback loop for contract drift that package-local transpilation can miss. The repair keeps public contracts unchanged and updates each consumer at its owning boundary:
+
+- Pi permission resolution relies on the preceding confirmation discriminant instead of retaining an unreachable boolean comparison.
+- ProjectQuality orchestration validates each result envelope, explicitly projects optional success data, and emits the media-quality evidence issue shape rather than the unrelated QA remediation issue type.
+- LLM parameter projection keeps the returned option view readonly while using a package-local mutable builder during construction.
+- Generated-output adoption requests UTF-8 directory entries and removes a media-kind branch already excluded by the generated-asset discriminant.
+- Semantic document extraction converts its supported PDF/EPUB/DOCX source set into the canonical `DocumentFormat` boundary before document access.
+- Workspace identity recovery captures the immutable action before asynchronous callbacks so discriminated-union narrowing remains valid.
+- Local metadata maps its internal `rebuilding` state to the public search freshness value `building` at the projection boundary.
+
+These are compile-time and deterministic unit-test paths. They do not require provider credentials, browser/Webview automation, or a VS Code Development Host.
+
 ## Goals / Non-Goals
 
 **Goals:**

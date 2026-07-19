@@ -319,7 +319,7 @@ async function loadSemanticOccurrenceRecords(
       occurrenceId: record.projectionId,
       sourceId: record.sourceId,
       sourceFingerprint: source.sourceFingerprint,
-      freshness: record.freshness,
+      freshness: record.freshness === 'rebuilding' ? 'building' : record.freshness,
       occurrence,
     });
   }

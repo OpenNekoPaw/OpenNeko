@@ -8,7 +8,7 @@ import {
   type QualityDiagnostic,
   type QualityEvidence,
   type QualityEvaluatorClass,
-  type QualityIssue,
+  type QualityGateIssue,
   type QualityProjectRef,
   type QualityTarget,
   type ResourceRef,
@@ -50,7 +50,7 @@ export async function collectProjectQualityEvidence(
     target,
   };
   const validation = await facade.validateProject(request);
-  assertProjectQualityResult(validation, 'validate-project');
+  projectQualityResultData(validation, 'validate-project');
   if (!validation.ok) {
     return [
       createEvidence(target, 'structural', validation.diagnostics, [], now(), createId, {
@@ -64,20 +64,14 @@ export async function collectProjectQualityEvidence(
   const snapshot = await facade.getProjectSnapshot(request);
   const runtime = await facade.probeRuntime(request);
   const readiness = await facade.checkExportReadiness(request);
-  assertProjectQualityResult(snapshot, 'get-project-snapshot');
-  assertProjectQualityResult(runtime, 'probe-runtime');
-  assertProjectQualityResult(readiness, 'check-export-readiness');
+  const snapshotData = projectQualityResultData(snapshot, 'get-project-snapshot');
+  const runtimeData = projectQualityResultData(runtime, 'probe-runtime');
+  const readinessData = projectQualityResultData(readiness, 'check-export-readiness');
 
-  const snapshotRefs = snapshot.ok ? [snapshot.data.snapshotRef] : [];
+  const snapshotRefs = snapshotData ? [snapshotData.snapshotRef] : [];
   const structuralDiagnostics = [...validation.diagnostics, ...snapshot.diagnostics];
-  const runtimeDiagnostics = [
-    ...runtime.diagnostics,
-    ...(runtime.ok ? runtime.data.diagnostics : []),
-  ];
-  const readinessDiagnostics = [
-    ...readiness.diagnostics,
-    ...(readiness.ok ? readiness.data.diagnostics : []),
-  ];
+  const runtimeDiagnostics = [...runtime.diagnostics, ...(runtimeData?.diagnostics ?? [])];
+  const readinessDiagnostics = [...readiness.diagnostics, ...(readinessData?.diagnostics ?? [])];
   return [
     createEvidence(target, 'structural', structuralDiagnostics, snapshotRefs, now(), createId, {
       id: 'project.valid',
@@ -86,21 +80,21 @@ export async function collectProjectQualityEvidence(
     }),
     createEvidence(target, 'technical', runtimeDiagnostics, snapshotRefs, now(), createId, {
       id: 'project.runtime.available',
-      value: runtime.ok && runtime.data.available,
-      passed: runtime.ok && runtime.data.available && !hasError(runtimeDiagnostics),
+      value: runtimeData?.available ?? false,
+      passed: runtimeData?.available === true && !hasError(runtimeDiagnostics),
     }),
     createEvidence(target, 'policy', readinessDiagnostics, snapshotRefs, now(), createId, {
       id: 'project.export.ready',
-      value: readiness.ok && readiness.data.ready,
-      passed: readiness.ok && readiness.data.ready && !hasError(readinessDiagnostics),
+      value: readinessData?.ready ?? false,
+      passed: readinessData?.ready === true && !hasError(readinessDiagnostics),
     }),
   ];
 }
 
-function assertProjectQualityResult(
-  result: ProjectQualityResult<unknown>,
-  operation: ProjectQualityResult<unknown>['operation'],
-): void {
+function projectQualityResultData<TData>(
+  result: ProjectQualityResult<TData>,
+  operation: ProjectQualityResult<TData>['operation'],
+): TData | undefined {
   const contract = validateProjectQualityResult(result);
   if (result.operation !== operation || !contract.ok) {
     throw new Error(
@@ -109,6 +103,7 @@ function assertProjectQualityResult(
         .join('; ')}`,
     );
   }
+  return result.ok ? result.data : undefined;
 }
 
 function createEvidence(
@@ -145,7 +140,7 @@ function diagnosticIssue(
   diagnostic: QualityDiagnostic,
   index: number,
   createId: (prefix: string) => string,
-): QualityIssue {
+): QualityGateIssue {
   return {
     id: createId(`project-quality-issue-${index}`),
     category: diagnostic.code,

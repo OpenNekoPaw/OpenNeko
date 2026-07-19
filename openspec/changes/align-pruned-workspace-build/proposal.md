@@ -15,6 +15,7 @@ The customized workspace removes non-core products but retained Cut, Canvas, Ass
 - Preserve the existing `neko.engine.ensureFrameServer` and `@neko/neko-client` boundary for supported media callers, including authorized file/Range access, probe, frame capture, audio/video processing, timeline playback, stream, proxy, and export.
 - Remove the in-progress TypeScript FFmpeg process/server implementation so Rust/N-API remains the only Engine implementation; removed capability groups fail visibly by absence or `UnknownAction`, never through fallback or successful no-op behavior.
 - Align workspace, release, native build/package scripts, VS Code manifests, lockfiles, and quality checks with the retained Rust media dependency closure.
+- Close the retained strict-extension TypeScript graph by synchronizing discriminated unions, readonly builders, project-quality evidence projection, document formats, filesystem entry types, and metadata freshness states with their canonical contracts.
 - Make the Engine native build use one sequential owner: the package build runs host-cli before host-napi, while Turbo does not schedule duplicate native tasks; N-API metadata preflight keeps Cargo index and lock failures visible.
 - **BREAKING**: Scene/Puppet/Model/ML/Device/Live Engine groups and their DTO/client surfaces are removed. No migration is required for media source files; generated proxies and caches remain rebuildable.
 

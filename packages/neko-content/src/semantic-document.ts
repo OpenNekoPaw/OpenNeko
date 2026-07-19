@@ -1,5 +1,6 @@
 import type {
   DocumentArchiveResourceRef,
+  DocumentFormat,
   DocumentLocator,
   DocumentSourceRef,
   SemanticSourceDescriptor,
@@ -58,7 +59,7 @@ export interface SemanticDocumentExtractionResult {
 export async function extractSemanticDocument(
   input: ExtractSemanticDocumentInput,
 ): Promise<SemanticDocumentExtractionResult> {
-  assertSupportedDocumentSource(input.source);
+  const documentFormat = resolveSupportedDocumentFormat(input.source);
   assertNotAborted(input.signal);
   if (await input.documentAccess.hasDRM(input.runtimePath)) {
     throw new SemanticDocumentExtractionError(
@@ -87,7 +88,7 @@ export async function extractSemanticDocument(
   const startedAt = nowMs();
   const documentSource: DocumentSourceRef = {
     filePath: input.runtimePath,
-    format: input.source.format,
+    format: documentFormat,
     fileId: input.source.sourceId,
     identity: {
       fileId: input.source.sourceId,
@@ -171,13 +172,16 @@ export async function extractSemanticDocument(
   };
 }
 
-function assertSupportedDocumentSource(source: SemanticSourceDescriptor): void {
+function resolveSupportedDocumentFormat(
+  source: SemanticSourceDescriptor,
+): Extract<DocumentFormat, 'pdf' | 'epub' | 'docx'> {
   if (source.format !== 'pdf' && source.format !== 'epub' && source.format !== 'docx') {
     throw new SemanticDocumentExtractionError(
       'semantic-document-unsupported-format',
       `Unsupported semantic document format: ${source.format}`,
     );
   }
+  return source.format;
 }
 
 function collectResourceRefs(

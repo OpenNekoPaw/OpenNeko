@@ -70,7 +70,7 @@ export function resolvePiToolPermissionAction(
   if (mode === 'plan') return 'deny';
   if (requiresConfirmation === true) return 'confirm';
   if (isReadOnly === true) return 'allow';
-  if (mode === 'auto' && requiresConfirmation !== true) return 'allow';
+  if (mode === 'auto') return 'allow';
   return 'confirm';
 }
 

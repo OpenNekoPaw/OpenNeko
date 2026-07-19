@@ -1,6 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import type { Dirent } from 'node:fs';
 import {
   createGeneratedAssetRevisionRef,
   type GeneratedAsset,
@@ -222,9 +223,9 @@ async function listRegularFiles(
   directory: string,
   diagnostics: GeneratedOutputAdoptionDiagnostic[],
 ): Promise<Array<{ readonly filePath: string; readonly mtimeMs: number }>> {
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent<string>[];
   try {
-    entries = await fs.readdir(directory, { withFileTypes: true });
+    entries = await fs.readdir(directory, { withFileTypes: true, encoding: 'utf8' });
   } catch (error) {
     if (hasNodeErrorCode(error, 'ENOENT')) return [];
     diagnostics.push({
@@ -308,7 +309,7 @@ function toRetainableMediaKind(asset: GeneratedAsset): GeneratedMediaTaskType | 
         : asset.type === 'generated-audio'
           ? 'audio'
           : 'storyboard';
-  return kind === 'storyboard' || kind === 'file' ? undefined : kind;
+  return kind === 'storyboard' ? undefined : kind;
 }
 
 function isInsideDirectory(directory: string, filePath: string): boolean {

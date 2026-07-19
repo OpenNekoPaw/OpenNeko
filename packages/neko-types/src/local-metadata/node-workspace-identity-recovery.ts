@@ -33,15 +33,16 @@ export async function executeNodeWorkspaceIdentityRecoveryAction(options: {
   validateTimestamp(options.occurredAt);
   const descriptorPath = join(options.workspaceRoot, WORKSPACE_IDENTITY_RELATIVE_PATH);
   const currentDescriptor = parseWorkspaceIdentityJson(await readFile(descriptorPath, 'utf8'));
-  const locator = validatePortableLocator(options.action.locator);
+  const action = options.action;
+  const locator = validatePortableLocator(action.locator);
 
-  if (options.action.kind === 'rebind') {
-    assertDescriptorOwner(currentDescriptor, options.action.workspaceId);
+  if (action.kind === 'rebind') {
+    assertDescriptorOwner(currentDescriptor, action.workspaceId);
     const workspace = await options.metadataStore.transaction(
       { mode: 'state-write', ownership: 'state', operation: 'recover-workspace-rebind' },
       ({ repositories }) =>
         repositories.workspaces.rebind({
-          workspaceId: options.action.workspaceId,
+          workspaceId: action.workspaceId,
           locator,
           reboundAt: options.occurredAt,
         }),
@@ -55,11 +56,11 @@ export async function executeNodeWorkspaceIdentityRecoveryAction(options: {
     };
   }
 
-  if (options.action.kind === 'select-current') {
-    assertDescriptorOwner(currentDescriptor, options.action.workspaceId);
+  if (action.kind === 'select-current') {
+    assertDescriptorOwner(currentDescriptor, action.workspaceId);
     const conflictingWorkspaceIds = validateConflictSet(
-      options.action.workspaceId,
-      options.action.conflictingWorkspaceIds,
+      action.workspaceId,
+      action.conflictingWorkspaceIds,
     );
     const workspace = await options.metadataStore.transaction(
       { mode: 'state-write', ownership: 'state', operation: 'recover-workspace-select-current' },
@@ -67,14 +68,14 @@ export async function executeNodeWorkspaceIdentityRecoveryAction(options: {
         const matches = await repositories.workspaces.findByCurrentLocator(locator);
         assertExactCurrentLocatorConflict(
           matches,
-          options.action.workspaceId,
+          action.workspaceId,
           conflictingWorkspaceIds,
           locator,
         );
         for (const workspaceId of conflictingWorkspaceIds) {
           await repositories.workspaces.markOrphaned(workspaceId, options.occurredAt);
         }
-        return repositories.workspaces.markSeen(options.action.workspaceId, options.occurredAt);
+        return repositories.workspaces.markSeen(action.workspaceId, options.occurredAt);
       },
     );
     return {
@@ -86,10 +87,10 @@ export async function executeNodeWorkspaceIdentityRecoveryAction(options: {
     };
   }
 
-  assertDescriptorOwner(currentDescriptor, options.action.sourceWorkspaceId);
+  assertDescriptorOwner(currentDescriptor, action.sourceWorkspaceId);
   const nextDescriptor = parseWorkspaceIdentityDescriptor({
     version: 1,
-    workspaceId: options.action.newWorkspaceId,
+    workspaceId: action.newWorkspaceId,
   });
   if (nextDescriptor.workspaceId === currentDescriptor.workspaceId) {
     throw new NekoStorageContractError({
