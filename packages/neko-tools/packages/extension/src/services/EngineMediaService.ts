@@ -15,7 +15,7 @@
 
 import type { EngineDiffResult } from '@neko/shared';
 import { EngineClient } from '@neko/neko-client/EngineClient';
-import type { SilenceAnalysis } from '@neko/neko-client/engine/types';
+import type { ProbeResult, SilenceAnalysis } from '@neko/neko-client/engine/types';
 import type { IEngineMediaService } from '../contracts/IEngineMediaService';
 import type { IEngineRuntimeResolver } from '../contracts/IEngineRuntimeResolver';
 import { VSCodeEngineRuntimeResolver } from './EngineRuntimeResolver';
@@ -77,13 +77,6 @@ export class EngineMediaService implements IEngineMediaService {
   }
 
   /**
-   * Probe media metadata via the engine's native probe action.
-   *
-   * @param group - Action group: 'videos' | 'audios'
-   * @param source - Absolute path to media file
-   * @returns ProbeResult or null if engine unavailable
-   */
-  /**
    * Detect silence regions in an audio file via engine's native detect_silence action.
    */
   async detectSilence(
@@ -102,7 +95,14 @@ export class EngineMediaService implements IEngineMediaService {
     }
   }
 
-  async probe(group: 'videos' | 'audios', source: string): Promise<any | null> {
+  /**
+   * Probe media metadata via the engine's native probe action.
+   *
+   * @param group - Action group: 'videos' | 'audios'
+   * @param source - Absolute path to media file
+   * @returns ProbeResult or null if engine unavailable
+   */
+  async probe(group: 'videos' | 'audios', source: string): Promise<ProbeResult | null> {
     const client = await this.ensureClient();
     if (!client) return null;
 

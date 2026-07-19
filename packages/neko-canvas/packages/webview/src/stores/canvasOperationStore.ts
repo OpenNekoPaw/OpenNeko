@@ -6,7 +6,7 @@
  */
 
 import { create } from 'zustand';
-import type { CanvasNode, CanvasConnection } from '@neko/shared';
+import type { CanvasNode, CanvasConnection, CanvasNodeUpdateOperation } from '@neko/shared';
 import type { EditOperation, OperationMeta, OperationSource } from '@neko/shared';
 import { getGlobalVSCodeApi } from '../utils/vscode';
 
@@ -60,8 +60,8 @@ export interface CanvasOperationStore {
   recordNodeRemove: (nodeId: string, node: CanvasNode, connections: CanvasConnection[]) => void;
   recordNodeUpdate: (
     nodeId: string,
-    updates: Record<string, unknown>,
-    before: Record<string, unknown>,
+    updates: CanvasNodeUpdateOperation['payload']['updates'],
+    before: CanvasNodeUpdateOperation['before']['updates'],
   ) => void;
   recordNodeReorder: (nodeId: string, newZIndex: number, oldZIndex: number) => void;
   recordNodeGroup: (groupNode: CanvasNode, childIds: string[]) => void;

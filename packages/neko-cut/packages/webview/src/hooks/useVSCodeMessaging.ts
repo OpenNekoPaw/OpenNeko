@@ -176,27 +176,28 @@ export function useVSCodeMessaging(options: UseVSCodeMessagingOptions = {}) {
           break;
 
         case 'update':
+          const updatedProject: ProjectData = message.content;
+          const projectRoot =
+            typeof message.projectRoot === 'string' ? message.projectRoot : undefined;
           suppressProjectChangedSync(() => {
-            setProject(message.content as ProjectData, message.projectRoot as string | undefined);
+            setProject(updatedProject, projectRoot);
           });
 
           // Pre-request URIs for all media files in the project
-          if (message.content && message.content.tracks) {
+          {
             const mediaPaths = new Set<string>();
-            message.content.tracks.forEach((track: any) => {
-              if (track.elements) {
-                track.elements.forEach((element: any) => {
-                  if ((element.type === 'media' || element.type === 'audio') && element.src) {
-                    mediaPaths.add(element.src);
-                  }
-                });
+            for (const track of updatedProject.tracks) {
+              for (const element of track.elements) {
+                if ((element.type === 'media' || element.type === 'audio') && element.src) {
+                  mediaPaths.add(element.src);
+                }
               }
-            });
+            }
 
             // Request webview URIs for all unique media paths
-            mediaPaths.forEach((path) => {
-              requestFileUriUtil(path);
-            });
+            for (const mediaPath of mediaPaths) {
+              requestFileUriUtil(mediaPath);
+            }
           }
           break;
 

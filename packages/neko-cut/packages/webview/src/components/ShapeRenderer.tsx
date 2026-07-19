@@ -356,9 +356,6 @@ export const ShapeRenderer = memo(function ShapeRenderer({
   onClick,
   interactive = false,
 }: ShapeRendererProps) {
-  // Skip invisible shapes
-  if (!shape.visible) return null;
-
   const gradientId = `gradient-${shape.id}`;
   const shadowId = `shadow-${shape.id}`;
 
@@ -421,6 +418,8 @@ export const ShapeRenderer = memo(function ShapeRenderer({
 
     return elements.length > 0 ? <defs>{elements}</defs> : null;
   }, [shape.style.fill, shape.style.shadow, gradientId, shadowId]);
+
+  if (!shape.visible) return null;
 
   // Handle click
   const handleClick = (e: MouseEvent) => {

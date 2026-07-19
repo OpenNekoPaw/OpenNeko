@@ -152,15 +152,14 @@ interface VideoDetailsProps {
   };
 }
 
-const VideoDetails = memo(function VideoDetails({ details }: VideoDetailsProps) {
+export const VideoDetails = memo(function VideoDetails({ details }: VideoDetailsProps) {
   const { t } = useTranslation();
-  if (!details || !details.duration) return null;
-
-  // Downsample keyframe diffs for rendering performance
   const displayKeyframeDiffs = useMemo(
-    () => downsampleKeyframeDiffs(details.keyframeDiffs ?? [], 500),
-    [details.keyframeDiffs],
+    () => downsampleKeyframeDiffs(details?.keyframeDiffs ?? [], 500),
+    [details?.keyframeDiffs],
   );
+
+  if (!details || !details.duration) return null;
 
   return (
     <div className="border-t border-[var(--tools-divider)] bg-[var(--tools-panel)] p-3">

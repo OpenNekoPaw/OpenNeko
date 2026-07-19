@@ -15,6 +15,7 @@ import type {
   CanvasUpdateBlockResult,
   CanvasUpsertNarrativeProductionBindingRequest,
   CanvasUpsertNarrativeProductionBindingResult,
+  CanvasNodeUpdateOperation,
   PortDefinition,
   SceneGroupCanvasNode,
   ShotCanvasNode,
@@ -135,7 +136,7 @@ export interface CanvasStore {
   // ==================== Node Actions ====================
   addNode: (node: Omit<CanvasNode, 'id'>) => string;
   addNodes: (nodes: Array<Omit<CanvasNode, 'id'>>) => string[];
-  updateNode: (id: string, updates: Partial<CanvasNode>) => void;
+  updateNode: (id: string, updates: CanvasNodeUpdates) => void;
   updateNodeData: (id: string, data: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
   /** Record history + update position (call on drag end) */
@@ -224,6 +225,8 @@ export interface CanvasStore {
   undo: () => void;
   redo: () => void;
 }
+
+type CanvasNodeUpdates = CanvasNodeUpdateOperation['payload']['updates'];
 
 export function canCreateCanvasConnection(
   nodes: readonly CanvasNode[],
@@ -494,7 +497,7 @@ function withSubsystemMetadataDefaults(canvasData: CanvasData): CanvasData {
   });
 }
 
-function clampNodeUpdateSize(node: CanvasNode, updates: Partial<CanvasNode>): Partial<CanvasNode> {
+function clampNodeUpdateSize(node: CanvasNode, updates: CanvasNodeUpdates): CanvasNodeUpdates {
   if (!updates.size) {
     return updates;
   }
@@ -637,10 +640,10 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     recordHistory(canvasData);
 
     const oldNode = canvasData.nodes.find((n) => n.id === id);
-    const before: Partial<CanvasNode> = {};
+    const before: CanvasNodeUpdates = {};
     if (oldNode) {
-      for (const key of Object.keys(updates) as Array<keyof CanvasNode>) {
-        (before as any)[key] = (oldNode as any)[key];
+      for (const key of Object.keys(updates) as Array<keyof CanvasNodeUpdates>) {
+        Object.assign(before, { [key]: oldNode[key] });
       }
     }
     const normalizedUpdates = oldNode ? clampNodeUpdateSize(oldNode, updates) : updates;
@@ -685,7 +688,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
     useCanvasOperationStore
       .getState()
-      .recordNodeUpdate(id, { data: { ...oldNode?.data, ...data } } as any, before);
+      .recordNodeUpdate(id, { data: { ...oldNode?.data, ...data } }, before);
   },
 
   removeNode: (id) => {
@@ -756,7 +759,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
     useCanvasOperationStore
       .getState()
-      .recordNodeUpdate(id, { position } as any, { position: oldNode.position } as any);
+      .recordNodeUpdate(id, { position }, { position: oldNode.position });
   },
 
   resizeNodeEnd: (id, size, position) => {
@@ -815,7 +818,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
     useCanvasOperationStore
       .getState()
-      .recordNodeUpdate(id, { rotation } as any, { rotation: oldNode.rotation } as any);
+      .recordNodeUpdate(id, { rotation }, { rotation: oldNode.rotation });
   },
 
   assignShotsToScene: (sceneId, shotIds, autoLayout = true) => {
@@ -946,9 +949,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
 
     if (oldNode) {
-      useCanvasOperationStore
-        .getState()
-        .recordNodeUpdate(id, { ports } as any, { ports: oldNode.ports } as any);
+      useCanvasOperationStore.getState().recordNodeUpdate(id, { ports }, { ports: oldNode.ports });
     }
   },
 

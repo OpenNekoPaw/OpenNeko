@@ -24,7 +24,7 @@ export interface PreviewRendererProps {
   chrome?: 'contained' | 'full-bleed';
 }
 
-export type PreviewRenderer = (props: PreviewRendererProps) => React.ReactNode;
+export type PreviewRenderer = React.ComponentType<PreviewRendererProps>;
 
 export type PreviewRendererRegistry = Partial<
   Record<PreviewSourceDescriptor['role'], PreviewRenderer>
@@ -32,22 +32,22 @@ export type PreviewRendererRegistry = Partial<
 
 function createPreviewRendererRegistry(): PreviewRendererRegistry {
   return {
-    image: renderVisualPreview,
-    'document-cover': renderVisualPreview,
-    'video-poster': renderVisualPreview,
-    'video-proxy': renderVideoPreview,
-    'audio-waveform': renderAudioPreview,
-    'model-screenshot': renderVisualPreview,
-    'model-turntable': renderVisualPreview,
-    'generation-candidate': renderVisualPreview,
-    'project-thumbnail': renderProjectPreview,
-    unavailable: renderFallbackPreview,
+    image: VisualPreviewRenderer,
+    'document-cover': VisualPreviewRenderer,
+    'video-poster': VisualPreviewRenderer,
+    'video-proxy': VideoPreviewRenderer,
+    'audio-waveform': AudioPreviewRenderer,
+    'model-screenshot': VisualPreviewRenderer,
+    'model-turntable': VisualPreviewRenderer,
+    'generation-candidate': VisualPreviewRenderer,
+    'project-thumbnail': ProjectPreviewRenderer,
+    unavailable: FallbackPreviewRenderer,
   };
 }
 
 export function PreviewSurface(props: PreviewRendererProps) {
   const registry = useMemo(() => createPreviewRendererRegistry(), []);
-  const Renderer = registry[props.source.role] ?? renderFallbackPreview;
+  const Renderer = registry[props.source.role] ?? FallbackPreviewRenderer;
   return <Renderer key={props.source.id} {...props} />;
 }
 
@@ -555,7 +555,7 @@ function handoffRequestKey(request: {
 // Renderers
 // =============================================================================
 
-function renderVisualPreview({
+function VisualPreviewRenderer({
   source,
   surfaceKind = 'inline',
   chrome = 'contained',
@@ -610,7 +610,7 @@ function getVisualPreviewImageClassName(
   return 'h-full w-full object-contain';
 }
 
-function renderVideoPreview({
+function VideoPreviewRenderer({
   source,
   surfaceKind = 'inline',
   playbackControl,
@@ -747,7 +747,7 @@ function readImagePreviewUrl(url: string | undefined): string | undefined {
   return url && isImagePreviewUrl(url) ? url : undefined;
 }
 
-function renderAudioPreview({
+function AudioPreviewRenderer({
   source,
   delegateActions,
   surfaceKind = 'inline',
@@ -951,7 +951,10 @@ function useProjectThumbnail(assetPath: string | undefined, nodeId: string): str
   return thumbnailUrl;
 }
 
-function renderProjectPreview({ source, delegateActions }: PreviewRendererProps): React.ReactNode {
+function ProjectPreviewRenderer({
+  source,
+  delegateActions,
+}: PreviewRendererProps): React.ReactNode {
   const assetPath = source.asset?.path;
   const ext = assetPath?.split('.').pop()?.toLowerCase() ?? '';
   const thumbnailUrl = useProjectThumbnail(assetPath, source.id);
@@ -1050,4 +1053,8 @@ function renderFallbackPreview({
       )}
     </div>
   );
+}
+
+function FallbackPreviewRenderer(props: PreviewRendererProps): React.ReactNode {
+  return renderFallbackPreview(props);
 }

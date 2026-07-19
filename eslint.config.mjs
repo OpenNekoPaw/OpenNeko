@@ -33,7 +33,7 @@ export default tseslint.config(
       // --- Error level (CI-blocking) ---
       'no-debugger': 'error',
       'no-console': 'warn',
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
@@ -79,7 +79,7 @@ export default tseslint.config(
       'react-hooks': reactHooks,
     },
     rules: {
-      'react-hooks/rules-of-hooks': 'warn',
+      'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
     },
   },

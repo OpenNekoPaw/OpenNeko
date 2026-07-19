@@ -4,7 +4,7 @@ import React, { useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useResizable, type UseResizableReturn } from './useResizable';
+import { useResizable, type UseResizableOptions, type UseResizableReturn } from './useResizable';
 
 describe('useResizable hook lifecycle', () => {
   let host: HTMLDivElement;
@@ -220,24 +220,25 @@ describe('useResizable hook lifecycle', () => {
     } = options;
 
     function Harness() {
-      const result =
+      const resizeOptions: UseResizableOptions =
         options.size !== undefined
-          ? useResizable({
+          ? {
               edge,
               mode,
               size: options.size,
               minSize,
               maxSize,
               onSizeChange: options.onSizeChange ?? vi.fn(),
-            })
-          : useResizable({
+            }
+          : {
               edge,
               mode,
               initialSize: options.initialSize ?? 240,
               minSize,
               maxSize,
               onSizeChange: options.onSizeChange,
-            });
+            };
+      const result = useResizable(resizeOptions);
 
       latest = result;
 

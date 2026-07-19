@@ -122,6 +122,40 @@ describe('PreviewSurface media playback control', () => {
     expect(image?.className).not.toContain('object-cover');
   });
 
+  it('switches hook-owning preview roles through React component boundaries', async () => {
+    const visualSource: PreviewSourceDescriptor = {
+      id: 'preview-role-visual',
+      role: 'image',
+      variants: [
+        {
+          id: 'preview-role-visual:image',
+          role: 'image',
+          sourcePath: 'data:image/png;base64,cHJldmlldw==',
+        },
+      ],
+    };
+    const audioSource: PreviewSourceDescriptor = {
+      id: 'preview-role-audio',
+      role: 'audio-waveform',
+      title: 'Audio preview',
+    };
+
+    await act(async () => {
+      root.render(<PreviewSurface source={visualSource} />);
+    });
+    expect(host.querySelector('[data-preview-surface="visual"]')).not.toBeNull();
+
+    await act(async () => {
+      root.render(<PreviewSurface source={audioSource} />);
+    });
+    expect(host.querySelector('[data-preview-surface="audio"]')).not.toBeNull();
+
+    await act(async () => {
+      root.render(<PreviewSurface source={visualSource} />);
+    });
+    expect(host.querySelector('[data-preview-surface="visual"]')).not.toBeNull();
+  });
+
   it.each([
     {
       role: 'video-proxy' as const,

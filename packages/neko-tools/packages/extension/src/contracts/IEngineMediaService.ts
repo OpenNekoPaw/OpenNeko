@@ -1,5 +1,5 @@
 import type { EngineClient } from '@neko/neko-client/EngineClient';
-import type { SilenceAnalysis } from '@neko/neko-client/engine/types';
+import type { ProbeResult, SilenceAnalysis } from '@neko/neko-client/engine/types';
 import type { EngineDiffResult } from '@neko/shared';
 
 export interface IEngineMediaService {
@@ -15,5 +15,5 @@ export interface IEngineMediaService {
     thresholdDbfs?: number,
     minDuration?: number,
   ): Promise<SilenceAnalysis | null>;
-  probe(group: 'videos' | 'audios', source: string): Promise<unknown | null>;
+  probe(group: 'videos' | 'audios', source: string): Promise<ProbeResult | null>;
 }

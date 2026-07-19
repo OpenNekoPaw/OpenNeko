@@ -982,22 +982,7 @@ function ShotCreatorSummary({
   );
 }
 
-function ShotCreatorPromptEditor({
-  node,
-  onUpdateData,
-  creativeAiStatus,
-  onOptimizePrompt,
-  onGenerateImage,
-  onEditImage,
-  onGenerateVideo,
-  onEditVideo,
-  onCandidateAccept,
-  onCandidateReject,
-  onCandidateRetry,
-  onCandidateDelete,
-  onCandidateInspect,
-  className,
-}: {
+interface ShotCreatorPromptEditorProps {
   node: CanvasNode;
   onUpdateData?: (nodeId: string, data: Record<string, unknown>) => void;
   creativeAiStatus?: ContentOverlayCreativeAiStatus;
@@ -1032,9 +1017,29 @@ function ShotCreatorPromptEditor({
     actionId?: CanvasCreativeAiActionId,
   ) => void;
   className?: string;
-}) {
-  if (node.type !== 'shot') return null;
+}
 
+function ShotCreatorPromptEditor(props: ShotCreatorPromptEditorProps) {
+  if (props.node.type !== 'shot') return null;
+  return <ShotCreatorPromptEditorContent {...props} />;
+}
+
+function ShotCreatorPromptEditorContent({
+  node,
+  onUpdateData,
+  creativeAiStatus,
+  onOptimizePrompt,
+  onGenerateImage,
+  onEditImage,
+  onGenerateVideo,
+  onEditVideo,
+  onCandidateAccept,
+  onCandidateReject,
+  onCandidateRetry,
+  onCandidateDelete,
+  onCandidateInspect,
+  className,
+}: ShotCreatorPromptEditorProps) {
   const storyboardPromptState = readShotStoryboardPromptState(node);
   const projection = useMemo(() => projectCanvasShotPrompt(node), [node]);
   const promptDrafts = useMemo(

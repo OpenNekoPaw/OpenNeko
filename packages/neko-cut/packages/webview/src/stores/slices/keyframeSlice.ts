@@ -71,7 +71,7 @@ export interface KeyframeSlice {
     effectId: string,
     paramKey: string,
     time: number,
-    value: any,
+    value: EffectParameterKeyframe['value'],
   ) => void;
   removeEffectKeyframe: (
     trackId: string,
