@@ -163,7 +163,20 @@ Preview reuses the current shared floating toolbar, tree shell, property rows, a
 
 The existing key, fill, and rim entries remain the only initial light rig. They are `DirectionalLight` controls, not physical point lights: each stored position is normalized to the subject bounds and defines a direction toward the subject center, so distance does not attenuate intensity. Preview exposes them as a Lights group in the scene tree, a selected-light inspector, and bounded viewport objects composed from Three.js editor geometry. Camera selection similarly renders a recognizable camera body alongside its frustum.
 
-Camera and light objects are manipulated by direct pointer drag on a camera-facing plane. They do not attach to the XYZ `TransformControls` gizmo: the axis gizmo remains reserved for model-node transforms, while direct dragging pauses orbit navigation and commits normalized camera/light position through the existing temporary staging contracts. Camera/light bodies, frusta, direction guides, and transform gizmos are editor chrome and are hidden from every purpose capture. Initial scope does not add/remove lights, edit targets, enable shadows, persist a scene, or introduce point/spot/area light types.
+Camera and light objects are manipulated by direct pointer drag on a camera-facing plane. They do not attach to the XYZ `TransformControls` gizmo: the axis gizmo remains reserved for model-node transforms, while direct dragging pauses orbit navigation and commits normalized camera/light position through the existing temporary staging contracts. Camera/light bodies, frusta, direction guides, and transform gizmos are editor chrome and are hidden from every purpose capture. The initial camera/light-object slice did not add/remove lights; the bounded bottom creation bar below extends only the same directional-light contract and still does not edit targets, enable shadows, persist a scene, or introduce point/spot/area light types.
+
+### Use one bottom creation bar with bounded staging slots
+
+The Canvas-style bottom toolbar exposes five creation affordances: mannequin, blockout object, camera, directional light, and 720° environment. These actions remain projections of the existing temporary session owners rather than a second scene document model.
+
+- Mannequin and object menus select a catalog-declared built-in preset for the session's single primary-subject slot. Selecting another primary subject is an explicit replacement with a monotonic revision, not a hidden multi-character or multi-object scene.
+- Camera adds a copy of the active temporary camera and selects its viewport object.
+- Light adds a bounded temporary directional-light entry with a stable panel-local identity. The initial key/fill/rim rig remains the default, while extra lights use the same direction-to-subject semantics, direct-drag interaction, capture exclusion, and recursive disposal. The session accepts at most eight directional lights and still does not introduce point/spot/area lights, attenuation, shadows, or persistence.
+- 720° opens the Extension-owned authorized panorama picker and replaces the session's single environment slot after successful inspection. Cancellation changes nothing; failure remains visible and never substitutes the neutral grid.
+
+Preset replacement and panorama authorization cross the Webview/Extension message boundary with exact session identity. The Extension validates the requested catalog entry or local source, advances the canonical staging revision, and returns an identity-bearing runtime descriptor. Webview-local hard-coded asset paths, raw file paths, and optimistic subject mutation are forbidden.
+
+The Preview provider owns the Webview page's extension-asset authorization for the whole panel lifetime. A source-model session may add its exact projected dependency root, but disposing or replacing that session MUST NOT leave the page CSS, JavaScript, or selected built-in preset unauthorized. Subject replacement therefore restores the provider-owned extension roots after releasing the previous source projection; panel disposal remains the only operation that revokes every root.
 
 ### Preserve downstream capability negotiation
 

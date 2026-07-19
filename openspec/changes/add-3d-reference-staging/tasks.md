@@ -39,6 +39,7 @@
 - [x] 5.4 Add a visual pose-card gallery backed by real joint values, grouped constrained body/torso/head/arm/leg controls for supported mannequins, explicit unsupported states for static/non-articulated models, and no animation timeline, IK, retargeting, multi-character scene, or source writeback.
 - [x] 5.5 Add camera, shot/aspect, panorama orientation, environment, capture, and output-preview controls without resetting the live orbit view during unrelated edits.
 - [x] 5.6 Add focused accessibility, keyboard/focus, theme, panel-switching, resize, role-selection, stale-state, and multi-root Webview tests.
+- [x] 5.9 Add a Canvas-style bottom creation bar for catalog mannequin/object selection, temporary camera and bounded directional-light creation, and Extension-authorized 720° environment selection; keep one primary-subject and one environment slot, exact session identity, capture exclusion, i18n, accessibility, and focused contract/provider/runtime/UI tests.
 
 ## 6. Replace Agent, Canvas, and media delivery
 

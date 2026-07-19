@@ -75,6 +75,14 @@ Preview SHALL expose its fixed key, fill, and rim directional lights as selectab
 - **WHEN** a light helper is visible in the interactive viewport and the creator captures any reference purpose
 - **THEN** Preview excludes every light helper, guide line, label, and transform gizmo from the output
 
+#### Scenario: Add a bounded temporary directional light
+
+- **WHEN** the creator invokes the bottom light action while fewer than eight temporary directional lights exist
+- **THEN** Preview creates one panel-local directional light, selects its viewport object and inspector, and preserves the subject, camera, environment, and existing lights
+
+- **WHEN** the creator attempts to add a ninth light
+- **THEN** Preview reports the bounded-light diagnostic and does not create a point, spot, area, shadow, or persistent light
+
 ### Requirement: Panoramic scene reference reuses authorized Preview content boundaries
 
 Preview SHALL accept an authorized 720°/equirectangular panoramic image or supported panoramic video as a temporary environment, preserve its stable source reference and orientation, and project it into the Three.js reference viewport through an Extension-authorized URI. The Webview MUST NOT read arbitrary local paths, probe companion directories, or persist Webview URIs.
@@ -83,6 +91,30 @@ Preview SHALL accept an authorized 720°/equirectangular panoramic image or supp
 
 - **WHEN** the creator selects an authorized panoramic source and adjusts yaw, pitch, or viewport field of view
 - **THEN** Preview renders the environment and records the stable source identity plus orientation without copying the source into a model project
+
+### Requirement: The bottom creation bar projects bounded session operations
+
+Preview SHALL expose bottom-toolbar actions for mannequin, blockout object, camera, directional light, and 720° environment using the shared floating-toolbar, popover, theme, icon, focus, and keyboard primitives. Mannequin and object selection SHALL replace the single primary-subject slot only after Extension catalog validation; camera and light actions SHALL add temporary panel-local entries; the 720° action SHALL use the Extension-owned authorized file picker and replace the single environment slot. The toolbar MUST NOT create durable scene data, Webview-owned file access, multiple primary subjects, or an alternate preset registry.
+
+#### Scenario: Select a different mannequin from the bottom bar
+
+- **WHEN** the creator chooses a catalog mannequin from the bottom toolbar
+- **THEN** the Extension validates and projects that preset, advances the same panel session revision, and replaces the primary subject without opening a fallback or retaining the previous subject as a hidden scene object
+
+#### Scenario: Preserve Webview assets while replacing a source model
+
+- **WHEN** the creator replaces an authorized source model with a built-in mannequin or blockout object
+- **THEN** Preview releases the old model projection while keeping the provider-owned Webview CSS, JavaScript, and selected built-in dependencies authorized for the live panel
+
+#### Scenario: Add a camera from the bottom bar
+
+- **WHEN** the creator invokes the bottom camera action
+- **THEN** Preview duplicates the active temporary camera with a deterministic identity, selects its viewport object, and preserves the current orbit until the creator explicitly views through it
+
+#### Scenario: Choose a 720° environment from the bottom bar
+
+- **WHEN** the creator invokes the 720° action and selects an authorized panoramic image
+- **THEN** the Extension inspects and projects the exact resource into the existing environment slot while preserving the primary subject and other staging state
 
 ### Requirement: Every 3D reference session owns isolated mutable state
 
