@@ -297,6 +297,8 @@ export const chat = {
   'chat.input.mentionTags.entity.shot': 'Shot',
   'chat.input.mentionTags.entity.canvas': 'Canvas',
   'chat.input.mentionTags.entity.canvasNode': 'Canvas node',
+  'chat.input.mentionDescriptions.entityCandidate': 'Entity Candidate',
+  'chat.input.mentionDescriptions.withType': '{kind} · {type}',
   'chat.input.startTypingToSearch': 'Start typing to search files...',
   'chat.input.filesFound': '"{filter}" - {count} files',
   'chat.input.lineRangeHint': 'Tip: Use :10-20 for line range (e.g., file.ts:10-20)',

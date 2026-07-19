@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { setLocale } from '../../i18n';
 import {
   projectChatWorkspaceModelState,
   projectConfigStateMessage,
@@ -14,6 +15,10 @@ import {
 import { buildConfigChangedMessage, buildConfigStateMessage } from '@neko-agent/types';
 
 describe('config message presenter', () => {
+  beforeEach(() => {
+    setLocale('en');
+  });
+
   it('projects settings data without overwriting configured providers', () => {
     expect(
       projectSettingsDataMessage({
@@ -253,7 +258,7 @@ describe('config message presenter', () => {
           id: 'asset:asset-1',
           kind: 'asset',
           label: 'Hero portrait',
-          description: 'Asset · character',
+          description: 'Asset · Character',
           contextPayload: {
             type: 'asset',
             id: 'asset-1',
@@ -308,7 +313,38 @@ describe('config message presenter', () => {
       expect.objectContaining({
         kind: 'entity',
         label: '小橘',
-        description: 'Entity Candidate · character',
+        description: 'Entity Candidate · Character',
+      }),
+    ]);
+  });
+
+  it('localizes semantic Entity Candidate descriptions for the active webview locale', () => {
+    setLocale('zh-cn');
+
+    expect(
+      projectProjectFilesMessage({
+        type: 'projectFiles',
+        purpose: 'roleplay',
+        mentionExtras: [
+          {
+            type: 'entity',
+            id: 'entity-projection:semantic-xiaoju',
+            label: '小橘',
+            summary: 'Entity: 小橘 (character candidate)',
+            source: 'entity-graph',
+            entityType: 'character',
+            navigationData: {
+              candidateId: 'candidate:auto:character:小橘',
+              projectSearchItemId: 'entity-projection:semantic-xiaoju',
+            },
+          },
+        ],
+      }).mentionItems,
+    ).toEqual([
+      expect.objectContaining({
+        kind: 'entity',
+        label: '小橘',
+        description: '实体候选 · 角色',
       }),
     ]);
   });

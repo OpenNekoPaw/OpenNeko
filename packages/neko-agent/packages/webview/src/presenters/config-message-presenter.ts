@@ -39,6 +39,7 @@ import type {
   SettingsState,
   SettingsUpdatedMessage,
 } from '@neko-agent/types';
+import { t } from '../i18n';
 
 const AGENT_MEDIA_CATEGORIES: readonly AgentMediaModelCategory[] = ['image', 'video', 'audio'];
 const MEDIA_UNDERSTANDING_PURPOSES = {
@@ -46,6 +47,34 @@ const MEDIA_UNDERSTANDING_PURPOSES = {
   audio: 'audio.understand',
   video: 'video.understand',
 } as const satisfies Record<MediaUnderstandingCategory, MediaUnderstandingPurpose>;
+const MENTION_EXTRA_LABEL_KEYS = {
+  'canvas-node': 'chat.input.mentionTags.entity.canvasNode',
+  character: 'chat.input.mentionTags.kind.character',
+  scene: 'chat.input.mentionTags.kind.scene',
+  asset: 'chat.input.mentionTags.kind.asset',
+  media: 'chat.input.mentionTags.kind.media',
+  entity: 'chat.input.mentionTags.kind.entity',
+} as const satisfies Record<ProjectMentionExtra['type'], string>;
+const MEDIA_TYPE_LABEL_KEYS = {
+  video: 'chat.input.mentionTags.media.video',
+  audio: 'chat.input.mentionTags.media.audio',
+  image: 'chat.input.mentionTags.media.image',
+  sequence: 'chat.input.mentionTags.media.sequence',
+  text: 'chat.input.mentionTags.media.text',
+  document: 'chat.input.mentionTags.media.document',
+} as const satisfies Record<NonNullable<ProjectMentionExtra['mediaType']>, string>;
+const ENTITY_TYPE_LABEL_KEYS: Readonly<Record<string, string>> = {
+  asset: 'chat.input.mentionTags.entity.asset',
+  character: 'chat.input.mentionTags.entity.character',
+  role: 'chat.input.mentionTags.entity.character',
+  角色: 'chat.input.mentionTags.entity.character',
+  scene: 'chat.input.mentionTags.entity.scene',
+  shot: 'chat.input.mentionTags.entity.shot',
+  canvas: 'chat.input.mentionTags.entity.canvas',
+  'canvas-node': 'chat.input.mentionTags.entity.canvasNode',
+};
+
+type Translate = typeof t;
 
 export function projectSettingsDataMessage(message: SettingsDataMessage): SettingsDataProjection {
   const source = asRecord(message) ?? {};
@@ -217,7 +246,10 @@ export function projectMediaModelSelectionForSessionModeChange(input: {
   };
 }
 
-export function projectProjectFilesMessage(message: ProjectFilesMessage): ProjectFilesProjection {
+export function projectProjectFilesMessage(
+  message: ProjectFilesMessage,
+  translate: Translate = t,
+): ProjectFilesProjection {
   const projectFiles = (message.files ?? []).filter(isProjectFileMentionInfo);
   const fileMentions = projectFiles.map((file) => ({
     id: `file:${file.path}`,
@@ -236,7 +268,7 @@ export function projectProjectFilesMessage(message: ProjectFilesMessage): Projec
       id: `${extra.type}:${extra.id}`,
       kind: extra.type,
       label: extra.label,
-      description: describeMentionExtra(extra),
+      description: describeMentionExtra(extra, translate),
       contextPayload: toAgentContextPayload(extra),
       ...(extra.icon ? { icon: extra.icon } : {}),
       ...(extra.source ? { source: extra.source } : {}),
@@ -608,19 +640,52 @@ function toAgentContextPayload(extra: ProjectMentionExtra): AgentContextPayload 
   };
 }
 
-function describeMentionExtra(extra: ProjectMentionExtra): string {
-  if (extra.type === 'canvas-node') return 'Canvas node';
-  if (extra.type === 'character') return 'Character';
-  if (extra.type === 'scene') return 'Scene';
-  if (extra.type === 'asset') return extra.entityType ? `Asset · ${extra.entityType}` : 'Asset';
+function describeMentionExtra(extra: ProjectMentionExtra, translate: Translate): string {
+  const kindLabel = translate(MENTION_EXTRA_LABEL_KEYS[extra.type]);
+  if (extra.type === 'canvas-node' || extra.type === 'character' || extra.type === 'scene') {
+    return kindLabel;
+  }
+  if (extra.type === 'asset') {
+    return extra.entityType
+      ? describeMentionKindWithType(
+          kindLabel,
+          localizeEntityType(extra.entityType, translate),
+          translate,
+        )
+      : kindLabel;
+  }
   if (extra.type === 'media') {
-    return extra.mediaType ? `Media · ${extra.mediaType}` : 'Media';
+    return extra.mediaType
+      ? describeMentionKindWithType(
+          kindLabel,
+          translate(MEDIA_TYPE_LABEL_KEYS[extra.mediaType]),
+          translate,
+        )
+      : kindLabel;
   }
   if (extra.type === 'entity') {
-    const entityLabel = extra.navigationData?.candidateId ? 'Entity Candidate' : 'Entity';
-    return extra.entityType ? `${entityLabel} · ${extra.entityType}` : entityLabel;
+    const entityLabel = extra.navigationData?.candidateId
+      ? translate('chat.input.mentionDescriptions.entityCandidate')
+      : kindLabel;
+    return extra.entityType
+      ? describeMentionKindWithType(
+          entityLabel,
+          localizeEntityType(extra.entityType, translate),
+          translate,
+        )
+      : entityLabel;
   }
-  return extra.type;
+  return kindLabel;
+}
+
+function describeMentionKindWithType(kind: string, type: string, translate: Translate): string {
+  return translate('chat.input.mentionDescriptions.withType', { kind, type });
+}
+
+function localizeEntityType(entityType: string, translate: Translate): string {
+  const normalizedEntityType = entityType.trim().toLowerCase();
+  const translationKey = ENTITY_TYPE_LABEL_KEYS[normalizedEntityType];
+  return translationKey ? translate(translationKey) : entityType;
 }
 
 function isProviderView(value: unknown): value is SettingsState['providers'][number] {

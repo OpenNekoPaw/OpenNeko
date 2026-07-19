@@ -334,15 +334,15 @@ export function ConversationController({
     id: number;
     input: PendingSendInput;
   } | null>(null);
-  const nextEntryPromptMenuRequestIdRef = useRef(0);
-  const [initialEntryPromptMenuRequest, setInitialEntryPromptMenuRequest] = useState<{
-    id: number;
-    menu: EntryPromptMenu;
-  } | null>(null);
   const nextInitialInputRequestIdRef = useRef(0);
   const [initialInputRequest, setInitialInputRequest] = useState<{
     id: number;
     messageText: string;
+  } | null>(null);
+  const nextInitialSessionModeRequestIdRef = useRef(0);
+  const [initialSessionModeRequest, setInitialSessionModeRequest] = useState<{
+    id: number;
+    mode: SessionMode;
   } | null>(null);
   const [entryPromptMenu, setEntryPromptMenu] = useState<EntryPromptMenu | null>(null);
   const nextQueuedEditRequestIdRef = useRef(0);
@@ -844,18 +844,18 @@ export function ConversationController({
 
   const handleNewChat = useCallback(() => {
     setPendingSendRequest(null);
-    setInitialEntryPromptMenuRequest(null);
     setInitialInputRequest(null);
+    setInitialSessionModeRequest(null);
     setEntryPromptMenu(null);
     startNewForegroundConversation();
   }, [startNewForegroundConversation]);
 
-  const startNewForegroundConversationWithEntryPrompt = useCallback(
-    (menu: EntryPromptMenu, messageText?: string) => {
-      const id = nextEntryPromptMenuRequestIdRef.current + 1;
-      nextEntryPromptMenuRequestIdRef.current = id;
+  const startNewForegroundConversationWithGenerationMode = useCallback(
+    (mode: Extract<SessionMode, GenCategory>, messageText?: string) => {
+      const sessionModeRequestId = nextInitialSessionModeRequestIdRef.current + 1;
+      nextInitialSessionModeRequestIdRef.current = sessionModeRequestId;
       setPendingSendRequest(null);
-      setInitialEntryPromptMenuRequest({ id, menu });
+      setInitialSessionModeRequest({ id: sessionModeRequestId, mode });
       setEntryPromptMenu(null);
       if (messageText?.trim()) {
         const inputRequestId = nextInitialInputRequestIdRef.current + 1;
@@ -873,43 +873,39 @@ export function ConversationController({
     (action: EmptyStateEntryAction) => {
       setEntryAction(action);
       setEntrySessionMode('agent');
-      const messageText = entryInputValueRef.current.trim();
 
       switch (action) {
         case 'start-chat':
           setPendingSendRequest(null);
-          setInitialEntryPromptMenuRequest(null);
           setInitialInputRequest(null);
+          setInitialSessionModeRequest(null);
           setEntryPromptMenu(null);
           updateEntryInputValue('');
           startNewForegroundConversation();
           return;
         case 'generate-assets':
-          updateEntryInputValue('');
-          startNewForegroundConversationWithEntryPrompt('generate-assets', messageText);
+          setPendingSendRequest(null);
+          setInitialInputRequest(null);
+          setInitialSessionModeRequest(null);
+          setEntryPromptMenu('generate-assets');
           return;
         case 'roleplay':
           setPendingSendRequest(null);
-          setInitialEntryPromptMenuRequest(null);
           setInitialInputRequest(null);
+          setInitialSessionModeRequest(null);
           setEntryPromptMenu('roleplay');
           updateMentionSearchFilter('');
           AgentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
           return;
       }
     },
-    [
-      startNewForegroundConversation,
-      startNewForegroundConversationWithEntryPrompt,
-      updateEntryInputValue,
-      updateMentionSearchFilter,
-    ],
+    [startNewForegroundConversation, updateEntryInputValue, updateMentionSearchFilter],
   );
 
   const handleSendWithoutConversation = useCallback(
     (input: PendingSendInput) => {
-      setInitialEntryPromptMenuRequest(null);
       setInitialInputRequest(null);
+      setInitialSessionModeRequest(null);
       setEntryPromptMenu(null);
       const id = nextPendingSendRequestIdRef.current + 1;
       nextPendingSendRequestIdRef.current = id;
@@ -927,8 +923,8 @@ export function ConversationController({
 
       switch (entryAction) {
         case 'start-chat': {
-          setInitialEntryPromptMenuRequest(null);
           setInitialInputRequest(null);
+          setInitialSessionModeRequest(null);
           handleSendWithoutConversation({
             ...input,
             messageText,
@@ -941,13 +937,15 @@ export function ConversationController({
           return;
         }
         case 'generate-assets':
-          startNewForegroundConversationWithEntryPrompt('generate-assets', messageText);
-          updateEntryInputValue('');
+          setPendingSendRequest(null);
+          setInitialInputRequest(null);
+          setInitialSessionModeRequest(null);
+          setEntryPromptMenu('generate-assets');
           return;
         case 'roleplay':
           setPendingSendRequest(null);
-          setInitialEntryPromptMenuRequest(null);
           setInitialInputRequest(null);
+          setInitialSessionModeRequest(null);
           setEntryPromptMenu('roleplay');
           updateMentionSearchFilter('');
           AgentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
@@ -960,7 +958,6 @@ export function ConversationController({
       entryInputValue,
       entrySessionMode,
       handleSendWithoutConversation,
-      startNewForegroundConversationWithEntryPrompt,
       updateEntryInputValue,
       updateMentionSearchFilter,
     ],
@@ -970,12 +967,12 @@ export function ConversationController({
     setPendingSendRequest((current) => (current?.id === id ? null : current));
   }, []);
 
-  const handleInitialEntryPromptMenuRequestConsumed = useCallback((id: number) => {
-    setInitialEntryPromptMenuRequest((current) => (current?.id === id ? null : current));
-  }, []);
-
   const handleInitialInputRequestConsumed = useCallback((id: number) => {
     setInitialInputRequest((current) => (current?.id === id ? null : current));
+  }, []);
+
+  const handleInitialSessionModeRequestConsumed = useCallback((id: number) => {
+    setInitialSessionModeRequest((current) => (current?.id === id ? null : current));
   }, []);
 
   const handleEntrySessionModeChange = useCallback(
@@ -994,6 +991,20 @@ export function ConversationController({
     [activeSettings.chatModelOptions],
   );
 
+  const handleEntryGenerationModeSelect = useCallback(
+    (mode: Extract<SessionMode, GenCategory>) => {
+      const messageText = entryInputValueRef.current.trim();
+      handleEntrySessionModeChange(mode);
+      startNewForegroundConversationWithGenerationMode(mode, messageText);
+      updateEntryInputValue('');
+    },
+    [
+      handleEntrySessionModeChange,
+      startNewForegroundConversationWithGenerationMode,
+      updateEntryInputValue,
+    ],
+  );
+
   const handleEntryMediaModelSelect = useCallback((category: MediaCategory, modelId: string) => {
     setEntryMediaModelSelection((prev) => ({ ...prev, [category]: modelId }));
   }, []);
@@ -1004,8 +1015,8 @@ export function ConversationController({
 
   const handleBeforeTabOpen = useCallback(() => {
     setPendingSendRequest(null);
-    setInitialEntryPromptMenuRequest(null);
     setInitialInputRequest(null);
+    setInitialSessionModeRequest(null);
     setEntryPromptMenu(null);
     pendingForegroundConversationActivationRef.current = null;
     setIsForegroundConversationActivationPending(false);
@@ -1020,8 +1031,8 @@ export function ConversationController({
     }) => {
       const { conversationId } = request;
       setPendingSendRequest(null);
-      setInitialEntryPromptMenuRequest(null);
       setInitialInputRequest(null);
+      setInitialSessionModeRequest(null);
       setEntryPromptMenu(null);
       pendingForegroundConversationActivationRef.current = {
         reason: 'switch-conversation',
@@ -1046,8 +1057,8 @@ export function ConversationController({
 
   const handleAllTabsClosed = useCallback(() => {
     setPendingSendRequest(null);
-    setInitialEntryPromptMenuRequest(null);
     setInitialInputRequest(null);
+    setInitialSessionModeRequest(null);
     setEntryPromptMenu(null);
     isTablessConversationViewRef.current = true;
     setActiveConversationId(null);
@@ -1320,6 +1331,7 @@ export function ConversationController({
                 disabled={isForegroundConversationActivationPending || !hasConfigSnapshot}
                 entryPromptMenu={entryPromptMenu}
                 onEntryPromptMenuChange={setEntryPromptMenu}
+                onEntryGenerationModeSelect={handleEntryGenerationModeSelect}
               />
             </InputAreaProvider>
           </div>
@@ -1413,8 +1425,8 @@ export function ConversationController({
             onPendingSendRequestConsumed={handlePendingSendRequestConsumed}
             initialInputRequest={visible ? initialInputRequest : null}
             onInitialInputRequestConsumed={handleInitialInputRequestConsumed}
-            initialEntryPromptMenuRequest={visible ? initialEntryPromptMenuRequest : null}
-            onInitialEntryPromptMenuRequestConsumed={handleInitialEntryPromptMenuRequestConsumed}
+            initialSessionModeRequest={visible ? initialSessionModeRequest : null}
+            onInitialSessionModeRequestConsumed={handleInitialSessionModeRequestConsumed}
             queuedEditDraftConflictMessage={t('chat.input.queueEditDraftConflict')}
           />
         );

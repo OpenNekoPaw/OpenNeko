@@ -281,6 +281,8 @@ export const chat = {
   'chat.input.mentionTags.entity.shot': '镜头',
   'chat.input.mentionTags.entity.canvas': '画布',
   'chat.input.mentionTags.entity.canvasNode': '画布节点',
+  'chat.input.mentionDescriptions.entityCandidate': '实体候选',
+  'chat.input.mentionDescriptions.withType': '{kind} · {type}',
   'chat.input.startTypingToSearch': '开始输入以搜索文件...',
   'chat.input.filesFound': '"{filter}" - {count} 个文件',
   'chat.input.lineRangeHint': '提示：使用 :10-20 指定行范围（如 file.ts:10-20）',

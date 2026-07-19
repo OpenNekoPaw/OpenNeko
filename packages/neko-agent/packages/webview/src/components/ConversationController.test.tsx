@@ -144,8 +144,10 @@ vi.mock('@/components/ChatWorkspace', () => ({
       input: { messageText?: string; contextPayloads?: AgentContextPayload[] };
     } | null;
     initialInputRequest?: { id: number; messageText: string } | null;
-    initialEntryPromptMenuRequest?: { id: number; menu: 'generate-assets' | 'roleplay' } | null;
-    onInitialEntryPromptMenuRequestConsumed?: (id: number) => void;
+    initialSessionModeRequest?: {
+      id: number;
+      mode: 'agent' | 'image' | 'video' | 'audio';
+    } | null;
     isVisible?: boolean;
   }) => {
     const tabRenderSnapshot = useTabRenderStore(props.tabRenderStore);
@@ -290,7 +292,7 @@ vi.mock('@/components/ChatWorkspace', () => ({
           }
         />
         <span data-testid={testId('entry-menu')}>
-          {props.initialEntryPromptMenuRequest?.menu ?? 'none'}
+          {tabRenderSnapshot.snapshot.state.menus.entryPrompt ?? 'none'}
         </span>
         <span data-testid={testId('pending-send')}>
           {props.pendingSendRequest?.input.messageText ?? 'none'}
@@ -302,6 +304,9 @@ vi.mock('@/components/ChatWorkspace', () => ({
         </span>
         <span data-testid={testId('initial-input')}>
           {props.initialInputRequest?.messageText ?? 'none'}
+        </span>
+        <span data-testid={testId('initial-session-mode')}>
+          {props.initialSessionModeRequest?.mode ?? 'none'}
         </span>
       </div>
     );
@@ -319,6 +324,8 @@ vi.mock('@/components/ChatView/InputArea', async () => {
       onSend: () => void;
       disabled?: boolean;
       entryPromptMenu?: 'generate-assets' | 'roleplay' | null;
+      onEntryPromptMenuChange?: (menu: 'generate-assets' | 'roleplay' | null) => void;
+      onEntryGenerationModeSelect?: (mode: 'image' | 'video' | 'audio') => void;
     }) => {
       const {
         isBusy,
@@ -373,6 +380,12 @@ vi.mock('@/components/ChatView/InputArea', async () => {
             {contextChips.map((payload) => payload.label).join('|')}
           </span>
           <span data-testid="entry-page-menu">{props.entryPromptMenu ?? 'none'}</span>
+          <button type="button" onClick={() => props.onEntryPromptMenuChange?.(null)}>
+            Close Entry Menu
+          </button>
+          <button type="button" onClick={() => props.onEntryGenerationModeSelect?.('video')}>
+            Select Video Generation
+          </button>
         </div>
       );
     },
@@ -424,7 +437,7 @@ describe('ConversationController entry state', () => {
     );
   });
 
-  it('shows entry content only when no tabs are open and opens asset prompts from the entry button', () => {
+  it('shows the asset picker on the tabless entry page', () => {
     vi.clearAllMocks();
     render(<ConversationController {...createProps()} />);
 
@@ -433,21 +446,9 @@ describe('ConversationController entry state', () => {
     expect(vscodeMocks.getTabState).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
-    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'activeConversation',
-            conversation: { id: 'conv-new', title: 'New Chat', messages: [] },
-          },
-        }),
-      );
-    });
-
-    expect(screen.queryByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeNull();
-    expect(screen.getByTestId('entry-menu').textContent).toBe('generate-assets');
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
   });
 
   it('opens a new chat tab from the start chat entry button', () => {
@@ -490,11 +491,66 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('roleplay');
   });
 
+  it('does not create a chat tab when the asset generation picker is closed without a selection', () => {
+    vi.clearAllMocks();
+    render(<ConversationController {...createProps()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
+
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Entry Menu' }));
+
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('none');
+  });
+
+  it('creates one chat tab after generation mode confirmation and transfers the entry draft', () => {
+    vi.clearAllMocks();
+    render(<ConversationController {...createProps()} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Type anything...'), {
+      target: { value: 'make a rain scene' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
+
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Video Generation' }));
+
+    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'activeConversation',
+            conversation: { id: 'conv-new', title: 'New Chat', messages: [] },
+          },
+        }),
+      );
+    });
+
+    expect(screen.getByTestId('entry-menu').textContent).toBe('none');
+    expect(screen.getByTestId('initial-session-mode').textContent).toBe('video');
+    expect(screen.getByTestId('initial-input').textContent).toBe('make a rain scene');
+  });
+
   it('disables entry controls while the new tab is being activated', () => {
     vi.clearAllMocks();
     render(<ConversationController {...createProps()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
+
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Generate Assets/ }).hasAttribute('disabled')).toBe(
+      false,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select Video Generation' }));
 
     expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: /Generate Assets/ }).hasAttribute('disabled')).toBe(
@@ -630,7 +686,7 @@ describe('ConversationController entry state', () => {
     });
   });
 
-  it('starts a new tab with asset prompt and preserves existing entry text as initial input', () => {
+  it('reopens the asset picker on entry send without creating a tab before mode selection', () => {
     vi.clearAllMocks();
     render(<ConversationController {...createProps()} />);
 
@@ -638,23 +694,14 @@ describe('ConversationController entry state', () => {
       target: { value: 'make a rain scene' },
     });
     fireEvent.click(screen.getByRole('button', { name: /Generate Assets/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(vscodeMocks.newConversation).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent('message', {
-          data: {
-            type: 'activeConversation',
-            conversation: { id: 'conv-new', title: 'New Chat', messages: [] },
-          },
-        }),
-      );
-    });
-
-    expect(screen.getByTestId('entry-menu').textContent).toBe('generate-assets');
-    expect(screen.getByTestId('initial-input').textContent).toBe('make a rain scene');
-    expect(screen.getByTestId('pending-send').textContent).toBe('none');
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(screen.getByTestId('entry-page-menu').textContent).toBe('generate-assets');
+    expect(screen.getByPlaceholderText('Type anything...')).toHaveProperty(
+      'value',
+      'make a rain scene',
+    );
   });
 
   it('does not project activation progress from a different conversation into the active tab', () => {

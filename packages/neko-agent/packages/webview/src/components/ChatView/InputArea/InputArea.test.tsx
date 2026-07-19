@@ -1214,6 +1214,31 @@ describe('InputArea composer controls', () => {
     expect(onEntryPromptMenuChange).toHaveBeenCalledWith(null);
   });
 
+  it('delegates tabless generation confirmation without applying the normal Tab mode change', () => {
+    const onSessionModeChange = vi.fn();
+    const onEntryGenerationModeSelect = vi.fn();
+    const onEntryPromptMenuChange = vi.fn();
+    render(
+      <Harness availableMediaModels={allMediaModels} onSessionModeChange={onSessionModeChange}>
+        <InputArea
+          inputValue=""
+          isThinking={false}
+          entryPromptMenu="generate-assets"
+          onEntryPromptMenuChange={onEntryPromptMenuChange}
+          onEntryGenerationModeSelect={onEntryGenerationModeSelect}
+          onInputChange={vi.fn()}
+          onSend={vi.fn()}
+        />
+      </Harness>,
+    );
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /视频生成/ }));
+
+    expect(onEntryGenerationModeSelect).toHaveBeenCalledWith('video');
+    expect(onSessionModeChange).not.toHaveBeenCalled();
+    expect(onEntryPromptMenuChange).toHaveBeenCalledWith(null);
+  });
+
   it('opens the entry prompt for playable unified character entities', () => {
     const onSend = vi.fn();
     const onEntryPromptMenuChange = vi.fn();

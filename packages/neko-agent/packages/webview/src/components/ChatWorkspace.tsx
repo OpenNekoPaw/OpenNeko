@@ -125,8 +125,8 @@ export interface ChatWorkspaceProps {
   onPendingSendRequestConsumed?: (id: number) => void;
   initialInputRequest?: { id: number; messageText: string } | null;
   onInitialInputRequestConsumed?: (id: number) => void;
-  initialEntryPromptMenuRequest?: { id: number; menu: EntryPromptMenu } | null;
-  onInitialEntryPromptMenuRequestConsumed?: (id: number) => void;
+  initialSessionModeRequest?: { id: number; mode: SessionMode } | null;
+  onInitialSessionModeRequestConsumed?: (id: number) => void;
   queuedEditDraftConflictMessage: string;
 }
 
@@ -177,8 +177,8 @@ export function ChatWorkspace({
   onPendingSendRequestConsumed,
   initialInputRequest,
   onInitialInputRequestConsumed,
-  initialEntryPromptMenuRequest,
-  onInitialEntryPromptMenuRequestConsumed,
+  initialSessionModeRequest,
+  onInitialSessionModeRequestConsumed,
   queuedEditDraftConflictMessage,
 }: ChatWorkspaceProps) {
   const { snapshot: tabRenderSnapshot, updateState: updateTabRenderState } =
@@ -371,8 +371,8 @@ export function ChatWorkspace({
     },
     [updateTabRenderState],
   );
-  const consumedEntryPromptRequestIdRef = useRef<number | null>(null);
   const consumedInitialInputRequestIdRef = useRef<number | null>(null);
+  const consumedInitialSessionModeRequestIdRef = useRef<number | null>(null);
   const inputValueRef = useRef(inputValue);
   const consumedPendingSendRequestIdRef = useRef<number | null>(null);
 
@@ -483,27 +483,6 @@ export function ChatWorkspace({
     onInitialInputRequestConsumed,
     sessionMutationConversationId,
     setInputValue,
-  ]);
-
-  useEffect(() => {
-    if (!initialEntryPromptMenuRequest || !sessionMutationConversationId) return;
-    if (consumedEntryPromptRequestIdRef.current === initialEntryPromptMenuRequest.id) return;
-
-    consumedEntryPromptRequestIdRef.current = initialEntryPromptMenuRequest.id;
-    setEntryPromptMenu(initialEntryPromptMenuRequest.menu);
-    if (initialEntryPromptMenuRequest.menu === 'roleplay') {
-      onMentionSearchFilterChange('');
-      AgentHostMessages.searchProjectFiles('', sessionMutationConversationId, {
-        purpose: 'roleplay',
-      });
-    }
-    onInitialEntryPromptMenuRequestConsumed?.(initialEntryPromptMenuRequest.id);
-  }, [
-    initialEntryPromptMenuRequest,
-    onInitialEntryPromptMenuRequestConsumed,
-    onMentionSearchFilterChange,
-    sessionMutationConversationId,
-    setEntryPromptMenu,
   ]);
 
   useEffect(() => {
@@ -702,6 +681,20 @@ export function ChatWorkspace({
     },
     [settings.chatModelOptions, setEntryPromptMenu, setMediaModelSelection, setVisibleSessionMode],
   );
+
+  useEffect(() => {
+    if (!initialSessionModeRequest || !sessionMutationConversationId) return;
+    if (consumedInitialSessionModeRequestIdRef.current === initialSessionModeRequest.id) return;
+
+    consumedInitialSessionModeRequestIdRef.current = initialSessionModeRequest.id;
+    handleSessionModeChange(initialSessionModeRequest.mode);
+    onInitialSessionModeRequestConsumed?.(initialSessionModeRequest.id);
+  }, [
+    handleSessionModeChange,
+    initialSessionModeRequest,
+    onInitialSessionModeRequestConsumed,
+    sessionMutationConversationId,
+  ]);
   const isModelConfigurationBusy =
     modelCatalogStatus === 'loading' || isThinking || workItems.some(isActiveWorkItem);
 

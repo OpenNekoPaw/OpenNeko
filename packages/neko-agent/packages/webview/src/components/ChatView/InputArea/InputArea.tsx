@@ -85,6 +85,7 @@ interface InputAreaProps {
   onCancel?: () => void;
   entryPromptMenu?: EntryPromptMenu | null;
   onEntryPromptMenuChange?: (menu: EntryPromptMenu | null) => void;
+  onEntryGenerationModeSelect?: (mode: Extract<SessionMode, GenCategory>) => void;
   llmConfig?: AgentLlmConfig;
   onLlmConfigChange?: (config: AgentLlmConfig) => void;
   composerMenuState?: ComposerMenuState;
@@ -191,6 +192,7 @@ export function InputArea({
   onCancel,
   entryPromptMenu,
   onEntryPromptMenuChange,
+  onEntryGenerationModeSelect,
   llmConfig: controlledLlmConfig,
   onLlmConfigChange,
   composerMenuState: controlledComposerMenuState,
@@ -875,7 +877,11 @@ export function InputArea({
 
   const handleEntryGenerationModeSelect = (mode: Extract<SessionMode, GenCategory>) => {
     closeEntryPromptMenu();
-    onSessionModeChange(mode);
+    if (onEntryGenerationModeSelect) {
+      onEntryGenerationModeSelect(mode);
+    } else {
+      onSessionModeChange(mode);
+    }
     textareaRef.current?.focus();
   };
 

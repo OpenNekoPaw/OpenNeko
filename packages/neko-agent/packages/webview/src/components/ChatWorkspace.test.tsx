@@ -37,6 +37,7 @@ vi.mock('@/components/ChatView/InputAreaContext', () => ({
     children: ReactNode;
     sessionMode?: 'agent' | 'image' | 'video' | 'audio';
     onSessionModeChange?: (mode: 'agent' | 'image' | 'video' | 'audio') => void;
+    mediaModelSelection?: { image: string; video: string; audio: string };
     onCompressContext?: () => Promise<void>;
     selectedModel?: string;
     onModelSelect?: (modelId: string) => void;
@@ -46,6 +47,9 @@ vi.mock('@/components/ChatView/InputAreaContext', () => ({
   }) => (
     <div>
       <span data-testid="session-mode">{props.sessionMode ?? 'agent'}</span>
+      <span data-testid="media-model-selection">
+        {Object.values(props.mediaModelSelection ?? {}).join('|')}
+      </span>
       <span data-testid="selected-model">{props.selectedModel ?? 'none'}</span>
       <span data-testid="context-chips">
         {props.contextChips?.map((chip) => chip.label).join('|') ?? ''}
@@ -385,24 +389,6 @@ describe('ChatWorkspace pending send', () => {
     });
   });
 
-  it('opens the asset generation entry prompt from an initial controller request', () => {
-    const onInitialEntryPromptMenuRequestConsumed = vi.fn();
-    render(
-      <ChatWorkspace
-        {...createProps({
-          initialEntryPromptMenuRequest: { id: 1, menu: 'generate-assets' },
-          onInitialEntryPromptMenuRequestConsumed,
-        })}
-      />,
-    );
-
-    expect(screen.getByTestId('entry-menu').textContent).toBe('generate-assets');
-    expect(onInitialEntryPromptMenuRequestConsumed).toHaveBeenCalledWith(1);
-
-    fireEvent.click(screen.getByTestId('entry-close'));
-    expect(screen.getByTestId('entry-menu').textContent).toBe('none');
-  });
-
   it('prefills entry text after a new conversation is activated', () => {
     const onInitialInputRequestConsumed = vi.fn();
     const onMentionSearchFilterChange = vi.fn();
@@ -422,25 +408,24 @@ describe('ChatWorkspace pending send', () => {
     expect(onInitialInputRequestConsumed).toHaveBeenCalledWith(3);
   });
 
-  it('opens the roleplay entity prompt from an initial controller request and refreshes candidates', () => {
-    const onMentionSearchFilterChange = vi.fn();
-    const onInitialEntryPromptMenuRequestConsumed = vi.fn();
-    render(
-      <ChatWorkspace
-        {...createProps({
-          onMentionSearchFilterChange,
-          initialEntryPromptMenuRequest: { id: 2, menu: 'roleplay' },
-          onInitialEntryPromptMenuRequestConsumed,
-        })}
-      />,
-    );
-
-    expect(onMentionSearchFilterChange).toHaveBeenCalledWith('');
-    expect(vscodeMocks.searchProjectFiles).toHaveBeenCalledWith('', 'conv-1', {
-      purpose: 'roleplay',
+  it('applies an initial generation mode once and projects its media model default', () => {
+    const onInitialSessionModeRequestConsumed = vi.fn();
+    const request = { id: 4, mode: 'image' as const };
+    const props = createProps({
+      settings: createSettingsWithImageModel(),
+      initialSessionModeRequest: request,
+      onInitialSessionModeRequestConsumed,
     });
-    expect(screen.getByTestId('entry-menu').textContent).toBe('roleplay');
-    expect(onInitialEntryPromptMenuRequestConsumed).toHaveBeenCalledWith(2);
+    const { rerender } = render(<ChatWorkspace {...props} />);
+
+    expect(screen.getByTestId('session-mode').textContent).toBe('image');
+    expect(screen.getByTestId('media-model-selection').textContent).toBe('image-model|none|none');
+    expect(onInitialSessionModeRequestConsumed).toHaveBeenCalledTimes(1);
+    expect(onInitialSessionModeRequestConsumed).toHaveBeenCalledWith(4);
+
+    rerender(<ChatWorkspace {...props} />);
+
+    expect(onInitialSessionModeRequestConsumed).toHaveBeenCalledTimes(1);
   });
 
   it('restores a queued edit from its owning Tab store into an empty composer', () => {
