@@ -24,11 +24,19 @@ Measured output:
 
 | Item                               |       Raw |      Gzip | Notes                                                                                |
 | ---------------------------------- | --------: | --------: | ------------------------------------------------------------------------------------ |
-| `assets/model.js`                  | 926.69 kB | 246.49 kB | Only `model.html` loads the 3D entry; includes direct-drag editor controls           |
+| `assets/model.js`                  | 933.67 kB | 248.58 kB | Only `model.html` loads the 3D entry; includes direct-drag and mannequin pose controls |
 | Built-in preset binaries           |       0 B |       0 B | Mannequin, props, studio, and panorama grid are project-authored procedural geometry |
 | Catalog aggregate binary increment |       0 B |       0 B | No Draco, Meshopt, KTX2, worker, or third-party model payload                        |
 
 `buildOwnership.test.ts` proves every non-model HTML entry points to its own main module and contains no model entry or `model.js` reference. Catalog validation proves immutable identity/capabilities/dependencies/provenance/license notices. All current presets use `LicenseRef-OpenNeko` with project-owned redistribution metadata.
+
+### Adult/child mannequin and pose checkpoint
+
+- The former `guide-neutral-mannequin` production identity is rejected. The immutable catalog now exposes project-authored adult-female, adult-male, and child variants with distinct body proportions and no identity, clothing, texture, or third-party binary model payload.
+- Each variant is assembled from smooth capsule/ellipsoid anatomy around the same declared 16-joint hierarchy. Catalog validation requires exact parent links, bounded rotations, and complete joint values for every preset.
+- Twelve pose presets are supplied: standing, T-pose, walking, running, jumping, sitting, crouching, kneeling, falling, waving, thinking, and fighting. Pose cards project their actual rotations into SVG thumbnails; selection sends the complete joint array to the runtime and temporary staging state.
+- Manual joint editing is grouped by whole body, torso, head, arms, and legs, and remains bounded by catalog constraints. Static/non-articulated subjects retain an explicit unsupported state. No IK, timeline, retargeting, multi-character staging, or source writeback was added.
+- Runtime tests construct and recursively dispose all three variants, assert smooth vertex normals and variant bounds, validate the complete hierarchy and constraints, and reject unknown, duplicate, incomplete, and out-of-range poses.
 
 ## Extension Development Host evidence
 
@@ -143,10 +151,22 @@ pnpm build
 # latest checkpoint passed: 10/10 Turbo build tasks, including Preview Webview/Extension and shared UI consumers
 
 pnpm check
-# latest checkpoint passed: Knip and dependency-cruiser, 1,549 modules / 5,533 dependencies, no violations
+# latest checkpoint passed: Knip and dependency-cruiser, 1,550 modules / 5,536 dependencies, no violations
+
+pnpm --dir packages/neko-preview test --run
+# latest mannequin checkpoint passed: 44 files / 328 tests
+
+pnpm exec vitest run packages/neko-types/src/types/__tests__/three-reference.test.ts
+# shared 3D Reference contract: 1 file / 5 tests
+
+pnpm exec tsc -p packages/neko-preview/packages/webview/tsconfig.json --noEmit
+# passed
+
+pnpm --dir packages/neko-preview compile
+# production Webview + Extension build passed; model.js 933.67 kB / 248.58 kB gzip; extension.js 701.3 kB
 
 pnpm test
-# blocked outside this change: Preview's repository-owned matrix fixture triangle.glb is absent, and three concurrently modified TUI Workspace Board tests expect group nodes that are not present
+# repository run reached 21 successful Turbo tasks before one unrelated Agent architecture-guard timeout stopped the graph: 1 failed / 1,325 passed / 1 skipped in @neko/agent. The timed-out guard scans removed creative/Quality identities across workspace fixtures; no Preview test failed.
 ```
 
 Earlier focused contract/provider/runtime/UI/materialization groups passed 28 tests in 6 files, and the cumulative focused Preview groups passed 44 tests. Relevant ESLint and `git diff --check` checks passed at their implementation checkpoints.
@@ -159,8 +179,8 @@ Agent Evaluation disposition is `update` for `agent-runtime.creative-media-workf
 2. Agent task 6.2 is complete: invalid `3d-reference` payloads fail visibly, role-labelled prompt/evidence projection and chips are canonical, exact ResourceRefs become multimodal attachments, and empty-entry injection creates a conversation through the existing bridge. Canvas/media projection and capability negotiation in tasks 6.3–6.5 remain open; overlapping unrelated work in those files must still be preserved.
 3. System ADR, architecture index, and package-boundary files already have unrelated edits. Task 8.2 remains open; only clean Preview-owned documentation was updated.
 4. Real-model appearance/camera capture and role-labelled Agent context injection are complete, but real-source panorama composition and provider-level role-isolated generation are not; task 7.3 remains open.
-5. The latest repository `pnpm build` and `pnpm check` pass. `pnpm test` remains blocked outside this change by the absent Preview `triangle.glb` matrix fixture and three concurrently modified TUI Workspace Board group-node expectations. Legacy-debt, functional, and real Agent evaluation gates have not yet been accepted for this change, so task 7.5 and final verification task 8.3 remain open.
-6. The latest full Preview run passed 323 of 324 tests; the unrelated standard-format matrix test is blocked because its repository fixture `triangle.glb` is absent. The focused Preview Webview run passed all 53 tests, including the camera/light object and direct-drag paths.
-7. Preview Webview `tsc --noEmit` is blocked by three existing errors outside the new light-control files: the unsupported `shield` Codicon and empty `PanelSection` in `ThreeReferencePurposeControls.tsx`, plus a non-tuple spread in `threeReferencePresetRuntime.ts`. Production builds and focused ESLint/tests pass.
+5. The latest repository `pnpm build` and `pnpm check` pass. `pnpm test` reached 21 successful Turbo tasks, then stopped on one unrelated timeout in `@neko/agent`'s workspace-wide removed-identity architecture guard (1 failed / 1,325 passed / 1 skipped in that package); no Preview test failed. Legacy-debt, functional, and real Agent evaluation gates have not yet been accepted for this change, so task 7.5 and final verification task 8.3 remain open.
+6. The latest full Preview run passed all 44 files / 328 tests, including the mannequin catalog, runtime, pose-card staging, camera/light object, and direct-drag paths.
+7. Preview Webview `tsc --noEmit` now passes. The unsupported Codicon, empty `PanelSection`, and tuple-spread errors recorded at the earlier checkpoint have been removed.
 8. The full shared `neko-types` Vitest run passed 1,440 of 1,441 tests. The unrelated local-resource guardrail currently reports the pre-existing `ModelPreviewSourceSession.ts` Webview-root assembly path; the focused shared theme test passes.
 9. Camera/light object visual and direct-drag acceptance is blocked because port 9222 is reachable but is not a verified VS Code CDP endpoint: it exposes no VS Code workbench page target. No browser/Vite substitute was used; task 5.8 stays open until the Extension Development Host can verify object visibility, drag responsiveness without XYZ gizmos, capture exclusion, console output, and cleanup against `~/Git/neko-test/test.glb`.
