@@ -3,8 +3,13 @@ import type {
   ThreeReferencePresetKind,
   ThreeReferencePresetIdentity,
   ThreeReferencePurpose,
+  ThreeReferenceRuntimePosePreset,
   ThreeReferenceVector3,
 } from '@neko/shared';
+import {
+  THREE_REFERENCE_MANNEQUIN_JOINTS,
+  THREE_REFERENCE_MANNEQUIN_POSES,
+} from './threeReferenceMannequinPoses';
 
 export type ThreeReferencePresetCatalogErrorCode =
   | 'duplicate-preset-id'
@@ -49,7 +54,7 @@ export interface ThreeReferencePresetJointConstraint {
 }
 
 export interface ThreeReferencePresetPoseCapabilities {
-  readonly posePresetIds: readonly string[];
+  readonly posePresets: readonly ThreeReferenceRuntimePosePreset[];
   readonly joints: readonly ThreeReferencePresetJointConstraint[];
 }
 
@@ -154,41 +159,24 @@ export function resolveThreeReferencePreset(
 }
 
 export const THREE_REFERENCE_PRESET_CATALOG = defineThreeReferencePresetCatalog([
-  {
-    presetId: 'guide-neutral-mannequin',
-    presetVersion: 1,
-    fingerprint: 'sha256:a28e43bd9bc3aa94b2954e13186e21fa8bef5a6424cdb8733d045913c5437456',
-    presetKind: 'mannequin',
-    appearancePolicy: 'guide-only',
-    allowedPurposes: ['pose', 'camera'],
-    labelKey: 'preview.threeReference.preset.neutralMannequin',
-    defaultScale: 1,
-    runtime: { kind: 'procedural', implementationId: 'neutral-mannequin-v1' },
-    poseCapabilities: {
-      posePresetIds: ['standing', 't-pose', 'walking-blockout', 'running-blockout'],
-      joints: [
-        joint('hips'),
-        joint('spine', 'hips'),
-        joint('chest', 'spine'),
-        joint('head', 'chest'),
-        joint('leftShoulder', 'chest'),
-        joint('leftElbow', 'leftShoulder'),
-        joint('leftWrist', 'leftElbow'),
-        joint('rightShoulder', 'chest'),
-        joint('rightElbow', 'rightShoulder'),
-        joint('rightWrist', 'rightElbow'),
-        joint('leftHip', 'hips'),
-        joint('leftKnee', 'leftHip'),
-        joint('leftAnkle', 'leftKnee'),
-        joint('rightHip', 'hips'),
-        joint('rightKnee', 'rightHip'),
-        joint('rightAnkle', 'rightKnee'),
-      ],
-    },
-    renderPasses: ['pose-skeleton', 'depth', 'camera-composition'],
-    packagedDependencies: [],
-    ...projectAuthoredMetadata('neutral mannequin procedural geometry'),
-  },
+  mannequinPreset({
+    presetId: 'guide-mannequin-female',
+    implementationId: 'neutral-mannequin-female-v2',
+    fingerprint: 'sha256:8fee3056caeed0cb8e4ad4b404ff8fef2b0dacea000238659b2d984ef0a65afc',
+    labelKey: 'preview.threeReference.preset.femaleMannequin',
+  }),
+  mannequinPreset({
+    presetId: 'guide-mannequin-male',
+    implementationId: 'neutral-mannequin-male-v2',
+    fingerprint: 'sha256:29cacde2f7ec95306259baf2d535a0f3c1aa8124482d01d520572184eb11943f',
+    labelKey: 'preview.threeReference.preset.maleMannequin',
+  }),
+  mannequinPreset({
+    presetId: 'guide-mannequin-child',
+    implementationId: 'neutral-mannequin-child-v2',
+    fingerprint: 'sha256:2fa5962892c51638c0799e1bb30ee7344ca23422034d44db7869efd864368490',
+    labelKey: 'preview.threeReference.preset.childMannequin',
+  }),
   {
     presetId: 'guide-primitive-blockout-props',
     presetVersion: 1,
@@ -320,6 +308,53 @@ function validatePoseCapabilities(entry: ThreeReferencePresetCatalogEntry): void
       );
     }
   }
+  const poseIds = new Set(pose.posePresets.map((preset) => preset.poseId));
+  if (
+    pose.posePresets.length === 0 ||
+    poseIds.size !== pose.posePresets.length ||
+    poseIds.has('')
+  ) {
+    throw new ThreeReferencePresetCatalogError(
+      'invalid-joint-metadata',
+      `Pose preset IDs must be unique and non-empty: ${entry.presetId}`,
+    );
+  }
+  for (const preset of pose.posePresets) {
+    const presetJointIds = new Set(preset.joints.map((joint) => joint.jointId));
+    if (
+      !isNonEmptyString(preset.labelKey) ||
+      preset.joints.length !== pose.joints.length ||
+      presetJointIds.size !== pose.joints.length ||
+      [...jointIds].some((jointId) => !presetJointIds.has(jointId)) ||
+      preset.joints.some((jointPose) => {
+        const constraint = pose.joints.find((joint) => joint.jointId === jointPose.jointId);
+        return !constraint || !rotationWithinConstraint(jointPose.rotation, constraint);
+      })
+    ) {
+      throw new ThreeReferencePresetCatalogError(
+        'invalid-joint-metadata',
+        `Pose preset does not declare a complete bounded joint pose: ${entry.presetId}/${preset.poseId}`,
+      );
+    }
+  }
+}
+
+function rotationWithinConstraint(
+  rotation: { readonly x: number; readonly y: number; readonly z: number },
+  joint: ThreeReferencePresetJointConstraint,
+): boolean {
+  const { min, max } = joint.rotationConstraint;
+  return (
+    Number.isFinite(rotation.x) &&
+    Number.isFinite(rotation.y) &&
+    Number.isFinite(rotation.z) &&
+    rotation.x >= min.x &&
+    rotation.x <= max.x &&
+    rotation.y >= min.y &&
+    rotation.y <= max.y &&
+    rotation.z >= min.z &&
+    rotation.z <= max.z
+  );
 }
 
 function validateRenderPasses(entry: ThreeReferencePresetCatalogEntry): void {
@@ -436,14 +471,29 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function joint(jointId: string, parentJointId?: string): ThreeReferencePresetJointConstraint {
+function mannequinPreset(input: {
+  readonly presetId: string;
+  readonly implementationId: string;
+  readonly fingerprint: string;
+  readonly labelKey: string;
+}): ThreeReferencePresetCatalogEntry {
   return {
-    jointId,
-    ...(parentJointId === undefined ? {} : { parentJointId }),
-    rotationConstraint: {
-      min: { x: -1.25, y: -1.25, z: -1.25 },
-      max: { x: 1.25, y: 1.25, z: 1.25 },
+    presetId: input.presetId,
+    presetVersion: 2,
+    fingerprint: input.fingerprint,
+    presetKind: 'mannequin',
+    appearancePolicy: 'guide-only',
+    allowedPurposes: ['pose', 'camera'],
+    labelKey: input.labelKey,
+    defaultScale: 1,
+    runtime: { kind: 'procedural', implementationId: input.implementationId },
+    poseCapabilities: {
+      posePresets: THREE_REFERENCE_MANNEQUIN_POSES,
+      joints: THREE_REFERENCE_MANNEQUIN_JOINTS,
     },
+    renderPasses: ['pose-skeleton', 'depth', 'camera-composition'],
+    packagedDependencies: [],
+    ...projectAuthoredMetadata(`${input.presetId} smooth procedural guide geometry`),
   };
 }
 
@@ -471,7 +521,21 @@ function freezeCatalogEntry(
 ): ThreeReferencePresetCatalogEntry {
   const poseCapabilities = entry.poseCapabilities
     ? Object.freeze({
-        posePresetIds: Object.freeze([...entry.poseCapabilities.posePresetIds]),
+        posePresets: Object.freeze(
+          entry.poseCapabilities.posePresets.map((preset) =>
+            Object.freeze({
+              ...preset,
+              joints: Object.freeze(
+                preset.joints.map((joint) =>
+                  Object.freeze({
+                    ...joint,
+                    rotation: Object.freeze({ ...joint.rotation }),
+                  }),
+                ),
+              ),
+            }),
+          ),
+        ),
         joints: Object.freeze(
           entry.poseCapabilities.joints.map((joint) =>
             Object.freeze({

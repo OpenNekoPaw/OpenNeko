@@ -22,7 +22,7 @@ export async function projectThreeReferencePresetRuntime(
       ...(input.entry.poseCapabilities
         ? {
             poseCapabilities: {
-              posePresetIds: input.entry.poseCapabilities.posePresetIds,
+              posePresets: input.entry.poseCapabilities.posePresets,
               joints: input.entry.poseCapabilities.joints,
             },
           }

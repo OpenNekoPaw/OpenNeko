@@ -31,6 +31,7 @@ import {
   createBlockoutReferencePreset,
   createMannequinSkeletonOverlay,
   createNeutralMannequin,
+  type NeutralMannequinVariant,
   type BlockoutReferenceImplementationId,
   type NeutralMannequinRuntime,
 } from './threeReferencePresetRuntime';
@@ -609,10 +610,13 @@ class BrowserThreeModelRuntime implements ThreeModelRuntimePort {
     if (preset.runtime.kind !== 'procedural') {
       throw new Error(`Unsupported 3D Reference preset runtime: ${preset.subject.presetId}`);
     }
-    const mannequin =
-      preset.runtime.implementationId === 'neutral-mannequin-v1'
-        ? createNeutralMannequin(requireMannequinPoseCapabilities(preset.runtime.poseCapabilities))
-        : undefined;
+    const mannequinVariant = toNeutralMannequinVariant(preset.runtime.implementationId);
+    const mannequin = mannequinVariant
+      ? createNeutralMannequin(
+          mannequinVariant,
+          requireMannequinPoseCapabilities(preset.runtime.poseCapabilities),
+        )
+      : undefined;
     const root = mannequin
       ? mannequin.root
       : createBlockoutReferencePreset(
@@ -1316,6 +1320,19 @@ function requireMannequinPoseCapabilities(
     throw new Error('Neutral mannequin preset is missing declared pose capabilities.');
   }
   return capabilities;
+}
+
+function toNeutralMannequinVariant(implementationId: string): NeutralMannequinVariant | undefined {
+  switch (implementationId) {
+    case 'neutral-mannequin-female-v2':
+      return 'female';
+    case 'neutral-mannequin-male-v2':
+      return 'male';
+    case 'neutral-mannequin-child-v2':
+      return 'child';
+    default:
+      return undefined;
+  }
 }
 
 function toBlockoutReferenceImplementationId(

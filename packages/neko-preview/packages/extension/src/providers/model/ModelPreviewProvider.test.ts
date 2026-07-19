@@ -41,7 +41,7 @@ describe('3D Reference provider session boundary', () => {
     const guidePanel = panel();
     vi.mocked(vscode.window.createWebviewPanel).mockReturnValue(guidePanel.value);
 
-    await provider.openBuiltinPresetPanel('guide-neutral-mannequin');
+    await provider.openBuiltinPresetPanel('guide-mannequin-female');
     await ready(guidePanel, 'guide-session');
 
     expect(vscode.window.createWebviewPanel).toHaveBeenCalledWith(
@@ -52,7 +52,7 @@ describe('3D Reference provider session boundary', () => {
     );
     expect(guidePanel.messages.at(-1)).toMatchObject({
       panelSubject: { kind: 'builtin-preset' },
-      staging: { subject: { presetId: 'guide-neutral-mannequin' } },
+      staging: { subject: { presetId: 'guide-mannequin-female' } },
     });
   });
 
@@ -100,7 +100,7 @@ describe('3D Reference provider session boundary', () => {
     const presetPanel = panel();
     const environmentPanel = panel();
 
-    await provider.resolveBuiltinPresetPanel('guide-neutral-mannequin', presetPanel.value, token());
+    await provider.resolveBuiltinPresetPanel('guide-mannequin-female', presetPanel.value, token());
     await provider.resolveEnvironmentOnlyPanel(environmentPanel.value, token());
     await ready(presetPanel, 'preset-session');
     await ready(environmentPanel, 'environment-session');
@@ -109,7 +109,7 @@ describe('3D Reference provider session boundary', () => {
     expect(presetPanel.messages.at(-1)).toMatchObject({
       panelSubject: {
         kind: 'builtin-preset',
-        subject: { presetId: 'guide-neutral-mannequin', appearancePolicy: 'guide-only' },
+        subject: { presetId: 'guide-mannequin-female', appearancePolicy: 'guide-only' },
       },
       eligiblePurposes: ['pose', 'camera'],
       staging: { selectedPurposes: ['pose', 'camera'], pose: { poseId: 'standing' } },
@@ -307,13 +307,13 @@ describe('3D Reference provider session boundary', () => {
     });
     const presetPanel = panel();
     const resolution = provider.resolveBuiltinPresetPanel(
-      'guide-neutral-mannequin',
+      'guide-mannequin-female',
       presetPanel.value,
       token(),
     );
     await Promise.resolve();
     presetPanel.dispose();
-    finishProjection?.({ kind: 'procedural', implementationId: 'neutral-mannequin-v1' });
+    finishProjection?.({ kind: 'procedural', implementationId: 'neutral-mannequin-female-v2' });
     await resolution;
     expect(presetPanel.messages).toEqual([]);
   });

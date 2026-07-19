@@ -154,7 +154,7 @@ function builtinStaging(): ThreeReferenceStagingSnapshot {
     ...baseStaging(),
     subject: {
       kind: 'builtin-preset',
-      presetId: 'guide-neutral-mannequin',
+      presetId: 'guide-mannequin-female',
       presetVersion: 1,
       fingerprint: 'builtin',
       presetKind: 'mannequin',

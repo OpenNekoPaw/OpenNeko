@@ -18,7 +18,18 @@ const validEntry: ThreeReferencePresetCatalogEntry = {
   defaultScale: 1,
   runtime: { kind: 'procedural', implementationId: 'neutral-mannequin-v1' },
   poseCapabilities: {
-    posePresetIds: ['standing'],
+    posePresets: [
+      {
+        poseId: 'standing',
+        labelKey: 'preview.model.posePreset.standing',
+        joints: [
+          {
+            jointId: 'hips',
+            rotation: { x: 0, y: 0, z: 0, order: 'XYZ' },
+          },
+        ],
+      },
+    ],
     joints: [
       {
         jointId: 'hips',
@@ -53,7 +64,17 @@ describe('3D reference preset catalog contract', () => {
       })),
     ).toEqual([
       {
-        presetId: 'guide-neutral-mannequin',
+        presetId: 'guide-mannequin-female',
+        presetKind: 'mannequin',
+        allowedPurposes: ['pose', 'camera'],
+      },
+      {
+        presetId: 'guide-mannequin-male',
+        presetKind: 'mannequin',
+        allowedPurposes: ['pose', 'camera'],
+      },
+      {
+        presetId: 'guide-mannequin-child',
         presetKind: 'mannequin',
         allowedPurposes: ['pose', 'camera'],
       },
@@ -73,6 +94,21 @@ describe('3D reference preset catalog contract', () => {
         allowedPurposes: ['panorama-scene'],
       },
     ]);
+    expect(THREE_REFERENCE_PRESET_CATALOG.map((entry) => entry.presetId)).not.toContain(
+      'guide-neutral-mannequin',
+    );
+    const mannequins = THREE_REFERENCE_PRESET_CATALOG.filter(
+      (entry) => entry.presetKind === 'mannequin',
+    );
+    expect(mannequins).toHaveLength(3);
+    for (const mannequin of mannequins) {
+      expect(mannequin.poseCapabilities?.posePresets).toHaveLength(12);
+      expect(
+        mannequin.poseCapabilities?.posePresets.every(
+          (pose) => pose.joints.length === mannequin.poseCapabilities?.joints.length,
+        ),
+      ).toBe(true);
+    }
     for (const entry of THREE_REFERENCE_PRESET_CATALOG) {
       expect(entry.appearancePolicy).toBe('guide-only');
       expect(entry.allowedPurposes).not.toContain('appearance');
@@ -98,6 +134,8 @@ describe('3D reference preset catalog contract', () => {
     });
     expect(Object.isFrozen(catalog)).toBe(true);
     expect(Object.isFrozen(catalog[0])).toBe(true);
+    expect(Object.isFrozen(catalog[0]?.poseCapabilities?.posePresets)).toBe(true);
+    expect(Object.isFrozen(catalog[0]?.poseCapabilities?.posePresets[0]?.joints)).toBe(true);
     expect(Object.isFrozen(catalog[0]?.poseCapabilities?.joints)).toBe(true);
     expect(Object.isFrozen(catalog[0]?.packagedDependencies)).toBe(true);
     expect(Object.isFrozen(catalog[0]?.provenance)).toBe(true);
@@ -116,7 +154,7 @@ describe('3D reference preset catalog contract', () => {
         {
           ...validEntry,
           poseCapabilities: {
-            posePresetIds: ['standing'],
+            posePresets: validEntry.poseCapabilities?.posePresets ?? [],
             joints: [
               {
                 jointId: 'hips',
@@ -125,6 +163,25 @@ describe('3D reference preset catalog contract', () => {
                   min: { x: 1, y: 0, z: 0 },
                   max: { x: -1, y: 0, z: 0 },
                 },
+              },
+            ],
+          },
+        },
+      ],
+      code: 'invalid-joint-metadata',
+    },
+    {
+      name: 'pose preset without complete declared joint rotations',
+      entries: [
+        {
+          ...validEntry,
+          poseCapabilities: {
+            ...validEntry.poseCapabilities!,
+            posePresets: [
+              {
+                poseId: 'standing',
+                labelKey: 'preview.model.posePreset.standing',
+                joints: [],
               },
             ],
           },

@@ -119,8 +119,14 @@ export interface ThreeReferenceRuntimeJointConstraint {
   };
 }
 
+export interface ThreeReferenceRuntimePosePreset {
+  readonly poseId: string;
+  readonly labelKey: string;
+  readonly joints: readonly ThreeReferenceJointPose[];
+}
+
 export interface ThreeReferenceRuntimePoseCapabilities {
-  readonly posePresetIds: readonly string[];
+  readonly posePresets: readonly ThreeReferenceRuntimePosePreset[];
   readonly joints: readonly ThreeReferenceRuntimeJointConstraint[];
 }
 
@@ -369,8 +375,16 @@ function isThreeReferencePresetRuntimeDescriptor(
 function isThreeReferenceRuntimePoseCapabilities(value: unknown): boolean {
   return (
     isRecord(value) &&
-    isArrayOf(value['posePresetIds'], isNonEmptyString) &&
-    value['posePresetIds'].length > 0 &&
+    isArrayOf(value['posePresets'], (preset): preset is ThreeReferenceRuntimePosePreset => {
+      if (!isRecord(preset)) return false;
+      return (
+        isNonEmptyString(preset['poseId']) &&
+        isNonEmptyString(preset['labelKey']) &&
+        isArrayOf(preset['joints'], isThreeReferenceJointPose) &&
+        preset['joints'].length > 0
+      );
+    }) &&
+    value['posePresets'].length > 0 &&
     isArrayOf(value['joints'], (joint): joint is ThreeReferenceRuntimeJointConstraint => {
       if (!isRecord(joint)) return false;
       return (

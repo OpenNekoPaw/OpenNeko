@@ -51,7 +51,7 @@ describe('3D Reference panel protocol', () => {
       ...sourceModelStaging(),
       subject: {
         kind: 'builtin-preset',
-        presetId: 'guide-neutral-mannequin',
+        presetId: 'guide-mannequin-female',
         presetVersion: 1,
         fingerprint: 'preset-fingerprint',
         presetKind: 'mannequin',

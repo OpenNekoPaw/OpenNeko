@@ -28,7 +28,7 @@ const contextData: ThreeReferenceContextData = {
     revision: 4,
     subject: {
       kind: 'builtin-preset',
-      presetId: 'guide-neutral-mannequin',
+      presetId: 'guide-mannequin-female',
       presetVersion: 1,
       fingerprint: 'preset-fingerprint',
       presetKind: 'mannequin',

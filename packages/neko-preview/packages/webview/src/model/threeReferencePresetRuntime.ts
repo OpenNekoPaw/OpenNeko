@@ -7,36 +7,113 @@ export interface NeutralMannequinRuntime {
   readonly capabilities: ThreeReferenceRuntimePoseCapabilities;
 }
 
+export type NeutralMannequinVariant = 'female' | 'male' | 'child';
+
 export type BlockoutReferenceImplementationId =
   'primitive-blockout-props-v1' | 'studio-room-blockout-v1' | 'neutral-panorama-grid-v1';
 
-const JOINT_LAYOUT = [
-  ['hips', undefined, [0, 1.02, 0]],
-  ['spine', 'hips', [0, 0.16, 0]],
-  ['chest', 'spine', [0, 0.28, 0]],
-  ['head', 'chest', [0, 0.42, 0]],
-  ['leftShoulder', 'chest', [0.26, 0.12, 0]],
-  ['leftElbow', 'leftShoulder', [0.3, 0, 0]],
-  ['leftWrist', 'leftElbow', [0.26, 0, 0]],
-  ['rightShoulder', 'chest', [-0.26, 0.12, 0]],
-  ['rightElbow', 'rightShoulder', [-0.3, 0, 0]],
-  ['rightWrist', 'rightElbow', [-0.26, 0, 0]],
-  ['leftHip', 'hips', [0.11, -0.1, 0]],
-  ['leftKnee', 'leftHip', [0, -0.42, 0]],
-  ['leftAnkle', 'leftKnee', [0, -0.4, 0]],
-  ['rightHip', 'hips', [-0.11, -0.1, 0]],
-  ['rightKnee', 'rightHip', [0, -0.42, 0]],
-  ['rightAnkle', 'rightKnee', [0, -0.4, 0]],
-] as const;
+interface MannequinBodyProfile {
+  readonly rootName: string;
+  readonly color: number;
+  readonly hipsY: number;
+  readonly spineLength: number;
+  readonly chestLength: number;
+  readonly neckToHead: number;
+  readonly shoulderWidth: number;
+  readonly upperArmLength: number;
+  readonly lowerArmLength: number;
+  readonly hipWidth: number;
+  readonly upperLegLength: number;
+  readonly lowerLegLength: number;
+  readonly chestWidth: number;
+  readonly waistWidth: number;
+  readonly pelvisWidth: number;
+  readonly torsoDepth: number;
+  readonly limbRadius: number;
+  readonly headRadius: number;
+}
+
+type JointLayout = readonly [
+  jointId: string,
+  parentJointId: string | undefined,
+  position: readonly [number, number, number],
+][];
+
+const BODY_PROFILES: Readonly<Record<NeutralMannequinVariant, MannequinBodyProfile>> = {
+  female: {
+    rootName: 'guide-mannequin-female',
+    color: 0x8ca6c8,
+    hipsY: 1.02,
+    spineLength: 0.17,
+    chestLength: 0.27,
+    neckToHead: 0.4,
+    shoulderWidth: 0.27,
+    upperArmLength: 0.29,
+    lowerArmLength: 0.25,
+    hipWidth: 0.125,
+    upperLegLength: 0.43,
+    lowerLegLength: 0.4,
+    chestWidth: 0.22,
+    waistWidth: 0.145,
+    pelvisWidth: 0.22,
+    torsoDepth: 0.115,
+    limbRadius: 0.052,
+    headRadius: 0.135,
+  },
+  male: {
+    rootName: 'guide-mannequin-male',
+    color: 0x7897c1,
+    hipsY: 1.08,
+    spineLength: 0.18,
+    chestLength: 0.3,
+    neckToHead: 0.43,
+    shoulderWidth: 0.315,
+    upperArmLength: 0.32,
+    lowerArmLength: 0.28,
+    hipWidth: 0.12,
+    upperLegLength: 0.46,
+    lowerLegLength: 0.43,
+    chestWidth: 0.255,
+    waistWidth: 0.17,
+    pelvisWidth: 0.205,
+    torsoDepth: 0.135,
+    limbRadius: 0.06,
+    headRadius: 0.14,
+  },
+  child: {
+    rootName: 'guide-mannequin-child',
+    color: 0x9aafd0,
+    hipsY: 0.73,
+    spineLength: 0.12,
+    chestLength: 0.19,
+    neckToHead: 0.31,
+    shoulderWidth: 0.19,
+    upperArmLength: 0.205,
+    lowerArmLength: 0.175,
+    hipWidth: 0.09,
+    upperLegLength: 0.29,
+    lowerLegLength: 0.265,
+    chestWidth: 0.155,
+    waistWidth: 0.13,
+    pelvisWidth: 0.155,
+    torsoDepth: 0.1,
+    limbRadius: 0.043,
+    headRadius: 0.13,
+  },
+};
 
 export function createNeutralMannequin(
+  variant: NeutralMannequinVariant,
   capabilities: ThreeReferenceRuntimePoseCapabilities,
 ): NeutralMannequinRuntime {
-  validateCapabilities(capabilities);
+  const profile = BODY_PROFILES[variant];
+  const layout = createJointLayout(profile);
+  validateCapabilities(capabilities, layout);
   const root = new THREE.Group();
-  root.name = 'guide-neutral-mannequin';
+  root.name = profile.rootName;
+  root.userData['referenceMannequinVariant'] = variant;
   const joints = new Map<string, THREE.Group>();
-  for (const [jointId, parentId, position] of JOINT_LAYOUT) {
+  for (const [jointId, parentId, position] of layout) {
     const joint = new THREE.Group();
     joint.name = `joint:${jointId}`;
     joint.userData['referenceJointId'] = jointId;
@@ -47,24 +124,21 @@ export function createNeutralMannequin(
     joints.set(jointId, joint);
   }
   const material = new THREE.MeshStandardMaterial({
-    color: 0x91a0b5,
-    roughness: 0.82,
+    color: profile.color,
+    roughness: 0.76,
     metalness: 0,
   });
-  addPart(joints, 'hips', 'pelvis', new THREE.BoxGeometry(0.34, 0.18, 0.2), material);
-  addPart(
-    joints,
-    'chest',
-    'torso',
-    new THREE.BoxGeometry(0.42, 0.48, 0.2),
-    material,
-    [0, -0.08, 0],
-  );
-  addPart(joints, 'head', 'head', new THREE.SphereGeometry(0.14, 12, 8), material, [0, 0.11, 0]);
-  addArm(joints, material, 'left', 1);
-  addArm(joints, material, 'right', -1);
-  addLeg(joints, material, 'left');
-  addLeg(joints, material, 'right');
+  const jointMaterial = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(profile.color).multiplyScalar(0.84),
+    roughness: 0.72,
+    metalness: 0,
+  });
+  addAnatomicalTorso(joints, profile, material);
+  addHeadAndNeck(joints, profile, material, jointMaterial);
+  addArm(joints, profile, material, jointMaterial, 'left', 1);
+  addArm(joints, profile, material, jointMaterial, 'right', -1);
+  addLeg(joints, profile, material, jointMaterial, 'left');
+  addLeg(joints, profile, material, jointMaterial, 'right');
   root.updateMatrixWorld(true);
   return { root, joints, capabilities };
 }
@@ -73,7 +147,7 @@ export function applyDeclaredMannequinPose(
   mannequin: NeutralMannequinRuntime,
   pose: ThreeReferencePoseState,
 ): void {
-  if (!mannequin.capabilities.posePresetIds.includes(pose.poseId)) {
+  if (!mannequin.capabilities.posePresets.some((preset) => preset.poseId === pose.poseId)) {
     throw new Error(`Unknown 3D Reference pose preset: ${pose.poseId}`);
   }
   const seen = new Set<string>();
@@ -101,6 +175,9 @@ export function applyDeclaredMannequinPose(
     ) {
       throw new Error(`3D Reference joint rotation exceeds constraint: ${jointPose.jointId}`);
     }
+  }
+  if (seen.size !== mannequin.joints.size) {
+    throw new Error(`Incomplete 3D Reference joint pose: ${pose.poseId}`);
   }
   for (const joint of mannequin.joints.values()) joint.rotation.set(0, 0, 0, 'XYZ');
   for (const jointPose of pose.joints) {
@@ -200,8 +277,11 @@ export function createBlockoutReferencePreset(
   return root;
 }
 
-function validateCapabilities(capabilities: ThreeReferenceRuntimePoseCapabilities): void {
-  const actualIds = new Set(JOINT_LAYOUT.map(([jointId]) => jointId));
+function validateCapabilities(
+  capabilities: ThreeReferenceRuntimePoseCapabilities,
+  layout: JointLayout,
+): void {
+  const actualIds = new Set(layout.map(([jointId]) => jointId));
   const declaredIds = new Set(capabilities.joints.map((joint) => joint.jointId));
   if (
     actualIds.size !== declaredIds.size ||
@@ -210,96 +290,255 @@ function validateCapabilities(capabilities: ThreeReferenceRuntimePoseCapabilitie
     throw new Error('3D Reference mannequin joint declarations do not match its runtime.');
   }
   for (const declaration of capabilities.joints) {
-    const layout = JOINT_LAYOUT.find(([jointId]) => jointId === declaration.jointId);
-    if (!layout) throw new Error(`Unknown declared mannequin joint: ${declaration.jointId}`);
-    if (declaration.parentJointId !== layout[1]) {
+    const layoutEntry = layout.find(([jointId]) => jointId === declaration.jointId);
+    if (!layoutEntry) throw new Error(`Unknown declared mannequin joint: ${declaration.jointId}`);
+    if (declaration.parentJointId !== layoutEntry[1]) {
       throw new Error(`3D Reference mannequin hierarchy mismatch: ${declaration.jointId}`);
     }
   }
 }
 
+function createJointLayout(profile: MannequinBodyProfile): JointLayout {
+  return [
+    ['hips', undefined, [0, profile.hipsY, 0]],
+    ['spine', 'hips', [0, profile.spineLength, 0]],
+    ['chest', 'spine', [0, profile.chestLength, 0]],
+    ['head', 'chest', [0, profile.neckToHead, 0]],
+    ['leftShoulder', 'chest', [profile.shoulderWidth, profile.chestLength * 0.38, 0]],
+    ['leftElbow', 'leftShoulder', [profile.upperArmLength, 0, 0]],
+    ['leftWrist', 'leftElbow', [profile.lowerArmLength, 0, 0]],
+    ['rightShoulder', 'chest', [-profile.shoulderWidth, profile.chestLength * 0.38, 0]],
+    ['rightElbow', 'rightShoulder', [-profile.upperArmLength, 0, 0]],
+    ['rightWrist', 'rightElbow', [-profile.lowerArmLength, 0, 0]],
+    ['leftHip', 'hips', [profile.hipWidth, -profile.pelvisWidth * 0.35, 0]],
+    ['leftKnee', 'leftHip', [0, -profile.upperLegLength, 0]],
+    ['leftAnkle', 'leftKnee', [0, -profile.lowerLegLength, 0]],
+    ['rightHip', 'hips', [-profile.hipWidth, -profile.pelvisWidth * 0.35, 0]],
+    ['rightKnee', 'rightHip', [0, -profile.upperLegLength, 0]],
+    ['rightAnkle', 'rightKnee', [0, -profile.lowerLegLength, 0]],
+  ];
+}
+
+function addAnatomicalTorso(
+  joints: ReadonlyMap<string, THREE.Group>,
+  profile: MannequinBodyProfile,
+  material: THREE.Material,
+): void {
+  addEllipsoid(
+    joints,
+    'hips',
+    'pelvis',
+    material,
+    [profile.pelvisWidth, profile.pelvisWidth * 0.58, profile.torsoDepth],
+    [0, profile.spineLength * 0.12, 0],
+  );
+  addEllipsoid(
+    joints,
+    'spine',
+    'abdomen',
+    material,
+    [profile.waistWidth, profile.chestLength * 0.6, profile.torsoDepth * 0.82],
+    [0, profile.chestLength * 0.28, 0],
+  );
+  addEllipsoid(
+    joints,
+    'chest',
+    'ribcage',
+    material,
+    [profile.chestWidth, profile.chestLength * 0.72, profile.torsoDepth],
+    [0, -profile.chestLength * 0.08, 0],
+  );
+}
+
+function addHeadAndNeck(
+  joints: ReadonlyMap<string, THREE.Group>,
+  profile: MannequinBodyProfile,
+  material: THREE.Material,
+  jointMaterial: THREE.Material,
+): void {
+  addCapsulePart(
+    joints,
+    'chest',
+    'neck',
+    profile.limbRadius * 0.78,
+    profile.neckToHead * 0.42,
+    material,
+    [0, profile.neckToHead * 0.22, 0],
+  );
+  addEllipsoid(
+    joints,
+    'head',
+    'head',
+    material,
+    [profile.headRadius * 0.84, profile.headRadius * 1.14, profile.headRadius],
+    [0, profile.headRadius * 0.48, 0],
+  );
+  addEllipsoid(
+    joints,
+    'head',
+    'face-plane',
+    jointMaterial,
+    [profile.headRadius * 0.58, profile.headRadius * 0.5, profile.headRadius * 0.2],
+    [0, profile.headRadius * 0.42, profile.headRadius * 0.82],
+  );
+}
+
 function addArm(
   joints: ReadonlyMap<string, THREE.Group>,
+  profile: MannequinBodyProfile,
   material: THREE.Material,
+  jointMaterial: THREE.Material,
   side: 'left' | 'right',
   direction: 1 | -1,
 ): void {
-  addPart(
+  addJointSphere(
+    joints,
+    `${side}Shoulder`,
+    `${side}-shoulder`,
+    profile.limbRadius * 1.18,
+    jointMaterial,
+  );
+  addOrientedCapsule(
     joints,
     `${side}Shoulder`,
     `${side}-upper-arm`,
-    new THREE.CylinderGeometry(0.045, 0.055, 0.3, 10),
+    profile.limbRadius,
+    [direction * profile.upperArmLength, 0, 0],
     material,
-    [direction * 0.15, 0, 0],
-    Math.PI / 2,
   );
-  addPart(
+  addJointSphere(joints, `${side}Elbow`, `${side}-elbow`, profile.limbRadius * 0.9, jointMaterial);
+  addOrientedCapsule(
     joints,
     `${side}Elbow`,
     `${side}-lower-arm`,
-    new THREE.CylinderGeometry(0.035, 0.045, 0.26, 10),
+    profile.limbRadius * 0.82,
+    [direction * profile.lowerArmLength, 0, 0],
     material,
-    [direction * 0.13, 0, 0],
-    Math.PI / 2,
   );
-  addPart(
+  addJointSphere(joints, `${side}Wrist`, `${side}-wrist`, profile.limbRadius * 0.65, jointMaterial);
+  addEllipsoid(
     joints,
     `${side}Wrist`,
     `${side}-hand`,
-    new THREE.BoxGeometry(0.1, 0.07, 0.04),
     material,
-    [direction * 0.05, 0, 0],
-    0,
+    [profile.limbRadius * 1.25, profile.limbRadius * 0.65, profile.limbRadius * 0.42],
+    [direction * profile.limbRadius * 1.12, 0, 0],
   );
 }
 
 function addLeg(
   joints: ReadonlyMap<string, THREE.Group>,
+  profile: MannequinBodyProfile,
   material: THREE.Material,
+  jointMaterial: THREE.Material,
   side: 'left' | 'right',
 ): void {
-  addPart(
+  addJointSphere(joints, `${side}Hip`, `${side}-hip`, profile.limbRadius * 1.28, jointMaterial);
+  addOrientedCapsule(
     joints,
     `${side}Hip`,
     `${side}-upper-leg`,
-    new THREE.CylinderGeometry(0.06, 0.075, 0.42, 10),
+    profile.limbRadius * 1.28,
+    [0, -profile.upperLegLength, 0],
     material,
-    [0, -0.21, 0],
   );
-  addPart(
+  addJointSphere(joints, `${side}Knee`, `${side}-knee`, profile.limbRadius, jointMaterial);
+  addOrientedCapsule(
     joints,
     `${side}Knee`,
     `${side}-lower-leg`,
-    new THREE.CylinderGeometry(0.045, 0.06, 0.4, 10),
+    profile.limbRadius,
+    [0, -profile.lowerLegLength, 0],
     material,
-    [0, -0.2, 0],
   );
-  addPart(
+  addJointSphere(joints, `${side}Ankle`, `${side}-ankle`, profile.limbRadius * 0.72, jointMaterial);
+  addEllipsoid(
     joints,
     `${side}Ankle`,
     `${side}-foot`,
-    new THREE.BoxGeometry(0.12, 0.08, 0.24),
     material,
-    [0, -0.02, 0.07],
+    [profile.limbRadius * 1.05, profile.limbRadius * 0.7, profile.limbRadius * 1.9],
+    [0, -profile.limbRadius * 0.35, profile.limbRadius * 1.18],
   );
 }
 
-function addPart(
+function addOrientedCapsule(
+  joints: ReadonlyMap<string, THREE.Group>,
+  jointId: string,
+  name: string,
+  radius: number,
+  endpoint: readonly [number, number, number],
+  material: THREE.Material,
+): void {
+  const joint = joints.get(jointId);
+  if (!joint) throw new Error(`3D Reference mannequin joint is missing: ${jointId}`);
+  const direction = new THREE.Vector3(...endpoint);
+  const length = direction.length();
+  const geometry = new THREE.CapsuleGeometry(radius, Math.max(length - radius * 2, 0.001), 8, 16);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.name = `guide-part:${name}`;
+  mesh.position.copy(direction).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+  joint.add(mesh);
+}
+
+function addCapsulePart(
+  joints: ReadonlyMap<string, THREE.Group>,
+  jointId: string,
+  name: string,
+  radius: number,
+  length: number,
+  material: THREE.Material,
+  position: readonly [number, number, number],
+): void {
+  const geometry = new THREE.CapsuleGeometry(radius, Math.max(length - radius * 2, 0.001), 8, 16);
+  addPartMesh(joints, jointId, name, geometry, material, position);
+}
+
+function addJointSphere(
+  joints: ReadonlyMap<string, THREE.Group>,
+  jointId: string,
+  name: string,
+  radius: number,
+  material: THREE.Material,
+): void {
+  addPartMesh(joints, jointId, name, new THREE.SphereGeometry(radius, 20, 14), material, [0, 0, 0]);
+}
+
+function addEllipsoid(
+  joints: ReadonlyMap<string, THREE.Group>,
+  jointId: string,
+  name: string,
+  material: THREE.Material,
+  scale: readonly [number, number, number],
+  position: readonly [number, number, number],
+): void {
+  const mesh = addPartMesh(
+    joints,
+    jointId,
+    name,
+    new THREE.SphereGeometry(1, 24, 16),
+    material,
+    position,
+  );
+  mesh.scale.set(...scale);
+}
+
+function addPartMesh(
   joints: ReadonlyMap<string, THREE.Group>,
   jointId: string,
   name: string,
   geometry: THREE.BufferGeometry,
   material: THREE.Material,
-  position: readonly [number, number, number] = [0, 0, 0],
-  rotationZ = 0,
-): void {
+  position: readonly [number, number, number],
+): THREE.Mesh {
   const joint = joints.get(jointId);
   if (!joint) throw new Error(`3D Reference mannequin joint is missing: ${jointId}`);
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = `guide-part:${name}`;
   mesh.position.set(...position);
-  mesh.rotation.z = rotationZ;
   joint.add(mesh);
+  return mesh;
 }
 
 function addMesh(

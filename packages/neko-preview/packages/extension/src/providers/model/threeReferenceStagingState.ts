@@ -37,10 +37,14 @@ export function createBuiltinPresetStaging(
     allowedPurposes: preset.allowedPurposes,
   };
   const staging = createBaseStaging(sessionId, subject, preset.allowedPurposes);
-  const withPose = preset.allowedPurposes.includes('pose')
+  const defaultPose = preset.poseCapabilities?.posePresets[0];
+  if (preset.allowedPurposes.includes('pose') && !defaultPose) {
+    throw new Error(`Pose-capable 3D Reference preset has no declared pose: ${preset.presetId}`);
+  }
+  const withPose = defaultPose
     ? {
         ...staging,
-        pose: { poseId: preset.poseCapabilities?.posePresetIds[0] ?? 'standing', joints: [] },
+        pose: { poseId: defaultPose.poseId, joints: defaultPose.joints },
       }
     : staging;
   const result = environment ? { ...withPose, environment } : withPose;

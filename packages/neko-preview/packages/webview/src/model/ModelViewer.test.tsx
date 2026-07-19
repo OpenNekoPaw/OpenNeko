@@ -276,7 +276,26 @@ describe('ModelViewer', () => {
     );
     expect(appearancePurpose?.disabled).toBe(true);
     expect(posePurpose?.getAttribute('aria-pressed')).toBe('true');
-    expect(container.querySelector('[data-property-id="reference-pose-preset"]')).not.toBeNull();
+    const poseCards = container.querySelectorAll<HTMLButtonElement>('.model-preview__pose-card');
+    expect(poseCards).toHaveLength(2);
+    expect(poseCards[0]?.getAttribute('aria-pressed')).toBe('true');
+    expect(poseCards[0]?.querySelector('svg')).not.toBeNull();
+    runtime.applyReferencePose.mockClear();
+    await act(async () => poseCards[1]?.click());
+    const walkingPreset = message.panelSubject.runtime.poseCapabilities.posePresets[1];
+    expect(runtime.applyReferencePose).toHaveBeenCalledWith({
+      poseId: walkingPreset?.poseId,
+      joints: walkingPreset?.joints,
+    });
+    expect(mockWindow.api.postedMessages).toContainEqual(
+      expect.objectContaining({
+        type: '3d-reference/staging-changed',
+        staging: expect.objectContaining({
+          revision: 1,
+          pose: { poseId: walkingPreset?.poseId, joints: walkingPreset?.joints },
+        }),
+      }),
+    );
     expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
       'dataset.viewerStatus',
       'ready',
@@ -717,7 +736,7 @@ function builtinPresetMessage() {
       kind: 'builtin-preset' as const,
       subject: {
         kind: 'builtin-preset' as const,
-        presetId: 'guide-neutral-mannequin',
+        presetId: 'guide-mannequin-female',
         presetVersion: 1,
         fingerprint: 'sha256:neutral',
         presetKind: 'mannequin' as const,
@@ -726,8 +745,43 @@ function builtinPresetMessage() {
       },
       runtime: {
         kind: 'procedural' as const,
-        implementationId: 'neutral-mannequin-v1',
-        poseCapabilities: { posePresetIds: ['standing'], joints: [] },
+        implementationId: 'neutral-mannequin-female-v2',
+        poseCapabilities: {
+          posePresets: [
+            {
+              poseId: 'standing',
+              labelKey: 'preview.model.posePreset.standing',
+              joints: [
+                { jointId: 'hips', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } },
+                { jointId: 'spine', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } },
+              ],
+            },
+            {
+              poseId: 'walking',
+              labelKey: 'preview.model.posePreset.walking',
+              joints: [
+                { jointId: 'hips', rotation: { x: 0.04, y: 0.08, z: 0, order: 'XYZ' } },
+                { jointId: 'spine', rotation: { x: -0.06, y: 0, z: 0, order: 'XYZ' } },
+              ],
+            },
+          ],
+          joints: [
+            {
+              jointId: 'hips',
+              rotationConstraint: {
+                min: { x: -0.5, y: -0.5, z: -0.5 },
+                max: { x: 0.5, y: 0.5, z: 0.5 },
+              },
+            },
+            {
+              jointId: 'spine',
+              rotationConstraint: {
+                min: { x: -0.5, y: -0.5, z: -0.5 },
+                max: { x: 0.5, y: 0.5, z: 0.5 },
+              },
+            },
+          ],
+        },
       },
     },
     eligiblePurposes: ['pose', 'camera'] as const,
@@ -737,7 +791,7 @@ function builtinPresetMessage() {
       revision: 0,
       subject: {
         kind: 'builtin-preset' as const,
-        presetId: 'guide-neutral-mannequin',
+        presetId: 'guide-mannequin-female',
         presetVersion: 1,
         fingerprint: 'sha256:neutral',
         presetKind: 'mannequin' as const,

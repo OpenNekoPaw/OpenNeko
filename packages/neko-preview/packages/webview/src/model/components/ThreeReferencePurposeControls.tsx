@@ -13,6 +13,7 @@ import type {
   ThreeReferencePoseState,
   ThreeReferencePurpose,
   ThreeReferenceRuntimeJointConstraint,
+  ThreeReferenceRuntimePosePreset,
   ThreeReferenceStagingSnapshot,
 } from '@neko/shared';
 import { useTranslation } from '../../i18n/I18nContext';
@@ -40,6 +41,8 @@ const PURPOSES: readonly ThreeReferencePurpose[] = [
   'panorama-scene',
 ];
 
+type PoseJointGroup = 'body' | 'torso' | 'head' | 'arms' | 'legs';
+
 export function ThreeReferencePurposeControls({
   disabled,
   eligiblePurposes,
@@ -58,8 +61,13 @@ export function ThreeReferencePurposeControls({
       ? panelSubject.runtime.poseCapabilities
       : undefined;
   const [selectedJointId, setSelectedJointId] = useState<string>('');
+  const [selectedJointGroup, setSelectedJointGroup] = useState<PoseJointGroup>('body');
   const [poseControlMode, setPoseControlMode] = useState<ThreeReferencePoseControlMode>('pose');
-  const selectedJoint = capabilities?.joints.find((joint) => joint.jointId === selectedJointId);
+  const groupedJoints = capabilities?.joints.filter(
+    (joint) => poseJointGroupOf(joint.jointId) === selectedJointGroup,
+  );
+  const effectiveSelectedJointId = selectedJointId || groupedJoints?.[0]?.jointId || '';
+  const selectedJoint = groupedJoints?.find((joint) => joint.jointId === effectiveSelectedJointId);
   const environment = staging?.environment;
   const jointRotation = useMemo(
     () =>
@@ -77,7 +85,7 @@ export function ThreeReferencePurposeControls({
       {panelSubject?.kind === 'builtin-preset' &&
       panelSubject.subject.appearancePolicy === 'guide-only' ? (
         <p className="model-preview__guide-only" role="note">
-          <span className={toCodiconClassName('shield')} aria-hidden="true" />
+          <span className={toCodiconClassName('lock')} aria-hidden="true" />
           {t('preview.model.guideOnly')}
         </p>
       ) : null}
@@ -127,7 +135,9 @@ export function ThreeReferencePurposeControls({
         pose={staging?.pose}
         poseControlMode={poseControlMode}
         selectedJoint={selectedJoint}
-        selectedJointId={selectedJointId}
+        selectedJointGroup={selectedJointGroup}
+        selectedJointId={effectiveSelectedJointId}
+        visibleJoints={groupedJoints ?? []}
         onCapture={() => onCapture('pose', poseControlMode)}
         onJointChange={(axis, value) => {
           if (!staging?.pose || !selectedJoint) return;
@@ -136,6 +146,13 @@ export function ThreeReferencePurposeControls({
         onPoseChange={onPoseChange}
         onPoseControlModeChange={setPoseControlMode}
         onSelectedJointChange={setSelectedJointId}
+        onSelectedJointGroupChange={(group) => {
+          setSelectedJointGroup(group);
+          const firstJoint = capabilities?.joints.find(
+            (joint) => poseJointGroupOf(joint.jointId) === group,
+          );
+          setSelectedJointId(firstJoint?.jointId ?? '');
+        }}
       />
       <PanelSection
         className="model-preview__inspector-section"
@@ -234,13 +251,16 @@ function PoseControls({
   onPoseChange,
   onPoseControlModeChange,
   onSelectedJointChange,
+  onSelectedJointGroupChange,
   pose,
   poseControlMode,
   selectedJoint,
+  selectedJointGroup,
   selectedJointId,
+  visibleJoints,
 }: {
   readonly capabilities?: {
-    readonly posePresetIds: readonly string[];
+    readonly posePresets: readonly ThreeReferenceRuntimePosePreset[];
     readonly joints: readonly ThreeReferenceRuntimeJointConstraint[];
   };
   readonly disabled: boolean;
@@ -248,12 +268,15 @@ function PoseControls({
   readonly pose?: ThreeReferencePoseState;
   readonly poseControlMode: ThreeReferencePoseControlMode;
   readonly selectedJoint?: ThreeReferenceRuntimeJointConstraint;
+  readonly selectedJointGroup: PoseJointGroup;
   readonly selectedJointId: string;
+  readonly visibleJoints: readonly ThreeReferenceRuntimeJointConstraint[];
   readonly onCapture: () => void;
   readonly onJointChange: (axis: 'x' | 'y' | 'z', value: number) => void;
   readonly onPoseChange: (pose: ThreeReferencePoseState) => void;
   readonly onPoseControlModeChange: (mode: ThreeReferencePoseControlMode) => void;
   readonly onSelectedJointChange: (jointId: string) => void;
+  readonly onSelectedJointGroupChange: (group: PoseJointGroup) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   if (!capabilities || !pose) {
@@ -264,7 +287,9 @@ function PoseControls({
         disabled
         title={t('preview.model.pose')}
         description={t('preview.model.poseUnsupported')}
-      />
+      >
+        <span aria-hidden="true" />
+      </PanelSection>
     );
   }
   return (
@@ -274,21 +299,42 @@ function PoseControls({
       disabled={disabled}
       title={t('preview.model.pose')}
     >
+      <div className="model-preview__pose-presets" aria-label={t('preview.model.posePreset')}>
+        {capabilities.posePresets.map((preset) => (
+          <button
+            key={preset.poseId}
+            className="model-preview__pose-card"
+            type="button"
+            aria-pressed={pose.poseId === preset.poseId}
+            disabled={disabled}
+            onClick={() => onPoseChange({ poseId: preset.poseId, joints: preset.joints })}
+          >
+            <PosePresetThumbnail preset={preset} />
+            <span>{t(preset.labelKey)}</span>
+            {pose.poseId === preset.poseId ? (
+              <span className={toCodiconClassName('check')} aria-hidden="true" />
+            ) : null}
+          </button>
+        ))}
+      </div>
       <SelectPropertyRow
         density="compact"
         disabled={disabled}
-        id="reference-pose-preset"
-        label={t('preview.model.posePreset')}
-        options={capabilities.posePresetIds.map((poseId) => ({ value: poseId, label: poseId }))}
-        value={pose.poseId}
-        onCommit={(_, poseId) => onPoseChange({ poseId, joints: [] })}
+        id="reference-pose-joint-group"
+        label={t('preview.model.poseJointGroup')}
+        options={(['body', 'torso', 'head', 'arms', 'legs'] as const).map((group) => ({
+          value: group,
+          label: t(`preview.model.poseJointGroup.${group}`),
+        }))}
+        value={selectedJointGroup}
+        onCommit={(_, group) => onSelectedJointGroupChange(requirePoseJointGroup(group))}
       />
       <SelectPropertyRow
         density="compact"
         disabled={disabled}
         id="reference-pose-joint"
         label={t('preview.model.poseJoint')}
-        options={capabilities.joints.map((joint) => ({
+        options={visibleJoints.map((joint) => ({
           value: joint.jointId,
           label: joint.jointId,
         }))}
@@ -330,6 +376,84 @@ function PoseControls({
   );
 }
 
+function PosePresetThumbnail({
+  preset,
+}: {
+  readonly preset: ThreeReferenceRuntimePosePreset;
+}): React.JSX.Element {
+  const rotations = new Map(preset.joints.map((joint) => [joint.jointId, joint.rotation]));
+  const shoulderY = 19;
+  const hipY = 39;
+  const leftShoulder = { x: 18, y: shoulderY };
+  const rightShoulder = { x: 30, y: shoulderY };
+  const leftElbow = poseEndpoint(leftShoulder, 10, Math.PI + poseAngle(rotations, 'leftShoulder'));
+  const rightElbow = poseEndpoint(rightShoulder, 10, poseAngle(rotations, 'rightShoulder'));
+  const leftWrist = poseEndpoint(
+    leftElbow,
+    9,
+    Math.PI + poseAngle(rotations, 'leftShoulder') + poseAngle(rotations, 'leftElbow'),
+  );
+  const rightWrist = poseEndpoint(
+    rightElbow,
+    9,
+    poseAngle(rotations, 'rightShoulder') + poseAngle(rotations, 'rightElbow'),
+  );
+  const leftHip = { x: 21, y: hipY };
+  const rightHip = { x: 27, y: hipY };
+  const leftKnee = poseEndpoint(leftHip, 11, Math.PI / 2 + poseAngle(rotations, 'leftHip'));
+  const rightKnee = poseEndpoint(rightHip, 11, Math.PI / 2 - poseAngle(rotations, 'rightHip'));
+  const leftAnkle = poseEndpoint(
+    leftKnee,
+    10,
+    Math.PI / 2 + poseAngle(rotations, 'leftHip') - poseAngle(rotations, 'leftKnee'),
+  );
+  const rightAnkle = poseEndpoint(
+    rightKnee,
+    10,
+    Math.PI / 2 - poseAngle(rotations, 'rightHip') + poseAngle(rotations, 'rightKnee'),
+  );
+  return (
+    <svg className="model-preview__pose-thumbnail" viewBox="0 0 48 64" aria-hidden="true">
+      <circle cx="24" cy="9" r="5" />
+      <path d="M24 14 L24 38 M18 19 L30 19 M21 39 L27 39" />
+      <PoseLine from={leftShoulder} to={leftElbow} />
+      <PoseLine from={leftElbow} to={leftWrist} />
+      <PoseLine from={rightShoulder} to={rightElbow} />
+      <PoseLine from={rightElbow} to={rightWrist} />
+      <PoseLine from={leftHip} to={leftKnee} />
+      <PoseLine from={leftKnee} to={leftAnkle} />
+      <PoseLine from={rightHip} to={rightKnee} />
+      <PoseLine from={rightKnee} to={rightAnkle} />
+    </svg>
+  );
+}
+
+function PoseLine({
+  from,
+  to,
+}: {
+  readonly from: { readonly x: number; readonly y: number };
+  readonly to: { readonly x: number; readonly y: number };
+}): React.JSX.Element {
+  return <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} />;
+}
+
+function poseAngle(
+  rotations: ReadonlyMap<string, { readonly x: number; readonly y: number; readonly z: number }>,
+  jointId: string,
+): number {
+  const rotation = rotations.get(jointId);
+  return rotation ? rotation.z + rotation.x * 0.45 + rotation.y * 0.2 : 0;
+}
+
+function poseEndpoint(
+  start: { readonly x: number; readonly y: number },
+  length: number,
+  angle: number,
+): { readonly x: number; readonly y: number } {
+  return { x: start.x + Math.cos(angle) * length, y: start.y + Math.sin(angle) * length };
+}
+
 function updateJointRotation(
   pose: ThreeReferencePoseState,
   jointId: string,
@@ -350,6 +474,32 @@ function updateJointRotation(
 function requirePoseControlMode(value: string): ThreeReferencePoseControlMode {
   if (value === 'pose' || value === 'depth') return value;
   throw new Error(`Unknown 3D Reference pose control mode: ${value}`);
+}
+
+function requirePoseJointGroup(value: string): PoseJointGroup {
+  if (
+    value === 'body' ||
+    value === 'torso' ||
+    value === 'head' ||
+    value === 'arms' ||
+    value === 'legs'
+  ) {
+    return value;
+  }
+  throw new Error(`Unknown 3D Reference pose joint group: ${value}`);
+}
+
+function poseJointGroupOf(jointId: string): PoseJointGroup {
+  if (jointId === 'hips') return 'body';
+  if (jointId === 'spine' || jointId === 'chest') return 'torso';
+  if (jointId === 'head') return 'head';
+  if (jointId.includes('Shoulder') || jointId.includes('Elbow') || jointId.includes('Wrist')) {
+    return 'arms';
+  }
+  if (jointId.includes('Hip') || jointId.includes('Knee') || jointId.includes('Ankle')) {
+    return 'legs';
+  }
+  throw new Error(`Unknown 3D Reference mannequin joint group: ${jointId}`);
 }
 
 function requirePositiveNumber(value: string): number {

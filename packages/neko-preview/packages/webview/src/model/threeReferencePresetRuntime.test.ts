@@ -9,8 +9,23 @@ import {
 } from './threeReferencePresetRuntime';
 
 describe('neutral 3D Reference mannequin runtime', () => {
+  it.each(['female', 'male', 'child'] as const)(
+    'creates a smooth, complete %s mannequin without textures or appearance detail',
+    (variant) => {
+      const mannequin = createNeutralMannequin(variant, poseCapabilities());
+      const meshes: THREE.Mesh[] = [];
+      mannequin.root.traverse((object) => {
+        if (object instanceof THREE.Mesh) meshes.push(object);
+      });
+      expect(meshes.length).toBeGreaterThanOrEqual(20);
+      expect(meshes.every((mesh) => mesh.geometry.getAttribute('normal') !== undefined)).toBe(true);
+      expect(new THREE.Box3().setFromObject(mannequin.root).isEmpty()).toBe(false);
+      disposeObjectTree(mannequin.root);
+    },
+  );
+
   it('creates all declared neutral landmarks without textures or appearance detail', () => {
-    const mannequin = createNeutralMannequin(poseCapabilities());
+    const mannequin = createNeutralMannequin('female', poseCapabilities());
     expect([...mannequin.joints.keys()]).toHaveLength(16);
     expect([...mannequin.joints.keys()]).toEqual(
       expect.arrayContaining(['hips', 'head', 'leftElbow', 'rightAnkle']),
@@ -25,33 +40,42 @@ describe('neutral 3D Reference mannequin runtime', () => {
   });
 
   it('applies declared constrained joints and rejects unknown or out-of-range values', () => {
-    const mannequin = createNeutralMannequin(poseCapabilities());
+    const capabilities = poseCapabilities();
+    const mannequin = createNeutralMannequin('female', capabilities);
+    const standing = capabilities.posePresets[0];
+    if (!standing) throw new Error('Test pose capabilities omitted standing.');
     applyDeclaredMannequinPose(mannequin, {
       poseId: 'standing',
-      joints: [
-        {
-          jointId: 'leftElbow',
-          rotation: { x: 0, y: 0, z: 0.5, order: 'XYZ' },
-        },
-      ],
+      joints: standing.joints.map((joint) =>
+        joint.jointId === 'leftElbow'
+          ? { ...joint, rotation: { x: 0, y: 0, z: 0.5, order: 'XYZ' as const } }
+          : joint,
+      ),
     });
     expect(mannequin.joints.get('leftElbow')?.rotation.z).toBeCloseTo(0.5);
     expect(() =>
       applyDeclaredMannequinPose(mannequin, {
         poseId: 'standing',
-        joints: [{ jointId: 'unknown', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } }],
+        joints: [
+          ...standing.joints,
+          { jointId: 'unknown', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } },
+        ],
       }),
     ).toThrow(/unknown joint/i);
     expect(() =>
       applyDeclaredMannequinPose(mannequin, {
         poseId: 'standing',
-        joints: [{ jointId: 'leftElbow', rotation: { x: 9, y: 0, z: 0, order: 'XYZ' } }],
+        joints: standing.joints.map((joint) =>
+          joint.jointId === 'leftElbow'
+            ? { ...joint, rotation: { x: 9, y: 0, z: 0, order: 'XYZ' as const } }
+            : joint,
+        ),
       }),
     ).toThrow(/constraint/i);
   });
 
   it('projects only declared joints and parent links into the pose render overlay', () => {
-    const mannequin = createNeutralMannequin(poseCapabilities());
+    const mannequin = createNeutralMannequin('female', poseCapabilities());
     const overlay = createMannequinSkeletonOverlay(mannequin);
     const lines = overlay.children.find((child) => child instanceof THREE.LineSegments);
     const points = overlay.children.find((child) => child instanceof THREE.Points);
@@ -67,7 +91,7 @@ describe('neutral 3D Reference mannequin runtime', () => {
   });
 
   it('recursively disposes every mannequin geometry and shared material exactly once', () => {
-    const mannequin = createNeutralMannequin(poseCapabilities());
+    const mannequin = createNeutralMannequin('female', poseCapabilities());
     const disposals = { geometry: 0, material: 0 };
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
@@ -131,7 +155,16 @@ function poseCapabilities() {
     ['rightAnkle', 'rightKnee'],
   ] as const;
   return {
-    posePresetIds: ['standing'],
+    posePresets: [
+      {
+        poseId: 'standing',
+        labelKey: 'preview.model.posePreset.standing',
+        joints: hierarchy.map(([jointId]) => ({
+          jointId,
+          rotation: { x: 0, y: 0, z: 0, order: 'XYZ' as const },
+        })),
+      },
+    ],
     joints: hierarchy.map(([jointId, parentJointId]) => ({
       jointId,
       ...(parentJointId ? { parentJointId } : {}),

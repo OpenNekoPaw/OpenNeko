@@ -67,7 +67,7 @@ describe('ThreeReferenceOutputCollector', () => {
       ...sourceStaging(),
       subject: {
         kind: 'builtin-preset' as const,
-        presetId: 'guide-neutral-mannequin',
+        presetId: 'guide-mannequin-female',
         presetVersion: 1,
         fingerprint: 'guide-1',
         presetKind: 'mannequin' as const,

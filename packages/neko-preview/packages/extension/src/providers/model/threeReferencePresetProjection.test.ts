@@ -24,7 +24,16 @@ describe('3D Reference preset runtime projection', () => {
     expect(runtime).toEqual({
       kind: 'procedural',
       implementationId: 'neutral-mannequin-v1',
-      poseCapabilities: { posePresetIds: ['standing'], joints: [] },
+      poseCapabilities: {
+        posePresets: [
+          {
+            poseId: 'standing',
+            labelKey: 'preview.model.posePreset.standing',
+            joints: [{ jointId: 'hips', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } }],
+          },
+        ],
+        joints: [],
+      },
     });
     expect(authorization.toWebviewUri).not.toHaveBeenCalled();
   });
@@ -83,7 +92,16 @@ function proceduralEntry(): ThreeReferencePresetCatalogEntry {
     labelKey: 'test',
     defaultScale: 1,
     runtime: { kind: 'procedural', implementationId: 'neutral-mannequin-v1' },
-    poseCapabilities: { posePresetIds: ['standing'], joints: [] },
+    poseCapabilities: {
+      posePresets: [
+        {
+          poseId: 'standing',
+          labelKey: 'preview.model.posePreset.standing',
+          joints: [{ jointId: 'hips', rotation: { x: 0, y: 0, z: 0, order: 'XYZ' } }],
+        },
+      ],
+      joints: [],
+    },
     renderPasses: ['pose-skeleton'],
     packagedDependencies: [],
     provenance: { origin: 'project-authored', author: 'OpenNeko', source: 'test' },
