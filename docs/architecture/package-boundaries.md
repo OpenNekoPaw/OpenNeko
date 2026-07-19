@@ -157,16 +157,16 @@ TUI 的产品级组合位于 `apps/neko-tui`。Agent core/platform 不导入 VS 
 
 ## 保留领域包
 
-| 包                 | 主要职责                                              | 关键边界                                                                |
-| ------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------- |
-| `neko-agent`       | Agent session、provider、Skill、capability 与 Chat UI | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation |
-| `neko-assets`      | 素材库、元数据、缩略图、Entity VS Code surface        | 路径走公共 resolver；Entity 走 canonical facade；缓存不伪装事实         |
-| `neko-canvas`      | 画布、创作结构、投影与领域 authoring                  | Webview 管交互；持久写入走 domain/host contract；复用公共 UI            |
-| `neko-cut`         | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Extension 管 editor/export；媒体走 Engine client  |
-| `neko-preview`     | 保留媒体、文档与标准 3D 格式的授权只读预览            | Extension 管 provider/resource/CSP；Webview 只渲染授权内容；Three.js 仅属于独立模型 Webview，不恢复 Engine Model/Scene 或新项目格式 |
-| `neko-tools`       | 工具、Media LSP、差异与诊断                           | LSP/diagnostic 在 Extension；不得贡献已移除 Device UI                   |
-| `neko-engine`      | 本地 Rust Media Engine 与 VS Code native wrapper      | 只暴露保留媒体 contract；native 资源显式释放                            |
-| `apps/neko-vscode` | VS Code 产品组合根                                    | 只拥有 Extension Pack、打包、发布和产品验收                             |
+| 包                 | 主要职责                                              | 关键边界                                                                                                                                       |
+| ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `neko-agent`       | Agent session、provider、Skill、capability 与 Chat UI | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation                                                                        |
+| `neko-assets`      | 素材库、元数据、缩略图、Entity VS Code surface        | 路径走公共 resolver；Entity 走 canonical facade；缓存不伪装事实                                                                                |
+| `neko-canvas`      | 画布、创作结构、投影与领域 authoring                  | Webview 管交互；持久写入走 domain/host contract；复用公共 UI                                                                                   |
+| `neko-cut`         | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Extension 管 editor/export；媒体走 Engine client                                                                         |
+| `neko-preview`     | 授权只读预览与临时 3D Reference staging               | Preview 拥有面板级 Three.js 会话及形象、动作、机位、全景输出；Agent/Canvas/media 只消费共享 contract；不恢复 Engine Model/Scene 或持久 3D 项目 |
+| `neko-tools`       | 工具、Media LSP、差异与诊断                           | LSP/diagnostic 在 Extension；不得贡献已移除 Device UI                                                                                          |
+| `neko-engine`      | 本地 Rust Media Engine 与 VS Code native wrapper      | 只暴露保留媒体 contract；native 资源显式释放                                                                                                   |
+| `apps/neko-vscode` | VS Code 产品组合根                                    | 只拥有 Extension Pack、打包、发布和产品验收                                                                                                    |
 
 ## 路径、缓存与用户数据
 

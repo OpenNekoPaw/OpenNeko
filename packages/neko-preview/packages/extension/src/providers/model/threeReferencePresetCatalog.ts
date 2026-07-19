@@ -177,20 +177,24 @@ export const THREE_REFERENCE_PRESET_CATALOG = defineThreeReferencePresetCatalog(
     fingerprint: 'sha256:2fa5962892c51638c0799e1bb30ee7344ca23422034d44db7869efd864368490',
     labelKey: 'preview.threeReference.preset.childMannequin',
   }),
-  {
-    presetId: 'guide-primitive-blockout-props',
-    presetVersion: 1,
-    fingerprint: 'sha256:09fe929b333c29941a53017592e406293825132ee3d3efc5e90912b54101c3fd',
-    presetKind: 'prop',
-    appearancePolicy: 'guide-only',
-    allowedPurposes: ['camera'],
-    labelKey: 'preview.threeReference.preset.primitiveBlockoutProps',
-    defaultScale: 1,
-    runtime: { kind: 'procedural', implementationId: 'primitive-blockout-props-v1' },
-    renderPasses: ['camera-composition'],
-    packagedDependencies: [],
-    ...projectAuthoredMetadata('primitive and blockout prop geometry'),
-  },
+  blockoutPropPreset({
+    presetId: 'guide-blockout-cube',
+    implementationId: 'blockout-cube-v1',
+    fingerprint: 'sha256:651896895b005e632f733da5e749f6ec147ebbed2e9d244a39f1304290407ec7',
+    labelKey: 'preview.threeReference.preset.blockoutCube',
+  }),
+  blockoutPropPreset({
+    presetId: 'guide-blockout-sphere',
+    implementationId: 'blockout-sphere-v1',
+    fingerprint: 'sha256:061cb4e1b87a0786717f8f9817f4d649d1f1bc1ed6cb54c7b6177c3455074400',
+    labelKey: 'preview.threeReference.preset.blockoutSphere',
+  }),
+  blockoutPropPreset({
+    presetId: 'guide-blockout-cylinder',
+    implementationId: 'blockout-cylinder-v1',
+    fingerprint: 'sha256:e90c8b833a60f1e9de9f94b1ed81d8c280444e077082cb2770b346a6c2077367',
+    labelKey: 'preview.threeReference.preset.blockoutCylinder',
+  }),
   {
     presetId: 'guide-studio-room-blockout',
     presetVersion: 1,
@@ -494,6 +498,28 @@ function mannequinPreset(input: {
     renderPasses: ['pose-skeleton', 'depth', 'camera-composition'],
     packagedDependencies: [],
     ...projectAuthoredMetadata(`${input.presetId} smooth procedural guide geometry`),
+  };
+}
+
+function blockoutPropPreset(input: {
+  readonly presetId: string;
+  readonly implementationId: string;
+  readonly fingerprint: string;
+  readonly labelKey: string;
+}): ThreeReferencePresetCatalogEntry {
+  return {
+    presetId: input.presetId,
+    presetVersion: 1,
+    fingerprint: input.fingerprint,
+    presetKind: 'prop',
+    appearancePolicy: 'guide-only',
+    allowedPurposes: ['camera'],
+    labelKey: input.labelKey,
+    defaultScale: 1,
+    runtime: { kind: 'procedural', implementationId: input.implementationId },
+    renderPasses: ['camera-composition'],
+    packagedDependencies: [],
+    ...projectAuthoredMetadata(`${input.presetId} procedural guide geometry`),
   };
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_PREVIEW_STAGING_SCHEMA_VERSION, type ModelPreviewStagingState } from '@neko/shared';
 import {
+  addModelCamera,
   addModelLight,
   duplicateModelCamera,
   patchModelTransform,
@@ -11,6 +12,7 @@ import {
   updateModelEnvironmentIntensity,
   updateModelLight,
 } from './modelStagingStore';
+import { resolveModelCameraPlacement, resolveModelLightPlacement } from './modelCreationPresets';
 
 describe('model staging store', () => {
   it('serializes temporary camera, light, selection, and transform state', () => {
@@ -67,6 +69,25 @@ describe('model staging store', () => {
     expect(state.revision).toBe(5);
   });
 
+  it('adds fixed-position cameras with deterministic identities', () => {
+    let state = initialState();
+    const placement = resolveModelCameraPlacement('front-left');
+    state = addModelCamera(state, placement, 'Front left');
+    state = addModelCamera(state, placement, 'Front left');
+
+    expect(state.cameraPresets.slice(-2)).toEqual([
+      {
+        id: 'camera-front-left',
+        label: 'Front left',
+        position: { x: -2.5, y: 1.3, z: 2.5 },
+        target: { x: 0, y: 0, z: 0 },
+        fieldOfViewDeg: 45,
+      },
+      expect.objectContaining({ id: 'camera-front-left-2' }),
+    ]);
+    expect(() => resolveModelCameraPlacement('missing')).toThrow(/Unknown/);
+  });
+
   it('refuses invalid camera edits or removal of the final preset', () => {
     const state = initialState();
     expect(() => updateModelCamera(state, { ...state.cameraPresets[0]!, label: ' ' })).toThrow(
@@ -78,14 +99,18 @@ describe('model staging store', () => {
 
   it('adds bounded temporary directional lights with deterministic identities', () => {
     let state = initialState();
-    state = addModelLight(state);
+    const placement = resolveModelLightPlacement('overhead');
+    state = addModelLight(state, placement);
     expect(state.lightRig.lights.at(-1)).toMatchObject({
-      id: 'light-1',
+      id: 'light-overhead',
       color: '#ffffff',
-      intensity: 1,
+      intensity: 1.5,
+      position: { x: 0, y: 4, z: 0.5 },
     });
-    while (state.lightRig.lights.length < 8) state = addModelLight(state);
-    expect(() => addModelLight(state)).toThrow(/at most 8 directional lights/);
+    while (state.lightRig.lights.length < 8) state = addModelLight(state, placement);
+    expect(state.lightRig.lights.at(-1)?.id).toBe('light-overhead-6');
+    expect(() => addModelLight(state, placement)).toThrow(/at most 8 directional lights/);
+    expect(() => resolveModelLightPlacement('missing')).toThrow(/Unknown/);
   });
 });
 

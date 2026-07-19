@@ -325,27 +325,52 @@ describe('ModelViewer', () => {
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[aria-label="Add camera"]')?.click();
+      await Promise.resolve();
     });
+    const cameraOptions = document.body.querySelectorAll<HTMLButtonElement>(
+      'button[data-creation-option-id^="front"], button[data-creation-option-id="left"], button[data-creation-option-id="right"], button[data-creation-option-id="rear"]',
+    );
+    expect(cameraOptions).toHaveLength(6);
+    cameraOptions[0]?.focus();
+    cameraOptions[0]?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }),
+    );
+    expect(document.activeElement).toBe(cameraOptions[1]);
+    await act(async () => cameraOptions[1]?.click());
     expect(
-      container.querySelector('[data-tree-item-id="model-selection:camera:camera-default-copy"]'),
+      container.querySelector('[data-tree-item-id="model-selection:camera:camera-front-left"]'),
     ).not.toBeNull();
     expect(container.querySelector('[data-testid="model-preview-ready"]')).toHaveProperty(
       'dataset.selectionKind',
       'camera',
     );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
 
     await act(async () => {
       container
         .querySelector<HTMLButtonElement>('button[aria-label="Add directional light"]')
         ?.click();
+      await Promise.resolve();
     });
+    const overheadLight = document.body.querySelector<HTMLButtonElement>(
+      'button[data-creation-option-id="overhead"]',
+    );
+    expect(overheadLight).not.toBeNull();
+    await act(async () => overheadLight?.click());
     expect(
-      container.querySelector('[data-tree-item-id="model-selection:light:light-1"]'),
+      container.querySelector('[data-tree-item-id="model-selection:light:light-overhead"]'),
     ).not.toBeNull();
     expect(runtime.applyStaging).toHaveBeenLastCalledWith(
       expect.objectContaining({
         lightRig: expect.objectContaining({
-          lights: expect.arrayContaining([expect.objectContaining({ id: 'light-1' })]),
+          lights: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'light-overhead',
+              position: { x: 0, y: 4, z: 0.5 },
+            }),
+          ]),
         }),
       }),
     );
@@ -375,6 +400,39 @@ describe('ModelViewer', () => {
       type: '3d-reference/preset-subject-requested',
       identity: { sessionId: 'session-1', revision: 2 },
       presetId: 'guide-mannequin-male',
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Add or replace object"]')
+        ?.click();
+      await Promise.resolve();
+    });
+    const objectPresetIds = [
+      'guide-blockout-cube',
+      'guide-blockout-sphere',
+      'guide-blockout-cylinder',
+    ];
+    expect(
+      objectPresetIds.map((presetId) =>
+        document.body.querySelector<HTMLButtonElement>(`button[data-preset-id="${presetId}"]`),
+      ),
+    ).not.toContain(null);
+    expect(
+      document.body.querySelector('button[data-preset-id="guide-primitive-blockout-props"]'),
+    ).toBeNull();
+    await act(async () =>
+      document.body
+        .querySelector<HTMLButtonElement>('button[data-preset-id="guide-blockout-sphere"]')
+        ?.click(),
+    );
+    expect(mockWindow.api.postedMessages).toContainEqual({
+      type: '3d-reference/preset-subject-requested',
+      identity: { sessionId: 'session-1', revision: 2 },
+      presetId: 'guide-blockout-sphere',
     });
 
     await act(async () => root.unmount());
@@ -903,9 +961,19 @@ function referencePresetOptions() {
       labelKey: 'preview.threeReference.preset.maleMannequin',
     },
     {
-      presetId: 'guide-primitive-blockout-props',
+      presetId: 'guide-blockout-cube',
       presetKind: 'prop' as const,
-      labelKey: 'preview.threeReference.preset.primitiveBlockoutProps',
+      labelKey: 'preview.threeReference.preset.blockoutCube',
+    },
+    {
+      presetId: 'guide-blockout-sphere',
+      presetKind: 'prop' as const,
+      labelKey: 'preview.threeReference.preset.blockoutSphere',
+    },
+    {
+      presetId: 'guide-blockout-cylinder',
+      presetKind: 'prop' as const,
+      labelKey: 'preview.threeReference.preset.blockoutCylinder',
     },
   ];
 }

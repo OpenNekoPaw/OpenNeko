@@ -115,24 +115,40 @@ describe('neutral 3D Reference mannequin runtime', () => {
     expect(disposals).toEqual({ geometry: geometries.size, material: materials.size });
   });
 
-  it.each([
-    'primitive-blockout-props-v1',
-    'studio-room-blockout-v1',
-    'neutral-panorama-grid-v1',
-  ] as const)('creates the declared guide-only blockout runtime %s', (implementationId) => {
-    const root = createBlockoutReferencePreset(implementationId);
-    const meshes: THREE.Mesh[] = [];
-    root.traverse((object) => {
-      if (object instanceof THREE.Mesh) meshes.push(object);
-    });
-    expect(meshes.length).toBeGreaterThan(0);
-    expect(new THREE.Box3().setFromObject(root).isEmpty()).toBe(false);
-    for (const mesh of meshes) {
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      expect(materials.every((material) => !('map' in material) || !material.map)).toBe(true);
-    }
-    disposeObjectTree(root);
-  });
+  it.each(['blockout-cube-v1', 'blockout-sphere-v1', 'blockout-cylinder-v1'] as const)(
+    'creates exactly one declared blockout primitive for %s',
+    (implementationId) => {
+      const root = createBlockoutReferencePreset(implementationId);
+      const meshes: THREE.Mesh[] = [];
+      root.traverse((object) => {
+        if (object instanceof THREE.Mesh) meshes.push(object);
+      });
+      expect(meshes).toHaveLength(1);
+      expect(meshes[0]?.name).toBe(
+        `guide-part:${implementationId.replace('blockout-', '').replace('-v1', '')}`,
+      );
+      expect(new THREE.Box3().setFromObject(root).isEmpty()).toBe(false);
+      disposeObjectTree(root);
+    },
+  );
+
+  it.each(['studio-room-blockout-v1', 'neutral-panorama-grid-v1'] as const)(
+    'creates the declared guide-only blockout runtime %s',
+    (implementationId) => {
+      const root = createBlockoutReferencePreset(implementationId);
+      const meshes: THREE.Mesh[] = [];
+      root.traverse((object) => {
+        if (object instanceof THREE.Mesh) meshes.push(object);
+      });
+      expect(meshes.length).toBeGreaterThan(0);
+      expect(new THREE.Box3().setFromObject(root).isEmpty()).toBe(false);
+      for (const mesh of meshes) {
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        expect(materials.every((material) => !('map' in material) || !material.map)).toBe(true);
+      }
+      disposeObjectTree(root);
+    },
+  );
 });
 
 function poseCapabilities() {

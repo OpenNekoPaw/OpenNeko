@@ -25,16 +25,21 @@ The contract SHALL model appearance, pose, camera, and panoramic scene outputs a
 
 ### Requirement: Appearance and control routing remain separate
 
-Preview, Agent, Canvas, and media adapters MUST preserve the declared role of every output. Appearance output may populate ordinary visual reference or explicitly supported IP-Adapter fields; pose/depth output may populate only control-image fields with the matching control mode; camera output remains structured camera/shot metadata; panoramic output remains environment/scene evidence. No consumer may reinterpret a control output as appearance based only on its image MIME type.
+Preview, Agent, Canvas, and media adapters MUST preserve the declared role of every output through one shared media projection. Appearance output may populate ordinary visual reference or explicitly supported IP-Adapter fields; pose/depth output may populate only control-image fields with the matching control mode; camera output remains complete structured camera/shot metadata; panoramic output remains the stable panorama resource plus structured orientation. Stable image `ResourceRef` values MUST be materialized only at the authorized host execution boundary. No consumer may reinterpret a control output as appearance based only on its image MIME type.
 
 #### Scenario: Route a pose control to image generation
 
 - **WHEN** Canvas or Agent builds an image request from a pose output
 - **THEN** it binds the resource to `controlImage` with `controlMode: pose` and does not add it to IP-Adapter, subject, style, or ordinary reference collections
 
+#### Scenario: Reject ambiguous structured roles
+
+- **WHEN** one generation request aggregates two independently captured pose/depth outputs, two camera outputs, or two panoramic-scene outputs
+- **THEN** shared projection rejects the request before media request construction instead of choosing a value by context order or active editor state
+
 ### Requirement: Unsupported controls fail before provider submission
 
-Agent/media capability negotiation SHALL validate the selected provider/model against every requested 3D reference output before task submission. Unsupported pose, depth, camera, or panoramic controls MUST return typed diagnostics and MUST NOT be dropped, converted to prompt-only success, attached as ordinary appearance reference, or submitted through another provider without explicit user intent.
+Agent/media capability negotiation SHALL validate both the selected provider adapter profile and selected model capability declaration against every requested 3D reference output before task creation. Precise model capabilities SHALL distinguish pose, depth, appearance/IP-Adapter, camera, and panorama; generic aliases or unknown provider-option forwarding MUST NOT establish support. Unsupported pose, depth, appearance, camera, or panoramic controls MUST return typed diagnostics and MUST NOT be dropped, converted to prompt-only success, attached as ordinary appearance reference, or submitted through another provider without explicit user intent.
 
 #### Scenario: Provider lacks pose control
 

@@ -77,8 +77,11 @@ Preview SHALL expose its fixed key, fill, and rim directional lights as selectab
 
 #### Scenario: Add a bounded temporary directional light
 
-- **WHEN** the creator invokes the bottom light action while fewer than eight temporary directional lights exist
-- **THEN** Preview creates one panel-local directional light, selects its viewport object and inspector, and preserves the subject, camera, environment, and existing lights
+- **WHEN** the creator opens the bottom light action while fewer than eight temporary directional lights exist
+- **THEN** Preview presents a keyboard-accessible list of fixed normalized light positions without changing staging state
+
+- **WHEN** the creator selects one fixed light position
+- **THEN** Preview creates exactly one panel-local directional light at that position, selects its viewport object and inspector, and preserves the subject, camera, environment, and existing lights
 
 - **WHEN** the creator attempts to add a ninth light
 - **THEN** Preview reports the bounded-light diagnostic and does not create a point, spot, area, shadow, or persistent light
@@ -108,8 +111,19 @@ Preview SHALL expose bottom-toolbar actions for mannequin, blockout object, came
 
 #### Scenario: Add a camera from the bottom bar
 
-- **WHEN** the creator invokes the bottom camera action
-- **THEN** Preview duplicates the active temporary camera with a deterministic identity, selects its viewport object, and preserves the current orbit until the creator explicitly views through it
+- **WHEN** the creator opens the bottom camera action
+- **THEN** Preview presents a keyboard-accessible list of fixed front, rear, side, and three-quarter camera positions without changing staging state
+
+- **WHEN** the creator selects one fixed camera position
+- **THEN** Preview creates exactly one temporary camera with a deterministic identity, normalized position, target, and field of view, selects its viewport object, and preserves the current orbit until the creator explicitly views through it
+
+#### Scenario: Add one basic blockout object
+
+- **WHEN** the creator opens the bottom object action
+- **THEN** Preview lists cube, sphere, and cylinder as separate catalog-backed choices rather than one combined primitive set
+
+- **WHEN** the creator selects one blockout primitive
+- **THEN** the Extension validates and projects only that preset into the single primary-subject slot and does not construct the other primitive shapes
 
 #### Scenario: Choose a 720° environment from the bottom bar
 

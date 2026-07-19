@@ -1359,7 +1359,9 @@ function toBlockoutReferenceImplementationId(
   implementationId: string,
 ): BlockoutReferenceImplementationId {
   switch (implementationId) {
-    case 'primitive-blockout-props-v1':
+    case 'blockout-cube-v1':
+    case 'blockout-sphere-v1':
+    case 'blockout-cylinder-v1':
     case 'studio-room-blockout-v1':
     case 'neutral-panorama-grid-v1':
       return implementationId;

@@ -5,6 +5,7 @@ import type {
   ModelPreviewStagingState,
   ModelPreviewTransform,
 } from '@neko/shared';
+import type { ModelCameraPlacementPreset, ModelLightPlacementPreset } from './modelCreationPresets';
 
 export const MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS = 8;
 
@@ -70,6 +71,21 @@ export function duplicateModelCamera(
   });
 }
 
+export function addModelCamera(
+  state: ModelPreviewStagingState,
+  placement: ModelCameraPlacementPreset,
+  label: string,
+): ModelPreviewStagingState {
+  if (label.trim().length === 0) throw new Error('Model Preview camera label cannot be empty.');
+  const id = nextPlacementId(
+    new Set(state.cameraPresets.map((camera) => camera.id)),
+    `camera-${placement.id}`,
+  );
+  return nextRevision(state, {
+    cameraPresets: [...state.cameraPresets, { id, label: label.trim(), ...placement.camera }],
+  });
+}
+
 export function removeModelCamera(
   state: ModelPreviewStagingState,
   cameraId: string,
@@ -109,25 +125,20 @@ export function updateModelLight(
   });
 }
 
-export function addModelLight(state: ModelPreviewStagingState): ModelPreviewStagingState {
+export function addModelLight(
+  state: ModelPreviewStagingState,
+  placement: ModelLightPlacementPreset,
+): ModelPreviewStagingState {
   if (state.lightRig.lights.length >= MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS) {
     throw new Error(
       `Model Preview supports at most ${MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS} directional lights.`,
     );
   }
-  const id = nextLightId(state);
-  const ordinal = state.lightRig.lights.length;
-  const angle = (ordinal / MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS) * Math.PI * 2;
-  const light: ModelPreviewLightEntry = {
-    id,
-    color: '#ffffff',
-    intensity: 1,
-    position: {
-      x: Number((Math.cos(angle) * 3).toFixed(4)),
-      y: 2.5,
-      z: Number((Math.sin(angle) * 3).toFixed(4)),
-    },
-  };
+  const id = nextPlacementId(
+    new Set(state.lightRig.lights.map((light) => light.id)),
+    `light-${placement.id}`,
+  );
+  const light: ModelPreviewLightEntry = { id, ...placement.light };
   return nextRevision(state, {
     lightRig: { ...state.lightRig, lights: [...state.lightRig.lights, light] },
   });
@@ -172,9 +183,9 @@ function nextCameraCopyId(state: ModelPreviewStagingState, cameraId: string): st
   return `${baseId}-${suffix}`;
 }
 
-function nextLightId(state: ModelPreviewStagingState): string {
-  const existingIds = new Set(state.lightRig.lights.map((light) => light.id));
-  let suffix = 1;
-  while (existingIds.has(`light-${suffix}`)) suffix += 1;
-  return `light-${suffix}`;
+function nextPlacementId(existingIds: ReadonlySet<string>, baseId: string): string {
+  if (!existingIds.has(baseId)) return baseId;
+  let suffix = 2;
+  while (existingIds.has(`${baseId}-${suffix}`)) suffix += 1;
+  return `${baseId}-${suffix}`;
 }

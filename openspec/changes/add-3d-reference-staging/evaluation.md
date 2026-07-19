@@ -19,9 +19,9 @@ Date: 2026-07-19
 
 ## Verification
 
-- **Key-free validation:** `pnpm test:agent:eval` passed on 2026-07-19: 39 files and 278 tests passed; all-suite dry-run discovered 23 suites and 47 cases.
+- **Key-free validation:** `pnpm test:agent:eval` passed on 2026-07-19: 39 files and 278 tests passed; all-suite dry-run discovered 23 suites and 48 cases.
 - **Real cases and reports:** Not run. No case/report is claimed as real Agent acceptance.
-- **Blocked:** Tasks 6.2–6.5 are not safely implementable in the current worktree because the exact Agent/Canvas/media owner files contain extensive unrelated user changes. Until that routing exists and Evaluation has a canonical Preview-context input path, a focused real TUI case would test a synthetic path rather than the product behavior.
+- **Blocked:** The downstream owner files are currently available for scoped implementation. A focused real TUI case remains blocked until Evaluation has a canonical Preview-context input operation; directly injecting a context into a turn would test a synthetic path rather than the product behavior.
 
 ## Interpretation
 
@@ -31,6 +31,6 @@ Date: 2026-07-19
 
 ## Residual Risk
 
-- Pose/depth, camera, and panorama roles may still be dropped or misclassified by the current Agent/media path.
+- Residual product risk is limited to real-provider behavior: current audited adapters intentionally reject structured camera/panorama, and no real TUI case proves a supported pose/depth or appearance submission from a Preview-originated context.
 - Unsupported provider/model controls have no real TUI acceptance evidence.
 - The new focused cases must be authored and run after the downstream canonical path and neutral observability are available; a good final answer or dry-run cannot replace them.

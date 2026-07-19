@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Popover, SegmentedControl, ToolbarButton, ToolbarSeparator } from '@neko/ui';
 import {
   AxesIcon,
@@ -17,6 +18,12 @@ import {
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import type { ThreeReferencePresetOption } from '@neko/shared';
 import { useTranslation } from '../../i18n/I18nContext';
+import {
+  MODEL_CAMERA_PLACEMENTS,
+  MODEL_LIGHT_PLACEMENTS,
+  type ModelCameraPlacementId,
+  type ModelLightPlacementId,
+} from '../modelCreationPresets';
 
 export type ModelViewportMode = 'navigate' | 'inspect';
 export type ModelTransformMode = 'translate' | 'rotate' | 'scale';
@@ -37,8 +44,8 @@ export interface ModelViewportControlsProps {
   readonly onAxesVisibleChange: (visible: boolean) => void;
   readonly onGridVisibleChange: (visible: boolean) => void;
   readonly onPresetRequest: (presetId: string) => void;
-  readonly onAddCamera: () => void;
-  readonly onAddLight: () => void;
+  readonly onAddCamera: (placementId: ModelCameraPlacementId) => void;
+  readonly onAddLight: (placementId: ModelLightPlacementId) => void;
   readonly onPanoramaRequest: () => void;
 }
 
@@ -148,17 +155,19 @@ export function ModelViewportControls({
             title={t('preview.model.addPanorama')}
             onClick={onPanoramaRequest}
           />
-          <ToolbarButton
+          <CreationMenu
             disabled={disabled}
             icon={<CameraIcon size={18} />}
+            options={MODEL_CAMERA_PLACEMENTS}
             title={t('preview.model.addCamera')}
-            onClick={onAddCamera}
+            onSelect={onAddCamera}
           />
-          <ToolbarButton
+          <CreationMenu
             disabled={disabled || !canAddLight}
             icon={<LightIcon size={18} />}
+            options={MODEL_LIGHT_PLACEMENTS}
             title={canAddLight ? t('preview.model.addLight') : t('preview.model.lightLimitReached')}
-            onClick={onAddLight}
+            onSelect={onAddLight}
           />
         </div>
         <ToolbarSeparator orientation="vertical" />
@@ -216,38 +225,110 @@ function PresetMenu({
   readonly title: string;
   readonly onSelect: (presetId: string) => void;
 }): React.JSX.Element {
+  return (
+    <CreationMenu
+      activeId={activePresetId}
+      disabled={disabled || options.length === 0}
+      icon={icon}
+      options={options.map((option) => ({
+        id: option.presetId,
+        labelKey: option.labelKey,
+        presetId: option.presetId,
+      }))}
+      title={title}
+      onSelect={onSelect}
+    />
+  );
+}
+
+interface CreationMenuOption<TId extends string> {
+  readonly id: TId;
+  readonly labelKey: string;
+  readonly presetId?: string;
+}
+
+function CreationMenu<TId extends string>({
+  activeId,
+  disabled,
+  icon,
+  onSelect,
+  options,
+  title,
+}: {
+  readonly activeId?: string;
+  readonly disabled: boolean;
+  readonly icon: React.JSX.Element;
+  readonly options: readonly CreationMenuOption<TId>[];
+  readonly title: string;
+  readonly onSelect: (id: TId) => void;
+}): React.JSX.Element {
   const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
   return (
     <Popover
       align="start"
+      open={open}
       side="top"
+      onOpenChange={setOpen}
       trigger={
         <ToolbarButton
-          active={options.some((option) => option.presetId === activePresetId)}
-          disabled={disabled || options.length === 0}
+          active={options.some((option) => option.id === activeId)}
+          disabled={disabled}
           icon={icon}
           title={title}
         />
       }
     >
-      <div className="model-preview__creation-menu" aria-label={title} role="menu">
+      <div
+        className="model-preview__creation-menu"
+        aria-label={title}
+        role="menu"
+        onKeyDown={moveCreationMenuFocus}
+      >
         {options.map((option) => (
           <button
-            key={option.presetId}
+            key={option.id}
             className="model-preview__creation-menu-item"
+            data-creation-option-id={option.id}
             data-preset-id={option.presetId}
-            disabled={option.presetId === activePresetId}
+            disabled={option.id === activeId}
             role="menuitem"
             type="button"
-            onClick={() => onSelect(option.presetId)}
+            onClick={() => {
+              onSelect(option.id);
+              setOpen(false);
+            }}
           >
             <span>{t(option.labelKey)}</span>
-            {option.presetId === activePresetId ? <span aria-hidden="true">✓</span> : null}
+            {option.id === activeId ? <span aria-hidden="true">✓</span> : null}
           </button>
         ))}
       </div>
     </Popover>
   );
+}
+
+function moveCreationMenuFocus(event: React.KeyboardEvent<HTMLDivElement>): void {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+  const items = [
+    ...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'),
+  ];
+  if (items.length === 0) return;
+  event.preventDefault();
+  const currentIndex = items.findIndex((item) => item === document.activeElement);
+  const nextIndex =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? items.length - 1
+        : event.key === 'ArrowUp'
+          ? currentIndex <= 0
+            ? items.length - 1
+            : currentIndex - 1
+          : currentIndex < 0 || currentIndex === items.length - 1
+            ? 0
+            : currentIndex + 1;
+  items[nextIndex]?.focus();
 }
 
 function asViewportMode(value: string): ModelViewportMode {

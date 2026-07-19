@@ -79,7 +79,17 @@ describe('3D reference preset catalog contract', () => {
         allowedPurposes: ['pose', 'camera'],
       },
       {
-        presetId: 'guide-primitive-blockout-props',
+        presetId: 'guide-blockout-cube',
+        presetKind: 'prop',
+        allowedPurposes: ['camera'],
+      },
+      {
+        presetId: 'guide-blockout-sphere',
+        presetKind: 'prop',
+        allowedPurposes: ['camera'],
+      },
+      {
+        presetId: 'guide-blockout-cylinder',
         presetKind: 'prop',
         allowedPurposes: ['camera'],
       },
@@ -96,6 +106,9 @@ describe('3D reference preset catalog contract', () => {
     ]);
     expect(THREE_REFERENCE_PRESET_CATALOG.map((entry) => entry.presetId)).not.toContain(
       'guide-neutral-mannequin',
+    );
+    expect(THREE_REFERENCE_PRESET_CATALOG.map((entry) => entry.presetId)).not.toContain(
+      'guide-primitive-blockout-props',
     );
     const mannequins = THREE_REFERENCE_PRESET_CATALOG.filter(
       (entry) => entry.presetKind === 'mannequin',

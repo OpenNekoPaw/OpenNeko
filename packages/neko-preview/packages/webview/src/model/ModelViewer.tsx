@@ -31,6 +31,7 @@ import {
   type ThreeModelRuntimePort,
 } from './threeRuntime';
 import {
+  addModelCamera,
   addModelLight,
   duplicateModelCamera,
   MAX_MODEL_PREVIEW_DIRECTIONAL_LIGHTS,
@@ -41,6 +42,12 @@ import {
   updateModelCamera,
   updateModelLight,
 } from './modelStagingStore';
+import {
+  resolveModelCameraPlacement,
+  resolveModelLightPlacement,
+  type ModelCameraPlacementId,
+  type ModelLightPlacementId,
+} from './modelCreationPresets';
 import type { ModelSceneSelection } from './modelSceneSelection';
 import { ModelInspectorPanel } from './components/ModelInspectorPanel';
 import { ModelScenePanel } from './components/ModelScenePanel';
@@ -269,10 +276,22 @@ export function ModelViewer({
     setSceneSelection({ kind: 'camera', cameraId: duplicate.id });
     setViewportMode('inspect');
   };
-  const addLight = (): void => {
+  const addCamera = (placementId: ModelCameraPlacementId): void => {
     if (!staging) throw new Error('Model Preview staging is unavailable.');
+    const placement = resolveModelCameraPlacement(placementId);
+    const previousIds = new Set(staging.cameraPresets.map((camera) => camera.id));
+    const next = addModelCamera(staging, placement, t(placement.labelKey));
+    const added = next.cameraPresets.find((camera) => !previousIds.has(camera.id));
+    if (!added) throw new Error('Model Preview camera creation produced no camera.');
+    updateStaging(next);
+    setSceneSelection({ kind: 'camera', cameraId: added.id });
+    setViewportMode('inspect');
+  };
+  const addLight = (placementId: ModelLightPlacementId): void => {
+    if (!staging) throw new Error('Model Preview staging is unavailable.');
+    const placement = resolveModelLightPlacement(placementId);
     const previousIds = new Set(staging.lightRig.lights.map((light) => light.id));
-    const next = addModelLight(staging);
+    const next = addModelLight(staging, placement);
     const added = next.lightRig.lights.find((light) => !previousIds.has(light.id));
     if (!added) throw new Error('Model Preview light creation produced no light.');
     updateStaging(next);
@@ -379,10 +398,7 @@ export function ModelViewer({
           viewportMode={viewportMode}
           transformMode={transformMode}
           onAxesVisibleChange={setAxesVisible}
-          onAddCamera={() => {
-            if (!staging) throw new Error('Model Preview staging is unavailable.');
-            duplicateCamera(staging.activeCameraId);
-          }}
+          onAddCamera={addCamera}
           onAddLight={addLight}
           onGridVisibleChange={(visible) => {
             runtimeRef.current?.setGroundGridVisible(visible);

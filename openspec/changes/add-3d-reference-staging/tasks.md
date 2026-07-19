@@ -40,6 +40,7 @@
 - [x] 5.5 Add camera, shot/aspect, panorama orientation, environment, capture, and output-preview controls without resetting the live orbit view during unrelated edits.
 - [x] 5.6 Add focused accessibility, keyboard/focus, theme, panel-switching, resize, role-selection, stale-state, and multi-root Webview tests.
 - [x] 5.9 Add a Canvas-style bottom creation bar for catalog mannequin/object selection, temporary camera and bounded directional-light creation, and Extension-authorized 720° environment selection; keep one primary-subject and one environment slot, exact session identity, capture exclusion, i18n, accessibility, and focused contract/provider/runtime/UI tests.
+- [x] 5.10 Refine bottom creation actions so camera and directional light use shared-popover fixed-position choices, while cube, sphere, and cylinder are separate catalog-backed object choices that replace the single primary subject one at a time; add i18n, keyboard/accessibility, store/runtime, protocol, and UI tests.
 
 ## 6. Replace Agent, Canvas, and media delivery
 
@@ -47,9 +48,9 @@
 - [x] 6.1.1 Store capture sources in the owning workspace resource cache, reject missing/ambiguous workspace ownership before writes, and add a regression test proving Preview global storage is not used for Agent handoff.
 - [x] 6.1.2 Deliver every visible purpose-capture action independently with a purpose-scoped staging snapshot and identity; remove hidden cross-action pending state that can strand camera outputs across revisions.
 - [x] 6.2 Update Agent context parsing, chips, prompt/evidence projection, reference tokens, and multimodal attachment handling so every output retains appearance/pose/camera/panorama role and guide restrictions.
-- [ ] 6.3 Update Canvas/Agent media projection to map pose/depth only to `controlImage` plus matching `controlMode`, appearance only to explicit ordinary/IP-Adapter references, and camera/panorama only to declared structured controls.
-- [ ] 6.4 Add capability negotiation and red/green tests proving unsupported provider/model controls fail before submission and cannot be dropped, converted to prompt-only success, rerouted to another provider, or attached as ordinary appearance.
-- [ ] 6.5 Add path-level spies/poison guards proving Preview session → purpose output → `3d-reference` context → Agent/Canvas/media projection, with no legacy context, generic image fallback, direct provider selection, raw model upload, Engine Model/Scene path, or feature-package internal import.
+- [x] 6.3 Define one shared stable-`ResourceRef` 3D-reference media projection; consume it from Agent direct-media and Canvas generation requests; materialize control/IP-Adapter image refs only at the authorized host execution boundary while preserving structured camera/panorama fields.
+- [x] 6.4 Add provider-adapter plus selected-model capability negotiation and red/green tests proving unsupported or ambiguous controls fail before task creation and cannot be dropped, converted to prompt-only success, rerouted to another provider, attached as ordinary appearance, or accepted through generic capability aliases.
+- [x] 6.5 Add path-level spies/poison guards proving Preview session → independent purpose output → `3d-reference` context → shared projection → Agent/Canvas request → authorized materialization/provider submission, with no legacy context, generic image fallback, direct provider selection, raw model upload, Engine Model/Scene path, or feature-package internal import.
 
 ## 7. Validate the real product boundary
 
@@ -57,10 +58,10 @@
 - [ ] 7.2 Run the owning scenarios locally in an Extension Development Host through `vscode-extension-debugger`; keep UI runtime tests out of CI and commit only a scrubbed result summary.
 - [ ] 7.3 Manually verify the real-source path in the external `~/Git/neko-test` workspace with `test.glb`, including appearance/pose eligibility, camera, panorama composition, material completeness, angle changes, and role isolation without repository-local copies.
 - [x] 7.4 Use `neko-agent-evaluation` to make an explicit `reuse | update | create | excluded` decision for the changed Agent context/purpose-routing behavior, run `pnpm test:agent:eval` for harness integrity, and run the required focused real TUI case or record the exact external blocker without claiming behavior acceptance.
-- [ ] 7.5 Run focused shared/Preview/Agent/Canvas/media tests, typechecks, production builds, manifest/CSP/build-ownership/license tests, `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, `pnpm check:unused`, strict OpenSpec validation, and `git diff --check`; record all blocked commands and residual risks.
+- [x] 7.5 Run focused shared/Preview/Agent/Canvas/media tests, typechecks, production builds, manifest/CSP/build-ownership/license tests, `pnpm build`, `pnpm test`, `pnpm check`, `pnpm check:legacy-debt`, `pnpm check:unused`, strict OpenSpec validation, and `git diff --check`; record all blocked commands and residual risks.
 
 ## 8. Document and prepare rollout
 
 - [x] 8.1 Update Preview README/architecture, supported reference-purpose tables, built-in catalog/licensing documentation, package description, commands, and user-facing no-model/guide behavior in Chinese and English where applicable.
-- [ ] 8.2 Update the system ADR and package-boundary documentation only where the stable responsibility changes, preserving the absence of durable 3D projects and Rust Engine Model/Scene authority.
-- [ ] 8.3 Record the final design/reuse audit, asset provenance, actual bundle/performance measurements, canonical-path/no-fallback evidence, Extension Development Host reports, Agent Evaluation disposition, validation commands, blocked checks, and remaining risks in `verification.md`.
+- [x] 8.2 Update the system ADR and package-boundary documentation only where the stable responsibility changes, preserving the absence of durable 3D projects and Rust Engine Model/Scene authority.
+- [x] 8.3 Record the final design/reuse audit, asset provenance, actual bundle/performance measurements, canonical-path/no-fallback evidence, Extension Development Host reports, Agent Evaluation disposition, validation commands, blocked checks, and remaining risks in `verification.md`.

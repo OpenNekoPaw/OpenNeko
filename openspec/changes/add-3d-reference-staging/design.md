@@ -170,8 +170,9 @@ Camera and light objects are manipulated by direct pointer drag on a camera-faci
 The Canvas-style bottom toolbar exposes five creation affordances: mannequin, blockout object, camera, directional light, and 720° environment. These actions remain projections of the existing temporary session owners rather than a second scene document model.
 
 - Mannequin and object menus select a catalog-declared built-in preset for the session's single primary-subject slot. Selecting another primary subject is an explicit replacement with a monotonic revision, not a hidden multi-character or multi-object scene.
-- Camera adds a copy of the active temporary camera and selects its viewport object.
-- Light adds a bounded temporary directional-light entry with a stable panel-local identity. The initial key/fill/rim rig remains the default, while extra lights use the same direction-to-subject semantics, direct-drag interaction, capture exclusion, and recursive disposal. The session accepts at most eight directional lights and still does not introduce point/spot/area lights, attenuation, shadows, or persistence.
+- Camera opens a shared-popover menu of fixed normalized placements (front, rear, left, right, and front three-quarter views). Selecting one placement creates exactly one temporary camera with a deterministic identity, target, and field of view, then selects its viewport object. Scene-tree duplication remains the explicit operation for copying an existing camera; the bottom action does not silently duplicate the active view.
+- Light opens the same menu pattern with fixed normalized front, back, side, and overhead placements. Selecting one placement adds exactly one bounded temporary directional-light entry with a stable panel-local identity. The initial key/fill/rim rig remains the default, while extra lights use the same direction-to-subject semantics, direct-drag interaction, capture exclusion, and recursive disposal. The session accepts at most eight directional lights and still does not introduce point/spot/area lights, attenuation, shadows, or persistence.
+- The object menu lists project-authored cube, sphere, and cylinder blockouts as separate catalog entries. Selecting one replaces the single primary-subject slot with only that primitive; the removed combined primitive-set identity is not retained as a fallback that constructs all shapes together.
 - 720° opens the Extension-owned authorized panorama picker and replaces the session's single environment slot after successful inspection. Cancellation changes nothing; failure remains visible and never substitutes the neutral grid.
 
 Preset replacement and panorama authorization cross the Webview/Extension message boundary with exact session identity. The Extension validates the requested catalog entry or local source, advances the canonical staging revision, and returns an identity-bearing runtime descriptor. Webview-local hard-coded asset paths, raw file paths, and optimistic subject mutation are forbidden.
@@ -180,7 +181,23 @@ The Preview provider owns the Webview page's extension-asset authorization for t
 
 ### Preserve downstream capability negotiation
 
-Preview constructs validated context but never chooses a provider or submits generation. Agent/Canvas map pose/depth outputs to existing `controlImage` fields, appearance to explicit reference fields, and camera/panorama to declared semantic controls. The media platform validates the selected provider/model before submission. Unsupported controls fail visibly; no prompt-only, ordinary-image, other-provider, or dropped-control fallback can report success.
+Preview constructs validated context but never chooses a provider or submits generation. A shared L0 projector maps validated `ThreeReferenceContextData` into provider-neutral media controls so Agent and Canvas cannot invent separate role rules:
+
+- appearance outputs accumulate as stable IP-Adapter/ordinary appearance `ResourceRef` values;
+- one pose or depth output binds to one stable control-image `ResourceRef` and the matching control mode;
+- one camera output remains the complete structured camera reference;
+- one panoramic-scene output remains the stable panorama `ResourceRef` plus orientation.
+
+Each independently captured context remains valid input to the projector. Across one generation request, multiple appearance outputs may preserve their order, but a second pose/depth, camera, or panorama output is ambiguous and fails before request construction. The projector never chooses a winner based on context order, active editor state, or MIME type.
+
+Image media requests carry stable `controlImageRef`, IP-Adapter `imageRef`, structured camera, and structured panorama fields until the authorized host execution boundary. That boundary materializes stable image references to provider bytes only after capability negotiation and rejects mixed stable/legacy representations. Camera and panorama remain structured fields; they are not flattened into prompt text while no audited adapter owns them.
+
+Capability negotiation is the intersection of two explicit declarations:
+
+1. the provider adapter profile must declare the exact requested media controls it actually maps;
+2. the selected model must declare the matching precise capabilities (`image.control.pose`, `image.control.depth`, `image.reference.ip-adapter`, `image.control.camera`, or `image.control.panorama`).
+
+The inventory for this change finds audited pose/depth mapping in fal, DashScope, and the standard-image NewAPI-compatible runtimes (`generic`, `newapi`, `oneapi`, `xai`, and `kling`), plus one IP-Adapter mapping in fal. Official OpenAI image models ignore the Neko control namespace, and NewAPI-compatible chat-image mode converts controls into prompt/multimodal evidence, so both paths reject precise 3D controls even when a model incorrectly declares the capability. No adapter currently owns structured 3D camera or panoramic-scene controls, and the default image model declares none of the precise capabilities. Therefore camera/panorama requests are expressible but fail closed, while pose/depth or appearance requests succeed only for an adapter/model pair that declares the exact control. Generic `controlnet`/`ip_adapter` aliases and adapters that merely forward unknown provider options do not establish audited support. Unsupported or mixed stable/legacy controls fail before task creation; no prompt-only, ordinary-image, other-provider, dropped-control, truncation, or adapter-ignored success is allowed.
 
 ### Materialize captures inside the owning workspace
 
@@ -213,6 +230,4 @@ Rollback removes the guide entry/catalog and `3d-reference` producer/consumer ch
 
 ## Open Questions
 
-- Should the first production mannequin be project-authored procedural geometry or an audited CC0 rigged GLB? Resolve through a bounded feasibility task measuring pose ergonomics, landmark output, asset size, and load/disposal behavior.
-- Which provider/model combinations currently declare reliable pose, depth, camera, and panoramic controls? Implementation must inventory actual capability profiles before deciding default delivery selections.
 - Should appearance-capable built-in examples ship in the initial catalog, or should the first release contain guide-only assets? Default recommendation is guide-only until licensing, package budget, and user-value evidence justify appearance examples.

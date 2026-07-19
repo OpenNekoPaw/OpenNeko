@@ -10,7 +10,11 @@ export interface NeutralMannequinRuntime {
 export type NeutralMannequinVariant = 'female' | 'male' | 'child';
 
 export type BlockoutReferenceImplementationId =
-  'primitive-blockout-props-v1' | 'studio-room-blockout-v1' | 'neutral-panorama-grid-v1';
+  | 'blockout-cube-v1'
+  | 'blockout-sphere-v1'
+  | 'blockout-cylinder-v1'
+  | 'studio-room-blockout-v1'
+  | 'neutral-panorama-grid-v1';
 
 interface MannequinBodyProfile {
   readonly rootName: string;
@@ -240,16 +244,20 @@ export function createBlockoutReferencePreset(
     metalness: 0,
   });
   switch (implementationId) {
-    case 'primitive-blockout-props-v1':
-      addMesh(root, 'cube', new THREE.BoxGeometry(0.7, 0.7, 0.7), material, [-0.9, 0.35, 0]);
+    case 'blockout-cube-v1':
+      addMesh(root, 'cube', new THREE.BoxGeometry(1, 1, 1), material, [0, 0.5, 0]);
+      break;
+    case 'blockout-sphere-v1':
+      addMesh(root, 'sphere', new THREE.SphereGeometry(0.55, 20, 14), material, [0, 0.55, 0]);
+      break;
+    case 'blockout-cylinder-v1':
       addMesh(
         root,
         'cylinder',
-        new THREE.CylinderGeometry(0.35, 0.35, 0.9, 12),
+        new THREE.CylinderGeometry(0.45, 0.45, 1, 20),
         material,
-        [0, 0.45, 0],
+        [0, 0.5, 0],
       );
-      addMesh(root, 'sphere', new THREE.SphereGeometry(0.42, 12, 8), material, [0.95, 0.42, 0]);
       break;
     case 'studio-room-blockout-v1':
       addMesh(root, 'floor', new THREE.BoxGeometry(4, 0.05, 4), material, [0, -0.025, 0]);
