@@ -32,7 +32,7 @@ export default tseslint.config(
     rules: {
       // --- Error level (CI-blocking) ---
       'no-debugger': 'error',
-      'no-console': 'warn',
+      'no-console': 'error',
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'warn',
@@ -53,6 +53,17 @@ export default tseslint.config(
       '@typescript-eslint/ban-ts-comment': 'off',
       'no-case-declarations': 'off',
       'no-control-regex': 'off',
+    },
+  },
+
+  // Explicit console output boundaries: the shared transport and a local manual executable.
+  {
+    files: [
+      'packages/neko-engine/packages/extension/src/mediaEngine/export/ExportIntegrationTest.ts',
+      'packages/neko-types/src/logger/console-logger.ts',
+    ],
+    rules: {
+      'no-console': 'off',
     },
   },
 
