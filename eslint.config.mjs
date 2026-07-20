@@ -79,6 +79,7 @@ export default tseslint.config(
       'security/detect-non-literal-fs-filename': 'off',
       'security/detect-non-literal-regexp': 'off',
       'security/detect-non-literal-require': 'off',
+      'security/detect-possible-timing-attacks': 'error',
       'security/detect-unsafe-regex': 'warn',
     },
   },

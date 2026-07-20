@@ -6,6 +6,7 @@ import eslintConfig from '../../eslint.config.mjs';
 const EXPLICIT_ANY_RULE = '@typescript-eslint/no-explicit-any';
 const HOOK_ORDER_RULE = 'react-hooks/rules-of-hooks';
 const CONSOLE_RULE = 'no-console';
+const TIMING_ATTACK_RULE = 'security/detect-possible-timing-attacks';
 const CONSOLE_BOUNDARY_FILES = [
   'packages/neko-engine/packages/extension/src/mediaEngine/export/ExportIntegrationTest.ts',
   'packages/neko-types/src/logger/console-logger.ts',
@@ -23,6 +24,10 @@ test('test files retain the scoped explicit-any override', () => {
 test('console output remains blocking outside exact output boundaries', () => {
   assert.equal(readLastRuleSetting(CONSOLE_RULE, isProductionTypeScriptConfig), 'error');
   assert.deepEqual(readRuleOverrideFiles(CONSOLE_RULE, 'off'), CONSOLE_BOUNDARY_FILES);
+});
+
+test('possible timing attacks remain blocking', () => {
+  assert.equal(readLastRuleSetting(TIMING_ATTACK_RULE, isSecurityConfig), 'error');
 });
 
 function readLastRuleSetting(ruleName, predicate) {
@@ -47,6 +52,10 @@ function isProductionTypeScriptConfig(config) {
 
 function isReactHookConfig(config) {
   return config.files?.includes('packages/**/src/**/*.tsx') === true;
+}
+
+function isSecurityConfig(config) {
+  return config.rules?.['security/detect-object-injection'] === 'off';
 }
 
 function isTestConfig(config) {

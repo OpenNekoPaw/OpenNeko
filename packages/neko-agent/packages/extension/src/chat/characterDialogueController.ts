@@ -1127,20 +1127,20 @@ export function parseCharacterDialogueSlashArgs(
   const messageParts: string[] = [];
 
   for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    if (token === '--consult') {
+    const argument = tokens[index];
+    if (argument === '--consult') {
       mode = 'consult';
       continue;
     }
-    if (token === '--roleplay') {
+    if (argument === '--roleplay') {
       mode = 'roleplay';
       continue;
     }
-    if (token.startsWith('--enrichment=')) {
-      enrichment = parseEnrichmentMode(token.slice('--enrichment='.length));
+    if (argument.startsWith('--enrichment=')) {
+      enrichment = parseEnrichmentMode(argument.slice('--enrichment='.length));
       continue;
     }
-    if (token === '--enrichment') {
+    if (argument === '--enrichment') {
       const next = tokens[index + 1];
       enrichment = parseEnrichmentMode(next);
       if (next && !next.startsWith('--')) {
@@ -1148,34 +1148,34 @@ export function parseCharacterDialogueSlashArgs(
       }
       continue;
     }
-    if (token === '--auto-enrich') {
+    if (argument === '--auto-enrich') {
       enrichment = 'auto';
       continue;
     }
-    if (token === '--manual') {
+    if (argument === '--manual') {
       enrichment = 'manual';
       continue;
     }
-    if (token === '--skip-enrich') {
+    if (argument === '--skip-enrich') {
       enrichment = 'skip';
       continue;
     }
-    if (!entityToken && token.startsWith('@')) {
-      entityToken = token;
+    if (!entityToken && argument.startsWith('@')) {
+      entityToken = argument;
       continue;
     }
-    if (!entityToken && token.startsWith('entity:')) {
-      entityToken = token;
+    if (!entityToken && argument.startsWith('entity:')) {
+      entityToken = argument;
       continue;
     }
-    if (!entityRef && looksLikeCreativeEntityRef(token)) {
-      const parsedRef = parseCreativeEntityRefJson(token);
+    if (!entityRef && looksLikeCreativeEntityRef(argument)) {
+      const parsedRef = parseCreativeEntityRefJson(argument);
       if (parsedRef) {
         entityRef = parsedRef;
         continue;
       }
     }
-    messageParts.push(token);
+    messageParts.push(argument);
   }
 
   return {

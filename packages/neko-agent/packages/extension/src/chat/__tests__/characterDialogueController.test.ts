@@ -1013,6 +1013,22 @@ describe('CharacterDialogueController', () => {
       initialUserMessage: 'hi there',
     });
   });
+
+  it.each([
+    ['@小橘 --roleplay --enrichment=auto hello', 'roleplay', 'auto'],
+    ['@小橘 --consult --enrichment manual hello', 'consult', 'manual'],
+    ['@小橘 --skip-enrich hello', 'roleplay', 'skip'],
+  ] as const)(
+    'parses public slash argument variants from %s',
+    (args, expectedMode, expectedEnrichment) => {
+      expect(parseCharacterDialogueSlashArgs(args)).toEqual({
+        entityToken: '@小橘',
+        mode: expectedMode,
+        enrichment: expectedEnrichment,
+        initialUserMessage: 'hello',
+      });
+    },
+  );
 });
 
 async function createConfirmedCharacterProject(): Promise<string> {
