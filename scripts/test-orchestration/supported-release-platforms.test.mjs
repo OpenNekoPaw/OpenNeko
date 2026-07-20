@@ -74,6 +74,13 @@ describe('supported release platform orchestration', () => {
     ]);
   });
 
+  it('keeps the native Engine out of TypeScript-only VSIX packaging', async () => {
+    const packageGroups = JSON.parse(await readFile('scripts/package-groups.json', 'utf8'));
+
+    assert.ok(packageGroups.packages.buildRelease.includes('neko-engine'));
+    assert.ok(!packageGroups.packages.tsExtensions.includes('neko-engine'));
+  });
+
   it('does not expose discontinued platform targets through local release entry points', async () => {
     const surfaces = await Promise.all(
       ['build.sh', 'ci.sh', 'scripts/act-ci.sh'].map((file) => readFile(file, 'utf8')),

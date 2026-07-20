@@ -20,7 +20,6 @@ const retainedReleaseExtensions = [
 
 test('extension pack contains exactly the retained release extensions', () => {
   assert.deepEqual(groups.packages.buildRelease, retainedReleaseExtensions);
-  assert.deepEqual(groups.packages.tsExtensions, retainedReleaseExtensions);
 
   const expected = retainedReleaseExtensions.map((name) => `neko.${name}`);
   assert.deepEqual(manifest.extensionPack, expected);
