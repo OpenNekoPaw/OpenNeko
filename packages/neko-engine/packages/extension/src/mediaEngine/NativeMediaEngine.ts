@@ -31,10 +31,9 @@ import type {
 } from '@neko/shared';
 import { COMPATIBLE_MODE_CAPABILITIES } from '@neko/shared';
 import { getLogger } from '../base/logger';
+import { createNativeEngineBinding } from './nativeEngineBinding';
 
 type EventListener<T> = (data: T) => void;
-
-type NativeEngineModule = typeof import('@neko-engine/host-napi');
 
 // =============================================================================
 // Native Media Engine
@@ -95,9 +94,7 @@ export class NativeMediaEngine implements IMediaEngine {
     this._setState('initializing');
 
     try {
-      // Load NativeEngine via dynamic import
-      const module = (await import('@neko-engine/host-napi')) as unknown as NativeEngineModule;
-      this._engine = await module.NativeEngine.create();
+      this._engine = await createNativeEngineBinding();
 
       // Log GPU info
       const hasGpu = this._engine.hasGpu();

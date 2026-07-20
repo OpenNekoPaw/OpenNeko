@@ -7,8 +7,7 @@
 
 import type { NativeEngine as NativeEngineType } from '@neko-engine/host-napi';
 import { getLogger } from '../../base/logger';
-
-type NativeEngineModule = typeof import('@neko-engine/host-napi');
+import { createNativeEngineBinding } from '../nativeEngineBinding';
 
 const logger = getLogger('ExportService');
 
@@ -274,8 +273,7 @@ export class ExportService {
     }
 
     try {
-      const module = (await import('@neko-engine/host-napi')) as unknown as NativeEngineModule;
-      this._engine = await module.NativeEngine.create();
+      this._engine = await createNativeEngineBinding();
       this._isInitialized = true;
       logger.info('Initialized with NativeEngine');
     } catch (error) {
