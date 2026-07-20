@@ -1,6 +1,5 @@
 import type {
   AgentPhase,
-  ContentBlock,
   Message,
   TaskCreatedMessage,
   TaskUpdatedMessage,

@@ -1294,10 +1294,6 @@ export function createCharacterDialogueSessionId(entityRef: CreativeEntityRef): 
   return createDefaultCharacterDialogueSessionId(entityRef);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
 function requireCharacterSemanticPort<T>(port: T | undefined, operation: string): T {
   if (!port) throw new Error(`${operation} requires an Agent semantic port.`);
   return port;

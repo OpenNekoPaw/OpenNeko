@@ -140,11 +140,11 @@ export async function checkReferences(
   const existenceResults = await Promise.all(
     srcElements.map(async ({ el, absolutePath }) => {
       const exists = await fileExists(absolutePath);
-      return { el, absolutePath, exists };
+      return { el, exists };
     }),
   );
 
-  for (const { el, absolutePath, exists } of existenceResults) {
+  for (const { el, exists } of existenceResults) {
     if (!exists && el.srcRange) {
       entries.push({
         message: `Media file not found: ${el.src}`,

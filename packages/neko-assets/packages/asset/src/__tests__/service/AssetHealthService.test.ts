@@ -71,7 +71,7 @@ describe('AssetHealthService', () => {
     });
 
     it('should update status in storage', async () => {
-      const { variant } = await createEntityWithFiles('Test', ['/offline/file.mp4']);
+      await createEntityWithFiles('Test', ['/offline/file.mp4']);
 
       await healthService.validateAll();
 
@@ -140,7 +140,7 @@ describe('AssetHealthService', () => {
     });
 
     it('should track previousStatus', async () => {
-      const { variant } = await createEntityWithFiles('Test', ['/valid/file.mp4']);
+      await createEntityWithFiles('Test', ['/valid/file.mp4']);
 
       // First validation: sets status to online
       await healthService.validateAll();

@@ -103,8 +103,6 @@ type CanvasMarkdownTableCapabilityInput = Extract<
   }
 >;
 
-type CanvasMarkdownTableOperationHint = CanvasMarkdownTableCapabilityInput['operationHint'];
-
 type CanvasMarkdownTableUnknownColumnPolicy = 'preserve' | 'reject';
 
 type CanvasMarkdownTableProfilePhase = 'review' | 'apply';

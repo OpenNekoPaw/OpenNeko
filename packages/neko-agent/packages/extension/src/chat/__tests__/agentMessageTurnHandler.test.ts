@@ -1742,7 +1742,7 @@ describe('AgentMessageTurnHandler', () => {
         },
         activate: vi.fn(),
       } as any);
-      vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command: string) => {
+      vi.mocked(vscode.commands.executeCommand).mockImplementation(async (_command: string) => {
         return {
           items: [
             {

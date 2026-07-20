@@ -6,13 +6,7 @@
  * - Variable substitution
  */
 
-import type {
-  Prompt,
-  PromptVariable,
-  PromptCategory,
-  RenderedPrompt,
-  IPromptManager,
-} from '@neko/shared';
+import type { Prompt, PromptCategory, RenderedPrompt, IPromptManager } from '@neko/shared';
 
 /**
  * Prompt manager implementation

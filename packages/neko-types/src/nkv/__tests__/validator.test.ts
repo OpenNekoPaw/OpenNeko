@@ -229,7 +229,7 @@ describe('validateNkv', () => {
     });
 
     it('should error when media element is missing src', () => {
-      const { src, ...noSrc } = VALID_MEDIA_ELEMENT;
+      const { src: _src, ...noSrc } = VALID_MEDIA_ELEMENT;
       const data = {
         ...VALID_PROJECT,
         tracks: [{ ...VALID_PROJECT.tracks[0], elements: [noSrc] }],

@@ -14,7 +14,6 @@ import {
 } from '@neko/shared';
 import { probeImageMetadata } from './image-metadata';
 import {
-  dedupeStrings,
   extractEpubImageEntryPaths,
   extractLocalImageReferences,
   type DocumentContent,

@@ -237,7 +237,7 @@ function createLocalResourceAccessIfConfigured(
 function createResourceCacheIfConfigured(
   options: CreateHostContentAccessRuntimeOptions,
   localResourceAccess: LocalResourceAccessService | undefined,
-  workspaceRoot: string | undefined,
+  _workspaceRoot: string | undefined,
 ): ResourceCacheService | undefined {
   const target = resolveResourceCacheTarget(options.resourceCacheOptions);
   if (!target || !localResourceAccess) return undefined;

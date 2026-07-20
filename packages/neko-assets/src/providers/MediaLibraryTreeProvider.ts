@@ -26,7 +26,7 @@ import type { ResolvedMediaLibrary } from '@neko/shared';
 import type { MediaLibrarySettingsService } from '../services/MediaLibrarySettingsService';
 import type { ThumbnailService } from '../services/ThumbnailService';
 import type { MediaMetadataCache } from '../services/MediaMetadataCache';
-import { formatDuration, formatResolution, buildMetadataTooltipLines } from '../utils/formatters';
+import { buildMetadataTooltipLines } from '../utils/formatters';
 import { createThumbnailTooltip } from '../utils/thumbnailTooltip';
 import { getPreviewViewType } from '../utils/preview';
 import { t } from '../i18n';

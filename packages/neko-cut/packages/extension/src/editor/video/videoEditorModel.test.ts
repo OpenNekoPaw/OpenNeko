@@ -2,7 +2,7 @@
  * VideoEditorModel 单元测试
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import * as vscode from 'vscode';
 import { VideoEditorModel, VideoEditorModelProvider } from './videoEditorModel';
 import { ProjectData } from '@neko/shared';

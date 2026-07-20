@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { InMemoryStorage } from '../../storage/InMemoryStorage';
-import type { AssetEntity, CreateEntityInput } from '@neko/shared';
+import type { AssetEntity } from '@neko/shared';
 
 describe('InMemoryStorage', () => {
   let storage: InMemoryStorage;

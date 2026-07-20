@@ -251,7 +251,7 @@ describe('EntityService', () => {
     it('should return recent entities sorted by last used', async () => {
       const e1 = await service.create({ name: 'E1', category: 'object' });
       const e2 = await service.create({ name: 'E2', category: 'object' });
-      const e3 = await service.create({ name: 'E3', category: 'object' });
+      await service.create({ name: 'E3', category: 'object' });
 
       // Record usage to update lastUsedAt
       await service.recordUsage(e2.id);

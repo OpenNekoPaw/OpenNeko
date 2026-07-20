@@ -3,7 +3,6 @@ import type {
   PerceptionDiagnostics,
   PerceptionEvidenceEntry,
   PerceptionLayer,
-  PerceptualAssetRef,
 } from '@neko/shared';
 import type {
   MediaProbeResult,

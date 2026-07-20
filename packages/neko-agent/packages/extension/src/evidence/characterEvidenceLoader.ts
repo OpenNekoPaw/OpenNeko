@@ -8,13 +8,10 @@ import {
   type CharacterEvidenceEntityReader,
   type CharacterEvidenceLoader,
   type CharacterEvidenceOccurrenceReader,
-  type CharacterEvidencePathResolutionInput,
   type CharacterEvidenceProjectSearchReader,
-  type CharacterEvidenceResolvedProjectPath,
   type CharacterEvidenceRuntimeLogger,
   type CharacterEvidenceStoryIndexReader,
   type CharacterEvidenceTextReader,
-  type ParsedCharacterEvidenceLocation,
 } from '@neko/entity';
 import { createVSCodeEntityServices } from '@neko/entity/host-vscode';
 import { PROJECT_SEARCH_QUERY_COMMAND } from '@neko/search/host-vscode';

@@ -11,7 +11,7 @@
 
 import * as vscode from 'vscode';
 import type { AssetLibrary } from '@neko/asset';
-import type { AssetEntity, AssetFile, AssetFileStatus, MediaFileMetadata } from '@neko/shared';
+import type { AssetEntity, AssetFile, MediaFileMetadata } from '@neko/shared';
 import { isMediaFile } from '@neko/shared';
 import { formatDuration, formatResolution, buildMetadataTooltip } from '../utils/formatters';
 

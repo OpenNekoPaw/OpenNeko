@@ -137,7 +137,11 @@ describe('BaseMediaDiffAnalyzer', () => {
       super(['.png', '.jpg', '.jpeg']);
     }
 
-    async analyze(current: Buffer, previous: Buffer, options?: DiffOptions): Promise<DiffResult> {
+    async analyze(
+      _current: Buffer,
+      _previous: Buffer,
+      _options?: DiffOptions,
+    ): Promise<DiffResult> {
       // Create abort controller for cancellation check
       this.createAbortController();
 

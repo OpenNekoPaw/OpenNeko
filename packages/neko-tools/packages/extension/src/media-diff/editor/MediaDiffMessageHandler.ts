@@ -216,7 +216,7 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
           await handleAudioStreamControl(this, message.payload.action, message.payload, requestId);
           break;
       }
-    } catch (error) {
+    } catch {
       this.sendMessage({
         requestId,
         type: 'mediaDiff:error',
@@ -238,7 +238,7 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
         type: 'mediaDiff:fileHistory',
         payload: { commits },
       });
-    } catch (error) {
+    } catch {
       this.sendMessage({
         requestId,
         type: 'mediaDiff:fileHistory',

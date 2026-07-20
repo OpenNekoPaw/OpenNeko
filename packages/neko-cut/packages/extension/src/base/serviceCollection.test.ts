@@ -4,7 +4,7 @@
  * 测试 DI 容器的核心功能
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   ServiceCollection,
   createServiceId,

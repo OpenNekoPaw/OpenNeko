@@ -3,7 +3,6 @@ import {
   type ContributionDiagnostic,
   type ProjectIndexFreshness,
   type ProjectSearchQueryContext,
-  type ProjectSemanticCoverageMatchedRange,
   type ProjectSemanticCoverageQuery,
   type ProjectSemanticCoverageResult,
   type ProjectSemanticCoverageStaleReason,

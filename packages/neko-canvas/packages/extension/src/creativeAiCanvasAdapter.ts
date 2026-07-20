@@ -18,7 +18,6 @@ import {
   type CanvasStoryboardModelCapabilityProjection,
   type CanvasStoryboardPromptDocumentRef,
   type CanvasStoryboardPromptState,
-  type CanvasStoryboardReferenceMedia,
   type CanvasStoryboardSemanticPromptDocument,
   type CreativeAiApplyRequest,
   type CreativeAiCandidatePromotionRequest,
@@ -30,7 +29,6 @@ import {
   type CreativeAiRevision,
   type CreativeAiSourceRef,
   type CreativeAiTargetRef,
-  type CreativeAiWritebackPolicy,
   type ExternalCreativeAiInvocation,
 } from '@neko/shared';
 

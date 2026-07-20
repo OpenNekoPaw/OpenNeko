@@ -44,7 +44,6 @@ export function AudioPlayer() {
   const [volume, setVolume] = useState(1.0);
   const [speed, setSpeed] = useState(1.0);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('cover');
   const [fileName, setFileName] = useState('');
   const [lyrics, setLyrics] = useState<LrcLine[]>([]);
@@ -295,14 +294,6 @@ export function AudioPlayer() {
         <span className="text-sm text-neko-preview-text-secondary">
           {t('preview.audio.loading')}
         </span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-full text-sm text-red-400">
-        {t('preview.audio.error', { error })}
       </div>
     );
   }

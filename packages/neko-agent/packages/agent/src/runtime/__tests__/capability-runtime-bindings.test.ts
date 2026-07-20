@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-  createCapabilityRuntimeBindingStore,
-  mergeCapabilityRuntimeBindings,
-} from '../capability/capability-runtime-bindings';
+import { createCapabilityRuntimeBindingStore } from '../capability/capability-runtime-bindings';
 
 describe('capability-runtime-bindings', () => {
   it('stores external processor runtime as a shared capability binding', () => {

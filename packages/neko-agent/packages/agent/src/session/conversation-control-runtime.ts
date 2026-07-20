@@ -1,5 +1,4 @@
 import {
-  buildAgentPhaseMessage,
   buildHistoryClearedMessage,
   buildMessageCancelledMessage,
   type AgentPhaseMessage,

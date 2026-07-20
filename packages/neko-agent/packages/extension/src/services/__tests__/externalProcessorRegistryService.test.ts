@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   EXTERNAL_PROCESSOR_SCHEMA,

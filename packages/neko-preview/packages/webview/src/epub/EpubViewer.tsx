@@ -1300,31 +1300,6 @@ export const EpubViewer: FC = () => {
     }
   }, [capturing, currentChapter, viewMode, buildCurrentChapterLocator]);
 
-  // =========================================================================
-  // Send text selection to AI (rendition modes)
-  // =========================================================================
-
-  const sendSelectionToAgent = useCallback(() => {
-    if (!epubSelection) return;
-
-    postMessage({
-      type: 'document:sendToAi',
-      payload: {
-        text: epubSelection.text,
-        contentKind: 'text',
-        context: { chapter: currentChapter || undefined },
-        locator: buildCurrentChapterLocator(),
-        excerpt: {
-          contentKind: 'text',
-          text: epubSelection.text,
-          truncated: false,
-        },
-      },
-    } as never);
-
-    setEpubSelection(null);
-  }, [epubSelection, currentChapter, buildCurrentChapterLocator]);
-
   const handleContextMenuTarget = useCallback((target: HTMLElement) => {
     const imgEl = target.tagName === 'IMG' ? (target as HTMLImageElement) : null;
     setRightClickedImageSrc(imgEl?.src ?? null);

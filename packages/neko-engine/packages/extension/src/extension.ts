@@ -17,7 +17,6 @@ import { MediaEngineManager, createMediaEngineManager, NativeMediaEngine } from 
 import {
   ExportService,
   JviProjectLoader,
-  VideoFrameProvider,
   createVideoFrameProvider,
   type ExportProgress,
 } from './mediaEngine/export';
@@ -450,8 +449,7 @@ async function cmdShowStatus(): Promise<void> {
     }
 
     // Query health
-    const healthJson = await engine.engine.health();
-    const health = JSON.parse(healthJson);
+    JSON.parse(await engine.engine.health());
 
     // Query GPU info
     const gpuJson = await engine.engine.gpuInfo();

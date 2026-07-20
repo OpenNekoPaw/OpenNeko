@@ -178,7 +178,7 @@ export const createClipboardSlice: StateCreator<
       const track = project.tracks.find((t) => t.id === trackId);
       const element = track?.elements.find((e) => e.id === elementId);
       if (track && element) {
-        const { id, ...rest } = element;
+        const { id: _id, ...rest } = element;
         items.push({ trackType: track.type, element: rest });
       }
     }

@@ -53,7 +53,7 @@ class MockAnalyzer implements IMediaDiffAnalyzer {
     this.delay = delay;
   }
 
-  async analyze(current: Buffer, previous: Buffer, options?: DiffOptions): Promise<DiffResult> {
+  async analyze(_current: Buffer, _previous: Buffer, _options?: DiffOptions): Promise<DiffResult> {
     if (this.delay > 0) {
       await new Promise((resolve) => setTimeout(resolve, this.delay));
     }

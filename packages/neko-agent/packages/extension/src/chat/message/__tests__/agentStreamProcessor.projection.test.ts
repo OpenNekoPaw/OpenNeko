@@ -46,7 +46,7 @@ describe('AgentStreamProcessor conversation projection ownership', () => {
       },
     });
 
-    const result = await processor.processStream(webview as never, 'conversation-a', events(), {
+    await processor.processStream(webview as never, 'conversation-a', events(), {
       messageId: 'message-a',
       onPhaseChange: vi.fn(),
     });

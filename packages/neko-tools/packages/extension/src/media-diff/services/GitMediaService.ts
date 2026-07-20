@@ -15,13 +15,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import {
-  type MediaType,
   type MediaFileChange,
   type FileVersionPair,
   type GitChangeStatus,
   type GitCommitInfo,
   getMediaType,
-  isSupportedMediaFile,
 } from '@neko/shared';
 import { getLogger } from '../../utils/logger';
 import { GitCliGateway, type GitCliTarget, type IGitCliGateway } from './GitCliGateway';

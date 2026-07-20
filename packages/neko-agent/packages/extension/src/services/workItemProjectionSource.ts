@@ -19,7 +19,6 @@ import {
   type TaskRemovedMessage,
   type TasksUpdatedMessage,
   type TaskUpdatedMessage,
-  type TaskWorkItem,
 } from '@neko-agent/types';
 import type { Platform } from '@neko/platform';
 import type { IRuntimeTaskManager } from '@neko/agent';

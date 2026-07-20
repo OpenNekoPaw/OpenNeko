@@ -4,7 +4,7 @@
  */
 
 import * as vscode from 'vscode';
-import { BaseEditorModel, EditorCapabilities, IModelChangeEvent } from '../common/editorModel';
+import { BaseEditorModel, EditorCapabilities } from '../common/editorModel';
 import { ProjectData, createDefaultProject, loadNkv, saveNkv } from '@neko/shared';
 import { getLogger } from '../../base';
 import {

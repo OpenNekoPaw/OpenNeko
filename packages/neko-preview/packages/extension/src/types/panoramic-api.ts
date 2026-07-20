@@ -1,8 +1,4 @@
 import type {
-  OPEN_PANORAMIC_IMAGE_COMMAND,
-  OPEN_PANORAMIC_VIDEO_COMMAND,
-  PANORAMIC_IMAGE_VIEW_TYPE,
-  PANORAMIC_VIDEO_VIEW_TYPE,
   PanoramaViewState,
   PreviewManifest,
   PreviewVariant,

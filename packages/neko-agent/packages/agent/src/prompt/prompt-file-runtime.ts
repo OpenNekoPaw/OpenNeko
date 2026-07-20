@@ -1,7 +1,6 @@
 import type { PromptPresetConfig, PromptSource } from '@neko/shared';
 import {
   DEFAULT_AGENTS_FILE_CONTENT,
-  PROMPT_FILE_EXTENSION,
   buildAgentsFileLoadPlan,
   buildPromptFileContent,
   ensurePromptFileExtension,

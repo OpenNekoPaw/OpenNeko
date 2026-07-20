@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { FrameScheduler } from '../FrameScheduler';
-import type { FrameSchedulerStats } from '../FrameScheduler';
 
 // =============================================================================
 // VideoFrame mock — browser API not available in Node.js

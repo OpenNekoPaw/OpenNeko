@@ -83,7 +83,7 @@ describe('apply-shape', () => {
 
   describe('shape.duplicate', () => {
     it('should duplicate shape with offset', () => {
-      const { project, shape1 } = createShapeProject();
+      const { project } = createShapeProject();
       const dup = createTestShapeInstance({ id: 's1-dup' });
 
       const result = applyOperation(project, {

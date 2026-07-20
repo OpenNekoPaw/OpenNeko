@@ -15,13 +15,9 @@ import type { PiConversationCatalogRecord, PiConversationTranscriptEntry } from 
 import { buildAgentSessionDiagnosticMessage, type Message } from '@neko-agent/types';
 import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
 
-import { getLogger } from '../base';
 import type { AgentLocalResourceAccess } from '../services/localResourceAccess';
 import { projectMessagesForWebviewResourceDisplay } from './message/webviewResourceProjection';
 import { projectPiConversationEntries } from './message/piConversationHistoryProjection';
-
-const logger = getLogger('ConversationBridge');
-
 export interface PiConversationPresentationCatalogItem extends PiConversationCatalogRecord {
   readonly messageCount: number;
 }

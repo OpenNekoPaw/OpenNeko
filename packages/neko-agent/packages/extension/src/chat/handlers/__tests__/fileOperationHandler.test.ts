@@ -4,7 +4,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FileOperationHandler } from '../fileOperationHandler';
-import { handleError } from '../../../base';
 
 vi.mock('vscode', async () => await import('../../../__mocks__/vscode'));
 
@@ -226,13 +225,3 @@ describe('FileOperationHandler', () => {
     });
   });
 });
-
-function expectHandleErrorMessage(expected: string | RegExp): void {
-  const error = vi.mocked(handleError).mock.calls.at(-1)?.[0];
-  expect(error).toBeInstanceOf(Error);
-  if (typeof expected === 'string') {
-    expect((error as Error).message).toBe(expected);
-  } else {
-    expect((error as Error).message).toMatch(expected);
-  }
-}

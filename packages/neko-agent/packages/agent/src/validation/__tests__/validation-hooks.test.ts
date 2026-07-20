@@ -4,11 +4,11 @@
  * Comprehensive test suite for ValidationHooks class and createValidationHooks factory.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ValidationHooks, createValidationHooks } from '../validation-hooks';
 import { AgentError } from '../../errors';
 import type { AgentContext, AgentStep, ChatMessage, ContentPart } from '@neko/shared';
-import type { ValidationHooksOptions, ValidationError, ValidationWarning } from '../types';
+import type { ValidationHooksOptions, ValidationError } from '../types';
 
 const mermaidRuntimeMocks = vi.hoisted(() => ({
   initialize: vi.fn(),

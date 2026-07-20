@@ -138,7 +138,7 @@ describe('AssetLibrary', () => {
     it('should get recent entities sorted by lastUsedAt', async () => {
       const e1 = await library.createEntity({ name: 'E1', category: 'object' });
       await new Promise((r) => setTimeout(r, 5));
-      const e2 = await library.createEntity({ name: 'E2', category: 'object' });
+      await library.createEntity({ name: 'E2', category: 'object' });
       await new Promise((r) => setTimeout(r, 5));
       const e3 = await library.createEntity({ name: 'E3', category: 'object' });
 

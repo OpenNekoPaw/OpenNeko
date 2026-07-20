@@ -40,7 +40,6 @@ import {
   type WorkspaceMediaPathContext,
   type ResourceVariantRequest,
 } from '@neko/shared';
-import type { ImportedAssetDescriptor } from '@neko/shared';
 import {
   createNodeWorkspaceEntityAssetMetadataBinding,
   createNodeWorkspaceMediaMetadataBinding,
@@ -1602,17 +1601,6 @@ async function exportCharacterPack(input: unknown): Promise<unknown> {
   }
 }
 
-function findOwningWorkspaceRoot(
-  uri: vscode.Uri,
-  workspaceFolders: readonly vscode.WorkspaceFolder[],
-): string | undefined {
-  if (uri.scheme !== 'file') return workspaceFolders[0]?.uri.fsPath;
-  return workspaceFolders
-    .map((folder) => folder.uri.fsPath)
-    .filter((root) => isPathInsideOrEqual(uri.fsPath, root))
-    .sort((left, right) => right.length - left.length)[0];
-}
-
 function isPathInsideOrEqual(candidatePath: string, rootPath: string): boolean {
   const relativePath = path.relative(rootPath, candidatePath);
   return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
@@ -1687,73 +1675,6 @@ function isAuthorizedLocalPath(
 ): boolean {
   if (!allowedRoots || allowedRoots.length === 0) return true;
   return allowedRoots.some((root) => isPathInsideOrEqual(filePath, root));
-}
-
-async function registerImportedAssetDescriptor(descriptor: ImportedAssetDescriptor): Promise<void> {
-  if (!library || !descriptor.path) return;
-  const category =
-    descriptor.mediaKind.startsWith('live2d-') || descriptor.mediaKind.startsWith('model-')
-      ? 'character'
-      : 'object';
-  const durableProjectRef =
-    typeof descriptor.metadata?.['durableProjectRef'] === 'string'
-      ? descriptor.metadata['durableProjectRef']
-      : descriptor.path;
-  await library.importFile(descriptor.path, {
-    entityInput: {
-      name: path.basename(descriptor.path).replace(/\.[^.]+$/i, ''),
-      category,
-      tags: [descriptor.mediaKind, descriptor.dimension],
-    },
-    variantInput: {
-      name: descriptor.dimension,
-      tags: [descriptor.storageMode],
-    },
-    fileOptions: {
-      purpose: descriptor.dimension === 'model' ? 'main' : 'source',
-      characterAsset: {
-        assetDimension: descriptor.dimension,
-        mediaKind: descriptor.mediaKind,
-        storageMode: descriptor.storageMode,
-        ...(descriptor.locator ? { bundleLocator: descriptor.locator } : {}),
-        sourceOrigin: durableProjectRef,
-        ...(descriptor.sourceHash ? { sourceHash: descriptor.sourceHash } : {}),
-      },
-    },
-  });
-  await library.flush();
-  await registerProjectAssetDependency(descriptor);
-  entityChangeEmitter?.fire();
-}
-
-async function registerProjectAssetDependency(descriptor: ImportedAssetDescriptor): Promise<void> {
-  if (!dependencyManifestService || !descriptor.path) return;
-  const originalSourcePath =
-    typeof descriptor.metadata?.['originalSourcePath'] === 'string'
-      ? descriptor.metadata['originalSourcePath']
-      : descriptor.path;
-  const importDestination =
-    typeof descriptor.metadata?.['importDestination'] === 'string'
-      ? descriptor.metadata['importDestination']
-      : descriptor.storageMode === 'disk'
-        ? descriptor.path
-        : undefined;
-  const files = Array.isArray(descriptor.metadata?.['files'])
-    ? descriptor.metadata['files'].filter((entry): entry is string => typeof entry === 'string')
-    : undefined;
-
-  await dependencyManifestService.upsert(
-    dependencyManifestService.createImportDependency({
-      id: `${descriptor.mediaKind}:${descriptor.dimension}:${descriptor.path}`,
-      originalFile: originalSourcePath,
-      mediaKind: descriptor.mediaKind,
-      dimensions: [descriptor.dimension],
-      storageMode: descriptor.storageMode,
-      ...(descriptor.sourceHash ? { contentHash: descriptor.sourceHash } : {}),
-      ...(importDestination ? { importDestination } : {}),
-      ...(files ? { files } : {}),
-    }),
-  );
 }
 
 // =============================================================================

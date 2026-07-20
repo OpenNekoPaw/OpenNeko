@@ -5,12 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  ConnectionStateManager,
-  ConnectionStatus,
-  ConnectionState,
-  ConnectionStateChangeEvent,
-} from './connectionStateManager';
+import { ConnectionStateManager, ConnectionStatus } from './connectionStateManager';
 
 // =============================================================================
 // 测试套件

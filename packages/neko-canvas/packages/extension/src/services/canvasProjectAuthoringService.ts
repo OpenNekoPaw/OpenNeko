@@ -30,7 +30,6 @@ import {
   type CanvasHeadlessApplyOperationsResult,
   type CanvasHeadlessApplyAgentContentAuthoringResult,
   type CanvasHeadlessAuthoringResultBase,
-  type CanvasHeadlessAuthoringOperation,
   type CanvasHeadlessAuthoringTarget,
   type CanvasHeadlessCreateCompositeAuthoringResult,
   type CanvasHeadlessCreateConnectionResult,

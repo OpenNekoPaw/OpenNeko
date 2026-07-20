@@ -4,14 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TaskManager } from '../task-manager';
-import type {
-  TaskInput,
-  Task,
-  TaskStatus,
-  TaskExecutor,
-  TaskRunOwnerScope,
-  TaskRunScope,
-} from '@neko/shared';
+import type { TaskInput, Task, TaskExecutor, TaskRunOwnerScope, TaskRunScope } from '@neko/shared';
 
 const OWNER: TaskRunOwnerScope = {
   conversationId: 'conversation-1',
@@ -42,7 +35,7 @@ describe('TaskManager', () => {
       const executor: TaskExecutor = vi.fn().mockResolvedValue({ data: 'result' });
       manager.registerExecutor('image_generation', executor);
 
-      const taskId = await submit({
+      await submit({
         type: 'image_generation',
         payload: { prompt: 'test' },
       });
@@ -50,7 +43,6 @@ describe('TaskManager', () => {
       // Advance timers to allow task execution
       await vi.advanceTimersByTimeAsync(0);
 
-      const task = await manager.get(taskId);
       expect(executor).toHaveBeenCalled();
     });
   });
@@ -185,13 +177,9 @@ describe('TaskManager', () => {
     });
 
     it('should cancel running task', async () => {
-      let resolveExecutor: () => void;
-      const executor: TaskExecutor = vi.fn().mockImplementation(
-        () =>
-          new Promise<{ data: string }>((resolve) => {
-            resolveExecutor = () => resolve({ data: 'done' });
-          }),
-      );
+      const executor: TaskExecutor = vi
+        .fn()
+        .mockImplementation(() => new Promise<{ data: string }>(() => {}));
       manager.registerExecutor('audio_generation', executor);
 
       const taskId = await submit({

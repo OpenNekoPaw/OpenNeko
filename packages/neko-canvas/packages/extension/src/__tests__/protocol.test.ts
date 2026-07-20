@@ -83,23 +83,6 @@ function readMethodBody(source: string, methodStart: string): string {
   return source.slice(start, end);
 }
 
-function readCaseBody(source: string, caseName: string): string {
-  const start = source.indexOf(`case '${caseName}'`);
-  expect(start).toBeGreaterThanOrEqual(0);
-  const braceStart = source.indexOf('{', start);
-  expect(braceStart).toBeGreaterThanOrEqual(0);
-  let depth = 0;
-  for (let index = braceStart; index < source.length; index += 1) {
-    const char = source[index];
-    if (char === '{') depth += 1;
-    if (char === '}') {
-      depth -= 1;
-      if (depth === 0) return source.slice(braceStart, index + 1);
-    }
-  }
-  return source.slice(start);
-}
-
 describe('canvasEditorProvider message contracts', () => {
   describe('NKV-001: nodes.list nodeType parameter', () => {
     it('sends nodeType field, not bare type', () => {

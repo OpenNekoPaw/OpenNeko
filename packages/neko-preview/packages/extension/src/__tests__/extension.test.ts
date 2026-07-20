@@ -4,10 +4,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock vscode module
 // ============================================================================
 
-const mockSubscriptions: { push: ReturnType<typeof vi.fn> } = {
-  push: vi.fn(),
-};
-
 vi.mock('vscode', () => {
   const Uri = {
     file: (path: string) => ({

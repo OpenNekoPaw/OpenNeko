@@ -1317,7 +1317,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const validateTool = tools.find(
       (tool) => tool.name === TOOL_NAMES_CANVAS.CANVAS_VALIDATE_MARKDOWN_STORYBOARD,
     );
-    const ingestTool = tools.find((tool) => tool.name === TOOL_NAMES_CANVAS.CANVAS_INGEST_MARKDOWN);
     const createStoryboardTool = tools.find(
       (tool) => tool.name === TOOL_NAMES_CANVAS.CANVAS_CREATE_STORYBOARD_FROM_MARKDOWN,
     );

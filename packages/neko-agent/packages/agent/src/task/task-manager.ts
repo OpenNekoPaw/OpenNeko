@@ -10,7 +10,6 @@ import type {
   TaskType,
   TaskStatus,
   TaskInput,
-  TaskOutput,
   TaskProgressCallback,
   ITaskManager,
   ITaskStorage,

@@ -4,7 +4,6 @@
 
 import { describe, it, expect } from 'vitest';
 import { applyOperation } from '../apply';
-import { OperationError } from '../errors';
 import {
   createTestProject,
   createTestTrack,
@@ -173,7 +172,7 @@ describe('apply-element', () => {
 
   describe('element.linkAudio', () => {
     it('should link audio element to video element', () => {
-      const { project, videoElement } = createPopulatedProject();
+      const { project } = createPopulatedProject();
       const newAudioElem = createTestAudioElement({ id: 'a2', linkedVideoId: 'v1' });
 
       const result = applyOperation(project, {

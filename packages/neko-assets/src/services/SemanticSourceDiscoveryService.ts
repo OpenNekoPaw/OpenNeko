@@ -26,7 +26,6 @@ import type {
   SemanticEntityOccurrenceRecord,
   SemanticCreativeSchemaRef,
   SemanticOccurrenceEntityLinks,
-  SemanticTextSegment,
 } from '@neko/shared';
 import {
   createNodeWorkspaceSemanticEntityMetadataBinding,

@@ -2,37 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { createResourceFingerprint, createResourceRef, type TaskRunScope } from '@neko/shared';
 import {
   AGENT_WEBVIEW_PROTOCOL_VERSION,
-  buildAmbientCanvasUpdateMessage,
-  buildAgentPhaseMessage,
-  buildAgentCapabilityActivationProgressMessage,
-  buildAgentSessionDiagnosticMessage,
-  buildAgentStateSnapshotMessage,
-  buildErrorMessage,
-  buildExternalInputMessage,
-  buildHistoryClearedMessage,
   buildInjectContextMessage,
-  buildMediaTaskCreatedMessage,
-  buildMediaTaskProgressMessage,
-  buildMessageCancelledMessage,
-  buildMessageQueueErrorMessage,
-  buildMessageQueueSnapshotMessage,
   buildQueuedMessageEditRequestedMessage,
-  buildPluginCommandsMessage,
-  buildPluginSlashCommandInvocation,
-  buildPluginsAvailableMessage,
-  buildStreamTextMessage,
-  buildSubAgentEventMessage,
-  buildTaskCreatedMessage,
-  buildTaskRemovedMessage,
-  buildTaskUpdatedMessage,
-  buildTasksUpdatedMessage,
-  buildThinkingMessage,
-  buildToolConfirmationMessage,
   parseSendMessageWebviewMessage,
   parseWebviewToExtensionMessage,
 } from '../webview-protocol';
-import type { MessageQueuedMessage } from '../webview-protocol';
-import type { AgentTurnTimelineAssistantTextItem } from '../agent-turn-timeline';
 
 const cacheResourceRef = createResourceRef({
   scope: 'project',
@@ -1111,30 +1085,6 @@ function legacyModelPreviewContextData(): Record<string, unknown> {
       height: 1024,
       cameraId: camera.id,
     },
-  };
-}
-
-function makeTimelineTextItem(input: {
-  itemId: string;
-  sequence: number;
-  content: string;
-}): AgentTurnTimelineAssistantTextItem {
-  return {
-    conversationId: 'conv-1',
-    turnId: 'turn-1',
-    messageId: 'msg-1',
-    itemId: input.itemId,
-    sequence: input.sequence,
-    itemRevision: 1,
-    kind: 'assistant_text',
-    status: 'streaming',
-    payload: {
-      content: input.content,
-      format: 'markdown',
-      sourceGeneration: 1,
-    },
-    createdAt: 1777392000000 + input.sequence,
-    updatedAt: 1777392000000 + input.sequence,
   };
 }
 

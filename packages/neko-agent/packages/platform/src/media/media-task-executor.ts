@@ -20,7 +20,6 @@ import { sleepWithAbort } from '@neko/shared';
 import type { Provider, Model } from '../types/provider';
 import type {
   MediaAdapter,
-  MediaAdapterResult,
   ImageGenerationRequest,
   VideoGenerationRequest,
   AudioGenerationRequest,
@@ -840,7 +839,7 @@ export class MediaTaskExecutor {
           case 'processing':
             break;
         }
-      } catch (_error) {
+      } catch {
         // Transient error, continue with next interval
       }
 

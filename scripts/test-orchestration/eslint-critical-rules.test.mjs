@@ -4,6 +4,7 @@ import test from 'node:test';
 import eslintConfig from '../../eslint.config.mjs';
 
 const EXPLICIT_ANY_RULE = '@typescript-eslint/no-explicit-any';
+const UNUSED_VARIABLE_RULE = '@typescript-eslint/no-unused-vars';
 const HOOK_ORDER_RULE = 'react-hooks/rules-of-hooks';
 const CONSOLE_RULE = 'no-console';
 const TIMING_ATTACK_RULE = 'security/detect-possible-timing-attacks';
@@ -14,6 +15,7 @@ const CONSOLE_BOUNDARY_FILES = [
 
 test('critical production ESLint rules remain blocking', () => {
   assert.equal(readLastRuleSetting(EXPLICIT_ANY_RULE, isProductionTypeScriptConfig), 'error');
+  assert.equal(readLastRuleSetting(UNUSED_VARIABLE_RULE, isProductionTypeScriptConfig)[0], 'error');
   assert.equal(readLastRuleSetting(HOOK_ORDER_RULE, isReactHookConfig), 'error');
 });
 

@@ -1,5 +1,4 @@
 import {
-  TOOL_NAMES_SYSTEM,
   type AgentCapabilityContext,
   type AgentCapabilityProvider,
   type ResourceRef,

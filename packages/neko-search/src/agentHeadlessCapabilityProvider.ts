@@ -5,7 +5,6 @@ import type {
   ProjectSearchItem,
   ProjectSearchItemKind,
   ProjectSearchMode,
-  ProjectSearchPartitionKind,
   ProjectSearchPartitionStatusSnapshot,
   ProjectSearchQuery,
   ProjectSearchResult,

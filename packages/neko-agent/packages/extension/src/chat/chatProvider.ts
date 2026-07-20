@@ -88,7 +88,6 @@ import {
   normalizeTabState,
   parseWebviewToExtensionMessage,
   type ActivateConversationWebviewMessage,
-  type Message,
   type OpenTab,
   type ProjectionAttachmentKey,
   type TabState,

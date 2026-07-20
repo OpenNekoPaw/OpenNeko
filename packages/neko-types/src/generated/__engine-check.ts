@@ -8,7 +8,6 @@
 // but forget to update the hand-written type, `tsc --noEmit` will fail here.
 // =============================================================================
 
-import type { EngineElement } from './timeline.engine';
 import type { EngineTransform } from './timeline.engine';
 import type { EngineTrack } from './timeline.engine';
 import type { EngineAudioProperties } from './timeline.engine';

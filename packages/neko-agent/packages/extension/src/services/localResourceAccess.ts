@@ -50,7 +50,7 @@ class VSCodeAgentLocalResourceAccess implements AgentLocalResourceAccess {
   private readonly webviews = new Set<vscode.Webview>();
   private readonly requiredWorkspaceCacheRoots: readonly vscode.Uri[];
 
-  constructor(extensionUri: vscode.Uri, context: vscode.ExtensionContext) {
+  constructor(extensionUri: vscode.Uri, _context: vscode.ExtensionContext) {
     this.requiredWorkspaceCacheRoots = getWorkspaceCacheRoots();
     this.service = new VSCodeLocalResourceAccessService({
       logger,

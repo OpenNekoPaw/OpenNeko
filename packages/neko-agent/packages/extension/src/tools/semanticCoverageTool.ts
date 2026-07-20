@@ -5,7 +5,6 @@ import {
   isProjectSemanticCoverageQuery,
   isProjectSemanticCoverageResult,
   validateProjectSemanticCoverageQuery,
-  type ProjectSemanticCoverageQuery,
   type ProjectSemanticCoverageResult,
   type Tool,
   type ToolResult,

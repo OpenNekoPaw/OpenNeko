@@ -21,7 +21,7 @@ import { IEditorRegistry } from '../common/editorRegistry';
 import { VideoEditorModel } from './videoEditorModel';
 import { MessageHandler } from './messageHandler';
 import { VideoProjectDocument } from './videoProjectDocument';
-import { prepareCutProjectFileSave, saveCutProjectFile } from './cutProjectFilePersistence';
+import { saveCutProjectFile } from './cutProjectFilePersistence';
 import { MediaService } from '../../services/MediaService';
 import { EngineConnection } from '../../services/EngineConnection';
 import { ExportService } from '../../services/ExportService';
@@ -70,7 +70,7 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
   /**
    * Pin the editor tab for the given document URI to prevent accidental closure during export
    */
-  private pinEditorTab(documentUri: vscode.Uri): void {
+  private pinEditorTab(_documentUri: vscode.Uri): void {
     try {
       // The editor should be active when export starts, so we can just pin the active editor
       vscode.commands.executeCommand('workbench.action.pinEditor');
@@ -121,21 +121,21 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
    */
   public getActiveWebview(): vscode.Webview | null {
     // Find the visible/active webview panel
-    for (const [uri, panel] of this.activeWebviewPanels) {
+    for (const panel of this.activeWebviewPanels.values()) {
       if (panel.visible && panel.active) {
         return panel.webview;
       }
     }
 
     // Fallback: find any visible panel
-    for (const [uri, panel] of this.activeWebviewPanels) {
+    for (const panel of this.activeWebviewPanels.values()) {
       if (panel.visible) {
         return panel.webview;
       }
     }
 
     // Last resort: return any webview (for single project case)
-    for (const [uri, webview] of this.activeWebviews) {
+    for (const webview of this.activeWebviews.values()) {
       return webview;
     }
 
@@ -147,21 +147,21 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
    */
   public getActiveWebviewPanel(): vscode.WebviewPanel | null {
     // Find the visible/active webview panel
-    for (const [uri, panel] of this.activeWebviewPanels) {
+    for (const panel of this.activeWebviewPanels.values()) {
       if (panel.visible && panel.active) {
         return panel;
       }
     }
 
     // Fallback: find any visible panel
-    for (const [uri, panel] of this.activeWebviewPanels) {
+    for (const panel of this.activeWebviewPanels.values()) {
       if (panel.visible) {
         return panel;
       }
     }
 
     // Last resort: return any panel (for single project case)
-    for (const [uri, panel] of this.activeWebviewPanels) {
+    for (const panel of this.activeWebviewPanels.values()) {
       return panel;
     }
 

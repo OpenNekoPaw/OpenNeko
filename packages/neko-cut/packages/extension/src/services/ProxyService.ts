@@ -152,7 +152,7 @@ export class ProxyService implements vscode.Disposable {
 
     // Probe media info via engine
     try {
-      const result = await this.dispatch({
+      await this.dispatch({
         group: 'videos',
         action: 'probe',
         options: { source: absoluteSource },
@@ -330,7 +330,7 @@ export class ProxyService implements vscode.Disposable {
 
     try {
       // Call engine: videos:proxy
-      const result = await this.dispatch({
+      await this.dispatch({
         group: 'videos',
         action: 'proxy',
         options: {

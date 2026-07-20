@@ -16,7 +16,6 @@ import { buildAssistantSettingsUpdatedMessage } from '@neko/platform/config/assi
 import {
   createAgentCapabilityActivationIntent,
   createAgentCapabilityActivationProgressEvent,
-  type AgentCapabilityActivationProgressEvent,
 } from '@neko/shared';
 import { buildAgentCapabilityActivationProgressMessage } from '@neko-agent/types';
 import { getLogger } from '../../base';

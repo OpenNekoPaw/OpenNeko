@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { BaseRegistry, type IRegistry } from '../base-registry';
+import { BaseRegistry } from '../base-registry';
 
 // Concrete implementation for testing
 class TestRegistry extends BaseRegistry<'type-a' | 'type-b', { name: string }> {

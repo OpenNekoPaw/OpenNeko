@@ -2,7 +2,7 @@
  * Concurrency Pool Unit Tests
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { ConcurrencyPool, KeyedConcurrencyPool, withConcurrencyLimit } from '../concurrency-pool';
 
 describe('ConcurrencyPool', () => {

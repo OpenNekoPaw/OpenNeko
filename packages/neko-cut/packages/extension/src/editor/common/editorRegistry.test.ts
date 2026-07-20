@@ -362,7 +362,7 @@ describe('EditorRegistry', () => {
       try {
         registry.registerModel(model);
         registry.setActiveEditor(model);
-      } catch (e) {
+      } catch {
         // dispose 后可能会抛出错误，这是正常的
       }
 

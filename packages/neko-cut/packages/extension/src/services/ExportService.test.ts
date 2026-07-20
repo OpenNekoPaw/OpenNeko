@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ActionRequest, ActionResponse } from '@neko/neko-client';
 import type { ContentAccessRequest, ContentAccessResult, ProjectData } from '@neko/shared';
-import { ExportService, type ExportConfig } from './ExportService';
+import { ExportService } from './ExportService';
 
 vi.mock('vscode', () => ({
   EventEmitter: class<T> {

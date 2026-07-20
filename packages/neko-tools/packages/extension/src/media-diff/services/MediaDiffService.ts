@@ -12,7 +12,6 @@
 
 import * as vscode from 'vscode';
 import {
-  type MediaType,
   type DiffOptions,
   type DiffResult,
   type FileVersionPair,

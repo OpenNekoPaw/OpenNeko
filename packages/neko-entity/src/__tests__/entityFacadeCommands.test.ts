@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { ENTITY_FACADE_COMMANDS, isEntityFacadeCommandError } from '@neko/shared';
 import { registerEntityFacadeCommands, VSCodeEntityRuntimeRegistry } from '../host-vscode';
 import { CreativeEntityService } from '../core/CreativeEntityService';

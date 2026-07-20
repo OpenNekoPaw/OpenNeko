@@ -288,7 +288,7 @@ export class EntityInspectorProvider implements vscode.WebviewViewProvider, vsco
     void this.webviewView?.webview.postMessage(message);
   }
 
-  private renderHtml(webview: vscode.Webview): string {
+  private renderHtml(_webview: vscode.Webview): string {
     const nonce = getNonce();
     const strings = entityInspectorStrings();
     return `<!DOCTYPE html>

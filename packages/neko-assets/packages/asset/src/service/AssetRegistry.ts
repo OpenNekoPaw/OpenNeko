@@ -23,7 +23,6 @@ import type {
   AssetMediaType,
   MediaKind,
 } from '@neko/shared';
-import type { IAssetStorage } from '../storage/IAssetStorage';
 import { AssetLibrary, type AssetLibraryConfig } from './AssetLibrary';
 
 // =============================================================================

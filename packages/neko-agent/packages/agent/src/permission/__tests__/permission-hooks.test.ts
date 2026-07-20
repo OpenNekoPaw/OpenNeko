@@ -6,7 +6,7 @@
  * SettingsHookLoader and callbacks are mocked with vi.fn().
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { PermissionHooks, createPermissionHooks } from '../permission-hooks';
 import type { PermissionHooksOptions } from '../permission-hooks';
 import type { PermissionConfig, PermissionRules } from '../types';

@@ -692,7 +692,7 @@ class ThumbnailService implements IThumbnailService {
 
       logger.info(`Generated ${thumbnails.length} thumbnails successfully`);
       return thumbnails;
-    } catch (error) {
+    } catch {
       if (signal?.aborted) {
         throw new Error('Request aborted');
       }

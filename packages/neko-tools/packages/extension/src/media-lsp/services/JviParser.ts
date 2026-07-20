@@ -7,7 +7,7 @@
  * All exported functions are pure (no vscode dependency) and testable.
  */
 
-import { parseTree, findNodeAtOffset, getNodeValue, type Node } from 'jsonc-parser';
+import { parseTree, findNodeAtOffset, type Node } from 'jsonc-parser';
 import type { JviRange, JviParsedProject, JviParsedTrack, JviParsedElement } from '../types';
 
 // ─── Offset ↔ Position conversion ───────────────────────────────────────────
