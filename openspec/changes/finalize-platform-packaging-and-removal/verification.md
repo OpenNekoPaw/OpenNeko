@@ -45,6 +45,7 @@ Passed:
 - OpenNeko assembler/manifest tests: 8 tests
 - Embedded registry and deferred Agent capability registration: 9 tests
 - Application manifest/scoped-context tests: 3 tests
+- Focused CI regressions: Agent router 40 tests, Tools asset reader 2 tests, Canvas protocol 67 tests
 - `pnpm check:test-orchestration`: 61 tests
 - `pnpm check:release-channels`
 - `pnpm check:openspec`
@@ -60,8 +61,9 @@ Passed:
 Repository-wide `pnpm ci:local` was attempted but the concurrent dirty worktree blocks unrelated
 stages: Prettier reports ten Agent/Assets/Canvas files, ESLint reports two unrelated unused values,
 build stops on an unrelated `CREATIVE_ENTITY_KINDS` unused import, and Agent Extension tests report
-eight unrelated Canvas/content-access failures. `pnpm check:unused` has no finding from this change;
-it still reports two pre-existing exports in `scripts/read-package-group.mjs` and one config hint.
+eight unrelated Canvas/content-access failures. The PR's `pnpm check:unused` findings were cleared by
+making two package-group helpers module-private and removing a redundant Agent evaluation entry.
+The full dirty-worktree rerun now reports only an unrelated `adm-zip` dependency in `neko-assets`.
 
 After the unused import was removed and host packaging was rerun, `pnpm check:legacy-debt` became
 blocked by 55 `migrate-now` occurrences in two concurrent workspace-linked media-library migration
