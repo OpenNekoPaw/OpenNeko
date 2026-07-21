@@ -31,7 +31,9 @@
     "neko.neko-tools",
     "neko.neko-preview"
   ],
-  "activationEvents": ["onInstallType:shader"],
+  "activationEvents": [
+    "onInstallType:shader"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "neko.installTargets": [
@@ -334,8 +336,9 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run compile",
-    "compile": "pnpm run compile:extension && pnpm run copy:webview",
+    "compile": "pnpm run compile:extension && pnpm run compile:webview && pnpm run copy:webview",
     "compile:extension": "esbuild ./packages/extension/src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:sharp --format=cjs --platform=node",
+    "compile:webview": "cd packages/webview && pnpm run build",
     "copy:webview": "rm -rf dist/webview && mkdir -p dist/webview/assets && cp packages/webview/dist/*.html dist/webview/ && cp -R packages/webview/dist/assets/* dist/webview/assets/",
     "watch": "pnpm run compile:extension -- --watch",
     "lint": "eslint packages/extension/src --ext ts,tsx",
