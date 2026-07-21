@@ -98,7 +98,7 @@ Media Job Plane 统一管理 `proxy | transcode | timeline-export | audio-render
 
 ### 5. 所有视频输入严格 GPU-only
 
-macOS、Windows、Linux 分别使用打包并验证的 VideoToolbox、D3D11VA 和 VA-API 类 FFmpeg profile。启动 self-check 必须真实解码合成/打包 fixture，验证 codec、pixel format、frame output 和必要互操作；列出 `hwaccels` 不算成功。
+当前支持的 macOS、Linux 分别使用打包并验证的 VideoToolbox 和 VA-API 类 FFmpeg profile。Windows/D3D11VA profile 在独立平台准入完成前不得进入发布路径。启动 self-check 必须真实解码合成/打包 fixture，验证 codec、pixel format、frame output 和必要互操作；列出 `hwaccels` 不算成功。
 
 Realtime、capture、proxy、transcode 和 export 的视频输入都必须命中声明的硬件 decoder。设备、driver、codec、surface 或 pixel format 不满足时 stream/job 失败并返回 backend diagnostic；不存在 CPU decoder 配置、兼容模式或静默 fallback。
 

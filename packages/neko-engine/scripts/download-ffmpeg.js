@@ -8,8 +8,7 @@
  *
  * Sources:
  *   macOS  — Copies from Homebrew installation (lib + include)
- *   Linux  — Downloads BtbN pre-built shared builds
- *   Windows — Downloads BtbN pre-built shared builds
+ *   Linux — Downloads BtbN pre-built shared builds
  *
  * Usage:
  *   node scripts/download-ffmpeg.js                         # current platform
@@ -53,9 +52,7 @@ function isAlreadyPresent() {
 
   const libEntries = fs.readdirSync(libDir);
   return libEntries.some(
-    (entry) =>
-      entry.includes('avutil') &&
-      (entry.endsWith('.dylib') || entry.includes('.so') || entry.endsWith('.lib')),
+    (entry) => entry.includes('avutil') && (entry.endsWith('.dylib') || entry.includes('.so')),
   );
 }
 
@@ -144,22 +141,9 @@ function setupFromBtbn(artifact) {
     const extractDir = path.join(tmpDir, 'extracted');
     fs.mkdirSync(extractDir);
 
-    if (archive.endsWith('.tar.xz')) {
-      execFileSync('tar', ['xJf', archivePath, '-C', extractDir, '--strip-components=1'], {
-        stdio: 'inherit',
-      });
-    } else {
-      execFileSync('unzip', ['-o', archivePath, '-d', extractDir], { stdio: 'inherit' });
-      // Handle nested directory in zip
-      const entries = fs.readdirSync(extractDir);
-      if (entries.length === 1 && fs.statSync(path.join(extractDir, entries[0])).isDirectory()) {
-        const inner = path.join(extractDir, entries[0]);
-        for (const entry of fs.readdirSync(inner)) {
-          fs.renameSync(path.join(inner, entry), path.join(extractDir, entry));
-        }
-        fs.rmdirSync(inner);
-      }
-    }
+    execFileSync('tar', ['xJf', archivePath, '-C', extractDir, '--strip-components=1'], {
+      stdio: 'inherit',
+    });
 
     // Copy include/
     const srcInclude = path.join(extractDir, 'include');
@@ -177,18 +161,6 @@ function setupFromBtbn(artifact) {
       fs.mkdirSync(destLib, { recursive: true });
       copyDirRecursive(srcLib, destLib);
       console.log('  [copy]   lib/');
-    }
-
-    // For Windows: also copy bin/*.dll to lib/ for FFMPEG_DIR discovery
-    const srcBin = path.join(extractDir, 'bin');
-    if (archive.endsWith('.zip') && fs.existsSync(srcBin)) {
-      fs.mkdirSync(destLib, { recursive: true });
-      for (const file of fs.readdirSync(srcBin)) {
-        if (file.endsWith('.dll') || file.endsWith('.lib')) {
-          fs.copyFileSync(path.join(srcBin, file), path.join(destLib, file));
-          console.log(`  [copy]   lib/${file}`);
-        }
-      }
     }
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });

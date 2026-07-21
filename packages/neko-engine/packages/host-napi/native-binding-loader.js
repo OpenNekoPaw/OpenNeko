@@ -12,10 +12,6 @@ const SUPPORTED_TARGETS = Object.freeze({
     localFile: 'neko-engine.linux-x64-gnu.node',
     packageName: '@neko-engine/host-napi-linux-x64-gnu',
   }),
-  'win32-x64': Object.freeze({
-    localFile: 'neko-engine.win32-x64-msvc.node',
-    packageName: '@neko-engine/host-napi-win32-x64-msvc',
-  }),
 });
 
 const SUPPORTED_TARGET_NAMES = Object.freeze(Object.keys(SUPPORTED_TARGETS));

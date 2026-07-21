@@ -9,12 +9,9 @@
   "targets": [
     { "host": "vscode-extension", "os": "darwin", "arch": "arm64" },
     { "host": "vscode-extension", "os": "linux", "arch": "x64" },
-    { "host": "vscode-extension", "os": "win32", "arch": "x64" },
     { "host": "node-cli", "os": "darwin", "arch": "arm64" },
     { "host": "node-cli", "os": "linux", "arch": "x64" },
-    { "host": "node-cli", "os": "win32", "arch": "x64" },
     { "host": "bun-tui", "os": "darwin", "arch": "arm64" },
-    { "host": "bun-tui", "os": "linux", "arch": "x64" },
-    { "host": "bun-tui", "os": "win32", "arch": "x64" }
+    { "host": "bun-tui", "os": "linux", "arch": "x64" }
   ]
 }

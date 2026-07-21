@@ -65,84 +65,26 @@ test('resolveFfmpegEnv falls back to Homebrew when workspace deps are missing', 
   });
 });
 
-test('resolveFfmpegEnv discovers Chocolatey FFmpeg installs on Windows runners', () => {
-  const programDataDir = '/programdata';
-  const chocoToolsDir = path.join(programDataDir, 'chocolatey', 'lib', 'ffmpeg-shared', 'tools');
-  const chocoDir = path.join(chocoToolsDir, 'ffmpeg-8.0.1-full_build-shared');
-  const existing = new Set([
-    path.join(chocoDir, 'include', 'libavutil', 'avutil.h'),
-    path.join(chocoDir, 'lib'),
-  ]);
-
-  const resolved = resolveFfmpegEnv({
-    env: {
-      ProgramData: programDataDir,
-    },
-    platform: 'win32',
-    platformKey: 'win32-x64',
-    existsSync(filePath) {
-      return existing.has(filePath);
-    },
-    readdirSync(dirPath) {
-      if (dirPath === chocoToolsDir) {
-        return ['ffmpeg-8.0.1-full_build-shared'];
-      }
-
-      throw new Error(`Unexpected read: ${dirPath}`);
-    },
-    statSync(filePath) {
-      if (filePath === chocoDir) {
-        return {
-          isDirectory() {
-            return true;
-          },
-        };
-      }
-
-      throw new Error(`Unexpected stat: ${filePath}`);
-    },
-    execFileSync() {
-      return '';
-    },
-  });
-
-  assert.deepEqual(resolved, {
-    ffmpegDir: chocoDir,
-    pkgConfigPath: null,
-    source: 'chocolatey',
-  });
-});
-
-test('resolveFfmpegEnv uses the prepared workspace FFmpeg on Windows CI', () => {
-  const workspaceDir = path.join(DEPS_DIR, 'ffmpeg');
-  const existing = new Set([
-    path.join(workspaceDir, 'include', 'libavutil', 'avutil.h'),
-    path.join(workspaceDir, 'lib'),
-    path.join(workspaceDir, 'lib', 'pkgconfig'),
-  ]);
-
-  const resolved = resolveFfmpegEnv({
-    env: {
-      ProgramData: '/programdata',
-    },
-    platform: 'win32',
-    platformKey: 'win32-x64',
-    existsSync(filePath) {
-      return existing.has(filePath);
-    },
-    readdirSync() {
-      return [];
-    },
-    execFileSync() {
-      return '';
-    },
-  });
-
-  assert.deepEqual(resolved, {
-    ffmpegDir: workspaceDir,
-    pkgConfigPath: path.join(workspaceDir, 'lib', 'pkgconfig'),
-    source: 'workspace',
-  });
+test('resolveFfmpegEnv rejects deferred Windows before probing local installs', () => {
+  let probed = false;
+  assert.throws(
+    () =>
+      resolveFfmpegEnv({
+        env: { FFMPEG_DIR: 'C:\\ffmpeg' },
+        platform: 'win32',
+        platformKey: 'win32-x64',
+        existsSync() {
+          probed = true;
+          throw new Error('unsupported platform reached filesystem probing');
+        },
+        execFileSync() {
+          probed = true;
+          throw new Error('unsupported platform reached command probing');
+        },
+      }),
+    /Unsupported FFmpeg build platform "win32-x64".*darwin-arm64, linux-x64/u,
+  );
+  assert.equal(probed, false);
 });
 
 test('resolveFfmpegEnv accepts Ubuntu multiarch FFmpeg dev package layout', () => {

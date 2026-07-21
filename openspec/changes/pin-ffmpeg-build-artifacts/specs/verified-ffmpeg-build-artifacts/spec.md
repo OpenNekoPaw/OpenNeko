@@ -28,19 +28,19 @@ The Engine FFmpeg acquisition path MUST calculate the SHA256 of every downloaded
 - **WHEN** the acquired archive bytes produce a different SHA256
 - **THEN** the operation fails before extraction and reports the expected and actual values
 
-### Requirement: Windows packaging uses the Engine-owned FFmpeg setup path
+### Requirement: Deferred platforms cannot enter FFmpeg acquisition
 
-GitHub CI and release packaging for `win32-x64` SHALL invoke the repository-owned Engine FFmpeg setup path and MUST NOT install `ffmpeg-shared` through Chocolatey. Native compilation SHALL resolve the prepared workspace FFmpeg prefix, and runtime bundling SHALL use the separately declared verified runtime artifact.
+FFmpeg development setup and runtime bundling SHALL reject any target outside the current supported platform configuration before probing local installations, package managers, or workspace artifacts.
 
-#### Scenario: Main CI packages the Windows Engine VSIX
+#### Scenario: Windows FFmpeg setup is requested
 
-- **WHEN** the `win32-x64` package matrix reaches FFmpeg setup
-- **THEN** it invokes the Engine downloader for `win32-x64`, verifies the development archive, and does not execute Chocolatey
+- **WHEN** FFmpeg setup or bundling is requested for `win32-x64` while Windows support is deferred
+- **THEN** it fails with an unsupported-target diagnostic before download, extraction, or filesystem discovery
 
-#### Scenario: Release workflow packages the Windows Engine VSIX
+#### Scenario: A supported BtbN target is acquired
 
-- **WHEN** the release matrix reaches FFmpeg setup for `win32-x64`
-- **THEN** it follows the same Engine-owned verified setup path as main CI
+- **WHEN** Linux x64 FFmpeg setup or bundling downloads its configured archive
+- **THEN** it follows the Engine-owned verified setup path
 
 ### Requirement: FFmpeg artifact updates are atomic and reviewable
 

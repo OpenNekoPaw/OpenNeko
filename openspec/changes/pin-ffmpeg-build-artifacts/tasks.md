@@ -7,10 +7,10 @@
 
 - [x] 2.1 Replace floating BtbN templates with exact release, archive, and SHA256 descriptors
 - [x] 2.2 Add one shared archive verifier and require both development download and runtime bundling to verify before extraction
-- [x] 2.3 Route Windows CI and release packaging through the Engine-owned setup command and remove Chocolatey invocation
+- [x] 2.3 Remove deferred Windows FFmpeg acquisition from CI, release packaging, and package scripts
 - [x] 2.4 Document the intentional FFmpeg artifact update procedure in the Engine package README
 
 ## 3. Validation
 
 - [x] 3.1 Run focused Engine script tests, workflow assertions, OpenSpec validation, and diff checks
-- [x] 3.2 Run applicable repository quality gates and record Windows-hosted packaging as verified or residual risk
+- [x] 3.2 Run applicable repository quality gates and verify Windows remains outside the supported packaging path

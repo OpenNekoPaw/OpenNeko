@@ -4,7 +4,12 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const { DEPS_DIR, getCurrentPlatformKey, getTargetConfig } = require('./package-config');
+const {
+  DEPS_DIR,
+  getCurrentPlatformKey,
+  getSupportedTargets,
+  getTargetConfig,
+} = require('./package-config');
 
 const LINUX_MULTIARCH_TRIPLES = ['x86_64-linux-gnu', 'aarch64-linux-gnu', 'arm-linux-gnueabihf'];
 
@@ -14,8 +19,6 @@ const LINUX_MULTIARCH_TRIPLES = ['x86_64-linux-gnu', 'aarch64-linux-gnu', 'arm-l
  *   platform?: NodeJS.Platform;
  *   platformKey?: string;
  *   existsSync?: (filePath: string) => boolean;
- *   readdirSync?: typeof fs.readdirSync;
- *   statSync?: typeof fs.statSync;
  *   execFileSync?: typeof execFileSync;
  * }} ResolveOptions
  */
@@ -100,30 +103,6 @@ function queryPkgConfigPrefix(deps = {}) {
 }
 
 /**
- * @param {string} baseDir
- * @param {{ readdirSync?: typeof fs.readdirSync; statSync?: typeof fs.statSync }} [deps]
- * @returns {string[]}
- */
-function listChildDirectories(baseDir, deps = {}) {
-  const readdirSync = deps.readdirSync ?? fs.readdirSync;
-  const statSync = deps.statSync ?? fs.statSync;
-
-  try {
-    return readdirSync(baseDir)
-      .map((entry) => path.join(baseDir, entry))
-      .filter((entryPath) => {
-        try {
-          return statSync(entryPath).isDirectory();
-        } catch {
-          return false;
-        }
-      });
-  } catch {
-    return [];
-  }
-}
-
-/**
  * @param {ResolveOptions} [options]
  * @returns {Array<{ path: string; source: string }>}
  */
@@ -131,6 +110,12 @@ function getSearchCandidates(options = {}) {
   const env = options.env ?? process.env;
   const platform = options.platform ?? process.platform;
   const platformKey = options.platformKey ?? getCurrentPlatformKey();
+  const target = getTargetConfig(platformKey);
+  if (!target) {
+    throw new Error(
+      `Unsupported FFmpeg build platform "${platformKey}". Supported targets: ${getSupportedTargets().join(', ')}.`,
+    );
+  }
   const candidates = [];
   const seen = new Set();
 
@@ -158,7 +143,6 @@ function getSearchCandidates(options = {}) {
   pushCandidate(env.FFMPEG_DIR, 'environment');
   pushCandidate(queryPkgConfigPrefix(options), 'pkg-config');
 
-  const target = getTargetConfig(platformKey);
   if (target?.ffmpegDev?.source === 'homebrew') {
     pushCandidate(target.ffmpegDev.brewPrefix, 'homebrew-dev');
   }
@@ -174,22 +158,6 @@ function getSearchCandidates(options = {}) {
   if (platform === 'linux') {
     pushCandidate('/usr', 'system');
     pushCandidate('/usr/local', 'system');
-  }
-
-  if (platform === 'win32') {
-    const chocolateyInstall =
-      env.ChocolateyInstall ?? path.join(env.ProgramData ?? 'C:\\ProgramData', 'chocolatey');
-    const chocolateyToolsDir = path.join(chocolateyInstall, 'lib', 'ffmpeg-shared', 'tools');
-    pushCandidate(path.join(chocolateyToolsDir, 'ffmpeg'), 'chocolatey');
-    for (const entryPath of listChildDirectories(chocolateyToolsDir, options)) {
-      pushCandidate(entryPath, 'chocolatey');
-    }
-
-    pushCandidate('C:\\ffmpeg', 'system');
-    pushCandidate('C:\\Program Files\\ffmpeg', 'system');
-    if (env.USERPROFILE) {
-      pushCandidate(path.join(env.USERPROFILE, 'ffmpeg'), 'system');
-    }
   }
 
   pushCandidate(path.join(DEPS_DIR, 'ffmpeg'), 'workspace');
@@ -273,8 +241,6 @@ function formatMissingFfmpegMessage(platform = process.platform) {
     lines.push(
       '  2. Install system dev packages, e.g. `sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev pkg-config`.',
     );
-  } else if (platform === 'win32') {
-    lines.push('  2. Install FFmpeg and set `FFMPEG_DIR` to its install prefix.');
   } else {
     lines.push('  2. Set `FFMPEG_DIR` to your FFmpeg install prefix.');
   }

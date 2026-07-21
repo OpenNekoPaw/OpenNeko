@@ -108,7 +108,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-15]
+        os: [ubuntu-latest, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -445,10 +445,6 @@ jobs:
             os: ubuntu-latest
             rust-target: x86_64-unknown-linux-gnu
             ffmpeg-install: sudo apt-get update && sudo apt-get install -y clang libclang-dev libasound2-dev libavcodec-dev libavdevice-dev libavfilter-dev libavformat-dev libavutil-dev libssl-dev libswresample-dev libswscale-dev libudev-dev libva-dev libvulkan-dev libwayland-dev libx11-dev libxcursor-dev libxfixes-dev libxi-dev libxkbcommon-dev libxrandr-dev patchelf pkg-config
-          - target: win32-x64
-            os: windows-latest
-            rust-target: x86_64-pc-windows-msvc
-            ffmpeg-install: node packages/neko-engine/scripts/download-ffmpeg.js --platform win32-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5

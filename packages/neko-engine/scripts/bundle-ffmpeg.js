@@ -7,8 +7,7 @@
  *
  * Sources:
  *   macOS  — Homebrew installation
- *   Linux  — BtbN pre-built shared builds (same source as Dockerfile)
- *   Windows — BtbN pre-built Windows builds
+ *   Linux — BtbN pre-built shared builds (same source as Dockerfile)
  *
  * Usage:
  *   node scripts/bundle-ffmpeg.js                         # current platform
@@ -145,7 +144,7 @@ function bundleMacOS(cfg) {
   return copied;
 }
 
-function bundleBtbN(cfg, platform) {
+function bundleBtbN(cfg) {
   const { archive, sha256 } = cfg.ffmpeg;
   const url = `${BTBN_BASE_URL}/${config.btbnTag}/${archive}`;
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ffmpeg-'));
@@ -160,68 +159,40 @@ function bundleBtbN(cfg, platform) {
     const extractDir = path.join(tmpDir, 'extracted');
     fs.mkdirSync(extractDir);
 
-    if (archive.endsWith('.tar.xz')) {
-      execFileSync('tar', ['xJf', archivePath, '-C', extractDir, '--strip-components=1'], {
-        stdio: 'inherit',
-      });
-    } else {
-      execFileSync('unzip', ['-o', archivePath, '-d', extractDir], { stdio: 'inherit' });
-      const entries = fs.readdirSync(extractDir);
-      if (entries.length === 1 && fs.statSync(path.join(extractDir, entries[0])).isDirectory()) {
-        const inner = path.join(extractDir, entries[0]);
-        for (const entry of fs.readdirSync(inner)) {
-          fs.renameSync(path.join(inner, entry), path.join(extractDir, entry));
-        }
-        fs.rmdirSync(inner);
-      }
-    }
+    execFileSync('tar', ['xJf', archivePath, '-C', extractDir, '--strip-components=1'], {
+      stdio: 'inherit',
+    });
 
     let libDir;
     if (fs.existsSync(path.join(extractDir, 'lib'))) {
       libDir = path.join(extractDir, 'lib');
-    } else if (fs.existsSync(path.join(extractDir, 'bin'))) {
-      libDir = path.join(extractDir, 'bin');
     } else {
-      console.error('ERROR: Cannot find lib/ or bin/ in extracted FFmpeg archive');
+      console.error('ERROR: Cannot find lib/ in extracted FFmpeg archive');
       process.exit(1);
     }
 
     const copied = [];
-    const isWindows = platform === 'win32-x64';
 
     for (const lib of FFMPEG_LIBS) {
-      if (isWindows) {
-        const dll = fs
-          .readdirSync(libDir)
-          .find((entry) => entry.startsWith(`${lib}-`) && entry.endsWith('.dll'));
-        if (dll) {
-          fs.copyFileSync(path.join(libDir, dll), path.join(NAPI_DIR, dll));
-          copied.push(dll);
-          log(`[copy]   ${dll}`);
-        }
-      } else {
-        const soFiles = fs.readdirSync(libDir).filter((entry) => entry.startsWith(`lib${lib}.so`));
-        for (const soFile of soFiles) {
-          const src = path.join(libDir, soFile);
-          const dest = path.join(NAPI_DIR, soFile);
-          const realSrc = fs.realpathSync(src);
-          fs.copyFileSync(realSrc, dest);
-          copied.push(soFile);
-          log(`[copy]   ${soFile}`);
-        }
+      const soFiles = fs.readdirSync(libDir).filter((entry) => entry.startsWith(`lib${lib}.so`));
+      for (const soFile of soFiles) {
+        const src = path.join(libDir, soFile);
+        const dest = path.join(NAPI_DIR, soFile);
+        const realSrc = fs.realpathSync(src);
+        fs.copyFileSync(realSrc, dest);
+        copied.push(soFile);
+        log(`[copy]   ${soFile}`);
       }
     }
 
-    if (!isWindows) {
-      const nodeFile = path.join(NAPI_DIR, cfg.nodeFile);
-      if (fs.existsSync(nodeFile)) {
-        log(`[patch]  ${cfg.nodeFile} — setting RPATH to $ORIGIN`);
-        try {
-          execFileSync('patchelf', ['--set-rpath', '$ORIGIN', nodeFile], { stdio: 'pipe' });
-        } catch {
-          log('[warn]   patchelf not found — install with: sudo apt-get install patchelf');
-          log('[warn]   The .node file may fail to load FFmpeg libs at runtime');
-        }
+    const nodeFile = path.join(NAPI_DIR, cfg.nodeFile);
+    if (fs.existsSync(nodeFile)) {
+      log(`[patch]  ${cfg.nodeFile} — setting RPATH to $ORIGIN`);
+      try {
+        execFileSync('patchelf', ['--set-rpath', '$ORIGIN', nodeFile], { stdio: 'pipe' });
+      } catch {
+        log('[warn]   patchelf not found — install with: sudo apt-get install patchelf');
+        log('[warn]   The .node file may fail to load FFmpeg libs at runtime');
       }
     }
 
@@ -253,7 +224,7 @@ function main() {
   console.log(`Bundling FFmpeg libs for: ${platformKey}`);
   cleanBundledLibs();
 
-  const copied = cfg.ffmpeg.source === 'homebrew' ? bundleMacOS(cfg) : bundleBtbN(cfg, platformKey);
+  const copied = cfg.ffmpeg.source === 'homebrew' ? bundleMacOS(cfg) : bundleBtbN(cfg);
   console.log(`\nBundled ${copied.length} FFmpeg libraries to: ${NAPI_DIR}`);
 }
 

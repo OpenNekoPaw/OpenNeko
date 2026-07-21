@@ -9,7 +9,7 @@ const {
   SUPPORTED_TARGET_NAMES,
 } = require('../../packages/neko-engine/packages/host-napi/native-binding-loader');
 
-const EXPECTED_TARGETS = ['darwin-arm64', 'linux-x64', 'win32-x64'];
+const EXPECTED_TARGETS = ['darwin-arm64', 'linux-x64'];
 const EXPECTED_MATRIX = [
   {
     target: 'darwin-arm64',
@@ -20,11 +20,6 @@ const EXPECTED_MATRIX = [
     target: 'linux-x64',
     os: 'ubuntu-latest',
     rustTarget: 'x86_64-unknown-linux-gnu',
-  },
-  {
-    target: 'win32-x64',
-    os: 'windows-latest',
-    rustTarget: 'x86_64-pc-windows-msvc',
   },
 ];
 
@@ -64,14 +59,13 @@ describe('supported release platform orchestration', () => {
 
     assert.deepEqual(projectMatrix(ciEngineJob), EXPECTED_MATRIX);
     assert.deepEqual(projectMatrix(releaseEngineJob), EXPECTED_MATRIX);
-    assertWindowsFfmpegSetup(ciEngineJob);
-    assertWindowsFfmpegSetup(releaseEngineJob);
     assert.equal(ciWorkflow.jobs['test-rust']['runs-on'], 'macos-15');
     assert.deepEqual(ciWorkflow.jobs['local-metadata-runtime'].strategy.matrix.os, [
       'ubuntu-latest',
-      'windows-latest',
       'macos-15',
     ]);
+    assert.doesNotMatch(JSON.stringify(ciWorkflow), /windows-latest|win32-x64/u);
+    assert.doesNotMatch(JSON.stringify(releaseWorkflow), /windows-latest|win32-x64/u);
   });
 
   it('keeps the native Engine out of TypeScript-only VSIX packaging', async () => {
@@ -87,7 +81,10 @@ describe('supported release platform orchestration', () => {
     );
     const source = surfaces.join('\n');
 
-    assert.doesNotMatch(source, /darwin-x64|x86_64-apple-darwin|macos-13|macos-14/u);
+    assert.doesNotMatch(
+      source,
+      /darwin-x64|x86_64-apple-darwin|win32-x64|x86_64-pc-windows-msvc|macos-13|macos-14/u,
+    );
     for (const target of EXPECTED_TARGETS) {
       assert.match(source, new RegExp(target, 'u'));
     }
@@ -100,18 +97,4 @@ function projectMatrix(job) {
     os: entry.os,
     rustTarget: entry['rust-target'],
   }));
-}
-
-function assertWindowsFfmpegSetup(job) {
-  const windowsTarget = job.strategy.matrix.include.find((entry) => entry.target === 'win32-x64');
-  assert.ok(windowsTarget);
-  assert.equal(
-    windowsTarget['ffmpeg-install'],
-    'node packages/neko-engine/scripts/download-ffmpeg.js --platform win32-x64',
-  );
-  assert.doesNotMatch(windowsTarget['ffmpeg-install'], /choco|chocolatey/iu);
-
-  const installStep = job.steps.find((step) => step.name === 'Install FFmpeg');
-  assert.ok(installStep);
-  assert.equal(installStep.shell, 'bash');
 }

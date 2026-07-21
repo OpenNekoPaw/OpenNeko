@@ -18,10 +18,11 @@ const { setupPlatform } = require('./download-ffmpeg');
 const ENGINE_ROOT = path.resolve(__dirname, '..');
 
 test('package config resolves supported media engine targets', () => {
-  assert.deepEqual(getSupportedTargets(), ['darwin-arm64', 'linux-x64', 'win32-x64']);
+  assert.deepEqual(getSupportedTargets(), ['darwin-arm64', 'linux-x64']);
   assert.equal(getTargetConfig('darwin-arm64')?.ffmpeg.source, 'homebrew');
   assert.equal(getTargetConfig('linux-x64')?.ffmpeg.source, 'btbn');
   assert.equal(getTargetConfig('darwin-x64'), null);
+  assert.equal(getTargetConfig('win32-x64'), null);
   assert.equal(getTargetByRustTriple('aarch64-apple-darwin'), 'darwin-arm64');
   assert.equal(getTargetByRustTriple('x86_64-apple-darwin'), null);
 });
@@ -38,7 +39,7 @@ test('BtbN FFmpeg artifacts use immutable release identities and SHA256 digests'
         continue;
       }
 
-      assert.match(artifact.archive, /^ffmpeg-.+\.(?:zip|tar\.xz)$/u);
+      assert.match(artifact.archive, /^ffmpeg-.+\.tar\.xz$/u);
       assert.match(artifact.sha256, /^[a-f0-9]{64}$/u);
       assert.doesNotMatch(artifact.archive, /latest/u);
     }
@@ -51,7 +52,7 @@ test('package config rejects mutable BtbN release aliases before download', () =
 
   try {
     assert.throws(
-      () => getTargetConfig('win32-x64'),
+      () => getTargetConfig('linux-x64'),
       /Invalid immutable BtbN release tag: "latest"/u,
     );
   } finally {
@@ -71,10 +72,7 @@ test('package config resolves host-napi binary paths from the shared target map'
     resolveNodeBinaryPath('darwin-arm64'),
     path.join(NAPI_DIR, 'neko-engine.darwin-arm64.node'),
   );
-  assert.equal(
-    resolveNodeBinaryPath('win32-x64'),
-    path.join(NAPI_DIR, 'neko-engine.win32-x64-msvc.node'),
-  );
+  assert.throws(() => resolveNodeBinaryPath('win32-x64'), /Unsupported target "win32-x64"/u);
 });
 
 test('package manifest localization placeholders exist in every package NLS bundle', () => {

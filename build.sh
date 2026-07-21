@@ -57,7 +57,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --all              Build release-ready extensions (${#RELEASE_PACKAGES[@]} packages)"
       echo "  --dev              Build ALL extensions including dev-only (+ ${#DEV_ONLY_PACKAGES[@]} packages)"
       echo "  --package <name>   Build specific package (e.g., neko-cut)"
-      echo "  --target <platform> Platform target for neko-engine VSIX (darwin-arm64|linux-x64|win32-x64)"
+      echo "  --target <platform> Platform target for neko-engine VSIX (darwin-arm64|linux-x64)"
       echo "  --skip-package     Compile only, skip VSIX packaging"
       echo "  (no options)       Build neko-cut only (default)"
       echo ""

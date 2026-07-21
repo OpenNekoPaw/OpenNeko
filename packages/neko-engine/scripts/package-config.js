@@ -34,7 +34,7 @@ function projectFfmpegArtifact(artifact, label) {
   }
   if (
     typeof artifact.archive !== 'string' ||
-    !/^ffmpeg-.+\.(?:zip|tar\.xz)$/u.test(artifact.archive) ||
+    !/^ffmpeg-.+\.tar\.xz$/u.test(artifact.archive) ||
     artifact.archive.includes('latest')
   ) {
     throw new Error(

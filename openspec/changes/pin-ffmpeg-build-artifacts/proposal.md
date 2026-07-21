@@ -1,12 +1,12 @@
 ## Why
 
-Windows Engine packaging currently delegates FFmpeg development-library installation to the Chocolatey `ffmpeg-shared` package, whose fixed checksum protects a mutable Gyan download URL. When the upstream archive changed without a matching package update, the `win32-x64` package job failed before the repository-owned Engine build path could run.
+The Engine previously delegated some FFmpeg development-library installation to external package-manager paths whose mutable upstream artifacts were not owned by the repository. Windows support has since been deferred; the remaining supported BtbN consumer is Linux x64.
 
 ## What Changes
 
-- Make `neko-engine` the single owner of FFmpeg build-artifact identity for Linux and Windows: immutable BtbN release tag, exact archive filename, and SHA256.
+- Make `neko-engine` the single owner of FFmpeg build-artifact identity for every supported BtbN target, currently Linux x64: immutable BtbN release tag, exact archive filename, and SHA256.
 - Verify every repository-managed BtbN archive before extraction or packaging, and fail visibly on missing or mismatched integrity metadata.
-- Replace the Windows CI and release Chocolatey installation path with the existing repository-owned FFmpeg setup command.
+- Remove deferred Windows FFmpeg descriptors and acquisition paths from the current packaging contract.
 - Add focused tests proving mutable release aliases and unverified or mismatched archives cannot enter the canonical packaging path.
 
 ## Capabilities
@@ -22,5 +22,5 @@ None.
 ## Impact
 
 - Affects `packages/neko-engine/scripts/` package configuration, download/bundle helpers, and package-owned tests.
-- Affects Windows entries in `.github/workflows/ci.yml` and `.github/workflows/release.yml`.
-- Removes CI reliance on the external Chocolatey `ffmpeg-shared` installer without changing supported release targets or Engine runtime contracts.
+- Keeps CI and Release dependent only on Engine-owned descriptors for supported targets.
+- Removes Windows FFmpeg acquisition from the current release path; restoring it belongs to the later Windows qualification change.

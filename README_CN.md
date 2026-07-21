@@ -38,13 +38,12 @@ OpenNeko 目前处于 **Alpha** 阶段，以源码体验和产品验证为主。
 
 支持的平台仅限：
 
-| 系统    | 架构  | 发布目标       |
-| ------- | ----- | -------------- |
-| macOS   | ARM64 | `darwin-arm64` |
-| Linux   | x64   | `linux-x64`    |
-| Windows | x64   | `win32-x64`    |
+| 系统  | 架构  | 发布目标       |
+| ----- | ----- | -------------- |
+| macOS | ARM64 | `darwin-arm64` |
+| Linux | x64   | `linux-x64`    |
 
-Intel Mac、Linux ARM64/musl、Windows ARM64 及其他系统/架构不提供发布包。
+Windows 支持暂缓，当前不提供 Windows 发布包。后续恢复前必须在真实 Windows 环境验证原生构建、VSIX 启动以及 Engine 媒体读取和导出路径。Intel Mac、Linux ARM64/musl 及其他系统/架构也不提供发布包。
 
 ```bash
 pnpm install

@@ -2,7 +2,7 @@
 
 # OpenNeko Local CI Script
 # Mirrors .github/workflows/ci.yml checks for local pre-push verification.
-# Supports macOS ARM64, Linux x64, and Windows x64 (Git Bash / WSL).
+# Supports macOS ARM64 and Linux x64.
 #
 # Usage:
 #   ./ci.sh                Full check (TS + Rust)
@@ -45,18 +45,13 @@ detect_vscode_target() {
         x86_64|amd64) echo "linux-x64" ;;
         *) return 1 ;;
       esac ;;
-    MINGW*|MSYS*|CYGWIN*)
-      case "$arch" in
-        x86_64|amd64) echo "win32-x64" ;;
-        *) return 1 ;;
-      esac ;;
     *) return 1 ;;
   esac
 }
 
 PLATFORM="$(detect_platform)"
 if ! VSCODE_TARGET="$(detect_vscode_target)"; then
-  echo "Unsupported host: $(uname -s)-$(uname -m). Supported targets: darwin-arm64, linux-x64, win32-x64." >&2
+  echo "Unsupported host: $(uname -s)-$(uname -m). Supported targets: darwin-arm64, linux-x64." >&2
   exit 1
 fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -304,7 +299,7 @@ release_engine() {
   echo ""
   echo "  Cross-platform note:"
   echo "    Local build targets: $VSCODE_TARGET (current host)"
-  echo "    Full matrix (darwin-arm64, linux-x64, win32-x64)"
+  echo "    Full matrix (darwin-arm64, linux-x64)"
   echo "    is built by GitHub Actions on push to main or tag push."
   echo ""
 

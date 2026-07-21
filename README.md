@@ -38,13 +38,12 @@ Requires Node.js 24+, pnpm 10, and VS Code 1.128+; the repository development to
 
 Supported release platforms are limited to:
 
-| System  | Architecture | Release target   |
-| ------- | ------------ | ---------------- |
-| macOS   | ARM64        | `darwin-arm64`   |
-| Linux   | x64          | `linux-x64`      |
-| Windows | x64          | `win32-x64`      |
+| System | Architecture | Release target |
+| ------ | ------------ | -------------- |
+| macOS  | ARM64        | `darwin-arm64` |
+| Linux  | x64          | `linux-x64`    |
 
-Intel Macs, Linux ARM64/musl, Windows ARM64, and other systems or architectures do not receive release packages.
+Windows support is deferred and no Windows release package is currently provided. Restoring it requires native build, VSIX startup, and Engine media read/export validation on a real Windows environment. Intel Macs, Linux ARM64/musl, and other systems or architectures also do not receive release packages.
 
 ```bash
 pnpm install

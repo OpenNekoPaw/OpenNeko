@@ -84,7 +84,6 @@ export async function validateLocalMetadataRuntimeMatrix({ probeBun = false } = 
   const expectedPlatforms = [
     ['darwin', 'arm64'],
     ['linux', 'x64'],
-    ['win32', 'x64'],
   ];
   for (const host of expectedHosts) {
     for (const [os, arch] of expectedPlatforms) {
@@ -93,7 +92,7 @@ export async function validateLocalMetadataRuntimeMatrix({ probeBun = false } = 
       }
     }
   }
-  if (targetKeys.size !== 9) errors.push(`Runtime matrix must contain 9 unique targets`);
+  if (targetKeys.size !== 6) errors.push(`Runtime matrix must contain 6 unique targets`);
 
   for (const packageJsonPath of await collectPackageJsonPaths(packageRoot)) {
     const packageJson = await readJson(packageJsonPath);
@@ -167,6 +166,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     for (const error of errors) console.error(error);
     process.exitCode = 1;
   } else {
-    console.log('Local metadata runtime matrix is valid (9 targets).');
+    console.log('Local metadata runtime matrix is valid (6 targets).');
   }
 }
