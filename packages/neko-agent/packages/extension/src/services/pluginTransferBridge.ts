@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { resolveNekoExtension } from '@neko/shared/vscode/extension';
 import * as path from 'node:path';
 import {
   buildRuntimePluginsAvailableMessage,
@@ -125,7 +126,8 @@ export async function sendGeneratedAssetToPlugin(
 export function postPluginsAvailable(webview: vscode.Webview): void {
   webview.postMessage(
     buildRuntimePluginsAvailableMessage({
-      hasExtension: (extensionId) => !!vscode.extensions.getExtension(extensionId),
+      hasExtension: (extensionId) =>
+        Boolean(resolveNekoExtension(extensionId, (id) => vscode.extensions.getExtension(id))),
     }),
   );
 }

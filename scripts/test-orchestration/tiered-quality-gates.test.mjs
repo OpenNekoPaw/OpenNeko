@@ -12,8 +12,7 @@ const SHARED_GATE_JOBS = Object.freeze([
   'proto-check',
   'code-quality',
   'openspec-check',
-  'package-ts-vsix',
-  'package-engine-vsix',
+  'package-openneko-vsix',
 ]);
 
 describe('dev/main quality gate orchestration', () => {
@@ -77,8 +76,9 @@ describe('dev/main quality gate orchestration', () => {
     for (const jobName of ['test-rust', 'cargo-deny', 'proto-check', 'openspec-check']) {
       assert.equal(workflow.jobs?.[jobName]?.if, undefined, `${jobName} must always run`);
     }
-    assert.equal(workflow.jobs?.['package-ts-vsix']?.if, undefined);
-    assert.equal(workflow.jobs?.['package-engine-vsix']?.if, undefined);
+    assert.equal(workflow.jobs?.['package-openneko-vsix']?.if, undefined);
+    assert.equal(workflow.jobs?.['package-ts-vsix'], undefined);
+    assert.equal(workflow.jobs?.['package-engine-vsix'], undefined);
   });
 });
 

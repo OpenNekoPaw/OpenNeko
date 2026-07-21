@@ -34,6 +34,14 @@ read_package_group_into() {
 read_package_group_into RELEASE_PACKAGES packages.buildRelease
 read_package_group_into DEV_ONLY_PACKAGES packages.devOnly
 
+detect_host_target() {
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64) echo "darwin-arm64" ;;
+    Linux-x86_64|Linux-amd64) echo "linux-x64" ;;
+    *) return 1 ;;
+  esac
+}
+
 # =============================================================================
 # Parse arguments
 # =============================================================================
@@ -54,10 +62,10 @@ while [[ $# -gt 0 ]]; do
       echo "Usage: ./build.sh [options]"
       echo ""
       echo "Options:"
-      echo "  --all              Build release-ready extensions (${#RELEASE_PACKAGES[@]} packages)"
+      echo "  --all              Build the complete OpenNeko application (${#RELEASE_PACKAGES[@]} embedded features)"
       echo "  --dev              Build ALL extensions including dev-only (+ ${#DEV_ONLY_PACKAGES[@]} packages)"
       echo "  --package <name>   Build specific package (e.g., neko-cut)"
-      echo "  --target <platform> Platform target for neko-engine VSIX (darwin-arm64|linux-x64)"
+      echo "  --target <platform> Platform target for the OpenNeko VSIX (darwin-arm64|linux-x64)"
       echo "  --skip-package     Compile only, skip VSIX packaging"
       echo "  (no options)       Build neko-cut only (default)"
       echo ""
@@ -104,6 +112,29 @@ package_list() {
   done
 }
 
+package_openneko() {
+  local target="$TARGET_PLATFORM"
+  local rust_target
+  if [ -z "$target" ] && ! target="$(detect_host_target)"; then
+    echo "Unsupported host: $(uname -s)-$(uname -m). Pass --target for a supported build host." >&2
+    return 1
+  fi
+  case "$target" in
+    darwin-arm64) rust_target="aarch64-apple-darwin" ;;
+    linux-x64) rust_target="x86_64-unknown-linux-gnu" ;;
+    *)
+      echo "Unsupported OpenNeko target: $target" >&2
+      return 1
+      ;;
+  esac
+
+  echo ""
+  echo "📦 Packaging OpenNeko ($target)..."
+  pnpm --dir "$SCRIPT_DIR/packages/neko-engine/packages/host-napi" run build:napi -- --target "$rust_target"
+  bash "$SCRIPT_DIR/packages/neko-engine/scripts/package-platform.sh" "$target"
+  node "$SCRIPT_DIR/scripts/package-openneko-platform.mjs" --target "$target"
+}
+
 # =============================================================================
 # Main
 # =============================================================================
@@ -143,11 +174,10 @@ main() {
 
   # Package VSIX (not cacheable — depends on dist/ content)
   if [ "$SKIP_PACKAGE" = "0" ]; then
-    package_list "${packages[@]}"
-
-    # Also package neko-suite extension pack for full builds
     if [ "$BUILD_ALL" = "1" ] || [ "$BUILD_DEV" = "1" ]; then
-      package_extension "neko-suite"
+      package_openneko
+    else
+      package_list "${packages[@]}"
     fi
   fi
 
@@ -157,7 +187,11 @@ main() {
     echo "⚠️  Dev build: includes ${DEV_ONLY_PACKAGES[*]} (not release-ready)"
   fi
   echo ""
-  ls -la neko-*.vsix 2>/dev/null || echo "No VSIX files generated."
+  if [ "$BUILD_ALL" = "1" ] || [ "$BUILD_DEV" = "1" ]; then
+    ls -la vsix-artifacts/OpenNeko-*.vsix 2>/dev/null || echo "No OpenNeko VSIX generated."
+  else
+    ls -la neko-*.vsix 2>/dev/null || echo "No VSIX files generated."
+  fi
 }
 
 main

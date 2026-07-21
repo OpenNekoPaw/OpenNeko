@@ -19,10 +19,12 @@ import {
   createVSCodeLogger,
   VSCodeErrorHandler,
   inspectLogLevelSetting,
+  resolveNekoExtension,
   watchLogLevel,
 } from '@neko/shared/vscode/extension';
 import {
   formatLocalMetadataUserDiagnostic,
+  isNekoCutAPI,
   LogLevel,
   projectLocalMetadataUserDiagnostic,
   withTimeout,
@@ -119,12 +121,10 @@ async function resolveOwningProjectQualityFacade(
 ): Promise<ProjectQualityFacade | undefined> {
   const extensionId = PROJECT_QUALITY_EXTENSION_BY_DOMAIN[project.domain];
   if (!extensionId) return undefined;
-  const extension = vscode.extensions.getExtension<{
-    readonly projectQuality?: ProjectQualityFacade;
-  }>(extensionId);
+  const extension = resolveNekoExtension(extensionId, (id) => vscode.extensions.getExtension(id));
   if (!extension) return undefined;
   const api = extension.isActive ? extension.exports : await extension.activate();
-  return api?.projectQuality;
+  return isNekoCutAPI(api) ? api.projectQuality : undefined;
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<NekoAgentAPI> {

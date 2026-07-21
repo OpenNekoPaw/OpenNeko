@@ -27,6 +27,7 @@ import {
   requestWebviewProjectSnapshot,
   createVSCodeProjectSourceAddRequest,
   normalizeVSCodeProjectSourceAddRequest,
+  resolveNekoExtension,
   resolveHostContentMediaPath,
   resolveGeneratedAssetResourceRef,
   updateWebviewKeyboardEditableOwner,
@@ -61,6 +62,8 @@ import {
   projectCanvasPlaybackRouteToCutDraft,
   createProjectionAdapterRegistry,
   NEKO_EXTENSION_IDS,
+  isNekoAssetsAPI,
+  isNekoCutAPI,
   normalizeNarrativePreviewFeatureToggles,
   PathResolver,
   resolveEffectiveCanvasPlaybackRoutes,
@@ -924,10 +927,12 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
 
   private async getNekoAssetsApi(): Promise<NekoAssetsAPI | null> {
     try {
-      const ext = vscode.extensions.getExtension<NekoAssetsAPI>(NEKO_EXTENSION_IDS.NEKO_ASSETS);
+      const ext = resolveNekoExtension(NEKO_EXTENSION_IDS.NEKO_ASSETS, (id) =>
+        vscode.extensions.getExtension(id),
+      );
       if (!ext) return null;
-      if (!ext.isActive) await ext.activate();
-      return ext.exports;
+      const api = ext.isActive ? ext.exports : await ext.activate();
+      return isNekoAssetsAPI(api) ? api : null;
     } catch {
       return null;
     }
@@ -979,7 +984,9 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
 
   private async getPreviewVariantApi(): Promise<NekoPreviewVariantAPI | null> {
     try {
-      const ext = vscode.extensions.getExtension('neko.neko-preview');
+      const ext = resolveNekoExtension('neko.neko-preview', (id) =>
+        vscode.extensions.getExtension(id),
+      );
       if (!ext) return null;
       if (!ext.isActive) await ext.activate();
       const api = ext.exports;
@@ -6322,11 +6329,17 @@ async function selectExistingCutProjectTarget(): Promise<{
   if (!documentUri) {
     throw new Error('Cut authoring was cancelled before an explicit .nkv target was selected.');
   }
-  const cutExtension = vscode.extensions.getExtension<NekoCutAPI>('neko.neko-cut');
+  const cutExtension = resolveNekoExtension('neko.neko-cut', (id) =>
+    vscode.extensions.getExtension(id),
+  );
   if (!cutExtension) {
     throw new Error('Neko Cut is unavailable for explicit project authoring.');
   }
-  const cutApi = cutExtension.isActive ? cutExtension.exports : await cutExtension.activate();
+  const cutApiValue = cutExtension.isActive ? cutExtension.exports : await cutExtension.activate();
+  if (!isNekoCutAPI(cutApiValue)) {
+    throw new Error('Neko Cut API contract mismatch.');
+  }
+  const cutApi: NekoCutAPI = cutApiValue;
   const targetUri = documentUri.toString();
   const info = await cutApi.timeline.getInfo({ documentUri: targetUri });
   return {

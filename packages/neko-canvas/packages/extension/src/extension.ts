@@ -41,11 +41,12 @@ import {
   VSCodeErrorHandler,
   createNewFile,
   registerOptionalAgentCapabilityProvider,
+  resolveNekoExtension,
   resolveLogLevelSetting,
   watchLogLevel,
 } from '@neko/shared/vscode/extension';
 import type { AssetEntity, AssetFile, NekoAssetsAPI } from '@neko/shared';
-import { NEKO_EXTENSION_IDS } from '@neko/shared';
+import { isNekoAssetsAPI, NEKO_EXTENSION_IDS } from '@neko/shared';
 import { getRootLogger, setRootLogger } from './utils/logger';
 import { setErrorHandler, handleError } from './utils/errorHandler';
 import { CanvasEditorProvider } from './editor';
@@ -84,10 +85,15 @@ function parseCanvasDocumentUri(documentUri: string | undefined): vscode.Uri | u
 
 async function getAssetsAPI(): Promise<NekoAssetsAPI | undefined> {
   if (assetsAPI) return assetsAPI;
-  const ext = vscode.extensions.getExtension<NekoAssetsAPI>(NEKO_EXTENSION_IDS.NEKO_ASSETS);
+  const ext = resolveNekoExtension(NEKO_EXTENSION_IDS.NEKO_ASSETS, (id) =>
+    vscode.extensions.getExtension(id),
+  );
   if (!ext) return undefined;
-  if (!ext.isActive) await ext.activate();
-  assetsAPI = ext.exports;
+  const api = ext.isActive ? ext.exports : await ext.activate();
+  if (!isNekoAssetsAPI(api)) {
+    throw new Error('Neko Assets API contract mismatch.');
+  }
+  assetsAPI = api;
   return assetsAPI;
 }
 

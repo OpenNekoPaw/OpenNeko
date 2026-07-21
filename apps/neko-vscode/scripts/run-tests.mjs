@@ -13,7 +13,10 @@ const nodeArguments = ['--test'];
 if (forwardedArguments.includes('--coverage')) {
   nodeArguments.push('--experimental-test-coverage');
 }
-nodeArguments.push(fileURLToPath(new URL('./manifest.test.mjs', import.meta.url)));
+nodeArguments.push(
+  fileURLToPath(new URL('./manifest.test.mjs', import.meta.url)),
+  fileURLToPath(new URL('../src/scoped-extension-context.test.ts', import.meta.url)),
+);
 
 const result = spawnSync(process.execPath, nodeArguments, { stdio: 'inherit' });
 if (result.error) throw result.error;

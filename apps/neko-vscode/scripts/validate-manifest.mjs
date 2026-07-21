@@ -8,9 +8,9 @@ const manifest = JSON.parse(
 if (manifest.publisher !== 'neko' || manifest.name !== 'neko-suite') {
   throw new Error('OpenNeko for VSCode must preserve the neko.neko-suite product identity.');
 }
-if (!Array.isArray(manifest.extensionPack) || manifest.extensionPack.length === 0) {
-  throw new Error('OpenNeko for VSCode must declare a non-empty extensionPack.');
+if (manifest.main !== './dist/extension.js') {
+  throw new Error('OpenNeko for VSCode must own the single Extension Host runtime entry.');
 }
-if (manifest.main || manifest.browser || manifest.activationEvents || manifest.contributes) {
-  throw new Error('OpenNeko for VSCode must remain a pure Extension Pack without runtime behavior.');
+if (manifest.extensionPack || manifest.extensionDependencies) {
+  throw new Error('OpenNeko for VSCode must not depend on separately installed Neko extensions.');
 }

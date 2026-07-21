@@ -739,6 +739,84 @@ export const NEKO_EXTENSION_IDS = {
   NEKO_ASSETS: 'neko.neko-assets',
 } as const;
 
+export function isNekoAssetsAPI(value: unknown): value is NekoAssetsAPI {
+  return hasCallableMembers(value, [
+    'getAllEntities',
+    'importFile',
+    'getThumbnailPath',
+    'resolveEntityUri',
+    'getCharacterThumbnail',
+    'getBindingCandidate',
+    'getRepresentationPackageDetail',
+    'onDidChangeEntities',
+  ]);
+}
+
+export function isNekoCanvasAPI(value: unknown): value is NekoCanvasAPI {
+  if (!isExtensionApiRecord(value)) return false;
+  return (
+    hasCallableMembers(value['asset'], ['import', 'list', 'getById']) &&
+    hasCallableMember(value['authoring'], 'importAsset') &&
+    hasCallableMember(value['markdown'], 'invoke') &&
+    hasCallableMember(value['boards'], 'project') &&
+    hasCallableMembers(value['canvas'], ['create', 'addShape']) &&
+    hasCallableMembers(value['storyboard'], ['import', 'getExecutionSummary']) &&
+    hasCallableMembers(value['playback'], [
+      'getPlan',
+      'getRoutes',
+      'revealWorkspace',
+      'createCutDraftFromRoute',
+      'reorderUnits',
+    ]) &&
+    hasCallableMembers(value['nodes'], [
+      'list',
+      'get',
+      'update',
+      'create',
+      'derive',
+      'createConnection',
+      'createComposite',
+      'updateBlock',
+      'extractStructuredContent',
+      'getActiveContext',
+      'applyAgentContent',
+      'generateImage',
+      'generateBatch',
+      'onSelectionChange',
+    ]) &&
+    hasCallableMembers(value['events'], ['onDidChangeAssets', 'onDidChangeCanvas'])
+  );
+}
+
+export function isNekoCutAPI(value: unknown): value is NekoCutAPI {
+  if (!isExtensionApiRecord(value)) return false;
+  return (
+    isExtensionApiRecord(value['projectQuality']) &&
+    hasCallableMember(value['authoring'], 'importGeneratedClip') &&
+    hasCallableMembers(value['timeline'], [
+      'getInfo',
+      'addElement',
+      'updateElement',
+      'deleteElement',
+      'listElements',
+      'reveal',
+      'importCanvasDraft',
+    ])
+  );
+}
+
+function hasCallableMember(value: unknown, key: string): boolean {
+  return isExtensionApiRecord(value) && typeof Reflect.get(value, key) === 'function';
+}
+
+function hasCallableMembers(value: unknown, keys: readonly string[]): boolean {
+  return keys.every((key) => hasCallableMember(value, key));
+}
+
+function isExtensionApiRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
 // =============================================================================
 // P3: Skill Provider Interface
 // =============================================================================

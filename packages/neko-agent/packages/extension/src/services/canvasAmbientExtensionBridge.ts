@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import type { NekoCanvasAPI } from '@neko/shared';
+import { isNekoCanvasAPI } from '@neko/shared';
+import { resolveNekoExtension } from '@neko/shared/vscode/extension';
 import { NEKO_PLUGIN_EXTENSION_IDS } from '@neko-agent/types';
 import { projectCanvasAssetChangeSummary, projectCanvasChangeSummary } from '@neko/agent/runtime';
 import {
@@ -38,14 +39,18 @@ export function registerCanvasAmbientExtensionBridge(
  * mutations between interactions.
  */
 export function subscribeCanvasSelection(context: vscode.ExtensionContext): void {
-  const canvasExt = vscode.extensions.getExtension<NekoCanvasAPI>(NEKO_PLUGIN_EXTENSION_IDS.canvas);
+  const canvasExt = resolveNekoExtension(NEKO_PLUGIN_EXTENSION_IDS.canvas, (id) =>
+    vscode.extensions.getExtension(id),
+  );
   if (!canvasExt) return;
 
   const activate = canvasExt.isActive ? Promise.resolve(canvasExt.exports) : canvasExt.activate();
 
   void Promise.resolve(activate)
     .then((api) => {
-      if (!api) return;
+      if (!isNekoCanvasAPI(api)) {
+        throw new Error('Neko Canvas API contract mismatch.');
+      }
 
       if (api.nodes?.onSelectionChange) {
         context.subscriptions.push(

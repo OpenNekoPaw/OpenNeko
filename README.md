@@ -60,9 +60,9 @@ pnpm gate:local
 
 ## Development And Release
 
-`dev` is the normal development branch. Ordinary pushes do not run GitHub Actions; run `pnpm gate:local` before pushing, and dispatch CI manually when GitHub-runner evidence is needed. `main` is the release branch and only accepts `dev -> main` Pull Requests. `Merge Gate` must complete all source checks and package the `darwin-arm64` and `linux-x64` VSIX artifacts before merge.
+`dev` is the normal development branch. Ordinary pushes do not run GitHub Actions; run `pnpm gate:local` before pushing, and dispatch CI manually when GitHub-runner evidence is needed. `main` is the release branch and only accepts `dev -> main` Pull Requests. `Merge Gate` must complete all source checks and produce one complete OpenNeko VSIX for each of `darwin-arm64` and `linux-x64` before merge.
 
-Formal releases are triggered by `v*` tags reachable from main. The Release workflow validates tag ancestry and extension manifest versions, rebuilds the release VSIX artifacts and `SHA256SUMS`, then creates the GitHub Release through the `release` environment.
+Formal releases are triggered by `v*` tags reachable from main. The Release workflow validates tag ancestry and extension manifest versions, rebuilds `OpenNeko-darwin-arm64-<version>.vsix`, `OpenNeko-linux-x64-<version>.vsix`, and `SHA256SUMS`, then creates the GitHub Release through the `release` environment. Feature-package VSIX files are never published as Release assets.
 
 ## Project Entries
 

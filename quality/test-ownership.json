@@ -2,6 +2,15 @@
   "schemaVersion": "neko.test-ownership.v1",
   "workspaces": [
     {
+      "path": "apps/neko-vscode",
+      "mode": "alternative",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts and scripts/*.test.mjs",
+      "rationale": "The composition root uses Node's test runner for mixed manifest and dependency-free context contract tests.",
+      "validationAlternative": "pnpm --dir apps/neko-vscode test -- --coverage",
+      "closingCondition": "Adopt shared Vitest coverage when the composition runtime gains tests that require the VS Code mock environment."
+    },
+    {
       "path": "apps/neko-tui",
       "owner": "apps/neko-tui",
       "mode": "self",

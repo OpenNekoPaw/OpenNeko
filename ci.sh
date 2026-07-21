@@ -10,8 +10,7 @@
 #   ./ci.sh --rust         Rust only
 #   ./ci.sh --quick        Skip build (format + lint + test only)
 #   ./ci.sh --fix          Auto-fix format/lint issues
-#   ./ci.sh --release      Build release VSIX packages (current platform)
-#   ./ci.sh --release --ts TS extensions VSIX only (no native build)
+#   ./ci.sh --release      Build one complete OpenNeko VSIX for the current platform
 set -euo pipefail
 
 # =============================================================================
@@ -263,44 +262,19 @@ run_rust() {
 }
 
 # =============================================================================
-# Release: Build VSIX packages (mirrors: package-ts-vsix + package-engine-vsix)
+# Release: Build one complete platform VSIX (mirrors package-openneko-vsix)
 # =============================================================================
 
-release_ts() {
+release_openneko() {
   echo ""
   echo "========================================"
-  echo " Release: TS Extensions VSIX"
-  echo "========================================"
-
-  # Build TS extensions
-  # shellcheck disable=SC2046
-  run_step "compile TS extensions" pnpm turbo compile $(make_ts_filters)
-
-  # Package each extension
-  mkdir -p "$SCRIPT_DIR/vsix-artifacts"
-  for pkg in "${TS_EXTENSIONS[@]}" neko-suite; do
-    local pkg_dir="$SCRIPT_DIR/packages/$pkg"
-    if [ -d "$pkg_dir" ]; then
-      run_step "package $pkg" \
-        bash -c "cd '$pkg_dir' && npx @vscode/vsce package --no-dependencies --allow-missing-repository && cp -f *.vsix '$SCRIPT_DIR/vsix-artifacts/' 2>/dev/null"
-    fi
-  done
-
-  echo ""
-  echo "  TS VSIX artifacts:"
-  ls -lh "$SCRIPT_DIR/vsix-artifacts/"*.vsix 2>/dev/null | awk '{print "    " $NF " (" $5 ")"}'
-}
-
-release_engine() {
-  echo ""
-  echo "========================================"
-  echo " Release: neko-engine VSIX ($VSCODE_TARGET)"
+  echo " Release: OpenNeko VSIX ($VSCODE_TARGET)"
   echo "========================================"
   echo ""
   echo "  Cross-platform note:"
   echo "    Local build targets: $VSCODE_TARGET (current host)"
   echo "    Full matrix (darwin-arm64, linux-x64)"
-  echo "    is built by GitHub Actions on push to main or tag push."
+  echo "    is built by GitHub Actions for Pull Requests, manual CI, and release tags."
   echo ""
 
   check_command cargo "https://rustup.rs" || return 1
@@ -313,16 +287,15 @@ release_engine() {
   run_step "build host-napi ($VSCODE_TARGET)" \
     pnpm --filter @neko-engine/host-napi run build:native
 
-  # Package platform-specific VSIX (handles ORT + FFmpeg bundling)
-  run_step "package neko-engine ($VSCODE_TARGET)" \
+  # Build-only Engine payload, then assemble every retained feature into one VSIX.
+  run_step "package Engine payload ($VSCODE_TARGET)" \
     bash "$ENGINE_DIR/scripts/package-platform.sh" "$VSCODE_TARGET"
-
-  mkdir -p "$SCRIPT_DIR/vsix-artifacts"
-  cp -f "$ENGINE_DIR"/*.vsix "$SCRIPT_DIR/vsix-artifacts/" 2>/dev/null || true
+  run_step "assemble OpenNeko ($VSCODE_TARGET)" \
+    node "$SCRIPT_DIR/scripts/package-openneko-platform.mjs" --target "$VSCODE_TARGET"
 
   echo ""
-  echo "  Engine VSIX artifacts:"
-  ls -lh "$SCRIPT_DIR/vsix-artifacts/"neko-engine*.vsix 2>/dev/null | awk '{print "    " $NF " (" $5 ")"}'
+  echo "  OpenNeko VSIX artifact:"
+  ls -lh "$SCRIPT_DIR/vsix-artifacts/OpenNeko-$VSCODE_TARGET-"*.vsix 2>/dev/null | awk '{print "    " $NF " (" $5 ")"}'
 }
 
 # =============================================================================
@@ -337,9 +310,12 @@ main() {
   cd "$SCRIPT_DIR"
 
   if [ "$RELEASE" -eq 1 ]; then
-    # Release mode: build VSIX packages
-    [ "$RUN_TS" -eq 1 ] && release_ts
-    [ "$RUN_RUST" -eq 1 ] && release_engine
+    if [ "$RUN_TS" -ne 1 ] || [ "$RUN_RUST" -ne 1 ]; then
+      echo "Release packaging requires both TypeScript features and the native Engine." >&2
+      FAILED=1
+    else
+      release_openneko
+    fi
   else
     # CI mode: validate checks
     [ "$RUN_TS" -eq 1 ] && run_ts

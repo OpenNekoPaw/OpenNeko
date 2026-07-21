@@ -1,14 +1,17 @@
 # OpenNeko for VSCode composition
 
-`apps/neko-vscode` owns only the OpenNeko Extension Pack manifest, VSIX
-packaging, release metadata, and product-level acceptance.
+`apps/neko-vscode` is the sole installed VS Code extension. It owns the OpenNeko
+composition runtime, merged manifest, platform VSIX packaging, release metadata,
+and product-level acceptance.
 
 ```text
 apps/neko-vscode
-  -> extensionPack identifiers
-  -> packages/neko-*/package.json
-  -> owning domain Extension runtime
+  -> scoped embedded feature lifecycle
+  -> dist/features/<package>
+  -> packages/neko-*/package.json and owning runtime
 ```
 
-The application has no activation entry and no runtime dependency on another
-application. Member Extensions remain independently buildable and package-owned.
+Feature packages remain independently buildable and package-owned, but their
+VSIX files are temporary assembly inputs rather than public artifacts. The
+application activates them in dependency order and exposes cross-feature APIs
+through the shared embedded registry.

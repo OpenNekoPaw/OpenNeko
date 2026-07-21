@@ -11,6 +11,7 @@
  */
 
 import * as vscode from 'vscode';
+import { resolveNekoExtension } from '@neko/shared/vscode/extension';
 import { EngineClient, MediaPlaybackService } from '@neko/neko-client';
 import type { PlaybackHandle } from '@neko/neko-client';
 import type {
@@ -60,9 +61,11 @@ export class PreviewService implements vscode.Disposable {
       logger.info('Connecting to neko-engine Frame Server...');
 
       // 1. Ensure engine extension is activated
-      const ext = vscode.extensions.getExtension(ENGINE_EXTENSION_ID);
+      const ext = resolveNekoExtension(ENGINE_EXTENSION_ID, (id) =>
+        vscode.extensions.getExtension(id),
+      );
       if (!ext) {
-        logger.error(`Extension ${ENGINE_EXTENSION_ID} not installed`);
+        logger.error(`OpenNeko feature ${ENGINE_EXTENSION_ID} is unavailable`);
         return false;
       }
 

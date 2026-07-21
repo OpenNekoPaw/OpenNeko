@@ -15,13 +15,42 @@ import {
   REGISTER_AGENT_CAPABILITIES_COMMAND,
   registerOptionalAgentCapabilityProvider,
 } from '../optional-agent-capability-registration';
+import {
+  EmbeddedFeatureRegistry,
+  installEmbeddedFeatureRegistry,
+} from '../embedded-feature-registry';
 
 const provider = { id: 'test-provider' } as AgentCapabilityProvider;
 
 describe('registerOptionalAgentCapabilityProvider', () => {
   beforeEach(() => {
+    globalThis.__openNekoEmbeddedFeatureRegistry = undefined;
     vscodeMocks.executeCommand.mockReset();
     vscodeMocks.getExtension.mockReset();
+  });
+
+  it('waits for the embedded Agent before executing its registration command', async () => {
+    const registry = new EmbeddedFeatureRegistry();
+    registry.register({
+      id: 'neko.neko-agent',
+      extensionUri: uri('/features/neko-agent'),
+      packageJSON: {},
+      activate: () => ({}),
+    });
+    const owner = installEmbeddedFeatureRegistry(registry);
+    vscodeMocks.executeCommand.mockResolvedValue(undefined);
+
+    const registration = registerOptionalAgentCapabilityProvider(provider);
+    await Promise.resolve();
+    expect(vscodeMocks.executeCommand).not.toHaveBeenCalled();
+
+    await registry.activateAll(['neko.neko-agent']);
+    await expect(registration).resolves.toBe(true);
+    expect(vscodeMocks.executeCommand).toHaveBeenCalledWith(
+      REGISTER_AGENT_CAPABILITIES_COMMAND,
+      provider,
+    );
+    owner.dispose();
   });
 
   it('does not execute the Agent command when the optional extension is absent', async () => {
@@ -51,3 +80,17 @@ describe('registerOptionalAgentCapabilityProvider', () => {
     );
   });
 });
+
+function uri(fsPath: string) {
+  return {
+    fsPath,
+    scheme: 'file',
+    authority: '',
+    path: fsPath,
+    query: '',
+    fragment: '',
+    with: () => uri(fsPath),
+    toJSON: () => ({ scheme: 'file', path: fsPath }),
+    toString: () => `file://${fsPath}`,
+  };
+}

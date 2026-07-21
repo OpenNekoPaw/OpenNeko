@@ -11,6 +11,14 @@
  */
 export { BaseOutlineProvider } from './baseOutlineProvider';
 export type { IOutlineProvider } from './baseOutlineProvider';
+export {
+  EmbeddedFeatureRegistry,
+  installEmbeddedFeatureRegistry,
+  requireNekoExtension,
+  resolveNekoExtension,
+  waitForNekoExtensionActivation,
+} from './embedded-feature-registry';
+export type { EmbeddedFeatureRegistration, NekoExtension } from './embedded-feature-registry';
 
 // Logger (OutputChannel transport + log level config)
 export {

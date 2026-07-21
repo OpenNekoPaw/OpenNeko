@@ -34,13 +34,11 @@ test('Turbo actions cache remains remote-only when act uses direct cache mounts'
   const workflow = parse(await readFile('.github/workflows/ci.yml', 'utf8'));
   const turboCacheJobs = Object.entries(workflow.jobs)
     .filter(([, job]) =>
-      job.steps?.some(
-        (step) => step.uses === 'actions/cache@v5' && step.with?.path === '.turbo',
-      ),
+      job.steps?.some((step) => step.uses === 'actions/cache@v5' && step.with?.path === '.turbo'),
     )
     .map(([jobName]) => jobName);
 
-  assert.deepEqual(turboCacheJobs, ['build', 'test-ts', 'code-quality', 'package-ts-vsix']);
+  assert.deepEqual(turboCacheJobs, ['build', 'test-ts', 'code-quality']);
   for (const jobName of turboCacheJobs) {
     const cacheStep = workflow.jobs[jobName].steps.find(
       (step) => step.uses === 'actions/cache@v5' && step.with?.path === '.turbo',
