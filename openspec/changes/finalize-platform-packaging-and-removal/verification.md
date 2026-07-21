@@ -46,6 +46,8 @@ Passed:
 - Embedded registry and deferred Agent capability registration: 9 tests
 - Application manifest/scoped-context tests: 3 tests
 - Focused CI regressions: Agent router 40 tests, Tools asset reader 2 tests, Canvas protocol 67 tests
+- Embedded/standalone extension contract uses the canonical VS Code `Extension.activate()`
+  `Thenable` signature; all seven PR typecheck diagnostics were cleared
 - `pnpm check:test-orchestration`: 61 tests
 - `pnpm check:release-channels`
 - `pnpm check:openspec`
