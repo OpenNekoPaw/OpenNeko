@@ -62,6 +62,20 @@ describe('OpenNeko platform assembler', () => {
         runtimeLibraryCount: 2,
       },
     );
+    assert.deepEqual(
+      assertEmbeddedNativeClosure(
+        [
+          '/payload/neko-engine.linux-x64-gnu.node',
+          '/payload/libavcodec.so.62',
+          '/payload/libavformat.so.62',
+        ],
+        'linux-x64',
+      ),
+      {
+        nativeFile: '/payload/neko-engine.linux-x64-gnu.node',
+        runtimeLibraryCount: 2,
+      },
+    );
     assert.throws(
       () =>
         assertEmbeddedNativeClosure(
@@ -73,6 +87,14 @@ describe('OpenNeko platform assembler', () => {
           'darwin-arm64',
         ),
       /native closure must contain only/u,
+    );
+    assert.throws(
+      () =>
+        assertEmbeddedNativeClosure(
+          ['/payload/neko-engine.linux-x64.node', '/payload/libavcodec.so.62'],
+          'linux-x64',
+        ),
+      /neko-engine\.linux-x64-gnu\.node/u,
     );
   });
 

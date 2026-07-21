@@ -10,6 +10,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { basename, join, resolve } from 'node:path';
 
 import {
@@ -21,6 +22,8 @@ import {
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const appRoot = join(repoRoot, 'apps', 'neko-vscode');
+const require = createRequire(import.meta.url);
+const { getTargetConfig } = require('../packages/neko-engine/scripts/package-config.js');
 
 export function parseOpenNekoPackageArgs(argv) {
   const targetIndex = argv.indexOf('--target');
@@ -41,7 +44,11 @@ export function resolveHostTarget(platform = process.platform, arch = process.ar
 
 export function assertEmbeddedNativeClosure(files, target) {
   const nativeFiles = files.filter((file) => /neko-engine\.[^.]+\.node$/u.test(file));
-  const expected = `neko-engine.${target}.node`;
+  const targetConfig = getTargetConfig(target);
+  if (!targetConfig) {
+    throw new Error(`Unsupported OpenNeko native target: ${target}`);
+  }
+  const expected = targetConfig.nodeFile;
   if (nativeFiles.length !== 1 || basename(nativeFiles[0]) !== expected) {
     throw new Error(
       `OpenNeko ${target} native closure must contain only ${expected}; received ${nativeFiles.join(', ') || '<none>'}.`,
