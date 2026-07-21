@@ -4,6 +4,8 @@
 - Why:
 - User path affected:
 
+For a Pull Request targeting `main`, the source branch must be `dev`.
+
 ## Risk Level
 
 - [ ] L0 docs/copy/low-risk single-file fix
@@ -50,6 +52,8 @@ For multi-module changes, summarize responsibility, dependency, interface, exten
 ```bash
 # paste commands and key results
 ```
+
+- [ ] `pnpm gate:local` completed before promotion, or the blocking condition is recorded below
 
 ## Residual Risk
 

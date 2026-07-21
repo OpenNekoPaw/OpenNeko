@@ -1,9 +1,10 @@
 # Release workflow — triggered by version tags (e.g. v0.1.0)
 #
 # Jobs:
-#   1. release-ts:     Build + test + package TS-only extensions (ubuntu)
-#   2. release-engine: Build neko-engine per supported platform
-#   3. create-release: Collect all VSIX and create GitHub Release
+#   1. validate-release: Validate main ancestry and VSIX manifest versions
+#   2. release-ts:      Build + test + package TS-only extensions (ubuntu)
+#   3. release-engine:  Build neko-engine per supported platform
+#   4. create-release:  Collect signed-off artifacts and create GitHub Release
 #
 # Usage:
 #   git tag v0.1.0
@@ -17,15 +18,39 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   TURBO_TELEMETRY_DISABLED: 1
 
 jobs:
+  validate-release:
+    name: Validate Release Source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Fetch main ancestry
+        run: git fetch --no-tags origin main:refs/remotes/origin/main
+
+      - name: Validate release source
+        run: node scripts/validate-release-source.mjs
+
   # ── TypeScript-only extensions (no native code) ──
   release-ts:
     name: Build & Package (TS extensions)
+    needs: [validate-release]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -85,6 +110,7 @@ jobs:
   # ── neko-engine: platform-specific native builds ──
   release-engine:
     name: Package neko-engine (${{ matrix.target }})
+    needs: [validate-release]
     strategy:
       fail-fast: false
       matrix:
@@ -150,6 +176,9 @@ jobs:
     name: Create GitHub Release
     needs: [release-ts, release-engine]
     runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -161,10 +190,16 @@ jobs:
           echo "## Release artifacts:" >> $GITHUB_STEP_SUMMARY
           ls -lh release-artifacts/*.vsix | awk '{print "- " $NF " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
 
+      - name: Generate SHA256 manifest
+        working-directory: release-artifacts
+        run: sha256sum *.vsix > SHA256SUMS
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-artifacts/*.vsix
+          files: |
+            release-artifacts/*.vsix
+            release-artifacts/SHA256SUMS
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}

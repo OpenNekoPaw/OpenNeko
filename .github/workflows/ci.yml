@@ -1,74 +1,39 @@
 name: CI
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
+
+permissions:
+  contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
   TURBO_TELEMETRY_DISABLED: 1
 
-# ──────────────────────────────────────────────
-# Reusable setup anchors (YAML anchors not supported in GHA,
-# so we use a composite pattern with shared steps)
-# ──────────────────────────────────────────────
-
 jobs:
-  # ── Path change detection ──────────────────
-  changes:
-    name: Detect Changes
+  promotion-source:
+    name: Validate dev to main promotion
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      ts: ${{ steps.filter.outputs.ts }}
-      rust: ${{ steps.filter.outputs.rust }}
-      proto: ${{ steps.filter.outputs.proto }}
-      openspec: ${{ steps.filter.outputs.openspec }}
     steps:
       - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
         with:
-          fetch-depth: 0
+          node-version-file: .node-version
+          package-manager-cache: false
 
-      - name: Detect changed paths
-        id: filter
-        shell: bash
-        run: |
-          set -euo pipefail
+      - name: Validate promotion source
+        env:
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_BASE_REF: ${{ github.base_ref }}
+        run: node scripts/test-orchestration/assert-promotion-source.mjs
 
-          changed_files="$(mktemp)"
-          event_name="${{ github.event_name }}"
-
-          if [[ "${event_name}" == "pull_request" ]]; then
-            base_sha="${{ github.event.pull_request.base.sha }}"
-            head_sha="${{ github.event.pull_request.head.sha }}"
-            git diff --name-only "${base_sha}" "${head_sha}" > "${changed_files}"
-          else
-            before_sha="${{ github.event.before }}"
-            head_sha="${{ github.sha }}"
-
-            if [[ -z "${before_sha}" || "${before_sha}" =~ ^0+$ ]]; then
-              if git rev-parse "${head_sha}^" >/dev/null 2>&1; then
-                before_sha="$(git rev-parse "${head_sha}^")"
-                git diff --name-only "${before_sha}" "${head_sha}" > "${changed_files}"
-              else
-                git ls-files > "${changed_files}"
-              fi
-            else
-              git diff --name-only "${before_sha}" "${head_sha}" > "${changed_files}"
-            fi
-          fi
-
-          node scripts/test-orchestration/detect-ci-changes.mjs \
-            --github-output "${GITHUB_OUTPUT}" < "${changed_files}"
-
-  # ── TypeScript: Build & Lint ───────────────
   build:
     name: Build & Lint
     runs-on: ubuntu-latest
@@ -95,6 +60,7 @@ jobs:
             turbo-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
+
       - name: Install native build dependencies
         if: ${{ env.ACT != 'true' || env.ACT_NATIVE_DEPS_READY != 'true' }}
         run: |
@@ -131,7 +97,6 @@ jobs:
       - run: pnpm --filter @neko/app-tui test:sqlite:bun
       - run: pnpm --filter @neko/app-tui build
 
-  # ── TypeScript: Tests ──────────────────────
   test-ts:
     name: TypeScript Tests
     runs-on: ubuntu-latest
@@ -158,6 +123,7 @@ jobs:
             turbo-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
+
       - name: Run TypeScript tests
         run: |
           if [ "${ACT:-}" = "true" ]; then
@@ -173,12 +139,9 @@ jobs:
           path: packages/**/coverage/
           retention-days: 14
 
-  # ── Rust: Format, Lint & Test ──────────────
   test-rust:
     name: Rust Tests
     runs-on: macos-15
-    needs: changes
-    if: needs.changes.outputs.rust == 'true' || github.event_name == 'push'
     steps:
       - uses: actions/checkout@v5
 
@@ -200,7 +163,6 @@ jobs:
       - name: Install FFmpeg (macOS)
         run: brew install ffmpeg pkg-config
 
-      # vendor/ is gitignored; remove the cargo config that forces vendored sources
       - name: Remove vendor source override
         run: rm -f packages/neko-engine/.cargo/config.toml
 
@@ -216,26 +178,19 @@ jobs:
         run: cargo test --workspace
         working-directory: packages/neko-engine
 
-  # ── Rust: Dependency audit ─────────────────
   cargo-deny:
     name: Cargo Deny
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.rust == 'true' || github.event_name == 'push'
     steps:
       - uses: actions/checkout@v5
-      # vendor/ is gitignored; remove the cargo config that forces vendored sources
       - run: rm -f packages/neko-engine/.cargo/config.toml
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           manifest-path: packages/neko-engine/Cargo.toml
 
-  # ── Proto: Type generation check ───────────
   proto-check:
     name: Proto Types Sync
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.proto == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -248,17 +203,8 @@ jobs:
         run: corepack enable
 
       - run: pnpm install --frozen-lockfile
-      - name: Regenerate proto types
-        run: pnpm generate:types
-      - name: Check for uncommitted changes
-        run: |
-          if ! git diff --quiet packages/neko-types/src/generated/; then
-            echo "::error::Generated proto types are out of sync. Run 'pnpm generate:types' and commit."
-            git diff packages/neko-types/src/generated/
-            exit 1
-          fi
+      - run: pnpm check:proto-sync
 
-  # ── Code Quality: Unused code & architecture ─
   code-quality:
     name: Code Quality
     runs-on: ubuntu-latest
@@ -283,16 +229,11 @@ jobs:
             turbo-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm check:repository-quality
 
-      - name: Repository quality gates
-        run: pnpm check:repository-quality
-
-  # ── OpenSpec: proposal/spec validation ─────
   openspec-check:
     name: OpenSpec Validation
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.openspec == 'true' || github.event_name == 'push'
     steps:
       - uses: actions/checkout@v5
 
@@ -305,15 +246,12 @@ jobs:
         run: corepack enable
 
       - run: pnpm install --frozen-lockfile
+      - run: pnpm check:openspec
 
-      - name: Validate OpenSpec artifacts
-        run: pnpm check:openspec
-
-  # ── Security: Dependency review (PR only) ──
   dependency-review:
     name: Dependency Review
-    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
@@ -323,49 +261,10 @@ jobs:
         with:
           comment-summary-in-pr: on-failure
 
-  branch-gate:
-    name: Branch Gate
-    runs-on: ubuntu-latest
-    needs:
-      - changes
-      - build
-      - local-metadata-runtime
-      - test-ts
-      - test-rust
-      - cargo-deny
-      - proto-check
-      - code-quality
-      - openspec-check
-      - dependency-review
-    if: always() && github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
-
-      - name: Assert required branch jobs
-        env:
-          CI_GATE_RESULTS: ${{ toJson(needs) }}
-        run: >-
-          node scripts/test-orchestration/assert-ci-gate-results.mjs
-          "Branch Gate"
-          changes
-          build
-          local-metadata-runtime
-          test-ts
-          code-quality
-          dependency-review
-
-  # ── Release: TS extensions VSIX packaging ────
-  # Runs on push to main only. Packages all TS-only extensions.
   package-ts-vsix:
     name: Package TS Extensions VSIX
     runs-on: ubuntu-latest
     needs: [build, test-ts]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v5
 
@@ -387,9 +286,7 @@ jobs:
             turbo-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
-
-      - name: Build TS extensions
-        run: pnpm compile:ts-vsix
+      - run: pnpm compile:ts-vsix
 
       - name: Package TS extensions
         run: |
@@ -402,7 +299,7 @@ jobs:
             pkg_path="$pkg"
             if [[ "$pkg_path" != */* ]]; then pkg_path="packages/$pkg_path"; fi
             if [ -d "$pkg_path" ]; then
-              echo "📦 Packaging $pkg_path..."
+              echo "Packaging $pkg_path..."
               rm -f "$pkg_path"/*.vsix
               (cd "$pkg_path" && npx @vscode/vsce package --no-dependencies --allow-missing-repository)
               if ! compgen -G "$pkg_path/*.vsix" > /dev/null; then
@@ -424,15 +321,9 @@ jobs:
           path: vsix-artifacts/*.vsix
           retention-days: 30
 
-  # ── Release: Platform-specific neko-engine VSIX packaging ────
-  # Runs on push to main only. Builds native addon + bundles ORT/FFmpeg
-  # per platform, producing a platform-specific VSIX for each target.
   package-engine-vsix:
     name: Package neko-engine VSIX (${{ matrix.target }})
     needs: [build, test-ts, test-rust]
-    if: |
-      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
     strategy:
       fail-fast: false
       matrix:
@@ -472,17 +363,14 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # vendor/ is gitignored; remove the cargo config that forces vendored sources
       - name: Remove vendor source override
         run: rm -f packages/neko-engine/.cargo/config.toml
         shell: bash
 
-      # Build the native .node for this platform
       - name: Build host-napi
         working-directory: packages/neko-engine/packages/host-napi
         run: pnpm run build:napi -- --target ${{ matrix.rust-target }}
 
-      # Package platform-specific VSIX (handles ORT + FFmpeg bundling)
       - name: Package platform VSIX
         working-directory: packages/neko-engine
         run: bash scripts/package-platform.sh ${{ matrix.target }}
@@ -493,11 +381,11 @@ jobs:
           path: packages/neko-engine/*.vsix
           retention-days: 30
 
-  main-gate:
-    name: Main Gate
+  manual-gate:
+    name: Manual Gate
+    if: always() && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     needs:
-      - changes
       - build
       - local-metadata-runtime
       - test-ts
@@ -506,10 +394,8 @@ jobs:
       - proto-check
       - code-quality
       - openspec-check
-      - dependency-review
       - package-ts-vsix
       - package-engine-vsix
-    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v5
 
@@ -518,19 +404,63 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
 
-      - name: Assert required main jobs
+      - name: Assert required manual jobs
         env:
           CI_GATE_RESULTS: ${{ toJson(needs) }}
         run: >-
           node scripts/test-orchestration/assert-ci-gate-results.mjs
-          "Main Gate"
-          changes
+          "Manual Gate"
           build
           local-metadata-runtime
           test-ts
           test-rust
           cargo-deny
+          proto-check
           code-quality
           openspec-check
           package-ts-vsix
           package-engine-vsix
+
+  merge-gate:
+    name: Merge Gate
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - local-metadata-runtime
+      - test-ts
+      - test-rust
+      - cargo-deny
+      - proto-check
+      - code-quality
+      - openspec-check
+      - package-ts-vsix
+      - package-engine-vsix
+      - promotion-source
+      - dependency-review
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Assert required merge jobs
+        env:
+          CI_GATE_RESULTS: ${{ toJson(needs) }}
+        run: >-
+          node scripts/test-orchestration/assert-ci-gate-results.mjs
+          "Merge Gate"
+          build
+          local-metadata-runtime
+          test-ts
+          test-rust
+          cargo-deny
+          proto-check
+          code-quality
+          openspec-check
+          package-ts-vsix
+          package-engine-vsix
+          promotion-source
+          dependency-review

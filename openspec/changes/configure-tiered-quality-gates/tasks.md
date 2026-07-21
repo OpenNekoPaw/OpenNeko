@@ -25,3 +25,8 @@
 - [x] 5.2 Add local UI and real API command surfaces without making them generic gate dependencies
 - [x] 5.3 Add orchestration guards proving remote workflows and gate roots cannot reach local runtime commands
 - [x] 5.4 Update the quality ADR and verify focused orchestration, Canvas protocol, and full deterministic tests
+
+## 6. External Gate Follow-up
+
+- [x] 6.1 Configure GitHub main branch protection to require Pull Requests and the stable `Branch Gate`, including administrator enforcement and force-push/deletion protection
+- [x] 6.2 Run focused orchestration, OpenSpec, diff hygiene, and external branch-protection verification

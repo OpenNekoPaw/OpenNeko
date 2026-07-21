@@ -18,12 +18,12 @@ OpenNeko is for creators who want control over their project files, model connec
 
 ## Current Capabilities
 
-| Capability            | What it provides                                                        |
-| --------------------- | ----------------------------------------------------------------------- |
-| Creative Agent        | Project conversations, task planning, tool use, and media generation    |
-| Canvas                | Organize ideas, references, storyboards, media, and generated results   |
-| Video Timeline        | Arrange audio, video, effects, and transitions, then preview and export |
-| Assets and Characters | Manage media, characters, variants, references, and reusable packs      |
+| Capability            | What it provides                                                                             |
+| --------------------- | -------------------------------------------------------------------------------------------- |
+| Creative Agent        | Project conversations, task planning, tool use, and media generation                         |
+| Canvas                | Organize ideas, references, storyboards, media, and generated results                        |
+| Video Timeline        | Arrange audio, video, effects, and transitions, then preview and export                      |
+| Assets and Characters | Manage media, characters, variants, references, and reusable packs                           |
 | Preview and Tools     | Preview common media, documents, and standard 3D models, compare assets, and return feedback |
 
 Available generation and understanding features depend on your configured APIs, model access, and local services.
@@ -55,7 +55,14 @@ Common validation commands:
 ```bash
 pnpm test
 pnpm check
+pnpm gate:local
 ```
+
+## Development And Release
+
+`dev` is the normal development branch. Ordinary pushes do not run GitHub Actions; run `pnpm gate:local` before pushing, and dispatch CI manually when GitHub-runner evidence is needed. `main` is the release branch and only accepts `dev -> main` Pull Requests. `Merge Gate` must complete all source checks and package the `darwin-arm64` and `linux-x64` VSIX artifacts before merge.
+
+Formal releases are triggered by `v*` tags reachable from main. The Release workflow validates tag ancestry and extension manifest versions, rebuilds the release VSIX artifacts and `SHA256SUMS`, then creates the GitHub Release through the `release` environment.
 
 ## Project Entries
 

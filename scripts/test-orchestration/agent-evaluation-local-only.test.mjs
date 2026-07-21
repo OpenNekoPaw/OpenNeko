@@ -8,11 +8,9 @@ const GENERIC_CI_SCRIPTS = Object.freeze([
   'check:test',
   'check:ci',
   'gate:local',
-  'gate:branch',
-  'gate:main',
+  'gate:remote',
   'ci:local',
-  'ci:branch',
-  'ci:main',
+  'ci:remote',
 ]);
 const FORBIDDEN_REFERENCES = Object.freeze([
   'test:agent:eval',

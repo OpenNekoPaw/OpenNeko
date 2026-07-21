@@ -5,13 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const REMOTE_GATE_ROOTS = Object.freeze([
-  'check:ci',
-  'gate:branch',
-  'gate:main',
-  'ci:branch',
-  'ci:main',
-]);
+const REMOTE_GATE_ROOTS = Object.freeze(['check:ci', 'gate:remote', 'ci:remote']);
 const LOCAL_RUNTIME_SCRIPTS = Object.freeze([
   'test:local:vscode',
   'test:local:ui',
@@ -21,11 +15,12 @@ const LOCAL_RUNTIME_SCRIPTS = Object.freeze([
 describe('VS Code functional workflow boundary', () => {
   it('does not replace built-in Extension Debug with a workflow-owned code launch', async () => {
     const workflowRoot = join(repoRoot, '.github/workflows');
-    const workflowNames = (await readdir(workflowRoot))
-      .filter((name) => name.endsWith('.yml') || name.endsWith('.yaml'));
-    const workflowText = (await Promise.all(
-      workflowNames.map((name) => readFile(join(workflowRoot, name), 'utf8')),
-    )).join('\n');
+    const workflowNames = (await readdir(workflowRoot)).filter(
+      (name) => name.endsWith('.yml') || name.endsWith('.yaml'),
+    );
+    const workflowText = (
+      await Promise.all(workflowNames.map((name) => readFile(join(workflowRoot, name), 'utf8')))
+    ).join('\n');
 
     assert.doesNotMatch(workflowText, /NEKO_VSCODE_COMMAND/u);
     assert.doesNotMatch(workflowText, /pnpm test:webview:functional/u);
@@ -36,8 +31,8 @@ describe('VS Code functional workflow boundary', () => {
   it('keeps the retired Webview functional harness out of CI quality scripts', async () => {
     const packageJson = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8'));
     const scripts = packageJson.scripts ?? {};
-    const retiredScriptNames = Object.keys(scripts).filter(
-      (name) => name.includes('webview:functional'),
+    const retiredScriptNames = Object.keys(scripts).filter((name) =>
+      name.includes('webview:functional'),
     );
 
     assert.deepEqual(retiredScriptNames, []);

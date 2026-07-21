@@ -5,7 +5,7 @@ import { assertCiGateResults } from './assert-ci-gate-results.mjs';
 describe('CI gate result aggregation', () => {
   it('accepts successful required jobs and skipped optional jobs', () => {
     const summary = assertCiGateResults({
-      gateName: 'Branch Gate',
+      gateName: 'Manual Gate',
       jobs: {
         build: { result: 'success' },
         test: { result: 'success' },
@@ -15,7 +15,7 @@ describe('CI gate result aggregation', () => {
     });
 
     assert.deepEqual(summary, {
-      gateName: 'Branch Gate',
+      gateName: 'Manual Gate',
       observedJobs: 3,
       requiredJobs: 2,
     });
@@ -25,14 +25,14 @@ describe('CI gate result aggregation', () => {
     assert.throws(
       () =>
         assertCiGateResults({
-          gateName: 'Branch Gate',
+          gateName: 'Manual Gate',
           jobs: {
             build: { result: 'success' },
             audit: { result: 'failure' },
           },
           requiredSuccess: ['build'],
         }),
-      /Branch Gate failed: audit=failure/u,
+      /Manual Gate failed: audit=failure/u,
     );
   });
 
@@ -40,7 +40,7 @@ describe('CI gate result aggregation', () => {
     assert.throws(
       () =>
         assertCiGateResults({
-          gateName: 'Main Gate',
+          gateName: 'Merge Gate',
           jobs: {
             build: { result: 'success' },
             package: { result: 'cancelled' },
@@ -55,7 +55,7 @@ describe('CI gate result aggregation', () => {
     assert.throws(
       () =>
         assertCiGateResults({
-          gateName: 'Main Gate',
+          gateName: 'Merge Gate',
           jobs: { build: { result: 'success' } },
           requiredSuccess: ['build', 'package'],
         }),
@@ -67,7 +67,7 @@ describe('CI gate result aggregation', () => {
     assert.throws(
       () =>
         assertCiGateResults({
-          gateName: 'Main Gate',
+          gateName: 'Merge Gate',
           jobs: {
             build: { result: 'success' },
             package: { result: 'skipped' },
@@ -82,7 +82,7 @@ describe('CI gate result aggregation', () => {
     assert.throws(
       () =>
         assertCiGateResults({
-          gateName: 'Branch Gate',
+          gateName: 'Manual Gate',
           jobs: {
             build: { result: 'success' },
             audit: { result: 'neutral' },

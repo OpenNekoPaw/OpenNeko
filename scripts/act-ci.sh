@@ -11,12 +11,12 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 WORKFLOW_FILE="$ROOT_DIR/.github/workflows/ci.yml"
 ACT_DOCKER_CONTEXT="$SCRIPT_DIR/act"
 
-DEFAULT_EVENT="push"
+DEFAULT_EVENT="workflow_dispatch"
 DEFAULT_CONTAINER_ARCHITECTURE="${ACT_CONTAINER_ARCHITECTURE:-linux/arm64/v8}"
 DEFAULT_BASE_IMAGE="${ACT_BASE_IMAGE:-catthehacker/ubuntu:act-latest}"
 
 DEFAULT_JOBS=(build test-ts code-quality cargo-deny)
-SUPPORTED_JOBS=(changes build test-ts code-quality cargo-deny proto-check)
+SUPPORTED_JOBS=(build test-ts code-quality cargo-deny proto-check)
 
 EVENT="$DEFAULT_EVENT"
 RUN_ALL=0
@@ -34,7 +34,7 @@ Options:
   --job, -j <id>       Run one supported job. May be repeated.
   --all               Run the default local act job set.
   --list              List supported jobs and exit.
-  --event <name>      GitHub event name passed to act (default: push).
+  --event <name>      GitHub event name passed to act (default: workflow_dispatch).
   --pull              Refresh the prepared runner image and its base image.
   --help, -h          Show this help.
 
@@ -95,7 +95,8 @@ list_jobs() {
   echo ""
   echo "Excluded by design:"
   echo "  test-rust       macos-15 (Apple Silicon); use pnpm ci:local:rust locally"
-  echo "  dependency-review, package-*  PR/release-only GitHub runner checks"
+  echo "  dependency-review  Pull Request-only GitHub check"
+  echo "  package-*          Full supported-platform packaging stays on GitHub runners"
 }
 
 configure_local_runtime() {
