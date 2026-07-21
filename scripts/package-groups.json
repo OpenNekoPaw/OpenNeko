@@ -1,23 +1,23 @@
 {
-  "extensionPack": "apps/neko-vscode",
+  "productApplication": "apps/neko-vscode",
   "packages": {
     "buildRelease": [
       "neko-engine",
       "neko-tools",
       "neko-preview",
+      "neko-assets",
       "neko-cut",
       "neko-canvas",
-      "neko-agent",
-      "neko-assets"
+      "neko-agent"
     ],
     "devOnly": [],
     "tsExtensions": [
       "neko-tools",
       "neko-preview",
+      "neko-assets",
       "neko-cut",
       "neko-canvas",
-      "neko-agent",
-      "neko-assets"
+      "neko-agent"
     ]
   }
 }

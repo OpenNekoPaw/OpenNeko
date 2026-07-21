@@ -6,13 +6,16 @@ describe('workspace test ownership audit', () => {
   it('accepts the repository ownership inventory', async () => {
     const result = await auditTestOwnership();
     assert.equal(result.ok, true);
-    assert.equal(result.sourceBearingWorkspaces, 28);
+    assert.equal(result.sourceBearingWorkspaces, 29);
   });
 
   it('rejects duplicate workspace ownership entries before scanning', async () => {
     const entry = {
-      path: 'packages/example', owner: 'packages/example', mode: 'self',
-      sourceScope: 'src/**/*.ts', testScope: 'src/**/*.test.ts',
+      path: 'packages/example',
+      owner: 'packages/example',
+      mode: 'self',
+      sourceScope: 'src/**/*.ts',
+      testScope: 'src/**/*.test.ts',
     };
     await assert.rejects(
       auditTestOwnership({

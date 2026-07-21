@@ -166,7 +166,7 @@ TUI 的产品级组合位于 `apps/neko-tui`。Agent core/platform 不导入 VS 
 | `neko-preview`     | 授权只读预览与临时 3D Reference staging               | Preview 拥有面板级 Three.js 会话及形象、动作、机位、全景输出；Agent/Canvas/media 只消费共享 contract；不恢复 Engine Model/Scene 或持久 3D 项目 |
 | `neko-tools`       | 工具、Media LSP、差异与诊断                           | LSP/diagnostic 在 Extension；不得贡献已移除 Device UI                                                                                          |
 | `neko-engine`      | 本地 Rust Media Engine 与 VS Code native wrapper      | 只暴露保留媒体 contract；native 资源显式释放                                                                                                   |
-| `apps/neko-vscode` | VS Code 产品组合根                                    | 只拥有 Extension Pack、打包、发布和产品验收                                                                                                    |
+| `apps/neko-vscode` | VS Code 产品组合根                                    | 拥有单一安装扩展的组合生命周期、scoped context、manifest 合并、平台打包、发布和产品验收；领域实现仍由各 `neko-*` 包拥有                         |
 
 ## 路径、缓存与用户数据
 

@@ -10,6 +10,7 @@ import {
   isCanvasMarkdownCapabilityId,
   isCanvasMarkdownCapabilityInput,
   isCanvasMarkdownCapabilityResult,
+  isNekoCanvasAPI,
   validateAgentCapabilityInvocationInput,
   validateAgentCapabilityInvocationResult,
   type CanvasMarkdownCapabilityResult,
@@ -21,6 +22,7 @@ import {
   type AgentCapabilityLifecyclePhase,
   type AgentCapabilityLifecycleTargetRef,
 } from '@neko/shared';
+import { resolveNekoExtension } from '@neko/shared/vscode/extension';
 import { buildRuntimePluginSlashCommandDispatch } from '@neko/agent/runtime';
 import { getLogger } from '../../base';
 import { sendGeneratedAssetToPlugin } from '../../services/pluginTransferBridge';
@@ -537,12 +539,14 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 }
 
 async function getCanvasApi(): Promise<NekoCanvasAPI> {
-  const extension = vscode.extensions.getExtension<NekoCanvasAPI>(NEKO_PLUGIN_EXTENSION_IDS.canvas);
+  const extension = resolveNekoExtension(NEKO_PLUGIN_EXTENSION_IDS.canvas, (id) =>
+    vscode.extensions.getExtension(id),
+  );
   if (!extension) {
     throw new Error('Canvas extension is not installed.');
   }
   const api = extension.isActive ? extension.exports : await extension.activate();
-  if (!api?.markdown?.invoke) {
+  if (!isNekoCanvasAPI(api)) {
     throw new Error('Canvas Markdown capability API is unavailable.');
   }
   return api;

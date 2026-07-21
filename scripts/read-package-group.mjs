@@ -7,11 +7,11 @@ const scriptPath = fileURLToPath(import.meta.url);
 const scriptDir = dirname(scriptPath);
 const configPath = resolve(scriptDir, 'package-groups.json');
 
-export function readPackageConfig() {
+function readPackageConfig() {
   return JSON.parse(readFileSync(configPath, 'utf8'));
 }
 
-export function readConfigValue(pathExpression) {
+function readConfigValue(pathExpression) {
   if (!pathExpression) {
     throw new Error('Expected a config path, for example: packages.tsExtensions');
   }

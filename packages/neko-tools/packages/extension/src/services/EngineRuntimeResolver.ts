@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { EngineClient } from '@neko/neko-client/EngineClient';
+import { resolveNekoExtension } from '@neko/shared/vscode/extension';
 import type { IEngineRuntimeResolver } from '../contracts/IEngineRuntimeResolver';
 import { getLogger } from '../utils/logger';
 
@@ -26,9 +27,11 @@ export class VSCodeEngineRuntimeResolver implements IEngineRuntimeResolver {
   }
 
   private async initializeClient(): Promise<EngineClient | null> {
-    const ext = vscode.extensions.getExtension(ENGINE_EXTENSION_ID);
+    const ext = resolveNekoExtension(ENGINE_EXTENSION_ID, (id) =>
+      vscode.extensions.getExtension(id),
+    );
     if (!ext) {
-      logger.error(`Extension ${ENGINE_EXTENSION_ID} not installed`);
+      logger.error(`OpenNeko feature ${ENGINE_EXTENSION_ID} is unavailable`);
       return null;
     }
 

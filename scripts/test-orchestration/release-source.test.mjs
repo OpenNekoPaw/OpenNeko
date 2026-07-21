@@ -46,10 +46,10 @@ describe('release source validation', () => {
     );
   });
 
-  it('resolves the extension pack and every canonical release package exactly once', () => {
+  it('resolves the product application and every embedded release package exactly once', () => {
     assert.deepEqual(
       resolvePublishablePackagePaths({
-        extensionPack: 'apps/neko-vscode',
+        productApplication: 'apps/neko-vscode',
         packages: { buildRelease: ['neko-engine', 'neko-tools', 'neko-engine'] },
       }),
       ['apps/neko-vscode', 'packages/neko-engine', 'packages/neko-tools'],
@@ -104,13 +104,24 @@ describe('release source validation', () => {
       /validate-release-source\.mjs/u,
     );
     assert.match(validateRelease.steps.map((step) => step.run ?? '').join('\n'), /origin\/main/u);
-    assert.deepEqual(workflow.jobs?.['release-ts']?.needs, ['validate-release']);
-    assert.deepEqual(workflow.jobs?.['release-engine']?.needs, ['validate-release']);
+    assert.deepEqual(workflow.jobs?.['release-tests']?.needs, ['validate-release']);
+    assert.deepEqual(workflow.jobs?.['release-openneko']?.needs, [
+      'validate-release',
+      'release-tests',
+    ]);
+    assert.deepEqual(createRelease?.needs, ['release-openneko']);
+    assert.equal(workflow.jobs?.['release-ts'], undefined);
+    assert.equal(workflow.jobs?.['release-engine'], undefined);
     assert.equal(createRelease?.environment, 'release');
     assert.deepEqual(createRelease?.permissions, { contents: 'write' });
 
     const releaseSource = JSON.stringify(createRelease);
     assert.match(releaseSource, /SHA256SUMS/u);
-    assert.match(releaseSource, /release-artifacts\/\*\.vsix/u);
+    assert.match(releaseSource, /assert-openneko-release-artifacts\.mjs/u);
+    const publicationFiles =
+      createRelease.steps.find((step) => step.name === 'Create GitHub Release')?.with?.files ?? '';
+    assert.match(publicationFiles, /OpenNeko-darwin-arm64-\*\.vsix/u);
+    assert.match(publicationFiles, /OpenNeko-linux-x64-\*\.vsix/u);
+    assert.doesNotMatch(publicationFiles, /release-artifacts\/\*\.vsix/u);
   });
 });

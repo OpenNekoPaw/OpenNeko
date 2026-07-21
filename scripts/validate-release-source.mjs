@@ -36,16 +36,16 @@ export function resolveReleaseCommit({ tag, resolveRef }) {
 }
 
 export function resolvePublishablePackagePaths(packageGroups) {
-  const extensionPack = packageGroups?.extensionPack;
+  const productApplication = packageGroups?.productApplication;
   const buildRelease = packageGroups?.packages?.buildRelease;
-  if (typeof extensionPack !== 'string' || extensionPack.length === 0) {
-    throw new Error('package-groups.json must define extensionPack.');
+  if (typeof productApplication !== 'string' || productApplication.length === 0) {
+    throw new Error('package-groups.json must define productApplication.');
   }
   if (!Array.isArray(buildRelease) || buildRelease.length === 0) {
     throw new Error('package-groups.json must define a non-empty packages.buildRelease array.');
   }
 
-  const paths = new Set([extensionPack]);
+  const paths = new Set([productApplication]);
   for (const entry of buildRelease) {
     if (typeof entry !== 'string' || entry.length === 0) {
       throw new Error('packages.buildRelease entries must be non-empty strings.');

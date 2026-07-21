@@ -13,8 +13,11 @@
   "engines": {
     "vscode": "^1.128.0"
   },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "categories": [
-    "Extension Packs",
     "Other",
     "Visualization"
   ],
@@ -27,21 +30,16 @@
     "filmmaking",
     "local-first"
   ],
-  "extensionPack": [
-    "neko.neko-engine",
-    "neko.neko-tools",
-    "neko.neko-preview",
-    "neko.neko-cut",
-    "neko.neko-canvas",
-    "neko.neko-agent",
-    "neko.neko-assets"
-  ],
   "scripts": {
-    "vscode:prepublish": "node scripts/validate-manifest.mjs",
+    "vscode:prepublish": "pnpm run compile && node scripts/validate-manifest.mjs",
+    "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
     "test": "node scripts/run-tests.mjs",
-    "package": "vsce package --no-dependencies --allow-missing-repository"
+    "package": "node ../../scripts/package-openneko-platform.mjs"
+  },
+  "dependencies": {
+    "@neko/shared": "workspace:*"
   },
   "devDependencies": {
-    "@vscode/vsce": "^3.9.2"
+    "esbuild": "^0.19.8"
   }
 }

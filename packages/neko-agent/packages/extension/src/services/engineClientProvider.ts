@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 import { EngineClient } from '@neko/neko-client/EngineClient';
+import { resolveNekoExtension } from '@neko/shared/vscode/extension';
 import {
   NEKO_ENGINE_CLIENT_TIMEOUT_MS,
   NEKO_ENGINE_ENSURE_FRAME_SERVER_COMMAND,
@@ -47,9 +48,11 @@ class VSCodeEngineClientProvider implements IEngineClientProvider {
       return this._engineClient;
     }
 
-    const extension = vscode.extensions.getExtension(NEKO_ENGINE_EXTENSION_ID);
+    const extension = resolveNekoExtension(NEKO_ENGINE_EXTENSION_ID, (id) =>
+      vscode.extensions.getExtension(id),
+    );
     if (!extension) {
-      throw new Error(`Extension ${NEKO_ENGINE_EXTENSION_ID} not installed`);
+      throw new Error(`OpenNeko feature ${NEKO_ENGINE_EXTENSION_ID} is unavailable`);
     }
 
     if (!extension.isActive) {

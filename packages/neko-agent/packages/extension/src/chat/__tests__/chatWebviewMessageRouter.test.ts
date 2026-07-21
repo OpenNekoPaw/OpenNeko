@@ -61,6 +61,46 @@ function createCanvasLifecycleDescriptor(capabilityId: string): AgentCapabilityL
   };
 }
 
+function mockCanvasExtension(invoke: ReturnType<typeof vi.fn>): void {
+  vi.mocked(vscode.extensions.getExtension).mockReturnValue({
+    id: 'neko.neko-canvas',
+    isActive: true,
+    exports: {
+      asset: { import: vi.fn(), list: vi.fn(), getById: vi.fn() },
+      authoring: { importAsset: vi.fn() },
+      markdown: { invoke },
+      boards: { project: vi.fn() },
+      canvas: { create: vi.fn(), addShape: vi.fn() },
+      storyboard: { import: vi.fn(), getExecutionSummary: vi.fn() },
+      playback: {
+        getPlan: vi.fn(),
+        getRoutes: vi.fn(),
+        revealWorkspace: vi.fn(),
+        createCutDraftFromRoute: vi.fn(),
+        reorderUnits: vi.fn(),
+      },
+      nodes: {
+        list: vi.fn(),
+        get: vi.fn(),
+        update: vi.fn(),
+        create: vi.fn(),
+        derive: vi.fn(),
+        createConnection: vi.fn(),
+        createComposite: vi.fn(),
+        updateBlock: vi.fn(),
+        extractStructuredContent: vi.fn(),
+        getActiveContext: vi.fn(),
+        applyAgentContent: vi.fn(),
+        generateImage: vi.fn(),
+        generateBatch: vi.fn(),
+        onSelectionChange: vi.fn(),
+      },
+      events: { onDidChangeAssets: vi.fn(), onDidChangeCanvas: vi.fn() },
+    },
+    activate: vi.fn(),
+  } as never);
+}
+
 function createDeps(): ChatWebviewMessageRouterDeps {
   return {
     webview: { postMessage: vi.fn().mockResolvedValue(true) } as any,
@@ -619,14 +659,7 @@ describe('handleChatWebviewMessage', () => {
   it('routes unspecified storyboard Markdown as a normal document without structured fallback', async () => {
     const deps = createDeps();
     const invoke = vi.fn();
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      id: 'neko.neko-canvas',
-      isActive: true,
-      exports: {
-        markdown: { invoke },
-      },
-      activate: vi.fn(),
-    } as any);
+    mockCanvasExtension(invoke);
 
     handleChatWebviewMessage(
       {
@@ -813,14 +846,7 @@ describe('handleChatWebviewMessage', () => {
   it('routes general Canvas authoring handoff through Agent context without choosing Canvas tools', async () => {
     const deps = createDeps();
     const invoke = vi.fn();
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      id: 'neko.neko-canvas',
-      isActive: true,
-      exports: {
-        markdown: { invoke },
-      },
-      activate: vi.fn(),
-    } as any);
+    mockCanvasExtension(invoke);
 
     handleChatWebviewMessage(
       {
@@ -1094,14 +1120,7 @@ describe('handleChatWebviewMessage', () => {
   it('blocks unapproved Markdown production apply before Canvas API mutation', async () => {
     const deps = createDeps();
     const invoke = vi.fn();
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      id: 'neko.neko-canvas',
-      isActive: true,
-      exports: {
-        markdown: { invoke },
-      },
-      activate: vi.fn(),
-    } as any);
+    mockCanvasExtension(invoke);
 
     handleChatWebviewMessage(
       {
@@ -1153,14 +1172,7 @@ describe('handleChatWebviewMessage', () => {
       resolveLifecycleCapabilityDescriptor: vi.fn(() => undefined),
     };
     const invoke = vi.fn();
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      id: 'neko.neko-canvas',
-      isActive: true,
-      exports: {
-        markdown: { invoke },
-      },
-      activate: vi.fn(),
-    } as any);
+    mockCanvasExtension(invoke);
 
     handleChatWebviewMessage(
       {
@@ -1206,14 +1218,7 @@ describe('handleChatWebviewMessage', () => {
   it('fails visibly when Canvas Markdown lifecycle returns an invalid result', async () => {
     const deps = createDeps();
     const invoke = vi.fn().mockResolvedValue({});
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      id: 'neko.neko-canvas',
-      isActive: true,
-      exports: {
-        markdown: { invoke },
-      },
-      activate: vi.fn(),
-    } as any);
+    mockCanvasExtension(invoke);
 
     handleChatWebviewMessage(
       {
@@ -1265,14 +1270,7 @@ describe('handleChatWebviewMessage', () => {
       status: 'created',
       diagnostics: [],
     });
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      id: 'neko.neko-canvas',
-      isActive: true,
-      exports: {
-        markdown: { invoke },
-      },
-      activate: vi.fn(),
-    } as any);
+    mockCanvasExtension(invoke);
 
     handleChatWebviewMessage(
       {
@@ -1328,14 +1326,7 @@ describe('handleChatWebviewMessage', () => {
       diagnostics: [],
       nodeIds: ['scene-1', 'shot-1'],
     });
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      id: 'neko.neko-canvas',
-      isActive: true,
-      exports: {
-        markdown: { invoke },
-      },
-      activate: vi.fn(),
-    } as any);
+    mockCanvasExtension(invoke);
 
     handleChatWebviewMessage(
       {
@@ -1406,14 +1397,7 @@ describe('handleChatWebviewMessage', () => {
         },
       ],
     });
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      id: 'neko.neko-canvas',
-      isActive: true,
-      exports: {
-        markdown: { invoke },
-      },
-      activate: vi.fn(),
-    } as any);
+    mockCanvasExtension(invoke);
 
     handleChatWebviewMessage(
       {
@@ -1468,14 +1452,7 @@ describe('handleChatWebviewMessage', () => {
       diagnostics: [],
       nodeIds: ['scene-1'],
     });
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      id: 'neko.neko-canvas',
-      isActive: true,
-      exports: {
-        markdown: { invoke },
-      },
-      activate: vi.fn(),
-    } as any);
+    mockCanvasExtension(invoke);
 
     handleChatWebviewMessage(
       {

@@ -116,9 +116,9 @@ function validatePackageGroupAlignment(config, groups) {
   const releasePackages = new Set(asArray(packages.buildRelease));
   const devOnlyPackages = new Set(asArray(packages.devOnly));
   const tsPackages = new Set(asArray(packages.tsExtensions));
-  const extensionPack = groups?.extensionPack;
-  if (typeof extensionPack === 'string' && extensionPack.length > 0) {
-    tsPackages.add(extensionPack);
+  const productApplication = groups?.productApplication;
+  if (typeof productApplication !== 'string' || productApplication.length === 0) {
+    errors.push('package-groups.json must define productApplication.');
   }
 
   const stablePackages = new Set(asArray(config.channels?.stable?.packages));

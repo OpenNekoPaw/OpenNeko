@@ -2,9 +2,9 @@
 #
 # Jobs:
 #   1. validate-release: Validate main ancestry and VSIX manifest versions
-#   2. release-ts:      Build + test + package TS-only extensions (ubuntu)
-#   3. release-engine:  Build neko-engine per supported platform
-#   4. create-release:  Collect signed-off artifacts and create GitHub Release
+#   2. release-tests:    Re-run deterministic tests at the validated tag
+#   3. release-openneko: Build one complete OpenNeko VSIX per supported platform
+#   4. create-release:  Publish only the two signed-off platform artifacts
 #
 # Usage:
 #   git tag v0.1.0
@@ -47,9 +47,8 @@ jobs:
       - name: Validate release source
         run: node scripts/validate-release-source.mjs
 
-  # ── TypeScript-only extensions (no native code) ──
-  release-ts:
-    name: Build & Package (TS extensions)
+  release-tests:
+    name: Release Tests
     needs: [validate-release]
     runs-on: ubuntu-latest
     steps:
@@ -65,52 +64,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Build TS-only extensions (skip neko-engine compile — no Rust on ubuntu)
-      - name: Build TS extensions
-        run: pnpm compile:ts-vsix
-
       - run: pnpm test
 
-      # Package each TS extension
-      - name: Package TS extensions
-        run: |
-          {
-            node scripts/read-package-group.mjs packages.tsExtensions
-            node scripts/read-package-group.mjs extensionPack
-          } | while IFS= read -r pkg; do
-            [ -n "$pkg" ] || continue
-            pkg_path="$pkg"
-            if [[ "$pkg_path" != */* ]]; then pkg_path="packages/$pkg_path"; fi
-            if [ -d "$pkg_path" ]; then
-              echo "📦 Packaging $pkg_path..."
-              rm -f "$pkg_path"/*.vsix
-              (cd "$pkg_path" && npx @vscode/vsce package --no-dependencies --allow-missing-repository)
-              if ! compgen -G "$pkg_path/*.vsix" > /dev/null; then
-                echo "::error::Packaging $pkg_path did not produce a new VSIX artifact."
-                exit 1
-              fi
-            fi
-          done
-
-      - name: Collect VSIX artifacts
-        run: |
-          mkdir -p release-artifacts
-          find packages apps -maxdepth 2 -name '*.vsix' -exec cp {} release-artifacts/ \;
-          if ! compgen -G "release-artifacts/*.vsix" > /dev/null; then
-            echo "::error::No TS extension VSIX artifacts were collected."
-            exit 1
-          fi
-
-      - uses: actions/upload-artifact@v6
-        with:
-          name: vsix-ts-extensions
-          path: release-artifacts/*.vsix
-          retention-days: 7
-
-  # ── neko-engine: platform-specific native builds ──
-  release-engine:
-    name: Package neko-engine (${{ matrix.target }})
-    needs: [validate-release]
+  release-openneko:
+    name: Package OpenNeko (${{ matrix.target }})
+    needs: [validate-release, release-tests]
     strategy:
       fail-fast: false
       matrix:
@@ -118,7 +76,7 @@ jobs:
           - target: darwin-arm64
             os: macos-15
             rust-target: aarch64-apple-darwin
-            ffmpeg-install: brew install ffmpeg pkg-config
+            ffmpeg-install: brew untap aws/tap >/dev/null 2>&1 || true; brew install ffmpeg pkg-config
           - target: linux-x64
             os: ubuntu-latest
             rust-target: x86_64-unknown-linux-gnu
@@ -150,36 +108,38 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # vendor/ is gitignored; remove the cargo config that forces vendored sources
       - name: Remove vendor source override
         run: rm -f packages/neko-engine/.cargo/config.toml
         shell: bash
 
-      # Build native addon
       - name: Build host-napi
         working-directory: packages/neko-engine/packages/host-napi
         run: pnpm run build:napi -- --target ${{ matrix.rust-target }}
 
-      # Package platform VSIX (ORT + FFmpeg bundling handled by script)
-      - name: Package platform VSIX
+      - name: Package Engine payload
         working-directory: packages/neko-engine
         run: bash scripts/package-platform.sh ${{ matrix.target }}
 
+      - name: Assemble OpenNeko platform VSIX
+        run: node scripts/package-openneko-platform.mjs --target ${{ matrix.target }}
+
       - uses: actions/upload-artifact@v6
         with:
-          name: vsix-neko-engine-${{ matrix.target }}
-          path: packages/neko-engine/*.vsix
+          name: openneko-vsix-${{ matrix.target }}
+          path: vsix-artifacts/OpenNeko-${{ matrix.target }}-*.vsix
           retention-days: 7
 
   # ── Collect all artifacts and create release ──
   create-release:
     name: Create GitHub Release
-    needs: [release-ts, release-engine]
+    needs: [release-openneko]
     runs-on: ubuntu-latest
     environment: release
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+
       - uses: actions/download-artifact@v8
         with:
           path: release-artifacts
@@ -190,6 +150,11 @@ jobs:
           echo "## Release artifacts:" >> $GITHUB_STEP_SUMMARY
           ls -lh release-artifacts/*.vsix | awk '{print "- " $NF " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
 
+      - name: Validate exact release artifact set
+        env:
+          RELEASE_ARTIFACT_DIRECTORY: release-artifacts
+        run: node scripts/assert-openneko-release-artifacts.mjs
+
       - name: Generate SHA256 manifest
         working-directory: release-artifacts
         run: sha256sum *.vsix > SHA256SUMS
@@ -198,7 +163,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-artifacts/*.vsix
+            release-artifacts/OpenNeko-darwin-arm64-*.vsix
+            release-artifacts/OpenNeko-linux-x64-*.vsix
             release-artifacts/SHA256SUMS
           generate_release_notes: true
           draft: false

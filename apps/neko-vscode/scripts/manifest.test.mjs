@@ -12,28 +12,28 @@ const retainedReleaseExtensions = [
   'neko-engine',
   'neko-tools',
   'neko-preview',
+  'neko-assets',
   'neko-cut',
   'neko-canvas',
   'neko-agent',
-  'neko-assets',
 ];
 
-test('extension pack contains exactly the retained release extensions', () => {
+test('application composition contains exactly the retained release features', () => {
   assert.deepEqual(groups.packages.buildRelease, retainedReleaseExtensions);
-
-  const expected = retainedReleaseExtensions.map((name) => `neko.${name}`);
-  assert.deepEqual(manifest.extensionPack, expected);
-  assert.equal(new Set(manifest.extensionPack).size, manifest.extensionPack.length);
+  assert.equal(new Set(groups.packages.buildRelease).size, retainedReleaseExtensions.length);
 });
 
-test('extension pack remains a pure manifest without runtime activation', () => {
+test('OpenNeko is the single runtime extension rather than an extension pack', () => {
   assert.equal(manifest.displayName, 'OpenNeko');
   assert.equal(manifest.name, 'neko-suite');
   assert.equal(manifest.publisher, 'neko');
-  assert.equal(manifest.main, undefined);
+  assert.equal(manifest.main, './dist/extension.js');
   assert.equal(manifest.browser, undefined);
-  assert.equal(manifest.activationEvents, undefined);
+  assert.deepEqual(manifest.activationEvents, ['onStartupFinished']);
   assert.equal(manifest.contributes, undefined);
+  assert.equal(manifest.extensionPack, undefined);
+  assert.equal(manifest.extensionDependencies, undefined);
+  assert.ok(!manifest.categories.includes('Extension Packs'));
 });
 
 function readJson(path) {

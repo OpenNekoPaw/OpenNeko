@@ -54,8 +54,8 @@ describe('supported release platform orchestration', () => {
       readFile('.github/workflows/release.yml', 'utf8').then(parse),
     ]);
 
-    const ciEngineJob = ciWorkflow.jobs['package-engine-vsix'];
-    const releaseEngineJob = releaseWorkflow.jobs['release-engine'];
+    const ciEngineJob = ciWorkflow.jobs['package-openneko-vsix'];
+    const releaseEngineJob = releaseWorkflow.jobs['release-openneko'];
 
     assert.deepEqual(projectMatrix(ciEngineJob), EXPECTED_MATRIX);
     assert.deepEqual(projectMatrix(releaseEngineJob), EXPECTED_MATRIX);
@@ -66,6 +66,8 @@ describe('supported release platform orchestration', () => {
     ]);
     assert.doesNotMatch(JSON.stringify(ciWorkflow), /windows-latest|win32-x64/u);
     assert.doesNotMatch(JSON.stringify(releaseWorkflow), /windows-latest|win32-x64/u);
+    assert.equal(ciWorkflow.jobs['package-engine-vsix'], undefined);
+    assert.equal(releaseWorkflow.jobs['release-engine'], undefined);
   });
 
   it('keeps the native Engine out of TypeScript-only VSIX packaging', async () => {

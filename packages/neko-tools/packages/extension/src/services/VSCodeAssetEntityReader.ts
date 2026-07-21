@@ -1,5 +1,11 @@
 import * as vscode from 'vscode';
-import { NEKO_EXTENSION_IDS, type AssetEntity, type NekoAssetsAPI } from '@neko/shared';
+import {
+  isNekoAssetsAPI,
+  NEKO_EXTENSION_IDS,
+  type AssetEntity,
+  type NekoAssetsAPI,
+} from '@neko/shared';
+import { resolveNekoExtension } from '@neko/shared/vscode/extension';
 import type { IAssetEntityReader } from '../contracts/IAssetEntityReader';
 
 export class VSCodeAssetEntityReader implements IAssetEntityReader {
@@ -13,16 +19,16 @@ export class VSCodeAssetEntityReader implements IAssetEntityReader {
   }
 
   private async getAssetsApi(): Promise<NekoAssetsAPI> {
-    const extension = vscode.extensions.getExtension<NekoAssetsAPI>(NEKO_EXTENSION_IDS.NEKO_ASSETS);
+    const extension = resolveNekoExtension(NEKO_EXTENSION_IDS.NEKO_ASSETS, (id) =>
+      vscode.extensions.getExtension(id),
+    );
     if (!extension) {
       throw new Error('Neko Assets extension API is unavailable.');
     }
-    if (!extension.isActive) {
-      await extension.activate();
-    }
-    if (!extension.exports || typeof extension.exports.getAllEntities !== 'function') {
+    const api = extension.isActive ? extension.exports : await extension.activate();
+    if (!isNekoAssetsAPI(api)) {
       throw new Error('Neko Assets extension API does not expose getAllEntities().');
     }
-    return extension.exports;
+    return api;
   }
 }

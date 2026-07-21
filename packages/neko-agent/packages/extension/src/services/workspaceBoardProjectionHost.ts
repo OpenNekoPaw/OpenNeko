@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import {
   CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
   createSafeCanvasWorkspaceProjectionDiagnostic,
+  isNekoCanvasAPI,
   NEKO_EXTENSION_IDS,
   type CanvasWorkspaceDeliveryBatch,
   type CanvasWorkspaceProjectionArtifact,
@@ -9,6 +10,7 @@ import {
   type CanvasWorkspaceProjectionResult,
   type NekoCanvasAPI,
 } from '@neko/shared';
+import { resolveNekoExtension } from '@neko/shared/vscode/extension';
 import type { CreatorVisibleArtifactCandidate } from '@neko/agent/runtime';
 
 export interface WorkspaceBoardProjectionHostOptions {
@@ -119,10 +121,12 @@ function toProjectionArtifact(
 }
 
 async function getCanvasApi(): Promise<Pick<NekoCanvasAPI, 'boards'> | undefined> {
-  const extension = vscode.extensions.getExtension<NekoCanvasAPI>(NEKO_EXTENSION_IDS.NEKO_CANVAS);
+  const extension = resolveNekoExtension(NEKO_EXTENSION_IDS.NEKO_CANVAS, (id) =>
+    vscode.extensions.getExtension(id),
+  );
   if (!extension) return undefined;
-  if (!extension.isActive) await extension.activate();
-  return extension.exports;
+  const api = extension.isActive ? extension.exports : await extension.activate();
+  return isNekoCanvasAPI(api) ? api : undefined;
 }
 
 function readWorkspaceUris(): readonly string[] {
