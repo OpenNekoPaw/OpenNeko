@@ -30,3 +30,9 @@ Execution rule: this is the next canonical infrastructure migration after `retai
 - [x] 5.1 Synchronize cache/content/package documentation with Host-private derived storage and product semantic representations.
 - [x] 5.2 Run focused representation/cache/document/processor tests and affected package builds, then `pnpm build`, `pnpm test`, and `pnpm check`.
 - [x] 5.3 Run legacy/unused/dependency gates and isolated Extension scenarios for thumbnail, proxy/waveform, document entry/raster, processor candidate, GC, and path non-disclosure.
+
+## 6. Residual Public Surface Cleanup
+
+- [x] 6.1 Confirm the document cache provider has no production consumers while preserving resource-ref projection consumers.
+- [x] 6.2 Remove provider/materialization public exports and tests; retain pure document resource identity helpers under a storage-neutral module.
+- [x] 6.3 Run focused shared/Canvas/TUI tests, boundary and unused gates, then the repository build, test, and check gates.

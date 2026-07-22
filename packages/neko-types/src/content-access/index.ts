@@ -25,17 +25,10 @@ export type {
 } from '../vscode/extension/resource-cache-service';
 
 export {
-  DOCUMENT_RESOURCE_CACHE_PROVIDER_ID,
-  DocumentResourceCacheProvider,
   createDocumentResourceRef,
   createDocumentResourceRefFromArchiveRef,
-} from '../vscode/extension/document-resource-cache-provider';
-export type {
-  CreateDocumentResourceRefInput,
-  DocumentEntryReader,
-  DocumentResourceCacheFsOps,
-  DocumentResourceCacheProviderOptions,
-} from '../vscode/extension/document-resource-cache-provider';
+} from '../vscode/extension/document-resource-ref';
+export type { CreateDocumentResourceRefInput } from '../vscode/extension/document-resource-ref';
 export {
   GENERATED_RESOURCE_CACHE_PROVIDER_ID,
   GeneratedAssetDerivativeResourceCacheProvider,

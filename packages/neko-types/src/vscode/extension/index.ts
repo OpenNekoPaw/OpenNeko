@@ -120,17 +120,10 @@ export type {
   ThumbnailResourceGeneratorResult,
 } from './resource-cache-providers';
 export {
-  DOCUMENT_RESOURCE_CACHE_PROVIDER_ID,
-  DocumentResourceCacheProvider,
   createDocumentResourceRef,
   createDocumentResourceRefFromArchiveRef,
-} from './document-resource-cache-provider';
-export type {
-  CreateDocumentResourceRefInput,
-  DocumentEntryReader,
-  DocumentResourceCacheFsOps,
-  DocumentResourceCacheProviderOptions,
-} from './document-resource-cache-provider';
+} from './document-resource-ref';
+export type { CreateDocumentResourceRefInput } from './document-resource-ref';
 export {
   contractHostContentMediaPath,
   createHostContentMediaPathContext,
