@@ -12,6 +12,7 @@
     "@ai-sdk/provider": "^3.0.8",
     "@neko-agent/types": "workspace:*",
     "@neko/shared": "workspace:*",
+    "sharp": "^0.34.0",
     "undici": "^7.16.0"
   },
   "devDependencies": {

@@ -14,7 +14,6 @@ const config: KnipConfig = {
     '@fission-ai/openspec', // Used by the `openspec` CLI invoked in development workflow.
     '@types/vscode', // Provided by VSCode runtime
     'esbuild', // Used as CLI bundler, not imported
-    'sharp', // Native binary, loaded at runtime
     '@img/sharp-wasm32', // Sharp WASM fallback
     'clsx',
   ],

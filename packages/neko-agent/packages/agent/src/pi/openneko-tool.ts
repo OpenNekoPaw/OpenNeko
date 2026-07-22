@@ -1,4 +1,8 @@
 import {
+  AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES,
+  AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS,
+  AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES,
+  AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES,
   TOOL_NAMES_MEDIA,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
@@ -34,9 +38,30 @@ export interface PiToolResultAssetPayload {
   readonly mimeType?: string;
 }
 
+export type PiToolResultImageBatchLayout = 'overview' | 'detail';
+
+export interface PiToolResultImageBatchItem {
+  readonly payload: PiToolResultAssetPayload;
+  /** Zero-based indexes into the input ref array, in the same order as labeled tiles. */
+  readonly sourceIndexes: readonly number[];
+}
+
+export interface PiToolResultImageBatchOptions {
+  readonly layout: PiToolResultImageBatchLayout;
+}
+
 export interface PiToolResultAssetLoader {
   load(ref: PerceptualAssetRef): Promise<PiToolResultAssetPayload>;
+  loadBatch?(
+    refs: readonly PerceptualAssetRef[],
+    options: PiToolResultImageBatchOptions,
+  ): Promise<readonly PiToolResultImageBatchItem[]>;
 }
+
+export const MAX_PI_TOOL_RESULT_SOURCE_IMAGES = AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES;
+export const MAX_PI_TOOL_RESULT_IMAGE_PAYLOADS = AGENT_IMAGE_TRANSPORT_MAX_PAYLOADS;
+export const MAX_PI_TOOL_RESULT_IMAGE_PAYLOAD_BYTES = AGENT_IMAGE_TRANSPORT_MAX_PAYLOAD_BYTES;
+export const MAX_PI_TOOL_RESULT_IMAGE_TOTAL_BYTES = AGENT_IMAGE_TRANSPORT_MAX_TOTAL_BYTES;
 
 export function resolveOpenNekoToolModelPurpose(
   tool: Pick<Tool, 'name'>,
@@ -239,20 +264,108 @@ async function projectToolResultContent(
     throw new Error('Pi image Tool result requires a Host asset loader.');
   }
 
-  for (const attachment of imageAttachments) {
+  if (imageAttachments.length > MAX_PI_TOOL_RESULT_SOURCE_IMAGES) {
+    throw new Error(
+      `Pi image Tool result contains ${imageAttachments.length} source images; maximum is ${MAX_PI_TOOL_RESULT_SOURCE_IMAGES}.`,
+    );
+  }
+  const refs = imageAttachments.map((attachment) => {
     if (!attachment.assetRef) {
       throw new Error('Pi image Tool result requires a stable attachment assetRef.');
     }
-    const payload = await assetLoader.load(attachment.assetRef);
-    if (payload.kind !== 'image') {
-      throw new Error(`Pi image Tool result loader returned ${payload.kind} content.`);
+    return attachment.assetRef;
+  });
+  const projected = await projectProviderImagePayloads(result, refs, assetLoader);
+  if (refs.length > 1) {
+    content.push({ type: 'text', text: formatImageBatchManifest(projected, refs) });
+  }
+  let totalBytes = 0;
+  for (const item of projected) {
+    if (item.payload.kind !== 'image') {
+      throw new Error(`Pi image Tool result loader returned ${item.payload.kind} content.`);
     }
-    content.push(parsePiImageContent(payload));
+    const parsed = parsePiImageContent(item.payload);
+    if (parsed.byteLength > MAX_PI_TOOL_RESULT_IMAGE_PAYLOAD_BYTES) {
+      throw new Error(
+        `Pi image Tool result payload is ${parsed.byteLength} bytes; maximum is ${MAX_PI_TOOL_RESULT_IMAGE_PAYLOAD_BYTES}.`,
+      );
+    }
+    totalBytes += parsed.byteLength;
+    if (totalBytes > MAX_PI_TOOL_RESULT_IMAGE_TOTAL_BYTES) {
+      throw new Error(
+        `Pi image Tool result batch is ${totalBytes} bytes; maximum is ${MAX_PI_TOOL_RESULT_IMAGE_TOTAL_BYTES}.`,
+      );
+    }
+    content.push(parsed.content);
   }
   return content;
 }
 
-function parsePiImageContent(payload: PiToolResultAssetPayload): ImageContent {
+async function projectProviderImagePayloads(
+  result: ToolResult,
+  refs: readonly PerceptualAssetRef[],
+  assetLoader: PiToolResultAssetLoader,
+): Promise<readonly PiToolResultImageBatchItem[]> {
+  if (refs.length === 1) {
+    return [{ payload: await assetLoader.load(refs[0]!), sourceIndexes: [0] }];
+  }
+  if (!assetLoader.loadBatch) {
+    throw new Error('Pi multi-image Tool result requires a Host batch image projector.');
+  }
+  const batches = await assetLoader.loadBatch(refs, {
+    layout: resolveImageBatchLayout(result.data),
+  });
+  if (batches.length === 0 || batches.length > MAX_PI_TOOL_RESULT_IMAGE_PAYLOADS) {
+    throw new Error(
+      `Pi image Tool result produced ${batches.length} provider payloads; expected 1-${MAX_PI_TOOL_RESULT_IMAGE_PAYLOADS}.`,
+    );
+  }
+  validateBatchCoverage(batches, refs.length);
+  return batches;
+}
+
+function resolveImageBatchLayout(data: unknown): PiToolResultImageBatchLayout {
+  const analysis =
+    typeof data === 'object' && data !== null && !Array.isArray(data)
+      ? (data as Record<string, unknown>)['analysis']
+      : undefined;
+  return analysis === 'ocr' || analysis === 'panels' || analysis === 'custom'
+    ? 'detail'
+    : 'overview';
+}
+
+function validateBatchCoverage(
+  batches: readonly PiToolResultImageBatchItem[],
+  sourceCount: number,
+): void {
+  const indexes = batches.flatMap((batch) => [...batch.sourceIndexes]);
+  const expected = Array.from({ length: sourceCount }, (_, index) => index);
+  if (indexes.length !== expected.length || indexes.some((index, position) => index !== position)) {
+    throw new Error('Pi image Tool result batch projection did not preserve every source image.');
+  }
+}
+
+function formatImageBatchManifest(
+  batches: readonly PiToolResultImageBatchItem[],
+  refs: readonly PerceptualAssetRef[],
+): string {
+  const lines = ['Contact-sheet tile manifest (labels are local to each sheet):'];
+  batches.forEach((batch, batchIndex) => {
+    batch.sourceIndexes.forEach((sourceIndex, tileIndex) => {
+      const ref = refs[sourceIndex];
+      if (!ref) throw new Error(`Missing image source ${sourceIndex + 1} for batch manifest.`);
+      lines.push(
+        `sheet ${batchIndex + 1}, tile ${tileIndex + 1} = ${ref.label ?? ref.assetId} [${ref.assetId}]`,
+      );
+    });
+  });
+  return lines.join('\n');
+}
+
+function parsePiImageContent(payload: PiToolResultAssetPayload): {
+  readonly content: ImageContent;
+  readonly byteLength: number;
+} {
   const match = /^data:([^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/u.exec(payload.url);
   if (!match) {
     throw new Error('Pi image Tool result requires a base64 data URL.');
@@ -262,5 +375,8 @@ function parsePiImageContent(payload: PiToolResultAssetPayload): ImageContent {
   if (!data || !mimeType?.startsWith('image/')) {
     throw new Error('Pi image Tool result requires image MIME type and base64 data.');
   }
-  return { type: 'image', data, mimeType };
+  return {
+    content: { type: 'image', data, mimeType },
+    byteLength: Buffer.byteLength(data, 'base64'),
+  };
 }

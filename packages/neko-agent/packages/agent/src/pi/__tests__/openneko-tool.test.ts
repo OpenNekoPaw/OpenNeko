@@ -9,6 +9,9 @@ import { Value } from 'typebox/value';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  MAX_PI_TOOL_RESULT_IMAGE_PAYLOAD_BYTES,
+  MAX_PI_TOOL_RESULT_IMAGE_TOTAL_BYTES,
+  MAX_PI_TOOL_RESULT_SOURCE_IMAGES,
   projectOpenNekoTool,
   OpenNekoPiToolExecutionError,
   resolveOpenNekoToolModelPurpose,
@@ -293,6 +296,161 @@ describe('OpenNeko tool projection to Pi', () => {
       details: expect.objectContaining({ success: true, data: { imageCount: 1 } }),
     });
     expect(load).toHaveBeenCalledWith(assetRef);
+  });
+
+  it('uses one Host batch projection for multiple source images and preserves ordered coverage', async () => {
+    const refs = [0, 1].map((index) => ({
+      assetId: `page-${index + 1}`,
+      uri: `content:page-${index + 1}`,
+      mimeType: 'image/png',
+    }));
+    const load = vi.fn(async () => {
+      throw new Error('single-image loading must not run');
+    });
+    const loadBatch = vi.fn(async () => [
+      {
+        payload: {
+          kind: 'image' as const,
+          url: 'data:image/jpeg;base64,Y29udGFjdC1zaGVldA==',
+          mimeType: 'image/jpeg',
+        },
+        sourceIndexes: [0, 1],
+      },
+    ]);
+    const projected = projectOpenNekoTool(
+      tool({
+        execute: async () => ({
+          success: true,
+          data: { imageCount: 2, analysis: 'storyboard' },
+          attachments: refs.map((assetRef) => ({
+            type: 'image' as const,
+            path: assetRef.uri,
+            assetRef,
+          })),
+        }),
+      }),
+      { assetLoader: { load, loadBatch } },
+    );
+
+    const result = await projected.execute({ args: {}, context });
+
+    expect(result.content).toEqual([
+      { type: 'text', text: '{"imageCount":2,"analysis":"storyboard"}' },
+      {
+        type: 'text',
+        text: [
+          'Contact-sheet tile manifest (labels are local to each sheet):',
+          'sheet 1, tile 1 = page-1 [page-1]',
+          'sheet 1, tile 2 = page-2 [page-2]',
+        ].join('\n'),
+      },
+      { type: 'image', data: 'Y29udGFjdC1zaGVldA==', mimeType: 'image/jpeg' },
+    ]);
+    expect(load).not.toHaveBeenCalled();
+    expect(loadBatch).toHaveBeenCalledWith(refs, { layout: 'overview' });
+  });
+
+  it('rejects more than five source images before Host batch projection', async () => {
+    const refs = Array.from({ length: MAX_PI_TOOL_RESULT_SOURCE_IMAGES + 1 }, (_, index) => ({
+      assetId: `page-${index + 1}`,
+      uri: `content:page-${index + 1}`,
+      mimeType: 'image/png',
+    }));
+    const loadBatch = vi.fn();
+    const projected = projectOpenNekoTool(
+      tool({
+        execute: async () => ({
+          success: true,
+          data: { imageCount: refs.length, analysis: 'storyboard' },
+          attachments: refs.map((assetRef) => ({
+            type: 'image' as const,
+            path: assetRef.uri,
+            assetRef,
+          })),
+        }),
+      }),
+      { assetLoader: { load: vi.fn(), loadBatch } },
+    );
+
+    await expect(projected.execute({ args: {}, context })).rejects.toThrow(
+      `maximum is ${MAX_PI_TOOL_RESULT_SOURCE_IMAGES}`,
+    );
+    expect(loadBatch).not.toHaveBeenCalled();
+  });
+
+  it('rejects an oversized provider-bound image before the next model request', async () => {
+    const oversized = Buffer.alloc(MAX_PI_TOOL_RESULT_IMAGE_PAYLOAD_BYTES + 1).toString('base64');
+    const projected = projectOpenNekoTool(
+      tool({
+        execute: async () => ({
+          success: true,
+          data: { imageCount: 1 },
+          attachments: [
+            {
+              type: 'image',
+              path: 'content:page-1',
+              assetRef: {
+                assetId: 'page-1',
+                uri: 'content:page-1',
+                mimeType: 'image/jpeg',
+              },
+            },
+          ],
+        }),
+      }),
+      {
+        assetLoader: {
+          load: async () => ({
+            kind: 'image',
+            url: `data:image/jpeg;base64,${oversized}`,
+            mimeType: 'image/jpeg',
+          }),
+        },
+      },
+    );
+
+    await expect(projected.execute({ args: {}, context })).rejects.toThrow(
+      `maximum is ${MAX_PI_TOOL_RESULT_IMAGE_PAYLOAD_BYTES}`,
+    );
+  });
+
+  it('rejects a provider-bound image batch that exceeds the total byte budget', async () => {
+    const refs = Array.from({ length: 4 }, (_, index) => ({
+      assetId: `page-${index + 1}`,
+      uri: `content:page-${index + 1}`,
+      mimeType: 'image/jpeg',
+    }));
+    const payloadBytes = Math.floor(MAX_PI_TOOL_RESULT_IMAGE_TOTAL_BYTES / 4) + 1;
+    const data = Buffer.alloc(payloadBytes).toString('base64');
+    const projected = projectOpenNekoTool(
+      tool({
+        execute: async () => ({
+          success: true,
+          data: { imageCount: refs.length },
+          attachments: refs.map((assetRef) => ({
+            type: 'image' as const,
+            path: assetRef.uri,
+            assetRef,
+          })),
+        }),
+      }),
+      {
+        assetLoader: {
+          load: async () => {
+            throw new Error('single-image loading must not run');
+          },
+          loadBatch: async () =>
+            refs.map((_, index) => ({
+              payload: { kind: 'image', url: `data:image/jpeg;base64,${data}` },
+              sourceIndexes: [index],
+            })),
+        },
+      },
+    );
+
+    await expect(projected.execute({ args: {}, context })).rejects.toThrow(
+      `maximum is ${MAX_PI_TOOL_RESULT_IMAGE_TOTAL_BYTES}`,
+    );
   });
 
   it('fails visibly when an image attachment has no Host loader', async () => {

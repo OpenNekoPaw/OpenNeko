@@ -12,6 +12,8 @@
 - 保持 Pi、Extension ToolRegistry 和 TUI 对同一 schema 的判断一致。
 - 让模型看到可修正的 field-level validation diagnostic，并可通过现有 ReAct Tool 失败反馈重试。
 - 用合成 EPUB 证明 `ReadDocument -> ReadImage -> native multimodal` 路径。
+- 限制一次 ReadImage 原生多模态 continuation 的源图数量和编码字节，并让多图使用带可追溯编号的 contact sheet。
+- 让用户在 Tool 卡片中看到实际选中图片的缩略图，即使结果只包含 canonical `ContentLocator`。
 
 **Non-Goals:**
 
@@ -19,6 +21,7 @@
 - 修改 ContentAccess、ResourceCache、document reader、媒体库 path 或缓存物化。
 - 引入 session-local batch handle、工具结果索引或第二套文档图片访问接口。
 - 让 `ReadImage` 自己调用视觉模型或返回 OCR/画面描述。
+- 把 contact sheet 当作新的持久素材、派生事实或 Webview-owned 文件。
 
 ## Decisions
 
@@ -56,14 +59,34 @@
 
 同一项携带多个稳定身份时，不能把无效的新 canonical identity 当作“字段不存在”并改走旧身份。该行为会掩盖 ReadDocument/模型参数漂移，并让最终错误错误地归因于 Host source resolution。调用方可依据精确 validation diagnostic 修正 locator；运行时不得从 sibling ref 猜测缺失的 workspace source/path。
 
+### 7. Provider 图片传输使用硬预算
+
+`ReadImage` 每次最多选择 5 个源图。Pi Tool-result bridge 在调用 provider 前强制校验最多 4 个编码 image payload、每个 payload 最多 4 MiB、整批最多 12 MiB；超过预算必须 fail-visible，不能截断后伪装成完整分析。
+
+源图加载上限与 provider 编码预算是不同边界：ContentAccess 保护单个本地输入，Host 图片传输器负责旋转、缩放、JPEG 编码和最终 Base64 预算。单图也必须通过同一有界归一化路径，不能把原始 20 MiB 图片直接交给 provider。
+
+### 8. 多图由 Host 生成可追溯 contact sheet
+
+当 Tool result 含多个 image attachment 时，Pi bridge 调用 Host 注入的 batch projection，而不是逐张形成 provider image part。`storyboard`/`describe` 使用 overview sheet；`ocr`/`panels`/`custom` 使用更少图片一组的 detail sheets。每个 tile 必须带从 1 开始的顺序标签，模型可见文本 manifest 保存 `tile -> assetId/label` 映射。
+
+contact sheet 只存在于当次 provider continuation，不写工作区、不进入 ResourceRef、不会替代 Tool result 中逐项 attachment/perception card。Host 缺少 batch 能力时，多图调用必须 fail-visible；不得静默退回无预算的逐图发送。
+
+### 9. Webview 缩略图使用独立的 Host 投影
+
+Tool result 的 canonical identity 仍是 `ContentLocator`/ResourceRef。Extension Host 在发送 live Tool result 和恢复历史消息时，将 image attachment 的稳定 ref 投影为小尺寸 WebP/JPEG preview data URI；该字段只属于 Webview message projection，不进入持久历史或模型输入。
+
+Webview presenter 必须按 attachment/result index 把 preview 与 `data.images[n]` 对齐，并接受 locator-only ReadImage 结果。UI 显示实际选中的每一项及其顺序/标签；预览生成失败时保留可见占位和明确 diagnostic，不能把整项过滤消失。
+
 ## Risks / Trade-offs
 
 - **[模型仍可能首次生成无效参数]** → schema 在执行前提供精确 field diagnostic；真实 evaluation 验证 ReAct 能修正或至少 fail-visible。
 - **[递归 validator 影响其他工具]** → 保持 JSON Schema 标准语义，补通用单元测试并运行 Tool registry/Agent gates。
 - **[provider 对 anyOf 支持差异]** → Pi TypeBox 和 ToolRegistry 均保留本地校验；provider schema rejection 与 runtime validation failure分别可观测。
-- **[批量一个坏项导致全失败]** → 能由同项冗余身份唯一恢复时先规范化；source 缺失、路径冲突或无 entry 身份仍保持原子失败，避免用户请求 10 页却只分析 9 页而不知情。
+- **[批量一个坏项导致全失败]** → 能由同项冗余身份唯一恢复时先规范化；source 缺失、路径冲突或无 entry 身份仍保持原子失败，避免用户请求 5 页却只分析 4 页而不知情。
 - **[宿主未注入图片 loader]** → image attachment 使 Tool fail-visible；不返回纯文本成功，也不从 path/cache 自行读取。
 - **[批量中只有后续 locator 损坏]** → diagnostic 携带 `images[n]`；整批在内容加载前失败，不用旧 ref 产出部分成功结果。
+- **[拼图降低小字可读性]** → overview/detail 两种固定策略；Tool result 保留逐项引用，用户可缩小批次再次读取，不宣称 contact sheet 适合像素级 OCR。
+- **[Webview 预览扩大消息体]** → 只生成小尺寸有损缩略图，live/history 投影按 locator 去重，data URI 不持久化。
 
 ## Migration Plan
 

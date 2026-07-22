@@ -7,6 +7,14 @@
 
 export { resolveProvider } from './resolve';
 export type { ResolveProviderOptions } from './resolve';
+export {
+  composeProviderImageBatches,
+  normalizeProviderImage,
+  normalizeProviderImageDataUri,
+  type ProviderImageBatchLayout,
+  type ProviderImageBatchResult,
+  type ProviderImageBatchSource,
+} from './image-batch-transport';
 export type { ProviderConfig, ResolvedProvider, ResolvedProviderSource } from './types';
 export { createNewAPIProvider } from './providers/newapi';
 export {

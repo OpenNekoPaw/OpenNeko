@@ -140,6 +140,7 @@ export * from './tool-category';
 // Perception tool contracts (Agent-first optional evidence providers)
 export * from './perception-tool';
 export * from './perception-card';
+export * from './agent-image-transport';
 
 // Tool injection types (three-layer injection mechanism)
 export * from './tool-injection';

@@ -33,7 +33,8 @@ const entries = [
   <manifest>
     <item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="page" href="page.xhtml" media-type="application/xhtml+xml"/>
-    <item id="image" href="images/page.png" media-type="image/png"/>
+    <item id="image-1" href="images/page-1.png" media-type="image/png"/>
+    <item id="image-2" href="images/page-2.png" media-type="image/png"/>
   </manifest>
   <spine toc="toc">
     <itemref idref="page"/>
@@ -62,17 +63,18 @@ const entries = [
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
   <head><title>Page</title></head>
-  <body><div><img src="images/page.png" alt="synthetic page"/></div></body>
+  <body><div><img src="images/page-1.png" alt="synthetic page 1"/><img src="images/page-2.png" alt="synthetic page 2"/></div></body>
 </html>
 `),
   ],
-  ['OEBPS/images/page.png', createSyntheticPng()],
+  ['OEBPS/images/page-1.png', createSyntheticPng('N7Q4', false)],
+  ['OEBPS/images/page-2.png', createSyntheticPng('Q47N', true)],
 ];
 
 await fs.mkdir(dirname(output), { recursive: true });
 await fs.writeFile(output, createStoredZip(entries));
 
-function createSyntheticPng() {
+function createSyntheticPng(code, alternatePalette) {
   const width = 192;
   const height = 128;
   const stride = 1 + width * 4;
@@ -83,7 +85,17 @@ function createSyntheticPng() {
     for (let x = 0; x < width; x += 1) {
       const offset = row + 1 + x * 4;
       const diagonal = Math.abs(y - (height - 1 - (x * height) / width)) < 7;
-      const color = diagonal ? [250, 220, 20] : x < width / 3 ? [20, 180, 80] : [220, 40, 150];
+      const color = alternatePalette
+        ? diagonal
+          ? [30, 220, 240]
+          : x < width / 3
+            ? [245, 120, 20]
+            : [80, 60, 210]
+        : diagonal
+          ? [250, 220, 20]
+          : x < width / 3
+            ? [20, 180, 80]
+            : [220, 40, 150];
       pixels[offset] = color[0];
       pixels[offset + 1] = color[1];
       pixels[offset + 2] = color[2];
@@ -91,7 +103,7 @@ function createSyntheticPng() {
     }
   }
   fillRect(pixels, stride, 6, 34, 180, 58, [12, 12, 12, 255]);
-  drawPixelCode(pixels, stride, 'N7Q4', 11, 45, 5);
+  drawPixelCode(pixels, stride, code, 11, 45, 5);
 
   const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
   const header = Buffer.alloc(13);

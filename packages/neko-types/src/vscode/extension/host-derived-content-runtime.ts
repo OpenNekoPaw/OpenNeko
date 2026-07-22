@@ -15,7 +15,10 @@ import type {
   ResourceCacheSettings,
   ResourceCacheStats,
 } from '../../types';
-import { HostContentRepresentationService } from './content-representation-service';
+import {
+  HostContentRepresentationService,
+  type ContentRepresentationFileOps,
+} from './content-representation-service';
 import {
   resolveResourceCacheQuotaPolicy,
   type ResourceCacheGcResult,
@@ -23,7 +26,6 @@ import {
   type ResourceCacheService,
   VSCodeResourceCacheService,
 } from './resource-cache-service';
-import type { ResourceCacheFileOps } from './resource-cache-providers';
 import {
   createDefaultLocalResourceAccessService,
   type DefaultLocalResourceAccessServiceOptions,
@@ -51,7 +53,7 @@ export interface CreateHostDerivedContentRuntimeOptions {
   readonly localResourceAccessOptions?: Partial<DefaultLocalResourceAccessServiceOptions>;
   readonly extraLocalResourceRootProviders?: readonly LocalResourceRootProvider[];
   readonly representationGenerators?: readonly ContentRepresentationGenerator[];
-  readonly representationFileOps?: ResourceCacheFileOps;
+  readonly representationFileOps?: ContentRepresentationFileOps;
   readonly settings?: ResourceCacheSettings;
   readonly runStartupMaintenance?: boolean;
   readonly logger?: ResourceCacheLogger;

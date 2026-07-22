@@ -1,5 +1,6 @@
 import * as path from 'path';
 import {
+  AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES,
   createResourceFingerprint,
   createResourceRef,
   contentLocatorKey,
@@ -32,7 +33,7 @@ import {
 import { probeImageMetadata, type ImageMetadata } from './image-metadata';
 
 export const DEFAULT_READ_IMAGE_LIMIT = 4;
-export const MAX_READ_IMAGE_LIMIT = 16;
+export const MAX_READ_IMAGE_LIMIT = AGENT_IMAGE_TRANSPORT_MAX_SOURCE_IMAGES;
 export const MAX_READ_IMAGE_BYTES = 20 * 1024 * 1024;
 export const READ_IMAGE_MODEL_ANALYSIS_UNSUPPORTED =
   'ReadImage no longer performs model-backed vision analysis. Use metadata mode to expose image resources, then let the selected chat model analyze them through the native multimodal Agent turn. Future external vision-model tools must use a separate tool name.';

@@ -5,13 +5,14 @@
   "caseGroup": "regression",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Read a committed synthetic EPUB image through its canonical document-entry contentLocator and deliver the loaded image to the native multimodal Pi turn.",
+    "userBehavior": "Read two committed synthetic EPUB images through canonical document-entry contentLocators and deliver one bounded contact sheet to the native multimodal Pi turn.",
     "canonicalPath": [
       "TUI input queue",
       "Pi Agent Tool schema",
       "ReadDocument imageInfo document-entry contentLocator",
       "ReadImage canonical content locator validation",
       "ReadImage direct document-entry content read",
+      "Host labeled contact-sheet composition",
       "native multimodal Pi turn",
       "terminal answer"
     ],
@@ -21,6 +22,7 @@
       "provider fallback after canonical content loading",
       "conflicting outer and nested entry paths",
       "cache or scratch path",
+      "one provider image part per source page",
       "textual Tool imitation"
     ],
     "observables": [
@@ -31,7 +33,7 @@
         "required": true
       }
     ],
-    "expectedResult": "ReadDocument returns the synthetic page contentLocator, ReadImage preserves and directly reads that identity, and the native multimodal turn describes the image before the final marker.",
+    "expectedResult": "ReadDocument returns two synthetic page contentLocators, ReadImage preserves and directly reads both identities, and the native multimodal turn identifies both contact-sheet tiles before the final marker.",
     "expectedFailure": "Missing or conflicting entry identity, whole-archive or fabricated-ref loading, failed Tool execution, runtime diagnostics, or a missing visual answer fails visibly."
   },
   "fixtureRefs": ["document-image-workspace"],
@@ -41,7 +43,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "严格执行两步文档图片读取：先调用 ReadDocument 一次，以 content mode 读取工作区相对路径 synthetic-document.epub，include_images=true、max_images=1；再把返回的 imageInfo[0] 原样作为 ReadImage.images[0]，保留 contentLocator 的 kind、source.path 和 entryPath，mode=metadata、max_images=1。不要改写 contentLocator，不要传 resourceRef、整本 EPUB、裸 entryPath、缓存路径或临时路径。根据 ReadImage 交付的原生图像上下文，写出图中黑色区域里的四字符代码，再简短说明页面颜色，最后单独输出 DOCUMENT_IMAGE_NATIVE_OK。"
+      "prompt": "严格执行两步文档图片读取：先调用 ReadDocument 一次，以 content mode 读取工作区相对路径 synthetic-document.epub，include_images=true、max_images=2；再把返回的 imageInfo[0] 和 imageInfo[1] 原样作为 ReadImage.images[0] 和 images[1]，保留每项 contentLocator 的 kind、source.path 和 entryPath，analysis=storyboard、mode=metadata、max_images=2。不要改写 contentLocator，不要传 resourceRef、整本 EPUB、裸 entryPath、缓存路径或临时路径。根据 ReadImage 交付的原生 contact sheet，按 tile 1、tile 2 顺序写出两个黑色区域里的四字符代码，再简短说明两页主色，最后单独输出 DOCUMENT_IMAGE_NATIVE_OK。"
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
   ],
@@ -65,14 +67,22 @@
       "name": "ReadDocument",
       "status": "success",
       "resultIncludes": {
-        "imageCount": 1,
+        "imageCount": 2,
         "imageInfo": [
           {
-            "entryPath": "OEBPS/images/page.png",
+            "entryPath": "OEBPS/images/page-1.png",
             "contentLocator": {
               "kind": "document-entry",
               "source": { "kind": "workspace-file", "path": "synthetic-document.epub" },
-              "entryPath": "OEBPS/images/page.png"
+              "entryPath": "OEBPS/images/page-1.png"
+            }
+          },
+          {
+            "entryPath": "OEBPS/images/page-2.png",
+            "contentLocator": {
+              "kind": "document-entry",
+              "source": { "kind": "workspace-file", "path": "synthetic-document.epub" },
+              "entryPath": "OEBPS/images/page-2.png"
             }
           }
         ]
@@ -86,14 +96,22 @@
       "status": "success",
       "resultIncludes": {
         "mode": "metadata",
-        "imageCount": 1,
+        "analysis": "storyboard",
+        "imageCount": 2,
+        "imagesTruncated": false,
         "images": [
           {
-            "entryPath": "OEBPS/images/page.png",
             "contentLocator": {
               "kind": "document-entry",
               "source": { "kind": "workspace-file", "path": "synthetic-document.epub" },
-              "entryPath": "OEBPS/images/page.png"
+              "entryPath": "OEBPS/images/page-1.png"
+            }
+          },
+          {
+            "contentLocator": {
+              "kind": "document-entry",
+              "source": { "kind": "workspace-file", "path": "synthetic-document.epub" },
+              "entryPath": "OEBPS/images/page-2.png"
             }
           }
         ]
@@ -113,7 +131,7 @@
       "id": "answer",
       "kind": "final-answer",
       "mode": "contains",
-      "text": ["N7Q4", "DOCUMENT_IMAGE_NATIVE_OK"],
+      "text": ["N7Q4", "Q47N", "DOCUMENT_IMAGE_NATIVE_OK"],
       "evidenceRef": "document-image-facts"
     }
   ],

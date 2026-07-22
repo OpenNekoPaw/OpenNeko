@@ -282,7 +282,8 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
   }
 
   async loadProviderAsset(input: AgentProviderAssetInput): Promise<AgentProviderAssetResult> {
-    if (input.source.kind === 'runtime') {
+    const source = input.source;
+    if (source.kind === 'runtime') {
       return {
         status: 'unsupported-source',
         diagnostics: [
@@ -294,7 +295,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
       };
     }
 
-    const locator = await this.resolveContentLocator(input.source);
+    const locator = await this.resolveContentLocator(source);
     if (!locator) {
       return {
         status: 'unsupported-source',
@@ -313,7 +314,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
     });
     return {
       ...loaded,
-      ...(input.source.kind === 'runtime' ? {} : { source: input.source }),
+      source,
       diagnostics: loaded.diagnostics,
       mimeType: loaded.mimeType ?? input.mimeTypeHint,
       ...(input.metadata ? { metadata: input.metadata } : {}),
@@ -323,24 +324,11 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
   private async resolveContentLocator(
     source: ContentSourceRef,
   ): Promise<ContentLocator | undefined> {
-    if (source.kind === 'document' && source.entryPath) {
-      const sourcePath = source.source.document?.filePath ?? source.source.filePath;
-      const workspaceSource = sourcePath
-        ? this.services.resolveWorkspaceFileLocator(sourcePath)
-        : undefined;
-      return workspaceSource
-        ? {
-            kind: 'document-entry',
-            source: workspaceSource,
-            entryPath: source.entryPath,
-          }
-        : undefined;
-    }
     if (isResourceRef(source)) {
       if (source.source.kind === 'generated-asset') {
         return this.services.resolveGeneratedOutputLocator?.(source);
       }
-      if (source.locator?.kind === 'document') {
+      if (source.locator?.kind === 'document' && source.locator.entryPath) {
         const sourcePath =
           readResourceSourceLocalPath(source.source) ??
           (source.source.kind === 'document'
@@ -357,6 +345,21 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
             }
           : undefined;
       }
+      const sourcePath = readStableSourcePath(source);
+      return sourcePath ? this.services.resolveWorkspaceFileLocator(sourcePath) : undefined;
+    }
+    if (source.kind === 'document' && source.entryPath) {
+      const sourcePath = source.source.document?.filePath ?? source.source.filePath;
+      const workspaceSource = sourcePath
+        ? this.services.resolveWorkspaceFileLocator(sourcePath)
+        : undefined;
+      return workspaceSource
+        ? {
+            kind: 'document-entry',
+            source: workspaceSource,
+            entryPath: source.entryPath,
+          }
+        : undefined;
     }
     const sourcePath = readStableSourcePath(source);
     return sourcePath ? this.services.resolveWorkspaceFileLocator(sourcePath) : undefined;

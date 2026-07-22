@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import AdmZipModule from 'adm-zip';
+import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { NekoHostPorts } from '@neko/host';
 import {
@@ -231,6 +232,47 @@ describe('createNodePerceptionAssetLoader', () => {
       kind: 'image',
       url: `data:image/jpeg;base64,${imageBytes.toString('base64')}`,
       mimeType: 'image/jpeg',
+    });
+  });
+
+  it('shares bounded contact-sheet projection with the VS Code Node Host', async () => {
+    const workDir = createTempDir();
+    const pages = await Promise.all(
+      ['#dd2222', '#2255dd'].map((background) =>
+        sharp({ create: { width: 800, height: 1200, channels: 3, background } })
+          .jpeg()
+          .toBuffer(),
+      ),
+    );
+    const archive = new (AdmZipModule as unknown as AdmZipConstructor)();
+    archive.addFile('pages/001.jpg', pages[0]!);
+    archive.addFile('pages/002.jpg', pages[1]!);
+    archive.writeZip(path.join(workDir, 'comic.cbz'));
+    const loader = createNodePerceptionAssetLoader(
+      createTestContentAccessRuntime(createNodeHostAdapter({ workDir }), workDir),
+    );
+    const refs = [1, 2].map((page) => ({
+      assetId: `page-${page}`,
+      label: `Page ${page}`,
+      uri: `content:page-${page}`,
+      mimeType: 'image/jpeg',
+      contentLocator: {
+        kind: 'document-entry' as const,
+        source: { kind: 'workspace-file' as const, path: 'comic.cbz' },
+        entryPath: `pages/${String(page).padStart(3, '0')}.jpg`,
+      },
+    }));
+
+    const batches = await loader.loadBatch!(refs, { layout: 'overview' });
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.sourceIndexes).toEqual([0, 1]);
+    const encoded = batches[0]?.payload.url.split(',')[1];
+    if (!encoded) throw new Error('Contact sheet payload was not base64 encoded.');
+    await expect(sharp(Buffer.from(encoded, 'base64')).metadata()).resolves.toMatchObject({
+      format: 'jpeg',
+      width: 2048,
+      height: 2048,
     });
   });
 });

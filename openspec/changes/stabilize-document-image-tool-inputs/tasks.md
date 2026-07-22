@@ -29,3 +29,11 @@
 - [x] 5.1 Reproduce the reported failure where an invalid `contentLocator` is silently discarded and a sibling legacy `resourceRef` reaches provider loading.
 - [x] 5.2 Publish the complete `ContentLocator` union in the ReadImage Tool schema and reject an explicitly supplied invalid locator before any fallback path.
 - [x] 5.3 Run focused producer/consumer tests, key-free Evaluation validation, the real document-image case, and required repository quality gates.
+
+## 6. Bounded Multimodal Transport And Visible Selection Follow-up
+
+- [x] 6.1 Add red regressions for locator-only ReadImage thumbnails and provider-bound image count/per-payload/total-byte budgets.
+- [x] 6.2 Add Host batch projection for bounded single-image normalization and labeled multi-image contact sheets while retaining per-image Tool result identity.
+- [x] 6.3 Restore live and hydrated Webview thumbnail projection from canonical ContentLocator attachments, with ordered placeholders and no persisted preview bytes.
+- [x] 6.4 Update deterministic producer/consumer tests and the existing document-image Evaluation ownership/evidence for contact-sheet delivery and forbidden unbounded fallback.
+- [x] 6.5 Run focused content, Pi bridge, Extension Host, Webview tests/builds, key-free Agent Evaluation, strict OpenSpec validation, and applicable quality gates.

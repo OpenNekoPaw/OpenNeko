@@ -71,3 +71,36 @@ The Evaluation platform SHALL exercise the canonical document image Tool sequenc
 
 - **WHEN** provider credentials, model access, or required multimodal capability is unavailable
 - **THEN** the run reports infrastructure-blocked and does not treat key-free or deterministic tests as real Agent acceptance
+
+### Requirement: Native image transport is bounded and batch-aware
+
+The Agent SHALL bound ReadImage source selection and every provider-bound image payload. A multi-image Tool result SHALL use Host-composed, labeled contact sheets while retaining the original per-image stable identities in the Tool result.
+
+#### Scenario: Analyze a multi-page document batch
+
+- **WHEN** ReadImage selects between two and five document images for one Agent continuation
+- **THEN** the Host composes one or more labeled contact sheets within the provider image-count and byte budgets, and the next model step receives the sheets plus an ordered tile manifest instead of one image part per source page
+
+#### Scenario: Encoded payload exceeds its budget
+
+- **WHEN** Host projection cannot keep one image payload at or below 4 MiB or the complete image batch at or below 12 MiB
+- **THEN** the Tool continuation fails visibly before provider submission and does not silently omit source images
+
+#### Scenario: Too many source images are requested
+
+- **WHEN** ReadImage receives more than five valid image inputs
+- **THEN** it selects at most five according to the declared order, reports truncation, and does not load or transmit later items
+
+### Requirement: Webview shows the images selected for analysis
+
+The Extension Host SHALL project bounded display previews for successful ReadImage attachments, including locator-only document entries, and the Agent Webview SHALL render them in selected order without persisting Host-only preview bytes.
+
+#### Scenario: Locator-only ReadImage result is displayed
+
+- **WHEN** ReadImage returns `data.images[n].contentLocator` and the aligned attachment has the same stable locator
+- **THEN** the Host resolves a bounded thumbnail through ContentAccess and the Tool card displays the image label, index, dimensions, and preview
+
+#### Scenario: Thumbnail projection fails
+
+- **WHEN** a selected image remains valid for model analysis but its Webview preview cannot be generated
+- **THEN** the Tool card retains an ordered placeholder and diagnostic for that image instead of removing it from the visible selection

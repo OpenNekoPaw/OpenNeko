@@ -534,6 +534,41 @@ describe('content access tools', () => {
     });
   });
 
+  it('selects at most five ordered images before loading a provider continuation batch', async () => {
+    const runtime = createRuntime();
+    runtime.loadContentAsset.mockResolvedValue({
+      status: 'ready',
+      diagnostics: [],
+      bytes: pngBytes(),
+      mimeType: 'image/png',
+      sizeBytes: pngBytes().byteLength,
+    });
+    const images = Array.from({ length: 12 }, (_, index) => ({
+      label: `Page ${index + 1}`,
+      contentLocator: {
+        kind: 'document-entry' as const,
+        source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
+        entryPath: `pages/${String(index + 1).padStart(3, '0')}.png`,
+      },
+    }));
+
+    const result = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
+      images,
+      max_images: 12,
+      mode: 'metadata',
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        images: images.slice(0, 5),
+        imageCount: 12,
+        imagesTruncated: true,
+      },
+    });
+    expect(runtime.loadContentAsset).toHaveBeenCalledTimes(5);
+  });
+
   it('rejects an invalid content locator instead of falling back to a sibling resource ref', async () => {
     const runtime = createRuntime();
     runtime.loadProviderAsset.mockResolvedValueOnce({

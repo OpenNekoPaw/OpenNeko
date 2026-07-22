@@ -23,6 +23,10 @@ export interface PerceptualAssetRef {
    */
   readonly uri: string;
   readonly mimeType: string;
+  /** Host-projected, runtime-only preview for Webview display. Never persist this data URI. */
+  readonly previewUri?: string;
+  /** Host-projected, runtime-only display failure. Model loading may still succeed independently. */
+  readonly previewDiagnostic?: string;
   readonly contentLocator?: ContentLocator;
   readonly resourceRef?: ResourceRef;
   readonly documentResourceRef?: DocumentArchiveResourceRef;

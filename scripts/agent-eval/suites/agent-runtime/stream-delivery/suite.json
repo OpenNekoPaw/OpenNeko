@@ -42,7 +42,7 @@
       "id": "document-image-workspace",
       "root": "shared-fixtures/document-image-workspace",
       "source": "repository",
-      "digest": "sha256:7f279eafa51fb9e8ad567344708e6dd6c13afee014d6af896d24801a04e6409b",
+      "digest": "sha256:0ee348f6099989e6810699fe4c13c34c37aeed6a6b3defda8958a639c36ec325",
       "mutable": true
     }
   ],

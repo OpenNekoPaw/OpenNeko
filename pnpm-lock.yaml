@@ -173,6 +173,9 @@ importers:
       ink-testing-library:
         specifier: ^4.0.0
         version: 4.0.0(@types/react@18.3.27)
+      sharp:
+        specifier: ^0.34.0
+        version: 0.34.5
       tsup:
         specifier: ^8.0.0
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
@@ -275,6 +278,9 @@ importers:
       '@neko/shared':
         specifier: workspace:*
         version: link:../../../neko-types
+      sharp:
+        specifier: ^0.34.0
+        version: 0.34.5
       undici:
         specifier: ^7.16.0
         version: 7.20.0

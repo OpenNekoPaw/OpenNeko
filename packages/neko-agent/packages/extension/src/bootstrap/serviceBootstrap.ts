@@ -166,6 +166,15 @@ export async function bootstrapCoreServices(
         createLocalPerceptionAssetLoader(getCapabilityRuntimeBindings().contentAccessRuntime).load(
           ref,
         ),
+      loadBatch: (refs, options) => {
+        const loader = createLocalPerceptionAssetLoader(
+          getCapabilityRuntimeBindings().contentAccessRuntime,
+        );
+        if (!loader.loadBatch) {
+          throw new Error('Extension perception asset loader lacks batch projection.');
+        }
+        return loader.loadBatch(refs, options);
+      },
     },
     workspaceTrusted: () => vscode.workspace.isTrusted,
   });
