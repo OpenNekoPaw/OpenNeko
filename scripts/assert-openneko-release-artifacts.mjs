@@ -3,7 +3,7 @@
 import { readdirSync } from 'node:fs';
 
 import { assertOpenNekoReleaseArtifacts } from './openneko-vsix-contract.mjs';
-import { parseReleaseTag } from './validate-release-source.mjs';
+import { parseReleaseTag } from './release-version-contract.mjs';
 
 function main() {
   const directory = process.env.RELEASE_ARTIFACT_DIRECTORY ?? 'release-artifacts';

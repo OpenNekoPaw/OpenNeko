@@ -1,14 +1,13 @@
 # Release workflow — triggered by version tags (e.g. v0.1.0)
 #
 # Jobs:
-#   1. validate-release: Validate main ancestry and VSIX manifest versions
+#   1. validate-release: Validate tag, main ancestry, and publishable manifests
 #   2. release-tests:    Re-run deterministic tests at the validated tag
 #   3. release-openneko: Build one complete OpenNeko VSIX per supported platform
 #   4. create-release:  Publish only the two signed-off platform artifacts
 #
 # Usage:
-#   git tag v0.1.0
-#   git push origin v0.1.0
+#   Create a vX.Y.Z tag from main in GitHub; the tag supplies the manifest version.
 
 name: Release
 
@@ -59,6 +58,9 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
 
+      - name: Project release manifest versions
+        run: node scripts/project-release-version.mjs
+
       - name: Enable Corepack
         run: corepack enable
 
@@ -89,6 +91,9 @@ jobs:
         with:
           node-version-file: .node-version
           package-manager-cache: false
+
+      - name: Project release manifest versions
+        run: node scripts/project-release-version.mjs
 
       - name: Enable Corepack
         run: corepack enable

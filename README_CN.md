@@ -62,7 +62,7 @@ pnpm gate:local
 
 `dev` 是正常开发分支，普通 push 不自动运行 GitHub Actions；提交前使用 `pnpm gate:local`，需要 GitHub runner 证据时从 Actions 手动运行 CI。`main` 是发布分支，只接受 `dev -> main` Pull Request；`Merge Gate` 必须完成完整源码检查，并为 `darwin-arm64`、`linux-x64` 各生成一个完整 OpenNeko VSIX 后才允许合并。
 
-正式发布由 main 历史上的 `v*` 标签触发。Release workflow 会校验标签来源和扩展 manifest 版本，重新生成 `OpenNeko-darwin-arm64-<version>.vsix`、`OpenNeko-linux-x64-<version>.vsix` 与 `SHA256SUMS`，然后通过 `release` environment 创建 GitHub Release；功能包 VSIX 不会作为 Release asset 发布。
+正式发布由 main 历史上的 GitHub `v*` 标签触发，标签是发布版本的唯一输入，无需提前提交 manifest 升版。Release workflow 会校验标签来源，在每个临时 job 中将标签的数值基础版本投影到全部可发布 manifest，重新生成 `OpenNeko-darwin-arm64-<version>.vsix`、`OpenNeko-linux-x64-<version>.vsix` 与 `SHA256SUMS`，然后通过 `release` environment 创建 GitHub Release；功能包 VSIX 不会作为 Release asset 发布。
 
 ## 项目入口
 
