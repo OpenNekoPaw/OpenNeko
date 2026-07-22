@@ -212,14 +212,14 @@ function resolveToolbarActions(
           },
           previewSource,
         ),
-        ...(material.canPromoteToAssetLibrary
+        ...(material.canCopyToMediaLibrary
           ? [
               createNodeAction(
                 node,
                 parentId,
                 {
-                  id: 'save-to-asset-library',
-                  label: 'action.saveToAssetLibrary',
+                  id: 'copy-to-media-library',
+                  label: 'action.copyToMediaLibrary',
                   position: 'bottom',
                   visibleWhen: 'always',
                 },
@@ -432,7 +432,7 @@ function nodeActionIcon(actionId: NodeCardActionId): ReactNode {
       return <OpenIcon size={14} />;
     case 'duplicate':
       return <CopyIcon size={14} />;
-    case 'save-to-asset-library':
+    case 'copy-to-media-library':
       return <PackageIcon size={14} />;
     case 'generate':
       return <RefreshIcon size={14} />;

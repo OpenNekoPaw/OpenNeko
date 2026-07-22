@@ -5,36 +5,41 @@ import {
 } from '@neko/content/document';
 import {
   isResourceRef,
-  type ContentAccessRequest,
-  type ContentAccessResult,
-  type ContentAccessTarget,
+  readResourceSourceLocalPath,
+  type ContentReadService,
+  type ContentLocator,
+  type ContentRepresentationLocator,
+  type ContentRepresentationService,
   type ContentSourceRef,
+  type GeneratedOutputContentLocator,
   type ResourceRef,
-  type ResourceVariantRequest,
+  type WorkspaceFileContentLocator,
 } from '@neko/shared';
-import type { ContentAccessService } from '@neko/shared/content-access';
 import {
   createAgentContentAccessDiagnostic,
-  createAgentContentAccessFailureResult,
-  toAgentContentAccessDiagnostics,
-  type AgentContentAccessCaller,
   type AgentContentAccessDiagnostic,
   type AgentContentAccessRuntime,
-  type AgentContentAccessRuntimeRequest,
   type AgentDocumentContentInput,
   type AgentDocumentContentResult,
   type AgentImageMetadataInput,
   type AgentImageMetadataResult,
   type AgentProviderAssetInput,
   type AgentProviderAssetResult,
-  type AgentResourceProjectionInput,
-  type AgentResourceProjectionResult,
 } from './agent-content-access-runtime';
 
+const DEFAULT_AGENT_CONTENT_READ_MAX_BYTES = 20 * 1024 * 1024;
+
 export interface CreateHostAgentContentAccessRuntimeOptions {
-  readonly contentAccess: ContentAccessService;
+  readonly contentRead: ContentReadService;
   readonly documentAccess: IDocumentAccessService;
-  readonly resolveDocumentResourceScope: () => ResourceRef['scope'];
+  readonly resolveWorkspaceFileLocator: (path: string) => WorkspaceFileContentLocator | undefined;
+  readonly resolveGeneratedOutputLocator?: (
+    ref: ResourceRef,
+  ) => Promise<GeneratedOutputContentLocator | undefined>;
+  readonly resolveDocumentHostFilePath: (
+    source: WorkspaceFileContentLocator,
+  ) => Promise<string | undefined> | string | undefined;
+  readonly contentRepresentation?: ContentRepresentationService;
 }
 
 export function createHostAgentContentAccessRuntime(
@@ -48,57 +53,14 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
 
   constructor(private readonly services: CreateHostAgentContentAccessRuntimeOptions) {
     this.documentRuntime = new DocumentContentAccessRuntime({
-      contentAccess: services.contentAccess,
+      contentRead: services.contentRead,
       documentAccess: services.documentAccess,
-      resolveDocumentResourceScope: services.resolveDocumentResourceScope,
-      loadProviderAsset: (input) => this.loadProviderAsset(input),
-    });
-  }
-
-  resolve(input: AgentContentAccessRuntimeRequest): Promise<ContentAccessResult> {
-    if (
-      input.request.target === 'bytes' &&
-      input.request.ref.kind !== 'runtime' &&
-      !isResourceRef(input.request.ref)
-    ) {
-      return this.loadProviderAsset({
-        caller: input.caller,
-        source: input.request.ref,
-        preferredTarget: 'bytes',
-        signal: input.request.signal,
-        metadata: input.request.metadata,
-      }).then((asset) => ({
-        status: asset.status,
-        request: input.request,
-        source: asset.source,
-        bytes: asset.bytes,
-        mimeType: asset.mimeType,
-        sizeBytes: asset.sizeBytes,
-        diagnostics: asset.diagnostics,
-        error: asset.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message,
-      }));
-    }
-    return this.services.contentAccess.resolve({
-      ...input.request,
-      caller: input.request.caller ?? input.caller,
+      resolveHostFilePath: services.resolveDocumentHostFilePath,
     });
   }
 
   async resolveImageMetadata(input: AgentImageMetadataInput): Promise<AgentImageMetadataResult> {
-    const caller = input.caller ?? 'read-image';
-    const request = createRequest(input.source, {
-      caller,
-      intent: input.intent ?? 'verify',
-      target: 'bytes',
-      variant: input.variant,
-      signal: input.signal,
-      metadata: input.metadata,
-    });
-    const providerAsset = await this.loadProviderAsset({
-      ...input,
-      caller,
-      preferredTarget: 'bytes',
-    });
+    const providerAsset = await this.loadProviderAsset(input);
     const diagnostics = [...providerAsset.diagnostics];
     const metadata =
       providerAsset.bytes !== undefined ? probeImageMetadata(providerAsset.bytes) : undefined;
@@ -107,8 +69,6 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
         createAgentContentAccessDiagnostic({
           code: 'unsupported-source',
           message: 'Unsupported or unreadable image bytes.',
-          caller,
-          request,
         }),
       );
     }
@@ -120,7 +80,6 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
             ? 'unsupported-source'
             : providerAsset.status,
       source: providerAsset.source,
-      contentAccess: providerAsset.contentAccess,
       diagnostics,
       ...(metadata?.mimeType ? { mimeType: metadata.mimeType } : {}),
       ...(metadata?.width !== undefined ? { width: metadata.width } : {}),
@@ -134,29 +93,44 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
   async resolveDocumentContent(
     input: AgentDocumentContentInput,
   ): Promise<AgentDocumentContentResult> {
-    const caller = input.caller ?? 'read-document';
+    const sourcePath = readStableSourcePath(input.source);
+    const source = sourcePath ? this.services.resolveWorkspaceFileLocator(sourcePath) : undefined;
+    if (!source) {
+      return documentFailure(input, 'Document source must be a workspace-file locator.');
+    }
     try {
       const result = await this.documentRuntime.resolveDocumentContent({
-        ...input,
-        caller,
+        source,
+        mode: input.mode,
+        range: input.range,
+        cursor: input.cursor,
+        startBatch: input.startBatch,
+        includeManifest: input.includeManifest,
+        includeImages: input.includeImages,
+        maxChars: input.maxChars,
+        maxImages: input.maxImages,
+        signal: input.signal,
       });
+      if (result.status === 'unavailable') {
+        return documentFailure(input, `Document content is unavailable: ${result.diagnostic.code}`);
+      }
+      const computedImages = await this.projectComputedDocumentImages(input, result);
+      const imageInfo = computedImages.imageInfo ?? result.imageInfo;
+      const imageCount = computedImages.imageCount ?? result.imageCount;
+      const imagesTruncated = computedImages.imagesTruncated ?? result.imagesTruncated;
       return {
-        ...operationFromContentAccess(result.contentAccess, caller),
-        status: result.contentAccess.status,
-        ...(result.source ? { source: result.source } : {}),
-        ...(result.documentResourceRef ? { documentResourceRef: result.documentResourceRef } : {}),
-        ...(result.resourceRef ? { resourceRef: result.resourceRef } : {}),
+        status: 'ready',
+        source: { kind: 'file', path: result.source.path },
+        diagnostics: computedImages.diagnostics,
         ...(result.text !== undefined ? { text: result.text } : {}),
         ...(result.manifest ? { manifest: result.manifest } : {}),
         ...(result.range ? { range: result.range } : {}),
         ...(result.locator ? { locator: result.locator } : {}),
         ...(result.excerpt ? { excerpt: result.excerpt } : {}),
         ...(result.cursor ? { cursor: result.cursor } : {}),
-        ...(result.imageInfo ? { imageInfo: result.imageInfo } : {}),
-        ...(result.imageCount !== undefined ? { imageCount: result.imageCount } : {}),
-        ...(result.imagesTruncated !== undefined
-          ? { imagesTruncated: result.imagesTruncated }
-          : {}),
+        ...(imageInfo ? { imageInfo } : {}),
+        ...(imageCount !== undefined ? { imageCount } : {}),
+        ...(imagesTruncated !== undefined ? { imagesTruncated } : {}),
         ...(result.pageCount !== undefined ? { pageCount: result.pageCount } : {}),
         ...(result.totalTextChars !== undefined ? { totalTextChars: result.totalTextChars } : {}),
         ...(result.returnedTextChars !== undefined
@@ -166,134 +140,262 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
         ...(result.metadata ? { metadata: result.metadata } : {}),
       };
     } catch (error) {
-      const request = createRequest(input.source, {
-        caller,
-        intent: input.intent ?? 'agent-context',
-        target: 'local-path',
-        signal: input.signal,
-        metadata: input.metadata,
-      });
+      void error;
+      return documentFailure(input, 'Document content could not be read.');
+    }
+  }
+
+  async loadRepresentationAsset(input: {
+    readonly locator: ContentRepresentationLocator;
+    readonly maxBytes: number;
+  }): Promise<AgentProviderAssetResult> {
+    const service = this.services.contentRepresentation;
+    if (!service) {
       return {
-        ...operationFromContentAccess(
-          createAgentContentAccessFailureResult({
-            request,
-            caller,
-            code: 'unsupported-source',
-            message: error instanceof Error ? error.message : String(error),
-            status: 'failed',
+        status: 'failed',
+        diagnostics: [
+          createAgentContentAccessDiagnostic({
+            code: 'agent-content-access-unavailable',
+            message: 'Content representation access is unavailable.',
           }),
-          caller,
-        ),
+        ],
+      };
+    }
+    const loaded = await service.readRepresentation(input.locator, { maxBytes: input.maxBytes });
+    if (loaded.status !== 'ready') {
+      return {
+        status: 'failed',
+        diagnostics: [
+          createAgentContentAccessDiagnostic({
+            code: loaded.diagnostic.code,
+            message: loaded.diagnostic.message,
+          }),
+        ],
+      };
+    }
+    return {
+      status: 'ready',
+      diagnostics: [],
+      bytes: loaded.bytes,
+      ...(loaded.metadata.mimeType ? { mimeType: loaded.metadata.mimeType } : {}),
+      sizeBytes: loaded.totalByteLength,
+    };
+  }
+
+  async loadContentAsset(input: {
+    readonly locator: ContentLocator;
+    readonly maxBytes: number;
+    readonly signal?: AbortSignal;
+  }): Promise<AgentProviderAssetResult> {
+    const loaded = await this.services.contentRead.read(input.locator, {
+      maxBytes: input.maxBytes,
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+    if (loaded.status === 'unavailable') {
+      return {
+        status: 'failed',
+        diagnostics: [
+          createAgentContentAccessDiagnostic({
+            code: loaded.diagnostic.code,
+            message: `Content bytes are unavailable: ${loaded.diagnostic.code}`,
+          }),
+        ],
+      };
+    }
+    return {
+      status: 'ready',
+      diagnostics: [],
+      bytes: loaded.bytes,
+      ...(loaded.mimeType ? { mimeType: loaded.mimeType } : {}),
+      sizeBytes: loaded.totalByteLength ?? loaded.bytes.byteLength,
+    };
+  }
+
+  private async projectComputedDocumentImages(
+    input: AgentDocumentContentInput,
+    result: Extract<
+      Awaited<ReturnType<DocumentContentAccessRuntime['resolveDocumentContent']>>,
+      { status: 'ready' }
+    >,
+  ): Promise<{
+    readonly imageInfo?: readonly import('@neko/shared').DocumentImageInfo[];
+    readonly imageCount?: number;
+    readonly imagesTruncated?: boolean;
+    readonly diagnostics: readonly AgentContentAccessDiagnostic[];
+  }> {
+    if (
+      input.includeImages === false ||
+      result.imageInfo?.length ||
+      !result.pageCount ||
+      !this.services.contentRepresentation
+    ) {
+      return { diagnostics: [] };
+    }
+    try {
+      const source: ContentLocator = result.source;
+      const contentRepresentation = this.services.contentRepresentation;
+      if (!contentRepresentation) return { diagnostics: [] };
+      const count = Math.min(result.pageCount, input.maxImages ?? 4);
+      const imageInfo = await Promise.all(
+        Array.from({ length: count }, async (_, index) => {
+          const page = index + 1;
+          const represented = await contentRepresentation.getRepresentation({
+            source,
+            spec: { kind: 'raster-page', page, format: 'png' },
+            ...(input.signal ? { signal: input.signal } : {}),
+          });
+          if (represented.status !== 'ready') throw new Error(represented.diagnostic.message);
+          return {
+            label: `page ${page}`,
+            locator: { kind: 'page' as const, pageNumber: page, pageIndex: index },
+            mimeType: represented.metadata.mimeType ?? 'image/png',
+            ...(represented.metadata.width !== undefined
+              ? { width: represented.metadata.width }
+              : {}),
+            ...(represented.metadata.height !== undefined
+              ? { height: represented.metadata.height }
+              : {}),
+            ...(represented.metadata.byteLength !== undefined
+              ? { byteSize: represented.metadata.byteLength }
+              : {}),
+            representationLocator: represented.locator,
+          };
+        }),
+      );
+      return {
+        imageInfo,
+        imageCount: result.pageCount,
+        imagesTruncated: count < result.pageCount,
+        diagnostics: [],
+      };
+    } catch {
+      return {
+        diagnostics: [
+          createAgentContentAccessDiagnostic({
+            code: 'document-representation-unavailable',
+            severity: 'warning',
+            message: 'Document page representations are unavailable.',
+          }),
+        ],
       };
     }
   }
 
   async loadProviderAsset(input: AgentProviderAssetInput): Promise<AgentProviderAssetResult> {
-    const caller = input.caller ?? 'perception-asset-loader';
-    if (input.source.kind === 'runtime') {
-      const request = createRequest(input.source, {
-        caller,
-        intent: 'agent-context',
-        target: input.preferredTarget ?? 'bytes',
-        signal: input.signal,
-        metadata: input.metadata,
-      });
+    const source = input.source;
+    if (source.kind === 'runtime') {
       return {
-        ...operationFromContentAccess(
-          createAgentContentAccessFailureResult({
-            request,
-            caller,
+        status: 'unsupported-source',
+        diagnostics: [
+          createAgentContentAccessDiagnostic({
             code: 'runtime-handle-rejected',
             message: 'Runtime handles cannot be used as durable Agent content identity.',
-            status: 'unsupported-source',
           }),
-          caller,
-        ),
+        ],
       };
     }
 
-    const request = createRequest(input.source, {
-      caller,
-      intent: 'agent-context',
-      target: input.preferredTarget ?? 'bytes',
-      variant: input.variant,
-      materialization: isResourceRef(input.source) ? 'if-missing' : undefined,
-      signal: input.signal,
-      metadata: input.metadata,
+    const locator = await this.resolveContentLocator(source);
+    if (!locator) {
+      return {
+        status: 'unsupported-source',
+        diagnostics: [
+          createAgentContentAccessDiagnostic({
+            code: 'unsupported-source',
+            message: 'Agent content source does not resolve to a stable content locator.',
+          }),
+        ],
+      };
+    }
+    const loaded = await this.loadContentAsset({
+      locator,
+      maxBytes: DEFAULT_AGENT_CONTENT_READ_MAX_BYTES,
+      ...(input.signal ? { signal: input.signal } : {}),
     });
-    const result = await this.services.contentAccess.resolve(request);
     return {
-      ...operationFromContentAccess(result, caller),
-      bytes: result.bytes,
-      uri: result.localPath ?? result.uri,
-      engineSourceToken: result.engineSource?.token,
-      mimeType: result.mimeType ?? input.mimeTypeHint,
-      sizeBytes: result.sizeBytes ?? result.bytes?.byteLength,
+      ...loaded,
+      source,
+      diagnostics: loaded.diagnostics,
+      mimeType: loaded.mimeType ?? input.mimeTypeHint,
+      ...(input.metadata ? { metadata: input.metadata } : {}),
     };
   }
 
-  async projectResource(
-    input: AgentResourceProjectionInput,
-  ): Promise<AgentResourceProjectionResult> {
-    const caller = input.caller ?? 'message-resource-projection';
-    const request = createRequest(input.source, {
-      caller,
-      intent: 'interactive-preview',
-      target: input.target,
-      variant: input.variant,
-      signal: input.signal,
-      metadata: input.metadata,
-    });
-    const result = await this.services.contentAccess.resolve(request);
-    return {
-      ...operationFromContentAccess(result, caller),
-      target: input.target,
-      uri: result.uri ?? result.localPath ?? result.runtimeStream?.url,
-      runtimeOnly: true,
-    };
+  private async resolveContentLocator(
+    source: ContentSourceRef,
+  ): Promise<ContentLocator | undefined> {
+    if (isResourceRef(source)) {
+      if (source.source.kind === 'generated-asset') {
+        return this.services.resolveGeneratedOutputLocator?.(source);
+      }
+      if (source.locator?.kind === 'document' && source.locator.entryPath) {
+        const sourcePath =
+          readResourceSourceLocalPath(source.source) ??
+          (source.source.kind === 'document'
+            ? (source.source.document?.filePath ?? source.source.filePath)
+            : undefined);
+        const workspaceSource = sourcePath
+          ? this.services.resolveWorkspaceFileLocator(sourcePath)
+          : undefined;
+        return workspaceSource
+          ? {
+              kind: 'document-entry',
+              source: workspaceSource,
+              entryPath: source.locator.entryPath,
+            }
+          : undefined;
+      }
+      const sourcePath = readStableSourcePath(source);
+      return sourcePath ? this.services.resolveWorkspaceFileLocator(sourcePath) : undefined;
+    }
+    if (source.kind === 'document' && source.entryPath) {
+      const sourcePath = source.source.document?.filePath ?? source.source.filePath;
+      const workspaceSource = sourcePath
+        ? this.services.resolveWorkspaceFileLocator(sourcePath)
+        : undefined;
+      return workspaceSource
+        ? {
+            kind: 'document-entry',
+            source: workspaceSource,
+            entryPath: source.entryPath,
+          }
+        : undefined;
+    }
+    const sourcePath = readStableSourcePath(source);
+    return sourcePath ? this.services.resolveWorkspaceFileLocator(sourcePath) : undefined;
   }
 }
 
-function createRequest(
-  ref: ContentSourceRef,
-  options: {
-    readonly caller: AgentContentAccessCaller;
-    readonly intent: ContentAccessRequest['intent'];
-    readonly target: ContentAccessTarget;
-    readonly variant?: ResourceVariantRequest;
-    readonly materialization?: ContentAccessRequest['materialization'];
-    readonly signal?: AbortSignal;
-    readonly metadata?: Record<string, unknown>;
-  },
-): ContentAccessRequest {
-  return {
-    ref,
-    intent: options.intent,
-    target: options.target,
-    caller: options.caller,
-    ...(options.variant ? { variant: options.variant, role: options.variant.role } : {}),
-    ...(options.materialization ? { materialization: options.materialization } : {}),
-    ...(options.signal ? { signal: options.signal } : {}),
-    ...(options.metadata ? { metadata: options.metadata } : {}),
-  };
+function readStableSourcePath(source: ContentSourceRef): string | undefined {
+  if (isResourceRef(source)) {
+    return source.locator?.kind === 'file'
+      ? source.locator.path
+      : readResourceSourceLocalPath(source.source);
+  }
+  switch (source.kind) {
+    case 'file':
+      return source.path;
+    case 'document':
+      return source.source.document?.filePath;
+    case 'runtime':
+      return source.source ? readStableSourcePath(source.source) : undefined;
+    default:
+      return undefined;
+  }
 }
 
-function operationFromContentAccess(
-  result: ContentAccessResult,
-  caller: AgentContentAccessCaller,
-): {
-  readonly status: ContentAccessResult['status'];
-  readonly source?: Exclude<ContentSourceRef, { readonly kind: 'runtime' }>;
-  readonly contentAccess: ContentAccessResult;
-  readonly diagnostics: readonly AgentContentAccessDiagnostic[];
-  readonly metadata?: Record<string, unknown>;
-} {
-  const diagnostics = toAgentContentAccessDiagnostics(result.diagnostics, caller);
+function documentFailure(
+  input: AgentDocumentContentInput,
+  message: string,
+): AgentDocumentContentResult {
   return {
-    status: result.status,
-    ...(result.source ? { source: result.source } : {}),
-    contentAccess: result,
-    diagnostics,
-    ...(result.metadata ? { metadata: result.metadata } : {}),
+    status: 'failed',
+    diagnostics: [
+      createAgentContentAccessDiagnostic({
+        code: 'unsupported-source',
+        message,
+        ...(input.metadata ? { metadata: input.metadata } : {}),
+      }),
+    ],
   };
 }

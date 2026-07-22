@@ -1,6 +1,5 @@
 import {
   classifyWorkspaceMediaPath,
-  contractWorkspaceMediaPath,
   resolveWorkspaceMediaPath,
   type WorkspaceMediaPathContext,
   type WorkspaceMediaPathDiagnostic,
@@ -64,6 +63,11 @@ export function applyPortableSourcePathPolicy<TDocument>(
       continue;
     }
 
+    if (hasUnsupportedUriScheme(descriptor.path)) {
+      diagnostics.push(createNonPortableSourceDiagnostic(descriptor));
+      continue;
+    }
+
     if (isRemoteUrl(descriptor.path)) {
       if (!descriptor.allowRemote) {
         diagnostics.push(
@@ -84,29 +88,17 @@ export function applyPortableSourcePathPolicy<TDocument>(
       diagnostics.push(createNonPortableSourceDiagnostic(descriptor));
       continue;
     }
-    if (classification.kind === 'workspace-relative' || classification.kind === 'variable') {
-      continue;
-    }
-
-    const contracted = contractWorkspaceMediaPath(descriptor.path, options.context);
-    if (contracted.format === 'workspace-relative' || contracted.format === 'variable') {
-      if (contracted.path !== descriptor.path) {
-        replacements.push({ descriptor, path: contracted.path });
+    if (classification.kind === 'variable') {
+      if (!isKnownPathVariable(classification.variable, options.context)) {
+        diagnostics.push(createMigrationRequiredDiagnostic(descriptor, classification.variable));
       }
       continue;
     }
-
-    if (contracted.format === 'absolute-local') {
-      diagnostics.push(
-        createProjectFileDiagnostic({
-          code: 'non-portable-path',
-          message: `Source ${descriptor.id} is an absolute local path that cannot be made portable.`,
-          path: descriptor.fieldPath,
-          sourceId: descriptor.id,
-          recoverability: 'create-asset',
-        }),
-      );
+    if (classification.kind === 'workspace-relative') {
+      continue;
     }
+
+    diagnostics.push(createMigrationRequiredDiagnostic(descriptor));
   }
 
   return {
@@ -130,6 +122,10 @@ export function resolveProjectSourceDiagnostics<TDocument>(
       diagnostics.push(runtimeDiagnostic);
       continue;
     }
+    if (hasUnsupportedUriScheme(descriptor.path)) {
+      diagnostics.push(createNonPortableSourceDiagnostic(descriptor));
+      continue;
+    }
     if (isRemoteUrl(descriptor.path)) {
       if (!descriptor.allowRemote) {
         diagnostics.push(
@@ -146,6 +142,19 @@ export function resolveProjectSourceDiagnostics<TDocument>(
     }
     if (hasParentTraversal(descriptor.path)) {
       diagnostics.push(createNonPortableSourceDiagnostic(descriptor));
+      continue;
+    }
+
+    const classification = classifyWorkspaceMediaPath(descriptor.path);
+    if (classification.kind === 'absolute-local') {
+      diagnostics.push(createMigrationRequiredDiagnostic(descriptor));
+      continue;
+    }
+    if (
+      classification.kind === 'variable' &&
+      !isKnownPathVariable(classification.variable, options.context)
+    ) {
+      diagnostics.push(createMigrationRequiredDiagnostic(descriptor, classification.variable));
       continue;
     }
 
@@ -223,6 +232,27 @@ function createNonPortableSourceDiagnostic(
   });
 }
 
+function createMigrationRequiredDiagnostic(
+  descriptor: ProjectSourceDescriptor,
+  variable?: string,
+): ProjectFileDiagnostic {
+  return createProjectFileDiagnostic({
+    code: 'migration-required',
+    message: `Source ${descriptor.id} uses a retired local path shape and requires explicit migration.`,
+    path: descriptor.fieldPath,
+    sourceId: descriptor.id,
+    recoverability: 'relink',
+    ...(variable ? { context: { variable } } : {}),
+  });
+}
+
+function isKnownPathVariable(
+  variable: string | undefined,
+  context: WorkspaceMediaPathContext,
+): boolean {
+  return Boolean(variable && context.pathVariables?.has(variable));
+}
+
 function hasParentTraversal(value: string): boolean {
   const normalized = normalizePathForSegmentChecks(value);
   return normalized === '..' || normalized.startsWith('../') || normalized.includes('/../');
@@ -296,4 +326,8 @@ function mapWorkspaceDiagnostic(
 
 function isRemoteUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
+}
+
+function hasUnsupportedUriScheme(value: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(value.trim()) && !isRemoteUrl(value.trim());
 }

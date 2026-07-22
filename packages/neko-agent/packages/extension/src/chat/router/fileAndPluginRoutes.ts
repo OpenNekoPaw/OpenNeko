@@ -52,10 +52,6 @@ export function tryHandleFileAndPluginRoute(
       deps.fileOperationHandler.handleRevealFile(message.filePath);
       return true;
 
-    case 'revealAsset':
-      deps.fileOperationHandler.handleRevealAsset(message.assetId);
-      return true;
-
     case 'openConfigFile':
       deps.fileOperationHandler.handleOpenConfigFile();
       return true;
@@ -68,19 +64,7 @@ export function tryHandleFileAndPluginRoute(
       const nav = message.navigationData;
       const filePath = nav?.['filePath'] ?? nav?.['path'];
       const resolvedPath = nav?.['resolvedPath'];
-      const assetId =
-        message.contextType === 'asset'
-          ? (nav?.['assetId'] ??
-            (nav?.['partition'] === 'asset-library' ? nav?.['sourceId'] : undefined) ??
-            stripAssetIdPrefix(message.contextId))
-          : undefined;
-      if (assetId) {
-        deps.fileOperationHandler.handleRevealAsset(assetId);
-      } else if (
-        message.contextType === 'media' &&
-        nav?.['partition'] === 'media-library' &&
-        filePath
-      ) {
+      if (message.contextType === 'media' && nav?.['partition'] === 'media-library' && filePath) {
         void vscode.commands.executeCommand(
           'neko.assets.revealMediaLibraryFile',
           resolvedPath ?? filePath,
@@ -550,9 +534,4 @@ async function getCanvasApi(): Promise<NekoCanvasAPI> {
     throw new Error('Canvas Markdown capability API is unavailable.');
   }
   return api;
-}
-
-function stripAssetIdPrefix(contextId: string): string | undefined {
-  const prefix = 'asset:';
-  return contextId.startsWith(prefix) ? contextId.slice(prefix.length) : contextId || undefined;
 }

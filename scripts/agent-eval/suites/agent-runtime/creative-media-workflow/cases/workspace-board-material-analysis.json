@@ -5,16 +5,18 @@
   "caseGroup": "workflow",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Read the selected fixture material, produce a named Markdown analysis, and inspect the automatic Workspace Board creative-content graph.",
+    "userBehavior": "Analyze the selected fixture image through native multimodal ReadImage and inspect the automatically retained Workspace Board analysis record without separately requesting an artifact.",
     "canonicalPath": [
       "TUI App session owner",
-      "content access",
-      "named Markdown artifact",
+      "ReadImage with explicit analysis intent",
+      "native multimodal turn",
+      "terminal native-image-analysis finalizer",
       "Canvas-owned batch coordinator",
       "neko/boards/workspace.nkc"
     ],
     "forbiddenFallback": [
-      "unselected attachment inference",
+      "ordinary final-answer promotion",
+      "unselected fixture inference",
       "active or recent Canvas routing",
       "generic Send to Canvas",
       "direct .nkc writer"
@@ -23,12 +25,12 @@
       {
         "ref": "workflow-facts",
         "kind": "runtime-fact",
-        "description": "Selected source evidence, named Markdown artifact, delivery ledger receipt, top-level content node identities, creative relation identity, and no-fallback facts.",
+        "description": "Successful ReadImage evidence, native-image-analysis artifact provenance, delivery ledger receipt, top-level content node identities, creative relation identity, and no-fallback facts.",
         "required": true
       }
     ],
-    "expectedResult": "The selected material and named Markdown analysis appear as deduplicated top-level Workspace Board nodes connected by one creative dependency; unselected material, visual processing Groups, and generic handoff paths are absent.",
-    "expectedFailure": "Missing source evidence, unnamed/final-answer-only Markdown, omitted analysis, active-target routing, duplicate delivery, or missing receipt fails."
+    "expectedResult": "The selected image and finalized Markdown analysis appear as deduplicated top-level Workspace Board nodes connected by one creative dependency; unrelated fixture files, visual processing Groups, and generic handoff paths are absent.",
+    "expectedFailure": "Missing ReadImage evidence, missing native-image-analysis provenance, omitted analysis, active-target routing, duplicate delivery, or missing receipt fails."
   },
   "fixtureRefs": ["creative-planning-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -37,11 +39,18 @@
     {
       "id": "analyze",
       "kind": "submit",
-      "prompt": "Read only screenplay.fountain from the fixture workspace and produce a named, reviewable Markdown artifact titled Material Analysis with the selected scene's findings. Do not treat plan.md or station-illustration.svg as used material."
+      "prompt": "Analyze only station-illustration.svg from the fixture workspace as a storyboard image. Call ReadImage directly with analysis=storyboard and images=[{\"alias\":\"station-frame\",\"locator\":{\"kind\":\"workspace-file\",\"path\":\"station-illustration.svg\"}}]; do not search for or pass the file through ReadDocument. Then return a concise Markdown analysis of composition, subjects, environment, action, and visual continuity. Do not explicitly create a composite artifact, and do not treat screenplay.fountain or plan.md as used material."
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 240000 }
   ],
   "assertions": [
+    {
+      "id": "read-image",
+      "kind": "tool-call",
+      "name": "ReadImage",
+      "status": "success",
+      "evidenceRef": "workflow-facts"
+    },
     {
       "id": "source",
       "kind": "artifact",
@@ -54,7 +63,7 @@
       "id": "analysis",
       "kind": "artifact",
       "artifactKind": "composite-artifact",
-      "provenanceSource": "tool-result",
+      "provenanceSource": "native-image-analysis",
       "validatorStatus": "valid",
       "evidenceRef": "workflow-facts"
     },

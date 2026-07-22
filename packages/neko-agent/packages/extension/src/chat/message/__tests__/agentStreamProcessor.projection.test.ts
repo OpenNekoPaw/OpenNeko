@@ -1,6 +1,10 @@
 import { createConversationProjectionStore } from '@neko/agent/runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AgentStreamProcessor } from '../agentStreamProcessor';
+import sharp from 'sharp';
+import {
+  AgentStreamProcessor,
+  projectStreamMessageResourcesForWebview,
+} from '../agentStreamProcessor';
 
 vi.mock('vscode', () => ({
   Uri: { file: (fsPath: string) => ({ fsPath }) },
@@ -73,5 +77,142 @@ describe('AgentStreamProcessor conversation projection ownership', () => {
     });
     processor.dispose();
     projection.dispose();
+  });
+
+  it('projects locator-only ReadImage attachments to bounded Webview previews without mutating history', async () => {
+    const sourceBytes = await sharp({
+      create: { width: 1200, height: 1800, channels: 3, background: '#d02020' },
+    })
+      .png()
+      .toBuffer();
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
+      entryPath: 'pages/001.png',
+    };
+    const assetRef = {
+      assetId: 'page-1',
+      uri: 'content:page-1',
+      mimeType: 'image/png',
+      contentLocator,
+    };
+    const message = {
+      type: 'toolResult' as const,
+      conversationId: 'conversation-a',
+      messageId: 'message-a',
+      toolCallId: 'read-image-1',
+      success: true,
+      data: { images: [{ label: 'Page 1', contentLocator }] },
+      attachments: [{ type: 'image' as const, path: assetRef.uri, assetRef }],
+      perceptionCards: [
+        {
+          version: 1 as const,
+          assetId: 'page-1',
+          modality: 'image' as const,
+          createdAt: 1,
+          layerStatus: {
+            layer0: 'complete' as const,
+            layer1: 'skipped' as const,
+            layer2: 'complete' as const,
+          },
+          structural: { format: 'png', mimeType: 'image/png', byteSize: sourceBytes.byteLength },
+          perceptual: { thumbnailRef: assetRef, keyframeRefs: [assetRef] },
+        },
+      ],
+    };
+    const loadContentAsset = vi.fn(async () => ({
+      status: 'ready' as const,
+      locator: contentLocator,
+      diagnostics: [],
+      bytes: sourceBytes,
+      mimeType: 'image/png',
+      sizeBytes: sourceBytes.byteLength,
+    }));
+
+    const projected = await projectStreamMessageResourcesForWebview({} as never, message, {
+      contentAccessRuntime: { loadContentAsset } as never,
+    });
+
+    expect(projected).toMatchObject({
+      attachments: [
+        {
+          assetRef: {
+            contentLocator,
+            previewUri: expect.stringMatching(/^data:image\/webp;base64,/),
+          },
+        },
+      ],
+    });
+    expect(loadContentAsset).toHaveBeenCalledTimes(1);
+    expect(projected.perceptionCards?.[0]?.perceptual?.thumbnailRef).not.toHaveProperty(
+      'previewUri',
+    );
+    expect(assetRef).not.toHaveProperty('previewUri');
+  });
+
+  it('projects hydrated locator-only perception cards when legacy history has no attachments', async () => {
+    const sourceBytes = await sharp({
+      create: { width: 900, height: 1200, channels: 3, background: '#2040d0' },
+    })
+      .png()
+      .toBuffer();
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
+      entryPath: 'pages/002.png',
+    };
+    const assetRef = {
+      assetId: 'page-2',
+      uri: 'content:page-2',
+      mimeType: 'image/png',
+      contentLocator,
+    };
+    const loadContentAsset = vi.fn(async () => ({
+      status: 'ready' as const,
+      locator: contentLocator,
+      diagnostics: [],
+      bytes: sourceBytes,
+      mimeType: 'image/png',
+      sizeBytes: sourceBytes.byteLength,
+    }));
+
+    const projected = await projectStreamMessageResourcesForWebview(
+      {} as never,
+      {
+        type: 'toolResult' as const,
+        conversationId: 'conversation-a',
+        messageId: 'message-a',
+        toolCallId: 'read-image-hydrated',
+        success: true,
+        data: { images: [{ label: 'Page 2', contentLocator }] },
+        perceptionCards: [
+          {
+            version: 1 as const,
+            assetId: 'page-2',
+            modality: 'image' as const,
+            createdAt: 1,
+            layerStatus: {
+              layer0: 'complete' as const,
+              layer1: 'skipped' as const,
+              layer2: 'complete' as const,
+            },
+            structural: {
+              format: 'png',
+              mimeType: 'image/png',
+              byteSize: sourceBytes.byteLength,
+            },
+            perceptual: { thumbnailRef: assetRef },
+          },
+        ],
+      },
+      { contentAccessRuntime: { loadContentAsset } as never },
+    );
+
+    expect(projected.perceptionCards?.[0]?.perceptual?.thumbnailRef).toMatchObject({
+      contentLocator,
+      previewUri: expect.stringMatching(/^data:image\/webp;base64,/),
+    });
+    expect(loadContentAsset).toHaveBeenCalledTimes(1);
+    expect(assetRef).not.toHaveProperty('previewUri');
   });
 });

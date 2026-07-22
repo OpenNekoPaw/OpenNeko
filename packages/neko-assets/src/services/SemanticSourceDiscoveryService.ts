@@ -34,7 +34,7 @@ import {
 import { TextEntityAnalyzer } from '@neko/entity/core';
 import { projectAutomaticEntityCandidateReview } from '@neko/entity/core';
 import { isExcludedSemanticPath, semanticFormat } from '@neko/search/core';
-import type { MediaLibrarySettingsService } from './MediaLibrarySettingsService';
+import type { WorkspaceLinkedMediaLibraryService } from './WorkspaceLinkedMediaLibraryService';
 import { getLogger } from '../utils/logger';
 import type { SemanticCreativeSchemaAdapter } from '@neko/content';
 
@@ -45,7 +45,7 @@ const RECONCILE_INTERVAL_MS = 60_000;
 
 export interface SemanticSourceDiscoveryServiceOptions {
   readonly workspaceRoot: string;
-  readonly settingsService: MediaLibrarySettingsService;
+  readonly libraryService: WorkspaceLinkedMediaLibraryService;
   readonly entityService: CreativeEntityService;
   readonly homedir: string;
   readonly creativeSchemaAdapters?: readonly SemanticCreativeSchemaAdapter[];
@@ -101,8 +101,8 @@ export class SemanticSourceDiscoveryService implements vscode.Disposable {
       new TextEntityAnalyzer(),
     );
     this.disposables.push(
-      options.settingsService.onDidChange(() => {
-        void this.refreshScopes('settings-change');
+      options.libraryService.onDidChange(() => {
+        void this.refreshScopes('links-change');
       }),
       vscode.window.onDidChangeWindowState((event) => {
         if (event.focused) void this.reconcileAll('focus-recovery');
@@ -353,15 +353,15 @@ export class SemanticSourceDiscoveryService implements vscode.Disposable {
         priority: 0,
       },
     ];
-    const libraries = await this.options.settingsService.getResolvedLibraries();
+    const libraries = await this.options.libraryService.list();
     for (const [index, library] of libraries.entries()) {
-      if (!library.enabled || !library.accessible) continue;
+      if (library.availability !== 'available') continue;
       scopes.push({
         workspaceId: this.requireBinding().workspaceId,
-        rootId: `media-library:${library.variable}`,
+        rootId: `media-library:${library.name}`,
         rootKind: 'media-library',
-        portableRoot: `\${${library.variable}}`,
-        runtimeRoot: library.resolvedPath,
+        portableRoot: library.workspacePath,
+        runtimeRoot: this.options.libraryService.resolveWorkspacePath(library.workspacePath),
         analysisMode: 'link-existing',
         priority: index + 1,
       });

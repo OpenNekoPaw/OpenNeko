@@ -41,10 +41,10 @@ describe('project search normalization and filters', () => {
   it('applies explicit partition, kind, media, file, and scope filters centrally', () => {
     const item = {
       ...createProjectSearchItem({
-        id: 'asset:portrait',
-        kind: 'asset',
+        id: 'media:portrait',
+        kind: 'media',
         label: 'Portrait',
-        partition: 'asset-library',
+        partition: 'media-library',
       }),
       filePath: '/workspace/assets/portrait.png',
       metadata: {
@@ -56,8 +56,8 @@ describe('project search normalization and filters', () => {
     expect(
       projectSearchItemMatchesFilters(item, {
         text: '',
-        partitions: ['asset-library'],
-        kinds: ['asset'],
+        partitions: ['media-library'],
+        kinds: ['media'],
         mediaTypes: ['image'],
         fileTypes: ['png'],
         scopes: [{ kind: 'workspace', id: '/workspace' }],
@@ -71,10 +71,10 @@ describe('project search normalization and filters', () => {
 
   it('keeps ranking deterministic with explicit priority hints', () => {
     const low = createProjectSearchItem({
-      id: 'asset:low',
-      kind: 'asset',
+      id: 'media:low',
+      kind: 'media',
       label: '小橘 reference',
-      partition: 'asset-library',
+      partition: 'media-library',
       priority: 1,
     });
     const high = createProjectSearchItem({
@@ -87,7 +87,7 @@ describe('project search normalization and filters', () => {
 
     expect(rankProjectSearchItems([low, high], { text: '小橘' }).map((item) => item.id)).toEqual([
       'entity:high',
-      'asset:low',
+      'media:low',
     ]);
   });
 });

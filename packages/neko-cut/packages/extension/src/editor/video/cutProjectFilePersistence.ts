@@ -2,17 +2,17 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   ProjectFileStore,
+  ProjectFileSaveSession,
   createDefaultProjectFormatCodecRegistry,
   nkvSourcePathPolicy,
   saveNkv,
   type ProjectData,
   type ProjectFileDiagnostic,
+  type ProjectFileOps,
   type ProjectFileSaveReason,
 } from '@neko/shared';
-import {
-  createVSCodeProjectFileIoAdapter,
-  ProjectFileSaveSession,
-} from '@neko/shared/vscode/extension';
+import { createVSCodeProjectFileIoAdapter } from '@neko/shared/vscode/extension/project-file-io';
+import { NodeAuthorizedWorkspaceWriter } from '@neko/shared/vscode/extension/workspace-content-writer';
 import {
   createCutWorkspaceMediaPathContext,
   isExistingLocalFile,
@@ -24,6 +24,12 @@ export interface CutProjectSaveResult {
   readonly document?: ProjectData;
   readonly content?: string;
   readonly diagnostics: readonly ProjectFileDiagnostic[];
+}
+
+export interface CutProjectSaveOptions {
+  readonly sourceUri?: vscode.Uri;
+  readonly useSaveAs?: boolean;
+  readonly fileOps?: ProjectFileOps;
 }
 
 export async function prepareCutProjectFileSave(
@@ -58,18 +64,23 @@ export async function saveCutProjectFile(
   documentUri: vscode.Uri,
   document: ProjectData,
   saveReason: ProjectFileSaveReason = 'manual',
-  options: { readonly sourceUri?: vscode.Uri; readonly useSaveAs?: boolean } = {},
+  options: CutProjectSaveOptions = {},
 ): Promise<CutProjectSaveResult> {
   const sourceUri = options.sourceUri ?? documentUri;
   const prepared = await prepareCutProjectFileSave(sourceUri, document);
   if (!prepared.ok || !prepared.document) return prepared;
-  const adapter = createVSCodeProjectFileIoAdapter({
-    vscodeApi: vscode,
-    workspaceFolders: vscode.workspace.workspaceFolders,
-  });
+  const fileOps = options.fileOps ?? createVSCodeProjectFileOps();
   const store = new ProjectFileStore({
     registry: createDefaultProjectFormatCodecRegistry(),
-    fileOps: adapter.fileOps,
+    fileOps,
+    ...(options.fileOps
+      ? {}
+      : {
+          resolveAuthorizedWrite: (filePath: string) => ({
+            writer: new NodeAuthorizedWorkspaceWriter({ workspaceRoot: path.dirname(filePath) }),
+            locator: { kind: 'workspace-file' as const, path: path.basename(filePath) },
+          }),
+        }),
   });
   const context = createCutWorkspaceMediaPathContext(path.dirname(sourceUri.fsPath), {
     documentUri: sourceUri,
@@ -100,4 +111,11 @@ export async function saveCutProjectFile(
     content: result.ok ? `${saveNkv(result.document ?? prepared.document)}\n` : undefined,
     diagnostics: result.diagnostics,
   };
+}
+
+function createVSCodeProjectFileOps(): ProjectFileOps {
+  return createVSCodeProjectFileIoAdapter({
+    vscodeApi: vscode,
+    workspaceFolders: vscode.workspace.workspaceFolders,
+  }).fileOps;
 }

@@ -4,7 +4,9 @@
 日期：2026-06-24
 范围：`neko-canvas`、`neko-cut`、`neko-preview`、`neko-agent`、共享类型契约、`.nkc` / `.nkv` 项目文件关系。
 
-本文记录 Canvas 播放顺序、预览路线、Cut 时间线和 Agent 操作能力之间的稳定边界。它补充 [`package-boundaries.md`](package-boundaries.md)、[`proto-and-wire-contracts.md`](proto-and-wire-contracts.md)、[`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md) 和视频领域架构 [`../domains/video/architecture.md`](../domains/video/architecture.md)。
+部分取代说明（2026-07-22）：本文只保留 Canvas 播放路线、Canvas 权威和 Canvas → Cut 单次快照原则。本文后续出现的 Cut `.nkv` 权威、专业多轨能力、`CanvasCutDraftPayload` 字段、`TimelineSync`、active/recent Cut 目标、持续同步和 Agent Cut 操作均已由 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 取代，不得作为新实现依据。新 v1 交接只允许有序 media/gap draft，并要求“创建新 `.otio`”或显式指定 `.otio` URI/revision。
+
+本文记录 Canvas 播放顺序、预览路线、Cut 时间线和 Agent 操作能力之间的稳定边界。它补充 [`package-boundaries.md`](package-boundaries.md)、[`proto-and-wire-contracts.md`](proto-and-wire-contracts.md) 和 [`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md)。
 
 ## 背景
 
@@ -29,7 +31,7 @@ Canvas 已经通过容器、节点、连线和 playback metadata 表达一组播
 
 - Canvas 的节点、容器、连接、route 和 preview session 归 `interactive` 领域；播放路线是 Canvas 子系统，不是新的 Canvas kind。
 - 分支叙事和互动 route 在 Canvas 内统一投影为 `CanvasPlaybackPlan.routeCandidates`；实现不得为 narrative 分支另建独立播放路线模型。
-- 素材、缩略图、媒体引用和生成产物必须通过 Asset / ResourceRef / ContentAccess 路径进入 `CanvasCutDraftPayload`，不得把任意 host 绝对路径写成长期事实。
+- 素材、缩略图、媒体引用和生成产物必须通过 Asset / ResourceRef / stable locator 与窄 content port 进入 `CanvasCutDraftPayload`，不得把任意 host 绝对路径写成长期事实。
 - Cut 导出仍走视频领域导出与交付管线；本 ADR 只规定 Canvas 到 Cut 的剪辑初稿交接，不改变导出权威。
 
 ## 决策
@@ -42,7 +44,7 @@ Cut 管视频剪辑时间线
 Agent 通过共享协议读取、展示、确认和触发高层操作
 ```
 
-Canvas 不实现 Cut 式剪辑 timeline。Canvas 可提供 `Playback Route Navigator`，其主形态是预览路线矩阵（Route Storyboard Matrix），紧凑形态可以退化为 `PlaybackRouteStrip`。它只用于展示、筛选、选择、切换和预览 `CanvasPlaybackPlan`。Cut 继续拥有 `.nkv` 的剪辑 timeline 权威。Agent 可以感知顺序，但不拥有自己的 timeline 模型。
+Canvas 不实现 Cut 式剪辑 timeline。Canvas 可提供 `Playback Route Navigator`，其主形态是预览路线矩阵（Route Storyboard Matrix），紧凑形态可以退化为 `PlaybackRouteStrip`。它只用于展示、筛选、选择、切换和预览 `CanvasPlaybackPlan`。Cut 的当前权威与交接契约以替代 ADR 为准；Agent 可以感知顺序，但不拥有自己的 timeline 模型。
 
 ## 顺序权威
 
@@ -72,7 +74,7 @@ CanvasPlaybackPlan
 
 - 预览打开、预览刷新、Agent 查询、发送 Cut 前创建 draft 时，基于当前 `CanvasData` 快照生成 plan。
 - Canvas 数据、playback metadata、选中节点、adapter/mode 或资源投影变化后，相关缓存必须失效。
-- 如果 plan 或 preview-enriched plan 包含已解析的媒体 metadata（duration、thumbnail、poster frame、availability、probe result 等），外部素材、ResourceRef resolver、Asset index 或 ContentAccess revision 变化也必须使缓存失效。若 plan 只保存 durable resource reference，则这些媒体解析结果应留在 preview enrichment 层，不进入基础 `CanvasPlaybackPlan` 缓存键。
+- 如果 plan 或 preview-enriched plan 包含已解析的媒体 metadata（duration、thumbnail、poster frame、availability、probe result 等），外部素材、ResourceRef resolver、Asset index、content fingerprint 或 representation revision 变化也必须使缓存失效。若 plan 只保存 durable resource reference，则这些媒体解析结果应留在 preview enrichment 层，不进入基础 `CanvasPlaybackPlan` 缓存键。
 - 跨 Webview、Agent 或 Cut draft 传递时，应带上 source canvas uri、route id 和 canvas revision/hash；消费者必须能发现 stale plan，而不是继续把旧 route 当成当前事实。
 - 缓存只能优化投影成本，不能成为顺序权威；命中缓存与重新生成应得到等价的 units、transitions 和 route candidates。
 
@@ -563,7 +565,7 @@ Canvas 和 Cut 分别通过 adapter 投影自己的领域模型，不让共享 U
 
 - `CanvasPlaybackPlan` 由 Canvas 顺序生成，路线条不保存私有排序。
 - Plan 生成缓存必须由 Canvas revision/hash 失效；stale plan 不能继续成功导入 Cut。
-- 若 plan enrichment 包含媒体解析结果，外部素材、Asset index、ResourceRef 或 ContentAccess revision 变化必须使相关缓存失效。
+- 若 plan enrichment 包含媒体解析结果，外部素材、Asset index、ResourceRef、content fingerprint 或 representation revision 变化必须使相关缓存失效。
 - 持久 route intent 与 `PlaybackSession` 运行态分离；关闭和重开预览不会写入私有 timeline 顺序。
 - 多输入生成、reference、prompt、note、asset dependency 等非播放连接不得默认进入 `CanvasPlaybackPlan` route；只有明确播放边、播放容器顺序或 route metadata 才能生成播放 unit / transition。
 - Route Storyboard Matrix 行必须按 route family 分组和去重；默认只展开 divergent routes / branches，不能把所有 route candidate 无差别铺成重复行。

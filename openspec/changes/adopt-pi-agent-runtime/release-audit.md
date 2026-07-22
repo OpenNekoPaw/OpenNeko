@@ -91,8 +91,8 @@ This release audit records the post-deletion production bundle and the remaining
 
 - Pi Session receives only the contained virtual workspace locator `/__neko_workspaces/<id>`; Evaluation hard gates reject traversal or a physical workspace path.
 - Skill locators are process-local and fingerprint-addressed; containment tests reject `..` and symlink escape. They are not Evaluation or persisted product facts.
-- Pi workspace and Skill locators are namespace identities, not transparent-cache paths. Resource caching remains exclusively behind stable `ResourceRef`; any cache materialization path stays inside ContentAccess and is never substituted into either virtual namespace.
-- Extension document readers may resolve `${VAR}` or authorized Host paths only inside the Node `@neko/content` low-level boundary. That physical resolver does not recognize Pi workspace locators or Skill locators, so the boundary check no longer treats its canonical Host composition variable names as legacy Agent path services.
+- Pi workspace and Skill locators are namespace identities, not derived-storage paths. Any ResourceCache implementation and materialized path remain private to the Host content/representation layer and are never substituted into either virtual namespace or projected to Pi.
+- Extension document readers resolve ordinary workspace-relative paths, including `neko/assets/<libraryName>/...` links followed by the OS, only inside the Node `@neko/content` low-level boundary. Media-library `${VAR}` inputs are migration-only under `adopt-workspace-linked-media-libraries`; there is no Agent-visible target map or media-library resolver. The physical reader does not recognize Pi workspace locators or Skill locators.
 - Effective TUI configuration and Pi runtime facts contain configured/wire model identities, protocol/auth mechanism, provenance, and digests, but no API key, authorization header, endpoint containing credentials, physical Skill path, or cache handle.
 - The Extension runtime check used an isolated empty workspace. No screenshot or raw runtime report containing user configuration was retained.
 

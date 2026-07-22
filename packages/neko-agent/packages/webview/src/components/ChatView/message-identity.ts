@@ -44,7 +44,6 @@ export function projectMessageIdentities(input: MessageIdentityInput): MessageId
       assistant: {
         displayName: characterName,
         avatarLabel: characterName,
-        avatarUri: projectCharacterAvatarUri(input.characterDialogueSession.profile),
         title: `${characterName} (Character Dialogue)`,
       },
     };
@@ -56,7 +55,6 @@ export function projectMessageIdentities(input: MessageIdentityInput): MessageId
       user: {
         displayName: `You as ${characterName}`,
         avatarLabel: characterName,
-        avatarUri: projectCharacterAvatarUri(input.embodyCharacterSession.profile),
         title: `You as ${characterName}`,
       },
       assistant: {
@@ -75,37 +73,4 @@ export function selectMessageIdentity(
   role: Extract<Message['role'], 'user' | 'assistant'>,
 ): MessageSpeakerIdentity {
   return role === 'user' ? identities.user : identities.assistant;
-}
-
-function projectCharacterAvatarUri(profile: {
-  readonly representationBindings?: readonly {
-    readonly assetRef: string;
-    readonly isDefault?: boolean;
-  }[];
-}): string | undefined {
-  const bindings = profile.representationBindings ?? [];
-  const defaultBinding = bindings.find((candidate) => candidate.isDefault);
-  const candidateRefs = [
-    ...(defaultBinding ? [defaultBinding.assetRef] : []),
-    ...bindings.map((binding) => binding.assetRef),
-  ];
-  return candidateRefs.find(isRenderableAvatarUri);
-}
-
-function isRenderableAvatarUri(uri: string): boolean {
-  try {
-    const protocol = new URL(uri).protocol;
-    return (
-      protocol === 'blob:' ||
-      protocol === 'data:' ||
-      protocol === 'http:' ||
-      protocol === 'https:' ||
-      protocol === 'vscode-resource:' ||
-      protocol === 'vscode-webview:' ||
-      protocol === 'vscode-webview-resource:' ||
-      protocol === 'webview:'
-    );
-  } catch {
-    return false;
-  }
 }

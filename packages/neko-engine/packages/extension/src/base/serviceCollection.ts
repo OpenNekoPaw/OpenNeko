@@ -13,18 +13,3 @@ export interface ServiceIdentifier<T> {
   readonly id: string;
   readonly _brand: T;
 }
-
-/**
- * Create a typed service identifier
- *
- * @param id - Unique string identifier for the service
- * @returns A typed ServiceIdentifier that can be used as a DI key
- *
- * @example
- * ```typescript
- * const IMyService = createServiceId<MyService>('myService');
- * ```
- */
-export function createServiceId<T>(id: string): ServiceIdentifier<T> {
-  return { id, _brand: undefined as unknown as T };
-}

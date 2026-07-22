@@ -92,25 +92,24 @@ describe('SemanticSourceDiscoveryService integration path', () => {
     await writeFile(join(workspace, 'copied.md'), '# Rin\n', 'utf8');
     await writeFile(join(library, 'scene.fountain'), 'INT. ROOM - DAY\n\nNOVA\nHello.\n', 'utf8');
 
-    const settings = createSettings([
+    const linkedLibraries = createLinkedLibraries([
       {
         name: 'Library',
-        variable: 'LIBRARY',
-        resolvedPath: library,
-        enabled: true,
-        accessible: true,
+        workspacePath: 'neko/assets/Library',
+        runtimePath: library,
+        availability: 'available',
       },
     ]);
     const service = new SemanticSourceDiscoveryService({
       workspaceRoot: workspace,
-      settingsService: settings,
+      libraryService: linkedLibraries,
       entityService: createEntityService(),
       homedir: root,
     });
 
     await service.start();
     expect([...projection.sources.keys()]).toEqual(
-      expect.arrayContaining(['workspace:copied.md', 'media-library:LIBRARY:scene.fountain']),
+      expect.arrayContaining(['workspace:copied.md', 'media-library:Library:scene.fountain']),
     );
     expect(factWrites.importAsset).not.toHaveBeenCalled();
     expect(factWrites.confirmEntity).not.toHaveBeenCalled();
@@ -137,45 +136,42 @@ describe('SemanticSourceDiscoveryService integration path', () => {
     await writeFile(join(firstLibrary, 'old.md'), '# Old', 'utf8');
     await writeFile(join(secondLibrary, 'new.md'), '# New', 'utf8');
 
-    const settings = createSettings([
+    const linkedLibraries = createLinkedLibraries([
       {
         name: 'Library',
-        variable: 'LIBRARY',
-        resolvedPath: firstLibrary,
-        enabled: true,
-        accessible: true,
+        workspacePath: 'neko/assets/Library',
+        runtimePath: firstLibrary,
+        availability: 'available',
       },
     ]);
     const service = new SemanticSourceDiscoveryService({
       workspaceRoot: workspace,
-      settingsService: settings,
+      libraryService: linkedLibraries,
       entityService: createEntityService(),
       homedir: root,
     });
     await service.start();
-    expect(projection.sources.has('media-library:LIBRARY:old.md')).toBe(true);
+    expect(projection.sources.has('media-library:Library:old.md')).toBe(true);
 
-    settings.libraries = [
+    linkedLibraries.libraries = [
       {
         name: 'Library',
-        variable: 'LIBRARY',
-        resolvedPath: secondLibrary,
-        enabled: true,
-        accessible: true,
+        workspacePath: 'neko/assets/Library',
+        runtimePath: secondLibrary,
+        availability: 'available',
       },
       {
         name: 'Missing',
-        variable: 'MISSING',
-        resolvedPath: join(root, 'missing'),
-        enabled: true,
-        accessible: false,
+        workspacePath: 'neko/assets/Missing',
+        runtimePath: join(root, 'missing'),
+        availability: 'unavailable',
       },
     ];
     settingsChange.listener?.();
-    await waitFor(() => projection.sources.has('media-library:LIBRARY:new.md'));
-    expect(projection.sources.has('media-library:LIBRARY:old.md')).toBe(false);
-    expect(projection.sources.has('media-library:LIBRARY:new.md')).toBe(true);
-    expect([...projection.sources.keys()]).not.toContain('media-library:MISSING:any.json');
+    await waitFor(() => projection.sources.has('media-library:Library:new.md'));
+    expect(projection.sources.has('media-library:Library:old.md')).toBe(false);
+    expect(projection.sources.has('media-library:Library:new.md')).toBe(true);
+    expect([...projection.sources.keys()]).not.toContain('media-library:Missing:any.json');
 
     service.dispose();
   });
@@ -189,7 +185,7 @@ describe('SemanticSourceDiscoveryService integration path', () => {
     const schema = { schemaId: 'openneko.story', schemaVersion: '1' };
     const service = new SemanticSourceDiscoveryService({
       workspaceRoot: workspace,
-      settingsService: createSettings([]),
+      libraryService: createLinkedLibraries([]),
       entityService: createEntityService(),
       homedir: root,
       creativeSchemaAdapters: [
@@ -219,26 +215,32 @@ async function createFixtureRoot(): Promise<string> {
   return root;
 }
 
-function createSettings(
+function createLinkedLibraries(
   initial: readonly {
     readonly name: string;
-    readonly variable: string;
-    readonly resolvedPath: string;
-    readonly enabled: boolean;
-    readonly accessible: boolean;
+    readonly workspacePath: string;
+    readonly runtimePath: string;
+    readonly availability: 'available' | 'unavailable';
   }[],
 ) {
-  const settings = {
+  const linkedLibraries = {
     libraries: [...initial],
     onDidChange(listener: () => void) {
       settingsChange.listener = listener;
       return { dispose: vi.fn() };
     },
-    async getResolvedLibraries() {
-      return settings.libraries;
+    async list() {
+      return linkedLibraries.libraries.map(({ runtimePath: _runtimePath, ...library }) => library);
+    },
+    resolveWorkspacePath(workspacePath: string) {
+      const library = linkedLibraries.libraries.find(
+        (candidate) => candidate.workspacePath === workspacePath,
+      );
+      if (!library) throw new Error(`Unknown linked library: ${workspacePath}`);
+      return library.runtimePath;
     },
   };
-  return settings;
+  return linkedLibraries;
 }
 
 function createEntityService() {

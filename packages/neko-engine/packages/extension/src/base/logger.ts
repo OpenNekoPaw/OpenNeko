@@ -15,10 +15,6 @@ export function setRootLogger(logger: ILogger): void {
   registry.setRootLogger(logger);
 }
 
-export function getRootLogger(): ILogger {
-  return registry.getRootLogger();
-}
-
 export function getLogger(source: string): ILogger {
   return registry.getLogger(source);
 }

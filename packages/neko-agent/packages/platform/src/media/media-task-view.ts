@@ -31,7 +31,7 @@ export function toMediaBackgroundTaskStatus(status: MediaTaskStatus): MediaBackg
   return status === 'pending' ? 'queued' : status;
 }
 
-export function isStableMediaTaskResultUrl(value: string): boolean {
+function isStableMediaTaskResultUrl(value: string): boolean {
   return isPublicGeneratedAssetResultUri(value);
 }
 

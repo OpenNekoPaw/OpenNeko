@@ -55,6 +55,22 @@ describe('TUI debug automation protocol', () => {
     expect(request.method).toBe('message.cancel');
   });
 
+  it('accepts tool.confirm as a generic pending-confirmation control', () => {
+    const request = parseTuiDebugAutomationRequest(
+      JSON.stringify({
+        schema: TUI_DEBUG_AUTOMATION_REQUEST_SCHEMA,
+        id: 'confirm-1',
+        method: 'tool.confirm',
+        params: {
+          sessionId: 'debug-session-1',
+          toolName: 'BindEntityRepresentation',
+          approved: true,
+        },
+      }),
+    );
+    expect(request.method).toBe('tool.confirm');
+  });
+
   it('accepts terminal.resize and validates its positive integer bounds', () => {
     const request = parseTuiDebugAutomationRequest(
       JSON.stringify({

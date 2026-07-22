@@ -20,6 +20,7 @@ import {
   createDefaultProjectFormatCodecRegistry,
   nkvSourcePathPolicy,
 } from '@neko/shared';
+import { NodeAuthorizedWorkspaceWriter } from '@neko/shared/vscode/extension/workspace-content-writer';
 import { createServiceId } from '../base';
 
 export interface ProjectSessionInfo {
@@ -52,10 +53,18 @@ export class ProjectSessionService implements IProjectSessionService {
   private readonly store: ProjectFileStore;
   private readonly saveSession: ProjectFileSaveSession<ProjectData>;
 
-  constructor(fileOps: ProjectFileOps = createNodeProjectFileOps()) {
+  constructor(fileOps?: ProjectFileOps) {
     this.store = new ProjectFileStore({
       registry: createDefaultProjectFormatCodecRegistry(),
-      fileOps,
+      fileOps: fileOps ?? createNodeProjectFileOps(),
+      ...(fileOps
+        ? {}
+        : {
+            resolveAuthorizedWrite: (filePath: string) => ({
+              writer: new NodeAuthorizedWorkspaceWriter({ workspaceRoot: path.dirname(filePath) }),
+              locator: { kind: 'workspace-file' as const, path: path.basename(filePath) },
+            }),
+          }),
     });
     this.saveSession = new ProjectFileSaveSession<ProjectData>({
       formatId: 'nkv',

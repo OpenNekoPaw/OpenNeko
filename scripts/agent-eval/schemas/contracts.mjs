@@ -187,13 +187,21 @@ const MODEL_PROFILE_SCHEMA = s.union([
   }),
 ]);
 
-const FIXTURE_SCHEMA = s.object({
-  id: ID,
-  root: PATH,
-  source: s.enum(['repository', 'generated']),
-  digest: HASH,
-  mutable: s.boolean(),
-});
+const FIXTURE_SCHEMA = s.object(
+  {
+    id: ID,
+    root: PATH,
+    source: s.enum(['repository', 'generated']),
+    digest: HASH,
+    mutable: s.boolean(),
+  },
+  {
+    links: s.array(
+      s.object({ path: PATH, target: PATH }),
+      { minLength: 1, maxLength: 100 },
+    ),
+  },
+);
 
 const REPORT_POLICY_SCHEMA = s.object({
   rawRetentionDays: s.integer({ min: 1, max: 30 }),
@@ -266,6 +274,14 @@ const STEP_SCHEMA = s.union([
   s.object({ id: ID, kind: s.literal('queue'), prompt: TEXT, afterStepId: ID }),
   s.object({ id: ID, kind: s.literal('wait-for-idle'), timeoutMs: s.integer({ min: 1 }) }),
   s.object({ id: ID, kind: s.literal('cancel'), afterStepId: ID }),
+  s.object({
+    id: ID,
+    kind: s.literal('confirm'),
+    afterStepId: ID,
+    toolName: EXTERNAL_ID,
+    approved: s.boolean(),
+    timeoutMs: s.integer({ min: 1, max: 600_000 }),
+  }),
   s.object({ id: ID, kind: s.literal('resume'), conversationRef: s.literal('current') }),
   s.object({ id: ID, kind: s.literal('feedback'), prompt: TEXT, afterStepId: ID }),
   s.object({
@@ -288,6 +304,7 @@ const PROCESS_EVENT_SELECTOR_SCHEMA = s.union([
       method: s.enum([
         'message.submit',
         'message.cancel',
+        'tool.confirm',
         'session.waitForIdle',
         'session.resume',
         'terminal.resize',
@@ -871,6 +888,7 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'queue',
     'wait-for-idle',
     'cancel',
+    'confirm',
     'resume',
     'feedback',
     'resize',

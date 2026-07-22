@@ -2,7 +2,7 @@
  * useDragDrop - Drag & drop handling for canvas
  *
  * Handles drag-and-drop of files from the VSCode explorer, native
- * file system, and asset library into the canvas.
+ * file system, and Media Library into the canvas.
  */
 
 import { useCallback, useRef, useState } from 'react';
@@ -14,6 +14,7 @@ import {
   inferCanvasModelType,
   inferCanvasTextFileFormat,
   inferNkProjectType,
+  isMediaLibraryDragData,
   type ProjectSourceAddClient,
   type ProjectSourceAddClientInput,
   type ProjectSourceAddResult,
@@ -73,47 +74,33 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
       // Save drop position for when extension responds
       dropPositionRef.current = screenToCanvas(event.clientX, event.clientY);
 
-      if (result.type === 'asset-json' && result.assetData) {
-        // Asset Library protocol
-        const data = result.assetData as Record<string, unknown>;
-        if (data.type === 'asset' || data.type === 'assets' || data.type === 'media-file') {
-          const items =
-            data.type === 'assets'
-              ? (data.items as unknown[])
-              : data.type === 'media-file'
-                ? (data.files as Array<{ path: string }>).map((f) => ({
-                    files: [{ path: f.path }],
-                  }))
-                : [data];
-          const addSourceClient =
-            options.addSourceClient ?? createCanvasProjectSourceAddClient(vscode);
-          const pos = dropPositionRef.current ?? { x: 0, y: 0 };
-          for (let i = 0; i < (items as unknown[]).length; i++) {
-            const item = (items as Array<Record<string, unknown>>)[i];
-            const files = item?.['files'] as Array<Record<string, string>> | undefined;
-            const file = files?.[0];
-            if (file) {
-              const filePath = file['path'];
-              if (!filePath) continue;
-              const dropPos = { x: pos.x + i * 30, y: pos.y + i * 30 };
-              const addResult = await addSourceClient.addSource(
-                createCanvasAssetAddSourceInput({
-                  sourcePath: filePath,
-                  name: file['name'] ?? filePath,
-                  mediaType: normalizeCanvasMediaType(file['mediaType']),
-                  dropPosition: dropPos,
-                }),
-              );
-              applyCanvasAddSourceResult({
-                result: addResult,
-                sourceNameHint: file['name'] ?? filePath,
-                mediaTypeHint: normalizeCanvasMediaType(file['mediaType']),
+      if (result.type === 'json' && isMediaLibraryDragData(result.data)) {
+        const items = result.data.files.map((file) => ({ files: [file] }));
+        const addSourceClient =
+          options.addSourceClient ?? createCanvasProjectSourceAddClient(vscode);
+        const pos = dropPositionRef.current ?? { x: 0, y: 0 };
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          const file = item?.files[0];
+          if (file) {
+            const dropPos = { x: pos.x + i * 30, y: pos.y + i * 30 };
+            const addResult = await addSourceClient.addSource(
+              createCanvasAssetAddSourceInput({
+                sourcePath: file.path,
+                name: file.name,
+                mediaType: normalizeCanvasMediaType(file.mediaType),
                 dropPosition: dropPos,
-                addMediaAt,
-                onDropAssets: options.onDropAssets,
-                onError,
-              });
-            }
+              }),
+            );
+            applyCanvasAddSourceResult({
+              result: addResult,
+              sourceNameHint: file.name,
+              mediaTypeHint: normalizeCanvasMediaType(file.mediaType),
+              dropPosition: dropPos,
+              addMediaAt,
+              onDropAssets: options.onDropAssets,
+              onError,
+            });
           }
         }
       } else if (result.type === 'uri-list' && result.uris) {
@@ -291,12 +278,7 @@ function createCanvasAssetAddSourceInput(input: {
                   ? 'image'
                   : 'media',
     },
-    destination: {
-      kind: 'project',
-      directory: mediaType ? 'media' : 'assets',
-      copyMode: 'link',
-    },
-    ingestMode: 'link',
+    assetDirectory: mediaType ? 'media' : 'assets',
     metadata,
   };
 }
@@ -313,12 +295,7 @@ export function createCanvasMediaAddSourceInput(input: {
     target: {
       role: input.mediaType === 'audio' ? 'audio' : input.mediaType === 'image' ? 'image' : 'media',
     },
-    destination: {
-      kind: 'project',
-      directory: 'media',
-      copyMode: 'copy',
-    },
-    ingestMode: 'create-asset',
+    assetDirectory: 'media',
     metadata: {
       ...createCanvasAddSourceMetadata({
         fileName: input.file.name,
@@ -349,12 +326,7 @@ export function createCanvasFilePickerAddSourceInput(
     target: {
       role: readCanvasSourceRoleForNodeType(nodeType),
     },
-    destination: {
-      kind: 'project',
-      directory: assetKind === 'media' ? 'media' : 'assets',
-      copyMode: 'link',
-    },
-    ingestMode: 'link',
+    assetDirectory: assetKind === 'media' ? 'media' : 'assets',
     metadata,
   };
 }
@@ -393,7 +365,7 @@ function readCanvasAddSourceMetadata(result: ProjectSourceAddResult): {
   readonly textFormat?: string;
   readonly textContent?: string;
 } {
-  const metadata = result.ingest?.metadata;
+  const metadata = result.metadata;
   const canvasAssetKind = metadata?.['canvasAssetKind'];
   const mediaType = metadata?.['mediaType'];
   const runtimeAssetPath = metadata?.['runtimeAssetPath'];

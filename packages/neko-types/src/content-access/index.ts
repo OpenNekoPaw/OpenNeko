@@ -1,44 +1,4 @@
 export {
-  HostContentAccessService,
-  HostContentIngestService,
-} from '../vscode/extension/content-access-service';
-export type {
-  ContentAccessLogger,
-  ContentAccessService,
-  ContentAccessServiceOptions,
-  ContentIngestGuardOptions,
-  ContentIngestService,
-  ContentIngestServiceOptions,
-} from '../vscode/extension/content-access-service';
-
-export {
-  CacheArtifactContentIngestProvider,
-  DocumentEntryContentAccessProvider,
-  ExportStagingContentIngestProvider,
-  GeneratedAssetSourceContentAccessProvider,
-  GeneratedOutputContentIngestProvider,
-  ImportSourceContentIngestProvider,
-  PreviewVariantContentAccessProvider,
-  RegisterExistingSourceContentIngestProvider,
-  ResourceCacheContentAccessProvider,
-  SourceFileContentAccessProvider,
-  VideoProxyContentAccessProvider,
-} from '../vscode/extension/content-access-providers';
-export type {
-  CacheArtifactContentIngestProviderOptions,
-  ContentAccessFileOps,
-  ContentAccessFileExists,
-  ContentAccessWebviewResolver,
-  ContentIngestFileProviderOptions,
-  DocumentEntryContentAccessProviderOptions,
-  GeneratedAssetSourceContentAccessProviderOptions,
-  PreviewVariantContentAccessProviderOptions,
-  ResourceCacheContentAccessProviderOptions,
-  SourceFileContentAccessProviderOptions,
-  VideoProxyContentAccessProviderOptions,
-} from '../vscode/extension/content-access-providers';
-
-export {
   VSCodeResourceCacheService as HostResourceCacheService,
   VSCodeResourceCacheService,
   computeStats,
@@ -65,17 +25,10 @@ export type {
 } from '../vscode/extension/resource-cache-service';
 
 export {
-  DOCUMENT_RESOURCE_CACHE_PROVIDER_ID,
-  DocumentResourceCacheProvider,
   createDocumentResourceRef,
   createDocumentResourceRefFromArchiveRef,
-} from '../vscode/extension/document-resource-cache-provider';
-export type {
-  CreateDocumentResourceRefInput,
-  DocumentEntryReader,
-  DocumentResourceCacheFsOps,
-  DocumentResourceCacheProviderOptions,
-} from '../vscode/extension/document-resource-cache-provider';
+} from '../vscode/extension/document-resource-ref';
+export type { CreateDocumentResourceRefInput } from '../vscode/extension/document-resource-ref';
 export {
   GENERATED_RESOURCE_CACHE_PROVIDER_ID,
   GeneratedAssetDerivativeResourceCacheProvider,
@@ -90,3 +43,24 @@ export type {
   GeneratedImageVariantGeneratorResult,
   ResourceCacheFileOps,
 } from '../vscode/extension/resource-cache-providers';
+
+export * from '../types/content-representation';
+export * from '../types/content-io';
+export * from '../types/content-locator';
+export * from './content-read-service';
+export {
+  createNodeHostContentReadService,
+  NodeDocumentEntryContentReadHandler,
+  NodeGeneratedOutputContentReadHandler,
+  UnavailableContentReadHandler,
+  type CreateNodeHostContentReadServiceOptions,
+  type NodeDocumentEntryReader,
+} from '../vscode/extension/node-content-read-service';
+export {
+  createHostDerivedContentRuntime,
+  type CreateHostDerivedContentRuntimeOptions,
+  type HostDerivedContentMaintenanceOptions,
+  type HostDerivedContentMaintenanceResult,
+  type HostDerivedContentRuntime,
+  type HostDerivedContentTarget,
+} from '../vscode/extension/host-derived-content-runtime';

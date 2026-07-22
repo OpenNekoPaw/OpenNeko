@@ -4,6 +4,7 @@ export type ProjectFileDiagnosticCode =
   | 'invalid-document'
   | 'unsupported-version'
   | 'migration-failed'
+  | 'migration-required'
   | 'missing-source'
   | 'unresolved-variable'
   | 'unauthorized-root'

@@ -61,7 +61,7 @@ export type NodeCardActionId =
   | 'generate'
   | 'open-media-preview'
   | 'open-content-overlay'
-  | 'save-to-asset-library'
+  | 'copy-to-media-library'
   | 'duplicate'
   | 'open-in-editor';
 

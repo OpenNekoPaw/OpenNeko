@@ -73,7 +73,7 @@ const profile: NpcProfileSource = {
   representationBindings: [
     {
       role: 'portrait',
-      assetRef: 'project://assets/xiaoju-portrait',
+      representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju-portrait.png' },
       isDefault: true,
     },
   ],

@@ -14,7 +14,6 @@ const config: KnipConfig = {
     '@fission-ai/openspec', // Used by the `openspec` CLI invoked in development workflow.
     '@types/vscode', // Provided by VSCode runtime
     'esbuild', // Used as CLI bundler, not imported
-    'sharp', // Native binary, loaded at runtime
     '@img/sharp-wasm32', // Sharp WASM fallback
     'clsx',
   ],
@@ -33,6 +32,8 @@ const config: KnipConfig = {
     'packages/neko-cut/packages/webview/src/utils/logger.ts': ['exports'],
     'packages/neko-preview/packages/webview/src/utils/logger.ts': ['exports'],
     'packages/neko-tools/packages/webview/src/utils/logger.ts': ['exports'],
+    // Vitest aliases this file as the complete `vscode` module, so property reads are dynamic.
+    'packages/neko-entity/src/testing/vscode.ts': ['exports'],
     // Shared contract files consumed as package-level type surfaces
     'packages/neko-canvas/packages/webview/src/types/extendedCanvas.ts': ['exports'],
     'packages/neko-preview/packages/extension/src/types/document-messages.ts': ['exports'],
@@ -46,35 +47,120 @@ const config: KnipConfig = {
       entry: [
         'scripts/agent-eval/ablation/run.mjs',
         'scripts/agent-eval/canvas-json-check.mjs',
+        'scripts/agent-eval/fixtures/generate-synthetic-document-image-epub.mjs',
         'scripts/agent-eval/protocol-smoke.mjs',
         'scripts/agent-eval/validators/file-validator-cli.mjs',
+        'scripts/assert-openneko-release-artifacts.mjs',
+        'scripts/check-application-boundaries.mjs',
+        'scripts/check-canvas-playback-boundary.mjs',
+        'scripts/check-content-access-boundaries.mjs',
+        'scripts/check-*-debt-surfaces.mjs',
+        'scripts/check-neko-agent-boundaries.mjs',
+        'scripts/check-openspec.mjs',
+        'scripts/check-release-channels.mjs',
+        'scripts/check-strict-tsconfig.mjs',
+        'scripts/check-webview-boundaries.mjs',
+        'scripts/compile-ts-vsix.mjs',
+        'scripts/project-release-version.mjs',
+        'scripts/proto-gen-ts.mjs',
+        'scripts/smoke-vscode-targets.mjs',
+        'scripts/smoke-webview-builds.mjs',
         'scripts/test-orchestration/fixtures/*.ts',
+        'scripts/test-orchestration/vscode-debug-config.local.mjs',
       ],
     },
     // ── Layer 0: Library packages ──────────────────────
     'packages/neko-types': {
-      // Knip auto-detects entries from package.json exports
+      entry: [
+        'src/index.ts',
+        'src/components/index.ts',
+        'src/config/config-reader.ts',
+        'src/content-access/index.ts',
+        'src/generated/__engine-check.ts',
+        'src/i18n/index.ts',
+        'src/i18n/react.tsx',
+        'src/i18n/webview.ts',
+        'src/icons/index.ts',
+        'src/icons/editor.test.tsx',
+        'src/local-metadata/index.ts',
+        'src/local-metadata/node.ts',
+        'src/local-metadata/node-workspace-identity.ts',
+        'src/local-metadata/sqlite/index.ts',
+        'src/local-metadata/testing/index.ts',
+        'src/nkc/index.ts',
+        'src/nkv/index.ts',
+        'src/path/index.ts',
+        'src/project-authoring/index.ts',
+        'src/project-file-io/index.ts',
+        'src/theme/index.ts',
+        'src/vscode/index.ts',
+        'src/vscode/extension/index.ts',
+      ],
       ignoreDependencies: ['react', 'react-dom', 'tailwindcss'], // Optional peer dependencies
     },
-    'packages/neko-content': {},
+    'packages/neko-content': {
+      entry: ['src/index.ts', 'src/document/index.ts'],
+    },
     'packages/neko-client': {},
+    'packages/neko-entity': {
+      entry: [
+        'src/index.ts',
+        'src/core/index.ts',
+        'src/host-vscode/index.ts',
+        'src/providers/index.ts',
+        'src/projections/index.ts',
+        'src/search/index.ts',
+        'src/testing/index.ts',
+      ],
+    },
+    'packages/neko-search': {
+      entry: [
+        'src/index.ts',
+        'src/core/index.ts',
+        'src/host-vscode/index.ts',
+        'src/providers/index.ts',
+        'src/testing/index.ts',
+      ],
+    },
+    'packages/neko-ui': {
+      entry: [
+        'src/index.ts',
+        'src/creative/index.ts',
+        'src/error-boundary/index.tsx',
+        'src/foundation/index.tsx',
+        'src/hooks/index.ts',
+        'src/icons/codicon.css',
+        'src/icons/index.ts',
+        'src/keyboard/focus.css',
+        'src/keyboard/index.ts',
+        'src/markdown/index.ts',
+        'src/primitives/index.ts',
+        'src/test-utils/index.ts',
+        'src/utils/index.ts',
+        'src/workbench/editor-workbench.css',
+        'src/workbench/index.ts',
+      ],
+    },
 
     // ── Extension parent packages ─────────────────────
     // These are VSCode manifest wrappers; entry from sub-packages.
     'packages/neko-cut': {},
-    'packages/neko-agent': {},
+    'packages/neko-agent': {
+      entry: ['scripts/copy-builtin-skills.mjs'],
+    },
     'packages/neko-canvas': {},
     'packages/neko-tools': {},
     'packages/neko-preview': {},
     'packages/neko-assets': {},
     'packages/neko-engine': {
+      entry: ['scripts/check-media-closure.mjs', 'scripts/run-with-ffmpeg-env.js'],
       ignore: ['packages/host-napi/**'], // Rust packages, skip
     },
 
     // ── Extension sub-packages ────────────────────────
     'packages/neko-cut/packages/extension': {},
     'packages/neko-cut/packages/webview': {
-      // Vite auto-detects entries from HTML files, explicit entry is redundant
+      entry: ['src/host-adapter/index.tsx'],
       ignore: [
         // Phase 2 features (v2.0) - planned but not yet implemented
         'src/components/ColorCorrection/**',
@@ -100,12 +186,24 @@ const config: KnipConfig = {
         'src/config/index.ts',
       ],
     },
-    'packages/neko-agent/packages/platform': {},
-    'packages/neko-agent/packages/agent': {},
+    'packages/neko-agent/packages/platform': {
+      entry: ['src/index.ts', 'src/files/index.ts', 'src/media/index.ts'],
+    },
+    'packages/neko-agent/packages/agent': {
+      entry: [
+        'src/index.ts',
+        'src/approval/index.ts',
+        'src/pi/index.ts',
+        'src/runtime/index.ts',
+        'src/tools/index.ts',
+        'src/validation/index.ts',
+        'src/workspace/index.ts',
+      ],
+    },
     'packages/neko-agent/test-utils': {},
     'packages/neko-canvas/packages/extension': {},
     'packages/neko-canvas/packages/webview': {
-      entry: ['src/preview/narrativePreviewMediaRuntime.ts'],
+      entry: ['src/host-adapter/index.tsx', 'src/preview/narrativePreviewMediaRuntime.ts'],
       ignore: [
         // Barrel exports
         'src/types/index.ts',
@@ -115,9 +213,11 @@ const config: KnipConfig = {
         'src/components/panels/PropertyPanel.tsx',
       ],
     },
-    'packages/neko-tools/packages/extension': {},
+    'packages/neko-tools/packages/extension': {
+      entry: ['src/bootstrap/index.ts', 'src/media-diff/index.ts', 'src/media-lsp/index.ts'],
+    },
     'packages/neko-tools/packages/webview': {
-      entry: ['src/mediaDiff.tsx', 'src/assetDiff.tsx'],
+      entry: ['src/mediaDiff.tsx'],
       ignore: [
         // Barrel exports and internal utilities
         'src/components/MediaDiff/streaming/index.ts',
@@ -134,10 +234,10 @@ const config: KnipConfig = {
         'src/epub/main.tsx',
         'src/pdf/main.tsx',
         'src/model/main.tsx',
+        'src/host-adapter/index.tsx',
       ],
     },
     'packages/neko-preview/packages/extension': {},
-    'packages/neko-assets/packages/asset': {},
     'packages/neko-engine/packages/extension': {},
 
     // ── Skills (CLI scripts, not imported) ───────────────
@@ -149,8 +249,7 @@ const config: KnipConfig = {
       entry: ['package.json'],
     },
     'apps/neko-vscode': {
-      // Pure Extension Pack product manifest with no runtime source.
-      entry: ['package.json'],
+      entry: ['package.json', 'scripts/run-tests.mjs', 'scripts/validate-manifest.mjs'],
     },
     'packages/neko-engine/packages/host-napi': { ignore: ['**/*'] },
     'packages/neko-engine/packages/host-cli': {

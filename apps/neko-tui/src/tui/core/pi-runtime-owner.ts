@@ -24,6 +24,7 @@ import {
   type PiConversationCompactionResult,
   type PiSkillHostSnapshot,
   type PiToolPermissionPolicy,
+  type PiToolResultAssetLoader,
   type PiToolRunIdentity,
   type SkillHostRecord,
   type SkillSourceRoot,
@@ -43,6 +44,7 @@ export interface TuiPiRuntimeOwnerOptions {
   readonly permissionPolicy: PiToolPermissionPolicy;
   readonly workspaceTrusted: boolean;
   readonly locale: 'en' | 'zh';
+  readonly assetLoader?: PiToolResultAssetLoader;
   readonly builtinSkillRoot?: string;
   readonly requireExistingConversation?: boolean;
 }
@@ -353,6 +355,7 @@ export class TuiPiRuntimeOwner {
       skills,
       tools: projectOpenNekoTools(this.options.getTools(), {
         locale: this.options.locale,
+        ...(this.options.assetLoader === undefined ? {} : { assetLoader: this.options.assetLoader }),
         purposeForTool: resolveOpenNekoToolModelPurpose,
         isPurposeOptionalForTool: (tool) => tool.name === TOOL_NAMES_QUALITY.QUALITY_CHECK,
         ...(metadata === undefined ? {} : { metadata }),

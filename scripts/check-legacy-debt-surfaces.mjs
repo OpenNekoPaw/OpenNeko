@@ -10,6 +10,7 @@ const terms = ['legacy', 'fallback', 'deprecated'];
 const requiredSemanticClasses = [
   'delete-now',
   'migrate-now',
+  'migration-only',
   'current-bridge',
   'runtime-resilience',
   'boundary-canonicalizer',
@@ -21,6 +22,20 @@ const requiredSemanticClasses = [
 ];
 const allowedSemanticClasses = new Set([...requiredSemanticClasses, 'needs-review']);
 const failingProductionSemanticClasses = new Set(['delete-now', 'migrate-now', 'needs-review']);
+const retiredAssetCatalogBoundaryPathPatterns = [
+  'packages/neko-agent/packages/extension/src/services/projectMentionSearch.ts',
+  'packages/neko-types/src/local-metadata/node-workspace-storage-inspection.ts',
+  'packages/neko-types/src/types/asset/workspace-linked-media-library.ts',
+  'packages/neko-types/src/types/content-locator.ts',
+];
+const retiredAssetCatalogRules = [
+  { id: 'catalog-type', pattern: /\b(?:AssetEntity|AssetVariant|AssetFile|AssetSource)\b/g },
+  { id: 'catalog-api', pattern: /\b(?:ListAssets|GetAsset|ImportAsset)\b/g },
+  { id: 'asset-uri', pattern: /project:\/\/assets\//g },
+  { id: 'catalog-file', pattern: /neko\/assets\/library\.json/g },
+  { id: 'search-partition', pattern: /['"]asset-library['"]/g },
+  { id: 'picker-mode', pattern: /['"]asset-picker['"]/g },
+];
 const allowedStatuses = new Set(['active', 'planned', 'removed']);
 const allowedActions = new Set([
   'delete',
@@ -52,6 +67,7 @@ const excludedDirectories = new Set([
   'dist',
   'node_modules',
   'out',
+  'reports',
   'target',
 ]);
 const includedExtensions = new Set(['.ts', '.tsx']);
@@ -70,7 +86,8 @@ if (args.has('--self-test')) {
 const packageRoots = collectPackageRoots();
 const files = walkSourceFiles(repoRoot);
 const matches = scanFiles(files);
-const report = buildReport(matches, files);
+const retiredAssetCatalogMatches = scanRetiredAssetCatalog(files);
+const report = buildReport(matches, files, retiredAssetCatalogMatches);
 
 if (args.has('--validate-ledger')) {
   const result = validateLedger(report);
@@ -210,7 +227,7 @@ function scanFiles(sourceFiles) {
   return results;
 }
 
-function buildReport(allMatches, sourceFiles) {
+function buildReport(allMatches, sourceFiles, catalogMatches) {
   const allFiles = sourceFiles.map(toRepoPath);
   const nonTestFiles = allFiles.filter((file) => !isTestPath(file));
   const nonTestMatches = allMatches.filter((match) => !match.isTest);
@@ -242,7 +259,8 @@ function buildReport(allMatches, sourceFiles) {
         nonTestMatches.filter((match) => !isAgentGovernedPath(match.file)),
       ),
     },
-    qualityGate: buildQualityGate(nonTestMatches),
+    retiredAssetCatalog: summarizeRetiredAssetCatalog(catalogMatches),
+    qualityGate: buildQualityGate(nonTestMatches, catalogMatches),
     hotspots: {
       packages: topRows(
         groupMatches(nonTestMatches, (match) => match.packageName),
@@ -261,7 +279,7 @@ function buildReport(allMatches, sourceFiles) {
   };
 }
 
-function buildQualityGate(nonTestMatches) {
+function buildQualityGate(nonTestMatches, catalogMatches = []) {
   const governedMatches = nonTestMatches.filter((match) => !isAgentGovernedPath(match.file));
   const failingMatches = governedMatches.filter((match) =>
     failingProductionSemanticClasses.has(match.semanticClass),
@@ -276,14 +294,78 @@ function buildQualityGate(nonTestMatches) {
     };
   }
 
+  const catalogViolations = catalogMatches.filter((match) => match.allowlist === undefined);
+
   return {
     scope: 'non-agent',
     excludedAgentOccurrences: nonTestMatches.length - governedMatches.length,
-    status: failingMatches.length === 0 ? 'passed' : 'failed',
+    status:
+      failingMatches.length === 0 && catalogViolations.length === 0 ? 'passed' : 'failed',
     failingProductionSemanticClasses: [...failingProductionSemanticClasses].sort(),
-    blockingOccurrences: failingMatches.length,
+    blockingOccurrences: failingMatches.length + catalogViolations.length,
     classes,
+    retiredAssetCatalogViolations: {
+      occurrences: catalogViolations.length,
+      files: new Set(catalogViolations.map((match) => match.file)).size,
+      examples: catalogViolations.slice(0, 50),
+    },
   };
+}
+
+function scanRetiredAssetCatalog(sourceFiles) {
+  const results = [];
+  for (const file of sourceFiles) {
+    const relPath = toRepoPath(file);
+    let content = '';
+    try {
+      content = readFileSync(file, 'utf8');
+    } catch {
+      continue;
+    }
+    const lines = content.split(/\r?\n/);
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index] ?? '';
+      for (const rule of retiredAssetCatalogRules) {
+        rule.pattern.lastIndex = 0;
+        let match = rule.pattern.exec(line);
+        while (match !== null) {
+          const allowlist = retiredAssetCatalogAllowlist(relPath);
+          results.push({
+            file: relPath,
+            line: index + 1,
+            rule: rule.id,
+            text: line.trim(),
+            ...(allowlist ? { allowlist } : {}),
+          });
+          match = rule.pattern.exec(line);
+        }
+      }
+    }
+  }
+  return results;
+}
+
+function summarizeRetiredAssetCatalog(matches) {
+  const violations = matches.filter((match) => match.allowlist === undefined);
+  return {
+    rules: retiredAssetCatalogRules.map((rule) => rule.id),
+    allowlists: {
+      migrationOnly: [],
+      boundaryRejection: retiredAssetCatalogBoundaryPathPatterns,
+      tests: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'],
+    },
+    matches: matches.length,
+    allowedMatches: matches.length - violations.length,
+    violations,
+  };
+}
+
+function retiredAssetCatalogAllowlist(file) {
+  if (isTestPath(file)) return 'test-or-poison-fixture';
+  if (retiredAssetCatalogBoundaryPathPatterns.some((pattern) => matchesGlob(file, pattern))) {
+    return 'boundary-rejection';
+  }
+  return undefined;
 }
 
 function summarizeScope(scopeMatches, scopeFiles) {
@@ -757,6 +839,7 @@ function isMigrateNowSurface(lowerLine, term) {
 function isExplicitRejectionDiagnostic(lowerLine) {
   return containsAny(lowerLine, [
     'fallback is forbidden',
+    'legacy-version',
     'legacy activation lifecycle is intentionally absent',
     'legacy code renderer tokens; removed',
     'legacy media path request',
@@ -856,8 +939,10 @@ function validateQualityGate(report, errors) {
     .filter(([, row]) => row.occurrences > 0)
     .map(([semanticClass, row]) => `${semanticClass}=${row.occurrences}`)
     .join(', ');
+  const catalogViolations = report.qualityGate.retiredAssetCatalogViolations.occurrences;
   errors.push(
-    `Production unresolved legacy/fallback debt remains: ${summary}. ` +
+    `Production unresolved legacy/fallback debt remains: ${summary || 'none'}; ` +
+      `retired-asset-catalog=${catalogViolations}. ` +
       'Resolve, rename, or ledger-classify these surfaces before the gate can pass.',
   );
 }
@@ -1111,6 +1196,10 @@ function printHumanReport(report) {
   printSemanticClassSummary(report.semanticClasses.nonTestSource);
   console.log('');
   printQualityGate(report.qualityGate);
+  console.log(
+    `Retired Asset catalog audit: ${report.retiredAssetCatalog.violations.length} violation(s), ` +
+      `${report.retiredAssetCatalog.allowedMatches} allowlisted migration/rejection/test match(es)`,
+  );
   console.log('');
   printHotspots('Top package hotspots', report.hotspots.packages, 12);
   console.log('');
@@ -1138,6 +1227,13 @@ function printQualityGate(qualityGate) {
     console.log(`- ${semanticClass}: ${row.occurrences} occurrences in ${row.files} files`);
     for (const example of row.examples.slice(0, 3)) {
       console.log(`  ${example.file}:${example.line} ${example.text}`);
+    }
+  }
+  const catalog = qualityGate.retiredAssetCatalogViolations;
+  if (catalog.occurrences > 0) {
+    console.log(`- retired-asset-catalog: ${catalog.occurrences} occurrences in ${catalog.files} files`);
+    for (const example of catalog.examples.slice(0, 8)) {
+      console.log(`  ${example.file}:${example.line} [${example.rule}] ${example.text}`);
     }
   }
 }
@@ -1331,6 +1427,16 @@ function runSelfTest() {
         'legacy',
       ),
       expected: 'migrate-now',
+    },
+    {
+      value: retiredAssetCatalogAllowlist('packages/neko-types/src/types/content-locator.ts'),
+      expected: 'boundary-rejection',
+    },
+    {
+      value: retiredAssetCatalogAllowlist(
+        'packages/neko-canvas/packages/extension/src/runtime.ts',
+      ),
+      expected: undefined,
     },
     {
       value: matchesGlob(

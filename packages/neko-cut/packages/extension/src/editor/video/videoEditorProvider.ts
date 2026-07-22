@@ -12,9 +12,11 @@ import {
   type ProjectFileSaveReason,
 } from '@neko/shared';
 import {
-  createHostContentAccessRuntime,
+  createDefaultLocalResourceAccessService,
+  createHostDerivedContentRuntime,
   requestWebviewProjectSnapshot,
   createProjectSnapshotPackage,
+  type HostDerivedContentRuntime,
   type LocalResourceAccessService,
 } from '@neko/shared/vscode/extension';
 import { IEditorRegistry } from '../common/editorRegistry';
@@ -28,8 +30,8 @@ import { ExportService } from '../../services/ExportService';
 import { resolveMediaPath } from '../../services/tools/helpers';
 import { ExportPresetService } from '../../services/ExportPresetService';
 import { getService, getLogger } from '../../base';
-import { isAssetMessage, handleAssetMessage } from '../../handlers/assetHandlers';
 import { createNkvProjectRef } from '../../services/CutProjectQualityFacade';
+import { CutMediaRepresentationGenerator } from '../../services/CutMediaRepresentationGenerator';
 
 const logger = getLogger('VideoEditorProvider');
 import { IStatusBar } from '../../views/statusBar';
@@ -47,24 +49,18 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
   private mediaServices: Map<string, MediaService> = new Map();
   private engineConnection: EngineConnection = new EngineConnection();
   private exportServices: Map<string, ExportService> = new Map();
+  private derivedRuntimes: Map<string, HostDerivedContentRuntime> = new Map();
   private presetService: ExportPresetService | null = null;
   /** Deferred cleanup subscriptions (cancelled when editor is reopened during export) */
   private deferredCleanupSubs: Map<string, vscode.Disposable[]> = new Map();
   private readonly localResourceAccess: LocalResourceAccessService;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    const contentRuntime = createHostContentAccessRuntime({
+    this.localResourceAccess = createDefaultLocalResourceAccessService({
       extensionUri: context.extensionUri,
       context,
-      sourceFileProvider: { enabled: false },
-      documentEntryProvider: { enabled: false },
-      ingest: { enabled: false },
       logger,
     });
-    if (!contentRuntime.localResourceAccess) {
-      throw new Error('Cut video editor requires LocalResourceAccessService.');
-    }
-    this.localResourceAccess = contentRuntime.localResourceAccess;
   }
 
   /**
@@ -459,7 +455,22 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
         // Dispose without destroying editor stream (export may still use client)
         oldMedia.dispose();
       }
-      const mediaService = new MediaService(webviewPanel, client, document.uri);
+      const representationRoot = detectedProjectRoot ?? jviDir;
+      const oldDerivedRuntime = this.derivedRuntimes.get(docUri);
+      if (oldDerivedRuntime) await oldDerivedRuntime.dispose();
+      const derivedRuntime = await createHostDerivedContentRuntime({
+        target: { kind: 'workspace', workspaceRoot: representationRoot },
+        representationGenerators: [new CutMediaRepresentationGenerator(representationRoot, client)],
+        logger,
+      });
+      this.derivedRuntimes.set(docUri, derivedRuntime);
+      const mediaService = new MediaService(
+        webviewPanel,
+        client,
+        document.uri,
+        derivedRuntime.contentRepresentation,
+        representationRoot,
+      );
       this.mediaServices.set(docUri, mediaService);
 
       // The editor stream is created after the Webview sends `ready`.
@@ -910,14 +921,6 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
           return;
         }
 
-        // Handle asset messages (asset:*)
-        if (isAssetMessage(message)) {
-          await handleAssetMessage(message, (response) => {
-            webviewPanel.webview.postMessage(response);
-          });
-          return;
-        }
-
         await messageHandler.handleMessage(message);
 
         if (message.type === 'project:changed' || message.type === 'save') {
@@ -1126,6 +1129,12 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
       // 清除活动编辑器（如果是当前活动的）
       if (editorRegistry.getActiveEditor() === model) {
         editorRegistry.setActiveEditor(undefined);
+      }
+
+      const derivedRuntime = this.derivedRuntimes.get(docUri);
+      if (derivedRuntime) {
+        await derivedRuntime.dispose();
+        this.derivedRuntimes.delete(docUri);
       }
     });
 

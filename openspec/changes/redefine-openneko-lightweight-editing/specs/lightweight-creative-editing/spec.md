@@ -1,156 +1,133 @@
 ## ADDED Requirements
 
-### Requirement: OpenNeko provides one lightweight editing experience
-OpenNeko SHALL expose one Cut editing experience for importing media, editing an NKV lightweight project, generating proxies, previewing, mixing, exporting, exchanging OTIO, and handing profile-external work to managed processors. It MUST NOT expose a basic/professional mode selector or a hidden professional editing surface.
+### Requirement: Cut uses OTIO as its only writable project format
+Cut SHALL create, open, save, save-as, back up and revert timelines through one OTIO document path. It MUST NOT write Cut timelines as NKV or NKC, maintain a parallel serialized timeline store, or fall back to a legacy codec when OTIO processing fails.
 
-#### Scenario: Open a lightweight project
-- **WHEN** a user opens a supported NKV project
-- **THEN** Cut exposes the retained timeline, proxy/transcode, audio, preview, export, undo/redo, save, and professional handoff operations in one editor
+#### Scenario: Copy and reopen a Cut project
+- **WHEN** a user copies, moves or saves-as a `.otio` document within the same workspace
+- **THEN** the copied file remains an independently writable Cut project and its workspace-relative media references keep the same meaning
 
-#### Scenario: Audit the product surface
-- **WHEN** manifests, commands, messages, stores, UI, localization, Agent capabilities, and Engine clients are inspected
-- **THEN** retained lightweight operations are reachable and removed shader/plugin/diff/mask/keyframe/professional-color operations are absent
+#### Scenario: OTIO processing fails
+- **WHEN** the OTIO document has an unknown schema version, invalid structure or unsupported OpenNeko field
+- **THEN** Cut returns an object/path-level diagnostic and does not invoke NKV, NKC, an empty project or a compatibility reader
 
-### Requirement: NKV has one versioned lightweight profile
-The writable NKV contract SHALL support ordered video, title, subtitle, and audio tracks; no more than three concurrently active visual elements; non-overlapping video clips within one track; explicit source/timeline ranges; project resolution/fps/duration; and workflow lineage. Validation MUST reject unknown or unsupported semantics before save, playback, or export.
+### Requirement: Host document sessions own durable Cut state
+Each open or headless Cut document SHALL have a Host-owned session carrying explicit document URI, session identity and revision. The session SHALL own OTIO bytes, dirty state, commands, undo/redo, save, save-as, backup and revert. The Webview MUST NOT own a writable project snapshot or provide the authoritative bytes for save.
 
-#### Scenario: Validate a layered project
-- **WHEN** a project has any number of organizational tracks but never exceeds three simultaneous visual elements and uses only profile fields
-- **THEN** the canonical codec accepts it as a writable lightweight project
+#### Scenario: Edit through the Webview
+- **WHEN** a user submits a timeline command from the Webview with the current expected revision
+- **THEN** the Host session applies the Cut Core command and returns a new revisioned `TimelineView` projection
 
-#### Scenario: Reject excessive visual concurrency
-- **WHEN** more than three video/title/subtitle elements are active during the same interval
-- **THEN** validation reports the conflicting elements, interval, and layer limit without partially saving the project
+#### Scenario: Save after Webview state is lost
+- **WHEN** selection, playhead, zoom or the entire Webview presentation state is discarded
+- **THEN** the Host session can still save or reopen the complete OTIO document without requesting a Webview project snapshot
 
-#### Scenario: Render gaps
-- **WHEN** an upper visual track or all visual tracks contain a gap
-- **THEN** the upper gap is transparent and a fully empty visual composite uses the project black background while eligible audio continues
+#### Scenario: Reject a stale command
+- **WHEN** a Webview, Canvas, Agent or TUI command carries a stale or mismatched document/session identity
+- **THEN** the Host rejects it without selecting an active editor or mutating another document
 
-### Requirement: Lightweight visual composition is closed and deterministic
-Visual clips SHALL support track-order z, normal source-over alpha, static position/scale/rotation, crop, contain/cover, and static opacity. NKV MUST NOT support non-normal blend, masks, adjustment/effect tracks, nested compositions, arbitrary shader/effect data, or animated layout.
+### Requirement: Cut accepts one exact lightweight OTIO subset
+Cut SHALL accept only the frozen Timeline, top-level Stack, Track, Clip, Gap, ExternalReference, RationalTime and TimeRange schema versions. It SHALL allow exactly one Video Track and zero or more Audio Tracks. Nested stacks, transitions, effects, time warps, markers, additional Video Tracks, multiple media references and unknown schema versions MUST be rejected before mutation.
 
-#### Scenario: Create picture in picture
-- **WHEN** a user places a transformed overlay above a base clip
-- **THEN** Cut persists the static layout and Engine preview/export render the same normal-alpha composition
+#### Scenario: Open a supported timeline
+- **WHEN** an OTIO contains one sequential Video Track, Audio Tracks, Clip/Gap items and one ExternalReference per Clip
+- **THEN** Cut opens it without generating another writable timeline model
 
-#### Scenario: Request an unsupported composition field
-- **WHEN** a caller authors a non-normal blend, mask, adjustment layer, nested composition, or arbitrary visual effect
-- **THEN** the authoring contract rejects the exact field and does not encode it as generic metadata
+#### Scenario: Open an unsupported timeline
+- **WHEN** an OTIO contains a nested Stack, second Video Track, Transition, Effect, TimeWarp, Marker or unknown schema version
+- **THEN** Cut preserves the source bytes and reports every unsupported object/path without flattening or dropping it
 
-### Requirement: Lightweight timing supports only simple deterministic operations
-The writable profile SHALL support hard cuts, fade to/from black, cross-dissolve between eligible adjacent clips, and a bounded constant positive clip rate with optional audio pitch preservation. It MUST NOT support reverse, time-remap curves, arbitrary transitions, transition effect parameters, or generic keyframes.
+### Requirement: OpenNeko metadata preserves current clip and link identity
+Cut SHALL persist project profile/edit-rate/canvas metadata, one stable `clipId` per Clip, optional `linkedAudioClipId` / `linkedVideoClipId`, and supported audio gain/fade values under the `openneko` namespace. Link identity MAY drive the current separate/unseparate and no-duplicate-mix behavior; it MUST NOT contain paths, media bytes or runtime handles.
 
-#### Scenario: Add a cross-dissolve
-- **WHEN** adjacent clips have sufficient source handles and a supported dissolve duration
-- **THEN** Cut persists the transition and preview/export render the same overlap
+#### Scenario: Save linked audio
+- **WHEN** a user separates audio through the current supported VS Code path and saves the project
+- **THEN** the Video and Audio Clips retain stable identities, reciprocal link metadata and the same ExternalReference after reopen
 
-#### Scenario: Change constant speed
-- **WHEN** a user assigns a supported positive fixed rate
-- **THEN** Cut updates timeline duration/source mapping and preview/export use that same mapping
+#### Scenario: Encounter unknown OpenNeko metadata
+- **WHEN** an OTIO contains an unknown key under the `openneko` namespace
+- **THEN** Cut rejects the document for editing instead of ignoring the field and overwriting it
 
-#### Scenario: Request advanced timing
-- **WHEN** a caller requests reverse, speed keyframes, time-remap, wipe, glitch, iris, ripple, or another unsupported transition
-- **THEN** authoring fails with an unsupported-capability diagnostic and writes no generic timing/effect field
+### Requirement: Media entry is workspace link-only
+Cut SHALL add media through a normalized workspace-relative path and SHALL persist that path as the ExternalReference target. The path MAY refer to a file outside the Cut project directory but MUST remain inside the authorized workspace after normalization and symlink resolution. Cut MUST NOT copy, ingest, transcode or create a project-local media artifact as part of this operation.
 
-### Requirement: Titles and subtitles remain first-class tracks
-NKV SHALL support timed title and subtitle elements with bounded text, font/fallback identity, size, color, background, alignment, stroke, static layout, and duration. Preview and export MUST use deterministic shaping and packaged font fallback. Animated text, arbitrary text effects, and path text MUST NOT be writable.
+#### Scenario: Link media outside the Cut directory
+- **WHEN** `projects/cut/demo.otio` links `neko/assets/Footage/shot01.mp4`
+- **THEN** the OTIO stores the unchanged normalized workspace-relative path and no media bytes are copied
 
-#### Scenario: Author timed subtitles
-- **WHEN** a user imports or creates subtitles using supported styles
-- **THEN** Cut persists them as subtitle elements and preview/export render them at the declared intervals
+#### Scenario: Move the OTIO document
+- **WHEN** the `.otio` is moved or copied elsewhere in the same workspace
+- **THEN** its ExternalReference still resolves from the workspace root to the same media file
 
-#### Scenario: Resolve a missing font
-- **WHEN** a persisted font is unavailable on the current platform
-- **THEN** the renderer uses the declared packaged fallback, reports the substitution, and produces the same preview/export layout
+#### Scenario: Reject a path escape
+- **WHEN** a reference is absolute, a runtime URL, or escapes the workspace after normalization or symlink resolution
+- **THEN** the Host rejects it before mutation or media access
 
-### Requirement: Basic color correction remains available
-Visual clips SHALL support a closed bounded set for exposure or brightness, contrast, temperature/tint, and saturation with reset semantics. Wheels, curves, selective HSL, LUT upload, secondary correction, arbitrary parameters, and animated grading MUST NOT be writable.
+### Requirement: Project root config only selects the document destination
+The Host SHALL accept a workspace-relative `cut.defaultProjectRoot` only as the default directory for newly created `.otio` files. It MUST NOT persist the configured root, use it as the ExternalReference base or require project-local `media/`, `exports/` or derived directories.
 
-#### Scenario: Correct a clip
-- **WHEN** a user changes supported basic-color controls
-- **THEN** Cut persists typed values and Engine preview/export apply the same correction
+#### Scenario: Create under a configured root
+- **WHEN** `cut.defaultProjectRoot` is `projects/cut` and a user creates project `demo`
+- **THEN** the Host creates `projects/cut/demo.otio` while media references remain workspace-relative
 
-#### Scenario: Request professional grading
-- **WHEN** a caller submits LUT, curve, wheel, selective HSL, secondary, animated, or unknown color data
-- **THEN** Cut rejects the data or offers managed professional handoff without writing a partial grade
+### Requirement: Cut exposes one basic operation surface
+Cut SHALL expose one mode with a sequential Video Track, Audio Tracks, link/relink, split, trim, reorder, ripple delete, Gap, gain, mute, fade, preview and media export. It MUST NOT expose media copy/import, fixed/complex speed, multi-layer visual composition, title/subtitle authoring, transitions, nested timelines, masks, blend modes, keyframes, color/effect/plugin systems or arbitrary DSP graphs.
 
-### Requirement: Lightweight audio supports multitrack finishing
-NKV SHALL support multiple audio tracks and embedded video audio with source/timeline mapping, mute, gain/volume, pan, fades, and a closed corrective DSP chain. Cut SHALL expose waveform, loudness, mix preview, and mixdown/export without exposing third-party DSP or arbitrary graphs.
+#### Scenario: Link and edit without a media runtime
+- **WHEN** a Host provides workspace IO but no media adapter
+- **THEN** Cut can create, open, link, edit and save structurally valid OTIO while probe, separation, preview and media export return an unavailable diagnostic
 
-#### Scenario: Mix dialogue and music
-- **WHEN** dialogue and music overlap with supported level, pan, fade, EQ/dynamics, and limiter settings
-- **THEN** preview and export preserve source identities, declared timing, and the expected mix
+### Requirement: Current logical audio separation semantics are retained
+The initial OTIO implementation SHALL preserve the current explicit separation behavior: before separation a Video Clip MAY contribute embedded audio; separation creates a linked Audio Clip that references the same media and prevents duplicate mixing. The operation MUST NOT create WAV, transcode, copy or modify media. Fully independent audio/video editing is not required by this change.
 
-#### Scenario: Request unsupported DSP
-- **WHEN** a caller registers third-party DSP, submits arbitrary effect JSON, or authors an unknown node
-- **THEN** mutation fails visibly and no runtime factory or compatibility fallback participates
+#### Scenario: Separate embedded audio
+- **WHEN** the selected VS Code media adapter confirms usable embedded audio and the user invokes separation at the current document revision
+- **THEN** one Cut Core command creates an Audio Clip with the same ExternalReference/ranges and reciprocal link identities
 
-### Requirement: Derived media does not replace project truth
-Proxy, waveform, thumbnail, loudness, transcode, AI candidate, and export artifacts SHALL be represented by ResourceRef and provenance according to their lifecycle. NKV SHALL continue to reference original sources until an explicit authoring disposition accepts a new asset; machine-specific cache paths MUST NOT become project facts.
+#### Scenario: Preview before separation
+- **WHEN** a Video Clip contains embedded audio and has no linked Audio Clip
+- **THEN** the current media adapter may preserve its existing embedded-audio playback behavior
 
-#### Scenario: Edit through a proxy
-- **WHEN** an equivalent proxy is available
-- **THEN** preview may use it while trim, source mapping, relink, export, and provenance remain anchored to the original source
+#### Scenario: Preview after separation
+- **WHEN** the Video Clip has a linked Audio Clip
+- **THEN** the current media adapter avoids mixing the same source audio twice
 
-#### Scenario: Rebuild a missing derived artifact
-- **WHEN** proxy, waveform, thumbnail, or loudness data is absent
-- **THEN** the project remains valid and Cut can request regeneration without silently changing project revision
+### Requirement: TUI supports offline OTIO authoring only
+The TUI SHALL expose the production Cut Core and document binding for OTIO create/open/save/save-as, structural import/export, workspace link/relink and editing commands. It MUST NOT claim media probe, logical-separation evidence, frame capture, PCM, preview or MP4 export when no media adapter is composed.
 
-### Requirement: Proxy, transcode, and export are in-product operations
-Cut SHALL submit typed Engine jobs for proxy, supported transcode, and timeline export; display progress, cancellation, and terminal diagnostics; and return authorized ResourceRefs. Profiles MUST be versioned and MUST NOT accept arbitrary FFmpeg arguments or filter graphs.
+#### Scenario: Export an OTIO structure from TUI
+- **WHEN** a TUI Agent edits a valid `.otio` and requests export to another `.otio` destination
+- **THEN** the Host serializes the OTIO structure, preserves media bytes and returns the new document identity/revision
 
-#### Scenario: Export a project revision
-- **WHEN** a user exports a valid NKV document and expected revision
-- **THEN** Cut freezes that revision, reports job progress, and presents the validated output even if later edits create a newer revision
+#### Scenario: Request media work from offline TUI
+- **WHEN** a TUI request requires probe, frame capture, playback, logical-separation validation or MP4 render
+- **THEN** the capability returns a media-runtime-unavailable diagnostic without simulating success
 
-#### Scenario: Cancel an output job
-- **WHEN** a user cancels proxy, transcode, or export
-- **THEN** Cut reports cancellation, preserves existing sources/destinations, and does not present partial output as successful
+### Requirement: Canvas sends an explicit snapshot to an explicit Cut target
+Canvas route authoring SHALL either create a new `.otio` project or append to an explicitly named `.otio` document URI with expected revision. The system MUST NOT infer an active/recent Cut, overwrite a target, replace a selection or establish continuous synchronization.
 
-#### Scenario: Transcode an incompatible source
-- **WHEN** an authorized source can be converted by a supported profile
-- **THEN** Engine creates a new managed asset with provenance and Cut requires an explicit disposition before adding it to the project
+#### Scenario: Create a new Cut from Canvas
+- **WHEN** the user confirms a supported workspace-relative media/gap route and chooses a new Cut target
+- **THEN** the ordered route creates a new `.otio` document through Cut Core
 
-### Requirement: NKV maps predictably to OTIO editorial structure
-The domain layer SHALL map NKV ordered tracks, clips, gaps, supported transitions, source ranges, and timing to OTIO Timeline/Stack/Track/Clip/Gap/Transition semantics. OpenNeko-only layout, basic color, text style, and DSP SHALL use versioned `openneko.*` metadata. Runtime tokens, proxy/cache paths, and localhost URLs MUST NOT be exported as editorial facts.
+#### Scenario: Append to a specified Cut
+- **WHEN** the user confirms an existing document URI and matching expected revision
+- **THEN** supported route items append at the end of that exact OTIO timeline
 
-#### Scenario: Round-trip the common subset
-- **WHEN** a lightweight project uses only the declared OTIO core and recognized OpenNeko extensions
-- **THEN** NKV-to-OTIO-to-NKV preserves track order, ranges, gaps, supported transitions, and recognized extension values
+### Requirement: Legacy Cut projects fail visibly without migration
+The new Cut editor SHALL NOT register NKC or NKV as writable Cut projects, perform automatic conversion or dual-write old and new formats. Existing files MUST remain byte-for-byte unchanged when rejected.
 
-#### Scenario: Import unsupported OTIO semantics
-- **WHEN** OTIO contains excessive visual concurrency, nested stacks, timewarp, unsupported effects/transitions, or unknown required extensions
-- **THEN** import preserves the source OTIO, returns object/path-level diagnostics, and does not silently flatten or discard data
+#### Scenario: Open a legacy Cut project
+- **WHEN** a user attempts to open an NKC-embedded or NKV Cut timeline
+- **THEN** Cut returns an unsupported legacy format diagnostic and does not alter, rename, migrate or delete the file
 
-### Requirement: Legacy NKV is migrated by capability without data loss
-The system MUST inspect legacy version and capability usage before migration. A fully representable project MAY be projected in memory and written only after explicit save through normal dirty/undo/backup semantics. A project using removed, excessive, or unknown semantics MUST remain byte-for-byte unchanged and return `unsupported-nkv-capabilities` diagnostics.
+### Requirement: Cut Webview exposes one basic presentation
+The Cut Webview SHALL retain one contextual Inspector and minimal playback/timeline controls. It MUST remove the basic/professional selector, profile-external entries, disabled placeholders and Minimap implementation/activation paths.
 
-#### Scenario: Open a representable legacy project
-- **WHEN** every legacy field maps losslessly to the lightweight profile
-- **THEN** Cut opens an in-memory projection and does not rewrite the file until explicit save
+#### Scenario: Inspect supported items
+- **WHEN** a Video Clip, Audio Clip, Gap or project summary is selected
+- **THEN** the Inspector shows only source/link state, timing/trim, supported audio values or project summary fields owned by that context
 
-#### Scenario: Open an advanced legacy project
-- **WHEN** a project uses custom shader, non-normal blend, mask, arbitrary effect, keyframe/time-remap, professional color, or another removed semantic
-- **THEN** Cut preserves the file and reports field paths plus explicit handoff or flatten options
-
-#### Scenario: Open an unknown schema
-- **WHEN** NKV version or required schema is unknown
-- **THEN** loading fails closed without best-effort field fallback
-
-### Requirement: Authoring and playback are document-scoped
-Every Cut mutation, Engine timeline operation, media job, and processor handoff SHALL carry an explicit NKV document URI and expected revision where applicable. Active editor, recent file, output completion, or filename similarity MUST NOT select the target.
-
-#### Scenario: Edit one of multiple projects
-- **WHEN** multiple NKV documents are open and an edit, export, candidate accept, or handoff is requested
-- **THEN** only the explicitly identified document/revision is affected or the operation fails on mismatch
-
-### Requirement: Webview exposes only retained lightweight capabilities
-The Cut Webview SHALL retain timeline, bounded layers, static layout, title/subtitle, simple transition, fixed speed, basic color, audio, derived-media, playback, and job UI. It MUST remove professional mode, arbitrary Effects/Mask, keyframe/shape animation, non-normal blend, reverse/time-remap, stylized transition, professional color/LUT, diff, and dynamic capability surfaces together with their stores, messages, handlers, localization, styles, and tests.
-
-#### Scenario: Inspect Webview contracts
-- **WHEN** Cut Webview source and generated bundles are audited
-- **THEN** only typed per-editor authoring/playback/job/derived-artifact clients remain and removed operations cannot be sent or restored by a hidden UI path
-
-#### Scenario: Seek and update preview
-- **WHEN** a user scrubs or commits a timeline edit
-- **THEN** Webview uses the existing stream seek or revisioned timeline update contract without requesting a public stream/session restart
+#### Scenario: Navigate a long timeline
+- **WHEN** the timeline is wider than the viewport
+- **THEN** the user navigates through horizontal scrolling, zoom, fit-all and playhead following without a Minimap projection

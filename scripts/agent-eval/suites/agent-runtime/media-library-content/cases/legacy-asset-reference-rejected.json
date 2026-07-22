@@ -1,0 +1,84 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "legacy-asset-reference-rejected",
+  "suiteId": "agent-runtime.media-library-content",
+  "caseGroup": "boundary",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Receive a legacy project Asset URI and report its visible rejection without resolving through any retired Asset capability.",
+    "canonicalPath": [
+      "TUI input queue",
+      "ReadDocument",
+      "ContentLocator validation",
+      "fail-closed diagnostic"
+    ],
+    "forbiddenFallback": [
+      "ListAssets",
+      "GetAsset",
+      "ImportAsset",
+      "Asset catalog lookup",
+      "library.json runtime read",
+      "project://assets resolver"
+    ],
+    "observables": [
+      {
+        "ref": "legacy-rejection-facts",
+        "kind": "runtime-fact",
+        "description": "The requested ReadDocument Tool fails and bounded no-fallback facts contain no retired Asset path.",
+        "required": true
+      }
+    ],
+    "expectedResult": "ReadDocument rejects project://assets/legacy-book and the Agent reports that the legacy reference requires migration.",
+    "expectedFailure": "A successful Tool result, Asset Tool invocation, catalog read, silent empty result, or missing terminal answer fails visibly."
+  },
+  "fixtureRefs": ["media-library-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "调用 ReadDocument 一次，source={kind:file,path:project://assets/legacy-book}，mode=content、include_images=false、max_chars=1000。不要修正路径，不要调用其他工具，不要查询 Asset catalog。该旧引用必须失败；简短报告需要显式迁移，并单独输出 LEGACY_ASSET_REJECTED_OK。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "idle", "kind": "fully-idle", "evidenceRef": "legacy-rejection-facts" },
+    {
+      "id": "read-rejected",
+      "kind": "tool-call",
+      "name": "ReadDocument",
+      "status": "error",
+      "evidenceRef": "legacy-rejection-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["LEGACY_ASSET_REJECTED_OK"],
+      "evidenceRef": "legacy-rejection-facts"
+    },
+    {
+      "id": "no-asset-fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "ListAssets",
+        "GetAsset",
+        "ImportAsset",
+        "AssetEntity",
+        "asset-library",
+        "library.json"
+      ],
+      "evidenceRef": "legacy-rejection-facts"
+    }
+  ],
+  "artifactChecks": [
+    {
+      "id": "legacy-catalog-absent",
+      "kind": "file-absent",
+      "evidenceRef": "legacy-rejection-facts",
+      "path": "neko/assets/library.json"
+    }
+  ],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

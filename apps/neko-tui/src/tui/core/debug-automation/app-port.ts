@@ -16,6 +16,7 @@ import type {
   TuiDebugAutomationIdleState,
   TuiDebugAutomationMarkdownFacts,
   TuiDebugAutomationSessionFacts,
+  TuiDebugAutomationSkillReceipt,
   TuiDebugAutomationTaskFact,
   TuiDebugAutomationToolCallSummary,
   TuiDebugAutomationTurnSummary,
@@ -35,7 +36,7 @@ const FACT_LIMITS = Object.freeze({
   turnToolCalls: 256,
   timelineRows: 2_048,
   history: 512,
-  skillActivations: 128,
+  skillReceipts: 128,
   tasks: 512,
   continuations: 512,
   promptComposition: 256,
@@ -68,6 +69,7 @@ export interface TuiAutomationAppPortOptions {
   readonly stores: TuiConversationStores;
   readonly readHandle: () => TuiAutomationSessionHandle;
   readonly submitInput: (input: string) => Promise<void>;
+  readonly confirmToolCall?: (toolCallId: string, approved: boolean) => void;
   readonly readMarkdownFacts: () => TuiDebugAutomationMarkdownFacts;
 }
 
@@ -120,6 +122,41 @@ export function createTuiAutomationAppPort(
       return wasRunning;
     },
 
+    async confirmPendingTool(input) {
+      const startedAt = Date.now();
+      for (;;) {
+        const pending = stores.ui.getState().pendingApproval;
+        if (pending) {
+          if (!options.confirmToolCall) {
+            throw new TuiDebugAutomationProtocolError(
+              'session-not-ready',
+              'TUI Tool confirmation owner is unavailable.',
+            );
+          }
+          if (pending.toolName !== input.toolName) {
+            throw new TuiDebugAutomationProtocolError(
+              'invalid-request',
+              `Pending Tool confirmation is for ${pending.toolName}, not ${input.toolName}.`,
+            );
+          }
+          pending.resolve(input.approved);
+          options.confirmToolCall(pending.toolCallId, input.approved);
+          return {
+            toolCallId: pending.toolCallId,
+            toolName: pending.toolName,
+            approved: input.approved,
+          };
+        }
+        if (Date.now() - startedAt >= input.timeoutMs) {
+          throw new TuiDebugAutomationProtocolError(
+            'session-timeout',
+            `Timed out waiting for ${input.toolName} confirmation after ${input.timeoutMs}ms.`,
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    },
+
     resizeTerminal(input): void {
       stores.ui.getState().setTerminalSize({ columns: input.columns, rows: input.rows });
     },
@@ -152,7 +189,7 @@ export function createTuiAutomationAppPort(
       const rawTasks = await readTasks(handle);
       const tasks = bounded(projectTaskFacts(rawTasks, rawContinuations), FACT_LIMITS.tasks);
       const turns = readTurnSummaries(stores);
-      const skillActivations = bounded([], FACT_LIMITS.skillActivations);
+      const skillReceipts = bounded(readSkillReceipts(stores), FACT_LIMITS.skillReceipts);
       const artifacts = bounded(
         readArtifactFacts(
           stores,
@@ -190,7 +227,7 @@ export function createTuiAutomationAppPort(
         idle,
         turns: turns.items,
         ...(history ? { history: history.items } : {}),
-        skillActivations: skillActivations.items,
+        skillReceipts: skillReceipts.items,
         tasks: tasks.items,
         messageQueue,
         continuations: continuations.items,
@@ -235,7 +272,7 @@ export function createTuiAutomationAppPort(
           turns: turns.completeness,
           turnToolCalls: turns.toolCalls,
           timelineRows: turns.timelineRows,
-          skillActivations: skillActivations.completeness,
+          skillReceipts: skillReceipts.completeness,
           tasks: tasks.completeness,
           continuations: continuations.completeness,
           promptComposition: promptComposition.completeness,
@@ -690,19 +727,25 @@ export function readMessageToolCallSummaries(
   for (const row of message.timelineRows ?? []) {
     if (row.kind !== 'tool' || !row.toolCallId || !row.toolName) continue;
     const existing = summaries.get(row.toolCallId);
-    const result =
+    const rawResult =
       row.toolResult !== undefined
         ? row.toolResult
         : existing?.result !== undefined
           ? existing.result
           : row.resultSummary;
+    const result =
+      row.toolName === 'read_skill'
+        ? (projectSkillReceiptValue(row.toolCallId, row.status, rawResult) ?? undefined)
+        : rawResult;
     const error = row.toolError ?? existing?.error ?? row.diagnosticCode;
     summaries.set(row.toolCallId, {
       id: row.toolCallId,
       name: row.toolName,
       status: row.status,
       ...(row.toolArguments
-        ? { arguments: row.toolArguments }
+        ? {
+            arguments: row.toolName === 'read_skill' ? {} : row.toolArguments,
+          }
         : existing?.arguments
           ? { arguments: existing.arguments }
           : {}),
@@ -807,12 +850,19 @@ function messageContainsCanvasSignal(message: Message): boolean {
 function projectToolCallSummary(
   toolCall: Message['toolCalls'][number],
 ): TuiDebugAutomationToolCallSummary {
+  const skillReceipt = projectSkillReceipt(toolCall);
   return {
     id: toolCall.id,
     name: toolCall.name,
     status: toolCall.status,
-    ...(toolCall.arguments ? { arguments: toolCall.arguments } : {}),
-    ...(toolCall.result !== undefined ? { result: toolCall.result } : {}),
+    ...(toolCall.arguments
+      ? {
+          arguments: toolCall.name === 'read_skill' ? {} : toolCall.arguments,
+        }
+      : {}),
+    ...(toolCall.result !== undefined
+      ? { result: toolCall.name === 'read_skill' ? skillReceipt : toolCall.result }
+      : {}),
     ...(toolCall.error ? { error: toolCall.error } : {}),
     resultObservation: toolCall.error
       ? 'error'
@@ -825,6 +875,70 @@ function projectToolCallSummary(
       ? [{ code: 'tool-call-error', severity: 'error', message: toolCall.error }]
       : [],
   };
+}
+
+function readSkillReceipts(
+  stores: TuiConversationStores,
+): readonly TuiDebugAutomationSkillReceipt[] {
+  return stores.conversation
+    .getState()
+    .messages.flatMap((message) => message.toolCalls.map(projectSkillReceipt))
+    .filter((receipt): receipt is TuiDebugAutomationSkillReceipt => receipt !== null);
+}
+
+function projectSkillReceipt(
+  toolCall: Message['toolCalls'][number],
+): TuiDebugAutomationSkillReceipt | null {
+  if (toolCall.name !== 'read_skill') return null;
+  return projectSkillReceiptValue(toolCall.id, toolCall.status, toolCall.result);
+}
+
+function projectSkillReceiptValue(
+  toolCallId: string,
+  status: string,
+  result: unknown,
+): TuiDebugAutomationSkillReceipt | null {
+  if (status !== 'success') return null;
+  if (!isRecord(result)) return null;
+  const skillName = result['skillName'];
+  const source = result['source'];
+  const rawFingerprint = result['fingerprint'];
+  const projectedLocatorKind = result['locatorKind'];
+  const sourceKind = isSkillSourceKind(source)
+    ? source
+    : isRecord(source) && isSkillSourceKind(source['kind'])
+      ? source['kind']
+      : null;
+  if (
+    typeof skillName !== 'string' ||
+    sourceKind === null ||
+    typeof rawFingerprint !== 'string' ||
+    (projectedLocatorKind !== 'skill' && projectedLocatorKind !== 'skill-resource')
+  ) {
+    return null;
+  }
+  const fingerprint = normalizeSkillFingerprint(rawFingerprint);
+  if (fingerprint === null) return null;
+  return {
+    toolCallId,
+    skillName,
+    source: sourceKind,
+    fingerprint,
+    locatorKind: projectedLocatorKind,
+  };
+}
+
+function normalizeSkillFingerprint(value: string): `sha256:${string}` | null {
+  if (/^sha256:[a-f0-9]{64}$/u.test(value)) return `sha256:${value.slice('sha256:'.length)}`;
+  return /^[a-f0-9]{64}$/u.test(value) ? `sha256:${value}` : null;
+}
+
+function isSkillSourceKind(value: unknown): value is TuiDebugAutomationSkillReceipt['source'] {
+  return value === 'builtin' || value === 'personal' || value === 'project';
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function safeJsonIncludesCanvas(value: unknown): boolean {

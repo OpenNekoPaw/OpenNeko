@@ -602,9 +602,7 @@ const AGENT_TURN_PRECONDITION_MESSAGES: Record<AgentMessageTurnPreconditionReaso
     'The selected model does not support the required workflow capability. Choose a model with the needed vision or generation capability.',
 };
 
-export function getAgentTurnPreconditionMessage(
-  reason: AgentMessageTurnPreconditionReason,
-): string {
+function getAgentTurnPreconditionMessage(reason: AgentMessageTurnPreconditionReason): string {
   return AGENT_TURN_PRECONDITION_MESSAGES[reason];
 }
 
@@ -785,7 +783,7 @@ export function projectThreeReferenceContextImageResources(
   return resources;
 }
 
-export function projectUserMessageContextReferences(input: {
+function projectUserMessageContextReferences(input: {
   readonly contextPayloads?: readonly AgentContextPayload[];
   readonly fileReferences?: readonly AgentFileReference[];
 }): MessageContextReference[] | undefined {
@@ -835,7 +833,6 @@ function fileReferenceContextType(reference: AgentFileReference): MessageContext
   ) {
     return 'media';
   }
-  if (reference.source === 'asset-library') return 'asset';
   if (reference.source === 'entity-graph') return 'entity';
   return 'file';
 }
@@ -1109,7 +1106,7 @@ export async function runAgentMessageTurnRuntime(
   return { status: 'precondition-unmet', reason: 'no-agent-runtime' };
 }
 
-export function projectAgentThreeReferenceMediaControls(
+function projectAgentThreeReferenceMediaControls(
   payloads: readonly AgentContextPayload[] | undefined,
 ): ThreeReferenceMediaControls | undefined {
   const contexts = (payloads ?? []).flatMap((payload): readonly ThreeReferenceContextData[] => {
@@ -1610,7 +1607,7 @@ export function appendAmbientCanvasSystemPrompt(
   );
 }
 
-export function appendPerceptionToolRoutingPrompt(
+function appendPerceptionToolRoutingPrompt(
   systemPrompt: string,
   input: {
     readonly chatModel?: ModelRef<'llm'>;
@@ -1659,7 +1656,7 @@ function getDifferentUnderstandingModelModalities(input: {
   return modalities;
 }
 
-export function appendCustomSystemPromptOverlay(
+function appendCustomSystemPromptOverlay(
   systemPrompt: string,
   customSystemPrompt?: string | null,
 ): string {
@@ -1937,7 +1934,7 @@ export function buildAgentExecutionMetadata(
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
-export function withAgentRuntimeLocaleMetadata(
+function withAgentRuntimeLocaleMetadata(
   overrides: AgentMessageExecutionOverrides | undefined,
   locale: AgentRuntimePromptLocale | string | undefined,
 ): AgentMessageExecutionOverrides | undefined {

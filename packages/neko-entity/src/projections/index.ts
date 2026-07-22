@@ -26,7 +26,7 @@ export {
   NpcProfileAssembler,
   type AssembleNpcProfileInput,
   type NpcProfileAssemblerReaders,
-  type NpcProfileAssetMetadata,
+  type NpcProfileRepresentationMetadata,
   type NpcProfileAssemblyResult,
 } from './npcProfileAssembler';
 export {

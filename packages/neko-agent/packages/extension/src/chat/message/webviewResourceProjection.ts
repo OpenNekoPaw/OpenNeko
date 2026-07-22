@@ -6,12 +6,20 @@ import {
   projectDocumentResourceRefsInValue,
   readDocumentArchiveResourceProjection,
 } from '@neko/content/document';
-import type { DocumentArchiveResourceRef, ResourceRef, ResourceVariantRequest } from '@neko/shared';
+import {
+  contentLocatorKey,
+  validateContentLocator,
+  type DocumentArchiveResourceRef,
+  type ResourceRef,
+  type ResourceVariantRequest,
+} from '@neko/shared';
 import type { ConversationProjectionAttachmentHostFrame, Message } from '@neko-agent/types';
 import type { AgentLocalResourceAccess } from '../../services/localResourceAccess';
 import { getLogger } from '../../base';
 
 const logger = getLogger('WebviewResourceProjection');
+const MAX_WEBVIEW_IMAGE_PREVIEW_SOURCE_BYTES = 20 * 1024 * 1024;
+const WEBVIEW_IMAGE_PREVIEW_LONG_EDGE = 240;
 
 export interface WebviewResourceProjectionOptions {
   readonly webview: vscode.Webview;
@@ -43,7 +51,11 @@ export async function projectMessagesForWebviewResourceDisplay(
     project: (ref, variant) => projector.projectDocumentResourceRef(ref, variant),
     onMissingProjection: appendResourceProjectionDiagnostic,
   });
-  return Array.isArray(withDocumentResources) ? (withDocumentResources as Message[]) : projected;
+  const withPreviews = await projectPerceptualAssetPreviewsInValue(
+    withDocumentResources,
+    options.contentAccessRuntime,
+  );
+  return Array.isArray(withPreviews) ? (withPreviews as Message[]) : projected;
 }
 
 /**
@@ -77,10 +89,130 @@ export async function projectValueForWebviewResourceDisplay(
   const projected = projectResourceValue(value, {
     resolveLocalMediaPath: projector.resolveLocalMediaPath,
   });
-  return projectDocumentResourceRefsInValue(stripDocumentResourceRuntimeFields(projected), {
-    project: (ref, variant) => projector.projectDocumentResourceRef(ref, variant),
-    onMissingProjection: appendResourceProjectionDiagnostic,
-  });
+  const withDocumentResources = await projectDocumentResourceRefsInValue(
+    stripDocumentResourceRuntimeFields(projected),
+    {
+      project: (ref, variant) => projector.projectDocumentResourceRef(ref, variant),
+      onMissingProjection: appendResourceProjectionDiagnostic,
+    },
+  );
+  return projectPerceptualAssetPreviewsInValue(withDocumentResources, options.contentAccessRuntime);
+}
+
+async function projectPerceptualAssetPreviewsInValue(
+  value: unknown,
+  contentAccessRuntime: AgentContentAccessRuntime | undefined,
+): Promise<unknown> {
+  const cache = new Map<string, Promise<{ previewUri?: string; previewDiagnostic?: string }>>();
+  const projectAssetRef = async (assetRef: Record<string, unknown>): Promise<unknown> => {
+    const locatorResult = validateContentLocator(assetRef['contentLocator']);
+    const isPerceptualAsset =
+      typeof assetRef['assetId'] === 'string' &&
+      typeof assetRef['uri'] === 'string' &&
+      typeof assetRef['mimeType'] === 'string';
+    if (!isPerceptualAsset || !locatorResult.ok) return assetRef;
+    if (!contentAccessRuntime) {
+      return {
+        ...assetRef,
+        previewDiagnostic: 'Webview image preview requires AgentContentAccessRuntime.',
+      };
+    }
+    const key = contentLocatorKey(locatorResult.locator);
+    let preview = cache.get(key);
+    if (!preview) {
+      preview = createContentLocatorPreview(locatorResult.locator, contentAccessRuntime);
+      cache.set(key, preview);
+    }
+    return { ...assetRef, ...(await preview) };
+  };
+  const project = async (item: unknown, allowPerceptionFallback = true): Promise<unknown> => {
+    if (Array.isArray(item)) {
+      return Promise.all(item.map((child) => project(child, allowPerceptionFallback)));
+    }
+    if (!isRecord(item)) return item;
+    const hasImageAttachments =
+      Array.isArray(item['attachments']) && item['attachments'].some(isImageToolResultAttachment);
+    const projectedEntries = await Promise.all(
+      Object.entries(item).map(
+        async ([key, child]) =>
+          [
+            key,
+            await project(
+              child,
+              key === 'perceptionCards'
+                ? allowPerceptionFallback && !hasImageAttachments
+                : allowPerceptionFallback,
+            ),
+          ] as const,
+      ),
+    );
+    const projected = Object.fromEntries(projectedEntries);
+    const assetRef =
+      item['type'] === 'image' && isRecord(item['assetRef']) ? item['assetRef'] : undefined;
+    if (assetRef) {
+      return {
+        ...projected,
+        assetRef: await projectAssetRef(asRecord(projected['assetRef'])),
+      };
+    }
+    if (
+      allowPerceptionFallback &&
+      item['modality'] === 'image' &&
+      isRecord(item['perceptual']) &&
+      isRecord(item['perceptual']['thumbnailRef'])
+    ) {
+      const perceptual = asRecord(projected['perceptual']);
+      return {
+        ...projected,
+        perceptual: {
+          ...perceptual,
+          thumbnailRef: await projectAssetRef(asRecord(perceptual['thumbnailRef'])),
+        },
+      };
+    }
+    return projected;
+  };
+  return project(value);
+}
+
+function isImageToolResultAttachment(value: unknown): boolean {
+  return isRecord(value) && value['type'] === 'image' && isRecord(value['assetRef']);
+}
+
+async function createContentLocatorPreview(
+  locator: import('@neko/shared').ContentLocator,
+  contentAccessRuntime: AgentContentAccessRuntime,
+): Promise<{ previewUri?: string; previewDiagnostic?: string }> {
+  try {
+    const loaded = await contentAccessRuntime.loadContentAsset({
+      locator,
+      maxBytes: MAX_WEBVIEW_IMAGE_PREVIEW_SOURCE_BYTES,
+    });
+    if (loaded.status !== 'ready' || !loaded.bytes) {
+      return {
+        previewDiagnostic:
+          loaded.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
+          `Image preview is unavailable: ${loaded.status}.`,
+      };
+    }
+    const sharp = (await import('sharp')).default;
+    const preview = await sharp(loaded.bytes)
+      .rotate()
+      .resize({
+        width: WEBVIEW_IMAGE_PREVIEW_LONG_EDGE,
+        height: WEBVIEW_IMAGE_PREVIEW_LONG_EDGE,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 74 })
+      .toBuffer();
+    return { previewUri: `data:image/webp;base64,${preview.toString('base64')}` };
+  } catch (error) {
+    logger.warn('Failed to project ContentLocator image preview for Webview display', { error });
+    return {
+      previewDiagnostic: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function createWebviewResourceProjector(
@@ -103,24 +235,18 @@ async function projectDocumentResourceRefForWebview(
   ref: DocumentArchiveResourceRef,
   variant: ResourceVariantRequest,
 ): Promise<string | undefined> {
-  if (!options.contentAccessRuntime || !options.localResourceAccess) return undefined;
+  if (!options.contentAccessRuntime) return undefined;
   const managedRef = createManagedDocumentResourceRef(
     ref,
     options.resolveDocumentResourceScope?.() ?? resolveDefaultDocumentResourceScope(),
   );
   try {
     const result = await options.contentAccessRuntime.loadProviderAsset({
-      caller: 'message-resource-projection',
       source: managedRef,
-      preferredTarget: 'local-path',
-      variant,
+      ...(variant.mimeType ? { mimeTypeHint: variant.mimeType } : {}),
     });
-    if (result.status !== 'ready' || !result.uri) return undefined;
-    return options.localResourceAccess.toWebviewUri(
-      options.webview,
-      result.uri,
-      options.documentResourceCaller,
-    );
+    if (result.status !== 'ready' || !result.bytes || !result.mimeType) return undefined;
+    return `data:${result.mimeType};base64,${Buffer.from(result.bytes).toString('base64')}`;
   } catch (error) {
     logger.warn('Failed to project document resource for Webview display', { error });
     return undefined;
@@ -182,6 +308,10 @@ function isObject(value: unknown): value is object {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return isObject(value) && !Array.isArray(value);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
 }
 
 function resolveDefaultDocumentResourceScope(): ResourceRef['scope'] {

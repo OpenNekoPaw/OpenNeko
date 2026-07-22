@@ -1,10 +1,60 @@
 import { describe, expect, it } from 'vitest';
 import {
+  projectCreatorVisibleArtifactFacts,
   projectGeneratedOutputLifecycleArtifactFacts,
   projectTaskOutputArtifactFacts,
   projectToolResultArtifactFacts,
 } from './artifact-fact-projector';
 import { createGeneratedAssetRevisionRef } from '@neko/shared';
+
+describe('projectCreatorVisibleArtifactFacts', () => {
+  it('projects document-entry sources and native image analysis provenance', () => {
+    const documentResourceRef = {
+      kind: 'document-entry' as const,
+      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      entryPath: 'OEBPS/images/page-01.jpg',
+      versionPolicy: 'read-only-source' as const,
+    };
+
+    const facts = projectCreatorVisibleArtifactFacts([
+      {
+        artifactId: 'page-01',
+        revision: 'attachment:page-01',
+        role: 'source',
+        kind: 'image',
+        title: 'Page 1',
+        sourceId: 'document:page-01',
+        documentResourceRef,
+      },
+      {
+        artifactId: 'analysis-01',
+        revision: 'markdown:analysis-01',
+        role: 'analysis',
+        kind: 'markdown',
+        title: 'Storyboard Analysis',
+        sourceId: 'artifact:analysis-01',
+        sourceArtifactIds: ['page-01'],
+        markdown: '# Storyboard Analysis\n\nFindings.',
+        provenanceSource: 'native-image-analysis',
+      },
+    ]);
+
+    expect(facts).toEqual([
+      expect.objectContaining({
+        ref: 'page-01',
+        kind: 'resource-ref',
+        provenance: { source: 'source-file' },
+        validator: { id: 'document-archive-resource-ref', status: 'valid' },
+      }),
+      expect.objectContaining({
+        ref: 'analysis-01',
+        kind: 'composite-artifact',
+        provenance: { source: 'native-image-analysis' },
+        validator: { id: 'composite-artifact-schema', status: 'valid' },
+      }),
+    ]);
+  });
+});
 
 describe('projectToolResultArtifactFacts', () => {
   it('projects durable generated ResourceRef identity, digest, revision, and provenance', () => {

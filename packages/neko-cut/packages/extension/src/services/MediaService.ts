@@ -28,6 +28,7 @@ import {
   resolveProjectMediaSourcesForRuntime,
 } from './tools/helpers';
 import type {
+  ContentRepresentationService,
   MediaRequest,
   MediaResponse,
   GetVideoFrameRequest,
@@ -44,6 +45,7 @@ import type {
   ProjectData,
 } from '@neko/shared';
 import { getLogger } from '../base';
+import { createCutRepresentationSource } from './CutMediaRepresentationGenerator';
 
 const logger = getLogger('MediaService');
 
@@ -75,6 +77,8 @@ export class MediaService implements vscode.Disposable {
     private readonly webviewPanel: vscode.WebviewPanel,
     private readonly client: EngineClient,
     documentUri?: vscode.Uri,
+    private readonly contentRepresentation?: ContentRepresentationService,
+    private readonly representationRoot?: string,
   ) {
     this.documentUri = documentUri;
     this.documentDir = documentUri ? path.dirname(documentUri.fsPath) : undefined;
@@ -344,25 +348,17 @@ export class MediaService implements vscode.Disposable {
   private async handleGetWaveform(request: GetWaveformRequest): Promise<MediaResponse> {
     const { filePath } = request.payload;
     const absolutePath = await this.resolveMediaPath(filePath);
-
-    const result = await this.dispatch({
-      group: 'audios',
-      action: 'waveform',
-      options: { source: absolutePath },
-    });
-
-    const data = result.data as Record<string, unknown>;
-    const waveform = data.waveform as Record<string, unknown>;
+    const waveform = await this.readJsonRepresentation(absolutePath, { kind: 'waveform' });
 
     return {
       requestId: request.requestId,
       type: 'media:response:getWaveform' as never,
       payload: {
-        sampleRate: waveform.sampleRate as number,
-        channels: waveform.channels as number,
-        peaksPerSecond: waveform.peaksPerSecond as number,
-        duration: waveform.duration as number,
-        peaks: waveform.peaks as number[][],
+        sampleRate: waveform['sampleRate'] as number,
+        channels: waveform['channels'] as number,
+        peaksPerSecond: waveform['peaksPerSecond'] as number,
+        duration: waveform['duration'] as number,
+        peaks: (waveform['channelPeaks'] ?? waveform['peaks']) as number[][],
       } as never,
     };
   }
@@ -705,12 +701,12 @@ export class MediaService implements vscode.Disposable {
       for (const source of payload.sources) {
         try {
           const absolutePath = await this.resolveMediaPath(source);
-          const result = await this.dispatch({
-            group: 'audios',
-            action: 'analyze_loudness',
-            options: { source: absolutePath, targetLufs },
+          const analysis = await this.readJsonRepresentation(absolutePath, {
+            kind: 'loudness',
+            standard: 'ebu-r128',
+            targetLufs,
           });
-          results.push({ source, analysis: result.data });
+          results.push({ source, analysis });
         } catch (error) {
           results.push({
             source,
@@ -731,6 +727,32 @@ export class MediaService implements vscode.Disposable {
         error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
+  }
+
+  private async readJsonRepresentation(
+    absolutePath: string,
+    spec: Extract<
+      import('@neko/shared').ContentRepresentationSpec,
+      { readonly kind: 'waveform' | 'loudness' }
+    >,
+  ): Promise<Record<string, unknown>> {
+    if (!this.contentRepresentation || !this.representationRoot) {
+      throw new Error('Cut media representation service is unavailable.');
+    }
+    const source = await createCutRepresentationSource(this.representationRoot, absolutePath);
+    const represented = await this.contentRepresentation.getRepresentation({ source, spec });
+    if (represented.status !== 'ready') {
+      throw new Error(represented.diagnostic.message);
+    }
+    const loaded = await this.contentRepresentation.readRepresentation(represented.locator, {
+      maxBytes: 64 * 1024 * 1024,
+    });
+    if (loaded.status !== 'ready') throw new Error(loaded.diagnostic.message);
+    const value: unknown = JSON.parse(new TextDecoder().decode(loaded.bytes));
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('Cut media representation returned invalid JSON.');
+    }
+    return value as Record<string, unknown>;
   }
 
   // =========================================================================

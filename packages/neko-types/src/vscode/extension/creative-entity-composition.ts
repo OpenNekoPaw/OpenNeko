@@ -6,32 +6,26 @@ import {
   normalizeCharacterLookupKey,
 } from '../../types/character-registry';
 import {
-  ASSET_REF_SCHEMES,
-  type AssetFederationCapabilityProvider,
-  type AssetRefResolver,
-  type AssetRefScheme,
-  type AssetRefValidation,
   type CreativeEntity,
   type CreativeEntityKind,
   type CreativeEntityQuery,
   type CreativeEntityRegistry,
-  type EntityAssetBinding,
-  type EntityAssetBindingFile,
   type EntityAssetRequirement,
   type EntityAssetRequirementFile,
-  type ParsedAssetRef,
-  type RepresentationKind,
-  type RepresentationResolveRequest,
-  type RepresentationResolveResult,
-  DEFAULT_REPRESENTATION_FALLBACKS,
-  type ResolvedAssetRef,
-  type ResolvedRepresentationFile,
   type VisualIdentityDraft,
   type VisualIdentityDraftFile,
-  isEntityAssetBindingFile,
   isEntityAssetRequirementFile,
   isVisualIdentityDraftFile,
 } from '../../types/creative-entity-asset-composition';
+import {
+  ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
+  ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
+  assertEntityRepresentationBindingFile,
+  createEmptyEntityRepresentationBindingFile,
+  normalizeEntityRepresentationBindingFile,
+  type EntityRepresentationBinding,
+  type EntityRepresentationBindingFile,
+} from '../../types/entity-representation-binding';
 import { CharacterRegistryService, resolveCharacterRegistryPath } from './character-registry';
 
 export interface CreativeEntityAdapter {
@@ -130,8 +124,8 @@ export class CreativeEntityRegistryService implements CreativeEntityRegistry {
   }
 }
 
-export function resolveEntityAssetBindingsPath(workspaceRoot: string): string {
-  return path.join(workspaceRoot, 'neko', 'entity-bindings.json');
+export function resolveEntityRepresentationBindingsPath(workspaceRoot: string): string {
+  return path.join(workspaceRoot, ...ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH.split('/'));
 }
 
 export function resolveVisualIdentityDraftsPath(workspaceRoot: string): string {
@@ -142,12 +136,7 @@ export function resolveEntityAssetRequirementsPath(workspaceRoot: string): strin
   return path.join(workspaceRoot, 'neko', 'entity-asset-requirements.json');
 }
 
-export function createEmptyEntityAssetBindingFile(): EntityAssetBindingFile {
-  return {
-    version: 1,
-    bindings: [],
-  };
-}
+export { createEmptyEntityRepresentationBindingFile };
 
 export function createEmptyVisualIdentityDraftFile(): VisualIdentityDraftFile {
   return {
@@ -163,191 +152,61 @@ export function createEmptyEntityAssetRequirementFile(): EntityAssetRequirementF
   };
 }
 
-export type AssetRefBackendResolver = (
-  parsed: ParsedAssetRef,
-) => Promise<Omit<ResolvedAssetRef, 'ref' | 'scheme'> | undefined>;
-
-export interface DefaultAssetRefResolverOptions {
-  readonly project?: AssetRefBackendResolver;
-  readonly shared?: AssetRefBackendResolver;
-  readonly external?: AssetRefBackendResolver;
-}
-
-export class DefaultAssetRefResolver implements AssetRefResolver {
-  constructor(private readonly backends: DefaultAssetRefResolverOptions = {}) {}
-
-  parse(ref: string): ParsedAssetRef {
-    const separatorIndex = ref.indexOf('://');
-    if (separatorIndex <= 0) {
-      throw new Error(`Invalid assetRef "${ref}": missing scheme`);
-    }
-
-    const rawScheme = ref.slice(0, separatorIndex);
-    if (!isAssetRefScheme(rawScheme)) {
-      throw new Error(`Invalid assetRef "${ref}": unsupported scheme "${rawScheme}"`);
-    }
-
-    const rest = ref.slice(separatorIndex + 3);
-    const queryIndex = rest.indexOf('?');
-    const withoutQuery = queryIndex >= 0 ? rest.slice(0, queryIndex) : rest;
-    const queryString = queryIndex >= 0 ? rest.slice(queryIndex + 1) : '';
-    const slashIndex = withoutQuery.indexOf('/');
-    const authority = slashIndex >= 0 ? withoutQuery.slice(0, slashIndex) : withoutQuery;
-    const refPath = slashIndex >= 0 ? withoutQuery.slice(slashIndex + 1) : '';
-    const versionMatch = authority.match(/^(.*)@([^@]+)$/);
-
-    return {
-      scheme: rawScheme,
-      raw: ref,
-      authority: authority || undefined,
-      path: refPath,
-      version: versionMatch?.[2],
-      query: parseAssetRefQuery(queryString),
-    };
-  }
-
-  validate(ref: string): AssetRefValidation {
-    try {
-      const parsed = this.parse(ref);
-      if (!parsed.authority && !parsed.path) {
-        return { valid: false, reason: 'assetRef must include an authority or path' };
-      }
-
-      return { valid: true };
-    } catch (error) {
-      return {
-        valid: false,
-        reason: error instanceof Error ? error.message : 'Invalid assetRef',
-      };
-    }
-  }
-
-  async resolve(ref: string): Promise<ResolvedAssetRef> {
-    const parsed = this.parse(ref);
-    const backend = this.backends[parsed.scheme];
-    const resolved = backend ? await backend(parsed) : undefined;
-
-    if (resolved) {
-      return {
-        ref,
-        scheme: parsed.scheme,
-        ...resolved,
-      };
-    }
-
-    return createFallbackResolvedAssetRef(parsed);
-  }
-}
-
-export interface RepresentationResolverOptions {
-  readonly entities: CreativeEntityRegistry;
-  readonly bindings: EntityAssetBindingService;
-  readonly assetRefs: AssetRefResolver;
-  readonly federation?: AssetFederationCapabilityProvider;
-}
-
-export class RepresentationResolver {
-  constructor(private readonly options: RepresentationResolverOptions) {}
-
-  async resolve(request: RepresentationResolveRequest): Promise<RepresentationResolveResult> {
-    const entity = await this.options.entities.get(request.entityId);
-    const allBindings = await this.options.bindings.list();
-    const candidates = allBindings.filter(
-      (binding) =>
-        binding.entityId === request.entityId &&
-        (!entity || binding.entityKind === entity.kind) &&
-        binding.status === 'confirmed',
-    );
-
-    const order = getRepresentationFallbackOrder(request);
-    for (const kind of order) {
-      const binding = pickBindingForKind(candidates, kind);
-      if (!binding) {
-        continue;
-      }
-
-      const resolvedRef = await this.options.assetRefs.resolve(binding.assetRef);
-      const federationSemantics = await this.options.federation?.describeAsset(resolvedRef);
-      return {
-        status: 'resolved',
-        entityId: request.entityId,
-        assetRef: binding.assetRef,
-        assetEntityId: resolvedRef.assetEntityId,
-        resolvedKind: kind,
-        fallback: request.preferredKind ? kind !== request.preferredKind : false,
-        role: binding.role,
-        files:
-          federationSemantics?.files && federationSemantics.files.length > 0
-            ? federationSemantics.files
-            : buildResolvedRepresentationFiles(binding, resolvedRef, kind),
-        capabilities: mergeCapabilities(
-          resolvedRef.capabilities,
-          federationSemantics?.capabilities,
-        ),
-      };
-    }
-
-    return {
-      status: 'missing-representation',
-      entityId: request.entityId,
-      missingKinds: order,
-      suggestedActions: ['generate', 'import', 'bind-existing', 'dismiss'],
-    };
-  }
-}
-
-export class EntityAssetBindingService {
+export class EntityRepresentationBindingService {
   private static readonly writeChains = new Map<string, Promise<void>>();
 
   constructor(private readonly filePath: string) {
     assertNotCachePath(filePath);
   }
 
-  static fromWorkspaceRoot(workspaceRoot: string): EntityAssetBindingService {
-    return new EntityAssetBindingService(resolveEntityAssetBindingsPath(workspaceRoot));
+  static fromWorkspaceRoot(workspaceRoot: string): EntityRepresentationBindingService {
+    return new EntityRepresentationBindingService(
+      resolveEntityRepresentationBindingsPath(workspaceRoot),
+    );
   }
 
-  async load(): Promise<EntityAssetBindingFile> {
+  async load(): Promise<EntityRepresentationBindingFile> {
     try {
       const raw = await fs.readFile(this.filePath, 'utf-8');
       const parsed: unknown = JSON.parse(raw);
-      return isEntityAssetBindingFile(parsed) ? parsed : createEmptyEntityAssetBindingFile();
-    } catch {
-      return createEmptyEntityAssetBindingFile();
+      return assertEntityRepresentationBindingFile(parsed);
+    } catch (error) {
+      if (isNodeError(error) && error.code === 'ENOENT') {
+        return createEmptyEntityRepresentationBindingFile();
+      }
+      throw error;
     }
   }
 
-  async save(file: EntityAssetBindingFile): Promise<void> {
-    if (!isEntityAssetBindingFile(file)) {
-      throw new Error('Invalid entity asset binding file');
-    }
+  async save(file: EntityRepresentationBindingFile): Promise<void> {
+    assertEntityRepresentationBindingFile(file);
 
-    await EntityAssetBindingService.withFileLock(this.filePath, async () => {
+    await EntityRepresentationBindingService.withFileLock(this.filePath, async () => {
       await this.saveUnlocked(file);
     });
   }
 
-  async list(): Promise<readonly EntityAssetBinding[]> {
+  async list(): Promise<readonly EntityRepresentationBinding[]> {
     return (await this.load()).bindings;
   }
 
-  async upsert(binding: EntityAssetBinding): Promise<EntityAssetBindingFile> {
+  async upsert(binding: EntityRepresentationBinding): Promise<EntityRepresentationBindingFile> {
     return this.mutate((file) => ({
-      version: 1,
+      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
       bindings: [...file.bindings.filter((candidate) => candidate.id !== binding.id), binding].sort(
         compareBindings,
       ),
     }));
   }
 
-  async setDefault(binding: EntityAssetBinding): Promise<EntityAssetBindingFile> {
-    const nextBinding: EntityAssetBinding = {
+  async setDefault(binding: EntityRepresentationBinding): Promise<EntityRepresentationBindingFile> {
+    const nextBinding: EntityRepresentationBinding = {
       ...binding,
       isDefault: true,
     };
 
     return this.mutate((file) => ({
-      version: 1,
+      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
       bindings: [
         ...file.bindings
           .filter((candidate) => candidate.id !== nextBinding.id)
@@ -359,19 +218,19 @@ export class EntityAssetBindingService {
     }));
   }
 
-  async remove(id: string): Promise<EntityAssetBindingFile> {
+  async remove(id: string): Promise<EntityRepresentationBindingFile> {
     return this.mutate((file) => ({
-      version: 1,
+      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
       bindings: file.bindings.filter((binding) => binding.id !== id),
     }));
   }
 
   private async mutate(
     operation: (
-      file: EntityAssetBindingFile,
-    ) => Promise<EntityAssetBindingFile> | EntityAssetBindingFile,
-  ): Promise<EntityAssetBindingFile> {
-    return EntityAssetBindingService.withFileLock(this.filePath, async () => {
+      file: EntityRepresentationBindingFile,
+    ) => Promise<EntityRepresentationBindingFile> | EntityRepresentationBindingFile,
+  ): Promise<EntityRepresentationBindingFile> {
+    return EntityRepresentationBindingService.withFileLock(this.filePath, async () => {
       const current = await this.load();
       const next = await operation(current);
       await this.saveUnlocked(next);
@@ -379,13 +238,12 @@ export class EntityAssetBindingService {
     });
   }
 
-  private async saveUnlocked(file: EntityAssetBindingFile): Promise<void> {
+  private async saveUnlocked(file: EntityRepresentationBindingFile): Promise<void> {
     await fs.mkdir(path.dirname(this.filePath), { recursive: true });
 
-    const normalized: EntityAssetBindingFile = {
-      version: 1,
-      bindings: [...file.bindings].sort(compareBindings),
-    };
+    const normalized = normalizeEntityRepresentationBindingFile(
+      assertEntityRepresentationBindingFile(file),
+    );
     const json = `${JSON.stringify(normalized, null, 2)}\n`;
     const tmpPath = `${this.filePath}.tmp`;
     await fs.writeFile(tmpPath, json, 'utf-8');
@@ -393,14 +251,15 @@ export class EntityAssetBindingService {
   }
 
   private static async withFileLock<T>(filePath: string, operation: () => Promise<T>): Promise<T> {
-    const previous = EntityAssetBindingService.writeChains.get(filePath) ?? Promise.resolve();
+    const previous =
+      EntityRepresentationBindingService.writeChains.get(filePath) ?? Promise.resolve();
     let release: (() => void) | undefined;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
 
     const nextChain = previous.catch(() => {}).then(() => gate);
-    EntityAssetBindingService.writeChains.set(filePath, nextChain);
+    EntityRepresentationBindingService.writeChains.set(filePath, nextChain);
 
     await previous.catch(() => {});
 
@@ -408,9 +267,9 @@ export class EntityAssetBindingService {
       return await operation();
     } finally {
       release?.();
-      const current = EntityAssetBindingService.writeChains.get(filePath);
+      const current = EntityRepresentationBindingService.writeChains.get(filePath);
       if (current === nextChain) {
-        EntityAssetBindingService.writeChains.delete(filePath);
+        EntityRepresentationBindingService.writeChains.delete(filePath);
       }
     }
   }
@@ -517,7 +376,7 @@ function matchesQuery(entity: CreativeEntity, query: CreativeEntityQuery): boole
   return lookupKeys.includes(key);
 }
 
-function compareBindings(a: EntityAssetBinding, b: EntityAssetBinding): number {
+function compareBindings(a: EntityRepresentationBinding, b: EntityRepresentationBinding): number {
   return (
     a.entityKind.localeCompare(b.entityKind) ||
     a.entityId.localeCompare(b.entityId) ||
@@ -526,11 +385,11 @@ function compareBindings(a: EntityAssetBinding, b: EntityAssetBinding): number {
   );
 }
 
-function isSameEntityRole(a: EntityAssetBinding, b: EntityAssetBinding): boolean {
+function isSameEntityRole(a: EntityRepresentationBinding, b: EntityRepresentationBinding): boolean {
   return a.entityKind === b.entityKind && a.entityId === b.entityId && a.role === b.role;
 }
 
-function omitDefaultFlag(binding: EntityAssetBinding): EntityAssetBinding {
+function omitDefaultFlag(binding: EntityRepresentationBinding): EntityRepresentationBinding {
   const { isDefault: _isDefault, ...rest } = binding;
   return rest;
 }
@@ -555,90 +414,15 @@ async function writeJsonAtomic(filePath: string, value: unknown): Promise<void> 
   await fs.rename(tmpPath, filePath);
 }
 
-function getRepresentationFallbackOrder(
-  request: RepresentationResolveRequest,
-): readonly RepresentationKind[] {
-  if (request.allowFallback === false && request.preferredKind) {
-    return [request.preferredKind];
-  }
-
-  const baseOrder =
-    request.fallbackOrder ??
-    (request.preferredKind
-      ? [
-          request.preferredKind,
-          ...DEFAULT_REPRESENTATION_FALLBACKS[request.target].filter(
-            (kind) => kind !== request.preferredKind,
-          ),
-        ]
-      : DEFAULT_REPRESENTATION_FALLBACKS[request.target]);
-
-  return Array.from(new Set(baseOrder));
-}
-
-function pickBindingForKind(
-  bindings: readonly EntityAssetBinding[],
-  kind: RepresentationKind,
-): EntityAssetBinding | undefined {
-  const roleBindings = bindings.filter((binding) => binding.role === kind);
-  return roleBindings.find((binding) => binding.isDefault) ?? roleBindings[0];
-}
-
-function buildResolvedRepresentationFiles(
-  binding: EntityAssetBinding,
-  resolvedRef: ResolvedAssetRef,
-  kind: RepresentationKind,
-): readonly ResolvedRepresentationFile[] {
-  return [
-    {
-      role: kind === 'voice' ? 'voice' : kind === 'motion' ? 'motion' : 'main',
-      assetRef: binding.assetRef,
-      path: resolvedRef.localPath,
-      mediaType: kind,
-    },
-  ];
-}
-
-function mergeCapabilities(
-  ...capabilityGroups: Array<readonly string[] | undefined>
-): readonly string[] {
-  return Array.from(new Set(capabilityGroups.flatMap((group) => group ?? []))).sort();
-}
-
 function assertNotCachePath(filePath: string): void {
   const normalized = path.normalize(filePath);
   const segments = normalized.split(path.sep);
   const cacheIndex = segments.lastIndexOf('.cache');
   if (cacheIndex > 0 && segments[cacheIndex - 1] === '.neko') {
-    throw new Error('Entity asset bindings must not be stored under .neko/.cache');
+    throw new Error('Entity representation bindings must not be stored under .neko/.cache');
   }
 }
 
-function createFallbackResolvedAssetRef(parsed: ParsedAssetRef): ResolvedAssetRef {
-  return {
-    ref: parsed.raw,
-    scheme: parsed.scheme,
-    source: parsed.scheme,
-    readonly: parsed.scheme !== 'project',
-    assetEntityId: parsed.scheme === 'project' ? parsed.path || parsed.authority : undefined,
-    uri: parsed.raw,
-  };
-}
-
-function isAssetRefScheme(value: string): value is AssetRefScheme {
-  return ASSET_REF_SCHEMES.includes(value as AssetRefScheme);
-}
-
-function parseAssetRefQuery(query: string): Record<string, string> | undefined {
-  if (!query) {
-    return undefined;
-  }
-
-  const params = new URLSearchParams(query);
-  const entries = Array.from(params.entries());
-  if (entries.length === 0) {
-    return undefined;
-  }
-
-  return Object.fromEntries(entries);
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
 }

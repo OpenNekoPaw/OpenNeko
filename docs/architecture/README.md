@@ -33,15 +33,18 @@
 | [`adr-code-debt-redundancy-governance.md`](adr-code-debt-redundancy-governance.md)                                 | 重复、冗余、兼容桥和 fallback 代码的分类、清理优先级与验证规则                        |
 | [`adr-code-review-quality-gates.md`](adr-code-review-quality-gates.md)                                             | 代码审查、风险分级、验证矩阵和功能偏离检查                                            |
 | [`adr-local-metadata-store-sqlite.md`](adr-local-metadata-store-sqlite.md)                                         | 用户级 SQLite 本地元数据 Store、项目事实和缓存索引边界                                |
-| [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md) | 拟议新增 Desktop 组合根、现有子包复用方式及 Craft Agents 等开源参考边界 |
+| [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md) | 拟议新增 Desktop 组合根、现有子包复用方式及 OpenCode、Zed、Craft Agents、Goose 等参考边界 |
+| [`adr-neko-desktop-home-project-profile-ux-boundary.md`](adr-neko-desktop-home-project-profile-ux-boundary.md)     | Desktop Home、Project Tabs、三类 Project Profile，以及 `neko-chara`/`neko-world` 顶级领域聚合边界 |
+| [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) | Cut 以 OTIO 为唯一工程、VS Code 保留 Engine adapter，并通过同源 MP4 引用完成显式逻辑音频分离 |
 | [`application-composition.md`](application-composition.md)                                                       | TUI、OpenNeko for VS Code 两个应用 composition root 和依赖方向                       |
 | [`adr-unified-markdown-resource-rendering.md`](adr-unified-markdown-resource-rendering.md)                         | Canvas MCP 式能力、Markdown 扩展语法、资源增强渲染和 Send to Canvas 边界              |
 | [`adr-canvas-cut-playback-route-and-timeline-boundary.md`](adr-canvas-cut-playback-route-and-timeline-boundary.md) | Canvas 预览路线矩阵、Cut 剪辑时间线、Agent 顺序感知和跨包协议边界                     |
 | [`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md)                   | 创作领域面板与共享 UI 原语的复用边界                                                  |
+| [`adr-asset-library-sources-and-unified-entity-boundary.md`](adr-asset-library-sources-and-unified-entity-boundary.md) | 单一媒体库、ContentLocator 与统一实体的职责和迁移边界                             |
 | [`agent.md`](agent.md)                                                                                             | Agent-first、execution mode、skill/prompt/tool/provider 控制面和宿主分层              |
-| [`asset-library.md`](asset-library.md)                                                                             | 素材库、Asset/Variant/File、显式导入、外部包 trust 和素材搜索投影                    |
+| [`asset-library.md`](asset-library.md)                                                                             | 媒体库、工作区 link、内容访问、显式文件操作和搜索投影                              |
 | [`auth.md`](auth.md)                                                                                               | 无独立 Auth 产品时的用户凭据、workspace policy、host adapter 和 session 边界           |
-| [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)                                                 | 缓存、文件读写服务、路径变量、ContentAccess 和 Webview 投影                           |
+| [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)                                                 | 派生存储、窄内容读写服务、路径变量和 Webview 投影                                      |
 | [`client-targets.md`](client-targets.md)                                                                           | TUI、OpenNeko for VS Code 的产品目标、职责边界和验证重点                              |
 | [`engine-runtime.md`](engine-runtime.md)                                                                           | 裁剪后的 Rust Media Engine、Host API、文件/Range、编解码和数据路径                    |
 | [`headless-project-authoring.md`](headless-project-authoring.md)                                                   | `.nk*` 持久项目写入的无 UI authoring 边界、operation 分类、canonical 入口和客户端适配 |

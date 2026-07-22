@@ -315,7 +315,6 @@ export const CLI_TERMINAL_MESSAGES_EN = {
   'agent.terminal.reference.expectedStringField': '{source}.{field} must be a string.',
   'agent.terminal.runtime.workspaceContentReadFailed': 'Failed to read {path}: {detail}',
   'agent.terminal.runtime.workspaceContentParseFailed': 'Failed to parse {path}: {detail}',
-  'agent.terminal.runtime.resourceCacheGcFailed': 'Resource cache startup cleanup failed: {detail}',
   'agent.terminal.runtime.resumeNotFoundStartingFresh':
     'Conversation "{conversationId}" was not found; starting fresh.',
   'agent.terminal.runtime.continuationDiscarded': 'Continuation discarded: {itemId}',
@@ -726,7 +725,6 @@ export const CLI_TERMINAL_MESSAGES_EN = {
   'agent.terminal.value.mediaCategory.text': 'text',
   'agent.terminal.value.mediaCategory.document': 'document',
   'agent.terminal.value.referenceSource.workspaceFile': 'workspace file',
-  'agent.terminal.value.referenceSource.assetLibrary': 'asset-library',
   'agent.terminal.value.referenceSource.generatedAssets': 'generated-assets',
   'agent.terminal.value.referenceSource.mediaLibrary': 'media-library',
   'agent.terminal.value.referenceSource.entityGraph': 'entity-graph',
@@ -1106,7 +1104,6 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
   'agent.terminal.reference.expectedStringField': '{source}.{field} 必须是字符串。',
   'agent.terminal.runtime.workspaceContentReadFailed': '读取 {path} 失败：{detail}',
   'agent.terminal.runtime.workspaceContentParseFailed': '解析 {path} 失败：{detail}',
-  'agent.terminal.runtime.resourceCacheGcFailed': '启动时清理资源缓存失败：{detail}',
   'agent.terminal.runtime.resumeNotFoundStartingFresh':
     '未找到对话“{conversationId}”；将开始新对话。',
   'agent.terminal.runtime.continuationDiscarded': '已丢弃续跑：{itemId}',
@@ -1475,7 +1472,6 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
   'agent.terminal.value.mediaCategory.text': '文本',
   'agent.terminal.value.mediaCategory.document': '文档',
   'agent.terminal.value.referenceSource.workspaceFile': '工作区文件',
-  'agent.terminal.value.referenceSource.assetLibrary': '素材库',
   'agent.terminal.value.referenceSource.generatedAssets': '生成素材',
   'agent.terminal.value.referenceSource.mediaLibrary': '媒体库',
   'agent.terminal.value.referenceSource.entityGraph': '实体图谱',

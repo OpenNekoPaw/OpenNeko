@@ -3,7 +3,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSharpGeneratedImageVariantGenerator } from '../visionImageProcessor';
+import type { ContentReadService } from '@neko/shared';
+import { createSharpGeneratedImageRepresentationGenerator } from '../visionImageProcessor';
 
 describe('Sharp generated image variants', () => {
   const temporaryDirectories: string[] = [];
@@ -27,16 +28,29 @@ describe('Sharp generated image variants', () => {
       .toBuffer();
     await fs.writeFile(sourcePath, sourceBytes);
 
-    const result = await createSharpGeneratedImageVariantGenerator().generate(sourcePath, {
-      role: 'thumbnail',
-      width: 20,
-      height: 20,
-      mimeType: 'image/webp',
+    const contentRead: ContentReadService = {
+      stat: async () => {
+        throw new Error('stat was not expected');
+      },
+      read: async (locator) => ({
+        status: 'ready',
+        locator,
+        bytes: sourceBytes,
+        offset: 0,
+        totalByteLength: sourceBytes.byteLength,
+        fingerprint: { strategy: 'sha256', value: 'source-v1' },
+      }),
+    };
+    const result = await createSharpGeneratedImageRepresentationGenerator(contentRead).generate({
+      source: { kind: 'workspace-file', path: 'source.png' },
+      spec: { kind: 'thumbnail', maxWidth: 20, maxHeight: 20, format: 'webp' },
     });
 
-    expect(result).toMatchObject({ mimeType: 'image/webp', width: 20, height: 10 });
-    expect(result?.bytes).not.toEqual(sourceBytes);
-    await expect(sharp(result?.bytes).metadata()).resolves.toMatchObject({
+    expect(result).toMatchObject({
+      metadata: { mimeType: 'image/webp', width: 20, height: 10 },
+    });
+    expect(result.bytes).not.toEqual(sourceBytes);
+    await expect(sharp(result.bytes).metadata()).resolves.toMatchObject({
       format: 'webp',
       width: 20,
       height: 10,

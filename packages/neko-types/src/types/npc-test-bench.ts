@@ -1,9 +1,10 @@
-import type { EntityAssetBindingRole } from './creative-entity-asset-composition';
+import { isCreativeEntityRef, type CreativeEntityRef } from './creative-entity-asset-composition';
 import {
-  isCreativeEntityRef,
-  isEntityAssetBindingRole,
-  type CreativeEntityRef,
-} from './creative-entity-asset-composition';
+  isEntityRepresentationRole,
+  type EntityRepresentationRole,
+  type EntityRepresentationTarget,
+} from './entity-representation-binding';
+import { isContentLocator } from './content-locator';
 
 export const NPC_TEST_BENCH_AS_SLASH_COMMAND_NAME = 'as';
 export const NPC_TEST_BENCH_AS_SLASH_COMMAND = '/as';
@@ -19,7 +20,7 @@ export type NpcProfileSparsity = 'thin' | 'partial' | 'rich';
 export type NpcProfileFactAuthority = 'confirmed' | 'suggested';
 export type NpcProfileFactSource =
   | 'registry'
-  | 'asset-metadata'
+  | 'representation-metadata'
   | 'visual-draft'
   | 'relationship-graph'
   | 'occurrence-index'
@@ -27,8 +28,9 @@ export type NpcProfileFactSource =
   | 'agent-inferred'
   | 'user-supplement';
 export type NpcProfileEnrichmentMode = 'ask' | 'skip' | 'auto' | 'manual';
-export type NpcTestBenchLaunchSource = 'slash-command' | 'agent' | 'story' | 'canvas' | 'asset';
-export type NpcAgentWorkflowLaunchSource = 'agent' | 'story' | 'canvas' | 'asset';
+export type NpcTestBenchLaunchSource =
+  'slash-command' | 'agent' | 'story' | 'canvas' | 'media-library';
+export type NpcAgentWorkflowLaunchSource = 'agent' | 'story' | 'canvas' | 'media-library';
 export type NpcCharacterRoleWorkflowAction = 'embody-character';
 export type NpcCharacterRoleWorkflowScopeKind =
   | 'project'
@@ -86,8 +88,8 @@ export interface NpcProfileRelationshipValue {
 }
 
 export interface NpcProfileRepresentationBinding {
-  readonly role: EntityAssetBindingRole;
-  readonly assetRef: string;
+  readonly role: EntityRepresentationRole;
+  readonly representation: EntityRepresentationTarget;
   readonly isDefault?: boolean;
   readonly sourceRef?: string;
   readonly summary?: string;
@@ -229,7 +231,7 @@ export const NPC_PROFILE_FACT_AUTHORITIES: readonly NpcProfileFactAuthority[] = 
 ] as const;
 export const NPC_PROFILE_FACT_SOURCES: readonly NpcProfileFactSource[] = [
   'registry',
-  'asset-metadata',
+  'representation-metadata',
   'visual-draft',
   'relationship-graph',
   'occurrence-index',
@@ -248,13 +250,13 @@ export const NPC_TEST_BENCH_LAUNCH_SOURCES: readonly NpcTestBenchLaunchSource[] 
   'agent',
   'story',
   'canvas',
-  'asset',
+  'media-library',
 ] as const;
 export const NPC_AGENT_WORKFLOW_LAUNCH_SOURCES: readonly NpcAgentWorkflowLaunchSource[] = [
   'agent',
   'story',
   'canvas',
-  'asset',
+  'media-library',
 ] as const;
 export const NPC_TRANSCRIPT_MESSAGE_ROLES: readonly NpcTranscriptMessageRole[] = [
   'user',
@@ -375,8 +377,8 @@ export function isNpcProfileRepresentationBinding(
 ): value is NpcProfileRepresentationBinding {
   if (!isRecord(value)) return false;
   return (
-    isEntityAssetBindingRole(value['role']) &&
-    isNonEmptyString(value['assetRef']) &&
+    isEntityRepresentationRole(value['role']) &&
+    isContentLocator(value['representation']) &&
     (value['isDefault'] === undefined || typeof value['isDefault'] === 'boolean') &&
     (value['sourceRef'] === undefined || typeof value['sourceRef'] === 'string') &&
     (value['summary'] === undefined || typeof value['summary'] === 'string')

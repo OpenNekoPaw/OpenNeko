@@ -1,211 +1,152 @@
 ---
 name: vscode-extension-debugger
 description: |
-  This skill enables debugging VS Code extensions and their webviews through Chrome DevTools Protocol (CDP).
-  It should be used when:
-  - Debugging VS Code extension webviews (custom editors, panels, sidebars)
-  - Inspecting DOM structure of extension webviews
-  - Taking screenshots of VS Code windows or webviews
-  - Executing JavaScript in extension webviews
-  - Monitoring console output from extensions
-  Triggers on: "debug extension", "inspect webview", "extension screenshot", "webview DOM", "VS Code debugging"
+  Validate VS Code extensions through two explicit lanes: use Computer Use for
+  no-port, black-box host UI workflows, and use Chrome DevTools Protocol (CDP)
+  for Webview iframe, DOM, JavaScript, console, and runtime diagnostics. Use
+  this skill when debugging an Extension Development Host, validating a VS
+  Code command or visible workflow, inspecting an extension Webview, or
+  collecting VS Code runtime evidence.
 ---
 
 # VS Code Extension Debugger
 
-This skill provides tools to debug VS Code extensions and their webviews using Chrome DevTools Protocol (CDP).
+Classify the requested evidence before starting. This skill has two complementary
+lanes; do not present one lane as evidence for the other.
 
-## Prerequisites
+| Lane                | Use for                                                                                                                                                        | Debug port                |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Host UI / black box | Launching the Extension Development Host, native VS Code commands, menus, focus, keyboard input, visible text, and whole-window screenshots                    | Not required              |
+| Webview / white box | Webview target discovery, iframe/DOM inspection, JavaScript evaluation, console diagnostics, CSP/resource investigation, and Webview-specific runtime evidence | Required (default `9222`) |
 
-1. VS Code must be running with remote debugging enabled on port 9222
-2. Launch VS Code with: `code --inspect=9222` or configure in launch.json
-3. Node.js must be available with the `ws` package installed globally or in the project
+## Host UI Lane (No CDP Port)
 
-## Core Tool
+Use the `computer-use` skill for direct VS Code UI actions. It operates through
+macOS Accessibility and does not require VS Code to expose a remote debugging
+port.
 
-The CDP client script at `scripts/cdp-client.js` provides all debugging capabilities.
+1. Use an isolated Extension Development Host and the repository's synthetic
+   `neko-test` workspace. Do not capture the user's normal workspace, settings,
+   credentials, or unrelated files.
+2. Select the repository launch configuration `Debug Dev (All)` and start the
+   debug session through the visible VS Code UI. The configuration owns the
+   extension development paths and its `build:dev` prelaunch task.
+3. Drive the user-visible workflow with clicks, keyboard input, menus, and
+   focus changes. Re-read the current accessibility state after each UI action;
+   element positions and indices are not stable across updates.
+4. Assert only observable host results: visible labels, enabled/disabled state,
+   selected views, focus, dialogs, and user-visible side effects.
 
-### Available Commands
+This lane may validate a rendered Webview as a user would see it, but it cannot
+prove the Webview's DOM, iframe identity, postMessage path, CSP, resource URI,
+console, or network behavior. Do not use a successful UI observation to claim
+Webview white-box acceptance.
 
-| Command | Description | Usage |
-|---------|-------------|-------|
-| `list` | List all debug targets | `node cdp-client.js list` |
-| `snapshot` | Get DOM snapshot | `node cdp-client.js snapshot <targetId>` |
-| `screenshot` | Capture screenshot | `node cdp-client.js screenshot <targetId> [outputPath]` |
-| `eval` | Execute JavaScript | `node cdp-client.js eval <targetId> <code>` |
-| `console` | Get console messages | `node cdp-client.js console <targetId>` |
+## Webview Lane (CDP Required)
 
-## Workflow
+Use this lane whenever the scenario mentions Webview DOM, iframe targets,
+`postMessage`, CSP, `asWebviewUri`, resource/media failures, console output, or
+path-level Webview diagnostics.
 
-### Step 1: List Available Targets
+### Prerequisites
 
-To find debug targets:
+1. Run VS Code with remote debugging enabled on port `9222`, or set a different
+   port through the command options/environment described below.
+2. Ensure Node.js and the `ws` package are available to the repository script.
+3. Make the target Webview visible. VS Code does not expose an iframe target
+   until the Webview is mounted and visible.
+
+### Target Preflight
+
+Run the repository target smoke and require the skill explicitly:
+
+```bash
+pnpm smoke:vscode:targets -- --skill vscode-extension-debugger
+```
+
+For a Webview scenario, require an iframe target:
+
+```bash
+pnpm smoke:webview:targets
+```
+
+The target smoke proves only that the CDP page/iframe is discoverable. It is
+not functional Webview acceptance.
+
+### CDP Client Commands
+
+The bundled client is `.codex/skills/vscode-extension-debugger/scripts/cdp-client.js`.
 
 ```bash
 node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js list
-```
-
-Output shows all available targets:
-- `type: "page"` - VS Code windows (use for screenshots)
-- `type: "iframe"` - Extension webviews (use for DOM inspection)
-- `type: "worker"` - Background workers
-
-### Step 2: Identify Target
-
-From the list output, identify the relevant target:
-- For webview debugging: Find the iframe with `extensionId` matching your extension
-- For screenshots: Use the main page (type: "page") without parentId
-
-### Step 3: Inspect or Debug
-
-**Get DOM Snapshot:**
-```bash
 node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js snapshot <targetId>
-```
-
-Returns:
-- `title` - Page/webview title
-- `bodyText` - Text content (first 5000 chars)
-- `elements` - Interactive elements (buttons, inputs, etc.)
-
-**Take Screenshot:**
-```bash
-node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js screenshot <targetId> /tmp/screenshot.png
-```
-
-Note: Screenshots only work on top-level pages, not iframes. To capture webview content, screenshot the parent VS Code window.
-
-**Execute JavaScript:**
-```bash
+node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js screenshot <pageTargetId> /tmp/vscode.png
 node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js eval <targetId> "document.title"
-```
-
-For webview iframe content:
-```bash
-node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js eval <parentPageId> "document.getElementById('active-frame').contentDocument.body.innerText"
-```
-
-**Monitor Console:**
-```bash
 node .codex/skills/vscode-extension-debugger/scripts/cdp-client.js console <targetId>
 ```
 
-## Limitations
+Use `list` first and select targets by identity, not by a stale index:
 
-1. **Screenshots**: Only work on top-level pages (type: "page"), not iframes
-2. **Cross-origin**: Some webview content may be cross-origin restricted
-3. **Port**: Default port is 9222, ensure VS Code is launched with this debug port
+- `type: "page"`: top-level VS Code Workbench; use it for screenshots.
+- `type: "iframe"` or a `vscode-webview://` URL: extension Webview; use it
+  for DOM snapshots and JavaScript evaluation.
+- `type: "worker"`: background worker; use only when the scenario requires it.
+
+Screenshots are supported only for top-level page targets. To capture a
+Webview's rendered pixels, capture its parent VS Code page. For Webview DOM
+inspection, evaluate against the Webview target or the parent frame's active
+frame when the target is exposed there.
+
+### Port and Target Options
+
+The repository smoke accepts:
+
+```text
+--port <port>
+--timeout-ms <milliseconds>
+--skill <name-or-path>
+--require-webview
+--expect-title <text>
+--expect-url <text>
+--expect-extension-id <id>
+```
+
+The default port is `9222`. `NEKO_VSCODE_DEBUG_PORT`,
+`NEKO_VSCODE_DEBUGGER_SMOKE_TIMEOUT_MS`,
+`NEKO_VSCODE_DEBUGGER_SMOKE_SKILLS`, and
+`NEKO_VSCODE_DEBUGGER_SMOKE_REQUIRE_WEBVIEW` provide equivalent environment
+configuration for the repository smoke.
+
+## Evidence Rules
+
+- Use an isolated synthetic workspace for every functional scenario.
+- Record the host, extension/configuration identity, target type, command,
+  observed result, and failure classification.
+- Keep host UI evidence and CDP evidence separately labeled. A no-port
+  Computer Use run is black-box evidence; it does not replace a CDP Webview
+  run when the changed behavior crosses the Webview boundary.
+- Treat VS Code container warnings about `local-network-access` or the
+  Webview sandbox as benign only when they originate from VS Code's own
+  Webview container. Investigate Neko CSP, media, resource, save, and message
+  diagnostics separately.
+- Do not use ordinary browser, Vite localhost, Browser, Playwright, or a
+  no-port host screenshot as the default acceptance path for Webview CSP,
+  message, focus, media, or lifecycle changes.
 
 ## Troubleshooting
 
-### "Connection refused"
-- Ensure VS Code is running with `--inspect=9222`
-- Check if port 9222 is in use: `lsof -i :9222`
+- `Connection refused`: the CDP lane has no reachable VS Code endpoint. Use the
+  Host UI lane if the requested evidence is strictly black-box, otherwise start
+  VS Code with remote debugging and retry.
+- `no webview iframe targets were visible`: bring the target Webview to the
+  foreground in the isolated Extension Development Host, then rerun preflight.
+- `Target not found`: refresh `list` and reselect the target by current id.
+- `Command can only be executed on top-level targets`: use the parent page for
+  screenshots; use the iframe target for DOM/runtime operations.
 
-### "Target not found"
-- Run `list` command to refresh available targets
-- Webview targets appear only when the webview is visible
+## Non-Equivalence Boundary
 
-### "Command can only be executed on top-level targets"
-- This error occurs when trying to screenshot an iframe
-- Use the parent page ID instead for screenshots
-
-## Debug Session Control
-
-Control VS Code debug sessions using AppleScript keyboard shortcuts.
-
-### Available Commands
-
-| Action | Shortcut | AppleScript Command |
-|--------|----------|---------------------|
-| Start Debugging | F5 | `key code 96` |
-| Stop Debugging | Shift+F5 | `key code 96 using {shift down}` |
-| Restart Debugging | Cmd+Shift+F5 | `key code 96 using {command down, shift down}` |
-| Step Over | F10 | `key code 109` |
-| Step Into | F11 | `key code 103` |
-| Step Out | Shift+F11 | `key code 103 using {shift down}` |
-
-### Usage Examples
-
-**Start Debugging:**
-```bash
-osascript <<EOF
-tell application "Visual Studio Code" to activate
-delay 0.3
-tell application "System Events"
-    tell process "Code"
-        key code 96
-    end tell
-end tell
-EOF
-```
-
-**Stop Debugging:**
-```bash
-osascript <<EOF
-tell application "Visual Studio Code" to activate
-delay 0.3
-tell application "System Events"
-    tell process "Code"
-        key code 96 using {shift down}
-    end tell
-end tell
-EOF
-```
-
-**Restart Debugging:**
-```bash
-osascript <<EOF
-tell application "Visual Studio Code" to activate
-delay 0.3
-tell application "System Events"
-    tell process "Code"
-        key code 96 using {command down, shift down}
-    end tell
-end tell
-EOF
-```
-
-### Prerequisites for AppleScript
-
-System Preferences > Security & Privacy > Privacy > Accessibility must include:
-- Terminal (or your terminal app)
-- osascript
-
-### VS Code Debug Commands Reference
-
-These commands can be executed via `vscode.commands.executeCommand()` in extension code:
-
-| Command | Description |
-|---------|-------------|
-| `workbench.action.debug.start` | Start debugging (F5) |
-| `workbench.action.debug.stop` | Stop debugging (Shift+F5) |
-| `workbench.action.debug.restart` | Restart debugging (Cmd+Shift+F5) |
-| `workbench.action.debug.selectandstart` | Select and start debug config |
-| `workbench.action.debug.continue` | Continue execution |
-| `workbench.action.debug.stepOver` | Step over (F10) |
-| `workbench.action.debug.stepInto` | Step into (F11) |
-| `workbench.action.debug.stepOut` | Step out (Shift+F11) |
-
-Note: `vscode.debug.activeDebugSession` is an API property, not a command.
-
-## Example Session
-
-```bash
-# 1. List targets
-node cdp-client.js list
-# Output: [{"id":"ABC123","type":"page","title":"[Extension Host] ..."},...]
-
-# 2. Get webview snapshot (find iframe with your extension)
-node cdp-client.js snapshot DEF456
-
-# 3. Screenshot the main window
-node cdp-client.js screenshot ABC123 /tmp/vscode.png
-
-# 4. Execute code in webview
-node cdp-client.js eval DEF456 "document.querySelectorAll('button').length"
-
-# 5. Control debug session
-osascript -e 'tell application "Visual Studio Code" to activate' && \
-osascript -e 'tell application "System Events" to tell process "Code" to key code 96'
-```
+Do not claim that Computer Use replaced the debugger when the acceptance
+requires Webview DOM, iframe identity, JavaScript, CSP, console, resource, or
+message evidence. Conversely, do not require a CDP port for a host-only UI
+scenario whose assertions are limited to visible VS Code behavior.

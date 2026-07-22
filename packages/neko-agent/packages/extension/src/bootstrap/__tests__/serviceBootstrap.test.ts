@@ -25,12 +25,8 @@ describe('Extension Agent persistence bootstrap', () => {
     expect(binding).not.toHaveProperty('taskMigration');
     await binding.taskStorage.save(task);
     await expect(binding.taskStorage.load(task.scope)).resolves.toEqual(task);
-    expect(binding.resourceCacheMigrationReport).toMatchObject({ sourceStatus: 'absent' });
-    expect(binding.proxyMigrationReport).toMatchObject({ sourceStatus: 'absent' });
-    await expect(binding.workspaceResourceCacheManifestStore.load()).resolves.toMatchObject({
-      projectRoot: workDir,
-      entries: {},
-    });
+    expect(binding).not.toHaveProperty('workspaceResourceCacheManifestStore');
+    expect(binding).not.toHaveProperty('globalResourceCacheManifestStore');
 
     await binding.disposeHost();
   });

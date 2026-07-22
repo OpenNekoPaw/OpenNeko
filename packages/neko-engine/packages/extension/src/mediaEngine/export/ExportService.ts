@@ -12,68 +12,6 @@ import { createNativeEngineBinding } from '../nativeEngineBinding';
 const logger = getLogger('ExportService');
 
 // =============================================================================
-// Coordinate Transform Utility
-// =============================================================================
-
-interface WebTransform {
-  x: number; // 0-1 normalized (0.5 = center)
-  y: number; // 0-1 normalized (0.5 = center)
-  scaleX: number;
-  scaleY: number;
-  rotation: number;
-  anchorX: number; // 0-1 normalized
-  anchorY: number; // 0-1 normalized
-}
-
-interface RustTransform {
-  x: number; // pixel coordinates
-  y: number; // pixel coordinates
-  scaleX: number;
-  scaleY: number;
-  rotation: number;
-  anchorX: number; // pixel coordinates
-  anchorY: number; // pixel coordinates
-}
-
-/**
- * Convert Web normalized coordinates to Rust pixel coordinates
- * Web uses 0-1 normalized coords (0.5, 0.5 = center)
- * Rust uses pixel coords (0, 0 = top-left)
- */
-export function webTransformToRust(
-  web: WebTransform,
-  canvasWidth: number,
-  canvasHeight: number,
-  layerWidth: number,
-  layerHeight: number,
-): RustTransform {
-  const scaledWidth = layerWidth * web.scaleX;
-  const scaledHeight = layerHeight * web.scaleY;
-
-  // Calculate center position in pixels
-  const centerX = web.x * canvasWidth;
-  const centerY = web.y * canvasHeight;
-
-  // Calculate top-left position (accounting for anchor)
-  const x = centerX - scaledWidth * web.anchorX;
-  const y = centerY - scaledHeight * web.anchorY;
-
-  // Convert anchor from normalized to pixel coordinates
-  const anchorX = web.anchorX * scaledWidth;
-  const anchorY = web.anchorY * scaledHeight;
-
-  return {
-    x,
-    y,
-    scaleX: web.scaleX,
-    scaleY: web.scaleY,
-    rotation: web.rotation,
-    anchorX,
-    anchorY,
-  };
-}
-
-// =============================================================================
 // Export Configuration
 // =============================================================================
 
@@ -567,17 +505,4 @@ export class ExportService {
     this._stopPolling();
     resolve(result);
   }
-}
-
-// =============================================================================
-// Factory
-// =============================================================================
-
-/**
- * Create and initialize an ExportService
- */
-export async function createExportService(): Promise<ExportService> {
-  const service = new ExportService();
-  await service.initialize();
-  return service;
 }

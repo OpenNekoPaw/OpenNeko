@@ -1,6 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as vscode from 'vscode';
 import type { ActionRequest, ActionResponse } from '@neko/neko-client';
-import type { ContentAccessRequest, ContentAccessResult, ProjectData } from '@neko/shared';
+import type { ContentLocator, ProjectData } from '@neko/shared';
 import { ExportService } from './ExportService';
 
 vi.mock('vscode', () => ({
@@ -21,25 +25,48 @@ vi.mock('vscode', () => ({
 }));
 
 describe('ExportService', () => {
-  it('resolves media sources through final-export content access before engine dispatch', async () => {
-    const requests: ContentAccessRequest[] = [];
+  let workspaceRoot: string;
+
+  beforeEach(async () => {
+    workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-cut-export-'));
+    await Promise.all([
+      fs.mkdir(path.join(workspaceRoot, 'proxies'), { recursive: true }),
+      fs.mkdir(path.join(workspaceRoot, 'cases'), { recursive: true }),
+      fs.mkdir(path.join(workspaceRoot, 'edit'), { recursive: true }),
+    ]);
+    await Promise.all([
+      fs.writeFile(path.join(workspaceRoot, 'proxies', 'clip-proxy.mp4'), 'proxy'),
+      fs.writeFile(path.join(workspaceRoot, 'cases', 'clip.mp4'), 'clip'),
+    ]);
+    (vscode.workspace as unknown as { workspaceFolders: unknown[] }).workspaceFolders = [
+      { uri: { fsPath: workspaceRoot }, name: 'project', index: 0 },
+    ];
+  });
+
+  afterEach(async () => {
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it('authorizes media sources through ContentReadService before engine dispatch', async () => {
+    const locators: ContentLocator[] = [];
     const dispatched: ActionRequest[] = [];
-    const service = new ExportService(createEngineClient(dispatched), '/workspace/project', {
+    const service = new ExportService(createEngineClient(dispatched), workspaceRoot, {
       fileExists: () => true,
-      contentAccess: {
-        registerProvider: vi.fn(),
-        resolve: async (request) => {
-          requests.push(request);
+      contentRead: {
+        stat: async (locator) => {
+          locators.push(locator);
           return {
             status: 'ready',
-            request,
-            localPath: '/source/original/clip.mp4',
-          } satisfies ContentAccessResult;
+            locator,
+            byteLength: 5,
+            fingerprint: { strategy: 'mtime-size', value: '1:5' },
+          } as const;
         },
+        read: vi.fn(),
       },
     });
 
-    await service.startExport(createProject('/workspace/project/proxies/clip-proxy.mp4'), {
+    await service.startExport(createProject('proxies/clip-proxy.mp4'), {
       outputPath: '/exports/final.mp4',
       format: 'mp4',
       width: 1920,
@@ -49,13 +76,7 @@ describe('ExportService', () => {
       audioBitrate: 192_000,
     });
 
-    expect(requests).toEqual([
-      expect.objectContaining({
-        intent: 'final-export',
-        target: 'local-path',
-        ref: { kind: 'file', path: '/workspace/project/proxies/clip-proxy.mp4' },
-      }),
-    ]);
+    expect(locators).toEqual([{ kind: 'workspace-file', path: 'proxies/clip-proxy.mp4' }]);
     expect(dispatched[0]).toMatchObject({
       group: 'timelines',
       action: 'export_enqueue',
@@ -66,7 +87,7 @@ describe('ExportService', () => {
               elements: [
                 {
                   type: 'media',
-                  src: '/source/original/clip.mp4',
+                  src: path.join(workspaceRoot, 'proxies', 'clip-proxy.mp4'),
                 },
               ],
             },
@@ -76,20 +97,21 @@ describe('ExportService', () => {
     });
   });
 
-  it('passes explicit draft-proxy quality mode into export content access diagnostics', async () => {
-    const requests: ContentAccessRequest[] = [];
-    const service = new ExportService(createEngineClient([]), '/workspace/project', {
+  it('does not add quality routing to source read authorization', async () => {
+    const locators: ContentLocator[] = [];
+    const service = new ExportService(createEngineClient([]), workspaceRoot, {
       fileExists: () => true,
-      contentAccess: {
-        registerProvider: vi.fn(),
-        resolve: async (request) => {
-          requests.push(request);
+      contentRead: {
+        stat: async (locator) => {
+          locators.push(locator);
           return {
             status: 'ready',
-            request,
-            localPath: '/workspace/project/proxies/clip-proxy.mp4',
-          } satisfies ContentAccessResult;
+            locator,
+            byteLength: 5,
+            fingerprint: { strategy: 'mtime-size', value: '1:5' },
+          } as const;
         },
+        read: vi.fn(),
       },
     });
 
@@ -104,37 +126,34 @@ describe('ExportService', () => {
       qualityMode: 'draft-proxy',
     });
 
-    expect(requests[0]).toMatchObject({
-      intent: 'final-export',
-      qualityMode: 'draft-proxy',
-      ref: { kind: 'file', path: '/workspace/project/proxies/clip-proxy.mp4' },
-    });
+    expect(locators).toEqual([{ kind: 'workspace-file', path: 'proxies/clip-proxy.mp4' }]);
   });
 
   it('resolves workspace-relative media from the owning workspace before final export', async () => {
-    const requests: ContentAccessRequest[] = [];
+    const locators: ContentLocator[] = [];
     const dispatched: ActionRequest[] = [];
     const service = new ExportService(
       createEngineClient(dispatched),
-      '/workspace/project/edit',
+      path.join(workspaceRoot, 'edit'),
       {
-        fileExists: (filePath) => filePath === '/workspace/project/cases/clip.mp4',
-        contentAccess: {
-          registerProvider: vi.fn(),
-          resolve: async (request) => {
-            requests.push(request);
+        fileExists: (filePath) => filePath === path.join(workspaceRoot, 'cases', 'clip.mp4'),
+        contentRead: {
+          stat: async (locator) => {
+            locators.push(locator);
             return {
               status: 'ready',
-              request,
-              localPath: '/workspace/project/cases/clip.mp4',
-            } satisfies ContentAccessResult;
+              locator,
+              byteLength: 4,
+              fingerprint: { strategy: 'mtime-size', value: '1:4' },
+            } as const;
           },
+          read: vi.fn(),
         },
       },
       {
         scheme: 'file',
-        fsPath: '/workspace/project/edit/project.nkv',
-        toString: () => 'file:///workspace/project/edit/project.nkv',
+        fsPath: path.join(workspaceRoot, 'edit', 'project.nkv'),
+        toString: () => `file://${path.join(workspaceRoot, 'edit', 'project.nkv')}`,
       } as never,
     );
 
@@ -148,29 +167,14 @@ describe('ExportService', () => {
       audioBitrate: 192_000,
     });
 
-    expect(requests[0]).toMatchObject({
-      intent: 'final-export',
-      ref: { kind: 'file', path: '/workspace/project/cases/clip.mp4' },
-    });
+    expect(locators).toEqual([{ kind: 'workspace-file', path: 'cases/clip.mp4' }]);
   });
 
-  it('stages completed export outputs through the ingest boundary', async () => {
+  it('prepares completed export output through the export owner', async () => {
     const staged: string[] = [];
     const service = new ExportService(createEngineClient([]), '/workspace/project', {
-      contentIngest: {
-        registerProvider: vi.fn(),
-        ingest: async (request) => {
-          staged.push(`${request.destination.directory}/${request.fileName}`);
-          return {
-            status: 'ready',
-            request,
-            outputPath: `${request.destination.directory}/${request.fileName}`,
-            stagedOutput: {
-              path: `${request.destination.directory}/${request.fileName}`,
-              kind: 'export',
-            },
-          };
-        },
+      prepareOutputDirectory: async (directory) => {
+        staged.push(directory);
       },
     });
 
@@ -180,7 +184,7 @@ describe('ExportService', () => {
       }
     ).stageExportOutput('/exports/final.mp4');
 
-    expect(staged).toEqual(['/exports/final.mp4']);
+    expect(staged).toEqual(['/exports']);
   });
 });
 

@@ -6,6 +6,5 @@
 export {
   bootstrapCoreServices,
   logServicesStatus,
-  IConnectionStateManager,
   type IServiceBootstrapResult,
 } from './serviceBootstrap';

@@ -273,6 +273,13 @@ function createFakePort(): TuiDebugAutomationAppPort {
     cancelActiveMessage() {
       return true;
     },
+    async confirmPendingTool(input) {
+      return {
+        toolCallId: 'tool-call-1',
+        toolName: input.toolName,
+        approved: input.approved,
+      };
+    },
     resizeTerminal(input) {
       mockState.terminalSizes.push(input);
     },
@@ -305,7 +312,7 @@ function createFakePort(): TuiDebugAutomationAppPort {
         },
         idle: await this.waitForIdle({ timeoutMs: 1, pollIntervalMs: 1 }),
         turns: [],
-        skillActivations: [],
+        skillReceipts: [],
         tasks: [],
         messageQueue: null,
         continuations: [],
@@ -343,7 +350,7 @@ function createFakePort(): TuiDebugAutomationAppPort {
           turns: { limit: 512, droppedCount: 0 },
           turnToolCalls: { limit: 256, droppedCount: 0 },
           timelineRows: { limit: 2048, droppedCount: 0 },
-          skillActivations: { limit: 128, droppedCount: 0 },
+          skillReceipts: { limit: 128, droppedCount: 0 },
           tasks: { limit: 512, droppedCount: 0 },
           continuations: { limit: 512, droppedCount: 0 },
           promptComposition: { limit: 256, droppedCount: 0 },

@@ -42,33 +42,33 @@ import {
 } from '../ai/piCredentialRuntime';
 import { VSCodePiRuntimeManager } from '../ai/vscodePiRuntimeManager';
 import { VSCodePiPurposeModelRuntime } from '../ai/vscodePiPurposeModelRuntime';
+import { getCapabilityRuntimeBindings } from './capabilityBootstrap';
+import { createLocalPerceptionAssetLoader } from '../services/perceptionAssetLoader';
 
 // =============================================================================
 // Service Identifiers
 // =============================================================================
 
 export const IPlatform = createServiceId<Platform>('platform');
-export const IToolRegistry = createServiceId<ToolRegistry>('toolRegistry');
-export const IMCPManager = createServiceId<MCPManager>('mcpManager');
+const IToolRegistry = createServiceId<ToolRegistry>('toolRegistry');
+const IMCPManager = createServiceId<MCPManager>('mcpManager');
 export const ITaskManager = createServiceId<IRuntimeTaskManager>('taskManager');
 export const IAgentManager = createServiceId<IAgentManagerInterface>('agentManager');
-export const IPiCredentialStore = createServiceId<OpenNekoCredentialStore>('piCredentialStore');
-export const IPiProviderAuthController = createServiceId<PiProviderAuthController>(
+const IPiCredentialStore = createServiceId<OpenNekoCredentialStore>('piCredentialStore');
+const IPiProviderAuthController = createServiceId<PiProviderAuthController>(
   'piProviderAuthController',
 );
-export const IPiAuthInteraction = createServiceId<AuthInteraction>('piAuthInteraction');
+const IPiAuthInteraction = createServiceId<AuthInteraction>('piAuthInteraction');
 export const IPiAgentRuntimeManager =
   createServiceId<VSCodePiRuntimeManager>('piAgentRuntimeManager');
 export const IProductPurposeTextRuntime = createServiceId<ICapabilityPurposeTextRuntime>(
   'productPurposeTextRuntime',
 );
-export const ITaskLifecycleCoordinator = createServiceId<TaskLifecycleCoordinator>(
+const ITaskLifecycleCoordinator = createServiceId<TaskLifecycleCoordinator>(
   'taskLifecycleCoordinator',
 );
 
 // Re-export IEditorRegistry
-export { IEditorRegistry };
-
 // =============================================================================
 // Service Bootstrap Result
 // =============================================================================
@@ -159,6 +159,21 @@ export async function bootstrapCoreServices(
     builtinSkillRoot: join(context.extensionUri.fsPath, 'dist', 'skills'),
     credentials: piCredentials.credentials,
     tools: toolRegistry,
+    assetLoader: {
+      load: (ref) =>
+        createLocalPerceptionAssetLoader(getCapabilityRuntimeBindings().contentAccessRuntime).load(
+          ref,
+        ),
+      loadBatch: (refs, options) => {
+        const loader = createLocalPerceptionAssetLoader(
+          getCapabilityRuntimeBindings().contentAccessRuntime,
+        );
+        if (!loader.loadBatch) {
+          throw new Error('Extension perception asset loader lacks batch projection.');
+        }
+        return loader.loadBatch(refs, options);
+      },
+    },
     workspaceTrusted: () => vscode.workspace.isTrusted,
   });
   services.set(IPiAgentRuntimeManager, piAgentRuntimeManager);

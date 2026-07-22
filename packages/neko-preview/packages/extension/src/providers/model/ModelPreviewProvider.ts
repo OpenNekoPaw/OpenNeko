@@ -11,7 +11,7 @@ import {
   type ThreeReferenceStagingSnapshot,
 } from '@neko/shared';
 import {
-  createHostContentAccessRuntime,
+  createDefaultLocalResourceAccessService,
   loadHostContentPathPolicy,
   type LocalResourceAccessService,
 } from '@neko/shared/vscode/extension';
@@ -123,18 +123,11 @@ export class ModelPreviewProvider
     private readonly context: vscode.ExtensionContext,
     dependencies: ModelPreviewProviderDependencies = {},
   ) {
-    const contentAccess = createHostContentAccessRuntime({
+    this.localResourceAccess = createDefaultLocalResourceAccessService({
       extensionUri,
       context,
-      localResourceAccessOptions: { includeExtensionCache: false },
-      sourceFileProvider: { enabled: false },
-      documentEntryProvider: { enabled: false },
-      ingest: { enabled: false },
+      includeExtensionCache: false,
     });
-    if (!contentAccess.localResourceAccess) {
-      throw new Error('3D Reference requires LocalResourceAccessService.');
-    }
-    this.localResourceAccess = contentAccess.localResourceAccess;
     this.createSessionId = dependencies.createSessionId ?? randomUUID;
     this.presetCatalog = dependencies.presetCatalog ?? THREE_REFERENCE_PRESET_CATALOG;
     this.onCaptureRequested = dependencies.onCaptureRequested;

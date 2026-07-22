@@ -61,10 +61,7 @@ export function validateExternalResearchUrl(
   return { ok: true, url: parsed, domain };
 }
 
-export function matchesDomainPolicy(
-  domain: string,
-  policy: readonly string[] | undefined,
-): boolean {
+function matchesDomainPolicy(domain: string, policy: readonly string[] | undefined): boolean {
   if (!policy || policy.length === 0) return false;
   return policy.some((entry) => matchesDomainEntry(domain, entry.toLowerCase()));
 }

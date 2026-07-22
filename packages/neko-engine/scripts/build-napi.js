@@ -15,7 +15,7 @@ const {
 
 function parseArgs(argv) {
   const targetIndex = argv.indexOf('--target');
-  const rustTarget = targetIndex === -1 ? null : argv[targetIndex + 1] ?? null;
+  const rustTarget = targetIndex === -1 ? null : (argv[targetIndex + 1] ?? null);
   if (targetIndex !== -1 && !rustTarget) {
     throw new Error('--target requires a Rust target triple.');
   }
@@ -138,5 +138,4 @@ module.exports = {
   parseArgs,
   resolveBuildTarget,
   restoreCanonicalLoader,
-  runCommand,
 };

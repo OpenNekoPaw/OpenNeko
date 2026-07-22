@@ -26,7 +26,7 @@ describe('createNodeHostAdapter', () => {
       path.join(path.resolve(workspaceRoot), '.neko'),
     );
     expect(workspace.storageLayout?.global.root).toBe(path.join(path.resolve(homedir), '.neko'));
-    expect(workspace.pathVariables?.get('A')).toBe(path.resolve(workspaceRoot));
+    expect(workspace.pathVariables?.get('A')).toBeUndefined();
     expect(workspace.pathVariables?.get('WORKSPACE')).toBe(path.resolve(workspaceRoot));
     expect(workspace.pathVariables?.get('PROJECT')).toBe(path.resolve(workspaceRoot));
     expect(workspace.pathVariables?.get('NEKO_HOME')).toBe(
@@ -53,57 +53,33 @@ describe('createNodeHostAdapter', () => {
     expect(workspace.pathVariables?.get('ASSETS')).toBeUndefined();
   });
 
-  it('projects configured media library variables through the shared workspace content host', async () => {
+  it('projects workspace-linked media libraries without adding path variables or read roots', async () => {
     const workspaceRoot = createTempDir();
     const homedir = createTempDir();
     const mediaRoot = createTempDir();
     const localMediaRoot = createTempDir();
-    fs.mkdirSync(path.join(workspaceRoot, 'neko'), { recursive: true });
-    fs.mkdirSync(path.join(workspaceRoot, '.neko'), { recursive: true });
-    fs.writeFileSync(
-      path.join(workspaceRoot, 'neko', 'settings.json'),
-      JSON.stringify({
-        mediaLibraries: [
-          { name: 'Assets', path: mediaRoot, variable: 'A' },
-          { name: 'Disabled', path: mediaRoot, variable: 'DISABLED', enabled: false },
-          {
-            name: 'Local',
-            path: path.join(workspaceRoot, 'missing-media-root'),
-            variable: 'LOCAL',
-          },
-        ],
-      }),
-      'utf8',
-    );
-    fs.writeFileSync(
-      path.join(workspaceRoot, '.neko', 'settings.local.json'),
-      JSON.stringify({
-        mediaLibraryOverrides: {
-          LOCAL: localMediaRoot,
-        },
-      }),
-      'utf8',
-    );
+    const assetsRoot = path.join(workspaceRoot, 'neko', 'assets');
+    fs.mkdirSync(assetsRoot, { recursive: true });
+    fs.symlinkSync(mediaRoot, path.join(assetsRoot, 'Assets'), directoryLinkType());
+    fs.symlinkSync(localMediaRoot, path.join(assetsRoot, 'Local'), directoryLinkType());
 
     const host = createNodeWorkspaceContentHostAdapter({ workDir: workspaceRoot, homedir });
     const workspace = await host.workspace.getWorkspace();
 
-    expect(workspace.pathVariables?.get('A')).toBe(path.resolve(mediaRoot));
-    expect(workspace.pathVariables?.get('LOCAL')).toBe(path.resolve(localMediaRoot));
-    expect(workspace.pathVariables?.get('DISABLED')).toBeUndefined();
+    expect(workspace.pathVariables?.get('ASSETS')).toBeUndefined();
+    expect(workspace.pathVariables?.get('LOCAL')).toBeUndefined();
     expect(workspace.pathVariables?.get('WORKSPACE')).toBe(path.resolve(workspaceRoot));
     const contentPolicy = await host.contentPolicy?.getSnapshot();
     expect(contentPolicy).toMatchObject({
-      mediaLibraryRoots: [path.resolve(mediaRoot), path.resolve(localMediaRoot)],
-      authorizedReadRoots: [
-        path.resolve(workspaceRoot),
-        path.resolve(mediaRoot),
-        path.resolve(localMediaRoot),
+      mediaLibraries: [
+        { name: 'Assets', workspacePath: 'neko/assets/Assets', availability: 'available' },
+        { name: 'Local', workspacePath: 'neko/assets/Local', availability: 'available' },
       ],
+      authorizedReadRoots: [path.resolve(workspaceRoot)],
     });
-    expect(host.paths.resolvePath({ path: '${A}/epub/book.epub' })).toEqual({
+    expect(host.paths.resolvePath({ path: 'neko/assets/Assets/epub/book.epub' })).toEqual({
       type: 'local',
-      path: path.join(path.resolve(mediaRoot), 'epub', 'book.epub'),
+      path: path.join(path.resolve(workspaceRoot), 'neko', 'assets', 'Assets', 'epub', 'book.epub'),
     });
   });
 
@@ -112,7 +88,7 @@ describe('createNodeHostAdapter', () => {
     const homedir = createTempDir();
     const host = createNodeHostAdapter({ workDir: workspaceRoot, homedir });
 
-    expect(host.paths.resolvePath({ path: '${A}/books/book.epub' })).toEqual({
+    expect(host.paths.resolvePath({ path: '${WORKSPACE}/books/book.epub' })).toEqual({
       type: 'local',
       path: path.join(path.resolve(workspaceRoot), 'books', 'book.epub'),
     });
@@ -122,7 +98,7 @@ describe('createNodeHostAdapter', () => {
     });
     expect(
       host.paths.contractPath({ absolutePath: path.join(workspaceRoot, 'shots', 'a.png') }),
-    ).toBe('${A}/shots/a.png');
+    ).toBe('${WORKSPACE}/shots/a.png');
   });
 
   it('implements filesystem primitives with explicit file types', async () => {
@@ -212,4 +188,8 @@ function createTempDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neko-node-host-'));
   createdPaths.push(dir);
   return dir;
+}
+
+function directoryLinkType(): 'dir' | 'junction' {
+  return process.platform === 'win32' ? 'junction' : 'dir';
 }

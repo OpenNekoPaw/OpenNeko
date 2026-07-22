@@ -760,7 +760,10 @@ describe('NodeContentDispatcher', () => {
               entityRef: { entityId: 'entity-broken', entityKind: 'character' },
               defaultRepresentation: {
                 role: 'portrait',
-                assetRef: 'project://assets/missing',
+                representation: {
+                  kind: 'workspace-file',
+                  path: 'neko/assets/Characters/missing.png',
+                },
                 availability: 'orphaned',
               },
             },

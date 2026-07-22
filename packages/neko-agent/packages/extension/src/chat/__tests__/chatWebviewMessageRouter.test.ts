@@ -66,7 +66,6 @@ function mockCanvasExtension(invoke: ReturnType<typeof vi.fn>): void {
     id: 'neko.neko-canvas',
     isActive: true,
     exports: {
-      asset: { import: vi.fn(), list: vi.fn(), getById: vi.fn() },
       authoring: { importAsset: vi.fn() },
       markdown: { invoke },
       boards: { project: vi.fn() },
@@ -95,7 +94,7 @@ function mockCanvasExtension(invoke: ReturnType<typeof vi.fn>): void {
         generateBatch: vi.fn(),
         onSelectionChange: vi.fn(),
       },
-      events: { onDidChangeAssets: vi.fn(), onDidChangeCanvas: vi.fn() },
+      events: { onDidChangeCanvas: vi.fn() },
     },
     activate: vi.fn(),
   } as never);
@@ -145,7 +144,6 @@ function createDeps(): ChatWebviewMessageRouterDeps {
       handleOpenFile: vi.fn(),
       handleRevealDocumentLocator: vi.fn(),
       handleRevealFile: vi.fn(),
-      handleRevealAsset: vi.fn(),
       handleOpenConfigFile: vi.fn(),
       handleOpenUrl: vi.fn(),
       handleDownloadSvg: vi.fn(),
@@ -1520,35 +1518,6 @@ describe('handleChatWebviewMessage', () => {
       locator,
       source: { filePath: '/books/a.pdf', format: 'pdf' },
     });
-  });
-
-  it('routes explicit asset reveals to the file operation handler', () => {
-    const deps = createDeps();
-
-    handleChatWebviewMessage({ type: 'revealAsset', assetId: 'asset-1' }, deps);
-
-    expect(deps.fileOperationHandler.handleRevealAsset).toHaveBeenCalledWith('asset-1');
-  });
-
-  it('routes asset context source reveals through asset-library navigation data', () => {
-    const deps = createDeps();
-
-    handleChatWebviewMessage(
-      {
-        type: 'revealContextSource',
-        contextType: 'asset',
-        contextId: 'asset:asset-1',
-        navigationData: {
-          partition: 'asset-library',
-          sourceId: 'asset-1',
-          filePath: '${ASSETS}/hero.png',
-        },
-      },
-      deps,
-    );
-
-    expect(deps.fileOperationHandler.handleRevealAsset).toHaveBeenCalledWith('asset-1');
-    expect(deps.fileOperationHandler.handleOpenFile).not.toHaveBeenCalled();
   });
 
   it('routes media library context source reveals to the media library tree', () => {

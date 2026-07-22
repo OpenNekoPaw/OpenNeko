@@ -18,13 +18,6 @@ export function presentWorkspaceContentDiagnostic(
   );
 }
 
-export function presentResourceCacheGcFailure(
-  detail: string,
-  context: PresentationContext,
-): string {
-  return context.t('agent.terminal.runtime.resourceCacheGcFailed', { detail });
-}
-
 export function presentResumeFallback(
   conversationId: string,
   context: PresentationContext,

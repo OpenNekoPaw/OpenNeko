@@ -33,7 +33,3 @@ export class PerceptionPolicyResolver {
     };
   }
 }
-
-export function createPerceptionPolicyResolver(): PerceptionPolicyResolver {
-  return new PerceptionPolicyResolver();
-}

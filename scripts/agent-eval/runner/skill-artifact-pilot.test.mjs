@@ -6,7 +6,6 @@ import { discoverSuites, selectSuiteCases } from '../suites/discovery.mjs';
 import { runV2Case } from './run-v2-case.mjs';
 
 const HASH = `sha256:${'a'.repeat(64)}`;
-const FRAGMENT_HASH = `sha256:${'b'.repeat(64)}`;
 const SKILL_FILE = `---
 name: eval-v2-created-skill
 description: Evaluation v2 created portable Skill.
@@ -66,41 +65,16 @@ function pilotFacts(identity) {
         ],
       },
     ],
-    skillActivations: [
+    skillReceipts: [
       {
-        id: 'skill-record-1',
+        toolCallId: 'read-skill-1',
         skillName: identity.name,
-        status: 'active',
-        triggerSource: 'explicit-agent',
-        hostIdentity: {
-          portableName: identity.name,
-          source: identity.source,
-          provenance: identity.provenance,
-          rootId: identity.rootId,
-          relativePath: identity.relativePath,
-          fingerprint: identity.fingerprint,
-        },
-        injectedFragments: [
-          {
-            id: 'skill:domainSkill:evaluation-artifact-author:skill-record-1',
-            source: 'skill-lifecycle',
-            order: 0,
-            version: identity.fingerprint,
-            hash: FRAGMENT_HASH,
-          },
-        ],
-        toolPolicyIds: ['skill-tool-policy:evaluation-artifact-author'],
+        source: identity.source,
+        fingerprint: identity.fingerprint,
+        locatorKind: 'skill',
       },
     ],
-    promptComposition: [
-      {
-        id: 'skill:domainSkill:evaluation-artifact-author:skill-record-1',
-        source: 'skill-lifecycle',
-        order: 0,
-        version: identity.fingerprint,
-        hash: FRAGMENT_HASH,
-      },
-    ],
+    promptComposition: [],
     tasks: [],
     continuations: [],
     artifacts: [],
@@ -110,7 +84,7 @@ function pilotFacts(identity) {
       runtimeErrors: { limit: 256, droppedCount: 0 },
       turns: { limit: 512, droppedCount: 0 },
       turnToolCalls: { limit: 256, droppedCount: 0 },
-      skillActivations: { limit: 128, droppedCount: 0 },
+      skillReceipts: { limit: 128, droppedCount: 0 },
       tasks: { limit: 512, droppedCount: 0 },
       continuations: { limit: 512, droppedCount: 0 },
       promptComposition: { limit: 256, droppedCount: 0 },
@@ -143,9 +117,9 @@ describe('v2 Skill and artifact pilot', () => {
 
   it.each([
     [
-      'Skill injection',
+      'Skill receipt',
       (selected, facts) => {
-        facts.promptComposition[0].hash = HASH;
+        facts.skillReceipts[0].fingerprint = HASH;
       },
     ],
     [

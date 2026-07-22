@@ -5,8 +5,7 @@ import { isMentionExcludedPath } from '@neko/agent';
 import type {
   AgentReferenceCandidate,
   AgentReferenceContributor,
-  AssetEntity,
-  ResolvedMediaLibrary,
+  WorkspaceLinkedMediaLibrary,
   SearchDocumentRecord,
 } from '@neko/shared';
 import type { InputSuggestionOption } from './input-suggestions';
@@ -42,7 +41,7 @@ export type TuiMentionReferenceKind =
   'file' | 'asset' | 'media' | 'entity' | 'canvas-node' | 'character' | 'scene';
 
 export type TuiMentionReferenceSource =
-  'workspace' | 'asset-library' | 'media-library' | 'entity-graph' | 'story' | 'canvas';
+  'workspace' | 'media-library' | 'entity-graph' | 'story' | 'canvas';
 
 export type TuiMentionMediaType = 'video' | 'audio' | 'image' | 'sequence' | 'text' | 'document';
 
@@ -65,58 +64,23 @@ interface WorkspaceFileCandidate {
 }
 
 interface LocalLibraryReferenceCandidate extends WorkspaceFileCandidate {
-  readonly kind: 'asset' | 'media';
-  readonly source: 'asset-library' | 'media-library';
+  readonly kind: 'media';
+  readonly source: 'media-library';
   readonly mediaType: TuiMentionMediaType;
   readonly libraryLabel: string;
-}
-
-interface LocalLibraryRoot {
-  readonly relativeDir: string;
-  readonly kind: 'asset' | 'media';
-  readonly source: 'asset-library' | 'media-library';
-  readonly label: string;
 }
 
 interface LocalLibraryScanRoot {
   readonly absoluteRoot: string;
   readonly displayRoot: string;
-  readonly kind: 'asset' | 'media';
-  readonly source: 'asset-library' | 'media-library';
+  readonly kind: 'media';
+  readonly source: 'media-library';
   readonly label: string;
 }
-
-interface AssetLibraryFile {
-  readonly entities: readonly AssetEntity[];
-}
-
-type AssetLibraryEntityFile = AssetEntity['variants'][number]['files'][number];
 
 const DEFAULT_REFERENCE_LIMIT = 80;
 const DEFAULT_REFERENCE_MAX_DEPTH = 4;
 const LOCAL_LIBRARY_MAX_DEPTH = 5;
-const ASSET_LIBRARY_FILE = path.join('neko', 'assets', 'library.json');
-const DEFAULT_LOCAL_LIBRARY_ROOTS: readonly LocalLibraryRoot[] = [
-  { relativeDir: 'assets', kind: 'asset', source: 'asset-library', label: 'asset-library' },
-  { relativeDir: 'neko/assets', kind: 'asset', source: 'asset-library', label: 'asset-library' },
-  { relativeDir: '.neko/assets', kind: 'asset', source: 'asset-library', label: 'asset-library' },
-  { relativeDir: 'generated', kind: 'asset', source: 'asset-library', label: 'generated-assets' },
-  {
-    relativeDir: 'neko/generated',
-    kind: 'asset',
-    source: 'asset-library',
-    label: 'generated-assets',
-  },
-  {
-    relativeDir: '.neko/generated',
-    kind: 'asset',
-    source: 'asset-library',
-    label: 'generated-assets',
-  },
-  { relativeDir: 'media', kind: 'media', source: 'media-library', label: 'media-library' },
-  { relativeDir: 'neko/media', kind: 'media', source: 'media-library', label: 'media-library' },
-  { relativeDir: '.neko/media', kind: 'media', source: 'media-library', label: 'media-library' },
-];
 
 const IMAGE_EXTENSIONS = new Set([
   '.avif',
@@ -180,10 +144,6 @@ export async function createTuiReferenceSuggestions(
     resolvedMediaLibraries,
     query,
   });
-  const assetLibraryCandidates = await listAssetLibraryReferenceCandidates(root, {
-    limit,
-    query,
-  });
   const searchIndexCandidates = await listSearchIndexReferenceCandidates(root, {
     limit,
     query,
@@ -196,9 +156,6 @@ export async function createTuiReferenceSuggestions(
     limit,
     query,
   });
-  const assetLibrarySuggestions = assetLibraryCandidates.map((candidate) =>
-    mentionReferenceCandidateToSuggestion(candidate, options.presentation),
-  );
   const searchIndexSuggestions = searchIndexCandidates.map((candidate) =>
     mentionReferenceCandidateToSuggestion(candidate, options.presentation),
   );
@@ -209,11 +166,7 @@ export async function createTuiReferenceSuggestions(
   for (const candidate of localLibraryCandidates) {
     pathBackedLibraryRefs.add(candidate.relativePath);
   }
-  for (const candidate of [
-    ...assetLibraryCandidates,
-    ...searchIndexCandidates,
-    ...(options.extraReferences ?? []),
-  ]) {
+  for (const candidate of [...searchIndexCandidates, ...(options.extraReferences ?? [])]) {
     const relativePath =
       candidate.filePath && isTerminalSafeReferencePath(candidate.filePath)
         ? normalizeTerminalPath(candidate.filePath)
@@ -229,7 +182,6 @@ export async function createTuiReferenceSuggestions(
       ? limit
       : limit -
           localLibraryCandidates.length -
-          assetLibrarySuggestions.length -
           searchIndexSuggestions.length -
           contributedReferenceSuggestions.length -
           extraReferenceSuggestions.length,
@@ -249,7 +201,6 @@ export async function createTuiReferenceSuggestions(
     ...localLibraryCandidates.map((file) =>
       localLibraryCandidateToSuggestion(file, options.presentation),
     ),
-    ...assetLibrarySuggestions,
     ...searchIndexSuggestions,
     ...contributedReferenceSuggestions,
     ...extraReferenceSuggestions,
@@ -366,25 +317,17 @@ async function listLocalLibraryReferenceFiles(
   options: {
     readonly limit: number;
     readonly maxDepth: number;
-    readonly resolvedMediaLibraries?: readonly ResolvedMediaLibrary[];
+    readonly resolvedMediaLibraries?: readonly WorkspaceLinkedMediaLibrary[];
     readonly query?: string;
   },
 ): Promise<readonly LocalLibraryReferenceCandidate[]> {
   const results: LocalLibraryReferenceCandidate[] = [];
   const seen = new Set<string>();
   const configuredMediaLibraryRoots = listConfiguredMediaLibraryRoots(
+    workspaceRoot,
     options.resolvedMediaLibraries ?? (await readResolvedMediaLibraries(workspaceRoot)),
   );
-  const scanRoots: LocalLibraryScanRoot[] = [
-    ...configuredMediaLibraryRoots,
-    ...DEFAULT_LOCAL_LIBRARY_ROOTS.map((root) => ({
-      absoluteRoot: path.join(workspaceRoot, root.relativeDir),
-      displayRoot: root.relativeDir,
-      kind: root.kind,
-      source: root.source,
-      label: root.label,
-    })),
-  ];
+  const scanRoots: LocalLibraryScanRoot[] = [...configuredMediaLibraryRoots];
 
   for (const root of scanRoots) {
     if (results.length >= options.limit) break;
@@ -426,58 +369,18 @@ async function listLocalLibraryReferenceFiles(
 }
 
 function listConfiguredMediaLibraryRoots(
-  libraries: readonly ResolvedMediaLibrary[],
+  workspaceRoot: string,
+  libraries: readonly WorkspaceLinkedMediaLibrary[],
 ): readonly LocalLibraryScanRoot[] {
   return libraries
-    .filter((library) => library.enabled && library.accessible)
+    .filter((library) => library.availability === 'available')
     .map((library) => ({
-      absoluteRoot: library.resolvedPath,
-      displayRoot: formatPathVariableReference(library.variable),
+      absoluteRoot: path.join(workspaceRoot, ...library.workspacePath.split('/')),
+      displayRoot: library.workspacePath,
       kind: 'media' as const,
       source: 'media-library' as const,
       label: library.name,
     }));
-}
-
-async function listAssetLibraryReferenceCandidates(
-  workspaceRoot: string,
-  options: {
-    readonly limit: number;
-    readonly query?: string;
-  },
-): Promise<readonly TuiMentionReferenceCandidate[]> {
-  const library = await readAssetLibraryFile(path.join(workspaceRoot, ASSET_LIBRARY_FILE));
-  if (!library) {
-    return [];
-  }
-
-  const candidates: TuiMentionReferenceCandidate[] = [];
-  for (const entity of library.entities) {
-    if (candidates.length >= options.limit) {
-      break;
-    }
-    const files = readAssetEntityFiles(entity);
-    const firstFile = files[0];
-    const mediaType = firstFile ? toTuiMentionMediaType(firstFile.mediaType) : undefined;
-    const filePath =
-      firstFile?.path && isTerminalSafeReferencePath(firstFile.path) ? firstFile.path : undefined;
-
-    const candidate: TuiMentionReferenceCandidate = {
-      kind: 'asset',
-      id: entity.id,
-      label: entity.name,
-      source: 'asset-library',
-      ...(mediaType ? { mediaType } : {}),
-      ...(filePath ? { filePath } : {}),
-      description: formatAssetLibraryDescription(entity),
-      searchText: formatAssetLibrarySearchText(entity, files),
-      insertText: `@asset:${entity.id} `,
-    };
-    if (!options.query || matchesMentionCandidateQuery(candidate, options.query)) {
-      candidates.push(candidate);
-    }
-  }
-  return candidates;
 }
 
 async function listSearchIndexReferenceCandidates(
@@ -520,7 +423,7 @@ async function listSearchIndexReferenceCandidates(
 
 async function readResolvedMediaLibraries(
   workspaceRoot: string,
-): Promise<readonly ResolvedMediaLibrary[]> {
+): Promise<readonly WorkspaceLinkedMediaLibrary[]> {
   try {
     return createNodeWorkspaceContentPolicy({ workDir: workspaceRoot }).mediaLibraries;
   } catch (error) {
@@ -533,97 +436,6 @@ async function readResolvedMediaLibraries(
     }
     throw error;
   }
-}
-
-async function readOptionalJsonFile(filePath: string): Promise<unknown | undefined> {
-  let content: string;
-  try {
-    content = await fs.readFile(filePath, 'utf-8');
-  } catch (error) {
-    if (isFileNotFoundError(error)) {
-      return undefined;
-    }
-    throw new TuiReferenceSuggestionError({
-      code: 'read-failed',
-      filePath,
-      detail: formatUnknownError(error),
-    });
-  }
-
-  try {
-    return JSON.parse(content) as unknown;
-  } catch (error) {
-    throw new TuiReferenceSuggestionError({
-      code: 'parse-failed',
-      filePath,
-      detail: formatUnknownError(error),
-    });
-  }
-}
-
-async function readAssetLibraryFile(filePath: string): Promise<AssetLibraryFile | undefined> {
-  const value = await readOptionalJsonFile(filePath);
-  if (value === undefined) {
-    return undefined;
-  }
-  if (!isRecord(value)) {
-    throw new TuiReferenceSuggestionError({
-      code: 'expected-object',
-      source: ASSET_LIBRARY_FILE,
-    });
-  }
-  const entities = value['entities'];
-  if (entities === undefined) {
-    return { entities: [] };
-  }
-  if (!Array.isArray(entities)) {
-    throw new TuiReferenceSuggestionError({
-      code: 'expected-array',
-      source: `${ASSET_LIBRARY_FILE}.entities`,
-    });
-  }
-  return {
-    entities: entities.map((entity, index) => readAssetEntity(entity, index)),
-  };
-}
-
-function readAssetEntity(value: unknown, index: number): AssetEntity {
-  if (!isRecord(value)) {
-    throw new TuiReferenceSuggestionError({
-      code: 'expected-entry-object',
-      source: `${ASSET_LIBRARY_FILE}.entities`,
-      index,
-    });
-  }
-  if (!isAssetEntity(value)) {
-    throw new TuiReferenceSuggestionError({
-      code: 'invalid-entry',
-      source: `${ASSET_LIBRARY_FILE}.entities`,
-      index,
-    });
-  }
-  return value;
-}
-
-function isAssetEntity(value: unknown): value is AssetEntity {
-  if (!isRecord(value)) {
-    return false;
-  }
-  return (
-    typeof value['id'] === 'string' &&
-    value['id'].length > 0 &&
-    typeof value['name'] === 'string' &&
-    value['name'].length > 0 &&
-    typeof value['category'] === 'string' &&
-    value['category'].length > 0 &&
-    isRecord(value['metadata']) &&
-    Array.isArray(value['variants']) &&
-    Array.isArray(value['tags']) &&
-    value['tags'].every((tag) => typeof tag === 'string') &&
-    typeof value['usageCount'] === 'number' &&
-    typeof value['createdAt'] === 'number' &&
-    typeof value['updatedAt'] === 'number'
-  );
 }
 
 async function listLibraryRootFiles(input: {
@@ -848,33 +660,6 @@ function detectMentionMediaType(filePath: string): TuiMentionMediaType | null {
   return null;
 }
 
-function readAssetEntityFiles(entity: AssetEntity): readonly AssetLibraryEntityFile[] {
-  return entity.variants.flatMap((variant) => (Array.isArray(variant.files) ? variant.files : []));
-}
-
-function formatAssetLibraryDescription(entity: AssetEntity): string {
-  return [entity.category, entity.description, entity.tags.join(', ')]
-    .filter((part): part is string => typeof part === 'string' && part.length > 0)
-    .join(' · ');
-}
-
-function formatAssetLibrarySearchText(
-  entity: AssetEntity,
-  files: readonly AssetLibraryEntityFile[],
-): string {
-  return [
-    entity.id,
-    entity.name,
-    entity.category,
-    entity.description,
-    ...(entity.tags ?? []),
-    ...(entity.aliases ?? []),
-    ...files.flatMap((file) => [file.id, file.name, file.path, file.mediaType]),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    .join(' ');
-}
-
 function toTuiMentionMediaType(value: unknown): TuiMentionMediaType | undefined {
   switch (value) {
     case 'video':
@@ -969,10 +754,6 @@ function isLocalLibraryExcludedName(name: string): boolean {
   );
 }
 
-function formatPathVariableReference(variable: string): string {
-  return '${' + variable + '}';
-}
-
 async function directoryExists(dirPath: string): Promise<boolean> {
   try {
     const stat = await fs.stat(dirPath);
@@ -1003,16 +784,4 @@ function normalizeTerminalPath(filePath: string): string {
 
 function toPosixPath(filePath: string): string {
   return filePath.replace(/\\/g, '/').replace(/^\/+/, '');
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isFileNotFoundError(error: unknown): boolean {
-  return isRecord(error) && error['code'] === 'ENOENT';
-}
-
-function formatUnknownError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

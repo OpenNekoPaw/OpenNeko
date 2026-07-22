@@ -2,21 +2,82 @@
   "schema": "neko.agent-eval.suite.v2",
   "id": "agent-runtime.stream-delivery",
   "owner": { "kind": "agent-runtime", "id": "tui-stream-delivery" },
-  "target": { "kind": "runtime", "id": "stream-delivery", "contractHash": "sha256:d28befaeebfecdc85eea8cf5a4c681b7238f71d96ecee667167b0fb8efe529d8" },
+  "target": {
+    "kind": "runtime",
+    "id": "stream-delivery",
+    "contractHash": "sha256:d28befaeebfecdc85eea8cf5a4c681b7238f71d96ecee667167b0fb8efe529d8"
+  },
   "repositoryRevision": "working-tree",
-  "runtimeProfiles": [{ "id": "markdown", "settings": { "outputFormat": "markdown" }, "configurationHash": "sha256:f949e317ef6531bd9fa4f15b04f4cc038036365bc0a8a8f97dcb229049f0baac" }],
-  "modelProfiles": [{ "id": "configured-default", "selection": "configured-default", "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915" }],
+  "runtimeProfiles": [
+    {
+      "id": "markdown",
+      "settings": { "outputFormat": "markdown" },
+      "configurationHash": "sha256:f949e317ef6531bd9fa4f15b04f4cc038036365bc0a8a8f97dcb229049f0baac"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "configured-default",
+      "selection": "configured-default",
+      "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    }
+  ],
   "judgeProfiles": [],
   "fixtures": [
-    { "id": "empty-workspace", "root": "shared-fixtures/empty-workspace", "source": "repository", "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081", "mutable": true },
-    { "id": "creative-planning-workspace", "root": "shared-fixtures/creative-planning-workspace", "source": "repository", "digest": "sha256:e0886a2114d2d964afbde9ae7fad0c7d4fdc73a2f0bf5f50d8c6ee251d79cfb8", "mutable": true }
+    {
+      "id": "empty-workspace",
+      "root": "shared-fixtures/empty-workspace",
+      "source": "repository",
+      "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081",
+      "mutable": true
+    },
+    {
+      "id": "creative-planning-workspace",
+      "root": "shared-fixtures/creative-planning-workspace",
+      "source": "repository",
+      "digest": "sha256:e0886a2114d2d964afbde9ae7fad0c7d4fdc73a2f0bf5f50d8c6ee251d79cfb8",
+      "mutable": true
+    },
+    {
+      "id": "document-image-workspace",
+      "root": "shared-fixtures/document-image-workspace",
+      "source": "repository",
+      "digest": "sha256:0ee348f6099989e6810699fe4c13c34c37aeed6a6b3defda8958a639c36ec325",
+      "mutable": true
+    }
   ],
   "cases": [
-    { "id": "tool-text-order-final-answer", "file": "cases/tool-text-order-final-answer.json", "group": "regression", "visibility": "public" },
-    { "id": "read-document-tool-result", "file": "cases/read-document-tool-result.json", "group": "regression", "visibility": "public" },
-    { "id": "active-stream-cancellation", "file": "cases/active-stream-cancellation.json", "group": "failure", "visibility": "public" }
+    {
+      "id": "tool-text-order-final-answer",
+      "file": "cases/tool-text-order-final-answer.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "read-document-tool-result",
+      "file": "cases/read-document-tool-result.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "document-image-native-delivery",
+      "file": "cases/document-image-native-delivery.json",
+      "group": "regression",
+      "visibility": "public"
+    },
+    {
+      "id": "active-stream-cancellation",
+      "file": "cases/active-stream-cancellation.json",
+      "group": "failure",
+      "visibility": "public"
+    }
   ],
   "rubricRefs": [],
   "baselinePolicy": { "mode": "none" },
-  "reportPolicy": { "rawRetentionDays": 14, "trustedCiRetentionDays": 14, "committedSummary": true, "includeHistory": false }
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
 }

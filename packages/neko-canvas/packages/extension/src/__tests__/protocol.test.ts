@@ -247,32 +247,41 @@ describe('canvasEditorProvider message contracts', () => {
     });
   });
 
-  describe('NKV-013: unified resource cache provider integration', () => {
-    it('registers provider adapters instead of guessing package cache roots', () => {
-      expect(providerSource).toContain('new ThumbnailResourceCacheProvider');
-      expect(providerSource).toContain('new PreviewVariantResourceCacheProvider');
-      expect(providerSource).toContain('new GeneratedAssetDerivativeResourceCacheProvider');
-      expect(providerSource).toContain('new DocumentResourceCacheProvider');
+  describe('NKV-013: Host-private content representation integration', () => {
+    it('registers semantic generators instead of package cache providers', () => {
+      expect(providerSource).toContain('createHostDerivedContentRuntime');
+      expect(providerSource).toContain(
+        'createCanvasRepresentationGenerator(workspaceRoot, contentRead)',
+      );
+      expect(providerSource).toContain(
+        "kinds: ['thumbnail', 'preview', 'proxy', 'fov-crop', 'raster-page']",
+      );
+      expect(providerSource).toContain('createNodeDocumentRasterRepresentationGenerator');
+      expect(providerSource).not.toContain('new ThumbnailResourceCacheProvider');
+      expect(providerSource).not.toContain('new PreviewVariantResourceCacheProvider');
+      expect(providerSource).not.toContain('new GeneratedAssetDerivativeResourceCacheProvider');
+      expect(providerSource).not.toContain('new DocumentResourceCacheProvider');
       expect(providerSource).not.toContain('new LegacyResourceCacheProvider');
     });
 
     it('preview variant resolution uses ResourceRef without cache-path compatibility', () => {
       expect(providerSource).toContain('const resourceRef = isResourceRef(message.resourceRef)');
-      expect(providerSource).toContain('this.projectResourceCacheVariant(');
+      expect(providerSource).toContain('this.projectContentRepresentation(');
       expect(providerSource).toContain("case 'preview:resolveVariant'");
       expect(providerSource).toContain(
         'resolveCanvasPreviewVariantRole(resourceRef, preferredRole)',
       );
+      expect(providerSource).toContain('this.contentRepresentation.getRepresentation({');
     });
 
     it('open media preview resolves ResourceRef through content access before local paths', () => {
       expect(providerSource).toContain("case 'openMediaPreview'");
       expect(providerSource).toContain('this.resolveResourceRefLocalPreviewPath(');
       expect(providerSource).toContain("'neko-canvas.open-media-preview'");
-      expect(providerSource).toContain("target: 'local-path'");
+      expect(providerSource).toContain('this.resolveResourceRefSourceLocalPath(resourceRef)');
     });
 
-    it('AssetLibrary actions reuse the authorized local-path resolver', () => {
+    it('Media Library copy actions reuse the authorized local-path resolver', () => {
       const actions = providerSource.slice(
         providerSource.indexOf("case 'openMediaPreview':"),
         providerSource.indexOf("case 'preview:resolveVariant':"),
@@ -282,8 +291,8 @@ describe('canvasEditorProvider message contracts', () => {
         providerSource.indexOf('private resolvePreviewResourceRef('),
       );
 
-      expect(actions).toContain("case 'saveCanvasMaterialToAssetLibrary':");
-      expect(actions).toContain("'neko.assets.importFile'");
+      expect(actions).toContain("case 'copyCanvasMaterialToMediaLibrary':");
+      expect(actions).toContain("'neko.assets.copyToMediaLibrary'");
       expect(actions).toContain('this.resolveCanvasMaterialLocalFilePath(');
       expect(actions).not.toContain('vscode.workspace.fs.readFile');
       expect(resolver).toContain('this.resolvePreviewResourceRef(');
@@ -302,13 +311,13 @@ describe('canvasEditorProvider message contracts', () => {
     });
   });
 
-  describe('NKV-014: intent-aware content access boundaries', () => {
-    it('routes resource preview projection through ContentAccessService', () => {
-      expect(providerSource).toContain('createHostContentAccessRuntime');
-      expect(providerSource).toContain('this.createCanvasResourceCacheProviders(workspaceRoot)');
-      expect(providerSource).toContain("intent: 'interactive-preview'");
-      expect(providerSource).toContain("target: 'webview-uri'");
-      expect(providerSource).toContain("materialization: 'if-missing'");
+  describe('NKV-014: semantic representation boundaries', () => {
+    it('routes derived preview projection through ContentRepresentationService', () => {
+      expect(providerSource).toContain('createHostDerivedContentRuntime');
+      expect(providerSource).toContain('this.contentRepresentation.getRepresentation({');
+      expect(providerSource).toContain('this.contentRepresentation.readRepresentation(');
+      expect(providerSource).toContain('Buffer.from(loaded.bytes).toString');
+      expect(providerSource).not.toContain("materialization: 'if-missing'");
     });
 
     it('routes asset path variables through shared host content policy instead of neko-assets commands', () => {
@@ -318,18 +327,13 @@ describe('canvasEditorProvider message contracts', () => {
       expect(providerSource).not.toContain("'neko.assets.contractPath'");
     });
 
-    it('binds Webview URI projection to the requesting Webview instead of the active editor', () => {
-      expect(providerSource).toContain('CONTENT_ACCESS_WEBVIEW_RESOLVER_TOKEN_METADATA_KEY');
-      expect(providerSource).toContain('private readonly contentAccessWebviewsByToken');
-      expect(providerSource).toContain('resolveContentAccessWebview(request');
-      expect(providerSource).toContain('this.contentAccessWebviewsByToken.get(token)');
-      expect(providerSource).toContain('withContentAccessWebview(webview');
+    it('projects representation bytes without a cache-backed Webview URI resolver', () => {
       expect(providerSource).toContain(
-        'metadata: { [CONTENT_ACCESS_WEBVIEW_RESOLVER_TOKEN_METADATA_KEY]: webviewResolverToken }',
+        'return `data:${mimeType};base64,${Buffer.from(loaded.bytes)',
       );
-      expect(providerSource).not.toContain(
-        'webviewResolver: () => this.activeWebviewPanel?.webview',
-      );
+      expect(providerSource).not.toContain('CONTENT_ACCESS_WEBVIEW_RESOLVER_TOKEN_METADATA_KEY');
+      expect(providerSource).not.toContain('contentAccessWebviewsByToken');
+      expect(providerSource).not.toContain('withContentAccessWebview(webview');
     });
 
     it('projects Canvas playback plans for the Preview panel without persisting runtime URLs', () => {
@@ -445,13 +449,22 @@ describe('canvasEditorProvider message contracts', () => {
       expect(providerSource).toContain('/vscode-resource\\.vscode-cdn\\.net(\\/[^?#]*)/i');
     });
 
-    it('registers document resources so stable document refs can be materialized in Canvas', () => {
-      expect(providerSource).toContain('DocumentResourceCacheProvider');
-      expect(providerSource).toContain('createCanvasDocumentEntryReader()');
+    it('reads native document entries directly without a document cache provider', () => {
+      expect(providerSource).not.toContain('DocumentResourceCacheProvider');
+      expect(providerSource).toContain(
+        'const documentEntryReader = createCanvasDocumentEntryContentReader();',
+      );
+      expect(providerSource).toContain(
+        'createNodeHostContentReadService({ workspaceRoot, documentEntryReader })',
+      );
       expect(providerSource).not.toContain('findUniqueEntryByBasename');
-      expect(providerSource).toContain("preferredRole === 'source'");
-      expect(providerSource).toContain("? 'page-image'");
-      expect(providerSource).toContain(": 'document-entry'");
+      expect(providerSource).toContain('readCanvasNativeDocumentEntryPath(resourceRef)');
+      expect(providerSource).toContain(
+        "{ kind: 'document-entry', source, entryPath: documentEntryPath }",
+      );
+      expect(providerSource).not.toContain("target: 'bytes'");
+      expect(providerSource).not.toContain("variant: { role: 'document-entry' }");
+      expect(providerSource).toContain("Buffer.from(direct.bytes).toString('base64')");
     });
 
     it('does not persist referenceImagePath when a shot has stable resource refs', () => {
@@ -485,8 +498,8 @@ describe('canvasEditorProvider message contracts', () => {
     });
 
     it('resolves generated asset resource refs with workspace path variables', () => {
-      expect(providerSource).toContain('new GeneratedAssetDerivativeResourceCacheProvider({');
-      expect(providerSource).toContain('pathResolver: createWorkspacePathResolver(workspaceRoot)');
+      expect(providerSource).toContain('resolveGeneratedAssetResourceRef(');
+      expect(providerSource).toContain('createWorkspacePathResolver(workspaceRoot)');
       expect(providerSource).toContain("['WORKSPACE', workspaceRoot]");
       expect(providerSource).toContain("['PROJECT', workspaceRoot]");
     });
@@ -805,11 +818,10 @@ describe('canvasEditorProvider message contracts', () => {
 
   describe('NKV-013: document resource preview variants', () => {
     it('projects document resource refs before using authorized local-resource or Preview variant fallbacks', () => {
-      expect(providerSource).toContain('createHostContentAccessRuntime');
+      expect(providerSource).toContain('createHostDerivedContentRuntime');
       expect(providerSource).not.toContain('LegacyResourceCacheProvider');
-      expect(providerSource).toContain('os.homedir() || workspaceRoot');
       expect(providerSource).not.toContain('process.env.HOME');
-      expect(providerSource).toContain('projectResourceCacheVariant(');
+      expect(providerSource).toContain('projectContentRepresentation(');
       expect(providerSource).toContain('createDocumentResourceRefFromArchiveRef');
       expect(providerSource).toContain('resolvePreviewResourceRef(');
       expect(providerSource).toContain('const resourceRef = this.resolvePreviewResourceRef(');
@@ -818,9 +830,7 @@ describe('canvasEditorProvider message contracts', () => {
       expect(providerSource).toContain('const documentResourceRef = isDocumentArchiveResourceRef');
       expect(providerSource).toContain("'neko-canvas.document-resource-variant'");
       expect(providerSource).toContain("type: 'preview:variantResolved'");
-      expect(providerSource).toContain(
-        'Resource cache variant could not be materialized for this document reference.',
-      );
+      expect(providerSource).toContain('Canvas representation unavailable');
       expect(providerSource).not.toContain(
         'ResourceRef preview materialization failed; falling back to document path',
       );
@@ -843,9 +853,9 @@ describe('canvasEditorProvider message contracts', () => {
       );
       expect(previewVariantHandler).toContain('this.projectDocumentResourcePreviewUrl({');
       expect(previewVariantHandler).toContain('resourceRef: assetPath ? undefined : resourceRef');
-      expect(documentPreviewProjector).toContain('this.projectResourceCacheVariant(');
+      expect(documentPreviewProjector).toContain('this.projectContentRepresentation(');
       expect(documentPreviewProjector).toContain(
-        'Document resource cache Preview projection failed',
+        'Document representation Preview projection failed',
       );
       expect(providerSource).toContain(
         'private resolveDocumentResourceAssetPath(assetPath: string | undefined): string | undefined',
@@ -1032,7 +1042,7 @@ describe('canvasEditorProvider message contracts', () => {
     it('keeps Canvas media import storage paths separate from runtime webview URLs', () => {
       expect(providerSource).toContain('private async handleCanvasProjectAddSource(');
       expect(providerSource).toContain('private async addCanvasProjectSource(');
-      expect(providerSource).toContain('ingestProjectSourceAddRequest(');
+      expect(providerSource).toContain('storeProjectSourceAddRequest(');
       expect(providerSource).toContain('const runtimeAssetPath =');
       expect(providerSource).not.toContain('private projectLocalResource(');
       expect(providerSource).not.toContain('this.projectLocalResource(');
@@ -1040,9 +1050,8 @@ describe('canvasEditorProvider message contracts', () => {
       expect(providerSource).toContain('...(runtimeAssetPath ? { runtimeAssetPath } : {}),');
       expect(providerSource).toContain('postProjectSourceAddResult');
       expect(providerSource).toContain('handleProjectSourceAddHostRequest(sourceRequest');
-      expect(providerSource).toContain('contractedPath');
+      expect(providerSource).toContain('stored.durablePath');
       expect(providerSource).toContain('contractExternalAssetPath(');
-      expect(providerSource).toContain("'neko-canvas.project-add-source.file-picker'");
       expect(providerSource).toContain("'neko-canvas.project-add-source'");
       expect(providerSource).toContain('resolveCanvasMediaPathForSave(');
       expect(providerSource).toContain('resolveWorkspaceVariableAssetPathCandidates(');
@@ -1051,7 +1060,7 @@ describe('canvasEditorProvider message contracts', () => {
       expect(providerSource).toContain('getOwningCanvasWorkspaceRoot(');
       expect(providerSource).toContain('isWorkspaceScopedVariablePath(');
       expect(providerSource).toContain('return relativePath || undefined;');
-      expect(providerSource).toContain('Canvas asset path is not portable');
+      expect(providerSource).toContain('Canvas media path is not portable');
       expect(providerSource).not.toContain('// Fallback: relative to document directory');
       expect(providerSource).not.toContain('path.relative(docDir, absolutePath)');
       expect(providerSource).not.toContain(
@@ -1119,12 +1128,14 @@ describe('canvasEditorProvider message contracts', () => {
     });
   });
 
-  it('uses the typed neko-assets API for asset entity lookup without command fallback', () => {
-    expect(extensionSource).toContain('resolveNekoExtension(NEKO_EXTENSION_IDS.NEKO_ASSETS');
-    expect(extensionSource).toContain('isNekoAssetsAPI(api)');
-    expect(extensionSource).toContain('api.getAllEntities()');
-    expect(extensionSource).toContain('typed Neko Assets API is unavailable');
-    expect(extensionSource).not.toContain("'neko.assets.getAllEntities'");
+  it('does not expose the retired Asset catalog proxy', () => {
+    expect(providerSource).toContain('isNekoMediaRepresentationAPI(api)');
+    expect(providerSource).toContain('api?.generateThumbnail(sourcePath');
+    expect(providerSource).not.toContain('isNekoAssetsAPI(api)');
+    expect(providerSource).not.toContain('api.getAllEntities()');
+    expect(providerSource).not.toContain('api?.getThumbnailPath');
+    expect(providerSource).not.toContain('typed Neko Assets API is unavailable');
+    expect(extensionSource).not.toContain("'neko.assets.importFile'");
   });
 });
 

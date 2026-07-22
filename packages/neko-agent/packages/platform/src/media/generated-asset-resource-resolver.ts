@@ -1,9 +1,17 @@
-import type { GeneratedAssetDerivativeResourceCacheProviderOptions } from '@neko/shared/content-access';
+import type { ResourceRef } from '@neko/shared';
 import type { GeneratedAssetIndex } from './generated-asset-index';
 
-export type GeneratedAssetResourceResolver = NonNullable<
-  GeneratedAssetDerivativeResourceCacheProviderOptions['resolveAsset']
->;
+export interface GeneratedAssetResourceResolution {
+  readonly path: string;
+  readonly mimeType?: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly sizeBytes?: number;
+}
+
+export type GeneratedAssetResourceResolver = (
+  ref: ResourceRef,
+) => Promise<GeneratedAssetResourceResolution | undefined>;
 
 export function createGeneratedAssetResourceResolver(
   generatedAssetIndex: Pick<GeneratedAssetIndex, 'get'>,

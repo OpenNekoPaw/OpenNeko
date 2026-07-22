@@ -5,6 +5,8 @@ import {
   type ProjectFormatLoadResult,
 } from './codec';
 import type { ILogger } from '../logger/types';
+import type { AuthorizedWorkspaceWriter } from '../types/content-io';
+import type { WorkspaceFileContentLocator } from '../types/content-locator';
 import {
   createProjectFileDiagnostic,
   hasProjectFileErrors,
@@ -42,6 +44,13 @@ export interface ProjectFileStoreOptions {
   readonly textEncoder?: ProjectTextEncoder;
   readonly textDecoder?: ProjectTextDecoder;
   readonly logger?: Pick<ILogger, 'debug' | 'info' | 'warn'>;
+  readonly resolveAuthorizedWrite?: (filePath: string) => ProjectFileAuthorizedWrite | undefined;
+}
+
+export interface ProjectFileAuthorizedWrite {
+  readonly writer: AuthorizedWorkspaceWriter;
+  readonly locator: WorkspaceFileContentLocator;
+  readonly maxBytes?: number;
 }
 
 export interface ProjectFileLoadRequest<TDocument> {
@@ -102,6 +111,7 @@ export class ProjectFileStore {
   private readonly textEncoder: ProjectTextEncoder;
   private readonly textDecoder: ProjectTextDecoder;
   private readonly logger?: Pick<ILogger, 'debug' | 'info' | 'warn'>;
+  private readonly resolveAuthorizedWrite?: ProjectFileStoreOptions['resolveAuthorizedWrite'];
   private readonly writeQueues = new Map<string, Promise<void>>();
 
   constructor(options: ProjectFileStoreOptions) {
@@ -110,6 +120,7 @@ export class ProjectFileStore {
     this.textEncoder = options.textEncoder ?? new TextEncoder();
     this.textDecoder = options.textDecoder ?? new TextDecoder();
     this.logger = options.logger;
+    this.resolveAuthorizedWrite = options.resolveAuthorizedWrite;
   }
 
   async load<TDocument>(
@@ -306,6 +317,20 @@ export class ProjectFileStore {
 
   private async writeFile(filePath: string, content: string, atomic: boolean): Promise<void> {
     const bytes = this.textEncoder.encode(content.endsWith('\n') ? content : `${content}\n`);
+    if (this.resolveAuthorizedWrite) {
+      const authorized = this.resolveAuthorizedWrite(filePath);
+      if (!authorized) {
+        throw new Error('Project file path is outside the authorized write capability.');
+      }
+      const result = await authorized.writer.write(authorized.locator, bytes, {
+        conflict: 'replace',
+        ...(authorized.maxBytes !== undefined ? { maxBytes: authorized.maxBytes } : {}),
+      });
+      if (result.status === 'unavailable') {
+        throw new Error(`Authorized project write failed: ${result.diagnostic.code}`);
+      }
+      return;
+    }
     if (!atomic || !this.fileOps.renameFile) {
       await this.fileOps.writeFile(filePath, bytes);
       return;

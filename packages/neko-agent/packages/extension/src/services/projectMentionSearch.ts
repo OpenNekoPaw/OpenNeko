@@ -9,10 +9,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import type { ProjectSearchItem, ProjectSearchItemKind, ProjectSearchResult } from '@neko/shared';
-import {
-  contractHostContentMediaPath,
-  loadHostContentPathPolicy,
-} from '@neko/shared/vscode/extension';
 import type { AgentProjectFileSearchPlan, AgentProjectMentionCandidate } from '@neko/agent/runtime';
 import type {
   ProjectMentionExtraType,
@@ -27,7 +23,6 @@ const MENTION_SEARCH_KINDS: readonly ProjectSearchItemKind[] = [
   'script-role',
   'creative-entity',
   'entity-candidate',
-  'asset',
   'media',
   'document',
   'generated-asset',
@@ -40,7 +35,6 @@ const ROLEPLAY_SEARCH_KINDS: readonly ProjectSearchItemKind[] = [
 
 const WINDOWS_DRIVE_RE = /^[A-Za-z]:[\\/]/;
 const WINDOWS_UNC_RE = /^\\\\/;
-const HOST_CONTENT_PATH_VARIABLES = new Set(['HOME', 'NEKO_HOME', 'WORKSPACE', 'PROJECT']);
 
 interface ProjectMentionSearchOptions {
   readonly contextFilePath?: string;
@@ -86,14 +80,8 @@ export async function searchProjectMentionCandidates(
 
   const items = result?.items ?? [];
   const mentionItems = isRoleplaySearch ? filterRoleplayProjectSearchItems(items) : items;
-  const mediaLibraryPathVariables = await loadMediaLibraryPathVariables(
-    mentionItems,
-    options.projectRoot,
-  );
   const projections = await Promise.all(
-    mentionItems.map((item) =>
-      projectSearchItemToMentionCandidate(item, mediaLibraryPathVariables),
-    ),
+    mentionItems.map((item) => projectSearchItemToMentionCandidate(item)),
   );
   const rejectedMediaPathCount = projections.filter(
     (projection) => projection.rejectedMediaPath,
@@ -101,7 +89,7 @@ export async function searchProjectMentionCandidates(
   if (rejectedMediaPathCount > 0) {
     void vscode.window.showErrorMessage(
       vscode.l10n.t(
-        'Media library path variables are unavailable. Filtered {0} media item(s). Ensure Neko Assets is loaded and verify the media library path variable settings.',
+        'Filtered {0} media item(s) because they do not use a linked workspace path under neko/assets/.',
         rejectedMediaPathCount,
       ),
     );
@@ -181,8 +169,12 @@ function isCharacterLikeString(value: string | undefined): boolean {
 
 async function projectSearchItemToMentionCandidate(
   item: ProjectSearchItem,
-  mediaLibraryPathVariables: ReadonlySet<string>,
 ): Promise<ProjectMentionCandidateProjection> {
+  if (readString(item.source.partition) === 'asset-library') {
+    throw new Error(
+      'Legacy Asset Library search results require explicit inspection and migration.',
+    );
+  }
   const type = mentionTypeForProjectItem(item);
   const source = mentionSourceForProjectItem(item);
   const mediaType = readMentionMediaType(item.metadata?.['mediaType']);
@@ -192,7 +184,7 @@ async function projectSearchItemToMentionCandidate(
     readString(item.metadata?.['entityType']) ??
     readString(item.metadata?.['category']) ??
     item.source.sourceKind;
-  const referencePath = await projectMentionReferencePath(item, mediaLibraryPathVariables);
+  const referencePath = projectMentionReferencePath(item);
   if (isRejectedMediaLibraryPath(item, referencePath)) {
     return { rejectedMediaPath: true };
   }
@@ -212,23 +204,18 @@ async function projectSearchItemToMentionCandidate(
       ...(mediaType ? { mediaType } : {}),
       ...(entityType ? { entityType } : {}),
       ...(thumbnailUri ? { thumbnailUri } : {}),
-      navigationData: projectMentionNavigationData(item, referencePath, type),
+      navigationData: projectMentionNavigationData(item, referencePath),
     },
   };
 }
 
-async function projectMentionReferencePath(
-  item: ProjectSearchItem,
-  mediaLibraryPathVariables: ReadonlySet<string>,
-): Promise<string | undefined> {
+function projectMentionReferencePath(item: ProjectSearchItem): string | undefined {
   const filePath = readString(item.filePath);
   if (!filePath) return undefined;
 
   const normalizedPath = normalizeMentionPath(filePath);
   if (!isLocalAbsolutePath(filePath)) {
-    return isAllowedMentionReferencePath(item, normalizedPath, mediaLibraryPathVariables)
-      ? normalizedPath
-      : undefined;
+    return isAllowedMentionReferencePath(item, normalizedPath) ? normalizedPath : undefined;
   }
 
   const projectRelativePath = contractWithProjectRoot(filePath, item.projectRoot);
@@ -236,49 +223,12 @@ async function projectMentionReferencePath(
     return projectRelativePath;
   }
 
-  const contractedPath = await contractPathWithContentPolicy(filePath, item);
-  if (contractedPath && !isLocalAbsolutePath(contractedPath)) {
-    const normalizedContractedPath = normalizeMentionPath(contractedPath);
-    return isAllowedMentionReferencePath(item, normalizedContractedPath, mediaLibraryPathVariables)
-      ? normalizedContractedPath
-      : undefined;
-  }
-
   return undefined;
 }
 
-function isAllowedMentionReferencePath(
-  item: ProjectSearchItem,
-  referencePath: string,
-  mediaLibraryPathVariables: ReadonlySet<string>,
-): boolean {
+function isAllowedMentionReferencePath(item: ProjectSearchItem, referencePath: string): boolean {
   if (item.source.partition !== 'media-library') return true;
-  const variable = extractPathVariable(referencePath);
-  if (!variable) return !referencePath.startsWith('${');
-  return mediaLibraryPathVariables.has(variable);
-}
-
-async function loadMediaLibraryPathVariables(
-  items: readonly ProjectSearchItem[],
-  projectRoot: string | undefined,
-): Promise<ReadonlySet<string>> {
-  const mediaItem = items.find((item) => item.source.partition === 'media-library');
-  if (!mediaItem) return new Set();
-
-  try {
-    const policy = await loadHostContentPathPolicy({
-      workspaceRoot: projectRoot ?? mediaItem.projectRoot,
-      workspaceFolders: vscode.workspace.workspaceFolders ?? [],
-      getExtension: vscode.extensions.getExtension,
-    });
-    return new Set(
-      [...policy.pathVariables.keys()].filter(
-        (variable) => !HOST_CONTENT_PATH_VARIABLES.has(variable),
-      ),
-    );
-  } catch {
-    return new Set();
-  }
+  return referencePath.startsWith('neko/assets/') && !referencePath.includes('${');
 }
 
 function isRejectedMediaLibraryPath(
@@ -292,28 +242,11 @@ function isRejectedMediaLibraryPath(
   );
 }
 
-async function contractPathWithContentPolicy(
-  filePath: string,
-  item: ProjectSearchItem,
-): Promise<string | undefined> {
-  try {
-    return await contractHostContentMediaPath(filePath, {
-      workspaceRoot: item.projectRoot,
-      workspaceFolders: vscode.workspace.workspaceFolders ?? [],
-      getExtension: vscode.extensions.getExtension,
-    });
-  } catch {
-    return undefined;
-  }
-}
-
 function projectMentionNavigationData(
   item: ProjectSearchItem,
   referencePath: string | undefined,
-  type: ProjectMentionExtraType,
 ): Record<string, string> {
   const navigationData: Record<string, unknown> = { ...item.navigationData };
-  const rawFilePath = readString(item.filePath) ?? readString(navigationData['filePath']);
   const rawSourceId = readString(item.source.sourceId);
   const sourceId =
     rawSourceId && isLocalAbsolutePath(rawSourceId) ? (referencePath ?? undefined) : rawSourceId;
@@ -322,24 +255,18 @@ function projectMentionNavigationData(
     navigationData['path'] = referencePath;
     navigationData['filePath'] = referencePath;
     navigationData['portablePath'] = referencePath;
-    const variable = extractPathVariable(referencePath);
-    if (variable) {
-      navigationData['variable'] = variable;
-    }
   } else {
     removeAbsoluteNavigationPath(navigationData, 'path');
     removeAbsoluteNavigationPath(navigationData, 'filePath');
     removeAbsoluteNavigationPath(navigationData, 'portablePath');
   }
 
-  if (referencePath && rawFilePath && isLocalAbsolutePath(rawFilePath)) {
-    navigationData['resolvedPath'] = normalizeMentionPath(rawFilePath);
-  }
+  delete navigationData['resolvedPath'];
+  delete navigationData['variable'];
 
   return stringifyNavigationData({
     ...navigationData,
     projectSearchItemId: item.id,
-    ...(type === 'asset' ? { assetId: assetIdForProjectItem(item) } : {}),
     projectRoot: item.projectRoot,
     partition: item.source.partition,
     ...(sourceId ? { sourceId } : {}),
@@ -432,35 +359,16 @@ function normalizeMentionPath(filePath: string): string {
   return filePath.replace(/\\/g, '/');
 }
 
-function extractPathVariable(filePath: string): string | undefined {
-  return /^\$\{([^}]+)\}(?:\/|$)/.exec(filePath)?.[1];
-}
-
-function assetIdForProjectItem(item: ProjectSearchItem): string | undefined {
-  return (
-    readString(item.navigationData?.['assetId']) ??
-    readString(item.source.metadata?.['assetId']) ??
-    (item.source.partition === 'asset-library' ? item.source.sourceId : undefined) ??
-    parseAssetIdFromItemId(item.id)
-  );
-}
-
-function parseAssetIdFromItemId(id: string): string | undefined {
-  const prefix = 'asset:';
-  return id.startsWith(prefix) ? id.slice(prefix.length) : undefined;
-}
-
 function mentionTypeForProjectItem(item: ProjectSearchItem): ProjectMentionExtraType {
   if (item.kind === 'story-scene' || item.kind === 'story-section') return 'scene';
   if (item.kind === 'script-role') return 'character';
-  if (item.kind === 'asset' || item.kind === 'generated-asset') return 'asset';
+  if (item.kind === 'generated-asset') return 'asset';
   if (item.kind === 'media' || item.kind === 'document') return 'media';
   return 'entity';
 }
 
 function mentionSourceForProjectItem(item: ProjectSearchItem): ProjectMentionSource | undefined {
   if (item.source.partition === 'story-symbols') return 'story';
-  if (item.source.partition === 'asset-library') return 'asset-library';
   if (item.source.partition === 'media-library' || item.source.partition === 'documents') {
     return 'media-library';
   }

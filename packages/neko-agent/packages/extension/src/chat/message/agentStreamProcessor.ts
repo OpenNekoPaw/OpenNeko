@@ -560,33 +560,43 @@ export function projectStreamMessageResourcesForWebview(
   }
 
   if (message.type === 'toolResult') {
-    return Promise.all([
-      message.data !== undefined ? projectValue(message.data) : undefined,
-      message.attachments ? projectValue(message.attachments) : undefined,
-      message.perceptionCards ? projectValue(message.perceptionCards) : undefined,
-    ]).then(([data, attachments, perceptionCards]) => ({
-      ...message,
-      ...(data !== undefined ? { data } : {}),
-      ...(attachments ? { attachments: attachments as typeof message.attachments } : {}),
-      ...(perceptionCards
-        ? { perceptionCards: perceptionCards as typeof message.perceptionCards }
-        : {}),
-    }));
+    return projectValue({
+      ...(message.data !== undefined ? { data: message.data } : {}),
+      ...(message.attachments ? { attachments: message.attachments } : {}),
+      ...(message.perceptionCards ? { perceptionCards: message.perceptionCards } : {}),
+    }).then((value) => {
+      const projected = isRecord(value) ? value : {};
+      return {
+        ...message,
+        ...(projected['data'] !== undefined ? { data: projected['data'] } : {}),
+        ...(projected['attachments']
+          ? { attachments: projected['attachments'] as typeof message.attachments }
+          : {}),
+        ...(projected['perceptionCards']
+          ? { perceptionCards: projected['perceptionCards'] as typeof message.perceptionCards }
+          : {}),
+      };
+    });
   }
 
   if (message.type === 'toolResultBackfill') {
-    return Promise.all([
-      projectValue(message.dataPatch),
-      message.attachments ? projectValue(message.attachments) : undefined,
-      message.perceptionCards ? projectValue(message.perceptionCards) : undefined,
-    ]).then(([dataPatch, attachments, perceptionCards]) => ({
-      ...message,
-      dataPatch: isRecord(dataPatch) ? dataPatch : message.dataPatch,
-      ...(attachments ? { attachments: attachments as typeof message.attachments } : {}),
-      ...(perceptionCards
-        ? { perceptionCards: perceptionCards as typeof message.perceptionCards }
-        : {}),
-    }));
+    return projectValue({
+      dataPatch: message.dataPatch,
+      ...(message.attachments ? { attachments: message.attachments } : {}),
+      ...(message.perceptionCards ? { perceptionCards: message.perceptionCards } : {}),
+    }).then((value) => {
+      const projected = isRecord(value) ? value : {};
+      return {
+        ...message,
+        dataPatch: isRecord(projected['dataPatch']) ? projected['dataPatch'] : message.dataPatch,
+        ...(projected['attachments']
+          ? { attachments: projected['attachments'] as typeof message.attachments }
+          : {}),
+        ...(projected['perceptionCards']
+          ? { perceptionCards: projected['perceptionCards'] as typeof message.perceptionCards }
+          : {}),
+      };
+    });
   }
 
   if (message.type === 'streamComplete' && message.contentBlocks) {

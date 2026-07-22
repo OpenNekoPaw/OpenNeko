@@ -3,6 +3,7 @@ import {
   createDefaultProjectFormatCodecRegistry,
   ProjectFileStore,
   type ProjectData,
+  type ProjectFileOps,
 } from '@neko/shared';
 import { prepareCutProjectFileSave, saveCutProjectFile } from './cutProjectFilePersistence';
 
@@ -78,6 +79,8 @@ describe('saveCutProjectFile', () => {
     const result = await saveCutProjectFile(
       { fsPath: '/workspace/project/edit.nkv' } as never,
       createProject('/workspace/project/media/clip.mp4'),
+      'manual',
+      { fileOps: createMemoryFileOps() },
     );
 
     expect(result.ok).toBe(true);
@@ -110,6 +113,7 @@ describe('saveCutProjectFile', () => {
       { fsPath: '/workspace/project/edit.nkv' } as never,
       project,
       'add-source',
+      { fileOps: createMemoryFileOps() },
     );
 
     const store = new ProjectFileStore({
@@ -189,4 +193,26 @@ function readText(filePath: string): string {
   const content = fileContents.get(filePath);
   if (!content) return '';
   return new TextDecoder().decode(content);
+}
+
+function createMemoryFileOps(): ProjectFileOps {
+  return {
+    readFile: async (filePath) => {
+      const content = fileContents.get(filePath);
+      if (!content) throw new Error(`Missing file: ${filePath}`);
+      return content;
+    },
+    writeFile: async (filePath, content) => {
+      fileContents.set(filePath, content);
+    },
+    deleteFile: async (filePath) => {
+      fileContents.delete(filePath);
+    },
+    renameFile: async (fromPath, toPath) => {
+      const content = fileContents.get(fromPath);
+      if (!content) throw new Error(`Missing file: ${fromPath}`);
+      fileContents.set(toPath, content);
+      fileContents.delete(fromPath);
+    },
+  };
 }

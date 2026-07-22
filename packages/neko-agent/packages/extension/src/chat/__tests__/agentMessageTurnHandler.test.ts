@@ -45,6 +45,14 @@ vi.mock('vscode', () => {
     env: {
       language: 'en',
     },
+    l10n: {
+      t: vi.fn((message: string, ...args: readonly unknown[]) =>
+        message.replace(/\{(\d+)\}/g, (placeholder, index) => {
+          const value = args[Number(index)];
+          return value === undefined ? placeholder : String(value);
+        }),
+      ),
+    },
     commands: {
       executeCommand: vi.fn(),
     },
@@ -103,15 +111,6 @@ vi.mock('@neko/agent', async (importOriginal) => {
 vi.mock('@neko/platform', async (importOriginal) => {
   return await importOriginal<typeof import('@neko/platform')>();
 });
-
-// Mock ../ai/agentContext
-vi.mock('../ai/agentContext', () => ({
-  createDefaultAgentContext: vi.fn(() => ({
-    activeEditor: undefined,
-    workspaceRoot: undefined,
-    projectType: 'unknown',
-  })),
-}));
 
 // Mock ../base logger
 vi.mock('../base', () => ({
@@ -1734,52 +1733,44 @@ describe('AgentMessageTurnHandler', () => {
       const handler = buildHandler({ localResourceAccess });
 
       (vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: '/workspace' } }];
-      vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-        isActive: true,
-        exports: {
-          getMediaLibraryRoots: vi.fn(async () => ['/library']),
-          getPathVariables: vi.fn(async () => [['FOOTAGE', '/library']]),
-        },
-        activate: vi.fn(),
-      } as any);
       vi.mocked(vscode.commands.executeCommand).mockImplementation(async (_command: string) => {
         return {
           items: [
             {
-              id: 'asset:asset-hero',
-              kind: 'asset',
+              id: 'media:neko/assets/Characters/hero.png',
+              kind: 'media',
               label: 'Hero portrait',
-              description: 'Asset',
+              description: 'Media: Characters',
               icon: 'IMG',
               source: {
-                partition: 'asset-library',
-                sourceId: 'asset-hero',
-                sourceKind: 'character',
+                partition: 'media-library',
+                sourceId: 'neko/assets/Characters/hero.png',
+                sourceKind: 'image',
               },
               projectRoot: '/workspace',
-              filePath: 'assets/hero.png',
+              filePath: 'neko/assets/Characters/hero.png',
               thumbnailUri: '/workspace/thumbs/hero.png',
               searchText: 'Hero portrait',
               freshness: 'fresh',
               metadata: { mediaType: 'image', entityType: 'character' },
             },
             {
-              id: 'media:/library/hero-shot.mp4',
+              id: 'media:neko/assets/Footage/hero-shot.mp4',
               kind: 'media',
               label: 'hero-shot.mp4',
               description: 'Footage',
               source: {
                 partition: 'media-library',
-                sourceId: '/library/hero-shot.mp4',
+                sourceId: 'neko/assets/Footage/hero-shot.mp4',
                 sourceKind: 'video',
               },
               projectRoot: '/workspace',
-              filePath: '/library/hero-shot.mp4',
-              thumbnailUri: '/library/thumbs/hero-shot.jpg',
+              filePath: 'neko/assets/Footage/hero-shot.mp4',
+              thumbnailUri: '/workspace/.neko/.cache/resources/thumbnails/hero-shot.jpg',
               searchText: 'hero-shot',
               freshness: 'fresh',
               metadata: { mediaType: 'video' },
-              navigationData: { filePath: '/library/hero-shot.mp4' },
+              navigationData: { filePath: 'neko/assets/Footage/hero-shot.mp4' },
             },
             {
               id: 'entity:char-hero',
@@ -1812,7 +1803,7 @@ describe('AgentMessageTurnHandler', () => {
         expect.objectContaining({
           text: 'hero',
           mode: 'mention',
-          kinds: expect.arrayContaining(['asset', 'media', 'creative-entity']),
+          kinds: expect.arrayContaining(['generated-asset', 'media', 'creative-entity']),
         }),
       );
       expect(vscode.workspace.fs.readFile).toHaveBeenCalledWith({
@@ -1830,27 +1821,26 @@ describe('AgentMessageTurnHandler', () => {
         files: [],
         mentionExtras: expect.arrayContaining([
           expect.objectContaining({
-            type: 'asset',
-            id: 'asset:asset-hero',
+            type: 'media',
+            id: 'media:neko/assets/Characters/hero.png',
             label: 'Hero portrait',
-            source: 'asset-library',
+            source: 'media-library',
             mediaType: 'image',
-            filePath: 'assets/hero.png',
+            filePath: 'neko/assets/Characters/hero.png',
             thumbnailUri: 'webview:/workspace/thumbs/hero.png',
           }),
           expect.objectContaining({
             type: 'media',
-            id: 'media:/library/hero-shot.mp4',
+            id: 'media:neko/assets/Footage/hero-shot.mp4',
             label: 'hero-shot.mp4',
             source: 'media-library',
             mediaType: 'video',
-            filePath: '${FOOTAGE}/hero-shot.mp4',
+            filePath: 'neko/assets/Footage/hero-shot.mp4',
             navigationData: expect.objectContaining({
-              filePath: '${FOOTAGE}/hero-shot.mp4',
-              portablePath: '${FOOTAGE}/hero-shot.mp4',
-              resolvedPath: '/library/hero-shot.mp4',
+              filePath: 'neko/assets/Footage/hero-shot.mp4',
+              portablePath: 'neko/assets/Footage/hero-shot.mp4',
             }),
-            thumbnailUri: 'webview:/library/thumbs/hero-shot.jpg',
+            thumbnailUri: 'webview:/workspace/.neko/.cache/resources/thumbnails/hero-shot.jpg',
           }),
           expect.objectContaining({
             type: 'entity',

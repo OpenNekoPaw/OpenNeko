@@ -144,7 +144,7 @@ TODO 复用现有 conversation/task progress surface，只投影少量近期 `pe
 | 已审阅的 `plan.md`                        | 普通文件 identity/digest 可进入通用 Approval context；不授权未来 Tool                          | 不形成项目 revision               |
 | 对话、TODO、分析 Markdown、Skill 方法说明 | 临时上下文、说明或审阅记录                                                                     | 否                                |
 
-生成资产就是用户可直接使用的文件，不需要先晋升成另一种“稳定 Artifact”。Asset Library 的 Import/Promote 只在用户明确需要正式入库、实体绑定或项目复用时执行。
+生成结果是 generated-output owner 管理的可直接使用文件，不需要晋升成另一种 catalog identity。用户需要整理时可以显式复制到 Media Library；需要语义关联时直接绑定 Creative Entity representation。
 
 Agent 不维护全局 current revision，也不递归扫描历史消息寻找“最新 revision”。普通文本优先使用 VS Code `TextDocument.version`、外部修改检测、文件 digest 或精确 patch 冲突；generated 输出使用 ResourceRef/digest/lineage。只有依赖先前 read、异步结果、审批或 resume 的 stale-risk project mutation 才由 owning runtime 在写入前校验其 owner-specific base revision/digest；新建项目和同步 live-document 原子操作不强制 Agent 提供 revision。
 

@@ -52,16 +52,6 @@ function successResult(): NekoProjectAuthoringResult<CutProjectAuthoringImported
         ok: true,
         requestId: 'prepare-clip-1',
         durablePath: 'media/generated-clip.mp4',
-        ingest: {
-          status: 'ready',
-          request: {
-            mode: 'link',
-            destination: { kind: 'project', directory: 'media', copyMode: 'link' },
-          },
-          contractedPath: 'media/generated-clip.mp4',
-          source: { kind: 'file', path: 'media/generated-clip.mp4' },
-          diagnostics: [],
-        },
         diagnostics: [],
       },
     },

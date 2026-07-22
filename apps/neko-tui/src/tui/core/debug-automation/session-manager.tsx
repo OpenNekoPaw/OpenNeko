@@ -37,6 +37,8 @@ import type {
   TuiDebugAutomationSessionResumeParams,
   TuiDebugAutomationTerminalResizeParams,
   TuiDebugAutomationTerminalResized,
+  TuiDebugAutomationToolConfirmParams,
+  TuiDebugAutomationToolConfirmed,
   TuiDebugAutomationWaitForIdleParams,
 } from './types';
 
@@ -71,6 +73,8 @@ export class TuiDebugAutomationSessionManager {
         return this.submitMessage(readMessageSubmitParams(request));
       case 'message.cancel':
         return this.cancelMessage(readMessageCancelParams(request));
+      case 'tool.confirm':
+        return this.confirmTool(readToolConfirmParams(request));
       case 'terminal.resize':
         return this.resizeTerminal(readTerminalResizeParams(request));
       case 'session.waitForIdle':
@@ -177,6 +181,22 @@ export class TuiDebugAutomationSessionManager {
       conversationId: session.port.getConversationId(),
       accepted: session.port.cancelActiveMessage(),
     };
+  }
+
+  private async confirmTool(
+    params: TuiDebugAutomationToolConfirmParams,
+  ): Promise<TuiDebugAutomationToolConfirmed> {
+    const session = this.requireSession(params);
+    const timeoutMs = validateTuiDebugAutomationTimeout(params.timeoutMs, {
+      defaultMs: DEFAULT_IDLE_TIMEOUT_MS,
+      label: 'timeoutMs',
+    });
+    const confirmed = await session.port.confirmPendingTool({
+      toolName: params.toolName,
+      approved: params.approved,
+      timeoutMs,
+    });
+    return { sessionId: params.sessionId, ...confirmed };
   }
 
   private async resizeTerminal(
@@ -527,6 +547,26 @@ function readMessageCancelParams(
   assertAllowedParamKeys(params, ['sessionId'], request.method);
   return {
     sessionId: readRequiredStringParam(params, 'sessionId', request.method),
+  };
+}
+
+function readToolConfirmParams(
+  request: TuiDebugAutomationRequest,
+): TuiDebugAutomationToolConfirmParams {
+  const params = assertRecordParams(request.params, request.method);
+  assertAllowedParamKeys(params, ['sessionId', 'toolName', 'approved', 'timeoutMs'], request.method);
+  const approved = readOptionalBooleanParam(params, 'approved');
+  if (approved === undefined) {
+    throw new TuiDebugAutomationProtocolError(
+      'invalid-request',
+      'tool.confirm params.approved must be a boolean.',
+    );
+  }
+  return {
+    sessionId: readRequiredStringParam(params, 'sessionId', request.method),
+    toolName: readRequiredStringParam(params, 'toolName', request.method),
+    approved,
+    timeoutMs: readOptionalNumberParam(params, 'timeoutMs'),
   };
 }
 

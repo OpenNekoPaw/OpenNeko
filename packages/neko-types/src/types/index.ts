@@ -85,6 +85,7 @@ export * from './task-view';
 export * from './task-projection';
 export * from './creative-entity-facade';
 export * from './npc-test-bench';
+export * from './media-library-drag';
 
 // SubAgent UI Types
 export * from './subagent';
@@ -139,6 +140,7 @@ export * from './tool-category';
 // Perception tool contracts (Agent-first optional evidence providers)
 export * from './perception-tool';
 export * from './perception-card';
+export * from './agent-image-transport';
 
 // Tool injection types (three-layer injection mechanism)
 export * from './tool-injection';
@@ -155,14 +157,14 @@ export * from './exportProtocol';
 // Media diff protocol types (Extension ↔ Webview media diff IPC)
 export * from './mediaDiffProtocol';
 
-// Asset management types
-export * from './asset';
+// Media Library file metadata and package manifests
+export * from './media-file';
+export * from './asset/manifest';
+export * from './asset/workspace-linked-media-library';
 
 // Bundle locators and character asset import contracts
 export * from './bundle-locator';
 export * from './media-import';
-export * from './asset-export';
-export * from './project-asset-dependency-manifest';
 
 // Context manager types (token budget and lifecycle management)
 export * from './context-manager';
@@ -279,6 +281,21 @@ export * from './resource-cache';
 
 // Intent-aware content access and ingest contracts
 export * from './content-access';
+
+// Durable storage-neutral content locators
+export * from './content-locator';
+export * from './content-io';
+
+// Rebuildable Media Library file/resource projections
+export * from './media-library-projection';
+
+// Storage-neutral semantic representation contracts
+export * from './content-representation';
+
+// Direct Creative Entity representation bindings
+export * from './entity-representation-binding';
+
+// Explicit inspection and migration contracts for the retired Asset catalog
 
 // Loading tier types (tiered lazy loading for tools, skills, commands)
 export * from './loading-tier';

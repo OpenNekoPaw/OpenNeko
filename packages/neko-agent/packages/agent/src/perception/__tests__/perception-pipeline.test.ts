@@ -461,6 +461,51 @@ describe('PerceiveTool', () => {
     );
   });
 
+  it('preserves a canonical content locator in an explicit perception ref', async () => {
+    const pipeline = {
+      perceive: vi.fn(async () => ({
+        card: {
+          version: 1 as const,
+          assetId: 'asset-1',
+          modality: 'image' as const,
+          createdAt: 1,
+          layerStatus: {
+            layer0: 'complete' as const,
+            layer1: 'complete' as const,
+            layer2: 'skipped' as const,
+          },
+          structural: { format: 'png', mimeType: 'image/png', byteSize: 10 },
+        },
+      })),
+    };
+    const tool = new PerceiveTool({ pipeline, now: () => 20 });
+    const contentLocator = {
+      kind: 'document-entry',
+      source: { kind: 'workspace-file', path: 'book.epub' },
+      entryPath: 'OPS/images/page.png',
+    };
+
+    await tool.execute({
+      assetId: 'asset-1',
+      depth: 1,
+      ref: {
+        assetId: 'asset-1',
+        uri: 'content:document-entry',
+        mimeType: 'image/png',
+        contentLocator,
+      },
+    });
+
+    expect(pipeline.perceive).toHaveBeenCalledWith(
+      expect.objectContaining({
+        asset: {
+          assetId: 'asset-1',
+          ref: expect.objectContaining({ contentLocator }),
+        },
+      }),
+    );
+  });
+
   it('rejects model-authored understanding model overrides', async () => {
     const pipeline = {
       perceive: vi.fn(async () => ({

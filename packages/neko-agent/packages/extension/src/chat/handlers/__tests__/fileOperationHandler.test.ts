@@ -174,24 +174,6 @@ describe('FileOperationHandler', () => {
     });
   });
 
-  describe('handleRevealAsset', () => {
-    it('delegates asset reveal to neko-assets', async () => {
-      const { commands } = await import('vscode');
-
-      await handler.handleRevealAsset('asset-1');
-
-      expect(commands.executeCommand).toHaveBeenCalledWith('neko.assets.revealEntity', 'asset-1');
-    });
-
-    it('does nothing for empty asset id', async () => {
-      const { commands } = await import('vscode');
-
-      await handler.handleRevealAsset('');
-
-      expect(commands.executeCommand).not.toHaveBeenCalled();
-    });
-  });
-
   describe('handleDownloadSvg', () => {
     it('should do nothing for empty svg', async () => {
       const { window } = await import('vscode');

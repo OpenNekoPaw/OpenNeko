@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { CreativeEntityService } from '../core/CreativeEntityService';
 import {
   resolveCharacterRegistryPath,
-  resolveEntityAssetBindingsPath,
+  resolveEntityRepresentationBindingsPath,
   resolveEntityCandidateFilePath,
   resolveProjectEntityFilePath,
 } from '../core/paths';
@@ -202,15 +202,16 @@ describe('CreativeEntityService', () => {
 
   it('retargets entity-owned facts on conservative merge', async () => {
     const files = new MemoryEntityFileStore({
-      [resolveEntityAssetBindingsPath(projectRoot)]: {
-        version: 1,
+      [resolveEntityRepresentationBindingsPath(projectRoot)]: {
+        version: 2,
         bindings: [
           {
             id: 'binding-source',
             entityId: 'char_duplicate',
             entityKind: 'character',
-            assetRef: 'project://assets/dupe',
+            representation: { kind: 'workspace-file', path: 'neko/assets/dupe.png' },
             role: 'portrait',
+            isDefault: true,
             status: 'confirmed',
             availability: 'active',
             source: 'user',
@@ -234,8 +235,8 @@ describe('CreativeEntityService', () => {
     expect(result.survivingEntityRef).toEqual(
       expect.objectContaining({ entityId: 'char_xiaoju', entityKind: 'character' }),
     );
-    expect(files.get(resolveEntityAssetBindingsPath(projectRoot))).toEqual({
-      version: 1,
+    expect(files.get(resolveEntityRepresentationBindingsPath(projectRoot))).toEqual({
+      version: 2,
       bindings: [
         expect.objectContaining({
           id: 'binding-source',
@@ -265,14 +266,17 @@ describe('CreativeEntityService', () => {
           },
         ],
       },
-      [resolveEntityAssetBindingsPath(projectRoot)]: {
-        version: 1,
+      [resolveEntityRepresentationBindingsPath(projectRoot)]: {
+        version: 2,
         bindings: [
           {
             id: 'binding-portrait',
             entityId: 'char_xiaoju',
             entityKind: 'character',
-            assetRef: 'project://assets/xiaoju-portrait',
+            representation: {
+              kind: 'workspace-file',
+              path: 'neko/assets/xiaoju-portrait.png',
+            },
             role: 'portrait',
             status: 'confirmed',
             availability: 'active',
@@ -305,8 +309,8 @@ describe('CreativeEntityService', () => {
         ],
       }),
     );
-    expect(files.get(resolveEntityAssetBindingsPath(projectRoot))).toEqual({
-      version: 1,
+    expect(files.get(resolveEntityRepresentationBindingsPath(projectRoot))).toEqual({
+      version: 2,
       bindings: [
         expect.objectContaining({
           id: 'binding-portrait',
@@ -316,29 +320,44 @@ describe('CreativeEntityService', () => {
         }),
       ],
     });
+    expect(files.get(resolveEntityRepresentationBindingsPath(projectRoot))).toEqual({
+      version: 2,
+      bindings: [expect.not.objectContaining({ isDefault: true })],
+    });
 
-    await service.restoreOrphanedBindings({ bindingIds: ['binding-portrait'] });
-    expect(files.get(resolveEntityAssetBindingsPath(projectRoot))).toEqual({
-      version: 1,
+    await service.rebindRepresentation({
+      bindingId: 'binding-portrait',
+      representation: {
+        kind: 'workspace-file',
+        path: 'neko/assets/xiaoju-portrait-rebound.png',
+        fingerprint: { strategy: 'sha256', value: 'sha256:rebound' },
+      },
+    });
+    expect(files.get(resolveEntityRepresentationBindingsPath(projectRoot))).toEqual({
+      version: 2,
       bindings: [
         expect.not.objectContaining({
           orphanedAt: expect.any(String),
         }),
       ],
     });
-    expect(files.get(resolveEntityAssetBindingsPath(projectRoot))).toEqual({
-      version: 1,
+    expect(files.get(resolveEntityRepresentationBindingsPath(projectRoot))).toEqual({
+      version: 2,
       bindings: [
         expect.objectContaining({
           status: 'confirmed',
           availability: 'active',
+          representation: expect.objectContaining({
+            kind: 'workspace-file',
+            path: 'neko/assets/xiaoju-portrait-rebound.png',
+          }),
         }),
       ],
     });
 
     await service.archiveBindings({ bindingIds: ['binding-portrait'] });
-    expect(files.get(resolveEntityAssetBindingsPath(projectRoot))).toEqual({
-      version: 1,
+    expect(files.get(resolveEntityRepresentationBindingsPath(projectRoot))).toEqual({
+      version: 2,
       bindings: [
         expect.objectContaining({
           status: 'confirmed',
@@ -349,9 +368,7 @@ describe('CreativeEntityService', () => {
     expect(events.emit).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'mark-binding-orphaned' }),
     );
-    expect(events.emit).toHaveBeenCalledWith(
-      expect.objectContaining({ reason: 'restore-binding' }),
-    );
+    expect(events.emit).toHaveBeenCalledWith(expect.objectContaining({ reason: 'rebind' }));
     expect(events.emit).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'archive-binding' }),
     );

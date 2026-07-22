@@ -44,6 +44,15 @@ export function resolveHostTarget(platform = process.platform, arch = process.ar
 }
 
 export function assertEmbeddedNativeClosure(files, target) {
+  const buildInputFiles = files.filter((file) =>
+    file.replaceAll('\\', '/').split('/').includes('deps'),
+  );
+  if (buildInputFiles.length > 0) {
+    throw new Error(
+      `OpenNeko ${target} payload contains build-only dependency files: ${buildInputFiles.join(', ')}.`,
+    );
+  }
+
   const nativeFiles = files.filter((file) => /neko-engine\.[^.]+\.node$/u.test(file));
   const targetConfig = getTargetConfig(target);
   if (!targetConfig) {
@@ -83,7 +92,7 @@ export function createComposedManifest() {
   return manifest;
 }
 
-export function packageOpenNekoPlatform({ target, engineVsix }, command = runCommand) {
+function packageOpenNekoPlatform({ target, engineVsix }, command = runCommand) {
   const manifest = createComposedManifest();
   const version = manifest.version;
   const buildRoot = join(repoRoot, '.tmp', 'openneko-vsix', target);

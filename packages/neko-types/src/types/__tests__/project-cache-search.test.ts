@@ -36,7 +36,8 @@ describe('project cache/search contracts', () => {
     expect(isProjectSearchItemKind('semantic-evidence')).toBe(true);
     expect(isProjectSearchItemKind('character-memory-evidence')).toBe(true);
     expect(isProjectSearchItemKind('file')).toBe(false);
-    expect(isProjectSearchPartitionKind('asset-library')).toBe(true);
+    expect(isProjectSearchPartitionKind('media-library')).toBe(true);
+    expect(isProjectSearchPartitionKind('asset-library')).toBe(false);
     expect(isProjectSearchPartitionKind('semantic-evidence')).toBe(true);
     expect(isProjectSearchPartitionKind('character-memory')).toBe(true);
     expect(isProjectSearchPartitionKind('asset-cache')).toBe(false);
@@ -244,12 +245,12 @@ describe('project cache/search contracts', () => {
         sourceIdentity: 'workspace:123',
         partitions: [
           {
-            partition: 'asset-library',
+            partition: 'media-library',
             version: 1,
             generation: 3,
             freshness: 'fresh',
             itemCount: 12,
-            sourceIdentity: 'asset-library:mtime',
+            sourceIdentity: 'media-library:mtime',
             updatedAt: '2026-05-18T00:00:00.000Z',
           },
         ],

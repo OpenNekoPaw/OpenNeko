@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
+  isDocumentArchiveResourceRef,
   validateCompositeArtifact,
   validateDurableResourceRef,
   type GeneratedAssetRevisionRef,
@@ -122,6 +123,34 @@ export function projectCreatorVisibleArtifactFacts(
         })),
       };
     }
+    if (artifact.documentResourceRef) {
+      const valid = isDocumentArchiveResourceRef(artifact.documentResourceRef);
+      return {
+        ref: artifact.artifactId,
+        kind: 'resource-ref',
+        digest: hashStable({
+          artifactId: artifact.artifactId,
+          revision: artifact.revision,
+          documentResourceRef: artifact.documentResourceRef,
+        }),
+        revision: artifact.revision,
+        provenance: { source: artifact.role === 'source' ? 'source-file' : 'document-entry' },
+        deliveryStatus: 'delivered',
+        validator: {
+          id: 'document-archive-resource-ref',
+          status: valid ? 'valid' : 'invalid',
+        },
+        diagnostics: valid
+          ? []
+          : [
+              {
+                code: 'invalid-document-archive-resource-ref',
+                severity: 'error',
+                message: 'Document archive resource reference is invalid.',
+              },
+            ],
+      };
+    }
     return {
       ref: artifact.artifactId,
       kind: 'composite-artifact',
@@ -131,7 +160,7 @@ export function projectCreatorVisibleArtifactFacts(
         markdown: artifact.markdown,
       }),
       revision: artifact.revision,
-      provenance: { source: 'tool-result' },
+      provenance: { source: artifact.provenanceSource ?? 'tool-result' },
       deliveryStatus: 'delivered',
       validator: { id: 'composite-artifact-schema', status: 'valid' },
       diagnostics: [],

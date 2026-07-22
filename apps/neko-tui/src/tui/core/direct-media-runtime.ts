@@ -1,12 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { ToolRegistry } from '@neko/agent';
-import {
-  createResourceCacheGeneratedAssetIndex,
-  submitMediaTurn,
-  type MediaTask,
-} from '@neko/platform';
-import type { ResourceCacheManifestStore } from '@neko/shared';
+import { submitMediaTurn, type MediaTask } from '@neko/platform';
 import { createCLIPlatform, createCLITaskManager } from './platform-bootstrap';
 import type {
   DirectMediaCommandRuntime,
@@ -15,6 +10,7 @@ import type {
 } from './direct-media-command';
 import { createTuiLocalMetadataBinding } from '../host/tui-local-metadata-binding';
 import { NodeMediaTaskDeliveryHost } from '../host/node-media-task-delivery-host';
+import { createNodeGeneratedAssetIndexBinding } from '../host/node-generated-asset-index';
 
 export interface DirectMediaRuntimeBinding {
   readonly runtime: DirectMediaCommandRuntime;
@@ -35,21 +31,27 @@ export async function createDirectMediaRuntime(input: {
     taskRecoveryStorage: storage.taskRecoveryStorage,
   });
   await taskManager.initialize();
-  const generatedAssets = await createGeneratedAssetIndex(
-    storage.resourceCacheManifestStore,
-    input.workDir,
+  const generatedAssetBinding = await createNodeGeneratedAssetIndexBinding({
+    workspaceRoot: input.workDir,
     homedir,
-  );
+  });
+  if (generatedAssetBinding.migrationReport.sourceStatus === 'quarantined') {
+    await generatedAssetBinding.dispose();
+    await storage.dispose();
+    throw new Error(
+      `Generated asset index was quarantined: ${generatedAssetBinding.migrationReport.sourceDiagnostic ?? 'invalid index'}`,
+    );
+  }
+  const generatedAssets = generatedAssetBinding.index;
   const platformResult = createCLIPlatform({
     workspacePath: input.workDir,
     toolRegistry: new ToolRegistry(),
     taskManager,
-    generatedAssetIndex: generatedAssets,
-    resourceCacheManifestStore: storage.resourceCacheManifestStore,
   });
   const media = platformResult.platform.media;
   if (!media) {
     platformResult.platform.dispose();
+    await generatedAssetBinding.dispose();
     await storage.dispose();
     throw new Error('Direct media runtime requires Platform media generation support.');
   }
@@ -93,22 +95,4 @@ function submitDirectMediaTask(
       source: 'direct-media-cli',
     },
   });
-}
-
-async function createGeneratedAssetIndex(
-  manifestStore: ResourceCacheManifestStore,
-  workspaceRoot: string,
-  homedir: string,
-) {
-  const binding = await createResourceCacheGeneratedAssetIndex({
-    manifestStore,
-    workspaceRoot,
-    homedir,
-  });
-  if (binding.migrationReport.sourceStatus === 'quarantined') {
-    throw new Error(
-      `Generated asset index was quarantined: ${binding.migrationReport.sourceDiagnostic ?? 'invalid index'}`,
-    );
-  }
-  return binding.index;
 }

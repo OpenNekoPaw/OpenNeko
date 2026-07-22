@@ -262,7 +262,6 @@ export const chat = {
   'chat.input.mentionTags.media.text': '文本',
   'chat.input.mentionTags.media.document': '文档',
   'chat.input.mentionTags.source.workspace': '工作区',
-  'chat.input.mentionTags.source.assetLibrary': '素材',
   'chat.input.mentionTags.source.mediaLibrary': '媒体',
   'chat.input.mentionTags.source.entityGraph': '实体',
   'chat.input.mentionTags.source.story': '故事',

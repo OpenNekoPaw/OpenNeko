@@ -81,13 +81,6 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
-      "path": "packages/neko-assets/packages/asset",
-      "owner": "packages/neko-assets/packages/asset",
-      "mode": "self",
-      "sourceScope": "src/**/*.{ts,tsx}",
-      "testScope": "src/**/__tests__/**/*.test.ts"
-    },
-    {
       "path": "packages/neko-canvas/packages/domain",
       "owner": "packages/neko-canvas/packages/domain",
       "mode": "self",

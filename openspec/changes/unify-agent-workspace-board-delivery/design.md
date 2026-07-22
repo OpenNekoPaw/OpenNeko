@@ -26,7 +26,7 @@ Workspace Board 已具备共享 `CanvasWorkspaceProjectionRequest`、纯 `planCa
 
 | Concern                     | Reused canonical owner                                                                           | Decision                                                                                                                           |
 | --------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Agent artifacts             | Tool-result `attachments` / `artifacts`, CompositeArtifact snapshots, generated-output lifecycle | Collector only consumes successful stable evidence; it does not scan final answers, attachments, search candidates, or open files. |
+| Agent artifacts             | Tool-result `attachments` / `artifacts`, CompositeArtifact snapshots, generated-output lifecycle | Collector only consumes successful stable evidence. A successful `ReadImage` result with explicit `analysis` is a bounded terminal artifact declaration: its current-turn final Markdown becomes the named analysis artifact and its perceptual attachments become sources. The collector does not promote any other final answer, attachment, search candidate, or open file. |
 | Stable material identity    | `ResourceRef`, `DocumentArchiveResourceRef`, `validateDurableResourceRef`                        | No package-local path/ref DTO or cache identity is introduced.                                                                     |
 | Canvas schema and file IO   | `CanvasData`, `ProjectFileStore`, NKC codec, `createVSCodeProjectFileIoAdapter`                  | Canvas domain owns planning/coordinator; Host adapters only load and atomically save.                                              |
 | Local structured state      | User-level `LocalMetadataStore` `tasks` / `task_checkpoints` repositories                        | Reserved `system:canvas-board-*` rows reuse existing transactions and stay outside Agent task UI/recovery cleanup.                 |
@@ -73,7 +73,7 @@ artifacts[]:
 relations[]: optional source artifact ids for provenance only
 ```
 
-`deliveryId` 是一次 terminal creator-visible batch 的稳定 identity；artifact identity/revision 仍由 owning artifact/result service 提供。同步分析在 turn artifact finalization 后提交，异步生成在 terminal task result materialization 后提交。系统不扫描聊天文本，也不把 final answer 自动升级为 artifact；Markdown 只有在 runtime/tool 已声明为命名、reviewable artifact 时才进入 batch。
+`deliveryId` 是一次 terminal creator-visible batch 的稳定 identity；artifact identity/revision 仍由 owning artifact/result service 提供。同步分析在 turn artifact finalization 后提交，异步生成在 terminal task result materialization 后提交。系统不扫描普通聊天文本，也不把任意 final answer 自动升级为 artifact；Markdown 只有在 runtime/tool 已声明为命名、reviewable artifact 时才进入 batch。`ReadImage.analysis` 是一个明确且有界的声明：工具已成功把稳定图片作为本轮原生多模态证据送入模型时，terminal collector 使用分析 kind、source identities 与正文 digest 生成稳定 artifact identity/title，把最终 Markdown 提升为 analysis，并以实际 perception attachments 建立 `sourceArtifactIds`。如果工具失败、没有 `analysis`、没有稳定 source 或 final Markdown 为空，则不得合成 artifact。
 
 选择 batch 而不是继续逐 asset 调用，是因为一次 terminal result 仍需原子表达 source → analysis → output，并且不应在 Board 中留下半组节点或半条关系。batch 是 transport、ledger 和 transaction 边界，不是 Canvas 视觉容器；逐项扩展 `projectGeneratedAssets()` 会继续把 delivery policy、目标和错误处理散落到媒体、研究、artifact 和 Host 入口。
 

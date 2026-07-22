@@ -4,17 +4,18 @@ import {
   ENTITY_FACADE_COMMANDS,
   isEntityBindingWidgetTriggerRequest,
   isEntityFacadeAliasRequest,
-  isEntityFacadeAssetReverseLookupRequest,
-  isEntityFacadeAssetReverseLookupResult,
+  isEntityFacadeRepresentationReverseLookupRequest,
+  isEntityFacadeRepresentationReverseLookupResult,
   isEntityFacadeBindingLifecycleRequest,
   isEntityFacadeCommandError,
   isEntityFacadeConfirmCandidateRequest,
   isEntityFacadeInspectEntityRequest,
   isEntityFacadeListBindingsRequest,
+  isEntityFacadeRebindRepresentationRequest,
   isEntityFacadeRenameEntityRequest,
   isEntityFacadeResolveByNameRequest,
   isEntityFacadeTreeItem,
-  isEntityFacadeUnbindAssetRequest,
+  isEntityFacadeUnbindRepresentationRequest,
   isEntityFacadeUpdateMetadataRequest,
   isEntityFacadeUpsertBindingRequest,
   isEntityFacadeNameCandidateRequest,
@@ -24,16 +25,19 @@ describe('creative entity facade contracts', () => {
   it('declares serializable command ids and trigger actions', () => {
     expect(ENTITY_FACADE_COMMANDS.confirmCandidate).toBe('neko.entity.confirmCandidate');
     expect(ENTITY_FACADE_COMMANDS.inspectEntity).toBe('neko.entity.inspectEntity');
-    expect(ENTITY_FACADE_COMMANDS.findEntitiesByAsset).toBe('neko.entity.findEntitiesByAsset');
+    expect(ENTITY_FACADE_COMMANDS.findEntitiesByRepresentation).toBe(
+      'neko.entity.findEntitiesByRepresentation',
+    );
     expect(ENTITY_FACADE_COMMANDS.listBindings).toBe('neko.entity.listBindings');
-    expect(ENTITY_FACADE_COMMANDS.unbindAsset).toBe('neko.entity.unbindAsset');
+    expect(ENTITY_FACADE_COMMANDS.unbindRepresentation).toBe('neko.entity.unbindRepresentation');
+    expect(ENTITY_FACADE_COMMANDS.rebindRepresentation).toBe('neko.entity.rebindRepresentation');
     expect(ENTITY_FACADE_COMMANDS.archiveBinding).toBe('neko.entity.archiveBinding');
     expect(ENTITY_FACADE_COMMANDS.nameCandidate).toBe('neko.entity.nameCandidate');
     expect(ENTITY_FACADE_COMMANDS.triggerBindingWidgetAction).toBe(
       'neko.entity.triggerBindingWidgetAction',
     );
-    expect(ENTITY_BINDING_WIDGET_ACTIONS).toContain('bind-asset');
-    expect(ENTITY_BINDING_WIDGET_ACTIONS).toContain('unbind-asset');
+    expect(ENTITY_BINDING_WIDGET_ACTIONS).toContain('bind-representation');
+    expect(ENTITY_BINDING_WIDGET_ACTIONS).toContain('unbind-representation');
     expect(ENTITY_BINDING_WIDGET_ACTIONS).toContain('archive-binding');
     expect(ENTITY_BINDING_WIDGET_ACTIONS).toContain('name-candidate');
     expect(ENTITY_BINDING_WIDGET_ACTIONS).not.toContain('open-dashboard');
@@ -87,11 +91,11 @@ describe('creative entity facade contracts', () => {
       isEntityFacadeListBindingsRequest({
         projectRoot: '/workspace',
         entityRef,
-        assetRef: 'project://assets/xiaoju.png',
+        representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju.png' },
       }),
     ).toBe(true);
     expect(
-      isEntityFacadeUnbindAssetRequest({
+      isEntityFacadeUnbindRepresentationRequest({
         projectRoot: '/workspace',
         bindingId: 'binding-1',
       }),
@@ -101,6 +105,13 @@ describe('creative entity facade contracts', () => {
         projectRoot: '/workspace',
         bindingIds: ['binding-1'],
         orphanedAt: '2026-06-10T00:00:00.000Z',
+      }),
+    ).toBe(true);
+    expect(
+      isEntityFacadeRebindRepresentationRequest({
+        projectRoot: '/workspace',
+        bindingId: 'binding-1',
+        representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju.png' },
       }),
     ).toBe(true);
     expect(
@@ -134,7 +145,7 @@ describe('creative entity facade contracts', () => {
           id: 'binding-1',
           entityId: 'char_xiaoju',
           entityKind: 'character',
-          assetRef: 'file:///unsafe.png',
+          representation: { kind: 'workspace-file', path: 'file:///unsafe.png' },
           role: 'portrait',
           status: 'confirmed',
           availability: 'active',
@@ -152,9 +163,9 @@ describe('creative entity facade contracts', () => {
           projectRoot: '/workspace',
           nodeId: 'shot-1',
         },
-        action: 'bind-asset',
+        action: 'bind-representation',
         entityRef: { entityId: 'char_xiaoju', entityKind: 'character' },
-        assetRef: 'project://assets/xiaoju-portrait',
+        representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju-portrait.png' },
         role: 'portrait',
       }),
     ).toBe(true);
@@ -167,7 +178,7 @@ describe('creative entity facade contracts', () => {
     expect(
       isEntityBindingWidgetTriggerRequest({
         context: { surface: 'assets', projectRoot: '/workspace' },
-        action: 'unbind-asset',
+        action: 'unbind-representation',
         payload: { bindingId: 'binding-1' },
       }),
     ).toBe(true);
@@ -206,14 +217,14 @@ describe('creative entity facade contracts', () => {
       }),
     ).toBe(true);
     expect(
-      isEntityFacadeAssetReverseLookupRequest({
+      isEntityFacadeRepresentationReverseLookupRequest({
         projectRoot: '/workspace',
-        assetRef: 'project://assets/xiaoju.png',
+        representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju.png' },
       }),
     ).toBe(true);
     expect(
-      isEntityFacadeAssetReverseLookupResult({
-        assetRef: 'project://assets/xiaoju.png',
+      isEntityFacadeRepresentationReverseLookupResult({
+        representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju.png' },
         entities: [
           {
             entityRef: { entityId: 'char_xiaoju', entityKind: 'character' },

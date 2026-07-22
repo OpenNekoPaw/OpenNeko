@@ -48,8 +48,8 @@ export const NODE_CARD_ACTION_DISPATCHER: NodeCardActionDispatcher = {
     ctx.canvasStore.openContentOverlay(ctx.nodeId);
   },
 
-  'save-to-asset-library': (ctx) => {
-    postMaterialHostAction(ctx, 'saveCanvasMaterialToAssetLibrary');
+  'copy-to-media-library': (ctx) => {
+    postMaterialHostAction(ctx, 'copyCanvasMaterialToMediaLibrary');
   },
 
   duplicate: (ctx) => {
@@ -87,8 +87,8 @@ export const NODE_CARD_ACTION_DISPATCHER: NodeCardActionDispatcher = {
 };
 
 function postMaterialHostAction(
-  ctx: Parameters<NodeCardActionDispatcher['save-to-asset-library']>[0],
-  type: 'saveCanvasMaterialToAssetLibrary',
+  ctx: Parameters<NodeCardActionDispatcher['copy-to-media-library']>[0],
+  type: 'copyCanvasMaterialToMediaLibrary',
 ): void {
   const assetPath = readPersistentAssetPath(ctx.node);
   const documentResourceRef = readDocumentResourceRef(ctx.node);

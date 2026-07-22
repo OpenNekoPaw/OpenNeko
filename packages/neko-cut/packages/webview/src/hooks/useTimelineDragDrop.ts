@@ -23,10 +23,9 @@ import { getFileType } from '../utils';
 import type { ProjectData, TimelineTrack, TimelineElement } from '../types';
 import {
   CENTERED_TRANSFORM,
-  ASSET_DRAG_MIME,
+  MEDIA_LIBRARY_DRAG_MIME,
   createProjectSourceAddClient,
-  getDragItems,
-  type AssetDragData,
+  isMediaLibraryDragData,
   type SubtitleElement,
 } from '@neko/shared';
 import { getMediaInfoService } from '../services';
@@ -158,12 +157,7 @@ export function useTimelineDragDrop({
         formatId: 'nkv',
         ...(input.sourcePath ? { sourcePath: input.sourcePath } : {}),
         ...(input.file ? { file: input.file } : { browserFile: { name: input.displayName } }),
-        destination: {
-          kind: 'project',
-          directory: 'media',
-          copyMode: input.sourcePath ? 'link' : 'copy',
-        },
-        ingestMode: input.sourcePath ? 'link' : 'create-asset',
+        assetDirectory: 'media',
       });
 
       if (result.ok && result.durablePath) {
@@ -274,7 +268,7 @@ export function useTimelineDragDrop({
       const trackIndex = Math.floor(y / TRACK_HEIGHT);
       const targetTrack = tracks[trackIndex];
 
-      const jsonData = e.dataTransfer.getData(ASSET_DRAG_MIME);
+      const jsonData = e.dataTransfer.getData(MEDIA_LIBRARY_DRAG_MIME);
       const uriList = e.dataTransfer.getData('text/uri-list');
       const filesSnapshot: Array<{ name: string; path: string; file?: File }> = [];
       for (let i = 0; i < e.dataTransfer.files.length; i++) {
@@ -372,19 +366,15 @@ export function useTimelineDragDrop({
 
       /** Process the extracted drop snapshot asynchronously */
       const processDropItems = async (): Promise<void> => {
-        // Priority 1: asset library drag data
+        // Priority 1: Media Library drag data
         if (jsonData) {
           try {
-            const data = JSON.parse(jsonData) as AssetDragData;
-            const items = getDragItems(data);
-            if (items.length > 0) {
-              for (let i = 0; i < items.length; i++) {
-                const item = items[i];
-                if (item?.files && item.files.length > 0) {
-                  const file = item.files[0];
-                  if (file) {
-                    await addFileToTrack(file.path, file.name, dropTime + i * 0.5, undefined, i);
-                  }
+            const data: unknown = JSON.parse(jsonData);
+            if (isMediaLibraryDragData(data)) {
+              for (let i = 0; i < data.files.length; i++) {
+                const file = data.files[i];
+                if (file) {
+                  await addFileToTrack(file.path, file.name, dropTime + i * 0.5, undefined, i);
                 }
               }
               return;

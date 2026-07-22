@@ -29,10 +29,6 @@ export class VideoProjectDocument implements vscode.CustomDocument {
   }
 }
 
-export function isVideoProjectDocument(value: unknown): value is VideoProjectDocument {
-  return value instanceof VideoProjectDocument;
-}
-
 export function createVideoProjectTextDocumentAdapter(
   document: VideoProjectDocument,
 ): vscode.TextDocument {

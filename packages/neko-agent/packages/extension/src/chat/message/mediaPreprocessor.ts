@@ -74,12 +74,10 @@ export class MediaPreprocessor {
     }
     const mimeType = getMimeType(filePath);
     const loaded = await this.contentAccessRuntime.loadProviderAsset({
-      caller: 'media-preprocessor',
       source: {
         kind: 'file',
         path: filePath,
       },
-      preferredTarget: 'bytes',
       mimeTypeHint: mimeType,
     });
     if (loaded.status !== 'ready' || !loaded.bytes) {

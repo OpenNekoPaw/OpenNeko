@@ -4,7 +4,6 @@ import { nekoTailwindPreset } from '@neko/shared/theme/tailwind-preset';
 export default {
   presets: [nekoTailwindPreset],
   content: [
-    "./assetDiff.html",
     "./mediaDiff.html",
     "./src/**/*.{js,ts,jsx,tsx}",
     "../../../neko-ui/src/**/*.{tsx,ts}",

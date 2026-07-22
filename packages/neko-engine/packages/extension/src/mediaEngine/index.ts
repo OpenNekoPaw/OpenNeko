@@ -22,8 +22,6 @@
  */
 
 // Service identifiers
-export { IMediaEngineManager } from './serviceIds';
-
 // Manager
 export {
   MediaEngineManager,
@@ -32,4 +30,4 @@ export {
 } from './MediaEngineManager';
 
 // Native engine
-export { NativeMediaEngine, createNativeMediaEngine } from './NativeMediaEngine';
+export { NativeMediaEngine } from './NativeMediaEngine';

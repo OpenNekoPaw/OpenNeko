@@ -3,7 +3,7 @@ import { projectContextReferencesFromPayloads } from '../context-reference-prese
 import type { AgentContextPayload } from '@neko/shared';
 
 describe('context-reference-presenter', () => {
-  it('preserves structured context navigation data for asset jump actions', () => {
+  it('does not infer an Asset catalog id from presentation type', () => {
     const payload: AgentContextPayload = {
       type: 'asset',
       id: 'asset-1',
@@ -11,9 +11,8 @@ describe('context-reference-presenter', () => {
       summary: 'Asset: Hero portrait',
       data: {
         navigationData: {
-          partition: 'asset-library',
-          sourceId: 'asset-1',
-          portablePath: '${ASSETS}/hero.png',
+          owner: 'generated-output',
+          outputId: 'asset-1',
         },
       },
     };
@@ -24,12 +23,7 @@ describe('context-reference-presenter', () => {
         id: 'asset-1',
         label: 'Hero portrait',
         summary: 'Asset: Hero portrait',
-        navigationData: {
-          partition: 'asset-library',
-          sourceId: 'asset-1',
-          portablePath: '${ASSETS}/hero.png',
-          assetId: 'asset-1',
-        },
+        navigationData: { owner: 'generated-output', outputId: 'asset-1' },
       },
     ]);
   });

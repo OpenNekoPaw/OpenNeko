@@ -1,177 +1,144 @@
 /**
- * Thumbnail Service (Extension Host)
- *
- * 通过 neko-engine 提取视频/图片关键帧生成缩略图。
- * 持久化到 .neko/assets/thumbnails/，关联 AssetVariant.thumbnailFileId。
+ * Storage-neutral thumbnail generation and semantic representation consumption.
  */
 
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs/promises';
-import * as crypto from 'crypto';
-import { detectMediaType } from '@neko/shared';
-
-// =============================================================================
-// Types
-// =============================================================================
+import {
+  detectMediaType,
+  normalizeWorkspaceContentPath,
+  type ContentRepresentationGenerator,
+  type ContentRepresentationService,
+  type WorkspaceFileContentLocator,
+} from '@neko/shared';
 
 export interface ThumbnailOptions {
-  /** Max width in pixels (default 256) */
-  maxWidth?: number;
-  /** Max height in pixels (default 256) */
-  maxHeight?: number;
-  /** Time offset in seconds for video (default 1) */
-  timeOffset?: number;
+  readonly maxWidth?: number;
+  readonly maxHeight?: number;
 }
 
 export interface ThumbnailResult {
-  /** Absolute path to the generated thumbnail */
-  path: string;
-  /** Width of the thumbnail */
-  width: number;
-  /** Height of the thumbnail */
-  height: number;
+  readonly bytes: Uint8Array;
+  readonly uri: vscode.Uri;
+  readonly width: number;
+  readonly height: number;
+  readonly mimeType: 'image/jpeg';
 }
 
-// =============================================================================
-// Service
-// =============================================================================
+export class AssetsThumbnailGenerator implements ContentRepresentationGenerator {
+  readonly id = 'neko-assets-thumbnail';
+  readonly revision = '2';
+  readonly kinds = ['thumbnail'] as const;
+
+  constructor(private readonly workspaceRoot: string) {}
+
+  async generate(
+    input: Parameters<ContentRepresentationGenerator['generate']>[0],
+  ): Promise<Awaited<ReturnType<ContentRepresentationGenerator['generate']>>> {
+    if (input.spec.kind !== 'thumbnail' || input.source.kind !== 'workspace-file') {
+      throw new Error('Assets thumbnail generator requires a workspace-file thumbnail request.');
+    }
+    if (input.spec.format && input.spec.format !== 'jpeg') {
+      throw new Error(`Assets thumbnail generator does not support ${input.spec.format}.`);
+    }
+    if (input.signal?.aborted) {
+      throw input.signal.reason ?? new Error('Thumbnail generation was cancelled.');
+    }
+
+    const sourcePath = resolveWorkspaceFile(this.workspaceRoot, input.source.path);
+    const width = input.spec.maxWidth ?? 256;
+    const height = input.spec.maxHeight ?? 256;
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-thumbnail-'));
+    const outputPath = path.join(tempRoot, 'thumbnail.jpg');
+    try {
+      const result = await vscode.commands.executeCommand<{
+        readonly success: boolean;
+        readonly path?: string;
+        readonly width?: number;
+        readonly height?: number;
+      }>('neko.engine.extractThumbnail', sourcePath, outputPath, width, height, 1);
+      if (!result?.success || result.path !== outputPath) {
+        throw new Error('Engine thumbnail generation failed.');
+      }
+      const bytes = await fs.readFile(outputPath);
+      return {
+        bytes,
+        metadata: {
+          mimeType: 'image/jpeg',
+          byteLength: bytes.byteLength,
+          width: result.width ?? width,
+          height: result.height ?? height,
+        },
+      };
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  }
+}
 
 export class ThumbnailService implements vscode.Disposable {
-  private readonly thumbnailDir: string;
-
-  // Preheat infrastructure
   private readonly _onDidGenerateThumbnail = new vscode.EventEmitter<string>();
   readonly onDidGenerateThumbnail: vscode.Event<string> = this._onDidGenerateThumbnail.event;
   private readonly preheatQueue: string[] = [];
   private preheatRunning = 0;
   private readonly preheatConcurrency = 2;
 
-  constructor(thumbnailDir: string) {
-    this.thumbnailDir = thumbnailDir;
-  }
+  constructor(
+    private readonly workspaceRoot: string,
+    private readonly representations: ContentRepresentationService,
+  ) {}
 
-  /**
-   * Generate a thumbnail for a media file.
-   * Returns the path to the generated thumbnail, or null if generation fails.
-   */
   async generate(
     filePath: string,
     options: ThumbnailOptions = {},
   ): Promise<ThumbnailResult | null> {
     const mediaType = detectMediaType(filePath);
-    if (mediaType !== 'video' && mediaType !== 'image') {
-      return null;
-    }
+    if (mediaType !== 'video' && mediaType !== 'image') return null;
 
-    const maxWidth = options.maxWidth ?? 256;
-    const maxHeight = options.maxHeight ?? 256;
+    const source = await createWorkspaceFileLocator(this.workspaceRoot, filePath);
+    const width = options.maxWidth ?? 256;
+    const height = options.maxHeight ?? 256;
+    const representation = await this.representations.getRepresentation({
+      source,
+      spec: { kind: 'thumbnail', maxWidth: width, maxHeight: height, format: 'jpeg' },
+    });
+    if (representation.status !== 'ready') return null;
+    const loaded = await this.representations.readRepresentation(representation.locator, {
+      maxBytes: 16 * 1024 * 1024,
+    });
+    if (loaded.status !== 'ready') return null;
 
-    // Deterministic filename based on source path + options
-    const hash = crypto
-      .createHash('md5')
-      .update(`${filePath}:${maxWidth}:${maxHeight}:${options.timeOffset ?? 1}`)
-      .digest('hex');
-    const thumbPath = path.join(this.thumbnailDir, `${hash}.jpg`);
-
-    // Check cache
-    try {
-      await fs.access(thumbPath);
-      // Already exists — return cached
-      return { path: thumbPath, width: maxWidth, height: maxHeight };
-    } catch {
-      // Not cached, generate
-    }
-
-    // Ensure directory exists
-    await fs.mkdir(this.thumbnailDir, { recursive: true });
-
-    // Try engine thumbnail extraction
-    try {
-      const result = await vscode.commands.executeCommand<{
-        success: boolean;
-        path?: string;
-        width?: number;
-        height?: number;
-      }>(
-        'neko.engine.extractThumbnail',
-        filePath,
-        thumbPath,
-        maxWidth,
-        maxHeight,
-        options.timeOffset ?? 1,
-      );
-
-      if (result?.success && result.path) {
-        return {
-          path: result.path,
-          width: result.width ?? maxWidth,
-          height: result.height ?? maxHeight,
-        };
-      }
-    } catch {
-      // Engine not available — fall through
-    }
-
-    // Fallback: for images, copy/resize is not possible without native deps.
-    // Return null to indicate thumbnail generation is not available.
-    return null;
+    const bytes = loaded.bytes;
+    return {
+      bytes,
+      uri: vscode.Uri.parse(`data:image/jpeg;base64,${Buffer.from(bytes).toString('base64')}`),
+      width: loaded.metadata.width ?? width,
+      height: loaded.metadata.height ?? height,
+      mimeType: 'image/jpeg',
+    };
   }
 
-  /**
-   * Get the thumbnail path for a file if it exists in cache.
-   */
-  async getCached(filePath: string): Promise<string | null> {
-    const hash = crypto.createHash('md5').update(`${filePath}:256:256:1`).digest('hex');
-    const thumbPath = path.join(this.thumbnailDir, `${hash}.jpg`);
-
-    try {
-      await fs.access(thumbPath);
-      return thumbPath;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Clear all cached thumbnails.
-   */
-  async clearCache(): Promise<void> {
-    try {
-      await fs.rm(this.thumbnailDir, { recursive: true, force: true });
-    } catch {
-      // Directory may not exist
-    }
-  }
-
-  /**
-   * Queue files for background thumbnail generation.
-   * Fire-and-forget — results delivered via onDidGenerateThumbnail event.
-   */
   preheat(filePaths: string[]): void {
-    for (const fp of filePaths) {
-      if (!this.preheatQueue.includes(fp)) {
-        this.preheatQueue.push(fp);
-      }
+    for (const filePath of filePaths) {
+      if (!this.preheatQueue.includes(filePath)) this.preheatQueue.push(filePath);
     }
     this.drainPreheatQueue();
   }
 
   private drainPreheatQueue(): void {
     while (this.preheatRunning < this.preheatConcurrency && this.preheatQueue.length > 0) {
-      const filePath = this.preheatQueue.shift()!;
-      this.preheatRunning++;
-      this.generate(filePath)
+      const filePath = this.preheatQueue.shift();
+      if (!filePath) return;
+      this.preheatRunning += 1;
+      void this.generate(filePath)
         .then((result) => {
-          if (result) {
-            this._onDidGenerateThumbnail.fire(filePath);
-          }
+          if (result) this._onDidGenerateThumbnail.fire(filePath);
         })
-        .catch(() => {
-          // Silently ignore preheat failures
-        })
+        .catch(() => undefined)
         .finally(() => {
-          this.preheatRunning--;
+          this.preheatRunning -= 1;
           this.drainPreheatQueue();
         });
     }
@@ -181,4 +148,30 @@ export class ThumbnailService implements vscode.Disposable {
     this._onDidGenerateThumbnail.dispose();
     this.preheatQueue.length = 0;
   }
+}
+
+async function createWorkspaceFileLocator(
+  workspaceRoot: string,
+  filePath: string,
+): Promise<WorkspaceFileContentLocator> {
+  const relativePath = path.relative(workspaceRoot, filePath).replace(/\\/gu, '/');
+  const normalizedPath = normalizeWorkspaceContentPath(relativePath);
+  if (!normalizedPath || normalizedPath !== relativePath) {
+    throw new Error('Thumbnail source must be a canonical workspace file.');
+  }
+  const stat = await fs.stat(filePath);
+  return {
+    kind: 'workspace-file',
+    path: normalizedPath,
+    fingerprint: { strategy: 'mtime-size', value: `${stat.mtimeMs}:${stat.size}` },
+  };
+}
+
+function resolveWorkspaceFile(workspaceRoot: string, relativePath: string): string {
+  const resolved = path.resolve(workspaceRoot, relativePath);
+  const relative = path.relative(workspaceRoot, resolved);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('Thumbnail source escapes the workspace.');
+  }
+  return resolved;
 }

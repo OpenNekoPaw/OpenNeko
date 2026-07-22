@@ -157,6 +157,64 @@ describe('readMessageToolCallSummaries', () => {
   });
 });
 
+describe('Pi Skill receipt projection', () => {
+  it('projects a bounded redacted read_skill receipt without activation state or locator value', async () => {
+    runtime.conversation.stores.conversation.getState().replaceMessages([
+      createMessage({
+        toolCalls: [
+          {
+            id: 'read-skill-1',
+            name: 'read_skill',
+            arguments: { locator: '/__neko_skills/runtime/secret/SKILL.md' },
+            status: 'success',
+            result: {
+              skillName: 'image',
+              source: { kind: 'builtin' },
+              fingerprint: 'a'.repeat(64),
+              locator: `/__neko_skills/runtime/${'a'.repeat(64)}/SKILL.md`,
+              locatorKind: 'skill',
+            },
+          },
+        ],
+      }),
+    ]);
+    const port = createTuiAutomationAppPort({
+      stores: runtime.conversation.stores,
+      readHandle: () => ({
+        isReady: true,
+        submit: async () => undefined,
+        cancel: () => undefined,
+        listTasks: async () => [],
+        getCurrentConversationId: () => 'conversation-1',
+        getHistory: () => [],
+        getMessageQueueSnapshot: () => null,
+        getConversationPersistenceSnapshot: memoryPersistenceSnapshot,
+      }),
+      readMarkdownFacts: () => ({ pathEvents: [], droppedPathEventCount: 0 }),
+    });
+
+    const facts = await port.readFacts({ sessionId: 'debug-session-1', includeHistory: false });
+
+    expect(facts.skillReceipts).toEqual([
+      {
+        toolCallId: 'read-skill-1',
+        skillName: 'image',
+        source: 'builtin',
+        fingerprint: `sha256:${'a'.repeat(64)}`,
+        locatorKind: 'skill',
+      },
+    ]);
+    expect(facts.evidenceCompleteness.skillReceipts).toEqual({
+      limit: 128,
+      droppedCount: 0,
+    });
+    expect(facts.turns[0]?.toolCalls[0]?.result).toEqual(facts.skillReceipts[0]);
+    expect(facts.turns[0]?.toolCalls[0]?.arguments).toEqual({});
+    expect(JSON.stringify(facts)).not.toContain('/__neko_skills/');
+    expect('skillActivations' in facts).toBe(false);
+  });
+});
+
 describe('task result delivery idle projection', () => {
   it('keeps the session non-idle while a terminal Task result is being delivered', async () => {
     const port = createTuiAutomationAppPort({
@@ -322,6 +380,46 @@ describe('projectTaskFacts', () => {
 });
 
 describe('createTuiAutomationAppPort', () => {
+  it('confirms only the expected pending Tool through the App owner', async () => {
+    const resolve = vi.fn();
+    const confirmToolCall = vi.fn();
+    runtime.conversation.stores.ui.getState().showToolApproval({
+      toolCallId: 'call-bind',
+      toolName: 'BindEntityRepresentation',
+      arguments: { entityId: 'char-rin' },
+      resolve,
+    });
+    const port = createTuiAutomationAppPort({
+      stores: runtime.conversation.stores,
+      confirmToolCall,
+      readHandle: () => ({
+        isReady: true,
+        submit: async () => undefined,
+        cancel: () => undefined,
+        listTasks: async () => [],
+        getCurrentConversationId: () => 'tui-2026-01-01T00-00-00-000Z-test',
+        getHistory: () => [],
+        getMessageQueueSnapshot: () => null,
+        getConversationPersistenceSnapshot: memoryPersistenceSnapshot,
+      }),
+      readMarkdownFacts: () => ({ pathEvents: [], droppedPathEventCount: 0 }),
+    });
+
+    await expect(
+      port.confirmPendingTool({
+        toolName: 'BindEntityRepresentation',
+        approved: true,
+        timeoutMs: 100,
+      }),
+    ).resolves.toEqual({
+      toolCallId: 'call-bind',
+      toolName: 'BindEntityRepresentation',
+      approved: true,
+    });
+    expect(resolve).toHaveBeenCalledWith(true);
+    expect(confirmToolCall).toHaveBeenCalledWith('call-bind', true);
+  });
+
   it('exposes a failed session initialization through the App owner port', () => {
     const initializationError = new Error('conversation storage initialization failed');
     runtime.conversation.stores.agent.getState().setError(initializationError);

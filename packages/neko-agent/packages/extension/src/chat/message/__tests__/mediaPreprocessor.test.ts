@@ -79,9 +79,7 @@ describe('MediaPreprocessor', () => {
     await processor.processImage('/Volumes/assets/image/ref.png');
 
     expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith({
-      caller: 'media-preprocessor',
       source: { kind: 'file', path: '/Volumes/assets/image/ref.png' },
-      preferredTarget: 'bytes',
       mimeTypeHint: 'image/png',
     });
     expect(processImageMock).toHaveBeenCalledWith('/Volumes/assets/image/ref.png');

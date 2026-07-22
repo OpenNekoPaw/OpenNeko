@@ -283,7 +283,9 @@ export class NodeDocumentPreviewServer {
       response.end(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message.includes('does not exist')) {
+      if (hasErrorCode(error, 'ENOENT', 'ENOTDIR')) {
+        writeResponse(response, 404, 'document file not found');
+      } else if (message.includes('does not exist')) {
         writeResponse(response, 404, 'EPUB entry not found');
       } else if (
         message.includes('invalid') ||
@@ -367,6 +369,12 @@ function writeResponse(response: ServerResponse, statusCode: number, body?: stri
   response.setHeader('Content-Type', 'text/plain; charset=utf-8');
   response.setHeader('Content-Length', String(Buffer.byteLength(body)));
   response.end(body);
+}
+
+function hasErrorCode(error: unknown, ...codes: readonly string[]): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const code = Reflect.get(error, 'code');
+  return typeof code === 'string' && codes.includes(code);
 }
 
 function documentMime(format: Exclude<DocumentPreviewFormat, 'epub'>): string {

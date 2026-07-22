@@ -20,6 +20,7 @@ export type TuiDebugAutomationMethod =
   | 'session.resume'
   | 'message.submit'
   | 'message.cancel'
+  | 'tool.confirm'
   | 'terminal.resize'
   | 'session.waitForIdle'
   | 'session.facts'
@@ -95,6 +96,19 @@ export interface TuiDebugAutomationMessageSubmitParams extends TuiDebugAutomatio
 }
 
 export type TuiDebugAutomationMessageCancelParams = TuiDebugAutomationSessionRefParams;
+
+export interface TuiDebugAutomationToolConfirmParams extends TuiDebugAutomationSessionRefParams {
+  readonly toolName: string;
+  readonly approved: boolean;
+  readonly timeoutMs?: number;
+}
+
+export interface TuiDebugAutomationToolConfirmed {
+  readonly sessionId: string;
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly approved: boolean;
+}
 
 export interface TuiDebugAutomationMessageCancelled {
   readonly sessionId: string;
@@ -290,6 +304,14 @@ export interface TuiDebugAutomationConversationPersistenceFacts {
   };
 }
 
+export interface TuiDebugAutomationSkillReceipt {
+  readonly toolCallId: string;
+  readonly skillName: string;
+  readonly source: 'builtin' | 'personal' | 'project';
+  readonly fingerprint: `sha256:${string}`;
+  readonly locatorKind: 'skill' | 'skill-resource';
+}
+
 export interface TuiDebugAutomationSessionFacts {
   readonly sessionId: string;
   readonly conversationId: string;
@@ -299,8 +321,8 @@ export interface TuiDebugAutomationSessionFacts {
   readonly idle: TuiDebugAutomationIdleState;
   readonly turns: readonly TuiDebugAutomationTurnSummary[];
   readonly history?: readonly unknown[];
-  /** Legacy activation lifecycle is intentionally absent; Pi Skills execute as turns. */
-  readonly skillActivations: readonly never[];
+  /** Successful Pi read_skill receipts; no activation/lifecycle state is retained. */
+  readonly skillReceipts: readonly TuiDebugAutomationSkillReceipt[];
   readonly tasks: readonly TuiDebugAutomationTaskFact[];
   readonly messageQueue: AgentMessageQueueSnapshot | null;
   readonly continuations: readonly TuiDebugAutomationContinuationFact[];
@@ -345,7 +367,7 @@ export interface TuiDebugAutomationEvidenceCompleteness {
   readonly turns: TuiDebugAutomationCollectionCompleteness;
   readonly turnToolCalls: TuiDebugAutomationCollectionCompleteness;
   readonly timelineRows: TuiDebugAutomationCollectionCompleteness;
-  readonly skillActivations: TuiDebugAutomationCollectionCompleteness;
+  readonly skillReceipts: TuiDebugAutomationCollectionCompleteness;
   readonly tasks: TuiDebugAutomationCollectionCompleteness;
   readonly continuations: TuiDebugAutomationCollectionCompleteness;
   readonly promptComposition: TuiDebugAutomationCollectionCompleteness;
@@ -365,6 +387,11 @@ export interface TuiDebugAutomationAppPort {
   getConversationId(): string;
   submitMessage(input: { readonly prompt: string }): Promise<void>;
   cancelActiveMessage(): boolean;
+  confirmPendingTool(input: {
+    readonly toolName: string;
+    readonly approved: boolean;
+    readonly timeoutMs: number;
+  }): Promise<Omit<TuiDebugAutomationToolConfirmed, 'sessionId'>>;
   resizeTerminal(input: { readonly columns: number; readonly rows: number }): void;
   waitForIdle(input: {
     readonly timeoutMs: number;

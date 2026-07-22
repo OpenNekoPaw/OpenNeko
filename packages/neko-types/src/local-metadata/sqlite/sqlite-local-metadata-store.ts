@@ -72,10 +72,13 @@ import type {
 import {
   isCreativeEntityCandidate,
   isCreativeEntityKind,
-  isEntityAssetBindingAvailability,
-  isEntityAssetBindingRole,
 } from '../../types/creative-entity-asset-composition';
-import type { MediaFileMetadata } from '../../types/asset/entity';
+import {
+  isEntityRepresentationBindingAvailability,
+  isEntityRepresentationRole,
+} from '../../types/entity-representation-binding';
+import { isContentLocator } from '../../types/content-locator';
+import type { MediaFileMetadata } from '../../types/media-file';
 import {
   isResourceCacheEntry,
   isResourceCacheVariantEntry,
@@ -2449,7 +2452,7 @@ function isEntityAssetProjectionRecord(value: unknown): value is EntityAssetProj
       return (
         isEntityBindingAvailabilityProjectionValue(value['value']) &&
         value['entityId'] === value['value'].entityId &&
-        value['assetRef'] === value['value'].assetRef
+        value['assetRef'] === undefined
       );
   }
 }
@@ -2577,13 +2580,12 @@ function isEntityBindingAvailabilityProjectionValue(
     typeof value['entityId'] === 'string' &&
     value['entityId'].trim().length > 0 &&
     isCreativeEntityKind(value['entityKind']) &&
-    typeof value['assetRef'] === 'string' &&
-    optionalPortableAssetRef(value['assetRef']) &&
-    isEntityAssetBindingRole(value['role']) &&
+    isContentLocator(value['representation']) &&
+    isEntityRepresentationRole(value['role']) &&
     (value['status'] === 'suggested' ||
       value['status'] === 'confirmed' ||
       value['status'] === 'rejected') &&
-    isEntityAssetBindingAvailability(value['availability']) &&
+    isEntityRepresentationBindingAvailability(value['availability']) &&
     (value['orphanedAt'] === undefined ||
       (typeof value['orphanedAt'] === 'string' &&
         Number.isFinite(Date.parse(value['orphanedAt'])))) &&

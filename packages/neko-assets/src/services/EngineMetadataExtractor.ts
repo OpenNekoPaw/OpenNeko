@@ -12,7 +12,6 @@ import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import type { MediaFileMetadata, MediaInfo } from '@neko/shared';
 import { getMimeType, detectMediaType } from '@neko/shared';
-import type { MetadataExtractor } from '@neko/asset';
 
 // =============================================================================
 // Text Metadata Extraction (migrated from neko-cut AssetService)
@@ -85,10 +84,9 @@ function applyMediaInfo(metadata: MediaFileMetadata, info: MediaInfo): void {
  * 3. For text files, extracts word/line/character counts and language
  * 4. Falls back gracefully when engine is unavailable
  *
- * This is injected into AssetLibrary's FileService via the
- * existing MetadataExtractor callback pattern.
+ * This is injected into the Media Library projection.
  */
-export function createEngineMetadataExtractor(): MetadataExtractor {
+export function createEngineMetadataExtractor(): (filePath: string) => Promise<MediaFileMetadata> {
   return async (filePath: string): Promise<MediaFileMetadata> => {
     // 1. Basic metadata (always available)
     let fileSize = 0;

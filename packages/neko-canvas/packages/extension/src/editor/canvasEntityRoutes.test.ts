@@ -32,9 +32,11 @@ describe('canvas entity routes', () => {
           id: 'binding-portrait',
           entityId: 'char-rin',
           entityKind: 'character',
-          assetRef: 'project://assets/rin-portrait',
+          representation: {
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/rin-portrait.png',
+          },
           role: 'portrait',
-          isDefault: true,
           status: 'confirmed',
           availability: 'orphaned',
           orphanedAt: '2026-06-10T01:00:00.000Z',
@@ -71,7 +73,10 @@ describe('canvas entity routes', () => {
         candidateCount: 1,
         defaultRepresentation: {
           role: 'portrait',
-          assetRef: 'project://assets/rin-portrait',
+          representation: {
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/rin-portrait.png',
+          },
           availability: 'orphaned',
           orphanedAt: '2026-06-10T01:00:00.000Z',
         },

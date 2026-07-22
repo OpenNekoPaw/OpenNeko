@@ -40,7 +40,7 @@ Webview (React + Vite)
   ├── Timeline 组件          → 多轨道拖拽、吸附、波纹编辑
   ├── PreviewPanel          → H264StreamClient → WebCodecs → Canvas
   ├── PropertyPanel         → 关键帧、特效、遮罩属性
-  └── AssetLibrary          → 素材导入管理
+  └── Media source ingest   → direct locator / explicit authoring
 ```
 
 ### Headless Authoring Boundary
@@ -63,7 +63,7 @@ packages/
 │   ├── services/     # TimelineToolExecutor / MediaProcessor...
 │   └── views/        # 大纲面板、状态栏
 └── webview/src/
-    ├── components/   # Timeline / PreviewPanel / AssetLibrary...
+    ├── components/   # Timeline / PreviewPanel / PropertyPanel...
     ├── hooks/        # useKeyboardShortcuts / useTimelineActions...
     ├── stores/       # editor-store.ts + slices/
     └── services/     # postMessage 通信封装

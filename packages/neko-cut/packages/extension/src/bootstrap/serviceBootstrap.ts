@@ -7,7 +7,6 @@
 
 import * as vscode from 'vscode';
 import { ServiceCollection } from '../base';
-import { getRootLogger } from '../base';
 import { IEditorRegistry, EditorRegistry } from '../editor/common/editorRegistry';
 import { VideoEditorModelProvider } from '../editor/video/videoEditorModel';
 import { IStatusBar, StatusBar } from '../views/statusBar';
@@ -25,15 +24,12 @@ import {
   ICutProjectAuthoringService,
 } from '../services/CutProjectAuthoringService';
 import { addCutProjectSource } from '../editor/video/cutProjectSourceIngest';
-import { IAssetService, AssetService } from '../services/AssetService';
 
 // =============================================================================
 // Service Identifiers
 // =============================================================================
 
 // Re-export service IDs
-export { IConnectionStateManager, IAssetService };
-
 // =============================================================================
 // Service Bootstrap Result
 // =============================================================================
@@ -47,7 +43,6 @@ export interface IServiceBootstrapResult {
   outlineProvider: VideoProjectOutlineProvider;
   connectionStateManager: ConnectionStateManager;
   cutProjectAuthoringService: CutProjectAuthoringService;
-  assetService: AssetService;
 }
 
 // =============================================================================
@@ -101,25 +96,12 @@ export async function bootstrapCoreServices(
   const outlineProvider = new VideoProjectOutlineProvider();
   services.set(IVideoProjectOutlineProvider, outlineProvider);
 
-  // ==========================================================================
-  // 6. Asset Service (素材管理)
-  // ==========================================================================
-  const assetService = new AssetService({ globalStoragePath: context.globalStorageUri.fsPath });
-  services.set(IAssetService, assetService);
-  context.subscriptions.push(assetService);
-
-  // Initialize asset service in background
-  assetService.initialize().catch((error) => {
-    getRootLogger().error('Failed to initialize AssetService:', error);
-  });
-
   return {
     editorRegistry,
     statusBar,
     outlineProvider,
     connectionStateManager,
     cutProjectAuthoringService,
-    assetService,
   };
 }
 

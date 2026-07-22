@@ -58,7 +58,6 @@ import type {
 } from './storyboard-readiness';
 import type { DocumentArchiveResourceRef } from './document-reading';
 import type { SkillCatalogMeta } from './skill';
-import type { ProjectSearchVisualResource } from './project-cache-search';
 import type { ResourceRef, ResourceVariantRequest } from './resource-cache';
 
 export interface NekoDisposableLike {
@@ -266,26 +265,6 @@ export interface NekoCutAPI {
 // =============================================================================
 
 /**
- * Asset filter options
- */
-export interface AssetFilter {
-  type?: 'video' | 'audio' | 'image' | 'text' | 'other';
-  search?: string;
-}
-
-/**
- * Asset representation
- */
-export interface Asset {
-  id: string;
-  name: string;
-  type: string;
-  path: string;
-  thumbnail?: string;
-  metadata?: Record<string, unknown>;
-}
-
-/**
  * Canvas configuration for creation
  */
 export interface CanvasConfig {
@@ -376,15 +355,6 @@ export interface CanvasPlaybackReorderUnitsResult {
 }
 
 /**
- * Fired when an asset is added, updated, or removed from the canvas asset library.
- * Distinct from the asset-registry AssetChangeEvent to avoid naming conflicts.
- */
-export interface NekoCanvasAssetChangeEvent {
-  readonly type: 'add' | 'update' | 'delete';
-  readonly assetId: string;
-}
-
-/**
  * Fired when nodes or shapes on the active canvas change.
  */
 export interface CanvasChangeEvent {
@@ -402,27 +372,9 @@ export interface CanvasChangeEvent {
 
 /**
  * NekoCanvas Extension API
- * Exported by neko-canvas extension for asset and canvas manipulation
+ * Exported by neko-canvas extension for canvas manipulation
  */
 export interface NekoCanvasAPI {
-  asset: {
-    /**
-     * Import an asset into the project asset library.
-     * This namespace is a proxy to neko-assets; canvas is not the asset source of truth.
-     */
-    import(path: string): Promise<Asset>;
-
-    /**
-     * List assets through the neko-assets proxy.
-     */
-    list(filter?: AssetFilter): Promise<Asset[]>;
-
-    /**
-     * Get an asset by ID through the neko-assets proxy.
-     */
-    getById(id: string): Promise<Asset | null>;
-  };
-
   /**
    * Import media/resource facts into a Canvas document through headless authoring.
    */
@@ -596,11 +548,6 @@ export interface NekoCanvasAPI {
    */
   events: {
     /**
-     * Fired whenever an asset is added, updated, or deleted in the project library.
-     */
-    onDidChangeAssets: NekoEventLike<NekoCanvasAssetChangeEvent>;
-
-    /**
      * Fired whenever nodes or shapes on the active canvas are added, updated, or deleted.
      */
     onDidChangeCanvas: NekoEventLike<CanvasChangeEvent>;
@@ -612,84 +559,23 @@ export interface NekoCanvasAPI {
 // =============================================================================
 
 /**
- * NekoAssets Extension API
- * Exported by neko-assets extension for programmatic asset library access.
- * Replaces the former command-level proxy pattern (neko.assets.getAllEntities etc.).
+ * Media representation generation API exported by neko-assets.
+ * Consumers receive derived bytes and never observe the owning cache path.
  */
-export interface NekoAssetsAPI {
-  /** Get all asset entities in the library. */
-  getAllEntities(): Promise<import('./asset/entity').AssetEntity[]>;
-
-  /**
-   * Import a file into the asset library.
-   * Returns the created/existing entity and rejects visibly on unavailable source or import failure.
-   */
-  importFile(uri: { fsPath: string }): Promise<import('./asset/entity').AssetEntity>;
-
-  /** Get the thumbnail file path for a given asset file path. */
-  getThumbnailPath(filePath: string): Promise<string | undefined>;
-
-  /** Create a stable resource ref for a media thumbnail without exposing package-local cache paths. */
-  createThumbnailResourceRef?(
-    filePath: string,
-    options?: {
-      readonly width?: number;
-      readonly height?: number;
-      readonly mediaLibraryId?: string;
-      readonly projectRelativePath?: string;
-    },
-  ): Promise<ResourceRef | undefined>;
-
-  /** Return a host-projected or resource-ref-backed visual for search and mention consumers. */
-  getThumbnailVisual?(
+export interface NekoMediaRepresentationAPI {
+  /** Generate thumbnail bytes without exposing package-local cache paths. */
+  generateThumbnail(
     filePath: string,
     variant?: ResourceVariantRequest,
-  ): Promise<ProjectSearchVisualResource | undefined>;
-
-  /** Get resolved, enabled, and accessible media library roots for Webview authorization. */
-  getMediaLibraryRoots(): Promise<string[]>;
-
-  /** Get path variables used by shared PathResolver for portable media/library refs. */
-  getPathVariables?(): Promise<ReadonlyArray<readonly [string, string]>>;
-
-  /** Resolve an entity:// URI to a concrete variant file and absolute path. */
-  resolveEntityUri(
-    uri: string,
-  ): Promise<import('../entity-uri/index').ResolvedEntityRef | undefined>;
-
-  /** Resolve a character name to its thumbnail absolute path via CharacterRegistry → AssetEntity. */
-  getCharacterThumbnail(name: string): Promise<string | undefined>;
-
-  /** Project an asset entity into binding candidate roles without persisting bindings. */
-  getBindingCandidate(entityId: string): Promise<
+  ): Promise<
     | {
-        assetEntityId: string;
-        assetRef: string;
-        suggestedRoles: readonly import('./creative-entity-asset-composition').EntityAssetBindingRole[];
-        confidence: number;
-        reason: string;
+        readonly bytes: Uint8Array;
+        readonly width: number;
+        readonly height: number;
+        readonly mimeType: 'image/jpeg';
       }
     | undefined
   >;
-
-  /** Project an asset entity into representation package component details. */
-  getRepresentationPackageDetail(entityId: string): Promise<
-    | {
-        assetEntityId: string;
-        assetRef: string;
-        representationKinds: readonly import('./creative-entity-asset-composition').RepresentationKind[];
-        files: readonly import('./creative-entity-asset-composition').ResolvedRepresentationFile[];
-        capabilities: readonly string[];
-        missingRoles: readonly import('./creative-entity-asset-composition').RepresentationFileRole[];
-      }
-    | undefined
-  >;
-
-  /** Fired when asset entities are added, removed, or modified. */
-  onDidChangeEntities: { (listener: () => void): { dispose(): void } };
-
-  /** Fired when media library roots are added, removed, disabled, or overridden. */
-  onDidChangeMediaLibraryRoots: { (listener: () => void): { dispose(): void } };
 }
 
 // =============================================================================
@@ -719,10 +605,6 @@ export interface NekoAgentAPI {
   /** Pi Skill catalog owned by the Agent runtime. */
   getSkills(): readonly SkillDef[];
   resolveGeneratedOutput(resourceRef: ResourceRef): Promise<NekoAgentGeneratedOutputResolution>;
-  setGeneratedOutputReviewPin(
-    resourceRef: ResourceRef,
-    input: { readonly pinned: boolean; readonly ownerId: string },
-  ): Promise<void>;
 }
 
 // =============================================================================
@@ -739,23 +621,13 @@ export const NEKO_EXTENSION_IDS = {
   NEKO_ASSETS: 'neko.neko-assets',
 } as const;
 
-export function isNekoAssetsAPI(value: unknown): value is NekoAssetsAPI {
-  return hasCallableMembers(value, [
-    'getAllEntities',
-    'importFile',
-    'getThumbnailPath',
-    'resolveEntityUri',
-    'getCharacterThumbnail',
-    'getBindingCandidate',
-    'getRepresentationPackageDetail',
-    'onDidChangeEntities',
-  ]);
+export function isNekoMediaRepresentationAPI(value: unknown): value is NekoMediaRepresentationAPI {
+  return hasCallableMembers(value, ['generateThumbnail']);
 }
 
 export function isNekoCanvasAPI(value: unknown): value is NekoCanvasAPI {
   if (!isExtensionApiRecord(value)) return false;
   return (
-    hasCallableMembers(value['asset'], ['import', 'list', 'getById']) &&
     hasCallableMember(value['authoring'], 'importAsset') &&
     hasCallableMember(value['markdown'], 'invoke') &&
     hasCallableMember(value['boards'], 'project') &&
@@ -784,7 +656,7 @@ export function isNekoCanvasAPI(value: unknown): value is NekoCanvasAPI {
       'generateBatch',
       'onSelectionChange',
     ]) &&
-    hasCallableMembers(value['events'], ['onDidChangeAssets', 'onDidChangeCanvas'])
+    hasCallableMember(value['events'], 'onDidChangeCanvas')
   );
 }
 

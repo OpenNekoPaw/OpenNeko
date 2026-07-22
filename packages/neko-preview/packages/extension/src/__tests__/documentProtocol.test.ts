@@ -1,3 +1,6 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ============================================================================
@@ -55,15 +58,23 @@ vi.mock('vscode', () => ({
   EventEmitter: vi.fn(),
 }));
 
-vi.mock('node:fs/promises', () => ({
-  default: { readFile },
-  readFile,
-}));
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    default: { ...actual, readFile },
+    readFile,
+  };
+});
 
-vi.mock('node:os', () => ({
-  default: { homedir: () => '/Users/tester' },
-  homedir: () => '/Users/tester',
-}));
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  return {
+    ...actual,
+    default: { ...actual, homedir: () => '/Users/tester' },
+    homedir: () => '/Users/tester',
+  };
+});
 
 vi.mock('../../utils/logger', () => ({
   getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
@@ -90,21 +101,6 @@ beforeEach(() => {
   existingFiles.clear();
   workspaceFolders.length = 0;
 });
-
-function mockAssetsContentPolicy(options: {
-  readonly roots?: readonly string[];
-  readonly variables?: ReadonlyArray<readonly [string, string]>;
-}): void {
-  const api = {
-    getMediaLibraryRoots: vi.fn(async () => [...(options.roots ?? [])]),
-    getPathVariables: vi.fn(async () => [...(options.variables ?? [])]),
-  };
-  getExtension.mockReturnValue({
-    isActive: true,
-    exports: api,
-    activate: vi.fn(async () => api),
-  });
-}
 
 describe('document preview to Agent context bridge', () => {
   it('enriches document selections with source locator and excerpt metadata', async () => {
@@ -187,6 +183,44 @@ describe('document preview to Agent context bridge', () => {
 });
 
 describe('document provider registration lifetime', () => {
+  it('projects original PDF source through the Node transport without returning a derived path', async () => {
+    const registerFile = vi.spyOn(previewFileServer, 'registerFile').mockResolvedValueOnce({
+      url: 'http://127.0.0.1:4000/source-token',
+      token: 'source-token',
+    });
+    const unregisterFile = vi
+      .spyOn(previewFileServer, 'unregisterFile')
+      .mockResolvedValue(undefined);
+    const provider = new PdfPreviewProvider({ path: '/extension' } as never);
+    const panel = createDocumentPanel();
+    const document = {
+      uri: { fsPath: '/docs/book.pdf', toString: () => 'file:///docs/book.pdf' },
+    } as never;
+
+    await provider.resolveCustomEditor(document, panel.panel as never, {} as never);
+    await panel.send({ type: 'ready' });
+
+    expect(registerFile).toHaveBeenCalledWith('/docs/book.pdf', {
+      sourceDocumentUri: document.uri,
+    });
+    expect(
+      (panel.panel['webview'] as { postMessage: ReturnType<typeof vi.fn> }).postMessage,
+    ).toHaveBeenCalledWith({
+      type: 'document:data',
+      payload: { url: 'http://127.0.0.1:4000/source-token' },
+    });
+    const messages = JSON.stringify(
+      (panel.panel['webview'] as { postMessage: ReturnType<typeof vi.fn> }).postMessage.mock.calls,
+    );
+    expect(messages).not.toContain('.neko/.cache');
+    expect(messages).not.toContain('representationLocator');
+
+    provider.dispose();
+    await vi.waitFor(() => expect(unregisterFile).toHaveBeenCalledWith('source-token'));
+    registerFile.mockRestore();
+    unregisterFile.mockRestore();
+  });
+
   it('keeps tokens panel-scoped when the same document is reopened', async () => {
     const registerFile = vi
       .spyOn(previewFileServer, 'registerFile')
@@ -389,36 +423,37 @@ describe('PreviewFileServer path resolution fallback', () => {
     }
   });
 
-  it('resolves media library variables through the shared assets content policy', async () => {
-    workspaceFolders.push({ uri: { fsPath: '/workspace-a' } });
-    executeCommand.mockResolvedValueOnce('/${A}/epub/book.epub');
-    mockAssetsContentPolicy({
-      roots: ['/Volumes/LibraryA'],
-      variables: [['A', '/Volumes/LibraryA']],
-    });
-    existingFiles.add('/Volumes/LibraryA/epub/book.epub');
+  it('resolves a workspace-linked document through the shared Host content path', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'neko-preview-linked-document-'));
+    const workspaceRoot = path.join(root, 'workspace');
+    const target = path.join(root, 'target');
+    const linkPath = path.join(workspaceRoot, 'neko', 'assets', 'Books');
+    const linkedFile = path.join(linkPath, 'book.epub');
+    fs.mkdirSync(target, { recursive: true });
+    fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+    fs.writeFileSync(path.join(target, 'book.epub'), 'archive');
+    fs.symlinkSync(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
+    workspaceFolders.push({ uri: { fsPath: workspaceRoot } });
 
-    const resolved = await (
-      previewFileServer as unknown as { resolvePath: (filePath: string) => Promise<string> }
-    ).resolvePath('/${A}/epub/book.epub');
-
-    expect(resolved).toBe('/Volumes/LibraryA/epub/book.epub');
+    try {
+      const resolved = await (
+        previewFileServer as unknown as { resolvePath: (filePath: string) => Promise<string> }
+      ).resolvePath('neko/assets/Books/book.epub');
+      expect(resolved).toBe(linkedFile);
+      expect(getExtension).not.toHaveBeenCalled();
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
-  it('uses media library local overrides exported by the shared assets content policy', async () => {
+  it('rejects retired media-library variables without consulting Assets mappings', async () => {
     workspaceFolders.push({ uri: { fsPath: '/workspace-a' } });
-    executeCommand.mockResolvedValueOnce('/${A}/epub/book.epub');
-    mockAssetsContentPolicy({
-      roots: ['/Users/feng/LibraryA'],
-      variables: [['A', '/Users/feng/LibraryA']],
-    });
-    existingFiles.add('/Users/feng/LibraryA/epub/book.epub');
-
-    const resolved = await (
-      previewFileServer as unknown as { resolvePath: (filePath: string) => Promise<string> }
-    ).resolvePath('/${A}/epub/book.epub');
-
-    expect(resolved).toBe('/Users/feng/LibraryA/epub/book.epub');
+    await expect(
+      (
+        previewFileServer as unknown as { resolvePath: (filePath: string) => Promise<string> }
+      ).resolvePath('${BOOKS}/epub/book.epub'),
+    ).rejects.toBeInstanceOf(UnresolvedPathVariableError);
+    expect(getExtension).not.toHaveBeenCalled();
   });
 });
 

@@ -68,6 +68,17 @@ Explicit or progressively disclosed Skill content MUST create no persistent acti
 - **WHEN** `$skill-name` selects a trusted enabled Skill
 - **THEN** Pi formats its content for that turn and subsequent turns do not retain legacy activation slots, ToolGuard state, ToolSet mutations, or Skill model overrides
 
+### Requirement: Model-selected Skill use exposes a receipt, not activation state
+Every successful Pi `read_skill` result MUST carry the Host-owned Skill name, source, content fingerprint, and opaque locator identity in Pi transcript history. TUI debug automation SHALL project a bounded, redacted receipt containing the ToolCall identity, name, source kind, normalized fingerprint, and locator class. It MUST NOT project a physical path, raw locator value, raw Skill content, activation status, injected-fragment lifecycle, ToolGuard state, or cache identity.
+
+#### Scenario: Evaluate a model-selected Skill read
+- **WHEN** Pi successfully reads a trusted enabled Skill through `read_skill`
+- **THEN** Agent Evaluation observes the matching `skillReceipts` fact and proves the real receipt identity without consulting a `skillActivations` compatibility field or final-answer text
+
+#### Scenario: Skill receipt evidence is truncated or malformed
+- **WHEN** the bounded receipt projection drops a record or the Tool result lacks the required receipt contract
+- **THEN** the Skill hard gate fails visibly and does not infer Skill use from Tool name, prompt text, or model output
+
 ### Requirement: Skill Host adds no independent cache authority
 The Pi-loaded/Host catalog fingerprint snapshot MAY be reused within the current process. The system MUST NOT add a separate Skill cache manager, persistent Skill cache, or ResourceCache entry for Skill content. A changed fingerprint MUST be loaded for the next turn.
 

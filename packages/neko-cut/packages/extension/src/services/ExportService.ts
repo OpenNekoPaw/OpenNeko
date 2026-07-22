@@ -18,12 +18,12 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { EngineClient, type ActionRequest, type ActionResponse } from '@neko/neko-client';
-import type { ProjectData } from '@neko/shared';
 import {
-  createHostContentAccessRuntime,
-  type ContentAccessService,
-  type ContentIngestService,
-} from '@neko/shared/vscode/extension';
+  normalizeWorkspaceContentPath,
+  type ContentReadService,
+  type ProjectData,
+} from '@neko/shared';
+import { createNodeHostContentReadService } from '@neko/shared/vscode/extension';
 import { resolveMediaPath as resolveMediaPathHelper } from './tools/helpers';
 import { getLogger } from '../base';
 
@@ -51,8 +51,8 @@ export interface ExportConfig {
 }
 
 export interface ExportServiceOptions {
-  readonly contentAccess?: ContentAccessService;
-  readonly contentIngest?: ContentIngestService;
+  readonly contentRead?: ContentReadService;
+  readonly prepareOutputDirectory?: (directory: string) => Promise<void>;
   readonly fileExists?: (filePath: string) => boolean;
 }
 
@@ -955,38 +955,30 @@ export class ExportService implements vscode.Disposable {
         : {}),
       ...(this.options.fileExists ? { fileExists: this.options.fileExists } : {}),
     });
-    const contentAccess =
-      this.options.contentAccess ?? createExportContentAccessService(this.documentDir);
-    const result = await contentAccess.resolve({
-      ref: { kind: 'file', path: resolvedPath },
-      intent: 'final-export',
-      target: 'local-path',
-      ...(config.qualityMode === 'draft-proxy' ? { qualityMode: 'draft-proxy' } : {}),
-      caller: 'neko-cut.export',
-    });
-    if (result.status !== 'ready' || !result.localPath) {
-      throw new Error(result.error ?? `Unable to resolve export media source: ${mediaPath}`);
+    void config;
+    const workspaceRoot = resolveOwningWorkspaceRoot(resolvedPath, this.documentDir);
+    const relativePath = path.relative(workspaceRoot, resolvedPath).split(path.sep).join('/');
+    const workspacePath = normalizeWorkspaceContentPath(relativePath);
+    if (!workspacePath || workspacePath !== relativePath) {
+      throw new Error(`Unable to resolve export media source: ${mediaPath}`);
     }
-    return result.localPath;
+    const contentRead =
+      this.options.contentRead ?? createNodeHostContentReadService({ workspaceRoot });
+    const locator = { kind: 'workspace-file' as const, path: workspacePath };
+    const result = await contentRead.stat(locator);
+    if (result.status !== 'ready') {
+      throw new Error(`Unable to resolve export media source: ${result.diagnostic.code}`);
+    }
+    return path.join(workspaceRoot, ...workspacePath.split('/'));
   }
 
   private async stageExportOutput(outputPath: string | undefined): Promise<void> {
     if (!outputPath) return;
-    const contentIngest =
-      this.options.contentIngest ?? createExportContentIngestService(this.documentDir);
-    const result = await contentIngest.ingest({
-      mode: 'stage-export',
-      destination: {
-        kind: 'export-output',
-        directory: path.dirname(outputPath),
-        allowAbsolutePath: true,
-      },
-      fileName: path.basename(outputPath),
-      caller: 'neko-cut.export',
-    });
-    if (result.status !== 'ready') {
-      logger.warn('Failed to stage export output', { outputPath, status: result.status });
-    }
+    const prepareOutputDirectory =
+      this.options.prepareOutputDirectory ??
+      (async (directory: string) =>
+        vscode.workspace.fs.createDirectory(vscode.Uri.file(directory)));
+    await prepareOutputDirectory(path.dirname(outputPath));
   }
 
   /**
@@ -1063,24 +1055,13 @@ export class ExportService implements vscode.Disposable {
   }
 }
 
-function createExportContentAccessService(projectRoot: string): ContentAccessService {
-  return createHostContentAccessRuntime({
-    workspaceRoot: projectRoot,
-    documentEntryProvider: { enabled: false },
-    ingest: { enabled: false },
-  }).contentAccess;
-}
-
-function createExportContentIngestService(projectRoot: string): ContentIngestService {
-  return createHostContentAccessRuntime({
-    workspaceRoot: projectRoot,
-    sourceFileProvider: { enabled: false },
-    documentEntryProvider: { enabled: false },
-    ingest: {
-      includeImportSource: false,
-      includeRegisterExistingSource: false,
-      includeGeneratedOutput: false,
-      includeCacheArtifact: false,
-    },
-  }).contentIngest;
+function resolveOwningWorkspaceRoot(filePath: string, fallbackRoot: string): string {
+  const candidates = (vscode.workspace.workspaceFolders ?? [])
+    .map((folder) => folder.uri.fsPath)
+    .filter((root) => {
+      const relative = path.relative(root, filePath);
+      return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    })
+    .sort((left, right) => right.length - left.length);
+  return candidates[0] ?? fallbackRoot;
 }

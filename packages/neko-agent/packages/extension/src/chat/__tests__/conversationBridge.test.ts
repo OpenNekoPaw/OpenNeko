@@ -121,9 +121,13 @@ describe('ConversationBridge Pi presentation boundary', () => {
   });
 
   it('reprojects document resources for Webview without mutating the Pi-derived view', async () => {
-    const materializedPath = '/workspace/.neko/.cache/document/page-1.jpg';
     const contentAccessRuntime = {
-      loadProviderAsset: vi.fn().mockResolvedValue({ status: 'ready', uri: materializedPath }),
+      loadProviderAsset: vi.fn().mockResolvedValue({
+        status: 'ready',
+        diagnostics: [],
+        bytes: new Uint8Array([1, 2, 3]),
+        mimeType: 'image/jpeg',
+      }),
     };
     const localResourceAccess = {
       toWebviewUri: vi.fn((_webview: unknown, source: string) => `vscode-webview://${source}`),
@@ -170,7 +174,8 @@ describe('ConversationBridge Pi presentation boundary', () => {
 
     const posted = vi.mocked(webview.postMessage).mock.calls[0]?.[0] as any;
     const image = posted.conversation.messages[0].contentBlocks[0].toolCall.result.data.images[0];
-    expect(image.renderUri).toBe(`vscode-webview://${materializedPath}`);
+    expect(image.renderUri).toBe('data:image/jpeg;base64,AQID');
+    expect(localResourceAccess.toWebviewUri).not.toHaveBeenCalled();
     expect(JSON.stringify(bridge.get(conversationId)?.messages)).not.toContain('renderUri');
   });
 

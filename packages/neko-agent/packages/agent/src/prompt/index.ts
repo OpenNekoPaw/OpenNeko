@@ -40,8 +40,6 @@ export {
 } from './builtin-prompts';
 
 // System Prompt Composer
-export { SystemPromptComposer, createSystemPromptComposer } from './system-prompt-composer';
-
 export type {
   ISystemPromptComposer,
   PromptLayer,
@@ -56,10 +54,7 @@ export type {
   PromptCompositionFragmentProjection,
 } from './system-prompt-composer-types';
 
-export { PROMPT_LAYER_ORDER, DEFAULT_PROMPT_LAYER_BUDGET } from './system-prompt-composer-types';
-
 // Prompt Module Framework (Stage A)
-export { freezePromptContext, createPromptContextProvider } from './context';
 export type {
   PromptContext,
   PromptContextProvider,
@@ -67,29 +62,17 @@ export type {
   ArtifactIssue,
 } from './context';
 
-export { PromptModuleRegistry } from './registry/module-registry';
-export { PromptSectionCache } from './registry/section-cache';
 export type {
   PromptModule,
   PromptModuleManifest,
   PromptModuleSection,
 } from './registry/module-manifest';
 
-export { ModuleOrchestrator } from './composer/module-orchestrator';
-
 // Content-projection modules (PR2 Stage C)
-export { MemoryProjectModule } from './modules/memory/memory-project-module';
-export { MemoryRecallModule } from './modules/memory/memory-recall-module';
-export { CreativeVersionLogModule } from './modules/ephemeral/creative-version-log-module';
-
 // AGENTS.md overlay module (PR3b)
-export { AgentsMdModule } from './modules/environment/agents-md-module';
-
 // Schema-layer modules (PR3c)
 
 // Sub-package prompt fragments module (PR3e)
-export { SubpackageFragmentsModule } from './modules/environment/subpackage-fragments-module';
-
 // Prompt file host-neutral projection
 export {
   DEFAULT_AGENTS_FILE_CONTENT,

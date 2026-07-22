@@ -51,9 +51,15 @@ import {
   VSCodeErrorHandler,
   resolveLogLevelSetting,
   watchLogLevel,
+  createHostDerivedContentRuntime,
+  type HostDerivedContentRuntime,
 } from '@neko/shared/vscode/extension';
 import { setRootLogger, getLogger } from './utils/logger';
 import { setErrorHandler } from './utils/errorHandler';
+import {
+  PreviewWaveformGenerator,
+  PreviewWaveformRepresentationReader,
+} from './services/PreviewWaveformRepresentation';
 
 const logger = getLogger('Extension');
 
@@ -98,6 +104,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
   logger.info('Activating extension...');
 
   let sharedPreviewServicePromise: Promise<PreviewService | null> | null = null;
+  const waveformRuntimes = new Map<string, Promise<HostDerivedContentRuntime>>();
   const resolveSharedPreviewService = (): Promise<PreviewService | null> => {
     if (!sharedPreviewServicePromise) {
       sharedPreviewServicePromise = PreviewService.tryCreate().then((service) => {
@@ -112,6 +119,37 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
       });
     }
     return sharedPreviewServicePromise;
+  };
+  const resolveWaveform = async (filePath: string, service: PreviewService) => {
+    const workspaceRoot =
+      vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath))?.uri.fsPath ??
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceRoot) {
+      throw new Error('Preview waveform representations require a workspace folder.');
+    }
+    let runtimePromise = waveformRuntimes.get(workspaceRoot);
+    if (!runtimePromise) {
+      runtimePromise = createHostDerivedContentRuntime({
+        target: { kind: 'workspace', workspaceRoot },
+        representationGenerators: [new PreviewWaveformGenerator(workspaceRoot, service)],
+        logger: rootLogger,
+      });
+      waveformRuntimes.set(workspaceRoot, runtimePromise);
+      const runtime = await runtimePromise;
+      context.subscriptions.push({
+        dispose: () => {
+          waveformRuntimes.delete(workspaceRoot);
+          void runtime
+            .dispose()
+            .catch((error) => logger.warn('Failed to dispose waveform runtime', { error }));
+        },
+      });
+    }
+    const runtime = await runtimePromise;
+    return new PreviewWaveformRepresentationReader(
+      workspaceRoot,
+      runtime.contentRepresentation,
+    ).getWaveform(filePath);
   };
 
   // Create shared status bar
@@ -128,6 +166,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
     context.extensionUri,
     statusBarManager,
     resolveSharedPreviewService,
+    resolveWaveform,
   );
   const panoramicEnabled = vscode.workspace
     .getConfiguration('neko.preview')

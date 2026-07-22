@@ -276,13 +276,14 @@ function AppContent({
       stores,
       readHandle: () => agentSessionRef.current,
       submitInput: handleUserInput,
+      confirmToolCall: confirmTool,
       readMarkdownFacts: () => automation.readMarkdownFacts(),
     });
     automation.bind(port);
     return () => {
       automation.unbind(port);
     };
-  }, [automation, handleUserInput, stores]);
+  }, [automation, confirmTool, handleUserInput, stores]);
 
   useEffect(() => {
     const trimmed = initialPrompt?.trim();

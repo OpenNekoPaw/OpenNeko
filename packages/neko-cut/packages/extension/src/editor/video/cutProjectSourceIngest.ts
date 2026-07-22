@@ -3,12 +3,12 @@ import * as vscode from 'vscode';
 import {
   createProjectFileDiagnostic,
   handleProjectSourceAddRequest,
-  ingestProjectSourceAddRequest,
-  type ContentIngestRequest,
-  type ContentIngestResult,
+  storeProjectSourceAddRequest,
   type ProjectSourceAddRequest,
   type ProjectSourceAddResult,
+  type AuthorizedWorkspaceWriter,
 } from '@neko/shared';
+import { NodeAuthorizedWorkspaceWriter } from '@neko/shared/vscode/extension/workspace-content-writer';
 import {
   createCutWorkspaceMediaPathContext,
   isExistingLocalFile,
@@ -21,10 +21,13 @@ const PROJECT_MEDIA_DIR = 'media';
 export async function addCutProjectSource(
   documentUri: vscode.Uri,
   request: ProjectSourceAddRequest,
+  writer: AuthorizedWorkspaceWriter = new NodeAuthorizedWorkspaceWriter({
+    workspaceRoot: path.dirname(documentUri.fsPath),
+  }),
 ): Promise<ProjectSourceAddResult> {
   try {
     return await handleProjectSourceAddRequest(normalizeCutProjectSourceAddRequest(request), {
-      ingest: (ingestRequest) => ingestCutProjectSource(documentUri, ingestRequest),
+      store: (storageRequest) => storeCutProjectSource(documentUri, storageRequest, writer),
     });
   } catch (error) {
     logger.error('Project source ingest failed', error);
@@ -52,12 +55,13 @@ function normalizeCutProjectSourceAddRequest(
   return bytes === request.bytes ? request : { ...request, bytes };
 }
 
-async function ingestCutProjectSource(
+async function storeCutProjectSource(
   documentUri: vscode.Uri,
-  request: ContentIngestRequest,
-): Promise<ContentIngestResult> {
+  request: ProjectSourceAddRequest,
+  writer: AuthorizedWorkspaceWriter,
+) {
   const baseDir = path.dirname(documentUri.fsPath);
-  return ingestProjectSourceAddRequest(request, {
+  return storeProjectSourceAddRequest(request, {
     documentPath: documentUri.fsPath,
     assetDirectory: PROJECT_MEDIA_DIR,
     workspaceContext: createCutWorkspaceMediaPathContext(baseDir, {
@@ -68,20 +72,11 @@ async function ingestCutProjectSource(
     fileOps: {
       createDirectory: async (dirPath) =>
         vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath)),
-      fileExists: async (filePath) => {
-        try {
-          await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      writeFile: async (filePath, bytes) =>
-        vscode.workspace.fs.writeFile(vscode.Uri.file(filePath), bytes),
     },
+    writer,
     defaultFileName: 'media.bin',
     unmanagedSourceMessage:
-      'External media must be moved into the project, asset library, or a configured media root before saving.',
+      'External media must be moved into the project or a configured media root before saving.',
   });
 }
 

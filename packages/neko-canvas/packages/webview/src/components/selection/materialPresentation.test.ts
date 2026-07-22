@@ -23,7 +23,7 @@ describe('resolveCanvasMaterialPresentation', () => {
       source: 'referenced',
       mediaType: 'image',
       canPreview: true,
-      canPromoteToAssetLibrary: true,
+      canCopyToMediaLibrary: true,
     });
   });
 

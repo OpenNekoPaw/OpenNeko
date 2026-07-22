@@ -287,11 +287,7 @@ describe('MessageHandler save', () => {
         kind: 'drag-drop',
         formatId: 'nkv',
         sourcePath: '/workspace/project/media/clip.mp4',
-        destination: {
-          kind: 'project',
-          projectRoot: '/workspace/project',
-          copyMode: 'register',
-        },
+        assetDirectory: 'media',
       },
     });
 
@@ -321,12 +317,7 @@ describe('MessageHandler save', () => {
         formatId: 'nkv',
         browserFile: { name: 'clip.mp4', type: 'video/mp4', size: bytes.byteLength },
         bytes,
-        destination: {
-          kind: 'project',
-          directory: 'media',
-          copyMode: 'copy',
-        },
-        ingestMode: 'create-asset',
+        assetDirectory: 'media',
       },
     });
 
@@ -354,12 +345,7 @@ describe('MessageHandler save', () => {
         formatId: 'nkv',
         browserFile: { name: 'clip.mp4', type: 'video/mp4', size: bytes.length },
         bytes,
-        destination: {
-          kind: 'project',
-          directory: 'media',
-          copyMode: 'copy',
-        },
-        ingestMode: 'create-asset',
+        assetDirectory: 'media',
       },
     } as never);
 
@@ -388,12 +374,7 @@ describe('MessageHandler save', () => {
         formatId: 'nkv',
         sourcePath: '/downloads/clip.mp4',
         browserFile: { name: 'clip.mp4', type: 'video/mp4' },
-        destination: {
-          kind: 'project',
-          directory: 'media',
-          copyMode: 'link',
-        },
-        ingestMode: 'link',
+        assetDirectory: 'media',
       },
     });
 
@@ -425,12 +406,7 @@ describe('MessageHandler save', () => {
         formatId: 'nkv',
         sourcePath: '/downloads/missing.mp4',
         browserFile: { name: 'missing.mp4', type: 'video/mp4' },
-        destination: {
-          kind: 'project',
-          directory: 'media',
-          copyMode: 'link',
-        },
-        ingestMode: 'link',
+        assetDirectory: 'media',
       },
     });
 
@@ -464,12 +440,7 @@ describe('MessageHandler save', () => {
         formatId: 'nkv',
         sourcePath: '/workspace/project/shared/clip.mp4',
         browserFile: { name: 'clip.mp4', type: 'video/mp4' },
-        destination: {
-          kind: 'project',
-          directory: 'media',
-          copyMode: 'link',
-        },
-        ingestMode: 'link',
+        assetDirectory: 'media',
       },
     });
 
@@ -491,6 +462,22 @@ describe('MessageHandler save', () => {
       model as never,
       { globalStorageUri: { fsPath: '/tmp/neko' } } as never,
       null,
+      undefined,
+      undefined,
+      {
+        async write(locator, bytes) {
+          const filePath = `/workspace/project/${locator.path}`;
+          if (fileContents.has(filePath)) {
+            return {
+              status: 'unavailable',
+              locator,
+              diagnostic: { code: 'content-conflict' },
+            };
+          }
+          fileContents.set(filePath, bytes);
+          return { status: 'written', locator, byteLength: bytes.byteLength };
+        },
+      },
     );
   }
 });

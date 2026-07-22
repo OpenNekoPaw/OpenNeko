@@ -23,6 +23,7 @@ const RULES = Object.freeze([
   ]),
   rule('tool-result-delivery', 'agent-runtime.stream-delivery', [
     'packages/neko-content/src/document/read-document-tool.ts',
+    'packages/neko-content/src/document/read-image-tool.ts',
     'packages/neko-agent/packages/agent/src/pi/event-projector.ts',
     'packages/neko-agent/packages/extension/src/chat/message/piAgentStreamProcessor.ts',
     'apps/neko-tui/src/tui/adapters/pi-event-adapter.ts',
@@ -138,6 +139,7 @@ export function isAgentEvaluationRelevantPath(rawPath) {
     path.startsWith('packages/neko-agent/packages/extension/src/tools/') ||
     path.startsWith('packages/neko-agent/packages/platform/src/') ||
     path === 'packages/neko-content/src/document/read-document-tool.ts' ||
+    path === 'packages/neko-content/src/document/read-image-tool.ts' ||
     path.startsWith('scripts/agent-eval/')
   );
 }

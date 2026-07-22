@@ -110,7 +110,7 @@ function AgentWebviewFoundationBoundary({
   );
 }
 
-export function createAgentWebviewFoundation(input: {
+function createAgentWebviewFoundation(input: {
   readonly hostRuntimeAdapter?: AgentHostRuntimeAdapter;
   readonly locale: SupportedLocale;
 }): WebviewFoundationContextValue {

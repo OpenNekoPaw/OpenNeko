@@ -1,6 +1,6 @@
 ## Why
 
-Linux release packaging currently dereferences every FFmpeg shared-library alias and copies each alias as a complete binary. The resulting OpenNeko VSIX is roughly nine times larger than the macOS artifact because the same FFmpeg bytes are stored under unversioned, major-version, and full-version names.
+Linux release packaging currently dereferences every FFmpeg shared-library alias and copies each alias as a complete binary. Although runtime closure materialization now retains one SONAME entity per configured library, the Engine VSIX still includes the build-only `deps/ffmpeg` SDK, where the archive aliases remain materialized as complete files. The composed OpenNeko VSIX therefore remains several times larger than the macOS artifact.
 
 ## What Changes
 
@@ -10,6 +10,7 @@ Linux release packaging currently dereferences every FFmpeg shared-library alias
 - Build release N-API binaries against the configured platform FFmpeg development source, including the verified BtbN artifact on Linux, instead of an unrelated system FFmpeg version.
 - Include `avdevice` in the canonical cross-platform runtime closure because both supported N-API binaries link it directly.
 - Add a deterministic packaging regression test that uses real filesystem symlinks and proves aliases are not materialized as duplicate files.
+- Exclude the build-only FFmpeg SDK from the Engine VSIX and reject any `deps/` payload that reaches the final OpenNeko staging boundary.
 - Preserve the existing `$ORIGIN` loader contract and platform-specific Engine VSIX ownership.
 
 ## Capabilities
@@ -24,6 +25,6 @@ None.
 
 ## Impact
 
-- Affects `packages/neko-engine/scripts/bundle-ffmpeg.js`, its script-level regression tests, and the CI/Release platform build setup.
+- Affects `packages/neko-engine/scripts/bundle-ffmpeg.js`, Engine VSIX inclusion rules, final OpenNeko payload validation, their regression tests, and the CI/Release platform build setup.
 - Reduces the Linux Engine and composed OpenNeko VSIX payload without changing N-API, Rust, Extension, Webview, or release artifact naming contracts.
 - Release/install risk remains L4 because an incorrect runtime filename can prevent the packaged native Engine from loading.

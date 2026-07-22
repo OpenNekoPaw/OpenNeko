@@ -5,7 +5,7 @@ import {
   type BrowserFileProjection,
   type ProjectSourceAddRequest,
   type ProjectSourceAddResult,
-  type ProjectSourceIngestPort,
+  type ProjectSourceStoragePort,
 } from './ingest';
 
 export type ProjectSourceAddRequestMessage = {
@@ -70,7 +70,7 @@ export interface ProjectSourceAddHostLogger {
 export interface ProjectSourceAddHostOptions {
   readonly postMessage: (message: ProjectSourceAddResponseMessage) => Promise<unknown> | unknown;
   readonly addSource?: (request: ProjectSourceAddRequest) => Promise<ProjectSourceAddResult>;
-  readonly ingestPort?: ProjectSourceIngestPort;
+  readonly storagePort?: ProjectSourceStoragePort;
   readonly logger?: ProjectSourceAddHostLogger;
 }
 
@@ -121,10 +121,8 @@ export async function createProjectSourceAddRequest(
     ...(browserFile ? { browserFile } : {}),
     ...(bytes ? { bytes } : {}),
     ...(input.generatedAssetId ? { generatedAssetId: input.generatedAssetId } : {}),
-    destination: input.destination,
-    ...(input.ingestMode ? { ingestMode: input.ingestMode } : {}),
+    assetDirectory: input.assetDirectory,
     ...(input.mimeType ? { mimeType: input.mimeType } : {}),
-    ...(input.caller ? { caller: input.caller } : {}),
     ...(input.metadata ? { metadata: input.metadata } : {}),
   };
 }
@@ -247,14 +245,14 @@ async function resolveProjectSourceAddHostRequest(
     if (options.addSource) {
       return await options.addSource(request);
     }
-    if (!options.ingestPort) {
+    if (!options.storagePort) {
       return createFailedProjectSourceAddResult(request.requestId, {
         code: 'add-source-failed',
-        message: 'Add-source host handler is missing an ingest port.',
+        message: 'Add-source host handler is missing a storage port.',
         recoverability: 'manual',
       });
     }
-    return await handleProjectSourceAddRequest(request, options.ingestPort);
+    return await handleProjectSourceAddRequest(request, options.storagePort);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     options.logger?.error?.('projectSource.add.failed', {

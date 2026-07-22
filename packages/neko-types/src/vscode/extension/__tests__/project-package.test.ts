@@ -1,6 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import type { ContentReadService } from '../../../types/content-io';
 import { createProjectSnapshotPackage } from '../project-package';
+
+vi.mock('../workspace-linked-path-guard', () => ({
+  authorizeWorkspaceLinkedPath: vi.fn(
+    async (input: { readonly workspaceRoot: string; readonly requestedPath: string }) => ({
+      authorized:
+        input.requestedPath === input.workspaceRoot ||
+        input.requestedPath.startsWith(`${input.workspaceRoot}/`),
+    }),
+  ),
+}));
 
 const mocks = vi.hoisted(() => ({
   reads: new Map<string, Uint8Array>(),
@@ -8,8 +19,6 @@ const mocks = vi.hoisted(() => ({
   writes: new Map<string, Uint8Array>(),
   saveUri: undefined as MockUri | undefined,
   resolvedPaths: new Map<string, string>(),
-  mediaLibraryRoots: [] as string[],
-  pathVariables: [] as Array<readonly [string, string]>,
 }));
 
 interface MockUri {
@@ -71,14 +80,7 @@ vi.mock('vscode', () => ({
     }),
   },
   extensions: {
-    getExtension: vi.fn(() => ({
-      isActive: true,
-      exports: {
-        getMediaLibraryRoots: vi.fn(async () => [...mocks.mediaLibraryRoots]),
-        getPathVariables: vi.fn(async () => [...mocks.pathVariables]),
-      },
-      activate: vi.fn(),
-    })),
+    getExtension: vi.fn(() => undefined),
   },
 }));
 
@@ -90,8 +92,6 @@ describe('createProjectSnapshotPackage', () => {
     mocks.readFailures.clear();
     mocks.writes.clear();
     mocks.resolvedPaths.clear();
-    mocks.mediaLibraryRoots = [];
-    mocks.pathVariables = [];
     mocks.saveUri = fileUri('/workspace/story.zip');
     vi.clearAllMocks();
   });
@@ -103,6 +103,7 @@ describe('createProjectSnapshotPackage', () => {
       packageId: 'neko-canvas',
       title: 'Package Canvas Project',
       sourceUri: vscode.Uri.file('/workspace/story.nkc'),
+      contentRead: createMockContentReadService(),
       metadata: { kind: 'canvas' },
     });
 
@@ -168,6 +169,7 @@ describe('createProjectSnapshotPackage', () => {
               missingPath: 'assets/missing.wav',
               variablePath: '${MEDIA_ROOT}/voice.wav',
               unresolvedVariablePath: '${MISSING_ROOT}/lost.wav',
+              linkedPath: 'neko/assets/Footage/linked.wav',
             },
           },
         ],
@@ -185,14 +187,14 @@ describe('createProjectSnapshotPackage', () => {
     );
     mocks.reads.set('/workspace/textures/hero.png', new Uint8Array([13]));
     mocks.reads.set('/media/voice.wav', new Uint8Array([14]));
-    mocks.mediaLibraryRoots = ['/media'];
-    mocks.pathVariables = [['MEDIA_ROOT', '/media']];
+    mocks.reads.set('/workspace/neko/assets/Footage/linked.wav', new Uint8Array([16]));
     mocks.readFailures.add('/workspace/assets/missing.wav');
 
     const result = await createProjectSnapshotPackage({
       packageId: 'neko-canvas',
       title: 'Package Canvas Project',
       sourceUri: vscode.Uri.file('/workspace/story.nkc'),
+      contentRead: createMockContentReadService(),
       metadata: { kind: 'canvas' },
     });
 
@@ -207,11 +209,11 @@ describe('createProjectSnapshotPackage', () => {
       encodeJson({ images: [{ uri: '../textures/hero.png' }] }),
     );
     expect(zipEntries.get('textures/hero.png')).toEqual(new Uint8Array([13]));
+    expect(zipEntries.get('neko/assets/Footage/linked.wav')).toEqual(new Uint8Array([16]));
 
     expect([...zipEntries.keys()].find((name) => name.endsWith('-hero.glb'))).toBeUndefined();
     const variableEntryName = [...zipEntries.keys()].find((name) => name.endsWith('-voice.wav'));
-    expect(variableEntryName?.startsWith('assets/external/')).toBe(true);
-    expect(zipEntries.get(variableEntryName!)).toEqual(new Uint8Array([14]));
+    expect(variableEntryName).toBeUndefined();
     expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith(
       'neko.assets.resolvePath',
       expect.anything(),
@@ -225,10 +227,12 @@ describe('createProjectSnapshotPackage', () => {
         source: Record<string, unknown>;
       }>;
     };
+    expect(JSON.stringify(manifest)).not.toContain('/media');
+    expect(JSON.stringify(manifest)).not.toContain('/external');
     expect(manifest.assets.map((asset) => asset.packagePath)).toEqual([
       'assets/ref.png',
       'configs/hero.gltf',
-      variableEntryName,
+      'neko/assets/Footage/linked.wav',
       'textures/hero.png',
     ]);
     expect(manifest.missingReferences).toEqual(
@@ -240,8 +244,13 @@ describe('createProjectSnapshotPackage', () => {
         }),
         expect.objectContaining({
           fileName: 'hero.glb',
-          reason: 'read-failed',
+          reason: 'unsupported-reference',
           source: { kind: 'absolute', fileName: 'hero.glb' },
+        }),
+        expect.objectContaining({
+          fileName: 'voice.wav',
+          reason: 'unsupported-reference',
+          source: { kind: 'variable', reference: '${MEDIA_ROOT}/voice.wav' },
         }),
         expect.objectContaining({
           fileName: 'lost.wav',
@@ -263,7 +272,7 @@ describe('createProjectSnapshotPackage', () => {
       'story.nkc',
       'assets/ref.png',
       'configs/hero.gltf',
-      variableEntryName,
+      'neko/assets/Footage/linked.wav',
       'textures/hero.png',
     ]);
   });
@@ -284,6 +293,7 @@ describe('createProjectSnapshotPackage', () => {
       packageId: 'neko-canvas',
       title: 'Package Canvas Project',
       sourceUri: vscode.Uri.file('/workspace/story.nkc'),
+      contentRead: createMockContentReadService(),
       sourceBytes: currentSource,
     });
 
@@ -292,7 +302,67 @@ describe('createProjectSnapshotPackage', () => {
     expect(zipEntries.get('assets/current.png')).toEqual(new Uint8Array([21]));
     expect(zipEntries.has('assets/stale.png')).toBe(false);
   });
+
+  it('resolves a canonical linked source from the workspace root for a nested project', async () => {
+    mocks.saveUri = fileUri('/workspace/boards/story.zip');
+    mocks.reads.set(
+      '/workspace/boards/story.nkc',
+      encodeJson({
+        nodes: [{ type: 'media', data: { assetPath: 'neko/assets/Books/clips/linked.mp4' } }],
+      }),
+    );
+    mocks.reads.set('/workspace/neko/assets/Books/clips/linked.mp4', new Uint8Array([31, 32]));
+
+    const result = await createProjectSnapshotPackage({
+      packageId: 'neko-canvas',
+      title: 'Package Nested Canvas Project',
+      sourceUri: vscode.Uri.file('/workspace/boards/story.nkc'),
+      contentRead: createMockContentReadService(),
+    });
+
+    const archive = mocks.writes.get('/workspace/boards/story.zip');
+    expect(archive).toBeDefined();
+    const entries = readStoredZipEntries(archive!);
+    expect(entries.get('neko/assets/Books/clips/linked.mp4')).toEqual(new Uint8Array([31, 32]));
+    expect(result?.entries).toContain('neko/assets/Books/clips/linked.mp4');
+    expect(
+      JSON.stringify(JSON.parse(decoder.decode(entries.get('package-manifest.json')))),
+    ).not.toContain('/workspace');
+  });
 });
+
+function createMockContentReadService(): ContentReadService {
+  return {
+    stat: async (locator) => {
+      const filePath = locator.kind === 'workspace-file' ? `/workspace/${locator.path}` : '';
+      const bytes = mocks.reads.get(filePath);
+      if (!bytes || mocks.readFailures.has(filePath)) {
+        return { status: 'unavailable', locator, diagnostic: { code: 'content-missing' } };
+      }
+      return {
+        status: 'ready',
+        locator,
+        byteLength: bytes.byteLength,
+        fingerprint: { strategy: 'mtime-size', value: `0:${bytes.byteLength}` },
+      };
+    },
+    read: async (locator) => {
+      const filePath = locator.kind === 'workspace-file' ? `/workspace/${locator.path}` : '';
+      const bytes = mocks.reads.get(filePath);
+      if (!bytes || mocks.readFailures.has(filePath)) {
+        return { status: 'unavailable', locator, diagnostic: { code: 'content-missing' } };
+      }
+      return {
+        status: 'ready',
+        locator,
+        bytes,
+        offset: 0,
+        totalByteLength: bytes.byteLength,
+        fingerprint: { strategy: 'mtime-size', value: `0:${bytes.byteLength}` },
+      };
+    },
+  };
+}
 
 function encodeJson(value: unknown): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(value, null, 2));

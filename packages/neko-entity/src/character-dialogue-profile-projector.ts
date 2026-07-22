@@ -1,5 +1,10 @@
 /** Character-domain system prompt projection. */
-import type { NpcProfileFact, NpcProfileSource, NpcTestMode } from '@neko/shared';
+import type {
+  EntityRepresentationTarget,
+  NpcProfileFact,
+  NpcProfileSource,
+  NpcTestMode,
+} from '@neko/shared';
 
 export interface CharacterDialogueProfilePromptOptions {
   readonly mode?: NpcTestMode;
@@ -184,11 +189,24 @@ function renderRepresentationBindings(
     `## ${labels.representationBindings}`,
     ...bindings.map(
       (binding) =>
-        `- ${binding.role}: ${binding.assetRef}${
+        `- ${binding.role}: ${representationLabel(binding.representation)}${
           binding.isDefault ? ` (${labels.defaultBinding})` : ''
         }`,
     ),
   ].join('\n');
+}
+
+function representationLabel(representation: EntityRepresentationTarget): string {
+  switch (representation.kind) {
+    case 'workspace-file':
+      return representation.path;
+    case 'document-entry':
+      return `${representation.source.path}#${representation.entryPath}`;
+    case 'generated-output':
+      return representation.path;
+    case 'package-resource':
+      return `${representation.packageId}/${representation.resourcePath}`;
+  }
 }
 
 function getCharacterDialoguePromptLabels(

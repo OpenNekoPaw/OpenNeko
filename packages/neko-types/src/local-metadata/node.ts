@@ -1,4 +1,5 @@
 export * from './node-entity-asset-projection-migration';
+export * from './node-generated-output-projection-binding';
 export * from './node-media-metadata-migration';
 export * from './node-proxy-manifest-migration';
 export * from './node-resource-cache-manifest-migration';

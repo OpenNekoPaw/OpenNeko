@@ -1,8 +1,6 @@
 {
   "neko.canvas.new.title": "New Canvas",
   "neko.canvas.outline.title": "Canvas Outline",
-  "neko.asset.import.title": "Import Asset",
-  "neko.addToAssetLibrary.title": "Add to Asset Library",
   "neko.canvas.previewMedia.title": "Preview Media",
   "neko.canvas.revealPlaybackWorkspace.title": "Reveal Playback Workspace",
   "neko.canvas.deleteSelected.title": "Delete Selected",
