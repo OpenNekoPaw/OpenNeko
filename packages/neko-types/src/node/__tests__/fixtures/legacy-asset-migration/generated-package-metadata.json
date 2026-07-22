@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "entities": [
+    {
+      "id": "asset-generated",
+      "name": "Generated Alice",
+      "category": "character",
+      "description": "Do not copy this description into Creative Entity metadata",
+      "tags": ["private-tag"],
+      "aliases": ["Legacy Alice"],
+      "metadata": {
+        "character": {
+          "personality": ["quiet"],
+          "voiceActor": "Private Actor"
+        },
+        "source": {
+          "type": "ai-generated",
+          "license": "private-license",
+          "prompt": "private prompt",
+          "generated": {
+            "projectionId": "projection-alice",
+            "candidateId": "candidate-alice",
+            "taskId": "task-alice",
+            "revision": "revision-1",
+            "contentDigest": "sha256:generated-alice"
+          }
+        }
+      },
+      "variants": [
+        {
+          "id": "variant-generated",
+          "files": [
+            {
+              "id": "file-generated",
+              "path": "neko/generated/images/alice.png",
+              "purpose": "main"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "asset-package",
+      "name": "Wave Motion",
+      "category": "audio",
+      "metadata": {},
+      "variants": [
+        {
+          "id": "variant-package",
+          "files": [{ "id": "file-package", "path": "legacy/package/path", "purpose": "main" }]
+        }
+      ]
+    }
+  ]
+}

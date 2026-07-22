@@ -9,8 +9,6 @@ import type {
   CreativeEntityQuery,
   CreativeEntityRef,
   CreativeEntityStatus,
-  EntityAssetBinding,
-  EntityAssetBindingRole,
   VisualIdentityDraft,
 } from './creative-entity-asset-composition';
 import {
@@ -18,10 +16,16 @@ import {
   isCreativeEntityCandidateIdentityBasis,
   isCreativeEntityKind,
   isCreativeEntityRef,
-  isEntityAssetBinding,
-  isEntityAssetBindingRole,
   isVisualIdentityDraft,
 } from './creative-entity-asset-composition';
+import {
+  isEntityRepresentationBinding,
+  isEntityRepresentationRole,
+  type EntityRepresentationBinding,
+  type EntityRepresentationRole,
+  type EntityRepresentationTarget,
+} from './entity-representation-binding';
+import { isContentLocator } from './content-locator';
 
 export const ENTITY_FACADE_COMMANDS = {
   inspectEntity: 'neko.entity.inspectEntity',
@@ -29,7 +33,7 @@ export const ENTITY_FACADE_COMMANDS = {
   getEntityDetail: 'neko.entity.getEntityDetail',
   listEntities: 'neko.entity.listEntities',
   listBindings: 'neko.entity.listBindings',
-  findEntitiesByAsset: 'neko.entity.findEntitiesByAsset',
+  findEntitiesByRepresentation: 'neko.entity.findEntitiesByRepresentation',
   resolveByName: 'neko.entity.resolveByName',
   listCandidates: 'neko.entity.listCandidates',
   proposeCandidate: 'neko.entity.proposeCandidate',
@@ -37,10 +41,10 @@ export const ENTITY_FACADE_COMMANDS = {
   rejectCandidate: 'neko.entity.rejectCandidate',
   dismissCandidate: 'neko.entity.dismissCandidate',
   mergeCandidate: 'neko.entity.mergeCandidate',
-  bindAsset: 'neko.entity.bindAsset',
-  unbindAsset: 'neko.entity.unbindAsset',
+  bindRepresentation: 'neko.entity.bindRepresentation',
+  rebindRepresentation: 'neko.entity.rebindRepresentation',
+  unbindRepresentation: 'neko.entity.unbindRepresentation',
   markBindingOrphaned: 'neko.entity.markBindingOrphaned',
-  restoreBinding: 'neko.entity.restoreBinding',
   archiveBinding: 'neko.entity.archiveBinding',
   upsertVisualDraft: 'neko.entity.upsertVisualDraft',
   nameCandidate: 'neko.entity.nameCandidate',
@@ -65,8 +69,8 @@ export type EntityFacadeShortMetadataKey = (typeof ENTITY_FACADE_SHORT_METADATA_
 
 export const ENTITY_BINDING_WIDGET_ACTIONS = [
   'confirm-candidate',
-  'bind-asset',
-  'unbind-asset',
+  'bind-representation',
+  'unbind-representation',
   'archive-binding',
   'name-candidate',
   'rename-entity',
@@ -105,7 +109,7 @@ export interface EntityFacadeGetEntityDetailRequest extends EntityFacadeProjectC
 export interface EntityFacadeEntityDetailResult {
   readonly entity?: CreativeEntity;
   readonly candidates: readonly CreativeEntityCandidate[];
-  readonly bindings: readonly EntityAssetBinding[];
+  readonly bindings: readonly EntityRepresentationBinding[];
   readonly visualDrafts: readonly VisualIdentityDraft[];
 }
 
@@ -115,7 +119,7 @@ export interface EntityFacadeListEntitiesRequest extends EntityFacadeProjectCont
 
 export interface EntityFacadeListBindingsRequest extends EntityFacadeProjectContext {
   readonly entityRef?: CreativeEntityRef;
-  readonly assetRef?: string;
+  readonly representation?: EntityRepresentationTarget;
 }
 
 export interface EntityFacadeTreeItem {
@@ -127,26 +131,26 @@ export interface EntityFacadeTreeItem {
   readonly candidateId?: string;
   readonly summary?: string;
   readonly aliases?: readonly string[];
-  readonly defaultBindingRoles?: readonly EntityAssetBindingRole[];
+  readonly defaultBindingRoles?: readonly EntityRepresentationRole[];
 }
 
-export interface EntityFacadeAssetReverseLookupRequest extends EntityFacadeProjectContext {
-  readonly assetRef: string;
+export interface EntityFacadeRepresentationReverseLookupRequest extends EntityFacadeProjectContext {
+  readonly representation: EntityRepresentationTarget;
 }
 
-export interface EntityFacadeAssetReverseLookupItem {
+export interface EntityFacadeRepresentationReverseLookupItem {
   readonly entityRef: CreativeEntityRef;
   readonly label: string;
-  readonly role: EntityAssetBindingRole;
+  readonly role: EntityRepresentationRole;
   readonly bindingId: string;
-  readonly status: EntityAssetBinding['status'];
-  readonly availability?: EntityAssetBinding['availability'];
+  readonly status: EntityRepresentationBinding['status'];
+  readonly availability?: EntityRepresentationBinding['availability'];
   readonly isDefault?: boolean;
 }
 
-export interface EntityFacadeAssetReverseLookupResult {
-  readonly assetRef: string;
-  readonly entities: readonly EntityFacadeAssetReverseLookupItem[];
+export interface EntityFacadeRepresentationReverseLookupResult {
+  readonly representation: EntityRepresentationTarget;
+  readonly entities: readonly EntityFacadeRepresentationReverseLookupItem[];
 }
 
 export interface EntityFacadeResolveByNameRequest extends EntityFacadeProjectContext {
@@ -201,11 +205,16 @@ export interface EntityFacadeMergeCandidateRequest extends EntityFacadeProjectCo
 }
 
 export interface EntityFacadeUpsertBindingRequest extends EntityFacadeProjectContext {
-  readonly binding: EntityAssetBinding;
+  readonly binding: EntityRepresentationBinding;
 }
 
-export interface EntityFacadeUnbindAssetRequest extends EntityFacadeProjectContext {
+export interface EntityFacadeUnbindRepresentationRequest extends EntityFacadeProjectContext {
   readonly bindingId: string;
+}
+
+export interface EntityFacadeRebindRepresentationRequest extends EntityFacadeProjectContext {
+  readonly bindingId: string;
+  readonly representation: EntityRepresentationTarget;
 }
 
 export interface EntityFacadeBindingLifecycleRequest extends EntityFacadeProjectContext {
@@ -236,7 +245,7 @@ export interface EntityFacadeUpdateMetadataRequest extends EntityFacadeProjectCo
 }
 
 export interface EntityFacadeSetDefaultBindingRequest extends EntityFacadeProjectContext {
-  readonly binding?: EntityAssetBinding;
+  readonly binding?: EntityRepresentationBinding;
   readonly entityRef?: CreativeEntityRef;
   readonly interactive?: boolean;
 }
@@ -257,7 +266,7 @@ export interface EntityBindingWidgetHostContext extends EntityFacadeProjectConte
   readonly surface: EntityBindingWidgetHostSurface;
   readonly sourceRef?: string;
   readonly nodeId?: string;
-  readonly assetRef?: string;
+  readonly representation?: EntityRepresentationTarget;
 }
 
 export interface EntityBindingWidgetTriggerRequest extends EntityFacadeProjectContext {
@@ -265,8 +274,8 @@ export interface EntityBindingWidgetTriggerRequest extends EntityFacadeProjectCo
   readonly action: EntityBindingWidgetAction;
   readonly entityRef?: CreativeEntityRef;
   readonly candidateId?: string;
-  readonly assetRef?: string;
-  readonly role?: EntityAssetBindingRole;
+  readonly representation?: EntityRepresentationTarget;
+  readonly role?: EntityRepresentationRole;
   readonly payload?: Record<string, unknown>;
 }
 
@@ -323,7 +332,7 @@ export function isEntityFacadeListBindingsRequest(
     isRecord(value) &&
     isEntityFacadeProjectContext(value) &&
     (value['entityRef'] === undefined || isCreativeEntityRef(value['entityRef'])) &&
-    (value['assetRef'] === undefined || isNonEmptyString(value['assetRef']))
+    (value['representation'] === undefined || isContentLocator(value['representation']))
   );
 }
 
@@ -340,27 +349,29 @@ export function isEntityFacadeTreeItem(value: unknown): value is EntityFacadeTre
     isOptionalStringArray(value['aliases']) &&
     (value['defaultBindingRoles'] === undefined ||
       (Array.isArray(value['defaultBindingRoles']) &&
-        value['defaultBindingRoles'].every(isEntityAssetBindingRole))) &&
+        value['defaultBindingRoles'].every(isEntityRepresentationRole))) &&
     (isCreativeEntityRef(value['entityRef']) || isNonEmptyString(value['candidateId']))
   );
 }
 
-export function isEntityFacadeAssetReverseLookupRequest(
+export function isEntityFacadeRepresentationReverseLookupRequest(
   value: unknown,
-): value is EntityFacadeAssetReverseLookupRequest {
+): value is EntityFacadeRepresentationReverseLookupRequest {
   return (
-    isRecord(value) && isEntityFacadeProjectContext(value) && isNonEmptyString(value['assetRef'])
+    isRecord(value) &&
+    isEntityFacadeProjectContext(value) &&
+    isContentLocator(value['representation'])
   );
 }
 
-export function isEntityFacadeAssetReverseLookupItem(
+export function isEntityFacadeRepresentationReverseLookupItem(
   value: unknown,
-): value is EntityFacadeAssetReverseLookupItem {
+): value is EntityFacadeRepresentationReverseLookupItem {
   return (
     isRecord(value) &&
     isCreativeEntityRef(value['entityRef']) &&
     isNonEmptyString(value['label']) &&
-    isEntityAssetBindingRole(value['role']) &&
+    isEntityRepresentationRole(value['role']) &&
     isNonEmptyString(value['bindingId']) &&
     (value['status'] === 'suggested' ||
       value['status'] === 'confirmed' ||
@@ -373,14 +384,14 @@ export function isEntityFacadeAssetReverseLookupItem(
   );
 }
 
-export function isEntityFacadeAssetReverseLookupResult(
+export function isEntityFacadeRepresentationReverseLookupResult(
   value: unknown,
-): value is EntityFacadeAssetReverseLookupResult {
+): value is EntityFacadeRepresentationReverseLookupResult {
   return (
     isRecord(value) &&
-    isNonEmptyString(value['assetRef']) &&
+    isContentLocator(value['representation']) &&
     Array.isArray(value['entities']) &&
-    value['entities'].every(isEntityFacadeAssetReverseLookupItem)
+    value['entities'].every(isEntityFacadeRepresentationReverseLookupItem)
   );
 }
 
@@ -466,15 +477,28 @@ export function isEntityFacadeUpsertBindingRequest(
   value: unknown,
 ): value is EntityFacadeUpsertBindingRequest {
   return (
-    isRecord(value) && isEntityFacadeProjectContext(value) && isEntityAssetBinding(value['binding'])
+    isRecord(value) &&
+    isEntityFacadeProjectContext(value) &&
+    isEntityRepresentationBinding(value['binding'])
   );
 }
 
-export function isEntityFacadeUnbindAssetRequest(
+export function isEntityFacadeUnbindRepresentationRequest(
   value: unknown,
-): value is EntityFacadeUnbindAssetRequest {
+): value is EntityFacadeUnbindRepresentationRequest {
   return (
     isRecord(value) && isEntityFacadeProjectContext(value) && isNonEmptyString(value['bindingId'])
+  );
+}
+
+export function isEntityFacadeRebindRepresentationRequest(
+  value: unknown,
+): value is EntityFacadeRebindRepresentationRequest {
+  return (
+    isRecord(value) &&
+    isEntityFacadeProjectContext(value) &&
+    isNonEmptyString(value['bindingId']) &&
+    isContentLocator(value['representation'])
   );
 }
 
@@ -540,7 +564,7 @@ export function isEntityFacadeSetDefaultBindingRequest(
   return (
     isRecord(value) &&
     isEntityFacadeProjectContext(value) &&
-    (value['binding'] === undefined || isEntityAssetBinding(value['binding'])) &&
+    (value['binding'] === undefined || isEntityRepresentationBinding(value['binding'])) &&
     (value['entityRef'] === undefined || isCreativeEntityRef(value['entityRef'])) &&
     (value['interactive'] === undefined || typeof value['interactive'] === 'boolean') &&
     (value['binding'] !== undefined || value['entityRef'] !== undefined)
@@ -556,7 +580,7 @@ export function isEntityBindingWidgetHostContext(
     isEntityBindingWidgetHostSurface(value['surface']) &&
     (value['sourceRef'] === undefined || typeof value['sourceRef'] === 'string') &&
     (value['nodeId'] === undefined || typeof value['nodeId'] === 'string') &&
-    (value['assetRef'] === undefined || typeof value['assetRef'] === 'string')
+    (value['representation'] === undefined || isContentLocator(value['representation']))
   );
 }
 
@@ -570,8 +594,8 @@ export function isEntityBindingWidgetTriggerRequest(
     isEntityBindingWidgetAction(value['action']) &&
     (value['entityRef'] === undefined || isCreativeEntityRef(value['entityRef'])) &&
     (value['candidateId'] === undefined || isNonEmptyString(value['candidateId'])) &&
-    (value['assetRef'] === undefined || typeof value['assetRef'] === 'string') &&
-    (value['role'] === undefined || isEntityAssetBindingRole(value['role'])) &&
+    (value['representation'] === undefined || isContentLocator(value['representation'])) &&
+    (value['role'] === undefined || isEntityRepresentationRole(value['role'])) &&
     (value['payload'] === undefined || isRecord(value['payload']))
   );
 }
@@ -666,8 +690,8 @@ function isShortMetadataPatch(
 export function isEntityBindingWidgetAction(value: unknown): value is EntityBindingWidgetAction {
   return (
     value === 'confirm-candidate' ||
-    value === 'bind-asset' ||
-    value === 'unbind-asset' ||
+    value === 'bind-representation' ||
+    value === 'unbind-representation' ||
     value === 'archive-binding' ||
     value === 'name-candidate' ||
     value === 'rename-entity' ||

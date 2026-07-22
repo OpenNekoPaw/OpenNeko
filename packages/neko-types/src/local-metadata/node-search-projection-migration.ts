@@ -3,7 +3,7 @@ import type { Dirent } from 'node:fs';
 import { access, copyFile, readFile, readdir, rename } from 'node:fs/promises';
 import * as path from 'node:path';
 import type { PathResolver } from '../path';
-import type { AssetMediaType } from '../types/asset/entity';
+import type { MediaFileType } from '../types/media-file';
 import {
   parseMediaSemanticIndexSidecar,
   type MediaSemanticIndex,
@@ -47,7 +47,7 @@ interface LegacyMediaSearchIndexEntry {
   readonly filePath: string;
   readonly fileName: string;
   readonly libraryName: string;
-  readonly mediaType: AssetMediaType;
+  readonly mediaType: MediaFileType;
 }
 
 export interface SemanticIndexSidecarMigrationDiagnostic {
@@ -419,11 +419,11 @@ function isLegacyMediaSearchIndexEntry(value: unknown): value is LegacyMediaSear
     typeof value['filePath'] === 'string' &&
     typeof value['fileName'] === 'string' &&
     typeof value['libraryName'] === 'string' &&
-    isAssetMediaType(value['mediaType'])
+    isMediaFileType(value['mediaType'])
   );
 }
 
-function isAssetMediaType(value: unknown): value is AssetMediaType {
+function isMediaFileType(value: unknown): value is MediaFileType {
   return (
     value === 'video' ||
     value === 'audio' ||

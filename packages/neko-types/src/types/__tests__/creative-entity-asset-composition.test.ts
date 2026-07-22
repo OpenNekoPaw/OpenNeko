@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_REPRESENTATION_FALLBACKS,
-  ENTITY_ASSET_BINDING_AVAILABILITIES,
   REPRESENTATION_FILE_ROLES,
   WELL_KNOWN_VISUAL_FACT_KEYS,
   CREATIVE_ENTITY_CANDIDATE_IDENTITY_BASES,
@@ -15,10 +14,6 @@ import {
   isCreativeEntityOperationResult,
   isCreativeEntityProviderStatus,
   isCreativeEntityRef,
-  isEntityAssetBinding,
-  isEntityAssetBindingAvailability,
-  isEntityAssetBindingFile,
-  isEntityAssetBindingRole,
   isEntityAssetRequirementFile,
   isProjectCreativeEntityFile,
   isRepresentationFileRole,
@@ -26,10 +21,13 @@ import {
   isVisualIdentityDraftFile,
   withCreativeEntityCandidateDefaults,
   withCreativeEntityCandidateFileDefaults,
-  withEntityAssetBindingDefaults,
-  withEntityAssetBindingFileDefaults,
   type VisualFactKey,
 } from '../creative-entity-asset-composition';
+import {
+  ENTITY_REPRESENTATION_BINDING_AVAILABILITIES,
+  isEntityRepresentationBindingAvailability,
+  isEntityRepresentationRole,
+} from '../entity-representation-binding';
 
 describe('creative entity asset composition contracts', () => {
   it('declares target-aware fallback chains for all resolver targets', () => {
@@ -68,9 +66,9 @@ describe('creative entity asset composition contracts', () => {
     expect(isRepresentationKind('avatar')).toBe(false);
     expect(isAssetRefScheme('market')).toBe(false);
     expect(isAssetRefScheme('file')).toBe(false);
-    expect(isEntityAssetBindingRole('portrait')).toBe(true);
-    expect(isEntityAssetBindingRole('puppet-bone')).toBe(true);
-    expect(isEntityAssetBindingRole('video')).toBe(false);
+    expect(isEntityRepresentationRole('portrait')).toBe(true);
+    expect(isEntityRepresentationRole('puppet-bone')).toBe(false);
+    expect(isEntityRepresentationRole('video')).toBe(false);
     expect(CREATIVE_ENTITY_CANDIDATE_IDENTITY_BASES).toEqual([
       'user-named',
       'placeholder',
@@ -79,9 +77,13 @@ describe('creative entity asset composition contracts', () => {
     ]);
     expect(isCreativeEntityCandidateIdentityBasis('visual')).toBe(true);
     expect(isCreativeEntityCandidateIdentityBasis('filename')).toBe(false);
-    expect(ENTITY_ASSET_BINDING_AVAILABILITIES).toEqual(['active', 'orphaned', 'archived']);
-    expect(isEntityAssetBindingAvailability('orphaned')).toBe(true);
-    expect(isEntityAssetBindingAvailability('missing')).toBe(false);
+    expect(ENTITY_REPRESENTATION_BINDING_AVAILABILITIES).toEqual([
+      'active',
+      'orphaned',
+      'archived',
+    ]);
+    expect(isEntityRepresentationBindingAvailability('orphaned')).toBe(true);
+    expect(isEntityRepresentationBindingAvailability('missing')).toBe(false);
   });
 
   it('validates creative entity lifecycle, candidates, and project fact contracts', () => {
@@ -207,26 +209,7 @@ describe('creative entity asset composition contracts', () => {
     ).toBe(false);
   });
 
-  it('validates binding, draft, and requirement file shapes', () => {
-    expect(
-      isEntityAssetBindingFile({
-        version: 1,
-        bindings: [
-          {
-            id: 'binding-1',
-            entityId: 'char_linxia',
-            entityKind: 'character',
-            assetRef: 'project://assets/linxia',
-            role: 'puppet-bone',
-            status: 'confirmed',
-            availability: 'active',
-            source: 'user',
-            updatedAt: '2026-05-10T00:00:00.000Z',
-          },
-        ],
-      }),
-    ).toBe(true);
-    expect(isEntityAssetBinding({ id: 'missing-fields' })).toBe(false);
+  it('validates draft and requirement file shapes', () => {
     expect(
       isVisualIdentityDraftFile({
         version: 1,
@@ -269,7 +252,7 @@ describe('creative entity asset composition contracts', () => {
     expect(custom).toBe('tattoo_style');
   });
 
-  it('applies backward-compatible defaults for old candidates and bindings', () => {
+  it('applies candidate defaults without accepting legacy binding fallback', () => {
     const oldCandidate = {
       id: 'candidate:story:character:xiaoju',
       kind: 'character',
@@ -283,24 +266,11 @@ describe('creative entity asset composition contracts', () => {
       ],
       sourceRefs: [],
     };
-    const oldBinding = {
-      id: 'binding-1',
-      entityId: 'char_linxia',
-      entityKind: 'character',
-      assetRef: 'project://assets/linxia',
-      role: 'portrait',
-      status: 'confirmed',
-      source: 'user',
-      updatedAt: '2026-05-10T00:00:00.000Z',
-    };
-
     expect(isCreativeEntityCandidate(oldCandidate)).toBe(true);
     expect(isCreativeEntityCandidateFile({ version: 1, candidates: [oldCandidate] })).toBe(true);
-    expect(isEntityAssetBinding(oldBinding)).toBe(true);
-    expect(isEntityAssetBindingFile({ version: 1, bindings: [oldBinding] })).toBe(true);
 
-    if (!isCreativeEntityCandidate(oldCandidate) || !isEntityAssetBinding(oldBinding)) {
-      throw new Error('Fixture should pass backward-compatible guards.');
+    if (!isCreativeEntityCandidate(oldCandidate)) {
+      throw new Error('Candidate fixture should pass the guard.');
     }
 
     expect(withCreativeEntityCandidateDefaults(oldCandidate).identityBasis).toBe('user-named');
@@ -308,10 +278,5 @@ describe('creative entity asset composition contracts', () => {
       withCreativeEntityCandidateFileDefaults({ version: 1, candidates: [oldCandidate] })
         .candidates[0]?.identityBasis,
     ).toBe('user-named');
-    expect(withEntityAssetBindingDefaults(oldBinding).availability).toBe('active');
-    expect(
-      withEntityAssetBindingFileDefaults({ version: 1, bindings: [oldBinding] }).bindings[0]
-        ?.availability,
-    ).toBe('active');
   });
 });

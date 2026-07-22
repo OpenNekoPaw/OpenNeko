@@ -18,7 +18,7 @@ export type CreativeGraphNodeKind =
 export interface CreativeGraphNode {
   readonly id: string;
   readonly kind: CreativeGraphNodeKind;
-  /** Reference ID pointing to the backing object (e.g. CharacterRecord.id, AssetEntity.id) */
+  /** Reference ID pointing to the backing domain record. */
   readonly refId?: string;
   readonly label?: string;
 }

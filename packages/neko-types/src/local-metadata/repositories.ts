@@ -1,6 +1,7 @@
 import type { WorkspaceIdentityDescriptor, WorkspacePortableLocator } from '../types/storage';
 import type { ResourceCacheEntry } from '../types/resource-cache';
-import type { MediaFileMetadata } from '../types/asset/entity';
+import type { MediaFileMetadata } from '../types/media-file';
+import type { ContentLocator } from '../types/content-locator';
 import type {
   CompactMediaSemanticIndex,
   SemanticEvidenceProjection,
@@ -10,10 +11,12 @@ import type {
   CreativeEntityKind,
   CreativeEntityOccurrenceProjection,
   CreativeEntityRelationshipProjection,
-  EntityAssetBindingAvailability,
-  EntityAssetBindingRole,
-  EntityAssetBindingStatus,
 } from '../types/creative-entity-asset-composition';
+import type {
+  EntityRepresentationBindingAvailability,
+  EntityRepresentationBindingStatus,
+  EntityRepresentationRole,
+} from '../types/entity-representation-binding';
 import type { CreativeGraphNode, CreativeRelationEdge } from '../types/creative-entity-graph';
 import type {
   ProjectIndexFreshness,
@@ -287,10 +290,10 @@ export interface EntityBindingAvailabilityProjectionValue {
   readonly bindingId: string;
   readonly entityId: string;
   readonly entityKind: CreativeEntityKind;
-  readonly assetRef: string;
-  readonly role: EntityAssetBindingRole;
-  readonly status: EntityAssetBindingStatus;
-  readonly availability: EntityAssetBindingAvailability;
+  readonly representation: ContentLocator;
+  readonly role: EntityRepresentationRole;
+  readonly status: EntityRepresentationBindingStatus;
+  readonly availability: EntityRepresentationBindingAvailability;
   readonly orphanedAt?: string;
   readonly isDefault?: boolean;
 }

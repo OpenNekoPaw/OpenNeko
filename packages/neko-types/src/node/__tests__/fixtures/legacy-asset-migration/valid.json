@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "entities": [
+    {
+      "id": "asset-alice",
+      "name": "Alice",
+      "category": "character",
+      "metadata": { "character": { "registryId": "char_alice" } },
+      "variants": [
+        {
+          "id": "variant-alice",
+          "files": [
+            {
+              "id": "file-alice",
+              "path": "neko/assets/Characters/alice.png",
+              "purpose": "main"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

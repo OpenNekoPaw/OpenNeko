@@ -311,7 +311,6 @@ export interface ProcessorMetadata {
 
 export type PluginPermission =
   | 'fs-read:project'
-  | 'fs-read:asset-library'
   | 'fs-read:plugin-data'
   | 'fs-write:project'
   | 'fs-write:plugin-data'
@@ -326,7 +325,6 @@ export type PluginPermission =
 
 export const PLUGIN_PERMISSIONS: readonly PluginPermission[] = [
   'fs-read:project',
-  'fs-read:asset-library',
   'fs-read:plugin-data',
   'fs-write:project',
   'fs-write:plugin-data',

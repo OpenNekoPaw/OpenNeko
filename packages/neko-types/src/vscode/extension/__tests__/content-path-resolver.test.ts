@@ -1,8 +1,9 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import type * as vscode from 'vscode';
-import { describe, expect, it, vi } from 'vitest';
-import type { NekoAssetsAPI } from '../../../types/extension-api';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { NekoMediaRepresentationAPI } from '../../../types/extension-api';
 import {
   contractHostContentMediaPath,
   loadHostContentPathPolicy,
@@ -10,19 +11,33 @@ import {
 } from '../content-path-resolver';
 
 describe('content-path-resolver', () => {
-  it('loads workspace and media-library roots into one content policy', async () => {
+  const cleanupDirectories: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(
+      cleanupDirectories.splice(0).map((directory) =>
+        rm(directory, {
+          recursive: true,
+          force: true,
+        }),
+      ),
+    );
+  });
+
+  it('does not load retired media-library roots or variables into content policy', async () => {
+    const getExtension = createAssetsExtensionGetter({
+      mediaLibraryRoots: ['/library/books'],
+      pathVariables: [['BOOKS', '/library/books']],
+    });
     const policy = await loadHostContentPathPolicy({
       workspaceRoot: '/workspace/project',
-      getExtension: createAssetsExtensionGetter({
-        mediaLibraryRoots: ['/library/books'],
-        pathVariables: [['BOOKS', '/library/books']],
-      }),
+      getExtension,
       fileExists: (filePath) => filePath === '/library/books/comic.epub',
     });
 
-    expect(policy.pathResolver.resolve('${BOOKS}/comic.epub')).toBe('/library/books/comic.epub');
-    expect(policy.authorizedReadRoots).toEqual(['/workspace/project', '/library/books']);
-    expect(policy.mediaLibraryRoots).toEqual(['/library/books']);
+    expect(policy.pathResolver.resolve('${BOOKS}/comic.epub')).toBe('${BOOKS}/comic.epub');
+    expect(policy.authorizedReadRoots).toEqual(['/workspace/project']);
+    expect(getExtension).not.toHaveBeenCalled();
   });
 
   it('adds host built-in variables without authorizing the whole user home', async () => {
@@ -43,17 +58,42 @@ describe('content-path-resolver', () => {
     expect(policy.authorizedReadRoots).toEqual(['/workspace/project']);
   });
 
-  it('resolves media-library variable paths through the shared content policy', async () => {
-    const resolved = await resolveHostContentMediaPath('${BOOKS}/comic.epub', {
-      workspaceRoot: '/workspace/project',
-      getExtension: createAssetsExtensionGetter({
-        mediaLibraryRoots: ['/library/books'],
-        pathVariables: [['BOOKS', '/library/books']],
-      }),
-      fileExists: (filePath) => filePath === '/library/books/comic.epub',
+  it('resolves a linked media file through its ordinary workspace path', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'neko-content-path-'));
+    cleanupDirectories.push(root);
+    const workspaceRoot = path.join(root, 'workspace');
+    const target = path.join(root, 'target');
+    const linkPath = path.join(workspaceRoot, 'neko/assets/Books');
+    await Promise.all([mkdir(workspaceRoot), mkdir(target)]);
+    await mkdir(path.dirname(linkPath), { recursive: true });
+    await writeFile(path.join(target, 'comic.epub'), 'book');
+    await symlink(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir');
+
+    const resolved = await resolveHostContentMediaPath('neko/assets/Books/comic.epub', {
+      workspaceRoot,
+      fileExists: async (filePath) => {
+        try {
+          return (await stat(filePath)).isFile();
+        } catch {
+          return false;
+        }
+      },
     });
 
-    expect(resolved).toBe('/library/books/comic.epub');
+    expect(resolved).toBe(path.join(workspaceRoot, 'neko/assets/Books/comic.epub'));
+  });
+
+  it('poisons retired media-library variable resolution', async () => {
+    await expect(
+      resolveHostContentMediaPath('${BOOKS}/comic.epub', {
+        workspaceRoot: '/workspace/project',
+        getExtension: createAssetsExtensionGetter({
+          mediaLibraryRoots: ['/library/books'],
+          pathVariables: [['BOOKS', '/library/books']],
+        }),
+        fileExists: (filePath) => filePath === '/library/books/comic.epub',
+      }),
+    ).rejects.toThrow('Path variable BOOKS is not defined.');
   });
 
   it('reports unknown variables before generic missing-file diagnostics', async () => {
@@ -69,7 +109,7 @@ describe('content-path-resolver', () => {
     ).rejects.toThrow('Path variable MISSING is not defined.');
   });
 
-  it('contracts media-library paths through the shared content policy', async () => {
+  it('does not contract an absolute target through a retired media-library variable', async () => {
     const contracted = await contractHostContentMediaPath('/library/books/comic.epub', {
       workspaceRoot: '/workspace/project',
       getExtension: createAssetsExtensionGetter({
@@ -78,7 +118,7 @@ describe('content-path-resolver', () => {
       }),
     });
 
-    expect(contracted).toBe('${BOOKS}/comic.epub');
+    expect(contracted).toBeUndefined();
   });
 
   it('rejects local media paths outside authorized roots', async () => {
@@ -95,18 +135,17 @@ describe('content-path-resolver', () => {
   });
 });
 
-function createAssetsExtensionGetter(options: {
+function createAssetsExtensionGetter(_options: {
   readonly mediaLibraryRoots: readonly string[];
   readonly pathVariables: ReadonlyArray<readonly [string, string]>;
 }): <T>(id: string) => vscode.Extension<T> | undefined {
   const api = {
-    getMediaLibraryRoots: vi.fn(async () => [...options.mediaLibraryRoots]),
-    getPathVariables: vi.fn(async () => [...options.pathVariables]),
-  } as unknown as NekoAssetsAPI;
+    generateThumbnail: vi.fn(async () => undefined),
+  } satisfies NekoMediaRepresentationAPI;
   const extension = {
     isActive: true,
     exports: api,
     activate: vi.fn(async () => api),
-  } as unknown as vscode.Extension<NekoAssetsAPI>;
-  return <T>() => extension as unknown as vscode.Extension<T>;
+  } as unknown as vscode.Extension<NekoMediaRepresentationAPI>;
+  return vi.fn(<T>() => extension as unknown as vscode.Extension<T>);
 }
