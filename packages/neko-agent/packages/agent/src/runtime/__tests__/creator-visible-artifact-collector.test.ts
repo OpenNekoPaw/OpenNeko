@@ -167,6 +167,148 @@ describe('collectCreatorVisibleArtifacts', () => {
     ]);
   });
 
+  it('finalizes explicitly requested native image analysis with its source images', () => {
+    const firstPageRef = {
+      kind: 'document-entry' as const,
+      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      entryPath: 'OEBPS/images/page-01.jpg',
+      versionPolicy: 'read-only-source' as const,
+    };
+    const secondPageRef = {
+      ...firstPageRef,
+      entryPath: 'OEBPS/images/page-02.jpg',
+    };
+
+    const collected = collectCreatorVisibleArtifacts({
+      toolResults: [
+        {
+          name: 'ReadImage',
+          success: true,
+          data: {
+            mode: 'metadata',
+            analysis: 'storyboard',
+            images: [
+              { resourceRef: firstPageRef, width: 1200, height: 1800 },
+              { resourceRef: secondPageRef, width: 1200, height: 1800 },
+            ],
+          },
+          attachments: [
+            {
+              type: 'image',
+              path: 'document-entry://page-01',
+              assetRef: {
+                assetId: 'page-01',
+                uri: 'document-entry://page-01',
+                mimeType: 'image/jpeg',
+                documentResourceRef: firstPageRef,
+              },
+            },
+            {
+              type: 'image',
+              path: 'document-entry://page-02',
+              assetRef: {
+                assetId: 'page-02',
+                uri: 'document-entry://page-02',
+                mimeType: 'image/jpeg',
+                documentResourceRef: secondPageRef,
+              },
+            },
+          ],
+        },
+      ],
+      assistantMarkdown: '# 分镜分析\n\n第 1 页建立环境，第 2 页推进动作。',
+    });
+
+    expect(collected).toEqual([
+      expect.objectContaining({ artifactId: 'page-01', role: 'source', kind: 'image' }),
+      expect.objectContaining({ artifactId: 'page-02', role: 'source', kind: 'image' }),
+      expect.objectContaining({
+        role: 'analysis',
+        kind: 'markdown',
+        title: 'Storyboard Analysis',
+        markdown: '# 分镜分析\n\n第 1 页建立环境，第 2 页推进动作。',
+        sourceArtifactIds: ['page-01', 'page-02'],
+      }),
+    ]);
+  });
+
+  it('does not promote ordinary ReadImage replies without an explicit analysis declaration', () => {
+    const documentResourceRef = {
+      kind: 'document-entry' as const,
+      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      entryPath: 'OEBPS/images/cover.jpg',
+      versionPolicy: 'read-only-source' as const,
+    };
+
+    const collected = collectCreatorVisibleArtifacts({
+      toolResults: [
+        {
+          name: 'ReadImage',
+          success: true,
+          data: {
+            mode: 'metadata',
+            images: [{ resourceRef: documentResourceRef, width: 1024, height: 1536 }],
+          },
+          attachments: [
+            {
+              type: 'image',
+              path: 'document-entry://cover',
+              assetRef: {
+                assetId: 'cover-image',
+                uri: 'document-entry://cover',
+                mimeType: 'image/jpeg',
+                documentResourceRef,
+              },
+            },
+          ],
+        },
+      ],
+      assistantMarkdown: 'This is an ordinary conversational reply.',
+    });
+
+    expect(collected).toEqual([
+      expect.objectContaining({ artifactId: 'cover-image', role: 'output' }),
+    ]);
+    expect(collected.some((candidate) => candidate.kind === 'markdown')).toBe(false);
+  });
+
+  it('does not duplicate an explicit composite artifact after ReadImage analysis', () => {
+    const assistantMarkdown = `~~~NEKO\n${JSON.stringify({
+      schemaVersion: 1,
+      kind: 'composite-artifact',
+      artifactId: 'declared-storyboard-analysis',
+      title: 'Storyboard Analysis',
+      blocks: [{ blockId: 'findings', kind: 'text', text: 'Declared findings.' }],
+    })}\n~~~`;
+
+    const collected = collectCreatorVisibleArtifacts({
+      toolResults: [
+        {
+          name: 'ReadImage',
+          success: true,
+          data: { mode: 'metadata', analysis: 'storyboard', images: [] },
+          artifacts: [
+            {
+              type: 'artifactSnapshot',
+              complete: true,
+              artifact: {
+                schemaVersion: 1,
+                kind: 'composite-artifact',
+                artifactId: 'declared-storyboard-analysis',
+                title: 'Storyboard Analysis',
+                blocks: [{ blockId: 'findings', kind: 'text', text: 'Declared findings.' }],
+              },
+            },
+          ],
+        },
+      ],
+      assistantMarkdown,
+    });
+
+    expect(collected.filter((candidate) => candidate.role === 'analysis')).toHaveLength(1);
+    expect(collected[0]).toMatchObject({ artifactId: 'declared-storyboard-analysis' });
+  });
+
   it('coalesces weak and hashed observations of one portable source file', () => {
     const portablePath = '${A}/epub/animation/Blame/volume-01.epub';
     const weakRef = {

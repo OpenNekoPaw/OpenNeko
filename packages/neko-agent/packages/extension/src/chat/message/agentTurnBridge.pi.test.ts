@@ -173,6 +173,67 @@ describe('AgentTurnBridge Pi canonical path', () => {
     );
   });
 
+  it('delivers native ReadImage analysis with the exposed image as its source', async () => {
+    const documentResourceRef = {
+      kind: 'document-entry' as const,
+      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      entryPath: 'OEBPS/images/page-01.jpg',
+      versionPolicy: 'read-only-source' as const,
+    };
+    createPiStream.mockReturnValueOnce({
+      events: streamEvents,
+      result: () => ({
+        ...streamResult,
+        accumulatedResponse: '# 分镜分析\n\n第 1 页建立场景。',
+        collectedToolCalls: [
+          {
+            id: 'read-image-1',
+            name: 'ReadImage',
+            arguments: { analysis: 'storyboard' },
+            result: {
+              success: true,
+              data: {
+                mode: 'metadata',
+                analysis: 'storyboard',
+                images: [{ resourceRef: documentResourceRef, width: 1200, height: 1800 }],
+              },
+              attachments: [
+                {
+                  type: 'image',
+                  path: 'document-entry://page-01',
+                  assetRef: {
+                    assetId: 'page-01',
+                    uri: 'document-entry://page-01',
+                    mimeType: 'image/jpeg',
+                    documentResourceRef,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      dispose: streamDispose,
+    });
+
+    await createBridge().execute(createInput());
+
+    expect(deliverCreatorVisibleArtifacts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deliveryId: 'agent-turn:turn-1',
+        artifacts: [
+          expect.objectContaining({ artifactId: 'page-01', role: 'source' }),
+          expect.objectContaining({
+            role: 'analysis',
+            title: 'Storyboard Analysis',
+            sourceArtifactIds: ['page-01'],
+            markdown: '# 分镜分析\n\n第 1 页建立场景。',
+          }),
+        ],
+      }),
+    );
+  });
+
   it('projects normalized topP into the exact Pi turn snapshot', async () => {
     const bridge = createBridge();
 

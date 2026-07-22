@@ -45,3 +45,12 @@
 - 真实TUI case不能完全覆盖VS Code打开且dirty的Canvas editor竞争；该路径必须由Extension Development Host功能场景和deterministic revision/lease integration共同验证。
 - 本地SQLite和文件系统崩溃窗口依赖实现后的fault injection测试；单次真实Agent成功不能证明并发安全。
 - 若新增facts在bounded collection中被截断，case应blocked而不是用最终回答或`.nkc`结果反推canonical path。
+
+## Native Image Analysis Refinement (2026-07-22)
+
+- Authoring disposition: `update` existing `agent-runtime.creative-media-workflow/workspace-board-material-analysis`; the case now owns native `ReadImage.analysis=storyboard` finalization instead of requiring the model to explicitly author a composite artifact.
+- Canonical evidence: one successful `ReadImage` call with a stable selected-image locator, a `source` ResourceRef fact, one `native-image-analysis` composite fact derived from the terminal Markdown, projected Workspace Board node/connection facts, zero fallback counters, and terminal idle.
+- Key-free evidence: `pnpm test:agent:eval` passed 39 files / 281 tests; the focused protocol dry-run passed with the updated exact locator and six hard assertions.
+- Real behavior evidence: run `board-native-image-analysis-20260722-r4` passed all six hard assertions with effective model `nekoapi-chat/gpt-5.6-luna`. The report is gitignored under `reports/agent-eval/agent-runtime.creative-media-workflow/workspace-board-material-analysis/board-native-image-analysis-20260722-r4/`.
+- Attribution: an earlier run used a stale pre-build TUI bundle, and another returned an external provider `Service temporarily unavailable` response with no final content. Neither was accepted as Board success; the succeeding rebuilt run is the acceptance evidence.
+- Content quality remains `hard-gates-only/not-evaluated`; this case proves routing, durable evidence, finalization, and projection rather than judging the prose.

@@ -30,6 +30,7 @@ export interface CreatorVisibleArtifactCandidate {
   readonly resourceRef?: ResourceRef;
   readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly intrinsicDimensions?: CanvasWorkspaceArtifactDimensions;
+  readonly provenanceSource?: 'tool-result' | 'assistant-declared' | 'native-image-analysis';
 }
 
 export interface CreatorVisibleArtifactCollectionInput {
@@ -51,16 +52,22 @@ export function collectCreatorVisibleArtifacts(
   input: CreatorVisibleArtifactCollectionInput,
 ): readonly CreatorVisibleArtifactCandidate[] {
   const candidates: CreatorVisibleArtifactCandidate[] = [];
+  const nativeImageAnalysisKinds = new Set<ReadImageAnalysisKind>();
+  const nativeImageSourceArtifactIds: string[] = [];
   for (const result of input.toolResults) {
     if (!result.success) continue;
     if (result.name === 'ReadDocument') {
       const source = collectReadDocumentSource(result.data);
       if (source) candidates.push(source);
     }
-    const imageDimensions =
-      result.name === TOOL_NAMES_SYSTEM.READ_IMAGE
-        ? collectReadImageDimensions(result.data)
-        : EMPTY_IMAGE_DIMENSIONS;
+    const isReadImage = result.name === TOOL_NAMES_SYSTEM.READ_IMAGE;
+    const imageDimensions = isReadImage
+      ? collectReadImageDimensions(result.data)
+      : EMPTY_IMAGE_DIMENSIONS;
+    const nativeImageAnalysisKind = isReadImage
+      ? readReadImageAnalysisKind(result.data)
+      : undefined;
+    if (nativeImageAnalysisKind) nativeImageAnalysisKinds.add(nativeImageAnalysisKind);
     for (const attachment of result.attachments ?? []) {
       const resourceRef = attachment.assetRef?.resourceRef;
       const documentResourceRef = attachment.assetRef?.documentResourceRef;
@@ -76,17 +83,19 @@ export function collectCreatorVisibleArtifacts(
       const intrinsicDimensions = imageDimensions.get(
         createImageResourceIdentity(resourceRef ?? documentResourceRef),
       );
-      candidates.push({
+      const candidate: CreatorVisibleArtifactCandidate = {
         artifactId: attachment.assetRef?.assetId ?? sourceId,
         revision: resourceRevision(resourceRef) ?? `attachment:${hashStableValue(attachment)}`,
-        role: input.consumedResourceIds ? 'source' : 'output',
+        role: nativeImageAnalysisKind || input.consumedResourceIds ? 'source' : 'output',
         kind: attachment.type,
         title: attachment.assetRef?.label ?? `${attachment.type} result`,
         sourceId,
         ...(resourceRef ? { resourceRef } : {}),
         ...(documentResourceRef ? { documentResourceRef } : {}),
         ...(intrinsicDimensions ? { intrinsicDimensions } : {}),
-      });
+      };
+      candidates.push(candidate);
+      if (nativeImageAnalysisKind) nativeImageSourceArtifactIds.push(candidate.artifactId);
     }
     for (const transfer of result.artifacts ?? []) {
       const candidate = collectMarkdownArtifact(transfer);
@@ -104,14 +113,89 @@ export function collectCreatorVisibleArtifacts(
       resourceRef: lifecycle.resourceRef,
     });
   }
-  for (const fenced of extractCompositeContentFenceCandidates(input.assistantMarkdown ?? '')) {
+  const fencedCandidates = extractCompositeContentFenceCandidates(input.assistantMarkdown ?? '');
+  for (const fenced of fencedCandidates) {
     const candidate = collectCompositeMarkdownArtifact(fenced.value);
     if (candidate) candidates.push(candidate);
+  }
+  if (
+    nativeImageSourceArtifactIds.length > 0 &&
+    fencedCandidates.length === 0 &&
+    !candidates.some((candidate) => candidate.role === 'analysis')
+  ) {
+    const analysis = collectNativeImageAnalysisArtifact({
+      analysisKinds: [...nativeImageAnalysisKinds],
+      sourceArtifactIds: nativeImageSourceArtifactIds,
+      assistantMarkdown: input.assistantMarkdown,
+    });
+    if (analysis) candidates.push(analysis);
   }
   const reviewable = candidates.some((candidate) => candidate.role !== 'source');
   return deduplicateCandidates(
     reviewable ? candidates : candidates.filter((candidate) => candidate.role !== 'source'),
   );
+}
+
+type ReadImageAnalysisKind = 'describe' | 'ocr' | 'panels' | 'storyboard' | 'custom';
+
+interface NativeImageAnalysisArtifactInput {
+  readonly analysisKinds: readonly ReadImageAnalysisKind[];
+  readonly sourceArtifactIds: readonly string[];
+  readonly assistantMarkdown?: string;
+}
+
+function collectNativeImageAnalysisArtifact(
+  input: NativeImageAnalysisArtifactInput,
+): CreatorVisibleArtifactCandidate | undefined {
+  const markdown = readNonEmptyString(input.assistantMarkdown);
+  if (!markdown || input.analysisKinds.length === 0 || input.sourceArtifactIds.length === 0) {
+    return undefined;
+  }
+  const analysisKinds = [...new Set(input.analysisKinds)].sort();
+  const sourceArtifactIds = [...new Set(input.sourceArtifactIds)];
+  const identity = { analysisKinds, sourceArtifactIds, markdown };
+  const artifactId = `read-image-analysis:${hashStableValue(identity)}`;
+  return {
+    artifactId,
+    revision: `markdown:${hashStableValue(identity)}`,
+    role: 'analysis',
+    kind: 'markdown',
+    title: nativeImageAnalysisTitle(analysisKinds),
+    sourceId: `artifact:${artifactId}`,
+    sourceArtifactIds,
+    markdown,
+    provenanceSource: 'native-image-analysis',
+  };
+}
+
+function readReadImageAnalysisKind(data: unknown): ReadImageAnalysisKind | undefined {
+  if (!isRecord(data)) return undefined;
+  const analysis = data['analysis'];
+  return analysis === 'describe' ||
+    analysis === 'ocr' ||
+    analysis === 'panels' ||
+    analysis === 'storyboard' ||
+    analysis === 'custom'
+    ? analysis
+    : undefined;
+}
+
+function nativeImageAnalysisTitle(analysisKinds: readonly ReadImageAnalysisKind[]): string {
+  if (analysisKinds.length !== 1) return 'Image Analysis';
+  const analysisKind = analysisKinds[0];
+  if (!analysisKind) return 'Image Analysis';
+  switch (analysisKind) {
+    case 'describe':
+      return 'Image Description';
+    case 'ocr':
+      return 'Image OCR';
+    case 'panels':
+      return 'Panel Analysis';
+    case 'storyboard':
+      return 'Storyboard Analysis';
+    case 'custom':
+      return 'Image Analysis';
+  }
 }
 
 const EMPTY_IMAGE_DIMENSIONS: ReadonlyMap<string, CanvasWorkspaceArtifactDimensions> = new Map();
@@ -157,11 +241,12 @@ function collectMarkdownArtifact(
   if (transfer.type !== 'artifactSnapshot' && transfer.type !== 'artifactBackfill')
     return undefined;
   if (transfer.type === 'artifactSnapshot' && transfer.complete === false) return undefined;
-  return collectCompositeMarkdownArtifact(transfer.artifact);
+  return collectCompositeMarkdownArtifact(transfer.artifact, 'tool-result');
 }
 
 function collectCompositeMarkdownArtifact(
   value: unknown,
+  provenanceSource: CreatorVisibleArtifactCandidate['provenanceSource'] = 'assistant-declared',
 ): CreatorVisibleArtifactCandidate | undefined {
   if (!validateCompositeArtifact(value).ok || !isRecord(value)) return undefined;
   const artifactId = readNonEmptyString(value['artifactId']);
@@ -179,6 +264,7 @@ function collectCompositeMarkdownArtifact(
     sourceId: `artifact:${artifactId}`,
     ...(sourceArtifactIds ? { sourceArtifactIds } : {}),
     markdown,
+    provenanceSource,
   };
 }
 
