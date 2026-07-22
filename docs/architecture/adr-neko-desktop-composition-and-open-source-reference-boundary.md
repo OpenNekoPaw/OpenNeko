@@ -4,6 +4,8 @@
 日期：2026-07-19
 范围：拟议中的 `apps/neko-desktop`、现有领域子包、Desktop Host bridge、Rust Engine，以及 Craft Agents、MiniMax Hub 等外部参考的采用边界。
 
+部分取代说明（2026-07-22）：本文关于 Cut 保留 `.nkv`、OTIO 只作为交换格式或由 Desktop 复用既有 Cut 媒体实现的结论，已由 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 取代。Desktop Cut 格式和 media adapter 仍需未来独立 OpenSpec，不得从本文恢复 NKV 或推断宿主实现。
+
 ## 背景
 
 OpenNeko 当前只有 `apps/neko-vscode` 和 `apps/neko-tui` 两个应用组合根，系统文档也只把 VS Code 与 TUI 描述为现行客户端。此前的 Desktop、Workbench Core 与 Market Core 已被删除；[`adr-neko-desktop-apphost-resource-viewport-boundary.md`](adr-neko-desktop-apphost-resource-viewport-boundary.md) 因此保持 `Superseded`，不得作为恢复旧实现的依据。
@@ -57,7 +59,7 @@ Desktop 优先复用以下公共能力：
 | --- | --- | --- |
 | Agent、会话、模型、Skill、工具编排 | `packages/neko-agent` | 复用 Pi runtime、`AgentHostRuntimeAdapter` 和公共 Web UI root；实现 Electron adapter |
 | Canvas 项目事实与交互 | `packages/neko-canvas` | 保留 `.nkc` 与 Canvas domain 为真值；把完整 UI root 的 VS Code message 依赖改为注入式 host adapter |
-| Cut 时间线与编辑 | `packages/neko-cut` | 保留 `.nkv` 与 Cut domain 为真值；通过 host-neutral authoring/runtime contract 接入 |
+| Cut 时间线与编辑 | `packages/neko-cut` | 复用 host-neutral OTIO Cut Core；Desktop document/media adapter 由未来独立 OpenSpec 定义 |
 | 素材、实体与搜索 | `packages/neko-assets`、`packages/neko-entity`、`packages/neko-search` | 复用 domain service 与 DTO；为 Desktop 组合 React 素材管理面，不复用 VS Code TreeView 宿主实现 |
 | Preview | `packages/neko-preview` | 保留只读投影职责；把完整 root 的宿主通信抽到 adapter |
 | Host、UI 与基础能力 | `packages/neko-host`、`packages/neko-ui`、`packages/neko-types` | 扩展现有公共 ports/primitives，不在 Desktop 建第二套 host framework、design system、i18n、日志或错误类型 |
@@ -101,7 +103,7 @@ Desktop MVP 仍遵守本地产品边界：workspace、本地文件、Host 权限
 | Electron Forge | 优先直接采用 | 用于 Electron 打包、发布和 native module rebuild；最终选择仍需通过实施 OpenSpec 和平台 spike |
 | Electron Security Guidance | 必须落实 | `contextIsolation`、sandbox、CSP、最小 preload API、sender 校验和安全自定义协议是宿主基线 |
 | Playwright Electron | 评估后采用 | 用于 Desktop 运行态 E2E；其 Electron 支持状态要求同时保留 IPC/contract 测试，不能只靠 UI 自动化 |
-| OpenTimelineIO | 协议/语义参考 | 用于时间线交换边界；MVP 不要求嵌入其 Python/C++ runtime，也不替换 `.nkv` 真值 |
+| OpenTimelineIO | 工程协议/语义 | Cut 已选择受限 OTIO profile 为工程真值；Desktop 是否组合 Cut 及其媒体 adapter 仍需独立设计 |
 | Agent Skills | 格式参考并保持兼容 | 用于开放 Skill 可移植格式；Neko overlay、trust 和 capability 仍由现有 Agent 边界拥有 |
 | ComfyUI | 交互参考 | 参考 queue、history、provenance 与节点工作流体验；不采用其后端或工作流格式 |
 | React Flow | 技术 spike 候选 | 只评估图交互、可访问性与自动布局；未经 Canvas 架构和性能 spike 不替换现有 Canvas |
