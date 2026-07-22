@@ -330,7 +330,7 @@ Agent 上下文分三类：
 | Project context | `ResourceRef`、asset/entity ID、Search source、domain project refs                | 可进入 durable payload |
 | Memory context  | conversation journal、working summary、semantic memory、character memory evidence | 不替代项目事实         |
 
-Memory 保存可追溯上下文，不是实体、素材或领域项目格式的权威来源。Agent 生成内容若要进入项目，应通过对应事实层：素材进 Asset Library，身份进 Unified Entity，媒体进 Resource/Generated source，Engine 输出进 source ref 或领域格式。
+Memory 保存可追溯上下文，不是实体、媒体文件或领域项目格式的权威来源。Agent 生成内容若要进入项目，应通过对应 owner：文件保留为 generated output 或显式复制到 Media Library，身份与 representation binding 进入 Unified Entity，Engine 输出进入 source locator 或领域格式。
 
 ### Agent-first 多模态解析
 

@@ -29,7 +29,7 @@ Canvas 已经通过容器、节点、连线和 playback metadata 表达一组播
 
 - Canvas 的节点、容器、连接、route 和 preview session 归 `interactive` 领域；播放路线是 Canvas 子系统，不是新的 Canvas kind。
 - 分支叙事和互动 route 在 Canvas 内统一投影为 `CanvasPlaybackPlan.routeCandidates`；实现不得为 narrative 分支另建独立播放路线模型。
-- 素材、缩略图、媒体引用和生成产物必须通过 Asset / ResourceRef / ContentAccess 路径进入 `CanvasCutDraftPayload`，不得把任意 host 绝对路径写成长期事实。
+- 素材、缩略图、媒体引用和生成产物必须通过 Asset / ResourceRef / stable locator 与窄 content port 进入 `CanvasCutDraftPayload`，不得把任意 host 绝对路径写成长期事实。
 - Cut 导出仍走视频领域导出与交付管线；本 ADR 只规定 Canvas 到 Cut 的剪辑初稿交接，不改变导出权威。
 
 ## 决策
@@ -72,7 +72,7 @@ CanvasPlaybackPlan
 
 - 预览打开、预览刷新、Agent 查询、发送 Cut 前创建 draft 时，基于当前 `CanvasData` 快照生成 plan。
 - Canvas 数据、playback metadata、选中节点、adapter/mode 或资源投影变化后，相关缓存必须失效。
-- 如果 plan 或 preview-enriched plan 包含已解析的媒体 metadata（duration、thumbnail、poster frame、availability、probe result 等），外部素材、ResourceRef resolver、Asset index 或 ContentAccess revision 变化也必须使缓存失效。若 plan 只保存 durable resource reference，则这些媒体解析结果应留在 preview enrichment 层，不进入基础 `CanvasPlaybackPlan` 缓存键。
+- 如果 plan 或 preview-enriched plan 包含已解析的媒体 metadata（duration、thumbnail、poster frame、availability、probe result 等），外部素材、ResourceRef resolver、Asset index、content fingerprint 或 representation revision 变化也必须使缓存失效。若 plan 只保存 durable resource reference，则这些媒体解析结果应留在 preview enrichment 层，不进入基础 `CanvasPlaybackPlan` 缓存键。
 - 跨 Webview、Agent 或 Cut draft 传递时，应带上 source canvas uri、route id 和 canvas revision/hash；消费者必须能发现 stale plan，而不是继续把旧 route 当成当前事实。
 - 缓存只能优化投影成本，不能成为顺序权威；命中缓存与重新生成应得到等价的 units、transitions 和 route candidates。
 
@@ -563,7 +563,7 @@ Canvas 和 Cut 分别通过 adapter 投影自己的领域模型，不让共享 U
 
 - `CanvasPlaybackPlan` 由 Canvas 顺序生成，路线条不保存私有排序。
 - Plan 生成缓存必须由 Canvas revision/hash 失效；stale plan 不能继续成功导入 Cut。
-- 若 plan enrichment 包含媒体解析结果，外部素材、Asset index、ResourceRef 或 ContentAccess revision 变化必须使相关缓存失效。
+- 若 plan enrichment 包含媒体解析结果，外部素材、Asset index、ResourceRef、content fingerprint 或 representation revision 变化必须使相关缓存失效。
 - 持久 route intent 与 `PlaybackSession` 运行态分离；关闭和重开预览不会写入私有 timeline 顺序。
 - 多输入生成、reference、prompt、note、asset dependency 等非播放连接不得默认进入 `CanvasPlaybackPlan` route；只有明确播放边、播放容器顺序或 route metadata 才能生成播放 unit / transition。
 - Route Storyboard Matrix 行必须按 route family 分组和去重；默认只展开 divergent routes / branches，不能把所有 route candidate 无差别铺成重复行。

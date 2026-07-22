@@ -7,14 +7,14 @@
 [![Status](https://img.shields.io/badge/Status-Alpha-orange)]()
 [![License](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue)](./LICENSE)
 
-OpenNeko is for creators who want control over their project files, model connections, and creative workflow. Instead of being another online model aggregation platform, it lets an Agent understand a local project, invoke creative capabilities, and move generated results into a canvas, asset library, timeline, and preview tools for continued work.
+OpenNeko is for creators who want control over their project files, model connections, and creative workflow. Instead of being another online model aggregation platform, it lets an Agent understand a local project, invoke creative capabilities, and move generated results into a canvas, Media Library, timeline, and preview tools for continued work.
 
 ## Key Ideas
 
 - **Local projects first**: assets, characters, project context, and creative outputs are organized around the local workspace.
 - **Bring your own AI services**: configure external APIs, compatible APIs, or local API services without being tied to one model platform.
 - **Agent-driven creation**: the Agent can understand the current project, plan tasks, invoke tools, and help generate, analyze, and iterate content.
-- **A continuous workflow**: generated content can move into the canvas, asset library, and video timeline for editing, preview, and export.
+- **A continuous workflow**: generated content can move into the canvas, Media Library, and video timeline for editing, preview, and export.
 
 ## Current Capabilities
 

@@ -38,10 +38,11 @@
 | [`adr-unified-markdown-resource-rendering.md`](adr-unified-markdown-resource-rendering.md)                         | Canvas MCP 式能力、Markdown 扩展语法、资源增强渲染和 Send to Canvas 边界              |
 | [`adr-canvas-cut-playback-route-and-timeline-boundary.md`](adr-canvas-cut-playback-route-and-timeline-boundary.md) | Canvas 预览路线矩阵、Cut 剪辑时间线、Agent 顺序感知和跨包协议边界                     |
 | [`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md)                   | 创作领域面板与共享 UI 原语的复用边界                                                  |
+| [`adr-asset-library-sources-and-unified-entity-boundary.md`](adr-asset-library-sources-and-unified-entity-boundary.md) | 单一媒体库、ContentLocator 与统一实体的职责和迁移边界                             |
 | [`agent.md`](agent.md)                                                                                             | Agent-first、execution mode、skill/prompt/tool/provider 控制面和宿主分层              |
-| [`asset-library.md`](asset-library.md)                                                                             | 素材库、Asset/Variant/File、显式导入、外部包 trust 和素材搜索投影                    |
+| [`asset-library.md`](asset-library.md)                                                                             | 媒体库、工作区 link、内容访问、显式文件操作和搜索投影                              |
 | [`auth.md`](auth.md)                                                                                               | 无独立 Auth 产品时的用户凭据、workspace policy、host adapter 和 session 边界           |
-| [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)                                                 | 缓存、文件读写服务、路径变量、ContentAccess 和 Webview 投影                           |
+| [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)                                                 | 派生存储、窄内容读写服务、路径变量和 Webview 投影                                      |
 | [`client-targets.md`](client-targets.md)                                                                           | TUI、OpenNeko for VS Code 的产品目标、职责边界和验证重点                              |
 | [`engine-runtime.md`](engine-runtime.md)                                                                           | 裁剪后的 Rust Media Engine、Host API、文件/Range、编解码和数据路径                    |
 | [`headless-project-authoring.md`](headless-project-authoring.md)                                                   | `.nk*` 持久项目写入的无 UI authoring 边界、operation 分类、canonical 入口和客户端适配 |
