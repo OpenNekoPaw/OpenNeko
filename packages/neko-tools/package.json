@@ -173,7 +173,7 @@
   "scripts": {
     "vscode:prepublish": "pnpm run compile",
     "compile": "pnpm run build:webview && pnpm run compile:extension && pnpm run copy:webview",
-    "compile:extension": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:sharp --format=cjs --platform=node --main-fields=module,main",
+    "compile:extension": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --main-fields=module,main",
     "build:webview": "cd packages/webview && pnpm run build",
     "copy:webview": "rm -rf dist/webview && cp -R packages/webview/dist dist/webview",
     "watch": "pnpm run compile:extension -- --watch",
@@ -189,7 +189,6 @@
     "vitest": "^4.1.2"
   },
   "dependencies": {
-    "jsonc-parser": "^3.3.0",
-    "sharp": "^0.34.0"
+    "jsonc-parser": "^3.3.0"
   }
 }

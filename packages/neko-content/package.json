@@ -17,12 +17,21 @@
     "@neko/markdown": "workspace:*",
     "@neko/shared": "workspace:*",
     "@zip.js/zip.js": "^2.8.26",
+    "adm-zip": "^0.5.16",
+    "cheerio": "^1.2.0",
     "epub2": "^3.0.2",
+    "fast-xml-parser": "^4.5.0",
     "mammoth": "^1.12.0",
+    "node-fetch": "^2.7.0",
+    "node-unrar-js": "^2.0.2",
+    "officeparser": "^6.0.4",
     "pdf-parse": "^2.4.5",
+    "xlsx": "^0.18.5",
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
+    "@types/node-fetch": "^2.6.13",
     "vitest": "^4.1.2"
   },
   "license": "AGPL-3.0-or-later"

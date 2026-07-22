@@ -1,7 +1,7 @@
 {
   "ffmpegVersion": "8.1.2",
   "btbnTag": "autobuild-2026-07-19-13-12",
-  "ffmpegLibs": ["avcodec", "avfilter", "avformat", "avutil", "swresample", "swscale"],
+  "ffmpegLibs": ["avcodec", "avdevice", "avfilter", "avformat", "avutil", "swresample", "swscale"],
   "targets": {
     "darwin-arm64": {
       "rustTarget": "aarch64-apple-darwin",

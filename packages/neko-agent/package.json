@@ -419,12 +419,13 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "pnpm run compile",
+    "vscode:prepublish": "pnpm run compile && pnpm run stage:sharp-runtime",
     "compile": "pnpm run compile:extension && pnpm run compile:webview && pnpm run copy:skills",
     "compile:extension": "esbuild ./packages/extension/src/index.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --loader:.md=text",
     "compile:webview": "cd packages/webview && pnpm run build && cd ../.. && pnpm run copy:webview",
     "copy:skills": "node scripts/copy-builtin-skills.mjs",
     "copy:webview": "rm -rf dist/webview && mkdir -p dist/webview && cp -r packages/webview/dist/* dist/webview/",
+    "stage:sharp-runtime": "node scripts/stage-sharp-runtime.mjs",
     "watch": "pnpm run compile:extension -- --watch",
     "lint": "eslint packages/extension/src packages/agent/src packages/platform/src packages/webview/src",
     "test": "vitest",

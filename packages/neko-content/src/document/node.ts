@@ -25,6 +25,19 @@ export interface CreateNodeDocumentAccessServiceOptions extends CreateNodeDocume
   readonly logger?: DocumentReaderLogger;
 }
 
+export const NODE_DOCUMENT_MODULE_NAMES = Object.freeze([
+  'adm-zip',
+  'pdf-parse',
+  'mammoth',
+  'officeparser',
+  'epub2',
+  'node-unrar-js',
+  'node-fetch',
+  'cheerio',
+  'xlsx',
+  'fast-xml-parser',
+] as const);
+
 export function createNodeDocumentAccessService(
   options: CreateNodeDocumentAccessServiceOptions = {},
 ): IDocumentAccessService {
@@ -34,28 +47,61 @@ export function createNodeDocumentAccessService(
       new TextDecoder().decode(await lowLevelAccess.readFile(filePath)),
     readBinaryFile: (filePath) => lowLevelAccess.readFile(filePath),
     readEntry: async (filePath, entryPath) => lowLevelAccess.readEntry(filePath, entryPath),
-    loadModule: loadOptionalDocumentModule,
+    loadModule: loadNodeDocumentModule,
     ...(options.logger ? { logger: options.logger } : {}),
   };
   const reader = createDocumentReaderRuntime(runtime);
   return createDocumentAccessService({ reader, runtime, lowLevelAccess });
 }
 
-async function loadOptionalDocumentModule<T>(packageName: string): Promise<T | null> {
-  try {
-    const loaded = await import(packageName);
-    return loaded.default ?? loaded;
-  } catch (error) {
-    if (isMissingModuleError(error)) return null;
-    throw error;
+export function loadNodeDocumentModule<T>(packageName: string): Promise<T>;
+export async function loadNodeDocumentModule(packageName: string): Promise<unknown> {
+  let loaded: unknown;
+  switch (packageName) {
+    case 'adm-zip':
+      loaded = await import('adm-zip');
+      break;
+    case 'pdf-parse':
+      loaded = await import('pdf-parse');
+      break;
+    case 'mammoth':
+      loaded = await import('mammoth');
+      break;
+    case 'officeparser':
+      loaded = await import('officeparser');
+      break;
+    case 'epub2':
+      loaded = await import('epub2');
+      break;
+    case 'node-unrar-js':
+      loaded = await import('node-unrar-js');
+      break;
+    case 'node-fetch':
+      loaded = await import('node-fetch');
+      break;
+    case 'cheerio':
+      loaded = await import('cheerio');
+      break;
+    case 'xlsx':
+      loaded = await import('xlsx');
+      break;
+    case 'fast-xml-parser':
+      loaded = await import('fast-xml-parser');
+      break;
+    default:
+      throw new Error(`Unsupported Node document runtime module: ${packageName}`);
   }
+
+  return normalizeNodeModule(loaded);
 }
 
-function isMissingModuleError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    ('code' in error
-      ? error.code === 'ERR_MODULE_NOT_FOUND'
-      : /cannot find package/iu.test(error.message))
-  );
+function normalizeNodeModule(moduleValue: unknown): unknown {
+  if (
+    (typeof moduleValue === 'object' && moduleValue !== null) ||
+    typeof moduleValue === 'function'
+  ) {
+    const defaultValue = Reflect.get(moduleValue, 'default');
+    return defaultValue ?? moduleValue;
+  }
+  return moduleValue;
 }

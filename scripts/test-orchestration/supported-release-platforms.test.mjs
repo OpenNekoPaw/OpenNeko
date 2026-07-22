@@ -70,6 +70,33 @@ describe('supported release platform orchestration', () => {
     assert.equal(releaseWorkflow.jobs['release-engine'], undefined);
   });
 
+  it('builds native release payloads against the configured FFmpeg SDK', async () => {
+    const [ciWorkflow, releaseWorkflow] = await Promise.all([
+      readFile('.github/workflows/ci.yml', 'utf8').then(parse),
+      readFile('.github/workflows/release.yml', 'utf8').then(parse),
+    ]);
+
+    for (const job of [
+      ciWorkflow.jobs['package-openneko-vsix'],
+      releaseWorkflow.jobs['release-openneko'],
+    ]) {
+      const prepareIndex = job.steps.findIndex(
+        (step) => step.name === 'Prepare configured FFmpeg build SDK',
+      );
+      const buildIndex = job.steps.findIndex((step) => step.name === 'Build host-napi');
+      assert.ok(prepareIndex >= 0, 'missing configured FFmpeg SDK preparation');
+      assert.ok(prepareIndex < buildIndex, 'FFmpeg SDK must be prepared before host-napi');
+
+      const prepareStep = job.steps[prepareIndex];
+      const buildStep = job.steps[buildIndex];
+      assert.match(prepareStep.run, /download-ffmpeg\.js --platform \$\{\{ matrix\.target \}\}/u);
+      assert.equal(
+        buildStep.env.FFMPEG_DIR,
+        '${{ github.workspace }}/packages/neko-engine/deps/ffmpeg',
+      );
+    }
+  });
+
   it('keeps the native Engine out of TypeScript-only VSIX packaging', async () => {
     const packageGroups = JSON.parse(await readFile('scripts/package-groups.json', 'utf8'));
 

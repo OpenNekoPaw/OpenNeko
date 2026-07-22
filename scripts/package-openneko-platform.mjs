@@ -19,6 +19,7 @@ import {
   mergeOpenNekoLocalization,
   openNekoArtifactName,
 } from './openneko-vsix-contract.mjs';
+import { assertEmbeddedRuntimeClosure } from './embedded-runtime-closure.mjs';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const appRoot = join(repoRoot, 'apps', 'neko-vscode');
@@ -139,6 +140,7 @@ export function packageOpenNekoPlatform({ target, engineVsix }, command = runCom
     listFiles(join(stageRoot, 'dist', 'features', 'neko-engine')),
     target,
   );
+  assertEmbeddedRuntimeClosure(stageRoot, target);
   cpSync(join(appRoot, 'dist', 'extension.js'), join(stageRoot, 'dist', 'extension.js'));
   cpSync(join(appRoot, 'README.md'), join(stageRoot, 'README.md'));
   cpSync(join(appRoot, 'LICENSE'), join(stageRoot, 'LICENSE'));

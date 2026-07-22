@@ -10,7 +10,7 @@ export const OPENNEKO_FEATURE_PACKAGES = Object.freeze([
   'neko-agent',
 ]);
 
-const OPENNEKO_PLATFORM_TARGETS = Object.freeze(['darwin-arm64', 'linux-x64']);
+export const OPENNEKO_PLATFORM_TARGETS = Object.freeze(['darwin-arm64', 'linux-x64']);
 
 const INTERNAL_EXTENSION_IDS = new Set(
   OPENNEKO_FEATURE_PACKAGES.map((packageName) => `neko.${packageName}`),

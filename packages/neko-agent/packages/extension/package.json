@@ -22,19 +22,12 @@
     "@neko/platform": "workspace:*",
     "@neko/search": "workspace:*",
     "@neko/shared": "workspace:*",
-    "adm-zip": "^0.5.16",
-    "epub2": "^3.0.2",
-    "fast-xml-parser": "^4.5.0",
-    "mammoth": "^1.12.0",
-    "node-fetch": "^2.7.0",
-    "node-unrar-js": "^2.0.2",
-    "officeparser": "^6.0.4",
-    "pdf-parse": "^2.4.5",
-    "sharp": "^0.34.0",
-    "xlsx": "^0.18.5"
+    "sharp": "^0.34.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/vscode": "^1.125.0",
+    "adm-zip": "^0.5.16",
     "vitest": "^4.1.2"
   },
   "license": "AGPL-3.0-or-later"
