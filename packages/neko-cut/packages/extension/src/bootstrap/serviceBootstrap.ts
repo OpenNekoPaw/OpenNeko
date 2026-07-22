@@ -30,8 +30,6 @@ import { addCutProjectSource } from '../editor/video/cutProjectSourceIngest';
 // =============================================================================
 
 // Re-export service IDs
-export { IConnectionStateManager };
-
 // =============================================================================
 // Service Bootstrap Result
 // =============================================================================

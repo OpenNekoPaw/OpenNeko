@@ -26,7 +26,6 @@ import {
 } from '@neko/shared';
 import {
   CharacterDialogueSession,
-  createDefaultCharacterDialogueSessionId,
   createCharacterDialogueRuntimeService,
   type CharacterDialogueResponder,
   CharacterEvidenceBundle,
@@ -1060,7 +1059,7 @@ function assertCharacterDialogueRouteNotAborted(signal: AbortSignal): void {
   }
 }
 
-export function projectCharacterDialogueSession(
+function projectCharacterDialogueSession(
   session: Pick<
     CharacterDialogueSession,
     'id' | 'entityRef' | 'profileSnapshot' | 'mode' | 'status'
@@ -1078,14 +1077,6 @@ export function projectCharacterDialogueSession(
     ...(input.projectRoot ? { projectRoot: input.projectRoot } : {}),
     status: session.status === 'disposed' ? 'exited' : 'active',
   };
-}
-
-export function resolveCharacterDialogueEntityRefFromSlashArgs(input: {
-  readonly args?: string;
-  readonly projectRoot?: string;
-}): CreativeEntityRef | null {
-  const parsed = parseCharacterDialogueSlashArgs(input.args);
-  return resolveExplicitCharacterDialogueEntityRef(parsed, input.projectRoot);
 }
 
 function resolveExplicitCharacterDialogueEntityRef(
@@ -1288,10 +1279,6 @@ export function summarizeCharacterProfile(profile: NpcProfileSource): string {
   ]
     .filter((value): value is string => Boolean(value))
     .join(' · ');
-}
-
-export function createCharacterDialogueSessionId(entityRef: CreativeEntityRef): string {
-  return createDefaultCharacterDialogueSessionId(entityRef);
 }
 
 function requireCharacterSemanticPort<T>(port: T | undefined, operation: string): T {

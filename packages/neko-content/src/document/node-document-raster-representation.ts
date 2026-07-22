@@ -115,9 +115,7 @@ export function createNodeDocumentRasterRepresentationGenerator(
   };
 }
 
-export function createLibreOfficeDocumentRasterizer(
-  executable = 'soffice',
-): OfficeDocumentRasterizer {
+function createLibreOfficeDocumentRasterizer(executable = 'soffice'): OfficeDocumentRasterizer {
   return {
     async convertToPdf({ sourcePath, signal }) {
       const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-office-raster-'));

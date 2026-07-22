@@ -11,7 +11,7 @@ import {
 } from '@neko/shared';
 import type { IPerceptionPipeline } from './contracts';
 
-export const PERCEIVE_TOOL_NAME = TOOL_NAMES_PERCEPTION.PERCEIVE;
+const PERCEIVE_TOOL_NAME = TOOL_NAMES_PERCEPTION.PERCEIVE;
 
 export interface PerceiveToolConfig {
   readonly pipeline: IPerceptionPipeline;

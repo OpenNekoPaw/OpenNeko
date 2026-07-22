@@ -50,27 +50,25 @@ import { createLocalPerceptionAssetLoader } from '../services/perceptionAssetLoa
 // =============================================================================
 
 export const IPlatform = createServiceId<Platform>('platform');
-export const IToolRegistry = createServiceId<ToolRegistry>('toolRegistry');
-export const IMCPManager = createServiceId<MCPManager>('mcpManager');
+const IToolRegistry = createServiceId<ToolRegistry>('toolRegistry');
+const IMCPManager = createServiceId<MCPManager>('mcpManager');
 export const ITaskManager = createServiceId<IRuntimeTaskManager>('taskManager');
 export const IAgentManager = createServiceId<IAgentManagerInterface>('agentManager');
-export const IPiCredentialStore = createServiceId<OpenNekoCredentialStore>('piCredentialStore');
-export const IPiProviderAuthController = createServiceId<PiProviderAuthController>(
+const IPiCredentialStore = createServiceId<OpenNekoCredentialStore>('piCredentialStore');
+const IPiProviderAuthController = createServiceId<PiProviderAuthController>(
   'piProviderAuthController',
 );
-export const IPiAuthInteraction = createServiceId<AuthInteraction>('piAuthInteraction');
+const IPiAuthInteraction = createServiceId<AuthInteraction>('piAuthInteraction');
 export const IPiAgentRuntimeManager =
   createServiceId<VSCodePiRuntimeManager>('piAgentRuntimeManager');
 export const IProductPurposeTextRuntime = createServiceId<ICapabilityPurposeTextRuntime>(
   'productPurposeTextRuntime',
 );
-export const ITaskLifecycleCoordinator = createServiceId<TaskLifecycleCoordinator>(
+const ITaskLifecycleCoordinator = createServiceId<TaskLifecycleCoordinator>(
   'taskLifecycleCoordinator',
 );
 
 // Re-export IEditorRegistry
-export { IEditorRegistry };
-
 // =============================================================================
 // Service Bootstrap Result
 // =============================================================================

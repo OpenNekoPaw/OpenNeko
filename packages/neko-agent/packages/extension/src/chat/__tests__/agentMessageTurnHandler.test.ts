@@ -112,15 +112,6 @@ vi.mock('@neko/platform', async (importOriginal) => {
   return await importOriginal<typeof import('@neko/platform')>();
 });
 
-// Mock ../ai/agentContext
-vi.mock('../ai/agentContext', () => ({
-  createDefaultAgentContext: vi.fn(() => ({
-    activeEditor: undefined,
-    workspaceRoot: undefined,
-    projectType: 'unknown',
-  })),
-}));
-
 // Mock ../base logger
 vi.mock('../base', () => ({
   getLogger: vi.fn(() => ({

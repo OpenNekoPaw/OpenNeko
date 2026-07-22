@@ -1143,7 +1143,7 @@ function requiredPiPurposeCapabilities(
   }
 }
 
-export async function ensureVSCodePiProviderCredential(
+async function ensureVSCodePiProviderCredential(
   credentials: OpenNekoCredentialStore,
   input: Pick<ExecuteVSCodePiTurnInput, 'provider'>,
 ): Promise<void> {

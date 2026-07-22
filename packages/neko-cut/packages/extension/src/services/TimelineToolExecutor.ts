@@ -3,7 +3,6 @@
  */
 
 import * as vscode from 'vscode';
-import { createDefaultProject, type ProjectData } from '@neko/shared';
 import { getService } from '../base';
 import { IEditorRegistry } from '../editor/common/editorRegistry';
 import type { VideoEditorModel } from '../editor/video/videoEditorModel';
@@ -131,8 +130,4 @@ function parseCutDocumentUri(documentUri: string | undefined): vscode.Uri | unde
 
 function failed(error: string, start: number): ToolResult {
   return { success: false, error, duration: Date.now() - start };
-}
-
-export function createEmptyProject(): ProjectData {
-  return createDefaultProject();
 }

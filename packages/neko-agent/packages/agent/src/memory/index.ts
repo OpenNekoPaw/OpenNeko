@@ -14,7 +14,6 @@ export type { MemoryRecallOptions, RecalledMemory } from './memory-recall';
 
 // Shared memory store (P5 — cross-ring scratchpad for dual-flow)
 export {
-  createSharedMemoryStore,
   type ISharedMemoryStore,
   type SharedMemoryStoreConfig,
   type MemoryScope,

@@ -31,7 +31,7 @@ const SHARP_RUNTIME_PACKAGES = Object.freeze({
   ]),
 });
 
-export function resolveSharpRuntimeTarget(platform = process.platform, arch = process.arch) {
+function resolveSharpRuntimeTarget(platform = process.platform, arch = process.arch) {
   const target = `${platform}-${arch}`;
   if (Object.hasOwn(SHARP_RUNTIME_PACKAGES, target)) return target;
   throw new Error(`Unsupported Sharp runtime target: ${target}`);

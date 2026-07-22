@@ -8,6 +8,10 @@ import type { AgentTurnTimelineItem } from '@neko-agent/types';
 import { createGeneratedAssetRevisionRef, type EntityMemoryContribution } from '@neko/shared';
 import { evaluateAgentTaskResultDelivery, normalizeAgentTaskResultObservation } from '@neko/agent';
 import { createConversationProjectionStore } from '@neko/agent/runtime';
+import {
+  createManagedDocumentResourceRef,
+  type DocumentArchiveResourceRef,
+} from '@neko/content/document';
 
 vi.mock('vscode', () => ({
   Uri: {
@@ -812,7 +816,7 @@ describe('AgentStreamProcessor', () => {
         source: { filePath: '/books/a.epub', format: 'epub' },
         entryPath: 'image/Page_1.jpg',
         versionPolicy: 'versioned-export',
-      };
+      } satisfies DocumentArchiveResourceRef;
       const localResourceAccess = {
         toWebviewUri: vi.fn((_webview, filePath: string) =>
           filePath === materializedPath ? 'vscode-webview://page-1.jpg' : undefined,
@@ -887,11 +891,10 @@ describe('AgentStreamProcessor', () => {
           },
         ],
       });
-      expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith(
-        expect.objectContaining({
-          variant: expect.objectContaining({ role: 'document-entry', mimeType: 'image/jpeg' }),
-        }),
-      );
+      expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith({
+        source: createManagedDocumentResourceRef(archiveRef, 'project'),
+        mimeTypeHint: 'image/jpeg',
+      });
       expect(localResourceAccess.toWebviewUri).not.toHaveBeenCalled();
       expect(getProjectedTimelineToolResult('conv-1', 'tc-read-doc-image')?.data).toMatchObject({
         images: [
@@ -944,7 +947,7 @@ describe('AgentStreamProcessor', () => {
         source: { filePath: '${BOOKS}/story.epub', format: 'epub' },
         entryPath: 'OPS/page-1.jpg',
         versionPolicy: 'versioned-export',
-      };
+      } satisfies DocumentArchiveResourceRef;
       const localResourceAccess = {
         toWebviewUri: vi.fn((_webview, filePath: string) =>
           filePath === materializedPath ? 'vscode-webview://page-1.jpg' : undefined,
@@ -1046,11 +1049,10 @@ describe('AgentStreamProcessor', () => {
         isStreaming: false,
       });
       expect(JSON.stringify(streamComplete?.contentBlocks)).not.toContain('镜号');
-      expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith(
-        expect.objectContaining({
-          variant: expect.objectContaining({ role: 'document-entry', mimeType: 'image/jpeg' }),
-        }),
-      );
+      expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith({
+        source: createManagedDocumentResourceRef(archiveRef, 'project'),
+        mimeTypeHint: 'image/jpeg',
+      });
     });
 
     it('projects top-level tool result media fields for webview delivery', async () => {

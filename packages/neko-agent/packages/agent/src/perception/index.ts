@@ -16,9 +16,5 @@ export {
   type PerceptualAssetResolverPort,
   type ResolvedPerceptualAsset,
 } from './contracts';
-export {
-  PerceptionPolicyResolver,
-  createPerceptionPolicyResolver,
-} from './perception-policy-resolver';
 export { PerceptionPipeline, createPerceptionPipeline } from './perception-pipeline';
-export { PERCEIVE_TOOL_NAME, PerceiveTool, type PerceiveToolConfig } from './perceive-tool';
+export { type PerceiveToolConfig } from './perceive-tool';

@@ -155,7 +155,7 @@ export function createExternalProcessorHostAdapter(
   return new ExternalProcessorHostAdapter(options);
 }
 
-export class ExternalProcessorHostAdapter {
+class ExternalProcessorHostAdapter {
   private readonly registry: ExternalProcessorRegistry;
   private readonly roots: ExternalProcessorRootContext;
   private readonly processRunner: ExternalProcessorProcessRunner;
@@ -767,7 +767,7 @@ function processorOutputLocatorsEqual(
   );
 }
 
-export class NodeExternalProcessorProcessRunner implements ExternalProcessorProcessRunner {
+class NodeExternalProcessorProcessRunner implements ExternalProcessorProcessRunner {
   readonly canDisableNetwork = false;
 
   async run(input: ExternalProcessorProcessRunInput): Promise<ExternalProcessorProcessRunResult> {

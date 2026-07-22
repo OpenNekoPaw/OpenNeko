@@ -122,7 +122,7 @@ export function readMediaTaskResultDeliveryPolicy(
   }
 }
 
-export function readMediaTaskResultDeliveryGroup(
+function readMediaTaskResultDeliveryGroup(
   metadata: Record<string, unknown> | undefined,
 ): TaskResultDeliveryGroupMetadata | undefined {
   const value = metadata?.['resultDeliveryGroup'] ?? metadata?.['agentTaskResultDeliveryGroup'];
