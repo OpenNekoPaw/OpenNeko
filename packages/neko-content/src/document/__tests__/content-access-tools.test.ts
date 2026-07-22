@@ -94,6 +94,14 @@ describe('content access tools', () => {
           readonly resourceRef?: {
             readonly anyOf?: readonly { readonly required?: readonly string[] }[];
           };
+          readonly contentLocator?: {
+            readonly anyOf?: readonly {
+              readonly required?: readonly string[];
+              readonly properties?: {
+                readonly source?: { readonly required?: readonly string[] };
+              };
+            }[];
+          };
         };
       };
     };
@@ -118,6 +126,14 @@ describe('content access tools', () => {
       'source',
       'fingerprint',
     ]);
+    expect(images.items?.properties?.contentLocator?.anyOf?.[1]?.required).toEqual([
+      'kind',
+      'source',
+      'entryPath',
+    ]);
+    expect(
+      images.items?.properties?.contentLocator?.anyOf?.[1]?.properties?.source?.required,
+    ).toEqual(['kind', 'path']);
   });
 
   it('advertises metadata-only ReadImage mode and rejects legacy model-backed vision mode', async () => {
@@ -513,6 +529,45 @@ describe('content access tools', () => {
       maxBytes: MAX_READ_IMAGE_BYTES,
     });
     expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
+    expect(result.perceptionCards?.[0]?.perceptual?.thumbnailRef).toMatchObject({
+      contentLocator,
+    });
+  });
+
+  it('rejects an invalid content locator instead of falling back to a sibling resource ref', async () => {
+    const runtime = createRuntime();
+    runtime.loadProviderAsset.mockResolvedValueOnce({
+      status: 'unsupported-source',
+      diagnostics: [
+        {
+          code: 'unsupported-source',
+          severity: 'error',
+          message: 'Agent content source does not resolve to a stable content locator.',
+        },
+      ],
+    });
+
+    const result = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
+      images: [
+        {
+          contentLocator: {
+            kind: 'document-entry',
+            source: { kind: 'workspace-file' },
+            entryPath: 'pages/001.png',
+          },
+          resourceRef,
+        },
+      ],
+      mode: 'metadata',
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: expect.stringContaining('images[0].contentLocator'),
+    });
+    expect(runtime.loadContentAsset).not.toHaveBeenCalled();
+    expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
+    expect(runtime.resolveImageMetadata).not.toHaveBeenCalled();
   });
 
   it('rejects a missing nested document entry path instead of restoring it from sibling metadata', async () => {

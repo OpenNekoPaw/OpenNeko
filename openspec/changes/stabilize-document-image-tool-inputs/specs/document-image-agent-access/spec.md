@@ -38,6 +38,11 @@ The Agent and `ReadImage` MUST NOT reconstruct an incomplete resourceRef from an
 - **WHEN** a document-entry ref and its containing image item both omit `entryPath`
 - **THEN** validation fails before content loading and the batch is not reported as successful
 
+#### Scenario: Invalid canonical locator cannot fall back to a sibling reference
+
+- **WHEN** an image item explicitly contains a `contentLocator` that does not satisfy the stable locator contract and also contains a parseable `resourceRef`
+- **THEN** validation reports the indexed `contentLocator` failure before content loading and neither provider nor metadata fallback executes
+
 #### Scenario: Whole archive is passed as an image
 
 - **WHEN** ReadImage receives a document archive reference without an entry path

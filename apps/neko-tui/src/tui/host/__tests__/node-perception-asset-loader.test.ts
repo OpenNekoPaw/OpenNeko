@@ -203,6 +203,36 @@ describe('createNodePerceptionAssetLoader', () => {
       mimeType: 'image/jpeg',
     });
   });
+
+  it('loads canonical document-entry locators without provider fallback', async () => {
+    const workDir = createTempDir();
+    const archivePath = path.join(workDir, 'book.epub');
+    const imageBytes = Buffer.from('canonical-document-image-bytes');
+    const archive = new (AdmZipModule as unknown as AdmZipConstructor)();
+    archive.addFile('OPS/images/page-1.jpg', imageBytes);
+    archive.writeZip(archivePath);
+    const loader = createNodePerceptionAssetLoader(
+      createTestContentAccessRuntime(createNodeHostAdapter({ workDir }), workDir),
+    );
+    const documentAsset: PerceptualAssetRef = {
+      assetId: 'doc-image-content-locator-1',
+      uri: 'content:document-entry',
+      mimeType: 'image/jpeg',
+      contentLocator: {
+        kind: 'document-entry',
+        source: { kind: 'workspace-file', path: 'book.epub' },
+        entryPath: 'OPS/images/page-1.jpg',
+      },
+    };
+
+    const result = await loader.load(documentAsset);
+
+    expect(result).toEqual({
+      kind: 'image',
+      url: `data:image/jpeg;base64,${imageBytes.toString('base64')}`,
+      mimeType: 'image/jpeg',
+    });
+  });
 });
 
 function directoryLinkType(): 'dir' | 'junction' {

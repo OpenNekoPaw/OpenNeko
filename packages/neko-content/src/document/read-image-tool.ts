@@ -200,6 +200,16 @@ const MANAGED_RESOURCE_REF_SCHEMA: ToolParameterProperty = {
   },
 };
 
+const CONTENT_FINGERPRINT_SCHEMA: ToolParameterProperty = {
+  type: 'object',
+  properties: {
+    strategy: { type: 'string', enum: ['sha256', 'mtime-size', 'provider'] },
+    value: { type: 'string', minLength: 1 },
+  },
+  required: ['strategy', 'value'],
+  additionalProperties: false,
+};
+
 const WORKSPACE_FILE_LOCATOR_SCHEMA: ToolParameterProperty = {
   type: 'object',
   description:
@@ -207,9 +217,48 @@ const WORKSPACE_FILE_LOCATOR_SCHEMA: ToolParameterProperty = {
   properties: {
     kind: { type: 'string', enum: ['workspace-file'] },
     path: { type: 'string', minLength: 1 },
-    fingerprint: { type: 'object' },
+    fingerprint: CONTENT_FINGERPRINT_SCHEMA,
   },
   required: ['kind', 'path'],
+  additionalProperties: false,
+};
+
+const DOCUMENT_ENTRY_CONTENT_LOCATOR_SCHEMA: ToolParameterProperty = {
+  type: 'object',
+  properties: {
+    kind: { type: 'string', enum: ['document-entry'] },
+    source: WORKSPACE_FILE_LOCATOR_SCHEMA,
+    entryPath: { type: 'string', minLength: 1 },
+    fingerprint: CONTENT_FINGERPRINT_SCHEMA,
+  },
+  required: ['kind', 'source', 'entryPath'],
+  additionalProperties: false,
+};
+
+const GENERATED_OUTPUT_CONTENT_LOCATOR_SCHEMA: ToolParameterProperty = {
+  type: 'object',
+  properties: {
+    kind: { type: 'string', enum: ['generated-output'] },
+    outputId: { type: 'string', minLength: 1 },
+    revision: { type: 'string', minLength: 1 },
+    digest: { type: 'string', minLength: 1 },
+    path: { type: 'string', minLength: 1 },
+  },
+  required: ['kind', 'outputId', 'revision', 'digest', 'path'],
+  additionalProperties: false,
+};
+
+const PACKAGE_RESOURCE_CONTENT_LOCATOR_SCHEMA: ToolParameterProperty = {
+  type: 'object',
+  properties: {
+    kind: { type: 'string', enum: ['package-resource'] },
+    packageId: { type: 'string', minLength: 1 },
+    revision: { type: 'string', minLength: 1 },
+    resourcePath: { type: 'string', minLength: 1 },
+    digest: { type: 'string', minLength: 1 },
+    manifestPath: { type: 'string', minLength: 1 },
+  },
+  required: ['kind', 'packageId', 'revision', 'resourcePath'],
   additionalProperties: false,
 };
 
@@ -217,6 +266,12 @@ const CONTENT_LOCATOR_SCHEMA: ToolParameterProperty = {
   type: 'object',
   description:
     'Canonical ContentLocator copied unchanged from ReadDocument.imageInfo[].contentLocator.',
+  anyOf: [
+    WORKSPACE_FILE_LOCATOR_SCHEMA,
+    DOCUMENT_ENTRY_CONTENT_LOCATOR_SCHEMA,
+    GENERATED_OUTPUT_CONTENT_LOCATOR_SCHEMA,
+    PACKAGE_RESOURCE_CONTENT_LOCATOR_SCHEMA,
+  ],
 };
 
 export function createReadImageTool(deps: ReadImageToolDeps = {}): Tool {
@@ -625,7 +680,7 @@ function getImageDisplayPath(input: InternalReadImageInputImage): string {
 function readInputImages(args: Record<string, unknown>): ReadImageInputImage[] {
   const structured = args['images'];
   if (Array.isArray(structured)) {
-    return structured.flatMap((item) => {
+    return structured.flatMap((item, index) => {
       if (!isRecord(item)) return [];
       const alias = readString(item['alias']);
       const aliasScope = readString(item['aliasScope']);
@@ -639,7 +694,7 @@ function readInputImages(args: Record<string, unknown>): ReadImageInputImage[] {
       const mimeType = readString(item['mimeType']);
       const metadata = isRecord(item['metadata']) ? item['metadata'] : undefined;
       const locator = parseWorkspaceFileLocator(item['locator']);
-      const contentLocator = parseContentLocator(item['contentLocator']);
+      const contentLocator = parseContentLocator(item['contentLocator'], index);
       const resourceRef = parseReadImageResourceRef(item['resourceRef'], entryPath);
       const representationLocator = isContentRepresentationLocator(item['representationLocator'])
         ? item['representationLocator']
@@ -671,9 +726,15 @@ function readInputImages(args: Record<string, unknown>): ReadImageInputImage[] {
   return [];
 }
 
-function parseContentLocator(value: unknown): ContentLocator | undefined {
+function parseContentLocator(value: unknown, imageIndex: number): ContentLocator | undefined {
+  if (value === undefined) return undefined;
   const result = validateContentLocator(value);
-  return result.ok ? result.locator : undefined;
+  if (result.ok) return result.locator;
+  throw new Error(
+    `ReadImage images[${imageIndex}].contentLocator is invalid: ${result.diagnostics
+      .map((diagnostic) => diagnostic.message)
+      .join(' ')}`,
+  );
 }
 
 function parseWorkspaceFileLocator(value: unknown): WorkspaceFileContentLocator | undefined {
@@ -749,6 +810,7 @@ function createReadImagePerceptionCard(input: {
     assetId,
     uri: selectPerceptualAssetUri(input.image, input.loaded.resolvedPath),
     mimeType,
+    ...(input.image.contentLocator ? { contentLocator: input.image.contentLocator } : {}),
     ...(input.image.resourceRef && isResourceRef(input.image.resourceRef)
       ? { resourceRef: input.image.resourceRef }
       : input.loaded.input.managedResourceRef

@@ -122,6 +122,35 @@ describe('createLocalPerceptionAssetLoader', () => {
     });
   });
 
+  it('loads canonical content locators without provider fallback', async () => {
+    const bytes = Buffer.from('canonical-document-image-bytes');
+    const runtime = createContentAccessRuntime(bytes, 'image/jpeg');
+    const loader = createLocalPerceptionAssetLoader(runtime);
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'book.epub' },
+      entryPath: 'OPS/images/page-1.jpg',
+    };
+
+    const result = await loader.load({
+      assetId: 'doc-image-content-locator-1',
+      uri: 'content:document-entry',
+      mimeType: 'image/jpeg',
+      contentLocator,
+    });
+
+    expect(runtime.loadContentAsset).toHaveBeenCalledWith({
+      locator: contentLocator,
+      maxBytes: 20 * 1024 * 1024,
+    });
+    expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      kind: 'image',
+      url: `data:image/jpeg;base64,${bytes.toString('base64')}`,
+      mimeType: 'image/jpeg',
+    });
+  });
+
   it('keeps generated ResourceRef identity through ReadImage and native asset loading', async () => {
     const bytes = Buffer.from('generated-image-bytes');
     const runtime = createContentAccessRuntime(bytes, 'image/png');
@@ -226,6 +255,13 @@ function createContentAccessRuntime(
     resolveImageMetadata: vi.fn(),
     resolveDocumentContent: vi.fn(),
     loadProviderAsset: vi.fn(async () => ({
+      status: 'ready' as const,
+      diagnostics: [],
+      bytes,
+      mimeType,
+      sizeBytes: bytes.byteLength,
+    })),
+    loadContentAsset: vi.fn(async () => ({
       status: 'ready' as const,
       diagnostics: [],
       bytes,

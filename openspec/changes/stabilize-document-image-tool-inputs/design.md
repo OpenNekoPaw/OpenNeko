@@ -50,6 +50,12 @@
 
 `ReadDocument` 对外 document-entry ref 始终重绑到 stable input source；resolved absolute source 只进入内部 `loadProviderAsset` 请求，不得返回给模型或 Evaluation facts。
 
+### 6. 显式 contentLocator 不得静默回退
+
+`ReadImage.images[n].contentLocator` 对外发布完整的 `ContentLocator` discriminated union，而不是无约束 object。执行边界再次调用共享 `validateContentLocator`；如果调用方显式提供了该字段但验证失败，错误必须带当前图片索引并在任何 `resourceRef`、provider 或 metadata 路径执行前终止。
+
+同一项携带多个稳定身份时，不能把无效的新 canonical identity 当作“字段不存在”并改走旧身份。该行为会掩盖 ReadDocument/模型参数漂移，并让最终错误错误地归因于 Host source resolution。调用方可依据精确 validation diagnostic 修正 locator；运行时不得从 sibling ref 猜测缺失的 workspace source/path。
+
 ## Risks / Trade-offs
 
 - **[模型仍可能首次生成无效参数]** → schema 在执行前提供精确 field diagnostic；真实 evaluation 验证 ReAct 能修正或至少 fail-visible。
@@ -57,6 +63,7 @@
 - **[provider 对 anyOf 支持差异]** → Pi TypeBox 和 ToolRegistry 均保留本地校验；provider schema rejection 与 runtime validation failure分别可观测。
 - **[批量一个坏项导致全失败]** → 能由同项冗余身份唯一恢复时先规范化；source 缺失、路径冲突或无 entry 身份仍保持原子失败，避免用户请求 10 页却只分析 9 页而不知情。
 - **[宿主未注入图片 loader]** → image attachment 使 Tool fail-visible；不返回纯文本成功，也不从 path/cache 自行读取。
+- **[批量中只有后续 locator 损坏]** → diagnostic 携带 `images[n]`；整批在内容加载前失败，不用旧 ref 产出部分成功结果。
 
 ## Migration Plan
 

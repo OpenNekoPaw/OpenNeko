@@ -3,6 +3,7 @@ import {
   isResourceRef,
   parseDocumentArchiveResourceRef,
   TOOL_NAMES_PERCEPTION,
+  validateContentLocator,
   type PerceiveToolInput,
   type ToolParameters,
   type ToolExecuteOptions,
@@ -54,6 +55,10 @@ export class PerceiveTool extends BuiltinTool {
             type: 'object',
             description:
               'Stable document-entry resource ref copied exactly from the producing tool.',
+          },
+          contentLocator: {
+            type: 'object',
+            description: 'Stable canonical content locator copied exactly from the producing tool.',
           },
           label: { type: 'string' },
           timestampMs: { type: 'number' },
@@ -168,6 +173,12 @@ function readPerceptualAssetRef(value: unknown): PerceiveToolInput['ref'] | unde
   }
   const resourceRefValue = value['resourceRef'];
   const resourceRef = isResourceRef(resourceRefValue) ? resourceRefValue : undefined;
+  const contentLocatorValue = value['contentLocator'];
+  const contentLocatorResult = validateContentLocator(contentLocatorValue);
+  const contentLocator = contentLocatorResult.ok ? contentLocatorResult.locator : undefined;
+  if (contentLocatorValue !== undefined && !contentLocator) {
+    return undefined;
+  }
   const documentResourceRefValue = value['documentResourceRef'];
   const documentResourceRef = parseDocumentArchiveResourceRef(documentResourceRefValue);
   if (documentResourceRefValue !== undefined && !documentResourceRef) {
@@ -179,6 +190,7 @@ function readPerceptualAssetRef(value: unknown): PerceiveToolInput['ref'] | unde
     assetId,
     uri,
     mimeType,
+    ...(contentLocator ? { contentLocator } : {}),
     ...(resourceRef ? { resourceRef } : {}),
     ...(documentResourceRef ? { documentResourceRef } : {}),
     ...(label ? { label } : {}),

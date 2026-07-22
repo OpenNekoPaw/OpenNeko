@@ -134,6 +134,13 @@ describe('OpenNeko tool projection to Pi', () => {
         fingerprint: { strategy: 'none', value: 'resource-1' },
       },
     };
+    const contentLocatorImage = {
+      contentLocator: {
+        kind: 'document-entry',
+        source: { kind: 'workspace-file', path: 'books/book.epub' },
+        entryPath: 'images/page-1.jpg',
+      },
+    };
 
     expect(Value.Check(projected.parameters, { images: [documentImage] })).toBe(true);
     expect(
@@ -150,11 +157,33 @@ describe('OpenNeko tool projection to Pi', () => {
       }),
     ).toBe(false);
     expect(Value.Check(projected.parameters, { images: [managedImage] })).toBe(true);
+    expect(Value.Check(projected.parameters, { images: [contentLocatorImage] })).toBe(true);
+    expect(
+      Value.Check(projected.parameters, {
+        images: [
+          {
+            ...contentLocatorImage,
+            contentLocator: {
+              ...contentLocatorImage.contentLocator,
+              source: { kind: 'workspace-file' },
+            },
+          },
+        ],
+      }),
+    ).toBe(false);
     expect(projected.parameters).toMatchObject({
       properties: {
         images: {
           items: {
             properties: {
+              contentLocator: {
+                anyOf: [
+                  expect.any(Object),
+                  expect.objectContaining({ required: ['kind', 'source', 'entryPath'] }),
+                  expect.any(Object),
+                  expect.any(Object),
+                ],
+              },
               resourceRef: {
                 anyOf: [
                   expect.objectContaining({ required: ['kind', 'source', 'entryPath'] }),

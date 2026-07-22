@@ -23,3 +23,9 @@
 - [x] 4.1 Reproduce the real batch failure where same-item top-level entry paths survive but several nested document refs omit only `entryPath`.
 - [x] 4.2 Update the Tool schema and ReadImage input boundary to normalize only that unambiguous shape and reject conflicting paths before ContentAccess.
 - [x] 4.3 Update deterministic batch regressions, the focused real Agent case, documentation, and Evaluation ownership mapping.
+
+## 5. Content Locator Fallback Follow-up
+
+- [x] 5.1 Reproduce the reported failure where an invalid `contentLocator` is silently discarded and a sibling legacy `resourceRef` reaches provider loading.
+- [x] 5.2 Publish the complete `ContentLocator` union in the ReadImage Tool schema and reject an explicitly supplied invalid locator before any fallback path.
+- [x] 5.3 Run focused producer/consumer tests, key-free Evaluation validation, the real document-image case, and required repository quality gates.

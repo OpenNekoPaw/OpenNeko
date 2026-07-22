@@ -9,6 +9,8 @@ import {
 } from '@neko/shared';
 import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
 
+const MAX_PERCEPTION_ASSET_BYTES = 20 * 1024 * 1024;
+
 export function createNodePerceptionAssetLoader(
   contentAccessRuntime: AgentContentAccessRuntime,
   options: { readonly assetIndex?: GeneratedAssetIndex } = {},
@@ -26,21 +28,28 @@ async function loadPerceptionAsset(
   const resolvedRef = await resolveGeneratedAssetPerceptualRef(ref, options.assetIndex);
   const mimeType = ref.mimeType || getMimeType(ref.uri);
   const hasStableResourceRef = hasStableProviderResourceRef(resolvedRef);
-  if (!hasStableResourceRef && resolvedRef.uri.startsWith('data:')) {
+  const hasStableContentLocator = resolvedRef.contentLocator !== undefined;
+  if (!hasStableResourceRef && !hasStableContentLocator && resolvedRef.uri.startsWith('data:')) {
     return { kind: resolveProviderPayloadKind(mimeType), url: resolvedRef.uri, mimeType };
   }
   if (
     !hasStableResourceRef &&
+    !hasStableContentLocator &&
     (resolvedRef.uri.startsWith('http://') || resolvedRef.uri.startsWith('https://'))
   ) {
     return { kind: resolveProviderPayloadKind(mimeType), url: resolvedRef.uri, mimeType };
   }
 
-  const loaded = await contentAccessRuntime.loadProviderAsset({
-    caller: 'perception-asset-loader',
-    source: createPerceptionAssetSource(resolvedRef),
-    mimeTypeHint: mimeType,
-  });
+  const loaded = resolvedRef.contentLocator
+    ? await contentAccessRuntime.loadContentAsset({
+        locator: resolvedRef.contentLocator,
+        maxBytes: MAX_PERCEPTION_ASSET_BYTES,
+      })
+    : await contentAccessRuntime.loadProviderAsset({
+        caller: 'perception-asset-loader',
+        source: createPerceptionAssetSource(resolvedRef),
+        mimeTypeHint: mimeType,
+      });
   if (loaded.status !== 'ready' || !loaded.bytes) {
     throw new Error(
       loaded.diagnostics.find((diagnostic) => diagnostic.severity === 'error')?.message ??
