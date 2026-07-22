@@ -304,6 +304,14 @@ export interface TuiDebugAutomationConversationPersistenceFacts {
   };
 }
 
+export interface TuiDebugAutomationSkillReceipt {
+  readonly toolCallId: string;
+  readonly skillName: string;
+  readonly source: 'builtin' | 'personal' | 'project';
+  readonly fingerprint: `sha256:${string}`;
+  readonly locatorKind: 'skill' | 'skill-resource';
+}
+
 export interface TuiDebugAutomationSessionFacts {
   readonly sessionId: string;
   readonly conversationId: string;
@@ -313,8 +321,8 @@ export interface TuiDebugAutomationSessionFacts {
   readonly idle: TuiDebugAutomationIdleState;
   readonly turns: readonly TuiDebugAutomationTurnSummary[];
   readonly history?: readonly unknown[];
-  /** Legacy activation lifecycle is intentionally absent; Pi Skills execute as turns. */
-  readonly skillActivations: readonly never[];
+  /** Successful Pi read_skill receipts; no activation/lifecycle state is retained. */
+  readonly skillReceipts: readonly TuiDebugAutomationSkillReceipt[];
   readonly tasks: readonly TuiDebugAutomationTaskFact[];
   readonly messageQueue: AgentMessageQueueSnapshot | null;
   readonly continuations: readonly TuiDebugAutomationContinuationFact[];
@@ -359,7 +367,7 @@ export interface TuiDebugAutomationEvidenceCompleteness {
   readonly turns: TuiDebugAutomationCollectionCompleteness;
   readonly turnToolCalls: TuiDebugAutomationCollectionCompleteness;
   readonly timelineRows: TuiDebugAutomationCollectionCompleteness;
-  readonly skillActivations: TuiDebugAutomationCollectionCompleteness;
+  readonly skillReceipts: TuiDebugAutomationCollectionCompleteness;
   readonly tasks: TuiDebugAutomationCollectionCompleteness;
   readonly continuations: TuiDebugAutomationCollectionCompleteness;
   readonly promptComposition: TuiDebugAutomationCollectionCompleteness;

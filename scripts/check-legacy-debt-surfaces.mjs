@@ -22,11 +22,6 @@ const requiredSemanticClasses = [
 ];
 const allowedSemanticClasses = new Set([...requiredSemanticClasses, 'needs-review']);
 const failingProductionSemanticClasses = new Set(['delete-now', 'migrate-now', 'needs-review']);
-const migrationOnlyPathPatterns = [
-  'packages/neko-types/src/node/legacy-asset-*.ts',
-  'packages/neko-types/src/types/legacy-asset-catalog-migration.ts',
-  'packages/neko-types/src/types/asset/workspace-linked-media-library-migration.ts',
-];
 const retiredAssetCatalogBoundaryPathPatterns = [
   'packages/neko-agent/packages/extension/src/services/projectMentionSearch.ts',
   'packages/neko-types/src/local-metadata/node-workspace-storage-inspection.ts',
@@ -355,7 +350,7 @@ function summarizeRetiredAssetCatalog(matches) {
   return {
     rules: retiredAssetCatalogRules.map((rule) => rule.id),
     allowlists: {
-      migrationOnly: migrationOnlyPathPatterns,
+      migrationOnly: [],
       boundaryRejection: retiredAssetCatalogBoundaryPathPatterns,
       tests: ['**/__tests__/**', '**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'],
     },
@@ -367,7 +362,6 @@ function summarizeRetiredAssetCatalog(matches) {
 
 function retiredAssetCatalogAllowlist(file) {
   if (isTestPath(file)) return 'test-or-poison-fixture';
-  if (isMigrationOnlyPath(file)) return 'migration-only';
   if (retiredAssetCatalogBoundaryPathPatterns.some((pattern) => matchesGlob(file, pattern))) {
     return 'boundary-rejection';
   }
@@ -525,9 +519,6 @@ function classifySurface(file, line, term) {
   if (isGeneratedPath(file)) {
     return 'generated-source';
   }
-  if (isMigrationOnlyPath(file)) {
-    return 'migration-only';
-  }
   if (containsAny(lowerLine, ['false positive', 'knip', 'dynamic import']) && term !== 'fallback') {
     return 'false-positive-word';
   }
@@ -578,10 +569,6 @@ function isGeneratedPath(file) {
     file.includes('/proto/') ||
     file.includes('/__generated__/')
   );
-}
-
-function isMigrationOnlyPath(file) {
-  return migrationOnlyPathPatterns.some((pattern) => matchesGlob(file, pattern));
 }
 
 function isDomainDeprecatedSurface(lowerFile, lowerLine, term) {
@@ -1440,20 +1427,6 @@ function runSelfTest() {
         'legacy',
       ),
       expected: 'migrate-now',
-    },
-    {
-      value: classifySurface(
-        'packages/neko-types/src/node/legacy-asset-catalog-inspector.ts',
-        'export interface LegacyAssetCatalogInspectionSession {}',
-        'legacy',
-      ),
-      expected: 'migration-only',
-    },
-    {
-      value: retiredAssetCatalogAllowlist(
-        'packages/neko-types/src/node/legacy-asset-catalog-inspector.ts',
-      ),
-      expected: 'migration-only',
     },
     {
       value: retiredAssetCatalogAllowlist('packages/neko-types/src/types/content-locator.ts'),

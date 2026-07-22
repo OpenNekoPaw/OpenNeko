@@ -33,7 +33,8 @@
 | [`adr-code-debt-redundancy-governance.md`](adr-code-debt-redundancy-governance.md)                                 | 重复、冗余、兼容桥和 fallback 代码的分类、清理优先级与验证规则                        |
 | [`adr-code-review-quality-gates.md`](adr-code-review-quality-gates.md)                                             | 代码审查、风险分级、验证矩阵和功能偏离检查                                            |
 | [`adr-local-metadata-store-sqlite.md`](adr-local-metadata-store-sqlite.md)                                         | 用户级 SQLite 本地元数据 Store、项目事实和缓存索引边界                                |
-| [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md) | 拟议新增 Desktop 组合根、现有子包复用方式及 Craft Agents 等开源参考边界 |
+| [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md) | 拟议新增 Desktop 组合根、现有子包复用方式及 OpenCode、Zed、Craft Agents、Goose 等参考边界 |
+| [`adr-neko-desktop-home-project-profile-ux-boundary.md`](adr-neko-desktop-home-project-profile-ux-boundary.md)     | Desktop Home、Project Tabs、三类 Project Profile，以及 `neko-chara`/`neko-world` 顶级领域聚合边界 |
 | [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) | Cut 以 OTIO 为唯一工程、VS Code 保留 Engine adapter，并通过同源 MP4 引用完成显式逻辑音频分离 |
 | [`application-composition.md`](application-composition.md)                                                       | TUI、OpenNeko for VS Code 两个应用 composition root 和依赖方向                       |
 | [`adr-unified-markdown-resource-rendering.md`](adr-unified-markdown-resource-rendering.md)                         | Canvas MCP 式能力、Markdown 扩展语法、资源增强渲染和 Send to Canvas 边界              |

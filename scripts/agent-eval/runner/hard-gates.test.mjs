@@ -156,30 +156,13 @@ function m2Facts() {
     digest: HASH,
     chat: { ...facts.model },
   };
-  facts.skillActivations = [
+  facts.skillReceipts = [
     {
-      id: 'skill-record-1',
+      toolCallId: 'read-skill-1',
       skillName: 'storyboard',
-      status: 'active',
-      triggerSource: 'explicit-agent',
-      hostIdentity: {
-        portableName: SKILL_IDENTITY.name,
-        source: SKILL_IDENTITY.source,
-        provenance: SKILL_IDENTITY.provenance,
-        rootId: SKILL_IDENTITY.rootId,
-        relativePath: SKILL_IDENTITY.relativePath,
-        fingerprint: SKILL_IDENTITY.fingerprint,
-      },
-      injectedFragments: [
-        {
-          id: 'skill:storyboard',
-          source: 'skill-lifecycle',
-          order: 0,
-          version: HASH,
-          hash: HASH_B,
-        },
-      ],
-      toolPolicyIds: ['skill-tool-policy:storyboard'],
+      source: SKILL_IDENTITY.source,
+      fingerprint: SKILL_IDENTITY.fingerprint,
+      locatorKind: 'skill',
     },
   ];
   facts.promptComposition = [
@@ -246,7 +229,7 @@ function m2Facts() {
   };
   Object.assign(facts.evidenceCompleteness, {
     turnToolCalls: { limit: 256, droppedCount: 0 },
-    skillActivations: { limit: 128, droppedCount: 0 },
+    skillReceipts: { limit: 128, droppedCount: 0 },
     tasks: { limit: 512, droppedCount: 0 },
     continuations: { limit: 512, droppedCount: 0 },
     promptComposition: { limit: 256, droppedCount: 0 },
@@ -316,7 +299,7 @@ const M2_CONTEXT = {
 };
 
 describe('M2 typed path hard gates', () => {
-  it('passes Skill injection, actual model, Tool, task, artifact, and no-fallback facts', () => {
+  it('passes Pi Skill receipt, actual model, Tool, task, artifact, and no-fallback facts', () => {
     const results = evaluateHardGates(M2_ASSERTIONS, m2Facts(), M2_CONTEXT);
     expect(results.every((result) => result.status === 'pass')).toBe(true);
   });
@@ -347,13 +330,16 @@ describe('M2 typed path hard gates', () => {
     expect(result.status).toBe('pass');
   });
 
-  it('supports trigger evidence without claiming prompt injection', () => {
+  it('uses the same Pi receipt for the legacy assertion status vocabulary', () => {
     const [result] = evaluateHardGates(
       [{ ...M2_ASSERTIONS[0], status: 'triggered' }],
       m2Facts(),
       M2_CONTEXT,
     );
-    expect(result).toMatchObject({ status: 'pass', details: { triggerSource: 'explicit-agent' } });
+    expect(result).toMatchObject({
+      status: 'pass',
+      details: { toolCallId: 'read-skill-1', locatorKind: 'skill' },
+    });
   });
 
   it('selects a dynamic generated artifact by kind and provenance', () => {
@@ -458,7 +444,7 @@ describe('M2 typed path hard gates', () => {
   });
 
   it.each([
-    ['Skill composition mismatch', 0, (facts) => (facts.promptComposition[0].hash = HASH)],
+    ['Skill receipt mismatch', 0, (facts) => (facts.skillReceipts[0].fingerprint = HASH_B)],
     [
       'model fallback',
       1,
@@ -495,6 +481,16 @@ describe('M2 typed path hard gates', () => {
     expect(result).toMatchObject({
       status: 'fail',
       message: expect.stringContaining('evidence for promptComposition is incomplete'),
+    });
+  });
+
+  it('fails Skill evidence when the read_skill receipt collection is truncated', () => {
+    const facts = m2Facts();
+    facts.evidenceCompleteness.skillReceipts.droppedCount = 1;
+    const [result] = evaluateHardGates([M2_ASSERTIONS[0]], facts, M2_CONTEXT);
+    expect(result).toMatchObject({
+      status: 'fail',
+      message: expect.stringContaining('evidence for skillReceipts is incomplete'),
     });
   });
 

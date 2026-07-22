@@ -734,6 +734,7 @@ describe('PiConversationRuntime', () => {
     expect(JSON.stringify(contexts[1]!.messages)).toContain('Model selected body.');
     const persisted = await authority.buildContext('conversation-1', 'branch-main');
     expect(JSON.stringify(persisted.messages)).toContain('"fingerprint"');
+    expect(JSON.stringify(persisted.messages)).toContain('"locatorKind":"skill"');
     expect(JSON.stringify(persisted.messages)).toContain('Model selected body.');
     expect(JSON.stringify(persisted.messages)).not.toContain(root);
     runtime.dispose();

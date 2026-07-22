@@ -54,11 +54,11 @@ NKC/NKV、AssetFile、Search projection 和跨包 source 保存普通 workspace-
 
 Engine registration、Preview、Agent 和 package/export 继续通过现有 ContentAccess 路径消费该字符串；本变更不顺便更换 ContentAccess API。
 
-### 7. Legacy 只存在于 migration reader
+### 7. Legacy 状态 fail-closed，不保留不可达迁移子系统
 
-migration reader 只读解析旧 variable/original path/local override。用户选择 target 后，系统验证 source identity/fingerprint，创建 link，生成引用改写 plan，并只在确认保存时原子写新 revision和删除 retired settings。
+仓库没有 Extension、TUI 或 CLI migration owner，也没有可到达的用户确认入口。预发布数据策略因此收敛为：正常 reader/writer 对旧 variable/original path/local override、`${VAR}` 和 absolute source 返回明确的 migration-required diagnostic，并在任何 mutation 前停止；不得继续暴露只有测试可调用的 inspector、classifier、archive、execution plan 或 migration contract。
 
-未知 variable、missing target、名称冲突、fingerprint mismatch 或未知 schema 时保留原字节。正常 read/authoring path 不加载旧 mapping，不提供 compatibility fallback。
+原项目字节保持不变。用户显式创建同名 workspace link 后，通过当前产品入口重新关联、重新导入或重新创作引用，再由 canonical writer 保存新 revision。系统不猜测 target、不自动改写旧项目，也不通过旧 resolver 返回成功。若未来确认旧数据具有必须自动保护的价值，必须先由独立 OpenSpec 定义可到达的命令、owner、确认 UI、备份/回滚和移除条件，再实现迁移。
 
 ### 8. Package/export 解引用字节
 
@@ -92,17 +92,17 @@ Git 在 pathspec 校验阶段拒绝 symlink descendant，VS Code 内置 Git deco
 - **[Git 泄露 target]** → 精确 ignore 和 index/package assertions。
 - **[新机器缺少 Git-ignored link]** → 项目 path 提供 libraryName，missing diagnostic 引导创建同名 link。
 - **[Windows junction 行为不同]** → 薄平台 helper 和真实 fixture；消费者只见普通 path。
-- **[旧项目映射不明确]** → 显式选择、fingerprint 校验、保留原字节，不猜测。
+- **[旧项目映射不明确]** → fail-closed 保留原字节，并引导用户重新关联/重新导入；不保留无产品入口的自动迁移实现。
 - **[Git decoration 不支持 symlink descendant pathspec]** → Neko TreeItem 不声明 `resourceUri`；普通 Explorer/editor 由用户显式关闭当前 workspace 的 Git decorations，并保留影响说明和可发现命令。
 - **[Relink 改变目录语义]** → relink 前明确要求相同内部结构；项目事实不猜测迁移，派生搜索投影立即按新 target 重建。
 
 ## Migration Plan
 
-1. 冻结 link name、workspace path、guard diagnostic 和 legacy inspection contract。
+1. 冻结 link name、workspace path、guard diagnostic 和 legacy rejection contract。
 2. 实现 link helper、精确 Git ignore、enumeration 和 workspace guard。
 3. 删除 media-library settings/variable runtime 与 libraryId path lookup。
 4. 迁移 Assets/Search/Agent 和其他 source producers 到普通 workspace path。
-5. 更新 NKC/NKV validator/writer、legacy inspection/relink 和 package/export。
+5. 更新 NKC/NKV validator/writer、legacy rejection/re-authoring 和 package/export。
 6. poison 正常 runtime 的旧 mapping，运行路径、数据和真实 Extension 验证。
 
 ## Resolved Questions

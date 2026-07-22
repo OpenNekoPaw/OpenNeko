@@ -161,7 +161,6 @@ export * from './mediaDiffProtocol';
 export * from './media-file';
 export * from './asset/manifest';
 export * from './asset/workspace-linked-media-library';
-export * from './asset/workspace-linked-media-library-migration';
 
 // Bundle locators and character asset import contracts
 export * from './bundle-locator';
@@ -297,7 +296,6 @@ export * from './content-representation';
 export * from './entity-representation-binding';
 
 // Explicit inspection and migration contracts for the retired Asset catalog
-export * from './legacy-asset-catalog-migration';
 
 // Loading tier types (tiered lazy loading for tools, skills, commands)
 export * from './loading-tier';

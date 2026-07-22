@@ -7,7 +7,7 @@ product capability, a runtime Skill, or a second `AgentSession` assembly.
 ## Ownership Boundary
 
 - `apps/neko-tui` owns the TUI App/session lifecycle, input queue, runtime
-  configuration, Skill lifecycle, Tool/task execution, artifact projection, and
+  configuration, Pi Skill receipt projection, Tool/task execution, artifact projection, and
   evaluation-neutral debug facts.
 - `scripts/agent-eval` owns authoring decisions, suites, fixtures, controllers,
   hard assertions, artifact checks, Judges, comparisons, reports, and exit codes.
@@ -71,7 +71,7 @@ remains authoritative.
 
 Prefer the smallest evidence set that proves both the result and the path:
 
-- deterministic hard gates for activation/injection, model/config identity,
+- deterministic hard gates for Pi Skill receipts, model/config identity,
   Tool/task/process state, structured output, artifacts, permissions, and
   no-fallback;
 - owning-domain validators for durable files and media quality;
@@ -79,7 +79,7 @@ Prefer the smallest evidence set that proves both the result and the path:
 
 Keep three result planes separate:
 
-- **correctness**: deterministic path, configuration, activation, permission,
+- **correctness**: deterministic path, configuration, Skill receipt, permission,
   format/schema, artifact, and no-fallback hard gates;
 - **execution efficiency**: latency, token, cost, iteration, Tool, retry, and
   task metrics;

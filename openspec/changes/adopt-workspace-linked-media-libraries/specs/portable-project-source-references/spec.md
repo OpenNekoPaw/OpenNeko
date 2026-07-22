@@ -29,16 +29,16 @@ Package and export workflows MUST read source bytes through the link and MUST NO
 - **WHEN** a link is broken or final realpath escapes its target
 - **THEN** packaging fails visibly before claiming that source was included
 
-### Requirement: Legacy media state requires explicit migration
-Legacy variable/original-path/local-override settings and `${VAR}` or absolute project sources MUST be inspected read-only before entering the new writable model.
+### Requirement: Legacy media state is rejected before mutation
+Legacy variable/original-path/local-override settings and `${VAR}` or absolute project sources MUST fail closed before entering the new writable model. The product MUST NOT expose an implementation-only inspector, classifier, archive, migration planner, or execution contract without a reachable Host command and confirmation owner.
 
-#### Scenario: Legacy source maps safely
-- **WHEN** user-selected target and fingerprint prove the old source corresponds to `neko/assets/<libraryName>/...`
-- **THEN** migration plans link creation, reference rewrites, fingerprint validation, and retired-setting deletion without changing project bytes before confirmation
+#### Scenario: Legacy source is presented to the current product
+- **WHEN** a reader or writer receives retired media settings or source syntax
+- **THEN** it preserves original project bytes and returns an actionable diagnostic directing the user to create/relink the library and re-import or re-author the reference through the canonical workspace path
 
 #### Scenario: Legacy source cannot be proven
 - **WHEN** variable is unknown, target is missing, name conflicts, fingerprint differs, or schema is unknown
-- **THEN** the system preserves original bytes and returns actionable relink/migration diagnostics
+- **THEN** the system preserves original bytes and returns actionable relink/re-import diagnostics without guessing or constructing a hidden migration plan
 
 ### Requirement: Legacy mapping is not a runtime fallback
 Normal source reads and new authoring MUST NOT resolve retired media-library variables or absolute paths through settings or compatibility branches.
@@ -47,6 +47,6 @@ Normal source reads and new authoring MUST NOT resolve retired media-library var
 - **WHEN** a non-migration request contains retired media-library source syntax
 - **THEN** it fails closed with migration-required and does not read through the old resolver
 
-#### Scenario: Confirm migration
-- **WHEN** the user accepts a validated migration plan
-- **THEN** the Host creates or replaces the link, atomically saves workspace-relative references, removes retired mapping fields, and retains normal backup protection
+#### Scenario: Re-author a rejected legacy reference
+- **WHEN** the user creates or relinks the intended library and re-imports or reselects the source through a current product entry
+- **THEN** the canonical writer stores only the workspace-relative reference in a new revision while the rejected legacy bytes remain untouched until the user intentionally replaces them

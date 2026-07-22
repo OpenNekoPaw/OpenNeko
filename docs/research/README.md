@@ -9,3 +9,9 @@
 - 待验证假设或建议。
 
 调研结论若成为跨系统稳定约束，应提升到 [`../architecture/`](../architecture/)；若转化为实施工作，应进入 [`../../openspec/changes/`](../../openspec/changes/) 或根目录 TODO。不要在本目录维护无日期的“current/latest”状态。
+
+## 当前调研
+
+| 文档 | 内容 |
+| --- | --- |
+| [`desktop-agent-client-architecture-reference-2026-07-22.md`](desktop-agent-client-architecture-reference-2026-07-22.md) | OpenCode、Zed、Craft Agents、Goose 的会话/Thread、Tab/Panel/Window、Agent backend 与 OpenNeko 可复用边界 |

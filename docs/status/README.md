@@ -14,3 +14,4 @@
 ## 快照
 
 - [`2026-07-18-text-entity-extraction-gap.md`](2026-07-18-text-entity-extraction-gap.md)：统一实体文本抽取、动态工作区/素材库发现、SQLite 候选边界与第一阶段 Gap。
+- [`2026-07-22-desktop-host-adapter-reuse-gap.md`](2026-07-22-desktop-host-adapter-reuse-gap.md)：Desktop 对 VS Code 子包、Agent、Canvas、Cut、Preview、Assets、Host ports 和 Engine 的复用成熟度与 adapter 缺口。

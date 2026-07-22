@@ -322,51 +322,27 @@ function expectedPurposeExecution(purpose) {
 }
 
 function assertSkill(assertion, facts) {
-  const collections =
-    assertion.status === 'injected'
-      ? ['skillActivations', 'promptComposition']
-      : ['skillActivations'];
-  assertCompleteEvidence(facts, collections);
-  const activation = arrayOrEmpty(facts?.skillActivations).find((candidate) =>
-    matchesSkillIdentity(candidate?.hostIdentity, assertion.identity),
+  assertCompleteEvidence(facts, ['skillReceipts']);
+  const receipt = arrayOrEmpty(facts?.skillReceipts).find((candidate) =>
+    matchesSkillReceipt(candidate, assertion.identity),
   );
-  if (!activation) {
+  if (!receipt) {
     throw new Error(
-      `Skill Host identity was not observed: ${formatSkillIdentity(assertion.identity)}`,
+      `Pi read_skill receipt was not observed: ${formatSkillIdentity(assertion.identity)}`,
     );
   }
-  if (!activation.triggerSource) {
-    throw new Error(`Skill ${assertion.identity.name} has no trigger source evidence`);
+  if (!nonEmpty(receipt.toolCallId)) {
+    throw new Error(`Skill ${assertion.identity.name} receipt has no ToolCall identity`);
   }
-  if (activation.status === 'blocked' || activation.status === 'expired') {
-    throw new Error(`Skill ${assertion.identity.name} is not active: ${activation.status}`);
-  }
-  if (assertion.status === 'injected') {
-    const injected = arrayOrEmpty(activation.injectedFragments);
-    if (injected.length === 0) {
-      throw new Error(`Skill ${assertion.identity.name} has no injected fragment evidence`);
-    }
-    const composition = arrayOrEmpty(facts?.promptComposition);
-    const missing = injected.filter(
-      (fragment) =>
-        !composition.some(
-          (composed) =>
-            composed?.id === fragment?.id &&
-            composed?.source === fragment?.source &&
-            composed?.hash === fragment?.hash &&
-            composed?.version === fragment?.version,
-        ),
-    );
-    if (missing.length > 0) {
-      throw new Error(
-        `Skill ${assertion.identity.name} fragment(s) were not present in actual prompt composition: ${missing.map((item) => item?.id ?? '(unknown)').join(', ')}`,
-      );
-    }
+  if (receipt.locatorKind !== 'skill' && receipt.locatorKind !== 'skill-resource') {
+    throw new Error(`Skill ${assertion.identity.name} receipt has no locator class`);
   }
   return {
-    recordId: activation.id,
-    skillName: activation.skillName,
-    triggerSource: activation.triggerSource,
+    toolCallId: receipt.toolCallId,
+    skillName: receipt.skillName,
+    source: receipt.source,
+    fingerprint: receipt.fingerprint,
+    locatorKind: receipt.locatorKind,
     status: assertion.status,
   };
 }
@@ -894,7 +870,7 @@ function assertNoFallback(assertion, facts) {
   assertCompleteEvidence(facts, [
     'turns',
     'turnToolCalls',
-    'skillActivations',
+    'skillReceipts',
     'tasks',
     'continuations',
     'promptComposition',
@@ -993,13 +969,10 @@ function assertCompleteEvidence(facts, collections) {
   }
 }
 
-function matchesSkillIdentity(actual, expected) {
+function matchesSkillReceipt(actual, expected) {
   return (
-    actual?.portableName === expected?.name &&
+    actual?.skillName === expected?.name &&
     actual?.source === expected?.source &&
-    actual?.provenance === expected?.provenance &&
-    actual?.rootId === expected?.rootId &&
-    actual?.relativePath === expected?.relativePath &&
     actual?.fingerprint === expected?.fingerprint
   );
 }
@@ -1043,12 +1016,12 @@ function collectRuntimeRefs(facts) {
   addValues(refs, facts?.model);
   addValues(refs, facts?.configuration?.chat);
   addValue(refs, facts?.configuration?.digest);
-  for (const activation of arrayOrEmpty(facts?.skillActivations)) {
-    addValue(refs, activation?.id);
-    addValue(refs, activation?.skillName);
-    addValues(refs, activation?.hostIdentity);
-    addValues(refs, activation?.injectedFragments);
-    addValues(refs, activation?.toolPolicyIds);
+  for (const receipt of arrayOrEmpty(facts?.skillReceipts)) {
+    addValue(refs, receipt?.toolCallId);
+    addValue(refs, receipt?.skillName);
+    addValue(refs, receipt?.source);
+    addValue(refs, receipt?.fingerprint);
+    addValue(refs, receipt?.locatorKind);
   }
   for (const turn of arrayOrEmpty(facts?.turns)) {
     addValue(refs, turn?.id);

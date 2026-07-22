@@ -44,3 +44,4 @@
 - [x] 5.4 Run affected package tests/typechecks/build plus repository Agent boundary, legacy-debt, unused-dependency, and OpenSpec strict checks.
 - [ ] 5.5 Measure the production VS Code Agent bundle and activation time; audit Pi/provider licenses, secrets/provenance, OAuth callback/port/cancellation, and absolute/cache-path disclosure boundaries; document residual risk before declaring migration complete.
 - [x] 5.6 Add deterministic schema/execution/event/Host projection regressions for incomplete `ReadDocument` chapter locators, run affected package tests/build/checks plus key-free Agent evaluation validation, and record the focused real-Agent evidence or exact fixture/infrastructure blocker.
+- [x] 5.7 Replace the impossible TUI `skillActivations` fact with bounded Pi `read_skill` receipts, update Skill/no-fallback hard gates and deterministic tests, and rerun the key-free Evaluation harness.
