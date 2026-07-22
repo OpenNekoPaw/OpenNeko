@@ -56,14 +56,7 @@ const config: KnipConfig = {
       // Knip auto-detects entries from package.json exports
       ignoreDependencies: ['react', 'react-dom', 'tailwindcss'], // Optional peer dependencies
     },
-    'packages/neko-content': {
-      ignoreDependencies: [
-        // Loaded by the Node document runtime according to the source format.
-        'epub2',
-        'mammoth',
-        'pdf-parse',
-      ],
-    },
+    'packages/neko-content': {},
     'packages/neko-client': {},
 
     // ── Extension parent packages ─────────────────────
@@ -94,21 +87,7 @@ const config: KnipConfig = {
         'src/utils/subtitleParser.ts',
       ],
     },
-    'packages/neko-agent/packages/extension': {
-      ignoreDependencies: [
-        // Loaded via runtime import() in DocumentReaderService
-        'mammoth',
-        'officeparser',
-        'pdf-parse',
-        // Loaded via runtime import() in platform document readers.
-        // Knip cannot follow these dynamic parser backends from the extension package manifest.
-        'epub2',
-        'fast-xml-parser',
-        'node-fetch',
-        'node-unrar-js',
-        'xlsx',
-      ],
-    },
+    'packages/neko-agent/packages/extension': {},
     'apps/neko-tui': {
       // Knip's Bun plugin treats `bun test <file>` as a directory project root.
       // The dedicated Bun adapter suite is exercised by the application/CI script.

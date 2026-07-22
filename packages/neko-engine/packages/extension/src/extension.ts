@@ -30,6 +30,7 @@ import {
 } from '@neko/shared/vscode/extension';
 import type { NekoEngineRuntimeState, NekoEngineRuntimeStatus } from '@neko/shared';
 import { createEngineCapabilityProvider } from './agentCapabilityProvider';
+import { configureNativeEngineBinding } from './mediaEngine/nativeEngineBinding';
 
 // =============================================================================
 // Extension State
@@ -66,6 +67,7 @@ type NativeEngineWithPreviewRoots = {
  * Activate the extension
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  configureNativeEngineBinding(context.asAbsolutePath('packages/host-napi/loader.js'));
   outputChannel = vscode.window.createOutputChannel('Neko Engine');
   context.subscriptions.push(outputChannel);
 

@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module';
+import { isAbsolute } from 'node:path';
 import type { NativeEngine } from '@neko-engine/host-napi';
 
 type NativeEngineFactory = {
@@ -7,6 +9,11 @@ type NativeEngineFactory = {
 type NativeEngineModule = {
   NativeEngine: NativeEngineFactory;
 };
+
+type NativeEngineBindingFactory = () => Promise<NativeEngine>;
+type NativeEngineModuleLoader = (modulePath: string) => unknown;
+
+let bindingFactory: NativeEngineBindingFactory | undefined;
 
 function isPropertyContainer(value: unknown): value is Record<PropertyKey, unknown> {
   return (typeof value === 'object' && value !== null) || typeof value === 'function';
@@ -21,17 +28,39 @@ function isNativeEngineModule(value: unknown): value is NativeEngineModule {
   return isPropertyContainer(nativeEngine) && typeof nativeEngine.create === 'function';
 }
 
-export function resolveNativeEngineModule(namespace: unknown): NativeEngineModule {
-  if (!isPropertyContainer(namespace) || !isNativeEngineModule(namespace.default)) {
+export function resolveNativeEngineModule(moduleValue: unknown): NativeEngineModule {
+  if (!isNativeEngineModule(moduleValue)) {
     throw new Error(
-      'Invalid @neko-engine/host-napi module: expected default.NativeEngine.create to be a function.',
+      'Invalid packaged Engine module: expected NativeEngine.create to be a function.',
     );
   }
 
-  return namespace.default;
+  return moduleValue;
+}
+
+export function createNativeEngineBindingFactory(
+  modulePath: string,
+  loadModule?: NativeEngineModuleLoader,
+): NativeEngineBindingFactory {
+  if (!isAbsolute(modulePath)) {
+    throw new Error(`Packaged Engine module path must be absolute: ${modulePath}`);
+  }
+
+  const moduleLoader = loadModule ?? createRequire(modulePath);
+
+  return async () => resolveNativeEngineModule(moduleLoader(modulePath)).NativeEngine.create();
+}
+
+export function configureNativeEngineBinding(
+  modulePath: string,
+  loadModule?: NativeEngineModuleLoader,
+): void {
+  bindingFactory = createNativeEngineBindingFactory(modulePath, loadModule);
 }
 
 export async function createNativeEngineBinding(): Promise<NativeEngine> {
-  const namespace: unknown = await import('@neko-engine/host-napi');
-  return resolveNativeEngineModule(namespace).NativeEngine.create();
+  if (!bindingFactory) {
+    throw new Error('Packaged Engine module path was not configured during extension activation.');
+  }
+  return bindingFactory();
 }

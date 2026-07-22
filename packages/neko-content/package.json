@@ -17,12 +17,20 @@
     "@neko/markdown": "workspace:*",
     "@neko/shared": "workspace:*",
     "@zip.js/zip.js": "^2.8.26",
+    "adm-zip": "^0.6.0",
+    "cheerio": "^1.2.0",
     "epub2": "^3.0.2",
+    "fast-xml-parser": "^5.7.0",
     "mammoth": "^1.12.0",
+    "node-fetch": "^2.7.0",
+    "node-unrar-js": "^2.0.2",
+    "officeparser": "^6.0.4",
     "pdf-parse": "^2.4.5",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "yaml": "2.9.0"
   },
   "devDependencies": {
+    "@types/node-fetch": "^2.6.13",
     "vitest": "^4.1.2"
   },
   "license": "AGPL-3.0-or-later"

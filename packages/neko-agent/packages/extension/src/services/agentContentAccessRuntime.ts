@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { createEngineContentAccessAdapter } from '@neko/neko-client/engine-file-access';
 import {
   createNodeDocumentLowLevelAccess,
+  loadNodeDocumentModule,
   type NodeDocumentLowLevelAccess,
 } from '@neko/content/document/node';
 import {
@@ -196,8 +197,7 @@ function createDocumentPathResolver(
 
 async function tryImport<T>(packageName: string): Promise<T | null> {
   try {
-    const mod = (await import(packageName)) as { default?: unknown };
-    return (mod.default ?? mod) as T;
+    return await loadNodeDocumentModule<T>(packageName);
   } catch (error) {
     throw createAgentDocumentReaderModuleUnavailableError({
       packageName,

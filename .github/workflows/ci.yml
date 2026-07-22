@@ -17,7 +17,7 @@ env:
 
 jobs:
   promotion-source:
-    name: Validate dev to main promotion
+    name: Validate development branch to main promotion
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -301,6 +301,9 @@ jobs:
         run: ${{ matrix.ffmpeg-install }}
         shell: bash
 
+      - name: Prepare configured FFmpeg build SDK
+        run: node packages/neko-engine/scripts/download-ffmpeg.js --platform ${{ matrix.target }}
+
       - run: pnpm install --frozen-lockfile
 
       - name: Remove vendor source override
@@ -309,6 +312,8 @@ jobs:
 
       - name: Build host-napi
         working-directory: packages/neko-engine/packages/host-napi
+        env:
+          FFMPEG_DIR: ${{ github.workspace }}/packages/neko-engine/deps/ffmpeg
         run: pnpm run build:napi -- --target ${{ matrix.rust-target }}
 
       - name: Package Engine payload

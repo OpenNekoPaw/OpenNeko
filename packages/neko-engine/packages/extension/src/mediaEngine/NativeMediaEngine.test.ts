@@ -50,6 +50,8 @@ vi.mock('@neko/shared', () => ({
   },
 }));
 
+import { configureNativeEngineBinding } from './nativeEngineBinding';
+
 describe('NativeMediaEngine', () => {
   beforeEach(() => {
     mockState.create.mockClear();
@@ -65,6 +67,9 @@ describe('NativeMediaEngine', () => {
     mockState.logger.info.mockReset();
     mockState.logger.warn.mockReset();
     mockState.logger.error.mockReset();
+    configureNativeEngineBinding('/fixture/packages/host-napi/loader.js', () => ({
+      NativeEngine: { create: mockState.create },
+    }));
   });
 
   it('maps NativeEngine probeVideo responses into MediaInfo', async () => {

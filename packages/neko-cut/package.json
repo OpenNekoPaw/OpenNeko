@@ -337,7 +337,7 @@
   "scripts": {
     "vscode:prepublish": "pnpm run compile",
     "compile": "pnpm run compile:extension && pnpm run compile:webview && pnpm run copy:webview",
-    "compile:extension": "esbuild ./packages/extension/src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:sharp --format=cjs --platform=node",
+    "compile:extension": "esbuild ./packages/extension/src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
     "compile:webview": "cd packages/webview && pnpm run build",
     "copy:webview": "rm -rf dist/webview && mkdir -p dist/webview/assets && cp packages/webview/dist/*.html dist/webview/ && cp -R packages/webview/dist/assets/* dist/webview/assets/",
     "watch": "pnpm run compile:extension -- --watch",
@@ -352,7 +352,5 @@
     "typescript": "^5.3.2",
     "vitest": "^4.1.2"
   },
-  "dependencies": {
-    "sharp": "^0.34.0"
-  }
+  "dependencies": {}
 }
