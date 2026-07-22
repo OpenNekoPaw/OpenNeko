@@ -48,6 +48,8 @@ Alternative considered: retain Homebrew load paths. Rejected because end users a
 
 `@neko/content/document/node` defines an exhaustive map from every package requested by `DocumentReaderRuntimeDeps` to literal dynamic imports: `adm-zip`, `pdf-parse`, `mammoth`, `officeparser`, `epub2`, `node-unrar-js`, `node-fetch`, `cheerio`, `xlsx`, and `fast-xml-parser`. Assets uses this loader through `createNodeDocumentAccessService`; Agent delegates its diagnostic wrapper to the same loader. These packages move into Content's dependency manifest, while duplicate declarations leave Agent Extension.
 
+The npm registry's final `xlsx` release is vulnerable when reading untrusted spreadsheets. Content therefore pins the same `xlsx` package identity to SheetJS's official `0.20.3` tarball, the first release newer than both applicable security fixes. The exact source URL and pnpm integrity record keep the release input reproducible without changing the literal loader or spreadsheet reader contract.
+
 Alternative considered: retain arbitrary `import(packageName)` and copy parser packages. Rejected because the supported set is closed, literal imports let esbuild create one portable bundle, and arbitrary runtime package loading cannot be validated statically.
 
 ### Agent stages a target-specific Sharp native closure
