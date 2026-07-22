@@ -42,8 +42,7 @@ packages/neko-cut/
 │    ├─ Services                                           │
 │    │    ├─ MediaService → EngineClient (probe/waveform)  │
 │    │    ├─ ExportService (导出管线)                       │
-│    │    ├─ ProxyService (流媒体代理)                      │
-│    │    ├─ AssetService (资产管理)                        │
+│    │    ├─ CutMediaRepresentationGenerator (代理/波形/响度) │
 │    │    ├─ EngineConnection (端口发现)                    │
 │    │    ├─ TimelineToolExecutor (AI 工具执行)             │
 │    │    └─ ProjectSessionService (项目会话)               │
@@ -67,7 +66,7 @@ packages/neko-cut/
 │  │    │    └─ TimelineMinimap                      │      │
 │  │    ├─ PreviewPanel (H264 流 → Canvas)           │      │
 │  │    ├─ PropertyPanel (属性/关键帧/特效)           │      │
-│  │    ├─ AssetLibrary (资产库 + Diff)              │      │
+│  │    ├─ Media source ingest                       │      │
 │  │    ├─ ColorCorrection (调色面板)                │      │
 │  │    ├─ Subtitles (字幕编辑)                      │      │
 │  │    ├─ Mask (遮罩编辑)                           │      │
@@ -162,47 +161,46 @@ Phase 3（组合依赖）:   trackOps, elementOps, elementSplit, clipboard, shap
 
 ## Extension Host 服务
 
-| 服务 | 职责 |
-|------|------|
-| `MediaService` | 媒体探测 + 波形生成 → EngineClient HTTP dispatch |
-| `ExportService` | 导出管线编排 + 进度跟踪 |
-| `ProxyService` | 流媒体帧代理 |
-| `AssetService` | 资产库管理 |
-| `EngineConnection` | neko-engine 端口发现 + EngineClient 创建 |
-| `TimelineToolExecutor` | AI 工具执行 → ProjectData 变更（Command 模式） |
-| `ProjectSessionService` | 项目会话持久化 |
+| 服务                              | 职责                                                                    |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| `MediaService`                    | 媒体探测 + 波形生成 → EngineClient HTTP dispatch                        |
+| `ExportService`                   | 导出管线编排 + 进度跟踪                                                 |
+| `CutMediaRepresentationGenerator` | 以 storage-neutral generator 提供代理、波形和响度，由 Host 管理派生存储 |
+| `EngineConnection`                | neko-engine 端口发现 + EngineClient 创建                                |
+| `TimelineToolExecutor`            | AI 工具执行 → ProjectData 变更（Command 模式）                          |
+| `ProjectSessionService`           | 项目会话持久化                                                          |
 
 ---
 
 ## Webview 组件
 
-| 组件 | 职责 |
-|------|------|
-| `Timeline` | 时间线编辑核心（轨道/元素/缩略图/Minimap） |
-| `PreviewPanel` | H264StreamClient → WebCodecs → Canvas 实时预览 |
-| `PropertyPanel` | 属性编辑 + 关键帧曲线 + AI 操作 |
-| `AssetLibrary` | 资产浏览 + 版本 Diff + AI 分析 |
-| `ColorCorrection` | 色轮 + 曲线 + 基础调整 |
-| `Subtitles` | 字幕编辑 + 样式 + 导入导出 |
-| `Mask` | 遮罩编辑器 + 属性 |
-| `Effects` | 特效（Fade/Zoom/Blur 等）编辑 |
-| `SpeedControl` | 变速 + 时间拉伸 |
-| `ShapeRenderer` | 形状渲染 + 笔工具 |
+| 组件                | 职责                                                      |
+| ------------------- | --------------------------------------------------------- |
+| `Timeline`          | 时间线编辑核心（轨道/元素/缩略图/Minimap）                |
+| `PreviewPanel`      | H264StreamClient → WebCodecs → Canvas 实时预览            |
+| `PropertyPanel`     | 属性编辑 + 关键帧曲线 + AI 操作                           |
+| Media source ingest | 通过 canonical locator 显式加入时间线；不维护文件 catalog |
+| `ColorCorrection`   | 色轮 + 曲线 + 基础调整                                    |
+| `Subtitles`         | 字幕编辑 + 样式 + 导入导出                                |
+| `Mask`              | 遮罩编辑器 + 属性                                         |
+| `Effects`           | 特效（Fade/Zoom/Blur 等）编辑                             |
+| `SpeedControl`      | 变速 + 时间拉伸                                           |
+| `ShapeRenderer`     | 形状渲染 + 笔工具                                         |
 
 ---
 
 ## 关键设计模式
 
-| 模式 | 应用 |
-|------|------|
-| **CustomTextEditorProvider** | .nkv 文件的 VSCode 编辑器集成 |
-| **Service Locator** | ServiceCollection DI 容器 |
-| **Registry** | EditorRegistry 管理编辑器 Provider |
-| **Command** | TimelineToolExecutor — 时间线操作命令化 |
-| **Strategy** | ExportEngineFactory — 多格式导出适配器 |
-| **Slice Pattern** | Zustand 13 个独立状态切片 |
-| **EditOperation Pipeline** | dispatch → apply → push → sync 统一操作管道 |
-| **Facade** | MediaService — 屏蔽 EngineClient 调用复杂性 |
+| 模式                         | 应用                                        |
+| ---------------------------- | ------------------------------------------- |
+| **CustomTextEditorProvider** | .nkv 文件的 VSCode 编辑器集成               |
+| **Service Locator**          | ServiceCollection DI 容器                   |
+| **Registry**                 | EditorRegistry 管理编辑器 Provider          |
+| **Command**                  | TimelineToolExecutor — 时间线操作命令化     |
+| **Strategy**                 | ExportEngineFactory — 多格式导出适配器      |
+| **Slice Pattern**            | Zustand 13 个独立状态切片                   |
+| **EditOperation Pipeline**   | dispatch → apply → push → sync 统一操作管道 |
+| **Facade**                   | MediaService — 屏蔽 EngineClient 调用复杂性 |
 
 ---
 
@@ -216,12 +214,12 @@ Phase 3（组合依赖）:   trackOps, elementOps, elementSplit, clipboard, shap
 
 ## 技术栈
 
-| 层级 | 技术 |
-|------|------|
-| Extension Host | VSCode Extension API + TypeScript + esbuild |
-| Webview UI | React 18 + Zustand + Tailwind CSS + Vite |
-| 状态管理 | Zustand（Slice 模式，13 个切片） |
-| 媒体处理 | EngineClient → neko-engine（Rust/wgpu/FFmpeg） |
-| 导出 | StreamingFFmpegExportAdapter / WebviewExportAdapter / CanvasExportAdapter |
-| IPC | VSCode postMessage API |
-| 测试 | Vitest |
+| 层级           | 技术                                                                      |
+| -------------- | ------------------------------------------------------------------------- |
+| Extension Host | VSCode Extension API + TypeScript + esbuild                               |
+| Webview UI     | React 18 + Zustand + Tailwind CSS + Vite                                  |
+| 状态管理       | Zustand（Slice 模式，13 个切片）                                          |
+| 媒体处理       | EngineClient → neko-engine（Rust/wgpu/FFmpeg）                            |
+| 导出           | StreamingFFmpegExportAdapter / WebviewExportAdapter / CanvasExportAdapter |
+| IPC            | VSCode postMessage API                                                    |
+| 测试           | Vitest                                                                    |

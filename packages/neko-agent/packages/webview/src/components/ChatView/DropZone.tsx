@@ -99,7 +99,7 @@ export function DropZone({
     accept: acceptedTypes.map((t) => (t.endsWith('/*') ? t.slice(0, -1) : t)),
     maxSize,
     parseUriList: false,
-    parseAssetJson: false,
+    parseJson: false,
   });
 
   return (

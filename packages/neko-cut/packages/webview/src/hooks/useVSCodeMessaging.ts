@@ -658,7 +658,7 @@ function shouldAddProjectSourceResultToTimeline(
 }
 
 function readTimelineAddMetadata(result: ProjectSourceAddResult | undefined): TimelineAddMetadata {
-  const metadata = result?.ingest?.request.metadata;
+  const metadata = result?.metadata;
   if (!metadata || typeof metadata !== 'object') return {};
   return metadata as TimelineAddMetadata;
 }

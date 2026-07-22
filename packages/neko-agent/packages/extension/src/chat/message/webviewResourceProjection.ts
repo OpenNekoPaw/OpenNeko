@@ -103,24 +103,18 @@ async function projectDocumentResourceRefForWebview(
   ref: DocumentArchiveResourceRef,
   variant: ResourceVariantRequest,
 ): Promise<string | undefined> {
-  if (!options.contentAccessRuntime || !options.localResourceAccess) return undefined;
+  if (!options.contentAccessRuntime) return undefined;
   const managedRef = createManagedDocumentResourceRef(
     ref,
     options.resolveDocumentResourceScope?.() ?? resolveDefaultDocumentResourceScope(),
   );
   try {
     const result = await options.contentAccessRuntime.loadProviderAsset({
-      caller: 'message-resource-projection',
       source: managedRef,
-      preferredTarget: 'local-path',
       variant,
     });
-    if (result.status !== 'ready' || !result.uri) return undefined;
-    return options.localResourceAccess.toWebviewUri(
-      options.webview,
-      result.uri,
-      options.documentResourceCaller,
-    );
+    if (result.status !== 'ready' || !result.bytes || !result.mimeType) return undefined;
+    return `data:${result.mimeType};base64,${Buffer.from(result.bytes).toString('base64')}`;
   } catch (error) {
     logger.warn('Failed to project document resource for Webview display', { error });
     return undefined;

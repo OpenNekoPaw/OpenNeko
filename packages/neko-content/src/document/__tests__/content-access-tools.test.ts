@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createResourceFingerprint,
   createResourceRef,
+  type ContentRepresentationLocator,
   type ContentSourceRef,
   type DocumentArchiveResourceRef,
 } from '@neko/shared';
@@ -9,7 +10,11 @@ import {
   createReadDocumentTool,
   type ReadDocumentContentAccessRuntime,
 } from '../read-document-tool';
-import { createReadImageTool, type ReadImageContentAccessRuntime } from '../read-image-tool';
+import {
+  createReadImageTool,
+  MAX_READ_IMAGE_BYTES,
+  type ReadImageContentAccessRuntime,
+} from '../read-image-tool';
 
 const documentSource = {
   filePath: '/workspace/books/book.epub',
@@ -62,14 +67,57 @@ const resourceRef = createResourceRef({
   }),
 });
 
+const representationLocator: ContentRepresentationLocator = {
+  kind: 'content-representation',
+  id: 'document-raster-page-1',
+  representationKind: 'raster-page',
+  source: {
+    kind: 'workspace-file',
+    path: 'docs/story.pdf',
+    fingerprint: { strategy: 'mtime-size', value: '1:100' },
+  },
+  spec: { kind: 'raster-page', page: 1, format: 'png' },
+  generatorId: 'neko-content.document-raster',
+  sourceFingerprint: '1:100',
+  specFingerprint: 'raster-page-1-png',
+  revision: '1',
+};
+
 describe('content access tools', () => {
-  it('publishes ReadImage resourceRef as a required image item field', () => {
+  it('publishes ReadImage stable resourceRef or workspace locator identity branches', () => {
     const tool = createReadImageTool({ contentAccessRuntime: createRuntime() });
     const images = tool.parameters.properties['images'] as {
-      readonly items?: { readonly required?: readonly string[] };
+      readonly items?: {
+        readonly anyOf?: readonly { readonly required?: readonly string[] }[];
+        readonly required?: readonly string[];
+        readonly properties?: {
+          readonly resourceRef?: {
+            readonly anyOf?: readonly { readonly required?: readonly string[] }[];
+          };
+        };
+      };
     };
 
-    expect(images.items?.required).toContain('resourceRef');
+    expect(images.items?.required).toBeUndefined();
+    expect(images.items?.anyOf?.map((branch) => branch.required)).toEqual([
+      ['resourceRef'],
+      ['contentLocator'],
+      ['locator'],
+      ['representationLocator'],
+    ]);
+    expect(images.items?.properties?.resourceRef?.anyOf?.[0]?.required).toEqual([
+      'kind',
+      'source',
+      'entryPath',
+    ]);
+    expect(images.items?.properties?.resourceRef?.anyOf?.[1]?.required).toEqual([
+      'id',
+      'scope',
+      'provider',
+      'kind',
+      'source',
+      'fingerprint',
+    ]);
   });
 
   it('advertises metadata-only ReadImage mode and rejects legacy model-backed vision mode', async () => {
@@ -108,9 +156,7 @@ describe('content access tools', () => {
     expect(result.success).toBe(true);
     expect(result.data).toMatchObject({ resourceRef });
     expect(runtime.resolveDocumentContent).toHaveBeenCalledWith({
-      caller: 'read-document',
       source: documentContentSource,
-      intent: 'agent-context',
       mode: 'content',
       startBatch: false,
       includeManifest: false,
@@ -151,9 +197,7 @@ describe('content access tools', () => {
 
     expect(result.success).toBe(true);
     expect(runtime.resolveDocumentContent).toHaveBeenCalledWith({
-      caller: 'read-document',
       source: { kind: 'file', path: '${A}/books/book.epub' },
-      intent: 'agent-context',
       mode: 'range',
       range,
       startBatch: false,
@@ -284,8 +328,6 @@ describe('content access tools', () => {
     expect(imageResult.success).toBe(true);
     expect(runtime.loadProviderAsset).toHaveBeenCalledWith(
       expect.objectContaining({
-        caller: 'read-image',
-        preferredTarget: 'bytes',
         source: expect.objectContaining({
           provider: 'document-archive',
           locator: expect.objectContaining({
@@ -295,6 +337,60 @@ describe('content access tools', () => {
         }),
       }),
     );
+  });
+
+  it('passes computed ReadDocument raster pages to ReadImage without exposing a storage path', async () => {
+    const runtime = createRuntime();
+    runtime.resolveDocumentContent.mockResolvedValueOnce({
+      status: 'ready',
+      source: { kind: 'file', path: '/workspace/docs/story.pdf' },
+      diagnostics: [],
+      text: '',
+      imageInfo: [
+        {
+          label: 'page 1',
+          locator: { kind: 'page', pageNumber: 1, pageIndex: 0 },
+          mimeType: 'image/png',
+          representationLocator,
+        },
+      ],
+      imageCount: 1,
+      imagesTruncated: false,
+      pageCount: 1,
+    });
+    runtime.loadRepresentationAsset.mockResolvedValueOnce({
+      status: 'ready',
+      diagnostics: [],
+      bytes: pngBytes(),
+      mimeType: 'image/png',
+      sizeBytes: pngBytes().byteLength,
+    });
+
+    const documentResult = await createReadDocumentTool({ contentAccessRuntime: runtime }).execute({
+      source: { kind: 'file', path: '/workspace/docs/story.pdf' },
+      max_images: 1,
+    });
+    const imageInfo = (
+      documentResult.data as {
+        readonly imageInfo: readonly [
+          { readonly representationLocator: ContentRepresentationLocator },
+        ];
+      }
+    ).imageInfo;
+    const imageResult = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
+      images: imageInfo,
+    });
+
+    expect(documentResult.success).toBe(true);
+    expect(imageResult.success).toBe(true);
+    expect(runtime.loadRepresentationAsset).toHaveBeenCalledWith({
+      locator: representationLocator,
+      maxBytes: 20 * 1024 * 1024,
+    });
+    expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
+    expect(runtime.resolveImageMetadata).not.toHaveBeenCalled();
+    expect(imageResult.attachments?.[0]?.path).toMatch(/^data:image\/png;base64,/);
+    expect(JSON.stringify(imageResult)).not.toContain('.neko/.cache');
   });
 
   it('routes ReadImage through provider asset and metadata content access', async () => {
@@ -330,17 +426,179 @@ describe('content access tools', () => {
     });
     expect(runtime.loadProviderAsset).toHaveBeenCalledWith(
       expect.objectContaining({
-        caller: 'read-image',
         source: resourceRef,
-        preferredTarget: 'bytes',
       }),
     );
     expect(runtime.resolveImageMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
-        caller: 'read-image',
         source: resourceRef,
       }),
     );
+  });
+
+  it('routes a canonical workspace-file locator through unified content access', async () => {
+    const runtime = createRuntime();
+    runtime.loadProviderAsset.mockResolvedValueOnce({
+      status: 'ready',
+      diagnostics: [],
+      bytes: pngBytes(),
+      mimeType: 'image/png',
+      sizeBytes: pngBytes().byteLength,
+    });
+    runtime.resolveImageMetadata.mockResolvedValueOnce({
+      status: 'ready',
+      diagnostics: [],
+      mimeType: 'image/png',
+      width: 1,
+      height: 1,
+      sizeBytes: pngBytes().byteLength,
+    });
+    const locator = {
+      kind: 'workspace-file' as const,
+      path: 'neko/assets/Reference/library-image.png',
+    };
+
+    const result = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
+      images: [{ locator }],
+      mode: 'metadata',
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { images: [{ locator }] },
+    });
+    expect(runtime.loadProviderAsset).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: expect.objectContaining({
+          provider: 'source-file-content-access',
+          kind: 'media',
+          source: {
+            kind: 'file',
+            projectRelativePath: 'neko/assets/Reference/library-image.png',
+          },
+        }),
+      }),
+    );
+    expect(result.perceptionCards?.[0]?.perceptual?.thumbnailRef).toMatchObject({
+      resourceRef: expect.objectContaining({ provider: 'source-file-content-access' }),
+    });
+  });
+
+  it('passes a ReadDocument document-entry locator unchanged to the narrow read port', async () => {
+    const runtime = createRuntime();
+    runtime.loadContentAsset.mockResolvedValueOnce({
+      status: 'ready',
+      diagnostics: [],
+      bytes: pngBytes(),
+      mimeType: 'image/png',
+      sizeBytes: pngBytes().byteLength,
+    });
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
+      entryPath: 'pages/001.png',
+    };
+
+    const result = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
+      images: [{ contentLocator }],
+      mode: 'metadata',
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      data: { images: [{ contentLocator }] },
+    });
+    expect(runtime.loadContentAsset).toHaveBeenCalledWith({
+      locator: contentLocator,
+      maxBytes: MAX_READ_IMAGE_BYTES,
+    });
+    expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
+  });
+
+  it('rejects a missing nested document entry path instead of restoring it from sibling metadata', async () => {
+    const runtime = createRuntime();
+    runtime.loadProviderAsset.mockResolvedValue({
+      status: 'ready',
+      source: resourceRef,
+      diagnostics: [],
+      bytes: pngBytes(),
+      mimeType: 'image/png',
+      sizeBytes: pngBytes().byteLength,
+    });
+    runtime.resolveImageMetadata.mockResolvedValue({
+      status: 'ready',
+      source: resourceRef,
+      diagnostics: [],
+      mimeType: 'image/png',
+      width: 1,
+      height: 1,
+      sizeBytes: pngBytes().byteLength,
+    });
+    const images = [
+      {
+        label: 'page 5',
+        entryPath: 'images/page-5.jpg',
+        resourceRef: {
+          kind: 'document-entry',
+          source: documentSource,
+          locator: { kind: 'chapter', chapterHref: 'page-5', spineIndex: 4 },
+          versionPolicy: 'versioned-export',
+        },
+      },
+    ];
+
+    const result = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
+      images,
+      max_images: 1,
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: expect.stringContaining('stable document entry path'),
+    });
+    expect(images[0]?.entryPath).toBe('images/page-5.jpg');
+    expect(images[0]?.resourceRef).not.toHaveProperty('entryPath');
+    expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
+    expect(runtime.resolveImageMetadata).not.toHaveBeenCalled();
+  });
+
+  it('rejects conflicting nested and outer document entry paths before content access', async () => {
+    const runtime = createRuntime();
+
+    const result = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
+      images: [
+        {
+          entryPath: 'images/page-2.jpg',
+          resourceRef: {
+            kind: 'document-entry',
+            source: documentSource,
+            entryPath: 'images/page-1.jpg',
+          },
+        },
+      ],
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: expect.stringContaining('document entry identity mismatch'),
+    });
+    expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
+    expect(runtime.resolveImageMetadata).not.toHaveBeenCalled();
+  });
+
+  it('rejects a document image when both nested and outer entry identity are absent', async () => {
+    const runtime = createRuntime();
+
+    const result = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
+      images: [{ resourceRef: { kind: 'document-entry', source: documentSource } }],
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      error: expect.stringContaining('stable document entry path'),
+    });
+    expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
+    expect(runtime.resolveImageMetadata).not.toHaveBeenCalled();
   });
 
   it('rejects ReadImage path-only, cache, and Webview URI inputs instead of falling back', async () => {
@@ -354,10 +612,10 @@ describe('content access tools', () => {
     });
 
     expect(pathResult.success).toBe(false);
-    expect(pathResult.error).toContain('Missing required field: images[].resourceRef');
+    expect(pathResult.error).toContain('Missing required stable image identity');
     expect(pathResult.error).toContain('Do not inspect cache directories');
     expect(webviewResult.success).toBe(false);
-    expect(webviewResult.error).toContain('Missing required field: images[].resourceRef');
+    expect(webviewResult.error).toContain('Missing required stable image identity');
     expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
     expect(runtime.resolveImageMetadata).not.toHaveBeenCalled();
   });
@@ -367,11 +625,15 @@ function createRuntime(): ReadDocumentContentAccessRuntime &
   ReadImageContentAccessRuntime & {
     readonly resolveDocumentContent: ReturnType<typeof vi.fn>;
     readonly loadProviderAsset: ReturnType<typeof vi.fn>;
+    readonly loadContentAsset: ReturnType<typeof vi.fn>;
+    readonly loadRepresentationAsset: ReturnType<typeof vi.fn>;
     readonly resolveImageMetadata: ReturnType<typeof vi.fn>;
   } {
   return {
     resolveDocumentContent: vi.fn(),
     loadProviderAsset: vi.fn(),
+    loadContentAsset: vi.fn(),
+    loadRepresentationAsset: vi.fn(),
     resolveImageMetadata: vi.fn(),
   };
 }

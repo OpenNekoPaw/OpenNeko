@@ -2,7 +2,7 @@
 
 import { act } from 'react';
 import ReactDOM from 'react-dom/client';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createResourceFingerprint,
   createResourceRef,
@@ -32,8 +32,22 @@ class TestResizeObserver {
 }
 
 describe('ModelViewer', () => {
+  let originalResizeObserver: typeof globalThis.ResizeObserver | undefined;
+
+  beforeAll(() => {
+    originalResizeObserver = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = TestResizeObserver;
+  });
+
+  afterAll(() => {
+    if (originalResizeObserver) {
+      globalThis.ResizeObserver = originalResizeObserver;
+    } else {
+      Reflect.deleteProperty(globalThis, 'ResizeObserver');
+    }
+  });
+
   beforeEach(() => {
-    vi.stubGlobal('ResizeObserver', TestResizeObserver);
     Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
       configurable: true,
       value: () => ({ width: 800, height: 600, top: 0, left: 0, right: 800, bottom: 600 }),
@@ -41,7 +55,6 @@ describe('ModelViewer', () => {
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
     document.body.innerHTML = '';
   });
 

@@ -42,6 +42,8 @@ import {
 } from '../ai/piCredentialRuntime';
 import { VSCodePiRuntimeManager } from '../ai/vscodePiRuntimeManager';
 import { VSCodePiPurposeModelRuntime } from '../ai/vscodePiPurposeModelRuntime';
+import { getCapabilityRuntimeBindings } from './capabilityBootstrap';
+import { createLocalPerceptionAssetLoader } from '../services/perceptionAssetLoader';
 
 // =============================================================================
 // Service Identifiers
@@ -159,6 +161,12 @@ export async function bootstrapCoreServices(
     builtinSkillRoot: join(context.extensionUri.fsPath, 'dist', 'skills'),
     credentials: piCredentials.credentials,
     tools: toolRegistry,
+    assetLoader: {
+      load: (ref) =>
+        createLocalPerceptionAssetLoader(getCapabilityRuntimeBindings().contentAccessRuntime).load(
+          ref,
+        ),
+    },
     workspaceTrusted: () => vscode.workspace.isTrusted,
   });
   services.set(IPiAgentRuntimeManager, piAgentRuntimeManager);

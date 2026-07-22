@@ -75,12 +75,10 @@ export class AttachmentProcessor {
         throw new Error('Image attachment reading requires AgentContentAccessRuntime.');
       }
       const loaded = await contentAccessRuntime.loadProviderAsset({
-        caller: 'attachment-processor',
         source: {
           kind: 'file',
           path: filePath,
         },
-        preferredTarget: 'bytes',
         mimeTypeHint: mediaType,
       });
       if (loaded.status !== 'ready' || !loaded.bytes) {
@@ -116,9 +114,7 @@ export class AttachmentProcessor {
     const attachments: AgentBase64ImageAttachment[] = [];
     for (const input of resources) {
       const loaded = await contentAccessRuntime.loadProviderAsset({
-        caller: 'attachment-processor',
         source: input.resource,
-        preferredTarget: 'bytes',
         mimeTypeHint: 'image/png',
         metadata: { threeReferenceRole: input.role },
       });

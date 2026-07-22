@@ -86,11 +86,6 @@ function createPlaybackPlan(): CanvasPlaybackPlan {
 function createApi(): NekoCanvasAPI {
   const plan = createPlaybackPlan();
   return {
-    asset: {
-      import: vi.fn(),
-      list: vi.fn(),
-      getById: vi.fn(),
-    },
     importAsset: vi.fn(),
     canvas: {
       create: vi.fn(),
@@ -158,7 +153,6 @@ function createApi(): NekoCanvasAPI {
       onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
     },
     events: {
-      onDidChangeAssets: vi.fn(() => ({ dispose: vi.fn() })),
       onDidChangeCanvas: vi.fn(() => ({ dispose: vi.fn() })),
     },
   } as unknown as NekoCanvasAPI;

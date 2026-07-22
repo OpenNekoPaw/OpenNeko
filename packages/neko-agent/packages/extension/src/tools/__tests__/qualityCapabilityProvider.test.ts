@@ -97,9 +97,7 @@ describe('QualityCapabilityProvider', () => {
     });
     expect(loadProviderAsset).toHaveBeenCalledWith(
       expect.objectContaining({
-        caller: 'quality-review',
         source: resourceRef,
-        preferredTarget: 'bytes',
       }),
     );
     expect(complete).toHaveBeenCalledWith(

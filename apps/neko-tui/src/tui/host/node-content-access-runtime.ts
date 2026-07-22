@@ -6,67 +6,61 @@ import {
 } from '@neko/content/document';
 import AdmZipModule from 'adm-zip';
 import * as Epub2Module from 'epub2';
+import * as path from 'node:path';
 import { loadHostContentPolicySnapshot, type NekoHostPorts } from '@neko/host';
-import { PathResolver, type WorkspaceMediaPathContext } from '@neko/shared';
 import {
-  DocumentEntryContentAccessProvider,
-  DocumentResourceCacheProvider,
-  GeneratedAssetSourceContentAccessProvider,
-  HostContentAccessService,
-  HostResourceCacheService,
-  ResourceCacheContentAccessProvider,
+  PathResolver,
+  normalizeWorkspaceContentPath,
+  type ContentLocator,
+  type GeneratedOutputContentLocator,
+  type ResourceRef,
+  type WorkspaceFileContentLocator,
+} from '@neko/shared';
+import {
+  createHostDerivedContentRuntime,
+  createNodeHostContentReadService,
   resolveGeneratedAssetResourceRef,
-  SourceFileContentAccessProvider,
-  type ContentAccessFileOps,
-  type ContentAccessService,
-  type DocumentResourceCacheFsOps,
-  type GeneratedAssetDerivativeResourceCacheProviderOptions,
-  type ResourceCacheFsOps,
-  type ResourceCacheManifestStore,
-  type ResourceCacheService,
+  type HostDerivedContentRuntime,
 } from '@neko/shared/content-access';
+import type { GeneratedAssetResourceResolver } from '@neko/platform';
 import {
   createHostAgentContentAccessRuntime,
   createAgentDocumentReaderModuleUnavailableError,
   type AgentContentAccessRuntime,
-  type AgentContentAccessRuntimeRequest,
   type AgentDocumentContentInput,
   type AgentDocumentContentResult,
   type AgentImageMetadataInput,
   type AgentImageMetadataResult,
   type AgentProviderAssetInput,
   type AgentProviderAssetResult,
-  type AgentResourceProjectionInput,
-  type AgentResourceProjectionResult,
 } from '@neko/agent/runtime';
 
 const DEFAULT_PROVIDER_ASSET_RANGE_BYTES = 20 * 1024 * 1024;
 
-type GeneratedAssetResourceResolver = NonNullable<
-  GeneratedAssetDerivativeResourceCacheProviderOptions['resolveAsset']
->;
-
 export interface CreateNodeContentAccessRuntimeOptions {
   readonly host: NekoHostPorts;
   readonly maxProviderAssetBytes?: number;
-  readonly resourceCacheManifestStore?: ResourceCacheManifestStore;
   readonly resolveGeneratedAsset?: GeneratedAssetResourceResolver;
+  readonly derivedStorageHomedir?: string;
 }
 
 export interface NodeContentAccessRuntimeServices {
   readonly runtime: AgentContentAccessRuntime;
-  readonly contentAccess: ContentAccessService;
   readonly documentAccess: IDocumentAccessService;
-  readonly resourceCache?: ResourceCacheService;
+  readonly derivedRuntime: HostDerivedContentRuntime;
+}
+
+export interface NodeContentAccessRuntime extends AgentContentAccessRuntime {
+  dispose(): Promise<void>;
 }
 
 export function createNodeContentAccessRuntime(
   options: CreateNodeContentAccessRuntimeOptions,
-): AgentContentAccessRuntime {
+): NodeContentAccessRuntime {
   return new LazyNodeContentAccessRuntime(options);
 }
 
-export async function createNodeContentAccessRuntimeServices(
+async function createNodeContentAccessRuntimeServices(
   options: CreateNodeContentAccessRuntimeOptions,
 ): Promise<NodeContentAccessRuntimeServices> {
   const builder = new NodeContentAccessRuntimeBuilder(options);
@@ -77,10 +71,6 @@ class LazyNodeContentAccessRuntime implements AgentContentAccessRuntime {
   private servicesPromise: Promise<NodeContentAccessRuntimeServices> | undefined;
 
   constructor(private readonly options: CreateNodeContentAccessRuntimeOptions) {}
-
-  resolve(input: AgentContentAccessRuntimeRequest) {
-    return this.runtime().then((runtime) => runtime.resolve(input));
-  }
 
   resolveImageMetadata(input: AgentImageMetadataInput): Promise<AgentImageMetadataResult> {
     return this.runtime().then((runtime) => runtime.resolveImageMetadata(input));
@@ -94,8 +84,18 @@ class LazyNodeContentAccessRuntime implements AgentContentAccessRuntime {
     return this.runtime().then((runtime) => runtime.loadProviderAsset(input));
   }
 
-  projectResource(input: AgentResourceProjectionInput) {
-    return this.runtime().then((runtime) => runtime.projectResource(input));
+  loadContentAsset(input: {
+    readonly locator: ContentLocator;
+    readonly maxBytes: number;
+    readonly signal?: AbortSignal;
+  }): Promise<AgentProviderAssetResult> {
+    return this.runtime().then((runtime) => runtime.loadContentAsset(input));
+  }
+
+  async dispose(): Promise<void> {
+    if (!this.servicesPromise) return;
+    const services = await this.servicesPromise;
+    await services.derivedRuntime.dispose();
   }
 
   private async runtime(): Promise<AgentContentAccessRuntime> {
@@ -126,197 +126,44 @@ class NodeContentAccessRuntimeBuilder {
     }
 
     const pathResolver = new PathResolver(new Map(contentPolicy.pathVariables));
-    const mediaPathContext: WorkspaceMediaPathContext = {
-      owningWorkspaceRoot: workspaceRoot,
-      workspaceRoots: [workspaceRoot],
-      pathVariables: contentPolicy.pathVariables,
-      allowedRoots: contentPolicy.authorizedReadRoots,
-    };
-    const fileOps: Pick<ContentAccessFileOps, 'readFile'> = {
-      readFile: (filePath) => this.readBytes(filePath),
-    };
-    const resourceCacheFsOps = this.createResourceCacheFsOps();
-    const documentResourceCacheFsOps = this.createDocumentResourceCacheFsOps();
-    const resourceCacheManifestStore = this.options.resourceCacheManifestStore;
-    let resourceCache: ResourceCacheService | undefined;
-    if (workspace.storageLayout) {
-      if (!resourceCacheManifestStore) {
-        throw new Error('TUI ResourceCache requires a LocalMetadata manifest store.');
-      }
-      resourceCache = this.createResourceCache({
+    const resolveGeneratedAsset = async (ref: ResourceRef) =>
+      (await this.options.resolveGeneratedAsset?.(ref)) ??
+      resolveGeneratedAssetResourceRef(ref, pathResolver, workspaceRoot);
+    const derivedRuntime = await createHostDerivedContentRuntime({
+      target: {
+        kind: 'workspace',
         workspaceRoot,
-        pathResolver,
-        fileOps,
-        resourceCacheFsOps,
-        documentResourceCacheFsOps,
-        cacheRoot: workspace.storageLayout.project.local.cache.resources,
-        manifestStore: resourceCacheManifestStore,
-        ...(this.options.resolveGeneratedAsset
-          ? { resolveGeneratedAsset: this.options.resolveGeneratedAsset }
+        ...(this.options.derivedStorageHomedir
+          ? { homedir: this.options.derivedStorageHomedir }
           : {}),
-      });
-    }
-    const contentAccess = this.createContentAccess({
-      workspaceRoot,
-      pathResolver,
-      mediaPathContext,
-      fileOps,
-      resourceCache,
-      resolveGeneratedAsset: async (ref) =>
-        (await this.options.resolveGeneratedAsset?.(ref)) ??
-        resolveGeneratedAssetResourceRef(ref, pathResolver, workspaceRoot),
+      },
     });
     const documentAccess = this.createDocumentAccess();
+    const contentRead = createNodeHostContentReadService({
+      workspaceRoot,
+      documentEntryReader: {
+        readEntry: async (sourcePath, entryPath) => {
+          const bytes = await this.readEntry(sourcePath, entryPath);
+          if (!bytes) throw new Error(`Document entry not found: ${entryPath}`);
+          return bytes;
+        },
+      },
+    });
     const runtime = createHostAgentContentAccessRuntime({
-      contentAccess,
+      contentRead,
       documentAccess,
-      resolveDocumentResourceScope: () => 'project',
+      resolveWorkspaceFileLocator: createWorkspaceFileLocatorResolver(workspaceRoot),
+      resolveGeneratedOutputLocator: createGeneratedOutputLocatorResolver(
+        workspaceRoot,
+        resolveGeneratedAsset,
+      ),
+      resolveDocumentHostFilePath: (source) => path.join(workspaceRoot, ...source.path.split('/')),
     });
 
     return {
       runtime,
-      contentAccess,
       documentAccess,
-      ...(resourceCache ? { resourceCache } : {}),
-    };
-  }
-
-  private createContentAccess(input: {
-    readonly workspaceRoot: string;
-    readonly pathResolver: PathResolver;
-    readonly mediaPathContext: WorkspaceMediaPathContext;
-    readonly fileOps: Pick<ContentAccessFileOps, 'readFile'>;
-    readonly resourceCache?: ResourceCacheService;
-    readonly resolveGeneratedAsset?: GeneratedAssetResourceResolver;
-  }): ContentAccessService {
-    const contentAccess = new HostContentAccessService();
-    if (input.resolveGeneratedAsset) {
-      contentAccess.registerProvider(
-        new GeneratedAssetSourceContentAccessProvider({
-          resolveAsset: input.resolveGeneratedAsset,
-          fileOps: input.fileOps,
-        }),
-      );
-    }
-    if (input.resourceCache) {
-      contentAccess.registerProvider(
-        new ResourceCacheContentAccessProvider({
-          resourceCache: input.resourceCache,
-          fileOps: input.fileOps,
-        }),
-      );
-    }
-    contentAccess.registerProvider(
-      new DocumentEntryContentAccessProvider({
-        projectRoot: input.workspaceRoot,
-        mediaPathContext: input.mediaPathContext,
-        fileExists: (filePath) => this.isExistingLocalFile(filePath),
-        ...(input.resourceCache ? { resourceCache: input.resourceCache } : {}),
-        fileOps: input.fileOps,
-        entryReader: async ({ sourcePath, entryPath }) => {
-          if (!entryPath) {
-            throw new Error('Document entry path is required.');
-          }
-          const bytes = await this.readEntry(sourcePath, entryPath);
-          if (!bytes) {
-            throw new Error(`Document entry not found: ${entryPath}`);
-          }
-          return bytes;
-        },
-      }),
-    );
-    contentAccess.registerProvider(
-      new SourceFileContentAccessProvider({
-        projectRoot: input.workspaceRoot,
-        mediaPathContext: input.mediaPathContext,
-        fileExists: (filePath) => this.isExistingLocalFile(filePath),
-        fileOps: input.fileOps,
-        bytesResolver: async ({ path: filePath }) => {
-          const bytes = await this.readBytes(filePath);
-          return { bytes, sizeBytes: bytes.byteLength };
-        },
-      }),
-    );
-    return contentAccess;
-  }
-
-  private createResourceCache(input: {
-    readonly workspaceRoot: string;
-    readonly pathResolver: PathResolver;
-    readonly fileOps: Pick<ContentAccessFileOps, 'readFile'>;
-    readonly resourceCacheFsOps: ResourceCacheFsOps;
-    readonly documentResourceCacheFsOps: DocumentResourceCacheFsOps;
-    readonly cacheRoot: string;
-    readonly manifestStore: ResourceCacheManifestStore;
-    readonly resolveGeneratedAsset?: GeneratedAssetResourceResolver;
-  }): ResourceCacheService {
-    return new HostResourceCacheService({
-      cacheRoot: input.cacheRoot,
-      manifestStore: input.manifestStore,
-      projectRoot: input.workspaceRoot,
-      fsOps: input.resourceCacheFsOps,
-      providers: [
-        new DocumentResourceCacheProvider({
-          pathResolver: input.pathResolver,
-          projectRoot: input.workspaceRoot,
-          fsOps: input.documentResourceCacheFsOps,
-          entryReader: {
-            readEntry: (source, entryPath) => this.readEntry(source.filePath, entryPath),
-          },
-        }),
-      ],
-    });
-  }
-
-  private async isExistingLocalFile(filePath: string): Promise<boolean> {
-    try {
-      const stat = await this.options.host.files.stat(filePath);
-      return stat.type === 'file';
-    } catch {
-      return false;
-    }
-  }
-
-  private createResourceCacheFsOps(): ResourceCacheFsOps {
-    return {
-      readFile: (filePath, encoding) => {
-        if (encoding !== 'utf-8') {
-          throw new Error(`TUI resource cache only supports utf-8 text reads: ${encoding}`);
-        }
-        return this.options.host.files.readText(filePath);
-      },
-      writeFile: async (filePath, content, encoding) => {
-        if (encoding !== 'utf-8') {
-          throw new Error(`TUI resource cache only supports utf-8 text writes: ${encoding}`);
-        }
-        await this.options.host.files.writeText(filePath, content);
-      },
-      rename: (oldPath, newPath) => this.options.host.files.rename(oldPath, newPath),
-      mkdir: async (dirPath) => {
-        await this.options.host.files.createDirectory(dirPath);
-      },
-      stat: async (filePath) => {
-        const stat = await this.options.host.files.stat(filePath);
-        return {
-          size: stat.sizeBytes ?? 0,
-          ...(stat.modifiedAtMs !== undefined ? { mtimeMs: stat.modifiedAtMs } : {}),
-        };
-      },
-      rm: (filePath, options) =>
-        this.options.host.files.delete(filePath, { idempotent: options.force }),
-    };
-  }
-
-  private createDocumentResourceCacheFsOps(): DocumentResourceCacheFsOps {
-    return {
-      writeFile: (filePath, data) => this.options.host.files.writeBytes(filePath, data),
-      mkdir: async (dirPath) => {
-        await this.options.host.files.createDirectory(dirPath);
-      },
-      stat: async (filePath) => {
-        const stat = await this.options.host.files.stat(filePath);
-        return { size: stat.sizeBytes ?? 0 };
-      },
+      derivedRuntime,
     };
   }
 
@@ -397,6 +244,49 @@ class NodeContentAccessRuntimeBuilder {
       ? resolved.path
       : undefined;
   }
+}
+
+function createWorkspaceFileLocatorResolver(
+  workspaceRoot: string,
+): (value: string) => WorkspaceFileContentLocator | undefined {
+  return (value) => {
+    const absolutePath = path.isAbsolute(value)
+      ? path.resolve(value)
+      : path.resolve(workspaceRoot, value);
+    const relativePath = path.relative(workspaceRoot, absolutePath).replaceAll(path.sep, '/');
+    const normalized = normalizeWorkspaceContentPath(relativePath);
+    return normalized && normalized === relativePath
+      ? { kind: 'workspace-file', path: normalized }
+      : undefined;
+  };
+}
+
+function createGeneratedOutputLocatorResolver(
+  workspaceRoot: string,
+  resolveGeneratedAsset: GeneratedAssetResourceResolver,
+): (ref: ResourceRef) => Promise<GeneratedOutputContentLocator | undefined> {
+  const resolveWorkspaceFile = createWorkspaceFileLocatorResolver(workspaceRoot);
+  return async (ref) => {
+    if (ref.source.kind !== 'generated-asset') return undefined;
+    const resolved = await resolveGeneratedAsset(ref);
+    const workspaceFile = resolved?.path ? resolveWorkspaceFile(resolved.path) : undefined;
+    const revision = readNonEmptyString(ref.source.metadata?.['revision']);
+    const digest = readNonEmptyString(ref.source.metadata?.['contentDigest']);
+    const outputId = readNonEmptyString(ref.source.generatedAssetId);
+    return workspaceFile && revision && digest && outputId
+      ? {
+          kind: 'generated-output',
+          outputId,
+          revision,
+          digest,
+          path: workspaceFile.path,
+        }
+      : undefined;
+  };
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
 interface AdmZipEntry {

@@ -437,7 +437,6 @@ export interface IGlobalStorageLayout {
 export interface IProjectFactsLayout {
   readonly root: string;
   readonly settings: string;
-  readonly assetLibrary: string;
   readonly providerCards: string;
   readonly entityBindings: string;
   readonly visualIdentityDrafts: string;
@@ -514,7 +513,6 @@ export function resolveStorageLayout(workspaceRoot: string, homedir: string): IS
   const facts: IProjectFactsLayout = {
     root: factsRoot,
     settings: join(factsRoot, 'settings.json'),
-    assetLibrary: join(factsRoot, 'assets', 'library.json'),
     providerCards: join(factsRoot, 'providers'),
     entityBindings: join(factsRoot, 'entity-bindings.json'),
     visualIdentityDrafts: join(factsRoot, 'visual-identity-drafts.json'),

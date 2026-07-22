@@ -13,20 +13,20 @@ export interface FileDropOptions {
   maxSize?: number;
   /** Parse `text/uri-list` from VSCode explorer drops (default true). */
   parseUriList?: boolean;
-  /** Parse `application/json` from Asset Library drops (default true). */
-  parseAssetJson?: boolean;
+  /** Parse supported structured drag payloads from `application/json` (default true). */
+  parseJson?: boolean;
   /** Read native File objects from the DataTransfer (default true). */
   parseNativeFiles?: boolean;
 }
 
-export type FileDropResultType = 'uri-list' | 'asset-json' | 'native-file';
+export type FileDropResultType = 'uri-list' | 'json' | 'native-file';
 
 export interface FileDropResult {
   type: FileDropResultType;
   /** Parsed URIs (for 'uri-list'). */
   uris?: string[];
-  /** Raw parsed JSON payload (for 'asset-json'). Consumer casts to domain type. */
-  assetData?: unknown;
+  /** Raw parsed JSON payload (for 'json'). Consumer validates its domain contract. */
+  data?: unknown;
   /** Native File objects (for 'native-file'). */
   files?: File[];
 }
@@ -68,7 +68,7 @@ function parseUriList(raw: string): string[] {
  *
  * Handles three drop sources:
  *   1. VSCode explorer / external URI lists (`text/uri-list`)
- *   2. Asset Library protocol (`application/json`)
+ *   2. Structured extension payloads (`application/json`)
  *   3. Native File objects (filesystem drag)
  *
  * ```tsx
@@ -134,19 +134,19 @@ export function useFileDrop(
 
     const opts = optionsRef.current;
     const doUriList = opts?.parseUriList !== false;
-    const doAssetJson = opts?.parseAssetJson !== false;
+    const doJson = opts?.parseJson !== false;
     const doNativeFiles = opts?.parseNativeFiles !== false;
     const accept = opts?.accept;
     const maxSize = opts?.maxSize;
     const dt = e.dataTransfer;
 
-    // Priority 1: application/json (Asset Library protocol)
-    if (doAssetJson) {
+    // Priority 1: structured extension payloads
+    if (doJson) {
       const jsonStr = dt.getData('application/json');
       if (jsonStr) {
         try {
           const data: unknown = JSON.parse(jsonStr);
-          onDropRef.current({ type: 'asset-json', assetData: data }, e);
+          onDropRef.current({ type: 'json', data }, e);
           return;
         } catch {
           // fall through

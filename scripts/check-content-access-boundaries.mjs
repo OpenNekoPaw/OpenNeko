@@ -8,33 +8,56 @@ const repoRoot = process.cwd();
 const checkedRoots = [
   'packages/neko-types/src',
   'packages/neko-agent/packages/extension/src',
+  'packages/neko-agent/packages/agent-types/src',
+  'packages/neko-agent/packages/agent/src',
+  'packages/neko-agent/packages/platform/src',
   'packages/neko-canvas/packages/extension/src',
   'packages/neko-cut/packages/extension/src',
   'packages/neko-preview/packages/extension/src',
   'packages/neko-assets/src',
   'packages/neko-tools/packages/extension/src',
+  'apps/neko-tui/src',
 ];
 
 const featurePackageRoots = [
   'packages/neko-agent/packages/extension/src',
+  'packages/neko-agent/packages/agent-types/src',
+  'packages/neko-agent/packages/agent/src',
+  'packages/neko-agent/packages/platform/src',
   'packages/neko-canvas/packages/extension/src',
   'packages/neko-cut/packages/extension/src',
   'packages/neko-preview/packages/extension/src',
   'packages/neko-assets/src',
   'packages/neko-tools/packages/extension/src',
+  'apps/neko-tui/src',
 ];
 
 const blockedSymbols = [
   'HostContentAccessService',
   'HostContentIngestService',
-  'VSCodeResourceCacheService',
+  'ResourceCacheService',
   'ResourceCacheContentAccessProvider',
   'SourceFileContentAccessProvider',
   'DocumentEntryContentAccessProvider',
   'ExportStagingContentIngestProvider',
   'GeneratedOutputContentIngestProvider',
-  'createDefaultLocalResourceAccessService',
+  'createHostContentAccessRuntime',
 ];
+
+const derivedStorageBlockedSymbols = [
+  'ResourceCacheProvider',
+  'ResourceCacheManifestStore',
+  'DocumentResourceCacheProvider',
+  'GeneratedAssetDerivativeResourceCacheProvider',
+  'PreviewVariantResourceCacheProvider',
+  'ThumbnailResourceCacheProvider',
+  'resourceCacheRoot',
+  'resourceCacheManifest',
+  "'resourceCache'",
+  '"resourceCache"',
+];
+
+const derivedStorageMigrationAllowlist = new Set([]);
 
 const durableGeneratedCachePathPatterns = ['.neko/.cache/generated', '.neko/.cache/resources'];
 
@@ -68,6 +91,8 @@ function runCheck() {
     status: findings.length > 0 ? 'failed' : 'passed',
     checkedFiles,
     blockedSymbols,
+    derivedStorageBlockedSymbols,
+    derivedStorageMigrationAllowlist: [...derivedStorageMigrationAllowlist].sort(),
     findings,
   };
 
@@ -85,19 +110,51 @@ function runSelfTest() {
       name: 'feature package direct shared cache service fails',
       file: 'packages/neko-canvas/packages/extension/src/editor/example.ts',
       content: "import { VSCodeResourceCacheService } from '@neko/shared/vscode/extension';\n",
-      expectedSymbols: ['VSCodeResourceCacheService'],
+      expectedSymbols: ['ResourceCacheService'],
     },
     {
-      name: 'feature package shared runtime factory passes',
+      name: 'feature package narrow local resource capability passes',
+      file: 'packages/neko-canvas/packages/extension/src/editor/example.ts',
+      content:
+        "import { createDefaultLocalResourceAccessService } from '@neko/shared/vscode/extension';\n",
+      expectedSymbols: [],
+    },
+    {
+      name: 'feature package legacy broad content runtime fails',
       file: 'packages/neko-canvas/packages/extension/src/editor/example.ts',
       content: "import { createHostContentAccessRuntime } from '@neko/shared/vscode/extension';\n",
-      expectedSymbols: [],
+      expectedSymbols: ['createHostContentAccessRuntime'],
     },
     {
       name: 'test file direct service mention passes',
       file: 'packages/neko-canvas/packages/extension/src/__tests__/protocol.test.ts',
       content: "expect(source).not.toContain('VSCodeResourceCacheService');\n",
       expectedSymbols: [],
+    },
+    {
+      name: 'feature package cache provider fails',
+      file: 'packages/neko-canvas/packages/extension/src/editor/new-provider.ts',
+      content:
+        "import { DocumentResourceCacheProvider, type ResourceCacheProvider } from '@neko/shared/vscode/extension';\n",
+      expectedSymbols: ['DocumentResourceCacheProvider', 'ResourceCacheProvider'],
+    },
+    {
+      name: 'processor cache root fails',
+      file: 'packages/neko-agent/packages/agent-types/src/new-processor.ts',
+      content: "const allowedOutputRoots = ['resourceCache'];\n",
+      expectedSymbols: ["'resourceCache'"],
+    },
+    {
+      name: 'shared Host cache implementation passes',
+      file: 'packages/neko-types/src/vscode/extension/resource-cache-service.ts',
+      content: 'export class VSCodeResourceCacheService {}\n',
+      expectedSymbols: [],
+    },
+    {
+      name: 'former migration owner fails after the allowlist is emptied',
+      file: 'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
+      content: "import { DocumentResourceCacheProvider } from '@neko/shared/vscode/extension';\n",
+      expectedSymbols: ['DocumentResourceCacheProvider', 'ResourceCacheProvider'],
     },
     {
       name: 'durable generated cache path fails',
@@ -139,17 +196,33 @@ function runSelfTest() {
 
 function findViolations(file, content) {
   const findings = [];
-  if (!isTestFile(file) && isFeaturePackageFile(file)) {
+  if (
+    !isTestFile(file) &&
+    isFeaturePackageFile(file) &&
+    !derivedStorageMigrationAllowlist.has(file)
+  ) {
     for (const symbol of blockedSymbols) {
       const index = content.indexOf(symbol);
       if (index < 0) continue;
       findings.push({
-        ruleId: 'feature-packages-use-shared-content-runtime-factory',
+        ruleId: 'feature-packages-use-narrow-content-capabilities',
         file,
         symbol,
         line: lineForIndex(content, index),
         message:
-          'Feature packages must use createHostContentAccessRuntime and domain providers/adapters instead of directly assembling shared cache/content/projection services.',
+          'Feature packages must compose narrow shared read, projection, representation, writer, or local-resource capabilities and must not own the legacy broad content/cache services.',
+      });
+    }
+    for (const symbol of derivedStorageBlockedSymbols) {
+      const index = content.indexOf(symbol);
+      if (index < 0) continue;
+      findings.push({
+        ruleId: 'product-packages-must-not-own-derived-storage',
+        file,
+        symbol,
+        line: lineForIndex(content, index),
+        message:
+          'Product packages must request semantic representations and must not import cache providers, manifests, roots, lifecycle, or processor cache-root policy.',
       });
     }
   }
@@ -162,6 +235,9 @@ function isFeaturePackageFile(file) {
 }
 
 function findDurableGeneratedCachePathViolations(file, content) {
+  if (isTestFile(file)) {
+    return [];
+  }
   if (isAllowedGeneratedCacheDiagnosticTest(file, content)) {
     return [];
   }

@@ -2,8 +2,6 @@
  * Protocol integration tests for neko-cut extension.
  *
  * Exercises real production code paths:
- * - isAssetMessage() type guard from assetHandlers
- * - handleAssetMessage() with missing AssetService (SERVICE_NOT_AVAILABLE)
  * - AIActionHandler posting aiActionStatus via webview.postMessage
  */
 
@@ -60,7 +58,6 @@ vi.mock('../services/TimelineToolExecutor', () => ({
 
 vi.mock('../bootstrap/toolsBootstrap', () => ({}));
 
-import { isAssetMessage, handleAssetMessage } from '../handlers/assetHandlers';
 import { AIActionHandler } from '../services/AIActionHandler';
 import { registerTimelineCommands } from '../commands/timeline-commands';
 
@@ -78,56 +75,6 @@ const removedGeneratedClipEditorTimeout = [
 ].join('');
 
 describe('neko-cut protocol', () => {
-  describe('isAssetMessage', () => {
-    it('returns true for messages with asset: prefix', () => {
-      expect(isAssetMessage({ type: 'asset:createEntity' })).toBe(true);
-      expect(isAssetMessage({ type: 'asset:search' })).toBe(true);
-      expect(isAssetMessage({ type: 'asset:flush' })).toBe(true);
-    });
-
-    it('returns false for non-asset messages', () => {
-      expect(isAssetMessage({ type: 'updateTimeline' })).toBe(false);
-      expect(isAssetMessage({ type: 'aiActionStatus' })).toBe(false);
-    });
-
-    it('returns false for invalid inputs', () => {
-      expect(isAssetMessage(null)).toBe(false);
-      expect(isAssetMessage(undefined)).toBe(false);
-      expect(isAssetMessage({})).toBe(false);
-      expect(isAssetMessage({ type: 42 })).toBe(false);
-    });
-  });
-
-  describe('handleAssetMessage — no AssetService', () => {
-    it('responds with asset:error SERVICE_NOT_AVAILABLE when service is null', async () => {
-      const postMessage = vi.fn();
-
-      const result = await handleAssetMessage(
-        { type: 'asset:createEntity', payload: { name: 'test' } } as any,
-        postMessage,
-      );
-
-      expect(result).toBe(true);
-      expect(postMessage).toHaveBeenCalledOnce();
-      const response = postMessage.mock.calls[0]![0];
-      expect(response.type).toBe('asset:error');
-      expect(response.payload.code).toBe('SERVICE_NOT_AVAILABLE');
-    });
-
-    it('includes _requestId in error response when present', async () => {
-      const postMessage = vi.fn();
-
-      await handleAssetMessage(
-        { type: 'asset:search', payload: {}, _requestId: 'req-42' } as any,
-        postMessage,
-      );
-
-      const response = postMessage.mock.calls[0]![0];
-      expect(response._requestId).toBe('req-42');
-      expect(response.type).toBe('asset:error');
-    });
-  });
-
   describe('AIActionHandler', () => {
     let mockWebview: { postMessage: ReturnType<typeof vi.fn> };
     let handler: AIActionHandler;
@@ -340,19 +287,23 @@ describe('timeline command registration (NKC-010)', () => {
   });
 });
 
-describe('intent-aware engine and export boundaries', () => {
-  it('routes engine file range registration through source-intent content access', () => {
+describe('locator-first engine and export boundaries', () => {
+  it('authorizes engine file range registration through narrow content reads', () => {
     expect(messageHandlerSource).toContain('resolveEngineFileAccessPath');
-    expect(messageHandlerSource).toContain("intent: 'verify'");
-    expect(messageHandlerSource).toContain("target: 'local-path'");
+    expect(messageHandlerSource).toContain("kind: 'workspace-file' as const");
+    expect(messageHandlerSource).toContain('this.contentRead.stat(locator)');
     expect(messageHandlerSource).toContain('this.engineClient.registerFile({');
+    expect(messageHandlerSource).not.toContain("intent: 'verify'");
+    expect(messageHandlerSource).not.toContain("target: 'local-path'");
   });
 
-  it('keeps export source resolution and output staging behind content services', () => {
-    expect(exportServiceSource).toContain("intent: 'final-export'");
-    expect(exportServiceSource).toContain("mode: 'stage-export'");
-    expect(exportServiceSource).toContain('createHostContentAccessRuntime');
-    expect(exportServiceSource).toContain('includeGeneratedOutput: false');
+  it('keeps export source authorization narrow and output preparation domain-owned', () => {
+    expect(exportServiceSource).toContain("kind: 'workspace-file' as const");
+    expect(exportServiceSource).toContain('contentRead.stat(locator)');
+    expect(exportServiceSource).toContain('prepareOutputDirectory');
+    expect(exportServiceSource).not.toContain("intent: 'final-export'");
+    expect(exportServiceSource).not.toContain("mode: 'stage-export'");
+    expect(exportServiceSource).not.toContain('createHostContentAccessRuntime');
   });
 });
 

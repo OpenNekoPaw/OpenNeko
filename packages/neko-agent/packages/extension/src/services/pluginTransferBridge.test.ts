@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import type { ContentIngestRequest, ContentIngestResult } from '@neko/shared';
-import { sendGeneratedAssetToPlugin, type PluginTransferBridgeDeps } from './pluginTransferBridge';
+import {
+  sendGeneratedAssetToPlugin,
+  type PersistGeneratedOutputInput,
+  type PluginTransferBridgeDeps,
+} from './pluginTransferBridge';
 
 vi.mock('vscode', async () => await import('../__mocks__/vscode'));
 
@@ -15,11 +18,10 @@ describe('PluginTransferBridge', () => {
       'image',
       undefined,
       createDeps({
-        ingest: async (request) =>
-          createGeneratedIngestResult(request, {
-            outputPath: '/workspace/neko/generated/image/legacy-frame.png',
-            contractedPath: '${WORKSPACE}/neko/generated/image/legacy-frame.png',
-          }),
+        persist: async () => ({
+          kind: 'workspace-file',
+          path: 'neko/generated/image/legacy-frame.png',
+        }),
         executeCommand,
       }),
     );
@@ -39,7 +41,7 @@ describe('PluginTransferBridge', () => {
   });
 
   it('materializes Agent generated images before sending them to Canvas', async () => {
-    const ingestCalls: ContentIngestRequest[] = [];
+    const persistCalls: PersistGeneratedOutputInput[] = [];
     const executeCommand = vi.fn().mockResolvedValue({ ok: true });
 
     const result = await sendGeneratedAssetToPlugin(
@@ -56,28 +58,21 @@ describe('PluginTransferBridge', () => {
         target: { kind: 'file', documentUri: 'file:///workspace/edit.nkv' },
       },
       createDeps({
-        ingest: async (request) => {
-          ingestCalls.push(request);
-          return createGeneratedIngestResult(request, {
-            outputPath: '/workspace/neko/generated/image/shot.png',
-            contractedPath: '${WORKSPACE}/neko/generated/image/shot.png',
-          });
+        persist: async (input) => {
+          persistCalls.push(input);
+          return { kind: 'workspace-file', path: 'neko/generated/image/shot.png' };
         },
         executeCommand,
       }),
     );
 
     expect(result.success).toBe(true);
-    expect(ingestCalls).toHaveLength(1);
-    expect(ingestCalls[0]).toMatchObject({
-      mode: 'generated-output',
+    expect(persistCalls).toHaveLength(1);
+    expect(persistCalls[0]).toMatchObject({
       sourcePath: '/tmp/agent-private/shot.png',
-      destination: {
-        kind: 'generated-assets',
-        directory: '/workspace/neko/generated/image',
-      },
-      fileName: 'shot.png',
-      mimeType: 'image/png',
+      outputDirectory: 'neko/generated/image',
+      fileNameHint: 'shot.png',
+      mediaType: 'image/png',
     });
     expect(executeCommand).toHaveBeenCalledWith(
       'neko.canvas.importAsset',
@@ -116,12 +111,7 @@ describe('PluginTransferBridge', () => {
         },
       },
       createDeps({
-        ingest: async (request) => ({
-          status: 'unsupported-destination',
-          request,
-          providerId: 'generated-output-content-ingest',
-          error: 'Generated output path must be contracted before persistence.',
-        }),
+        persist: async () => undefined,
         executeCommand,
       }),
     );
@@ -150,13 +140,10 @@ describe('PluginTransferBridge', () => {
         ],
       },
       createDeps({
-        ingest: async (request) => {
-          const outputPath = `/workspace/neko/generated/image/${request.fileName}`;
-          materializedPaths.push(outputPath);
-          return createGeneratedIngestResult(request, {
-            outputPath,
-            contractedPath: `\${WORKSPACE}/neko/generated/image/${request.fileName}`,
-          });
+        persist: async (input) => {
+          const relativePath = `neko/generated/image/${input.fileNameHint}`;
+          materializedPaths.push(`/workspace/${relativePath}`);
+          return { kind: 'workspace-file', path: relativePath };
         },
         executeCommand,
       }),
@@ -194,7 +181,7 @@ describe('PluginTransferBridge', () => {
   });
 
   it('keeps existing stable refs without rematerializing', async () => {
-    const ingest = vi.fn();
+    const persist = vi.fn();
     const executeCommand = vi.fn().mockResolvedValue(undefined);
     const existingResourceRef = {
       id: 'res_existing',
@@ -224,10 +211,10 @@ describe('PluginTransferBridge', () => {
           resourceRef: existingResourceRef,
         },
       },
-      createDeps({ ingest, executeCommand }),
+      createDeps({ persist, executeCommand }),
     );
 
-    expect(ingest).not.toHaveBeenCalled();
+    expect(persist).not.toHaveBeenCalled();
     expect(executeCommand).toHaveBeenCalledWith(
       'neko.canvas.importAsset',
       expect.objectContaining({
@@ -238,12 +225,10 @@ describe('PluginTransferBridge', () => {
   });
 
   it('does not treat cache-backed generated resource refs as durable Canvas inputs', async () => {
-    const ingest = vi.fn(async (request: ContentIngestRequest) =>
-      createGeneratedIngestResult(request, {
-        outputPath: '/workspace/neko/generated/image/existing.png',
-        contractedPath: '${WORKSPACE}/neko/generated/image/existing.png',
-      }),
-    );
+    const persist = vi.fn(async () => ({
+      kind: 'workspace-file' as const,
+      path: 'neko/generated/image/existing.png',
+    }));
     const executeCommand = vi.fn().mockResolvedValue(undefined);
     const cacheResourceRef = {
       id: 'res_cache',
@@ -273,10 +258,10 @@ describe('PluginTransferBridge', () => {
           resourceRef: cacheResourceRef,
         },
       },
-      createDeps({ ingest, executeCommand }),
+      createDeps({ persist, executeCommand }),
     );
 
-    expect(ingest).toHaveBeenCalledOnce();
+    expect(persist).toHaveBeenCalledOnce();
     expect(executeCommand).toHaveBeenCalledWith(
       'neko.canvas.importAsset',
       expect.objectContaining({
@@ -291,7 +276,7 @@ describe('PluginTransferBridge', () => {
   });
 
   it('sends generated clips to the Cut authoring command without Canvas materialization', async () => {
-    const ingest = vi.fn();
+    const persist = vi.fn();
     const executeCommand = vi.fn().mockResolvedValue(undefined);
 
     const result = await sendGeneratedAssetToPlugin(
@@ -311,11 +296,11 @@ describe('PluginTransferBridge', () => {
           expectedProjectRevision: 'revision-1',
         },
       },
-      createDeps({ ingest, executeCommand }),
+      createDeps({ persist, executeCommand }),
     );
 
     expect(result.success).toBe(true);
-    expect(ingest).not.toHaveBeenCalled();
+    expect(persist).not.toHaveBeenCalled();
     expect(executeCommand).toHaveBeenCalledWith('neko.cut.authoring.importGeneratedClip', {
       assetPath: '/tmp/agent-private/shot.png',
       mediaType: 'image',
@@ -328,7 +313,7 @@ describe('PluginTransferBridge', () => {
   it.each(['sketch', 'model'] as const)(
     'rejects removed %s authoring transfers without executing a command',
     async (target) => {
-      const ingest = vi.fn();
+      const persist = vi.fn();
       const executeCommand = vi.fn();
 
       const result = await sendGeneratedAssetToPlugin(
@@ -343,7 +328,7 @@ describe('PluginTransferBridge', () => {
             name: 'output.bin',
           },
         },
-        createDeps({ ingest, executeCommand }),
+        createDeps({ persist, executeCommand }),
       );
 
       expect(result).toEqual({
@@ -352,7 +337,7 @@ describe('PluginTransferBridge', () => {
         results: [],
         unsupported: [{ target, reason: undefined }],
       });
-      expect(ingest).not.toHaveBeenCalled();
+      expect(persist).not.toHaveBeenCalled();
       expect(executeCommand).not.toHaveBeenCalled();
     },
   );
@@ -392,35 +377,14 @@ describe('PluginTransferBridge', () => {
 });
 
 function createDeps(input: {
-  readonly ingest: (request: ContentIngestRequest) => Promise<ContentIngestResult>;
+  readonly persist: (
+    input: PersistGeneratedOutputInput,
+  ) => Promise<{ readonly kind: 'workspace-file'; readonly path: string } | undefined>;
   readonly executeCommand: typeof vscode.commands.executeCommand;
 }): PluginTransferBridgeDeps {
   return {
     workspaceRoot: '/workspace',
-    ingestService: {
-      registerProvider: vi.fn(),
-      ingest: input.ingest,
-    },
+    persistGeneratedOutput: input.persist,
     executeCommand: input.executeCommand,
-  };
-}
-
-function createGeneratedIngestResult(
-  request: ContentIngestRequest,
-  paths: { readonly outputPath: string; readonly contractedPath: string },
-): ContentIngestResult {
-  const assetId = String(request.metadata?.['assetId'] ?? 'asset');
-  return {
-    status: 'ready',
-    request,
-    providerId: 'generated-output-content-ingest',
-    source: {
-      kind: 'generated-asset',
-      assetId,
-      path: paths.contractedPath,
-      promoted: true,
-    },
-    outputPath: paths.outputPath,
-    contractedPath: paths.contractedPath,
   };
 }

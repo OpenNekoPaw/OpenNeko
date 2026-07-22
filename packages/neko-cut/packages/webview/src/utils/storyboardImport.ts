@@ -442,16 +442,9 @@ function normalizeStoryboardMediaLocator(
       };
     }
     case 'asset': {
-      const assetId = readNonEmptyString(value.assetId);
-      if (!assetId) return undefined;
-      return {
-        type: 'asset',
-        assetId,
-        ...(readNonEmptyString(value.assetVersion)
-          ? { assetVersion: readNonEmptyString(value.assetVersion) }
-          : {}),
-        ...(readNonEmptyString(value.uri) ? { uri: readNonEmptyString(value.uri) } : {}),
-      };
+      throw new Error(
+        'Legacy storyboard Asset locators require explicit inspection and migration before Cut import.',
+      );
     }
     case 'workspace-path': {
       const path = readNonEmptyString(value.path);
@@ -494,7 +487,9 @@ function projectPreparedKeyframePath(ref: StoryboardMediaRef | undefined): strin
     case 'workspace-path':
       return ref.locator.path;
     case 'asset':
-      return ref.locator.uri ?? `asset:${ref.locator.assetId}`;
+      throw new Error(
+        'Legacy storyboard Asset locators require explicit inspection and migration before Cut import.',
+      );
     case 'tool-result':
       return `tool-result:${ref.locator.toolCallId}:${ref.locator.assetIndex}`;
     case 'canvas-node':

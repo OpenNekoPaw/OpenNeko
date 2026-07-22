@@ -22,30 +22,20 @@
  */
 export {
   createAgentContentAccessDiagnostic,
-  createAgentContentAccessFailureResult,
   isAgentContentAccessReady,
-  toAgentContentAccessDiagnostics,
   type AgentContentAccessRuntime,
-  type AgentContentAccessRuntimeRequest,
-  type AgentContentAccessCaller,
   type AgentContentAccessDiagnostic,
   type AgentContentAccessDiagnosticCode,
   type AgentContentAccessBaseInput,
   type AgentContentAccessOperationResult,
+  type AgentContentAccessStatus,
   type AgentDocumentContentInput,
   type AgentDocumentContentResult,
   type AgentImageMetadataInput,
   type AgentImageMetadataResult,
   type AgentProviderAssetInput,
   type AgentProviderAssetResult,
-  type AgentResourceProjectionInput,
-  type AgentResourceProjectionResult,
 } from './capability/agent-content-access-runtime';
-
-export {
-  createAgentProjectResourceCacheTarget,
-  type AgentProjectResourceCacheTarget,
-} from './resource-cache-runtime';
 
 export {
   createAgentDocumentReaderModuleUnavailableError,

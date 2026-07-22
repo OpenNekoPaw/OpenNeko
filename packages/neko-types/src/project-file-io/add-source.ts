@@ -1,10 +1,10 @@
-import type { ContentIngestRequest, ContentIngestResult } from '../types/content-access';
+import type { AuthorizedWorkspaceWriter } from '../types/content-io';
 import { contractWorkspaceMediaPath, type WorkspaceMediaPathContext } from '../path';
+import { createProjectFileDiagnostic } from './diagnostics';
+import type { ProjectSourceAddRequest, ProjectSourceStorageResult } from './ingest';
 
 export interface ProjectSourceAssetFileOps {
   createDirectory(dirPath: string): Promise<void>;
-  fileExists(filePath: string): Promise<boolean>;
-  writeFile(filePath: string, bytes: Uint8Array): Promise<void>;
 }
 
 export interface ProjectSourceAssetOptions {
@@ -12,6 +12,7 @@ export interface ProjectSourceAssetOptions {
   readonly assetDirectory?: string;
   readonly workspaceContext: WorkspaceMediaPathContext;
   readonly fileOps: ProjectSourceAssetFileOps;
+  readonly writer: AuthorizedWorkspaceWriter;
   readonly contractPath?: (
     absolutePath: string,
   ) => Promise<string | undefined> | string | undefined;
@@ -20,19 +21,22 @@ export interface ProjectSourceAssetOptions {
   readonly unmanagedSourceMessage?: string;
 }
 
-export async function ingestProjectSourceAddRequest(
-  request: ContentIngestRequest,
+export async function storeProjectSourceAddRequest(
+  request: ProjectSourceAddRequest,
   options: ProjectSourceAssetOptions,
-): Promise<ContentIngestResult> {
+): Promise<ProjectSourceStorageResult> {
   const baseDir = dirnamePath(options.documentPath);
   const sourcePath = request.sourcePath;
   if (!sourcePath && !request.bytes) {
     return {
-      status: 'missing-source',
-      request,
-      error: request.fileName
-        ? `Dropped file ${request.fileName} does not expose a durable source path.`
-        : 'No source path was provided.',
+      status: 'unavailable',
+      diagnostic: createProjectFileDiagnostic({
+        code: 'missing-source',
+        message: request.browserFile?.name
+          ? `Dropped file ${request.browserFile.name} does not expose a durable source path.`
+          : 'No source path was provided.',
+        recoverability: 'create-asset',
+      }),
     };
   }
 
@@ -44,48 +48,54 @@ export async function ingestProjectSourceAddRequest(
     if (contracted) {
       return {
         status: 'ready',
-        request,
-        source: { kind: 'file', path: contracted },
-        contractedPath: contracted,
+        storage: 'referenced',
+        durablePath: contracted,
+        ...(request.metadata ? { metadata: request.metadata } : {}),
       };
     }
 
-    if (request.mode === 'link' || request.mode === 'register-existing-source') {
+    if (!request.bytes) {
       return {
-        status: 'non-portable',
-        request,
-        error:
-          options.unmanagedSourceMessage ??
-          'External source must be moved into the project, asset library, or a configured media root before saving.',
+        status: 'unavailable',
+        diagnostic: createProjectFileDiagnostic({
+          code: 'non-portable-path',
+          message:
+            options.unmanagedSourceMessage ??
+            'External source must be moved into the project or a configured media root before saving.',
+          recoverability: 'create-asset',
+        }),
       };
     }
-  }
-
-  if (request.mode !== 'create-asset' && request.mode !== 'generated-output') {
-    return {
-      status: 'non-portable',
-      request,
-      error:
-        'Only byte-backed Webview files or generated outputs can create a new project asset from this flow.',
-    };
   }
 
   if (!request.bytes) {
     return {
-      status: 'non-portable',
-      request,
-      error:
-        'Create Asset requires file bytes. Move this file into the project, asset library, or a configured media root before adding it.',
+      status: 'unavailable',
+      diagnostic: createProjectFileDiagnostic({
+        code: 'non-portable-path',
+        message:
+          'Creating a project source requires file bytes. Move this file into the project or a configured media root before adding it.',
+        recoverability: 'create-asset',
+      }),
     };
   }
 
   const createdAssetPath = await createProjectSourceAsset(request, options, baseDir);
+  if (!createdAssetPath) {
+    return {
+      status: 'unavailable',
+      diagnostic: createProjectFileDiagnostic({
+        code: 'write-failed',
+        message: 'Failed to allocate a writable project asset path.',
+        recoverability: 'retry',
+      }),
+    };
+  }
   return {
     status: 'ready',
-    request,
-    source: { kind: 'file', path: createdAssetPath },
-    outputPath: joinPath(baseDir, createdAssetPath),
-    contractedPath: createdAssetPath,
+    storage: 'copied',
+    durablePath: createdAssetPath,
+    ...(request.metadata ? { metadata: request.metadata } : {}),
   };
 }
 
@@ -100,20 +110,49 @@ export async function contractDurableSourcePath(
         ) => Promise<string | undefined> | string | undefined;
       },
 ): Promise<string | undefined> {
-  if (!isAbsolutePath(sourcePath)) return sourcePath;
-
   const context = 'context' in contextOrOptions ? contextOrOptions.context : contextOrOptions;
+  if (!isAbsolutePath(sourcePath)) return validateDurableStoredPath(sourcePath, context);
+
   const contracted = contractWorkspaceMediaPath(sourcePath, context);
   if (contracted.format === 'workspace-relative' || contracted.format === 'variable') {
-    return contracted.path;
+    return validateDurableStoredPath(contracted.path, context);
   }
   if ('context' in contextOrOptions && contextOrOptions.contractPath) {
-    return await contractDurableSourcePathWithInjectedContractor(
+    const injected = await contractDurableSourcePathWithInjectedContractor(
       sourcePath,
       contextOrOptions.contractPath,
     );
+    return injected ? validateDurableStoredPath(injected, context) : undefined;
   }
   return undefined;
+}
+
+function validateDurableStoredPath(
+  sourcePath: string,
+  context: WorkspaceMediaPathContext,
+): string | undefined {
+  const normalized = normalizeSlashes(sourcePath.trim());
+  if (!normalized || /[\r\n\u0000]/u.test(normalized)) return undefined;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/u.test(normalized)) return undefined;
+  const variableMatch = /^\/?\$\{([^}]+)\}(?:\/|$)/u.exec(normalized);
+  if (variableMatch) {
+    const variable = variableMatch[1];
+    return variable && context.pathVariables?.has(variable)
+      ? normalized.replace(/^\//u, '')
+      : undefined;
+  }
+  if (isAbsolutePath(normalized)) return undefined;
+  const segments = normalized.toLowerCase().split('/');
+  if (
+    segments.some((segment) => !segment || segment === '.' || segment === '..') ||
+    segments.some(
+      (segment) => segment === 'cache' || segment === 'proxy' || segment === 'thumbnail',
+    ) ||
+    segments.some((segment, index) => segment === '.neko' && segments[index + 1] === '.cache')
+  ) {
+    return undefined;
+  }
+  return normalized;
 }
 
 export function sanitizeProjectSourceFileName(fileName: string): string {
@@ -127,28 +166,28 @@ export function sanitizeProjectSourceFileName(fileName: string): string {
 }
 
 async function createProjectSourceAsset(
-  request: ContentIngestRequest,
+  request: ProjectSourceAddRequest,
   options: ProjectSourceAssetOptions,
   baseDir: string,
-): Promise<string> {
+): Promise<string | undefined> {
   const fileName = sanitizeProjectSourceFileName(
-    request.fileName ??
+    request.browserFile?.name ??
       (request.sourcePath
         ? basenamePath(request.sourcePath)
         : (options.defaultFileName ?? 'asset.bin')),
   );
-  const assetDir = joinPath(baseDir, options.assetDirectory ?? 'assets');
+  const assetDirectory = options.assetDirectory ?? request.assetDirectory;
+  const assetDir = joinPath(baseDir, assetDirectory);
   await options.fileOps.createDirectory(assetDir);
 
-  const targetPath = await resolveAvailableAssetPath(
-    assetDir,
+  const targetPath = await writeAvailableAsset(
+    assetDirectory,
     fileName,
-    options.fileOps,
+    request.bytes!,
+    options.writer,
     options.maxNameAttempts,
   );
-  await options.fileOps.writeFile(targetPath, request.bytes!);
-
-  return relativePath(baseDir, targetPath);
+  return targetPath;
 }
 
 async function contractDurableSourcePathWithInjectedContractor(
@@ -161,22 +200,25 @@ async function contractDurableSourcePathWithInjectedContractor(
   return contracted;
 }
 
-async function resolveAvailableAssetPath(
-  assetDir: string,
+async function writeAvailableAsset(
+  assetDirectory: string,
   fileName: string,
-  fileOps: ProjectSourceAssetFileOps,
+  bytes: Uint8Array,
+  writer: AuthorizedWorkspaceWriter,
   maxAttempts = 1000,
-): Promise<string> {
+): Promise<string | undefined> {
   const parsed = parsePath(fileName);
   const stem = parsed.name || 'asset';
   const ext = parsed.ext;
 
   for (let index = 0; index < maxAttempts; index += 1) {
     const candidateName = index === 0 ? `${stem}${ext}` : `${stem}-${index}${ext}`;
-    const candidatePath = joinPath(assetDir, candidateName);
-    if (!(await fileOps.fileExists(candidatePath))) {
-      return candidatePath;
-    }
+    const candidatePath = joinPath(assetDirectory, candidateName);
+    const result = await writer.write({ kind: 'workspace-file', path: candidatePath }, bytes, {
+      conflict: 'fail-if-exists',
+    });
+    if (result.status === 'written') return candidatePath;
+    if (result.diagnostic.code !== 'content-conflict') return undefined;
   }
 
   throw new Error(`Unable to find an available asset file name for ${fileName}.`);
@@ -226,35 +268,6 @@ function isAbsolutePath(value: string): boolean {
   return (
     normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized) || normalized.startsWith('//')
   );
-}
-
-function relativePath(fromPath: string, toPath: string): string {
-  const from = splitPath(stripTrailingSlash(fromPath));
-  const to = splitPath(stripTrailingSlash(toPath));
-  let index = 0;
-  while (index < from.parts.length && from.parts[index] === to.parts[index]) {
-    index += 1;
-  }
-  const up = from.parts.slice(index).map(() => '..');
-  const down = to.parts.slice(index);
-  const result = [...up, ...down].join('/');
-  return result || '.';
-}
-
-function splitPath(value: string): { readonly root: string; readonly parts: readonly string[] } {
-  const normalized = normalizeSlashes(value);
-  const driveMatch = normalized.match(/^([A-Za-z]:)(?:\/|$)(.*)$/);
-  if (driveMatch) {
-    return {
-      root: driveMatch[1]!,
-      parts: (driveMatch[2] ?? '').split('/').filter(Boolean),
-    };
-  }
-  const root = normalized.startsWith('/') ? '/' : '';
-  return {
-    root,
-    parts: normalized.replace(/^\/+/, '').split('/').filter(Boolean),
-  };
 }
 
 function parsePath(fileName: string): { readonly name: string; readonly ext: string } {

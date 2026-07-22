@@ -9,11 +9,9 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { EngineClient } from '@neko/neko-client';
-import {
-  createHostContentAccessRuntime,
-  type ContentAccessService,
-  type LocalResourceAccessService,
-} from '@neko/shared/vscode/extension';
+import { createNodeHostContentReadService } from '@neko/shared/vscode/extension/node-content-read-service';
+import type { LocalResourceAccessService } from '@neko/shared/vscode/extension/local-resource-access';
+import { NodeAuthorizedWorkspaceWriter } from '@neko/shared/vscode/extension/workspace-content-writer';
 import {
   formatProjectFileDiagnostics,
   MessageFromWebview,
@@ -21,6 +19,9 @@ import {
   isProjectFileSnapshotResponseMessage,
   ProjectData,
   ContextMenuItem,
+  normalizeWorkspaceContentPath,
+  type AuthorizedWorkspaceWriter,
+  type ContentReadService,
   type EditOperation,
   type ProjectSourceAddRequest,
 } from '@neko/shared';
@@ -49,8 +50,11 @@ export class MessageHandler {
     private readonly _context: vscode.ExtensionContext,
     private readonly engineClient: EngineClient | null = null,
     private readonly localResourceAccess?: LocalResourceAccessService,
-    private readonly contentAccess: ContentAccessService = createFileRangeContentAccessService(
-      path.dirname(model.uri.fsPath),
+    private readonly contentRead: ContentReadService = createNodeHostContentReadService({
+      workspaceRoot: path.dirname(model.uri.fsPath),
+    }),
+    private readonly projectSourceWriter: AuthorizedWorkspaceWriter = new NodeAuthorizedWorkspaceWriter(
+      { workspaceRoot: path.dirname(model.uri.fsPath) },
     ),
   ) {}
 
@@ -255,16 +259,18 @@ export class MessageHandler {
 
   private async resolveEngineFileAccessPath(filePath: string): Promise<string> {
     const absolutePath = await this.resolveStoredMediaPath(filePath);
-    const result = await this.contentAccess.resolve({
-      ref: { kind: 'file', path: absolutePath },
-      intent: 'verify',
-      target: 'local-path',
-      caller: 'neko-cut.file-range',
-    });
-    if (result.status !== 'ready' || !result.localPath) {
-      throw new Error(result.error ?? `Unable to resolve source file for range read: ${filePath}`);
+    const projectRoot = path.dirname(this.model.uri.fsPath);
+    const relativePath = path.relative(projectRoot, absolutePath).split(path.sep).join('/');
+    const workspacePath = normalizeWorkspaceContentPath(relativePath);
+    if (!workspacePath || workspacePath !== relativePath) {
+      throw new Error(`Unable to resolve source file for range read: ${filePath}`);
     }
-    return result.localPath;
+    const locator = { kind: 'workspace-file' as const, path: workspacePath };
+    const result = await this.contentRead.stat(locator);
+    if (result.status !== 'ready') {
+      throw new Error(`Unable to resolve source file for range read: ${result.diagnostic.code}`);
+    }
+    return path.join(projectRoot, ...workspacePath.split('/'));
   }
 
   /**
@@ -313,7 +319,8 @@ export class MessageHandler {
 
   private async handleProjectAddSource(request: ProjectSourceAddRequest): Promise<void> {
     await handleProjectSourceAddHostRequest(request, {
-      addSource: (sourceRequest) => addCutProjectSource(this.model.uri, sourceRequest),
+      addSource: (sourceRequest) =>
+        addCutProjectSource(this.model.uri, sourceRequest, this.projectSourceWriter),
       postMessage: (message) => this.webview.postMessage(message),
       logger,
     });
@@ -796,12 +803,4 @@ function isStructuredCloneByteRecord(data: unknown): data is Record<string, numb
     values.length > 0 &&
     values.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)
   );
-}
-
-function createFileRangeContentAccessService(projectRoot: string): ContentAccessService {
-  return createHostContentAccessRuntime({
-    workspaceRoot: projectRoot,
-    documentEntryProvider: { enabled: false },
-    ingest: { enabled: false },
-  }).contentAccess;
 }

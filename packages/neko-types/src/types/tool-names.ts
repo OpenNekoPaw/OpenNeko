@@ -124,22 +124,13 @@ export const TOOL_NAMES_EFFECTS = {
 } as const;
 
 // =============================================================================
-// Assets — Asset Management
-// =============================================================================
-
-export const TOOL_NAMES_ASSETS = {
-  LIST_ASSETS: 'ListAssets',
-  GET_ASSET: 'GetAsset',
-  IMPORT_ASSET: 'ImportAsset',
-} as const;
-
-// =============================================================================
 // Creative Entities — Entity Facts and Projections
 // =============================================================================
 
 export const TOOL_NAMES_ENTITY = {
   LIST_CREATIVE_ENTITIES: 'ListCreativeEntities',
   GET_CREATIVE_ENTITY: 'GetCreativeEntity',
+  BIND_ENTITY_REPRESENTATION: 'BindEntityRepresentation',
 } as const;
 
 // =============================================================================
@@ -230,7 +221,6 @@ export const TOOL_NAMES = {
   ...TOOL_NAMES_MEDIA,
   ...TOOL_NAMES_QUALITY,
   ...TOOL_NAMES_EFFECTS,
-  ...TOOL_NAMES_ASSETS,
   ...TOOL_NAMES_TRANSCRIBE,
   ...TOOL_NAMES_PERCEPTION,
   ...TOOL_NAMES_SYSTEM,

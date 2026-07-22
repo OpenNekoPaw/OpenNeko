@@ -810,12 +810,7 @@ function createGeneratedClipSourceRequest(
       type: mimeTypeForMedia(fileName, mediaType),
       ...(request.bytes ? { size: request.bytes.byteLength } : {}),
     },
-    destination: {
-      kind: 'project',
-      directory: 'media',
-      copyMode: request.bytes ? 'copy' : 'link',
-    },
-    ingestMode: request.bytes ? 'create-asset' : 'link',
+    assetDirectory: 'media',
     metadata: {
       addToTimeline: true,
       mediaType,
@@ -852,12 +847,7 @@ function createMediaSourceAddRequest(
       name: fileName,
       type: mimeTypeForMedia(fileName, mediaType),
     },
-    destination: {
-      kind: 'project',
-      directory: 'media',
-      copyMode: 'link',
-    },
-    ingestMode: 'link',
+    assetDirectory: 'media',
     metadata: {
       addToTimeline: true,
       mediaType,

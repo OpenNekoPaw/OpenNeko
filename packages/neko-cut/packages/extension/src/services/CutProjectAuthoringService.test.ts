@@ -577,20 +577,6 @@ function createSourceResult(input: {
     requestId: input.requestId,
     ok: true,
     durablePath: input.durablePath,
-    ingest: {
-      status: 'ready',
-      request: {
-        mode: 'link',
-        destination: {
-          kind: 'project',
-          directory: 'media',
-          copyMode: 'link',
-        },
-      },
-      contractedPath: input.durablePath,
-      source: { kind: 'file', path: input.durablePath },
-      diagnostics: [],
-    },
     diagnostics: [],
   };
 }

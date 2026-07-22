@@ -15,7 +15,7 @@
  * NOTE: This module has NO Node.js dependencies — safe to use in Webview.
  */
 
-import type { AssetMediaType } from '../types/asset/entity';
+import type { MediaFileType } from '../types/media-file';
 
 // =============================================================================
 // Extension → Media Type Mapping
@@ -25,7 +25,7 @@ import type { AssetMediaType } from '../types/asset/entity';
  * Comprehensive extension-to-media-type mapping.
  * Merged from all packages to ensure no supported format is missing.
  */
-const EXTENSION_TO_MEDIA_TYPE: Record<string, AssetMediaType> = {
+const EXTENSION_TO_MEDIA_TYPE: Record<string, MediaFileType> = {
   // Video
   mp4: 'video',
   mov: 'video',
@@ -171,7 +171,7 @@ export function getFileExtension(filePath: string): string {
 /**
  * Detect the asset media type from a file path.
  *
- * Returns the appropriate {@link AssetMediaType}:
+ * Returns the appropriate {@link MediaFileType}:
  * - `'video'` — mp4, mov, avi, mkv, webm, flv, m4v, ts, wmv
  * - `'audio'` — mp3, wav, ogg, aac, m4a, flac, wma, opus
  * - `'image'` — jpg, jpeg, png, gif, webp, bmp, svg, tiff
@@ -185,7 +185,7 @@ export function getFileExtension(filePath: string): string {
  * detectMediaType('frame_001.png')           // 'sequence'
  * detectMediaType('subtitle.srt')            // 'text'
  */
-export function detectMediaType(filePath: string): AssetMediaType {
+export function detectMediaType(filePath: string): MediaFileType {
   const ext = getFileExtension(filePath);
 
   // Check for image sequence pattern BEFORE extension lookup
@@ -259,7 +259,7 @@ export function isSubtitleFile(filePath: string): boolean {
 /**
  * Get all supported extensions for a given media type.
  */
-export function getExtensionsForType(type: AssetMediaType): string[] {
+export function getExtensionsForType(type: MediaFileType): string[] {
   return Object.entries(EXTENSION_TO_MEDIA_TYPE)
     .filter(([, t]) => t === type)
     .map(([ext]) => ext);

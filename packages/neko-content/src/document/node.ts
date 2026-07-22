@@ -7,6 +7,13 @@ export {
   type NodeDocumentLowLevelAccess,
 } from './node-document-low-level-access';
 
+export {
+  createLibreOfficeDocumentRasterizer,
+  createNodeDocumentRasterRepresentationGenerator,
+  type NodeDocumentRasterRepresentationOptions,
+  type OfficeDocumentRasterizer,
+} from './node-document-raster-representation';
+
 import {
   createDocumentAccessService,
   type IDocumentAccessService,

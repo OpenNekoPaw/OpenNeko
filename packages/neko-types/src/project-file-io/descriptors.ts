@@ -444,7 +444,7 @@ function isSourceLikeValue(value: string): boolean {
     trimmed.startsWith('${') ||
     /^[A-Za-z]:[\\/]/.test(trimmed) ||
     /^https?:\/\//i.test(trimmed) ||
-    /\.[A-Za-z0-9]{2,8}(?:[?#].*)?$/.test(trimmed)
+    /\.[A-Za-z0-9]{2,16}(?:[?#].*)?$/.test(trimmed)
   );
 }
 

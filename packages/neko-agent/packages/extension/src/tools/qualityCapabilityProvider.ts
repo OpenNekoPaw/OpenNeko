@@ -169,10 +169,13 @@ function createExtensionQualityMaterializer(
           'quality-materialization-unavailable: Agent content access runtime is unavailable.',
         );
       }
+      if (input.representation !== 'base64') {
+        throw new Error(
+          'quality-materialization-unavailable: Source projection requires a capability-scoped processor port.',
+        );
+      }
       const loaded = await runtime.loadProviderAsset({
-        caller: 'quality-review',
         source: input.target.resourceRef,
-        preferredTarget: input.representation === 'base64' ? 'bytes' : 'local-path',
         metadata: {
           qualityTargetId: input.target.targetId,
           qualityConsumer: input.consumer,
@@ -184,27 +187,15 @@ function createExtensionQualityMaterializer(
             `quality-materialization-failed: ${loaded.status}`,
         );
       }
-      if (input.representation === 'base64') {
-        if (!loaded.bytes || !loaded.mimeType) {
-          throw new Error(
-            'quality-materialization-failed: Provider materialization requires bytes and mimeType.',
-          );
-        }
-        return {
-          resourceRef: input.target.resourceRef,
-          base64: Buffer.from(loaded.bytes).toString('base64'),
-          mimeType: loaded.mimeType,
-        };
-      }
-      if (!loaded.uri) {
+      if (!loaded.bytes || !loaded.mimeType) {
         throw new Error(
-          'quality-materialization-failed: Technical materialization requires a local source.',
+          'quality-materialization-failed: Provider materialization requires bytes and mimeType.',
         );
       }
       return {
         resourceRef: input.target.resourceRef,
-        source: loaded.uri,
-        ...(loaded.mimeType ? { mimeType: loaded.mimeType } : {}),
+        base64: Buffer.from(loaded.bytes).toString('base64'),
+        mimeType: loaded.mimeType,
       };
     },
   };

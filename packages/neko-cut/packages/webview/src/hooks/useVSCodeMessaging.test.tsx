@@ -226,19 +226,10 @@ describe('useVSCodeMessaging project snapshot protocol', () => {
               ok: true,
               durablePath: 'cases/720P.mp4',
               diagnostics: [],
-              ingest: {
-                status: 'ready',
-                request: {
-                  mode: 'link',
-                  destination: { kind: 'project', directory: 'media', copyMode: 'link' },
-                  metadata: {
-                    addToTimeline: true,
-                    mediaType: 'video',
-                    name: '720P.mp4',
-                  },
-                },
-                source: { kind: 'file', path: 'cases/720P.mp4' },
-                contractedPath: 'cases/720P.mp4',
+              metadata: {
+                addToTimeline: true,
+                mediaType: 'video',
+                name: '720P.mp4',
               },
             },
           },

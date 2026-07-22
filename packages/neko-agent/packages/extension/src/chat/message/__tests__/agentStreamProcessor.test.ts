@@ -821,11 +821,10 @@ describe('AgentStreamProcessor', () => {
       const contentAccessRuntime = {
         loadProviderAsset: vi.fn(async () => ({
           status: 'ready',
-          source: { kind: 'file', path: materializedPath },
           diagnostics: [],
-          uri: materializedPath,
+          bytes: new Uint8Array([1, 2, 3]),
           mimeType: 'image/jpeg',
-          sizeBytes: 2048,
+          sizeBytes: 3,
         })),
       };
       const workItemProjections = {
@@ -890,16 +889,10 @@ describe('AgentStreamProcessor', () => {
       });
       expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith(
         expect.objectContaining({
-          caller: 'message-resource-projection',
-          preferredTarget: 'local-path',
           variant: expect.objectContaining({ role: 'document-entry', mimeType: 'image/jpeg' }),
         }),
       );
-      expect(localResourceAccess.toWebviewUri).toHaveBeenCalledWith(
-        webview,
-        materializedPath,
-        'neko-agent.document-resource',
-      );
+      expect(localResourceAccess.toWebviewUri).not.toHaveBeenCalled();
       expect(getProjectedTimelineToolResult('conv-1', 'tc-read-doc-image')?.data).toMatchObject({
         images: [
           expect.objectContaining({
@@ -960,11 +953,10 @@ describe('AgentStreamProcessor', () => {
       const contentAccessRuntime = {
         loadProviderAsset: vi.fn(async () => ({
           status: 'ready',
-          source: { kind: 'file', path: materializedPath },
           diagnostics: [],
-          uri: materializedPath,
+          bytes: new Uint8Array([1, 2, 3]),
           mimeType: 'image/jpeg',
-          sizeBytes: 2048,
+          sizeBytes: 3,
         })),
       };
       processor = createAgentStreamProcessor({
@@ -1040,7 +1032,7 @@ describe('AgentStreamProcessor', () => {
               images: [
                 expect.objectContaining({
                   alias: 'P1',
-                  renderUri: 'vscode-webview://page-1.jpg',
+                  renderUri: 'data:image/jpeg;base64,AQID',
                   resourceRef: archiveRef,
                 }),
               ],
@@ -1056,8 +1048,6 @@ describe('AgentStreamProcessor', () => {
       expect(JSON.stringify(streamComplete?.contentBlocks)).not.toContain('镜号');
       expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith(
         expect.objectContaining({
-          caller: 'message-resource-projection',
-          preferredTarget: 'local-path',
           variant: expect.objectContaining({ role: 'document-entry', mimeType: 'image/jpeg' }),
         }),
       );

@@ -34,10 +34,6 @@ import {
   type QualityProjectRef,
   type ICapabilityPurposeMediaService,
 } from '@neko/shared';
-import {
-  createNodeGlobalResourceCacheMetadataBinding,
-  type NodeGlobalResourceCacheMetadataBinding,
-} from '@neko/shared/local-metadata/node';
 import { bootstrapCoreServices, logServicesStatus } from './bootstrap';
 import { ITaskManager } from './bootstrap';
 import { createGeneratedAssetResourceResolver, setPlatformRootLogger } from '@neko/platform';
@@ -79,14 +75,12 @@ import {
 } from '@neko/search/host-vscode';
 import { createAgentProjectSearchAdapters } from './services/agentProjectSearchAdapters';
 import { ExternalProcessorRegistryService } from './services/externalProcessorRegistryService';
-import { runResourceCacheStartupGc } from './services/resourceCacheStartupGcService';
 import { getEngineClientProvider } from './services/engineClientProvider';
 import { createExtensionAgentContentAccessRuntime } from './services/agentContentAccessRuntime';
 import { createWorkspaceGeneratedAssetIndex } from './services/generatedAssetOpenResolver';
 import { cleanupLegacyCanvasBoardMetadata } from './services/legacyCanvasBoardMetadataCleanup';
 import { cleanupLegacyConversationWorkspaceState } from './services/legacyConversationWorkspaceStateCleanup';
 import {
-  createHostContentMediaPathContext,
   createHostContentPathResolver,
   getHostContentAuthorizedReadRoots,
 } from '@neko/shared/vscode/extension';
@@ -191,7 +185,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
 
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   let localMetadata: ExtensionLocalMetadataBinding | undefined;
-  let globalResourceCache: NodeGlobalResourceCacheMetadataBinding | undefined;
   if (workspaceRoot) {
     try {
       localMetadata = await createExtensionLocalMetadata({
@@ -205,10 +198,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
       await vscode.window.showErrorMessage(message);
       throw new Error(message, { cause: error });
     }
-  } else {
-    globalResourceCache = await createNodeGlobalResourceCacheMetadataBinding({
-      homedir: nodeOs.homedir(),
-    });
   }
 
   // Bootstrap core services (Platform, MCP, Tools, etc.)
@@ -230,37 +219,29 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
     throw error;
   }
   logServicesStatus(bootstrapResult);
-  void runResourceCacheStartupGc({
-    context,
-    ...(localMetadata
-      ? {
-          manifestStores: {
-            workspace: localMetadata.workspaceResourceCacheManifestStore,
-            global: localMetadata.globalResourceCacheManifestStore,
-          },
-        }
-      : globalResourceCache
-        ? { manifestStores: { global: globalResourceCache.manifestStore } }
-        : {}),
-  })
-    .catch((error) => {
-      logger.warn('Failed to run resource cache startup GC', { error });
-    })
-    .finally(() => globalResourceCache?.dispose());
 
   // Initialize capability discovery (P0-1: sub-packages register their own tools)
   // Platform services are injected into context so providers can use media/config/embed
   // without depending on @neko/platform directly.
   const capabilityRegistries = createAgentCapabilityRuntimeRegistries();
-  const generatedAssetIndex =
+  const generatedAssetIndexBinding =
     localMetadata && workspaceRoot
       ? await createWorkspaceGeneratedAssetIndex({
-          manifestStore: localMetadata.workspaceResourceCacheManifestStore,
           workspaceRoot,
           homedir: nodeOs.homedir(),
           logger,
         })
       : undefined;
+  const generatedAssetIndex = generatedAssetIndexBinding?.index;
+  if (generatedAssetIndexBinding) {
+    context.subscriptions.push({
+      dispose: () => {
+        void generatedAssetIndexBinding
+          .dispose()
+          .catch((error) => logger.warn('Failed to dispose generated output index', { error }));
+      },
+    });
+  }
   const engineClientProvider = getEngineClientProvider();
   await engineClientProvider.setAuthorizedReadRoots?.(
     await getHostContentAuthorizedReadRoots({
@@ -269,27 +250,26 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
       logger,
     }),
   );
-  const agentContentAccess = createExtensionAgentContentAccessRuntime({
+  const agentContentAccess = await createExtensionAgentContentAccessRuntime({
     context,
-    engineClientProvider,
     workspaceRoot,
-    ...(localMetadata
-      ? { resourceCacheManifestStore: localMetadata.workspaceResourceCacheManifestStore }
-      : {}),
     ...(generatedAssetIndex
       ? { resolveGeneratedAsset: createGeneratedAssetResourceResolver(generatedAssetIndex) }
       : {}),
-    mediaPathContext: await createHostContentMediaPathContext({
-      workspaceRoot,
-      workspaceFolders: vscode.workspace.workspaceFolders ?? [],
-      getExtension: vscode.extensions.getExtension,
-      logger,
-    }),
     pathResolver: await createHostContentPathResolver({
       workspaceRoot,
       getExtension: vscode.extensions.getExtension,
       logger,
     }),
+  });
+  context.subscriptions.push({
+    dispose: () => {
+      void agentContentAccess.derivedRuntime
+        .dispose()
+        .catch((error) =>
+          logger.warn('Failed to dispose Agent derived content runtime', { error }),
+        );
+    },
   });
   setCapabilityRuntimeContentAccessRuntime(agentContentAccess.runtime);
 
@@ -449,25 +429,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
                   await localMetadata.searchDocuments.list(localMetadata.searchPartition)
                 ).some((document) => document.partition === 'media-library');
               },
-              resolveFileKey: async (fileKey: string) => {
-                try {
-                  const resolved = await vscode.commands.executeCommand<unknown>(
-                    'neko.assets.resolvePath',
-                    fileKey,
-                    {
-                      owningWorkspaceRoot: workspaceRoot,
-                      workspaceRoots: workspaceRoot ? [workspaceRoot] : [],
-                    },
-                  );
-                  return typeof resolved === 'string' ? resolved : fileKey;
-                } catch (error) {
-                  projectSearchLogger.warn('Media search file key resolution failed', {
-                    fileKey,
-                    error,
-                  });
-                  return fileKey;
-                }
-              },
             },
             entityAssetProjection: {
               repository: localMetadata.entityAssetProjections,
@@ -577,23 +538,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
         ...(lifecycle.generation.runId ? { runId: lifecycle.generation.runId } : {}),
         sourcePath: asset.path,
       };
-    },
-    async setGeneratedOutputReviewPin(resourceRef, input) {
-      if (!agentContentAccess.resourceCache) {
-        throw new Error('Generated output review pinning requires ResourceCache.');
-      }
-      const result = await agentContentAccess.resourceCache.updateLifecycle({
-        ref: resourceRef,
-        variant: { role: 'source' },
-        pinned: input.pinned,
-        sessionActive: input.pinned,
-        ...(input.pinned ? { retentionHint: 'pinned' as const } : {}),
-        reason: input.pinned ? 'canvas-generated-review-open' : 'canvas-generated-review-closed',
-        ownerId: input.ownerId,
-      });
-      if (result.status !== 'ready') {
-        throw new Error(result.error ?? 'Generated output review pin update failed.');
-      }
     },
   };
 }

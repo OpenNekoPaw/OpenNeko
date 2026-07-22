@@ -38,7 +38,7 @@ describe('ProjectSessionService', () => {
 
     await expect(
       service.updateProjectData(createProject('Broken', '/external/clip.mp4')),
-    ).rejects.toThrow('absolute local path that cannot be made portable');
+    ).rejects.toThrow('uses a retired local path shape and requires explicit migration');
 
     expect(JSON.parse(fileOps.readText('/project/edit.nkv'))).toMatchObject({ name: 'Loaded' });
   });

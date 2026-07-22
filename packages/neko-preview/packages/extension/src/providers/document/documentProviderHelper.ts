@@ -14,7 +14,7 @@
  */
 
 import * as vscode from 'vscode';
-import { createHostContentAccessRuntime } from '@neko/shared/vscode/extension';
+import { createDefaultLocalResourceAccessService } from '@neko/shared/vscode/extension';
 import type {
   AgentContextPayload,
   DocumentContentKind,
@@ -56,17 +56,11 @@ export async function setupDocumentWebview(
   const filePath = document.uri.fsPath;
   const fileName = filePath.split('/').pop() ?? filePath;
 
-  const contentRuntime = createHostContentAccessRuntime({
+  const localResourceAccess = createDefaultLocalResourceAccessService({
     extensionUri,
-    context: options?.context,
-    sourceFileProvider: { enabled: false },
-    documentEntryProvider: { enabled: false },
-    ingest: { enabled: false },
+    ...(options?.context ? { context: options.context } : {}),
   });
-  if (!contentRuntime.localResourceAccess) {
-    throw new Error('Document preview setup requires LocalResourceAccessService.');
-  }
-  await contentRuntime.localResourceAccess.configureWebview(webviewPanel.webview, {
+  await localResourceAccess.configureWebview(webviewPanel.webview, {
     enableScripts: true,
   });
 
