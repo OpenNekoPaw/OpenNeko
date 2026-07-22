@@ -39,8 +39,11 @@ export class AudioPreviewProvider implements vscode.CustomReadonlyEditorProvider
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _statusBar: StatusBarManager,
-    private readonly _resolvePreviewService: () => Promise<PreviewService | null> = () =>
-      PreviewService.tryCreate(),
+    private readonly _resolvePreviewService: () => Promise<PreviewService | null>,
+    private readonly _resolveWaveform: (
+      filePath: string,
+      previewService: PreviewService,
+    ) => Promise<{ peaks: number[]; duration: number; sampleRate: number }>,
   ) {}
 
   /** Inject a shared PreviewService instance (avoids duplicate NativeEngine) */
@@ -136,7 +139,8 @@ export class AudioPreviewProvider implements vscode.CustomReadonlyEditorProvider
 
             // Generate and send waveform data
             try {
-              const waveform = await this._previewService?.getWaveform(filePath);
+              if (!this._previewService) throw new Error('PreviewService not available');
+              const waveform = await this._resolveWaveform(filePath, this._previewService);
               await webviewPanel.webview.postMessage({
                 type: 'preview:waveform',
                 payload: waveform,

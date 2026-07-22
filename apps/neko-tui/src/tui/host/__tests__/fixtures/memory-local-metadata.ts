@@ -2,8 +2,6 @@ import { MemoryTaskRecoveryStorage, MemoryTaskStorage } from '@neko/agent';
 import type {
   CatalogItemRecord,
   CatalogProjectionRepository,
-  ResourceCacheManifest,
-  ResourceCacheManifestStore,
   EntityAssetProjectionRecord,
   EntityAssetProjectionRepository,
   SearchDocumentRecord,
@@ -36,7 +34,6 @@ export async function createMemoryLocalMetadataBinding(
     homedir,
     metadataStore,
   });
-  const resourceCacheManifestStore = createMemoryResourceCacheManifestStore();
   const searchDocuments = createMemorySearchDocumentRepository();
   const semanticProjections = createMemorySemanticProjectionRepository();
   const entityAssetProjections = createMemoryEntityAssetProjectionRepository();
@@ -67,34 +64,6 @@ export async function createMemoryLocalMetadataBinding(
     metadataStore,
     taskStorage: new MemoryTaskStorage(),
     taskRecoveryStorage: new MemoryTaskRecoveryStorage(),
-    resourceCacheManifestStore,
-    resourceCacheMigrationReport: {
-      sourceStatus: 'absent',
-      sourcePath: '<memory>',
-      backupPath: null,
-      archivedPath: null,
-      quarantinePath: null,
-      sourceDiagnostic: null,
-      importedEntryCount: 0,
-      importedVariantCount: 0,
-      verifiedEntryCount: 0,
-      verifiedVariantCount: 0,
-      unrecoverable: [],
-    },
-    proxyMigrationReport: {
-      sourceStatus: 'absent',
-      sourcePath: '<memory>',
-      backupPath: null,
-      archivedPath: null,
-      quarantinePath: null,
-      sourceDiagnostic: null,
-      importedEntryCount: 0,
-      importedVariantCount: 0,
-      copiedArtifactCount: 0,
-      verifiedEntryCount: 0,
-      verifiedVariantCount: 0,
-      unrecoverable: [],
-    },
     searchPartition,
     semanticPartition,
     entityAssetPartition,
@@ -249,25 +218,5 @@ function createMemoryEntityAssetProjectionRepository(): EntityAssetProjectionRep
           .map((record) => `${record.kind}:${record.projectionId}`),
       };
     },
-  };
-}
-
-function createMemoryResourceCacheManifestStore(): ResourceCacheManifestStore {
-  let manifest: ResourceCacheManifest = {
-    version: 1,
-    createdAt: '2026-07-13T00:00:00.000Z',
-    updatedAt: '2026-07-13T00:00:00.000Z',
-    entries: {},
-  };
-  return {
-    load: async () => manifest,
-    save: async (next) => {
-      manifest = next;
-    },
-    update: async (operation) => {
-      manifest = await operation(manifest);
-      return manifest;
-    },
-    invalidateCache() {},
   };
 }

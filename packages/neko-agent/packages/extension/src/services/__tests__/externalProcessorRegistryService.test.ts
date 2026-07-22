@@ -240,13 +240,13 @@ function processorManifest(input: { readonly id: string }): ExternalProcessorMan
       image: { accepts: ['image/*'], required: true },
     },
     outputs: {
-      image: { produces: ['image/png'], root: 'resourceCache', pathHint: 'result.png' },
+      image: { produces: ['image/png'], ownership: 'candidate', pathHint: 'result.png' },
     },
     policy: {
       requiresApproval: true,
       allowNetwork: false,
-      allowedInputRoots: ['workspace', 'mediaLibrary', 'resourceCache'],
-      allowedOutputRoots: ['resourceCache'],
+      allowedInputRoots: ['workspace', 'mediaLibrary'],
+      allowedOutputOwnerships: ['candidate'],
       timeoutMs: 120_000,
     },
   };

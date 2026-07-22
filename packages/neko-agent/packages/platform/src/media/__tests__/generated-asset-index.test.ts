@@ -8,10 +8,9 @@ import {
   type ResourceCacheManifest,
   type ResourceCacheManifestStore,
 } from '@neko/shared';
+import { LocalMetadataGeneratedOutputProjectionStore } from '@neko/shared/local-metadata/node';
 import {
   GeneratedAssetIndex,
-  ResourceCacheGeneratedAssetIndexStore,
-  createResourceCacheGeneratedAssetIndex,
   generateAssetId,
   migrateLegacyGeneratedAssetIndex,
 } from '../generated-asset-index';
@@ -48,7 +47,7 @@ describe('GeneratedAssetIndex', () => {
   it('persists generated output projection metadata without absolute Host paths', async () => {
     const workspaceRoot = await createTempDir();
     const manifest = createManifestStore();
-    const store = new ResourceCacheGeneratedAssetIndexStore({
+    const store = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: manifest.store,
       workspaceRoot,
       pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
@@ -124,12 +123,12 @@ describe('GeneratedAssetIndex', () => {
     });
 
     await expect(
-      createResourceCacheGeneratedAssetIndex({
+      new LocalMetadataGeneratedOutputProjectionStore({
         manifestStore: manifest.store,
         workspaceRoot,
-        homedir: workspaceRoot,
-      }),
-    ).rejects.toThrow('legacy-generated-draft-projection');
+        pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
+      }).load(),
+    ).rejects.toThrow('retired-generated-draft-projection');
   });
 
   it('backs up, imports, verifies, and archives the legacy generated asset index', async () => {
@@ -140,7 +139,7 @@ describe('GeneratedAssetIndex', () => {
     await mkdir(generatedDir, { recursive: true });
     await writeFile(indexPath, JSON.stringify({ version: 1, assets: [asset] }), 'utf8');
     const manifest = createManifestStore();
-    const store = new ResourceCacheGeneratedAssetIndexStore({
+    const store = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: manifest.store,
       workspaceRoot,
       pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
@@ -170,7 +169,7 @@ describe('GeneratedAssetIndex', () => {
     await mkdir(generatedDir, { recursive: true });
     await writeFile(indexPath, '{bad json', 'utf8');
     const manifest = createManifestStore();
-    const store = new ResourceCacheGeneratedAssetIndexStore({
+    const store = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: manifest.store,
       workspaceRoot,
       pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
@@ -205,7 +204,7 @@ describe('GeneratedAssetIndex', () => {
     const workspaceRoot = await createTempDir();
     const manifest = createManifestStore();
     const index = new GeneratedAssetIndex(
-      new ResourceCacheGeneratedAssetIndexStore({
+      new LocalMetadataGeneratedOutputProjectionStore({
         manifestStore: manifest.store,
         workspaceRoot,
         pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),

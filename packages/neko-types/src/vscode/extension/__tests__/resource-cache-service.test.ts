@@ -190,6 +190,48 @@ describe('resource cache service', () => {
     expect(calls).toBe(1);
   });
 
+  it('bounds concurrent representation generation across different variants', async () => {
+    let active = 0;
+    let maximumActive = 0;
+    let releaseFirst: (() => void) | undefined;
+    let markFirstStarted: (() => void) | undefined;
+    const firstStarted = new Promise<void>((resolve) => {
+      markFirstStarted = resolve;
+    });
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const provider = createProvider(async (input) => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      if (input.ref.id === ref.id) {
+        markFirstStarted?.();
+        await firstGate;
+      }
+      const absolutePath = `${input.cacheRoot}/${input.ref.id}.jpg`;
+      fsOps.files.set(absolutePath, 'image-bytes');
+      active -= 1;
+      return { status: 'ready', ref: input.ref, variant: input.variant, absolutePath };
+    });
+    const service = createService({ providers: [provider], maxConcurrentEnsures: 1 });
+    const secondRef = { ...ref, id: `${ref.id}-second` };
+
+    const first = service.ensure(ref, variant);
+    await firstStarted;
+    const second = service.ensure(secondRef, variant);
+    await Promise.resolve();
+
+    expect(provider.ensure).toHaveBeenCalledTimes(1);
+    expect(maximumActive).toBe(1);
+    releaseFirst?.();
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ status: 'ready' }),
+      expect.objectContaining({ status: 'ready' }),
+    ]);
+    expect(provider.ensure).toHaveBeenCalledTimes(2);
+    expect(maximumActive).toBe(1);
+  });
+
   it('keeps document entry variants canonical across metadata-shaped requests', async () => {
     const documentVariant = { role: 'document-entry' as const };
     const documentEntryPath = '/workspace/.neko/.cache/resources/documents/doc/page-1.jpg';
@@ -584,6 +626,37 @@ describe('resource cache service', () => {
     expect(fsOps.files.has(absolutePath)).toBe(false);
   });
 
+  it('rejects durable product outputs instead of adopting them into derived storage', async () => {
+    const service = createService([]);
+    const durablePaths = [
+      '/workspace/neko/assets/library/hero.png',
+      '/workspace/neko/generated/image/accepted.png',
+      '/workspace/neko/canvas/board.nkc',
+      '/workspace/exports/final.mp4',
+    ];
+
+    for (const [index, durablePath] of durablePaths.entries()) {
+      fsOps.files.set(durablePath, 'durable-content');
+      await expect(
+        service.record({
+          ref: { ...ref, id: `${ref.id}-durable-${index}` },
+          variant,
+          absolutePath: durablePath,
+          sizeBytes: 128,
+          rebuildable: false,
+        }),
+      ).resolves.toMatchObject({
+        status: 'non-portable',
+        error: 'Recorded resource path is outside the managed cache root.',
+      });
+    }
+
+    await expect(manifestStore.load()).resolves.toMatchObject({ entries: {} });
+    for (const durablePath of durablePaths) {
+      expect(fsOps.files.has(durablePath)).toBe(true);
+    }
+  });
+
   it('preserves unsafe paths, pinned entries, and session-active variants during GC', async () => {
     const service = createService([]);
     const oldVariant = { role: 'thumbnail' as const, width: 64, height: 64 };
@@ -959,6 +1032,7 @@ describe('resource cache service', () => {
           readonly now?: () => string;
           readonly touchFlushIntervalMs?: number;
           readonly clockMs?: () => number;
+          readonly maxConcurrentEnsures?: number;
         },
     logger?: { warn: ReturnType<typeof vi.fn> },
     now: () => string = () => '2026-06-05T00:00:00.000Z',
@@ -971,6 +1045,7 @@ describe('resource cache service', () => {
           now: input.now ?? (() => '2026-06-05T00:00:00.000Z'),
           touchFlushIntervalMs: input.touchFlushIntervalMs,
           clockMs: input.clockMs,
+          maxConcurrentEnsures: input.maxConcurrentEnsures,
         };
     return new VSCodeResourceCacheService({
       cacheRoot: '/workspace/.neko/.cache/resources',
@@ -984,7 +1059,7 @@ describe('resource cache service', () => {
       fsOps,
       now: options.now,
       logger: options.logger,
-      maxConcurrentEnsures: 1,
+      maxConcurrentEnsures: options.maxConcurrentEnsures ?? 1,
       ...(options.touchFlushIntervalMs !== undefined
         ? { touchFlushIntervalMs: options.touchFlushIntervalMs }
         : {}),

@@ -1,13 +1,18 @@
-import type { AgentCapabilityTrustLevel, ResourceRef } from '@neko/shared';
+import type {
+  AgentCapabilityTrustLevel,
+  ContentLocator,
+  ProcessorOutputLocator,
+  ProcessorOutputOwnership,
+  ResourceRef,
+} from '@neko/shared';
 import type { AgentCapabilitySource } from './capability';
 
 export const EXTERNAL_PROCESSOR_SCHEMA = 'neko.externalProcessor';
-export const EXTERNAL_PROCESSOR_SCHEMA_VERSION = 1;
+export const EXTERNAL_PROCESSOR_SCHEMA_VERSION = 2;
 
 export const EXTERNAL_PROCESSOR_ROOT_ALIASES = [
   'workspace',
   'mediaLibrary',
-  'resourceCache',
   'extensionPrivateResources',
 ] as const;
 
@@ -34,14 +39,7 @@ export const EXTERNAL_PROCESSOR_REGISTRY_CHANGE_KINDS = [
 export type ExternalProcessorRegistryChangeKind =
   (typeof EXTERNAL_PROCESSOR_REGISTRY_CHANGE_KINDS)[number];
 
-export const EXTERNAL_PROCESSOR_RETENTION_HINTS = [
-  'intermediate',
-  'debug',
-  'pinned',
-  'promoted',
-] as const;
-
-export type ExternalProcessorRetentionHint = (typeof EXTERNAL_PROCESSOR_RETENTION_HINTS)[number];
+export type ExternalProcessorOutputOwnership = Exclude<ProcessorOutputOwnership, 'promoted'>;
 
 export type ExternalProcessorParamType = 'string' | 'number' | 'boolean' | 'enum';
 
@@ -55,7 +53,7 @@ export type ExternalProcessorDiagnosticCode =
   | 'missing-required-field'
   | 'invalid-field-type'
   | 'invalid-root-alias'
-  | 'illegal-output-root'
+  | 'illegal-output-ownership'
   | 'undeclared-template-reference'
   | 'invalid-template-reference'
   | 'unsupported-env-request'
@@ -92,7 +90,7 @@ export interface ExternalProcessorInputDeclaration {
 
 export interface ExternalProcessorOutputDeclaration {
   readonly produces: readonly string[];
-  readonly root: ExternalProcessorRootAlias;
+  readonly ownership: ExternalProcessorOutputOwnership;
   readonly pathHint?: string;
 }
 
@@ -107,7 +105,7 @@ export interface ExternalProcessorPolicy {
   readonly requiresApproval: boolean;
   readonly allowNetwork: boolean;
   readonly allowedInputRoots: readonly ExternalProcessorRootAlias[];
-  readonly allowedOutputRoots: readonly ExternalProcessorRootAlias[];
+  readonly allowedOutputOwnerships: readonly ExternalProcessorOutputOwnership[];
   readonly timeoutMs?: number;
   readonly cwdRoot?: ExternalProcessorRootAlias;
 }
@@ -181,16 +179,19 @@ export interface ExternalProcessorRegistryContext {
   readonly includeDisabled?: boolean;
 }
 
-export interface ExternalProcessorInvocationInputBinding {
-  readonly slot: string;
-  readonly resourceRef?: ResourceRef;
-  readonly sourcePath?: string;
-  readonly root: ExternalProcessorRootAlias;
-}
+export type ExternalProcessorInvocationInputBinding =
+  | {
+      readonly slot: string;
+      readonly locator: ContentLocator;
+    }
+  | {
+      readonly slot: string;
+      readonly output: ProcessorOutputLocator;
+    };
 
 export interface ExternalProcessorInvocationOutputBinding {
   readonly slot: string;
-  readonly root: ExternalProcessorRootAlias;
+  readonly ownership: ExternalProcessorOutputOwnership;
   readonly pathHint?: string;
 }
 
@@ -210,13 +211,12 @@ export interface ExternalProcessorInvocation {
   readonly inputs: readonly ExternalProcessorInvocationInputBinding[];
   readonly outputs: readonly ExternalProcessorInvocationOutputBinding[];
   readonly params?: Readonly<Record<string, string | number | boolean>>;
-  readonly retentionHint: ExternalProcessorRetentionHint;
 }
 
 export interface ExternalProcessorOutput {
   readonly slot: string;
-  readonly resourceRef: ResourceRef;
-  readonly retentionHint: ExternalProcessorRetentionHint;
+  readonly output: ProcessorOutputLocator;
+  readonly ownership: ExternalProcessorOutputOwnership;
   readonly sizeBytes?: number;
   readonly mimeType?: string;
 }
@@ -230,45 +230,6 @@ export interface ExternalProcessorResult {
   readonly outputs: readonly ExternalProcessorOutput[];
   readonly diagnostics: readonly ExternalProcessorDiagnostic[];
   readonly exitCode?: number;
-}
-
-export interface ProcessorResourceStatus {
-  readonly resourceRef: ResourceRef;
-  readonly retentionHint: ExternalProcessorRetentionHint;
-  readonly status: 'ready' | 'missing' | 'stale' | 'failed' | 'non-portable';
-  readonly promotedSourceRef?: ProcessorResourcePromotedSourceRef;
-  readonly diagnostics?: readonly ExternalProcessorDiagnostic[];
-}
-
-export type ProcessorResourcePromotedSourceRef =
-  | { readonly kind: 'asset'; readonly assetId: string }
-  | { readonly kind: 'project'; readonly path: string }
-  | { readonly kind: 'mediaLibrary'; readonly path: string; readonly mediaLibraryId?: string };
-
-export interface ProcessorResourcePort {
-  setRetention(input: ProcessorResourceRetentionInput): Promise<ProcessorResourceStatus>;
-  getStatus(resourceRef: ResourceRef): Promise<ProcessorResourceStatus>;
-  pin(input: ProcessorResourceReferenceInput): Promise<ProcessorResourceStatus>;
-  unpin(input: ProcessorResourceReferenceInput): Promise<ProcessorResourceStatus>;
-  markPromoted(input: ProcessorResourcePromoteInput): Promise<ProcessorResourceStatus>;
-}
-
-export interface ProcessorResourceRetentionInput {
-  readonly resourceRef: ResourceRef;
-  readonly run: ExternalProcessorRunIdentity;
-  readonly retentionHint: ExternalProcessorRetentionHint;
-}
-
-export interface ProcessorResourceReferenceInput {
-  readonly resourceRef: ResourceRef;
-  readonly reason: string;
-  readonly ownerId?: string;
-}
-
-export interface ProcessorResourcePromoteInput {
-  readonly resourceRef: ResourceRef;
-  readonly run: ExternalProcessorRunIdentity;
-  readonly target: 'asset' | 'project' | 'mediaLibrary';
 }
 
 export interface ExternalProcessorManifestValidationResult {
@@ -420,7 +381,7 @@ export function validateExternalProcessorManifest(
     validateTemplateReferences(entry.args, inputs, outputs, params, diagnostics);
   }
   if (outputs && policy) {
-    validateOutputRoots(outputs, policy.allowedOutputRoots, diagnostics);
+    validateOutputOwnerships(outputs, policy.allowedOutputOwnerships, diagnostics);
   }
 
   if (diagnostics.some((item) => item.severity === 'error')) {
@@ -889,11 +850,15 @@ function readOutputs(
       diagnostics,
       `outputs.${key}.produces`,
     );
-    const root = readRootAlias(declaration['root'], diagnostics, `outputs.${key}.root`);
-    if (!produces || !root) continue;
+    const ownership = readOutputOwnership(
+      declaration['ownership'],
+      diagnostics,
+      `outputs.${key}.ownership`,
+    );
+    if (!produces || !ownership) continue;
     outputs[key] = {
       produces,
-      root,
+      ownership,
       ...(typeof declaration['pathHint'] === 'string' ? { pathHint: declaration['pathHint'] } : {}),
     };
   }
@@ -970,16 +935,16 @@ function readPolicy(
     diagnostics,
     'policy.allowedInputRoots',
   );
-  const allowedOutputRoots = readRootAliasArray(
-    value['allowedOutputRoots'],
+  const allowedOutputOwnerships = readOutputOwnershipArray(
+    value['allowedOutputOwnerships'],
     diagnostics,
-    'policy.allowedOutputRoots',
+    'policy.allowedOutputOwnerships',
   );
   if (
     requiresApproval === undefined ||
     allowNetwork === undefined ||
     !allowedInputRoots ||
-    !allowedOutputRoots
+    !allowedOutputOwnerships
   ) {
     return undefined;
   }
@@ -987,7 +952,7 @@ function readPolicy(
     requiresApproval,
     allowNetwork,
     allowedInputRoots,
-    allowedOutputRoots,
+    allowedOutputOwnerships,
     ...(typeof value['timeoutMs'] === 'number' ? { timeoutMs: value['timeoutMs'] } : {}),
     ...(typeof value['cwdRoot'] === 'string' && isExternalProcessorRootAlias(value['cwdRoot'])
       ? { cwdRoot: value['cwdRoot'] }
@@ -1062,24 +1027,58 @@ function readEnvProfile(
   };
 }
 
-function validateOutputRoots(
+function validateOutputOwnerships(
   outputs: Readonly<Record<string, ExternalProcessorOutputDeclaration>>,
-  allowedOutputRoots: readonly ExternalProcessorRootAlias[],
+  allowedOutputOwnerships: readonly ExternalProcessorOutputOwnership[],
   diagnostics: ExternalProcessorDiagnostic[],
 ): void {
-  const allowed = new Set(allowedOutputRoots);
+  const allowed = new Set(allowedOutputOwnerships);
   for (const [key, output] of Object.entries(outputs)) {
-    if (!allowed.has(output.root)) {
+    if (!allowed.has(output.ownership)) {
       diagnostics.push(
         diagnostic(
-          'illegal-output-root',
+          'illegal-output-ownership',
           'error',
-          `Output "${key}" uses root "${output.root}" not declared in policy.allowedOutputRoots.`,
-          `outputs.${key}.root`,
+          `Output "${key}" uses ownership "${output.ownership}" not declared in policy.allowedOutputOwnerships.`,
+          `outputs.${key}.ownership`,
         ),
       );
     }
   }
+}
+
+function readOutputOwnership(
+  value: unknown,
+  diagnostics: ExternalProcessorDiagnostic[],
+  path: string,
+): ExternalProcessorOutputOwnership | undefined {
+  if (value === 'intermediate' || value === 'debug' || value === 'candidate') return value;
+  diagnostics.push(
+    diagnostic(
+      'illegal-output-ownership',
+      'error',
+      `${path} must be intermediate, debug, or candidate.`,
+      path,
+    ),
+  );
+  return undefined;
+}
+
+function readOutputOwnershipArray(
+  value: unknown,
+  diagnostics: ExternalProcessorDiagnostic[],
+  path: string,
+): readonly ExternalProcessorOutputOwnership[] | undefined {
+  if (!Array.isArray(value)) {
+    diagnostics.push(diagnostic('invalid-field-type', 'error', `${path} must be an array.`, path));
+    return undefined;
+  }
+  const ownerships: ExternalProcessorOutputOwnership[] = [];
+  for (const [index, item] of value.entries()) {
+    const ownership = readOutputOwnership(item, diagnostics, `${path}.${index}`);
+    if (ownership) ownerships.push(ownership);
+  }
+  return ownerships;
 }
 
 function validateTemplateReferences(
@@ -1187,20 +1186,6 @@ function readOptionalScalarArray(
   if (!Array.isArray(value) || !value.every(isScalar)) {
     diagnostics.push(
       diagnostic('invalid-field-type', 'error', `${path} must be a scalar array.`, path),
-    );
-    return undefined;
-  }
-  return value;
-}
-
-function readRootAlias(
-  value: unknown,
-  diagnostics: ExternalProcessorDiagnostic[],
-  path: string,
-): ExternalProcessorRootAlias | undefined {
-  if (typeof value !== 'string' || !isExternalProcessorRootAlias(value)) {
-    diagnostics.push(
-      diagnostic('invalid-root-alias', 'error', `${path} must be a known root alias.`, path),
     );
     return undefined;
   }

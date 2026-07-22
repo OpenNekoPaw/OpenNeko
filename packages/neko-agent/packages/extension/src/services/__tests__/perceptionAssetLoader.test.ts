@@ -75,9 +75,7 @@ describe('createLocalPerceptionAssetLoader', () => {
     });
 
     expect(runtime.loadProviderAsset).toHaveBeenCalledWith({
-      caller: 'perception-asset-loader',
       source: { kind: 'file', path: '${A}/images/frame.png' },
-      preferredTarget: 'bytes',
       mimeTypeHint: 'image/png',
     });
     expect(result).toEqual({
@@ -106,7 +104,6 @@ describe('createLocalPerceptionAssetLoader', () => {
     const result = await loader.load(documentAsset);
 
     expect(runtime.loadProviderAsset).toHaveBeenCalledWith({
-      caller: 'perception-asset-loader',
       source: {
         kind: 'document',
         source: {
@@ -116,7 +113,6 @@ describe('createLocalPerceptionAssetLoader', () => {
         entryPath: 'OPS/images/page-1.jpg',
         locator: { kind: 'document', entryPath: 'OPS/images/page-1.jpg' },
       },
-      preferredTarget: 'bytes',
       mimeTypeHint: 'image/jpeg',
     });
     expect(result).toEqual({
@@ -175,9 +171,7 @@ describe('createLocalPerceptionAssetLoader', () => {
     const loaded = await createLocalPerceptionAssetLoader(runtime).load(assetRef);
 
     expect(runtime.loadProviderAsset).toHaveBeenLastCalledWith({
-      caller: 'perception-asset-loader',
       source: generatedResourceRef,
-      preferredTarget: 'bytes',
       mimeTypeHint: 'image/png',
     });
     expect(loaded).toEqual({

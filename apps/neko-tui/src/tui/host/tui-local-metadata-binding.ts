@@ -1,9 +1,5 @@
+import { SqliteTaskRecoveryStorage, SqliteTaskStorage } from '@neko/agent';
 import {
-  SqliteTaskRecoveryStorage,
-  SqliteTaskStorage,
-} from '@neko/agent';
-import {
-  LocalMetadataResourceCacheManifestStore,
   createLocalMetadataRevisionCursor,
   resolveGlobalStorageLayout,
   resolveStorageLayout,
@@ -15,20 +11,15 @@ import {
   type LocalMetadataPartition,
   type LocalMetadataPartitionRevision,
   type LocalMetadataStore,
-  type ResourceCacheManifestStore,
   type SearchDocumentRepository,
   type SemanticProjectionRepository,
   type WorkspaceStorageInspectionReport,
 } from '@neko/shared';
 import {
   migrateLegacyAssetGraph,
-  migrateLegacyProxyManifest,
-  migrateLegacyResourceCacheManifest,
   migrateLegacySemanticIndexSidecars,
   inspectWorkspaceStorage,
   type LegacyAssetGraphMigrationReport,
-  type ProxyManifestMigrationReport,
-  type ResourceCacheManifestMigrationReport,
   type SemanticIndexSidecarMigrationReport,
 } from '@neko/shared/local-metadata/node';
 import {
@@ -36,7 +27,6 @@ import {
   CATALOG_PROJECTION_MIGRATIONS,
   ENTITY_ASSET_PROJECTION_MIGRATIONS,
   M1_LOCAL_METADATA_MIGRATIONS,
-  RESOURCE_CACHE_MIGRATIONS,
   SEARCH_PROJECTION_MIGRATIONS,
 } from '@neko/shared/local-metadata/sqlite';
 import { resolveNodeWorkspaceIdentity } from '@neko/shared/local-metadata/node-workspace-identity';
@@ -49,9 +39,6 @@ export interface TuiLocalMetadataBinding {
   readonly metadataStore: LocalMetadataStore;
   readonly taskStorage: ITaskStorage;
   readonly taskRecoveryStorage: ITaskRecoveryStorage;
-  readonly resourceCacheManifestStore: ResourceCacheManifestStore;
-  readonly resourceCacheMigrationReport: ResourceCacheManifestMigrationReport;
-  readonly proxyMigrationReport: ProxyManifestMigrationReport;
   readonly searchPartition: LocalMetadataPartition;
   readonly semanticPartition: LocalMetadataPartition;
   readonly entityAssetPartition: LocalMetadataPartition;
@@ -96,7 +83,6 @@ export async function createTuiLocalMetadataBinding(options: {
     });
     await metadataStore.migrateNamespace(M1_LOCAL_METADATA_MIGRATIONS);
     await metadataStore.migrateNamespace(AGENT_STATE_MIGRATIONS);
-    await metadataStore.migrateNamespace(RESOURCE_CACHE_MIGRATIONS);
     await metadataStore.migrateNamespace(SEARCH_PROJECTION_MIGRATIONS);
     await metadataStore.migrateNamespace(ENTITY_ASSET_PROJECTION_MIGRATIONS);
     await metadataStore.migrateNamespace(CATALOG_PROJECTION_MIGRATIONS);
@@ -112,28 +98,7 @@ export async function createTuiLocalMetadataBinding(options: {
       domains: ['tasks', 'catalog', 'entity-asset-projection'],
     });
     await revisionCursor.initialize();
-    const resourceCacheManifestStore = new LocalMetadataResourceCacheManifestStore({
-      metadataStore,
-      partition: {
-        scope: 'workspace',
-        workspaceId,
-        domain: 'resource-cache',
-      },
-      projectRoot: options.workDir,
-    });
     const storageLayout = resolveStorageLayout(options.workDir, options.homedir);
-    const resourceCacheMigrationReport = await migrateLegacyResourceCacheManifest({
-      manifestPath: storageLayout.project.local.cache.resourceManifest,
-      cacheRoot: storageLayout.project.local.cache.resources,
-      manifestStore: resourceCacheManifestStore,
-    });
-    const proxyMigrationReport = await migrateLegacyProxyManifest({
-      manifestPath: storageLayout.project.local.cache.proxyManifest,
-      workDir: options.workDir,
-      legacyProxyRoot: storageLayout.project.local.cache.proxies,
-      resourceCacheRoot: storageLayout.project.local.cache.resources,
-      manifestStore: resourceCacheManifestStore,
-    });
     const searchPartition: LocalMetadataPartition = {
       scope: 'workspace',
       workspaceId,
@@ -178,9 +143,6 @@ export async function createTuiLocalMetadataBinding(options: {
         workspaceId,
         metadataStore,
       }),
-      resourceCacheManifestStore,
-      resourceCacheMigrationReport,
-      proxyMigrationReport,
       searchPartition,
       semanticPartition,
       entityAssetPartition,

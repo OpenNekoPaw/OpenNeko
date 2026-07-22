@@ -52,6 +52,35 @@ describe('resource cache provider adapters', () => {
     expect(fsOps.copyCalls[0]?.target).toContain('/workspace/.neko/.cache/resources/thumbnails/');
   });
 
+  it('owns cache writes when a thumbnail generator returns bytes', async () => {
+    const fsOps = new FakeFileOps({});
+    const ref = createFileThumbnailResourceRef({
+      filePath: '/workspace/media/poster.png',
+      identity: { sizeBytes: 512, mtimeMs: 7 },
+    });
+    const provider = new ThumbnailResourceCacheProvider({
+      fsOps,
+      generator: {
+        generate: vi.fn(async () => ({
+          bytes: new TextEncoder().encode('thumbnail-bytes'),
+          width: 128,
+          height: 128,
+          mimeType: 'image/jpeg',
+        })),
+      },
+    });
+
+    const result = await provider.ensure({
+      ref,
+      variant: { role: 'thumbnail', width: 128, height: 128, mimeType: 'image/jpeg' },
+      cacheRoot: '/workspace/.neko/.cache/resources',
+    });
+
+    expect(result.status).toBe('ready');
+    expect(fsOps.files.get(result.absolutePath!)).toBe('thumbnail-bytes');
+    expect(fsOps.copyCalls).toEqual([]);
+  });
+
   it('copies preview variants without treating preview API roots as cache identity', async () => {
     const fsOps = new FakeFileOps({
       '/engine/cache/pano-preview.webp': 'preview',

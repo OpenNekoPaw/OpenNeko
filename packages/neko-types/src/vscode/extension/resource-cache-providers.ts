@@ -39,8 +39,21 @@ export interface ThumbnailResourceGenerator {
   ): Promise<ThumbnailResourceGeneratorResult | null>;
 }
 
-export interface ThumbnailResourceGeneratorResult {
+export type ThumbnailResourceGeneratorResult =
+  ThumbnailResourceGeneratorPathResult | ThumbnailResourceGeneratorBytesResult;
+
+export interface ThumbnailResourceGeneratorPathResult {
   readonly path: string;
+  readonly bytes?: never;
+  readonly width?: number;
+  readonly height?: number;
+  readonly mimeType?: string;
+  readonly sizeBytes?: number;
+}
+
+export interface ThumbnailResourceGeneratorBytesResult {
+  readonly bytes: Uint8Array;
+  readonly path?: never;
   readonly width?: number;
   readonly height?: number;
   readonly mimeType?: string;
@@ -159,17 +172,19 @@ export class ThumbnailResourceCacheProvider implements ResourceCacheProvider {
       return unsupported(input, 'Thumbnail generator did not produce a thumbnail.');
     }
 
-    return copyProviderArtifact({
+    const artifact = {
       input,
       fsOps: this.fsOps,
-      sourcePath: generated.path,
       directory: 'thumbnails',
       mimeType: generated.mimeType ?? input.variant.mimeType ?? 'image/jpeg',
       width: generated.width ?? input.variant.width,
       height: generated.height ?? input.variant.height,
       sizeBytes: generated.sizeBytes,
       rebuildable: true,
-    });
+    } as const;
+    return generated.bytes !== undefined
+      ? writeProviderArtifact({ ...artifact, bytes: generated.bytes, sourcePath })
+      : copyProviderArtifact({ ...artifact, sourcePath: generated.path });
   }
 }
 
@@ -440,6 +455,41 @@ async function copyProviderArtifact(input: {
     ...(input.width !== undefined ? { width: input.width } : {}),
     ...(input.height !== undefined ? { height: input.height } : {}),
     sizeBytes: input.sizeBytes ?? stat.size,
+    rebuildable: input.rebuildable,
+  };
+}
+
+async function writeProviderArtifact(input: {
+  readonly input: ResourceEnsureInput;
+  readonly fsOps: ResourceCacheFileOps;
+  readonly bytes: Uint8Array;
+  readonly sourcePath: string;
+  readonly directory: string;
+  readonly mimeType?: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly sizeBytes?: number;
+  readonly rebuildable: boolean;
+}): Promise<ResourceEnsureResult> {
+  const relativePath = createProviderRelativePath(
+    input.directory,
+    input.input.ref,
+    input.input.variant,
+    input.sourcePath,
+  );
+  const targetPath = path.join(input.input.cacheRoot, relativePath);
+  await input.fsOps.mkdir(path.dirname(targetPath), { recursive: true });
+  await input.fsOps.writeFile(targetPath, input.bytes);
+  return {
+    status: 'ready',
+    ref: input.input.ref,
+    variant: input.input.variant,
+    absolutePath: targetPath,
+    relativePath,
+    ...(input.mimeType ? { mimeType: input.mimeType } : {}),
+    ...(input.width !== undefined ? { width: input.width } : {}),
+    ...(input.height !== undefined ? { height: input.height } : {}),
+    sizeBytes: input.sizeBytes ?? input.bytes.byteLength,
     rebuildable: input.rebuildable,
   };
 }

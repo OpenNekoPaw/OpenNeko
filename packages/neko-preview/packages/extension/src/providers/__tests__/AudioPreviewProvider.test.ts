@@ -151,6 +151,8 @@ describe('AudioPreviewProvider', () => {
     provider = new AudioPreviewProvider(
       extensionUri,
       statusBar as unknown as import('../../ui/StatusBarManager').StatusBarManager,
+      () => PreviewService.tryCreate(),
+      (filePath, service) => service.getWaveform(filePath),
     );
   });
 

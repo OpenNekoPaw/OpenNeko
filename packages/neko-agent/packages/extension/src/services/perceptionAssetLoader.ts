@@ -35,9 +35,7 @@ async function loadPerceptionAsset(
   }
 
   const loaded = await contentAccessRuntime.loadProviderAsset({
-    caller: 'perception-asset-loader',
     source: createPerceptionAssetSource(ref),
-    preferredTarget: 'bytes',
     mimeTypeHint: mimeType,
   });
   if (loaded.status !== 'ready' || !loaded.bytes) {

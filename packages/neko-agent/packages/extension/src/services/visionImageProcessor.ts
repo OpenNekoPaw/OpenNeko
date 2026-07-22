@@ -1,5 +1,11 @@
 import type { VisionImageProcessor } from '@neko/platform/media';
-import type { GeneratedImageVariantGenerator } from '@neko/shared/vscode/extension';
+import type {
+  ContentReadService,
+  ContentRepresentationGenerator,
+  ContentRepresentationGeneratorInput,
+} from '@neko/shared';
+
+const MAX_GENERATED_IMAGE_SOURCE_BYTES = 64 * 1024 * 1024;
 
 export function createSharpVisionImageProcessor(): VisionImageProcessor {
   return {
@@ -18,11 +24,24 @@ export function createSharpVisionImageProcessor(): VisionImageProcessor {
   };
 }
 
-export function createSharpGeneratedImageVariantGenerator(): GeneratedImageVariantGenerator {
+export function createSharpGeneratedImageRepresentationGenerator(
+  contentRead: ContentReadService,
+): ContentRepresentationGenerator {
   return {
-    generate: async (sourcePath, request) => {
+    id: 'neko-agent.sharp-image-representation',
+    revision: '1',
+    kinds: ['thumbnail', 'preview'],
+    generate: async (input) => {
+      const request = imageRepresentationRequest(input);
+      const source = await contentRead.read(input.source, {
+        maxBytes: MAX_GENERATED_IMAGE_SOURCE_BYTES,
+        ...(input.signal ? { signal: input.signal } : {}),
+      });
+      if (source.status !== 'ready') {
+        throw new Error(`Generated image source is unavailable: ${source.diagnostic.code}.`);
+      }
       const sharp = (await import('sharp')).default;
-      const result = await sharp(sourcePath)
+      const result = await sharp(source.bytes)
         .resize({
           width: request.width,
           height: request.height,
@@ -36,10 +55,26 @@ export function createSharpGeneratedImageVariantGenerator(): GeneratedImageVaria
       }
       return {
         bytes: result.data,
-        width: result.info.width,
-        height: result.info.height,
-        mimeType: 'image/webp',
+        metadata: {
+          width: result.info.width,
+          height: result.info.height,
+          mimeType: 'image/webp',
+          byteLength: result.data.byteLength,
+        },
       };
     },
+  };
+}
+
+function imageRepresentationRequest(input: ContentRepresentationGeneratorInput): {
+  readonly width?: number;
+  readonly height?: number;
+} {
+  if (input.spec.kind !== 'thumbnail' && input.spec.kind !== 'preview') {
+    throw new Error(`Unsupported Sharp image representation: ${input.spec.kind}.`);
+  }
+  return {
+    ...(input.spec.maxWidth !== undefined ? { width: input.spec.maxWidth } : {}),
+    ...(input.spec.maxHeight !== undefined ? { height: input.spec.maxHeight } : {}),
   };
 }
