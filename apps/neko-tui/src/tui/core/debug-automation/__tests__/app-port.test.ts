@@ -322,6 +322,46 @@ describe('projectTaskFacts', () => {
 });
 
 describe('createTuiAutomationAppPort', () => {
+  it('confirms only the expected pending Tool through the App owner', async () => {
+    const resolve = vi.fn();
+    const confirmToolCall = vi.fn();
+    runtime.conversation.stores.ui.getState().showToolApproval({
+      toolCallId: 'call-bind',
+      toolName: 'BindEntityRepresentation',
+      arguments: { entityId: 'char-rin' },
+      resolve,
+    });
+    const port = createTuiAutomationAppPort({
+      stores: runtime.conversation.stores,
+      confirmToolCall,
+      readHandle: () => ({
+        isReady: true,
+        submit: async () => undefined,
+        cancel: () => undefined,
+        listTasks: async () => [],
+        getCurrentConversationId: () => 'tui-2026-01-01T00-00-00-000Z-test',
+        getHistory: () => [],
+        getMessageQueueSnapshot: () => null,
+        getConversationPersistenceSnapshot: memoryPersistenceSnapshot,
+      }),
+      readMarkdownFacts: () => ({ pathEvents: [], droppedPathEventCount: 0 }),
+    });
+
+    await expect(
+      port.confirmPendingTool({
+        toolName: 'BindEntityRepresentation',
+        approved: true,
+        timeoutMs: 100,
+      }),
+    ).resolves.toEqual({
+      toolCallId: 'call-bind',
+      toolName: 'BindEntityRepresentation',
+      approved: true,
+    });
+    expect(resolve).toHaveBeenCalledWith(true);
+    expect(confirmToolCall).toHaveBeenCalledWith('call-bind', true);
+  });
+
   it('exposes a failed session initialization through the App owner port', () => {
     const initializationError = new Error('conversation storage initialization failed');
     runtime.conversation.stores.agent.getState().setError(initializationError);

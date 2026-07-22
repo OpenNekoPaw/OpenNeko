@@ -4,7 +4,7 @@ import {
   TOOL_NAMES_QUALITY,
   type Tool,
 } from '@neko/shared';
-import { createReadDocumentTool } from '@neko/content/document';
+import { createReadDocumentTool, createReadImageTool } from '@neko/content/document';
 import { Value } from 'typebox/value';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -114,6 +114,62 @@ describe('OpenNeko tool projection to Pi', () => {
     ).toBe(true);
   });
 
+  it('projects the discriminated ReadImage resource contract to Pi', () => {
+    const projected = projectOpenNekoTool(createReadImageTool({}));
+    const documentImage = {
+      entryPath: 'images/page-1.jpg',
+      resourceRef: {
+        kind: 'document-entry',
+        source: { filePath: 'books/book.epub', format: 'epub' },
+        entryPath: 'images/page-1.jpg',
+      },
+    };
+    const managedImage = {
+      resourceRef: {
+        id: 'resource-1',
+        scope: 'project',
+        provider: 'source-file',
+        kind: 'image',
+        source: { kind: 'file', filePath: 'images/reference.png' },
+        fingerprint: { strategy: 'none', value: 'resource-1' },
+      },
+    };
+
+    expect(Value.Check(projected.parameters, { images: [documentImage] })).toBe(true);
+    expect(
+      Value.Check(projected.parameters, {
+        images: [
+          {
+            ...documentImage,
+            resourceRef: {
+              kind: 'document-entry',
+              source: documentImage.resourceRef.source,
+            },
+          },
+        ],
+      }),
+    ).toBe(false);
+    expect(Value.Check(projected.parameters, { images: [managedImage] })).toBe(true);
+    expect(projected.parameters).toMatchObject({
+      properties: {
+        images: {
+          items: {
+            properties: {
+              resourceRef: {
+                anyOf: [
+                  expect.objectContaining({ required: ['kind', 'source', 'entryPath'] }),
+                  expect.objectContaining({
+                    required: ['id', 'scope', 'provider', 'kind', 'source', 'fingerprint'],
+                  }),
+                ],
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
   it('executes through the owning Tool with explicit identity and model facts', async () => {
     const execute = vi.fn(async () => ({ success: true, data: { evidence: 'ok' } }));
     const projected = projectOpenNekoTool(tool({ execute }), {
@@ -170,6 +226,111 @@ describe('OpenNeko tool projection to Pi', () => {
       content: [{ type: 'text', text: '{"evidence":"ok"}' }],
       details: { success: true, data: { evidence: 'ok' } },
     });
+  });
+
+  it('projects stable image attachments through the injected Host loader', async () => {
+    const assetRef = {
+      assetId: 'document-page-1',
+      uri: 'book.epub#images/page-1.png',
+      mimeType: 'image/png',
+      documentResourceRef: {
+        kind: 'document-entry' as const,
+        source: { filePath: 'book.epub', format: 'epub' as const },
+        entryPath: 'images/page-1.png',
+        versionPolicy: 'versioned-export' as const,
+      },
+    };
+    const load = vi.fn(async () => ({
+      kind: 'image' as const,
+      url: 'data:image/png;base64,aW1hZ2UtYnl0ZXM=',
+      mimeType: 'image/png',
+    }));
+    const projected = projectOpenNekoTool(
+      tool({
+        execute: async () => ({
+          success: true,
+          data: { imageCount: 1 },
+          attachments: [{ type: 'image', path: assetRef.uri, mimeType: 'image/png', assetRef }],
+        }),
+      }),
+      { assetLoader: { load } },
+    );
+
+    await expect(projected.execute({ args: {}, context })).resolves.toEqual({
+      content: [
+        { type: 'text', text: '{"imageCount":1}' },
+        { type: 'image', data: 'aW1hZ2UtYnl0ZXM=', mimeType: 'image/png' },
+      ],
+      details: expect.objectContaining({ success: true, data: { imageCount: 1 } }),
+    });
+    expect(load).toHaveBeenCalledWith(assetRef);
+  });
+
+  it('fails visibly when an image attachment has no Host loader', async () => {
+    const projected = projectOpenNekoTool(
+      tool({
+        execute: async () => ({
+          success: true,
+          data: { imageCount: 1 },
+          attachments: [
+            {
+              type: 'image',
+              path: 'book.epub#images/page-1.png',
+              assetRef: {
+                assetId: 'document-page-1',
+                uri: 'book.epub#images/page-1.png',
+                mimeType: 'image/png',
+                documentResourceRef: {
+                  kind: 'document-entry',
+                  source: { filePath: 'book.epub', format: 'epub' },
+                  entryPath: 'images/page-1.png',
+                },
+              },
+            },
+          ],
+        }),
+      }),
+    );
+
+    await expect(projected.execute({ args: {}, context })).rejects.toThrow(
+      'Pi image Tool result requires a Host asset loader.',
+    );
+  });
+
+  it('rejects non-image or non-base64 Host payloads', async () => {
+    const projected = projectOpenNekoTool(
+      tool({
+        execute: async () => ({
+          success: true,
+          data: { imageCount: 1 },
+          attachments: [
+            {
+              type: 'image',
+              path: 'book.epub#images/page-1.png',
+              assetRef: {
+                assetId: 'document-page-1',
+                uri: 'book.epub#images/page-1.png',
+                mimeType: 'image/png',
+                documentResourceRef: {
+                  kind: 'document-entry',
+                  source: { filePath: 'book.epub', format: 'epub' },
+                  entryPath: 'images/page-1.png',
+                },
+              },
+            },
+          ],
+        }),
+      }),
+      {
+        assetLoader: {
+          load: async () => ({ kind: 'image', url: 'https://example.invalid/a.png' }),
+        },
+      },
+    );
+
+    await expect(projected.execute({ args: {}, context })).rejects.toThrow(
+      'Pi image Tool result requires a base64 data URL.',
+    );
   });
 
   it('propagates failed Tool results instead of presenting fallback success', async () => {

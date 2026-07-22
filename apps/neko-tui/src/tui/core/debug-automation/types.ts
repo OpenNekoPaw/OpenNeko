@@ -20,6 +20,7 @@ export type TuiDebugAutomationMethod =
   | 'session.resume'
   | 'message.submit'
   | 'message.cancel'
+  | 'tool.confirm'
   | 'terminal.resize'
   | 'session.waitForIdle'
   | 'session.facts'
@@ -95,6 +96,19 @@ export interface TuiDebugAutomationMessageSubmitParams extends TuiDebugAutomatio
 }
 
 export type TuiDebugAutomationMessageCancelParams = TuiDebugAutomationSessionRefParams;
+
+export interface TuiDebugAutomationToolConfirmParams extends TuiDebugAutomationSessionRefParams {
+  readonly toolName: string;
+  readonly approved: boolean;
+  readonly timeoutMs?: number;
+}
+
+export interface TuiDebugAutomationToolConfirmed {
+  readonly sessionId: string;
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly approved: boolean;
+}
 
 export interface TuiDebugAutomationMessageCancelled {
   readonly sessionId: string;
@@ -365,6 +379,11 @@ export interface TuiDebugAutomationAppPort {
   getConversationId(): string;
   submitMessage(input: { readonly prompt: string }): Promise<void>;
   cancelActiveMessage(): boolean;
+  confirmPendingTool(input: {
+    readonly toolName: string;
+    readonly approved: boolean;
+    readonly timeoutMs: number;
+  }): Promise<Omit<TuiDebugAutomationToolConfirmed, 'sessionId'>>;
   resizeTerminal(input: { readonly columns: number; readonly rows: number }): void;
   waitForIdle(input: {
     readonly timeoutMs: number;

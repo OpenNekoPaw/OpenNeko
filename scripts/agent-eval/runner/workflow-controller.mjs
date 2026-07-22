@@ -136,6 +136,32 @@ export async function runTuiWorkflowController(child, responses, input) {
         continue;
       }
 
+      if (step.kind === 'confirm') {
+        const confirmation = await sendDebugRequest(child, responses, {
+          id: requestId(step.id, 'tool.confirm'),
+          method: 'tool.confirm',
+          params: {
+            sessionId,
+            toolName: step.toolName,
+            approved: step.approved,
+            timeoutMs: step.timeoutMs,
+          },
+        });
+        trace.steps.push({
+          id: step.id,
+          kind: step.kind,
+          method: 'tool.confirm',
+          afterStepId: step.afterStepId,
+          toolName: confirmation?.toolName ?? step.toolName,
+          toolCallId: confirmation?.toolCallId,
+          approved: confirmation?.approved === true,
+          ...(input.captureStepFacts === false
+            ? {}
+            : { snapshot: projectSnapshot(await readFacts(step.id)) }),
+        });
+        continue;
+      }
+
       if (step.kind === 'wait-for-idle') {
         const idle = await sendDebugRequest(child, responses, {
           id: requestId(step.id, 'session.waitForIdle'),

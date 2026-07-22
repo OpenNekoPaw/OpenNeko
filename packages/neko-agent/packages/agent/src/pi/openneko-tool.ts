@@ -2,12 +2,14 @@ import {
   TOOL_NAMES_MEDIA,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
+  type PerceptualAssetRef,
   type Tool,
   type ToolParameters,
   type ToolResult,
 } from '@neko/shared';
 import { Type, type TObjectOptions } from 'typebox';
 import type { AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core';
+import type { ImageContent, TextContent } from '@earendil-works/pi-ai';
 
 import type {
   PiCapabilityTool,
@@ -23,6 +25,17 @@ export interface ProjectOpenNekoToolOptions {
   readonly modelPurposeRequirement?: 'required' | 'optional';
   readonly locale?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly assetLoader?: PiToolResultAssetLoader;
+}
+
+export interface PiToolResultAssetPayload {
+  readonly kind: 'image' | 'audio' | 'video';
+  readonly url: string;
+  readonly mimeType?: string;
+}
+
+export interface PiToolResultAssetLoader {
+  load(ref: PerceptualAssetRef): Promise<PiToolResultAssetPayload>;
 }
 
 export function resolveOpenNekoToolModelPurpose(
@@ -117,7 +130,7 @@ export function projectOpenNekoTool(
       }
       if (!result.success) throw new OpenNekoPiToolExecutionError(tool.name, result);
       return {
-        content: [{ type: 'text', text: formatToolResultForModel(result) }],
+        content: await projectToolResultContent(result, options.assetLoader),
         details: structuredClone(result),
       };
     },
@@ -131,6 +144,7 @@ export function projectOpenNekoTools(
     readonly metadata?: Readonly<Record<string, unknown>>;
     readonly purposeForTool?: (tool: Tool) => ToolModelPurpose | undefined;
     readonly isPurposeOptionalForTool?: (tool: Tool) => boolean;
+    readonly assetLoader?: PiToolResultAssetLoader;
   },
 ): readonly PiCapabilityTool<ToolResult>[] {
   return Object.freeze(
@@ -138,6 +152,7 @@ export function projectOpenNekoTools(
       projectOpenNekoTool(tool, {
         ...(options?.locale === undefined ? {} : { locale: options.locale }),
         ...(options?.metadata === undefined ? {} : { metadata: options.metadata }),
+        ...(options?.assetLoader === undefined ? {} : { assetLoader: options.assetLoader }),
         ...(options?.purposeForTool?.(tool) === undefined
           ? {}
           : { modelPurpose: options.purposeForTool(tool) }),
@@ -207,4 +222,45 @@ function formatToolResultForModel(result: ToolResult): string {
   if (typeof result.data === 'string') return result.data;
   if (result.data === undefined) return 'Tool completed successfully.';
   return JSON.stringify(result.data);
+}
+
+async function projectToolResultContent(
+  result: ToolResult,
+  assetLoader: PiToolResultAssetLoader | undefined,
+): Promise<(TextContent | ImageContent)[]> {
+  const content: (TextContent | ImageContent)[] = [
+    { type: 'text', text: formatToolResultForModel(result) },
+  ];
+  const imageAttachments = (result.attachments ?? []).filter(
+    (attachment) => attachment.type === 'image',
+  );
+  if (imageAttachments.length === 0) return content;
+  if (!assetLoader) {
+    throw new Error('Pi image Tool result requires a Host asset loader.');
+  }
+
+  for (const attachment of imageAttachments) {
+    if (!attachment.assetRef) {
+      throw new Error('Pi image Tool result requires a stable attachment assetRef.');
+    }
+    const payload = await assetLoader.load(attachment.assetRef);
+    if (payload.kind !== 'image') {
+      throw new Error(`Pi image Tool result loader returned ${payload.kind} content.`);
+    }
+    content.push(parsePiImageContent(payload));
+  }
+  return content;
+}
+
+function parsePiImageContent(payload: PiToolResultAssetPayload): ImageContent {
+  const match = /^data:([^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/u.exec(payload.url);
+  if (!match) {
+    throw new Error('Pi image Tool result requires a base64 data URL.');
+  }
+  const data = match[2];
+  const mimeType = payload.mimeType ?? match[1];
+  if (!data || !mimeType?.startsWith('image/')) {
+    throw new Error('Pi image Tool result requires image MIME type and base64 data.');
+  }
+  return { type: 'image', data, mimeType };
 }

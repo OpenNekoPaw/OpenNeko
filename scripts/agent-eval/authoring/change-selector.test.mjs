@@ -57,6 +57,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/neko-agent/packages/agent/src/task/task-runtime.ts',
         'packages/neko-agent/packages/platform/src/media/media-task-executor.ts',
         'packages/neko-content/src/document/read-document-tool.ts',
+        'packages/neko-content/src/document/read-image-tool.ts',
         'packages/neko-agent/packages/agent/src/pi/event-projector.ts',
         'packages/neko-agent/packages/extension/src/chat/message/piAgentStreamProcessor.ts',
         'apps/neko-tui/src/tui/adapters/pi-event-adapter.ts',

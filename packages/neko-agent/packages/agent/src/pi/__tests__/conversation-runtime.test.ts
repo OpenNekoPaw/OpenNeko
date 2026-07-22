@@ -15,6 +15,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node';
 import { createReadDocumentTool } from '@neko/content/document';
+import type { Tool } from '@neko/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PiConversationRuntime } from '../conversation-runtime';
@@ -214,6 +215,110 @@ describe('PiConversationRuntime', () => {
             error: expect.stringContaining('chapterHref'),
           }),
         }),
+      }),
+    );
+    runtime.dispose();
+  });
+
+  it('keeps a Host-loaded Tool result image in the next Pi model context', async () => {
+    const lease = authority.acquireLease('conversation-1');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+    });
+    const contexts: Context[] = [];
+    const responses = [
+      assistantContent('toolUse', [
+        {
+          type: 'toolCall' as const,
+          id: 'read-image-1',
+          name: 'ReadImage',
+          arguments: {},
+        },
+      ]),
+      assistant('stop', 'image observed'),
+    ];
+    const models = createFixtureModels((_model, context) => {
+      contexts.push(context);
+      const response = responses.shift();
+      if (response === undefined) throw new Error('Unexpected extra Pi model turn.');
+      return completedStream(response);
+    });
+    const modelPolicy = policy();
+    const load = vi.fn(async () => ({
+      kind: 'image' as const,
+      url: 'data:image/png;base64,AQID',
+      mimeType: 'image/png',
+    }));
+    const readImage: Tool = {
+      name: 'ReadImage',
+      description: 'Read one stable image reference.',
+      category: 'analysis',
+      parameters: { type: 'object', properties: {}, additionalProperties: false },
+      isReadOnly: true,
+      execute: async () => ({
+        success: true,
+        data: { imageCount: 1 },
+        attachments: [
+          {
+            type: 'image',
+            path: 'book.epub#images/page.png',
+            mimeType: 'image/png',
+            assetRef: {
+              assetId: 'document-page-1',
+              uri: 'book.epub#images/page.png',
+              mimeType: 'image/png',
+              documentResourceRef: {
+                kind: 'document-entry',
+                source: { filePath: 'book.epub', format: 'epub' },
+                entryPath: 'images/page.png',
+              },
+            },
+          },
+        ],
+      }),
+    };
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-1',
+      branchId: 'branch-main',
+      models,
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'OpenNeko fixture',
+    });
+    const events: PiProductAgentEvent[] = [];
+
+    await runtime.execute({
+      turnId: 'turn-read-image',
+      runId: 'run-read-image',
+      prompt: 'read the image',
+      modelPolicy,
+      skillSnapshot: await emptySkills(),
+      capabilityTools: [projectOpenNekoTool(readImage, { assetLoader: { load } })],
+      permissionPolicy: { preflight: () => ({ allowed: true }) },
+      workspaceTrusted: true,
+      events: collect(events),
+    });
+
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'tool.completed',
+        toolCallId: 'read-image-1',
+        isError: false,
+      }),
+    );
+    expect(contexts).toHaveLength(2);
+    expect(load).toHaveBeenCalledOnce();
+    expect(contexts[1]?.messages).toContainEqual(
+      expect.objectContaining({
+        role: 'toolResult',
+        toolCallId: 'read-image-1',
+        content: [
+          { type: 'text', text: '{"imageCount":1}' },
+          { type: 'image', data: 'AQID', mimeType: 'image/png' },
+        ],
       }),
     );
     runtime.dispose();

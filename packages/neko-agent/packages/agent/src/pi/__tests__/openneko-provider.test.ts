@@ -179,6 +179,117 @@ describe('OpenNeko provider projection to Pi', () => {
     }
   });
 
+  it('projects Tool result images into the NewAPI multimodal request body', async () => {
+    let requestPayload: unknown;
+    const server = createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on('data', (chunk: Buffer) => chunks.push(chunk));
+      request.on('end', () => {
+        requestPayload = JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
+        response.writeHead(200, {
+          'content-type': 'text/event-stream',
+          connection: 'keep-alive',
+        });
+        response.end(
+          'data: {"id":"chatcmpl-2","object":"chat.completion.chunk","created":1,"model":"configured-model","choices":[{"index":0,"delta":{"role":"assistant","content":"seen"},"finish_reason":null}]}\n\n' +
+            'data: {"id":"chatcmpl-2","object":"chat.completion.chunk","created":1,"model":"configured-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}\n\n' +
+            'data: [DONE]\n\n',
+        );
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    try {
+      const address = server.address();
+      if (address === null || typeof address === 'string') {
+        throw new Error('Expected a TCP test server address.');
+      }
+      const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
+      await credentials.replace(
+        'configured-provider',
+        { type: 'api_key', key: 'configured-secret' },
+        'user-config-import',
+      );
+      const models = createOpenNekoPiModels(credentials);
+      const projection = registerOpenNekoPiProvider(
+        models,
+        config({
+          baseUrl: `http://127.0.0.1:${address.port}/v1`,
+          protocol: 'newapi',
+          auth: { type: 'bearer' },
+        }),
+      );
+      const model = projection.models[0];
+      if (!model) throw new Error('Expected projected model.');
+
+      await models.completeSimple(model, {
+        messages: [
+          {
+            role: 'assistant',
+            content: [{ type: 'toolCall', id: 'call-image-1', name: 'ReadImage', arguments: {} }],
+            api: 'openai-completions',
+            provider: 'configured-provider',
+            model: 'configured-model',
+            usage: {
+              input: 1,
+              output: 1,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 2,
+              cost: {
+                input: 0,
+                output: 0,
+                cacheRead: 0,
+                cacheWrite: 0,
+                total: 0,
+              },
+            },
+            stopReason: 'toolUse',
+            timestamp: 1,
+          },
+          {
+            role: 'toolResult',
+            toolCallId: 'call-image-1',
+            toolName: 'ReadImage',
+            content: [
+              { type: 'text', text: '{"imageCount":1}' },
+              { type: 'image', data: 'AQID', mimeType: 'image/png' },
+            ],
+            isError: false,
+            timestamp: 2,
+          },
+        ],
+      });
+
+      expect(requestPayload).toMatchObject({
+        messages: [
+          expect.objectContaining({ role: 'assistant' }),
+          {
+            role: 'tool',
+            content: '{"imageCount":1}',
+            tool_call_id: 'call-image-1',
+          },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Attached image(s) from tool result:' },
+              {
+                type: 'image_url',
+                image_url: { url: 'data:image/png;base64,AQID' },
+              },
+            ],
+          },
+        ],
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+
   it('registers multiple exact models and per-model protocols under one provider', () => {
     const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
     const models = createOpenNekoPiModels(credentials);

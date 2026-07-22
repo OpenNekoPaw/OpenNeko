@@ -68,6 +68,7 @@ export interface TuiAutomationAppPortOptions {
   readonly stores: TuiConversationStores;
   readonly readHandle: () => TuiAutomationSessionHandle;
   readonly submitInput: (input: string) => Promise<void>;
+  readonly confirmToolCall?: (toolCallId: string, approved: boolean) => void;
   readonly readMarkdownFacts: () => TuiDebugAutomationMarkdownFacts;
 }
 
@@ -118,6 +119,41 @@ export function createTuiAutomationAppPort(
       const wasRunning = stores.agent.getState().status === 'running';
       handle.cancel();
       return wasRunning;
+    },
+
+    async confirmPendingTool(input) {
+      const startedAt = Date.now();
+      for (;;) {
+        const pending = stores.ui.getState().pendingApproval;
+        if (pending) {
+          if (!options.confirmToolCall) {
+            throw new TuiDebugAutomationProtocolError(
+              'session-not-ready',
+              'TUI Tool confirmation owner is unavailable.',
+            );
+          }
+          if (pending.toolName !== input.toolName) {
+            throw new TuiDebugAutomationProtocolError(
+              'invalid-request',
+              `Pending Tool confirmation is for ${pending.toolName}, not ${input.toolName}.`,
+            );
+          }
+          pending.resolve(input.approved);
+          options.confirmToolCall(pending.toolCallId, input.approved);
+          return {
+            toolCallId: pending.toolCallId,
+            toolName: pending.toolName,
+            approved: input.approved,
+          };
+        }
+        if (Date.now() - startedAt >= input.timeoutMs) {
+          throw new TuiDebugAutomationProtocolError(
+            'session-timeout',
+            `Timed out waiting for ${input.toolName} confirmation after ${input.timeoutMs}ms.`,
+          );
+        }
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
     },
 
     resizeTerminal(input): void {
