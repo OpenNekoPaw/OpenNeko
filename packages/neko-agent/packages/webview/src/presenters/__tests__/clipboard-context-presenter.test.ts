@@ -127,7 +127,7 @@ describe('clipboard-context-presenter', () => {
     });
   });
 
-  it('projects asset references into asset context payloads', () => {
+  it('rejects legacy Asset reference clipboard payloads', () => {
     const payload = projectClipboardTextToContextPayload(
       JSON.stringify({
         kind: 'asset-reference',
@@ -139,21 +139,7 @@ describe('clipboard-context-presenter', () => {
       }),
     );
 
-    expect(payload).toEqual({
-      type: 'asset',
-      id: 'asset-1',
-      label: 'Hero portrait',
-      summary: 'Asset: Hero portrait (image)',
-      data: expect.objectContaining({
-        navigationData: {
-          source: 'asset-library',
-          partition: 'asset-library',
-          assetId: 'asset-1',
-          portablePath: '${ASSETS}/hero.png',
-          filePath: '/workspace/assets/hero.png',
-        },
-      }),
-    });
+    expect(payload).toBeNull();
   });
 
   it('ignores ordinary pasted text', () => {

@@ -1,0 +1,143 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "generated-output-entity-binding",
+  "suiteId": "agent-runtime.media-library-content",
+  "caseGroup": "artifact",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Explicitly confirm binding an existing generated output directly to a Creative Entity portrait representation.",
+    "canonicalPath": [
+      "TUI input queue",
+      "GetCreativeEntity",
+      "Tool confirmation",
+      "BindEntityRepresentation",
+      "CreativeEntityService",
+      "entity-representation-bindings.json"
+    ],
+    "forbiddenFallback": [
+      "ImportAsset",
+      "AssetEntity allocation",
+      "project://assets URI",
+      "cache path identity",
+      "direct Agent file write"
+    ],
+    "observables": [
+      {
+        "ref": "entity-binding-facts",
+        "kind": "runtime-fact",
+        "description": "Ordered Entity query, explicit Tool confirmation, and successful binding result preserve the generated-output identity and preconditions.",
+        "required": true
+      }
+    ],
+    "expectedResult": "The confirmed binding returns a generated-output locator for char_rin with outputId, revision, digest, and workspace-relative path intact.",
+    "expectedFailure": "Missing confirmation, invalid Entity identity, changed locator fields, Asset participation, direct file editing, or failed Tool execution fails visibly."
+  },
+  "fixtureRefs": ["media-library-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "这是明确的写入请求。先调用 GetCreativeEntity 查询 entityId=char_rin；确认 kind=character 后，调用 BindEntityRepresentation，将 role=portrait、isDefault=true 绑定到 representation={kind:generated-output,outputId:generated-rin-portrait,revision:revision-1,digest:sha256:3f1735da0119e939c8fb7b1ac521d14909e81cefad29536af561abccecae7f54,path:neko/generated/image/rin-portrait.svg}。不要调用 Asset 工具，不要 Import，不要直接 Write JSON。等待确认并成功后单独输出 GENERATED_ENTITY_BIND_OK。"
+    },
+    {
+      "id": "confirm",
+      "kind": "confirm",
+      "afterStepId": "submit",
+      "toolName": "BindEntityRepresentation",
+      "approved": true,
+      "timeoutMs": 180000
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "entity-binding-facts" },
+    { "id": "idle", "kind": "fully-idle", "evidenceRef": "entity-binding-facts" },
+    {
+      "id": "entity-query",
+      "kind": "tool-call",
+      "name": "GetCreativeEntity",
+      "status": "success",
+      "expectedArguments": { "entityId": "char_rin" },
+      "evidenceRef": "entity-binding-facts"
+    },
+    {
+      "id": "binding",
+      "kind": "tool-call",
+      "name": "BindEntityRepresentation",
+      "status": "success",
+      "expectedArguments": {
+        "entityId": "char_rin",
+        "entityKind": "character",
+        "role": "portrait",
+        "isDefault": true,
+        "representation": {
+          "kind": "generated-output",
+          "outputId": "generated-rin-portrait",
+          "revision": "revision-1",
+          "digest": "sha256:3f1735da0119e939c8fb7b1ac521d14909e81cefad29536af561abccecae7f54",
+          "path": "neko/generated/image/rin-portrait.svg"
+        }
+      },
+      "resultIncludes": {
+        "binding": {
+          "entityId": "char_rin",
+          "entityKind": "character",
+          "role": "portrait",
+          "status": "confirmed",
+          "availability": "active",
+          "source": "agent",
+          "representation": {
+            "kind": "generated-output",
+            "outputId": "generated-rin-portrait",
+            "revision": "revision-1",
+            "digest": "sha256:3f1735da0119e939c8fb7b1ac521d14909e81cefad29536af561abccecae7f54",
+            "path": "neko/generated/image/rin-portrait.svg"
+          }
+        }
+      },
+      "evidenceRef": "entity-binding-facts"
+    },
+    {
+      "id": "order",
+      "kind": "process-order",
+      "events": [
+        { "kind": "tool", "name": "GetCreativeEntity", "status": "success" },
+        { "kind": "workflow-step", "stepId": "confirm", "method": "tool.confirm" },
+        { "kind": "tool", "name": "BindEntityRepresentation", "status": "success" }
+      ],
+      "evidenceRef": "entity-binding-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["GENERATED_ENTITY_BIND_OK"],
+      "evidenceRef": "entity-binding-facts"
+    },
+    {
+      "id": "no-asset-fallback",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "ListAssets",
+        "GetAsset",
+        "ImportAsset",
+        "AssetEntity",
+        "project://assets/",
+        "library.json",
+        "assetRef"
+      ],
+      "evidenceRef": "entity-binding-facts"
+    }
+  ],
+  "artifactChecks": [
+    {
+      "id": "legacy-catalog-absent",
+      "kind": "file-absent",
+      "evidenceRef": "entity-binding-facts",
+      "path": "neko/assets/library.json"
+    }
+  ],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

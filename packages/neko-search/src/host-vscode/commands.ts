@@ -137,7 +137,6 @@ export function registerProjectSearchWatchers(
 
   for (const [pattern, partition] of [
     ['**/*.{fountain,nks,story}', 'story-symbols'],
-    ['**/neko/assets/library.json', 'asset-library'],
     ['**/characters.json', 'creative-entities'],
     ['**/neko/entities/*.json', 'creative-entities'],
     ['**/neko/entity-asset-requirements.json', 'creative-entities'],

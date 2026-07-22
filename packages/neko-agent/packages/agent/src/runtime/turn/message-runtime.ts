@@ -835,7 +835,6 @@ function fileReferenceContextType(reference: AgentFileReference): MessageContext
   ) {
     return 'media';
   }
-  if (reference.source === 'asset-library') return 'asset';
   if (reference.source === 'entity-graph') return 'entity';
   return 'file';
 }

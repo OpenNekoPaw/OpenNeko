@@ -9,6 +9,9 @@ import type {
   CreativeEntityCandidateStatus,
   CreativeEntityKind,
   CreativeEntityQuery,
+  EntityRepresentationBinding,
+  EntityRepresentationRole,
+  EntityRepresentationTarget,
   ProjectIndexFreshness,
   ProjectSearchAdapter,
   ProjectSearchItem,
@@ -18,7 +21,12 @@ import type {
   Tool,
   ToolParameters,
 } from '@neko/shared';
-import { isCreativeEntityKind, TOOL_NAMES_ENTITY } from '@neko/shared';
+import {
+  isCreativeEntityKind,
+  isEntityRepresentationRole,
+  TOOL_NAMES_ENTITY,
+  validateContentLocator,
+} from '@neko/shared';
 
 export interface CreativeEntityHeadlessRuntime {
   list(query?: CreativeEntityQuery): Promise<readonly CreativeEntity[]>;
@@ -26,6 +34,13 @@ export interface CreativeEntityHeadlessRuntime {
   listCandidates?(
     status?: CreativeEntityCandidateStatus,
   ): Promise<readonly CreativeEntityCandidate[]>;
+  bindRepresentation(input: {
+    readonly entityId: string;
+    readonly entityKind: CreativeEntityKind;
+    readonly representation: EntityRepresentationTarget;
+    readonly role: EntityRepresentationRole;
+    readonly isDefault?: boolean;
+  }): Promise<{ readonly binding: EntityRepresentationBinding }>;
 }
 
 export function createCreativeEntityHeadlessCapabilityProvider(
@@ -130,6 +145,52 @@ class CreativeEntityHeadlessCapabilityProvider implements AgentCapabilityProvide
         } satisfies ToolParameters,
         execute: async (args) => this.getCreativeEntity(args),
       },
+      {
+        name: TOOL_NAMES_ENTITY.BIND_ENTITY_REPRESENTATION,
+        description:
+          'Bind one confirmed Creative Entity representation directly to a canonical workspace-file, document-entry, generated-output, or package-resource locator. Requires user confirmation and never creates Asset catalog membership.',
+        category: 'file',
+        parameters: {
+          type: 'object',
+          properties: {
+            entityId: { type: 'string', description: 'Stable Creative Entity ID.' },
+            entityKind: {
+              type: 'string',
+              description: 'Creative Entity kind, matched against the existing entity.',
+              enum: ['character', 'scene', 'object', 'location', 'style'],
+            },
+            role: {
+              type: 'string',
+              description: 'Semantic role of this representation.',
+              enum: ['portrait', 'reference', 'live2d', 'live3d', 'voice', 'motion', 'style'],
+            },
+            representation: createRepresentationParameter(),
+            isDefault: {
+              type: 'boolean',
+              description:
+                'Whether this active confirmed representation is the default for its role.',
+            },
+          },
+          required: ['entityId', 'entityKind', 'role', 'representation'],
+          additionalProperties: false,
+        } satisfies ToolParameters,
+        requiresConfirmation: true,
+        safetyKind: 'confirmation-gated',
+        targetRequirements: {
+          required: ['entityId', 'entityKind', 'role', 'representation'],
+          confirmationModes: ['bind-representation'],
+        },
+        queryBeforeMutate: {
+          preferredQueryTools: [
+            TOOL_NAMES_ENTITY.LIST_CREATIVE_ENTITIES,
+            TOOL_NAMES_ENTITY.GET_CREATIVE_ENTITY,
+          ],
+          reason:
+            'Confirm the target entity identity and kind before writing a representation fact.',
+        },
+        requirements: { writableProject: true },
+        execute: async (args) => this.bindEntityRepresentation(args),
+      },
     ];
   }
 
@@ -194,6 +255,96 @@ class CreativeEntityHeadlessCapabilityProvider implements AgentCapabilityProvide
       return { success: false, error: `Failed to get creative entity: ${String(error)}` };
     }
   }
+
+  private async bindEntityRepresentation(args: Record<string, unknown>) {
+    const entityId = optionalString(args['entityId']);
+    const entityKind = readCreativeEntityKind(args['entityKind']);
+    const role = readEntityRepresentationRole(args['role']);
+    const representation = validateContentLocator(args['representation']);
+    if (!entityId) return { success: false, error: 'entityId is required' };
+    if (!entityKind) return { success: false, error: 'entityKind is invalid' };
+    if (!role) return { success: false, error: 'role is invalid' };
+    if (!representation.ok) {
+      return {
+        success: false,
+        error: representation.diagnostics.map((diagnostic) => diagnostic.message).join(' '),
+      };
+    }
+
+    try {
+      const result = await this.runtime.bindRepresentation({
+        entityId,
+        entityKind,
+        role,
+        representation: representation.locator,
+        ...(args['isDefault'] === true ? { isDefault: true } : {}),
+      });
+      return {
+        success: true,
+        data: {
+          binding: result.binding,
+        },
+      };
+    } catch (error) {
+      return { success: false, error: `Failed to bind entity representation: ${String(error)}` };
+    }
+  }
+}
+
+function createRepresentationParameter(): ToolParameters['properties'][string] {
+  return {
+    type: 'object',
+    description:
+      'Canonical ContentLocator. Paths must be normalized workspace-relative paths; never pass absolute, cache, Webview, or Engine paths.',
+    anyOf: [
+      {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['workspace-file'] },
+          path: { type: 'string' },
+          fingerprint: { type: 'object' },
+        },
+        required: ['kind', 'path'],
+        additionalProperties: false,
+      },
+      {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['document-entry'] },
+          source: { type: 'object' },
+          entryPath: { type: 'string' },
+          fingerprint: { type: 'object' },
+        },
+        required: ['kind', 'source', 'entryPath'],
+        additionalProperties: false,
+      },
+      {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['generated-output'] },
+          outputId: { type: 'string' },
+          revision: { type: 'string' },
+          digest: { type: 'string' },
+          path: { type: 'string' },
+        },
+        required: ['kind', 'outputId', 'revision', 'digest', 'path'],
+        additionalProperties: false,
+      },
+      {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['package-resource'] },
+          packageId: { type: 'string' },
+          revision: { type: 'string' },
+          resourcePath: { type: 'string' },
+          digest: { type: 'string' },
+          manifestPath: { type: 'string' },
+        },
+        required: ['kind', 'packageId', 'revision', 'resourcePath'],
+        additionalProperties: false,
+      },
+    ],
+  };
 }
 
 class CreativeEntityReferenceContributor implements AgentReferenceContributor {
@@ -442,6 +593,10 @@ function matchesCandidateQuery(
 
 function readCreativeEntityKind(value: unknown): CreativeEntityKind | undefined {
   return isCreativeEntityKind(value) ? value : undefined;
+}
+
+function readEntityRepresentationRole(value: unknown): EntityRepresentationRole | undefined {
+  return isEntityRepresentationRole(value) ? value : undefined;
 }
 
 function readEntityStatus(value: unknown): CreativeEntity['status'] | undefined {

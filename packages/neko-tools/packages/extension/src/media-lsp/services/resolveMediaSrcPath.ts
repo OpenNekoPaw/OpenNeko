@@ -10,7 +10,7 @@ export function hasPathVariable(src: string): boolean {
 }
 
 export async function resolveMediaSrcPath(jviDir: string, src: string): Promise<string> {
-  if (!hasPathVariable(src)) {
+  if (!hasPathVariable(src) && !isWorkspaceLinkedMediaPath(src)) {
     if (path.isAbsolute(src)) return src;
     return path.resolve(jviDir, src);
   }
@@ -21,6 +21,10 @@ export async function resolveMediaSrcPath(jviDir: string, src: string): Promise<
     getExtension: vscode.extensions.getExtension,
     fileExists: isExistingLocalFile,
   });
+}
+
+function isWorkspaceLinkedMediaPath(value: string): boolean {
+  return value.replace(/\\/gu, '/').startsWith('neko/assets/');
 }
 
 function findOwningWorkspaceRoot(filePath: string): string | undefined {

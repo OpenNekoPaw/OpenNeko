@@ -9,7 +9,10 @@ describe('projectShotCharacterEntityReference', () => {
         entityRef: { entityId: 'char-rin', entityKind: 'character' },
         defaultRepresentation: {
           role: 'portrait',
-          assetRef: 'project://assets/rin-portrait',
+          representation: {
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/rin-portrait.png',
+          },
           availability: 'orphaned',
         },
       }),

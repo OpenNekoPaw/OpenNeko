@@ -158,7 +158,7 @@ export interface MessageContextReference {
 // ---------------------------------------------------------------------------
 
 export type AgentFileReferenceSource =
-  'workspace' | 'asset-library' | 'media-library' | 'entity-graph' | 'story' | 'canvas';
+  'workspace' | 'media-library' | 'entity-graph' | 'story' | 'canvas';
 
 export type AgentFileReferenceMediaType =
   'video' | 'audio' | 'image' | 'sequence' | 'text' | 'document';

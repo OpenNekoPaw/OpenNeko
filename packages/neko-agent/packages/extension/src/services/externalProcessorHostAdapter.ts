@@ -3,13 +3,12 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  createResourceFingerprint,
-  createResourceRef,
-  PathResolver,
-  type ResourceRef,
-  type ResourceScope,
-  type PathVariableMap,
-  type ResolvedMediaLibrary,
+  hashStableValue,
+  type ContentLocator,
+  type ProcessorContentProjectionPort,
+  type ProcessorOutputLocator,
+  type ProcessorOutputPromotionRequest,
+  type ProcessorOutputPromotionResult,
 } from '@neko/shared';
 import { authorizePathInsideRoots, isForbiddenUnmanagedPath } from '@neko/agent/tools';
 import type {
@@ -19,6 +18,7 @@ import type {
   ExternalProcessorInvocation,
   ExternalProcessorInvocationInputBinding,
   ExternalProcessorInvocationOutputBinding,
+  ExternalProcessorOutputOwnership,
   ExternalProcessorRegistration,
   ExternalProcessorRegistry,
   ExternalProcessorRegistryContext,
@@ -36,20 +36,50 @@ export interface ExternalProcessorHostAdapterOptions {
   readonly configuredEnv?: Readonly<Record<string, string | undefined>>;
   readonly runtimeEnv?: Readonly<Record<string, string | undefined>>;
   readonly executableAliases?: Readonly<Record<string, string>>;
-  readonly mediaLibraryResolver?: ExternalProcessorMediaLibraryResolver;
-  readonly now?: () => string;
+  readonly outputStorage?: ExternalProcessorOutputStorage;
+  readonly inputProjection: ProcessorContentProjectionPort;
+  readonly resolveInputHandle: (handle: string) => Promise<string | undefined>;
 }
 
 export interface ExternalProcessorRootContext {
   readonly workspaceRoot?: string;
-  readonly mediaLibraryRoots?: readonly string[];
-  readonly resourceCacheRoot?: string;
+  readonly processorOutputRoot: string;
   readonly extensionPrivateResourcesRoot: string;
 }
 
-export interface ExternalProcessorMediaLibraryResolver {
-  readonly libraries: readonly ResolvedMediaLibrary[];
-  readonly pathVariables?: PathVariableMap | ReadonlyMap<string, string>;
+export interface ExternalProcessorOutputStorageAllocation {
+  readonly locator: ProcessorOutputLocator;
+  readonly writablePath: string;
+}
+
+export interface ExternalProcessorOutputStorageAllocationRequest {
+  readonly processorId: string;
+  readonly processorRunId: string;
+  readonly stageId: string;
+  readonly attempt: number;
+  readonly slot: string;
+  readonly ownership: ExternalProcessorOutputOwnership;
+  readonly mediaType: string;
+  readonly fileNameHint: string;
+}
+
+export interface ExternalProcessorOutputStorage {
+  allocate(
+    request: ExternalProcessorOutputStorageAllocationRequest,
+  ): Promise<ExternalProcessorOutputStorageAllocation>;
+  resolve(output: ProcessorOutputLocator): Promise<string | undefined>;
+  promote(request: ProcessorOutputPromotionRequest): Promise<ProcessorOutputPromotionResult>;
+}
+
+export interface NodeExternalProcessorOutputStorageOptions {
+  readonly root: string;
+  readonly promoteOutput?: (input: {
+    readonly output: ProcessorOutputLocator;
+    readonly sourcePath: string;
+    readonly target: ProcessorOutputPromotionRequest['target'];
+    readonly signal?: AbortSignal;
+  }) => Promise<ContentLocator>;
+  readonly fsOps?: Pick<ExternalProcessorHostFsOps, 'mkdir'>;
 }
 
 export interface ExternalProcessorHostExecutionRequest {
@@ -93,7 +123,6 @@ export interface ExternalProcessorProcessRunResult {
 interface ResolvedRoot {
   readonly alias: ExternalProcessorRootAlias;
   readonly paths: readonly string[];
-  readonly scope: ResourceScope;
 }
 
 interface ResolvedInput {
@@ -104,8 +133,7 @@ interface ResolvedInput {
 interface AllocatedOutput {
   readonly binding: ExternalProcessorInvocationOutputBinding;
   readonly path: string;
-  readonly relativePath: string;
-  readonly scope: ResourceScope;
+  readonly locator: ProcessorOutputLocator;
 }
 
 interface TemplateValues {
@@ -136,21 +164,28 @@ export class ExternalProcessorHostAdapter {
   private readonly configuredEnv: Readonly<Record<string, string | undefined>>;
   private readonly runtimeEnv: Readonly<Record<string, string | undefined>>;
   private readonly executableAliases: Readonly<Record<string, string>>;
-  private readonly mediaLibraryResolver?: ExternalProcessorMediaLibraryResolver;
-  private readonly now: () => string;
+  private readonly outputStorage: ExternalProcessorOutputStorage;
+  private readonly inputProjection: ProcessorContentProjectionPort;
+  private readonly resolveInputHandle: (handle: string) => Promise<string | undefined>;
   private readonly pathPolicy: ExternalProcessorPathAccessPolicy;
 
   constructor(options: ExternalProcessorHostAdapterOptions) {
     this.registry = options.registry;
-    this.roots = normalizeRootContext(options.roots, options.mediaLibraryResolver);
+    this.roots = normalizeRootContext(options.roots);
     this.processRunner = options.processRunner ?? new NodeExternalProcessorProcessRunner();
     this.fsOps = options.fsOps ?? nodeExternalProcessorFsOps;
     this.hostEnv = options.hostEnv ?? process.env;
     this.configuredEnv = options.configuredEnv ?? {};
     this.runtimeEnv = options.runtimeEnv ?? {};
     this.executableAliases = options.executableAliases ?? {};
-    this.mediaLibraryResolver = options.mediaLibraryResolver;
-    this.now = options.now ?? (() => new Date().toISOString());
+    this.outputStorage =
+      options.outputStorage ??
+      new NodeExternalProcessorOutputStorage({
+        root: this.roots.processorOutputRoot,
+        fsOps: this.fsOps,
+      });
+    this.inputProjection = options.inputProjection;
+    this.resolveInputHandle = options.resolveInputHandle;
     this.pathPolicy = new ExternalProcessorPathAccessPolicy(this.roots);
   }
 
@@ -169,9 +204,9 @@ export class ExternalProcessorHostAdapter {
       return this.failedResult(request.invocation, preflightDiagnostics);
     }
 
-    const inputs = await this.resolveInputs(request.invocation, registration);
-    const outputs = this.allocateOutputs(request.invocation, registration);
-    const cwd = this.resolveCwd(registration);
+    const inputs = await this.resolveInputs(request.invocation, registration, request.signal);
+    const outputs = await this.allocateOutputs(request.invocation, registration);
+    const cwd = this.resolveCwd(registration, outputs.items);
     const env = this.buildEnv(registration);
     const executable = this.resolveExecutable(registration);
     const network = this.validateNetworkPolicy(registration);
@@ -218,11 +253,7 @@ export class ExternalProcessorHostAdapter {
       };
     }
 
-    const materialized = await this.materializeOutputs(
-      request.invocation,
-      registration,
-      outputs.items,
-    );
+    const materialized = await this.materializeOutputs(registration, outputs.items);
     const resultDiagnostics = executionDiagnostics.concat(materialized.diagnostics);
     return {
       status: resultDiagnostics.some((diagnostic) => diagnostic.severity === 'error')
@@ -264,6 +295,7 @@ export class ExternalProcessorHostAdapter {
   private async resolveInputs(
     invocation: ExternalProcessorInvocation,
     registration: ExternalProcessorRegistration,
+    signal?: AbortSignal,
   ): Promise<{
     readonly items: readonly ResolvedInput[];
     readonly diagnostics: readonly ExternalProcessorDiagnostic[];
@@ -271,51 +303,56 @@ export class ExternalProcessorHostAdapter {
     const items: ResolvedInput[] = [];
     const diagnostics: ExternalProcessorDiagnostic[] = [];
     for (const binding of invocation.inputs) {
-      if (!registration.manifest.policy.allowedInputRoots.includes(binding.root)) {
+      if ('output' in binding) {
+        const resolvedOutputPath = await this.outputStorage.resolve(binding.output);
+        if (!resolvedOutputPath) {
+          diagnostics.push(
+            diagnostic(
+              'missing-output',
+              'error',
+              `Input "${binding.slot}" references an unavailable processor output.`,
+              `inputs.${binding.slot}`,
+              { outputId: binding.output.id },
+            ),
+          );
+          continue;
+        }
+        items.push({ binding, path: resolvedOutputPath });
+        continue;
+      }
+      const projection = await this.inputProjection.project(binding.locator, {
+        ...(signal ? { signal } : {}),
+      });
+      if (projection.status === 'unavailable') {
         diagnostics.push(
           diagnostic(
             'unauthorized-path',
             'error',
-            `Input "${binding.slot}" uses root "${binding.root}" not allowed by processor policy.`,
+            `Input "${binding.slot}" could not be projected for processor access.`,
             `inputs.${binding.slot}`,
-            { root: binding.root },
+            { code: projection.diagnostic.code },
           ),
         );
         continue;
       }
 
-      if (!binding.sourcePath) {
-        diagnostics.push(
-          diagnostic(
-            'unauthorized-path',
-            'error',
-            `Input "${binding.slot}" must resolve to a Host-authorized local path before execution.`,
-            `inputs.${binding.slot}`,
-          ),
-        );
-        continue;
-      }
-
-      const localPath = resolveBindingPath(
-        binding.sourcePath,
-        binding.root,
-        this.roots,
-        this.mediaLibraryResolver,
-      );
+      const localPath = normalizeLocalPath(await this.resolveInputHandle(projection.handle));
       if (!localPath) {
         diagnostics.push(
           diagnostic(
             'unauthorized-path',
             'error',
-            `Input "${binding.slot}" is not a local file path.`,
+            `Input "${binding.slot}" processor handle is unavailable.`,
             `inputs.${binding.slot}`,
-            { sourcePath: binding.sourcePath },
           ),
         );
         continue;
       }
 
-      const authorization = this.pathPolicy.authorizeInput(binding.root, localPath);
+      const authorization = this.pathPolicy.authorizeInput(
+        registration.manifest.policy.allowedInputRoots,
+        localPath,
+      );
       if (authorization) {
         diagnostics.push({
           ...authorization,
@@ -328,13 +365,13 @@ export class ExternalProcessorHostAdapter {
     return { items, diagnostics };
   }
 
-  private allocateOutputs(
+  private async allocateOutputs(
     invocation: ExternalProcessorInvocation,
     registration: ExternalProcessorRegistration,
-  ): {
+  ): Promise<{
     readonly items: readonly AllocatedOutput[];
     readonly diagnostics: readonly ExternalProcessorDiagnostic[];
-  } {
+  }> {
     const items: AllocatedOutput[] = [];
     const diagnostics: ExternalProcessorDiagnostic[] = [];
     for (const binding of invocation.outputs) {
@@ -351,36 +388,27 @@ export class ExternalProcessorHostAdapter {
         continue;
       }
 
-      if (!registration.manifest.policy.allowedOutputRoots.includes(binding.root)) {
+      if (!registration.manifest.policy.allowedOutputOwnerships.includes(binding.ownership)) {
         diagnostics.push(
           diagnostic(
-            'illegal-output-root',
+            'illegal-output-ownership',
             'error',
-            `Output "${binding.slot}" uses root "${binding.root}" not allowed by processor policy.`,
+            `Output "${binding.slot}" uses ownership "${binding.ownership}" not allowed by processor policy.`,
             `outputs.${binding.slot}`,
-            { root: binding.root },
+            { ownership: binding.ownership },
           ),
         );
         continue;
       }
-      if (binding.root === 'mediaLibrary') {
+      if (binding.ownership !== declaration.ownership) {
         diagnostics.push(
           diagnostic(
-            'illegal-output-root',
+            'illegal-output-ownership',
             'error',
-            'Processor outputs cannot write to media library roots; use promote/create-asset flow.',
+            `Output "${binding.slot}" must use declared ownership "${declaration.ownership}".`,
             `outputs.${binding.slot}`,
           ),
         );
-        continue;
-      }
-
-      const resolvedRoot = this.resolveRoot(binding.root);
-      if (isDiagnostic(resolvedRoot)) {
-        diagnostics.push({
-          ...resolvedRoot,
-          path: `outputs.${binding.slot}`,
-        });
         continue;
       }
 
@@ -399,39 +427,59 @@ export class ExternalProcessorHostAdapter {
         continue;
       }
 
-      const allocationRelativePath = path.join(
-        OUTPUT_ROOT_PREFIX,
-        sanitizePathSegment(registration.id),
-        sanitizePathSegment(invocation.run.processorRunId),
-        sanitizePathSegment(invocation.run.stageId),
-        `attempt-${invocation.run.attempt}`,
-        relativeHint,
-      );
-      const outputPath = path.normalize(path.join(resolvedRoot.paths[0]!, allocationRelativePath));
-      const authorization = this.pathPolicy.authorizeOutput(binding.root, outputPath);
-      if (authorization) {
-        diagnostics.push({
-          ...authorization,
-          path: `outputs.${binding.slot}`,
-        });
+      const mediaType = declaration.produces[0];
+      if (!mediaType) {
+        diagnostics.push(
+          diagnostic(
+            'missing-required-field',
+            'error',
+            `Output "${binding.slot}" must declare at least one media type.`,
+            `outputs.${binding.slot}.produces`,
+          ),
+        );
         continue;
       }
-
-      items.push({
-        binding,
-        path: outputPath,
-        relativePath: allocationRelativePath,
-        scope: resolvedRoot.scope,
-      });
+      try {
+        const allocation = await this.outputStorage.allocate({
+          processorId: registration.id,
+          processorRunId: invocation.run.processorRunId,
+          stageId: invocation.run.stageId,
+          attempt: invocation.run.attempt,
+          slot: binding.slot,
+          ownership: binding.ownership,
+          mediaType,
+          fileNameHint: relativeHint,
+        });
+        items.push({ binding, path: allocation.writablePath, locator: allocation.locator });
+      } catch (error) {
+        diagnostics.push(
+          diagnostic(
+            'non-portable-output',
+            'error',
+            `Host could not allocate output "${binding.slot}".`,
+            `outputs.${binding.slot}`,
+            { error: error instanceof Error ? error.message : String(error) },
+          ),
+        );
+      }
     }
     return { items, diagnostics };
   }
 
-  private resolveCwd(registration: ExternalProcessorRegistration): {
+  private resolveCwd(
+    registration: ExternalProcessorRegistration,
+    outputs: readonly AllocatedOutput[],
+  ): {
     readonly value?: string;
     readonly diagnostics: readonly ExternalProcessorDiagnostic[];
   } {
-    const cwdRoot = registration.manifest.policy.cwdRoot ?? 'resourceCache';
+    const cwdRoot = registration.manifest.policy.cwdRoot;
+    if (!cwdRoot) {
+      return {
+        value: outputs[0] ? path.dirname(outputs[0].path) : this.roots.processorOutputRoot,
+        diagnostics: [],
+      };
+    }
     if (cwdRoot === 'mediaLibrary') {
       return {
         diagnostics: [
@@ -568,7 +616,6 @@ export class ExternalProcessorHostAdapter {
   }
 
   private async materializeOutputs(
-    invocation: ExternalProcessorInvocation,
     registration: ExternalProcessorRegistration,
     outputs: readonly AllocatedOutput[],
   ): Promise<Pick<ExternalProcessorResult, 'outputs' | 'diagnostics'>> {
@@ -587,7 +634,7 @@ export class ExternalProcessorHostAdapter {
             `Processor did not produce declared output "${output.binding.slot}".`,
             `outputs.${output.binding.slot}`,
             {
-              outputRoot: output.binding.root,
+              outputOwnership: output.binding.ownership,
               error: error instanceof Error ? error.message : String(error),
             },
           ),
@@ -597,13 +644,8 @@ export class ExternalProcessorHostAdapter {
 
       resultOutputs.push({
         slot: output.binding.slot,
-        resourceRef: createProcessorOutputResourceRef({
-          invocation,
-          registration,
-          output,
-          now: this.now(),
-        }),
-        retentionHint: invocation.retentionHint,
+        output: output.locator,
+        ownership: output.binding.ownership,
         ...(sizeBytes !== undefined ? { sizeBytes } : {}),
         ...(registration.manifest.outputs[output.binding.slot]?.produces[0]
           ? { mimeType: registration.manifest.outputs[output.binding.slot]!.produces[0] }
@@ -627,6 +669,102 @@ export class ExternalProcessorHostAdapter {
       diagnostics,
     };
   }
+}
+
+export class NodeExternalProcessorOutputStorage implements ExternalProcessorOutputStorage {
+  private readonly root: string;
+  private readonly promoteOutput?: NodeExternalProcessorOutputStorageOptions['promoteOutput'];
+  private readonly fsOps: Pick<ExternalProcessorHostFsOps, 'mkdir'>;
+  private readonly allocations = new Map<
+    string,
+    { readonly locator: ProcessorOutputLocator; readonly path: string }
+  >();
+
+  constructor(options: NodeExternalProcessorOutputStorageOptions) {
+    this.root = path.normalize(options.root);
+    this.promoteOutput = options.promoteOutput;
+    this.fsOps = options.fsOps ?? nodeExternalProcessorFsOps;
+  }
+
+  async allocate(
+    request: ExternalProcessorOutputStorageAllocationRequest,
+  ): Promise<ExternalProcessorOutputStorageAllocation> {
+    const fileName = sanitizeOutputPathHint(request.fileNameHint);
+    if (!fileName) {
+      throw new Error('Processor output allocation requires a portable file name hint.');
+    }
+    const relativePath = path.join(
+      OUTPUT_ROOT_PREFIX,
+      request.ownership,
+      sanitizePathSegment(request.processorId),
+      sanitizePathSegment(request.processorRunId),
+      sanitizePathSegment(request.stageId),
+      `attempt-${request.attempt}`,
+      fileName,
+    );
+    const writablePath = path.normalize(path.join(this.root, relativePath));
+    const authorization = authorizePathInsideRoots(writablePath, [this.root]);
+    if (!authorization.allowed) {
+      throw new Error('Processor output allocation escaped the Host-owned output root.');
+    }
+    const locator: ProcessorOutputLocator = {
+      kind: 'processor-output',
+      id: `processor-output-${hashStableValue({
+        processorId: request.processorId,
+        processorRunId: request.processorRunId,
+        stageId: request.stageId,
+        attempt: request.attempt,
+        slot: request.slot,
+        ownership: request.ownership,
+      })}`,
+      ownership: request.ownership,
+      mediaType: request.mediaType,
+    };
+    await this.fsOps.mkdir(path.dirname(writablePath), { recursive: true });
+    this.allocations.set(locator.id, { locator, path: writablePath });
+    return { locator, writablePath };
+  }
+
+  async resolve(output: ProcessorOutputLocator): Promise<string | undefined> {
+    const allocation = this.allocations.get(output.id);
+    return allocation && processorOutputLocatorsEqual(allocation.locator, output)
+      ? allocation.path
+      : undefined;
+  }
+
+  async promote(request: ProcessorOutputPromotionRequest): Promise<ProcessorOutputPromotionResult> {
+    const allocation = this.allocations.get(request.output.id);
+    if (!allocation || !processorOutputLocatorsEqual(allocation.locator, request.output)) {
+      throw new Error(`Processor output is unavailable for promotion: ${request.output.id}`);
+    }
+    if (!this.promoteOutput) {
+      throw new Error('Processor output promotion requires an owning durable writer.');
+    }
+    const source = await this.promoteOutput({
+      output: request.output,
+      sourcePath: allocation.path,
+      target: request.target,
+      ...(request.signal ? { signal: request.signal } : {}),
+    });
+    return {
+      status: 'promoted',
+      output: { ...request.output, ownership: 'promoted' },
+      source,
+    };
+  }
+}
+
+function processorOutputLocatorsEqual(
+  left: ProcessorOutputLocator,
+  right: ProcessorOutputLocator,
+): boolean {
+  return (
+    left.kind === right.kind &&
+    left.id === right.id &&
+    left.ownership === right.ownership &&
+    left.mediaType === right.mediaType &&
+    left.fingerprint === right.fingerprint
+  );
 }
 
 export class NodeExternalProcessorProcessRunner implements ExternalProcessorProcessRunner {
@@ -702,17 +840,37 @@ class ExternalProcessorPathAccessPolicy {
   }
 
   authorizeInput(
-    root: ExternalProcessorRootAlias,
+    roots: readonly ExternalProcessorRootAlias[],
     filePath: string,
   ): ExternalProcessorDiagnostic | undefined {
-    return this.authorizePath(root, filePath, 'input');
-  }
-
-  authorizeOutput(
-    root: ExternalProcessorRootAlias,
-    filePath: string,
-  ): ExternalProcessorDiagnostic | undefined {
-    return this.authorizePath(root, filePath, 'output');
+    const normalized = normalizeLocalPath(filePath);
+    if (!normalized || !isAbsolutePath(normalized)) {
+      return diagnostic(
+        'unauthorized-path',
+        'error',
+        'Processor input handle did not resolve to a Host-local file.',
+      );
+    }
+    if (isForbiddenUnmanagedPath(normalized)) {
+      return diagnostic(
+        'unauthorized-path',
+        'error',
+        'Processor input is outside managed Host content roots.',
+      );
+    }
+    const authorized = roots.some((root) => {
+      const resolvedRoot = resolveRoot(root, this.roots);
+      return authorizePathInsideRoots(normalized, resolvedRoot.paths).allowed;
+    });
+    return authorized
+      ? undefined
+      : diagnostic(
+          'unauthorized-path',
+          'error',
+          'Processor input is outside the roots allowed by its manifest.',
+          undefined,
+          { allowedRootAliases: roots },
+        );
   }
 
   authorizeCwd(
@@ -725,7 +883,7 @@ class ExternalProcessorPathAccessPolicy {
   private authorizePath(
     root: ExternalProcessorRootAlias,
     filePath: string,
-    accessKind: 'input' | 'output' | 'cwd',
+    accessKind: 'input' | 'cwd',
   ): ExternalProcessorDiagnostic | undefined {
     const normalized = normalizeLocalPath(filePath);
     if (!normalized || !isAbsolutePath(normalized)) {
@@ -761,20 +919,10 @@ class ExternalProcessorPathAccessPolicy {
   }
 }
 
-function normalizeRootContext(
-  roots: ExternalProcessorRootContext,
-  mediaLibraryResolver?: ExternalProcessorMediaLibraryResolver,
-): ExternalProcessorRootContext {
-  const mediaLibraryRoots = resolveActiveMediaLibraryRoots(roots, mediaLibraryResolver);
+function normalizeRootContext(roots: ExternalProcessorRootContext): ExternalProcessorRootContext {
   return {
     ...(roots.workspaceRoot ? { workspaceRoot: path.normalize(roots.workspaceRoot) } : {}),
-    mediaLibraryRoots,
-    resourceCacheRoot: path.normalize(
-      roots.resourceCacheRoot ??
-        (roots.workspaceRoot
-          ? path.join(roots.workspaceRoot, '.neko', '.cache', 'resources')
-          : path.join(roots.extensionPrivateResourcesRoot, 'resources')),
-    ),
+    processorOutputRoot: path.normalize(roots.processorOutputRoot),
     extensionPrivateResourcesRoot: path.normalize(roots.extensionPrivateResourcesRoot),
   };
 }
@@ -788,87 +936,18 @@ function resolveRoot(
       return {
         alias,
         paths: roots.workspaceRoot ? [roots.workspaceRoot] : [],
-        scope: 'project',
       };
     case 'mediaLibrary':
       return {
         alias,
-        paths: roots.mediaLibraryRoots ?? [],
-        scope: 'project',
-      };
-    case 'resourceCache':
-      return {
-        alias,
-        paths: roots.resourceCacheRoot ? [roots.resourceCacheRoot] : [],
-        scope: roots.workspaceRoot ? 'project' : 'extension-private',
+        paths: roots.workspaceRoot ? [path.join(roots.workspaceRoot, 'neko', 'assets')] : [],
       };
     case 'extensionPrivateResources':
       return {
         alias,
         paths: [roots.extensionPrivateResourcesRoot],
-        scope: 'extension-private',
       };
   }
-}
-
-function resolveBindingPath(
-  rawPath: string,
-  root: ExternalProcessorRootAlias,
-  roots: ExternalProcessorRootContext,
-  mediaLibraryResolver?: ExternalProcessorMediaLibraryResolver,
-): string | undefined {
-  if (root === 'mediaLibrary') {
-    return resolveMediaLibraryBindingPath(rawPath, roots, mediaLibraryResolver);
-  }
-  const localPath = normalizeLocalPath(rawPath);
-  if (!localPath) return undefined;
-  if (isAbsolutePath(localPath)) return localPath;
-  const resolvedRoot = resolveRoot(root, roots);
-  if (resolvedRoot.paths.length === 0) return undefined;
-  return path.normalize(path.join(resolvedRoot.paths[0]!, localPath));
-}
-
-function resolveMediaLibraryBindingPath(
-  rawPath: string,
-  roots: ExternalProcessorRootContext,
-  mediaLibraryResolver: ExternalProcessorMediaLibraryResolver | undefined,
-): string | undefined {
-  const normalized = normalizeLocalPath(rawPath);
-  if (!normalized) return undefined;
-
-  const activeRoots = resolveActiveMediaLibraryRoots(roots, mediaLibraryResolver);
-  if (activeRoots.length === 0) return undefined;
-
-  const variableResolved = resolvePathVariables(normalized, mediaLibraryResolver?.pathVariables);
-  if (isAbsolutePath(variableResolved)) return path.normalize(variableResolved);
-
-  if (normalized === variableResolved && hasPathVariable(normalized)) {
-    return undefined;
-  }
-
-  return path.normalize(path.join(activeRoots[0]!, variableResolved));
-}
-
-function resolveActiveMediaLibraryRoots(
-  roots: ExternalProcessorRootContext,
-  mediaLibraryResolver: ExternalProcessorMediaLibraryResolver | undefined,
-): readonly string[] {
-  if (!mediaLibraryResolver) return roots.mediaLibraryRoots ?? [];
-  return mediaLibraryResolver.libraries
-    .filter((library) => library.enabled && library.accessible)
-    .map((library) => path.normalize(library.resolvedPath));
-}
-
-function resolvePathVariables(
-  value: string,
-  variables: PathVariableMap | ReadonlyMap<string, string> | undefined,
-): string {
-  if (!variables) return value;
-  return new PathResolver(new Map(variables)).resolve(value);
-}
-
-function hasPathVariable(value: string): boolean {
-  return /^\/?\$\{[^}]+\}/.test(value);
 }
 
 function renderExecutable(
@@ -1088,43 +1167,6 @@ function mapRunDiagnostics(
     );
   }
   return diagnostics;
-}
-
-function createProcessorOutputResourceRef(input: {
-  readonly invocation: ExternalProcessorInvocation;
-  readonly registration: ExternalProcessorRegistration;
-  readonly output: AllocatedOutput;
-  readonly now: string;
-}): ResourceRef {
-  const sourceMetadata = {
-    processorId: input.registration.id,
-    registrationId: input.registration.registrationId,
-    registrationRevision: input.registration.revision,
-    processorRunId: input.invocation.run.processorRunId,
-    stageId: input.invocation.run.stageId,
-    attempt: input.invocation.run.attempt,
-    slot: input.output.binding.slot,
-    outputRoot: input.output.binding.root,
-    relativePath: input.output.relativePath,
-  };
-  return createResourceRef({
-    scope: input.output.scope,
-    provider: 'external-processor',
-    kind: 'generated',
-    source: {
-      kind: 'file',
-      ...(input.output.scope === 'project'
-        ? { projectRelativePath: input.output.relativePath }
-        : {}),
-      metadata: sourceMetadata,
-    },
-    fingerprint: createResourceFingerprint({
-      strategy: 'provider',
-      providerId: 'external-processor',
-      generatedAt: input.now,
-      source: sourceMetadata,
-    }),
-  });
 }
 
 function toPathRecord(

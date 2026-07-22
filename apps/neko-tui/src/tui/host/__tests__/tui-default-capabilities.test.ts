@@ -1,44 +1,85 @@
 import * as fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ProviderCardRegistry, ToolRegistry } from '@neko/agent';
 import {
   createGeneratedAssetRevisionRef,
-  TOOL_NAMES_ASSETS,
   TOOL_NAMES_ENTITY,
   TOOL_NAMES_SEARCH,
   TOOL_NAMES_SYSTEM,
   type GeneratedAsset,
 } from '@neko/shared';
-import type { ResourceCacheManifestStore } from '@neko/shared/content-access';
 import { GeneratedAssetIndex } from '@neko/platform';
 import { createTuiCapabilityLoader } from '../../core/tui-capability-loader';
-import { withTuiDefaultCapabilityProviders } from '../tui-default-capabilities';
+import {
+  createTuiDefaultCapabilityRuntime,
+  type TuiDefaultCapabilityRuntime,
+} from '../tui-default-capabilities';
 
 const createdPaths: string[] = [];
+const runtimes: TuiDefaultCapabilityRuntime[] = [];
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(runtimes.splice(0).map((runtime) => runtime.dispose()));
   for (const target of createdPaths.splice(0).reverse()) {
     fs.rmSync(target, { recursive: true, force: true });
   }
 });
 
-describe('withTuiDefaultCapabilityProviders', () => {
-  it('reads generated output resources through the SQLite-backed content capability', async () => {
+describe('TUI default capability providers', () => {
+  it('reads a linked Media Library image from its canonical workspace locator', async () => {
     const workDir = createTempDir();
-    const outputPath = path.join(workDir, 'neko', 'generated', 'image', 'generated-1.png');
-    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    const targetDir = createTempDir();
+    fs.mkdirSync(path.join(workDir, 'neko', 'assets'), { recursive: true });
     fs.writeFileSync(
-      outputPath,
+      path.join(targetDir, 'library-image.png'),
       Buffer.from(
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
         'base64',
       ),
     );
+    fs.symlinkSync(targetDir, path.join(workDir, 'neko', 'assets', 'Reference'));
+    const toolRegistry = new ToolRegistry();
+    createTuiCapabilityLoader({
+      toolRegistry,
+      providerCardRegistry: new ProviderCardRegistry(),
+    }).registerProviders(createTestRuntime(workDir, createMemoryGeneratedAssetIndex()).providers);
+    const locator = {
+      kind: 'workspace-file' as const,
+      path: 'neko/assets/Reference/library-image.png',
+    };
+
+    const result = await toolRegistry.execute(TOOL_NAMES_SYSTEM.READ_IMAGE, {
+      images: [{ locator }],
+      mode: 'metadata',
+      max_images: 1,
+    });
+
+    expect(result.success, result.error).toBe(true);
+    expect(result).toMatchObject({
+      data: {
+        imageCount: 1,
+        images: [expect.objectContaining({ locator, mimeType: 'image/png' })],
+      },
+    });
+    expect(JSON.stringify(result.data)).not.toContain(targetDir);
+    expect(JSON.stringify(result.data)).not.toContain('.neko/.cache');
+  });
+
+  it('reads generated output resources through the SQLite-backed content capability', async () => {
+    const workDir = createTempDir();
+    const outputPath = path.join(workDir, 'neko', 'generated', 'image', 'generated-1.png');
+    const outputBytes = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    );
+    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+    fs.writeFileSync(outputPath, outputBytes);
     const lifecycle = createGeneratedAssetRevisionRef({
       assetId: 'generated-1',
-      contentDigest: 'sha256:generated-1',
+      contentDigest: `sha256:${createHash('sha256').update(outputBytes).digest('hex')}`,
       mediaKind: 'image',
       mimeType: 'image/png',
       generation: { taskId: 'task-1' },
@@ -59,13 +100,7 @@ describe('withTuiDefaultCapabilityProviders', () => {
     createTuiCapabilityLoader({
       toolRegistry,
       providerCardRegistry: new ProviderCardRegistry(),
-    }).registerProviders(
-      withTuiDefaultCapabilityProviders({
-        workDir,
-        resourceCacheManifestStore: createMemoryManifestStore(),
-        generatedAssetIndex,
-      }),
-    );
+    }).registerProviders(createTestRuntime(workDir, generatedAssetIndex).providers);
     const resourceRef = lifecycle.resourceRef;
 
     expect(resourceRef.source).not.toHaveProperty('filePath');
@@ -85,45 +120,19 @@ describe('withTuiDefaultCapabilityProviders', () => {
     });
   });
 
-  it('loads asset summaries through the asset-owned runtime without exposing .neko files', async () => {
+  it('binds a generated output representation through the Entity owner', async () => {
     const workDir = createTempDir();
-    const assetLibraryPath = path.join(workDir, 'neko', 'assets', 'library.json');
-    fs.mkdirSync(path.dirname(assetLibraryPath), { recursive: true });
     fs.writeFileSync(
-      assetLibraryPath,
+      path.join(workDir, 'characters.json'),
       JSON.stringify({
         version: 1,
-        entities: [
+        characters: [
           {
-            id: 'asset-hero',
-            name: 'Hero Concept',
-            category: 'character',
-            description: 'Main character key art',
-            metadata: {},
-            variants: [
-              {
-                id: 'asset-hero-variant',
-                entityId: 'asset-hero',
-                name: 'Default',
-                attributes: {},
-                files: [
-                  {
-                    id: 'asset-hero-file',
-                    variantId: 'asset-hero-variant',
-                    name: 'Hero Concept',
-                    path: '${A}/assets/hero.png',
-                    mediaType: 'image',
-                    metadata: {},
-                    createdAt: 1,
-                  },
-                ],
-                createdAt: 1,
-              },
-            ],
-            tags: ['lead'],
-            usageCount: 0,
-            createdAt: 1,
-            updatedAt: 1,
+            id: 'char_rin',
+            canonicalName: 'Rin',
+            displayName: 'Rin',
+            aliases: [],
+            status: 'confirmed',
           },
         ],
       }),
@@ -133,31 +142,44 @@ describe('withTuiDefaultCapabilityProviders', () => {
     createTuiCapabilityLoader({
       toolRegistry,
       providerCardRegistry: new ProviderCardRegistry(),
-    }).registerProviders(
-      withTuiDefaultCapabilityProviders({
-        workDir,
-        resourceCacheManifestStore: createMemoryManifestStore(),
-        generatedAssetIndex: createMemoryGeneratedAssetIndex(),
-      }),
-    );
+    }).registerProviders(createTestRuntime(workDir, createMemoryGeneratedAssetIndex()).providers);
+    const representation = {
+      kind: 'generated-output' as const,
+      outputId: 'generated-rin-portrait',
+      revision: 'revision-1',
+      digest: 'sha256:generated-rin-portrait',
+      path: 'neko/generated/image/rin-portrait.png',
+    };
 
-    const result = await toolRegistry.execute(TOOL_NAMES_ASSETS.LIST_ASSETS, {
-      query: 'Hero',
+    const result = await toolRegistry.execute(TOOL_NAMES_ENTITY.BIND_ENTITY_REPRESENTATION, {
+      entityId: 'char_rin',
+      entityKind: 'character',
+      role: 'portrait',
+      isDefault: true,
+      representation,
     });
+    const stored = JSON.parse(
+      fs.readFileSync(path.join(workDir, 'neko', 'entity-representation-bindings.json'), 'utf8'),
+    ) as unknown;
 
     expect(result).toMatchObject({
       success: true,
       data: {
-        assets: [
-          expect.objectContaining({
-            id: 'asset-hero',
-            name: 'Hero Concept',
-            category: 'character',
-          }),
-        ],
+        binding: {
+          entityId: 'char_rin',
+          role: 'portrait',
+          status: 'confirmed',
+          availability: 'active',
+          source: 'agent',
+          representation,
+        },
       },
     });
-    expect(JSON.stringify(result.data)).not.toContain('neko/assets/library.json');
+    expect(stored).toMatchObject({
+      version: 2,
+      bindings: [expect.objectContaining({ entityId: 'char_rin', representation })],
+    });
+    expect(JSON.stringify(stored)).not.toMatch(/assetRef|project:\/\/assets|\.neko\/\.cache/);
   });
 
   it('loads entity and search projections without exposing backing managed files', async () => {
@@ -189,13 +211,7 @@ describe('withTuiDefaultCapabilityProviders', () => {
     createTuiCapabilityLoader({
       toolRegistry,
       providerCardRegistry: new ProviderCardRegistry(),
-    }).registerProviders(
-      withTuiDefaultCapabilityProviders({
-        workDir,
-        resourceCacheManifestStore: createMemoryManifestStore(),
-        generatedAssetIndex: createMemoryGeneratedAssetIndex(),
-      }),
-    );
+    }).registerProviders(createTestRuntime(workDir, createMemoryGeneratedAssetIndex()).providers);
 
     const entities = await toolRegistry.execute(TOOL_NAMES_ENTITY.LIST_CREATIVE_ENTITIES, {
       query: '小橘',
@@ -257,26 +273,6 @@ function createTempDir(): string {
   return dir;
 }
 
-function createMemoryManifestStore(): ResourceCacheManifestStore {
-  let manifest = {
-    version: 1 as const,
-    createdAt: '2026-07-14T00:00:00.000Z',
-    updatedAt: '2026-07-14T00:00:00.000Z',
-    entries: {},
-  };
-  return {
-    load: async () => manifest,
-    save: async (next) => {
-      manifest = next;
-    },
-    update: async (operation) => {
-      manifest = await operation(manifest);
-      return manifest;
-    },
-    invalidateCache: () => undefined,
-  };
-}
-
 function createMemoryGeneratedAssetIndex(): GeneratedAssetIndex {
   let assets: readonly GeneratedAsset[] = [];
   return new GeneratedAssetIndex({
@@ -286,4 +282,17 @@ function createMemoryGeneratedAssetIndex(): GeneratedAssetIndex {
       return assets;
     },
   });
+}
+
+function createTestRuntime(
+  workDir: string,
+  generatedAssetIndex: GeneratedAssetIndex,
+): TuiDefaultCapabilityRuntime {
+  const runtime = createTuiDefaultCapabilityRuntime({
+    workDir,
+    generatedAssetIndex,
+    derivedStorageHomedir: workDir,
+  });
+  runtimes.push(runtime);
+  return runtime;
 }

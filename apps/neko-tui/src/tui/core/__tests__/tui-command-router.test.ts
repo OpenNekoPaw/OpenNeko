@@ -698,7 +698,7 @@ describe('handleTuiControlCommand', () => {
     expect(result.source).toBe('tui-router');
     expect(result.output).toContain('MCP Servers:');
     expect(result.output).toContain('filesystem  connected  transport=stdio  tools=2');
-    expect(result.output).toContain('asset-library  disconnected  transport=http  tools=0');
+    expect(result.output).toContain('reference-service  disconnected  transport=http  tools=0');
     expect(result.output).toContain('disabled-server  disabled');
   });
 
@@ -717,14 +717,14 @@ describe('handleTuiControlCommand', () => {
   it('routes MCP connect, disconnect, and reconnect through MCP ports', async () => {
     const context = createContext();
 
-    const connected = await handleTuiControlCommand('/mcp connect asset-library', context);
+    const connected = await handleTuiControlCommand('/mcp connect reference-service', context);
     const disconnected = await handleTuiControlCommand('/mcp disconnect filesystem', context);
     const reconnected = await handleTuiControlCommand('/mcp reconnect filesystem', context);
 
-    expect(connected.output).toBe('MCP server connected: asset-library');
+    expect(connected.output).toBe('MCP server connected: reference-service');
     expect(disconnected.output).toBe('MCP server disconnected: filesystem');
     expect(reconnected.output).toBe('MCP server reconnected: filesystem');
-    expect(context.ports.mcp?.connect).toHaveBeenCalledWith('asset-library');
+    expect(context.ports.mcp?.connect).toHaveBeenCalledWith('reference-service');
     expect(context.ports.mcp?.disconnect).toHaveBeenCalledWith('filesystem');
     expect(context.ports.mcp?.reconnect).toHaveBeenCalledWith('filesystem');
   });
@@ -1143,8 +1143,8 @@ function createContext(
                   toolCount: 2,
                 },
                 {
-                  id: 'asset-library',
-                  name: 'Asset Library',
+                  id: 'reference-service',
+                  name: 'Reference Service',
                   enabled: true,
                   connected: false,
                   transport: 'http',
@@ -1163,7 +1163,7 @@ function createContext(
                 const tools = [
                   'mcp__filesystem__read_file',
                   'mcp__filesystem__search',
-                  'mcp__asset-library__lookup',
+                  'mcp__reference-service__lookup',
                 ];
                 return serverId
                   ? tools.filter((tool) => tool.startsWith(`mcp__${serverId}__`))

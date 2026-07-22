@@ -1000,34 +1000,34 @@ describe('message runtime helpers', () => {
     ]);
   });
 
-  it('projects typed asset, media, and entity candidates to mention extras', () => {
+  it('projects typed Media Library candidates to mention extras', () => {
     expect(
       projectAgentMentionExtras([], 'hero', undefined, undefined, [
         {
-          type: 'asset',
-          id: 'asset-1',
+          type: 'media',
+          id: 'media-1',
           label: 'Hero portrait',
-          summary: 'Asset: Hero portrait',
-          source: 'asset-library',
+          summary: 'Media: Hero portrait',
+          source: 'media-library',
           icon: '🎭',
-          filePath: 'assets\\hero.png',
+          filePath: 'neko\\assets\\Characters\\hero.png',
           mediaType: 'image',
           entityType: 'character',
-          navigationData: { assetId: 'asset-1' },
+          navigationData: { partition: 'media-library' },
         },
       ]),
     ).toEqual([
       {
-        type: 'asset',
-        id: 'asset-1',
+        type: 'media',
+        id: 'media-1',
         label: 'Hero portrait',
-        summary: 'Asset: Hero portrait',
-        source: 'asset-library',
+        summary: 'Media: Hero portrait',
+        source: 'media-library',
         icon: '🎭',
-        filePath: 'assets/hero.png',
+        filePath: 'neko/assets/Characters/hero.png',
         mediaType: 'image',
         entityType: 'character',
-        navigationData: { assetId: 'asset-1' },
+        navigationData: { partition: 'media-library' },
       },
     ]);
   });
@@ -1065,13 +1065,13 @@ describe('message runtime helpers', () => {
         files: [],
         mentionCandidates: [
           {
-            type: 'asset',
-            id: 'asset-lamp-genie',
+            type: 'media',
+            id: 'media-lamp-genie',
             label: '参考图 01',
-            summary: 'Asset: reference image',
+            summary: 'Media: reference image',
             searchText: '灯神 genie reference concept',
-            source: 'asset-library',
-            filePath: 'assets/reference-01.png',
+            source: 'media-library',
+            filePath: 'neko/assets/References/reference-01.png',
             mediaType: 'image',
           },
         ],
@@ -1083,13 +1083,13 @@ describe('message runtime helpers', () => {
       files: [],
       mentionExtras: [
         {
-          type: 'asset',
-          id: 'asset-lamp-genie',
+          type: 'media',
+          id: 'media-lamp-genie',
           label: '参考图 01',
-          summary: 'Asset: reference image',
+          summary: 'Media: reference image',
           searchText: '灯神 genie reference concept',
-          source: 'asset-library',
-          filePath: 'assets/reference-01.png',
+          source: 'media-library',
+          filePath: 'neko/assets/References/reference-01.png',
           mediaType: 'image',
         },
       ],

@@ -701,7 +701,7 @@ export const en = {
   'action.openPreview': 'Open preview',
   'action.duplicateShort': 'Dup',
   'action.editShort': 'Edit',
-  'action.saveToAssetLibrary': 'Save asset',
+  'action.copyToMediaLibrary': 'Copy to Media Library',
   'material.generatedContext': 'Generation prompt',
   'material.promptUnavailable': 'No generation prompt was recorded for this material',
   'material.generateAgain': 'Generate again',

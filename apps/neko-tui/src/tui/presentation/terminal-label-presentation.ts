@@ -89,8 +89,6 @@ export function presentReferenceSource(value: string, presentation: Presentation
   switch (value) {
     case 'workspace file':
       return presentation.t('agent.terminal.value.referenceSource.workspaceFile');
-    case 'asset-library':
-      return presentation.t('agent.terminal.value.referenceSource.assetLibrary');
     case 'generated-assets':
       return presentation.t('agent.terminal.value.referenceSource.generatedAssets');
     case 'media-library':

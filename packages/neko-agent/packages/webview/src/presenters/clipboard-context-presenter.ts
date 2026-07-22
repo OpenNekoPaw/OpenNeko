@@ -15,10 +15,6 @@ export function projectClipboardTextToContextPayload(text: string): AgentContext
   if (value.kind === 'media-library-file-reference') {
     return projectMediaLibraryFileReference(value);
   }
-  if (value.kind === 'asset-reference') {
-    return projectAssetReference(value);
-  }
-
   return null;
 }
 
@@ -103,40 +99,6 @@ function projectMediaLibraryFileReference(
     id: stableContextId('media-library-file', path, resolvedPath),
     label,
     summary: mediaType ? `Media: ${label} (${mediaType})` : `Media: ${label}`,
-    data,
-  };
-}
-
-function projectAssetReference(value: Record<string, unknown>): AgentContextPayload | null {
-  const assetId = readString(value.assetId) ?? readString(value.id);
-  const label = readString(value.label) ?? readString(value.name) ?? assetId;
-  if (!assetId || !label) return null;
-
-  const path = readString(value.path);
-  const resolvedPath = readString(value.resolvedPath);
-  const mediaType = readString(value.mediaType);
-  const data = {
-    kind: 'asset-reference',
-    assetId,
-    label,
-    ...(path ? { path } : {}),
-    ...(resolvedPath ? { resolvedPath } : {}),
-    ...(mediaType ? { mediaType } : {}),
-    ...(asRecord(value.source) ? { source: asRecord(value.source) } : {}),
-    navigationData: {
-      source: 'asset-library',
-      partition: 'asset-library',
-      assetId,
-      ...(path ? { portablePath: path } : {}),
-      ...(resolvedPath ? { filePath: resolvedPath } : {}),
-    },
-  };
-
-  return {
-    type: 'asset',
-    id: assetId,
-    label,
-    summary: mediaType ? `Asset: ${label} (${mediaType})` : `Asset: ${label}`,
     data,
   };
 }

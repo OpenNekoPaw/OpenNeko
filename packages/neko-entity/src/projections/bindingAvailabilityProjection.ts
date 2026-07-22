@@ -1,14 +1,15 @@
 import type {
-  EntityAssetBindingAvailability,
-  EntityAssetBindingRole,
-  EntityAssetBindingStatus,
+  EntityRepresentationBindingAvailability,
+  EntityRepresentationTarget,
+  EntityRepresentationRole,
+  EntityRepresentationBindingStatus,
 } from '@neko/shared';
 
 export interface EntityBindingAvailabilityProjectionInput {
-  readonly role: EntityAssetBindingRole;
-  readonly assetRef: string;
-  readonly status: EntityAssetBindingStatus;
-  readonly availability: EntityAssetBindingAvailability;
+  readonly role: EntityRepresentationRole;
+  readonly representation: EntityRepresentationTarget;
+  readonly status: EntityRepresentationBindingStatus;
+  readonly availability: EntityRepresentationBindingAvailability;
   readonly orphanedAt?: string;
   readonly isDefault?: boolean;
 }
@@ -38,12 +39,25 @@ export function projectEntityBindingAvailability(
     orphanedAtLabel,
   ]).join(' · ');
   return {
-    label: `${binding.role}: ${binding.assetRef}`,
+    label: `${binding.role}: ${representationLabel(binding.representation)}`,
     description,
     unavailable: binding.availability !== 'active',
     statusLabel,
     availabilityLabel,
   };
+}
+
+function representationLabel(representation: EntityRepresentationTarget): string {
+  switch (representation.kind) {
+    case 'workspace-file':
+      return representation.path;
+    case 'document-entry':
+      return `${representation.source.path}#${representation.entryPath}`;
+    case 'generated-output':
+      return representation.path;
+    case 'package-resource':
+      return `${representation.packageId}/${representation.resourcePath}`;
+  }
 }
 
 export function projectEntityBindingAvailabilityText(
@@ -53,7 +67,7 @@ export function projectEntityBindingAvailabilityText(
   return `${projection.label} · ${projection.description}`;
 }
 
-function bindingStatusLabel(status: EntityAssetBindingStatus): string {
+function bindingStatusLabel(status: EntityRepresentationBindingStatus): string {
   switch (status) {
     case 'confirmed':
       return 'confirmed';
@@ -64,7 +78,7 @@ function bindingStatusLabel(status: EntityAssetBindingStatus): string {
   }
 }
 
-function bindingAvailabilityLabel(availability: EntityAssetBindingAvailability): string {
+function bindingAvailabilityLabel(availability: EntityRepresentationBindingAvailability): string {
   switch (availability) {
     case 'active':
       return 'available';

@@ -1,4 +1,7 @@
-import type { CreativeEntityKind } from '@neko/shared';
+import {
+  ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH,
+  type CreativeEntityKind,
+} from '@neko/shared';
 
 export const ENTITY_FACTS_DIRECTORY = 'neko/entities';
 
@@ -30,8 +33,8 @@ export function resolveEntityCandidateFilePath(projectRoot: string): string {
   return joinProjectPath(projectRoot, ENTITY_FACTS_DIRECTORY, 'candidates.json');
 }
 
-export function resolveEntityAssetBindingsPath(projectRoot: string): string {
-  return joinProjectPath(projectRoot, 'neko', 'entity-bindings.json');
+export function resolveEntityRepresentationBindingsPath(projectRoot: string): string {
+  return joinProjectPath(projectRoot, ENTITY_REPRESENTATION_BINDING_WORKSPACE_PATH);
 }
 
 export function resolveVisualIdentityDraftsPath(projectRoot: string): string {

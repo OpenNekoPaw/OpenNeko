@@ -64,44 +64,17 @@ describe('compatibility project search adapters', () => {
     );
   });
 
-  it('projects asset aliases, media files, documents, confirmed entities, and entity requirements', async () => {
+  it('projects media files, confirmed entities, entity requirements, and generated outputs', async () => {
     const adapters = createCompatibilityProjectSearchAdapters({
       workspaceFileFinder: { findFiles: async () => [] },
-      contractPath: async (filePath) =>
-        filePath.startsWith('/media/') ? filePath.replace('/media', '${MEDIA}') : filePath,
       queryMediaLibrary: async () => [
         {
-          filePath: '/media/cat-school.mp4',
+          locator: { kind: 'workspace-file' as const, path: 'neko/assets/Media/cat-school.mp4' },
           fileName: 'cat-school.mp4',
           mediaType: 'video',
         },
       ],
       jsonReader: makeJsonReader({
-        '/workspace/neko/assets/library.json': {
-          entities: [
-            {
-              id: 'asset-1',
-              name: '橘猫参考图',
-              aliases: ['小橘'],
-              category: 'character',
-              variants: [
-                { id: 'v1', files: [{ id: 'f1', path: 'assets/xiaoju.png', mediaType: 'image' }] },
-              ],
-            },
-            {
-              id: 'asset-doc-1',
-              name: '世界观设定集',
-              aliases: ['设定集'],
-              category: 'document',
-              variants: [
-                {
-                  id: 'v1',
-                  files: [{ id: 'doc-file', path: 'docs/world.pdf', mediaType: 'document' }],
-                },
-              ],
-            },
-          ],
-        },
         '/workspace/.neko/.cache/search-index.json': {
           entries: [
             { filePath: '/media/cat-school.mp4', fileName: 'cat-school.mp4', mediaType: 'video' },
@@ -151,15 +124,9 @@ describe('compatibility project search adapters', () => {
       resolveThumbnailUri: (filePath) => `webview:${filePath}`,
     });
 
-    const assetItems = await adapters
-      .find((item) => item.partition === 'asset-library')!
-      .query({ text: '小橘', projectRoot: '/workspace' }, { projectRoot: '/workspace' });
     const mediaItems = await adapters
       .find((item) => item.partition === 'media-library')!
       .query({ text: 'cat-school', projectRoot: '/workspace' }, { projectRoot: '/workspace' });
-    const documentItems = await adapters
-      .find((item) => item.partition === 'asset-library')!
-      .query({ text: '设定集', projectRoot: '/workspace' }, { projectRoot: '/workspace' });
     const confirmedEntityItems = await adapters
       .find((item) => item.partition === 'creative-entities')!
       .query({ text: '妈妈猫', projectRoot: '/workspace' }, { projectRoot: '/workspace' });
@@ -173,22 +140,18 @@ describe('compatibility project search adapters', () => {
         { projectRoot: '/workspace' },
       );
 
-    expect(assetItems[0]).toEqual(expect.objectContaining({ kind: 'asset', label: '橘猫参考图' }));
     expect(mediaItems[0]).toEqual(
       expect.objectContaining({
         kind: 'media',
         label: 'cat-school.mp4',
-        filePath: '${MEDIA}/cat-school.mp4',
-        source: expect.objectContaining({ sourceId: '${MEDIA}/cat-school.mp4' }),
+        filePath: 'neko/assets/Media/cat-school.mp4',
+        source: expect.objectContaining({ sourceId: 'neko/assets/Media/cat-school.mp4' }),
         navigationData: expect.objectContaining({
-          filePath: '${MEDIA}/cat-school.mp4',
-          portablePath: '${MEDIA}/cat-school.mp4',
-          resolvedPath: '/media/cat-school.mp4',
+          filePath: 'neko/assets/Media/cat-school.mp4',
+          portablePath: 'neko/assets/Media/cat-school.mp4',
+          locator: { kind: 'workspace-file', path: 'neko/assets/Media/cat-school.mp4' },
         }),
       }),
-    );
-    expect(documentItems[0]).toEqual(
-      expect.objectContaining({ kind: 'document', label: '世界观设定集' }),
     );
     expect(confirmedEntityItems[0]).toEqual(
       expect.objectContaining({ kind: 'creative-entity', label: '猫妈妈' }),
@@ -213,7 +176,10 @@ describe('compatibility project search adapters', () => {
   it('falls back to the Assets media library runtime query when media cache files are absent', async () => {
     const queryMediaLibrary = vi.fn(async () => [
       {
-        filePath: '/library/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+        locator: {
+          kind: 'workspace-file' as const,
+          path: 'neko/assets/素材/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+        },
         fileName: '[Kmoe][浪客行]卷01.epub',
         libraryName: '素材',
         mediaType: 'document' as const,
@@ -222,8 +188,6 @@ describe('compatibility project search adapters', () => {
     const adapters = createCompatibilityProjectSearchAdapters({
       workspaceFileFinder: { findFiles: async () => [] },
       jsonReader: makeJsonReader({}),
-      contractPath: async (filePath) =>
-        filePath.startsWith('/library/') ? filePath.replace('/library', '${A}') : filePath,
       queryMediaLibrary,
     });
 
@@ -242,15 +206,18 @@ describe('compatibility project search adapters', () => {
       expect.objectContaining({
         kind: 'document',
         label: '[Kmoe][浪客行]卷01.epub',
-        filePath: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+        filePath: 'neko/assets/素材/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
         source: expect.objectContaining({
           partition: 'media-library',
-          sourceId: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+          sourceId: 'neko/assets/素材/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
         }),
         navigationData: expect.objectContaining({
-          filePath: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
-          portablePath: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
-          resolvedPath: '/library/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+          filePath: 'neko/assets/素材/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+          portablePath: 'neko/assets/素材/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+          locator: {
+            kind: 'workspace-file',
+            path: 'neko/assets/素材/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+          },
           libraryName: '素材',
         }),
       }),
@@ -360,7 +327,6 @@ describe('compatibility project search adapters', () => {
           throw new Error('legacy JSON search index must not be read');
         },
       },
-      contractPath: async () => '${MEDIA}/cat-school.mp4',
       searchProjection: {
         partition: {
           scope: 'workspace',
@@ -368,7 +334,6 @@ describe('compatibility project search adapters', () => {
           domain: 'project-search',
         },
         hasProjection: async () => true,
-        resolveFileKey: async () => '/media/cat-school.mp4',
         repository: {
           list: async () => [],
           query: async () => [
@@ -380,10 +345,10 @@ describe('compatibility project search adapters', () => {
               description: 'Media',
               source: {
                 partition: 'media-library',
-                sourceId: '${MEDIA}/cat-school.mp4',
-                filePath: '${MEDIA}/cat-school.mp4',
+                sourceId: 'neko/assets/Media/cat-school.mp4',
+                filePath: 'neko/assets/Media/cat-school.mp4',
               },
-              fileKey: '${MEDIA}/cat-school.mp4',
+              fileKey: 'neko/assets/Media/cat-school.mp4',
               searchText: 'cat-school.mp4 Media video',
               freshness: 'fresh',
               metadata: { mediaType: 'video', libraryName: 'Media' },
@@ -409,7 +374,7 @@ describe('compatibility project search adapters', () => {
       expect.objectContaining({
         kind: 'media',
         label: 'cat-school.mp4',
-        filePath: '${MEDIA}/cat-school.mp4',
+        filePath: 'neko/assets/Media/cat-school.mp4',
       }),
     ]);
   });
@@ -530,7 +495,7 @@ describe('compatibility project search adapters', () => {
   it('queries the Assets media runtime even when a retired cache file exists', async () => {
     const queryMediaLibrary = vi.fn(async () => [
       {
-        filePath: '/library/浪客行.epub',
+        locator: { kind: 'workspace-file' as const, path: 'neko/assets/素材/浪客行.epub' },
         fileName: '浪客行.epub',
         libraryName: '素材',
         mediaType: 'document' as const,
@@ -563,7 +528,7 @@ describe('compatibility project search adapters', () => {
     expect(queryMediaLibrary).toHaveBeenCalledOnce();
   });
 
-  it('logs malformed compatibility JSON without failing provider queries', async () => {
+  it('does not register a runtime reader for legacy Asset catalog JSON', () => {
     vi.mocked(vscode.workspace.fs.readFile).mockImplementation(async (uri: { fsPath?: string }) => {
       if (uri.fsPath === '/workspace/neko/assets/library.json') {
         return new TextEncoder().encode('{bad json');
@@ -571,121 +536,13 @@ describe('compatibility project search adapters', () => {
       return new Uint8Array();
     });
     const logger = { warn: vi.fn() };
-    const adapter = createCompatibilityProjectSearchAdapters({
+    const adapters = createCompatibilityProjectSearchAdapters({
       logger,
       workspaceFileFinder: { findFiles: async () => [] },
-    }).find((item) => item.partition === 'asset-library');
-
-    await expect(
-      adapter!.query({ text: 'xiaoju', projectRoot: '/workspace' }, { projectRoot: '/workspace' }),
-    ).resolves.toEqual([]);
-
-    expect(logger.warn).toHaveBeenCalledWith(
-      'Failed to parse project search compatibility JSON',
-      expect.objectContaining({ filePath: '/workspace/neko/assets/library.json' }),
-    );
-  });
-
-  it('projects Live2D and model asset dimensions through the asset-library partition', async () => {
-    const adapters = createCompatibilityProjectSearchAdapters({
-      workspaceFileFinder: { findFiles: async () => [] },
-      jsonReader: makeJsonReader({
-        '/workspace/neko/assets/library.json': {
-          entities: [
-            {
-              id: 'asset-puppet',
-              name: 'Sakura Live2D',
-              category: 'character',
-              variants: [
-                {
-                  id: 'variant-model',
-                  files: [
-                    {
-                      id: 'file-model',
-                      path: '.neko/imports/puppets/sakura.zip',
-                      mediaType: 'document',
-                      characterAsset: {
-                        assetDimension: 'model',
-                        mediaKind: 'live2d-model',
-                        storageMode: 'bundle-memory',
-                        bundleLocator: {
-                          bundlePath: './sakura.zip',
-                          entryPath: 'avatars/sakura/sakura.moc3',
-                          fragmentRef: './sakura.zip#avatars/sakura/sakura.moc3',
-                        },
-                        sourceHash: 'sha256:sakura',
-                      },
-                    },
-                  ],
-                },
-              ],
-            },
-            {
-              id: 'asset-model',
-              name: 'Hero VRM',
-              category: 'character',
-              variants: [
-                {
-                  id: 'variant-vrm',
-                  files: [
-                    {
-                      id: 'file-vrm',
-                      path: '.neko/imports/models/hero.vrm',
-                      mediaType: 'document',
-                      characterAsset: {
-                        assetDimension: 'model',
-                        mediaKind: 'model-3d',
-                        storageMode: 'disk',
-                      },
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      }),
     });
-    expect(adapters.filter((adapter) => adapter.partition === 'asset-library')).toHaveLength(1);
 
-    const assetAdapter = adapters.find((adapter) => adapter.partition === 'asset-library')!;
-    const live2dItems = await assetAdapter.query(
-      { text: 'live2d-model', projectRoot: '/workspace' },
-      { projectRoot: '/workspace' },
-    );
-    const modelItems = await assetAdapter.query(
-      { text: 'model-3d', projectRoot: '/workspace' },
-      { projectRoot: '/workspace' },
-    );
-
-    expect(live2dItems[0]).toEqual(
-      expect.objectContaining({
-        source: expect.objectContaining({ partition: 'asset-library' }),
-        metadata: expect.objectContaining({
-          assetDimension: 'model',
-          mediaKind: 'live2d-model',
-          storageMode: 'bundle-memory',
-          bundleLocator: expect.objectContaining({
-            fragmentRef: './sakura.zip#avatars/sakura/sakura.moc3',
-          }),
-          sourceHash: 'sha256:sakura',
-        }),
-        navigationData: expect.objectContaining({
-          assetDimension: 'model',
-          mediaKind: 'live2d-model',
-          storageMode: 'bundle-memory',
-        }),
-      }),
-    );
-    expect(modelItems[0]).toEqual(
-      expect.objectContaining({
-        metadata: expect.objectContaining({
-          assetDimension: 'model',
-          mediaKind: 'model-3d',
-          storageMode: 'disk',
-        }),
-      }),
-    );
+    expect(adapters.some((item) => String(item.partition) === 'asset-library')).toBe(false);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });
 

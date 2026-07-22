@@ -824,7 +824,6 @@ function isProjectMentionExtraType(value: unknown): value is ProjectMentionExtra
 function isProjectMentionSource(value: unknown): value is ProjectMentionExtra['source'] {
   return (
     value === 'workspace' ||
-    value === 'asset-library' ||
     value === 'media-library' ||
     value === 'entity-graph' ||
     value === 'story' ||

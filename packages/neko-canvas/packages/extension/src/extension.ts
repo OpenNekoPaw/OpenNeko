@@ -1,8 +1,8 @@
 /**
- * NekoCanvas Extension - Canvas editor and asset library for VSCode
+ * NekoCanvas Extension - Canvas editor for VSCode
  *
  * This is the main entry point for the NekoCanvas extension.
- * It provides canvas editing and asset management capabilities.
+ * It provides canvas editing and direct content authoring capabilities.
  */
 import * as vscode from 'vscode';
 import * as os from 'node:os';
@@ -29,7 +29,6 @@ import {
   resolveGlobalStorageLayout,
   type LocalMetadataStore,
 } from '@neko/shared';
-import { createNodeWorkspaceResourceCacheMetadataBinding } from '@neko/shared/local-metadata/node';
 import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/shared/local-metadata/node-workspace-identity';
 import {
@@ -40,13 +39,11 @@ import {
   createVSCodeLogger,
   VSCodeErrorHandler,
   createNewFile,
+  NodeAuthorizedWorkspaceWriter,
   registerOptionalAgentCapabilityProvider,
-  resolveNekoExtension,
   resolveLogLevelSetting,
   watchLogLevel,
 } from '@neko/shared/vscode/extension';
-import type { AssetEntity, AssetFile, NekoAssetsAPI } from '@neko/shared';
-import { isNekoAssetsAPI, NEKO_EXTENSION_IDS } from '@neko/shared';
 import { getRootLogger, setRootLogger } from './utils/logger';
 import { setErrorHandler, handleError } from './utils/errorHandler';
 import { CanvasEditorProvider } from './editor';
@@ -76,108 +73,8 @@ let workspaceBoardProjector: WorkspaceBoardProjector;
 let workspaceBoardMetadataStore: LocalMetadataStore | undefined;
 let workspaceBoardWorkspaceId: string | undefined;
 
-/** Cached assets API reference (resolved once, reused across calls). */
-let assetsAPI: NekoAssetsAPI | undefined;
-
 function parseCanvasDocumentUri(documentUri: string | undefined): vscode.Uri | undefined {
   return documentUri ? vscode.Uri.parse(documentUri) : undefined;
-}
-
-async function getAssetsAPI(): Promise<NekoAssetsAPI | undefined> {
-  if (assetsAPI) return assetsAPI;
-  const ext = resolveNekoExtension(NEKO_EXTENSION_IDS.NEKO_ASSETS, (id) =>
-    vscode.extensions.getExtension(id),
-  );
-  if (!ext) return undefined;
-  const api = ext.isActive ? ext.exports : await ext.activate();
-  if (!isNekoAssetsAPI(api)) {
-    throw new Error('Neko Assets API contract mismatch.');
-  }
-  assetsAPI = api;
-  return assetsAPI;
-}
-
-async function getAssetEntities(): Promise<AssetEntity[]> {
-  try {
-    const api = await getAssetsAPI();
-    if (!api) {
-      throw new Error('typed Neko Assets API is unavailable');
-    }
-    return api.getAllEntities();
-  } catch (error) {
-    throw new Error(`neko-assets typed API unavailable: ${String(error)}`);
-  }
-}
-
-function mapAssetMediaTypeToCanvasType(
-  mediaType: AssetFile['mediaType'],
-): import('./api').Asset['type'] {
-  switch (mediaType) {
-    case 'video':
-    case 'audio':
-    case 'image':
-      return mediaType;
-    case 'text':
-      return 'text';
-    default:
-      return 'other';
-  }
-}
-
-function pickPreferredAssetFile(entity: AssetEntity): AssetFile | undefined {
-  const variants = entity.defaultVariantId
-    ? [
-        entity.variants.find((variant) => variant.id === entity.defaultVariantId),
-        ...entity.variants.filter((variant) => variant.id !== entity.defaultVariantId),
-      ]
-    : entity.variants;
-
-  for (const variant of variants) {
-    if (!variant) continue;
-    const preferred =
-      variant.files.find((file) => file.purpose === 'main') ??
-      variant.files.find((file) => file.purpose === 'preview') ??
-      variant.files[0];
-    if (preferred) {
-      return preferred;
-    }
-  }
-
-  return undefined;
-}
-
-function mapAssetEntityToCanvasAsset(entity: AssetEntity): import('./api').Asset {
-  const file = pickPreferredAssetFile(entity);
-  return {
-    id: entity.id,
-    name: entity.name,
-    type: file ? mapAssetMediaTypeToCanvasType(file.mediaType) : 'other',
-    path: file?.path ?? '',
-    thumbnail:
-      entity.variants.find((variant) => variant.id === entity.defaultVariantId)?.thumbnailPath ??
-      entity.variants.find((variant) => typeof variant.thumbnailPath === 'string')?.thumbnailPath,
-    metadata: file?.metadata,
-    tags: entity.tags,
-    createdAt: entity.createdAt,
-    updatedAt: entity.updatedAt,
-  };
-}
-
-function matchesAssetFilter(
-  asset: import('./api').Asset,
-  filter: import('./api').AssetFilter | undefined,
-): boolean {
-  if (!filter) return true;
-  if (filter.type && asset.type !== filter.type) return false;
-  if (filter.tags && filter.tags.some((tag) => !asset.tags?.includes(tag))) return false;
-  if (filter.search) {
-    const query = filter.search.toLowerCase();
-    const haystacks = [asset.name, asset.path, ...(asset.tags ?? [])];
-    if (!haystacks.some((value) => value.toLowerCase().includes(query))) {
-      return false;
-    }
-  }
-  return true;
 }
 
 /**
@@ -204,27 +101,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCa
     );
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   const workspaceRoot = workspaceFolder?.uri.fsPath;
-  const resourceCacheMetadata = workspaceRoot
-    ? await createNodeWorkspaceResourceCacheMetadataBinding({
-        homedir: os.homedir() || workspaceRoot,
-        workDir: workspaceRoot,
-      })
-    : undefined;
-  try {
-    canvasEditorProvider = new CanvasEditorProvider(
-      context,
-      undefined,
-      getNarrativePreviewFeatureToggles,
-      resourceCacheMetadata,
-    );
-  } catch (error) {
-    await resourceCacheMetadata?.dispose();
-    throw error;
-  }
+  canvasEditorProvider = await CanvasEditorProvider.create(
+    context,
+    undefined,
+    getNarrativePreviewFeatureToggles,
+  );
   canvasProjectAuthoringService = new CanvasProjectAuthoringService({
     context,
     canvasEditorProvider,
     logger,
+    resolveAuthorizedWrite: (filePath) => ({
+      writer: new NodeAuthorizedWorkspaceWriter({ workspaceRoot: path.dirname(filePath) }),
+      locator: { kind: 'workspace-file', path: path.basename(filePath) },
+    }),
   });
   if (workspaceRoot) {
     const metadataStore = createNodeSqliteLocalMetadataStore({ homedir: os.homedir() });
@@ -369,45 +258,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCa
     }),
   );
 
-  // Return API for other extensions
-  // Asset operations now delegate to neko-assets via commands
+  // Return API for other extensions.
   const api: NekoCanvasAPI = {
-    asset: {
-      import: async (filePath) => {
-        try {
-          await vscode.commands.executeCommand('neko.assets.importFile', vscode.Uri.file(filePath));
-        } catch (error) {
-          throw new Error(`Failed to import asset via neko-assets: ${String(error)}`);
-        }
-
-        const importedPath = filePath.replace(/\\/g, '/');
-        const entities = await getAssetEntities();
-        const importedEntity = entities.find((entity) =>
-          entity.variants.some((variant) =>
-            variant.files.some((file) => file.path.replace(/\\/g, '/') === importedPath),
-          ),
-        );
-
-        if (!importedEntity) {
-          throw new Error(
-            'Asset imported via neko-assets, but imported entity could not be resolved.',
-          );
-        }
-
-        return mapAssetEntityToCanvasAsset(importedEntity);
-      },
-      list: async (filter) => {
-        const entities = await getAssetEntities();
-        return entities
-          .map(mapAssetEntityToCanvasAsset)
-          .filter((asset) => matchesAssetFilter(asset, filter));
-      },
-      getById: async (id) => {
-        const entities = await getAssetEntities();
-        const entity = entities.find((candidate) => candidate.id === id);
-        return entity ? mapAssetEntityToCanvasAsset(entity) : null;
-      },
-    },
     importAsset: (asset) => canvasProjectAuthoringService.importAsset({ asset }),
     authoring: {
       importAsset: (request) => canvasProjectAuthoringService.importAssetAuthoring(request),
@@ -510,7 +362,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCa
       writeBack: (source, changes) => canvasEditorProvider.writeProjectionBack(source, changes),
     },
     events: {
-      onDidChangeAssets: new vscode.EventEmitter<import('./api').AssetChangeEvent>().event,
       onDidChangeCanvas: canvasEditorProvider.onDidChangeCanvas,
     },
   };
@@ -595,61 +446,6 @@ function registerCommands(
         });
       } catch (error) {
         await handleError(error, { showToUser: true });
-      }
-    }),
-  );
-
-  // Add to Asset Library — delegate to neko-assets
-  context.subscriptions.push(
-    vscode.commands.registerCommand('neko.addToAssetLibrary', async (uri?: vscode.Uri) => {
-      if (!uri) {
-        void handleError(new Error(vscode.l10n.t('neko.canvas.addToAssetLibrary.noFile')), {
-          showToUser: true,
-        });
-        return;
-      }
-
-      await vscode.commands.executeCommand('neko.assets.importFile', uri);
-      vscode.window.showInformationMessage(
-        vscode.l10n.t('neko.canvas.addToAssetLibrary.success', path.basename(uri.fsPath)),
-      );
-    }),
-  );
-
-  // Import Asset — delegate to neko-assets
-  context.subscriptions.push(
-    vscode.commands.registerCommand('neko.asset.import', async () => {
-      const uris = await vscode.window.showOpenDialog({
-        canSelectMany: true,
-        filters: {
-          'Media Files': [
-            'mp4',
-            'mov',
-            'avi',
-            'mkv',
-            'webm',
-            'mp3',
-            'wav',
-            'ogg',
-            'flac',
-            'aac',
-            'png',
-            'jpg',
-            'jpeg',
-            'gif',
-            'webp',
-          ],
-          'All Files': ['*'],
-        },
-      });
-
-      if (uris) {
-        for (const uri of uris) {
-          await vscode.commands.executeCommand('neko.assets.importFile', uri);
-        }
-        vscode.window.showInformationMessage(
-          vscode.l10n.t('neko.canvas.asset.import.success', String(uris.length)),
-        );
       }
     }),
   );

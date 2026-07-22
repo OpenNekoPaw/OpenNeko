@@ -693,7 +693,7 @@ export const zhCN = {
   'action.openPreview': '打开预览',
   'action.duplicateShort': '复制',
   'action.editShort': '编辑',
-  'action.saveToAssetLibrary': '存为素材',
+  'action.copyToMediaLibrary': '复制到媒体库',
   'material.generatedContext': '生成提示词',
   'material.promptUnavailable': '该素材未记录生成提示词',
   'material.generateAgain': '再次生成',

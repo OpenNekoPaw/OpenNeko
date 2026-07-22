@@ -106,9 +106,6 @@ importers:
       '@neko/ai-sdk':
         specifier: workspace:*
         version: link:../../packages/neko-agent/packages/ai-sdk
-      '@neko/asset':
-        specifier: workspace:*
-        version: link:../../packages/neko-assets/packages/asset
       '@neko/content':
         specifier: workspace:*
         version: link:../../packages/neko-content
@@ -148,9 +145,6 @@ importers:
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
-      neko-assets:
-        specifier: workspace:*
-        version: link:../../packages/neko-assets
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -445,27 +439,18 @@ importers:
 
   packages/neko-assets:
     dependencies:
-      '@neko/asset':
-        specifier: workspace:*
-        version: link:packages/asset
       '@neko/content':
         specifier: workspace:*
         version: link:../neko-content
       '@neko/entity':
         specifier: workspace:*
         version: link:../neko-entity
-      '@neko/host':
-        specifier: workspace:*
-        version: link:../neko-host
       '@neko/search':
         specifier: workspace:*
         version: link:../neko-search
       '@neko/shared':
         specifier: workspace:*
         version: link:../neko-types
-      adm-zip:
-        specifier: ^0.6.0
-        version: 0.6.0
     devDependencies:
       '@types/node':
         specifier: ^24.0.0
@@ -482,19 +467,6 @@ importers:
       vitest:
         specifier: 4.1.2
         version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
-
-  packages/neko-assets/packages/asset:
-    dependencies:
-      '@neko/shared':
-        specifier: workspace:*
-        version: link:../../../neko-types
-    devDependencies:
-      typescript:
-        specifier: ^5.3.2
-        version: 5.9.3
-      vitest:
-        specifier: 4.1.2
-        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@25.7.0)(jsdom@27.4.0)(vite@6.4.2(@types/node@25.7.0)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
 
   packages/neko-canvas:
     devDependencies:
@@ -698,9 +670,6 @@ importers:
 
   packages/neko-cut/packages/extension:
     dependencies:
-      '@neko/asset':
-        specifier: workspace:*
-        version: link:../../../neko-assets/packages/asset
       '@neko/neko-client':
         specifier: workspace:*
         version: link:../../../neko-client

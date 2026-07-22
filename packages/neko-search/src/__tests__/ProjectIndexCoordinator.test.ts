@@ -10,9 +10,7 @@ describe('ProjectIndexCoordinator', () => {
   it('fans out queries, ranks results, and keeps partition failures isolated', async () => {
     const coordinator = createCoordinator();
     coordinator.registerAdapter(
-      makeAdapter('asset-library', [
-        makeItem('asset-1', 'asset', '小橘 portrait', 'asset-library', 5),
-      ]),
+      makeAdapter('documents', [makeItem('document-1', 'document', '小橘 notes', 'documents', 5)]),
     );
     coordinator.registerAdapter(makeFailingAdapter('media-library'));
 
@@ -23,11 +21,11 @@ describe('ProjectIndexCoordinator', () => {
       freshness: 'allow-stale',
     });
 
-    expect(result.items.map((item) => item.id)).toEqual(['asset-1']);
+    expect(result.items.map((item) => item.id)).toEqual(['document-1']);
     expect(result.freshness).toBe('partial');
     expect(result.partitions).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ partition: 'asset-library', status: 'ready' }),
+        expect.objectContaining({ partition: 'documents', status: 'ready' }),
         expect.objectContaining({ partition: 'media-library', status: 'failed' }),
       ]),
     );
@@ -53,25 +51,25 @@ describe('ProjectIndexCoordinator', () => {
 
   it('replaces an existing partition adapter when a first-class provider registers', async () => {
     const coordinator = createCoordinator();
-    const compatibilityAdapter = makeAdapter('asset-library', [
-      makeItem('asset:compat', 'asset', '小橘 old cache', 'asset-library', 0),
+    const compatibilityAdapter = makeAdapter('media-library', [
+      makeItem('media:compat', 'media', '小橘 old projection', 'media-library', 0),
     ]);
     const disposeCompatibility = vi.fn();
     coordinator.registerAdapter({ ...compatibilityAdapter, dispose: disposeCompatibility });
     coordinator.registerAdapter(
-      makeAdapter('asset-library', [
-        makeItem('asset:first-class', 'asset', '小橘 source fact', 'asset-library', 5),
+      makeAdapter('media-library', [
+        makeItem('media:first-class', 'media', '小橘 source file', 'media-library', 5),
       ]),
     );
 
     const result = await coordinator.query({
       text: '小橘',
       projectRoot: '/mock/workspace',
-      partitions: ['asset-library'],
+      partitions: ['media-library'],
     });
 
     expect(disposeCompatibility).toHaveBeenCalledTimes(1);
-    expect(result.items.map((item) => item.id)).toEqual(['asset:first-class']);
+    expect(result.items.map((item) => item.id)).toEqual(['media:first-class']);
   });
 
   it('works without a semantic provider and preserves source refs for semantic results', async () => {

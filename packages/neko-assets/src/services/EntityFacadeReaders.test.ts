@@ -7,7 +7,7 @@ vi.mock('vscode', () => ({
 }));
 
 describe('createEntityFacadeReaders', () => {
-  it('loads character records through entity facade commands', async () => {
+  it('loads Creative Entities without projecting Asset metadata', async () => {
     const executeCommand = vi.fn(async () => [
       {
         id: 'char-rin',
@@ -16,10 +16,7 @@ describe('createEntityFacadeReaders', () => {
         displayName: 'Rin Aoki',
         aliases: ['青木凛'],
         status: 'confirmed',
-        metadata: {
-          defaults: { assetEntityId: 'asset-rin-portrait' },
-          bindings: { scriptNames: ['Rin'] },
-        },
+        metadata: { biography: 'Fixture' },
       },
       {
         id: 'loc-school',
@@ -34,16 +31,15 @@ describe('createEntityFacadeReaders', () => {
       executeCommand,
     });
 
-    await expect(readers.characters.list()).resolves.toEqual([
+    await expect(readers.entities.list()).resolves.toEqual([
       expect.objectContaining({
         id: 'char-rin',
         canonicalName: 'Rin',
         displayName: 'Rin Aoki',
-        defaults: { assetEntityId: 'asset-rin-portrait' },
-        bindings: { scriptNames: ['Rin'] },
+        metadata: { biography: 'Fixture' },
       }),
     ]);
-    await expect(readers.characters.resolveByName('青木凛')).resolves.toEqual(
+    await expect(readers.entities.resolveByName('青木凛')).resolves.toEqual(
       expect.objectContaining({ id: 'char-rin' }),
     );
     expect(executeCommand).toHaveBeenCalledWith(ENTITY_FACADE_COMMANDS.listEntities, {
@@ -52,14 +48,18 @@ describe('createEntityFacadeReaders', () => {
     });
   });
 
-  it('loads asset bindings through entity facade commands', async () => {
+  it('loads direct representation bindings through entity facade commands', async () => {
     const binding = {
       id: 'binding-rin-portrait',
       entityId: 'char-rin',
       entityKind: 'character',
-      assetRef: 'project://assets/asset-rin-portrait',
+      representation: {
+        kind: 'workspace-file',
+        path: 'neko/assets/Characters/rin.png',
+      },
       role: 'portrait',
       status: 'confirmed',
+      availability: 'active',
       source: 'user',
       updatedAt: '2026-06-10T00:00:00.000Z',
     };
@@ -69,12 +69,9 @@ describe('createEntityFacadeReaders', () => {
       executeCommand,
     });
 
-    await expect(readers.bindings.listForProjectAsset('asset-rin-portrait')).resolves.toEqual([
-      binding,
-    ]);
+    await expect(readers.bindings.list()).resolves.toEqual([binding]);
     expect(executeCommand).toHaveBeenCalledWith(ENTITY_FACADE_COMMANDS.listBindings, {
       projectRoot: '/workspace',
-      assetRef: 'project://assets/asset-rin-portrait',
     });
   });
 });

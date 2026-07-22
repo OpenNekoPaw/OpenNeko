@@ -9,19 +9,19 @@ import {
 } from '@neko-agent/types';
 import {
   createExternalProcessorHostAdapter,
+  NodeExternalProcessorOutputStorage,
   type ExternalProcessorHostFsOps,
   type ExternalProcessorProcessRunInput,
   type ExternalProcessorProcessRunner,
 } from '../externalProcessorHostAdapter';
 
 const workspaceRoot = '/workspace/project';
-const resourceCacheRoot = '/workspace/project/.neko/.cache/resources';
-const mediaLibraryRoot = '/media/library';
+const processorOutputRoot = '/workspace/project/.neko/.cache/processor-outputs';
 const extensionPrivateResourcesRoot = '/extension/global/resources';
 const executable = '/tools/bin/upscale';
 
 describe('ExternalProcessorHostAdapter', () => {
-  it('allocates resourceCache outputs and spawns fixed manifest executable and args', async () => {
+  it('allocates opaque Host-owned outputs and spawns fixed manifest executable and args', async () => {
     const { adapter, runner, fsOps, registration } = createHarness({
       manifest: createManifest({ allowNetwork: true }),
     });
@@ -32,22 +32,16 @@ describe('ExternalProcessorHostAdapter', () => {
     expect(result.status).toBe('succeeded');
     expect(result.outputs[0]).toMatchObject({
       slot: 'image',
-      retentionHint: 'intermediate',
+      ownership: 'candidate',
       sizeBytes: 1234,
-      resourceRef: {
-        scope: 'project',
-        provider: 'external-processor',
-        kind: 'generated',
+      output: {
+        kind: 'processor-output',
+        ownership: 'candidate',
+        mediaType: 'image/png',
       },
     });
-    expect(result.outputs[0]?.resourceRef.source).toMatchObject({
-      kind: 'file',
-      projectRelativePath: expect.stringContaining(
-        'external-processors/upscale-image/run-1/stage-1/attempt-1/result.png',
-      ),
-    });
     expect(fsOps.mkdir).toHaveBeenCalledWith(
-      '/workspace/project/.neko/.cache/resources/external-processors/upscale-image/run-1/stage-1/attempt-1',
+      '/workspace/project/.neko/.cache/processor-outputs/external-processors/candidate/upscale-image/run-1/stage-1/attempt-1',
       { recursive: true },
     );
     expect(runner.run).toHaveBeenCalledWith(
@@ -57,11 +51,11 @@ describe('ExternalProcessorHostAdapter', () => {
           '--input',
           '/workspace/project/inputs/source.png',
           '--output',
-          '/workspace/project/.neko/.cache/resources/external-processors/upscale-image/run-1/stage-1/attempt-1/result.png',
+          '/workspace/project/.neko/.cache/processor-outputs/external-processors/candidate/upscale-image/run-1/stage-1/attempt-1/result.png',
           '--scale',
           '4',
         ],
-        cwd: resourceCacheRoot,
+        cwd: '/workspace/project/.neko/.cache/processor-outputs/external-processors/candidate/upscale-image/run-1/stage-1/attempt-1',
         timeoutMs: 90_000,
         networkDisabled: false,
       }),
@@ -71,9 +65,10 @@ describe('ExternalProcessorHostAdapter', () => {
   it('denies system temp inputs before spawning', async () => {
     const { adapter, runner, registration } = createHarness({
       manifest: createManifest({ allowNetwork: true }),
+      resolveInputPath: () => '/tmp/page-1.jpg',
     });
     const invocation = createInvocation(registration, {
-      inputs: [{ slot: 'image', root: 'workspace', sourcePath: '/tmp/page-1.jpg' }],
+      inputs: [{ slot: 'image', locator: { kind: 'workspace-file', path: 'inputs/page-1.jpg' } }],
     });
 
     const result = await adapter.execute({ invocation, registrationSnapshot: registration });
@@ -87,7 +82,7 @@ describe('ExternalProcessorHostAdapter', () => {
     expect(runner.run).not.toHaveBeenCalled();
   });
 
-  it('allows media library inputs but denies media library outputs', async () => {
+  it('allows media library inputs but denies output ownership outside the declaration', async () => {
     const inputHarness = createHarness({
       manifest: createManifest({
         allowNetwork: true,
@@ -95,7 +90,12 @@ describe('ExternalProcessorHostAdapter', () => {
       }),
     });
     const inputInvocation = createInvocation(inputHarness.registration, {
-      inputs: [{ slot: 'image', root: 'mediaLibrary', sourcePath: '/media/library/source.png' }],
+      inputs: [
+        {
+          slot: 'image',
+          locator: { kind: 'workspace-file', path: 'neko/assets/Books/source.png' },
+        },
+      ],
     });
 
     await expect(
@@ -106,19 +106,15 @@ describe('ExternalProcessorHostAdapter', () => {
     ).resolves.toMatchObject({ status: 'succeeded' });
     expect(inputHarness.runner.run).toHaveBeenCalledWith(
       expect.objectContaining({
-        args: expect.arrayContaining(['/media/library/source.png']),
+        args: expect.arrayContaining(['/workspace/project/neko/assets/Books/source.png']),
       }),
     );
 
     const outputHarness = createHarness({
-      manifest: createManifest({
-        allowNetwork: true,
-        allowedOutputRoots: ['mediaLibrary'],
-        outputRoot: 'mediaLibrary',
-      }),
+      manifest: createManifest({ allowNetwork: true }),
     });
     const outputInvocation = createInvocation(outputHarness.registration, {
-      outputs: [{ slot: 'image', root: 'mediaLibrary', pathHint: 'result.png' }],
+      outputs: [{ slot: 'image', ownership: 'debug', pathHint: 'result.png' }],
     });
 
     const outputResult = await outputHarness.adapter.execute({
@@ -129,79 +125,74 @@ describe('ExternalProcessorHostAdapter', () => {
     expect(outputResult.status).toBe('failed');
     expect(outputResult.diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ code: 'illegal-output-root', path: 'outputs.image' }),
+        expect.objectContaining({ code: 'illegal-output-ownership', path: 'outputs.image' }),
       ]),
     );
     expect(outputHarness.runner.run).not.toHaveBeenCalled();
   });
 
-  it('resolves media library variable inputs through enabled accessible libraries only', async () => {
+  it('chains an opaque processor output without exposing its Host path in the invocation', async () => {
+    const { adapter, runner, registration } = createHarness({
+      manifest: createManifest({ allowNetwork: true }),
+    });
+    const first = await adapter.execute({
+      invocation: createInvocation(registration),
+      registrationSnapshot: registration,
+    });
+    expect(first.status).toBe('succeeded');
+    const firstOutput = first.outputs[0]?.output;
+    expect(firstOutput).toBeDefined();
+    if (!firstOutput) return;
+
+    const secondInvocation = createInvocation(registration, {
+      inputs: [{ slot: 'image', output: firstOutput }],
+    });
+    const second = await adapter.execute({
+      invocation: secondInvocation,
+      registrationSnapshot: registration,
+    });
+
+    expect(second.status).toBe('succeeded');
+    expect(secondInvocation.inputs).toEqual([{ slot: 'image', output: firstOutput }]);
+    expect(runner.run).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        inputPaths: {
+          image: expect.stringContaining(
+            'external-processors/candidate/upscale-image/run-1/stage-1/attempt-1/result.png',
+          ),
+        },
+      }),
+    );
+  });
+
+  it('fails visibly when a projected input handle cannot be resolved', async () => {
     const { adapter, runner, registration } = createHarness({
       manifest: createManifest({
         allowNetwork: true,
         allowedInputRoots: ['mediaLibrary'],
       }),
-      mediaLibraryResolver: {
-        libraries: [
-          {
-            name: 'Team Library',
-            variable: 'TEAM_MEDIA',
-            originalPath: '${TEAM_MEDIA}',
-            resolvedPath: mediaLibraryRoot,
-            enabled: true,
-            accessible: true,
-            overridden: false,
-          },
-          {
-            name: 'Offline Library',
-            variable: 'OFFLINE_MEDIA',
-            originalPath: '${OFFLINE_MEDIA}',
-            resolvedPath: '/offline/library',
-            enabled: true,
-            accessible: false,
-            overridden: false,
-          },
-        ],
-        pathVariables: new Map([
-          ['TEAM_MEDIA', mediaLibraryRoot],
-          ['OFFLINE_MEDIA', '/offline/library'],
-        ]),
-      },
+      resolveInputPath: () => undefined,
     });
 
     const result = await adapter.execute({
       invocation: createInvocation(registration, {
-        inputs: [{ slot: 'image', root: 'mediaLibrary', sourcePath: '${TEAM_MEDIA}/source.png' }],
-      }),
-      registrationSnapshot: registration,
-    });
-
-    expect(result.status).toBe('succeeded');
-    expect(runner.run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        args: expect.arrayContaining(['/media/library/source.png']),
-      }),
-    );
-
-    const denied = await adapter.execute({
-      invocation: createInvocation(registration, {
         inputs: [
           {
             slot: 'image',
-            root: 'mediaLibrary',
-            sourcePath: '${OFFLINE_MEDIA}/source.png',
+            locator: { kind: 'workspace-file', path: 'neko/assets/Books/source.png' },
           },
         ],
       }),
       registrationSnapshot: registration,
     });
 
-    expect(denied.status).toBe('failed');
-    expect(denied.diagnostics).toEqual(
+    expect(result.status).toBe('failed');
+    expect(result.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ code: 'unauthorized-path', path: 'inputs.image' }),
       ]),
     );
+    expect(runner.run).not.toHaveBeenCalled();
   });
 
   it('blocks secret env keys even when they are allowlisted by manifest', async () => {
@@ -311,25 +302,57 @@ describe('ExternalProcessorHostAdapter', () => {
     });
   });
 
-  it('resolves extensionPrivateResources outputs as extension-private ResourceRefs', async () => {
-    const { adapter, registration } = createHarness({
-      manifest: createManifest({
-        allowNetwork: true,
-        allowedOutputRoots: ['extensionPrivateResources'],
-        outputRoot: 'extensionPrivateResources',
+  it('promotes a processor output only through an owning durable writer', async () => {
+    const promoteOutput = vi.fn(async () => ({
+      kind: 'generated-output' as const,
+      outputId: 'durable-output-1',
+      revision: '1',
+      digest: 'sha256:durable',
+      path: 'generated/durable-output-1.png',
+    }));
+    const storage = new NodeExternalProcessorOutputStorage({
+      root: processorOutputRoot,
+      promoteOutput,
+      fsOps: { mkdir: vi.fn(async () => undefined) },
+    });
+    const allocation = await storage.allocate({
+      processorId: 'upscale-image',
+      processorRunId: 'run-1',
+      stageId: 'stage-1',
+      attempt: 1,
+      slot: 'image',
+      ownership: 'candidate',
+      mediaType: 'image/png',
+      fileNameHint: 'result.png',
+    });
+    await expect(
+      storage.resolve({ ...allocation.locator, ownership: 'debug' }),
+    ).resolves.toBeUndefined();
+
+    const result = await storage.promote({
+      output: allocation.locator,
+      target: 'generated-output',
+    });
+
+    expect(promoteOutput).toHaveBeenCalledWith(
+      expect.objectContaining({
+        output: allocation.locator,
+        sourcePath: expect.stringContaining(
+          'external-processors/candidate/upscale-image/run-1/stage-1/attempt-1/result.png',
+        ),
+        target: 'generated-output',
       }),
-    });
-    const invocation = createInvocation(registration, {
-      outputs: [{ slot: 'image', root: 'extensionPrivateResources', pathHint: 'private.png' }],
-    });
-
-    const result = await adapter.execute({ invocation, registrationSnapshot: registration });
-
-    expect(result.status).toBe('succeeded');
-    expect(result.outputs[0]?.resourceRef.scope).toBe('extension-private');
-    expect(result.outputs[0]?.resourceRef.source.metadata).toMatchObject({
-      outputRoot: 'extensionPrivateResources',
-      relativePath: expect.stringContaining('private.png'),
+    );
+    expect(result).toEqual({
+      status: 'promoted',
+      output: { ...allocation.locator, ownership: 'promoted' },
+      source: {
+        kind: 'generated-output',
+        outputId: 'durable-output-1',
+        revision: '1',
+        digest: 'sha256:durable',
+        path: 'generated/durable-output-1.png',
+      },
     });
   });
 });
@@ -339,11 +362,11 @@ function createHarness(options: {
   readonly hostEnv?: Readonly<Record<string, string | undefined>>;
   readonly configuredEnv?: Readonly<Record<string, string | undefined>>;
   readonly runtimeEnv?: Readonly<Record<string, string | undefined>>;
-  readonly mediaLibraryResolver?: Parameters<
-    typeof createExternalProcessorHostAdapter
-  >[0]['mediaLibraryResolver'];
   readonly runnerCanDisableNetwork?: boolean;
   readonly runResult?: { readonly exitCode: number | null; readonly timedOut?: boolean };
+  readonly resolveInputPath?: (
+    locator: import('@neko/shared').ContentLocator,
+  ) => string | undefined;
 }) {
   const registry = createExternalProcessorRegistry();
   const registration = registry.upsert(
@@ -363,22 +386,34 @@ function createHarness(options: {
     mkdir: vi.fn(async () => undefined),
     stat: vi.fn(async () => ({ size: 1234 })),
   } satisfies ExternalProcessorHostFsOps;
+  const inputPaths = new Map<string, string | undefined>();
+  let inputHandleSequence = 0;
   const adapter = createExternalProcessorHostAdapter({
     registry,
     roots: {
       workspaceRoot,
-      mediaLibraryRoots: [mediaLibraryRoot],
-      resourceCacheRoot,
+      processorOutputRoot,
       extensionPrivateResourcesRoot,
     },
     executableAliases: { TOOLS: '/tools/bin' },
     hostEnv: options.hostEnv ?? {},
     configuredEnv: options.configuredEnv ?? {},
     runtimeEnv: options.runtimeEnv ?? {},
-    ...(options.mediaLibraryResolver ? { mediaLibraryResolver: options.mediaLibraryResolver } : {}),
     processRunner: runner,
     fsOps,
-    now: () => '2026-06-24T00:00:00.000Z',
+    inputProjection: {
+      project: vi.fn(async (locator) => {
+        const handle = `processor-input:${++inputHandleSequence}`;
+        const defaultPath =
+          locator.kind === 'workspace-file' ? `${workspaceRoot}/${locator.path}` : undefined;
+        inputPaths.set(
+          handle,
+          options.resolveInputPath ? options.resolveInputPath(locator) : defaultPath,
+        );
+        return { status: 'ready', kind: 'processor', locator, handle };
+      }),
+    },
+    resolveInputHandle: vi.fn(async (handle) => inputPaths.get(handle)),
   });
   return { adapter, runner, fsOps, registration };
 }
@@ -386,11 +421,10 @@ function createHarness(options: {
 function createManifest(options: {
   readonly allowNetwork: boolean;
   readonly allowedInputRoots?: ExternalProcessorManifest['policy']['allowedInputRoots'];
-  readonly allowedOutputRoots?: ExternalProcessorManifest['policy']['allowedOutputRoots'];
-  readonly outputRoot?: ExternalProcessorManifest['outputs'][string]['root'];
+  readonly outputOwnership?: ExternalProcessorManifest['outputs'][string]['ownership'];
   readonly envProfile?: ExternalProcessorManifest['envProfile'];
 }): ExternalProcessorManifest {
-  const outputRoot = options.outputRoot ?? 'resourceCache';
+  const outputOwnership = options.outputOwnership ?? 'candidate';
   return {
     schema: EXTERNAL_PROCESSOR_SCHEMA,
     schemaVersion: EXTERNAL_PROCESSOR_SCHEMA_VERSION,
@@ -413,7 +447,7 @@ function createManifest(options: {
       image: { accepts: ['image/*'], required: true },
     },
     outputs: {
-      image: { produces: ['image/png'], root: outputRoot, pathHint: 'result.png' },
+      image: { produces: ['image/png'], ownership: outputOwnership, pathHint: 'result.png' },
     },
     params: {
       scale: { type: 'number', required: true, default: 4 },
@@ -421,14 +455,9 @@ function createManifest(options: {
     policy: {
       requiresApproval: false,
       allowNetwork: options.allowNetwork,
-      allowedInputRoots: options.allowedInputRoots ?? [
-        'workspace',
-        'mediaLibrary',
-        'resourceCache',
-      ],
-      allowedOutputRoots: options.allowedOutputRoots ?? [outputRoot],
+      allowedInputRoots: options.allowedInputRoots ?? ['workspace', 'mediaLibrary'],
+      allowedOutputOwnerships: [outputOwnership],
       timeoutMs: 90_000,
-      cwdRoot: 'resourceCache',
     },
     ...(options.envProfile ? { envProfile: options.envProfile } : {}),
   };
@@ -448,12 +477,15 @@ function createInvocation(
       attempt: 1,
     },
     inputs: overrides.inputs ?? [
-      { slot: 'image', root: 'workspace', sourcePath: 'inputs/source.png' },
+      { slot: 'image', locator: { kind: 'workspace-file', path: 'inputs/source.png' } },
     ],
     outputs: overrides.outputs ?? [
-      { slot: 'image', root: registration.manifest.outputs.image!.root, pathHint: 'result.png' },
+      {
+        slot: 'image',
+        ownership: registration.manifest.outputs.image!.ownership,
+        pathHint: 'result.png',
+      },
     ],
     params: overrides.params ?? { scale: 4 },
-    retentionHint: 'intermediate',
   };
 }

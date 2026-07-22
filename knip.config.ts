@@ -117,7 +117,7 @@ const config: KnipConfig = {
     },
     'packages/neko-tools/packages/extension': {},
     'packages/neko-tools/packages/webview': {
-      entry: ['src/mediaDiff.tsx', 'src/assetDiff.tsx'],
+      entry: ['src/mediaDiff.tsx'],
       ignore: [
         // Barrel exports and internal utilities
         'src/components/MediaDiff/streaming/index.ts',
@@ -137,7 +137,6 @@ const config: KnipConfig = {
       ],
     },
     'packages/neko-preview/packages/extension': {},
-    'packages/neko-assets/packages/asset': {},
     'packages/neko-engine/packages/extension': {},
 
     // ── Skills (CLI scripts, not imported) ───────────────

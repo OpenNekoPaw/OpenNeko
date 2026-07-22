@@ -1,7 +1,7 @@
 /**
  * Media Metadata Formatting Utilities
  *
- * Shared between AssetFileDecorationProvider and MediaLibraryTreeProvider.
+ * Shared by Media Library metadata presentation.
  * Pure functions, no external dependencies.
  */
 
@@ -19,7 +19,7 @@ import type { MediaFileMetadata } from '@neko/shared';
  * formatDuration(3661) // "1:01:01"
  * formatDuration(5.5)  // "0:06"
  */
-export function formatDuration(seconds: number): string {
+function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.round(seconds % 60);
@@ -28,27 +28,6 @@ export function formatDuration(seconds: number): string {
     return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   }
   return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-// =============================================================================
-// Resolution
-// =============================================================================
-
-/**
- * Format resolution to a short label.
- *
- * @example
- * formatResolution(3840, 2160) // "4K"
- * formatResolution(1920, 1080) // "1080p"
- * formatResolution(800, 600)   // "800x600"
- */
-export function formatResolution(width: number, height: number): string {
-  if (width >= 3840) return '4K';
-  if (width >= 2560) return '1440p';
-  if (width >= 1920) return '1080p';
-  if (width >= 1280) return '720p';
-  if (width >= 640) return '480p';
-  return `${width}x${height}`;
 }
 
 // =============================================================================
@@ -108,11 +87,4 @@ export function buildMetadataTooltipLines(metadata: MediaFileMetadata): string[]
   }
 
   return lines;
-}
-
-/**
- * Build tooltip string from media metadata (plain text, newline-separated).
- */
-export function buildMetadataTooltip(metadata: MediaFileMetadata): string {
-  return buildMetadataTooltipLines(metadata).join('\n');
 }

@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import type { ServiceCollection } from '../base/serviceCollection';
 import { bootstrapCoreServices } from './bootstrapCoreServices';
-import { bootstrapAssetDiff } from './bootstrapAssetDiff';
 import { bootstrapMediaDiff } from './bootstrapMediaDiff';
 import { bootstrapMediaLsp } from './bootstrapMediaLsp';
 import { registerNekoToolsCommands } from './registerCommands';
@@ -32,15 +31,8 @@ export function bootstrapNekoToolsExtension(
     coreServices.workspaceIO,
     coreServices.scheduler,
   );
-  const assetDiffProvider = bootstrapAssetDiff(
-    context,
-    coreServices.assetEntityReader,
-    coreServices.variantComparisonService,
-  );
-
   registerNekoToolsCommands(context, {
     i18n: coreServices.i18n,
-    assetEntityReader: coreServices.assetEntityReader,
     errorHandler: coreServices.errorHandler,
   });
   const webviewKeyboardContextService = new WebviewKeyboardContextService(
@@ -53,7 +45,7 @@ export function bootstrapNekoToolsExtension(
   return {
     services: coreServices.services,
     async disposeAsync() {
-      await Promise.all([mediaDiffProvider.disposeAsync(), assetDiffProvider.disposeAsync()]);
+      await mediaDiffProvider.disposeAsync();
       webviewKeyboardContextService.dispose();
       coreServices.dispose();
     },

@@ -25,25 +25,28 @@ describe('projectMessageIdentities', () => {
     expect(identities.user.displayName).toBe('You');
     expect(identities.assistant.displayName).toBe('小橘');
     expect(identities.assistant.avatarLabel).toBe('小橘');
-    expect(identities.assistant.avatarUri).toBe('vscode-webview://avatars/xiaoju.png');
+    expect(identities.assistant.avatarUri).toBeUndefined();
     expect(identities.assistant.title).toBe('小橘 (Character Dialogue)');
   });
 
-  it('accepts VS Code webview resource avatar URIs', () => {
+  it('does not treat durable representation bindings as Webview avatar URIs', () => {
     const identities = projectMessageIdentities({
       conversationKind: 'character-dialogue',
       characterDialogueSession: createCharacterDialogueSession({
         representationBindings: [
           {
             role: 'portrait',
-            assetRef: 'vscode-webview-resource://avatar/xiaoju.png',
+            representation: {
+              kind: 'workspace-file',
+              path: 'neko/assets/Characters/xiaoju.png',
+            },
             isDefault: true,
           },
         ],
       }),
     });
 
-    expect(identities.assistant.avatarUri).toBe('vscode-webview-resource://avatar/xiaoju.png');
+    expect(identities.assistant.avatarUri).toBeUndefined();
   });
 
   it('projects embody character user as the character and assistant as feedback', () => {
@@ -54,26 +57,9 @@ describe('projectMessageIdentities', () => {
 
     expect(identities.user.displayName).toBe('You as 小橘');
     expect(identities.user.avatarLabel).toBe('小橘');
-    expect(identities.user.avatarUri).toBe('data:image/png;base64,avatar');
+    expect(identities.user.avatarUri).toBeUndefined();
     expect(identities.assistant.displayName).toBe('Character feedback');
     expect(identities.assistant.avatarLabel).toBe('CF');
-  });
-
-  it('does not expose project asset refs as image URIs', () => {
-    const identities = projectMessageIdentities({
-      conversationKind: 'character-dialogue',
-      characterDialogueSession: createCharacterDialogueSession({
-        representationBindings: [
-          {
-            role: 'portrait',
-            assetRef: 'project://assets/xiaoju-portrait',
-            isDefault: true,
-          },
-        ],
-      }),
-    });
-
-    expect(identities.assistant.avatarUri).toBeUndefined();
   });
 
   it('selects the identity for each message role', () => {
@@ -104,12 +90,18 @@ function createCharacterDialogueSession(
       representationBindings: [
         {
           role: 'portrait',
-          assetRef: 'project://assets/xiaoju-portrait',
+          representation: {
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/xiaoju-portrait.png',
+          },
           isDefault: true,
         },
         {
           role: 'portrait',
-          assetRef: 'vscode-webview://avatars/xiaoju.png',
+          representation: {
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/xiaoju.png',
+          },
         },
       ],
       ...profileOverrides,
@@ -134,7 +126,10 @@ function createEmbodyCharacterSession(): EmbodyCharacterSessionProjection {
       representationBindings: [
         {
           role: 'portrait',
-          assetRef: 'data:image/png;base64,avatar',
+          representation: {
+            kind: 'workspace-file',
+            path: 'neko/assets/Characters/xiaoju.png',
+          },
           isDefault: true,
         },
       ],

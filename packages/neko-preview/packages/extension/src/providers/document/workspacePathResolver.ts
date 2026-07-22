@@ -2,11 +2,7 @@ import * as fsSync from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
-import { resolveWorkspaceMediaPath, type WorkspaceMediaPathContext } from '@neko/shared';
-import {
-  createHostContentMediaPathContext,
-  resolveHostContentMediaPath,
-} from '@neko/shared/vscode/extension';
+import { resolveHostContentMediaPath } from '@neko/shared/vscode/extension';
 import { getLogger } from '../../utils/logger';
 
 export interface PreviewPathResolutionOptions {
@@ -49,33 +45,20 @@ function toLocalFilesystemPath(filePath: string): string | null {
   return trimmed;
 }
 
-async function createPreviewWorkspaceMediaPathContext(
-  options?: PreviewPathResolutionOptions,
-): Promise<WorkspaceMediaPathContext> {
-  return createHostContentMediaPathContext({
-    documentUri: options?.sourceDocumentUri,
-    workspaceFolders: vscode.workspace.workspaceFolders ?? [],
-    allowedRoots: options?.allowedRoots,
-    getExtension: vscode.extensions.getExtension,
-    logger,
-  });
-}
-
 async function resolveWorkspacePath(
   filePath: string,
   options?: PreviewPathResolutionOptions,
 ): Promise<string> {
-  if (options?.sourceDocumentUri) {
-    const context = await createPreviewWorkspaceMediaPathContext(options);
-    const resolved = resolveWorkspaceMediaPath({
-      source: filePath,
-      context,
-      fileExists: (candidate) => fileExists(candidate),
-      isPathAuthorized: (candidate) => isPathAuthorized(candidate, context.allowedRoots),
+  if (options?.sourceDocumentUri || isWorkspaceLinkedMediaPath(filePath)) {
+    return resolveHostContentMediaPath(filePath, {
+      documentUri: options?.sourceDocumentUri,
+      workspaceRoot: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+      workspaceFolders: vscode.workspace.workspaceFolders ?? [],
+      allowedRoots: options?.allowedRoots,
+      getExtension: vscode.extensions.getExtension,
+      fileExists,
+      logger,
     });
-    if (resolved.status === 'resolved-local') return resolved.path;
-    if (resolved.status === 'remote') return resolved.url;
-    return filePath;
   }
 
   const workspaceFolders = vscode.workspace.workspaceFolders ?? [];
@@ -135,12 +118,6 @@ function fileExists(filePath: string): boolean {
   }
 }
 
-function isPathAuthorized(filePath: string, allowedRoots: readonly string[] | undefined): boolean {
-  if (!allowedRoots || allowedRoots.length === 0) return true;
-  return allowedRoots.some((root) => isPathInsideOrEqual(filePath, root));
-}
-
-function isPathInsideOrEqual(candidatePath: string, rootPath: string): boolean {
-  const relativePath = path.relative(rootPath, candidatePath);
-  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+function isWorkspaceLinkedMediaPath(value: string): boolean {
+  return value.replace(/\\/gu, '/').startsWith('neko/assets/');
 }

@@ -38,26 +38,21 @@ describe('projectMentionSearch', () => {
             freshness: 'fresh',
           },
           {
-            id: 'asset:asset-1',
-            kind: 'asset',
+            id: 'media:neko/assets/Characters/xiaoju.png',
+            kind: 'media',
             label: '橘猫参考图',
-            description: 'Asset',
+            description: 'Media: Characters',
             icon: '🎭',
             source: {
-              partition: 'asset-library',
-              sourceId: 'asset-1',
-              sourceKind: 'character',
+              partition: 'media-library',
+              sourceId: 'neko/assets/Characters/xiaoju.png',
+              sourceKind: 'image',
             },
             projectRoot: '/workspace',
-            filePath: 'assets/xiaoju.png',
+            filePath: 'neko/assets/Characters/xiaoju.png',
             searchText: '橘猫参考图 小橘',
             freshness: 'fresh',
             metadata: { mediaType: 'image', entityType: 'character' },
-            visualResource: {
-              projectedUri: 'webview:/workspace/.neko/.cache/resources/thumbnails/asset-1.jpg',
-              status: 'ready',
-              alt: '橘猫参考图',
-            },
           },
           {
             id: 'entity-requirement:req-1',
@@ -122,21 +117,19 @@ describe('projectMentionSearch', () => {
           filePath: 'cases/test.fountain',
           navigationData: expect.objectContaining({
             filePath: 'cases/test.fountain',
-            resolvedPath: '/workspace/cases/test.fountain',
           }),
         }),
         expect.objectContaining({
-          type: 'asset',
+          type: 'media',
           label: '橘猫参考图',
-          source: 'asset-library',
+          source: 'media-library',
           searchText: '橘猫参考图 小橘',
           mediaType: 'image',
-          thumbnailUri: 'webview:/workspace/.neko/.cache/resources/thumbnails/asset-1.jpg',
           entityType: 'character',
           navigationData: expect.objectContaining({
-            assetId: 'asset-1',
-            partition: 'asset-library',
-            sourceId: 'asset-1',
+            partition: 'media-library',
+            sourceId: 'neko/assets/Characters/xiaoju.png',
+            filePath: 'neko/assets/Characters/xiaoju.png',
           }),
         }),
         expect.objectContaining({
@@ -159,6 +152,34 @@ describe('projectMentionSearch', () => {
         freshness: 'fresh',
       }),
     );
+  });
+
+  it('rejects legacy Asset Library search partitions instead of mapping an Asset id', async () => {
+    vi.mocked(vscode.commands.executeCommand).mockResolvedValue({
+      items: [
+        {
+          id: 'legacy-asset-1',
+          kind: 'media',
+          label: 'Legacy portrait',
+          source: {
+            partition: 'asset-library',
+            sourceId: 'legacy-asset-1',
+            sourceKind: 'image',
+          },
+          projectRoot: '/workspace',
+          searchText: 'Legacy portrait',
+          freshness: 'fresh',
+        },
+      ],
+      partitions: [],
+      freshness: 'fresh',
+      context: { projectRoot: '/workspace' },
+      query: { text: 'portrait' },
+    });
+
+    await expect(
+      searchProjectMentionCandidates({ includePattern: '**/*portrait*', limit: 30 }),
+    ).rejects.toThrow('Legacy Asset Library search results require explicit inspection');
   });
 
   it('returns confirmed characters and explicitly confirmable character Candidates for roleplay', async () => {
@@ -185,22 +206,6 @@ describe('projectMentionSearch', () => {
             entityKind: 'character',
             source: 'neko-entity',
           },
-        },
-        {
-          id: 'asset:asset-xiaoju',
-          kind: 'asset',
-          label: '小橘参考图',
-          description: 'Asset',
-          source: {
-            partition: 'asset-library',
-            sourceId: 'asset-xiaoju',
-            sourceKind: 'image',
-          },
-          projectRoot: '/workspace',
-          filePath: 'assets/xiaoju.png',
-          searchText: '小橘参考图',
-          freshness: 'fresh',
-          metadata: { mediaType: 'image', entityType: 'character' },
         },
         {
           id: 'creative-entity:legacy-character',
@@ -469,35 +474,29 @@ describe('projectMentionSearch', () => {
     });
   });
 
-  it('contracts media library absolute paths before exposing path-backed mention candidates', async () => {
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue(
-      createAssetsExtension({
-        mediaLibraryRoots: ['/Users/feng/Assets/epub'],
-        pathVariables: [['EPUBS', '/Users/feng/Assets/epub']],
-      }),
-    );
+  it('preserves linked workspace paths for path-backed mention candidates', async () => {
     vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command: string) => {
       if (command === PROJECT_SEARCH_QUERY_COMMAND) {
         return {
           items: [
             {
-              id: 'media:/Users/feng/Assets/epub/Blame/book.epub',
+              id: 'media:neko/assets/EPUBS/Blame/book.epub',
               kind: 'document',
               label: 'book.epub',
               description: 'Media: EPUBS',
               source: {
                 partition: 'media-library',
-                sourceId: '/Users/feng/Assets/epub/Blame/book.epub',
+                sourceId: 'neko/assets/EPUBS/Blame/book.epub',
                 sourceKind: 'document',
-                filePath: '/Users/feng/Assets/epub/Blame/book.epub',
+                filePath: 'neko/assets/EPUBS/Blame/book.epub',
               },
               projectRoot: '/workspace',
-              filePath: '/Users/feng/Assets/epub/Blame/book.epub',
+              filePath: 'neko/assets/EPUBS/Blame/book.epub',
               searchText: 'book.epub EPUBS document',
               freshness: 'fresh',
               metadata: { mediaType: 'document' },
               navigationData: {
-                filePath: '/Users/feng/Assets/epub/Blame/book.epub',
+                filePath: 'neko/assets/EPUBS/Blame/book.epub',
                 libraryName: 'EPUBS',
               },
             },
@@ -526,14 +525,12 @@ describe('projectMentionSearch', () => {
         label: 'book.epub',
         source: 'media-library',
         mediaType: 'document',
-        filePath: '${EPUBS}/Blame/book.epub',
+        filePath: 'neko/assets/EPUBS/Blame/book.epub',
         navigationData: expect.objectContaining({
           partition: 'media-library',
-          filePath: '${EPUBS}/Blame/book.epub',
-          portablePath: '${EPUBS}/Blame/book.epub',
-          resolvedPath: '/Users/feng/Assets/epub/Blame/book.epub',
-          sourceId: '${EPUBS}/Blame/book.epub',
-          variable: 'EPUBS',
+          filePath: 'neko/assets/EPUBS/Blame/book.epub',
+          portablePath: 'neko/assets/EPUBS/Blame/book.epub',
+          sourceId: 'neko/assets/EPUBS/Blame/book.epub',
         }),
       }),
     ]);
@@ -544,38 +541,31 @@ describe('projectMentionSearch', () => {
     );
   });
 
-  it('uses media library portable paths emitted by project search without re-contracting', async () => {
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue(
-      createAssetsExtension({
-        mediaLibraryRoots: ['/Users/feng/Assets'],
-        pathVariables: [['A', '/Users/feng/Assets']],
-      }),
-    );
+  it('uses linked workspace paths emitted by project search without rewriting', async () => {
+    const linkedPath = 'neko/assets/素材/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub';
     vi.mocked(vscode.commands.executeCommand).mockImplementation(async (command: string) => {
       if (command === PROJECT_SEARCH_QUERY_COMMAND) {
         return {
           items: [
             {
-              id: 'media:${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+              id: `media:${linkedPath}`,
               kind: 'document',
               label: '[Kmoe][浪客行]卷01.epub',
               description: 'Media: 素材',
               source: {
                 partition: 'media-library',
-                sourceId: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+                sourceId: linkedPath,
                 sourceKind: 'document',
-                filePath: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+                filePath: linkedPath,
               },
               projectRoot: '/workspace',
-              filePath: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
-              searchText:
-                '[Kmoe][浪客行]卷01.epub ${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+              filePath: linkedPath,
+              searchText: `[Kmoe][浪客行]卷01.epub ${linkedPath}`,
               freshness: 'fresh',
               metadata: { mediaType: 'document' },
               navigationData: {
-                filePath: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
-                portablePath: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
-                resolvedPath: '/Users/feng/Assets/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+                filePath: linkedPath,
+                portablePath: linkedPath,
                 libraryName: '素材',
               },
             },
@@ -604,13 +594,11 @@ describe('projectMentionSearch', () => {
         label: '[Kmoe][浪客行]卷01.epub',
         source: 'media-library',
         mediaType: 'document',
-        filePath: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
+        filePath: linkedPath,
         navigationData: expect.objectContaining({
-          filePath: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
-          portablePath: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
-          resolvedPath: '/Users/feng/Assets/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
-          sourceId: '${A}/epub/animation/浪客行/[Kmoe][浪客行]卷01.epub',
-          variable: 'A',
+          filePath: linkedPath,
+          portablePath: linkedPath,
+          sourceId: linkedPath,
         }),
       }),
     ]);
@@ -756,17 +744,3 @@ describe('projectMentionSearch', () => {
     );
   });
 });
-
-function createAssetsExtension(options: {
-  readonly mediaLibraryRoots: readonly string[];
-  readonly pathVariables: ReadonlyArray<readonly [string, string]>;
-}): vscode.Extension<unknown> {
-  return {
-    isActive: true,
-    exports: {
-      getMediaLibraryRoots: vi.fn(async () => [...options.mediaLibraryRoots]),
-      getPathVariables: vi.fn(async () => [...options.pathVariables]),
-    },
-    activate: vi.fn(),
-  } as unknown as vscode.Extension<unknown>;
-}

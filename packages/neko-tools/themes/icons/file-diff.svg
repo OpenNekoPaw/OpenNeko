@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none">
-  <!-- asset-diff: two overlapping rectangles with diff lines -->
-  <rect x="1.5" y="3" width="8" height="10" rx="1" stroke="#F97316" stroke-width="1.5"/>
-  <rect x="6.5" y="3" width="8" height="10" rx="1" stroke="#F97316" stroke-width="1.5" stroke-dasharray="2 1"/>
-  <line x1="4" y1="6.5" x2="7" y2="6.5" stroke="#F97316" stroke-width="1" stroke-linecap="round"/>
-  <line x1="4" y1="8" x2="7" y2="8" stroke="#F97316" stroke-width="1" stroke-linecap="round"/>
-  <line x1="4" y1="9.5" x2="7" y2="9.5" stroke="#F97316" stroke-width="1" stroke-linecap="round"/>
-</svg>
