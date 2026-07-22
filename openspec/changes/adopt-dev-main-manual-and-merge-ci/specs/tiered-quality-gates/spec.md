@@ -4,7 +4,7 @@
 
 The repository SHALL provide a stable local gate command that runs format, lint, build, ordinary workspace tests, unused-code checks, production debt checks, and architecture checks without collecting coverage.
 
-#### Scenario: Developer validates before pushing dev
+#### Scenario: Developer validates before pushing a development branch
 
 - **WHEN** a developer invokes the documented local gate from a checkout
 - **THEN** the command SHALL run the complete deterministic development gate without invoking Agent Evaluation or provider-backed acceptance
@@ -12,17 +12,17 @@ The repository SHALL provide a stable local gate command that runs format, lint,
 
 ### Requirement: Pull Request gate blocks deterministic repository regressions
 
-The repository SHALL run complete deterministic source validation, full Rust and Proto checks, dependency review, OpenSpec validation, and all supported-platform VSIX packaging for Pull Requests from dev to main.
+The repository SHALL run complete deterministic source validation, full Rust and Proto checks, dependency review, OpenSpec validation, and all supported-platform VSIX packaging for Pull Requests from non-main development branches to main.
 
-#### Scenario: dev promotion succeeds
+#### Scenario: Development branch promotion succeeds
 
-- **WHEN** a Pull Request has head branch dev and base branch main and every required validation and packaging job succeeds
+- **WHEN** a Pull Request has a non-empty head branch other than main, base branch main, and every required validation and packaging job succeeds
 - **THEN** GitHub Actions SHALL publish a successful stable `Merge Gate` result
 
-#### Scenario: Pull Request bypasses dev
+#### Scenario: Pull Request has an invalid promotion source
 
-- **WHEN** a Pull Request targeting main has a head branch other than dev
-- **THEN** `Merge Gate` SHALL fail with an explicit source-branch diagnostic
+- **WHEN** a Pull Request has an empty head branch, head branch main, or base branch other than main
+- **THEN** `Merge Gate` SHALL fail with an explicit development-branch-to-main diagnostic
 
 #### Scenario: Required merge job does not succeed
 
@@ -40,7 +40,7 @@ The repository SHALL implement `Manual Gate` and `Merge Gate` result aggregation
 
 #### Scenario: Merge validation succeeds
 
-- **WHEN** the dev-to-main Pull Request executes the same shared jobs plus promotion-source and dependency-review jobs successfully
+- **WHEN** the development-branch-to-main Pull Request executes the same shared jobs plus promotion-source and dependency-review jobs successfully
 - **THEN** GitHub Actions SHALL publish a successful `Merge Gate`
 
 #### Scenario: Unknown job result is provided
@@ -59,7 +59,7 @@ Generic local, manual, and merge gate commands SHALL NOT invoke Agent Evaluation
 
 #### Scenario: Existing localization tests remain package-owned
 
-- **WHEN** the dev/main promotion workflow is introduced
+- **WHEN** the development-branch/main promotion workflow is introduced
 - **THEN** the change SHALL NOT add localization-specific test content or alter package test discovery solely for gate composition
 
 ### Requirement: Remote gates exclude local runtime dependencies
@@ -82,6 +82,6 @@ Manual and Merge Gates SHALL only execute tests reproducible from a clean checko
 
 ### Requirement: Main gate aggregates release-level evidence
 
-**Reason**: Platform packaging and deterministic release feasibility now block dev-to-main promotion through `Merge Gate`; a post-merge `Main Gate` cannot prevent an invalid commit from entering main.
+**Reason**: Platform packaging and deterministic release feasibility now block development-branch-to-main promotion through `Merge Gate`; a post-merge `Main Gate` cannot prevent an invalid commit from entering main.
 
 **Migration**: Move every required Main Gate source and packaging job into the shared Manual/Merge graph, remove push-main CI, and publish only from protected main version tags.

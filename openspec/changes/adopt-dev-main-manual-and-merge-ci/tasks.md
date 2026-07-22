@@ -1,7 +1,7 @@
 ## 1. Gate Contracts And Regressions
 
-- [x] 1.1 Replace tiered gate orchestration expectations with local, remote-reproduction, Manual Gate, and dev-to-main Merge Gate contracts
-- [x] 1.2 Add fail-visible promotion-source tests for the only accepted dev-to-main Pull Request path
+- [x] 1.1 Replace tiered gate orchestration expectations with local, remote-reproduction, Manual Gate, and development-branch-to-main Merge Gate contracts
+- [x] 1.2 Add fail-visible promotion-source tests for accepted development-branch-to-main Pull Request paths
 - [x] 1.3 Add release-source/version validator tests covering main ancestry, stable/prerelease tags, package groups, and mismatches
 
 ## 2. CI Canonical Path
@@ -19,9 +19,9 @@
 
 ## 4. Documentation And External Configuration
 
-- [x] 4.1 Update the quality ADR and Chinese/English project entry docs for dev local validation, manual remote CI, dev-to-main Merge Gate, and tag Release
-- [x] 4.2 Create dev from the current main head and protect it from force push/deletion while retaining normal development pushes
-- [ ] 4.3 After the new check appears on a dev-to-main Pull Request, atomically replace main required `Branch Gate` with GitHub Actions `Merge Gate`
+- [x] 4.1 Update the quality ADR and Chinese/English project entry docs for development-branch local validation, manual remote CI, development-branch-to-main Merge Gate, and tag Release
+- [x] 4.2 Create an initial development branch from the current main head and protect it from force push/deletion while retaining normal development pushes
+- [ ] 4.3 After the new check appears on a development-branch-to-main Pull Request, atomically replace main required `Branch Gate` with GitHub Actions `Merge Gate`
 - [x] 4.4 Configure and verify the release environment and protected `v*` tag creation/deletion policy
 
 ## 5. Verification
@@ -29,3 +29,9 @@
 - [x] 5.1 Run focused orchestration and validator tests, strict OpenSpec validation, formatting, and diff hygiene
 - [x] 5.2 Run repository quality gates and classify any failures caused by unrelated concurrent worktree changes
 - [x] 5.3 Perform Neko L4 quality review and record real remote Manual/Merge/Release evidence or explicit external blockers
+
+## 6. Development Branch Source Correction
+
+- [x] 6.1 Replace the fixed `dev` source assertion with the canonical non-empty, non-main development branch contract and add regression coverage for topic branches
+- [x] 6.2 Synchronize Chinese/English entry docs and the quality-gate ADR with the corrected branch-category semantics
+- [x] 6.3 Run focused orchestration, OpenSpec, formatting, and diff-hygiene validation

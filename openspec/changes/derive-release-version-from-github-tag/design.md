@@ -81,7 +81,7 @@ suffix affects only GitHub Release classification.
 1. Add the projector and regression tests.
 2. Relax only the source/tag equality check while retaining all other source validation.
 3. Wire projection into Release tests and platform packaging before consumers run.
-4. Merge through the normal dev-to-main gate.
+4. Merge through the normal development-branch-to-main gate.
 5. Create a new GitHub Release tag from the updated main commit; do not move the failed protected
    `v0.0.2` tag.
 
