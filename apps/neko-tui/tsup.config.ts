@@ -35,8 +35,8 @@ export default defineConfig({
   banner: {
     js: [
       '#!/usr/bin/env node',
-      "import { createRequire } from 'node:module';",
-      'const require = createRequire(import.meta.url);',
+      "import { createRequire as createNekoTuiRequire } from 'node:module';",
+      'const require = createNekoTuiRequire(import.meta.url);',
     ].join('\n'),
   },
 });
