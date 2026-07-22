@@ -11,6 +11,22 @@ describe('Node document module loader', () => {
     ).resolves.toHaveLength(NODE_DOCUMENT_MODULE_NAMES.length);
   }, 30_000);
 
+  it('loads the patched XML parser and preserves Final Draft parsing APIs', async () => {
+    const fastXmlParser =
+      await loadNodeDocumentModule<typeof import('fast-xml-parser')>('fast-xml-parser');
+    const parser = new fastXmlParser.XMLParser({
+      ignoreAttributes: false,
+      attributeNamePrefix: '@_',
+    });
+
+    expect(parser.parse('<FinalDraft DocumentType="Script"><Content /></FinalDraft>')).toEqual({
+      FinalDraft: {
+        '@_DocumentType': 'Script',
+        Content: '',
+      },
+    });
+  });
+
   it('loads the patched SheetJS runtime and preserves spreadsheet parsing APIs', async () => {
     const xlsxModule = await import('xlsx');
     const xlsx = await loadNodeDocumentModule<typeof import('xlsx')>('xlsx');

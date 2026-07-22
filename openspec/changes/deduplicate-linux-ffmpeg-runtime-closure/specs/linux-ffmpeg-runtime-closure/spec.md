@@ -60,3 +60,17 @@ CI and Release platform packaging MUST compile the N-API binary against the FFmp
 
 - **WHEN** CI or Release builds `host-napi` for a supported target
 - **THEN** it prepares the configured FFmpeg development source first and passes that explicit workspace prefix to the native build
+
+### Requirement: Build SDK exclusion
+
+The FFmpeg development SDK under the Engine `deps/` tree MUST remain a build-time input and MUST NOT appear in either the standalone Engine VSIX or the composed OpenNeko VSIX.
+
+#### Scenario: Engine platform VSIX is created
+
+- **WHEN** platform packaging runs after preparing the configured FFmpeg development SDK
+- **THEN** VSIX inclusion rules exclude the complete `deps/` tree while retaining the materialized `packages/host-napi` runtime closure
+
+#### Scenario: A feature payload contains a build dependency tree
+
+- **WHEN** the OpenNeko assembler inspects an extracted feature payload containing a `deps/` path segment
+- **THEN** composition fails visibly before creating the final VSIX and identifies the forbidden build input

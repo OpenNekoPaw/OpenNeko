@@ -17,7 +17,7 @@ env:
 
 jobs:
   promotion-source:
-    name: Validate dev to main promotion
+    name: Validate development branch to main promotion
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:

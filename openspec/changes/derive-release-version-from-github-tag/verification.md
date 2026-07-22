@@ -63,7 +63,7 @@ effect rather than a release regression.
 
 - The protected existing `v0.0.2` tag points to a commit containing the old workflow. Re-running
   that tag cannot load this change, and the tag must not be moved, deleted, or overwritten.
-- After this change passes the normal `dev -> main` Merge Gate, the first release using the new
+- After this change passes the normal development-branch-to-main Merge Gate, the first release using the new
   contract must be a new GitHub Release tag, for example `v0.0.3`, created from updated main.
 - Linux artifact construction and the final GitHub Release upload remain runner-owned external
   evidence; local macOS validation cannot replace the first new-tag Release run.
