@@ -1,100 +1,66 @@
 ## ADDED Requirements
 
-### Requirement: VS Code selects one editor-scoped Engine adapter
-Each VS Code Cut editor SHALL receive one editor-scoped adapter implementing shared probe, video preview, PCM stream and export job ports. Runtime failure MUST NOT switch to Node media, HTML media, NKV or another hidden implementation.
+### Requirement: VS Code selects one bounded media adapter
+Each VS Code Cut document session SHALL receive one selected media adapter implementing host-neutral probe, frame capture, video preview, PCM stream and export ports. The public Cut contract MUST NOT expose Engine request types, tokens, native handles or timeline DTOs. Runtime failure MUST NOT switch to NKV, Webview-owned state or another hidden implementation.
 
 #### Scenario: Compose a Cut editor
-- **WHEN** a VS Code Cut editor session is created
-- **THEN** the composition root provides one Engine-backed adapter carrying explicit document/session identity
+- **WHEN** a VS Code Cut document session is created
+- **THEN** the composition root provides one current adapter carrying explicit document/session identity
 
-#### Scenario: Engine execution fails
-- **WHEN** Engine initialization, probe, preview, PCM or export fails
-- **THEN** VS Code returns the Engine diagnostic without invoking a fallback media path
+#### Scenario: Media execution fails
+- **WHEN** initialization, probe, preview, PCM, frame capture or export fails
+- **THEN** VS Code returns the selected adapter diagnostic without invoking a fallback project or media path
 
-### Requirement: Media probing provides complete profile evidence
-The shared `MediaDescriptor` SHALL expose container, stream count/index, codec/profile, dimensions, rational rate, CFR evidence, pixel format, bit depth/chroma, field order, color/HDR metadata, duration, audio sample rate/channels and encryption status required by the Cut v1 validator. Missing required evidence MUST be treated as unknown.
+### Requirement: Structural OTIO editing does not require media execution
+Opening, editing and saving structurally valid OTIO SHALL depend on Cut Core and Host workspace IO only. Media evidence SHALL be requested only by operations that require it, including separation, preview, frame capture and media export.
 
-#### Scenario: Probe a conforming MP4
-- **WHEN** Engine probes a supported fixture
-- **THEN** the descriptor contains enough field-level evidence for host-neutral validation without decoder-success inference
+#### Scenario: Open with media unavailable
+- **WHEN** a valid OTIO contains a missing or currently unsupported media reference
+- **THEN** Cut preserves and edits the OTIO structure while media-dependent actions report a reference-specific diagnostic
 
-#### Scenario: Probe evidence is incomplete
-- **WHEN** a required profile field is absent or ambiguous
-- **THEN** Cut returns an actionable unknown-profile diagnostic before mutation or playback
+### Requirement: Current linked separation reuses the source
+Separating audio SHALL create a linked Audio Clip whose ExternalReference is the same workspace-relative source used by the Video Clip. It SHALL copy the current timeline/source range and persist reciprocal Clip link identities. It MUST NOT create media output, invoke audio transcode, copy bytes or mutate the source file.
 
-### Requirement: Logical audio separation reuses the video source
-Separating audio SHALL create an Audio Track Clip whose ExternalReference is the same MP4 used by the source Video Clip. It SHALL copy the initial timeline/source range and MAY store provenance-only source Video Clip identity. It MUST NOT create WAV or other media output, invoke audio transcode, or mutate the source file.
+#### Scenario: Separate supported embedded audio
+- **WHEN** the selected adapter confirms usable embedded audio for the current source/document revision
+- **THEN** one Cut Core command creates the linked Audio Clip and undo can remove that timeline change without media cleanup
 
-#### Scenario: Separate one embedded audio stream
-- **WHEN** the user invokes separation for a current Video Clip revision whose MP4 has exactly one supported AAC-LC stream
-- **THEN** one Cut Core command creates the Audio Clip and undo can remove that timeline change without any media-file cleanup
+#### Scenario: Reject failed separation
+- **WHEN** probe fails, no usable audio exists, the source/document revision is stale or a linked Audio Clip already exists
+- **THEN** Cut returns a diagnostic and neither OTIO nor media bytes change
 
-#### Scenario: Reject ambiguous or stale separation
-- **WHEN** the source has zero or multiple audio streams, an unsupported codec, a stale source/document revision, or an existing provenance Audio Clip
-- **THEN** Cut returns a diagnostic and neither OTIO nor media files change
+### Requirement: Current embedded-audio playback remains supported
+Before separation, the selected VS Code adapter MAY preserve the current behavior in which a Video Clip contributes embedded audio. After separation, the reciprocal link identity SHALL prevent the same embedded stream from being mixed once through the Video Clip and again through the linked Audio Clip.
 
-### Requirement: Video and audio media roles are isolated
-`CutPreviewPlan` and `CutExportPlan` SHALL assign every segment an explicit video or audio role. A Video Track Clip MUST NOT contribute embedded audio. An Audio Track Clip MAY reference MP4 and SHALL contribute only its supported audio stream.
+#### Scenario: Preview before separation
+- **WHEN** a Video Clip has embedded audio and no linked Audio Clip
+- **THEN** preview may include the embedded audio through the current adapter
 
-#### Scenario: Preview an imported video before separation
-- **WHEN** a Video Track contains an MP4 with embedded AAC and no Audio Clip exists
-- **THEN** Engine produces video frames without starting or mixing an audio segment for that source
+#### Scenario: Preview after separation
+- **WHEN** the linked Audio Clip references the same source
+- **THEN** preview and export include one logical copy of the source audio rather than a duplicate mix
 
-#### Scenario: Preview after logical separation
-- **WHEN** an enabled Audio Clip references the same MP4 as a Video Clip
-- **THEN** Engine decodes PCM for the Audio Clip while the Video Clip remains video-only
+### Requirement: PCM and media export retain the current bounded path
+VS Code SHALL continue to use the selected current adapter for PCM preview and media export. MP4-backed and WAV-backed Audio Clips MAY use the existing PCM contract. Export MUST use typed Cut inputs, manage cancellation and staging, preserve an existing output on failure and return a terminal diagnostic.
 
-### Requirement: Logical Audio Clips remain independently editable
-An Audio Clip created by separation SHALL remain playable from its own ExternalReference/source range and MUST NOT receive automatic move, trim, delete or undo mutations from its source Video Clip.
-
-#### Scenario: Edit the source video after separation
-- **WHEN** the user moves, trims or deletes the originating Video Clip
-- **THEN** the Audio Clip remains unchanged and provenance metadata does not trigger synchronization
-
-### Requirement: PCM preview uses the current bounded Engine stream
-VS Code SHALL preview enabled Audio Track Clips through the existing Engine PCM stream as interleaved f32le, 48 kHz, stereo frames carrying PTS, duration, sample rate, channels and seek generation. MP4 and WAV Audio Clips SHALL share this runtime contract.
-
-#### Scenario: Seek MP4-backed audio
-- **WHEN** the user seeks while an Audio Clip backed by MP4 is active
-- **THEN** Engine decodes the container audio at the requested source range and stale PCM generations are discarded
-
-#### Scenario: Mix multiple Audio Tracks
-- **WHEN** enabled MP4-backed or WAV-backed Audio Clips overlap
-- **THEN** preview applies the shared gain/fade/sum/clamp semantics without enabling audio on Video Track Clips
-
-### Requirement: VS Code enforces one Cut v1 Media Profile
-Video Clips SHALL be limited to MP4 with one H.264 AVC 8-bit yuv420p SDR progressive CFR video stream up to 1080p, and their video role SHALL ignore all embedded audio streams. Logical separation SHALL be available only when the MP4 has exactly one AAC-LC 44.1/48 kHz mono/stereo stream. Independently imported Audio Clips SHALL be limited to WAV PCM 44.1/48 kHz mono/stereo. General format-conversion import is out of scope.
-
-#### Scenario: Import conforming media
-- **WHEN** probe evidence satisfies every required field for the selected role
-- **THEN** VS Code accepts the source and records a project-relative ExternalReference
-
-#### Scenario: Reject multiple embedded audio streams
-- **WHEN** an MP4 contains more than one audio stream
-- **THEN** Video Clip import remains video-only and logical separation reports unsupported-multiple-audio-streams instead of choosing the first stream
-
-#### Scenario: Reject profile-external media
-- **WHEN** media is VFR, HDR, 10-bit, non-4:2:0, interlaced, has extra video streams, surround/object audio, DRM, corrupt timestamps or unknown duration
-- **THEN** Cut returns field-level diagnostics even if Engine can decode the source
-
-### Requirement: Export executes one typed role-aware plan
-VS Code export SHALL produce MP4/H.264/AAC-LC/SDR/yuv420p up to 1080p from a frozen `CutExportPlan`. Output fps SHALL default to project edit rate and MAY use another supported rate with the frozen PTS/drop/repeat rule. Callers MUST NOT supply shell commands, arbitrary FFmpeg arguments or filter graphs.
-
-#### Scenario: Export before logical separation
-- **WHEN** Video Clips contain embedded AAC but no enabled Audio Track Clips exist
-- **THEN** output validation requires a video-only MP4 and proves the embedded streams were not implicitly mapped
-
-#### Scenario: Export after logical separation
-- **WHEN** an enabled Audio Clip references an MP4 embedded stream
-- **THEN** Engine decodes that stream through the audio role, mixes it and validates audio presence before atomic output commit
+#### Scenario: Export a supported timeline
+- **WHEN** the current adapter accepts the OTIO-derived timeline and output settings
+- **THEN** it produces and validates the requested media output without asking FFmpeg or another backend to interpret OTIO directly
 
 #### Scenario: Export fails or is cancelled
-- **WHEN** decode, mix, encode, mux, validation or cancellation reaches terminal failure
-- **THEN** Extension cleans staging, preserves an existing target and returns a terminal diagnostic without partial success
+- **WHEN** decode, mix, encode, mux, validation or cancellation fails
+- **THEN** VS Code cleans staging, preserves an existing target and reports terminal failure
 
 ### Requirement: Media bytes remain outside the Webview control bridge
-Extension/Webview messages SHALL contain only descriptors, plans, commands, stream identities, status, progress, cancellation and diagnostics. Source bytes and PCM MUST use Engine-authorized data channels and MUST NOT be Base64-encoded into ordinary postMessage payloads.
+Extension/Webview messages SHALL contain commands, projections, descriptors, stream identities, status, progress, cancellation and diagnostics. Source bytes, video frames and PCM MUST use authorized media data paths and MUST NOT be Base64-encoded into ordinary postMessage control payloads.
 
 #### Scenario: Audit media transport
-- **WHEN** VS Code previews a long video and MP4-backed Audio Clips
-- **THEN** runtime evidence shows Engine video/PCM traffic and no bulk file or PCM data in Extension/Webview control messages
+- **WHEN** VS Code previews or exports a timeline
+- **THEN** runtime evidence shows the selected media data path and no bulk source/frame/PCM data in ordinary Extension/Webview messages
+
+### Requirement: The current media implementation is replaceable
+OTIO, Cut Core, document sessions, Agent/TUI contracts and Webview messages SHALL depend only on host-neutral media ports. Replacing or deleting the current Neko Engine implementation MUST NOT require a second OTIO codec, a new project format or changes to offline Cut commands.
+
+#### Scenario: Audit public contracts
+- **WHEN** shared Cut types and capability schemas are inspected
+- **THEN** they contain media operation semantics but no Engine-specific request, action, token, native handle or lifecycle type

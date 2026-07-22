@@ -7,6 +7,8 @@
 
 Cut 范围说明（2026-07-22）：当前 Cut 轻量化变更只处理 VS Code 的 OTIO 工程和 Engine adapter，不决定 Desktop Cut 的预览、音频或导出实现。Desktop Cut 媒体路径必须由后续独立 ADR/OpenSpec 定义，不得从 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 推断。本文其他 Desktop composition、Agent、项目壳和 host adapter 决策继续有效。
 
+部分取代说明（2026-07-22）：本文关于 Cut 保留 `.nkv`、OTIO 只作为交换格式或由 Desktop 复用既有 Cut 媒体实现的结论，已由 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 取代。Desktop Cut 格式和 media adapter 仍需未来独立 OpenSpec，不得从本文恢复 NKV 或推断宿主实现。
+
 ## 背景
 
 OpenNeko 当前只有 `apps/neko-vscode` 和 `apps/neko-tui` 两个应用组合根，系统文档也只把 VS Code 与 TUI 描述为现行客户端。此前的 Desktop、Workbench Core 与 Market Core 已被删除；[`adr-neko-desktop-apphost-resource-viewport-boundary.md`](adr-neko-desktop-apphost-resource-viewport-boundary.md) 因此保持 `Superseded`，不得作为恢复旧实现的依据。

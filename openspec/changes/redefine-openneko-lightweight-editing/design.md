@@ -1,57 +1,61 @@
 ## Context
 
-当前 Cut 仍以 NKV、Webview timeline store、Extension-owned timeline conversion 和 Rust Engine timeline 为代码事实。现有 Webview 的“分离音频”会创建一个 `type: audio` 的 element，但 `src` 仍等于原视频 `src`；Engine 的 audio decoder 已支持从视频容器读取音频。因此“分离”是 timeline 逻辑分离，而不是 FFmpeg 生成 WAV。
+当前 Cut 仍以 NKV、Webview timeline store、Extension-owned timeline conversion 和 Rust timeline 为代码事实。现有“分离音频”会创建一个引用相同视频 `src` 的 Audio element，并以 `linkedAudioId` / `linkedVideoId` 避免重复混音；它不是生成 WAV 的媒体派生流程。
 
-本设计只处理 VS Code。目标是用 OTIO 和共享执行计划替换重复工程模型，同时复用当前 Engine 直接读取 MP4 音频流的能力。相关稳定决策见 [`ADR: Cut OTIO 工程与 VS Code 媒体运行时边界`](../../../docs/architecture/adr-cut-otio-vscode-media-runtime-boundary.md)。
+本设计以 `.otio` 文件取代重复工程模型，同时尽量不重做已经工作的媒体行为。对应稳定决策见 [`ADR: Cut OTIO 工程与可替换媒体运行时边界`](../../../docs/architecture/adr-cut-otio-vscode-media-runtime-boundary.md)。本 change 和该 ADR 是 Cut 最新目标；更早 NKV、项目内媒体目录或 Desktop 推断只作为历史/当前实现说明。
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- 用一个受限、版本化的 OTIO profile 取代 Cut 自定义项目格式和可变 timeline store。
-- 提供创建、导入、split、trim、reorder、ripple delete、Gap、基础音频 gain/mute/fade、预览和 MP4 导出。
-- 导入视频只创建 Video Clip；用户显式操作后才创建引用同一 MP4 的 Audio Clip。
-- 复用 Neko Engine 当前从视频容器解码音频、输出 PCM 和参与导出的能力，不生成 WAV 派生文件。
-- 允许受支持的不同 CFR 源共存，并用 project edit rate 与源 PTS 获得确定性预览/导出。
+- 让可复制、移动、另存和复用的 `.otio` 文件成为唯一持久 Cut 工程。
+- 由 Host document session 拥有 OTIO bytes、revision、undo/redo 和文件生命周期；Webview 只拥有临时交互状态。
+- 提供 create/open/save/save-as、workspace link、split、trim、reorder、ripple delete、Gap、基础音频参数、preview 和 export。
+- 复用当前同源媒体和 linked audio separation 行为，不生成 WAV 或复制媒体。
+- 允许引用 Cut 项目目录外、同一 workspace 内的普通文件。
+- 让 VS Code 与 TUI 复用同一个 host-neutral Cut Core；TUI 只组合离线 OTIO authoring。
 - 保持 Canvas 与 Cut 独立，只允许显式 `.otio` 目标的快照交接。
 
 **Non-Goals:**
 
-- Desktop composition root、Desktop media adapter、WebCodecs 或 Desktop FFmpeg。
-- 视频音轨转 WAV、`AudioExtractionJobPort`、`derived/audio/` 或音频派生产物生命周期。
-- 自动播放、混合或导出尚未逻辑分离的 MP4 内嵌音频。
-- 多音频流选择 UI；v1 只允许逻辑分离唯一受支持的内嵌音频流。
-- 音视频 sync lock、自动联动编辑或跨轨联动 undo。
+- 媒体 import/ingest/copy、项目私有 `media/`、通用格式转换或 proxy/original 生命周期。
+- TUI 媒体 probe、frame capture、PCM、preview 或 MP4 export。
+- 在本次替换中重做 provenance-only 音频关系、完全独立音视频编辑或多音频流选择。
+- 将 Neko Engine 固化为公共 Cut contract；当前 VS Code adapter 未来可由单独 change 替换。
 - 专业 NLE、多视觉层、transition、nested timeline、字幕 authoring、调色、效果、关键帧、变速、插件或开放 DSP graph。
-- 自动抽帧转换、光流补帧、高清增强、通用格式转换、proxy/original relink 或 NKC/NKV 在线迁移。
+- NKC/NKV 在线迁移、双读或双写。
 
 ## Five-layer analysis
 
 | Layer | Decision |
 | --- | --- |
-| Responsibility | Cut Core 拥有 OTIO、编辑命令、媒体角色、时间映射和计划；Extension/Engine adapter 只执行授权媒体请求。 |
-| Dependency | Webview 依赖 browser-safe Cut contract；VS Code、Node、Engine 和工作区 IO 留在 Extension/composition root。 |
-| Interface | Probe、video preview、PCM 和 export 使用窄 port；不新增 audio extraction/transcode port。 |
-| Extension | 后续宿主需要单独 OpenSpec；不能从本次 VS Code 设计推断 Desktop 技术路径。 |
-| Testing | OTIO/media fixture、路径断言和真实 Extension Development Host 共同证明新路径及 no-fallback。 |
+| Responsibility | `.otio` 文件是工程事实；Cut Core 拥有 codec/commands；Host document session 拥有文件生命周期；Webview 只展示投影。 |
+| Dependency | Cut Core 只依赖 host-neutral contract；VS Code/TUI 提供 workspace IO；媒体实现通过窄 port 注入。 |
+| Interface | Document commands 携带 document URI、session identity 和 expected revision；媒体 ports 不暴露 Engine 类型。 |
+| Extension | TUI 只复用离线 authoring；Desktop 和未来媒体 adapter 需要独立 change。 |
+| Testing | OTIO fixtures、document path assertions、TUI real Agent artifact evidence 和 VS Code Development Host 分别证明各自边界。 |
 
 ## Decisions
 
-### 1. OTIO document is the only mutable timeline authority
+### 1. The `.otio` file is the only durable project authority
 
 ```text
-project.otio
-  -> OtioDocument
-      -> typed edit command
-      -> TimelineView
-      -> CutPreviewPlan
-      -> CutExportPlan
-  -> React presentation state
+workspace/project.otio
+  -> Host CutDocumentSession
+      -> OtioDocument
+      -> typed command + expected revision
+      -> serialized OTIO bytes
+      -> TimelineView projection
+  -> Webview presentation state
 ```
 
-`OtioDocument` 是唯一可变 timeline state。三种投影均从显式 document revision 派生且不序列化。selection、playhead、zoom、hover、panel layout、waveform/thumbnail cache、Engine session 和授权 token 都是可恢复运行时状态。
+`CutDocumentSession` 按 document identity 隔离，拥有 OTIO bytes、当前 revision、dirty state、undo/redo、save、save-as、backup、revert 和外部文件变更处理。所有 durable command 必须携带显式 document URI/session identity/expected revision；缺失或陈旧时 fail-visible。
 
-### 2. Cut v1 freezes an exact OTIO subset
+Webview 不保存可回写的 timeline snapshot。selection、playhead、zoom、hover、panel layout、waveform/thumbnail cache、临时 URL 和媒体 session 都是可恢复状态。Webview 只提交 command intent 并消费 revisioned `TimelineView`；VS Code 保存不得向 Webview索取完整工程。
+
+同一个 `.otio` 可在同一 workspace 内复制、移动、粘贴、另存和重新打开。复制不会复制媒体 bytes。
+
+### 2. Cut v1 freezes a small OTIO structural subset
 
 只接受：
 
@@ -59,182 +63,124 @@ project.otio
 - `Clip.2`、`Gap.1`、`ExternalReference.1`；
 - `RationalTime.1`、`TimeRange.1`。
 
-Timeline 顶层 Stack 包含且只包含一个 `Track(kind=Video)` 与零到多个 `Track(kind=Audio)`。Track 只含 Clip/Gap；Clip 只含一个 active ExternalReference。
+Timeline 顶层 Stack 包含且只包含一个 `Track(kind=Video)` 与零到多个 `Track(kind=Audio)`。Track 只含 Clip/Gap；Clip 只允许一个可用 ExternalReference。nested Stack、Transition、Effect、TimeWarp、Marker、第二 Video Track、多个 media reference 或未知 schema version 在 mutation 前返回 object/path diagnostic。
 
-nested Stack、Transition、Effect、LinearTimeWarp、Marker、第二条 Video Track、多个 active media reference 或未知 schema version 在 mutation 前返回 object/path-level diagnostic。
-
-### 3. Metadata stays minimal and distinguishes provenance from coupling
-
-允许的 OpenNeko metadata：
+OpenNeko metadata 只保留当前实现需要的最小稳定 identity/link 和音频参数：
 
 ```text
 timeline.metadata.openneko.cut =
   profile | editRateNumerator | editRateDenominator | width | height
 
-audio track metadata.openneko.audio = gainDb
-
-audio clip metadata.openneko.audio =
-  gainDb | fadeInSeconds | fadeOutSeconds | sourceVideoClipId
+clip.metadata.openneko.cut = clipId
+video clip metadata.openneko.link = linkedAudioClipId?
+audio clip metadata.openneko.link = linkedVideoClipId?
+audio track/clip metadata.openneko.audio = gainDb | fadeInSeconds | fadeOutSeconds
 ```
 
-`sourceVideoClipId` 只证明该 Audio Clip 由哪次显式操作产生，用于防止重复分离、展示状态和 undo；它不建立同步关系。后续 move/trim/delete 任一 Clip 都不自动修改另一 Clip。
+`clipId` 在 create/link/split 时由 Cut Core 分配并持久化。link identity 只服务当前 separation/unseparation 和避免重复混音；本 change 不承诺音视频完全独立。未知 `openneko` 字段直接拒绝，安全的第三方 metadata 可原样保留。
 
-标准 OTIO `enabled` 表达 clip/track enable 和 mute。第三方 metadata 仅在安全可序列化且不声明 OpenNeko required capability 时保留；未知 `openneko` 字段直接拒绝。
+### 3. Media entry is link-only and workspace-relative
 
-### 4. Project timing and presentation are deterministic
+本次没有媒体 import/ingest/copy。唯一入口是：
 
-每个项目拥有固定正有理 edit rate；新项目默认 `30/1`。空项目首次导入时可以显式采用受支持源 rate，项目含 clip 后不隐式改变。
+```text
+linkMedia(workspaceRelativePath)
+  -> Host containment/symlink check
+  -> OTIO ExternalReference(target_url = workspaceRelativePath)
+```
 
-不同 CFR 源可以共存。对每个 project/output sample timestamp，选择 mapped source time 上 `PTS <= target` 的最新有效源帧；只有 clip 起点早于首帧时才使用范围内首帧。低 fps 因此重复显示，高 fps 跳过多余帧，不生成中间帧。
+ExternalReference 使用规范化、普通的 workspace-relative path，并以 workspace root 为解析基准。它可以指向 Cut 项目目录外的 workspace 文件，但不得是 absolute path、file/Webview/localhost/blob URL、Engine token、临时输出或解析后逃逸 workspace 的 symlink。
 
-项目 width/height 定义画布。v1 不提供 crop/transform；所有视频帧居中等比 `contain`，未覆盖区域为不透明黑色。Preview 与 export 使用同一 presentation rule。
+`cut.defaultProjectRoot` 只决定新 `.otio` 的默认保存目录。它不进入 OTIO，不成为媒体解析基准，也不要求创建 `media/` 或 `exports/`。
 
-### 5. Cut Core compiles role-explicit execution plans
+同一 workspace 内移动或复制 `.otio` 不改变媒体引用。跨 workspace 打开时，结构仍可编辑；不存在的引用产生 missing-media diagnostic，并通过显式 relink 修改。离线结构编辑不根据 decoder 成功与否拒绝保存。
 
-`CutPreviewPlan` 与 `CutExportPlan` 包含：
+### 4. Cut Core owns editing; media validation is operation-scoped
 
-- document URI、identity、revision；
-- project edit rate、画布和有效 timeline range；
-- 每个 segment 的 `role: video | audio`、source identity/revision、timeline range、source range 和 enabled；
-- audio gain/fade 的规范化值；
-- export output fps、container/codec、audio presence 和验证期望。
+Cut Core 实现 create/open/save projection、link/relink、split、trim、reorder、ripple delete、Gap、audio gain/mute/fade、undo 和 redo。项目 edit rate 固定为正有理数，v1 新项目统一为 `30/1`。
 
-Cut Core 是唯一 plan compiler。Video Track Clip 无论其 MP4 是否含音频，都只编译为 `role: video`；Audio Track Clip 即使引用 MP4，也只编译为 `role: audio`。这种角色隔离确保导入视频保持静音，只有显式创建 Audio Clip 后音频才进入 PCM 与导出。
+OTIO schema、路径 grammar 和 command invariants 可以离线验证。codec、duration、stream count、frame、PCM 和 export 能力只在相应媒体 operation 被请求时由当前媒体 adapter 验证。缺少 media adapter 时返回 `media-runtime-unavailable`，但不阻止合法 OTIO 结构编辑。
 
-Extension 不再从项目 DTO 自行重建 Engine timeline。Engine adapter 只把冻结 plan 转换成其受限请求，不读取 OTIO 项目文件。
+### 5. Separation initially preserves current linked behavior
 
-### 6. “Separate audio” creates a logical Audio Clip, not a WAV
+VS Code 用户显式执行“分离音频”时：
 
-导入符合 profile 的 MP4 只创建 Video Clip。Probe 可报告 `hasAudio`，但不自动创建 Audio Track/Clip；当前 `addMediaElementWithAudio` 中的异步自动创建路径必须删除。
+1. 当前媒体 adapter 检查源是否具有可用音频；
+2. Cut Core 在 expected document revision 上创建引用同一 ExternalReference 的 Audio Clip；
+3. Audio Clip 复制发起时 Video Clip 的 timeline/source range；
+4. 两个 Clip 写入稳定 `clipId` 和双向 link metadata；
+5. 一个 command 原子修改 OTIO 并记录 undo。
 
-用户点击“分离音频”时：
+该操作不调用音频转码，不创建 WAV、staging 或派生目录，也不修改媒体文件。分离前，Video Clip 可按当前媒体实现播放内嵌音频；分离后，adapter 通过 link identity 避免 Video Clip 和显式 Audio Clip 重复混音。
 
-1. 对 source revision 重新 probe；
-2. 要求恰好一个符合 profile 的音频流；
-3. 以同一 MP4 ExternalReference 创建 Audio Clip；
-4. 复制发起时 Video Clip 的 timeline/source range；
-5. 写入 provenance-only `sourceVideoClipId`；
-6. 通过一个 Cut Core command 原子修改 OTIO，并记录 undo。
+unseparate 删除 linked Audio Clip 并清理 link metadata。移动、trim、delete 和 undo 的现行 coupled 行为可以保留；完全独立编辑和 provenance-only identity 属于后续 change。TUI 没有媒体 adapter，因此不在真实 Agent evaluation 中执行或验证 separation。
 
-该操作没有后台媒体任务，不调用 `audios:transcode`，不创建临时文件或 WAV，也不改写源 MP4。UI 文案仍可使用用户熟悉的“分离音频”，但状态和文档必须说明它是逻辑分离。
+### 6. Media execution is behind replaceable host-neutral ports
 
-重复操作、缺少音频、多个音频流、unsupported codec、source revision stale 或同一 Video Clip 已有来源 Audio Clip 时，命令失败且 OTIO 不变。
-
-### 7. Audio Clips are independently editable but reuse one source
-
-逻辑分离后的 Audio Clip 与 Video Clip 共享 ExternalReference URI，不共享可变编辑状态。Audio Clip 的 trim、move、delete、gain、mute、fade 和 undo 独立执行。
-
-音频 gain 使用 `10^(gainDb/20)`，clip 与 track gain 相乘；fade 只属于 clip并使用线性振幅。Engine 按 plan 解码、应用自动化、float32 求和，并在输出边界限制到 `[-1, 1]`。
-
-用户删除来源 Video Clip 时不自动删除 Audio Clip；项目保存后重新打开时，Audio Clip 仍可仅凭自身 ExternalReference 和 source range 解码。来源 identity 失效只影响 provenance UI，不影响 Audio Clip 播放。
-
-### 8. VS Code reuses the current Engine media path
-
-每个 Cut Editor 创建 editor-scoped `VSCodeMediaAdapter`，实现：
+公共 Cut contract 只定义：
 
 - `MediaProbePort`；
+- `FrameCapturePort`；
 - `VideoPreviewPort`；
 - `AudioPcmStreamPort`；
 - `ExportJobPort`。
 
-现有 Engine audio decoder 能从 video/audio source 找到音频流，timeline stream 能创建 paired video/audio output，当前 ExportService 也允许 Audio element 与 Media element 共享 `src`。新路径保留这种底层能力，但由 role-explicit plan 决定哪些 segment进入 video 或 audio，不能由容器是否含音频自动决定。
+VS Code 当前提供一个 editor/document-scoped adapter，内部复用现有 Neko Engine probe、preview、PCM 和 export。该实现不能把 Engine request、token、timeline DTO 或 native handle 暴露给 Cut Core、OTIO、Agent、TUI 或 Webview contract。
 
-`AudioStreamClient` 和 `neko-pcm-v1` 继续消费 Engine PCM。Engine 初始化、probe、preview、PCM 或 export 失败直接返回 diagnostic，不回退 Node、HTML media、旧 timeline 或 NKV handler。
+媒体失败返回明确 diagnostic，不回退 NKV、Webview-owned timeline 或另一隐藏实现。未来删除或替换 Neko Engine 时，先通过独立 OpenSpec 实现新的唯一 media adapter，再垂直删除当前 adapter；OTIO 和 Cut Core contract 不随之变化。
 
-### 9. One probe-backed VS Code media profile
+### 7. TUI owns offline OTIO authoring only
 
-Host-neutral `MediaDescriptor` 必须提供 container、stream count/index、codec/profile、pixel format、bit depth/chroma、field order、color/HDR、duration、CFR/rate/timestamp mode、audio codec/sample rate/channels 和 encryption。缺失 required evidence 等价 profile unknown。
+TUI 组合与 VS Code 相同的 Cut Core 和 workspace document store，但不组合媒体 adapter。它支持：
 
-Cut v1：
+- create/open/save/save-as 和 OTIO structure import/export；
+- link/relink workspace-relative references；
+- add/delete/split/trim/reorder/Gap 和 audio property commands；
+- revision conflict、schema、path containment 和 legacy rejection。
 
-- Video Clip：MP4、单 H.264/AVC video stream、8-bit yuv420p SDR progressive CFR、最高 1920×1080；
-- Video role 忽略全部内嵌音频；仅当容器恰好有一个 AAC-LC 44.1/48 kHz mono/stereo stream 时提供逻辑分离；
-- 独立导入的 Audio Clip：WAV PCM 44.1/48 kHz mono/stereo；
-- Engine→Webview PCM：f32le、48 kHz、stereo。
+这里的 export 仅指把 OTIO 结构序列化到 `.otio`，不包括 MP4 render。TUI 不做 probe、separation evidence、截帧、PCM、preview 或媒体 export；这些请求必须返回 unavailable diagnostic，而不是模拟成功。
 
-多个音频流不阻止 video-only 导入，但暂不提供“选择音轨”UI，因此逻辑分离失败并返回 diagnostic；不得静默选择第一个。VFR、HDR、10-bit、4:2:2/4:4:4、interlaced、多视频 stream、多声道、DRM、损坏时间戳和未知 duration 拒绝对应的可编辑媒体角色。
-
-### 10. Project root and references stay portable
-
-VS Code 设置提供 workspace-relative `cut.defaultProjectRoot`：
-
-```text
-<workspace>/<configured-root>/<project-name>/
-  project.otio
-  media/
-  exports/
-```
-
-配置规范化后必须仍在 workspace 内。ExternalReference 保存相对 `.otio` 的 URI，不保存绝对路径、file/Webview/localhost/blob URL、Engine token 或临时输出。逻辑分离复用同一个相对 MP4 URI，因此不增加媒体文件或路径事实。
-
-### 11. Canvas and Cut remain independent
+### 8. Canvas and Cut remain independent
 
 ```text
 Canvas route
-  -> ordered media/gap draft
+  -> ordered workspace-relative media/gap draft
   -> create new .otio
      OR append to explicit documentUri + expectedRevision
   -> Cut Core command
 ```
 
-不允许 active/recent Cut fallback。已有目标只支持末尾追加，不支持隐式覆盖、replace selection 或持续同步。profile-external cue/transition/effect 返回 diagnostic。Agent capability 使用相同 target、approval 和 revision contract。
+不允许 active/recent Cut fallback。已有目标只支持末尾追加，不支持隐式覆盖、replace selection 或持续同步。profile-external cue/transition/effect 返回 diagnostic。Agent 使用相同 target、approval 和 revision contract。
 
-### 12. Export is typed, role-aware and atomic
+### 9. Webview keeps one basic editing surface
 
-输出为 MP4/H.264/AAC-LC/SDR/yuv420p，最高 1080p。没有 enabled Audio Track Clip 时输出无音轨 MP4；Video Track Clip 的内嵌音频不会被自动 mux。存在逻辑分离 Audio Clip 时，Engine 从它引用的 MP4 解码音频并参与 mix/export。
+Inspector 只显示 Video Clip、Audio Clip、Gap 和项目摘要；保留当前 linked separation 状态，不展示专业能力目录。播放控制条只保留开头、上一 project frame、播放/暂停、下一 project frame、结尾、时间码、静音/音量和全屏。时间线工具条只保留 link media、split、删除、undo/redo、zoom、fit-all 和 media export。
 
-Export 冻结 `CutExportPlan`、document revision、source set 和 output profile。Engine 写 staging，Extension 验证 codec、pixel format、fps、frame count、duration、尺寸和预期 audio presence 后原子提交。调用方不能传 shell、任意 FFmpeg argv 或 filter graph。
+Minimap 及其组件、projection、interaction、store state、message、i18n、style 和测试垂直删除。长时间线只使用水平滚动、zoom、fit-all 和 playhead follow。
 
-### 13. Replacement is vertical and fail-visible
+### 10. Replacement remains vertical and fail-visible
 
-新测试先 poison NKV/NKC codec、旧 timeline handler、active-editor target、导入时自动建 Audio Clip 和 profile-external Engine operation。结果只有在 OTIO、role-explicit plan、selected Engine adapter 和新 handler 均被断言命中时才算成功。
+新路径测试 poison NKV/NKC codec、Webview project snapshot save、active/recent target、媒体 copy/import 和隐藏 fallback。只有 Host CutDocumentSession、OTIO command、workspace-relative link 和选定媒体 adapter 被断言命中时才算成功。
 
-旧 NKV/NKC 文件不迁移、不覆盖。被移除 UI、store、operation、undo、message、Extension handler、Agent schema、i18n、CSS 和测试必须垂直删除。
+旧 NKV/NKC 文件不迁移、不覆盖。被移除 UI、store、operation、message、Extension handler、Agent schema、i18n、CSS 和测试必须垂直删除。
 
-### 14. Webview keeps one contextual Inspector and two minimal control surfaces
-
-右侧面板不删除，因为精确时间、来源信息和音频参数需要稳定入口；但它不再承担专业功能目录。删除“基础/专业”切换、灰色占位项和恢复已移除功能的入口，保留一个根据当前选择切换内容的 Inspector：
-
-| 选择 | Inspector 内容 |
-| --- | --- |
-| Video Clip | 名称/来源、分辨率、源 fps/帧数、timeline start/duration、trim in/out、内嵌音频状态与“分离音频” |
-| Audio Clip | 名称/来源、“来自视频”只读 provenance、timeline start/duration、trim in/out、gain/mute/fade in/out |
-| Gap | timeline start 与 duration |
-| 无选择 | 项目 width/height、edit rate、duration 的只读摘要；没有项目时显示空状态 |
-
-Inspector 不显示 transform、text、speed、入场/出场效果、color、effect 或 mask；不以 disabled row 暗示功能可解锁。字段是否可编辑由 v1 command contract 决定，probe/source 字段保持只读。
-
-播放控制条只保留：跳到开头、上一帧、播放/暂停、下一帧、跳到结尾、当前/总时间码、静音/音量和全屏。上一帧/下一帧按 project edit-rate frame step，不使用含义不明确的快退/快进语义。
-
-时间线工具条只保留：导入视频/音频、split、删除、undo/redo、缩小/放大、适应全部内容和导出。copy/paste 如果保留为 command/快捷键，不重复显示工具条按钮；文本、字幕、特效、专业工具箱、多视图/布局模式和含义不明的图标必须删除。
-
-Minimap 不进入 v1。删除其组件、viewport projection、拖动/缩放同步、store state、message、i18n、style 和测试。时间线导航由水平滚动、zoom、fit-all 和播放时 playhead 跟随组成；不得保留 hidden setting、灰色图标或 fallback 重新启用 Minimap。
-
-## Risks / Trade-offs
-
-- **Audio Clip 扩展名仍是 `.mp4`** → UI 以音频波形/图标和“来自视频”状态表达角色，不伪装为 WAV；导出/PCM 以 Track kind 与 plan role 判定。
-- **多个内嵌音频流无法选择** → v1 fail-visible；后续单独增加 stream selector 与持久 stream identity。
-- **共享源文件被移动会同时影响音视频** → 两个 Clip 各自报告同一 missing-media diagnostic，并通过显式 relink 修复。
-- **provenance identity 可能失效** → 只影响“已分离”提示，不影响 Audio Clip 自身播放；不得用于同步编辑。
-- **Engine 旧 timeline DTO 可能隐式播放 Video Clip 音频** → plan adapter 必须用 role-path assertions 和 video-only export fixture 证明该路径已关闭。
-- **当前 probe descriptor 不足** → 先扩展证据字段，unknown evidence 直接拒绝。
-- **移除 Minimap 后长时间线定位效率下降** → v1 以 zoom、fit-all、水平滚动和 playhead 跟随覆盖；只有真实可用性证据证明不足时再单独提案。
-- **Remote/SSH/WSL 未验证** → 只有真实 Extension Development Host/remote fixture 通过后才能声明支持。
+实施顺序是硬约束：目标 contract 只先在 OpenSpec/ADR 中冻结；随后先删除旧生产路径及其成功测试，并通过 `cleanup-audit.md` 的 source/dependency/manifest/unused/legacy/user-data gate。该 gate 未标记 `passed` 前，不得创建 OTIO codec、document session、新 Webview、新 Agent/TUI capability 或其他替代生产代码。清理阶段可以保留有明确 owner 和后续 consumer 的共享 primitive 与当前媒体 adapter seam，但不能用 placeholder、fallback 或 no-op 让旧请求继续成功。
 
 ## Migration Plan
 
-1. 冻结 OTIO schema/metadata、role-explicit plan、媒体 profile、path contract 和 fixtures。
-2. 实现 `OtioDocument`、commands、`TimelineView`、`CutPreviewPlan`、`CutExportPlan` 与 `.otio` Custom Editor。
-3. 将 Webview 收敛为单一上下文 Inspector、最小播放/时间线控制条，并垂直删除 Minimap 与 deferred UI surface。
-4. 删除导入时自动探测并创建 Audio Clip 的路径；实现显式逻辑分离命令。
-5. 扩展 `MediaDescriptor`，将 VS Code Engine 收敛为 probe/video/PCM/export adapter。
-6. 以 role-explicit plan 替换 Extension timeline conversion，验证 Video Track 永不隐式带入音频。
-7. 接入 Audio Track 同源 MP4 PCM、gain/fade/mix 与 video-only/audio-present 两类导出。
-8. 迁移 Canvas/Agent 到显式 `.otio` target，删除旧 target/fallback。
-9. 垂直删除 legacy/deferred surface，运行 Extension Development Host、Engine 集成、Agent evaluation 和仓库质量门禁。
+1. 只在 OpenSpec/ADR 中冻结目标 subset、ownership、path、linked separation、TUI 和 media-port contract；完成 deletion inventory。
+2. 垂直删除 NKV/NKC、Webview project snapshot、Extension reconstruction、import/copy、implicit target、professional/Minimap 路径及其成功测试。
+3. 运行清理 source/dependency/manifest/legacy/unused/user-data 检查，并将 `cleanup-audit.md` gate 标记为 `passed`。
+4. gate 通过后实现 `OtioDocument`、typed commands、revision、undo/redo、serialization、`TimelineView` 和 Host document session。
+5. 实现 workspace link-only 与 `.otio` Custom Editor，再构建新的基础 Webview。
+6. 在新 OTIO path 上重新接入保留的 linked separation 语义与当前 selected media adapter。
+7. 迁移 Canvas/Agent 到显式 `.otio` target，并为 TUI 组合离线 Cut document binding。
+8. 运行 OTIO/路径/多文档、TUI real Agent 和 VS Code Development Host 最终验证。
 
-## Open Questions
+## Risks / Trade-offs
 
-- 项目创建 UI 默认 `30/1` 还是同时提供 `30000/1001`，需要产品 fixture 冻结。
-- VS Code Remote/SSH/WSL 是否支持当前 Engine timeline audio path，需要真实宿主验收。
-- 多内嵌音频流选择属于后续 change；本次不得通过默认第一流隐藏该缺口。
+- Video Clip 在分离前仍可播放内嵌音频，暂不提供“分离前静音”的严格角色模型。
+- linked audio 仍可能随 Video Clip 发生现行联动；完全独立编辑延期。
+- link-only 不产生自包含项目；跨 workspace 复制可能需要 relink。
+- 离线 TUI 可以写入结构合法但运行时不支持的媒体引用；preview/export 时必须 fail-visible。
+- 当前 VS Code 媒体 adapter 仍依赖 Neko Engine，但新的公共 contract 不依赖它，后续可单独替换。
