@@ -1,245 +1,240 @@
 ## Context
 
-OpenNeko 当前的 Cut 与 Engine 同时承担播放、编辑、媒体生产、开放式特效和接近专业 NLE 的扩展语义。真正增加跨平台难度的不是 FFmpeg 或 GPU 解码本身，而是自定义 shader、动态 effect/plugin、复杂 blend/mask/keyframe、专业调色、平行 renderer 和宽泛 DTO 让每个平台都需要组合调试解码、显存互操作、合成、UI 与导出差异。
+当前 Cut 仍以 NKV、Webview timeline store、Extension-owned timeline conversion 和 Rust Engine timeline 为代码事实。现有 Webview 的“分离音频”会创建一个 `type: audio` 的 element，但 `src` 仍等于原视频 `src`；Engine 的 audio decoder 已支持从视频容器读取音频。因此“分离”是 timeline 逻辑分离，而不是 FFmpeg 生成 WAV。
 
-直接删除 `neko-engine` 并频繁启动 FFmpeg CLI 不能满足实时编辑：进程启动、硬件设备初始化、关键帧预热、管道重连和状态重建会使 seek、scrub 与编辑后预览产生可见卡顿。将视频改为 CPU 解码也会降低多层和高分辨率素材性能，并扩大“某平台悄悄成功、另一平台明显退化”的调试面。
-
-AI 视频生成改变的是创意变换的实现位置，而不是时间线事实的必要性。生成式修复、风格化、背景替换、抠像/跟踪、补帧和高级合成可以输出新的扁平媒体；但精确剪切、同步、字幕、音频混合、项目可编辑性、实时预览和交付仍要求确定性 Engine。AI 结果还必须具有来源、模型和接受状态，不能被伪装成可重放的 NKV effect。
-
-本变更跨越 NKV/OTIO、Proto、Rust Engine、Cut Extension/Webview、neko-client、Agent/External Processor、Assets/Canvas/Preview/Tools 与三平台分发。实现必须遵守 Rust 计算权威、Proto 单一 wire contract、Webview 沙箱、显式 document/session/job identity、ResourceRef、fail-visible 和预发布单一 canonical path。
+本设计只处理 VS Code。目标是用 OTIO 和共享执行计划替换重复工程模型，同时复用当前 Engine 直接读取 MP4 音频流的能力。相关稳定决策见 [`ADR: Cut OTIO 工程与 VS Code 媒体运行时边界`](../../../docs/architecture/adr-cut-otio-vscode-media-runtime-boundary.md)。
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- 提供从素材导入、代理/转码、轻量时间线编辑、GPU 实时预览、DSP 混音到视频导出的完整闭环。
-- 让 NKV 成为可验证、可迁移的 lightweight project profile，并与 OTIO 基础 editorial structure 稳定交换。
-- 保留长驻 GPU-only FFmpeg/libav realtime runtime，支持 seek、scrub、逐帧、A/V 同步和 timeline revision 原子更新。
-- 将 proxy、transcode、export、audio render、waveform 和 loudness 统一为有进度、取消、原子提交和 provenance 的受管任务。
-- 通过闭合能力矩阵删除开放式专业剪辑面，并由 AI/专业处理器承接真正 profile-external 的工作。
-- 让 AI 输出以不可变候选素材进入明确的 review/accept/import 流程，保护源素材与项目 revision。
-- 垂直清理 Webview、Extension、Proto、Engine、Agent、文档和测试中的旧路径，避免隐藏 fallback 或双实现。
+- 用一个受限、版本化的 OTIO profile 取代 Cut 自定义项目格式和可变 timeline store。
+- 提供创建、导入、split、trim、reorder、ripple delete、Gap、基础音频 gain/mute/fade、预览和 MP4 导出。
+- 导入视频只创建 Video Clip；用户显式操作后才创建引用同一 MP4 的 Audio Clip。
+- 复用 Neko Engine 当前从视频容器解码音频、输出 PCM 和参与导出的能力，不生成 WAV 派生文件。
+- 允许受支持的不同 CFR 源共存，并用 project edit rate 与源 PTS 获得确定性预览/导出。
+- 保持 Canvas 与 Cut 独立，只允许显式 `.otio` 目标的快照交接。
 
 **Non-Goals:**
 
-- 构建 Premiere、DaVinci 或 After Effects 级 NLE、调色、合成、动画或插件生态。
-- 支持任意 WGSL、FFmpeg argv/filter graph、OpenFX、第三方 DSP、动态原生插件或无限 effect graph。
-- 支持非 normal blend、mask、通用关键帧、速度曲线、倒放、复杂 transition、嵌套 composition 或无限视觉层。
-- 提供 CPU 视频解码兼容模式、显式软件解码开关或硬件失败后的隐式 fallback。
-- 将 OTIO 作为可写项目事实，或声称所有 OTIO adapter/metadata 都可以无损往返。
-- 让 AI 直接编辑 NKV 内部结构、覆盖源素材、成为实时 renderer，或把非确定性输出保存为可重放 effect 参数。
-- 由 Engine 发现、审批或执行外部 AI/provider；Engine 只消费和产生已授权媒体资源。
+- Desktop composition root、Desktop media adapter、WebCodecs 或 Desktop FFmpeg。
+- 视频音轨转 WAV、`AudioExtractionJobPort`、`derived/audio/` 或音频派生产物生命周期。
+- 自动播放、混合或导出尚未逻辑分离的 MP4 内嵌音频。
+- 多音频流选择 UI；v1 只允许逻辑分离唯一受支持的内嵌音频流。
+- 音视频 sync lock、自动联动编辑或跨轨联动 undo。
+- 专业 NLE、多视觉层、transition、nested timeline、字幕 authoring、调色、效果、关键帧、变速、插件或开放 DSP graph。
+- 自动抽帧转换、光流补帧、高清增强、通用格式转换、proxy/original relink 或 NKC/NKV 在线迁移。
+
+## Five-layer analysis
+
+| Layer | Decision |
+| --- | --- |
+| Responsibility | Cut Core 拥有 OTIO、编辑命令、媒体角色、时间映射和计划；Extension/Engine adapter 只执行授权媒体请求。 |
+| Dependency | Webview 依赖 browser-safe Cut contract；VS Code、Node、Engine 和工作区 IO 留在 Extension/composition root。 |
+| Interface | Probe、video preview、PCM 和 export 使用窄 port；不新增 audio extraction/transcode port。 |
+| Extension | 后续宿主需要单独 OpenSpec；不能从本次 VS Code 设计推断 Desktop 技术路径。 |
+| Testing | OTIO/media fixture、路径断言和真实 Extension Development Host 共同证明新路径及 no-fallback。 |
 
 ## Decisions
 
-### 1. 产品能力按“确定性编辑”和“生成式处理”分层
-
-OpenNeko 只有一个 Cut 模式，内建以下确定性能力：
-
-- 素材 probe、代理、转码和派生分析；
-- trim/split/reorder、受控多轨与三层视觉合成；
-- 静态布局、标题/字幕、简单转场、固定正向倍速和基础调色；
-- 多轨音频、纠正/交付型 DSP、实时预览、capture 和 export；
-- NKV 持久化、OTIO 交换、undo/redo、relink 和 revision 管理。
-
-AI/专业处理器承接生成式或专业视觉任务：背景替换/扩展、复杂抠像与跟踪、超分、补帧、去噪、风格化、高级 grade、复杂 transition/composition 和生成新镜头。分类依据是可复现的项目语义和轻剪辑闭环，而不是已有代码是否方便保留。
-
-替代方案“把所有视频处理交给 AI/外部工具”会破坏离线可用性、精确时间控制、可编辑性和稳定导出；替代方案“继续内建高级能力”则保留当前最大维护面，因此均不采用。
-
-### 2. NKV v3 lightweight profile 是唯一可写项目事实
-
-目标模型如下：
+### 1. OTIO document is the only mutable timeline authority
 
 ```text
-LightweightNkvProject
-  project: resolution, fps, duration, color baseline, lineage
-  ordered visual tracks: video | title | subtitle
-    maximum active visual elements at any time: 3
-    clip: sourceRef, timeline range, source range
-          static transform/crop/fit/opacity, normal blend
-          optional basic color, constant positive rate
-  audio tracks and embedded audio
-    clip: sourceRef, timeline/source range, mute/gain/pan/fades
-          closed corrective DSP chain
-  transitions: cut | fade | cross-dissolve
-  workflow lineage: non-render metadata
+project.otio
+  -> OtioDocument
+      -> typed edit command
+      -> TimelineView
+      -> CutPreviewPlan
+      -> CutExportPlan
+  -> React presentation state
 ```
 
-轨道数量用于组织，不等于解码并发；validator 按区间计算最多三个活跃视觉元素。Painter order 从下到上，只有 normal source-over alpha。上层 gap 透明，所有视觉层为空时输出项目黑场。每条视频轨内部 clip 不重叠，跨轨重叠用于受控 overlay/PIP/title/subtitle。
+`OtioDocument` 是唯一可变 timeline state。三种投影均从显式 document revision 派生且不序列化。selection、playhead、zoom、hover、panel layout、waveform/thumbnail cache、Engine session 和授权 token 都是可恢复运行时状态。
 
-基础调色第一版固定为 exposure/brightness、contrast、temperature/tint 和 saturation；文字只支持确定性字体 fallback、静态布局和有界样式；音频节点是版本化 closed union。未知字段和超限语义在保存或资源分配前拒绝，不能塞入 generic metadata/effect JSON。
+### 2. Cut v1 freezes an exact OTIO subset
 
-三层而不是单层是为了覆盖 B-roll、屏幕录制加摄像头、Logo、标题和字幕；限制三层而不是无限层是为了固定 decoder、显存、合成和测试预算。
+只接受：
 
-### 3. OTIO 是交换映射，不是 NKV 的基类
+- `Timeline.1`、`Stack.1`、`Track.1`；
+- `Clip.2`、`Gap.1`、`ExternalReference.1`；
+- `RationalTime.1`、`TimeRange.1`。
 
-NKV 与 OTIO 的 `Timeline/Stack/Track/Clip/Gap/Transition` 进行双向映射。OTIO track order 映射为 NKV painter order；clip range、gap、cut、fade/cross-dissolve 进入标准结构；静态布局、基础调色、文字样式和 DSP 使用版本化 `openneko.*` namespaced metadata。
+Timeline 顶层 Stack 包含且只包含一个 `Track(kind=Video)` 与零到多个 `Track(kind=Audio)`。Track 只含 Clip/Gap；Clip 只含一个 active ExternalReference。
 
-Import 必须先做 capability inspection。嵌套 Stack、timewarp、未知 required metadata、超出三层、复杂 effect/transition 等不可表示对象返回 object/path-level diagnostic，并保持源 OTIO 不变。用户可以显式调用外部处理器 flatten 为新媒体后重新导入，但 adapter 不自动 flatten。
+nested Stack、Transition、Effect、LinearTimeWarp、Marker、第二条 Video Track、多个 active media reference 或未知 schema version 在 mutation 前返回 object/path-level diagnostic。
 
-不按 OTIO 直接扩展 Engine model，是因为 OTIO 的目标是 editorial interchange，不拥有 OpenNeko 的实时渲染、代理、DSP、资源授权和项目迁移语义。
+### 3. Metadata stays minimal and distinguishes provenance from coupling
 
-### 4. `neko-engine` 保留为双平面的长驻运行时
-
-```mermaid
-flowchart LR
-  A["NKV / Media ResourceRef"] --> B["Canonical RenderPlan"]
-  B --> C["Realtime Plane"]
-  B --> D["Media Job Plane"]
-  C --> E["Stable H.264/PCM stream"]
-  D --> F["Proxy / Transcode / Export / Analysis ResourceRef"]
-```
-
-Realtime Plane 嵌入 FFmpeg/libav，session 独立拥有 decoder、GPU surfaces、clock、mixer、transport、queue、generation 和 cancellation。Seek 在现有 decoder context 中 seek/flush/pre-roll；timeline update 使用 `streamId + expectedRevision + nextRevision` 后台准备并原子切换 RenderPlan，公共 stream/WebSocket identity 不变。
-
-Media Job Plane 统一管理 `proxy | transcode | timeline-export | audio-render | waveform | loudness`。内部可以使用受管 FFmpeg 子进程或 library worker，但只能消费 Engine 生成的 typed plan/profile；公共 API 不接受 shell、argv 或 filter graph。
-
-保留 Engine 而不是直接调用 FFmpeg CLI，是为了拥有长驻实时状态、跨任务 QoS、ResourceRef 授权、统一错误语义、preview/export parity 和可靠 shutdown，而不是重新实现 FFmpeg codec/filter 能力。
-
-### 5. 所有视频输入严格 GPU-only
-
-当前支持的 macOS、Linux 分别使用打包并验证的 VideoToolbox 和 VA-API 类 FFmpeg profile。Windows/D3D11VA profile 在独立平台准入完成前不得进入发布路径。启动 self-check 必须真实解码合成/打包 fixture，验证 codec、pixel format、frame output 和必要互操作；列出 `hwaccels` 不算成功。
-
-Realtime、capture、proxy、transcode 和 export 的视频输入都必须命中声明的硬件 decoder。设备、driver、codec、surface 或 pixel format 不满足时 stream/job 失败并返回 backend diagnostic；不存在 CPU decoder 配置、兼容模式或静默 fallback。
-
-编码策略独立于解码策略。Preview/proxy/export 可以各自使用显式版本化 encoder profile；若允许 software encoder，它也不能被描述或实现为 CPU decode fallback。
-
-GPU decode 不代表一律零拷贝。仅保留 normal-alpha、硬件 frame import、必要 upload/download、encoder bridge 和平台句柄；custom effect/mask/LUT 专用互操作在路径测试证明无保留消费者后删除。
-
-### 6. Preview、capture 和 export 共用 Canonical RenderPlan
-
-Host-neutral NKV/OTIO domain codec 产生 Canonical BasicTimeline；Rust validator 将其编译为版本化 RenderPlan，包含 source/time mapping、layer order、layout、transition、color、text、audio/DSP 和 output descriptor。Realtime renderer、capture 和 timeline export 只能消费该计划。
-
-实时和离线可以采用不同调度或 encoder，但必须用 golden frame、text layout、transition boundary、sample-accurate audio、duration 和 color tolerance 证明语义一致。TypeScript/Webview 不维护第二套时间线解释，FFmpeg job 也不能自行解析 NKV effect JSON。
-
-### 7. 生产型媒体任务属于 Engine，不属于 AI/专业处理器
-
-Proxy 以 source content hash、profile revision 和 Engine/FFmpeg runtime revision 为 key，产出可重建 ResourceRef 与 source-time mapping；NKV 始终引用原素材。Transcode 产出新 Asset/ResourceRef，不隐式替换 source。Waveform/loudness 是可重建派生物，不增加项目 revision。
-
-Timeline export 冻结 `documentUri + projectRevision + snapshot + authorized ResourceRefs + output profile`，先写 Host 分配临时位置，验证 codec/duration/size 后原子提交。取消或失败清理临时文件，不覆盖已有目标。
-
-QoS 固定为：
+允许的 OpenNeko metadata：
 
 ```text
-realtime playback > seek/capture > proxy > transcode/export/audio-render
+timeline.metadata.openneko.cut =
+  profile | editRateNumerator | editRateDenominator | width | height
+
+audio track metadata.openneko.audio = gainDb
+
+audio clip metadata.openneko.audio =
+  gainDb | fadeInSeconds | fadeOutSeconds | sourceVideoClipId
 ```
 
-Job manager 使用 bounded concurrency 和 GPU session budget；资源不足时后台任务排队/节流，不抢占实时 session，也不回退 CPU decode。
+`sourceVideoClipId` 只证明该 Audio Clip 由哪次显式操作产生，用于防止重复分离、展示状态和 undo；它不建立同步关系。后续 move/trim/delete 任一 Clip 都不自动修改另一 Clip。
 
-### 8. 音频保留纠正与交付型 DSP
+标准 OTIO `enabled` 表达 clip/track enable 和 mute。第三方 metadata 仅在安全可序列化且不声明 OpenNeko required capability 时保留；未知 `openneko` 字段直接拒绝。
 
-保留 decode、resample、channel conversion、gain/volume/pan、fade、固定 EQ/filter、compressor、noise gate、limiter、loudness normalization、mixdown 和 A/V clock。节点、参数范围和顺序为版本化 closed union，preview、audio render 和 export 共用 contract/实现或 golden parity。
+### 4. Project timing and presentation are deterministic
 
-删除第三方 DSP 注册、任意 JSON graph 和运行时 factory。Reverb、delay、chorus、distortion 等创意 DSP 第一阶段不进入可写 timeline；确有价值时只能通过后续独立 OpenSpec 增加闭合离线 profile。
+每个项目拥有固定正有理 edit rate；新项目默认 `30/1`。空项目首次导入时可以显式采用受支持源 rate，项目含 clip 后不隐式改变。
 
-音频初始化、decode、DSP 或 mux 失败必须使 stream/job 明确失败，不能返回缺音频但标记成功的视频。
+不同 CFR 源可以共存。对每个 project/output sample timestamp，选择 mapped source time 上 `PTS <= target` 的最新有效源帧；只有 clip 起点早于首帧时才使用范围内首帧。低 fps 因此重复显示，高 fps 跳过多余帧，不生成中间帧。
 
-### 9. AI 生成采用 candidate-first，不直接 mutation
+项目 width/height 定义画布。v1 不提供 crop/transform；所有视频帧居中等比 `contain`，未覆盖区域为不透明黑色。Preview 与 export 使用同一 presentation rule。
 
-AI/专业请求由 Agent/Platform 拥有的 External Processor 边界执行：
+### 5. Cut Core compiles role-explicit execution plans
 
-```mermaid
-flowchart LR
-  U["User intent"] --> R["Capability classification"]
-  R --> P["Resolve + trust + approval"]
-  P --> T["Processor task"]
-  T --> C["Immutable media candidate"]
-  C --> V["Validate / Preview"]
-  V --> A["Explicit accept and import"]
-  V --> X["Reject without project mutation"]
+`CutPreviewPlan` 与 `CutExportPlan` 包含：
+
+- document URI、identity、revision；
+- project edit rate、画布和有效 timeline range；
+- 每个 segment 的 `role: video | audio`、source identity/revision、timeline range、source range 和 enabled；
+- audio gain/fade 的规范化值；
+- export output fps、container/codec、audio presence 和验证期望。
+
+Cut Core 是唯一 plan compiler。Video Track Clip 无论其 MP4 是否含音频，都只编译为 `role: video`；Audio Track Clip 即使引用 MP4，也只编译为 `role: audio`。这种角色隔离确保导入视频保持静音，只有显式创建 Audio Clip 后音频才进入 PCM 与导出。
+
+Extension 不再从项目 DTO 自行重建 Engine timeline。Engine adapter 只把冻结 plan 转换成其受限请求，不读取 OTIO 项目文件。
+
+### 6. “Separate audio” creates a logical Audio Clip, not a WAV
+
+导入符合 profile 的 MP4 只创建 Video Clip。Probe 可报告 `hasAudio`，但不自动创建 Audio Track/Clip；当前 `addMediaElementWithAudio` 中的异步自动创建路径必须删除。
+
+用户点击“分离音频”时：
+
+1. 对 source revision 重新 probe；
+2. 要求恰好一个符合 profile 的音频流；
+3. 以同一 MP4 ExternalReference 创建 Audio Clip；
+4. 复制发起时 Video Clip 的 timeline/source range；
+5. 写入 provenance-only `sourceVideoClipId`；
+6. 通过一个 Cut Core command 原子修改 OTIO，并记录 undo。
+
+该操作没有后台媒体任务，不调用 `audios:transcode`，不创建临时文件或 WAV，也不改写源 MP4。UI 文案仍可使用用户熟悉的“分离音频”，但状态和文档必须说明它是逻辑分离。
+
+重复操作、缺少音频、多个音频流、unsupported codec、source revision stale 或同一 Video Clip 已有来源 Audio Clip 时，命令失败且 OTIO 不变。
+
+### 7. Audio Clips are independently editable but reuse one source
+
+逻辑分离后的 Audio Clip 与 Video Clip 共享 ExternalReference URI，不共享可变编辑状态。Audio Clip 的 trim、move、delete、gain、mute、fade 和 undo 独立执行。
+
+音频 gain 使用 `10^(gainDb/20)`，clip 与 track gain 相乘；fade 只属于 clip并使用线性振幅。Engine 按 plan 解码、应用自动化、float32 求和，并在输出边界限制到 `[-1, 1]`。
+
+用户删除来源 Video Clip 时不自动删除 Audio Clip；项目保存后重新打开时，Audio Clip 仍可仅凭自身 ExternalReference 和 source range 解码。来源 identity 失效只影响 provenance UI，不影响 Audio Clip 播放。
+
+### 8. VS Code reuses the current Engine media path
+
+每个 Cut Editor 创建 editor-scoped `VSCodeMediaAdapter`，实现：
+
+- `MediaProbePort`；
+- `VideoPreviewPort`；
+- `AudioPcmStreamPort`；
+- `ExportJobPort`。
+
+现有 Engine audio decoder 能从 video/audio source 找到音频流，timeline stream 能创建 paired video/audio output，当前 ExportService 也允许 Audio element 与 Media element 共享 `src`。新路径保留这种底层能力，但由 role-explicit plan 决定哪些 segment进入 video 或 audio，不能由容器是否含音频自动决定。
+
+`AudioStreamClient` 和 `neko-pcm-v1` 继续消费 Engine PCM。Engine 初始化、probe、preview、PCM 或 export 失败直接返回 diagnostic，不回退 Node、HTML media、旧 timeline 或 NKV handler。
+
+### 9. One probe-backed VS Code media profile
+
+Host-neutral `MediaDescriptor` 必须提供 container、stream count/index、codec/profile、pixel format、bit depth/chroma、field order、color/HDR、duration、CFR/rate/timestamp mode、audio codec/sample rate/channels 和 encryption。缺失 required evidence 等价 profile unknown。
+
+Cut v1：
+
+- Video Clip：MP4、单 H.264/AVC video stream、8-bit yuv420p SDR progressive CFR、最高 1920×1080；
+- Video role 忽略全部内嵌音频；仅当容器恰好有一个 AAC-LC 44.1/48 kHz mono/stereo stream 时提供逻辑分离；
+- 独立导入的 Audio Clip：WAV PCM 44.1/48 kHz mono/stereo；
+- Engine→Webview PCM：f32le、48 kHz、stereo。
+
+多个音频流不阻止 video-only 导入，但暂不提供“选择音轨”UI，因此逻辑分离失败并返回 diagnostic；不得静默选择第一个。VFR、HDR、10-bit、4:2:2/4:4:4、interlaced、多视频 stream、多声道、DRM、损坏时间戳和未知 duration 拒绝对应的可编辑媒体角色。
+
+### 10. Project root and references stay portable
+
+VS Code 设置提供 workspace-relative `cut.defaultProjectRoot`：
+
+```text
+<workspace>/<configured-root>/<project-name>/
+  project.otio
+  media/
+  exports/
 ```
 
-每个候选包含稳定 ResourceRef、media metadata、content hash、provider/model/version、提示/参数摘要、输入 ResourceRefs、源 NKV URI/revision、task identity、时间和 provenance。秘密、token、localhost URL、Webview URI 和裸临时绝对路径不得持久化。
+配置规范化后必须仍在 workspace 内。ExternalReference 保存相对 `.otio` 的 URI，不保存绝对路径、file/Webview/localhost/blob URL、Engine token 或临时输出。逻辑分离复用同一个相对 MP4 URI，因此不增加媒体文件或路径事实。
 
-候选默认不修改 NKV。接受动作必须携带目标 document URI、expected revision、明确 disposition（add clip、replace selected clip、add asset only）并通过正常 authoring/undo/backup 路径提交。Revision mismatch 时保留候选并拒绝 mutation，不自动重新定位到 active editor。Reject 默认也不删除生成产物；只有用户显式删除或预先配置的 retention policy 才能清理。
+### 11. Canvas and Cut remain independent
 
-AI 输出是新素材而不是可重放 effect。即使 provider 支持“编辑某帧/某视频”，结果仍按新媒体候选管理；NKV 只记录接受后的 sourceRef 和 lineage，不保存一个声称能确定性重演生成结果的 effect node。
+```text
+Canvas route
+  -> ordered media/gap draft
+  -> create new .otio
+     OR append to explicit documentUri + expectedRevision
+  -> Cut Core command
+```
 
-### 10. Capability routing 使用闭合分类而非隐式 fallback
+不允许 active/recent Cut fallback。已有目标只支持末尾追加，不支持隐式覆盖、replace selection 或持续同步。profile-external cue/transition/effect 返回 diagnostic。Agent capability 使用相同 target、approval 和 revision contract。
 
-请求先按 typed capability catalog 分类：
+### 12. Export is typed, role-aware and atomic
 
-| 请求 | Canonical owner |
+输出为 MP4/H.264/AAC-LC/SDR/yuv420p，最高 1080p。没有 enabled Audio Track Clip 时输出无音轨 MP4；Video Track Clip 的内嵌音频不会被自动 mux。存在逻辑分离 Audio Clip 时，Engine 从它引用的 MP4 解码音频并参与 mix/export。
+
+Export 冻结 `CutExportPlan`、document revision、source set 和 output profile。Engine 写 staging，Extension 验证 codec、pixel format、fps、frame count、duration、尺寸和预期 audio presence 后原子提交。调用方不能传 shell、任意 FFmpeg argv 或 filter graph。
+
+### 13. Replacement is vertical and fail-visible
+
+新测试先 poison NKV/NKC codec、旧 timeline handler、active-editor target、导入时自动建 Audio Clip 和 profile-external Engine operation。结果只有在 OTIO、role-explicit plan、selected Engine adapter 和新 handler 均被断言命中时才算成功。
+
+旧 NKV/NKC 文件不迁移、不覆盖。被移除 UI、store、operation、undo、message、Extension handler、Agent schema、i18n、CSS 和测试必须垂直删除。
+
+### 14. Webview keeps one contextual Inspector and two minimal control surfaces
+
+右侧面板不删除，因为精确时间、来源信息和音频参数需要稳定入口；但它不再承担专业功能目录。删除“基础/专业”切换、灰色占位项和恢复已移除功能的入口，保留一个根据当前选择切换内容的 Inspector：
+
+| 选择 | Inspector 内容 |
 | --- | --- |
-| trim/split/track/layout/title/subtitle/simple transition/basic color/audio | Cut authoring + Engine RenderPlan |
-| proxy/transcode/export/waveform/loudness/audio render | Engine typed job |
-| generate shot/background replacement/tracking/denoise/upscale/interpolation/stylization/advanced grade/composition | External Processor |
+| Video Clip | 名称/来源、分辨率、源 fps/帧数、timeline start/duration、trim in/out、内嵌音频状态与“分离音频” |
+| Audio Clip | 名称/来源、“来自视频”只读 provenance、timeline start/duration、trim in/out、gain/mute/fade in/out |
+| Gap | timeline start 与 duration |
+| 无选择 | 项目 width/height、edit rate、duration 的只读摘要；没有项目时显示空状态 |
 
-若请求同时包含多类能力，Agent 生成显式阶段计划，并在每个阶段保留输入/输出 ResourceRef 与目标 revision。找不到专业处理器时返回 actionable unavailable diagnostic；不得回退 removed Engine action、任意 shell、package-local FFmpeg、basic job 或伪造成功。基本媒体任务也不得因 AI 可用而被不必要地外置。
+Inspector 不显示 transform、text、speed、入场/出场效果、color、effect 或 mask；不以 disabled row 暗示功能可解锁。字段是否可编辑由 v1 command contract 决定，probe/source 字段保持只读。
 
-### 11. Engine public contract 收敛为六组 action
+播放控制条只保留：跳到开头、上一帧、播放/暂停、下一帧、跳到结尾、当前/总时间码、静音/音量和全屏。上一帧/下一帧按 project edit-rate frame step，不使用含义不明确的快退/快进语义。
 
-| Group | Actions |
-| --- | --- |
-| `system` | `health`, `capabilities` |
-| `files` | `register`, `unregister`, `stat` |
-| `media` | `probe`, `capture`, `stream` |
-| `timelines` | `validate`, `capture`, `stream`, `update` |
-| `streams` | `pause`, `resume`, `seek`, `rate`, `loop`, `stats`, `stop` |
-| `jobs` | `submit`, `status`, `list`, `cancel` |
+时间线工具条只保留：导入视频/音频、split、删除、undo/redo、缩小/放大、适应全部内容和导出。copy/paste 如果保留为 command/快捷键，不重复显示工具条按钮；文本、字幕、特效、专业工具箱、多视图/布局模式和含义不明的图标必须删除。
 
-Job kind/profile 是 closed union。Host API、HTTP、N-API、CLI 和 neko-client 从同一 Proto/registry 生成或验证。旧 action 先 poison 为 unsupported，再删除 handler、alias、DTO 和文档；未知 action/version/field 必须 fail-visible。
-
-### 12. Webview 必须随能力垂直清理
-
-删除 professional mode、Effects/Mask、Keyframe store/editor/indicator、shape animation、blend modes、reverse/time-remap、复杂 transition、Wheels/Curves/HSL/LUT、diff 和 dynamic capability UI，以及它们对应的 operation、undo、message、Extension handler、Agent schema、i18n、CSS 和测试。
-
-保留并简化 timeline、多层静态布局、title/subtitle、simple transition、fixed speed、basic color、audio/waveform/loudness、proxy/transcode/export/job 和 Preview UI。Webview 只持有 document/revision、session/stream/job identity、ResourceRef、typed profile 与展示状态，不拥有项目文件、Engine runtime 或 provider task。
-
-每个 editor 使用实例化的 `TimelineAuthoringClient`、`PlaybackClient`、`MediaJobClient` 和 `DerivedArtifactClient`（或等价小接口）；禁止通过 active editor 单例或宽泛 `MediaRequestProxy` 路由实例状态。UI seek 调用 `streams:seek`，edit commit 调用 revisioned `timelines:update`，不得公开 restart stream/session 操作。
-
-### 13. 文件授权、实例所有权和 shutdown 保持显式
-
-Extension Host 只从明确 allowed roots 注册 opaque input token 与 output root；Webview 只接收 bounded descriptor/ResourceRef。Traversal、symlink escape、过期 token、非法 Range、未授权 overwrite 和 shutdown 后访问均拒绝。
-
-每个 document/editor session 独立拥有 playback state；每个 job 独立拥有 input snapshot、process/worker、progress、cancellation 和 output staging。共享 decoder/GPU pool 只能提供有界借用，不得通过 active session 切换全局状态。
-
-N-API runtime owner 必须真实 shutdown：停止接收、取消 stream/job、关闭 HTTP/WebSocket、释放 token、decoder/encoder/GPU surface、queue 和 Tokio task，并允许新配置重建。
-
-### 14. 旧 NKV 只无损迁移或明确拒绝
-
-Host-neutral codec 按 version 和 capability usage 分流：
-
-- 新 lightweight profile：正常打开、编辑和保存；
-- 旧格式且语义可无损表示：投影到新内存模型，仅在用户显式保存时写新版本；
-- 使用已删除/超限语义：保持文件字节不变，返回 `unsupported-nkv-capabilities`，列出 JSON path、capability、限制和 handoff/flatten 建议；
-- 未知 version/schema：fail closed。
-
-项目未发布允许删除旧 API 和草稿字段，但不能静默破坏已有本地项目。新 canonical path 测试必须 poison legacy renderer/handler，证明旧路径未参与成功。
+Minimap 不进入 v1。删除其组件、viewport projection、拖动/缩放同步、store state、message、i18n、style 和测试。时间线导航由水平滚动、zoom、fit-all 和播放时 playhead 跟随组成；不得保留 hidden setting、灰色图标或 fallback 重新启用 Minimap。
 
 ## Risks / Trade-offs
 
-- [GPU-only 在部分 codec/driver 上不可用] → 三平台真实 fixture self-check、发布硬件矩阵、明确 backend diagnostic 和受控 proxy profile；不添加 CPU fallback。
-- [三层并发耗尽 decoder 或显存] → capability/session budget、proxy、预热与有界队列；超限在资源分配前拒绝。
-- [后台任务影响实时预览] → 固定 QoS、bounded concurrency、播放中压力测试；后台排队而非抢占或降级解码。
-- [Preview 与 Export 结果漂移] → 单一 RenderPlan、共享 schema、golden frame/audio/duration/text/color 测试和 legacy path poison。
-- [AI 输出不可复现或质量不稳定] → immutable candidate、完整 provenance、owning validator、显式接受；不把生成参数当作确定性 effect。
-- [AI provider 不可用或权限不足] → fail-visible diagnostic、候选不创建、项目不 mutation；不回退任意命令或隐藏 Engine path。
-- [AI 能力诱发删除必要剪辑功能] → 保留精确时间线、同步、字幕、混音、preview/export 和媒体兼容闭环；仅外置生成式/专业变换。
-- [OTIO 无法表达 OpenNeko 扩展] → 标准 editorial core 优先、namespaced metadata、capability matrix 和显式拒绝/flatten。
-- [文字跨平台布局不同] → 打包字体、确定性 shaping/fallback 与 preview/export golden。
-- [旧 NKV 包含已删字段] → 字节保留、字段级 diagnostic、另存/processor handoff，禁止自动清空。
-- [保留媒体任务使 Engine 再膨胀] → 六组 action、closed job/profile、禁止任意 args/filter/plugin，每项能力有 owner 与 absence guard。
+- **Audio Clip 扩展名仍是 `.mp4`** → UI 以音频波形/图标和“来自视频”状态表达角色，不伪装为 WAV；导出/PCM 以 Track kind 与 plan role 判定。
+- **多个内嵌音频流无法选择** → v1 fail-visible；后续单独增加 stream selector 与持久 stream identity。
+- **共享源文件被移动会同时影响音视频** → 两个 Clip 各自报告同一 missing-media diagnostic，并通过显式 relink 修复。
+- **provenance identity 可能失效** → 只影响“已分离”提示，不影响 Audio Clip 自身播放；不得用于同步编辑。
+- **Engine 旧 timeline DTO 可能隐式播放 Video Clip 音频** → plan adapter 必须用 role-path assertions 和 video-only export fixture 证明该路径已关闭。
+- **当前 probe descriptor 不足** → 先扩展证据字段，unknown evidence 直接拒绝。
+- **移除 Minimap 后长时间线定位效率下降** → v1 以 zoom、fit-all、水平滚动和 playhead 跟随覆盖；只有真实可用性证据证明不足时再单独提案。
+- **Remote/SSH/WSL 未验证** → 只有真实 Extension Development Host/remote fixture 通过后才能声明支持。
 
 ## Migration Plan
 
-1. 冻结 NKV v3 lightweight schema、OTIO mapping、AI candidate/provenance、Canonical RenderPlan、Engine action/job union 和 removed-capability poison contract。
-2. 建立代表性 fixtures 与性能基线，覆盖旧 NKV、三层、字幕、简单转场、基础调色/DSP、GPU decode、proxy/export、OTIO 与 AI candidate accept/reject。
-3. 先迁移 Proto、host-neutral domain codec、ResourceRef 和 client contracts，再迁移 Rust realtime/job planes；任何新请求命中 legacy path 都必须失败。
-4. 收敛 session-owned GPU realtime path，保留 seek/scrub/revision update 与稳定 stream；在路径测试前不删除必要 GPU 互操作。
-5. 建立 MediaJobManager、QoS、typed profiles、原子输出与 provenance，迁移 proxy/transcode/export/waveform/loudness/audio render。
-6. 使 preview/capture/export 消费同一 RenderPlan，并实现三层 normal-alpha、text/color/transition 和 audio parity。
-7. 迁移 Cut Extension/Webview 到单一轻量模式与实例化 typed clients；恢复/保留生产任务 UI，垂直删除高级面板、store、message 和 operation。
-8. 建立 External Processor candidate-first 路径、AI provenance、显式 accept disposition 和 capability routing；运行聚焦 Agent Evaluation。
-9. 完成旧 NKV capability inspection 与 OTIO diagnostics，再 poison 并删除 shader/plugin/diff/mask/keyframe/professional-color/legacy route。
-10. 收缩 Cargo/pnpm/FFmpeg/font/platform 分发闭包，同步架构与用户文档，并完成三平台、Development Host、Engine 和 Agent 验收。
-
-首次写入 NKV v3 前可以回滚实现。首次写入后，旧版本必须只读拒绝并保留文件；proxy/waveform 等可重建缓存可以清理，AI/转码/导出等独立成功产物不得随项目回滚删除。
+1. 冻结 OTIO schema/metadata、role-explicit plan、媒体 profile、path contract 和 fixtures。
+2. 实现 `OtioDocument`、commands、`TimelineView`、`CutPreviewPlan`、`CutExportPlan` 与 `.otio` Custom Editor。
+3. 将 Webview 收敛为单一上下文 Inspector、最小播放/时间线控制条，并垂直删除 Minimap 与 deferred UI surface。
+4. 删除导入时自动探测并创建 Audio Clip 的路径；实现显式逻辑分离命令。
+5. 扩展 `MediaDescriptor`，将 VS Code Engine 收敛为 probe/video/PCM/export adapter。
+6. 以 role-explicit plan 替换 Extension timeline conversion，验证 Video Track 永不隐式带入音频。
+7. 接入 Audio Track 同源 MP4 PCM、gain/fade/mix 与 video-only/audio-present 两类导出。
+8. 迁移 Canvas/Agent 到显式 `.otio` target，删除旧 target/fallback。
+9. 垂直删除 legacy/deferred surface，运行 Extension Development Host、Engine 集成、Agent evaluation 和仓库质量门禁。
 
 ## Open Questions
 
-- 首个跨平台 proxy profile 的 codec、GOP、分辨率和 encoder 组合需要三平台 spike 固化，但 source-time mapping 必须稳定。
-- Preview/default export 是否要求硬件编码，或允许显式 software encoder profile，需要在许可、质量与功耗数据后决定；视频输入解码始终 GPU-only。
-- 三层 720p/30 或 1080p/30 的最低产品基线需在最低支持硬件测量后冻结，运行时不得静默改变项目语义。
-- 基础调色第一版是否扩展 highlights/shadows/whites/blacks/vibrance，需由 UI 简化和 parity spike 决定；当前最小集合不依赖这些参数。
-- AI candidate 的首批接受 disposition 是否只支持 `add asset` 与 `replace selected clip`，还是同时支持 `insert at playhead`，需由 undo/revision 冲突测试决定。
+- 项目创建 UI 默认 `30/1` 还是同时提供 `30000/1001`，需要产品 fixture 冻结。
+- VS Code Remote/SSH/WSL 是否支持当前 Engine timeline audio path，需要真实宿主验收。
+- 多内嵌音频流选择属于后续 change；本次不得通过默认第一流隐藏该缺口。

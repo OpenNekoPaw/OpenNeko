@@ -1,119 +1,96 @@
-## 1. Freeze boundaries and baseline evidence
+## 1. Freeze contracts and replacement evidence
 
-- [ ] 1.1 Inventory current NKV fields, Engine actions/jobs, Cut operations/messages/stores, Agent capabilities, GPU modules, FFmpeg profiles, and all custom shader/plugin/diff/keyframe/professional-color entry points.
-- [ ] 1.2 Record ownership, dependency, interface, extension, and test mapping for the NKV → Cut → Proto/client → Engine → stream/job → ResourceRef call chains.
-- [ ] 1.3 Build representative synthetic fixtures for legacy/current NKV, OTIO, one-to-three visual layers, text, audio/DSP, difficult codecs, output jobs, and AI candidate workflows.
-- [ ] 1.4 Capture current realtime startup, seek, scrub, revision update, frame latency/drop, A/V sync, GPU session, memory, and export throughput baselines on supported platforms.
-- [ ] 1.5 Define source and generated-artifact absence guards for every removed capability, legacy alias, fallback, arbitrary process input, and CPU video decoder path.
-- [ ] 1.6 Resolve or time-box the open proxy, encoder, three-layer performance, basic-color, and AI accept-disposition spikes before freezing v3 profiles.
+- [ ] 1.1 Inventory NKV/NKC Cut codecs, timeline stores, operations, messages, Engine actions, UI panels, Canvas/Agent handoff, tests and dependencies inside the VS Code replacement boundary.
+- [ ] 1.2 Add source/dependency/manifest/path guards proving new requests cannot reach NKV/NKC, active/recent target fallback, import-time automatic Audio Clip creation, audio transcode/WAV derivation or deferred professional features.
+- [ ] 1.3 Commit OTIO fixtures covering the exact accepted schema/metadata profile and every rejected object, version, field and path.
+- [ ] 1.4 Commit media fixtures covering silent MP4, MP4 with one AAC stream, MP4 with multiple audio streams, WAV, mixed source frame rates, corrupt timestamps and video-only/audio-present exports.
+- [ ] 1.5 Freeze host-neutral contracts for `MediaDescriptor`, `TimelineView`, role-explicit `CutPreviewPlan`/`CutExportPlan`, VS Code media ports and workspace-relative project roots.
+- [ ] 1.6 Record the Agent evaluation authoring decision and observability needed to prove the real Cut capability path.
 
-## 2. Define canonical project and wire contracts
+## 2. Make OTIO the Cut project authority
 
-- [ ] 2.1 Define the NKV v3 lightweight schema for project output, visual/audio tracks, three-layer concurrency, source/time ranges, static layout, simple transitions, fixed positive rate, basic color, text, DSP, and lineage.
-- [ ] 2.2 Implement a host-neutral NKV codec/validator that rejects unknown, removed, and over-limit semantics before save or Engine allocation with field/path diagnostics.
-- [ ] 2.3 Define the Canonical BasicTimeline and versioned RenderPlan contracts without generic effect JSON, arbitrary metadata escape hatches, or parallel TypeScript timeline models.
-- [ ] 2.4 Replace Proto Engine contracts with the six action groups, explicit session/stream/document/revision/job identities, closed job/profile unions, ResourceRef results, and structured diagnostics.
-- [ ] 2.5 Regenerate Rust/TypeScript types and migrate `@neko/neko-client` to the canonical registry, small typed clients, and bounded stream/job descriptors.
-- [ ] 2.6 Poison legacy actions, DTO fields, aliases, generic `applyOperation`, arbitrary filter/argv input, and missing instance identity so they cannot return compatibility success.
+- [ ] 2.1 Define OTIO types and runtime guards for `Timeline.1`, `Stack.1`, `Track.1`, `Clip.2`, `Gap.1`, `ExternalReference.1`, `RationalTime.1` and `TimeRange.1` only.
+- [ ] 2.2 Implement `OtioDocument` parse/serialize with exact schema checks, object/path diagnostics, project-contained relative URI validation and approved metadata validation.
+- [ ] 2.3 Implement the Cut v1 validator for one Video Track, zero or more Audio Tracks, sequential clips/gaps, project edit rate and the VS Code media profile.
+- [ ] 2.4 Implement import/link, split, trim, reorder, ripple delete, Gap, audio gain/mute/fade, relink, undo and redo as typed `OtioDocument` commands.
+- [ ] 2.5 Implement read-only `TimelineView`, `CutPreviewPlan` and `CutExportPlan`; assert adapters never reinterpret the whole OTIO document.
+- [ ] 2.6 Implement save, save-as, backup, revert, revision and multi-document tests proving OTIO is the only writable Cut fact.
 
-## 3. Implement OTIO exchange and NKV migration
+## 3. Rebuild the Cut Webview as one basic editor
 
-- [ ] 3.1 Implement NKV ↔ OTIO Timeline/Stack/Track/Clip/Gap/Transition mapping for track order, ranges, gaps, cuts, fade, and cross-dissolve.
-- [ ] 3.2 Define and validate versioned `openneko.*` OTIO metadata for static layout, basic color, text styles, audio/DSP, and safe lineage only.
-- [ ] 3.3 Add OTIO capability inspection that rejects nested stacks, timewarp, excessive layers, unsupported effects/transitions, and unknown required extensions without flattening.
-- [ ] 3.4 Implement legacy NKV capability inspection, lossless in-memory projection, explicit-save upgrade, and byte-preserving rejection for unsupported or unknown projects.
-- [ ] 3.5 Add NKV/OTIO round-trip, diagnostic path, no-runtime-path leakage, save/undo/backup, unknown-schema, and legacy-path-poison tests.
-- [ ] 3.6 Add explicit flatten/handoff descriptors for unsupported NKV/OTIO without placing External Processor discovery or execution in the codec.
+- [ ] 3.1 Audit and reuse the editor shell, material list, toolbar, inspector, theme, i18n, Logger and shared UI primitives where responsibilities remain valid.
+- [ ] 3.2 Replace the timeline with one sequential Video Track and zero or more Audio Tracks, visible-range thumbnails/waveforms, playhead, zoom and selection.
+- [ ] 3.3 Replace the basic/professional property surface with one contextual Inspector for Video Clip, Audio Clip, Gap and project/empty states, reusing shared field primitives.
+- [ ] 3.4 Remove transform, text, speed, transition, color, effect, mask and disabled placeholder Inspector groups together with their state, messages, i18n, styles and tests.
+- [ ] 3.5 Reduce playback controls to start, previous project frame, play/pause, next project frame, end, timecode, mute/volume and fullscreen; test project-frame stepping.
+- [ ] 3.6 Reduce the timeline toolbar to media import, split, delete, undo/redo, zoom, fit-all and export; remove duplicate/profile-external/ambiguous buttons and hidden restore paths.
+- [ ] 3.7 Delete Minimap components, viewport projection, interactions, store state, messages, settings, localization, styles and tests; add absence guards.
+- [ ] 3.8 Implement horizontal scroll, zoom, fit-all and playback playhead-follow behavior as the only long-timeline navigation path.
+- [ ] 3.9 Delete import-time `detectAndCreateAudio`; show imported video as video-only and expose “Separate Audio” only when probe evidence supports logical separation.
+- [ ] 3.10 Implement explicit logical separation UI that creates an Audio Clip referencing the same MP4 and clearly does not claim to create a WAV file.
+- [ ] 3.11 Show project edit rate, source fps/frame count and “来自视频” provenance without implying audio/video sync lock.
+- [ ] 3.12 Replace active-editor/singleton routing with editor-scoped Cut Core and Engine adapter instances carrying explicit identity.
+- [ ] 3.13 Add Webview unit/integration coverage for Inspector contexts, controls, navigation, explicit separation, no automatic audio, Minimap absence and unsupported diagnostics.
 
-## 4. Refactor Engine runtime ownership and authorization
+## 4. Implement logical audio separation in Cut Core
 
-- [ ] 4.1 Replace global/active-instance mutable media state with session-owned decoder, GPU surface, clock, mixer, transport, queue, generation, and cancellation ownership.
-- [ ] 4.2 Implement explicit bounded leases for any shared GPU/decoder/process pool and prove release, reset, owner mismatch rejection, and cross-session isolation.
-- [ ] 4.3 Consolidate opaque input-token and Host-owned output-root authorization across probe, capture, playback, jobs, Range, overwrite, expiry, traversal, and symlink checks.
-- [ ] 4.4 Implement complete runtime shutdown and reconstruction covering HTTP/WebSocket, sessions, jobs, tokens, codec/GPU/process resources, queues, and Tokio tasks.
-- [ ] 4.5 Add concurrent multi-document/session/job, cancellation, shutdown-with-work, stale identity, unauthorized path, and runtime-recreate tests.
+- [ ] 4.1 Define the logical-separation command with document/revision, source Video Clip identity and deterministic target Audio Track placement.
+- [ ] 4.2 Re-probe the source and require one supported embedded audio stream; fail on zero, multiple, unsupported or stale evidence without changing OTIO.
+- [ ] 4.3 Create an Audio Clip with the same ExternalReference and initial timeline/source range plus provenance-only `sourceVideoClipId`.
+- [ ] 4.4 Ensure undo/redo changes OTIO only and never starts media cleanup, transcode or derived-artifact work.
+- [ ] 4.5 Prove later move/trim/delete/undo operations do not propagate between the source Video Clip and Audio Clip.
+- [ ] 4.6 Delete or adapt `linkedAudioId`/`linkedVideoId` paths so they cannot reintroduce coupled edits or a second timeline fact.
 
-## 5. Preserve GPU-only long-lived realtime playback
+## 5. Keep VS Code on the current bounded Engine path
 
-- [ ] 5.1 Freeze packaged VideoToolbox, D3D11VA, and VA-API class backend profiles and implement real fixture self-check for codec, pixel format, frame output, and required interoperability.
-- [ ] 5.2 Remove CPU video decoder configuration, feature flags, automatic fallback, and software decode branches from realtime and job input paths while retaining explicit encoder profiles.
-- [ ] 5.3 Refactor media and timeline stream creation to reuse session-owned FFmpeg/libav decoder, GPU device/surfaces, clock, mixer, encoder/transport, and public stream identity.
-- [ ] 5.4 Implement in-context seek/flush/pre-roll, latest-wins scrub, and generation-tagged stale frame/audio rejection without process or stream restart.
-- [ ] 5.5 Implement revisioned `timelines:update` with background RenderPlan preparation and atomic activation at the requested playhead.
-- [ ] 5.6 Add path/performance tests proving seek and edits retain process/stream identity, meet baseline bounds, use the declared hardware decoder, and never participate in CPU or legacy renderer paths.
+- [ ] 5.1 Define `MediaProbePort`, `VideoPreviewPort`, `AudioPcmStreamPort` and `ExportJobPort` without Engine, Node or Webview implementation types.
+- [ ] 5.2 Expand the Engine probe bridge to return complete `MediaDescriptor` evidence, including stream counts/codecs, pixel/color fields, rational rate/timestamps, duration and audio properties.
+- [ ] 5.3 Implement one editor-scoped `VSCodeMediaAdapter` over existing Engine probe, timeline stream, PCM and export capabilities.
+- [ ] 5.4 Compile Engine requests from frozen role-explicit plans: Video Track segments are video-only; Audio Track segments decode audio even when their source is MP4.
+- [ ] 5.5 Reuse `neko-pcm-v1`/`AudioStreamClient` for MP4-backed and WAV-backed Audio Clips; prove seek generation, pause/resume, EOF and disposal.
+- [ ] 5.6 Remove any Cut call to `audios:transcode`/WAV extraction and poison future audio-derivation requests in this v1 path.
+- [ ] 5.7 Replace Extension-owned timeline reconstruction with `CutPreviewPlan`/`CutExportPlan` adapters and assert the selected Engine handler path.
+- [ ] 5.8 Run Extension Development Host scenarios for open/edit/save/reopen, no-auto-audio import, logical separation, PCM, mixed-fps seek, export and multi-editor isolation.
 
-## 6. Build the bounded RenderPlan renderer
+## 6. Implement paths and media authorization
 
-- [ ] 6.1 Compile validated BasicTimeline into a single RenderPlan consumed by realtime preview, capture, and export.
-- [ ] 6.2 Reduce GPU composition to at most three active visual elements, painter order, normal source-over alpha, transparent upper gaps, black background, and static transform/crop/fit/opacity.
-- [ ] 6.3 Retain only hardware-frame import/export, buffer/budget, required upload/download, text/color nodes, and encoder bridges used by canonical preview/capture/export.
-- [ ] 6.4 Implement hard cut, fade, cross-dissolve, bounded constant positive speed, source-handle validation, and optional pitch preservation.
-- [ ] 6.5 Implement the closed basic-color node and deterministic title/subtitle shaping, packaged font fallback, bounded styles, and substitution diagnostics.
-- [ ] 6.6 Add golden preview/capture/export tests for layers, gaps, layout, transitions, speed, color, text, duration, stale generations, and rejection of every removed visual semantic.
+- [ ] 6.1 Add workspace-relative `cut.defaultProjectRoot` through the shared settings/path mechanism; reject absolute paths, traversal and unresolved variables.
+- [ ] 6.2 Create project-local `media/` and `exports/` conventions without `derived/audio/` or host-specific URLs in OTIO.
+- [ ] 6.3 Enforce containment and symlink/realpath checks for imports, relinks, output targets and Engine resource registration.
+- [ ] 6.4 Implement editor-scoped media descriptors with source revision, owner identity and deterministic revoke/dispose behavior.
 
-## 7. Unify production media jobs
+## 7. Define Canvas and Agent interaction explicitly
 
-- [ ] 7.1 Implement `MediaJobManager` for the closed job union with typed/versioned profiles, explicit identity, bounded concurrency, progress, status/list/cancel, terminal diagnostics, and shutdown integration.
-- [ ] 7.2 Implement QoS and GPU session budgeting so realtime playback and seek/capture outrank proxy, transcode, timeline export, and audio render.
-- [ ] 7.3 Migrate proxy generation to content/profile/runtime-addressed cache artifacts with verified duration, timestamp, frame, audio, and source-time equivalence.
-- [ ] 7.4 Migrate transcode to typed profiles, GPU-only video input decode, explicit encoder choice, staged validation, atomic output, new ResourceRef provenance, and no source replacement.
-- [ ] 7.5 Migrate waveform and loudness to rebuildable typed jobs that do not change NKV revision.
-- [ ] 7.6 Migrate timeline export to frozen document/revision/snapshot/RenderPlan, PTS-based progress, output validation, atomic commit, and ResourceRef provenance.
-- [ ] 7.7 Add cancellation, crash, invalid output, overwrite, resource pressure, playback contention, and no-partial-success/no-CPU-fallback tests.
+- [ ] 7.1 Replace the legacy Canvas Cut payload with an ordered route snapshot containing only supported media/gap inputs.
+- [ ] 7.2 Require “create new Cut” or a specific writable `.otio`; remove active/recent Cut lookup and implicit `.nkv` targets.
+- [ ] 7.3 Apply Canvas handoff through Cut Core commands with explicit target URI/revision while preserving independent Canvas/Cut authority.
+- [ ] 7.4 Update Agent Cut capability schemas, approval and diagnostics for explicit `.otio` identity/revision and logical audio separation.
+- [ ] 7.5 Delete legacy Agent aliases/target fallbacks and prove missing, stale or non-OTIO targets fail visibly.
+- [ ] 7.6 Create/update the indexed `agent-runtime.cut-authoring` suite; if the real host-neutral Cut binding is unavailable to TUI, record that blocker instead of adding an eval-only tool.
 
-## 8. Retain a closed audio finishing pipeline
+## 8. Enforce timing, presentation and export profiles
 
-- [ ] 8.1 Define versioned DSP nodes, parameter ranges, and order for gain/volume/pan, fades, EQ/filters, compressor, noise gate, limiter, loudness normalization, resample, and channel conversion.
-- [ ] 8.2 Refactor preview, mix stream, audio render, waveform/loudness analysis, and export to share the canonical audio timing and DSP contract.
-- [ ] 8.3 Remove runtime DSP factory registration, third-party nodes, arbitrary graphs/effect JSON, and writable creative DSP not explicitly in the profile.
-- [ ] 8.4 Preserve fail-visible audio decode/DSP/mix/mux errors so no silent or video-only result can report success.
-- [ ] 8.5 Add sample/golden tests for overlap, pan/fade, EQ/dynamics, limiter, loudness, preserve-pitch, channel conversion, preview/export parity, and unsupported-node rejection.
+- [ ] 8.1 Implement one probe-backed validator for MP4/H.264 video, supported embedded AAC logical separation and independently imported WAV PCM.
+- [ ] 8.2 Reject unsupported video/color/timestamp/audio evidence with field-level diagnostics; reject logical separation when audio-stream selection would be ambiguous.
+- [ ] 8.3 Implement the frozen source-PTS hold-last sampling rule for mixed supported CFR sources without interpolation.
+- [ ] 8.4 Apply centered aspect-preserving contain on an opaque black project canvas without crop/transform controls.
+- [ ] 8.5 Implement output-fps selection with the same deterministic PTS/drop/repeat mapping.
+- [ ] 8.6 Execute typed Engine export for MP4/H.264/AAC-LC/SDR/yuv420p/up-to-1080p from a frozen role-aware `CutExportPlan`.
+- [ ] 8.7 Validate video-only output when no Audio Clip exists and audio presence when MP4/WAV-backed Audio Clips are enabled before atomic commit.
+- [ ] 8.8 Return conversion-not-available for unsupported inputs; do not add general conversion, proxies, original-media relink or Desktop behavior.
 
-## 9. Rebuild Cut and Webview around one lightweight mode
+## 9. Remove legacy paths vertically
 
-- [ ] 9.1 Remove the basic/professional selector and rebuild authoring state around explicit document URI/revision, multi-track operations, selection, undo/redo, and canonical NKV mutation.
-- [ ] 9.2 Retain and simplify UI for three-layer organization, static layout, title/subtitle, simple transition, fixed speed, basic color, audio/waveform/loudness, proxy/transcode/export, and job progress/cancel/result.
-- [ ] 9.3 Delete Effects/Mask, keyframe/shape animation, blend modes, reverse/time-remap, stylized transitions, Wheels/Curves/HSL/LUT, diff, and dynamic capability UI with stores, operations, undo, messages, handlers, i18n, CSS, and tests.
-- [ ] 9.4 Replace singleton/broad media proxies with per-editor typed authoring, playback, media-job, and derived-artifact clients carrying explicit instance identity.
-- [ ] 9.5 Migrate seek/scrub to live `streams:seek` and edit commit to revisioned `timelines:update` with local buffer flush only and no public restart path.
-- [ ] 9.6 Migrate Preview/Canvas/Assets/Tools consumers to canonical media/capture/derived-artifact contracts and remove diff/variant/plugin dependencies.
-- [ ] 9.7 Add Extension/Webview tests for import, proxy, layered edit, text, transition, speed, color, audio, playback/update, job lifecycle, export, save/reopen, error UI, and multi-document isolation.
+- [ ] 9.1 Delete NKV/NKC Cut registration, codec, save, autosave, backup and migration paths after OTIO path tests pass.
+- [ ] 9.2 Delete speed, extra visual layers, transitions, subtitle/title, effect/color/mask/keyframe/plugin/professional paths from Webview through adapter.
+- [ ] 9.3 Delete compatibility aliases, dual DTOs, fallback branches, hidden commands and tests that allow old or implicit paths to return success.
+- [ ] 9.4 Preserve old user files byte-for-byte and return explicit unsupported diagnostics without a runtime converter.
+- [ ] 9.5 Run legacy-debt, unused-code, dependency-direction, manifest and generated-artifact checks.
 
-## 10. Implement managed AI and professional handoff
+## 10. Synchronize documentation and validation
 
-- [ ] 10.1 Define the closed capability classification and immutable External Processor request contract for profile-external generation, repair, tracking, upscale/interpolation, advanced grade, and composition.
-- [ ] 10.2 Implement processor resolution, identity/version, trust, approval, PathAccessPolicy, sandbox, declared output, task status, cancellation, diagnostics, and provenance without Engine-owned discovery.
-- [ ] 10.3 Define immutable candidate ResourceRef metadata including content hash, media metadata, provider/model/version, safe prompt/parameter summary, inputs, source NKV revision, task identity, and lineage.
-- [ ] 10.4 Validate processor output through the owning media validator before candidate delivery; reject missing, corrupt, mismatched, unauthorized, or unsupported output despite provider success.
-- [ ] 10.5 Implement preview/reject/accept candidate lifecycle and revisioned dispositions through canonical Cut authoring, undo, backup, and explicit asset/clip import.
-- [ ] 10.6 Implement multi-stage orchestration that requires candidate acceptance before deterministic edit/export stages and stops safely on generation failure or revision conflict.
-- [ ] 10.7 Add no-processor, denied approval, invalid output, stale revision, reject, accept, source preservation, secret/transient-path redaction, no-shell/no-legacy-fallback, and multi-document tests.
-
-## 11. Delete open-ended capabilities vertically
-
-- [ ] 11.1 Poison and delete custom/user WGSL, shader upload, dynamic effect/plugin registration, capability discovery, and generic effect application from contract through implementation.
-- [ ] 11.2 Delete non-normal blend, masks, adjustment/effect tracks, arbitrary parameters, complex transitions, generic keyframe/animation/time-remap/reverse, and professional color/LUT paths.
-- [ ] 11.3 Delete diff/audio-diff/video-diff/timeline-diff and unowned preview variant implementations, DTOs, commands, manifests, clients, UI, docs, and fixtures.
-- [ ] 11.4 Remove legacy controller aliases, compatibility reads/writes, fallback branches, hidden CLI/N-API methods, and tests that allow removed paths to succeed.
-- [ ] 11.5 Shrink Cargo/pnpm dependencies, generated artifacts, FFmpeg/font/platform packages, settings, and contributions only after every retained path has a canonical owner.
-- [ ] 11.6 Run source/dependency/action/manifest/bundle absence guards and legacy-debt/unused checks proving removed capabilities cannot be rediscovered or restored.
-
-## 12. Align Agent routing and evaluation
-
-- [ ] 12.1 Update Cut/media capability schemas so lightweight authoring and production jobs expose explicit document/revision, typed profile, task, ResourceRef, candidate, and disposition contracts.
-- [ ] 12.2 Update `skill.video-editing` and `skill.color-grading` only for changed creative boundaries; reuse audio/subtitle methods unless their Skill content actually changes.
-- [ ] 12.3 Create/update the indexed Agent Evaluation suite and cases in `evaluation.md` for Engine export/proxy, advanced AI processing, candidate acceptance, mixed workflow, and missing processor.
-- [ ] 12.4 Audit neutral TUI/runtime facts for capability identity, target revision, job/process state, approval, candidate/artifact identity, validation, provenance, and forbidden fallback; add only missing owning facts.
-- [ ] 12.5 Refresh Host-computed Skill fingerprints, coverage mapping, key-free schema/runner validation, and dry-run selection before real provider-backed execution.
-- [ ] 12.6 Run focused real TUI cases in an isolated synthetic workspace and record run/report IDs, effective model/target identities, path evidence, artifact validation, costs, blockers, and residual risk.
-
-## 13. Synchronize documentation, packaging, and validation
-
-- [ ] 13.1 Update Engine runtime, Cut/Canvas, Proto/wire, External Processor, package-boundary, and Agent orchestration ADR/domain docs for the final ownership model.
-- [ ] 13.2 Supersede active OpenSpec text that promises CPU-first playback, single-track editing, removed production jobs, or the old wide effect/plugin surface without rewriting archived history.
-- [ ] 13.3 Update root/package README, NKV/OTIO/AI compatibility docs, Chinese/English UI text, settings, and diagnostics for GPU requirements, derived media, export, and candidate handoff.
-- [ ] 13.4 Freeze three-platform FFmpeg build/license manifest, backend self-check fixtures, proxy/export profiles, packaged fonts, and supported hardware/codec matrix.
-- [ ] 13.5 Run Proto generation/idempotence, focused producer/consumer tests, Rust fmt/clippy/tests, TypeScript typecheck/build, Cargo Deny, and strict OpenSpec validation.
-- [ ] 13.6 Run synthetic Engine/NKV/OTIO/media-job tests plus preview/export golden and performance gates, including path evidence, QoS, shutdown, no restart, and no CPU decode.
-- [ ] 13.7 Use Extension Development Host with `vscode-extension-debugger` and isolated fixtures to verify import → proxy → layered edit → audio/text → AI candidate accept → realtime preview → save → export.
-- [ ] 13.8 Run root build/test/check/quality/legacy/unused gates, `pnpm test:agent:eval`, focused real evaluation, `git diff --check`, release packaging, and a final retained/removed path audit before completion.
+- [ ] 10.1 Update architecture, package boundaries, Engine runtime, Canvas/Cut boundary, Webview security and user docs for the implemented VS Code state.
+- [ ] 10.2 Run focused TypeScript/Rust tests, typecheck/build, producer/consumer contract tests, strict OpenSpec and Extension Development Host acceptance.
+- [ ] 10.3 Run OTIO/media fixtures for PTS, logical separation, role isolation, PCM, cancellation, shutdown, export and multi-instance behavior.
+- [ ] 10.4 Run focused real Agent evaluation when capability/routing lands; keep key-free harness results distinct from real behavior evidence.
+- [ ] 10.5 Run root build/test/check/quality/legacy/unused gates, `git diff --check` and a final retained/removed path audit before completion.

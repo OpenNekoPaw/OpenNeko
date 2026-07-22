@@ -4,7 +4,9 @@
 日期：2026-06-24
 范围：`neko-canvas`、`neko-cut`、`neko-preview`、`neko-agent`、共享类型契约、`.nkc` / `.nkv` 项目文件关系。
 
-本文记录 Canvas 播放顺序、预览路线、Cut 时间线和 Agent 操作能力之间的稳定边界。它补充 [`package-boundaries.md`](package-boundaries.md)、[`proto-and-wire-contracts.md`](proto-and-wire-contracts.md)、[`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md) 和视频领域架构 [`../domains/video/architecture.md`](../domains/video/architecture.md)。
+部分取代说明（2026-07-22）：本文只保留 Canvas 播放路线、Canvas 权威和 Canvas → Cut 单次快照原则。本文后续出现的 Cut `.nkv` 权威、专业多轨能力、`CanvasCutDraftPayload` 字段、`TimelineSync`、active/recent Cut 目标、持续同步和 Agent Cut 操作均已由 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 取代，不得作为新实现依据。新 v1 交接只允许有序 media/gap draft，并要求“创建新 `.otio`”或显式指定 `.otio` URI/revision。
+
+本文记录 Canvas 播放顺序、预览路线、Cut 时间线和 Agent 操作能力之间的稳定边界。它补充 [`package-boundaries.md`](package-boundaries.md)、[`proto-and-wire-contracts.md`](proto-and-wire-contracts.md) 和 [`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md)。
 
 ## 背景
 
@@ -42,7 +44,7 @@ Cut 管视频剪辑时间线
 Agent 通过共享协议读取、展示、确认和触发高层操作
 ```
 
-Canvas 不实现 Cut 式剪辑 timeline。Canvas 可提供 `Playback Route Navigator`，其主形态是预览路线矩阵（Route Storyboard Matrix），紧凑形态可以退化为 `PlaybackRouteStrip`。它只用于展示、筛选、选择、切换和预览 `CanvasPlaybackPlan`。Cut 继续拥有 `.nkv` 的剪辑 timeline 权威。Agent 可以感知顺序，但不拥有自己的 timeline 模型。
+Canvas 不实现 Cut 式剪辑 timeline。Canvas 可提供 `Playback Route Navigator`，其主形态是预览路线矩阵（Route Storyboard Matrix），紧凑形态可以退化为 `PlaybackRouteStrip`。它只用于展示、筛选、选择、切换和预览 `CanvasPlaybackPlan`。Cut 的当前权威与交接契约以替代 ADR 为准；Agent 可以感知顺序，但不拥有自己的 timeline 模型。
 
 ## 顺序权威
 
