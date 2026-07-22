@@ -96,6 +96,18 @@ describe('OpenNeko platform assembler', () => {
         ),
       /neko-engine\.linux-x64-gnu\.node/u,
     );
+    assert.throws(
+      () =>
+        assertEmbeddedNativeClosure(
+          [
+            '/payload/packages/host-napi/neko-engine.linux-x64-gnu.node',
+            '/payload/packages/host-napi/libavcodec.so.62',
+            '/payload/deps/ffmpeg/lib/libavcodec.so.62',
+          ],
+          'linux-x64',
+        ),
+      /build-only dependency.*deps\/ffmpeg/u,
+    );
   });
 
   it('builds the Cut Webview before copying its release payload', () => {

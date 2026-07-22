@@ -8,6 +8,8 @@ Inspection of the published `0.0.2` Linux payload exposed a second contract viol
 
 The same inspection found that both supported N-API binaries link `avdevice` directly while the shared `ffmpegLibs` package configuration omitted it. The canonical configuration must include `avdevice` so macOS and Linux both materialize the complete direct closure.
 
+Inspection of the published `0.0.3` artifact exposed a third boundary defect: the runtime directory is deduplicated, but the top-level Engine `deps/ffmpeg` build SDK is not excluded by `.vscodeignore`. The standalone Engine VSIX therefore contains the SDK, and the OpenNeko assembler copies that opaque payload into the final VSIX. On Linux this adds approximately 187 MiB compressed because the SDK contains materialized unversioned, major-version, and fully versioned aliases.
+
 ## Goals / Non-Goals
 
 **Goals:**
@@ -18,6 +20,7 @@ The same inspection found that both supported N-API binaries link `avdevice` dir
 - Prove that every FFmpeg dependency requested by the N-API binary or another bundled FFmpeg library is present by exact runtime name.
 - Build the platform N-API binary against the FFmpeg development source selected by package configuration, including the verified artifact on Linux.
 - Provide a fast regression test using real symlinks so a future alias dereference loop cannot reintroduce duplicate entities.
+- Keep build-only dependency trees out of both the standalone Engine VSIX and the composed OpenNeko payload.
 
 **Non-Goals:**
 
@@ -27,11 +30,11 @@ The same inspection found that both supported N-API binaries link `avdevice` dir
 
 ## Decisions
 
-### Engine packaging owns closure materialization
+### Engine packaging owns closure materialization and payload inclusion
 
-The fix remains in the Engine packaging boundary because this is where the native runtime and dynamic-loader contract are known. The OpenNeko assembler continues to treat the Engine VSIX as an opaque build input.
+The runtime closure remains owned by Engine packaging because this is where the native runtime and dynamic-loader contract are known. Engine packaging also owns the allow/exclude decision for its build-only `deps/` tree. The OpenNeko assembler does not rewrite Engine contents, but validates that no build input crossed the feature payload boundary before composing the final VSIX.
 
-Alternative considered: deduplicate files while composing the final OpenNeko VSIX. Rejected because that would couple the application root to ELF semantics and allow the standalone Engine artifact to remain defective.
+Alternative considered: remove or deduplicate files while composing the final OpenNeko VSIX. Rejected because that would couple the application root to ELF semantics and allow the standalone Engine artifact to remain defective. The assembler only fails visibly when forbidden build inputs are present.
 
 ### The major-version SONAME is the canonical runtime filename
 
@@ -55,11 +58,11 @@ A script-level test creates a fully versioned fixture file plus unversioned and 
 
 ## Five-Layer Analysis
 
-- **Responsibility:** Engine platform packaging owns FFmpeg closure discovery, validation, and materialization; Release only publishes the resulting OpenNeko VSIX.
+- **Responsibility:** Engine platform packaging owns FFmpeg closure discovery, validation, materialization, and build-input exclusion; the OpenNeko assembler validates the feature payload boundary before Release publishes it.
 - **Dependency:** the helper depends only on Node filesystem/path primitives and an injected ELF metadata reader; it does not cross Extension, Webview, application, or Rust runtime boundaries.
 - **Interface:** input is the source library directory, destination directory, configured FFmpeg library names, native root consumers, and ELF SONAME/NEEDED readers; output is the copied runtime-name list or a thrown diagnostic.
 - **Extension:** a future FFmpeg component is added through the existing package configuration and automatically receives the same unique-SONAME rule without another copy path.
-- **Testing:** symlink and dependency fixtures cover deterministic materialization locally; workflow tests pin SDK preparation before compilation; Linux CI packaging covers the real verified ELF artifacts and final native closure.
+- **Testing:** symlink and dependency fixtures cover deterministic materialization locally; inclusion-rule and final-staging tests reject SDK leakage; workflow tests pin SDK preparation before compilation; Linux packaging covers the real verified ELF artifacts, final native closure, and compressed size.
 
 ## Risks / Trade-offs
 
@@ -68,6 +71,7 @@ A script-level test creates a fully versioned fixture file plus unversioned and 
 - **[Pinned archive layout changes]** -> Reject missing or ambiguous major aliases with the library name and candidate list instead of guessing.
 - **[Local macOS cannot execute Linux ELF tooling]** -> Inject the SONAME reader in deterministic unit tests and rely on the supported Linux packaging job for real ELF verification.
 - **[VSIX size remains above macOS]** -> Native codec/library differences can remain; acceptance targets removal of duplicate entities, not equal byte size across platforms.
+- **[A future build directory leaks into a feature VSIX]** -> Exclude Engine `deps/**` at its owning package boundary and fail final composition if any feature payload still contains a `deps/` segment.
 
 ## Migration Plan
 
@@ -75,7 +79,7 @@ A script-level test creates a fully versioned fixture file plus unversioned and 
 2. Route Linux FFmpeg copying through the canonical materializer and require `patchelf` SONAME/NEEDED validation.
 3. Prepare the configured platform FFmpeg SDK before CI/Release N-API compilation and pass its prefix explicitly.
 4. Run Engine script, workflow orchestration, OpenSpec, and quality checks locally.
-5. Let Merge Gate build the real Linux artifact and inspect its closure, dependencies, and size before the next release tag.
+5. Build the real Linux artifact, inspect its closure and compressed size, then retain the same evidence in Merge Gate before the next release tag.
 
 Rollback restores the previous bundler, but must not be used to publish another oversized artifact; no user data or persisted project format is involved.
 
