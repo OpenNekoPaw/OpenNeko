@@ -654,7 +654,8 @@
     "@neko/entity": "workspace:*",
     "@neko/host": "workspace:*",
     "@neko/search": "workspace:*",
-    "@neko/shared": "workspace:*"
+    "@neko/shared": "workspace:*",
+    "adm-zip": "^0.6.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

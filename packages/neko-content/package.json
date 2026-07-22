@@ -17,7 +17,7 @@
     "@neko/markdown": "workspace:*",
     "@neko/shared": "workspace:*",
     "@zip.js/zip.js": "^2.8.26",
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.6.0",
     "cheerio": "^1.2.0",
     "epub2": "^3.0.2",
     "fast-xml-parser": "^4.5.0",
@@ -30,7 +30,6 @@
     "yaml": "2.9.0"
   },
   "devDependencies": {
-    "@types/adm-zip": "^0.5.8",
     "@types/node-fetch": "^2.6.13",
     "vitest": "^4.1.2"
   },
