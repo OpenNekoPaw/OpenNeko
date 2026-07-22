@@ -1,11 +1,9 @@
-import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, extname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const repositoryRoot = resolve(packageRoot, '../..');
 const srcRoot = join(packageRoot, 'src', 'tui');
 
 describe('TUI Node adapter boundary', () => {
@@ -62,30 +60,20 @@ describe('TUI Node adapter boundary', () => {
     expect(applicationRuntime).toContain('createConfigStore');
     expect(defaultCapabilities).toContain('createNodeContentAccessRuntime');
     expect(defaultCapabilities).toContain('createNodeWorkspaceContentHostAdapter');
-    expect(defaultCapabilities).toContain('createNodeAssetsCapabilityProvider');
+    expect(defaultCapabilities).not.toContain('createNodeAssetsCapabilityProvider');
     expect(defaultCapabilities).toContain('createNodeEntitySearchCapabilityProviders');
     expect(nodeHostAdapter).toContain('createNodeHostAdapter');
   });
 
-  it('loads the Assets headless subpath through the actual Node ESM loader', () => {
-    const output = execFileSync(
-      process.execPath,
-      [
-        '--import',
-        'tsx',
-        '--input-type=module',
-        '--eval',
-        [
-          "import { createNekoAssetsHeadlessCapabilityProvider } from 'neko-assets/agent-headless';",
-          "if (typeof createNekoAssetsHeadlessCapabilityProvider !== 'function') throw new Error('missing headless provider export');",
-          "process.stdout.write('assets-headless-esm-ok');",
-        ].join('\n'),
-      ],
-      { cwd: repositoryRoot, encoding: 'utf8' },
+  it('does not compose the retired Asset catalog capability', () => {
+    const defaultCapabilities = readFileSync(
+      join(srcRoot, 'host', 'tui-default-capabilities.ts'),
+      'utf8',
     );
 
-    expect(output).toBe('assets-headless-esm-ok');
-  }, 30_000);
+    expect(defaultCapabilities).not.toContain('node-assets-capability');
+    expect(defaultCapabilities).not.toContain('neko-assets/agent-headless');
+  });
 
   it('keeps executable build ownership in the application manifest', () => {
     const packageManifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as {
