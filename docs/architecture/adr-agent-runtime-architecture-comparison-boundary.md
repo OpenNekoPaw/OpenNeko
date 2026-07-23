@@ -1,5 +1,7 @@
 # ADR: Agent Runtime 架构对比与边界决策
 
+> 后续决策：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 已取代本文中通用 `TaskManager` 作为 Agent 工具/媒体后台执行权威的部分。Agent-owned 工作使用 Tool Call，后台继续使用 BackgroundAgentRun/SubagentRun，独立恢复使用具体领域 Job。
+
 状态：Accepted
 日期：2026-07-05
 范围：`neko-agent` runtime、session/turn/runner/capability/stream 分层、Extension host adapter、Skill/Capability/External Processor、Agent 协议面与测试边界。

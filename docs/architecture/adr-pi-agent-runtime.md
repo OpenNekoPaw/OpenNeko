@@ -1,5 +1,7 @@
 # ADR: 采用 Pi Agent、Skill/Session primitives 与工具专用模型边界
 
+> 后续决策：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 已取代本文中“长媒体 Tool 快速返回 `TaskRef`，由通用 Task runtime 观察/恢复”的部分。Pi Tool Call 现在是 Agent-owned 工作的目标执行单位；独立恢复只由具体领域 Job 提供。
+
 状态：Accepted
 日期：2026-07-16
 范围：`neko-agent`、OpenNeko Agent 提取、LLM/provider runtime、Skill、会话、生成与感知工具、多模型配置及异步任务边界。

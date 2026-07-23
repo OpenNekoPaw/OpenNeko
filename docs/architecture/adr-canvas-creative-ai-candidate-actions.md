@@ -1,5 +1,7 @@
 # ADR: Canvas 创作 AI 按钮的 Candidate-First Agent Run 边界
 
+> 后续决策：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 已取代本文中“所有 Canvas AI 按钮由 Agent 通用 run/workItem 统一管理”的部分。Candidate-first、ResourceRef 和 Canvas-owned apply 继续有效；Canvas 直接按钮由 Canvas operation + Generation domain 拥有，只有显式“交给后台 Agent”才创建 BackgroundAgentRun。
+
 状态：Accepted
 日期：2026-07-10
 范围：`neko-canvas` Shot/Scene AI 按钮、`neko-agent` 后台创作会话投影、run/workItem、candidate 写回、媒体并发和质量晋升边界。

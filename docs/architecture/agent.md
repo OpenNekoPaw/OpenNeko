@@ -117,14 +117,15 @@ Webview/Extension 与 Terminal TUI/headless 是不同本地宿主，不要求功
 
 ### 异步任务结果观察
 
-后台任务的业务闭环归共享 runtime，而不是 Webview 或 TUI 私有实现：
+执行闭环归明确 owner，而不是 Webview、TUI 或通用 TaskManager：
 
-- `agent` 层拥有 task-result observation runtime，负责识别终态 task、记录 observation/evidence、根据 delivery policy 请求继续或自动续跑。
-- owning media capability 贡献媒体任务到通用 Agent task-result 的投影，负责把 provider/model、stable result refs、generated assets、host output paths 和 delivery policy 转成共享任务事实；generic Platform 只承载注册和 Provider adapter。
-- VS Code Extension、Terminal TUI、Desktop/Electron 只提供 host delivery port，例如 Webview URI、通知、Node workspace 保存目录、Electron IPC 或终端诊断。
-- 同一工作区的媒体生成结果必须能被任一宿主通过 workspace-visible task record、conversation journal、`ResourceRef` 或 generated asset index 观察；Webview URI、blob URL、临时下载路径和 host-private live handle 不能作为业务事实。
+- `AgentRun` 拥有当前 Tool Call；普通 Tool 在同一调用中投影进度并返回终态结果，随 Agent Run 取消。
+- 显式 `BackgroundAgentRun`/`SubagentRun` 由应用级 Agent supervisor 维护，并提供精确中断操作。
+- 需要跨页面/重启恢复或直接领域 UI 操作的工作由具体领域 Job/Session 拥有；Agent 只通过 Tool 调用领域 port。
+- VS Code Extension、Terminal TUI、Desktop/Electron 只提供 host delivery/lifecycle adapter，例如 Webview URI、通知、Node workspace 保存目录、Electron IPC 或终端诊断。
+- 同一工作区的生成结果通过稳定 `ResourceRef`、领域 Job identity 或 generated asset index 观察；Webview URI、blob URL、临时下载路径和 host-private live handle 不能成为业务事实。
 
-TUI 不读取 VS Code 注入设置，也不模拟 Webview 消息；它通过 Node adapter 复用 `AgentEventStreamRuntimeProcessor`、task-result observation runtime 和已注册的 owning media delivery contribution。Webview/Extension 可以有 VS Code 专属资源投影、setting bridge 和通知，但不能因此复制一套 task observation 或 token/usage 计算路径。
+TUI 不读取 VS Code 注入设置，也不模拟 Webview 消息。Webview/Extension 可以有 VS Code 专属资源投影、setting bridge 和通知，但不能因此复制 Tool execution、领域 Job observation 或 token/usage 计算路径。完整边界见 [`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md)。
 
 Webview 和 TUI 的可变展示状态遵循相同 ownership 规则，但不共享 UI 实现。每个 Webview Tab 拥有独立 `TabRenderRuntime`、projection attachment、store 与 keyed React subtree；切换 Tab 只改变 visibility。每个 Ink root 拥有独立 `AgentTuiApplicationRuntime`，每个 hosted conversation 拥有独立 session/render controller 和 store bundle；resume 切换 controller，不重绑模块单例。共享目录、catalog 和默认配置只能以只读服务或不可变 snapshot 注入。
 
@@ -138,7 +139,7 @@ Intent
   -> model decision
   -> Approval and policy when required
   -> current Tool call
-  -> Tool / Task result and diagnostics
+  -> Tool result or concrete domain Job identity and diagnostics
   -> grounded artifacts or owning project result
   -> next turn observation
 ```

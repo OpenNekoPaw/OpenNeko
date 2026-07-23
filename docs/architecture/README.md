@@ -15,8 +15,10 @@
 | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
 | [`adr-agent-idc-skill-planmode-trigger-boundary.md`](adr-agent-idc-skill-planmode-trigger-boundary.md)             | 已被 Agent 动态创作编排 ADR 取代的 IDC/Plan 历史边界                                  |
 | [`adr-agent-autonomous-filmmaking-creation-boundary.md`](adr-agent-autonomous-filmmaking-creation-boundary.md)     | 已被 Agent 动态创作编排 ADR 取代的影视创作历史边界                                    |
-| [`adr-agent-message-task-queue-boundary.md`](adr-agent-message-task-queue-boundary.md)                             | Agent 消息队列、任务队列与任务卡的展示位置、权威来源和操作边界                        |
-| [`adr-agent-internal-continuation-boundary.md`](adr-agent-internal-continuation-boundary.md)                       | Agent 内部续跑、消息队列、异步任务结果和 subagent 回传边界                            |
+| [`adr-agent-message-task-queue-boundary.md`](adr-agent-message-task-queue-boundary.md)                             | 历史边界；消息队列与计划进度分离仍有效，通用 Task/TaskCard 已被取代                   |
+| [`adr-agent-internal-continuation-boundary.md`](adr-agent-internal-continuation-boundary.md)                       | 历史提案；Subagent 结构化回传仍有效，通用 Task continuation 已被取代                  |
+| [`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md)     | 以 Tool Call 取代通用 Agent Task，并区分后台 Agent/Subagent、领域 Job、页面关闭与恢复边界 |
+| [`adr-agent-runtime-single-authority-and-simplification-boundary.md`](adr-agent-runtime-single-authority-and-simplification-boundary.md) | Agent 流式 Timeline 单一权威、Prompt/渲染/Platform 收敛、领域 owner 归位及条件性扩展框架边界 |
 | [`adr-agent-runtime-architecture-comparison-boundary.md`](adr-agent-runtime-architecture-comparison-boundary.md)   | Agent runtime 对比 Codex/OpenCode/Pi/OpenClaw/Hermes 等后的本地边界、协议面和演进约束 |
 | [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)                                                               | Pi 作为唯一 Agent/LLM/Skill/Session canonical path，及模型、路径、凭据和产品职责边界  |
 | [`adr-agent-creative-invocation-run-boundary.md`](adr-agent-creative-invocation-run-boundary.md)                   | Agent 创作包 AI 调用、document/run 边界、ResourceRef 结果和 package-owned 写回约束    |
@@ -33,7 +35,9 @@
 | [`adr-code-debt-redundancy-governance.md`](adr-code-debt-redundancy-governance.md)                                 | 重复、冗余、兼容桥和 fallback 代码的分类、清理优先级与验证规则                        |
 | [`adr-code-review-quality-gates.md`](adr-code-review-quality-gates.md)                                             | 代码审查、风险分级、验证矩阵和功能偏离检查                                            |
 | [`adr-local-metadata-store-sqlite.md`](adr-local-metadata-store-sqlite.md)                                         | 用户级 SQLite 本地元数据 Store、项目事实和缓存索引边界                                |
-| [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md) | 拟议新增 Desktop 组合根、现有子包复用方式及 Craft Agents 等开源参考边界 |
+| [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md) | 拟议新增 Desktop 组合根、现有子包复用方式及 OpenCode、Zed、Craft Agents、Goose 等参考边界 |
+| [`adr-neko-desktop-home-project-profile-ux-boundary.md`](adr-neko-desktop-home-project-profile-ux-boundary.md)     | Desktop Home、Project Tabs、三类 Project Profile，以及 `neko-chara`/`neko-world` 顶级领域聚合边界 |
+| [`adr-cut-otio-vscode-desktop-media-runtime-boundary.md`](adr-cut-otio-vscode-desktop-media-runtime-boundary.md) | Cut 以 OTIO 为唯一工程、VS Code 精简保留 Engine adapter、Desktop 迁移到 WebCodecs/Host FFmpeg，以及严格媒体格式边界 |
 | [`application-composition.md`](application-composition.md)                                                       | TUI、OpenNeko for VS Code 两个应用 composition root 和依赖方向                       |
 | [`adr-unified-markdown-resource-rendering.md`](adr-unified-markdown-resource-rendering.md)                         | Canvas MCP 式能力、Markdown 扩展语法、资源增强渲染和 Send to Canvas 边界              |
 | [`adr-canvas-cut-playback-route-and-timeline-boundary.md`](adr-canvas-cut-playback-route-and-timeline-boundary.md) | Canvas 预览路线矩阵、Cut 剪辑时间线、Agent 顺序感知和跨包协议边界                     |
