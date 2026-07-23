@@ -1,204 +1,113 @@
 import * as vscode from 'vscode';
+import type { CutExportTaskSnapshot } from '@neko-cut/domain';
 import { StatusBarGroup } from '@neko/shared/vscode/extension';
-import { createServiceId } from '../base';
+import { projectCutExportStatus } from './cutExportStatusProjection';
+import {
+  formatCutDocumentStatus,
+  type CutDocumentStatusSnapshot,
+} from './cutDocumentStatusProjection';
 
-// =============================================================================
-// 服务标识符
-// =============================================================================
+export const OPEN_CUT_EXPORT_TASK_COMMAND = 'neko.cut.openExportTask';
+export const OPEN_CUT_DOCUMENT_STATUS_COMMAND = 'neko.cut.openStatusDocument';
 
-export const IStatusBar = createServiceId<IStatusBar>('statusBar');
+const EXPORT_STATUS_ITEM_ID = 'neko.cut.exportStatus';
+const DOCUMENT_STATUS_ITEM_ID = 'neko.cut.documentStatus';
 
-// =============================================================================
-// 接口定义
-// =============================================================================
-
-interface StatusInfo {
-  currentTime: number;
-  totalDuration: number;
-  trackCount: number;
-  elementCount: number;
-  isPlaying: boolean;
-  fps: number;
-}
-
-/** Export progress info for status bar */
-export interface ExportStatusInfo {
-  /** Is export in progress */
-  isExporting: boolean;
-  /** Progress percentage (0-100) */
-  percent: number;
-  /** Current stage message */
-  message: string;
-  /** Current frame / total frames */
-  currentFrame?: number;
-  totalFrames?: number;
-  /** Processing FPS */
-  currentFps?: number;
-  /** Estimated time remaining in ms */
-  estimatedTimeRemaining?: number;
-}
-
-export interface IStatusBar extends vscode.Disposable {
-  show(): void;
-  hide(): void;
-  update(info: StatusInfo): void;
-  updateExportProgress(info: ExportStatusInfo): void;
-}
-
-// =============================================================================
-// IDs
-// =============================================================================
-
-const ID = {
-  playState: 'neko.cut.playState',
-  time: 'neko.cut.time',
-  info: 'neko.cut.info',
-  export: 'neko.cut.export',
-} as const;
-
-// =============================================================================
-// 实现
-// =============================================================================
-
-export class StatusBar implements IStatusBar {
-  private readonly group: StatusBarGroup;
-  private isActive: boolean = false;
+export class StatusBar implements vscode.Disposable {
+  private readonly group = new StatusBarGroup([
+    {
+      id: EXPORT_STATUS_ITEM_ID,
+      alignment: vscode.StatusBarAlignment.Right,
+      priority: 200,
+      name: vscode.l10n.t('Neko Cut Export'),
+      command: OPEN_CUT_EXPORT_TASK_COMMAND,
+      visible: 'conditional',
+    },
+    {
+      id: DOCUMENT_STATUS_ITEM_ID,
+      alignment: vscode.StatusBarAlignment.Left,
+      priority: 100,
+      name: vscode.l10n.t('Neko Cut Document'),
+      command: OPEN_CUT_DOCUMENT_STATUS_COMMAND,
+      visible: 'conditional',
+    },
+  ]);
+  private readonly tasks = new Map<string, CutExportTaskSnapshot>();
+  private exportTargetDocumentUri: string | undefined;
+  private documentTarget: { readonly documentUri: string; readonly sessionId: string } | undefined;
 
   constructor() {
-    this.group = new StatusBarGroup([
-      {
-        id: ID.playState,
-        alignment: vscode.StatusBarAlignment.Left,
-        priority: 100,
-        name: 'OpenNeko Play State',
-      },
-      {
-        id: ID.time,
-        alignment: vscode.StatusBarAlignment.Left,
-        priority: 99,
-        name: 'OpenNeko Timeline',
-      },
-      {
-        id: ID.info,
-        alignment: vscode.StatusBarAlignment.Left,
-        priority: 98,
-        name: 'OpenNeko Info',
-      },
-      {
-        id: ID.export,
-        alignment: vscode.StatusBarAlignment.Right,
-        priority: 1000,
-        name: 'OpenNeko Export',
-        command: 'neko.showExportPanel',
-        visible: 'conditional',
-      },
-    ]);
-  }
-
-  public show(): void {
-    this.isActive = true;
     this.group.show();
   }
 
-  public hide(): void {
-    this.isActive = false;
-    this.group.hide();
+  update(task: CutExportTaskSnapshot): void {
+    this.tasks.set(task.jobId, task);
+    const projection = projectCutExportStatus([...this.tasks.values()]);
+    this.exportTargetDocumentUri = projection.documentUri;
+    this.group.update(EXPORT_STATUS_ITEM_ID, projection.text, projection.tooltip);
+    const item = this.group.get(EXPORT_STATUS_ITEM_ID);
+    if (!item) throw new Error('Cut export status item was not created.');
+    item.backgroundColor = statusBackground(projection.tone);
+    this.group.setVisible(EXPORT_STATUS_ITEM_ID, projection.visible);
   }
 
-  public update(info: StatusInfo): void {
-    if (!this.isActive) return;
-
-    // Format time as MM:SS.ms
-    const formatTime = (seconds: number): string => {
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      const ms = Math.floor((seconds % 1) * 100);
-      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
-    };
-
-    // Play state
-    if (info.isPlaying) {
-      this.group.update(ID.playState, '$(debug-pause) Playing');
-      const playItem = this.group.get(ID.playState);
-      if (playItem) {
-        playItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-        playItem.tooltip = 'Video is playing';
-      }
-    } else {
-      this.group.update(ID.playState, '$(play) Paused');
-      const playItem = this.group.get(ID.playState);
-      if (playItem) {
-        playItem.backgroundColor = undefined;
-        playItem.tooltip = 'Video is paused';
-      }
-    }
-
-    // Time display
-    this.group.update(
-      ID.time,
-      `$(clock) ${formatTime(info.currentTime)} / ${formatTime(info.totalDuration)}`,
-      `Current: ${formatTime(info.currentTime)}\nTotal: ${formatTime(info.totalDuration)}\nFPS: ${info.fps}`,
-    );
-
-    // Track and element info
-    this.group.update(
-      ID.info,
-      `$(layers) ${info.trackCount} tracks $(file-media) ${info.elementCount} elements`,
-      `Tracks: ${info.trackCount}\nElements: ${info.elementCount}`,
-    );
-  }
-
-  public updateExportProgress(info: ExportStatusInfo): void {
-    if (!info.isExporting) {
-      this.group.setVisible(ID.export, false);
+  updateDocument(snapshot: CutDocumentStatusSnapshot | undefined): void {
+    if (!snapshot) {
+      this.documentTarget = undefined;
+      this.group.setVisible(DOCUMENT_STATUS_ITEM_ID, false);
       return;
     }
-
-    this.group.setVisible(ID.export, true);
-
-    const percent = Math.round(info.percent);
-
-    // Build progress bar (10 chars)
-    const filled = Math.floor(percent / 10);
-    const progressBar = '█'.repeat(filled) + '░'.repeat(10 - filled);
-
-    // Build tooltip with detailed info
-    const tooltipLines = [info.message];
-
-    if (info.currentFrame !== undefined && info.totalFrames !== undefined) {
-      tooltipLines.push(`帧: ${info.currentFrame}/${info.totalFrames}`);
-    }
-
-    if (info.currentFps !== undefined && info.currentFps > 0) {
-      tooltipLines.push(`速度: ${info.currentFps.toFixed(1)} fps`);
-    }
-
-    if (info.estimatedTimeRemaining !== undefined && info.estimatedTimeRemaining > 0) {
-      const seconds = Math.ceil(info.estimatedTimeRemaining / 1000);
-      if (seconds < 60) {
-        tooltipLines.push(`剩余: 约 ${seconds} 秒`);
-      } else {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        tooltipLines.push(`剩余: 约 ${mins}分${secs}秒`);
-      }
-    }
-
-    tooltipLines.push('', '点击查看详情');
-
-    this.group.update(
-      ID.export,
-      `$(sync~spin) 导出中 ${progressBar} ${percent}%`,
-      tooltipLines.join('\n'),
-    );
-
-    const exportItem = this.group.get(ID.export);
-    if (exportItem) {
-      exportItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-    }
+    this.documentTarget = {
+      documentUri: snapshot.documentUri,
+      sessionId: snapshot.sessionId,
+    };
+    const projection = formatCutDocumentStatus(snapshot, {
+      clips: (count) => vscode.l10n.t('{0} Clips', count),
+      tracks: (count) => vscode.l10n.t('{0} Tracks', count),
+      duration: (value) => vscode.l10n.t('Duration: {0}', value),
+      dirty: vscode.l10n.t('Unsaved changes'),
+    });
+    this.group.update(DOCUMENT_STATUS_ITEM_ID, projection.text, projection.tooltip);
+    this.group.setVisible(DOCUMENT_STATUS_ITEM_ID, true);
   }
 
-  public dispose(): void {
+  async openCurrentTaskDocument(): Promise<void> {
+    if (!this.exportTargetDocumentUri) {
+      throw new Error('No Cut export task is available for status-bar navigation.');
+    }
+    await vscode.commands.executeCommand(
+      'vscode.openWith',
+      vscode.Uri.parse(this.exportTargetDocumentUri),
+      'neko.cut.otioEditor',
+    );
+  }
+
+  async openCurrentDocument(): Promise<void> {
+    if (!this.documentTarget) {
+      throw new Error('No active Cut document is available for status-bar navigation.');
+    }
+    await vscode.commands.executeCommand(
+      'vscode.openWith',
+      vscode.Uri.parse(this.documentTarget.documentUri),
+      'neko.cut.otioEditor',
+    );
+  }
+
+  dispose(): void {
     this.group.dispose();
+    this.tasks.clear();
+  }
+}
+
+function statusBackground(
+  tone: ReturnType<typeof projectCutExportStatus>['tone'],
+): vscode.ThemeColor | undefined {
+  switch (tone) {
+    case 'warning':
+      return new vscode.ThemeColor('statusBarItem.warningBackground');
+    case 'error':
+      return new vscode.ThemeColor('statusBarItem.errorBackground');
+    case 'neutral':
+      return undefined;
   }
 }

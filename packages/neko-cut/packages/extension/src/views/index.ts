@@ -1,7 +1,6 @@
-/**
- * Views Module
- * 通用视图组件导出
- */
-
-export { IStatusBar, StatusBar } from './statusBar';
-export { IVideoProjectOutlineProvider, VideoProjectOutlineProvider } from './outlineProvider';
+export {
+  OPEN_CUT_DOCUMENT_STATUS_COMMAND,
+  OPEN_CUT_EXPORT_TASK_COMMAND,
+  StatusBar,
+} from './statusBar';
+export type { CutDocumentStatusSnapshot } from './cutDocumentStatusProjection';

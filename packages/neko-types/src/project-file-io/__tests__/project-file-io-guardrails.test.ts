@@ -25,7 +25,6 @@ describe('project file I/O guardrails', () => {
   it('keeps migrated nk* editor persistence on the shared project file store', () => {
     const migratedFiles = [
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-      'packages/neko-cut/packages/extension/src/services/ProjectSessionService.ts',
     ];
 
     for (const file of migratedFiles) {
@@ -37,18 +36,13 @@ describe('project file I/O guardrails', () => {
   it('keeps migrated nk* save lifecycles on the shared save session', () => {
     const sessionFiles = [
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
-      'packages/neko-cut/packages/extension/src/editor/video/cutProjectFilePersistence.ts',
-      'packages/neko-cut/packages/extension/src/services/ProjectSessionService.ts',
     ];
 
     for (const file of sessionFiles) {
       expect(readSource(file), file).toContain('ProjectFileSaveSession');
     }
 
-    const customEditorFiles = sessionFiles.filter(
-      (file) => !file.includes('cutProjectFilePersistence'),
-    );
-    for (const file of customEditorFiles) {
+    for (const file of sessionFiles) {
       const source = readSource(file);
       expect(source, `${file} must not bypass ProjectFileSaveSession with raw save`).not.toMatch(
         /projectFileStore\.save(?:As)?\(/,

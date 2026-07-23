@@ -16,16 +16,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: [
-      // Protocol integration tests (self-contained vi.mock('vscode'))
-      'packages/extension/src/__tests__/protocol.test.ts',
-      'packages/extension/src/agentCapabilityProvider.test.ts',
-      'packages/extension/src/editor/video/cutProjectFilePersistence.test.ts',
-      'packages/extension/src/editor/video/messageHandler.test.ts',
-      'packages/extension/src/editor/video/videoEditorModel.contract.test.ts',
-      'packages/extension/src/editor/video/videoEditorProvider.save.test.ts',
-      'packages/extension/src/services/**/*.test.ts',
-    ],
+    include: ['packages/extension/src/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     coverage: sharedCoverage({
       include: ['src/**/*.{ts,tsx}', 'packages/extension/src/**/*.{ts,tsx}'],

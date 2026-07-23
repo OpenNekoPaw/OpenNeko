@@ -1,9 +1,10 @@
 {
-  "neko.outline.title": "项目大纲",
-  "neko.outline.contextualTitle": "视频项目大纲",
-  "neko.newProject.title": "新建视频项目",
-  "neko.newProject.noFolder": "未打开任何工作区文件夹。",
-  "neko.addToTimeline.title": "添加到时间线",
-  "neko.openInEditor.title": "在视频编辑器中打开",
-  "neko.mediaDiff.compareFiles.title": "比较媒体文件"
+  "neko.cut.newProject.title": "新建 OTIO 项目",
+  "neko.cut.previewMedia.title": "预览媒体",
+  "Neko Cut Export": "Neko Cut 导出",
+  "Neko Cut Document": "Neko Cut 文档",
+  "{0} Clips": "{0} 个片段",
+  "{0} Tracks": "{0} 条轨道",
+  "Duration: {0}": "时长：{0}",
+  "Unsaved changes": "有未保存的更改"
 }
