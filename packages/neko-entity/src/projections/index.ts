@@ -23,13 +23,6 @@ export {
 } from './entityAssetMetadataProjection';
 
 export {
-  NpcProfileAssembler,
-  type AssembleNpcProfileInput,
-  type NpcProfileAssemblerReaders,
-  type NpcProfileAssetMetadata,
-  type NpcProfileAssemblyResult,
-} from './npcProfileAssembler';
-export {
   extractLineBasedScriptCharacters,
   extractScriptCharacterCandidates,
   scriptCharacterCandidateToProjectSearchItem,
