@@ -202,6 +202,7 @@ async function activateExtension() {
   const context = {
     subscriptions: [] as { dispose?: () => void }[],
     extensionUri: { fsPath: '/tmp/extension' },
+    asAbsolutePath: vi.fn((relativePath: string) => `/tmp/extension/${relativePath}`),
     globalStorageUri: { fsPath: '/tmp/storage' },
     globalState: {
       get: vi.fn(() => undefined),

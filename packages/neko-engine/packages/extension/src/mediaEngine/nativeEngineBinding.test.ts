@@ -1,14 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveNativeEngineModule } from './nativeEngineBinding';
+import { createNativeEngineBindingFactory, resolveNativeEngineModule } from './nativeEngineBinding';
 
 describe('nativeEngineBinding', () => {
-  it('resolves the Node 24 CommonJS dynamic-import namespace', () => {
+  it('resolves the packaged CommonJS module value', () => {
     const create = vi.fn();
     const module = resolveNativeEngineModule({
-      default: {
-        NativeEngine: { create },
-      },
+      NativeEngine: { create },
     });
 
     expect(module.NativeEngine.create).toBe(create);
@@ -19,10 +17,31 @@ describe('nativeEngineBinding', () => {
     {},
     { default: {} },
     { default: { NativeEngine: {} } },
-    { NativeEngine: { create: vi.fn() } },
+    { default: { NativeEngine: { create: vi.fn() } } },
   ])('rejects an invalid native module namespace: %j', (namespace) => {
     expect(() => resolveNativeEngineModule(namespace)).toThrow(
-      'Invalid @neko-engine/host-napi module: expected default.NativeEngine.create to be a function.',
+      'Invalid packaged Engine module: expected NativeEngine.create to be a function.',
+    );
+  });
+
+  it('loads only the configured absolute packaged path', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'engine' });
+    const loadModule = vi.fn(() => ({ NativeEngine: { create } }));
+    const createBinding = createNativeEngineBindingFactory(
+      '/extension/dist/features/neko-engine/packages/host-napi/loader.js',
+      loadModule,
+    );
+
+    await expect(createBinding()).resolves.toEqual({ id: 'engine' });
+    expect(loadModule).toHaveBeenCalledWith(
+      '/extension/dist/features/neko-engine/packages/host-napi/loader.js',
+    );
+    expect(create).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a relative packaged module path', () => {
+    expect(() => createNativeEngineBindingFactory('packages/host-napi/loader.js')).toThrow(
+      'Packaged Engine module path must be absolute',
     );
   });
 });

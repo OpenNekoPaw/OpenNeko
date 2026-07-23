@@ -15,7 +15,7 @@ const SHARED_GATE_JOBS = Object.freeze([
   'package-openneko-vsix',
 ]);
 
-describe('dev/main quality gate orchestration', () => {
+describe('development/main quality gate orchestration', () => {
   it('keeps local and remote-reproduction commands separate from local runtime checks', async () => {
     const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
     const scripts = packageJson.scripts ?? {};
@@ -42,7 +42,7 @@ describe('dev/main quality gate orchestration', () => {
     assert.equal(workflow.on.push, undefined);
   });
 
-  it('publishes Manual Gate and dev-to-main Merge Gate over one shared full job graph', async () => {
+  it('publishes Manual Gate and development-to-main Merge Gate over one shared full job graph', async () => {
     const workflow = parse(await readFile('.github/workflows/ci.yml', 'utf8'));
     const manualGate = workflow.jobs?.['manual-gate'];
     const mergeGate = workflow.jobs?.['merge-gate'];

@@ -1,19 +1,12 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const test = require('node:test');
 const path = require('path');
 
-const {
-  ENGINE_DIR,
-  NAPI_DIR,
-  resolveNodeBinaryPath,
-} = require('./package-config');
-const {
-  ensureNativeBinary,
-  packageTarget,
-  parseArgs,
-} = require('./package-platform');
+const { ENGINE_DIR, NAPI_DIR, resolveNodeBinaryPath } = require('./package-config');
+const { ensureNativeBinary, packageTarget, parseArgs } = require('./package-platform');
 
 test('package-platform parses target from either positional or named flag', () => {
   assert.deepEqual(parseArgs(['darwin-arm64']), {
@@ -35,6 +28,11 @@ test('package-platform parses target from either positional or named flag', () =
 
 test('packageTarget rejects unsupported targets before accessing packaging state', () => {
   assert.throws(() => packageTarget('darwin-x64'), /Unknown target "darwin-x64"/u);
+});
+
+test('Engine VSIX excludes build-only dependency trees', () => {
+  const ignoreRules = fs.readFileSync(path.join(ENGINE_DIR, '.vscodeignore'), 'utf8');
+  assert.match(ignoreRules, /(?:^|\n)deps\/\*\*(?:\n|$)/u);
 });
 
 test('ensureNativeBinary auto-builds the host target when the native artifact is missing', () => {
@@ -79,7 +77,10 @@ test('packageTarget executes the packaging steps in a stable order', () => {
     {
       currentPlatformKey: 'darwin-arm64',
       existsSync(filePath) {
-        return filePath === nativeBinaryPath || (vsixGenerated && filePath.endsWith('neko-engine-0.0.1-darwin-arm64.vsix'));
+        return (
+          filePath === nativeBinaryPath ||
+          (vsixGenerated && filePath.endsWith('neko-engine-0.0.1-darwin-arm64.vsix'))
+        );
       },
       log(message) {
         recorded.push(`log:${message}`);

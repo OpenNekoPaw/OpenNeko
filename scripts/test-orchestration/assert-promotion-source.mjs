@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 
 export function assertPromotionSource({ headRef, baseRef }) {
-  if (headRef !== 'dev' || baseRef !== 'main') {
+  if (
+    typeof headRef !== 'string' ||
+    headRef.length === 0 ||
+    headRef === 'main' ||
+    baseRef !== 'main'
+  ) {
     throw new Error(
-      `Merge Gate requires dev -> main; received ${headRef || '<empty>'} -> ${baseRef || '<empty>'}`,
+      `Merge Gate requires a non-main development branch -> main; received ${headRef || '<empty>'} -> ${baseRef || '<empty>'}`,
     );
   }
 

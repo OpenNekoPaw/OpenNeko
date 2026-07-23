@@ -23,7 +23,16 @@ describe('VSCodeAssetEntityReader', () => {
     const getAllEntities = vi.fn(async () => entities);
     vi.mocked(vscode.extensions.getExtension).mockReturnValue({
       isActive: true,
-      exports: { getAllEntities },
+      exports: {
+        getAllEntities,
+        importFile: vi.fn(),
+        getThumbnailPath: vi.fn(),
+        resolveEntityUri: vi.fn(),
+        getCharacterThumbnail: vi.fn(),
+        getBindingCandidate: vi.fn(),
+        getRepresentationPackageDetail: vi.fn(),
+        onDidChangeEntities: vi.fn(),
+      },
     } as never);
 
     const reader = new VSCodeAssetEntityReader();

@@ -10,6 +10,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { basename, join, resolve } from 'node:path';
 
 import {
@@ -18,9 +19,12 @@ import {
   mergeOpenNekoLocalization,
   openNekoArtifactName,
 } from './openneko-vsix-contract.mjs';
+import { assertEmbeddedRuntimeClosure } from './embedded-runtime-closure.mjs';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const appRoot = join(repoRoot, 'apps', 'neko-vscode');
+const require = createRequire(import.meta.url);
+const { getTargetConfig } = require('../packages/neko-engine/scripts/package-config.js');
 
 export function parseOpenNekoPackageArgs(argv) {
   const targetIndex = argv.indexOf('--target');
@@ -40,8 +44,21 @@ export function resolveHostTarget(platform = process.platform, arch = process.ar
 }
 
 export function assertEmbeddedNativeClosure(files, target) {
+  const buildInputFiles = files.filter((file) =>
+    file.replaceAll('\\', '/').split('/').includes('deps'),
+  );
+  if (buildInputFiles.length > 0) {
+    throw new Error(
+      `OpenNeko ${target} payload contains build-only dependency files: ${buildInputFiles.join(', ')}.`,
+    );
+  }
+
   const nativeFiles = files.filter((file) => /neko-engine\.[^.]+\.node$/u.test(file));
-  const expected = `neko-engine.${target}.node`;
+  const targetConfig = getTargetConfig(target);
+  if (!targetConfig) {
+    throw new Error(`Unsupported OpenNeko native target: ${target}`);
+  }
+  const expected = targetConfig.nodeFile;
   if (nativeFiles.length !== 1 || basename(nativeFiles[0]) !== expected) {
     throw new Error(
       `OpenNeko ${target} native closure must contain only ${expected}; received ${nativeFiles.join(', ') || '<none>'}.`,
@@ -132,6 +149,7 @@ export function packageOpenNekoPlatform({ target, engineVsix }, command = runCom
     listFiles(join(stageRoot, 'dist', 'features', 'neko-engine')),
     target,
   );
+  assertEmbeddedRuntimeClosure(stageRoot, target);
   cpSync(join(appRoot, 'dist', 'extension.js'), join(stageRoot, 'dist', 'extension.js'));
   cpSync(join(appRoot, 'README.md'), join(stageRoot, 'README.md'));
   cpSync(join(appRoot, 'LICENSE'), join(stageRoot, 'LICENSE'));

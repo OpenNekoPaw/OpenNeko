@@ -22,5 +22,5 @@ The repository SHALL assign every blocking production debt finding to exactly on
 
 #### Scenario: Merge introduces unclassified production debt
 
-- **WHEN** a dev-to-main Pull Request contains a blocking Agent or non-Agent legacy, fallback, or deprecated surface without valid ownership and ledger classification
+- **WHEN** a development-branch-to-main Pull Request contains a blocking Agent or non-Agent legacy, fallback, or deprecated surface without valid ownership and ledger classification
 - **THEN** Merge Gate SHALL fail before the change can merge

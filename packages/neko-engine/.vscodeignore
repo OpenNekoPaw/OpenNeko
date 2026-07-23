@@ -35,6 +35,7 @@ coverage/**
 
 # Build intermediaries
 node_modules/**
+deps/**
 out/**
 *.map
 *.tsbuildinfo

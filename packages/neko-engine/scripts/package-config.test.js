@@ -8,6 +8,7 @@ const path = require('path');
 const {
   NAPI_DIR,
   config,
+  getFfmpegLibs,
   getSupportedTargets,
   getTargetByRustTriple,
   getTargetConfig,
@@ -25,6 +26,18 @@ test('package config resolves supported media engine targets', () => {
   assert.equal(getTargetConfig('win32-x64'), null);
   assert.equal(getTargetByRustTriple('aarch64-apple-darwin'), 'darwin-arm64');
   assert.equal(getTargetByRustTriple('x86_64-apple-darwin'), null);
+});
+
+test('FFmpeg runtime closure includes every library linked by host-napi', () => {
+  assert.deepEqual(getFfmpegLibs(), [
+    'avcodec',
+    'avdevice',
+    'avfilter',
+    'avformat',
+    'avutil',
+    'swresample',
+    'swscale',
+  ]);
 });
 
 test('BtbN FFmpeg artifacts use immutable release identities and SHA256 digests', () => {

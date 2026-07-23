@@ -2,13 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { parse } from 'yaml';
+import { assertReleaseCommitOnMain, resolveReleaseCommit } from '../validate-release-source.mjs';
 import {
-  assertReleaseCommitOnMain,
+  inspectPublishableManifests,
   parseReleaseTag,
-  resolveReleaseCommit,
   resolvePublishablePackagePaths,
-  validateManifestVersions,
-} from '../validate-release-source.mjs';
+} from '../release-version-contract.mjs';
 
 describe('release source validation', () => {
   it('projects stable and prerelease tags to the numeric VSIX manifest version', () => {
@@ -56,28 +55,33 @@ describe('release source validation', () => {
     );
   });
 
-  it('accepts matching manifest versions and identifies mismatches by path', () => {
+  it('validates internally consistent source manifests without comparing them to the tag', () => {
     const packagePaths = ['apps/neko-vscode', 'packages/neko-engine'];
-    const matching = new Map(packagePaths.map((path) => [path, { version: '0.1.0' }]));
+    const matching = new Map(packagePaths.map((path) => [path, { version: '0.0.1' }]));
     assert.deepEqual(
-      validateManifestVersions({
-        tag: 'v0.1.0-alpha.1',
+      inspectPublishableManifests({
         packagePaths,
         readManifest: (path) => matching.get(path),
       }),
-      { manifestVersion: '0.1.0', packageCount: 2, prerelease: true },
+      {
+        entries: [
+          { packagePath: 'apps/neko-vscode', manifest: { version: '0.0.1' } },
+          { packagePath: 'packages/neko-engine', manifest: { version: '0.0.1' } },
+        ],
+        packageCount: 2,
+        sourceVersion: '0.0.1',
+      },
     );
 
     const mismatched = new Map(matching);
-    mismatched.set('packages/neko-engine', { version: '0.0.1' });
+    mismatched.set('packages/neko-engine', { version: '0.0.2' });
     assert.throws(
       () =>
-        validateManifestVersions({
-          tag: 'v0.1.0',
+        inspectPublishableManifests({
           packagePaths,
           readManifest: (path) => mismatched.get(path),
         }),
-      /packages\/neko-engine\/package\.json declares 0\.0\.1; expected 0\.1\.0/u,
+      /Publishable source manifest versions are inconsistent/u,
     );
   });
 
@@ -95,6 +99,8 @@ describe('release source validation', () => {
   it('validates source before packaging and isolates publication permission', async () => {
     const workflow = parse(await readFile('.github/workflows/release.yml', 'utf8'));
     const validateRelease = workflow.jobs?.['validate-release'];
+    const releaseTests = workflow.jobs?.['release-tests'];
+    const releaseOpenNeko = workflow.jobs?.['release-openneko'];
     const createRelease = workflow.jobs?.['create-release'];
 
     assert.deepEqual(workflow.permissions, { contents: 'read' });
@@ -104,11 +110,21 @@ describe('release source validation', () => {
       /validate-release-source\.mjs/u,
     );
     assert.match(validateRelease.steps.map((step) => step.run ?? '').join('\n'), /origin\/main/u);
-    assert.deepEqual(workflow.jobs?.['release-tests']?.needs, ['validate-release']);
-    assert.deepEqual(workflow.jobs?.['release-openneko']?.needs, [
-      'validate-release',
-      'release-tests',
-    ]);
+    assert.deepEqual(releaseTests?.needs, ['validate-release']);
+    assert.deepEqual(releaseOpenNeko?.needs, ['validate-release', 'release-tests']);
+    assertStepPrecedes(releaseTests, 'Project release manifest versions', 'pnpm install');
+    assertStepPrecedes(releaseTests, 'Project release manifest versions', 'pnpm test');
+    assertStepPrecedes(releaseOpenNeko, 'Project release manifest versions', 'Build host-napi');
+    assertStepPrecedes(
+      releaseOpenNeko,
+      'Project release manifest versions',
+      'Package Engine payload',
+    );
+    assertStepPrecedes(
+      releaseOpenNeko,
+      'Project release manifest versions',
+      'Assemble OpenNeko platform VSIX',
+    );
     assert.deepEqual(createRelease?.needs, ['release-openneko']);
     assert.equal(workflow.jobs?.['release-ts'], undefined);
     assert.equal(workflow.jobs?.['release-engine'], undefined);
@@ -125,3 +141,14 @@ describe('release source validation', () => {
     assert.doesNotMatch(publicationFiles, /release-artifacts\/\*\.vsix/u);
   });
 });
+
+function assertStepPrecedes(job, earlierName, laterNeedle) {
+  const steps = job?.steps ?? [];
+  const earlierIndex = steps.findIndex((step) => step.name === earlierName);
+  const laterIndex = steps.findIndex(
+    (step) => step.name === laterNeedle || step.run?.includes(laterNeedle),
+  );
+  assert.notEqual(earlierIndex, -1, `missing workflow step: ${earlierName}`);
+  assert.notEqual(laterIndex, -1, `missing workflow step: ${laterNeedle}`);
+  assert.ok(earlierIndex < laterIndex, `${earlierName} must precede ${laterNeedle}`);
+}

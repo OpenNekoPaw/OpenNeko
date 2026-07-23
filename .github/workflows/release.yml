@@ -1,14 +1,13 @@
 # Release workflow — triggered by version tags (e.g. v0.1.0)
 #
 # Jobs:
-#   1. validate-release: Validate main ancestry and VSIX manifest versions
+#   1. validate-release: Validate tag, main ancestry, and publishable manifests
 #   2. release-tests:    Re-run deterministic tests at the validated tag
 #   3. release-openneko: Build one complete OpenNeko VSIX per supported platform
 #   4. create-release:  Publish only the two signed-off platform artifacts
 #
 # Usage:
-#   git tag v0.1.0
-#   git push origin v0.1.0
+#   Create a vX.Y.Z tag from main in GitHub; the tag supplies the manifest version.
 
 name: Release
 
@@ -59,6 +58,9 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
 
+      - name: Project release manifest versions
+        run: node scripts/project-release-version.mjs
+
       - name: Enable Corepack
         run: corepack enable
 
@@ -90,6 +92,9 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
 
+      - name: Project release manifest versions
+        run: node scripts/project-release-version.mjs
+
       - name: Enable Corepack
         run: corepack enable
 
@@ -106,6 +111,9 @@ jobs:
         run: ${{ matrix.ffmpeg-install }}
         shell: bash
 
+      - name: Prepare configured FFmpeg build SDK
+        run: node packages/neko-engine/scripts/download-ffmpeg.js --platform ${{ matrix.target }}
+
       - run: pnpm install --frozen-lockfile
 
       - name: Remove vendor source override
@@ -114,6 +122,8 @@ jobs:
 
       - name: Build host-napi
         working-directory: packages/neko-engine/packages/host-napi
+        env:
+          FFMPEG_DIR: ${{ github.workspace }}/packages/neko-engine/deps/ffmpeg
         run: pnpm run build:napi -- --target ${{ matrix.rust-target }}
 
       - name: Package Engine payload

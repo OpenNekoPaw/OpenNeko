@@ -43,6 +43,9 @@ neko
 # Test utilities
 test-utils/**
 
+# Build and packaging scripts (run before VSIX file collection)
+scripts/**
+
 # Docs (not needed in VSIX)
 docs/**
 

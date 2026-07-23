@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import {
@@ -7,6 +8,10 @@ import {
   parseOpenNekoPackageArgs,
   resolveHostTarget,
 } from '../package-openneko-platform.mjs';
+
+const nekoCutManifest = JSON.parse(
+  readFileSync(new URL('../../packages/neko-cut/package.json', import.meta.url), 'utf8'),
+);
 
 describe('OpenNeko platform assembler', () => {
   it('parses explicit platform payload arguments', () => {
@@ -57,6 +62,20 @@ describe('OpenNeko platform assembler', () => {
         runtimeLibraryCount: 2,
       },
     );
+    assert.deepEqual(
+      assertEmbeddedNativeClosure(
+        [
+          '/payload/neko-engine.linux-x64-gnu.node',
+          '/payload/libavcodec.so.62',
+          '/payload/libavformat.so.62',
+        ],
+        'linux-x64',
+      ),
+      {
+        nativeFile: '/payload/neko-engine.linux-x64-gnu.node',
+        runtimeLibraryCount: 2,
+      },
+    );
     assert.throws(
       () =>
         assertEmbeddedNativeClosure(
@@ -69,5 +88,34 @@ describe('OpenNeko platform assembler', () => {
         ),
       /native closure must contain only/u,
     );
+    assert.throws(
+      () =>
+        assertEmbeddedNativeClosure(
+          ['/payload/neko-engine.linux-x64.node', '/payload/libavcodec.so.62'],
+          'linux-x64',
+        ),
+      /neko-engine\.linux-x64-gnu\.node/u,
+    );
+    assert.throws(
+      () =>
+        assertEmbeddedNativeClosure(
+          [
+            '/payload/packages/host-napi/neko-engine.linux-x64-gnu.node',
+            '/payload/packages/host-napi/libavcodec.so.62',
+            '/payload/deps/ffmpeg/lib/libavcodec.so.62',
+          ],
+          'linux-x64',
+        ),
+      /build-only dependency.*deps\/ffmpeg/u,
+    );
+  });
+
+  it('builds the Cut Webview before copying its release payload', () => {
+    assert.equal(nekoCutManifest.scripts['vscode:prepublish'], 'pnpm run compile');
+    assert.equal(
+      nekoCutManifest.scripts['compile:webview'],
+      'cd packages/webview && pnpm run build',
+    );
+    assert.match(nekoCutManifest.scripts.compile, /compile:webview.*copy:webview/u);
   });
 });

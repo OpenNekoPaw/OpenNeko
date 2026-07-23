@@ -1,14 +1,9 @@
 import type * as vscode from 'vscode';
 
-export interface NekoExtension {
-  readonly id: string;
-  readonly extensionUri: vscode.Uri;
-  readonly extensionPath: string;
-  readonly isActive: boolean;
-  readonly packageJSON: unknown;
-  readonly exports: unknown;
-  activate(): Promise<unknown>;
-}
+export type NekoExtension = Pick<
+  vscode.Extension<unknown>,
+  'id' | 'extensionUri' | 'extensionPath' | 'isActive' | 'packageJSON' | 'exports' | 'activate'
+>;
 
 export interface EmbeddedFeatureRegistration {
   readonly id: string;
