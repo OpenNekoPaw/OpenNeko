@@ -74,14 +74,14 @@ Home 首页只保留 Director Agent composer、最近项目、运行中/待确�
 
 Home 管理面只组合 owning domain 的公共 contract 和 projection：
 
-| Home 页面 | 用户职责 | Canonical owner / 当前边界 |
-| --- | --- | --- |
-| 会话与任务 | 查看全局和项目会话、运行中任务、待确认与失败 | Agent session/task owner；不得从 transcript 猜测状态 |
-| 媒体库 | 浏览、导入、搜索、整理、查看来源和使用关系 | Assets / ResourceRef / Search |
-| 角色库 | 浏览 confirmed 角色、版本、表现、关系和使用位置 | Entity 与 Asset binding；不是图片或模型文件目录 |
-| Skills 与插件 | 管理已安装能力、启用、信任、依赖和诊断 | Agent Skill catalog、plugin/capability contract |
-| Market / Discover | 发现、安装、更新和卸载 | 当前不存在；未来需新的 Market owner、trust 和安装 contract |
-| 所有项目 | 创建、打开、归档、过滤和恢复项目 | Desktop project catalog projection；Tab 不是项目事实 |
+| Home 页面         | 用户职责                                        | Canonical owner / 当前边界                                 |
+| ----------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| 会话与任务        | 查看全局和项目会话、运行中任务、待确认与失败    | Agent session/task owner；不得从 transcript 猜测状态       |
+| 媒体库            | 浏览、导入、搜索、整理、查看来源和使用关系      | Assets / ResourceRef / Search                              |
+| 角色库            | 浏览 confirmed 角色、版本、表现、关系和使用位置 | Entity 与 Asset binding；不是图片或模型文件目录            |
+| Skills 与插件     | 管理已安装能力、启用、信任、依赖和诊断          | Agent Skill catalog、plugin/capability contract            |
+| Market / Discover | 发现、安装、更新和卸载                          | 当前不存在；未来需新的 Market owner、trust 和安装 contract |
+| 所有项目          | 创建、打开、归档、过滤和恢复项目                | Desktop project catalog projection；Tab 不是项目事实       |
 
 Market 当前是被删除产品。本文只保留其目标信息位置，不建立可调用 route、repository、安装结果或兼容成功路径。
 
@@ -95,13 +95,13 @@ Home 的会话 Inbox 可以统一展示：
 
 会话、任务与运行必须保持不同用户对象：
 
-| 对象 | 含义 | 默认位置 |
-| --- | --- | --- |
-| Agent Conversation | 用户与 Agent 的持续讨论；拥有持久 identity，但不等于当前 run 或 UI view | Home Inbox 或项目 Agent |
-| Agent Run | Conversation 中一次 turn、续跑或 delegation 的执行 | 所属 Conversation timeline / activity projection |
-| Work Item / Task | 生成、分析、导出、处理器或其他后台执行 | Home 活动摘要、项目 Tasks、所属对话锚点 |
-| 角色对话运行 | 角色实验的一次对话或测试执行 | 角色项目内部 |
-| 世界运行 / Save | 世界的一次模拟、游玩状态或存档 | 世界项目内部 |
+| 对象               | 含义                                                                    | 默认位置                                         |
+| ------------------ | ----------------------------------------------------------------------- | ------------------------------------------------ |
+| Agent Conversation | 用户与 Agent 的持续讨论；拥有持久 identity，但不等于当前 run 或 UI view | Home Inbox 或项目 Agent                          |
+| Agent Run          | Conversation 中一次 turn、续跑或 delegation 的执行                      | 所属 Conversation timeline / activity projection |
+| Work Item / Task   | 生成、分析、导出、处理器或其他后台执行                                  | Home 活动摘要、项目 Tasks、所属对话锚点          |
+| 角色对话运行       | 角色实验的一次对话或测试执行                                            | 角色项目内部                                     |
+| 世界运行 / Save    | 世界的一次模拟、游玩状态或存档                                          | 世界项目内部                                     |
 
 新建 Home 会话不创建项目。一个全局目标可以创建项目及一个项目主会话；后续生成、分析和导出默认是 Work Item，不为每次操作创建新会话。只有用户显式开始独立讨论、实验或调试分支时才新增项目会话。
 
@@ -117,13 +117,13 @@ Home 可以创建项目、向明确 `projectId` 派发任务并观察状态，�
 
 默认导航策略：
 
-| 用户意图 | 项目行为 | 导航行为 |
-| --- | --- | --- |
-| 普通问答、调研或一次性候选 | 不创建项目 | 留在 Home |
-| 明确新建并编辑作品 | 创建项目 | 创建成功后打开 Project Tab |
-| 向已有项目批量生成、分析或导出 | 绑定已有项目并后台执行 | 留在当前界面，显示状态与“打开项目” |
-| Canvas/Timeline 编辑、角色调试或世界互动 | 创建或绑定项目 | 打开并聚焦 Project Tab |
-| 后台任务需要项目内审阅 | 项目进入 needs-attention | 通知并提供打开入口，不抢占其他前台工作 |
+| 用户意图                                 | 项目行为                 | 导航行为                               |
+| ---------------------------------------- | ------------------------ | -------------------------------------- |
+| 普通问答、调研或一次性候选               | 不创建项目               | 留在 Home                              |
+| 明确新建并编辑作品                       | 创建项目                 | 创建成功后打开 Project Tab             |
+| 向已有项目批量生成、分析或导出           | 绑定已有项目并后台执行   | 留在当前界面，显示状态与“打开项目”     |
+| Canvas/Timeline 编辑、角色调试或世界互动 | 创建或绑定项目           | 打开并聚焦 Project Tab                 |
+| 后台任务需要项目内审阅                   | 项目进入 needs-attention | 通知并提供打开入口，不抢占其他前台工作 |
 
 取消项目类型、模板、角色阵容或其他创建前选择不得留下空项目、空会话或空 Project Tab。
 
@@ -179,13 +179,13 @@ WindowId
 
 #### 5.2 关闭、停止、归档和删除是不同 operation
 
-| 用户动作 | UI view | Conversation | 当前 Agent Run | BackgroundWork |
-| --- | --- | --- | --- | --- |
-| 关闭 Conversation view / Project Tab | detach 或保存 view state | 保留 | 默认继续 | 继续 |
-| Stop / Abort | 保留 | 保留 | 取消明确 `agentRunId` | 不隐式取消 |
-| Archive Conversation | 从默认 Inbox 移出，可恢复 | 保留 | 仅在无 active run 时允许，或先显式取消 | 不隐式取消 |
-| Delete Conversation | 关闭相关 view 并删除持久会话 | 删除 | 必须先终止或拒绝删除 | 按明确引用/保留策略处理 |
-| Cancel BackgroundWork | 保留 | 保留 | 不隐式取消 | 取消明确 `backgroundWorkId` |
+| 用户动作                             | UI view                      | Conversation | 当前 Agent Run                         | BackgroundWork              |
+| ------------------------------------ | ---------------------------- | ------------ | -------------------------------------- | --------------------------- |
+| 关闭 Conversation view / Project Tab | detach 或保存 view state     | 保留         | 默认继续                               | 继续                        |
+| Stop / Abort                         | 保留                         | 保留         | 取消明确 `agentRunId`                  | 不隐式取消                  |
+| Archive Conversation                 | 从默认 Inbox 移出，可恢复    | 保留         | 仅在无 active run 时允许，或先显式取消 | 不隐式取消                  |
+| Delete Conversation                  | 关闭相关 view 并删除持久会话 | 删除         | 必须先终止或拒绝删除                   | 按明确引用/保留策略处理     |
+| Cancel BackgroundWork                | 保留                         | 保留         | 不隐式取消                             | 取消明确 `backgroundWorkId` |
 
 任何操作不得通过“当前 active Tab/Conversation”推断目标。关闭 renderer、Panel 或 Window 时，Host 只释放 view subscription 和 renderer-scoped resource；Host-owned runtime、Engine session 或后台任务是否释放，必须由 owning lifecycle 和显式引用/退出策略决定。
 
@@ -206,11 +206,11 @@ Primary Agent 调用 subagent 时，默认创建父 Conversation 下的 `ChildAg
 
 用户界面使用“内容创作”“角色 IP”“互动世界”，不使用“传统内容创作”。三类 Profile 共享 Desktop Shell、Project identity、Agent/Task projection、ResourceRef 和公共 UI primitive，但拥有不同的项目事实、运行和中央工作表面。
 
-| Project Profile | 核心对象 | 主要产物 | 中央工作表面 |
-| --- | --- | --- | --- |
-| Content | 文档、媒体、Board、Timeline、Output | 图片、音频、视频、文档、模型和交付物 | Canvas、Cut、Preview、文档编辑器 |
-| Character IP | 角色身份、表现、声音、记忆策略、行为和测试 | 可发布角色版本、表现绑定、测试证据 | 角色编辑器、2D/3D 舞台、Dialogue Lab |
-| Interactive World | 世界、地点、实体、剧情、规则、事件和运行 | 世界版本、体验、存档、回放 | 世界编辑器、模拟视图、游玩视图 |
+| Project Profile   | 核心对象                                   | 主要产物                             | 中央工作表面                         |
+| ----------------- | ------------------------------------------ | ------------------------------------ | ------------------------------------ |
+| Content           | 文档、媒体、Board、Timeline、Output        | 图片、音频、视频、文档、模型和交付物 | Canvas、Cut、Preview、文档编辑器     |
+| Character IP      | 角色身份、表现、声音、记忆策略、行为和测试 | 可发布角色版本、表现绑定、测试证据   | 角色编辑器、2D/3D 舞台、Dialogue Lab |
+| Interactive World | 世界、地点、实体、剧情、规则、事件和运行   | 世界版本、体验、存档、回放           | 世界编辑器、模拟视图、游玩视图       |
 
 实际 schema、project codec、package owner 和跨层 contract 必须在各自实施 OpenSpec 中定义。本文中的 Profile 名称不构成已实现文件格式或公共 API。
 
@@ -293,7 +293,7 @@ World runtime
 ```text
 packages/neko-agent
 packages/neko-entity
-packages/neko-chara   # proposed Character IP aggregate
+packages/neko-chara   # Character domain owner; phase-one package exists
 packages/neko-world   # proposed Interactive World aggregate
 packages/neko-assets
 ...
@@ -301,10 +301,10 @@ packages/neko-assets
 
 这里的“顶级”表示顶级领域包，不表示应用 Composition Root。`apps/neko-desktop`、`apps/neko-vscode` 或其他宿主继续负责实例化 Pi runtime、Engine client、Device/Perception、Renderer 和各领域 host adapter；`neko-chara`、`neko-world` 只通过公共 contract、稳定 ref、窄 port 和 capability contribution 组合这些能力。
 
-| 聚合包 | 聚合主线 | 拥有 | 组合但不拥有实现 |
-| --- | --- | --- | --- |
-| `neko-chara` | `CharacterProject -> CharacterVersion -> CharacterRun` | 角色 IP 创作、发布版本、角色运行、记忆/能力策略、表现绑定、Roleplay 和测试语义 | Agent、Entity、Assets、Voice、2D/3D Renderer、Device/Perception、Engine |
-| `neko-world` | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/Replay` | 世界事实、规则、事件、时钟、Gameplay、运行、存档、分支和回放 | Agent、Entity、Assets、已发布 CharacterVersion、Scene/Renderer、Engine |
+| 聚合包       | 聚合主线                                                       | 拥有                                                                           | 组合但不拥有实现                                                        |
+| ------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `neko-chara` | `CharacterProject -> CharacterVersion -> CharacterRun`         | 角色 IP 创作、发布版本、角色运行、记忆/能力策略、表现绑定、Roleplay 和测试语义 | Agent、Entity、Assets、Voice、2D/3D Renderer、Device/Perception、Engine |
+| `neko-world` | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/Replay` | 世界事实、规则、事件、时钟、Gameplay、运行、存档、分支和回放                   | Agent、Entity、Assets、已发布 CharacterVersion、Scene/Renderer、Engine  |
 
 `neko-chara` 是 Agent 的领域扩展，但不得成为 `packages/neko-agent/packages/` 下的子包。角色扮演、角色动作、NPC 决策和 World Agent 全部复用同一个 `neko-agent`/Pi AgentSession、Tool、Task、Approval、取消、事件和 transcript canonical path；角色/世界通过 `agent-contribution` 投影领域上下文与允许能力，不新增 `RoleplayAgent`、`CharacterAgentExecutor` 或 `WorldAgentRuntime` 等平行通用循环。
 
@@ -319,7 +319,7 @@ CharacterProject
 
 世界可以在 binding 中增加 world actor identity、世界角色、初始位置、阵营和世界局部策略，但当前地点、库存、关系进度、任务、事件经历和 Gameplay 状态属于 WorldRun/WorldSave。世界不得静默修改 CharacterVersion；角色 core 也不得导入 World 私有 runtime。角色在世界中的观察与行动由宿主组合的窄 Environment/World adapter 提供，避免 `neko-chara <-> neko-world` 循环依赖。
 
-本节只冻结 owner 与依赖边界，不声明两个 package 或相关 runtime 已实现。实际创建 package、project codec、Device/Live、持久 2D/3D authoring、Scene/Puppet 或 Gameplay runtime 前仍需独立 OpenSpec；缺失能力必须返回 unavailable diagnostic，不能恢复旧命令、fallback、空 provider 或成功 no-op。
+`packages/neko-chara` 已通过 `extract-neko-chara-domain-package` OpenSpec 建立第一阶段 owner，拥有当前 Character Dialogue、Embody、角色证据、Profile Assembly 和 VS Code 角色编排。它尚未实现 CharacterProject/CharacterVersion、发布、持久 CharacterRun 恢复或独立 Webview；`neko-world` 仍未建立。新增 project codec、Device/Live、持久 2D/3D authoring、Scene/Puppet 或 Gameplay runtime 前仍需独立 OpenSpec；缺失能力必须返回 unavailable diagnostic，不能恢复旧命令、fallback、空 provider 或成功 no-op。
 
 #### 6.5 Host 只组合实例，领域 application service 负责编排
 
@@ -365,12 +365,12 @@ Character、Agent、Tool adapter 和 Host 均不得直接修改 World store。�
 
 #### 6.9 记忆和运行时句柄不跨越所有权边界
 
-| 事实/能力 | Owner |
-| --- | --- |
+| 事实/能力                        | Owner                             |
+| -------------------------------- | --------------------------------- |
 | 角色核心知识、长期记忆和记忆策略 | CharacterProject/CharacterVersion |
-| 一次角色互动产生的记忆候选 | CharacterRun |
-| 世界关系、事件和经历 | WorldSave |
-| embedding、压缩、索引和召回 | 可重建 Memory infrastructure |
+| 一次角色互动产生的记忆候选       | CharacterRun                      |
+| 世界关系、事件和经历             | WorldSave                         |
+| embedding、压缩、索引和召回      | 可重建 Memory infrastructure      |
 
 CharacterRun memory candidate 或 WorldSave experience 只有经过显式 review/promotion，并发布新的 CharacterVersion，才能改变可复用角色事实。Memory infrastructure 不拥有晋升决策，也不能直接写 CharacterVersion、WorldSave 或 Agent transcript。
 
@@ -418,11 +418,11 @@ Project candidate
 
 #### 8.4 三类记忆
 
-| 记忆 | Owner | 生命周期 |
-| --- | --- | --- |
-| 角色核心设定、长期知识和记忆策略 | 角色版本 / 角色项目 | 跨项目、版本化 |
-| 一次角色对话产生的记忆 | 角色对话运行 | run-scoped，可审阅提升 |
-| 世界关系、事件和经历 | World Save | save-scoped，可审阅提升 |
+| 记忆                             | Owner               | 生命周期                |
+| -------------------------------- | ------------------- | ----------------------- |
+| 角色核心设定、长期知识和记忆策略 | 角色版本 / 角色项目 | 跨项目、版本化          |
+| 一次角色对话产生的记忆           | 角色对话运行        | run-scoped，可审阅提升  |
+| 世界关系、事件和经历             | World Save          | save-scoped，可审阅提升 |
 
 角色运行或世界经历只有经过显式审阅和提升，才能进入后续角色版本；不得自动污染全局角色事实。
 
@@ -430,10 +430,10 @@ Project candidate
 
 Desktop 使用两个 Agent 展示 scope，但不建立两套 Agent runtime：
 
-| 展示 scope | 职责 |
-| --- | --- |
+| 展示 scope     | 职责                                                                      |
+| -------------- | ------------------------------------------------------------------------- |
 | Director Agent | Home 中理解全局意图、发现资源、创建项目、派发明确项目任务和查看跨项目摘要 |
-| Project Agent | 在项目内消费明确 project/document/run context，协助创作、调试、审阅和运行 |
+| Project Agent  | 在项目内消费明确 project/document/run context，协助创作、调试、审阅和运行 |
 
 Director 会话创建项目时，保留来源记录并创建或选择一个 project-scoped 主会话。Project Agent 不继承隐式 active project；所有 operation、event、task 和 projection 必须携带明确 identity。
 
@@ -489,25 +489,25 @@ Home 默认停留在当前界面处理普通问答、调研、一次性生成和
 
 项目页共享稳定布局语法：
 
-| 区域 | 统一职责 | Profile 自定义内容 |
-| --- | --- | --- |
-| 左侧 | 项目资源与结构导航 | 内容文档/媒体；角色身份/表现；世界地点/实体/剧情/存档 |
-| 中央 | 当前主要创作或体验表面 | Canvas/Cut；角色设计/Dialogue Lab；世界编辑/模拟/游玩 |
-| 右侧 | 上下文协作与审阅 | Project Agent、Inspector、Review、Tasks、State、Events、Debug 的受控组合 |
-| 顶部 | 项目身份、模式和全局命令 | profile 名称、运行/待确认/失败/未保存状态和 profile mode |
+| 区域 | 统一职责                 | Profile 自定义内容                                                       |
+| ---- | ------------------------ | ------------------------------------------------------------------------ |
+| 左侧 | 项目资源与结构导航       | 内容文档/媒体；角色身份/表现；世界地点/实体/剧情/存档                    |
+| 中央 | 当前主要创作或体验表面   | Canvas/Cut；角色设计/Dialogue Lab；世界编辑/模拟/游玩                    |
+| 右侧 | 上下文协作与审阅         | Project Agent、Inspector、Review、Tasks、State、Events、Debug 的受控组合 |
+| 顶部 | 项目身份、模式和全局命令 | profile 名称、运行/待确认/失败/未保存状态和 profile mode                 |
 
 共享的是 Shell、Host ports、Agent/Task projection、ResourceRef 和 `@neko/ui` primitive。Content、Character、World 各自拥有项目事实、运行生命周期和验收，不通过万能 Canvas、Agent transcript 或 active Tab 共享状态。
 
 #### 11.3 开源参考映射到现有页面，不创造新页面模型
 
-| 参考 | 采用位置 | 不改变的边界 |
-| --- | --- | --- |
-| OpenCode | Desktop 生命周期、终端/任务 transport、Server Session 与 window Tab 分层、Home session timeline 性能与测试 | 不增加代码编辑器中心工作台，不采用其 server/store，不把目录/VCS 等同 Neko Project |
-| Zed | Project 分组的并行 Thread、统一 Thread shell 和多 backend adapter 投影 | 不采用编辑器/worktree 产品骨架，不把 Thread 类型等同 Project Profile，不增加第二套内部 Agent runtime |
-| Craft Agents | Home 多会话 Inbox、权限、Sources、后台任务和结果审阅；项目右侧 Agent/Review | 不让 session/status 成为内容、角色或世界事实 |
-| Goose | 未来可选 ACP backend、MCP App 受控结果或面板 | 不改变 Pi 默认路径，不把 ACP 或 Rust Agent Core 变成项目/Engine 真值 |
-| MiniMax Hub | Home 入口、顶部项目工作集、左中右项目工作台 | 不把所有 Profile 收敛为一个 Canvas |
-| Codex | Home 先处理任务、需要稳定项目上下文时进入 Project 的导航原则 | 不采用通用 IDE Workbench 或任意 UI 插件贡献 |
+| 参考         | 采用位置                                                                                                   | 不改变的边界                                                                                         |
+| ------------ | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| OpenCode     | Desktop 生命周期、终端/任务 transport、Server Session 与 window Tab 分层、Home session timeline 性能与测试 | 不增加代码编辑器中心工作台，不采用其 server/store，不把目录/VCS 等同 Neko Project                    |
+| Zed          | Project 分组的并行 Thread、统一 Thread shell 和多 backend adapter 投影                                     | 不采用编辑器/worktree 产品骨架，不把 Thread 类型等同 Project Profile，不增加第二套内部 Agent runtime |
+| Craft Agents | Home 多会话 Inbox、权限、Sources、后台任务和结果审阅；项目右侧 Agent/Review                                | 不让 session/status 成为内容、角色或世界事实                                                         |
+| Goose        | 未来可选 ACP backend、MCP App 受控结果或面板                                                               | 不改变 Pi 默认路径，不把 ACP 或 Rust Agent Core 变成项目/Engine 真值                                 |
+| MiniMax Hub  | Home 入口、顶部项目工作集、左中右项目工作台                                                                | 不把所有 Profile 收敛为一个 Canvas                                                                   |
+| Codex        | Home 先处理任务、需要稳定项目上下文时进入 Project 的导航原则                                               | 不采用通用 IDE Workbench 或任意 UI 插件贡献                                                          |
 
 最终产品不是 VS Code 的内容创作换肤，也不是多个工具页面的集合，而是 Agent 驱动的创作 Shell：Home 负责发现、管理和派发，Project Profile 负责持久创作、调试、运行和交付。
 
@@ -518,7 +518,7 @@ Home 默认停留在当前界面处理普通问答、调研、一次性生成和
 - Desktop Shell 拥有 Home、Project Tab 展示状态、导航和跨领域 projection 组合。
 - Agent 拥有会话、消息、任务投影和 Agent reasoning，不拥有媒体、角色或世界项目事实。
 - Assets/Entity 拥有素材与稳定实体事实及其绑定。
-- Content、Character、World 各自由明确 owning domain 拥有项目事实、运行和验证；Character 与 World 的拟议 owner 分别是平级顶级领域聚合包 `neko-chara`、`neko-world`，不存在实现时必须先建立 canonical owner。
+- Content、Character、World 各自由明确 owning domain 拥有项目事实、运行和验证；Character 的第一阶段 owner 已是顶级 `neko-chara`，World 的拟议 owner 是平级顶级 `neko-world`，不存在实现时必须先建立 canonical owner。
 - Market/Plugin 安装与信任需要独立 owner，不能由 Home UI 或 Skill runtime 顺便承担。
 
 ### 依赖

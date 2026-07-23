@@ -143,43 +143,49 @@ Engine 当前只拥有媒体能力：文件/Range、probe/capture、编解码、
 
 `packages/neko-agent` 内部继续按职责分层：
 
-| 子包          | 职责                                                                    |
-| ------------- | ----------------------------------------------------------------------- |
-| `agent-types` | Agent/Webview/Extension contract 和状态投影                             |
-| `agent`       | host-neutral session、workflow、prompt、skill、memory、tool、evaluation |
-| `ai-sdk`      | provider/AI SDK adapter                                                 |
-| `platform`    | host-neutral 配置、provider glue 和平台桥                               |
-| `extension`   | VS Code command、配置桥、host adapter、会话入口                         |
-| `webview`     | Chat/Agent UI、消息投影和用户输入                                       |
-| `test-utils`  | 测试支撑                                                                |
+| 子包          | 职责                                                                                                                              |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `agent-types` | Agent/Webview/Extension contract 和状态投影                                                                                       |
+| `agent`       | Pi product runtime、conversation identity、permission、Skill Host、Capability Tool bridge 与 Agent evaluation；不拥有领域 Quality |
+| `ai-sdk`      | provider/AI SDK adapter                                                                                                           |
+| `platform`    | 迁移中的 host-neutral config/media 集成层；不得作为 `config/tools/prompts/media` manager bag，目标按 owner 拆分                   |
+| `extension`   | VS Code command、配置桥、host adapter、会话入口                                                                                   |
+| `webview`     | Chat/Agent UI、消息投影和用户输入                                                                                                 |
+| `test-utils`  | 测试支撑                                                                                                                          |
 
-TUI 的产品级组合位于 `apps/neko-tui`。Agent core/platform 不导入 VS Code、React 或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Extension API。Prompt、Skill、capability/tool schema 和宿主副作用按各自边界维护。
+TUI 的产品级组合位于 `apps/neko-tui`。Agent core/platform 不导入 VS Code、React 或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Extension API。Prompt、Skill、capability/tool schema 和宿主副作用按各自边界维护。Pi 只接收已经解析好的 model/prompt/tool snapshot，不接收 `ConfigManager`、领域 service 或 Host process adapter。
+
+Quality 的边界由 [`adr-agent-runtime-single-authority-and-simplification-boundary.md`](adr-agent-runtime-single-authority-and-simplification-boundary.md) 定义：`@neko/quality` 已建立为中立 runtime，拥有 canonical contract validation、evidence freshness、Gate aggregation、evaluator port、provider-neutral model adapter 和通用 ProjectQuality facade orchestration；owning package 继续拥有领域 rubric、目标 materialization、确定性检查、Gate policy、repair 和 apply。跨包 contract 暂留 `@neko/shared`；Agent Extension 只保留 Tool/Capability、purpose-model 和授权资源 materializer 适配。
+
+Capability 是 OpenNeko 产品扩展 seam，领域包提供定义，Host 负责 discovery/trust/lifecycle，Pi bridge 只投影当前 turn 的不可变 Tool snapshot。External Processor 不是 Pi 或平行 Capability 系统；它只能作为 Host 中受管、可取消的 Tool implementation，并继续遵守路径、资源、环境、网络、审批和用户数据边界。
 
 ## 保留领域包
 
 | 包                 | 主要职责                                              | 关键边界                                                                                                                                       |
 | ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `neko-agent`       | Agent session、provider、Skill、capability 与 Chat UI | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation                                                                        |
+| `neko-chara`       | Character Dialogue、Embody、角色证据与角色运行编排    | core/application host-neutral；VS Code 依赖只在 `host-vscode`；只消费 Agent contract，不拥有第二套 Agent loop                                  |
+| `neko-quality`     | canonical Quality Gate、evaluator port 与模型证据适配 | 只依赖共享 contract；领域 rubric/repair/apply 留在 owning package；provider/config/credential 和 Host IO 由组合层注入                          |
 | `neko-assets`      | 素材库、元数据、缩略图、Entity VS Code surface        | 路径走公共 resolver；Entity 走 canonical facade；缓存不伪装事实                                                                                |
 | `neko-canvas`      | 画布、创作结构、投影与领域 authoring                  | Webview 管交互；持久写入走 domain/host contract；复用公共 UI                                                                                   |
 | `neko-cut`         | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Extension 管 editor/export；媒体走 Engine client                                                                         |
 | `neko-preview`     | 授权只读预览与临时 3D Reference staging               | Preview 拥有面板级 Three.js 会话及形象、动作、机位、全景输出；Agent/Canvas/media 只消费共享 contract；不恢复 Engine Model/Scene 或持久 3D 项目 |
 | `neko-tools`       | 工具、Media LSP、差异与诊断                           | LSP/diagnostic 在 Extension；不得贡献已移除 Device UI                                                                                          |
 | `neko-engine`      | 本地 Rust Media Engine 与 VS Code native wrapper      | 只暴露保留媒体 contract；native 资源显式释放                                                                                                   |
-| `apps/neko-vscode` | VS Code 产品组合根                                    | 拥有单一安装扩展的组合生命周期、scoped context、manifest 合并、平台打包、发布和产品验收；领域实现仍由各 `neko-*` 包拥有                         |
+| `apps/neko-vscode` | VS Code 产品组合根                                    | 拥有单一安装扩展的组合生命周期、scoped context、manifest 合并、平台打包、发布和产品验收；领域实现仍由各 `neko-*` 包拥有                        |
 
-## 拟议顶级领域聚合包
+## Character / World 顶级领域聚合包
 
-Character IP 与 Interactive World 已确定为独立 bounded context，但当前 workspace 尚无已接受实现。后续实施必须创建平级顶级领域包，不得嵌入 `neko-agent`、应用根或现有 Assets/Preview 内部：
+Character IP 与 Interactive World 已确定为独立 bounded context，必须作为平级顶级领域包存在，不得嵌入 `neko-agent`、应用根或现有 Assets/Preview 内部。`neko-chara` 已完成第一阶段 owner 迁移；`neko-world` 仍未实现：
 
-| 拟议包 | 聚合主线 | 主要职责 | 关键边界 |
-| --- | --- | --- | --- |
-| `neko-chara` | `CharacterProject -> CharacterVersion -> CharacterRun` | 角色 IP、发布版本、Roleplay、记忆/能力策略、表现绑定和角色运行 | 完全复用 `neko-agent`/Pi；Entity、Assets、Voice、2D/3D、Device/Perception、Engine 只通过公共 ref/port/provider 组合 |
-| `neko-world` | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/Replay` | 世界事实、规则/事件、Gameplay、运行、存档、分支和回放 | 只通过 CharacterVersion/WorldCharacterBinding 使用角色；世界局部状态不回写全局角色；不以 Agent/UI 状态代替世界事实 |
+| 包           | 状态           | 聚合主线                                                       | 主要职责                                                                                                          | 关键边界                                                                                                            |
+| ------------ | -------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `neko-chara` | 第一阶段已建立 | `CharacterProject -> CharacterVersion -> CharacterRun`         | 当前已拥有 Character Dialogue、Embody、角色证据、Profile Assembly 和 VS Code 角色编排；项目/版本/发布仍待后续实现 | 完全复用 `neko-agent`/Pi；Entity、Assets、Voice、2D/3D、Device/Perception、Engine 只通过公共 ref/port/provider 组合 |
+| `neko-world` | 拟议           | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/Replay` | 世界事实、规则/事件、Gameplay、运行、存档、分支和回放                                                             | 只通过 CharacterVersion/WorldCharacterBinding 使用角色；世界局部状态不回写全局角色；不以 Agent/UI 状态代替世界事实  |
 
 “顶级”指领域所有权，不指 concrete Composition Root。`apps/neko-desktop`、`apps/neko-vscode` 或其他宿主负责注入具体 Agent、Renderer、Device、Engine 和 host adapter。`neko-agent` 不导入 Character/World；Character core 不导入 World 私有实现；运行期环境交互通过窄 port 或 host-owned adapter 组合。
 
-角色只拥有说话、动作、表情、移动意图、感知、交互 affordance 和个体行为策略；地图、目标、任务、战斗、经济、成长、事件调度和整体胜负状态归 World。当前缺失的 Character/World、Device/Live、Scene/Puppet 和持久 2D/3D 路径必须保持 fail-visible，不能因为本节命名了目标包就恢复旧实现或宣称支持。
+角色只拥有说话、动作、表情、移动意图、感知、交互 affordance 和个体行为策略；地图、目标、任务、战斗、经济、成长、事件调度和整体胜负状态归 World。当前缺失的 Character Project/Version、World、Device/Live、Scene/Puppet 和持久 2D/3D 路径必须保持 fail-visible，不能因为第一阶段 package 已建立就恢复旧实现或宣称支持。
 
 两个聚合包内部必须保持以下依赖层级：
 
