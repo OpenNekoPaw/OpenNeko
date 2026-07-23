@@ -595,18 +595,30 @@ describe('agent architecture boundary guards', () => {
     }
   });
 
-  it('keeps Character domain runtime in @neko/entity', () => {
+  it('keeps Character domain runtime in @neko/chara', () => {
     for (const fileName of [
       'character-runtime-policy.ts',
       'character-evidence.ts',
       'character-dialogue-session.ts',
-      'character-dialogue-runtime.ts',
       'embody-character-session.ts',
     ]) {
       expect(existsSync(join(agentSrc, 'runtime', fileName)), fileName).toBe(false);
-      expect(existsSync(join(workspaceRoot, 'packages/neko-entity/src', fileName)), fileName).toBe(
-        true,
-      );
+      expect(
+        existsSync(join(workspaceRoot, 'packages/neko-chara/src/core', fileName)),
+        fileName,
+      ).toBe(true);
+    }
+    expect(
+      existsSync(
+        join(workspaceRoot, 'packages/neko-chara/src/application/character-dialogue-runtime.ts'),
+      ),
+    ).toBe(true);
+    for (const retiredAgentFile of [
+      'chat/characterDialogueController.ts',
+      'chat/embodyCharacterController.ts',
+      'evidence/characterEvidenceLoader.ts',
+    ]) {
+      expect(existsSync(join(extensionSrc, retiredAgentFile)), retiredAgentFile).toBe(false);
     }
   });
 
@@ -1146,10 +1158,6 @@ describe('agent architecture boundary guards', () => {
       [
         'packages/neko-agent/packages/extension/src/services/__tests__/skillCatalogProvider.test.ts',
         new Set(removedCreativeSkillNames),
-      ],
-      [
-        'packages/neko-agent/packages/extension/src/capabilities/quality/__tests__/quality-review-validation.test.ts',
-        new Set(removedQualityToolNames),
       ],
       [
         'packages/neko-cut/packages/extension/src/services/cutAgentSkillInvocation.test.ts',

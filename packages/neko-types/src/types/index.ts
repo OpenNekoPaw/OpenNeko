@@ -228,26 +228,6 @@ export * from './character-memory';
 export * from './media-semantic-index';
 export * from './semantic-source';
 export * from './comic-animation-indexing';
-export { QUALITY_ISSUE_CATEGORIES } from './quality';
-export type {
-  AudioTechnicalMetrics,
-  CharacterAppearance,
-  ConsistencyReport,
-  DiagnosticsReport,
-  EvalMediaType,
-  GatePreviewData,
-  IssueSeverity,
-  MediaEvaluation,
-  QualityIssue,
-  QualityIssueCategory,
-  RemediationAction,
-  RemediationActionType,
-  SceneDiagnostic,
-  SceneReviewCard,
-  SceneVerdict,
-  StyleDriftPair,
-  VideoTechnicalMetrics,
-} from './quality';
 export * from './reference-resolution';
 
 // Proxy protocol types (video proxy generation and management)
