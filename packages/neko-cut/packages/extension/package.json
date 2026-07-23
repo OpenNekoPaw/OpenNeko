@@ -9,6 +9,7 @@
     "./*": "./src/*"
   },
   "dependencies": {
+    "@neko-cut/domain": "workspace:*",
     "@neko/neko-client": "workspace:*",
     "@neko/shared": "workspace:*"
   },
