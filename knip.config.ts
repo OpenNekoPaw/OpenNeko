@@ -73,18 +73,7 @@ const config: KnipConfig = {
     // ── Extension sub-packages ────────────────────────
     'packages/neko-cut/packages/extension': {},
     'packages/neko-cut/packages/webview': {
-      // Vite auto-detects entries from HTML files, explicit entry is redundant
-      ignore: [
-        // Phase 2 features (v2.0) - planned but not yet implemented
-        'src/components/ColorCorrection/**',
-        'src/components/Effects/**',
-        'src/components/Mask/**',
-        'src/components/PropertyPanel/**',
-        'src/components/SpeedControl/**',
-        'src/components/TransitionPicker/**',
-        'src/components/ShapeRenderer.tsx',
-        'src/utils/subtitleParser.ts',
-      ],
+      // Vite and package exports define the app and retained primitive entries.
     },
     'packages/neko-agent/packages/extension': {},
     'apps/neko-tui': {

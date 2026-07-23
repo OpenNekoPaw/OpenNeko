@@ -3,35 +3,13 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { TimelineControls, type TimelineControlsProps } from './TimelineControls';
+import { TimelineControls } from './TimelineControls';
 
 vi.mock('../../i18n/I18nContext', () => ({
-  useTranslation: () => ({
-    t: (key: string) => key,
-  }),
+  useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const baseProps: TimelineControlsProps = {
-  zoomLevel: 1,
-  setZoomLevel: () => undefined,
-  snappingEnabled: true,
-  rippleEditingEnabled: false,
-  frameAlignEnabled: false,
-  showClipThumbnails: true,
-  showMinimap: true,
-  toggleSnapping: () => undefined,
-  toggleRippleEditing: () => undefined,
-  toggleFrameAlign: () => undefined,
-  toggleClipThumbnails: () => undefined,
-  toggleMinimap: () => undefined,
-  addTrack: () => undefined,
-  propertyPanelVisible: false,
-  onOpenPackage: () => undefined,
-  onTogglePropertyPanel: () => undefined,
-  onExport: () => undefined,
-};
-
-describe('TimelineControls workbench actions', () => {
+describe('TimelineControls media-kind actions', () => {
   let host: HTMLDivElement;
   let root: Root;
 
@@ -46,52 +24,58 @@ describe('TimelineControls workbench actions', () => {
     host.remove();
   });
 
-  it('routes package and property actions from the timeline control bar', () => {
-    const onOpenPackage = vi.fn();
-    const onTogglePropertyPanel = vi.fn();
+  it('uses accessible Audio and Subtitle icons without visible A/S glyphs', () => {
+    const onAddAudioTrack = vi.fn();
+    const onAddSubtitleTrack = vi.fn();
 
     act(() => {
       root.render(
         <TimelineControls
-          {...baseProps}
-          onOpenPackage={onOpenPackage}
-          onTogglePropertyPanel={onTogglePropertyPanel}
+          canAddAudioTrack
+          canAddSubtitleTrack
+          canSplit={false}
+          hasSelection={false}
+          onAddAudioTrack={onAddAudioTrack}
+          onAddSubtitleTrack={onAddSubtitleTrack}
+          onDelete={vi.fn()}
+          onExport={vi.fn()}
+          onFitAll={vi.fn()}
+          onLinkMedia={vi.fn()}
+          onPixelsPerSecond={vi.fn()}
+          onRedo={vi.fn()}
+          onSplit={vi.fn()}
+          onToggleOverview={vi.fn()}
+          onToggleSnapping={vi.fn()}
+          onUndo={vi.fn()}
+          overviewVisible
+          pixelsPerSecond={80}
+          snappingEnabled
         />,
       );
     });
 
-    const packageButton = host.querySelector<HTMLButtonElement>(
-      '[data-cut-control="package-project"]',
-    );
-    const propertyButton = host.querySelector<HTMLButtonElement>(
-      '[data-cut-control="toggle-property-panel"]',
-    );
+    const audioButton = getButton('timeline.controls.audioTrack');
+    const subtitleButton = getButton('timeline.controls.subtitleTrack');
 
-    expect(packageButton?.getAttribute('aria-label')).toBe('preview.packageProject');
-    expect(propertyButton?.getAttribute('aria-controls')).toBe('cut-property-panel');
-    expect(propertyButton?.getAttribute('aria-expanded')).toBe('false');
-    expect(propertyButton?.getAttribute('aria-pressed')).toBe('false');
-    expect(propertyButton?.getAttribute('aria-label')).toBe('preview.showPropertyPanel');
+    expect(audioButton.getAttribute('aria-label')).toBe('timeline.controls.audioTrack');
+    expect(subtitleButton.getAttribute('aria-label')).toBe('timeline.controls.subtitleTrack');
+    expect(audioButton.textContent).toBe('');
+    expect(subtitleButton.textContent).toBe('');
+    expect(audioButton.querySelector('svg polygon')).not.toBeNull();
+    expect(audioButton.querySelector('svg path')).not.toBeNull();
+    expect(subtitleButton.querySelector('svg path')).not.toBeNull();
+    expect(subtitleButton.querySelector('svg polyline')).not.toBeNull();
 
-    act(() => {
-      packageButton?.click();
-      propertyButton?.click();
-    });
+    act(() => audioButton.click());
+    act(() => subtitleButton.click());
 
-    expect(onOpenPackage).toHaveBeenCalledTimes(1);
-    expect(onTogglePropertyPanel).toHaveBeenCalledTimes(1);
+    expect(onAddAudioTrack).toHaveBeenCalledOnce();
+    expect(onAddSubtitleTrack).toHaveBeenCalledOnce();
   });
 
-  it('projects the expanded property state', () => {
-    act(() => {
-      root.render(<TimelineControls {...baseProps} propertyPanelVisible={true} />);
-    });
-
-    const propertyButton = host.querySelector<HTMLButtonElement>(
-      '[data-cut-control="toggle-property-panel"]',
-    );
-    expect(propertyButton?.getAttribute('aria-expanded')).toBe('true');
-    expect(propertyButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(propertyButton?.getAttribute('aria-label')).toBe('preview.hidePropertyPanel');
-  });
+  function getButton(title: string): HTMLButtonElement {
+    const button = host.querySelector<HTMLButtonElement>(`button[title="${title}"]`);
+    if (!button) throw new Error(`Missing Timeline control: ${title}`);
+    return button;
+  }
 });

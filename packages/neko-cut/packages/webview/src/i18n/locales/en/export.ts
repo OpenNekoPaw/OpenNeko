@@ -2,6 +2,10 @@ import type { MessageBundle } from '@neko/shared';
 
 export const exportBundle = {
   'export.title': 'Export Video',
+  'export.start': 'Start Export',
+  'export.fps': 'Frame rate',
+  'export.background': 'Background',
+  'export.progress.title': 'Export Progress',
   'export.format': 'Format',
   'export.resolution': 'Resolution',
   'export.quality': 'Quality',

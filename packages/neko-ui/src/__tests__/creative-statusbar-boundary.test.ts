@@ -9,23 +9,23 @@ function readRepoSource(path: string): string {
 }
 
 describe('creative workbench StatusBar boundary', () => {
-  it('keeps Cut passive timeline and export status in the native StatusBar', () => {
-    const statusBar = readRepoSource('packages/neko-cut/packages/extension/src/views/statusBar.ts');
+  it('keeps Cut export snapshots in the Webview and document/task state in the native StatusBar', () => {
     const provider = readRepoSource(
-      'packages/neko-cut/packages/extension/src/editor/video/videoEditorProvider.ts',
+      'packages/neko-cut/packages/extension/src/editor/CutOtioEditorProvider.ts',
     );
-    const messaging = readRepoSource(
-      'packages/neko-cut/packages/webview/src/hooks/useVSCodeMessaging.ts',
-    );
+    const extension = readRepoSource('packages/neko-cut/packages/extension/src/extension.ts');
+    const statusBar = readRepoSource('packages/neko-cut/packages/extension/src/views/statusBar.ts');
     const app = readRepoSource('packages/neko-cut/packages/webview/src/App.tsx');
     const css = readRepoSource('packages/neko-cut/packages/webview/src/index.css');
 
+    expect(provider).toMatch(/type: 'cut:export-task'/);
+    expect(app).toMatch(/message\['type'\] === 'cut:export-task'/);
+    expect(app).toMatch(/cut-basic-error/);
+    expect(statusBar).toMatch(/class StatusBar/);
     expect(statusBar).toMatch(/StatusBarGroup/);
-    expect(statusBar).toMatch(/playState/);
-    expect(statusBar).toMatch(/updateExportProgress/);
-    expect(provider).toMatch(/message\.type === 'statusUpdate'/);
-    expect(provider).toMatch(/updateStatusBarVisibility/);
-    expect(messaging).toMatch(/type: 'statusUpdate'/);
+    expect(statusBar).toMatch(/updateDocument/);
+    expect(extension).toMatch(/onDocumentStatusUpdate/);
+    expect(extension).toMatch(/onExportTaskUpdate/);
     expect(app).not.toMatch(/WorkbenchTopBar|cut-statusbar|cut-status-bar/);
     expect(css).not.toMatch(/\.cut-statusbar|\.cut-status-bar|\.cut-topbar/);
   });
