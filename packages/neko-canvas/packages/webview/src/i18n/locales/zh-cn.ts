@@ -140,10 +140,6 @@ export const zhCN = {
   'playback.matrix.stepTitle': '步骤 {index}: {title}',
   'playback.matrix.rowTitle': '{title} · {units} 个单元 · {duration}',
   'playback.matrix.rowMeta': '{units} 个单元 · {duration}',
-  'playback.matrix.sendToCut': '发送路线到 Cut',
-  'playback.matrix.sendRouteToCut': '发送 {title} 到 Cut',
-  'playback.matrix.cutDraftStale': '路线已变化，发送到 Cut 前请先刷新播放路线。',
-  'playback.matrix.cutDraftMissingRoute': '选中的路线已不存在，无法发送到 Cut。',
   'playback.matrix.summaryCellTitle': '{label} · 已折叠 {count} 个单元 · {duration}',
   'playback.matrix.foldedSummary': '{count} 个单元 · {duration}',
   'playback.matrix.cellTitle': '{label} · {kind} · {timing} · {state}',
@@ -864,7 +860,6 @@ export const zhCN = {
   'preset.media.duration': '时长',
   'preset.project.preview': '预览',
   'preview.open': '打开',
-  'project.type.nkv': '视频项目',
 
   // Generation panel — advanced section
   'gen.advanced': '高级选项',

@@ -126,8 +126,6 @@ export interface PluginTransferCutStoryboardAuthoringPayload
 
 export interface PluginTransferCommandPlanMap {
   readonly 'neko.canvas.importAsset': PluginTransferCanvasImportAssetPayload;
-  readonly 'neko.cut.authoring.importStoryboard': PluginTransferCutStoryboardAuthoringPayload;
-  readonly 'neko.cut.authoring.importGeneratedClip': PluginTransferCutImportGeneratedClipPayload;
 }
 
 export type PluginTransferCommand = keyof PluginTransferCommandPlanMap;

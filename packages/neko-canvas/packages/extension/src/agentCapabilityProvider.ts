@@ -28,7 +28,6 @@ import type {
   CanvasAgentMutationMode,
   CanvasConnection,
   CanvasPlaybackReorderUnitsRequest,
-  ReferenceDescriptor,
   StoryboardMediaRef,
   CanvasMarkdownCapabilityId,
   CanvasMarkdownCapabilityInput,
@@ -77,8 +76,6 @@ import {
   MEDIA_PRODUCTION_SHOT_IMAGE_PREP_PROFILE_ID,
   MEDIA_PRODUCTION_SHOT_IMAGE_PREP_REVIEW_PROFILE_ID,
   STORYBOARD_FROM_COMIC_SOURCE_PROFILE_ID,
-  applyCanvasTimelineSyncToCanvas,
-  buildStoryboardImportTimelineSyncPayload,
   createStoryboardPayload,
   extractCanvasNodeGenerationLineage,
   getDefaultCanvasNodePresetName,
@@ -1001,36 +998,6 @@ function projectCanvasMarkdownLifecycleTarget(
   };
 }
 
-function collectShotKeyframeReferenceDescriptors(
-  nodeId: string,
-  data: Record<string, unknown>,
-): readonly ReferenceDescriptor[] {
-  const mediaRefs = [
-    ...readStoryboardMediaRefs(data['generatedMediaRefs']),
-    ...readStoryboardMediaRefs(
-      data['shotImagePrepPlan'] && isRecord(data['shotImagePrepPlan'])
-        ? data['shotImagePrepPlan']['outputMediaRefs']
-        : undefined,
-    ),
-  ];
-  return mediaRefs.map((ref, index): ReferenceDescriptor => ({
-    schemaVersion: 1,
-    kind: 'reference-descriptor',
-    referenceId: `${nodeId}:keyframeRefs:${index}:${ref.refId}`,
-    sourceKind: 'canvas-node',
-    sourceId: nodeId,
-    referenceKind: ref.locator.type === 'asset' ? 'generated-asset' : 'custom',
-    role: ref.role === 'generated' || ref.role === 'derived' ? 'keyframe' : 'reference',
-    modality: ref.mimeType?.startsWith('video/') ? 'video' : 'image',
-    payload: storyboardMediaRefPayloadForReference(ref),
-    metadata: {
-      storyboardRefId: ref.refId,
-      ...(ref.label ? { label: ref.label } : {}),
-      ...(ref.mimeType ? { mimeType: ref.mimeType } : {}),
-    },
-  }));
-}
-
 function readStoryboardMediaRefs(value: unknown): readonly StoryboardMediaRef[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item): readonly StoryboardMediaRef[] =>
@@ -1070,59 +1037,6 @@ function isStoryboardMediaRef(value: unknown): value is StoryboardMediaRef {
     locatorType === 'canvas-node' ||
     locatorType === 'story-source'
   );
-}
-
-function storyboardMediaRefPayloadForReference(
-  ref: StoryboardMediaRef,
-): ReferenceDescriptor['payload'] {
-  switch (ref.locator.type) {
-    case 'asset':
-      return {
-        type: 'generated-asset',
-        assetId: ref.locator.assetId,
-        ...(ref.locator.assetVersion ? { variantId: ref.locator.assetVersion } : {}),
-      };
-    case 'canvas-node':
-      return {
-        type: 'canvas-node',
-        nodeId: ref.locator.canvasNodeId,
-        ...(ref.locator.outputId ? { slotId: ref.locator.outputId } : {}),
-      };
-    case 'workspace-path':
-      return {
-        type: 'path',
-        path: ref.locator.path,
-        pathKind: storyboardPathKindForReference(ref.locator.path),
-      };
-    case 'story-source':
-      return {
-        type: 'custom',
-        data: {
-          locatorType: 'story-source',
-          storyId: ref.locator.storyId,
-          ...(ref.locator.sceneId ? { sceneId: ref.locator.sceneId } : {}),
-          ...(ref.locator.frameIndex !== undefined ? { frameIndex: ref.locator.frameIndex } : {}),
-        },
-      };
-    case 'tool-result':
-      return {
-        type: 'custom',
-        data: {
-          locatorType: 'tool-result',
-          toolCallId: ref.locator.toolCallId,
-          assetIndex: ref.locator.assetIndex,
-          ...(ref.locator.taskId ? { taskId: ref.locator.taskId } : {}),
-        },
-      };
-  }
-}
-
-function storyboardPathKindForReference(
-  path: string,
-): 'workspace-relative' | 'variable' | 'transitional' {
-  if (path.startsWith('${')) return 'variable';
-  if (/^(?:\.{0,2}\/)?[^/]/.test(path)) return 'workspace-relative';
-  return 'transitional';
 }
 
 function readShotGeneratedImageFallback(data: Record<string, unknown>): string | undefined {
@@ -1295,12 +1209,11 @@ const CANVAS_TOOL_ZH_LOCALIZATIONS = {
     },
   },
   [TOOL_NAMES_CANVAS.CANVAS_CREATE_CUT_DRAFT_FROM_ROUTE]: {
-    description: '将 Canvas 播放路由投影为 CanvasCutDraftPayload，并可在确认后发送到 Cut。',
+    description: '将 Canvas 播放路由投影为 CanvasCutDraftPayload。',
     parameters: {
       sourceCanvasUri: '可选 Canvas 文档 URI。',
       routeId: '要投影的播放路由 ID。',
-      projectName: '可选目标 Cut 项目名称。',
-      sendToCut: '为 true 时，在确认后把创建的草稿发送到当前 Cut 时间线。',
+      projectName: '可选草稿项目名称。',
     },
   },
   [TOOL_NAMES_CANVAS.CANVAS_REORDER_PLAYBACK_UNITS]: {
@@ -3027,15 +2940,14 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
         targetRequirements: {
           required: ['routeId'],
           allowedFallbacks: ['selection', 'explicit-user-input'],
-          confirmationModes: ['create-cut-draft', 'send-to-cut'],
+          confirmationModes: ['create-cut-draft'],
         },
         queryBeforeMutate: {
           preferredQueryTools: [
             TOOL_NAMES_CANVAS.CANVAS_GET_PLAYBACK_PLAN,
             TOOL_NAMES_CANVAS.CANVAS_GET_PLAYBACK_ROUTES,
           ],
-          reason:
-            'Show route title, unit count, diagnostics, target project, and import risk before creating a Cut draft.',
+          reason: 'Show route title, unit count, and diagnostics before creating a Cut draft.',
         },
         parameters: {
           type: 'object',
@@ -3043,19 +2955,6 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
             sourceCanvasUri: { type: 'string', description: 'Optional Canvas document URI.' },
             routeId: { type: 'string', description: 'Playback route id to project.' },
             projectName: { type: 'string', description: 'Optional target Cut project name.' },
-            cutProjectUri: {
-              type: 'string',
-              description: 'Explicit existing .nkv file URI used when sendToCut is true.',
-            },
-            cutProjectRevision: {
-              type: 'string',
-              description: 'Expected Cut project revision captured before authoring.',
-            },
-            sendToCut: {
-              type: 'boolean',
-              description:
-                'When true, dispatch the created draft to the explicitly identified Cut project after confirmation.',
-            },
           },
         } satisfies ToolParameters,
         async execute(args) {
@@ -3065,32 +2964,9 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
               routeId: readOptionalString(args.routeId),
               projectName: readOptionalString(args.projectName),
             });
-            let cutImportResult: unknown;
-            if (args.sendToCut === true) {
-              const cutProjectUri = readOptionalString(args.cutProjectUri);
-              const cutProjectRevision = readOptionalString(args.cutProjectRevision);
-              if (!cutProjectUri || !cutProjectRevision) {
-                return {
-                  success: false,
-                  error: 'sendToCut requires cutProjectUri and cutProjectRevision.',
-                };
-              }
-              cutImportResult = await vscode.commands.executeCommand(
-                'neko.cut.authoring.importCanvasDraft',
-                {
-                  payload: draft,
-                  target: { kind: 'file', documentUri: cutProjectUri },
-                  expectedProjectRevision: cutProjectRevision,
-                },
-              );
-            }
             return {
               success: true,
-              data: {
-                draft,
-                sentToCut: args.sendToCut === true,
-                ...(args.sendToCut === true ? { cutImportResult } : {}),
-              },
+              data: { draft },
             };
           } catch (err) {
             return { success: false, error: `Failed to create Canvas Cut draft: ${String(err)}` };
@@ -4216,40 +4092,25 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
       {
         name: TOOL_NAMES_CANVAS.EXPORT_STORYBOARD,
         description:
-          'Export the storyboard as a ZIP image pack or import it into the neko-cut timeline. ' +
-          'ZIP format: creates a .zip file with shot images + manifest.json at a user-chosen path. ' +
-          'neko-cut format: sends all shots to an explicitly identified neko-cut project as MediaElement clips. ' +
-          'Returns the saved file path (ZIP) or a confirmation (neko-cut).',
+          'Export the storyboard as a ZIP image pack with shot images and manifest.json at a user-chosen path.',
         category: 'project',
         parameters: {
           type: 'object',
           properties: {
             format: {
               type: 'string',
-              enum: ['zip', 'neko-cut'],
-              description:
-                '"zip" to save image pack + manifest.json, "neko-cut" to import into timeline',
+              enum: ['zip'],
+              description: '"zip" saves an image pack with manifest.json.',
             },
             projectName: {
               type: 'string',
               description: 'Project name used for file naming and manifest (default: "storyboard")',
             },
-            cutProjectUri: {
-              type: 'string',
-              description: 'Explicit existing .nkv file URI required for neko-cut export.',
-            },
-            cutProjectRevision: {
-              type: 'string',
-              description: 'Expected Cut project revision captured before authoring.',
-            },
           },
           required: ['format'],
         } satisfies ToolParameters,
-        async execute(args) {
+        async execute(_args) {
           try {
-            const format = args.format as 'zip' | 'neko-cut';
-            const projectName = (args.projectName as string | undefined) ?? 'storyboard';
-
             // Fetch all shot and scene nodes
             const [allShots, allScenes] = await Promise.all([
               api.nodes.list('shot' as CanvasNodeType),
@@ -4316,68 +4177,6 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
                 imageFile: readShotGeneratedImageFallback(d) ? imageFile : undefined,
               };
             });
-
-            if (format === 'neko-cut') {
-              const cutProjectUri = readOptionalString(args.cutProjectUri);
-              const cutProjectRevision = readOptionalString(args.cutProjectRevision);
-              if (!cutProjectUri || !cutProjectRevision) {
-                return {
-                  success: false,
-                  error:
-                    'neko-cut storyboard export requires cutProjectUri and cutProjectRevision.',
-                };
-              }
-              const shotDataById = new Map<string, Record<string, unknown>>(
-                allShots.map((node) => [node.id, node.data as Record<string, unknown>]),
-              );
-              const timelineShots = manifestShots.map((s) => {
-                const data = shotDataById.get(s.id);
-                const referenceDescriptors: readonly ReferenceDescriptor[] = data
-                  ? collectShotKeyframeReferenceDescriptors(s.id, data)
-                  : [];
-                return {
-                  id: s.id,
-                  shotNumber: s.shotNumber,
-                  duration: s.duration,
-                  ...(data
-                    ? {
-                        preparedKeyframeRef: readShotPreparedKeyframeRef(data),
-                        imageDataUrl: readShotGeneratedImageFallback(data),
-                      }
-                    : {}),
-                  ...(referenceDescriptors.length > 0 ? { referenceDescriptors } : {}),
-                  dialogue: s.dialogue,
-                  voiceOver: s.voiceOver,
-                  soundCue: s.soundCue,
-                  label: `#${String(s.shotNumber).padStart(3, '0')} ${s.shotScale ?? ''}`.trim(),
-                };
-              });
-
-              await vscode.commands.executeCommand('neko.cut.authoring.importStoryboard', {
-                target: { kind: 'file', documentUri: cutProjectUri },
-                expectedProjectRevision: cutProjectRevision,
-                projectName,
-                shots: timelineShots,
-              });
-              const importedAt = Date.now();
-              await applyCanvasTimelineSyncToCanvas(
-                api,
-                buildStoryboardImportTimelineSyncPayload(
-                  timelineShots.map((shot) => shot.id),
-                  projectName,
-                  importedAt,
-                ),
-              );
-
-              return {
-                success: true,
-                data: {
-                  format: 'neko-cut',
-                  shotsImported: timelineShots.length,
-                  message: `${timelineShots.length} shots imported into neko-cut timeline`,
-                },
-              };
-            }
 
             // ZIP format — delegate to a command since ZIP requires AdmZip
             // which should not be a dependency of neko-canvas

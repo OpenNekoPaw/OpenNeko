@@ -44,8 +44,6 @@ import type {
   CanvasMarkdownCapabilityResult,
 } from './canvas-markdown-capabilities';
 import type { CanvasCutDraftPayload } from './canvas-cut-draft';
-import type { CanvasCutDraftDiagnostic } from './canvas-cut-draft';
-import type { CanvasTimelineSyncPayload } from './canvas-timeline-sync';
 import type { CanvasPlaybackPlan, CanvasPlaybackRouteCandidate } from './canvas-playback';
 import type {
   ApplyCanvasStoryboardOptions,
@@ -93,170 +91,39 @@ export interface NekoEngineRuntimeStatus {
 // NekoCut API
 // =============================================================================
 
-/**
- * Timeline element configuration for adding new elements
- */
-export interface TimelineElementConfig {
-  type: 'video' | 'audio' | 'image' | 'text' | 'shape' | 'subtitle';
-  trackId: string;
-  startTime: number;
-  duration: number;
-  source?: string;
-  [key: string]: unknown;
+export type CutRouteHandoffItem =
+  | {
+      readonly kind: 'media';
+      readonly workspaceRelativePath: string;
+      readonly name: string;
+      readonly durationSeconds: number;
+    }
+  | { readonly kind: 'gap'; readonly durationSeconds: number };
+
+export type CutRouteHandoffTarget =
+  | { readonly kind: 'new'; readonly projectName: string }
+  | {
+      readonly kind: 'append';
+      readonly documentUri: string;
+      readonly expectedRevision: number;
+    };
+
+export interface CutRouteHandoffRequest {
+  readonly target: CutRouteHandoffTarget;
+  readonly items: readonly CutRouteHandoffItem[];
 }
 
-/**
- * Timeline element update payload
- */
-export interface TimelineElementUpdate {
-  startTime?: number;
-  duration?: number;
-  source?: string;
-  [key: string]: unknown;
-}
-
-/**
- * Timeline information
- */
-export interface TimelineInfo {
-  documentUri: string;
-  projectRevision: string;
-  duration: number;
-  fps: number;
-  width: number;
-  height: number;
-  trackCount: number;
-}
-
-export interface CutTimelineRevealRequest {
-  readonly projectUri?: string;
-  readonly sequenceId?: string;
-  readonly clipId?: string;
-}
-
-export interface CutCanvasDraftImportResult {
-  readonly accepted: boolean;
-  readonly status: 'imported' | 'rejected' | 'failed' | 'unavailable' | 'timeout' | 'post-failed';
-  readonly projectUri?: string;
-  readonly syncPayload?: CanvasTimelineSyncPayload;
-  readonly diagnostics?: readonly CanvasCutDraftDiagnostic[];
-  readonly error?: string;
-}
-
-/**
- * Timeline element representation (for API response)
- */
-export interface NekoCutTimelineElement {
-  id: string;
-  type: string;
-  trackId: string;
-  startTime: number;
-  duration: number;
-  source?: string;
-  [key: string]: unknown;
-}
-
-export interface CutTimelineDocumentTarget {
+export interface CutRouteHandoffResult {
   readonly documentUri: string;
-  readonly expectedProjectRevision?: string;
+  readonly revision: number;
+  readonly created: boolean;
 }
 
-export interface CutTimelineCanvasDraftImportRequest extends CutTimelineDocumentTarget {
-  readonly payload: CanvasCutDraftPayload;
-}
-
-export interface CutProjectAuthoringCreateOptions {
-  readonly name?: string;
-  readonly width?: number;
-  readonly height?: number;
-  readonly fps?: number;
-}
-
-export interface CutProjectAuthoringImportGeneratedClipRequest {
-  readonly target: import('../project-authoring').NekoProjectAuthoringTarget;
-  readonly expectedProjectRevision?: string;
-  readonly sourcePath?: string;
-  readonly bytes?: Uint8Array;
-  readonly name?: string;
-  readonly mediaType?: 'video' | 'audio' | 'image';
-  readonly duration?: number;
-  readonly startTime?: number;
-  readonly trackId?: string;
-  readonly trackIndex?: number;
-  readonly requestId?: string;
-  readonly createProjectOptions?: CutProjectAuthoringCreateOptions;
-}
-
-export interface CutProjectAuthoringImportedClip {
-  readonly sourcePath: string;
-  readonly mediaType: 'video' | 'audio' | 'image';
-  readonly trackId: string;
-  readonly elementId: string;
-  readonly createdTrack: boolean;
-  readonly startTime: number;
-  readonly duration: number;
-}
-
-export interface NekoCutAuthoringAPI {
-  importGeneratedClip(
-    request: CutProjectAuthoringImportGeneratedClipRequest,
-  ): Promise<
-    import('../project-authoring').NekoProjectAuthoringResult<CutProjectAuthoringImportedClip>
-  >;
-}
-
-/**
- * NekoCut Extension API
- * Exported by neko-cut extension for timeline manipulation
- */
+/** NekoCut VS Code extension API. */
 export interface NekoCutAPI {
-  /** Package-owned structural, review-render, runtime, and export-readiness facade for .nkv projects. */
-  readonly projectQuality: import('../project-authoring/project-quality').ProjectQualityFacade;
-  /** Explicit-target, Webview-independent durable .nkv authoring. */
-  readonly authoring: NekoCutAuthoringAPI;
-
-  timeline: {
-    /**
-     * Get information about the current timeline
-     */
-    getInfo(target: CutTimelineDocumentTarget): Promise<TimelineInfo>;
-
-    /**
-     * Add a new element to the timeline
-     * @returns The ID of the created element
-     */
-    addElement(target: CutTimelineDocumentTarget, config: TimelineElementConfig): Promise<string>;
-
-    /**
-     * Update an existing timeline element
-     */
-    updateElement(
-      target: CutTimelineDocumentTarget,
-      id: string,
-      updates: TimelineElementUpdate,
-    ): Promise<void>;
-
-    /**
-     * Delete an element from the timeline
-     */
-    deleteElement(target: CutTimelineDocumentTarget, id: string): Promise<void>;
-
-    /**
-     * List all elements in the timeline
-     */
-    listElements(target: CutTimelineDocumentTarget): Promise<NekoCutTimelineElement[]>;
-
-    /**
-     * Reveal the owning Cut timeline surface. Playback and timeline focus stay in Cut.
-     */
-    reveal(request: CutTimelineRevealRequest & { readonly projectUri: string }): Promise<boolean>;
-
-    /**
-     * Import a Canvas route snapshot into an explicitly identified Cut project.
-     */
-    importCanvasDraft(
-      request: CutTimelineCanvasDraftImportRequest,
-    ): Promise<CutCanvasDraftImportResult>;
+  readonly status: 'ready';
+  readonly routes: {
+    handoff(request: CutRouteHandoffRequest): Promise<CutRouteHandoffResult>;
   };
 }
 
@@ -336,6 +203,10 @@ export interface CanvasPlaybackCreateCutDraftRequest {
   readonly sourceCanvasUri?: string;
   readonly routeId?: string;
   readonly projectName?: string;
+}
+
+export interface CanvasPlaybackSendRouteToCutRequest extends CanvasPlaybackCreateCutDraftRequest {
+  readonly target: CutRouteHandoffTarget;
 }
 
 export interface CanvasPlaybackReorderUnitsRequest {
@@ -450,6 +321,8 @@ export interface NekoCanvasAPI {
     createCutDraftFromRoute(
       request?: CanvasPlaybackCreateCutDraftRequest,
     ): Promise<CanvasCutDraftPayload>;
+
+    sendRouteToCut(request: CanvasPlaybackSendRouteToCutRequest): Promise<CutRouteHandoffResult>;
 
     /**
      * Reorder Canvas playback units through Canvas graph commands, then return the reprojected plan.
@@ -625,6 +498,14 @@ export function isNekoMediaRepresentationAPI(value: unknown): value is NekoMedia
   return hasCallableMembers(value, ['generateThumbnail']);
 }
 
+export function isNekoCutAPI(value: unknown): value is NekoCutAPI {
+  return (
+    isExtensionApiRecord(value) &&
+    value['status'] === 'ready' &&
+    hasCallableMember(value['routes'], 'handoff')
+  );
+}
+
 export function isNekoCanvasAPI(value: unknown): value is NekoCanvasAPI {
   if (!isExtensionApiRecord(value)) return false;
   return (
@@ -657,23 +538,6 @@ export function isNekoCanvasAPI(value: unknown): value is NekoCanvasAPI {
       'onSelectionChange',
     ]) &&
     hasCallableMember(value['events'], 'onDidChangeCanvas')
-  );
-}
-
-export function isNekoCutAPI(value: unknown): value is NekoCutAPI {
-  if (!isExtensionApiRecord(value)) return false;
-  return (
-    isExtensionApiRecord(value['projectQuality']) &&
-    hasCallableMember(value['authoring'], 'importGeneratedClip') &&
-    hasCallableMembers(value['timeline'], [
-      'getInfo',
-      'addElement',
-      'updateElement',
-      'deleteElement',
-      'listElements',
-      'reveal',
-      'importCanvasDraft',
-    ])
   );
 }
 

@@ -29,11 +29,13 @@ import type {
   CanvasNode,
   CanvasNodeType,
   CanvasPlaybackCreateCutDraftRequest,
+  CanvasPlaybackSendRouteToCutRequest,
   CanvasPlaybackPlan,
   CanvasPlaybackRevealWorkspaceRequest,
   CanvasPlaybackReorderUnitsRequest,
   CanvasPlaybackReorderUnitsResult,
   CanvasPlaybackRouteCandidate,
+  CutRouteHandoffResult,
   CanvasStoryboardExecutionSummary,
   CanvasStoryboardExecutionSummaryRequest,
   CanvasStoryboardPayload,
@@ -154,6 +156,7 @@ export interface NekoCanvasAPI {
     createCutDraftFromRoute(
       request?: CanvasPlaybackCreateCutDraftRequest,
     ): Promise<CanvasCutDraftPayload>;
+    sendRouteToCut(request: CanvasPlaybackSendRouteToCutRequest): Promise<CutRouteHandoffResult>;
     reorderUnits(
       request: CanvasPlaybackReorderUnitsRequest,
     ): Promise<CanvasPlaybackReorderUnitsResult>;

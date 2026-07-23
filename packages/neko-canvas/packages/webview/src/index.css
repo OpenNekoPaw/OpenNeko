@@ -1279,8 +1279,7 @@ body,
 .canvas-route-storyboard-matrix-family,
 .canvas-route-storyboard-matrix-step,
 .canvas-route-storyboard-matrix-container,
-.canvas-route-storyboard-matrix-row-button,
-.canvas-route-storyboard-matrix-send {
+.canvas-route-storyboard-matrix-row-button {
   cursor: pointer;
   border: 1px solid var(--control-border);
   background: var(--control-bg);
@@ -1549,20 +1548,6 @@ body,
   font-weight: 600;
 }
 
-.canvas-route-storyboard-matrix-send {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-width: 0 0 0 1px;
-  background: transparent;
-  color: var(--toolbar-fg-secondary);
-}
-
-.canvas-route-storyboard-matrix-send:hover {
-  background: color-mix(in srgb, var(--node-selected) 16%, transparent);
-  color: var(--toolbar-fg);
-}
-
 .canvas-route-storyboard-matrix-cells {
   height: var(--matrix-row-height, 72px);
   min-width: max-content;
@@ -1743,7 +1728,6 @@ body,
 .canvas-route-storyboard-matrix-step:focus-visible,
 .canvas-route-storyboard-matrix-container:focus-visible,
 .canvas-route-storyboard-matrix-row-button:focus-visible,
-.canvas-route-storyboard-matrix-send:focus-visible,
 .canvas-route-storyboard-matrix-cell-playable:focus-visible,
 .canvas-route-storyboard-matrix-cell-summary:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--node-selected) 72%, transparent);

@@ -1,11 +1,5 @@
 import { useMemo, useState, type KeyboardEvent } from 'react';
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  ClockIcon,
-  SendIcon,
-  WarningIcon,
-} from '@neko/ui/icons';
+import { ChevronDownIcon, ChevronRightIcon, ClockIcon, WarningIcon } from '@neko/ui/icons';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { t } from '../../i18n';
 import type {
@@ -32,7 +26,6 @@ export interface RouteStoryboardMatrixProps {
   readonly onSelectColumn: (columnId: string) => void;
   readonly onSelectFamily: (family: RouteStoryboardMatrixFamily) => void;
   readonly onToggleContainerFold: (container: RouteStoryboardMatrixContainerGroup) => void;
-  readonly onSendToCut: (row: RouteStoryboardMatrixRow) => void;
   readonly onFocus?: () => void;
 }
 
@@ -50,7 +43,6 @@ export function RouteStoryboardMatrix({
   onSelectColumn,
   onSelectFamily,
   onToggleContainerFold,
-  onSendToCut,
   onFocus,
 }: RouteStoryboardMatrixProps) {
   const [localFocusedCellId, setLocalFocusedCellId] = useState<string | undefined>();
@@ -249,7 +241,6 @@ export function RouteStoryboardMatrix({
               onSelectCell={onSelectCell}
               onSelectSummaryCell={onSelectSummaryCell}
               onFocusCell={focusCell}
-              onSendToCut={onSendToCut}
             />
           ))}
         </div>
@@ -283,7 +274,6 @@ function MatrixRow({
   onSelectCell,
   onSelectSummaryCell,
   onFocusCell,
-  onSendToCut,
 }: {
   readonly row: RouteStoryboardMatrixRow;
   readonly selected: boolean;
@@ -293,7 +283,6 @@ function MatrixRow({
   readonly onSelectCell: (cell: RouteStoryboardMatrixPlayableCell) => void;
   readonly onSelectSummaryCell?: (cell: RouteStoryboardMatrixSummaryCell) => void;
   readonly onFocusCell: (cell: RouteStoryboardMatrixCell) => void;
-  readonly onSendToCut: (row: RouteStoryboardMatrixRow) => void;
 }) {
   const displayRowTitle = formatMatrixDisplayLabel(row.title);
   const routeTitle = t('playback.matrix.rowTitle', {
@@ -326,19 +315,6 @@ function MatrixRow({
               duration: formatDurationMs(row.totalDurationMs),
             })}
           </small>
-        </button>
-        <button
-          type="button"
-          className="canvas-route-storyboard-matrix-send"
-          title={t('playback.matrix.sendToCut')}
-          aria-label={t('playback.matrix.sendRouteToCut', { title: displayRowTitle })}
-          onMouseDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSendToCut(row);
-          }}
-        >
-          <SendIcon size={13} />
         </button>
       </div>
       <div className="canvas-route-storyboard-matrix-cells">

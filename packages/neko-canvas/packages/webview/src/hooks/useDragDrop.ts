@@ -346,7 +346,7 @@ export function getCanvasFilePickerDefaultName(nodeType: CanvasNodeType | undefi
     case 'canvas-embed':
       return 'canvas.nkc';
     case 'project':
-      return 'project.nkv';
+      return 'project';
     default:
       return 'source';
   }

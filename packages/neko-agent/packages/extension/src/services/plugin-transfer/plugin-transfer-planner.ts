@@ -2,13 +2,8 @@ import type {
   PluginTransferAssetRef,
   PluginTransferCommandPlan,
   PluginTransferPayload,
-  PluginTransferTargetRef,
 } from '@neko-agent/types';
-import {
-  isDocumentArchiveResourceRef,
-  type DocumentArchiveResourceRef,
-  type NekoProjectAuthoringTarget,
-} from '@neko/shared';
+import { isDocumentArchiveResourceRef, type DocumentArchiveResourceRef } from '@neko/shared';
 
 type NekoSuitePluginTransferBuildPayload = Exclude<PluginTransferPayload, { kind: 'assetBatch' }>;
 
@@ -40,41 +35,16 @@ export function buildNekoSuitePluginTransferPlan(
 
   if (payload.kind === 'cutStoryboard') {
     if (input.target === 'cut') {
-      const target = readAuthoringTarget(payload.target);
-      if (!isExplicitCutTarget(target)) {
-        return {
-          status: 'unsupported',
-          target: input.target,
-          reason: 'explicit-cut-target-required',
-        };
-      }
-      const expectedProjectRevision = readExpectedProjectRevision(payload.target);
-      if (target.kind === 'file' && !expectedProjectRevision) {
-        return {
-          status: 'unsupported',
-          target: input.target,
-          reason: 'cut-project-revision-required',
-        };
-      }
       return {
-        status: 'execute-command',
-        command: 'neko.cut.authoring.importStoryboard',
-        payload: {
-          ...payload.storyboard,
-          ...(target ? { target } : {}),
-          ...(expectedProjectRevision ? { expectedProjectRevision } : {}),
-          ...(target?.reveal !== undefined ? { reveal: target.reveal } : {}),
-          ...(payload.provenance ? { provenance: payload.provenance } : {}),
-        },
+        status: 'unsupported',
+        target: input.target,
+        reason: 'cut-otio-target-not-registered',
       };
     }
     return { status: 'unsupported', target: input.target, reason: 'unsupported-structured-target' };
   }
 
   assertSingleTransferPayload(payload);
-  const transferTarget = payload.target ?? payload.asset.target;
-  const authoringTarget = readAuthoringTarget(transferTarget);
-  const provenance = payload.provenance ?? payload.asset.provenance;
 
   if (input.target === 'canvas') {
     const documentResourceRef = readDocumentResourceRef(payload.asset, payload.provenance);
@@ -106,33 +76,10 @@ export function buildNekoSuitePluginTransferPlan(
   }
 
   if (input.target === 'cut') {
-    if (!isExplicitCutTarget(authoringTarget)) {
-      return {
-        status: 'unsupported',
-        target: input.target,
-        reason: 'explicit-cut-target-required',
-      };
-    }
-    const expectedProjectRevision = readExpectedProjectRevision(transferTarget);
-    if (authoringTarget.kind === 'file' && !expectedProjectRevision) {
-      return {
-        status: 'unsupported',
-        target: input.target,
-        reason: 'cut-project-revision-required',
-      };
-    }
     return {
-      status: 'execute-command',
-      command: 'neko.cut.authoring.importGeneratedClip',
-      payload: {
-        assetPath: payload.asset.path,
-        ...(payload.asset.mediaType ? { mediaType: payload.asset.mediaType } : {}),
-        ...(payload.asset.name ? { name: payload.asset.name } : {}),
-        ...(authoringTarget ? { target: authoringTarget } : {}),
-        ...(expectedProjectRevision ? { expectedProjectRevision } : {}),
-        ...(authoringTarget?.reveal !== undefined ? { reveal: authoringTarget.reveal } : {}),
-        ...(provenance ? { provenance } : {}),
-      },
+      status: 'unsupported',
+      target: input.target,
+      reason: 'cut-otio-target-not-registered',
     };
   }
 
@@ -144,19 +91,6 @@ export function buildNekoSuitePluginTransferPlan(
   }
 
   return { status: 'unsupported', target: input.target };
-}
-
-function isExplicitCutTarget(
-  target: NekoProjectAuthoringTarget | undefined,
-): target is NekoProjectAuthoringTarget & {
-  readonly kind: 'file' | 'new';
-  readonly documentUri: string;
-} {
-  return (
-    (target?.kind === 'file' || target?.kind === 'new') &&
-    typeof target.documentUri === 'string' &&
-    target.documentUri.trim().length > 0
-  );
 }
 
 function assertSingleTransferPayload(
@@ -183,30 +117,4 @@ function readDocumentResourceRef(
     payloadProvenance?.metadata?.['documentResourceRef'],
   ];
   return candidates.find(isDocumentArchiveResourceRef);
-}
-
-function readAuthoringTarget(
-  target: PluginTransferTargetRef | undefined,
-): NekoProjectAuthoringTarget | undefined {
-  if (!target) return undefined;
-  const kind = readAuthoringTargetKind(target.kind);
-  const reveal = typeof target.reveal === 'boolean' ? target.reveal : undefined;
-  if (!kind && !target.documentUri && !target.title && reveal === undefined) return undefined;
-  return {
-    ...(kind ? { kind } : {}),
-    ...(target.documentUri ? { documentUri: target.documentUri } : {}),
-    ...(target.title ? { title: target.title } : {}),
-    ...(reveal !== undefined ? { reveal } : {}),
-  };
-}
-
-function readExpectedProjectRevision(
-  target: PluginTransferTargetRef | undefined,
-): string | undefined {
-  const revision = target?.expectedProjectRevision;
-  return typeof revision === 'string' && revision.trim().length > 0 ? revision : undefined;
-}
-
-function readAuthoringTargetKind(value: unknown): NekoProjectAuthoringTarget['kind'] | undefined {
-  return value === 'active' || value === 'file' || value === 'new' ? value : undefined;
 }
