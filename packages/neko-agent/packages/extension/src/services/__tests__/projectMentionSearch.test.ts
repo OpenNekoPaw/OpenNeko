@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { PROJECT_SEARCH_QUERY_COMMAND } from '@neko/search/host-vscode';
-import {
-  resolveRoleplayCandidateSearchSelection,
-  searchProjectMentionCandidates,
-} from '../projectMentionSearch';
+import { resolveRoleplayCandidateSearchSelection } from '@neko/chara/host-vscode';
+import { searchProjectMentionCandidates } from '../projectMentionSearch';
 
 vi.mock('vscode', async () => await import('../../__mocks__/vscode'));
 

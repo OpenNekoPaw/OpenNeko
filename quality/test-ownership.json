@@ -109,6 +109,13 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
+      "path": "packages/neko-chara",
+      "owner": "packages/neko-chara",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
       "path": "packages/neko-client",
       "owner": "packages/neko-client",
       "mode": "self",
@@ -118,6 +125,13 @@
     {
       "path": "packages/neko-content",
       "owner": "packages/neko-content",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
+      "path": "packages/neko-quality",
+      "owner": "packages/neko-quality",
       "mode": "self",
       "sourceScope": "src/**/*.{ts,tsx}",
       "testScope": "src/**/*.test.{ts,tsx}"

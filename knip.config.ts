@@ -58,6 +58,10 @@ const config: KnipConfig = {
     },
     'packages/neko-content': {},
     'packages/neko-client': {},
+    'packages/neko-chara': {
+      entry: ['src/index.ts', 'src/testing/index.ts'],
+    },
+    'packages/neko-quality': {},
 
     // ── Extension parent packages ─────────────────────
     // These are VSCode manifest wrappers; entry from sub-packages.

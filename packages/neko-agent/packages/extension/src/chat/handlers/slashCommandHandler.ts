@@ -24,7 +24,7 @@ import type { SkillHandler } from './skillHandler';
 import type { TaskHandler } from './taskHandler';
 import type { ContextHandler } from './contextHandler';
 import type { SettingsHandler } from './settingsHandler';
-import type { CharacterDialogueController } from '../characterDialogueController';
+import type { CharacterDialogueController } from '@neko/chara/host-vscode';
 import { getLogger } from '../../base';
 import {
   NPC_TEST_BENCH_AS_SLASH_COMMAND_NAME,

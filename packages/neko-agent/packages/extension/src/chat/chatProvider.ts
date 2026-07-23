@@ -55,15 +55,17 @@ import { AgentWorkItemProjectionSource } from '../services/workItemProjectionSou
 import {
   CharacterDialogueController,
   defaultEnrichCharacterProfile,
-} from './characterDialogueController';
-import { EmbodyCharacterController } from './embodyCharacterController';
+  EmbodyCharacterController,
+  type CharacterDialogueExitResult,
+  type CharacterDialogueLaunchResult,
+} from '@neko/chara/host-vscode';
 import {
   createCharacterDialoguePurposeResponder,
   createEmbodyCharacterPurposeResponder,
   evaluateCharacterDialogueWithPurpose,
   inferCharacterProfileFactsWithPurpose,
   requireCharacterPurposeRuntime,
-} from '@neko/entity';
+} from '@neko/chara/application';
 import {
   createAgentLocalResourceAccess,
   type AgentLocalResourceAccess,
@@ -1273,7 +1275,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 
   public async startCharacterDialogue(
     request: import('@neko/shared').NpcTestBenchLaunchRequest,
-  ): Promise<import('./characterDialogueController').CharacterDialogueLaunchResult | null> {
+  ): Promise<CharacterDialogueLaunchResult | null> {
     await vscode.commands.executeCommand(NEKO_AI_ASSISTANT_FOCUS_COMMAND);
     return this._characterDialogue.launch(request);
   }
@@ -1312,9 +1314,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     });
   }
 
-  public exitCharacterDialogue(
-    sessionId?: string,
-  ): Promise<import('./characterDialogueController').CharacterDialogueExitResult | null> {
+  public exitCharacterDialogue(sessionId?: string): Promise<CharacterDialogueExitResult | null> {
     return sessionId
       ? this._characterDialogue.exit(sessionId)
       : this._characterDialogue.exitActive();

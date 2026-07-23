@@ -1,0 +1,16 @@
+export {
+  CancellationTokenSource,
+  Disposable,
+  EventEmitter,
+  FileType,
+  LogLevel,
+  RelativePattern,
+  Uri,
+  commands,
+  createMockWebview,
+  env,
+  extensions,
+  l10n,
+  window,
+  workspace,
+} from './vscode';

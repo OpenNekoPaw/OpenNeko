@@ -8,6 +8,8 @@ const repoRoot = process.cwd();
 const checkedRoots = [
   'packages/neko-types/src',
   'packages/neko-agent/packages/extension/src',
+  'packages/neko-chara/src',
+  'packages/neko-quality/src',
   'packages/neko-canvas/packages/extension/src',
   'packages/neko-cut/packages/extension/src',
   'packages/neko-preview/packages/extension/src',
@@ -17,6 +19,8 @@ const checkedRoots = [
 
 const featurePackageRoots = [
   'packages/neko-agent/packages/extension/src',
+  'packages/neko-chara/src',
+  'packages/neko-quality/src',
   'packages/neko-canvas/packages/extension/src',
   'packages/neko-cut/packages/extension/src',
   'packages/neko-preview/packages/extension/src',

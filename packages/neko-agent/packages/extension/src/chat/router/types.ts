@@ -7,8 +7,10 @@ import type {
 import type { AgentCapabilityLifecycleDescriptor } from '@neko/shared';
 import type { DragDropBroker } from '../../services/DragDropBroker';
 import type { AgentMessageTurnHandler } from '../agentMessageTurnHandler';
-import type { CharacterDialogueController } from '../characterDialogueController';
-import type { EmbodyCharacterController } from '../embodyCharacterController';
+import type {
+  CharacterDialogueController,
+  EmbodyCharacterController,
+} from '@neko/chara/host-vscode';
 import type { ConversationProjectionAttachmentServer } from '../projection/conversationProjectionAttachmentServer';
 import type {
   ContextHandler,

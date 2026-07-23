@@ -44,6 +44,7 @@ const RULES = Object.freeze([
     'packages/neko-skills/src/builtins/',
   ]),
   rule('capability-tool-routing', 'agent-runtime.perception-routing', [
+    'packages/neko-quality/src/',
     'packages/neko-agent/packages/agent/src/tools/',
     'packages/neko-agent/packages/extension/src/tools/',
     'packages/neko-agent/packages/platform/src/capability/',
