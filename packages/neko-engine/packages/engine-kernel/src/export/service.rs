@@ -488,7 +488,7 @@ impl ExportService {
             .as_ref()
             .map(|audio| build_audio_encoder_config(&config, audio.as_ref()));
         let mut audio_encoder = match audio_encoder_config.clone() {
-            Some(audio_config) => backends.audio_encode_factory.create(audio_config)?,
+            Some(audio_config) => Some(backends.audio_encode_factory.create(audio_config)?),
             None => None,
         };
 
@@ -512,7 +512,7 @@ impl ExportService {
             mux_buffer_size: 8,
             encoder_config: config.settings.to_encoder_config(),
             audio_encoder_config: audio_encoder_config.clone(),
-            container: ContainerFormat::Mp4,
+            container: container_for_output_path(&config.output_path)?,
             output_path: config.output_path.clone(),
             total_frames,
         };
@@ -572,22 +572,13 @@ impl ExportService {
             if let (Some(ref mut enc), Some(ref mut audio)) =
                 (audio_encoder.as_mut(), audio_backend.as_mut())
             {
-                if let Ok(Some(audio_frame)) = audio.mix_frame(time) {
-                    match enc.encode_frame(&audio_frame) {
-                        Ok(packets) => {
-                            for audio_pkt in packets {
-                                if let Err(e) = submit_audio_packet_to_sink(
-                                    export_sink.as_ref(),
-                                    audio_pkt,
-                                    config.settings.audio_codec,
-                                ) {
-                                    tracing::warn!("Failed to submit audio packet: {}", e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            tracing::warn!("Audio encode error (continuing): {}", e);
-                        }
+                if let Some(audio_frame) = audio.mix_frame(time)? {
+                    for audio_pkt in enc.encode_frame(&audio_frame)? {
+                        submit_audio_packet_to_sink(
+                            export_sink.as_ref(),
+                            audio_pkt,
+                            config.settings.audio_codec,
+                        )?;
                     }
                 }
             }
@@ -656,21 +647,12 @@ impl ExportService {
         // Flush audio encoder and submit remaining packets
         if let Some(ref mut enc) = audio_encoder {
             tracing::info!("Flushing audio encoder");
-            match enc.flush() {
-                Ok(packets) => {
-                    for audio_pkt in packets {
-                        if let Err(e) = submit_audio_packet_to_sink(
-                            export_sink.as_ref(),
-                            audio_pkt,
-                            config.settings.audio_codec,
-                        ) {
-                            tracing::warn!("Failed to submit flushed audio packet: {}", e);
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!("Audio encoder flush error: {}", e);
-                }
+            for audio_pkt in enc.flush()? {
+                submit_audio_packet_to_sink(
+                    export_sink.as_ref(),
+                    audio_pkt,
+                    config.settings.audio_codec,
+                )?;
             }
         }
 
@@ -782,6 +764,21 @@ impl ExportService {
     }
 }
 
+fn container_for_output_path(output_path: &str) -> Result<ContainerFormat> {
+    match std::path::Path::new(output_path)
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(str::to_ascii_lowercase)
+        .as_deref()
+    {
+        Some("mp4") => Ok(ContainerFormat::Mp4),
+        Some("mov") => Ok(ContainerFormat::Mov),
+        extension => Err(Error::UnsupportedContainer(
+            extension.unwrap_or("<missing>").to_string(),
+        )),
+    }
+}
+
 fn submit_audio_packet_to_sink(
     sink: &dyn super::ExportSink,
     packet: EncodedPacket,
@@ -825,6 +822,7 @@ mod tests {
                 video_bitrate: None,
                 audio_codec: ExportAudioCodec::Aac,
                 audio_bitrate: None,
+                audio_sample_rate: 48_000,
                 hw_encoder: ExportHwEncoder::None,
                 time_range: None,
                 preset: ExportPreset::Medium,
