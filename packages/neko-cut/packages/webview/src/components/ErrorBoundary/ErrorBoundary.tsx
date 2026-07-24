@@ -5,6 +5,7 @@
 
 import { WebviewErrorBoundary } from '@neko/ui/error-boundary';
 import type { ErrorInfo, ReactNode } from 'react';
+import { useTranslation } from '../../i18n/I18nContext';
 import { getLogger } from '../../utils/logger';
 
 const logger = getLogger('ErrorBoundary');
@@ -18,6 +19,7 @@ interface ErrorBoundaryProps {
 }
 
 export function ErrorBoundary({ children, fallback, onError }: ErrorBoundaryProps): ReactNode {
+  const { t } = useTranslation();
   return (
     <WebviewErrorBoundary
       logger={logger}
@@ -25,9 +27,9 @@ export function ErrorBoundary({ children, fallback, onError }: ErrorBoundaryProp
         typeof fallback === 'function' ? ({ error, reset }) => fallback(error, reset) : fallback
       }
       onError={onError}
-      title="Something went wrong"
-      description={(error) => error.message || 'An unexpected error occurred'}
-      retryLabel="Try again"
+      title={t('errorBoundary.title')}
+      description={() => t('errorBoundary.description')}
+      retryLabel={t('errorBoundary.retry')}
       className="flex h-full flex-col items-center justify-center bg-[var(--vscode-editor-background)] p-4 text-center text-[var(--vscode-editor-foreground)]"
       contentClassName="flex max-w-md flex-col items-center gap-3"
       buttonClassName="rounded bg-[var(--vscode-button-background)] px-4 py-2 text-sm text-[var(--vscode-button-foreground)] transition-colors hover:bg-[var(--vscode-button-hoverBackground)]"

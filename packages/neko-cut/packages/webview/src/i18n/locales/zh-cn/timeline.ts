@@ -39,7 +39,7 @@ export const timeline = {
   'timeline.basic.overview': '时间线概览',
   'timeline.basic.selectClip': '请先打开 Cut 项目再开始预览',
   'timeline.basic.exportComplete': '导出完成：',
-  'timeline.basic.exportDescription': '将当前 Cut 作为后台任务导出为 MP4。',
+  'timeline.basic.exportDescription': '将当前 Cut 作为后台任务导出为本地 MP4 或 MOV 文件。',
   'timeline.basic.backgroundExport': '转入后台',
   'timeline.basic.duration': '时长',
 
@@ -95,6 +95,8 @@ export const timeline = {
 
   'timeline.controls.addTrack': '添加轨道',
   'timeline.controls.addMedia': '添加媒体到所选轨道',
+  'timeline.controls.switchToSequenceMode': '切换到顺序模式并移除尾部空白',
+  'timeline.controls.switchToPositionMode': '切换到定位模式',
   'timeline.controls.mediaTrack': '媒体轨道',
   'timeline.controls.audioTrack': '音频轨道',
   'timeline.controls.textTrack': '文本轨道',

@@ -20,8 +20,11 @@ export const PreviewPanel = memo(
     const { t } = useTranslation();
     return (
       <div className="cut-preview-panel cut-basic-preview flex h-full min-h-0 flex-col bg-vscode-bg">
-        <div className="cut-preview-stage relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black">
-          <div className="cut-basic-preview-stage relative flex items-center justify-center overflow-hidden bg-black">
+        <div className="cut-preview-stage relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-vscode-bg">
+          <div
+            className="cut-basic-preview-stage relative flex items-center justify-center overflow-hidden bg-black"
+            style={{ aspectRatio: `${projectWidth} / ${projectHeight}` }}
+          >
             <canvas
               ref={canvasRef}
               width={projectWidth}

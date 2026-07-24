@@ -1,9 +1,15 @@
-import type { CutExportTaskSnapshot, CutExportTaskStatus } from '@neko-cut/domain';
+import type {
+  CutExportSettings,
+  CutExportTaskSnapshot,
+  CutExportTaskStatus,
+} from '@neko-cut/domain';
+import { toCutUserDiagnostic } from './cutUserDiagnostic';
 
 export interface StartCutExportTask {
   readonly documentUri: string;
   readonly sessionId: string;
   readonly sourceRevision: number;
+  readonly settings: CutExportSettings;
   readonly outputWorkspaceRelativePath: string;
   readonly run: (signal: AbortSignal) => Promise<void>;
 }
@@ -32,6 +38,7 @@ export class CutExportTaskRegistry {
         documentUri: input.documentUri,
         sessionId: input.sessionId,
         sourceRevision: input.sourceRevision,
+        settings: { ...input.settings },
         outputWorkspaceRelativePath: input.outputWorkspaceRelativePath,
         status: 'running',
         startedAt: Date.now(),
@@ -95,7 +102,7 @@ export class CutExportTaskRegistry {
       ...entry.snapshot,
       status: 'failed',
       finishedAt: Date.now(),
-      error: error instanceof Error ? error.message : String(error),
+      diagnostic: toCutUserDiagnostic(error, 'cut:export-start'),
     };
     this.publish(entry.snapshot);
   }

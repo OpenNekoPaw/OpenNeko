@@ -11,6 +11,10 @@ export function ExportProgressView(props: {
     <div className="cut-basic-export-progress">
       <div className="cut-basic-export-spinner" aria-hidden="true" />
       <strong>{props.task.outputWorkspaceRelativePath}</strong>
+      <span>
+        {props.task.settings.width} × {props.task.settings.height} ·{' '}
+        {props.task.settings.framesPerSecond} fps
+      </span>
       <span>{t('timeline.basic.backgroundExport')}</span>
       <div className="cut-basic-export-actions">
         <button onClick={props.onBackgroundExport} type="button">

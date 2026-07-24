@@ -19,13 +19,18 @@ describe('creative workbench StatusBar boundary', () => {
     const css = readRepoSource('packages/neko-cut/packages/webview/src/index.css');
 
     expect(provider).toMatch(/type: 'cut:export-task'/);
+    expect(provider).toMatch(/type: 'cut:error'/);
+    expect(provider).toMatch(/diagnostic: toCutUserDiagnostic/);
     expect(app).toMatch(/message\['type'\] === 'cut:export-task'/);
-    expect(app).toMatch(/cut-basic-error/);
+    expect(app).toMatch(/translateCutDiagnostic/);
+    expect(app).toMatch(/useToast/);
     expect(statusBar).toMatch(/class StatusBar/);
     expect(statusBar).toMatch(/StatusBarGroup/);
     expect(statusBar).toMatch(/updateDocument/);
     expect(extension).toMatch(/onDocumentStatusUpdate/);
     expect(extension).toMatch(/onExportTaskUpdate/);
+    expect(app).not.toMatch(/cut-basic-error|cut-basic-notice/);
+    expect(css).not.toMatch(/\.cut-basic-error|\.cut-basic-notice/);
     expect(app).not.toMatch(/WorkbenchTopBar|cut-statusbar|cut-status-bar/);
     expect(css).not.toMatch(/\.cut-statusbar|\.cut-status-bar|\.cut-topbar/);
   });

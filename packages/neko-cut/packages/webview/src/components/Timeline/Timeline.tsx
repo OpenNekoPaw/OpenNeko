@@ -18,6 +18,7 @@ import { useTrackReordering } from '../../hooks/useTrackReordering';
 import { useTranslation } from '../../i18n/I18nContext';
 import {
   useCutPresentationStore,
+  type CutPlacementMode,
   type CutPresentationSelection,
 } from '../../stores/cut-presentation-store';
 import { readDroppedMediaUris } from './droppedMedia';
@@ -38,8 +39,11 @@ import {
 } from './pointerDrag';
 import {
   quantizeTimelineDelta,
+  quantizeTimelineTime,
   readClipTrimCapacity,
-  retainTimelineCanvasDuration,
+  resolveTimelineCanvasDuration,
+  timelineInsertionTime,
+  timelineStructureSignature,
   TRACK_HEADER_WIDTH,
 } from './timelineMath';
 import { nextPlayheadFollowScrollLeft } from './playheadFollow';
@@ -82,22 +86,30 @@ export function Timeline(props: TimelineProps) {
   const playheadSeconds = useCutPresentationStore((state) => state.playheadSeconds);
   const pixelsPerSecond = useCutPresentationStore((state) => state.pixelsPerSecond);
   const snappingEnabled = useCutPresentationStore((state) => state.snappingEnabled);
+  const placementMode = useCutPresentationStore((state) => state.placementMode);
   const overviewVisible = useCutPresentationStore((state) => state.overviewVisible);
   const actions = useCutPresentationStore((state) => state.actions);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const canvasDurationRef = useRef<{ readonly sessionKey: string; readonly duration: number }>();
+  const canvasDurationRef = useRef<{
+    readonly sessionKey: string;
+    readonly duration: number;
+    readonly structureSignature: string;
+  }>();
   const suppressTimelineClickRef = useRef(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [dragUi, setDragUi] = useState<DragUi>();
   const [selectionBoxUi, setSelectionBoxUi] = useState<SelectionBoxUi>();
   const representations = useClipRepresentations({ view, pixelsPerSecond, timelineRef: scrollRef });
   const sessionKey = view ? `${view.documentUri}\0${view.sessionId}` : '';
-  const previousCanvasDuration =
-    canvasDurationRef.current?.sessionKey === sessionKey
-      ? canvasDurationRef.current.duration
-      : undefined;
-  const duration = retainTimelineCanvasDuration(previousCanvasDuration, view?.durationSeconds ?? 0);
-  canvasDurationRef.current = { sessionKey, duration };
+  const structureSignature = timelineStructureSignature(view?.tracks ?? []);
+  const previousCanvasExtent =
+    canvasDurationRef.current?.sessionKey === sessionKey ? canvasDurationRef.current : undefined;
+  const duration = resolveTimelineCanvasDuration({
+    previous: previousCanvasExtent,
+    projectedDuration: view?.durationSeconds ?? 0,
+    structureSignature,
+  });
+  canvasDurationRef.current = { sessionKey, duration, structureSignature };
   const timelineWidth = Math.max(duration * pixelsPerSecond, 800);
   const rate = view?.profile
     ? view.profile.editRateNumerator / view.profile.editRateDenominator
@@ -291,7 +303,17 @@ export function Timeline(props: TimelineProps) {
       {
         label: t('timeline.contextMenu.addMedia'),
         disabled: track.locked,
-        onClick: () => controller.selectLinkMedia(track.trackId),
+        onClick: () => {
+          const targetSeconds =
+            placementMode === 'sequence'
+              ? timelineInsertionTime(track.items, playheadSeconds)
+              : playheadSeconds;
+          controller.selectLinkMedia(
+            track.trackId,
+            Math.max(0, Math.round(targetSeconds * rate)),
+            overlapPolicyForMode(placementMode),
+          );
+        },
       },
       { label: '', separator: true, onClick: () => undefined },
       {
@@ -351,7 +373,7 @@ export function Timeline(props: TimelineProps) {
         onClick: () => controller.command({ type: 'remove-track', trackId: track.trackId }),
       },
     ],
-    [actions, controller, t, trackNameEditing.begin],
+    [actions, controller, placementMode, playheadSeconds, rate, t, trackNameEditing.begin],
   );
   const contextMenu = useTimelineContextMenu({
     onSelect: (clipId, trackId) => {
@@ -467,14 +489,15 @@ export function Timeline(props: TimelineProps) {
           frameSeconds,
           snapTargets: snappingEnabled ? snapTargets : [],
         });
+        const targetSeconds = placementTimeForMode(placement, placementMode);
         latest = {
           layout: {
             ...latest.layout,
-            startSeconds: placement.pointerTimeSeconds,
+            startSeconds: targetSeconds,
             trackId: targetTrack.trackId,
           },
           targetTrackId: targetTrack.trackId,
-          targetSeconds: placement.pointerTimeSeconds,
+          targetSeconds,
           placement,
         };
         setDragUi(latest);
@@ -504,7 +527,8 @@ export function Timeline(props: TimelineProps) {
           const moving = selectedClipIds.has(clip.clipId)
             ? collectSelectedClipLayouts(view, selectedMovableClipIds)
             : [{ clipId: clip.clipId, trackId: track.trackId, startSeconds: clip.startSeconds }];
-          const deltaSeconds = latest.placement.pointerTimeSeconds - clip.startSeconds;
+          const deltaSeconds =
+            placementTimeForMode(latest.placement, placementMode) - clip.startSeconds;
           const ordered = orderClipLayoutsForMove(moving, deltaSeconds);
           const commands: CutCommand[] = ordered.map((candidate) => ({
             type: 'place-clip',
@@ -515,7 +539,8 @@ export function Timeline(props: TimelineProps) {
               Math.round((candidate.startSeconds + deltaSeconds) / frameSeconds),
             ),
             rate,
-            overlapPolicy: 'insert',
+            sourcePolicy: placementMode === 'sequence' ? 'ripple' : 'preserve-gap',
+            overlapPolicy: placementMode === 'sequence' ? 'insert' : 'reject',
           }));
           if (commands.length === 1) {
             controller.command(commands[0]!);
@@ -548,6 +573,7 @@ export function Timeline(props: TimelineProps) {
       duration,
       frameSeconds,
       pixelsPerSecond,
+      placementMode,
       rate,
       selectedClipIds,
       selectedIndependentClipIds,
@@ -573,12 +599,26 @@ export function Timeline(props: TimelineProps) {
     if (!(event.target instanceof HTMLElement)) return;
     const row = event.target.closest<HTMLElement>('[data-cut-track-id]');
     const trackId = row?.dataset['cutTrackId'];
+    const track = view?.tracks.find((candidate) => candidate.trackId === trackId);
     const uris = readDroppedMediaUris(event.dataTransfer);
-    if (!trackId || uris.length === 0) {
+    if (!row || !trackId || !track || uris.length === 0) {
       showToast(t('timeline.dropMediaHere'), 'error');
       return;
     }
-    controller.dropLinkMedia(trackId, uris);
+    const pointerTimeSeconds = quantizeTimelineTime(
+      (event.clientX - row.getBoundingClientRect().left - TRACK_HEADER_WIDTH) / pixelsPerSecond,
+      frameSeconds,
+    );
+    const targetTimeSeconds =
+      placementMode === 'sequence'
+        ? timelineInsertionTime(track.items, pointerTimeSeconds)
+        : pointerTimeSeconds;
+    controller.dropLinkMedia(
+      trackId,
+      uris,
+      Math.max(0, Math.round(targetTimeSeconds * rate)),
+      overlapPolicyForMode(placementMode),
+    );
   };
   const fitAll = () => {
     const scroller = scrollRef.current;
@@ -682,6 +722,7 @@ export function Timeline(props: TimelineProps) {
         onFitAll={fitAll}
         onLinkMedia={props.onOpenPackage}
         onPixelsPerSecond={actions.setPixelsPerSecond}
+        onPlacementMode={(mode) => controller.setPlacementMode(mode)}
         onRedo={() => controller.redo()}
         onSplit={() => selectedClip && splitClip(selectedClip)}
         onToggleOverview={() => actions.setOverviewVisible(!overviewVisible)}
@@ -689,6 +730,7 @@ export function Timeline(props: TimelineProps) {
         onUndo={() => controller.undo()}
         overviewVisible={overviewVisible}
         pixelsPerSecond={pixelsPerSecond}
+        placementMode={placementMode}
         snappingEnabled={snappingEnabled}
       />
       {view && overviewVisible ? (
@@ -807,6 +849,17 @@ export function Timeline(props: TimelineProps) {
       ) : null}
     </div>
   );
+}
+
+function placementTimeForMode(
+  placement: TimelinePointerDragPreview,
+  mode: CutPlacementMode,
+): number {
+  return mode === 'sequence' ? placement.insertionTimeSeconds : placement.pointerTimeSeconds;
+}
+
+function overlapPolicyForMode(mode: CutPlacementMode): 'insert' | 'reject' {
+  return mode === 'sequence' ? 'insert' : 'reject';
 }
 
 function findSelectedClip(

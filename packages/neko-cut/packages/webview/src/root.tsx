@@ -23,8 +23,8 @@ export function CutWebviewRoot({ locale }: CutWebviewRootProps): ReactElement {
   }, [locale]);
 
   return (
-    <ErrorBoundary>
-      <I18nProvider service={i18nService}>
+    <I18nProvider service={i18nService}>
+      <ErrorBoundary>
         <ToastProvider>
           <CutPresentationStoreProvider>
             <CutOtioControllerProvider>
@@ -32,7 +32,7 @@ export function CutWebviewRoot({ locale }: CutWebviewRootProps): ReactElement {
             </CutOtioControllerProvider>
           </CutPresentationStoreProvider>
         </ToastProvider>
-      </I18nProvider>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </I18nProvider>
   );
 }

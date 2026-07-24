@@ -5,6 +5,7 @@ import {
   FrameSelectionIcon,
   GridIcon,
   LayersIcon,
+  MoveIcon,
   PlusIcon,
   RedoIcon,
   ScissorsIcon,
@@ -16,17 +17,20 @@ import {
 } from '@neko/ui/icons';
 import { MainPanelControlLayer } from '@neko/ui/workbench';
 import { useTranslation } from '../../i18n/I18nContext';
+import type { CutPlacementMode } from '../../stores/cut-presentation-store';
 import { MAX_PIXELS_PER_SECOND, MIN_PIXELS_PER_SECOND, TRACK_HEADER_WIDTH } from './timelineMath';
 
 export interface TimelineControlsProps {
   readonly pixelsPerSecond: number;
   readonly snappingEnabled: boolean;
   readonly overviewVisible: boolean;
+  readonly placementMode: CutPlacementMode;
   readonly hasSelection: boolean;
   readonly canSplit: boolean;
   readonly canAddAudioTrack: boolean;
   readonly canAddSubtitleTrack: boolean;
   readonly onPixelsPerSecond: (value: number) => void;
+  readonly onPlacementMode: (mode: CutPlacementMode) => void;
   readonly onToggleSnapping: () => void;
   readonly onToggleOverview: () => void;
   readonly onLinkMedia: () => void;
@@ -71,6 +75,19 @@ export const TimelineControls = memo(function TimelineControls(props: TimelineCo
           </ToolbarButton>
         </div>
         <div className="cut-basic-timeline-actions">
+          <ToolbarButton
+            active={props.placementMode === 'position'}
+            label={t(
+              props.placementMode === 'sequence'
+                ? 'timeline.controls.switchToPositionMode'
+                : 'timeline.controls.switchToSequenceMode',
+            )}
+            onClick={() =>
+              props.onPlacementMode(props.placementMode === 'sequence' ? 'position' : 'sequence')
+            }
+          >
+            <MoveIcon size={16} />
+          </ToolbarButton>
           <ToolbarButton
             disabled={!props.canSplit}
             label={t('timeline.controls.split')}

@@ -4,6 +4,25 @@ import { createCutPresentationStore } from '../stores/cut-presentation-store';
 import { CutOtioController } from './CutOtioController';
 
 describe('CutOtioController', () => {
+  it('accepts structured Host diagnostics and rejects the removed raw-message protocol', () => {
+    const store = createCutPresentationStore();
+    const controller = new CutOtioController(store, { postMessage: vi.fn() });
+
+    expect(
+      controller.acceptHostMessage({
+        type: 'cut:error',
+        diagnostic: { code: 'clip-placement-overlap' },
+      }),
+    ).toBe(true);
+    expect(store.getState().diagnostic).toEqual({ code: 'clip-placement-overlap' });
+    expect(() =>
+      controller.acceptHostMessage({
+        type: 'cut:error',
+        message: 'Clip placement would overlap another Clip on the target Track.',
+      }),
+    ).toThrow('invalid Cut error diagnostic');
+  });
+
   it('keeps TimelineView immutable until the Host returns a new revision', () => {
     const store = createCutPresentationStore();
     const postMessage = vi.fn();
@@ -25,6 +44,124 @@ describe('CutOtioController', () => {
     });
   });
 
+  it('enters sequence mode through a trailing-Gap trim and reverts on failure', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    const view = createViewWithTrailingGap();
+
+    controller.acceptHostMessage({ type: 'cut:view', view });
+    expect(store.getState().placementMode).toBe('position');
+
+    controller.setPlacementMode('sequence');
+    expect(store.getState().placementMode).toBe('sequence');
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'cut:command',
+      clientMutationId: 'session-1:1',
+      documentUri: view.documentUri,
+      sessionId: view.sessionId,
+      expectedRevision: view.revision,
+      command: { type: 'trim-trailing-gaps' },
+    });
+
+    controller.acceptHostMessage({
+      type: 'cut:error',
+      diagnostic: { code: 'locked' },
+    });
+    expect(store.getState().placementMode).toBe('position');
+  });
+
+  it('changes placement presentation directly when no trailing Gap requires mutation', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    controller.acceptHostMessage({ type: 'cut:view', view: createView() });
+
+    controller.setPlacementMode('position');
+    controller.setPlacementMode('sequence');
+
+    expect(store.getState().placementMode).toBe('sequence');
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
+  it('keeps sequence mode after the Host accepts the trailing-Gap trim revision', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    const view = createViewWithTrailingGap();
+    controller.acceptHostMessage({ type: 'cut:view', view });
+
+    controller.setPlacementMode('sequence');
+    controller.acceptHostMessage({
+      type: 'cut:view',
+      view: { ...createView(), revision: 5 },
+    });
+    controller.acceptHostMessage({
+      type: 'cut:mutation-result',
+      clientMutationId: 'session-1:1',
+      succeeded: true,
+      revision: 5,
+    });
+
+    expect(store.getState().placementMode).toBe('sequence');
+    expect(store.getState().view?.tracks[0]?.items.some((item) => item.kind === 'gap')).toBe(false);
+
+    controller.undo();
+    controller.acceptHostMessage({
+      type: 'cut:view',
+      view: { ...view, revision: 6 },
+    });
+    controller.acceptHostMessage({
+      type: 'cut:mutation-result',
+      clientMutationId: 'session-1:2',
+      succeeded: true,
+      revision: 6,
+    });
+
+    expect(store.getState().placementMode).toBe('position');
+  });
+
+  it('keeps a queued sequence trim bound to its own mutation result', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    const view = createViewWithTrailingGap();
+    controller.acceptHostMessage({ type: 'cut:view', view });
+
+    controller.command({ type: 'rename-clip', clipId: 'clip-1', name: 'Renamed' });
+    controller.setPlacementMode('sequence');
+    expect(postMessage).toHaveBeenCalledTimes(1);
+
+    controller.acceptHostMessage({
+      type: 'cut:view',
+      view: { ...view, revision: 5 },
+    });
+    expect(store.getState().placementMode).toBe('sequence');
+
+    controller.acceptHostMessage({
+      type: 'cut:mutation-result',
+      clientMutationId: 'session-1:1',
+      succeeded: true,
+      revision: 5,
+    });
+    expect(postMessage).toHaveBeenNthCalledWith(2, {
+      type: 'cut:command',
+      clientMutationId: 'session-1:2',
+      documentUri: view.documentUri,
+      sessionId: view.sessionId,
+      expectedRevision: 5,
+      command: { type: 'trim-trailing-gaps' },
+    });
+
+    controller.acceptHostMessage({
+      type: 'cut:mutation-result',
+      clientMutationId: 'session-1:2',
+      succeeded: false,
+      revision: 5,
+    });
+    expect(store.getState().placementMode).toBe('position');
+  });
+
   it('serializes rapid durable edits across Host revisions', () => {
     const store = createCutPresentationStore();
     const postMessage = vi.fn();
@@ -38,6 +175,7 @@ describe('CutOtioController', () => {
       toTrackId: 'track-video',
       timelineStartFrames: 30,
       rate: 30,
+      sourcePolicy: 'ripple',
       overlapPolicy: 'insert',
     });
     controller.command({
@@ -46,6 +184,7 @@ describe('CutOtioController', () => {
       toTrackId: 'track-video',
       timelineStartFrames: 60,
       rate: 30,
+      sourcePolicy: 'ripple',
       overlapPolicy: 'insert',
     });
 
@@ -62,6 +201,7 @@ describe('CutOtioController', () => {
         toTrackId: 'track-video',
         timelineStartFrames: 30,
         rate: 30,
+        sourcePolicy: 'ripple',
         overlapPolicy: 'insert',
       },
     });
@@ -90,9 +230,45 @@ describe('CutOtioController', () => {
         toTrackId: 'track-video',
         timelineStartFrames: 60,
         rate: 30,
+        sourcePolicy: 'ripple',
         overlapPolicy: 'insert',
       },
     });
+  });
+
+  it('sends explicit picker and drop placement instead of an append-only media intent', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    controller.acceptHostMessage({ type: 'cut:view', view: createView() });
+
+    controller.selectLinkMedia('track-video', 45, 'reject');
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'cut:select-link-media',
+        trackId: 'track-video',
+        timelineStartFrames: 45,
+        overlapPolicy: 'reject',
+      }),
+    );
+
+    controller.acceptHostMessage({
+      type: 'cut:mutation-result',
+      clientMutationId: 'session-1:1',
+      succeeded: false,
+      revision: 4,
+      diagnostic: { code: 'internal-failure' },
+    });
+    controller.dropLinkMedia('track-video', ['file:///workspace/a.mp4'], 90, 'insert');
+    expect(postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'cut:drop-link-media',
+        trackId: 'track-video',
+        uris: ['file:///workspace/a.mp4'],
+        timelineStartFrames: 90,
+        overlapPolicy: 'insert',
+      }),
+    );
   });
 
   it('defers playback until the preceding edit revision is accepted', () => {
@@ -125,8 +301,54 @@ describe('CutOtioController', () => {
       sessionId: view.sessionId,
       expectedRevision: 5,
       timelineTimeSeconds: 1.5,
+      generation: 1,
     });
     expect(store.getState().isPlaying).toBe(true);
+  });
+
+  it('assigns a monotonically increasing generation to rapid preview requests', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    controller.acceptHostMessage({ type: 'cut:view', view: createView() });
+
+    expect(controller.startPreview(1)).toBe(1);
+    expect(controller.startPreview(2)).toBe(2);
+
+    expect(postMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ type: 'cut:preview-start', generation: 2 }),
+    );
+  });
+
+  it('prepares and activates one exact preview generation at a Clip boundary', () => {
+    const store = createCutPresentationStore();
+    const postMessage = vi.fn();
+    const controller = new CutOtioController(store, { postMessage });
+    controller.acceptHostMessage({ type: 'cut:view', view: createView() });
+
+    controller.startPreview(0);
+    const preparedGeneration = controller.preparePreview(4);
+    controller.activatePreview(preparedGeneration);
+
+    expect(postMessage).toHaveBeenNthCalledWith(2, {
+      type: 'cut:preview-prepare',
+      documentUri: 'file:///workspace/project.otio',
+      sessionId: 'session-1',
+      expectedRevision: 4,
+      timelineTimeSeconds: 4,
+      generation: 2,
+    });
+    expect(postMessage).toHaveBeenNthCalledWith(3, {
+      type: 'cut:preview-activate',
+      documentUri: 'file:///workspace/project.otio',
+      sessionId: 'session-1',
+      expectedRevision: 4,
+      generation: 2,
+    });
+    expect(() => controller.activatePreview(1)).toThrow(
+      'Cannot activate stale Cut preview generation',
+    );
   });
 
   it('stores only presentation state and clears selection removed by a Host revision', () => {
@@ -249,8 +471,10 @@ describe('CutOtioController', () => {
     const controller = new CutOtioController(store, { postMessage: vi.fn() }, { onPreviewReady });
     const message = {
       type: 'cut:preview-ready',
+      generation: 1,
       timelineTimeSeconds: 2,
       segmentEndSeconds: 4,
+      playbackEndSeconds: 4,
       width: 1920,
       height: 1080,
       framesPerSecond: 30,
@@ -268,7 +492,17 @@ describe('CutOtioController', () => {
     const controller = new CutOtioController(store, { postMessage });
     controller.acceptHostMessage({ type: 'cut:view', view: createView() });
 
-    controller.startExport();
+    controller.startExport({
+      outputName: 'Project',
+      container: 'mp4',
+      width: 1280,
+      height: 720,
+      framesPerSecond: 24,
+      videoBitrate: 8_000_000,
+      includeAudio: true,
+      audioBitrate: 192_000,
+      audioSampleRate: 48_000,
+    });
     controller.acceptHostMessage({
       type: 'cut:export-task',
       task: {
@@ -276,6 +510,17 @@ describe('CutOtioController', () => {
         documentUri: 'file:///workspace/project.otio',
         sessionId: 'session-1',
         sourceRevision: 4,
+        settings: {
+          outputName: 'Project',
+          container: 'mp4',
+          width: 1280,
+          height: 720,
+          framesPerSecond: 24,
+          videoBitrate: 8_000_000,
+          includeAudio: true,
+          audioBitrate: 192_000,
+          audioSampleRate: 48_000,
+        },
         outputWorkspaceRelativePath: 'exports/project.mp4',
         status: 'running',
         startedAt: 100,
@@ -289,6 +534,17 @@ describe('CutOtioController', () => {
       documentUri: 'file:///workspace/project.otio',
       sessionId: 'session-1',
       expectedRevision: 4,
+      settings: {
+        outputName: 'Project',
+        container: 'mp4',
+        width: 1280,
+        height: 720,
+        framesPerSecond: 24,
+        videoBitrate: 8_000_000,
+        includeAudio: true,
+        audioBitrate: 192_000,
+        audioSampleRate: 48_000,
+      },
     });
     expect(postMessage).toHaveBeenNthCalledWith(2, {
       type: 'cut:export-cancel',
@@ -472,6 +728,29 @@ function createTwoClipView(): TimelineView {
             clipId: 'clip-2',
             name: 'Clip 2',
             startSeconds: 3,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function createViewWithTrailingGap(): TimelineView {
+  const view = createView();
+  const track = view.tracks[0];
+  if (!track) throw new Error('Track fixture is missing.');
+  return {
+    ...view,
+    durationSeconds: 13,
+    tracks: [
+      {
+        ...track,
+        items: [
+          ...track.items,
+          {
+            kind: 'gap',
+            startSeconds: 3,
+            durationSeconds: 10,
           },
         ],
       },

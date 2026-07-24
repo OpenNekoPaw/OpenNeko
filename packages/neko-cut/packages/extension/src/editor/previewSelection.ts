@@ -1,4 +1,8 @@
-import type { TimelineClipView, TimelineView } from '@neko-cut/domain';
+import {
+  resolveTimelinePlaybackEndSeconds,
+  type TimelineClipView,
+  type TimelineView,
+} from '@neko-cut/domain';
 
 export interface CutPreviewSelection {
   readonly timelineTimeSeconds: number;
@@ -6,7 +10,10 @@ export interface CutPreviewSelection {
   readonly videoAudioMuted: boolean;
   readonly audioClips: readonly TimelineClipView[];
   readonly segmentEndSeconds: number;
+  readonly playbackEndSeconds: number;
 }
+
+export const resolvePreviewPlaybackEnd = resolveTimelinePlaybackEndSeconds;
 
 export function resolvePreviewSelection(
   view: TimelineView,
@@ -15,8 +22,9 @@ export function resolvePreviewSelection(
   if (!Number.isFinite(timelineTimeSeconds) || timelineTimeSeconds < 0) {
     throw new Error('Cut preview timeline time must be a non-negative finite number.');
   }
-  if (timelineTimeSeconds >= view.durationSeconds) {
-    throw new Error('Cut preview timeline time must be before the timeline end.');
+  const playbackEndSeconds = resolveTimelinePlaybackEndSeconds(view);
+  if (timelineTimeSeconds >= playbackEndSeconds) {
+    throw new Error('Cut preview timeline time must be before the final enabled media end.');
   }
   const videoTrack = view.tracks.find((track) => track.enabled && track.kind === 'Video');
   const videoClip = activeClips(view, 'Video', timelineTimeSeconds)[0];
@@ -25,11 +33,16 @@ export function resolvePreviewSelection(
     ...(videoClip ? { videoClip } : {}),
     videoAudioMuted: videoTrack?.audioMuted ?? false,
     audioClips: activeClips(view, 'Audio', timelineTimeSeconds).filter((clip) => !clip.audio.muted),
-    segmentEndSeconds: nextInputBoundary(view, timelineTimeSeconds),
+    segmentEndSeconds: nextInputBoundary(view, timelineTimeSeconds, playbackEndSeconds),
+    playbackEndSeconds,
   };
 }
 
-function nextInputBoundary(view: TimelineView, timelineTimeSeconds: number): number {
+function nextInputBoundary(
+  view: TimelineView,
+  timelineTimeSeconds: number,
+  playbackEndSeconds: number,
+): number {
   const boundary = view.tracks
     .filter(
       (track) =>
@@ -39,7 +52,7 @@ function nextInputBoundary(view: TimelineView, timelineTimeSeconds: number): num
     .filter((item) => item.kind !== 'clip' || item.enabled)
     .flatMap((item) => [item.startSeconds, item.startSeconds + item.durationSeconds])
     .filter((candidate) => candidate > timelineTimeSeconds)
-    .reduce((nearest, candidate) => Math.min(nearest, candidate), view.durationSeconds);
+    .reduce((nearest, candidate) => Math.min(nearest, candidate), playbackEndSeconds);
   if (boundary <= timelineTimeSeconds) {
     throw new Error('Cut preview segment does not have a future media boundary.');
   }

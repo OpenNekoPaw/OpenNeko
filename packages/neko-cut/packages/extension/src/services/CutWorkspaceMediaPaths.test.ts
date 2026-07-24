@@ -78,6 +78,8 @@ describe('CutWorkspaceMediaPaths', () => {
       durationFrames: 30,
       rate: 30,
       trackId: 'video-1',
+      timelineStartFrames: 0,
+      overlapPolicy: 'reject',
     });
 
     const rebased = await paths.rebaseDocument(document, oldDocument, newDocument);

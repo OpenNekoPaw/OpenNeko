@@ -11,6 +11,17 @@ describe('CutExportTaskRegistry', () => {
       documentUri: 'file:///workspace/demo.otio',
       sessionId: 'session-1',
       sourceRevision: 4,
+      settings: {
+        outputName: 'Project',
+        container: 'mp4',
+        width: 1920,
+        height: 1080,
+        framesPerSecond: 30,
+        videoBitrate: 8_000_000,
+        includeAudio: true,
+        audioBitrate: 192_000,
+        audioSampleRate: 48_000,
+      },
       outputWorkspaceRelativePath: 'exports/demo.mp4',
       run: () => new Promise<void>((resolve) => (finish = resolve)),
     });
@@ -34,6 +45,17 @@ describe('CutExportTaskRegistry', () => {
       documentUri: 'file:///workspace/demo.otio',
       sessionId: 'session-1',
       sourceRevision: 1,
+      settings: {
+        outputName: 'Project',
+        container: 'mp4',
+        width: 1920,
+        height: 1080,
+        framesPerSecond: 30,
+        videoBitrate: 8_000_000,
+        includeAudio: true,
+        audioBitrate: 192_000,
+        audioSampleRate: 48_000,
+      },
       outputWorkspaceRelativePath: 'exports/demo.mp4',
       run: (nextSignal) => {
         signal = nextSignal;
@@ -47,5 +69,38 @@ describe('CutExportTaskRegistry', () => {
     registry.cancel('file:///workspace/demo.otio', 'job-1');
     expect(signal?.aborted).toBe(true);
     expect(registry.get('job-1')?.status).toBe('cancelled');
+  });
+
+  it('publishes a structured failure diagnostic without exposing the raw provider message', async () => {
+    const registry = new CutExportTaskRegistry(
+      () => undefined,
+      () => 'job-1',
+    );
+    registry.start({
+      documentUri: 'file:///workspace/demo.otio',
+      sessionId: 'session-1',
+      sourceRevision: 1,
+      settings: {
+        outputName: 'Project',
+        container: 'mp4',
+        width: 1920,
+        height: 1080,
+        framesPerSecond: 30,
+        videoBitrate: 8_000_000,
+        includeAudio: true,
+        audioBitrate: 192_000,
+        audioSampleRate: 48_000,
+      },
+      outputWorkspaceRelativePath: 'exports/demo.mp4',
+      run: async () => {
+        throw new Error('codec exploded');
+      },
+    });
+
+    await vi.waitFor(() => expect(registry.get('job-1')?.status).toBe('failed'));
+    expect(registry.get('job-1')).toMatchObject({
+      diagnostic: { code: 'export-failed' },
+    });
+    expect(registry.get('job-1')).not.toHaveProperty('error');
   });
 });

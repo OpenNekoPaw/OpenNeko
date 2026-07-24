@@ -8,6 +8,7 @@ import {
 import type {
   CutClipRepresentationResult,
   CutExportTaskSnapshot,
+  CutUserDiagnostic,
   TimelineView,
 } from '@neko-cut/domain';
 import { createStore, type StoreApi } from 'zustand/vanilla';
@@ -25,6 +26,7 @@ export type CutPresentationSelection =
   | { readonly kind: 'track'; readonly trackId: string };
 
 export type CutPresentationSelectionMode = 'replace' | 'add' | 'toggle';
+export type CutPlacementMode = 'sequence' | 'position';
 
 export type CutPresentationClipboard =
   | {
@@ -58,12 +60,13 @@ export interface CutPresentationState {
   readonly previewMuted: boolean;
   readonly pixelsPerSecond: number;
   readonly snappingEnabled: boolean;
+  readonly placementMode: CutPlacementMode;
   readonly overviewVisible: boolean;
   readonly inspectorVisible: boolean;
   readonly gestureDraft?: CutClipGestureDraft;
   readonly exportTasks: readonly CutExportTaskSnapshot[];
   readonly representations: ReadonlyMap<string, CutClipRepresentationResult>;
-  readonly diagnostic?: string;
+  readonly diagnostic?: CutUserDiagnostic;
   readonly actions: CutPresentationActions;
 }
 
@@ -84,10 +87,11 @@ export interface CutPresentationActions {
   readonly togglePreviewMute: () => void;
   readonly setPixelsPerSecond: (pixelsPerSecond: number) => void;
   readonly toggleSnapping: () => void;
+  readonly setPlacementMode: (mode: CutPlacementMode) => void;
   readonly setOverviewVisible: (visible: boolean) => void;
   readonly setInspectorVisible: (visible: boolean) => void;
   readonly setGestureDraft: (draft: CutClipGestureDraft | undefined) => void;
-  readonly reportDiagnostic: (diagnostic: string) => void;
+  readonly reportDiagnostic: (diagnostic: CutUserDiagnostic) => void;
   readonly clearDiagnostic: () => void;
 }
 
@@ -103,6 +107,7 @@ export function createCutPresentationStore(): CutPresentationStore {
     previewMuted: false,
     pixelsPerSecond: 80,
     snappingEnabled: true,
+    placementMode: 'sequence',
     overviewVisible: true,
     inspectorVisible: true,
     selectedClips: [],
@@ -167,6 +172,7 @@ export function createCutPresentationStore(): CutPresentationStore {
       setPixelsPerSecond: (pixelsPerSecond) =>
         set({ pixelsPerSecond: clamp(pixelsPerSecond, 8, 480) }),
       toggleSnapping: () => set((state) => ({ snappingEnabled: !state.snappingEnabled })),
+      setPlacementMode: (placementMode) => set({ placementMode }),
       setOverviewVisible: (overviewVisible) => set({ overviewVisible }),
       setInspectorVisible: (inspectorVisible) => set({ inspectorVisible }),
       setGestureDraft: (gestureDraft) => set({ gestureDraft }),

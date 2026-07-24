@@ -7,8 +7,9 @@ import {
   quantizeTimelineDelta,
   quantizeTimelineTime,
   readClipTrimCapacity,
-  retainTimelineCanvasDuration,
+  resolveTimelineCanvasDuration,
   snapTimelineTime,
+  timelineStructureSignature,
   timelineTimeFromClientX,
   TRACK_HEADER_WIDTH,
 } from './timelineMath';
@@ -35,10 +36,44 @@ describe('timeline presentation math', () => {
     expect(quantizeTimelineDelta(-0.049, 1 / 30)).toBeCloseTo(-1 / 30);
   });
 
-  it('retains the timeline canvas extent when an edge trim shortens the document', () => {
-    expect(retainTimelineCanvasDuration(45, 30)).toBe(45);
-    expect(retainTimelineCanvasDuration(45, 60)).toBe(60);
-    expect(retainTimelineCanvasDuration(undefined, 4)).toBe(10);
+  it('retains trim extent but shrinks after the item structure changes', () => {
+    expect(
+      resolveTimelineCanvasDuration({
+        previous: { duration: 45, structureSignature: 'track:clip-a|clip-b' },
+        projectedDuration: 30,
+        structureSignature: 'track:clip-a|clip-b',
+      }),
+    ).toBe(45);
+    expect(
+      resolveTimelineCanvasDuration({
+        previous: { duration: 45, structureSignature: 'track:clip-a|clip-b' },
+        projectedDuration: 30,
+        structureSignature: 'track:clip-a',
+      }),
+    ).toBe(30);
+    expect(
+      resolveTimelineCanvasDuration({
+        projectedDuration: 4,
+        structureSignature: 'track:clip-a',
+      }),
+    ).toBe(10);
+    expect(timelineStructureSignature([{ trackId: 'track', items }])).not.toBe(
+      timelineStructureSignature([{ trackId: 'track', items: items.slice(0, 1) }]),
+    );
+    expect(
+      timelineStructureSignature([
+        {
+          trackId: 'track',
+          items: [
+            items[0]!,
+            {
+              ...items[1]!,
+              durationSeconds: 2,
+            },
+          ],
+        },
+      ]),
+    ).toBe(timelineStructureSignature([{ trackId: 'track', items }]));
   });
 
   it('derives independent start/end extension from a non-zero available range', () => {

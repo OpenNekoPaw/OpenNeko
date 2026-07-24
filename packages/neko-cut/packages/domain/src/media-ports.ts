@@ -90,27 +90,51 @@ export interface VideoPreviewPort {
       readonly startTimeSeconds: number;
       readonly includeAudio: boolean;
       readonly playbackRate: number;
+      readonly startPaused: boolean;
     },
     signal?: AbortSignal,
   ): Promise<CutPreviewSession>;
+  resumePreview(sessionId: string): Promise<void>;
   stopPreview(sessionId: string): Promise<void>;
 }
 
 export interface AudioPcmStreamPort {
   startPcm(
     source: CutRuntimeMediaSource,
-    options: { readonly startTimeSeconds: number; readonly playbackRate: number },
+    options: {
+      readonly startTimeSeconds: number;
+      readonly playbackRate: number;
+      readonly startPaused: boolean;
+    },
     signal?: AbortSignal,
   ): Promise<{ readonly sessionId: string; readonly streamUrl: string }>;
+  resumePcm(sessionId: string): Promise<void>;
   stopPcm(sessionId: string): Promise<void>;
 }
 
 export interface ExportJobPort {
   export(
-    timeline: TimelineView,
-    outputWorkspaceRelativePath: string,
+    request: CutExportRequest,
     signal?: AbortSignal,
   ): Promise<{ readonly outputWorkspaceRelativePath: string }>;
+}
+
+export interface CutExportSettings {
+  readonly outputName: string;
+  readonly container: 'mp4' | 'mov';
+  readonly width: number;
+  readonly height: number;
+  readonly framesPerSecond: number;
+  readonly videoBitrate: number;
+  readonly includeAudio: boolean;
+  readonly audioBitrate: number;
+  readonly audioSampleRate: 44_100 | 48_000;
+}
+
+export interface CutExportRequest {
+  readonly timeline: TimelineView;
+  readonly outputWorkspaceRelativePath: string;
+  readonly settings: CutExportSettings;
 }
 
 export class CutMediaRuntimeUnavailableError extends Error {

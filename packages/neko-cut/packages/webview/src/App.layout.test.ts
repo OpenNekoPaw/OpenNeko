@@ -19,6 +19,7 @@ describe('Cut OTIO Webview boundary', () => {
   const exportPanel = source('components/Timeline/export/ExportPanel.tsx');
   const exportConfig = source('components/Timeline/export/ExportConfigView.tsx');
   const exportProgress = source('components/Timeline/export/ExportProgressView.tsx');
+  const errorBoundary = source('components/ErrorBoundary/ErrorBoundary.tsx');
   const representations = source('hooks/useClipRepresentations.ts');
   const contextMenu = source('hooks/useTimelineContextMenu.ts');
   const styles = source('index.css');
@@ -100,7 +101,7 @@ describe('Cut OTIO Webview boundary', () => {
     expect(overview).toMatch(/role="scrollbar"/);
     expect(app).toMatch(/usePersistedResize/);
     expect(app).toMatch(/useResizable<HTMLDivElement>/);
-    expect(app).toMatch(/edge: 'left'/);
+    expect(app).toMatch(/edge: 'right'/);
     expect(styles).toMatch(/\.cut-basic-timeline-scroll[\s\S]*overflow: auto/);
     expect(styles).toMatch(/\.cut-basic-track-header[\s\S]*position: sticky/);
   });
@@ -108,6 +109,16 @@ describe('Cut OTIO Webview boundary', () => {
   it('owns Inspector visibility in PreviewControls without a collapsed right rail or Timeline toggle', () => {
     expect(app).toMatch(
       /<PreviewControls[\s\S]*propertyPanelVisible=\{!inspectorLayout\.collapsed\}/,
+    );
+    expect(app).toMatch(
+      /usePersistedResize\('cut\.inspector', 280, \{ minSize: 220, maxSize: 420 \}\)/,
+    );
+    expect(app).toMatch(/useResizable<HTMLElement>\(\{[\s\S]*edge: 'right'/);
+    expect(styles).toMatch(
+      /\.cut-basic-inspector-shell\s*\{[^}]*min-width:\s*220px;[^}]*max-width:\s*min\(420px,\s*max\(220px,\s*42vw\)\);[^}]*padding-left:\s*5px;/,
+    );
+    expect(styles).toMatch(
+      /\.cut-basic-inspector-resize-handle\s*\{[^}]*inset:\s*0 auto 0 0;[^}]*width:\s*5px;[^}]*border-left:\s*1px solid var\(--vscode-panel-border\);[^}]*border-right:\s*1px solid var\(--vscode-panel-border\);/,
     );
     expect(previewControls).toMatch(/onTogglePropertyPanel/);
     expect(previewControls).toMatch(/timeline\.controls\.propertyPanel/);
@@ -126,8 +137,27 @@ describe('Cut OTIO Webview boundary', () => {
 
   it('keeps preview stream ownership in the controller layer and consumes all audio streams', () => {
     expect(app).toMatch(/EngineAvStreamLifecycle/);
+    expect(app).toMatch(/PreviewAudioContextOwner/);
+    expect(app).toMatch(/contextForConnection\(\)/);
+    expect(app).toMatch(/\{ audioContext \}/);
     expect(app).toMatch(/additionalAudioStreamUrls\.map/);
     expect(app).toMatch(/new AudioStreamClient/);
+    expect(app).toMatch(/frame\.timestamp \/ 1_000_000/);
+    expect(app).toMatch(/setClockPlaybackRate\(message\.mediaPlaybackRate \?\? 1\)/);
+    expect(app).toMatch(/timelineEndSeconds: prepared\.playbackEndSeconds/);
     expect(app).toMatch(/controller\.startPreview\(playheadSeconds\)/);
+    expect(app).toMatch(/controller\.preparePreview\(playheadSeconds\)/);
+    expect(app).toMatch(/controller\.activatePreview\(generation\)/);
+    expect(app.match(/controller\.startPreview\(/g)).toHaveLength(1);
+  });
+
+  it('projects localized failures through the retained Toast surface only', () => {
+    expect(root).toMatch(/<ToastProvider>/);
+    expect(app).toMatch(/useToast/);
+    expect(app).toMatch(/translateCutDiagnostic/);
+    expect(app).not.toMatch(/cut-basic-error|cut-basic-notice/);
+    expect(styles).not.toMatch(/\.cut-basic-error|\.cut-basic-notice/);
+    expect(errorBoundary).toMatch(/useTranslation/);
+    expect(errorBoundary).not.toMatch(/error\.message|Something went wrong|Try again/);
   });
 });

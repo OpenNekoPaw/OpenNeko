@@ -6,5 +6,15 @@
   "{0} Clips": "{0} 个片段",
   "{0} Tracks": "{0} 条轨道",
   "Duration: {0}": "时长：{0}",
-  "Unsaved changes": "有未保存的更改"
+  "Unsaved changes": "有未保存的更改",
+  "Export Cut media": "导出 Cut 媒体",
+  "Cut: {0}": "Cut：{0}",
+  "{0} exports": "{0} 个导出任务",
+  "Exporting {0}": "正在导出 {0}",
+  "Export completed: {0}": "导出已完成：{0}",
+  "Cut export failed": "Cut 导出失败",
+  "Export failed: {0}": "导出失败：{0}",
+  "Cut export cancelled": "Cut 导出已取消",
+  "Export cancelled: {0}": "导出已取消：{0}",
+  "Unknown error": "未知错误"
 }

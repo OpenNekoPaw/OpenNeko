@@ -35,14 +35,14 @@ describe('NekoEngineCutMediaAdapter', () => {
     });
 
     await expect(adapter.probe({ workspaceRelativePath: 'media/shot.mp4' })).resolves.toEqual({
-      durationSeconds: 3,
+      durationSeconds: 2,
       width: 1920,
       height: 1080,
       framesPerSecond: 30,
       hasVideo: true,
       hasAudio: true,
       audioChannels: 2,
-      audioSampleRate: 48_000,
+      audioSampleRate: 48_000 as const,
     });
     expect(engine.probe).toHaveBeenCalledWith('videos', '/workspace/media/shot.mp4');
   });
@@ -55,7 +55,7 @@ describe('NekoEngineCutMediaAdapter', () => {
 
     await expect(
       adapter.generateWaveform({ workspaceRelativePath: 'media/shot.mp4' }, { peaksPerSecond: 20 }),
-    ).resolves.toEqual({ peaks: [], durationSeconds: 3, peaksPerSecond: 10 });
+    ).resolves.toEqual({ peaks: [], durationSeconds: 2, peaksPerSecond: 10 });
     expect(engine.waveform).toHaveBeenCalledWith('/workspace/media/shot.mp4', {
       peaksPerSecond: 20,
     });
@@ -69,11 +69,11 @@ describe('NekoEngineCutMediaAdapter', () => {
 
     const preview = await adapter.startPreview(
       { workspaceRelativePath: 'media/shot.mp4' },
-      { startTimeSeconds: 0, includeAudio: true, playbackRate: 1 },
+      { startTimeSeconds: 0, includeAudio: true, playbackRate: 1, startPaused: false },
     );
     const pcm = await adapter.startPcm(
       { workspaceRelativePath: 'media/shot.mp4' },
-      { startTimeSeconds: 0, playbackRate: 1 },
+      { startTimeSeconds: 0, playbackRate: 1, startPaused: false },
     );
     expect(preview).toMatchObject({
       sessionId: 'cut-media-1',
@@ -92,6 +92,37 @@ describe('NekoEngineCutMediaAdapter', () => {
     );
   });
 
+  it('keeps prepared preview streams paused until the owning session is resumed', async () => {
+    const engine = createEnginePort();
+    const adapter = new NekoEngineCutMediaAdapter('/workspace', {
+      ensureClient: async () => engine,
+    });
+
+    const preview = await adapter.startPreview(
+      { workspaceRelativePath: 'media/shot.mp4' },
+      { startTimeSeconds: 0, includeAudio: true, playbackRate: 1, startPaused: true },
+    );
+    expect(engine.createStream).toHaveBeenNthCalledWith(1, 'videos', '/workspace/media/shot.mp4', {
+      initialPaused: true,
+      sessionId: expect.stringMatching(/^playback-/),
+      speed: 1,
+      startTime: 0,
+    });
+    expect(engine.createStream).toHaveBeenNthCalledWith(2, 'audios', '/workspace/media/shot.mp4', {
+      initialPaused: true,
+      sessionId: expect.stringMatching(/^playback-audio-/),
+      speed: 1,
+      startTime: 0,
+    });
+    expect(engine.controlStream).not.toHaveBeenCalled();
+
+    await adapter.resumePreview(preview.sessionId);
+
+    expect(engine.controlStream).toHaveBeenCalledWith('videos', 'video-1', 'resume', undefined);
+    expect(engine.controlStream).toHaveBeenCalledWith('audios', 'audio-1', 'resume', undefined);
+    await adapter.stopPreview(preview.sessionId);
+  });
+
   it('projects constant Clip speed to every preview stream', async () => {
     const engine = createEnginePort();
     const adapter = new NekoEngineCutMediaAdapter('/workspace', {
@@ -100,21 +131,22 @@ describe('NekoEngineCutMediaAdapter', () => {
 
     const preview = await adapter.startPreview(
       { workspaceRelativePath: 'media/shot.mp4' },
-      { startTimeSeconds: 1.5, includeAudio: true, playbackRate: 2 },
+      { startTimeSeconds: 1.5, includeAudio: true, playbackRate: 2, startPaused: false },
     );
 
-    expect(engine.controlStream).toHaveBeenCalledWith('videos', 'video-1', 'seek', {
-      time: 1.5,
-    });
-    expect(engine.controlStream).toHaveBeenCalledWith('audios', 'audio-1', 'seek', {
-      time: 1.5,
-    });
-    expect(engine.controlStream).toHaveBeenCalledWith('videos', 'video-1', 'speed', {
+    expect(engine.createStream).toHaveBeenNthCalledWith(1, 'videos', '/workspace/media/shot.mp4', {
+      initialPaused: false,
+      sessionId: expect.stringMatching(/^playback-/),
       speed: 2,
+      startTime: 1.5,
     });
-    expect(engine.controlStream).toHaveBeenCalledWith('audios', 'audio-1', 'speed', {
+    expect(engine.createStream).toHaveBeenNthCalledWith(2, 'audios', '/workspace/media/shot.mp4', {
+      initialPaused: false,
+      sessionId: expect.stringMatching(/^playback-audio-/),
       speed: 2,
+      startTime: 1.5,
     });
+    expect(engine.controlStream).not.toHaveBeenCalled();
 
     await adapter.stopPreview(preview.sessionId);
   });
@@ -154,7 +186,7 @@ describe('NekoEngineCutMediaAdapter', () => {
     await expect(
       adapter.startPreview(
         { workspaceRelativePath: 'media/shot.mp4' },
-        { startTimeSeconds: 0, includeAudio: true, playbackRate: 1 },
+        { startTimeSeconds: 0, includeAudio: true, playbackRate: 1, startPaused: false },
         controller.signal,
       ),
     ).rejects.toThrow('cancelled after acquisition');
@@ -170,7 +202,7 @@ describe('NekoEngineCutMediaAdapter', () => {
     });
     const preview = await adapter.startPreview(
       { workspaceRelativePath: 'media/shot.mp4' },
-      { startTimeSeconds: 0, includeAudio: true, playbackRate: 1 },
+      { startTimeSeconds: 0, includeAudio: true, playbackRate: 1, startPaused: false },
     );
 
     await expect(adapter.stopPreview(preview.sessionId)).rejects.toBeInstanceOf(
@@ -208,7 +240,7 @@ describe('NekoEngineCutMediaAdapter', () => {
       ensureClient: async () => engine,
     });
 
-    await expect(adapter.export(workspace.timeline, 'exports/demo.mp4')).resolves.toEqual({
+    await expect(adapter.export(exportRequest(workspace.timeline))).resolves.toEqual({
       outputWorkspaceRelativePath: 'exports/demo.mp4',
     });
     await expect(nodeFs.readFile(workspace.output, 'utf8')).resolves.toBe('new-output');
@@ -264,7 +296,7 @@ describe('NekoEngineCutMediaAdapter', () => {
       ensureClient: async () => engine,
     });
 
-    await adapter.export(timeline, 'exports/demo.mp4');
+    await adapter.export(exportRequest(timeline));
 
     expect(findExportRequest(engine)).toMatchObject({
       body: {
@@ -276,6 +308,297 @@ describe('NekoEngineCutMediaAdapter', () => {
         },
       },
     });
+  });
+
+  it('projects mixed Clip timing, trim, speed and audio settings from one frozen view', async () => {
+    const workspace = await createExportWorkspace(temporaryDirectories);
+    const videoTrack = workspace.timeline.tracks[0];
+    const audioTrack = workspace.timeline.tracks[1];
+    const videoClip = videoTrack?.items[0];
+    const audioClip = audioTrack?.items[0];
+    if (
+      !videoTrack ||
+      !audioTrack ||
+      !videoClip ||
+      videoClip.kind !== 'clip' ||
+      !audioClip ||
+      audioClip.kind !== 'clip'
+    ) {
+      throw new Error('Mixed export fixture Clips are unavailable.');
+    }
+    const timeline: TimelineView = {
+      ...workspace.timeline,
+      durationSeconds: 5,
+      tracks: [
+        {
+          ...videoTrack,
+          items: [
+            { kind: 'gap', startSeconds: 0, durationSeconds: 1 },
+            {
+              ...videoClip,
+              startSeconds: 1,
+              durationSeconds: 4,
+              sourceStartSeconds: 3,
+              playbackRate: 2,
+              audio: { muted: false, gainDb: -3, fadeInSeconds: 0.25, fadeOutSeconds: 0.5 },
+            },
+          ],
+        },
+        {
+          ...audioTrack,
+          items: [
+            {
+              ...audioClip,
+              startSeconds: 1,
+              durationSeconds: 4,
+              sourceStartSeconds: 3,
+              playbackRate: 2,
+              audio: { muted: false, gainDb: -6, fadeInSeconds: 0.75, fadeOutSeconds: 1 },
+            },
+          ],
+        },
+      ],
+    };
+    const engine = createEnginePort();
+    vi.mocked(engine.probe).mockResolvedValue({
+      duration: 5,
+      width: 1920,
+      height: 1080,
+      fps: 24,
+      codec: 'h264',
+      format: 'mp4',
+      hasAudio: true,
+      audioChannels: 2,
+      audioSampleRate: 48_000 as const,
+    });
+    vi.mocked(engine.dispatch).mockImplementation(async (request: ActionRequest) => {
+      if (request.action === 'export_enqueue') {
+        const body = requireRecord(request.body);
+        await nodeFs.writeFile(requireString(body['outputPath']), 'new-output');
+      }
+      if (request.action === 'export_progress') return okResponse({ state: 'completed' });
+      return okResponse();
+    });
+    const adapter = new NekoEngineCutMediaAdapter(workspace.root, {
+      ensureClient: async () => engine,
+    });
+
+    await adapter.export({
+      timeline,
+      outputWorkspaceRelativePath: 'exports/demo.mp4',
+      settings: {
+        outputName: 'Project',
+        container: 'mp4' as const,
+        width: 1280,
+        height: 720,
+        framesPerSecond: 24,
+        videoBitrate: 8_000_000,
+        includeAudio: true,
+        audioBitrate: 192_000,
+        audioSampleRate: 48_000 as const,
+      },
+    });
+
+    expect(findExportRequest(engine)).toMatchObject({
+      body: {
+        settings: { width: 1280, height: 720, fps: 24 },
+        timeline: {
+          duration: 5,
+          resolution: { width: 1280, height: 720 },
+          fps: 24,
+          tracks: [
+            {
+              elements: [
+                {
+                  id: 'clip-1',
+                  startTime: 1,
+                  duration: 4,
+                  trimStart: 3,
+                  speed: { speed: 2 },
+                  audio: { gain: -3, fadeIn: 0.25, fadeOut: 0.5 },
+                },
+              ],
+            },
+            {
+              elements: [
+                {
+                  id: 'audio-1',
+                  startTime: 1,
+                  duration: 4,
+                  trimStart: 3,
+                  speed: { speed: 2 },
+                  audio: { gain: -6, fadeIn: 0.75, fadeOut: 1 },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+  });
+
+  it('exports the final enabled media end instead of the retained presentation extent', async () => {
+    const workspace = await createExportWorkspace(temporaryDirectories);
+    const timeline: TimelineView = {
+      ...workspace.timeline,
+      durationSeconds: 50.89,
+    };
+    const engine = createEnginePort();
+    vi.mocked(engine.probe).mockResolvedValue({
+      duration: 2,
+      width: 1920,
+      height: 1080,
+      fps: 30,
+      codec: 'h264',
+      format: 'mp4',
+      hasAudio: true,
+      audioChannels: 2,
+      audioSampleRate: 48_000 as const,
+    });
+    vi.mocked(engine.dispatch).mockImplementation(async (request: ActionRequest) => {
+      if (request.action === 'export_enqueue') {
+        const body = requireRecord(request.body);
+        await nodeFs.writeFile(requireString(body['outputPath']), 'new-output');
+      }
+      if (request.action === 'export_progress') return okResponse({ state: 'completed' });
+      return okResponse();
+    });
+    const adapter = new NekoEngineCutMediaAdapter(workspace.root, {
+      ensureClient: async () => engine,
+    });
+
+    await expect(adapter.export(exportRequest(timeline))).resolves.toEqual({
+      outputWorkspaceRelativePath: 'exports/demo.mp4',
+    });
+
+    expect(findExportRequest(engine)).toMatchObject({
+      body: {
+        timeline: {
+          duration: 2,
+        },
+      },
+    });
+  });
+
+  it('marks embedded audio only on Video sources whose probe reports audio', async () => {
+    const workspace = await createExportWorkspace(temporaryDirectories);
+    const videoTrack = workspace.timeline.tracks[0];
+    const videoClip = videoTrack?.items[0];
+    if (!videoTrack || !videoClip || videoClip.kind !== 'clip') {
+      throw new Error('Video export fixture is unavailable.');
+    }
+    await nodeFs.writeFile(nodePath.join(workspace.root, 'media', 'silent.mp4'), 'silent-source');
+    const timeline: TimelineView = {
+      ...workspace.timeline,
+      tracks: [
+        {
+          ...videoTrack,
+          items: [
+            { ...videoClip, durationSeconds: 1 },
+            {
+              ...videoClip,
+              clipId: 'clip-silent',
+              targetUrl: '../media/silent.mp4',
+              startSeconds: 1,
+              durationSeconds: 1,
+            },
+          ],
+        },
+      ],
+    };
+    const engine = createEnginePort();
+    vi.mocked(engine.probe).mockImplementation(async (_group, source) => ({
+      duration: 2,
+      width: 1920,
+      height: 1080,
+      fps: 30,
+      codec: 'h264',
+      format: 'mp4',
+      hasAudio: !source.endsWith('silent.mp4'),
+      ...(!source.endsWith('silent.mp4')
+        ? { audioChannels: 2, audioSampleRate: 48_000 as const }
+        : {}),
+    }));
+    vi.mocked(engine.dispatch).mockImplementation(async (request: ActionRequest) => {
+      if (request.action === 'export_enqueue') {
+        const body = requireRecord(request.body);
+        await nodeFs.writeFile(requireString(body['outputPath']), 'new-output');
+      }
+      if (request.action === 'export_progress') return okResponse({ state: 'completed' });
+      return okResponse();
+    });
+    const adapter = new NekoEngineCutMediaAdapter(workspace.root, {
+      ensureClient: async () => engine,
+    });
+
+    await adapter.export(exportRequest(timeline));
+
+    const request = requireRecord(findExportRequest(engine).body);
+    const projectedTimeline = requireRecord(request['timeline']);
+    const tracks = projectedTimeline['tracks'];
+    if (!Array.isArray(tracks)) throw new Error('Projected export Tracks are unavailable.');
+    const projectedVideoTrack = requireRecord(tracks[0]);
+    const elements = projectedVideoTrack['elements'];
+    if (!Array.isArray(elements)) throw new Error('Projected Video elements are unavailable.');
+    expect(requireRecord(elements[0])['audio']).toMatchObject({ muted: false });
+    expect(requireRecord(elements[1])['audio']).toBeUndefined();
+  });
+
+  it('rejects an output whose duration does not match the frozen timeline', async () => {
+    const workspace = await createExportWorkspace(temporaryDirectories);
+    const engine = createEnginePort();
+    vi.mocked(engine.probe).mockResolvedValue({
+      duration: 1,
+      width: 1920,
+      height: 1080,
+      fps: 30,
+      codec: 'h264',
+      format: 'mp4',
+      hasAudio: true,
+      audioChannels: 2,
+      audioSampleRate: 48_000 as const,
+    });
+    vi.mocked(engine.dispatch).mockImplementation(async (request: ActionRequest) => {
+      if (request.action === 'export_enqueue') {
+        const body = requireRecord(request.body);
+        await nodeFs.writeFile(requireString(body['outputPath']), 'bad-output');
+      }
+      if (request.action === 'export_progress') return okResponse({ state: 'completed' });
+      return okResponse();
+    });
+    const adapter = new NekoEngineCutMediaAdapter(workspace.root, {
+      ensureClient: async () => engine,
+    });
+
+    await expect(adapter.export(exportRequest(workspace.timeline))).rejects.toThrow('duration');
+    await expect(nodeFs.readFile(workspace.output, 'utf8')).resolves.toBe('original-output');
+  });
+
+  it('rejects an output without audio when the frozen timeline has audible inputs', async () => {
+    const workspace = await createExportWorkspace(temporaryDirectories);
+    const engine = createEnginePort();
+    vi.mocked(engine.probe).mockResolvedValue({
+      duration: 2,
+      width: 1920,
+      height: 1080,
+      fps: 30,
+      codec: 'h264',
+      format: 'mp4',
+      hasAudio: false,
+    });
+    vi.mocked(engine.dispatch).mockImplementation(async (request: ActionRequest) => {
+      if (request.action === 'export_enqueue') {
+        const body = requireRecord(request.body);
+        await nodeFs.writeFile(requireString(body['outputPath']), 'silent-output');
+      }
+      if (request.action === 'export_progress') return okResponse({ state: 'completed' });
+      return okResponse();
+    });
+    const adapter = new NekoEngineCutMediaAdapter(workspace.root, {
+      ensureClient: async () => engine,
+    });
+
+    await expect(adapter.export(exportRequest(workspace.timeline))).rejects.toThrow('audio stream');
   });
 
   it('excludes disabled Clips and Tracks from export projection', async () => {
@@ -300,6 +623,10 @@ describe('NekoEngineCutMediaAdapter', () => {
         },
         {
           ...audioTrack,
+        },
+        {
+          ...audioTrack,
+          trackId: 'audio-disabled',
           enabled: false,
         },
       ],
@@ -317,10 +644,17 @@ describe('NekoEngineCutMediaAdapter', () => {
       ensureClient: async () => engine,
     });
 
-    await adapter.export(timeline, 'exports/demo.mp4');
+    await adapter.export(exportRequest(timeline));
 
     expect(findExportRequest(engine)).toMatchObject({
-      body: { timeline: { tracks: [{ id: 'video-1', elements: [] }] } },
+      body: {
+        timeline: {
+          tracks: [
+            { id: 'video-1', elements: [] },
+            { id: 'audio-1', elements: [{ id: 'audio-1' }] },
+          ],
+        },
+      },
     });
   });
 
@@ -362,7 +696,7 @@ describe('NekoEngineCutMediaAdapter', () => {
       ensureClient: async () => engine,
     });
 
-    await expect(adapter.export(timeline, 'exports/demo.mp4')).rejects.toThrow(
+    await expect(adapter.export(exportRequest(timeline))).rejects.toThrow(
       'cannot burn Subtitle Tracks',
     );
     expect(engine.dispatch).not.toHaveBeenCalledWith(
@@ -382,7 +716,7 @@ describe('NekoEngineCutMediaAdapter', () => {
       ensureClient: async () => engine,
     });
 
-    await expect(adapter.export(workspace.timeline, 'exports/demo.mp4')).rejects.toThrow(
+    await expect(adapter.export(exportRequest(workspace.timeline))).rejects.toThrow(
       'encode failed',
     );
     await expect(nodeFs.readFile(workspace.output, 'utf8')).resolves.toBe('original-output');
@@ -406,7 +740,7 @@ describe('NekoEngineCutMediaAdapter', () => {
     });
 
     await expect(
-      adapter.export(workspace.timeline, 'exports/demo.mp4', controller.signal),
+      adapter.export(exportRequest(workspace.timeline), controller.signal),
     ).rejects.toThrow('cancelled by user');
     expect(engine.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'export_cancel' }),
@@ -499,6 +833,26 @@ function findExportRequest(engine: MediaPlaybackEnginePort): ActionRequest {
   return request;
 }
 
+function exportRequest(timeline: TimelineView) {
+  const profile = timeline.profile;
+  if (!profile) throw new Error('Export fixture profile is unavailable.');
+  return {
+    timeline,
+    outputWorkspaceRelativePath: 'exports/demo.mp4',
+    settings: {
+      outputName: 'Project',
+      container: 'mp4' as const,
+      width: profile.width,
+      height: profile.height,
+      framesPerSecond: profile.editRateNumerator / profile.editRateDenominator,
+      videoBitrate: 8_000_000,
+      includeAudio: true,
+      audioBitrate: 192_000,
+      audioSampleRate: 48_000 as const,
+    },
+  };
+}
+
 function requireRecord(value: unknown): Record<string, unknown> {
   if (!isRecord(value)) throw new Error('Expected record.');
   return value;
@@ -522,7 +876,7 @@ function createEnginePort(): MediaPlaybackEnginePort {
     getAudioWsUrl: (streamId) => `ws://audio/${streamId}`,
     dispatch: vi.fn(async () => okResponse({ data: 'frame' })),
     probe: vi.fn(async () => ({
-      duration: 3,
+      duration: 2,
       width: 1920,
       height: 1080,
       fps: 30,
@@ -530,7 +884,7 @@ function createEnginePort(): MediaPlaybackEnginePort {
       format: 'mp4',
       hasAudio: true,
       audioChannels: 2,
-      audioSampleRate: 48_000,
+      audioSampleRate: 48_000 as const,
     })),
     createStream: vi.fn(async (group) => {
       const streamId =
@@ -546,7 +900,7 @@ function createEnginePort(): MediaPlaybackEnginePort {
       peaks: [],
       sampleRate: 48_000,
       channels: 2,
-      duration: 3,
+      duration: 2,
       peaksPerSecond: 10,
     })),
   };

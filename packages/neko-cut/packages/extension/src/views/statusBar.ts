@@ -42,7 +42,17 @@ export class StatusBar implements vscode.Disposable {
 
   update(task: CutExportTaskSnapshot): void {
     this.tasks.set(task.jobId, task);
-    const projection = projectCutExportStatus([...this.tasks.values()]);
+    const projection = projectCutExportStatus([...this.tasks.values()], {
+      runningText: (label) => vscode.l10n.t('Cut: {0}', label),
+      runningCount: (count) => vscode.l10n.t('{0} exports', count),
+      exporting: (path) => vscode.l10n.t('Exporting {0}', path),
+      completedText: (name) => vscode.l10n.t('Cut: {0}', name),
+      completed: (path) => vscode.l10n.t('Export completed: {0}', path),
+      failedText: vscode.l10n.t('Cut export failed'),
+      failed: (path) => vscode.l10n.t('Export failed: {0}', path),
+      cancelledText: vscode.l10n.t('Cut export cancelled'),
+      cancelled: (path) => vscode.l10n.t('Export cancelled: {0}', path),
+    });
     this.exportTargetDocumentUri = projection.documentUri;
     this.group.update(EXPORT_STATUS_ITEM_ID, projection.text, projection.tooltip);
     const item = this.group.get(EXPORT_STATUS_ITEM_ID);
@@ -100,7 +110,7 @@ export class StatusBar implements vscode.Disposable {
 }
 
 function statusBackground(
-  tone: ReturnType<typeof projectCutExportStatus>['tone'],
+  tone: import('./cutExportStatusProjection').CutExportStatusTone,
 ): vscode.ThemeColor | undefined {
   switch (tone) {
     case 'warning':

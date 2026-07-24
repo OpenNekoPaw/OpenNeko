@@ -43,6 +43,8 @@ export type CutCommand =
       readonly availableDurationFrames?: number;
       readonly rate: number;
       readonly trackId: string;
+      readonly timelineStartFrames: number;
+      readonly overlapPolicy: 'reject' | 'insert';
     }
   | {
       readonly type: 'add-track';
@@ -79,6 +81,7 @@ export type CutCommand =
       readonly toTrackId: string;
       readonly timelineStartFrames: number;
       readonly rate: number;
+      readonly sourcePolicy: 'ripple' | 'preserve-gap';
       readonly overlapPolicy: 'reject' | 'insert';
     }
   | { readonly type: 'rename-clip'; readonly clipId: string; readonly name: string }
@@ -90,6 +93,7 @@ export type CutCommand =
     }
   | { readonly type: 'set-playback-rate'; readonly clipId: string; readonly playbackRate: number }
   | { readonly type: 'ripple-delete'; readonly clipId: string }
+  | { readonly type: 'trim-trailing-gaps' }
   | {
       readonly type: 'insert-gap';
       readonly trackId: string;
@@ -159,6 +163,7 @@ export class CutCommandError extends Error {
     | 'track-not-found'
     | 'track-limit'
     | 'incompatible-track'
+    | 'clip-placement-overlap'
     | 'invalid-command'
     | 'identity-conflict'
     | 'linked-clip-required'
@@ -207,6 +212,8 @@ export function applyCutCommand(document: OtioTimeline, command: CutCommand): Ot
       return setPlaybackRate(document, command.clipId, command.playbackRate);
     case 'ripple-delete':
       return rippleDelete(document, command.clipId);
+    case 'trim-trailing-gaps':
+      return trimTrailingGaps(document);
     case 'insert-gap':
       return insertGap(document, command);
     case 'remove-gap':
@@ -288,6 +295,9 @@ function assertCommandUnlocked(document: OtioTimeline, command: CutCommand): voi
     case 'set-clip-locked':
     case 'set-track-locked':
     case 'add-track':
+      return;
+    case 'trim-trailing-gaps':
+      assertTrailingGapTracksUnlocked(document);
       return;
     case 'link-media':
     case 'insert-gap':
@@ -393,6 +403,17 @@ function assertTrackUnlocked(document: OtioTimeline, trackId: string): void {
   }
 }
 
+function assertTrailingGapTracksUnlocked(document: OtioTimeline): void {
+  for (const track of document.tracks.children) {
+    if (track.children[track.children.length - 1]?.OTIO_SCHEMA !== 'Gap.1') continue;
+    const trackId = readTrackIdentity(track.metadata)?.trackId;
+    if (!trackId) {
+      throw new CutCommandError('track-not-found', `Track ${track.name} has no stable identity.`);
+    }
+    assertTrackUnlocked(document, trackId);
+  }
+}
+
 function assertClipUnlocked(document: OtioTimeline, clipId: string, includeLinked: boolean): void {
   const location = findClip(document, clipId);
   if (!location) {
@@ -462,6 +483,7 @@ function linkMedia(
 ): OtioTimeline {
   assertPositive(command.durationFrames, 'durationFrames');
   assertPositive(command.rate, 'rate');
+  assertTimelineStart(command.timelineStartFrames, command.rate);
   assertIdentityAvailable(document, command.clipId);
   const location = findTrack(document, command.trackId);
   if (!location) {
@@ -493,10 +515,40 @@ function linkMedia(
     effects: [],
     markers: [],
   };
-  return updateTrackById(document, command.trackId, (track) => ({
-    ...track,
-    children: [...track.children, clip],
-  }));
+  return updateTrackById(document, command.trackId, (track) => {
+    const overlap =
+      command.overlapPolicy === 'insert'
+        ? findPlacementOverlap(
+            track.children,
+            undefined,
+            command.timelineStartFrames,
+            command.durationFrames,
+            command.rate,
+          )
+        : undefined;
+    if (overlap) {
+      const children = [...track.children];
+      const anchorIndex = children.indexOf(overlap.anchor);
+      if (anchorIndex < 0) {
+        throw new CutCommandError(
+          'invalid-command',
+          'The overlapped Clip is no longer present on the target Track.',
+        );
+      }
+      children.splice(anchorIndex + (overlap.insertAfter ? 1 : 0), 0, clip);
+      return { ...track, children: normalizeGaps(children, command.rate) };
+    }
+    return {
+      ...track,
+      children: insertClipAtTime(
+        track.children,
+        clip,
+        command.timelineStartFrames,
+        command.durationFrames,
+        command.rate,
+      ),
+    };
+  });
 }
 
 function splitClip(
@@ -692,15 +744,27 @@ function placeClip(
   if (overlap) {
     const tracks = [...document.tracks.children];
     const sourceChildren = [...sourceTrack.children];
-    sourceChildren.splice(source.itemIndex, 1);
+    sourceChildren.splice(
+      source.itemIndex,
+      1,
+      ...(command.sourcePolicy === 'preserve-gap'
+        ? [createGap(clipDurationFrames, command.rate)]
+        : []),
+    );
     tracks[source.trackIndex] = {
       ...sourceTrack,
-      children: normalizeGaps(sourceChildren, command.rate),
+      children:
+        command.sourcePolicy === 'ripple'
+          ? compactTrackItems(sourceChildren)
+          : normalizeGaps(sourceChildren, command.rate),
     };
 
     const currentTarget = tracks[target.trackIndex];
     if (!currentTarget) throw new CutCommandError('track-not-found', 'Target Track is missing.');
-    const targetChildren = [...currentTarget.children];
+    const targetChildren =
+      command.sourcePolicy === 'ripple'
+        ? compactTrackItems(currentTarget.children)
+        : [...currentTarget.children];
     const anchorIndex = targetChildren.indexOf(overlap.anchor);
     if (anchorIndex < 0) {
       throw new CutCommandError(
@@ -711,32 +775,95 @@ function placeClip(
     targetChildren.splice(anchorIndex + (overlap.insertAfter ? 1 : 0), 0, source.clip);
     tracks[target.trackIndex] = {
       ...currentTarget,
-      children: normalizeGaps(targetChildren, command.rate),
+      children:
+        command.sourcePolicy === 'ripple'
+          ? targetChildren
+          : normalizeGaps(targetChildren, command.rate),
     };
     return { ...document, tracks: { ...document.tracks, children: tracks } };
   }
 
   const tracks = [...document.tracks.children];
   const sourceChildren = [...sourceTrack.children];
-  sourceChildren.splice(source.itemIndex, 1, createGap(clipDurationFrames, command.rate));
+  sourceChildren.splice(
+    source.itemIndex,
+    1,
+    ...(command.sourcePolicy === 'preserve-gap'
+      ? [createGap(clipDurationFrames, command.rate)]
+      : []),
+  );
   tracks[source.trackIndex] = {
     ...sourceTrack,
-    children: normalizeGaps(sourceChildren, command.rate),
+    children:
+      command.sourcePolicy === 'ripple'
+        ? compactTrackItems(sourceChildren)
+        : normalizeGaps(sourceChildren, command.rate),
   };
 
   const currentTarget = tracks[target.trackIndex];
   if (!currentTarget) throw new CutCommandError('track-not-found', 'Target Track is missing.');
+  const sourceStartFrames = trackItemStartFrames(
+    sourceTrack.children,
+    source.itemIndex,
+    command.rate,
+  );
+  const compactedTargetStartFrames =
+    command.sourcePolicy === 'ripple'
+      ? compactTimelineStartFrames(target.track.children, command.timelineStartFrames, command.rate)
+      : command.timelineStartFrames;
+  const targetStartFrames =
+    command.sourcePolicy === 'ripple' &&
+    source.trackIndex === target.trackIndex &&
+    sourceStartFrames < command.timelineStartFrames
+      ? Math.max(0, compactedTargetStartFrames - clipDurationFrames)
+      : compactedTargetStartFrames;
+  const targetChildren =
+    command.sourcePolicy === 'ripple'
+      ? compactTrackItems(currentTarget.children)
+      : currentTarget.children;
   tracks[target.trackIndex] = {
     ...currentTarget,
     children: insertClipAtTime(
-      currentTarget.children,
+      targetChildren,
       source.clip,
-      command.timelineStartFrames,
+      targetStartFrames,
       clipDurationFrames,
       command.rate,
     ),
   };
   return { ...document, tracks: { ...document.tracks, children: tracks } };
+}
+
+function compactTrackItems(children: readonly OtioTrackItem[]): OtioTrackItem[] {
+  return children.filter((item) => item.OTIO_SCHEMA !== 'Gap.1');
+}
+
+function compactTimelineStartFrames(
+  children: readonly OtioTrackItem[],
+  timelineStartFrames: number,
+  rate: number,
+): number {
+  let cursor = 0;
+  let removedGapFrames = 0;
+  for (const item of children) {
+    if (cursor >= timelineStartFrames) break;
+    const durationFrames = itemTimelineFrames(item, rate);
+    if (item.OTIO_SCHEMA === 'Gap.1') {
+      removedGapFrames += Math.min(durationFrames, timelineStartFrames - cursor);
+    }
+    cursor += durationFrames;
+  }
+  return Math.max(0, timelineStartFrames - removedGapFrames);
+}
+
+function trackItemStartFrames(
+  children: readonly OtioTrackItem[],
+  itemIndex: number,
+  rate: number,
+): number {
+  return children
+    .slice(0, itemIndex)
+    .reduce((total, item) => total + itemTimelineFrames(item, rate), 0);
 }
 
 function findPlacementOverlap(
@@ -800,7 +927,7 @@ function insertClipAtTime(
   }
   if (startFrames < cursor) {
     throw new CutCommandError(
-      'invalid-command',
+      'clip-placement-overlap',
       'Clip placement would overlap another Clip on the target Track.',
     );
   }
@@ -1024,17 +1151,39 @@ function rippleDelete(document: OtioTimeline, clipId: string): OtioTimeline {
   const linkedId = identity?.linkedAudioClipId ?? identity?.linkedVideoClipId;
   const ids = new Set([clipId, ...(linkedId ? [linkedId] : [])]);
   let removed = 0;
-  const children = document.tracks.children.map((track) => ({
-    ...track,
-    children: track.children.filter((item) => {
+  const children = document.tracks.children.map((track) => {
+    let removedFromTrack = false;
+    const retained = track.children.filter((item) => {
       if (item.OTIO_SCHEMA !== 'Clip.2') return true;
       const itemId = readClipIdentity(item.metadata)?.clipId;
       if (!itemId || !ids.has(itemId)) return true;
       removed += 1;
+      removedFromTrack = true;
       return false;
-    }),
-  }));
+    });
+    return {
+      ...track,
+      children: removedFromTrack ? compactTrackItems(retained) : retained,
+    };
+  });
   if (removed === 0) throw new CutCommandError('clip-not-found', `Clip ${clipId} was not found.`);
+  return { ...document, tracks: { ...document.tracks, children } };
+}
+
+function trimTrailingGaps(document: OtioTimeline): OtioTimeline {
+  let trimmed = false;
+  const children = document.tracks.children.map((track) => {
+    let end = track.children.length;
+    while (end > 0 && track.children[end - 1]?.OTIO_SCHEMA === 'Gap.1') {
+      end -= 1;
+    }
+    if (end === track.children.length) return track;
+    trimmed = true;
+    return { ...track, children: track.children.slice(0, end) };
+  });
+  if (!trimmed) {
+    throw new CutCommandError('invalid-command', 'The Cut Timeline has no trailing Gap to trim.');
+  }
   return { ...document, tracks: { ...document.tracks, children } };
 }
 

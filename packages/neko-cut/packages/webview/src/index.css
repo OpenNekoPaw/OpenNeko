@@ -913,12 +913,22 @@ body[data-vscode-theme-kind="vscode-light"] .nk-select {
   flex-direction: column;
 }
 
-.cut-preview-stage,
-.cut-basic-preview-stage {
+.cut-preview-stage {
   position: relative;
   width: 100%;
   height: 100%;
   flex: 1 1 0;
+  background: var(--vscode-editor-background);
+  overflow: hidden;
+}
+
+.cut-basic-preview-stage {
+  position: relative;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  flex: 0 1 auto;
   background: #09090b;
   overflow: hidden;
 }
@@ -934,10 +944,10 @@ body[data-vscode-theme-kind="vscode-light"] .nk-select {
 .cut-basic-inspector-shell {
   position: relative;
   flex: 0 0 auto;
-  min-width: 200px;
-  max-width: min(400px, max(200px, 42vw));
+  min-width: 220px;
+  max-width: min(420px, max(220px, 42vw));
   min-height: 0;
-  border-left: 1px solid var(--vscode-panel-border);
+  padding-left: 5px;
   overflow: hidden;
 }
 
@@ -963,6 +973,9 @@ body[data-vscode-theme-kind="vscode-light"] .nk-select {
   position: absolute;
   inset: 0 auto 0 0;
   z-index: 5;
+  width: 5px;
+  border-left: 1px solid var(--vscode-panel-border);
+  border-right: 1px solid var(--vscode-panel-border);
 }
 
 .cut-basic-preview-resize-handle {
@@ -977,25 +990,6 @@ body[data-vscode-theme-kind="vscode-light"] .nk-select {
   display: flex;
   min-height: 150px;
   overflow: hidden;
-}
-
-.cut-basic-error,
-.cut-basic-notice {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  z-index: 12;
-  max-width: 80%;
-  transform: translateX(-50%);
-  padding: 5px 9px;
-  border-radius: var(--nk-r-sm);
-  background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
-  color: var(--vscode-inputValidation-errorForeground, #fff);
-}
-
-.cut-basic-notice {
-  background: var(--vscode-editorWidget-background);
-  color: var(--vscode-foreground);
 }
 
 /* Timeline */
@@ -1180,6 +1174,11 @@ body[data-vscode-theme-kind="vscode-light"] .nk-select {
   position: absolute;
   inset-block: 0;
   border-inline: 1px dashed color-mix(in srgb, var(--vscode-panel-border) 70%, transparent);
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 8px,
+    color-mix(in srgb, var(--vscode-descriptionForeground) 14%, transparent) 8px 9px
+  );
 }
 
 .cut-basic-clip {
@@ -1422,24 +1421,31 @@ body[data-vscode-theme-kind="vscode-light"] .nk-select {
   background: color-mix(in srgb, var(--vscode-focusBorder) 12%, transparent);
 }
 
-.cut-basic-export-config dl {
-  display: grid;
-  gap: 6px;
-}
-
-.cut-basic-export-config dl div {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.cut-basic-export-config dt { color: var(--vscode-descriptionForeground); }
+.cut-basic-export-dialog { width: min(92vw, 720px); max-height: min(88vh, 760px); overflow: auto; }
+.cut-basic-export-config { display: grid; gap: 0; }
+.cut-basic-export-title-field,
+.cut-basic-export-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(220px, 280px); align-items: center; gap: 18px; }
+.cut-basic-export-title-field { padding: 8px 0 16px; }
+.cut-basic-export-title-field input { min-width: 0; height: 30px; border: 1px solid var(--vscode-input-border, var(--neko-border)); border-radius: 4px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); padding: 0 9px; }
+.cut-basic-export-section { display: grid; gap: 10px; padding: 14px 0; border-top: 1px solid var(--vscode-panel-border); }
+.cut-basic-export-section h3 { margin: 0 0 2px; font-size: 13px; }
+.cut-basic-export-row > :last-child { width: 100%; }
+.cut-basic-export-more { width: max-content; border: 0; background: transparent; color: var(--vscode-descriptionForeground); padding: 2px 0; }
+.cut-basic-export-dimensions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .cut-basic-export-history { display: grid; gap: 3px; margin-top: 12px; font-size: 11px; }
-.cut-basic-export-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 14px; }
+.cut-basic-export-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 14px; border-top: 1px solid var(--vscode-panel-border); color: var(--vscode-descriptionForeground); font-size: 11px; }
+.cut-basic-export-actions { display: flex; flex: 0 0 auto; justify-content: flex-end; gap: 6px; }
 .cut-basic-export-actions button { padding: 4px 10px; background: var(--vscode-button-secondaryBackground); }
 .cut-basic-export-actions button:last-child { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 .cut-basic-export-progress { display: grid; justify-items: center; gap: 10px; padding: 18px; }
 .cut-basic-export-spinner { width: 24px; height: 24px; border: 3px solid var(--vscode-panel-border); border-top-color: var(--vscode-progressBar-background); border-radius: 50%; animation: cut-preview-spin 0.9s linear infinite; }
+
+@media (max-width: 560px) {
+  .cut-basic-export-title-field,
+  .cut-basic-export-row { grid-template-columns: 1fr; gap: 5px; }
+  .cut-basic-export-footer { align-items: flex-start; flex-direction: column; }
+  .cut-basic-export-actions { align-self: flex-end; }
+}
 
 .cut-property-panel-shell {
   display: flex;

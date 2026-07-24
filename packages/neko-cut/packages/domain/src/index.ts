@@ -8,3 +8,4 @@ export * from './media-ports';
 export * from './projection';
 export * from './session';
 export * from './types';
+export * from './user-diagnostics';

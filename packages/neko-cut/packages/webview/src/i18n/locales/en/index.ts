@@ -1,6 +1,7 @@
 import type { MessageBundle } from '@neko/shared';
 
 import { common } from './common';
+import { diagnostics } from './diagnostics';
 import { exportBundle } from './export';
 import { preview } from './preview';
 import { propertyPanel } from './propertyPanel';
@@ -9,6 +10,7 @@ import { timeline } from './timeline';
 
 export const bundles: Record<string, MessageBundle> = {
   common,
+  diagnostics,
   exportBundle,
   preview,
   propertyPanel,

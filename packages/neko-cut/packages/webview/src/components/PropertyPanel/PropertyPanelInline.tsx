@@ -81,6 +81,7 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
           toTrackId: track.trackId,
           timelineStartFrames: Math.round(changes.startTime * frameRate(view)),
           rate: frameRate(view),
+          sourcePolicy: 'preserve-gap',
           overlapPolicy: 'reject',
         });
         return;

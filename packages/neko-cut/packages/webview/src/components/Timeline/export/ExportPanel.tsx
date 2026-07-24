@@ -19,6 +19,7 @@ export function ExportPanel({ isOpen, onClose }: ExportPanelProps) {
   );
   return (
     <Dialog
+      className="cut-basic-export-dialog"
       closeLabel={t('common.close')}
       description={t('timeline.basic.exportDescription')}
       onOpenChange={(open) => {
@@ -38,7 +39,7 @@ export function ExportPanel({ isOpen, onClose }: ExportPanelProps) {
           view={view}
           recentTasks={tasks.filter((task) => task.documentUri === view?.documentUri).slice(-3)}
           onClose={onClose}
-          onExport={() => controller.startExport()}
+          onExport={(settings) => controller.startExport(settings)}
         />
       )}
     </Dialog>

@@ -6,18 +6,20 @@ import {
   type MediaPlaybackEnginePort,
   type PlaybackHandle,
 } from '@neko/neko-client';
-import type {
-  AudioWaveformPort,
-  AudioPcmStreamPort,
-  CutMediaProbe,
-  CutRuntimeMediaSource,
-  FrameCapturePort,
-  ExportJobPort,
-  MediaProbePort,
-  TimelineView,
-  VideoPreviewPort,
+import {
+  CutMediaRuntimeUnavailableError,
+  resolveTimelinePlaybackEndSeconds,
+  type AudioPcmStreamPort,
+  type AudioWaveformPort,
+  type CutExportRequest,
+  type CutMediaProbe,
+  type CutRuntimeMediaSource,
+  type ExportJobPort,
+  type FrameCapturePort,
+  type MediaProbePort,
+  type TimelineView,
+  type VideoPreviewPort,
 } from '@neko-cut/domain';
-import { CutMediaRuntimeUnavailableError } from '@neko-cut/domain';
 
 export interface CutEngineClientProvider {
   ensureClient(): Promise<MediaPlaybackEnginePort | null>;
@@ -97,6 +99,7 @@ export class NekoEngineCutMediaAdapter
       readonly startTimeSeconds: number;
       readonly includeAudio: boolean;
       readonly playbackRate: number;
+      readonly startPaused: boolean;
     },
     signal?: AbortSignal,
   ) {
@@ -106,6 +109,7 @@ export class NekoEngineCutMediaAdapter
       startTime: options.startTimeSeconds,
       hasAudio: options.includeAudio,
       mediaType: 'video',
+      startPaused: options.startPaused,
       speed: options.playbackRate,
     });
     try {
@@ -125,9 +129,17 @@ export class NekoEngineCutMediaAdapter
     await this.stopSession(sessionId);
   }
 
+  async resumePreview(sessionId: string): Promise<void> {
+    await this.resumeSession(sessionId);
+  }
+
   async startPcm(
     source: CutRuntimeMediaSource,
-    options: { readonly startTimeSeconds: number; readonly playbackRate: number },
+    options: {
+      readonly startTimeSeconds: number;
+      readonly playbackRate: number;
+      readonly startPaused: boolean;
+    },
     signal?: AbortSignal,
   ) {
     throwIfAborted(signal);
@@ -136,6 +148,7 @@ export class NekoEngineCutMediaAdapter
       startTime: options.startTimeSeconds,
       hasAudio: true,
       mediaType: 'audio',
+      startPaused: options.startPaused,
       speed: options.playbackRate,
     });
     try {
@@ -159,11 +172,15 @@ export class NekoEngineCutMediaAdapter
     await this.stopSession(sessionId);
   }
 
+  async resumePcm(sessionId: string): Promise<void> {
+    await this.resumeSession(sessionId);
+  }
+
   async export(
-    timeline: TimelineView,
-    outputWorkspaceRelativePath: string,
+    request: CutExportRequest,
     signal?: AbortSignal,
   ): Promise<{ readonly outputWorkspaceRelativePath: string }> {
+    const { outputWorkspaceRelativePath, settings, timeline } = request;
     throwIfAborted(signal);
     const client = await this.client('export');
     const outputPath = await this.resolveWritableOutput(outputWorkspaceRelativePath);
@@ -172,12 +189,29 @@ export class NekoEngineCutMediaAdapter
       nodePath.dirname(outputPath),
       `.${nodePath.basename(outputPath, nodePath.extname(outputPath))}.${jobId}.tmp${nodePath.extname(outputPath)}`,
     );
-    const fps = timeline.profile
-      ? timeline.profile.editRateNumerator / timeline.profile.editRateDenominator
-      : 30;
-    const width = timeline.profile?.width ?? 1920;
-    const height = timeline.profile?.height ?? 1080;
-    const engineTimeline = await this.buildEngineTimeline(timeline, fps, width, height);
+    const {
+      audioBitrate,
+      audioSampleRate,
+      framesPerSecond: fps,
+      height,
+      includeAudio,
+      videoBitrate,
+      width,
+    } = settings;
+    const projection = await this.buildEngineTimeline(
+      timeline,
+      fps,
+      width,
+      height,
+      includeAudio,
+      client,
+    );
+    const engineTimeline = projection.timeline;
+    const expectsAudio = projection.expectsAudio;
+    const playbackEndSeconds = resolveTimelinePlaybackEndSeconds(timeline);
+    if (playbackEndSeconds <= 0) {
+      throw new Error('Cut export requires at least one enabled Video or audible Audio Clip.');
+    }
     let result: { readonly outputWorkspaceRelativePath: string } | undefined;
     let operationError: unknown;
     try {
@@ -192,9 +226,10 @@ export class NekoEngineCutMediaAdapter
             height,
             fps,
             videoCodec: 'h264',
-            videoBitrate: 8_000_000,
+            videoBitrate,
             audioCodec: 'aac',
-            audioBitrate: 192_000,
+            audioBitrate,
+            audioSampleRate,
             hwEncoder: 'auto',
             preset: 'medium',
             useZeroCopyGpu: true,
@@ -204,8 +239,7 @@ export class NekoEngineCutMediaAdapter
       });
       await waitForExport(client, jobId, signal);
       const probe = await new MediaPlaybackService(client).probeMedia(stagingPath);
-      if (probe.duration <= 0)
-        throw new Error('Engine export validation returned an empty output.');
+      validateExportOutput(probe, playbackEndSeconds, fps, expectsAudio);
       await replaceOutputAtomically(stagingPath, outputPath, jobId);
       result = { outputWorkspaceRelativePath };
     } catch (error) {
@@ -282,8 +316,9 @@ export class NekoEngineCutMediaAdapter
   }
 
   private async resolveWritableOutput(workspaceRelativePath: string): Promise<string> {
-    if (nodePath.posix.extname(workspaceRelativePath).toLowerCase() !== '.mp4') {
-      throw new Error('Cut basic export currently requires a workspace-relative .mp4 output.');
+    const extension = nodePath.posix.extname(workspaceRelativePath).toLowerCase();
+    if (extension !== '.mp4' && extension !== '.mov') {
+      throw new Error('Cut export requires a workspace-relative .mp4 or .mov output.');
     }
     const outputPath = this.resolveSource({ workspaceRelativePath });
     const [realRoot, realParent] = await Promise.all([
@@ -299,14 +334,24 @@ export class NekoEngineCutMediaAdapter
     fps: number,
     width: number,
     height: number,
-  ): Promise<Record<string, unknown>> {
+    includeAudio: boolean,
+    client: MediaPlaybackEnginePort,
+  ): Promise<{
+    readonly timeline: Record<string, unknown>;
+    readonly expectsAudio: boolean;
+  }> {
     const documentPath = fileURLToPath(timeline.documentUri);
     const realRoot = await nodeFs.realpath(this.workspaceRoot);
+    const mediaService = new MediaPlaybackService(client);
+    const playbackEndSeconds = resolveTimelinePlaybackEndSeconds(timeline);
+    const sourceAudioAvailability = new Map<string, boolean>();
+    let expectsAudio = false;
     const tracks = [];
     for (let trackIndex = 0; trackIndex < timeline.tracks.length; trackIndex += 1) {
       const track = timeline.tracks[trackIndex];
       if (!track) continue;
       if (!track.enabled) continue;
+      if (!includeAudio && track.kind === 'Audio') continue;
       if (track.kind === 'Subtitle') {
         if (track.items.some((item) => item.kind === 'clip')) {
           throw new Error(
@@ -324,6 +369,21 @@ export class NekoEngineCutMediaAdapter
         );
         const realSource = await nodeFs.realpath(absoluteSource);
         assertContained(realRoot, realSource);
+        let hasEmbeddedAudio = false;
+        if (includeAudio && track.kind === 'Video') {
+          const cached = sourceAudioAvailability.get(realSource);
+          hasEmbeddedAudio = cached ?? (await mediaService.probeMedia(realSource)).hasAudio;
+          sourceAudioAvailability.set(realSource, hasEmbeddedAudio);
+        }
+        const audioMuted = !includeAudio || track.audioMuted || item.audio.muted;
+        if (
+          includeAudio &&
+          !track.audioMuted &&
+          !item.audio.muted &&
+          (track.kind === 'Audio' || hasEmbeddedAudio)
+        ) {
+          expectsAudio = true;
+        }
         elements.push({
           id: item.clipId,
           name: item.name,
@@ -337,7 +397,7 @@ export class NekoEngineCutMediaAdapter
           blendMode: 'normal',
           effects: [],
           masks: [],
-          muted: track.audioMuted || item.audio.muted,
+          muted: audioMuted,
           hidden: false,
           locked: false,
           ...(item.playbackRate !== 1
@@ -352,14 +412,18 @@ export class NekoEngineCutMediaAdapter
           ...(track.kind === 'Video'
             ? {
                 mediaType: 'video',
-                audio: {
-                  volume: 1,
-                  pan: 0,
-                  muted: track.audioMuted || item.audio.muted,
-                  fadeIn: item.audio.fadeInSeconds,
-                  fadeOut: item.audio.fadeOutSeconds,
-                  gain: item.audio.gainDb,
-                },
+                ...(hasEmbeddedAudio
+                  ? {
+                      audio: {
+                        volume: 1,
+                        pan: 0,
+                        muted: audioMuted,
+                        fadeIn: item.audio.fadeInSeconds,
+                        fadeOut: item.audio.fadeOutSeconds,
+                        gain: item.audio.gainDb,
+                      },
+                    }
+                  : {}),
               }
             : {
                 audio: {
@@ -378,18 +442,21 @@ export class NekoEngineCutMediaAdapter
         name: track.name,
         type: track.kind.toLowerCase(),
         elements,
-        muted: track.audioMuted,
+        muted: !includeAudio || track.audioMuted,
         locked: false,
         hidden: false,
         isMain: track.kind === 'Video',
       });
     }
     return {
-      duration: timeline.durationSeconds,
-      resolution: { width, height },
-      fps,
-      tracks,
-      defaults: null,
+      timeline: {
+        duration: playbackEndSeconds,
+        resolution: { width, height },
+        fps,
+        tracks,
+        defaults: null,
+      },
+      expectsAudio,
     };
   }
 
@@ -399,6 +466,31 @@ export class NekoEngineCutMediaAdapter
     const service = await this.service('stream stop');
     await service.stopPlayback(handle);
     this.sessions.delete(sessionId);
+  }
+
+  private async resumeSession(sessionId: string): Promise<void> {
+    const handle = this.sessions.get(sessionId);
+    if (!handle) throw new Error(`Unknown Cut media session: ${sessionId}`);
+    const service = await this.service('stream resume');
+    await service.resumePlayback(handle);
+  }
+}
+
+function validateExportOutput(
+  probe: Awaited<ReturnType<MediaPlaybackService['probeMedia']>>,
+  expectedDurationSeconds: number,
+  framesPerSecond: number,
+  expectsAudio: boolean,
+): void {
+  if (probe.duration <= 0) throw new Error('Engine export validation returned an empty output.');
+  const durationToleranceSeconds = 1 / framesPerSecond + 0.001;
+  if (Math.abs(probe.duration - expectedDurationSeconds) > durationToleranceSeconds) {
+    throw new Error(
+      `Engine export duration ${probe.duration}s does not match the frozen timeline duration ${expectedDurationSeconds}s.`,
+    );
+  }
+  if (expectsAudio && !probe.hasAudio) {
+    throw new Error('Engine export validation expected an audio stream, but the output has none.');
   }
 }
 

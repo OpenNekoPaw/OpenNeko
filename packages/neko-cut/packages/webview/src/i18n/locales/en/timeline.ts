@@ -39,7 +39,8 @@ export const timeline = {
   'timeline.basic.overview': 'Timeline overview',
   'timeline.basic.selectClip': 'Open a Cut project before previewing',
   'timeline.basic.exportComplete': 'Export completed:',
-  'timeline.basic.exportDescription': 'Export the current Cut as an MP4 background task.',
+  'timeline.basic.exportDescription':
+    'Export the current Cut as a local MP4 or MOV background task.',
   'timeline.basic.backgroundExport': 'Continue in background',
   'timeline.basic.duration': 'Duration',
 
@@ -95,6 +96,8 @@ export const timeline = {
 
   'timeline.controls.addTrack': 'Add Track',
   'timeline.controls.addMedia': 'Add Media to Selected Track',
+  'timeline.controls.switchToSequenceMode': 'Switch to sequence mode and trim trailing gaps',
+  'timeline.controls.switchToPositionMode': 'Switch to position mode',
   'timeline.controls.mediaTrack': 'Media Track',
   'timeline.controls.audioTrack': 'Audio Track',
   'timeline.controls.textTrack': 'Text Track',

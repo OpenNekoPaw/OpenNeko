@@ -8,6 +8,7 @@ import {
   parseOtio,
   projectTimelineView,
   serializeOtio,
+  type CutCommand,
   type CutDocumentStorage,
   type OtioTimeline,
 } from '.';
@@ -51,7 +52,7 @@ describe('Cut Core commands', () => {
 
   it('links, edits, separates, manually mutes, unseparates and ripple deletes', () => {
     let document = emptyTimeline();
-    document = applyCutCommand(document, {
+    document = linkMediaForTest(document, {
       type: 'link-media',
       clipId: 'video-1',
       name: 'Shot',
@@ -105,7 +106,7 @@ describe('Cut Core commands', () => {
   });
 
   it('keeps linked separation serializable after coupled source-range editing', () => {
-    let document = applyCutCommand(emptyTimeline(), {
+    let document = linkMediaForTest(emptyTimeline(), {
       type: 'link-media',
       clipId: 'video-1',
       name: 'Shot',
@@ -136,7 +137,7 @@ describe('Cut Core commands', () => {
   });
 
   it('splits, trims, inserts gaps and reorders with visible contract failures', () => {
-    let document = applyCutCommand(emptyTimeline(), {
+    let document = linkMediaForTest(emptyTimeline(), {
       type: 'link-media',
       clipId: 'clip-1',
       name: 'Shot',
@@ -202,7 +203,7 @@ describe('Cut Core commands', () => {
   });
 
   it('persists constant speed, bounds duration and places Clips through normalized Gaps', () => {
-    let document = applyCutCommand(emptyTimeline(), {
+    let document = linkMediaForTest(emptyTimeline(), {
       type: 'link-media',
       clipId: 'clip-a',
       name: 'A',
@@ -212,7 +213,7 @@ describe('Cut Core commands', () => {
       rate: 30,
       trackId: 'video-1',
     });
-    document = applyCutCommand(document, {
+    document = linkMediaForTest(document, {
       type: 'link-media',
       clipId: 'clip-b',
       name: 'B',
@@ -247,6 +248,7 @@ describe('Cut Core commands', () => {
       toTrackId: 'video-1',
       timelineStartFrames: 90,
       rate: 30,
+      sourcePolicy: 'preserve-gap',
       overlapPolicy: 'reject',
     });
     expect(document.tracks.children[0]?.children).toMatchObject([
@@ -262,21 +264,26 @@ describe('Cut Core commands', () => {
         rate: 30,
       }),
     ).toThrow('available range');
-    expect(() =>
+    try {
       applyCutCommand(document, {
         type: 'place-clip',
         clipId: 'clip-b',
         toTrackId: 'video-1',
         timelineStartFrames: 10,
         rate: 30,
+        sourcePolicy: 'preserve-gap',
         overlapPolicy: 'reject',
-      }),
-    ).toThrow('overlap');
+      });
+      throw new Error('Expected overlapping placement to fail.');
+    } catch (error) {
+      expect(error).toBeInstanceOf(CutCommandError);
+      expect(error).toMatchObject({ code: 'clip-placement-overlap' });
+    }
   });
 
   it('inserts a dragged Clip before or after the overlapped Clip instead of rejecting it', () => {
     let document = emptyTimeline();
-    document = applyCutCommand(document, {
+    document = linkMediaForTest(document, {
       type: 'link-media',
       clipId: 'clip-a',
       name: 'A',
@@ -285,7 +292,7 @@ describe('Cut Core commands', () => {
       rate: 30,
       trackId: 'video-1',
     });
-    document = applyCutCommand(document, {
+    document = linkMediaForTest(document, {
       type: 'link-media',
       clipId: 'clip-b',
       name: 'B',
@@ -294,7 +301,7 @@ describe('Cut Core commands', () => {
       rate: 30,
       trackId: 'video-1',
     });
-    document = applyCutCommand(document, {
+    document = linkMediaForTest(document, {
       type: 'link-media',
       clipId: 'clip-c',
       name: 'C',
@@ -310,6 +317,7 @@ describe('Cut Core commands', () => {
       toTrackId: 'video-1',
       timelineStartFrames: 10,
       rate: 30,
+      sourcePolicy: 'ripple',
       overlapPolicy: 'insert',
     });
     expect(
@@ -324,6 +332,7 @@ describe('Cut Core commands', () => {
       toTrackId: 'video-1',
       timelineStartFrames: 50,
       rate: 30,
+      sourcePolicy: 'ripple',
       overlapPolicy: 'insert',
     });
     expect(
@@ -331,6 +340,209 @@ describe('Cut Core commands', () => {
         item.OTIO_SCHEMA === 'Clip.2' ? item.name : item.OTIO_SCHEMA,
       ),
     ).toEqual(['A', 'C', 'B']);
+  });
+
+  it('distinguishes sequence ripple placement from exact preserve-gap placement', () => {
+    let document = emptyTimeline();
+    for (const [clipId, name] of [
+      ['clip-a', 'A'],
+      ['clip-b', 'B'],
+      ['clip-c', 'C'],
+    ] as const) {
+      document = linkMediaForTest(document, {
+        type: 'link-media',
+        clipId,
+        name,
+        targetUrl: `../${name.toLowerCase()}.mp4`,
+        durationFrames: 30,
+        rate: 30,
+        trackId: 'video-1',
+      });
+    }
+
+    const withTrailingGap = applyCutCommand(document, {
+      type: 'insert-gap',
+      trackId: 'video-1',
+      index: 3,
+      durationFrames: 300,
+      rate: 30,
+    });
+    const sequenced = applyCutCommand(withTrailingGap, {
+      type: 'place-clip',
+      clipId: 'clip-a',
+      toTrackId: 'video-1',
+      timelineStartFrames: 390,
+      rate: 30,
+      sourcePolicy: 'ripple',
+      overlapPolicy: 'insert',
+    });
+    expect(
+      sequenced.tracks.children[0]?.children.map((item) =>
+        item.OTIO_SCHEMA === 'Clip.2' ? item.name : item.OTIO_SCHEMA,
+      ),
+    ).toEqual(['B', 'C', 'A']);
+
+    const positioned = applyCutCommand(document, {
+      type: 'place-clip',
+      clipId: 'clip-a',
+      toTrackId: 'video-1',
+      timelineStartFrames: 120,
+      rate: 30,
+      sourcePolicy: 'preserve-gap',
+      overlapPolicy: 'reject',
+    });
+    expect(
+      positioned.tracks.children[0]?.children.map((item) =>
+        item.OTIO_SCHEMA === 'Clip.2'
+          ? item.name
+          : `${item.OTIO_SCHEMA}:${item.source_range.duration.value}`,
+      ),
+    ).toEqual(['Gap.1:30', 'B', 'C', 'Gap.1:30', 'A']);
+  });
+
+  it('removes trailing and internal Gaps from a Track changed by ripple delete', () => {
+    let document = emptyTimeline();
+    for (const [clipId, name] of [
+      ['clip-a', 'A'],
+      ['clip-b', 'B'],
+    ] as const) {
+      document = linkMediaForTest(document, {
+        type: 'link-media',
+        clipId,
+        name,
+        targetUrl: `../${name.toLowerCase()}.mp4`,
+        durationFrames: 30,
+        rate: 30,
+        trackId: 'video-1',
+      });
+    }
+    document = applyCutCommand(document, {
+      type: 'insert-gap',
+      trackId: 'video-1',
+      index: 1,
+      durationFrames: 60,
+      rate: 30,
+    });
+    document = applyCutCommand(document, {
+      type: 'insert-gap',
+      trackId: 'video-1',
+      index: 3,
+      durationFrames: 300,
+      rate: 30,
+    });
+
+    const deleted = applyCutCommand(document, { type: 'ripple-delete', clipId: 'clip-b' });
+    expect(
+      deleted.tracks.children[0]?.children.map((item) =>
+        item.OTIO_SCHEMA === 'Clip.2' ? item.name : item.OTIO_SCHEMA,
+      ),
+    ).toEqual(['A']);
+  });
+
+  it('trims trailing Gaps across Tracks without shifting internal synchronization Gaps', () => {
+    let document = emptyTimeline();
+    for (const [clipId, name] of [
+      ['clip-a', 'A'],
+      ['clip-b', 'B'],
+    ] as const) {
+      document = linkMediaForTest(document, {
+        type: 'link-media',
+        clipId,
+        name,
+        targetUrl: `../${name.toLowerCase()}.mp4`,
+        durationFrames: 30,
+        rate: 30,
+        trackId: 'video-1',
+      });
+    }
+    document = applyCutCommand(document, {
+      type: 'insert-gap',
+      trackId: 'video-1',
+      index: 1,
+      durationFrames: 60,
+      rate: 30,
+    });
+    document = applyCutCommand(document, {
+      type: 'insert-gap',
+      trackId: 'video-1',
+      index: 3,
+      durationFrames: 300,
+      rate: 30,
+    });
+    document = applyCutCommand(document, {
+      type: 'add-track',
+      trackId: 'audio-1',
+      trackKind: 'Audio',
+      name: 'Audio 1',
+    });
+    document = applyCutCommand(document, {
+      type: 'insert-gap',
+      trackId: 'audio-1',
+      index: 0,
+      durationFrames: 600,
+      rate: 30,
+    });
+
+    const trimmed = applyCutCommand(document, { type: 'trim-trailing-gaps' });
+    expect(
+      trimmed.tracks.children.map((track) =>
+        track.children.map((item) =>
+          item.OTIO_SCHEMA === 'Clip.2'
+            ? item.name
+            : `${item.OTIO_SCHEMA}:${item.source_range.duration.value}`,
+        ),
+      ),
+    ).toEqual([['A', 'Gap.1:60', 'B'], []]);
+  });
+
+  it('rejects trailing Gap trim when an affected Track is locked', () => {
+    let document = applyCutCommand(emptyTimeline(), {
+      type: 'insert-gap',
+      trackId: 'video-1',
+      index: 0,
+      durationFrames: 30,
+      rate: 30,
+    });
+    document = applyCutCommand(document, {
+      type: 'set-track-locked',
+      trackId: 'video-1',
+      locked: true,
+    });
+
+    expect(() => applyCutCommand(document, { type: 'trim-trailing-gaps' })).toThrowError(
+      expect.objectContaining({ code: 'locked' }),
+    );
+  });
+
+  it('inserts linked media at an explicit time instead of always appending', () => {
+    let document = linkMediaForTest(emptyTimeline(), {
+      type: 'link-media',
+      clipId: 'clip-a',
+      name: 'A',
+      targetUrl: '../a.mp4',
+      durationFrames: 30,
+      rate: 30,
+      trackId: 'video-1',
+      timelineStartFrames: 60,
+      overlapPolicy: 'reject',
+    });
+    document = linkMediaForTest(document, {
+      type: 'link-media',
+      clipId: 'clip-b',
+      name: 'B',
+      targetUrl: '../b.mp4',
+      durationFrames: 30,
+      rate: 30,
+      trackId: 'video-1',
+      timelineStartFrames: 0,
+      overlapPolicy: 'reject',
+    });
+
+    expect(
+      document.tracks.children[0]?.children.map((item) =>
+        item.OTIO_SCHEMA === 'Clip.2' ? item.name : `Gap:${item.source_range.duration.value}`,
+      ),
+    ).toEqual(['B', 'Gap:30', 'A']);
   });
 
   it('appends an ordered Canvas media/gap route as one command', () => {
@@ -418,7 +630,7 @@ describe('Cut Core commands', () => {
       }),
     ).toThrowError(expect.objectContaining({ code: 'track-limit' }));
 
-    document = applyCutCommand(document, {
+    document = linkMediaForTest(document, {
       type: 'link-media',
       clipId: 'audio-clip-1',
       name: 'Music',
@@ -450,7 +662,7 @@ describe('Cut Core commands', () => {
   });
 
   it('persists independent Clip/Track participation and rejects edits through locked content', () => {
-    let document = applyCutCommand(emptyTimeline(), {
+    let document = linkMediaForTest(emptyTimeline(), {
       type: 'link-media',
       clipId: 'clip-1',
       name: 'Shot',
@@ -533,7 +745,7 @@ describe('Cut Core commands', () => {
   });
 
   it('duplicates a Clip with a new stable identity', () => {
-    let document = applyCutCommand(emptyTimeline(), {
+    let document = linkMediaForTest(emptyTimeline(), {
       type: 'link-media',
       clipId: 'clip-1',
       name: 'Shot',
@@ -557,7 +769,7 @@ describe('Cut Core commands', () => {
   });
 
   it('clones multiple Clips directly at absolute times without shifting their sources', () => {
-    let document = applyCutCommand(emptyTimeline(), {
+    let document = linkMediaForTest(emptyTimeline(), {
       type: 'link-media',
       clipId: 'clip-a',
       name: 'A',
@@ -573,7 +785,7 @@ describe('Cut Core commands', () => {
       durationFrames: 120,
       rate: 30,
     });
-    document = applyCutCommand(document, {
+    document = linkMediaForTest(document, {
       type: 'link-media',
       clipId: 'clip-b',
       name: 'B',
@@ -616,7 +828,7 @@ describe('Cut Core commands', () => {
   });
 
   it('clones linked Video and Audio Clips with reciprocal new identities', () => {
-    let document = applyCutCommand(emptyTimeline(), {
+    let document = linkMediaForTest(emptyTimeline(), {
       type: 'link-media',
       clipId: 'video-1',
       name: 'Shot',
@@ -687,7 +899,7 @@ describe('Cut Core commands', () => {
   });
 
   it('projects the complete media available range for reversible edge trim', () => {
-    let document = applyCutCommand(emptyTimeline(), {
+    let document = linkMediaForTest(emptyTimeline(), {
       type: 'link-media',
       clipId: 'clip-1',
       name: 'Shot',
@@ -791,7 +1003,7 @@ describe('Cut Core commands', () => {
   });
 
   it('renames, reorders and removes a non-empty optional Track without dangling links', () => {
-    let document = applyCutCommand(emptyTimeline(), {
+    let document = linkMediaForTest(emptyTimeline(), {
       type: 'link-media',
       clipId: 'video-1',
       name: 'Shot',
@@ -843,7 +1055,7 @@ describe('Cut Core commands', () => {
       trackKind: 'Audio',
       name: 'Music',
     });
-    document = applyCutCommand(document, {
+    document = linkMediaForTest(document, {
       type: 'link-media',
       clipId: 'music-1',
       name: 'Theme',
@@ -898,6 +1110,8 @@ describe('CutDocumentSession', () => {
           durationFrames: 30,
           rate: 30,
           trackId: 'video-1',
+          timelineStartFrames: 0,
+          overlapPolicy: 'reject',
         },
         {
           type: 'link-media',
@@ -907,6 +1121,8 @@ describe('CutDocumentSession', () => {
           durationFrames: 30,
           rate: 30,
           trackId: 'video-1',
+          timelineStartFrames: 30,
+          overlapPolicy: 'reject',
         },
       ],
     });
@@ -966,6 +1182,8 @@ describe('CutDocumentSession', () => {
         durationFrames: 60,
         rate: 30,
         trackId: 'video-1',
+        timelineStartFrames: 0,
+        overlapPolicy: 'reject',
       },
     });
     expect(edited).toMatchObject({ revision: 1, durationSeconds: 2, tracks: [{ kind: 'Video' }] });
@@ -1077,7 +1295,47 @@ function linkCommand() {
     durationFrames: 30,
     rate: 30,
     trackId: 'video-1',
+    timelineStartFrames: 0,
+    overlapPolicy: 'reject' as const,
   };
+}
+
+type LinkMediaTestCommand = Omit<
+  Extract<CutCommand, { readonly type: 'link-media' }>,
+  'timelineStartFrames' | 'overlapPolicy'
+> &
+  Partial<
+    Pick<
+      Extract<CutCommand, { readonly type: 'link-media' }>,
+      'timelineStartFrames' | 'overlapPolicy'
+    >
+  >;
+
+function linkMediaForTest(document: OtioTimeline, command: LinkMediaTestCommand): OtioTimeline {
+  if (command.timelineStartFrames !== undefined && command.overlapPolicy !== undefined) {
+    return applyCutCommand(document, {
+      ...command,
+      timelineStartFrames: command.timelineStartFrames,
+      overlapPolicy: command.overlapPolicy,
+    });
+  }
+  const view = projectTimelineView({
+    document,
+    documentUri: 'file:///workspace/test.otio',
+    sessionId: 'test-session',
+    revision: 0,
+  });
+  const track = view.tracks.find((candidate) => candidate.trackId === command.trackId);
+  if (!track) throw new Error(`Missing test Track ${command.trackId}.`);
+  const timelineStartFrames = Math.round(
+    track.items.reduce((end, item) => Math.max(end, item.startSeconds + item.durationSeconds), 0) *
+      command.rate,
+  );
+  return applyCutCommand(document, {
+    ...command,
+    timelineStartFrames,
+    overlapPolicy: 'reject',
+  });
 }
 
 function identity(session: CutDocumentSession, expectedRevision: number) {

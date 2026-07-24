@@ -59,6 +59,24 @@ export interface TimelineGapView {
   readonly durationSeconds: number;
 }
 
+export function resolveTimelinePlaybackEndSeconds(view: TimelineView): number {
+  return view.tracks
+    .filter(
+      (track) =>
+        track.enabled && (track.kind === 'Video' || (track.kind === 'Audio' && !track.audioMuted)),
+    )
+    .flatMap((track) =>
+      track.items.filter(
+        (item): item is TimelineClipView =>
+          item.kind === 'clip' && item.enabled && (track.kind !== 'Audio' || !item.audio.muted),
+      ),
+    )
+    .reduce(
+      (endSeconds, clip) => Math.max(endSeconds, clip.startSeconds + clip.durationSeconds),
+      0,
+    );
+}
+
 export function projectTimelineView(input: {
   readonly document: OtioTimeline;
   readonly documentUri: string;

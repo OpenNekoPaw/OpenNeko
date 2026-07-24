@@ -1,4 +1,4 @@
-import type { TimelineClipView, TimelineItemView } from '@neko-cut/domain';
+import type { TimelineClipView, TimelineItemView, TimelineTrackView } from '@neko-cut/domain';
 
 export const TRACK_HEADER_WIDTH = 112;
 export const MIN_PIXELS_PER_SECOND = 12;
@@ -37,12 +37,33 @@ export function quantizeTimelineDelta(value: number, frameSeconds: number): numb
   return Math.round(value / frameSeconds) * frameSeconds;
 }
 
-export function retainTimelineCanvasDuration(
-  previousDuration: number | undefined,
-  projectedDuration: number,
-  minimumDuration = 10,
-): number {
-  return Math.max(minimumDuration, previousDuration ?? 0, projectedDuration);
+export interface TimelineCanvasExtent {
+  readonly duration: number;
+  readonly structureSignature: string;
+}
+
+export function resolveTimelineCanvasDuration(input: {
+  readonly previous?: TimelineCanvasExtent;
+  readonly projectedDuration: number;
+  readonly structureSignature: string;
+  readonly minimumDuration?: number;
+}): number {
+  const retainedDuration =
+    input.previous?.structureSignature === input.structureSignature ? input.previous.duration : 0;
+  return Math.max(input.minimumDuration ?? 10, retainedDuration, input.projectedDuration);
+}
+
+export function timelineStructureSignature(
+  tracks: readonly Pick<TimelineTrackView, 'trackId' | 'items'>[],
+): string {
+  return tracks
+    .map(
+      (track) =>
+        `${track.trackId}:${track.items
+          .map((item) => (item.kind === 'clip' ? `clip:${item.clipId}` : 'gap'))
+          .join('|')}`,
+    )
+    .join('\n');
 }
 
 export function snapTimelineTime(
@@ -96,6 +117,17 @@ export function findTimelineInsertionIndex(
     (item) => targetSeconds < item.startSeconds + item.durationSeconds / 2,
   );
   return index === -1 ? items.length : index;
+}
+
+export function timelineInsertionTime(
+  items: readonly TimelineItemView[],
+  targetSeconds: number,
+): number {
+  const index = findTimelineInsertionIndex(items, targetSeconds);
+  const target = items[index];
+  if (target) return target.startSeconds;
+  const last = items[items.length - 1];
+  return last ? last.startSeconds + last.durationSeconds : 0;
 }
 
 export function readClipTrimCapacity(clip: TimelineClipView): {

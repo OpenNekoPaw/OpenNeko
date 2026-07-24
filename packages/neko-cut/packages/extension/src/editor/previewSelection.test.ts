@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TimelineClipView, TimelineView } from '@neko-cut/domain';
-import { resolvePreviewSelection } from './previewSelection';
+import { resolvePreviewPlaybackEnd, resolvePreviewSelection } from './previewSelection';
 
 function clip(
   clipId: string,
@@ -61,6 +61,41 @@ const view: TimelineView = {
 };
 
 describe('resolvePreviewSelection', () => {
+  it('stops at the last enabled media input instead of a trailing Gap', () => {
+    const trailingGap: TimelineView = {
+      ...view,
+      durationSeconds: 51.5,
+      tracks: [
+        {
+          ...view.tracks[0]!,
+          items: [
+            { ...clip('video-final', 0), durationSeconds: 26.9 },
+            { kind: 'gap', startSeconds: 26.9, durationSeconds: 24.6 },
+          ],
+        },
+        {
+          ...view.tracks[1]!,
+          items: [{ kind: 'gap', startSeconds: 0, durationSeconds: 39.2 }],
+        },
+      ],
+    };
+
+    expect(resolvePreviewPlaybackEnd(trailingGap)).toBe(26.9);
+  });
+
+  it('includes an enabled audio-only tail in the playback end', () => {
+    const audioTail: TimelineView = {
+      ...view,
+      durationSeconds: 12,
+      tracks: [
+        { ...view.tracks[0]!, items: [clip('video', 0)] },
+        { ...view.tracks[1]!, items: [clip('audio-tail', 6)] },
+      ],
+    };
+
+    expect(resolvePreviewPlaybackEnd(audioTail)).toBe(10);
+  });
+
   it('resolves active Video and every unmuted Audio Clip from timeline time', () => {
     const selection = resolvePreviewSelection(view, 2);
     expect(selection.videoClip?.clipId).toBe('video-a');
@@ -155,9 +190,9 @@ describe('resolvePreviewSelection', () => {
     expect(selection.segmentEndSeconds).toBe(4);
   });
 
-  it('fails visibly for invalid time and the end of the timeline', () => {
+  it('fails visibly for invalid time and the final enabled media end', () => {
     expect(() => resolvePreviewSelection(view, 8)).toThrowError(
-      'Cut preview timeline time must be before the timeline end.',
+      'Cut preview timeline time must be before the final enabled media end.',
     );
     expect(() => resolvePreviewSelection(view, -1)).toThrowError(
       'Cut preview timeline time must be a non-negative finite number.',

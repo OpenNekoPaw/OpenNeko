@@ -35,6 +35,7 @@ describe('TimelineControls media-kind actions', () => {
           canAddSubtitleTrack
           canSplit={false}
           hasSelection={false}
+          placementMode="sequence"
           onAddAudioTrack={onAddAudioTrack}
           onAddSubtitleTrack={onAddSubtitleTrack}
           onDelete={vi.fn()}
@@ -42,6 +43,7 @@ describe('TimelineControls media-kind actions', () => {
           onFitAll={vi.fn()}
           onLinkMedia={vi.fn()}
           onPixelsPerSecond={vi.fn()}
+          onPlacementMode={vi.fn()}
           onRedo={vi.fn()}
           onSplit={vi.fn()}
           onToggleOverview={vi.fn()}
@@ -71,6 +73,79 @@ describe('TimelineControls media-kind actions', () => {
 
     expect(onAddAudioTrack).toHaveBeenCalledOnce();
     expect(onAddSubtitleTrack).toHaveBeenCalledOnce();
+  });
+
+  it('switches placement mode through one icon-only toolbar button', () => {
+    const onPlacementMode = vi.fn();
+    act(() => {
+      root.render(
+        <TimelineControls
+          canAddAudioTrack
+          canAddSubtitleTrack
+          canSplit={false}
+          hasSelection={false}
+          onAddAudioTrack={vi.fn()}
+          onAddSubtitleTrack={vi.fn()}
+          onDelete={vi.fn()}
+          onExport={vi.fn()}
+          onFitAll={vi.fn()}
+          onLinkMedia={vi.fn()}
+          onPixelsPerSecond={vi.fn()}
+          onPlacementMode={onPlacementMode}
+          onRedo={vi.fn()}
+          onSplit={vi.fn()}
+          onToggleOverview={vi.fn()}
+          onToggleSnapping={vi.fn()}
+          onUndo={vi.fn()}
+          overviewVisible
+          pixelsPerSecond={80}
+          placementMode="sequence"
+          snappingEnabled
+        />,
+      );
+    });
+
+    expect(host.querySelector('.neko-segmented-control')).toBeNull();
+    expect(host.querySelectorAll('[role="tab"]')).toHaveLength(0);
+    const placementButton = getButton('timeline.controls.switchToPositionMode');
+    expect(placementButton.getAttribute('aria-pressed')).toBe('false');
+    expect(placementButton.textContent).toBe('');
+    expect(placementButton.querySelector('svg')).not.toBeNull();
+    act(() => placementButton.click());
+    expect(onPlacementMode).toHaveBeenCalledWith('position');
+
+    act(() => {
+      root.render(
+        <TimelineControls
+          canAddAudioTrack
+          canAddSubtitleTrack
+          canSplit={false}
+          hasSelection={false}
+          onAddAudioTrack={vi.fn()}
+          onAddSubtitleTrack={vi.fn()}
+          onDelete={vi.fn()}
+          onExport={vi.fn()}
+          onFitAll={vi.fn()}
+          onLinkMedia={vi.fn()}
+          onPixelsPerSecond={vi.fn()}
+          onPlacementMode={onPlacementMode}
+          onRedo={vi.fn()}
+          onSplit={vi.fn()}
+          onToggleOverview={vi.fn()}
+          onToggleSnapping={vi.fn()}
+          onUndo={vi.fn()}
+          overviewVisible
+          pixelsPerSecond={80}
+          placementMode="position"
+          snappingEnabled
+        />,
+      );
+    });
+
+    const activePlacementButton = getButton('timeline.controls.switchToSequenceMode');
+    expect(activePlacementButton.getAttribute('aria-pressed')).toBe('true');
+    act(() => activePlacementButton.click());
+    expect(onPlacementMode).toHaveBeenLastCalledWith('sequence');
   });
 
   function getButton(title: string): HTMLButtonElement {
