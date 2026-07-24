@@ -114,19 +114,31 @@ The Host SHALL accept a workspace-relative `cut.defaultProjectRoot` only as the 
 
 ### Requirement: Cut exposes one basic operation surface
 
-Cut SHALL expose one mode with a Video Track, up to three Audio Tracks, one optional Subtitle Track, add/remove optional empty Tracks, target-specific audio/video/subtitle link, Explorer/file drop import, compatible Clip time placement, split, trim/duration, bounded constant speed, ripple delete, Gap, gain, mute, fade, preview and media export. It MUST NOT expose general media-library ingest/catalog, automatic transcode, speed ramps/time-remap/reverse, multi-layer visual composition, rich subtitle authoring/styling/generation, transitions, nested timelines, masks, blend modes, keyframes, color/effect/plugin systems or arbitrary DSP graphs.
+Cut SHALL expose one mode with a Video Track, up to three Audio Tracks, one optional Subtitle Track, add/remove optional empty Tracks, target-specific audio/video/subtitle link, Explorer/file drop import, explicit sequence/position placement, split, trim/duration, bounded constant speed, ripple delete, Gap, gain, mute, fade, preview and media export. It MUST NOT expose general media-library ingest/catalog, automatic transcode, speed ramps/time-remap/reverse, multi-layer visual composition, rich subtitle authoring/styling/generation, transitions, nested timelines, masks, blend modes, keyframes, color/effect/plugin systems or arbitrary DSP graphs.
 
 #### Scenario: Place a Clip at a timeline time
 
 - **WHEN** a user drags a Clip to a compatible Track at a frame-quantized unoccupied time range
-- **THEN** Cut replaces its source interval with an equal Gap, splits or extends target Gaps as required, merges adjacent Gaps and persists the placement through one revisioned command
-- **AND** when the dragged range overlaps another Clip, Cut inserts before or after that Clip according to the overlapped Clip half instead of reporting a placement error
+- **THEN** position mode replaces its source interval with an equal Gap, splits or extends target Gaps as required, merges adjacent Gaps and persists the exact frame placement through one revisioned command
+- **AND** position mode rejects overlap, while sequence mode removes all Gaps from the modified source and target Tracks before inserting at the nearest sequence boundary
+- **AND** when a sequence-mode drop overlaps another Clip, Cut inserts before or after the stable anchor according to the overlapped Clip half instead of reporting a placement error
+- **AND** moving later on the same Track accounts for the source interval removed before resolving the final target
 - **AND** an exact start-time edit outside pointer dragging keeps reject-on-overlap semantics
+
+#### Scenario: Ripple-delete a Clip from a Track with Gaps
+
+- **WHEN** a user ripple-deletes a Clip or a reciprocally linked Clip pair from Tracks that contain internal or trailing Gaps
+- **THEN** Cut removes the selected Clip identities and all Gaps from each Track that actually lost a Clip
+- **AND** Tracks that did not lose a Clip remain unchanged
+- **AND** deleting the final Clip cannot leave an old trailing Gap extending the Timeline
 
 #### Scenario: Import a dropped local file
 
 - **WHEN** the Webview receives a VS Code Explorer or system file drop over a compatible Track
 - **THEN** the Host validates the dropped URI through the same prepare, workspace containment, media probe and document-relative `link-media` path as the file picker
+- **AND** a drop uses the pointer Track/time while the picker uses the playhead and selected compatible Track, or the fixed Video/first compatible Track when no selection exists
+- **AND** multiple files preserve input order and each following item starts at the prior inserted item's actual end
+- **AND** `link-media` without an explicit timeline start and overlap policy fails visibly instead of appending to the Track
 - **AND** workspace-contained input is not copied
 - **AND** workspace-external input is copied once by the Host before the same link path
 
@@ -235,7 +247,9 @@ The retained presentation SHALL be migrated from the pre-change component, hook,
 - **THEN** the user navigates through horizontal scrolling, zoom, fit-all, playhead following and a compact read-only Timeline Overview
 - **AND** the Overview derives Track/item geometry only from the current `TimelineView`, projects the real timeline viewport and changes only Webview scroll state when clicked or dragged
 - **AND** the Overview gives each Track and Clip a readable vertical range rather than compressing all structure into an indistinguishable strip
-- **AND** shortening a trailing Clip does not immediately shrink the current document-session timeline canvas and disturb cross-Track alignment
+- **AND** shortening a trailing Clip without changing Track/item identity or order does not immediately shrink the current document-session timeline canvas and disturb cross-Track alignment
+- **AND** deleting, moving or reordering items changes the structure signature and shrinks the canvas to the current projection instead of preserving historical empty extent
+- **AND** a real projected Gap is visually distinct from ordinary Track background, while retained presentation extent is never presented as a Gap
 - **AND** it does not send a Cut command, own a project snapshot or restore the legacy NKV Minimap media/store path
 
 #### Scenario: Preserve the preview workspace
@@ -259,6 +273,9 @@ The retained presentation SHALL be migrated from the pre-change component, hook,
 - **WHEN** the user clicks the ruler or drags the playhead
 - **THEN** the Webview updates only its temporary timeline position and starts preview through a revisioned timeline-time intent
 - **AND** the Host resolves the active Video and Audio Clips for that time
+- **AND** continuous playback prepares at most one paused next generation before an active-input boundary, activates it at the boundary and retires the previous generation
+- **AND** playback stops at the final enabled Video/Audio Clip end instead of advancing through a trailing Gap or retained presentation extent
+- **AND** seek, pause, stop or revision/session replacement cancels prepared media without blocking the pointer gesture
 
 #### Scenario: Render derived Clip content
 
@@ -323,8 +340,18 @@ The retained presentation SHALL be migrated from the pre-change component, hook,
 - **WHEN** the user pointer-drags a Clip toward a compatible Track timeline time
 - **THEN** Cut shows the compatible Track, frame-quantized time placement and snapping feedback and may auto-scroll the timeline near its horizontal edges
 - **AND** pointer cancellation, lost capture, window blur or an incompatible target clears temporary feedback without submitting a command
-- **AND** successful release submits exactly one revisioned `place-clip` command without persisting pixel coordinates or Webview-owned timeline state
-- **AND** the command uses insert-on-overlap semantics so an occupied drop becomes a deterministic before/after reorder
+- **AND** successful release submits exactly one revisioned `place-clip` command with explicit source and overlap policies, without persisting pixel coordinates or Webview-owned timeline state
+- **AND** sequence mode compacts modified Tracks and uses insert-on-overlap semantics so an occupied drop becomes a deterministic before/after reorder
+- **AND** position mode uses preserve-gap plus reject-on-overlap semantics so exact placement never silently moves another Clip
+
+#### Scenario: Enter sequence mode with trailing Gap
+
+- **WHEN** the current projection contains one or more Track-ending Gaps and the user changes the icon-only placement button from position mode to sequence mode
+- **THEN** Cut submits one revisioned `trim-trailing-gaps` command before treating the document as sequence mode
+- **AND** the command removes every trailing Gap from every unlocked Track while preserving internal Gaps and all Clip timing relative to preceding items
+- **AND** a locked affected Track or stale revision fails visibly and leaves position mode active
+- **AND** undoing the trim restores both the trailing Gap projection and position-mode presentation
+- **AND** the button uses its icon, active state and localized accessible label rather than a two-option text `SegmentedControl`
 
 #### Scenario: Serialize rapid durable Clip edits
 
@@ -372,6 +399,26 @@ Cut SHALL retain an export configuration panel, progress display, cancellation a
 The Extension Host SHALL project background export state into a native VS Code status item. The projection MUST be derived from explicit task snapshots and its navigation action MUST open the owning `.otio` document rather than infer an active or recent editor. Playback time and media metadata SHALL remain Webview control-bar state and MUST NOT be duplicated as another writable status source.
 
 The Extension Host MAY additionally project the currently visible Cut document's playback state, timeline time/FPS, Track/Clip counts and dirty/diagnostic summary into a separate native status item. That projection SHALL be keyed by explicit document/session identity. VS Code active-editor state MAY select which projection is visible but MUST NOT own, mutate or recover Cut session state. All status text, tooltips and command titles SHALL use Extension l10n.
+
+The Host SHALL freeze the accepted in-memory `TimelineView` immediately when it accepts a matching `cut:export-start` identity, before opening the destination picker. Export SHALL NOT implicitly save the VS Code document and SHALL NOT re-read disk, request a writable Webview snapshot or infer an active/recent editor. Each job SHALL bind that frozen `documentUri/sessionId/revision` to immutable output name, container, width, height, frame rate, video bitrate, audio inclusion, audio bitrate and audio sample-rate settings. Job settings MAY explicitly override encoding settings, SHALL initialize dimensions/rate from the frozen OTIO profile at the Webview boundary, and MUST NOT be persisted as another project profile or hidden user preference. The export surface SHALL create only a local MP4 or MOV file through the native Save Dialog and SHALL NOT expose export-to-Canvas or DaVinci Resolve actions.
+
+#### Scenario: Export a dirty accepted revision
+
+- **WHEN** the Host accepts export for a dirty in-memory revision and the user edits the document while the destination picker or export job remains active
+- **THEN** the running job exports exactly the revision accepted at the original start intent without saving or re-reading the document
+- **AND** later edits affect only a subsequent export
+
+#### Scenario: Override output settings for one job
+
+- **WHEN** the user submits valid output width, height or frame rate values from the export panel
+- **THEN** the Host binds those immutable values to that job and passes the same values to the selected media adapter
+- **AND** the OTIO project profile and the defaults of the next newly opened export panel remain unchanged
+
+#### Scenario: Resize and restore the contextual Inspector
+
+- **WHEN** the user drags the Inspector's left resize handle, collapses it and later expands it
+- **THEN** the Inspector width remains within the responsive 220–420px bounds and restores the last persisted expanded width
+- **AND** resize state remains recoverable Webview presentation state rather than an OTIO or Host command
 
 #### Scenario: Continue export after dismissing the panel
 

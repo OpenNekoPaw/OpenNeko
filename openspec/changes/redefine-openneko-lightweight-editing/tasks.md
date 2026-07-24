@@ -158,7 +158,7 @@
 - [x] 18.2 Make reciprocal linked timing/source edits atomic while preserving independent mute/gain/fade settings.
 - [x] 18.3 Support audio-only and streamless-gap preview segments; stop normally at timeline end without a missing-Video diagnostic.
 - [x] 18.4 Clamp each Minimap Clip to the timeline range and retain unchanged derived representations across Host revisions.
-- [ ] 18.5 Audit Cut i18n/theme/error/logger paths and route new diagnostics and labels through the existing shared infrastructure.
+- [x] 18.5 Audit Cut i18n/theme/error/logger paths; replace raw Host/Preview/Export error strings with the shared structured diagnostic contract, localize the complete catalog and project recoverable errors through the existing Toast surface only.
 - [ ] 18.6 Run focused Core/Extension/Webview tests and builds, strict OpenSpec, then validate save/backup, Minimap, add-Track/move and audio-only preview in an isolated Extension Development Host.
 
 ## 19. Restore Clip/Track state tools and reversible trim
@@ -202,3 +202,25 @@
 - [x] 23.1 Add a red-capable `TimelineControls` DOM test proving Audio/Subtitle Track actions have localized names, remain clickable and do not render visible `A`/`S` glyphs.
 - [x] 23.2 Reuse the shared Audio/Subtitle media-kind icons in Timeline controls without changing theme colors or introducing a second component path.
 - [x] 23.3 Run the focused Webview test/build and strict OpenSpec validation, then verify both controls in an isolated Extension Development Host.
+
+## 24. Diagnose export, playback and Preview runtime defects
+
+- [x] 24.1 Use `runtime-defect-register.md` as the current defect inventory and add stable failing/path tests before changing export, playhead or preview runtime behavior.
+- [x] 24.2 Decide and specify whether export saves the VS Code document or freezes the accepted in-memory OTIO revision; bind every job to explicit document/session/revision identity and prohibit disk/Webview/active-editor fallback.
+- [x] 24.3 Repair the OTIO-to-export projection and output validation so duration, Clip order/ranges/speed, Video embedded audio, Audio Tracks and enabled/mute state match the frozen revision.
+- [x] 24.4 Restore job-scoped output name, MP4/MOV, aspect-preserving resolution, frame-rate, video bitrate, audio inclusion/bitrate/sample-rate parameters without creating a second project-profile fact; explicitly exclude export-to-Canvas/DaVinci, retain the shared resizable Inspector path, and localize export/status projections through existing shared paths.
+- [x] 24.5 Diagnose and repair stuck Playhead gestures, timeline-end overrun and delayed/interrupted cross-Clip switching across the Webview controller, Host preview boundary and selected media adapter.
+- [x] 24.6 Make Preview workspace background follow existing VS Code theme tokens while preserving the project Canvas/letterbox color semantics.
+- [ ] 24.7 Run focused Domain/Extension/Webview tests and builds, strict OpenSpec and isolated Extension Development Host scenarios for dirty export revision, mixed audio, multiple Clip boundaries, high-frequency Playhead drag, exact timeline stop and light/dark Preview themes; record evidence in `validation.md`.
+- [ ] 24.8 Add save lifecycle/path tests, migrate OTIO persistence from package-local temporary-file replacement to the shared project-file save/authorized writer boundary, and prove normal save preserves the exact Custom Editor document/panel identity while version conflicts remain fail-visible.
+
+## 25. Correct Timeline placement and presentation extent
+
+- [x] 25.1 Diagnose historical canvas extent, real OTIO Gap, Clip move and media-entry paths; freeze sequence/position, explicit media insertion and structure-sensitive canvas contracts in proposal/design/spec/register.
+- [x] 25.2 Add red-capable Domain/Webview/Extension path tests for ripple versus preserve-gap movement, same-Track forward adjustment, explicit `link-media` timing, picker/drop targeting and trim-versus-structure canvas retention.
+- [x] 25.3 Implement required Core `sourcePolicy`/`overlapPolicy` placement and explicit timed `link-media`, poison omitted-field append behavior and keep Canvas explicit-target append outside this interactive insertion path.
+- [x] 25.4 Add document-scoped sequence/position presentation state and route Clip pointer preview/release through the matching insertion or exact-time policy.
+- [x] 25.5 Route external drop through pointer Track/time and native picker through playhead/selected compatible Track, preserving serialized multi-file order from each accepted insertion end.
+- [x] 25.6 Make retained canvas extent depend on Track/item identity-order structure, shrink after delete/move/reorder, and visually distinguish projected Gap from ordinary Track background.
+- [x] 25.7 Run focused Domain/Extension/Webview tests and builds, strict OpenSpec and isolated Extension Development Host scenarios for both modes, tail deletion, real Gap, pointer drop and picker insertion; record evidence in `validation.md`.
+- [x] 25.8 Replace the two-option placement `SegmentedControl` with one localized icon-only toolbar button, infer position mode for an initial projection containing Gap, and enter sequence mode through a revisioned trailing-Gap trim without removing internal synchronization Gaps.
