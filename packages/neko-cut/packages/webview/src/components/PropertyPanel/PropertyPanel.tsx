@@ -31,7 +31,7 @@ export const PropertyPanel = memo(function PropertyPanel(props: PropertyPanelPro
 
   if (!element) {
     return (
-      <div className="nk-prop-panel cut-shared-property-panel">
+      <div className="nk-prop-panel cut-shared-property-panel cut-inspector-property-surface">
         <div className="cut-basic-property-empty">{t('propertyPanel.noSelection')}</div>
       </div>
     );
@@ -42,7 +42,7 @@ export const PropertyPanel = memo(function PropertyPanel(props: PropertyPanelPro
   const playbackRate = element.speed?.speed ?? 1;
 
   return (
-    <div className="nk-prop-panel cut-shared-property-panel">
+    <div className="nk-prop-panel cut-shared-property-panel cut-inspector-property-surface">
       <PanelSection
         className="cut-inspector-group"
         density="compact"

@@ -74,44 +74,46 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
         controller.command({ type: 'rename-clip', clipId: clip.clipId, name: changes.name });
         return;
       }
-      if (typeof changes.startTime === 'number' && changes.startTime !== clip.startSeconds) {
-        controller.command({
-          type: 'place-clip',
-          clipId: clip.clipId,
-          toTrackId: track.trackId,
-          timelineStartFrames: Math.round(changes.startTime * frameRate(view)),
-          rate: frameRate(view),
-          sourcePolicy: 'preserve-gap',
-          overlapPolicy: 'reject',
-        });
+      const rate = frameRate(view);
+      if (typeof changes.startTime === 'number') {
+        const timelineStartFrames = Math.round(changes.startTime * rate);
+        if (timelineStartFrames !== Math.round(clip.startSeconds * rate)) {
+          controller.command({
+            type: 'place-clip',
+            clipId: clip.clipId,
+            toTrackId: track.trackId,
+            timelineStartFrames,
+            rate,
+            sourcePolicy: 'preserve-gap',
+            overlapPolicy: 'reject',
+          });
+        }
         return;
       }
       const projectedClip =
         draft?.id === elementId ? draft : projectClipForPropertyForm(track, clip);
-      if (
-        typeof changes.trimStart === 'number' &&
-        Math.abs(changes.trimStart - projectedClip.trimStart) > 1e-9
-      ) {
-        controller.command({
-          type: 'trim',
-          clipId: clip.clipId,
-          startDeltaFrames: Math.round(
-            (changes.trimStart - projectedClip.trimStart) * frameRate(view),
-          ),
-          endDeltaFrames: 0,
-        });
+      if (typeof changes.trimStart === 'number') {
+        const startDeltaFrames = Math.round((changes.trimStart - projectedClip.trimStart) * rate);
+        if (startDeltaFrames !== 0) {
+          controller.command({
+            type: 'trim',
+            clipId: clip.clipId,
+            startDeltaFrames,
+            endDeltaFrames: 0,
+          });
+        }
         return;
       }
-      if (
-        typeof changes.trimEnd === 'number' &&
-        Math.abs(changes.trimEnd - projectedClip.trimEnd) > 1e-9
-      ) {
-        controller.command({
-          type: 'trim',
-          clipId: clip.clipId,
-          startDeltaFrames: 0,
-          endDeltaFrames: Math.round((changes.trimEnd - projectedClip.trimEnd) * frameRate(view)),
-        });
+      if (typeof changes.trimEnd === 'number') {
+        const endDeltaFrames = Math.round((changes.trimEnd - projectedClip.trimEnd) * rate);
+        if (endDeltaFrames !== 0) {
+          controller.command({
+            type: 'trim',
+            clipId: clip.clipId,
+            startDeltaFrames: 0,
+            endDeltaFrames,
+          });
+        }
         return;
       }
       if (typeof changes.duration === 'number') {
@@ -119,12 +121,13 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
           frameSeconds(view),
           changes.duration - projectedClip.trimStart - projectedClip.trimEnd,
         );
-        if (Math.abs(durationSeconds - clip.durationSeconds) > 1e-9) {
+        const durationFrames = Math.max(1, Math.round(durationSeconds * rate));
+        if (durationFrames !== Math.max(1, Math.round(clip.durationSeconds * rate))) {
           controller.command({
             type: 'set-clip-duration',
             clipId: clip.clipId,
-            durationFrames: Math.max(1, Math.round(durationSeconds * frameRate(view))),
-            rate: frameRate(view),
+            durationFrames,
+            rate,
           });
         }
         return;
@@ -156,7 +159,7 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
   if (selectedTrack) {
     return (
       <div className="cut-basic-inspector-content">
-        <div className="nk-prop-panel cut-shared-property-panel">
+        <div className="nk-prop-panel cut-shared-property-panel cut-inspector-property-surface">
           <PanelSection
             className="cut-inspector-group"
             density="compact"
@@ -292,7 +295,7 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
     const profile = view.profile;
     return (
       <div className="cut-basic-inspector-content">
-        <div className="nk-prop-panel cut-shared-property-panel">
+        <div className="nk-prop-panel cut-shared-property-panel cut-inspector-property-surface">
           <PanelSection
             className="cut-inspector-group"
             density="compact"
@@ -421,7 +424,7 @@ function ReadOnlyInspector(props: {
 }) {
   return (
     <div className="cut-basic-inspector-content">
-      <div className="nk-prop-panel cut-shared-property-panel">
+      <div className="nk-prop-panel cut-shared-property-panel cut-inspector-property-surface">
         {props.groups.map((group) => (
           <PanelSection
             className="cut-inspector-group"
@@ -471,11 +474,12 @@ export function projectClipForPropertyForm(
 ): TimelineElement {
   const availableStart = clip.sourceAvailableStartSeconds;
   const availableDuration = clip.sourceAvailableDurationSeconds;
-  const trimStart =
+  const trimStart = normalizeInspectorSeconds(
     availableStart !== undefined && availableDuration !== undefined
       ? Math.max(0, (clip.sourceStartSeconds - availableStart) / clip.playbackRate)
-      : 0;
-  const trimEnd =
+      : 0,
+  );
+  const trimEnd = normalizeInspectorSeconds(
     availableStart !== undefined && availableDuration !== undefined
       ? Math.max(
           0,
@@ -485,12 +489,13 @@ export function projectClipForPropertyForm(
             clip.durationSeconds * clip.playbackRate) /
             clip.playbackRate,
         )
-      : 0;
+      : 0,
+  );
   const common = {
     id: clip.clipId,
     name: clip.name,
-    duration: trimStart + clip.durationSeconds + trimEnd,
-    startTime: clip.startSeconds,
+    duration: normalizeInspectorSeconds(trimStart + clip.durationSeconds + trimEnd),
+    startTime: normalizeInspectorSeconds(clip.startSeconds),
     trimStart,
     trimEnd,
     transform: ENGINE_DEFAULT_TRANSFORM,
@@ -553,6 +558,11 @@ function frameRate(
 
 function frameSeconds(view: Parameters<typeof frameRate>[0]): number {
   return 1 / frameRate(view);
+}
+
+function normalizeInspectorSeconds(value: number): number {
+  const rounded = Math.round(value * 1000) / 1000;
+  return Object.is(rounded, -0) ? 0 : rounded;
 }
 
 function formatSeconds(value: number): string {

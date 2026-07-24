@@ -28,7 +28,13 @@ vi.mock('../../i18n/I18nContext', () => ({
 }));
 vi.mock('./PropertyPanel', () => ({
   PropertyPanel: (props: {
-    element: { id: string; trimStart: number; trimEnd: number } | null;
+    element: {
+      id: string;
+      duration: number;
+      startTime: number;
+      trimStart: number;
+      trimEnd: number;
+    } | null;
     onElementCommit?: (id: string, changes: Record<string, unknown>) => void;
   }) => (
     <div>
@@ -80,6 +86,28 @@ vi.mock('./PropertyPanel', () => ({
         type="button"
       >
         trim-end
+      </button>
+      <button
+        onClick={() =>
+          props.element &&
+          props.onElementCommit?.(props.element.id, {
+            duration: props.element.duration,
+          })
+        }
+        type="button"
+      >
+        same-duration
+      </button>
+      <button
+        onClick={() =>
+          props.element &&
+          props.onElementCommit?.(props.element.id, {
+            trimEnd: props.element.trimEnd,
+          })
+        }
+        type="button"
+      >
+        same-trim-end
       </button>
     </div>
   ),
@@ -218,6 +246,49 @@ describe('PropertyPanelInline OTIO adapter', () => {
     ]);
   });
 
+  it('formats frame-derived seconds without submitting same-frame values', () => {
+    const view = createView();
+    const track = view.tracks[0];
+    const clip = track?.items[0];
+    if (!track || clip?.kind !== 'clip') throw new Error('Clip fixture missing.');
+    const durationSeconds = 638 / 30;
+    const noisyClip = {
+      ...clip,
+      durationSeconds,
+      sourceAvailableDurationSeconds: durationSeconds + 4e-15,
+    };
+    const projected = projectClipForPropertyForm(track, noisyClip);
+
+    expect(projected).toMatchObject({
+      duration: 21.267,
+      trimEnd: 0,
+    });
+
+    const store = createCutPresentationStore();
+    store.setState({
+      view: {
+        ...view,
+        durationSeconds,
+        tracks: [{ ...track, items: [noisyClip] }],
+      },
+      selection: { kind: 'clip', trackId: track.trackId, clipId: noisyClip.clipId },
+    });
+    act(() => {
+      root.render(
+        <CutPresentationStoreProvider store={store}>
+          <CutOtioControllerProvider>
+            <PropertyPanelInline mode="basic" />
+          </CutOtioControllerProvider>
+        </CutPresentationStoreProvider>,
+      );
+    });
+
+    click('same-duration');
+    click('same-trim-end');
+
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+
   it('adapts the retained Track Inspector to revisioned state and Agent intents', () => {
     const store = createCutPresentationStore();
     let controller: CutOtioController | undefined;
@@ -298,8 +369,11 @@ describe('PropertyPanelInline OTIO adapter', () => {
       );
     });
 
-    expect(host.querySelector('[data-property-id="project.canvasPreset"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="propertyPanel.project.canvasPreset"]')).not.toBeNull();
+    const canvasPreset = host.querySelector(
+      '[role="combobox"][aria-label="propertyPanel.project.canvasPreset"]',
+    );
+    expect(canvasPreset).not.toBeNull();
+    expect(canvasPreset?.closest('[data-property-id="project.canvasPreset"]')).not.toBeNull();
     expect(projectCanvasCommandForPreset('short-video')).toEqual({
       type: 'set-project-canvas',
       profile: 'short-video-1080p',

@@ -76,19 +76,6 @@ export const TimelineControls = memo(function TimelineControls(props: TimelineCo
         </div>
         <div className="cut-basic-timeline-actions">
           <ToolbarButton
-            active={props.placementMode === 'position'}
-            label={t(
-              props.placementMode === 'sequence'
-                ? 'timeline.controls.switchToPositionMode'
-                : 'timeline.controls.switchToSequenceMode',
-            )}
-            onClick={() =>
-              props.onPlacementMode(props.placementMode === 'sequence' ? 'position' : 'sequence')
-            }
-          >
-            <MoveIcon size={16} />
-          </ToolbarButton>
-          <ToolbarButton
             disabled={!props.canSplit}
             label={t('timeline.controls.split')}
             onClick={props.onSplit}
@@ -116,13 +103,28 @@ export const TimelineControls = memo(function TimelineControls(props: TimelineCo
           >
             <GridIcon size={16} />
           </ToolbarButton>
-          <ToolbarButton
-            active={props.overviewVisible}
-            label={t('timeline.controls.minimap')}
-            onClick={props.onToggleOverview}
-          >
-            <LayersIcon size={16} />
-          </ToolbarButton>
+          <span className="cut-basic-timeline-mode-overview-controls">
+            <ToolbarButton
+              active={props.placementMode === 'position'}
+              label={t(
+                props.placementMode === 'sequence'
+                  ? 'timeline.controls.switchToPositionMode'
+                  : 'timeline.controls.switchToSequenceMode',
+              )}
+              onClick={() =>
+                props.onPlacementMode(props.placementMode === 'sequence' ? 'position' : 'sequence')
+              }
+            >
+              <MoveIcon size={16} />
+            </ToolbarButton>
+            <ToolbarButton
+              active={props.overviewVisible}
+              label={t('timeline.controls.minimap')}
+              onClick={props.onToggleOverview}
+            >
+              <LayersIcon size={16} />
+            </ToolbarButton>
+          </span>
           <ToolbarButton label={t('timeline.controls.fitAll')} onClick={props.onFitAll}>
             <FrameSelectionIcon size={16} />
           </ToolbarButton>

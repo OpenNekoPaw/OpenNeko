@@ -230,3 +230,15 @@
 - [x] 26.1 Update proposal/design/spec so Project, Track, Clip and Gap properties use one continuous grouped Inspector surface without Tab or unsupported professional groups.
 - [x] 26.2 Add DOM/path tests and adapt the retained `PropertyPanel`/`PropertyPanelInline` through shared property primitives for context-specific basic, timing, speed, audio, canvas and state groups.
 - [x] 26.3 Run focused Webview tests/build, strict OpenSpec and an isolated Extension Development Host visual/interaction scenario; record evidence and remaining limits.
+
+## 27. Group Timeline placement and Overview controls
+
+- [x] 27.1 Update proposal/design/spec so the placement-mode and Timeline Overview visibility buttons form one adjacent toolbar group while retaining independent presentation state and actions.
+- [x] 27.2 Add a DOM regression assertion and move the existing icon-only buttons into one `TimelineControls` group without changing handlers or toolbar ownership.
+- [x] 27.3 Run focused Webview tests/build, strict OpenSpec and an isolated Extension Development Host visual scenario; record evidence.
+
+## 28. Refine contextual Inspector density and alignment
+
+- [x] 28.1 Update proposal/design/spec with responsive Inspector alignment, density, control grouping and non-overlap requirements across the supported width range.
+- [x] 28.2 Add focused layout/value assertions, refine the Cut-scoped property surface, group, control and action styles, and normalize frame-derived seconds without changing shared property behavior or the canonical typed command path.
+- [x] 28.3 Run focused Webview tests/build, strict OpenSpec and isolated Extension Development Host scenarios at the narrow and wide Inspector bounds; record geometry, interaction, console and screenshot evidence.

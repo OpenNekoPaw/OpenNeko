@@ -107,6 +107,12 @@ describe('TimelineControls media-kind actions', () => {
 
     expect(host.querySelector('.neko-segmented-control')).toBeNull();
     expect(host.querySelectorAll('[role="tab"]')).toHaveLength(0);
+    const modeOverviewGroup = host.querySelector('.cut-basic-timeline-mode-overview-controls');
+    expect(
+      Array.from(modeOverviewGroup?.querySelectorAll('button') ?? []).map((button) =>
+        button.getAttribute('title'),
+      ),
+    ).toEqual(['timeline.controls.switchToPositionMode', 'timeline.controls.minimap']);
     const placementButton = getButton('timeline.controls.switchToPositionMode');
     expect(placementButton.getAttribute('aria-pressed')).toBe('false');
     expect(placementButton.textContent).toBe('');

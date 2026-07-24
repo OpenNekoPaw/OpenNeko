@@ -242,6 +242,9 @@ The retained presentation SHALL be migrated from the pre-change component, hook,
 - **AND** every edit invokes a revisioned typed command rather than mutating the projection
 - **AND** all applicable properties remain visible in one vertically scrollable surface grouped by responsibility
 - **AND** the Inspector does not introduce Tabs, a basic/professional selector or unsupported transform/blend/mask groups
+- **AND** labels and controls use stable aligned columns, compact group spacing and uniform control heights throughout the supported Inspector width
+- **AND** Slider, numeric value and unit stay grouped without overflow; a narrow Inspector may reflow that control group without hiding any field
+- **AND** frame-derived seconds use concise millisecond presentation without floating-point noise, while committing a formatted value on the same project frame sends no mutation
 
 #### Scenario: Navigate a long timeline
 
@@ -354,6 +357,7 @@ The retained presentation SHALL be migrated from the pre-change component, hook,
 - **AND** a locked affected Track or stale revision fails visibly and leaves position mode active
 - **AND** undoing the trim restores both the trailing Gap projection and position-mode presentation
 - **AND** the button uses its icon, active state and localized accessible label rather than a two-option text `SegmentedControl`
+- **AND** the placement-mode button is adjacent to the Timeline Overview visibility button in one toolbar group without merging their state or actions
 
 #### Scenario: Serialize rapid durable Clip edits
 
@@ -420,6 +424,7 @@ The Host SHALL freeze the accepted in-memory `TimelineView` immediately when it 
 
 - **WHEN** the user drags the Inspector's left resize handle, collapses it and later expands it
 - **THEN** the Inspector width remains within the responsive 220–420px bounds and restores the last persisted expanded width
+- **AND** property labels, values, units, Sliders and bottom actions remain readable, aligned and non-overlapping at both width bounds
 - **AND** resize state remains recoverable Webview presentation state rather than an OTIO or Host command
 
 #### Scenario: Continue export after dismissing the panel

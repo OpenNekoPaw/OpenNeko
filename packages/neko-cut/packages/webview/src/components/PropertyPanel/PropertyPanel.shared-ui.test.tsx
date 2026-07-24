@@ -30,6 +30,7 @@ describe('Cut PropertyPanel retained basic UI', () => {
   it('renders one continuous OTIO-backed grouped surface without tabs', () => {
     act(() => root.render(<PropertyPanel {...props()} />));
 
+    expect(host.querySelector('.cut-inspector-property-surface')).not.toBeNull();
     expect(
       Array.from(host.querySelectorAll('.cut-inspector-group')).map((section) =>
         section.getAttribute('aria-label'),
@@ -52,6 +53,20 @@ describe('Cut PropertyPanel retained basic UI', () => {
     expect(host.textContent).not.toContain('colorCorrection');
     expect(host.textContent).not.toContain('effects.title');
     expect(host.textContent).not.toContain('masks.title');
+  });
+
+  it('keeps slider, numeric value and unit in one responsive property row', () => {
+    act(() => root.render(<PropertyPanel {...props()} />));
+
+    for (const [propertyId, unit] of [
+      ['speed', '×'],
+      ['audio.gain', 'dB'],
+    ] as const) {
+      const row = host.querySelector(`[data-property-id="${propertyId}"]`);
+      expect(row?.querySelector('[role="slider"]')).not.toBeNull();
+      expect(row?.querySelector('input[type="number"]')).not.toBeNull();
+      expect(row?.textContent).toContain(unit);
+    }
   });
 
   it('omits speed and audio groups for Subtitle Clips', () => {
