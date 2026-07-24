@@ -1,50 +1,82 @@
-/**
- * TimelineRuler Component — adapter wrapping the shared TimelineRuler.
- *
- * Preserves the neko-cut layout structure:
- *   [TRACK_LABEL_WIDTH spacer] | [shared canvas ruler]
- *
- * The ruler canvas is viewport-width and redraws based on the tracks
- * container's scroll position (scrollRef). It does NOT scroll itself.
- */
-
-import { memo } from 'react';
-import type { RefObject } from 'react';
-import { TimelineRuler as SharedRuler } from '@neko/ui/creative';
-import { PIXELS_PER_SECOND, RULER_HEIGHT, TRACK_LABEL_WIDTH } from '../../constants';
+import { memo, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { buildRulerTicks, timelineTimeFromClientX, TRACK_HEADER_WIDTH } from './timelineMath';
 
 export interface TimelineRulerProps {
-  totalDuration: number;
-  zoomLevel: number;
-  timelineWidth: number;
-  /** The scrollable tracks container — ruler mirrors its scrollLeft via redraw. */
-  scrollRef: RefObject<HTMLDivElement>;
-  seek: (time: number) => void;
+  readonly totalDuration: number;
+  readonly pixelsPerSecond: number;
+  readonly onSeek: (time: number) => void;
 }
 
-export const TimelineRuler = memo(function TimelineRuler({
-  totalDuration,
-  zoomLevel,
-  scrollRef,
-  seek,
-}: TimelineRulerProps) {
+export const TimelineRuler = memo(function TimelineRuler(props: TimelineRulerProps) {
+  const cleanupGestureRef = useRef<() => void>();
+  const ticks = useMemo(
+    () => buildRulerTicks(props.totalDuration, props.pixelsPerSecond),
+    [props.pixelsPerSecond, props.totalDuration],
+  );
+  useEffect(() => () => cleanupGestureRef.current?.(), []);
+  const seek = (event: ReactPointerEvent<HTMLDivElement>) => {
+    cleanupGestureRef.current?.();
+    const ruler = event.currentTarget;
+    const pointerId = event.pointerId;
+    const rect = ruler.getBoundingClientRect();
+    const move = (clientX: number) =>
+      props.onSeek(
+        timelineTimeFromClientX(clientX, rect.left, props.pixelsPerSecond, props.totalDuration),
+      );
+    move(event.clientX);
+    ruler.setPointerCapture(pointerId);
+    const pointerMove = (next: PointerEvent) => {
+      if (next.pointerId === pointerId) move(next.clientX);
+    };
+    const cleanup = () => {
+      ruler.removeEventListener('pointermove', pointerMove);
+      ruler.removeEventListener('pointerup', pointerEnd);
+      ruler.removeEventListener('pointercancel', pointerEnd);
+      ruler.removeEventListener('lostpointercapture', lostPointerCapture);
+      window.removeEventListener('blur', cancel);
+      document.removeEventListener('visibilitychange', visibilityChange);
+      if (cleanupGestureRef.current === cleanup) cleanupGestureRef.current = undefined;
+    };
+    const cancel = () => {
+      if (ruler.hasPointerCapture?.(pointerId)) ruler.releasePointerCapture(pointerId);
+      cleanup();
+    };
+    const pointerEnd = (next: PointerEvent) => {
+      if (next.pointerId !== pointerId) return;
+      cancel();
+    };
+    const lostPointerCapture = (next: PointerEvent) => {
+      if (next.pointerId === pointerId) cleanup();
+    };
+    const visibilityChange = () => {
+      if (document.hidden) cancel();
+    };
+    ruler.addEventListener('pointermove', pointerMove);
+    ruler.addEventListener('pointerup', pointerEnd);
+    ruler.addEventListener('pointercancel', pointerEnd);
+    ruler.addEventListener('lostpointercapture', lostPointerCapture);
+    window.addEventListener('blur', cancel);
+    document.addEventListener('visibilitychange', visibilityChange);
+    cleanupGestureRef.current = cancel;
+  };
   return (
-    <div className="flex border-b border-vscode-panel-border">
-      {/* Spacer aligned with track label column */}
+    <div className="cut-basic-ruler-row">
+      <div className="cut-basic-ruler-spacer" style={{ width: TRACK_HEADER_WIDTH }} />
       <div
-        className="shrink-0 border-r border-vscode-panel-border bg-vscode-sidebar-bg"
-        style={{ width: TRACK_LABEL_WIDTH }}
-      />
-
-      {/* Ruler area — fills remaining width, no scrolling needed */}
-      <div className="flex-1 overflow-hidden" style={{ height: RULER_HEIGHT }}>
-        <SharedRuler
-          duration={totalDuration}
-          pixelsPerSecond={PIXELS_PER_SECOND * zoomLevel}
-          onSeek={seek}
-          height={RULER_HEIGHT}
-          scrollRef={scrollRef}
-        />
+        className="cut-basic-ruler"
+        onPointerDown={seek}
+        style={{ width: Math.max(1, props.totalDuration * props.pixelsPerSecond) }}
+      >
+        {ticks.map((tick) => (
+          <span
+            className="cut-basic-ruler-tick"
+            data-major={tick.major ? 'true' : 'false'}
+            key={`${tick.seconds}-${tick.major}`}
+            style={{ left: tick.seconds * props.pixelsPerSecond }}
+          >
+            {tick.label ? <span>{tick.label}</span> : null}
+          </span>
+        ))}
       </div>
     </div>
   );

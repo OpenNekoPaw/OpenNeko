@@ -123,6 +123,13 @@
       "testScope": "src/**/*.test.{ts,tsx}"
     },
     {
+      "path": "packages/neko-cut/packages/domain",
+      "owner": "packages/neko-cut/packages/domain",
+      "mode": "self",
+      "sourceScope": "src/**/*.{ts,tsx}",
+      "testScope": "src/**/*.test.{ts,tsx}"
+    },
+    {
       "path": "packages/neko-cut/packages/extension",
       "owner": "packages/neko-cut",
       "mode": "aggregated",

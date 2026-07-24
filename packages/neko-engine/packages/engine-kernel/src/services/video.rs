@@ -1,6 +1,8 @@
 //! Video service trait
 
-use crate::domain::{CaptureOptions, ExtractOptions, FrameData, TaskHandle, TranscodeOptions};
+use crate::domain::{
+    CaptureOptions, ExtractOptions, FrameData, StreamConfig, TaskHandle, TranscodeOptions,
+};
 use crate::error::Result;
 use crate::services::IStreamPlayback;
 use async_trait::async_trait;
@@ -39,6 +41,7 @@ pub trait IVideoService: IStreamPlayback {
         &self,
         source: &Path,
         session_id: &str,
+        config: StreamConfig,
     ) -> Result<(StreamId, broadcast::Receiver<FrameData>)>;
 
     /// Transcode video to different format

@@ -1,436 +1,266 @@
-/**
- * ExportConfigView - Export configuration form UI.
- * Extracted from ExportPanel.tsx.
- */
-
-import { useState } from 'react';
-import { useTranslation } from '../../../i18n/I18nContext';
-import { postMessage as vscodePostMessage } from '../../../utils/vscodeApi';
-import type { ExportPreset, ExportPresetSettings } from '@neko/shared';
-import type { ExportFormat, Resolution } from './exportConstants';
+import { useEffect, useMemo, useState } from 'react';
+import type React from 'react';
 import {
-  RESOLUTIONS,
-  QUALITY_OPTIONS,
-  FPS_OPTIONS,
-  FORMAT_OPTIONS,
-  VIDEO_CODEC_OPTIONS,
-  AUDIO_CODEC_OPTIONS,
-  CONTAINER_VIDEO_CODECS,
-  CONTAINER_AUDIO_CODECS,
-} from './exportConstants';
+  resolveTimelinePlaybackEndSeconds,
+  type CutExportSettings,
+  type CutExportTaskSnapshot,
+  type TimelineView,
+} from '@neko-cut/domain';
+import { NumberInput } from '@neko/ui/creative';
+import { Checkbox, Select } from '@neko/ui/primitives';
+import { useTranslation } from '../../../i18n/I18nContext';
 
-// =============================================================================
-// HwBadge
-// =============================================================================
+const VIDEO_BITRATES = [4_000_000, 8_000_000, 12_000_000, 20_000_000] as const;
+const AUDIO_BITRATES = [128_000, 192_000, 256_000, 320_000] as const;
+const FRAME_RATES = [23.976, 24, 25, 29.97, 30, 60] as const;
 
-/** Shows hardware encoder name (green) or software fallback (muted) */
-function HwBadge({ encoder }: { encoder: string | null | undefined }) {
-  if (encoder == null) {
-    return (
-      <span className="text-xs text-vscode-descriptionForeground opacity-60">💻 软件编码</span>
-    );
-  }
-  return (
-    <span
-      className="text-xs px-1.5 py-0.5 rounded font-mono"
-      style={{
-        backgroundColor: 'color-mix(in srgb, var(--vscode-charts-green) 15%, transparent)',
-        color: 'var(--vscode-charts-green)',
-      }}
-    >
-      ⚡ {encoder}
-    </span>
-  );
-}
-
-// =============================================================================
-// ExportConfigView
-// =============================================================================
-
-interface ExportConfigViewProps {
-  format: ExportFormat;
-  videoCodec: string;
-  audioCodec: string;
-  resolution: Resolution;
-  quality: 'low' | 'medium' | 'high';
-  fps: number;
-  audioBitrate: number;
-  presets: ExportPreset[];
-  selectedPresetId: string | null;
-  hwCapabilities: Record<string, string | null> | null;
-  hasGlobalExport: boolean;
-  onFormatChange: (format: ExportFormat) => void;
-  onVideoCodecChange: (codec: string) => void;
-  onAudioCodecChange: (codec: string) => void;
-  onResolutionChange: (res: Resolution) => void;
-  onQualityChange: (quality: 'low' | 'medium' | 'high') => void;
-  onFpsChange: (fps: number) => void;
-  onAudioBitrateChange: (bitrate: number) => void;
-  onPresetChange: (presetId: string) => void;
-  onSelectedPresetIdChange: (id: string | null) => void;
-  onExport: () => void;
-  onClose: () => void;
-}
-
-export function ExportConfigView({
-  format,
-  videoCodec,
-  audioCodec,
-  resolution,
-  quality,
-  fps,
-  audioBitrate,
-  presets,
-  selectedPresetId,
-  hwCapabilities,
-  hasGlobalExport,
-  onFormatChange,
-  onVideoCodecChange,
-  onAudioCodecChange,
-  onResolutionChange,
-  onQualityChange,
-  onFpsChange,
-  onAudioBitrateChange,
-  onPresetChange,
-  onSelectedPresetIdChange,
-  onExport,
-  onClose,
-}: ExportConfigViewProps) {
+export function ExportConfigView(props: {
+  readonly view?: TimelineView;
+  readonly recentTasks: readonly CutExportTaskSnapshot[];
+  readonly onExport: (settings: CutExportSettings) => void;
+  readonly onClose: () => void;
+}) {
   const { t } = useTranslation();
-  const [isNamingPreset, setIsNamingPreset] = useState(false);
-  const [presetNameInput, setPresetNameInput] = useState('');
+  const profile = props.view?.profile;
+  const projectFps = profile ? profile.editRateNumerator / profile.editRateDenominator : 30;
+  const initial = useMemo(
+    () => defaultSettings(props.view, projectFps),
+    [projectFps, props.view?.documentUri, props.view?.sessionId],
+  );
+  const [settings, setSettings] = useState<CutExportSettings>(initial);
+  const [resolution, setResolution] = useState('project');
+  const [advanced, setAdvanced] = useState(false);
+
+  useEffect(() => {
+    setSettings(initial);
+    setResolution('project');
+  }, [initial]);
+
+  const set = <K extends keyof CutExportSettings>(key: K, value: CutExportSettings[K]) => {
+    setSettings((current) => ({ ...current, [key]: value }));
+  };
+  const selectResolution = (value: string) => {
+    setResolution(value);
+    if (value === 'project') {
+      setSettings((current) => ({
+        ...current,
+        width: profile?.width ?? 1920,
+        height: profile?.height ?? 1080,
+      }));
+      return;
+    }
+    const size = aspectResolution(profile?.width ?? 1920, profile?.height ?? 1080, Number(value));
+    setSettings((current) => ({ ...current, ...size }));
+  };
+  const duration = props.view ? resolveTimelinePlaybackEndSeconds(props.view) : 0;
+  const estimatedBytes =
+    (duration * (settings.videoBitrate + (settings.includeAudio ? settings.audioBitrate : 0))) / 8;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-[var(--vscode-sideBar-background)] rounded-lg shadow-xl w-[480px] max-w-full border border-vscode-panel-border opacity-100">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-vscode-panel-border">
-          <h2 className="text-lg font-semibold text-vscode-editor-foreground">导出视频</h2>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-vscode-list-hoverBackground text-vscode-foreground"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
+    <div className="cut-basic-export-config">
+      <label className="cut-basic-export-title-field">
+        <span>{t('export.outputName')}</span>
+        <input
+          aria-label={t('export.outputName')}
+          value={settings.outputName}
+          onChange={(event) => set('outputName', event.currentTarget.value)}
+        />
+      </label>
+
+      <section className="cut-basic-export-section">
+        <h3>{t('export.videoSection')}</h3>
+        <ExportRow label={t('export.resolution')}>
+          <Select
+            label={t('export.resolution')}
+            value={resolution}
+            options={[
+              { value: 'project', label: t('export.resolution.project') },
+              ...[480, 720, 1080, 1440, 2160].map((value) => ({
+                value: String(value),
+                label: value === 1440 ? '2K' : value === 2160 ? '4K' : String(value),
+              })),
+            ]}
+            onValueChange={selectResolution}
+          />
+        </ExportRow>
+        <ExportRow label={t('export.format')}>
+          <Select
+            label={t('export.format')}
+            value={settings.container}
+            options={[
+              { value: 'mp4', label: t('export.container.mp4') },
+              { value: 'mov', label: t('export.container.mov') },
+            ]}
+            onValueChange={(value) => set('container', value === 'mov' ? 'mov' : 'mp4')}
+          />
+        </ExportRow>
+        <ExportRow label={t('export.fps')}>
+          <Select
+            label={t('export.fps')}
+            value={String(settings.framesPerSecond)}
+            options={[
+              { value: String(projectFps), label: t('export.fps.project') },
+              ...FRAME_RATES.filter((value) => value !== projectFps).map((value) => ({
+                value: String(value),
+                label: `${value} ${t('export.fps.unit')}`,
+              })),
+            ]}
+            onValueChange={(value) => set('framesPerSecond', Number(value))}
+          />
+        </ExportRow>
+        <ExportRow label={t('export.videoBitrate')}>
+          <Select
+            label={t('export.videoBitrate')}
+            value={String(settings.videoBitrate)}
+            options={VIDEO_BITRATES.map((value) => ({
+              value: String(value),
+              label: value === 8_000_000 ? t('export.bitrate.auto') : `${value / 1_000_000} Mbps`,
+            }))}
+            onValueChange={(value) => set('videoBitrate', Number(value))}
+          />
+        </ExportRow>
+        <button
+          className="cut-basic-export-more"
+          type="button"
+          onClick={() => setAdvanced(!advanced)}
+        >
+          {t('export.more')} <span aria-hidden="true">{advanced ? '▲' : '▼'}</span>
+        </button>
+        {advanced ? (
+          <div className="cut-basic-export-dimensions">
+            <NumberInput
+              id="width"
+              label={t('export.outputWidth')}
+              min={16}
+              max={16384}
+              step={2}
+              unit="px"
+              value={settings.width}
+              onCommit={(_, value) => set('width', value)}
+              onPreviewChange={(_, value) => set('width', value)}
+            />
+            <NumberInput
+              id="height"
+              label={t('export.outputHeight')}
+              min={16}
+              max={16384}
+              step={2}
+              unit="px"
+              value={settings.height}
+              onCommit={(_, value) => set('height', value)}
+              onPreviewChange={(_, value) => set('height', value)}
+            />
+          </div>
+        ) : null}
+      </section>
+
+      <section className="cut-basic-export-section">
+        <Checkbox
+          id="cut-export-audio"
+          checked={settings.includeAudio}
+          label={t('export.audioSection')}
+          onCheckedChange={(checked) => set('includeAudio', checked)}
+        />
+        {settings.includeAudio ? (
+          <>
+            <ExportRow label={t('export.audioBitrate')}>
+              <Select
+                label={t('export.audioBitrate')}
+                value={String(settings.audioBitrate)}
+                options={AUDIO_BITRATES.map((value) => ({
+                  value: String(value),
+                  label: `${value / 1000} kbps`,
+                }))}
+                onValueChange={(value) => set('audioBitrate', Number(value))}
               />
-            </svg>
-          </button>
+            </ExportRow>
+            <ExportRow label={t('export.audioSampleRate')}>
+              <Select
+                label={t('export.audioSampleRate')}
+                value={String(settings.audioSampleRate)}
+                options={[
+                  { value: '44100', label: '44.1 kHz' },
+                  { value: '48000', label: '48 kHz' },
+                ]}
+                onValueChange={(value) =>
+                  set('audioSampleRate', value === '44100' ? 44_100 : 48_000)
+                }
+              />
+            </ExportRow>
+          </>
+        ) : null}
+      </section>
+
+      {props.recentTasks.length > 0 ? (
+        <div className="cut-basic-export-history">
+          {props.recentTasks.map((task) => (
+            <span data-status={task.status} key={task.jobId}>
+              {task.outputWorkspaceRelativePath} · {t(`export.status.${task.status}`)}
+            </span>
+          ))}
         </div>
+      ) : null}
 
-        {/* Content */}
-        <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
-          {/* Preset Selector */}
-          <div>
-            <label className="block text-sm font-medium text-vscode-foreground mb-2">
-              {t('export.preset.label')}
-            </label>
-            <div className="flex gap-2">
-              <select
-                value={selectedPresetId ?? ''}
-                onChange={(e) => onPresetChange(e.target.value)}
-                className="flex-1 px-3 py-2 bg-vscode-input-background border border-vscode-input-border rounded text-vscode-input-foreground focus:outline-none focus:border-vscode-focusBorder"
-              >
-                {presets.filter((p) => p.isBuiltin).length > 0 && (
-                  <optgroup label={t('export.preset.builtin')}>
-                    {presets
-                      .filter((p) => p.isBuiltin)
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                  </optgroup>
-                )}
-                {presets.filter((p) => !p.isBuiltin).length > 0 && (
-                  <optgroup label={t('export.preset.user')}>
-                    {presets
-                      .filter((p) => !p.isBuiltin)
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                  </optgroup>
-                )}
-                <option value="">{t('export.preset.custom')}</option>
-              </select>
-
-              {!isNamingPreset ? (
-                <button
-                  onClick={() => setIsNamingPreset(true)}
-                  className="px-2 py-2 bg-vscode-button-secondaryBackground hover:bg-vscode-button-secondaryHoverBackground rounded text-vscode-button-secondaryForeground transition-colors"
-                  title="保存为预设"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
-                    />
-                  </svg>
-                </button>
-              ) : (
-                <div className="flex gap-1 items-center">
-                  <input
-                    autoFocus
-                    type="text"
-                    value={presetNameInput}
-                    onChange={(e) => setPresetNameInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && presetNameInput.trim()) {
-                        const settings: ExportPresetSettings = {
-                          format,
-                          videoCodec,
-                          audioCodec,
-                          width: resolution.width,
-                          height: resolution.height,
-                          fps,
-                          quality,
-                          audioBitrate,
-                        };
-                        vscodePostMessage({
-                          type: 'preset:save',
-                          name: presetNameInput.trim(),
-                          settings,
-                        });
-                        setPresetNameInput('');
-                        setIsNamingPreset(false);
-                      } else if (e.key === 'Escape') {
-                        setPresetNameInput('');
-                        setIsNamingPreset(false);
-                      }
-                    }}
-                    placeholder="预设名称"
-                    className="w-32 px-2 py-1 bg-vscode-input-background border border-vscode-focusBorder rounded text-vscode-input-foreground text-sm focus:outline-none"
-                  />
-                  <button
-                    onClick={() => {
-                      setPresetNameInput('');
-                      setIsNamingPreset(false);
-                    }}
-                    className="px-1 py-1 text-vscode-foreground opacity-60 hover:opacity-100"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Global Export Warning */}
-          {hasGlobalExport && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 flex items-start gap-2">
-              <svg
-                className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <div className="flex-1">
-                <div className="text-sm font-medium text-blue-400">有导出任务正在进行</div>
-                <div className="text-xs text-vscode-descriptionForeground mt-1">
-                  新的导出任务将自动加入队列，当前任务完成后依次执行。
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Container Format */}
-          <div>
-            <label className="block text-sm font-medium text-vscode-foreground mb-2">
-              容器格式
-            </label>
-            <select
-              value={format}
-              onChange={(e) => onFormatChange(e.target.value as ExportFormat)}
-              className="w-full px-3 py-2 bg-vscode-input-background border border-vscode-input-border rounded text-vscode-input-foreground focus:outline-none focus:border-vscode-focusBorder"
-            >
-              {FORMAT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Video Codec */}
-          <div>
-            <label className="block text-sm font-medium text-vscode-foreground mb-2">
-              视频编码
-            </label>
-            <select
-              value={videoCodec}
-              onChange={(e) => {
-                onSelectedPresetIdChange(null);
-                onVideoCodecChange(e.target.value);
-              }}
-              className="w-full px-3 py-2 bg-vscode-input-background border border-vscode-input-border rounded text-vscode-input-foreground focus:outline-none focus:border-vscode-focusBorder"
-            >
-              {VIDEO_CODEC_OPTIONS.filter((opt) =>
-                (CONTAINER_VIDEO_CODECS[format] ?? []).includes(opt.value),
-              ).map((opt) => {
-                const hw = hwCapabilities?.[opt.value];
-                const tag = hwCapabilities == null ? '' : hw != null ? '  ⚡ 硬件' : '  💻 软件';
-                return (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                    {tag}
-                  </option>
-                );
-              })}
-            </select>
-            <div className="mt-1 h-5 flex items-center">
-              {hwCapabilities === null ? (
-                <span className="text-xs text-vscode-descriptionForeground opacity-40">
-                  检测硬件加速...
-                </span>
-              ) : (
-                <HwBadge encoder={hwCapabilities[videoCodec]} />
-              )}
-            </div>
-          </div>
-
-          {/* Audio Codec */}
-          <div>
-            <label className="block text-sm font-medium text-vscode-foreground mb-2">
-              音频编码
-            </label>
-            <select
-              value={audioCodec}
-              onChange={(e) => {
-                onSelectedPresetIdChange(null);
-                onAudioCodecChange(e.target.value);
-              }}
-              className="w-full px-3 py-2 bg-vscode-input-background border border-vscode-input-border rounded text-vscode-input-foreground focus:outline-none focus:border-vscode-focusBorder"
-            >
-              {AUDIO_CODEC_OPTIONS.filter((opt) =>
-                (CONTAINER_AUDIO_CODECS[format] ?? []).includes(opt.value),
-              ).map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Resolution */}
-          <div>
-            <label className="block text-sm font-medium text-vscode-foreground mb-2">分辨率</label>
-            <select
-              value={`${resolution.width}x${resolution.height}`}
-              onChange={(e) => {
-                onSelectedPresetIdChange(null);
-                const [w, h] = e.target.value.split('x').map(Number);
-                const res = RESOLUTIONS.find((r) => r.width === w && r.height === h);
-                if (res) onResolutionChange({ ...res });
-              }}
-              className="w-full px-3 py-2 bg-vscode-input-background border border-vscode-input-border rounded text-vscode-input-foreground focus:outline-none focus:border-vscode-focusBorder"
-            >
-              {RESOLUTIONS.map((res) => (
-                <option key={res.label} value={`${res.width}x${res.height}`}>
-                  {res.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Quality */}
-          <div>
-            <label className="block text-sm font-medium text-vscode-foreground mb-2">质量</label>
-            <select
-              value={quality}
-              onChange={(e) => {
-                onSelectedPresetIdChange(null);
-                onQualityChange(e.target.value as 'low' | 'medium' | 'high');
-              }}
-              className="w-full px-3 py-2 bg-vscode-input-background border border-vscode-input-border rounded text-vscode-input-foreground focus:outline-none focus:border-vscode-focusBorder"
-            >
-              {QUALITY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Audio Bitrate */}
-          <div>
-            <label className="block text-sm font-medium text-vscode-foreground mb-2">
-              音频比特率
-            </label>
-            <select
-              value={audioBitrate}
-              onChange={(e) => {
-                onSelectedPresetIdChange(null);
-                onAudioBitrateChange(Number(e.target.value));
-              }}
-              className="w-full px-3 py-2 bg-vscode-input-background border border-vscode-input-border rounded text-vscode-input-foreground focus:outline-none focus:border-vscode-focusBorder"
-            >
-              <option value={96000}>96 kbps</option>
-              <option value={128000}>128 kbps</option>
-              <option value={192000}>192 kbps</option>
-              <option value={256000}>256 kbps</option>
-              <option value={320000}>320 kbps</option>
-            </select>
-          </div>
-
-          {/* FPS */}
-          <div>
-            <label className="block text-sm font-medium text-vscode-foreground mb-2">
-              帧率: {fps} FPS
-            </label>
-            <select
-              value={fps}
-              onChange={(e) => {
-                onSelectedPresetIdChange(null);
-                onFpsChange(Number(e.target.value));
-              }}
-              className="w-full px-3 py-2 bg-vscode-input-background border border-vscode-input-border rounded text-vscode-input-foreground focus:outline-none focus:border-vscode-focusBorder"
-            >
-              {FPS_OPTIONS.map((fpsValue) => (
-                <option key={fpsValue} value={fpsValue}>
-                  {fpsValue} FPS
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-2 px-4 py-3 border-t border-vscode-panel-border">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-vscode-button-secondaryBackground hover:bg-vscode-button-secondaryHoverBackground rounded text-vscode-button-secondaryForeground transition-colors"
-          >
-            关闭
+      <footer className="cut-basic-export-footer">
+        <span>
+          {t('export.summary', {
+            duration: duration.toFixed(1),
+            size: formatBytes(estimatedBytes),
+            codec: `${settings.container.toUpperCase()} / H.264${settings.includeAudio ? ' / AAC' : ''}`,
+          })}
+        </span>
+        <div className="cut-basic-export-actions">
+          <button onClick={props.onClose} type="button">
+            {t('common.cancel')}
           </button>
           <button
-            onClick={onExport}
-            className="px-4 py-2 bg-vscode-button-background hover:bg-vscode-button-hoverBackground rounded text-vscode-button-foreground transition-colors"
+            disabled={!props.view || settings.outputName.trim().length === 0}
+            onClick={() => props.onExport(settings)}
+            type="button"
           >
-            {hasGlobalExport ? '加入队列' : '导出'}
+            {t('export.start')}
           </button>
         </div>
-      </div>
+      </footer>
     </div>
   );
+}
+
+function ExportRow(props: { readonly label: string; readonly children: React.ReactNode }) {
+  return (
+    <div className="cut-basic-export-row">
+      <span>{props.label}</span>
+      {props.children}
+    </div>
+  );
+}
+
+function defaultSettings(view: TimelineView | undefined, fps: number): CutExportSettings {
+  return {
+    outputName: view?.name ?? 'Untitled',
+    container: 'mp4',
+    width: view?.profile?.width ?? 1920,
+    height: view?.profile?.height ?? 1080,
+    framesPerSecond: fps,
+    videoBitrate: 8_000_000,
+    includeAudio: true,
+    audioBitrate: 192_000,
+    audioSampleRate: 48_000,
+  };
+}
+
+function aspectResolution(width: number, height: number, target: number) {
+  const landscape = width >= height;
+  const scale = target / (landscape ? height : width);
+  return { width: even(width * scale), height: even(height * scale) };
+}
+
+function even(value: number): number {
+  return Math.max(16, Math.round(value / 2) * 2);
+}
+
+function formatBytes(value: number): string {
+  return value >= 1_000_000_000
+    ? `${(value / 1_000_000_000).toFixed(1)} GB`
+    : `${Math.max(1, Math.round(value / 1_000_000))} MB`;
 }

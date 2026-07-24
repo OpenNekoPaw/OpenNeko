@@ -12,7 +12,6 @@ import type {
   CanvasNode,
   CanvasNodeType,
   ScriptScene,
-  CanvasTimelineSyncPayload,
   OperationSource,
   CanvasCreateCompositeRequest,
   CanvasCreateConnectionRequest,
@@ -82,8 +81,6 @@ export interface UseVSCodeMessagesOptions {
   /** Called when scene TOC is available for a ScriptNode */
   onScriptIndexResult?: (nodeId: string, scenes: ScriptScene[], error?: string) => void;
   onTextDocumentReadResult?: (result: CanvasTextDocumentReadResult) => void;
-  /** Called when cut syncs minimal operational metadata back into canvas */
-  onTimelineSync?: (payload: CanvasTimelineSyncPayload) => void;
   /** Return all nodes (optionally filtered by type) — used to respond to nodes.list requests */
   getNodes?: (type?: string) => CanvasNode[];
   /** Return a single node by id — used to respond to nodes.get requests */
@@ -200,7 +197,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
     onCanvasCreativeAiActionResult,
     onScriptIndexResult,
     onTextDocumentReadResult,
-    onTimelineSync,
     getNodes,
     getNode,
     updateNode,
@@ -238,8 +234,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
   onScriptIndexResultRef.current = onScriptIndexResult;
   const onTextDocumentReadResultRef = useRef(onTextDocumentReadResult);
   onTextDocumentReadResultRef.current = onTextDocumentReadResult;
-  const onTimelineSyncRef = useRef(onTimelineSync);
-  onTimelineSyncRef.current = onTimelineSync;
   const getNodesRef = useRef(getNodes);
   getNodesRef.current = getNodes;
   const getNodeRef = useRef(getNode);
@@ -390,15 +384,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
           case 'textDocument:readResult':
             if (isCanvasTextDocumentReadResult(message)) {
               onTextDocumentReadResultRef.current?.(message);
-            }
-            break;
-          case 'timelineSync':
-            if (
-              typeof message.payload === 'object' &&
-              message.payload !== null &&
-              Array.isArray((message.payload as { shots?: unknown }).shots)
-            ) {
-              onTimelineSyncRef.current?.(message.payload as CanvasTimelineSyncPayload);
             }
             break;
           case 'projectionStatus':

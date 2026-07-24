@@ -1,70 +1,37 @@
-/**
- * useTrackReordering Hook
- * 管理轨道拖拽重新排序
- */
-
 import { useCallback, useState } from 'react';
 
-export interface TrackReorderingOptions {
-  reorderTrack: (trackId: string, targetIndex: number) => void;
-}
+export function useTrackReordering(input: {
+  readonly onReorder: (trackId: string, targetIndex: number) => void;
+}) {
+  const [draggingTrackId, setDraggingTrackId] = useState<string>();
+  const [dragOverTrackIndex, setDragOverTrackIndex] = useState<number>();
 
-export function useTrackReordering({ reorderTrack }: TrackReorderingOptions) {
-  // Track drag reordering state
-  const [draggingTrackId, setDraggingTrackId] = useState<string | null>(null);
-  const [dragOverTrackIndex, setDragOverTrackIndex] = useState<number | null>(null);
-
-  // Track drag reordering handlers
-  const handleTrackDragStart = useCallback((e: React.DragEvent, trackId: string) => {
+  const start = useCallback((event: React.DragEvent, trackId: string) => {
     setDraggingTrackId(trackId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', trackId);
-    // Add a subtle drag image
-    const target = e.currentTarget as HTMLElement;
-    if (target) {
-      e.dataTransfer.setDragImage(target, target.offsetWidth / 2, target.offsetHeight / 2);
-    }
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', trackId);
   }, []);
-
-  const handleTrackDragOver = useCallback(
-    (e: React.DragEvent, trackIndex: number) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-      if (draggingTrackId) {
-        setDragOverTrackIndex(trackIndex);
-      }
+  const over = useCallback(
+    (event: React.DragEvent, trackIndex: number) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      if (draggingTrackId) setDragOverTrackIndex(trackIndex);
     },
     [draggingTrackId],
   );
-
-  const handleTrackDragLeave = useCallback(() => {
-    setDragOverTrackIndex(null);
-  }, []);
-
-  const handleTrackDrop = useCallback(
-    (e: React.DragEvent, targetIndex: number) => {
-      e.preventDefault();
-      if (draggingTrackId) {
-        reorderTrack(draggingTrackId, targetIndex);
-      }
-      setDraggingTrackId(null);
-      setDragOverTrackIndex(null);
+  const drop = useCallback(
+    (event: React.DragEvent, targetIndex: number) => {
+      event.preventDefault();
+      if (draggingTrackId) input.onReorder(draggingTrackId, targetIndex);
+      setDraggingTrackId(undefined);
+      setDragOverTrackIndex(undefined);
     },
-    [draggingTrackId, reorderTrack],
+    [draggingTrackId, input],
   );
-
-  const handleTrackDragEnd = useCallback(() => {
-    setDraggingTrackId(null);
-    setDragOverTrackIndex(null);
+  const end = useCallback(() => {
+    setDraggingTrackId(undefined);
+    setDragOverTrackIndex(undefined);
   }, []);
 
-  return {
-    draggingTrackId,
-    dragOverTrackIndex,
-    handleTrackDragStart,
-    handleTrackDragOver,
-    handleTrackDragLeave,
-    handleTrackDrop,
-    handleTrackDragEnd,
-  };
+  return { draggingTrackId, dragOverTrackIndex, start, over, drop, end };
 }

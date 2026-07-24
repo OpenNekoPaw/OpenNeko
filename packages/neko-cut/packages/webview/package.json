@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./host-adapter": "./src/host-adapter/index.tsx",
-    "./root": "./src/root.tsx"
+    "./root": "./src/root.tsx",
+    "./retained": "./src/retained.ts"
   },
   "scripts": {
     "dev": "vite",
@@ -14,6 +15,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@neko-cut/domain": "workspace:*",
     "@neko/neko-client": "workspace:*",
     "@neko/shared": "workspace:*",
     "@neko/ui": "workspace:*",

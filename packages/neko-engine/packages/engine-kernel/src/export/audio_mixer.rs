@@ -101,7 +101,7 @@ pub struct AudioMixer {
 
 impl AudioMixer {
     pub fn new(timeline: Timeline, settings: &ExportSettings) -> Self {
-        let output_sample_rate = 48000;
+        let output_sample_rate = settings.audio_sample_rate;
         let samples_per_frame = (settings.fps.recip() * output_sample_rate as f64) as usize;
         Self {
             sources: HashMap::new(),
@@ -113,7 +113,7 @@ impl AudioMixer {
         }
     }
 
-    pub fn initialize(&mut self) -> Result<()> {
+    pub fn initialize(&mut self) -> Result<bool> {
         let audio_sources = self.get_audio_sources();
         for src in audio_sources {
             let mut decoder = FfmpegAudioDecoder::new()
@@ -144,7 +144,7 @@ impl AudioMixer {
                 }
             }
         }
-        Ok(())
+        Ok(!self.sources.is_empty())
     }
 
     /// Hot-update timeline data without recreating the mixer.
@@ -195,12 +195,16 @@ impl AudioMixer {
             }
             for element in &track.elements {
                 if let Some(src) = element.source_path() {
-                    let dominated = match &element.element_type {
+                    let contributes_audio = match &element.element_type {
                         ElementType::Audio(_) => true,
-                        ElementType::Media(_) if !element.is_audio_muted() => true,
+                        ElementType::Media(media)
+                            if media.audio.is_some() && !element.is_audio_muted() =>
+                        {
+                            true
+                        }
                         _ => false,
                     };
-                    if dominated && !sources.contains(&src) {
+                    if contributes_audio && !sources.contains(&src) {
                         sources.push(src);
                     }
                 }
@@ -420,6 +424,9 @@ impl Drop for AudioMixer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::{AudioElementData, Element, MediaElementData, Track, Transform};
+    use neko_engine_types::{BlendMode, TrackType};
+    use std::io::Write;
 
     #[test]
     fn to_s16_bytes_clamps_and_serializes_little_endian() {
@@ -438,5 +445,135 @@ mod tests {
             .collect();
 
         assert_eq!(samples, vec![-32768, -32767, 0, 32767, 32767]);
+    }
+
+    #[test]
+    fn initialize_keeps_valid_embedded_audio_when_another_video_has_no_audio() {
+        let audio_file = write_test_wav();
+        let missing_video = audio_file.path().with_file_name("video-without-audio.mp4");
+        let mut timeline = Timeline::default();
+        let mut track = Track::new("video", TrackType::Video);
+        track.elements = vec![
+            media_element(audio_file.path().to_string_lossy().into_owned(), true),
+            media_element(missing_video.to_string_lossy().into_owned(), false),
+        ];
+        timeline.tracks = vec![track];
+        let mut mixer = AudioMixer::new(timeline, &test_settings());
+
+        assert_eq!(mixer.initialize().expect("initialize mixed audio"), true);
+    }
+
+    #[test]
+    fn initialize_rejects_an_explicit_audio_clip_without_an_audio_stream() {
+        let temporary_directory = tempfile::tempdir().expect("temporary directory");
+        let missing_audio = temporary_directory.path().join("missing-audio.mp4");
+        let mut timeline = Timeline::default();
+        let mut track = Track::new("audio", TrackType::Audio);
+        track.elements = vec![audio_element(missing_audio.to_string_lossy().into_owned())];
+        timeline.tracks = vec![track];
+        let mut mixer = AudioMixer::new(timeline, &test_settings());
+
+        assert!(mixer.initialize().is_err());
+    }
+
+    fn media_element(src: String, has_embedded_audio: bool) -> Element {
+        element(ElementType::Media(MediaElementData {
+            src,
+            resource_id: None,
+            audio: has_embedded_audio.then(Default::default),
+            media_type: Some("video".to_string()),
+            linked_audio_id: None,
+            volume: 1.0,
+        }))
+    }
+
+    fn audio_element(src: String) -> Element {
+        element(ElementType::Audio(AudioElementData {
+            src,
+            resource_id: None,
+            audio: None,
+            audio_settings: None,
+            linked_video_id: None,
+            volume: 1.0,
+            pan: 0.0,
+            fade_in: 0.0,
+            fade_out: 0.0,
+        }))
+    }
+
+    fn element(element_type: ElementType) -> Element {
+        Element {
+            id: "test".to_string(),
+            name: String::new(),
+            element_type,
+            start_time: 0.0,
+            duration: 1.0,
+            trim_start: 0.0,
+            trim_end: 0.0,
+            transform: Transform::default(),
+            opacity: 1.0,
+            blend_mode: BlendMode::Normal,
+            effects: Vec::new(),
+            muted: false,
+            hidden: false,
+            locked: false,
+            speed: None,
+            transition_in: None,
+            transition_out: None,
+            masks: Vec::new(),
+            transition: None,
+        }
+    }
+
+    fn test_settings() -> ExportSettings {
+        ExportSettings {
+            width: 1920,
+            height: 1080,
+            fps: 30.0,
+            video_codec: Default::default(),
+            video_bitrate: None,
+            audio_codec: Default::default(),
+            audio_bitrate: None,
+            audio_sample_rate: 48_000,
+            hw_encoder: Default::default(),
+            time_range: None,
+            preset: Default::default(),
+            use_zero_copy_gpu: false,
+        }
+    }
+
+    fn write_test_wav() -> tempfile::NamedTempFile {
+        let mut file = tempfile::Builder::new()
+            .suffix(".wav")
+            .tempfile()
+            .expect("temporary wav");
+        let channels = 2_u16;
+        let sample_rate = 48_000_u32;
+        let bits_per_sample = 16_u16;
+        let samples = vec![0_i16; 960];
+        let data_size = (samples.len() * std::mem::size_of::<i16>()) as u32;
+        let byte_rate = sample_rate * u32::from(channels) * u32::from(bits_per_sample) / 8;
+        let block_align = channels * bits_per_sample / 8;
+        file.write_all(b"RIFF").expect("RIFF");
+        file.write_all(&(36 + data_size).to_le_bytes())
+            .expect("wav size");
+        file.write_all(b"WAVEfmt ").expect("wav format");
+        file.write_all(&16_u32.to_le_bytes()).expect("PCM size");
+        file.write_all(&1_u16.to_le_bytes()).expect("PCM format");
+        file.write_all(&channels.to_le_bytes()).expect("channels");
+        file.write_all(&sample_rate.to_le_bytes())
+            .expect("sample rate");
+        file.write_all(&byte_rate.to_le_bytes()).expect("byte rate");
+        file.write_all(&block_align.to_le_bytes())
+            .expect("block align");
+        file.write_all(&bits_per_sample.to_le_bytes())
+            .expect("bits per sample");
+        file.write_all(b"data").expect("data marker");
+        file.write_all(&data_size.to_le_bytes()).expect("data size");
+        for sample in samples {
+            file.write_all(&sample.to_le_bytes()).expect("sample");
+        }
+        file.flush().expect("flush wav");
+        file
     }
 }

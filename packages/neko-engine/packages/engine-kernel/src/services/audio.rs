@@ -1,6 +1,6 @@
 //! Audio service trait
 
-use crate::domain::{AudioTranscodeOptions, LoudnessAnalysis, SilenceAnalysis};
+use crate::domain::{AudioTranscodeOptions, LoudnessAnalysis, SilenceAnalysis, StreamConfig};
 use crate::error::Result;
 use crate::services::IStreamPlayback;
 use async_trait::async_trait;
@@ -34,6 +34,7 @@ pub trait IAudioService: IStreamPlayback {
         &self,
         source: &Path,
         session_id: &str,
+        config: StreamConfig,
     ) -> Result<(StreamId, broadcast::Receiver<FrameData>)>;
 
     /// Start a project mix stream from a full mixdown render config.

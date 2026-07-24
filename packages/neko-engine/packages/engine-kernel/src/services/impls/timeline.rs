@@ -1139,6 +1139,7 @@ impl ITimelineService for TimelineService {
                 video_bitrate: None,
                 audio_codec: Default::default(),
                 audio_bitrate: None,
+                audio_sample_rate: 48_000,
                 hw_encoder: Default::default(),
                 time_range: None,
                 preset: Default::default(),
@@ -1146,9 +1147,16 @@ impl ITimelineService for TimelineService {
             };
 
             let mut mixer = AudioMixer::new(audio_timeline.clone(), &settings);
-            if let Err(e) = mixer.initialize() {
-                tracing::error!("Failed to initialize AudioMixer: {}", e);
-                return;
+            match mixer.initialize() {
+                Ok(true) => {}
+                Ok(false) => {
+                    tracing::debug!("AudioMixer has no active audio sources");
+                    return;
+                }
+                Err(error) => {
+                    tracing::error!("Failed to initialize AudioMixer: {}", error);
+                    return;
+                }
             }
 
             // Wait for WebSocket subscriber to connect before producing frames.

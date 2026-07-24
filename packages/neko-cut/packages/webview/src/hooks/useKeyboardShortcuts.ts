@@ -1,205 +1,96 @@
 import { useMemo } from 'react';
 import { useKeyboardDispatcher, type ShortcutBinding } from '@neko/ui/keyboard';
-import { useEditorStore } from '../stores/editor-store';
 
-interface CutKeyboardState extends Record<string, unknown> {
-  readonly hasProject: boolean;
+export interface CutKeyboardShortcutState extends Record<string, unknown> {
+  readonly hasView: boolean;
   readonly hasSelection: boolean;
+  readonly hasClipboard: boolean;
+  readonly canSplit: boolean;
+}
+
+export interface CutKeyboardShortcutActions {
+  readonly togglePlayback: () => void;
+  readonly seekByFrames: (frames: number) => void;
+  readonly seekStart: () => void;
+  readonly seekEnd: () => void;
+  readonly undo: () => void;
+  readonly redo: () => void;
+  readonly split: () => void;
+  readonly duplicateSelection: () => void;
+  readonly cutSelection: () => void;
+  readonly copySelection: () => void;
+  readonly paste: () => void;
+  readonly selectAll: () => void;
+  readonly deleteSelection: () => void;
+  readonly clearSelection: () => void;
+}
+
+export interface UseKeyboardShortcutsOptions {
+  readonly enabled: boolean;
+  readonly state: CutKeyboardShortcutState;
+  readonly actions: CutKeyboardShortcutActions;
 }
 
 const EDITOR_SCOPE = 'editor';
 
-export function useKeyboardShortcuts(): void {
-  const {
-    project,
-    currentTime,
-    selectedElements,
-    togglePlayback,
-    pause,
-    seek,
-    opUndo,
-    opRedo,
-    toggleSnapping,
-    toggleRippleEditing,
-    toggleFrameAlign,
-    copySelected,
-    pasteAtTime,
-    removeElement,
-    clearSelectedElements,
-    getTotalDuration,
-    splitAtPlayhead,
-    splitAndKeepLeft,
-    splitAndKeepRight,
-    toggleElementHidden,
-    toggleElementMuted,
-  } = useEditorStore();
-  const fps = project?.fps ?? 30;
-  const state = useMemo<CutKeyboardState>(
-    () => ({
-      hasProject: Boolean(project),
-      hasSelection: selectedElements.length > 0,
-    }),
-    [project, selectedElements.length],
-  );
-
-  const bindings = useMemo<readonly ShortcutBinding<CutKeyboardState>[]>(
-    () => [
-      createBinding('toggle-playback', 'Space', () => togglePlayback()),
-      createBinding('pause', 'KeyK', () => pause()),
-      createBinding('rewind-5s', 'KeyJ', () => seek(Math.max(0, currentTime - 5), fps)),
-      createBinding('forward-5s', 'KeyL', () =>
-        seek(Math.min(getTotalDuration() || 60, currentTime + 5), fps),
-      ),
-      createBinding('frame-back', 'ArrowLeft', () => seek(Math.max(0, currentTime - 1 / 30), fps)),
-      createBinding('frame-forward', 'ArrowRight', () => seek(currentTime + 1 / 30, fps)),
-      createBinding('go-start-primary', { key: 'ArrowLeft', primary: true }, () => seek(0, fps)),
-      createBinding('go-end-primary', { key: 'ArrowRight', primary: true }, () =>
-        seek(getTotalDuration() || 0, fps),
-      ),
-      createBinding('go-start', 'Home', () => seek(0, fps)),
-      createBinding('go-end', 'End', () => seek(getTotalDuration() || 0, fps)),
-      createBinding('undo', { key: 'KeyZ', primary: true }, () => opUndo()),
-      createBinding('redo', { key: 'KeyZ', primary: true, shift: true }, () => opRedo()),
-      createBinding('copy', { key: 'KeyC', primary: true }, () => copySelected()),
-      createBinding('paste', { key: 'KeyV', primary: true }, () => pasteAtTime(currentTime)),
-      createBinding(
-        'delete-selected',
-        'Delete',
-        () => deleteSelectedElements(selectedElements, removeElement, clearSelectedElements),
-        { when: (current) => current.hasProject && current.hasSelection },
-      ),
-      createBinding(
-        'delete-selected-backspace',
-        'Backspace',
-        () => deleteSelectedElements(selectedElements, removeElement, clearSelectedElements),
-        { when: (current) => current.hasProject && current.hasSelection },
-      ),
-      createBinding(
-        'select-all',
-        { key: 'KeyA', primary: true },
-        () => selectAllProjectElements(),
-        {
-          when: (current) => current.hasProject,
-        },
-      ),
-      createBinding('escape-clear-selection', 'Escape', () => clearSelectedElements()),
-      createBinding('toggle-snapping', 'KeyN', () => toggleSnapping()),
-      createBinding('toggle-ripple-editing', 'KeyR', () => toggleRippleEditing()),
-      createBinding('toggle-frame-align', 'KeyF', () => toggleFrameAlign()),
-      createBinding(
-        'split-at-playhead',
-        'KeyS',
-        () => {
-          for (const { trackId, elementId } of selectedElements) {
-            splitAtPlayhead(trackId, elementId);
-          }
-        },
-        { when: (current) => current.hasProject && current.hasSelection },
-      ),
-      createBinding(
-        'split-keep-left',
-        'KeyQ',
-        () => {
-          for (const { trackId, elementId } of selectedElements) {
-            splitAndKeepLeft(trackId, elementId);
-          }
-        },
-        { when: (current) => current.hasSelection },
-      ),
-      createBinding(
-        'split-keep-right',
-        'KeyW',
-        () => {
-          for (const { trackId, elementId } of selectedElements) {
-            splitAndKeepRight(trackId, elementId);
-          }
-        },
-        { when: (current) => current.hasSelection },
-      ),
-      createBinding(
-        'toggle-hidden',
-        'KeyH',
-        () => {
-          for (const { trackId, elementId } of selectedElements) {
-            toggleElementHidden(trackId, elementId);
-          }
-        },
-        { when: (current) => current.hasSelection },
-      ),
-      createBinding(
-        'toggle-muted',
-        'KeyM',
-        () => {
-          for (const { trackId, elementId } of selectedElements) {
-            toggleElementMuted(trackId, elementId);
-          }
-        },
-        { when: (current) => current.hasSelection },
-      ),
-    ],
-    [
-      clearSelectedElements,
-      copySelected,
-      currentTime,
-      fps,
-      getTotalDuration,
-      opRedo,
-      opUndo,
-      pasteAtTime,
-      pause,
-      removeElement,
-      seek,
-      selectedElements,
-      splitAndKeepLeft,
-      splitAndKeepRight,
-      splitAtPlayhead,
-      toggleElementHidden,
-      toggleElementMuted,
-      toggleFrameAlign,
-      togglePlayback,
-      toggleRippleEditing,
-      toggleSnapping,
-    ],
-  );
-
-  useKeyboardDispatcher(bindings, state);
+export function useKeyboardShortcuts({
+  enabled,
+  state,
+  actions,
+}: UseKeyboardShortcutsOptions): void {
+  const bindings = useMemo(() => createCutShortcutBindings(actions), [actions]);
+  useKeyboardDispatcher(bindings, state, { enabled });
 }
 
-function createBinding(
+export function createCutShortcutBindings(
+  actions: CutKeyboardShortcutActions,
+): readonly ShortcutBinding<CutKeyboardShortcutState>[] {
+  const hasView = (state: CutKeyboardShortcutState) => state.hasView;
+  const hasSelection = (state: CutKeyboardShortcutState) => state.hasView && state.hasSelection;
+  const hasClipboard = (state: CutKeyboardShortcutState) => state.hasView && state.hasClipboard;
+  return [
+    binding('toggle-playback', 'Space', actions.togglePlayback, hasView),
+    binding('pause', 'KeyK', actions.togglePlayback, hasView),
+    binding('rewind', 'KeyJ', () => actions.seekByFrames(-150), hasView),
+    binding('forward', 'KeyL', () => actions.seekByFrames(150), hasView),
+    binding('frame-back', 'ArrowLeft', () => actions.seekByFrames(-1), hasView),
+    binding('frame-forward', 'ArrowRight', () => actions.seekByFrames(1), hasView),
+    binding('go-start-primary', { key: 'ArrowLeft', primary: true }, actions.seekStart, hasView),
+    binding('go-end-primary', { key: 'ArrowRight', primary: true }, actions.seekEnd, hasView),
+    binding('go-start', 'Home', actions.seekStart, hasView),
+    binding('go-end', 'End', actions.seekEnd, hasView),
+    binding('undo', { key: 'KeyZ', primary: true }, actions.undo, hasView),
+    binding('redo', { key: 'KeyZ', primary: true, shift: true }, actions.redo, hasView),
+    binding('split-at-playhead', 'KeyS', actions.split, (state) => state.canSplit),
+    binding(
+      'duplicate-selected',
+      { key: 'KeyD', primary: true },
+      actions.duplicateSelection,
+      hasSelection,
+    ),
+    binding('cut-selected', { key: 'KeyX', primary: true }, actions.cutSelection, hasSelection),
+    binding('copy-selected', { key: 'KeyC', primary: true }, actions.copySelection, hasSelection),
+    binding('paste', { key: 'KeyV', primary: true }, actions.paste, hasClipboard),
+    binding('select-all', { key: 'KeyA', primary: true }, actions.selectAll, hasView),
+    binding('delete-selected', 'Delete', actions.deleteSelection, hasSelection),
+    binding('delete-selected-backspace', 'Backspace', actions.deleteSelection, hasSelection),
+    binding('escape-clear-selection', 'Escape', actions.clearSelection),
+  ];
+}
+
+function binding(
   id: string,
-  key: ShortcutBinding<CutKeyboardState>['key']['key'] | ShortcutBinding<CutKeyboardState>['key'],
+  key:
+    | ShortcutBinding<CutKeyboardShortcutState>['key']['key']
+    | ShortcutBinding<CutKeyboardShortcutState>['key'],
   run: () => void,
-  options: Pick<ShortcutBinding<CutKeyboardState>, 'when'> = {},
-): ShortcutBinding<CutKeyboardState> {
+  when?: (state: CutKeyboardShortcutState) => boolean,
+): ShortcutBinding<CutKeyboardShortcutState> {
   return {
     id,
     key: typeof key === 'string' ? { key } : key,
     scope: EDITOR_SCOPE,
     run,
-    when: options.when,
+    ...(when ? { when } : {}),
   };
-}
-
-function deleteSelectedElements(
-  selectedElements: readonly { readonly trackId: string; readonly elementId: string }[],
-  removeElement: (trackId: string, elementId: string) => void,
-  clearSelectedElements: () => void,
-): void {
-  for (const { trackId, elementId } of selectedElements) {
-    removeElement(trackId, elementId);
-  }
-  clearSelectedElements();
-}
-
-function selectAllProjectElements(): void {
-  const { project, setSelectedElements } = useEditorStore.getState();
-  if (!project) {
-    return;
-  }
-
-  setSelectedElements(
-    project.tracks.flatMap((track) =>
-      track.elements.map((element) => ({ trackId: track.id, elementId: element.id })),
-    ),
-  );
 }

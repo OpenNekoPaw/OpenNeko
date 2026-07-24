@@ -1,74 +1,37 @@
 ## Evaluation Scope
 
-- Change/feature: Cut Agent authoring changes from NKV and implicit UI ownership to explicit `.otio` document URI/revision and host-neutral offline OTIO commands.
-- Authoring decision: `create` the indexed suite `agent-runtime.cut-authoring`. The existing `video-editing` Skill owns editing methodology, not real Cut document routing, revision or artifact side effects.
-- Why real evaluation is required: capability registration, target selection, approval and persisted artifact delivery can change real Agent behavior. Parser and command unit tests cannot prove that a real Agent selects the canonical Cut capability.
-- Canonical path: real TUI Agent request → host-neutral Cut capability → explicit `.otio` URI/revision → Cut Core command → independently validated `.otio` artifact.
-- Forbidden substitutes: eval-only Cut tools, direct fixture mutation, active/recent document selection, NKV/NKC aliases, Webview state, media runtime shortcuts and hidden host-specific writes.
+- Change/feature: Cut Webview 中的 Clip/Track “发送到 Agent”入口改为显式 `.otio` document/session/revision/Track/Clip 定位，并通过共享 `AgentContextPayload` 与 `neko.agent.sendContext` 交付只读上下文。
+- Decision and owning suite: `create` 一个聚焦 Cut context-handoff case；现有 video-editing Skill suite 只验证剪辑方法，不拥有 VS Code Custom Editor 到 Agent context chip 的宿主路由。
+- Why real Evaluation is required: 该变更新增跨扩展 Agent 上下文路由。确定性测试能证明 payload 投影和 Host 命令调用，但不能单独证明真实 Agent 面板收到可见 context attachment。
+- Canonical path: Cut selection → revisioned Webview intent → Cut Extension 显式身份校验 → `AgentContextPayload` 投影 → `neko.agent.sendContext` → Agent context attachment。
+- Forbidden fallback: `executeAIAction`、active/recent editor 推断、Webview 直接调用模型、可写 OTIO 快照、缺失或陈旧 selection 的 apparent success。
 
-## Planned Cases
+## Cases
 
-### `cut-create-edit-save-otio`
+- Positive: 在合成 `.otio` fixture 中选择一个 Clip，调用“发送到 Agent”，断言 attachment 包含精确 document URI、session、revision、Track/Clip、时间范围和媒体摘要。
+- Boundary: 使用陈旧 revision、缺失 Clip 或跨文档 selection，断言 Cut fail-visible，Agent 不收到 attachment。
+- Deterministic evidence: `cutAgentContext.test.ts` 验证 payload 与 no-fallback；`CutOtioController.test.ts` 验证 Webview 只提交显式 selection；Extension Development Host 场景负责验证真实 VS Code/Agent 面板交互。
 
-- Kind: positive.
-- Prompt intent: create an OTIO project, add workspace-relative media references and gaps, perform trim/reorder/delete operations, then save or save-as.
-- Required evidence: selected capability/operation, explicit `.otio` target/revision, validated OTIO artifact, workspace-relative references and absence of NKV/NKC writes.
-- Path assertion: poison legacy handlers and assert the Cut Core document-session command path.
+## Missing Observability
 
-### `cut-open-edit-export-otio-structure`
+- 当前 indexed TUI Evaluation 平台没有可驱动 VS Code Cut Custom Editor selection 与 Agent context-chip 的生产绑定。
+- 不得为通过 Evaluation 添加 eval-only Cut Tool、直接调用 Agent turn runner、模拟 active editor 或直接注入 context chip。
+- 在平台获得该生产绑定前，focused real case 记录为 infrastructure-blocked；key-free harness 仅证明 Evaluation 平台完整性，不作为该行为验收。
 
-- Kind: positive.
-- Prompt intent: open an existing `.otio`, edit it and export the updated OTIO structure to another `.otio` destination.
-- Required evidence: source and destination document identities, expected/new revisions, validated serialized OTIO and unchanged referenced media bytes.
-- Path assertion: “export” means OTIO serialization/save-as only; no media probe, frame capture, playback or MP4 export operation may run.
+## Verification
 
-### `canvas-route-explicit-cut-target`
+- Key-free validation: `pnpm test:agent:eval` 通过（39 files / 281 tests；24 suites / 52 dry-run cases）。该结果只证明 harness/schema/dry-run 完整性。
+- Real case: 尚不可执行；需要生产 VS Code Host 绑定或等价的外部 Evaluation controller。
+- Runtime acceptance: 2026-07-23 在隔离 `neko-test` fixture workspace 的 Extension Development Host 中通过：
+  - 刷新后的 Cut Webview 使用当前 bundle；工具栏为共享 SVG icon，项目、Clip、Track Inspector 和中文右键菜单可见。
+  - minimap 的三个 Video Clip 分别投影为独立的 left/width 范围，而不是合并成整轨背景。
+  - 通过真实菜单完成 Clip copy/paste，Clip 数从 3 增至 4；随后 Undo 恢复为 3。通过属性面板把同一 Clip 从 21.27s 缩短到 18s、再拉长到 20s，并 Undo 恢复到 21.27s。
+  - `Cmd+S` 成功保存有效 OTIO，原生状态栏从 dirty 的 `*` 状态恢复为 clean；没有出现 `Cannot serialize an invalid OTIO document`。
+  - Clip Inspector 的“发送到 Agent”触发 `injectContext`，消息携带精确 document URI、session、revision、Track/Clip ID、时间范围、源路径、速度和音频状态。
+  - Agent Webview 显示 `720P.mp4` context chip 及“理解内容 / 生成替换素材”建议，证明真实跨扩展 handoff 命中。
+  - Cut/Agent Webview 控制台仅观察到 VS Code 已知的 `local-network-access` 警告；没有 Cut context 解析或路由错误。
 
-- Kind: boundary/positive.
-- Prompt intent: send an ordered Canvas media/gap route to a new Cut or a named existing `.otio`.
-- Required evidence: route snapshot, target mode, target URI/revision and resulting OTIO edit.
-- Path assertion: no active/recent Cut lookup; missing target choice fails.
+## Residual Risk
 
-### `cut-reject-invalid-offline-authoring`
-
-- Kind: failure.
-- Prompt intent: edit an `.nkv`, omit the target, use a stale revision, link an absolute/escaping path or request an unsupported timeline object.
-- Required evidence: structured fail-visible diagnostic identifying the exact unsupported condition.
-- Path assertion: no fallback, default document, partial side effect, empty success, legacy handler or Webview mutation.
-
-## Evidence and Observability
-
-- Record scenario id, provider/model, Agent run/report identity, capability/operation, approval, target URI/revision and terminal diagnostic.
-- Validate resulting `.otio` independently with the owning OTIO validator and verify referenced media bytes were not copied or changed.
-- Add path counters/spies or poison assertions for Cut Core document sessions, legacy handlers, active/recent target lookup and Webview-owned persistence.
-- Use isolated synthetic workspaces without real user media, credentials or private paths.
-- Key-free harness results prove manifest/schema/runner behavior only, not real model selection or side effects.
-
-## Explicit Exclusions
-
-- TUI evaluation does not prove media codec support, source duration, audio-stream presence, logical separation runtime correctness, frame capture, PCM, playback, preview quality or MP4 export.
-- Those behaviors require a selected media adapter and deterministic adapter/Extension Development Host tests. They must not be simulated through fixture metadata or Evaluation-only media tools.
-- Pure OTIO parse/serialize, schema rejection and command algebra remain primarily deterministic tests; the real suite proves Agent routing and durable artifact delivery.
-
-## Missing Observability / Implementation Blocker
-
-- The current indexed Agent evaluation catalog has no Cut-authoring suite.
-- The canonical TUI runtime must expose the production host-neutral Cut document binding and artifact events. If unavailable, real cases remain blocked.
-- Do not add an evaluation-only Cut capability, direct turn runner or fixture mutation path.
-
-## Verification Plan
-
-- Artifact stage: strict OpenSpec and documentation consistency checks only; no runtime capability has been implemented.
-- Implementation stage: run suite key-free self-tests, then focused real Agent cases through the canonical TUI session owner.
-- VS Code visual/media acceptance remains separate and uses Extension Development Host evidence.
-
-## Current Result
-
-- Real Agent evaluation: not run; this proposal does not implement or register the Cut capability changes.
-- Key-free Agent harness: not run; no evaluation manifest or runner code changes are part of this artifact update.
-
-## Residual Risks
-
-- Until TUI exposes the production Cut binding, Agent routing and artifact side effects remain unverified.
-- Offline authoring can preserve a workspace-relative media reference without proving that its bytes are decodable; selected media operations must diagnose that later.
-- Media runtime correctness remains outside this suite and requires its own adapter and VS Code evidence.
+- Extension Development Host 已证明真实 Agent 面板端到端交付；自动化的 focused real Agent Evaluation 仍因 indexed TUI 平台缺少 VS Code Custom Editor 生产绑定而处于 infrastructure-blocked。
+- Agent 收到上下文后的编辑建议质量不在本变更范围；本变更只负责结构化 handoff，不自动修改 Cut 文档。

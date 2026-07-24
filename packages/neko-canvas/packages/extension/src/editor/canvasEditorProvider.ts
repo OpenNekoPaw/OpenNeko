@@ -36,7 +36,6 @@ import {
   type PreviewVariantResourceApi,
 } from '@neko/shared/vscode/extension';
 import {
-  buildStoryboardImportTimelineSyncPayload,
   createCanvasStoryboardExecutionSummary,
   getPanoramicPreviewRoute,
   inferCanvasDocumentType,
@@ -59,7 +58,6 @@ import {
   createProjectionAdapterRegistry,
   NEKO_EXTENSION_IDS,
   isNekoMediaRepresentationAPI,
-  isNekoCutAPI,
   normalizeNarrativePreviewFeatureToggles,
   PathResolver,
   resolveEffectiveCanvasPlaybackRoutes,
@@ -83,14 +81,12 @@ import {
 import type {
   CanvasCreativeAiActionId,
   CanvasCutDraftPayload,
-  CutCanvasDraftImportResult,
   CanvasPlaybackPlan,
   CanvasPlaybackRouteCandidate,
   CanvasPlaybackUnit,
   CanvasPlaybackCreateCutDraftRequest,
   CanvasPlaybackReorderUnitsRequest,
   CanvasPlaybackReorderUnitsResult,
-  NekoCutAPI,
   CanvasCreateCompositeRequest,
   CanvasCreateCompositeResult,
   CanvasCreateConnectionRequest,
@@ -112,7 +108,6 @@ import type {
   ContentRepresentationSpec,
   CanvasUpdateBlockRequest,
   CanvasUpdateBlockResult,
-  CanvasTimelineSyncPayload,
   CreativeEntityChangedRef,
   CanvasStoryboardExecutionSummary,
   CanvasStoryboardExecutionSummaryRequest,
@@ -2776,63 +2771,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         });
         break;
       }
-      case 'playback:createCutDraftFromRoute': {
-        const requestId =
-          typeof message._requestId === 'number' && Number.isFinite(message._requestId)
-            ? message._requestId
-            : undefined;
-        try {
-          const routeId = typeof message.routeId === 'string' ? message.routeId : undefined;
-          const documentUri = document.uri.toString();
-          const requestedRevision =
-            typeof message.sourceRevision === 'number' && Number.isFinite(message.sourceRevision)
-              ? message.sourceRevision
-              : undefined;
-          const currentRevision = this.getCanvasRevision(documentUri);
-          if (requestedRevision !== undefined && requestedRevision < currentRevision) {
-            throw new Error(
-              'Canvas playback route matrix is stale; refresh before sending to Cut.',
-            );
-          }
-          const draft = this.createCutDraftFromRoute({
-            sourceCanvasUri: documentUri,
-            ...(routeId ? { routeId } : {}),
-          });
-          const cutTarget = await selectExistingCutProjectTarget();
-          const importResult = await vscode.commands.executeCommand<CutCanvasDraftImportResult>(
-            'neko.cut.authoring.importCanvasDraft',
-            {
-              payload: draft,
-              target: cutTarget.target,
-              expectedProjectRevision: cutTarget.expectedProjectRevision,
-            },
-          );
-          if (!importResult) {
-            throw new Error(
-              'neko.cut.authoring.importCanvasDraft did not return an import result.',
-            );
-          }
-          if (requestId !== undefined) {
-            await webviewPanel.webview.postMessage({
-              type: '_response',
-              _requestId: requestId,
-              draft,
-              importResult,
-            });
-          }
-        } catch (error) {
-          if (requestId !== undefined) {
-            await webviewPanel.webview.postMessage({
-              type: '_response',
-              _requestId: requestId,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          } else {
-            vscode.window.showErrorMessage(error instanceof Error ? error.message : String(error));
-          }
-        }
-        break;
-      }
       case 'save': {
         // Legacy webview builds used to write the .nkc file directly from this message.
         // Keep the message fail-closed into the VS Code custom editor lifecycle so there is
@@ -3565,53 +3503,12 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       }
 
       case 'importToTimeline': {
-        // Forward storyboard shots to neko-cut for timeline import
-        const { projectName, shots } = message as unknown as {
-          projectName: string;
-          shots: unknown[];
-        };
-        try {
-          const cutTarget = await selectExistingCutProjectTarget();
-          await vscode.commands.executeCommand('neko.cut.authoring.importStoryboard', {
-            target: cutTarget.target,
-            expectedProjectRevision: cutTarget.expectedProjectRevision,
-            projectName,
-            shots,
-          });
-          const shotIds = shots
-            .map((shot) =>
-              typeof shot === 'object' &&
-              shot !== null &&
-              typeof (shot as { id?: unknown }).id === 'string'
-                ? (shot as { id: string }).id
-                : null,
-            )
-            .filter((shotId): shotId is string => shotId !== null);
-          const importedAt = Date.now();
-          const payload: CanvasTimelineSyncPayload = buildStoryboardImportTimelineSyncPayload(
-            shotIds,
-            projectName,
-            importedAt,
-          );
-          webviewPanel.webview.postMessage({
-            type: 'timelineSync',
-            payload,
-          });
-          this._onDidChangeCanvas.fire({
-            type: 'update',
-            nodeIds: shotIds,
-            entityType: 'import',
-            reason: 'importToTimeline',
-            operationType: 'timeline.import',
-          });
-        } catch {
-          void handleError(
-            new Error(
-              'neko-cut is not available. Install neko-cut to import storyboard to timeline.',
-            ),
-            { showToUser: true, severity: 'warning' },
-          );
-        }
+        void handleError(
+          new Error(
+            'Storyboard import to Cut is unavailable until the explicit OTIO target contract is registered.',
+          ),
+          { showToUser: true, severity: 'warning' },
+        );
         break;
       }
 
@@ -6422,40 +6319,6 @@ function readCanvasProjectSourceAddFileName(request: ProjectSourceAddRequest): s
   const normalized = withoutQuery.replace(/\\/g, '/');
   const fileName = normalized.split('/').pop();
   return fileName && fileName.length > 0 ? decodeURIComponentSafe(fileName) : 'source';
-}
-
-async function selectExistingCutProjectTarget(): Promise<{
-  readonly target: { readonly kind: 'file'; readonly documentUri: string };
-  readonly expectedProjectRevision: string;
-}> {
-  const selected = await vscode.window.showOpenDialog({
-    canSelectFiles: true,
-    canSelectFolders: false,
-    canSelectMany: false,
-    filters: { 'Neko Cut Project': ['nkv'] },
-    openLabel: 'Select Cut Project',
-  });
-  const documentUri = selected?.[0];
-  if (!documentUri) {
-    throw new Error('Cut authoring was cancelled before an explicit .nkv target was selected.');
-  }
-  const cutExtension = resolveNekoExtension('neko.neko-cut', (id) =>
-    vscode.extensions.getExtension(id),
-  );
-  if (!cutExtension) {
-    throw new Error('Neko Cut is unavailable for explicit project authoring.');
-  }
-  const cutApiValue = cutExtension.isActive ? cutExtension.exports : await cutExtension.activate();
-  if (!isNekoCutAPI(cutApiValue)) {
-    throw new Error('Neko Cut API contract mismatch.');
-  }
-  const cutApi: NekoCutAPI = cutApiValue;
-  const targetUri = documentUri.toString();
-  const info = await cutApi.timeline.getInfo({ documentUri: targetUri });
-  return {
-    target: { kind: 'file', documentUri: targetUri },
-    expectedProjectRevision: info.projectRevision,
-  };
 }
 
 function decodeURIComponentSafe(value: string): string {

@@ -11,6 +11,7 @@ fn create_test_settings() -> ExportSettings {
         video_bitrate: None,
         audio_codec: ExportAudioCodec::Aac,
         audio_bitrate: None,
+        audio_sample_rate: 48_000,
         hw_encoder: ExportHwEncoder::None,
         time_range: None,
         preset: ExportPreset::Medium,

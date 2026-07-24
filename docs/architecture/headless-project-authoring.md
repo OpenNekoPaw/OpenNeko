@@ -22,7 +22,7 @@ Neko 项目文件是持久创作事实。来自 Agent、Assets、TUI、VS Code c
 | 包 | Canonical path | 禁止路径 |
 | --- | --- | --- |
 | Canvas | `CanvasProjectAuthoringService`、Canvas authoring capability、`NekoCanvasAPI` 的持久写入 API | 用 Webview 私有 node mutation 充当 Agent/Assets/TUI executor |
-| Cut | `CutProjectAuthoringService` 与 `neko.cut.authoring.*` 命令/API | 先打开隐藏 editor、发送 Webview import message、依赖当前 timeline 才报告写入成功 |
+| Cut | VS Code Canvas 通过 shared `NekoCutAPI.routes.handoff` 创建新 `.otio`，或追加到已打开的显式 URI + revision | Agent/TUI authoring、active/recent target、隐藏 editor、Webview import message |
 
 共享层只拥有 client-neutral target、result、diagnostic、operation classification 和测试 poison helper。领域 edit planning、codec、source policy 与项目 mutation 留在 owning package。
 

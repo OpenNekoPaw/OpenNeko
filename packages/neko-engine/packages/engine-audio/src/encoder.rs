@@ -145,6 +145,174 @@ impl FfmpegAudioEncoder {
 
         Ok(packets)
     }
+
+    fn append_frame_to_packed_fifo(
+        fifo: &mut Vec<u8>,
+        frame: &AudioFrame,
+        format: Sample,
+        channels: usize,
+    ) -> Result<()> {
+        let bytes_per_sample = Self::bytes_per_sample(format);
+        let samples = frame.samples();
+        match format {
+            Sample::F32(ffmpeg::format::sample::Type::Planar) => {
+                for sample in 0..samples {
+                    for channel in 0..channels {
+                        fifo.extend_from_slice(&frame.plane::<f32>(channel)[sample].to_ne_bytes());
+                    }
+                }
+            }
+            Sample::I16(ffmpeg::format::sample::Type::Planar) => {
+                for sample in 0..samples {
+                    for channel in 0..channels {
+                        fifo.extend_from_slice(&frame.plane::<i16>(channel)[sample].to_ne_bytes());
+                    }
+                }
+            }
+            Sample::I32(ffmpeg::format::sample::Type::Planar) => {
+                for sample in 0..samples {
+                    for channel in 0..channels {
+                        fifo.extend_from_slice(&frame.plane::<i32>(channel)[sample].to_ne_bytes());
+                    }
+                }
+            }
+            Sample::F64(ffmpeg::format::sample::Type::Planar) => {
+                for sample in 0..samples {
+                    for channel in 0..channels {
+                        fifo.extend_from_slice(&frame.plane::<f64>(channel)[sample].to_ne_bytes());
+                    }
+                }
+            }
+            Sample::U8(ffmpeg::format::sample::Type::Planar) => {
+                for sample in 0..samples {
+                    for channel in 0..channels {
+                        fifo.push(frame.plane::<u8>(channel)[sample]);
+                    }
+                }
+            }
+            Sample::None => {
+                return Err(Error::EncodeFailed(
+                    "resampled audio frame has no sample format".to_string(),
+                ));
+            }
+            _ => {
+                let byte_count = samples
+                    .checked_mul(channels)
+                    .and_then(|value| value.checked_mul(bytes_per_sample))
+                    .ok_or_else(|| {
+                        Error::EncodeFailed("resampled audio frame size overflow".to_string())
+                    })?;
+                let data = frame.data(0);
+                if byte_count > data.len() {
+                    return Err(Error::EncodeFailed(format!(
+                        "resampled packed audio is shorter than {samples} samples"
+                    )));
+                }
+                fifo.extend_from_slice(&data[..byte_count]);
+            }
+        }
+        Ok(())
+    }
+
+    fn copy_packed_samples_to_frame(
+        frame: &mut AudioFrame,
+        format: Sample,
+        channels: usize,
+        samples: usize,
+        packed: &[u8],
+    ) -> Result<()> {
+        let bytes_per_sample = Self::bytes_per_sample(format);
+        let required_bytes = samples
+            .checked_mul(channels)
+            .and_then(|value| value.checked_mul(bytes_per_sample))
+            .ok_or_else(|| Error::EncodeFailed("audio frame size overflow".to_string()))?;
+        if packed.len() < required_bytes {
+            return Err(Error::EncodeFailed(format!(
+                "packed audio is shorter than {samples} samples"
+            )));
+        }
+        match format {
+            Sample::F32(ffmpeg::format::sample::Type::Planar) => {
+                for channel in 0..channels {
+                    let plane = frame.plane_mut::<f32>(channel);
+                    for (sample, value) in plane.iter_mut().take(samples).enumerate() {
+                        let offset = (sample * channels + channel) * 4;
+                        *value = f32::from_ne_bytes(
+                            packed[offset..offset + 4]
+                                .try_into()
+                                .expect("validated f32 sample width"),
+                        );
+                    }
+                }
+            }
+            Sample::I16(ffmpeg::format::sample::Type::Planar) => {
+                for channel in 0..channels {
+                    let plane = frame.plane_mut::<i16>(channel);
+                    for (sample, value) in plane.iter_mut().take(samples).enumerate() {
+                        let offset = (sample * channels + channel) * 2;
+                        *value = i16::from_ne_bytes(
+                            packed[offset..offset + 2]
+                                .try_into()
+                                .expect("validated i16 sample width"),
+                        );
+                    }
+                }
+            }
+            Sample::I32(ffmpeg::format::sample::Type::Planar) => {
+                for channel in 0..channels {
+                    let plane = frame.plane_mut::<i32>(channel);
+                    for (sample, value) in plane.iter_mut().take(samples).enumerate() {
+                        let offset = (sample * channels + channel) * 4;
+                        *value = i32::from_ne_bytes(
+                            packed[offset..offset + 4]
+                                .try_into()
+                                .expect("validated i32 sample width"),
+                        );
+                    }
+                }
+            }
+            Sample::F64(ffmpeg::format::sample::Type::Planar) => {
+                for channel in 0..channels {
+                    let plane = frame.plane_mut::<f64>(channel);
+                    for (sample, value) in plane.iter_mut().take(samples).enumerate() {
+                        let offset = (sample * channels + channel) * 8;
+                        *value = f64::from_ne_bytes(
+                            packed[offset..offset + 8]
+                                .try_into()
+                                .expect("validated f64 sample width"),
+                        );
+                    }
+                }
+            }
+            Sample::U8(ffmpeg::format::sample::Type::Planar) => {
+                for channel in 0..channels {
+                    let plane = frame.plane_mut::<u8>(channel);
+                    for (sample, value) in plane.iter_mut().take(samples).enumerate() {
+                        *value = packed[sample * channels + channel];
+                    }
+                }
+            }
+            Sample::None => {
+                return Err(Error::EncodeFailed(
+                    "audio frame has no sample format".to_string(),
+                ));
+            }
+            _ => {
+                frame.data_mut(0)[..required_bytes].copy_from_slice(&packed[..required_bytes]);
+            }
+        }
+        Ok(())
+    }
+
+    fn bytes_per_sample(format: Sample) -> usize {
+        match format {
+            Sample::U8(_) => 1,
+            Sample::I16(_) => 2,
+            Sample::I32(_) | Sample::F32(_) => 4,
+            Sample::F64(_) => 8,
+            _ => 4,
+        }
+    }
 }
 
 impl Default for FfmpegAudioEncoder {
@@ -262,18 +430,15 @@ impl AudioEncoder for FfmpegAudioEncoder {
             input_frame
         };
 
-        // Append resampled data to FIFO
-        let resampled_data = resampled.data(0);
-        self.fifo.extend_from_slice(resampled_data);
+        Self::append_frame_to_packed_fifo(
+            &mut self.fifo,
+            &resampled,
+            encoder_format,
+            channels as usize,
+        )?;
 
         // Calculate bytes per frame_size chunk
-        let bytes_per_sample = match encoder_format {
-            Sample::U8(_) => 1,
-            Sample::I16(_) => 2,
-            Sample::I32(_) | Sample::F32(_) => 4,
-            Sample::F64(_) => 8,
-            _ => 4,
-        };
+        let bytes_per_sample = Self::bytes_per_sample(encoder_format);
         let ch_count = channels as usize;
         let chunk_bytes = self.frame_size * ch_count * bytes_per_sample;
 
@@ -287,38 +452,13 @@ impl AudioEncoder for FfmpegAudioEncoder {
             enc_frame.set_pts(Some(self.pts));
             self.pts += self.frame_size as i64;
 
-            // Copy chunk data into frame planes
-            // For planar formats, we need to deinterleave
-            match encoder_format {
-                Sample::F32(ffmpeg::format::sample::Type::Planar)
-                | Sample::I16(ffmpeg::format::sample::Type::Planar)
-                | Sample::I32(ffmpeg::format::sample::Type::Planar)
-                | Sample::F64(ffmpeg::format::sample::Type::Planar)
-                | Sample::U8(ffmpeg::format::sample::Type::Planar) => {
-                    // Deinterleave: packed input → separate planes
-                    let samples_per_ch = self.frame_size;
-                    for ch in 0..ch_count {
-                        let plane = enc_frame.data_mut(ch);
-                        for s in 0..samples_per_ch {
-                            let src_offset = (s * ch_count + ch) * bytes_per_sample;
-                            let dst_offset = s * bytes_per_sample;
-                            if src_offset + bytes_per_sample <= chunk.len()
-                                && dst_offset + bytes_per_sample <= plane.len()
-                            {
-                                plane[dst_offset..dst_offset + bytes_per_sample].copy_from_slice(
-                                    &chunk[src_offset..src_offset + bytes_per_sample],
-                                );
-                            }
-                        }
-                    }
-                }
-                _ => {
-                    // Packed format: direct copy to plane 0
-                    let plane = enc_frame.data_mut(0);
-                    let copy_len = chunk.len().min(plane.len());
-                    plane[..copy_len].copy_from_slice(&chunk[..copy_len]);
-                }
-            }
+            Self::copy_packed_samples_to_frame(
+                &mut enc_frame,
+                encoder_format,
+                ch_count,
+                self.frame_size,
+                &chunk,
+            )?;
 
             let encoder = self.encoder.as_mut().ok_or(Error::EncoderNotInitialized)?;
             encoder.send_frame(&enc_frame)?;
@@ -344,13 +484,7 @@ impl AudioEncoder for FfmpegAudioEncoder {
 
         // Flush remaining FIFO data as a partial frame (zero-padded)
         if !self.fifo.is_empty() {
-            let bytes_per_sample = match encoder_format {
-                Sample::U8(_) => 1,
-                Sample::I16(_) => 2,
-                Sample::I32(_) | Sample::F32(_) => 4,
-                Sample::F64(_) => 8,
-                _ => 4,
-            };
+            let bytes_per_sample = Self::bytes_per_sample(encoder_format);
             let remaining_samples = self.fifo.len() / (channels * bytes_per_sample);
 
             if remaining_samples > 0 {
@@ -359,36 +493,14 @@ impl AudioEncoder for FfmpegAudioEncoder {
                 enc_frame.set_rate(sample_rate);
                 enc_frame.set_pts(Some(self.pts));
 
-                // Copy remaining data (same planar/packed logic)
                 let chunk = std::mem::take(&mut self.fifo);
-                match encoder_format {
-                    Sample::F32(ffmpeg::format::sample::Type::Planar)
-                    | Sample::I16(ffmpeg::format::sample::Type::Planar)
-                    | Sample::I32(ffmpeg::format::sample::Type::Planar)
-                    | Sample::F64(ffmpeg::format::sample::Type::Planar)
-                    | Sample::U8(ffmpeg::format::sample::Type::Planar) => {
-                        for ch in 0..channels {
-                            let plane = enc_frame.data_mut(ch);
-                            for s in 0..remaining_samples {
-                                let src_offset = (s * channels + ch) * bytes_per_sample;
-                                let dst_offset = s * bytes_per_sample;
-                                if src_offset + bytes_per_sample <= chunk.len()
-                                    && dst_offset + bytes_per_sample <= plane.len()
-                                {
-                                    plane[dst_offset..dst_offset + bytes_per_sample]
-                                        .copy_from_slice(
-                                            &chunk[src_offset..src_offset + bytes_per_sample],
-                                        );
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        let plane = enc_frame.data_mut(0);
-                        let copy_len = chunk.len().min(plane.len());
-                        plane[..copy_len].copy_from_slice(&chunk[..copy_len]);
-                    }
-                }
+                Self::copy_packed_samples_to_frame(
+                    &mut enc_frame,
+                    encoder_format,
+                    channels,
+                    remaining_samples,
+                    &chunk,
+                )?;
 
                 let encoder = self.encoder.as_mut().ok_or(Error::EncoderNotInitialized)?;
                 encoder.send_frame(&enc_frame)?;
@@ -446,5 +558,85 @@ mod tests {
         assert_eq!(config.sample_rate, 48000);
         assert_eq!(config.channels, 2);
         assert_eq!(config.bitrate, 256_000);
+    }
+
+    #[test]
+    fn aac_encoder_accepts_finite_stereo_pcm_across_export_frame_boundaries() {
+        ffmpeg::init().expect("initialize FFmpeg");
+        let config = AudioEncoderConfig::new(48_000, 2, AudioCodec::Aac);
+        let mut encoder = FfmpegAudioEncoder::new();
+        encoder.open(&config).expect("open AAC encoder");
+        let samples = 1_600;
+        let mut packets = Vec::new();
+        for frame_index in 0..60 {
+            let pcm = (0..samples)
+                .flat_map(|index| {
+                    let sample_index = frame_index * samples + index;
+                    let sample = ((sample_index as f32 / 48_000.0) * 440.0 * std::f32::consts::TAU)
+                        .sin()
+                        * 0.25;
+                    [sample, sample]
+                })
+                .collect::<Vec<_>>();
+            let pcm_bytes = pcm
+                .iter()
+                .flat_map(|sample| sample.to_ne_bytes())
+                .collect::<Vec<_>>();
+            packets.extend(
+                encoder
+                    .encode_frame(&pcm_bytes, samples)
+                    .unwrap_or_else(|error| {
+                        panic!("encode finite PCM frame {frame_index}: {error}")
+                    }),
+            );
+        }
+        packets.extend(encoder.flush().expect("flush AAC encoder"));
+
+        assert!(!packets.is_empty());
+        assert!(packets.iter().all(|packet| !packet.data.is_empty()));
+    }
+
+    #[test]
+    fn planar_resampler_padding_does_not_enter_the_packed_fifo() {
+        let format = Sample::F32(ffmpeg::format::sample::Type::Planar);
+        let mut frame = AudioFrame::new(format, 3, ChannelLayout::STEREO);
+        for channel in 0..2 {
+            let plane = frame.plane_mut::<f32>(channel);
+            for sample in 0..3 {
+                let value = (channel * 10 + sample) as f32;
+                plane[sample] = value;
+            }
+        }
+        for chunk in frame.data_mut(0)[3 * 4..].chunks_exact_mut(4) {
+            chunk.copy_from_slice(&f32::NAN.to_ne_bytes());
+        }
+        let mut fifo = Vec::new();
+
+        FfmpegAudioEncoder::append_frame_to_packed_fifo(&mut fifo, &frame, format, 2)
+            .expect("interleave planar frame");
+
+        let values = fifo
+            .chunks_exact(4)
+            .map(|chunk| f32::from_ne_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+            .collect::<Vec<_>>();
+        assert_eq!(values, vec![0.0, 10.0, 1.0, 11.0, 2.0, 12.0]);
+        assert!(values.iter().all(|value| value.is_finite()));
+    }
+
+    #[test]
+    fn packed_fifo_populates_every_planar_encoder_channel() {
+        let format = Sample::F32(ffmpeg::format::sample::Type::Planar);
+        let mut frame = AudioFrame::new(format, 3, ChannelLayout::STEREO);
+        let values = [0.0_f32, 10.0, 1.0, 11.0, 2.0, 12.0];
+        let packed = values
+            .iter()
+            .flat_map(|value| value.to_ne_bytes())
+            .collect::<Vec<_>>();
+
+        FfmpegAudioEncoder::copy_packed_samples_to_frame(&mut frame, format, 2, 3, &packed)
+            .expect("populate planar frame");
+
+        assert_eq!(frame.plane::<f32>(0), &[0.0, 1.0, 2.0]);
+        assert_eq!(frame.plane::<f32>(1), &[10.0, 11.0, 12.0]);
     }
 }

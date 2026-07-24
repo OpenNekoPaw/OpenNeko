@@ -115,6 +115,7 @@ impl PreviewPipeline {
             video_bitrate: Some(config.bitrate),
             audio_codec: neko_engine_types::AudioCodec::Aac,
             audio_bitrate: None,
+            audio_sample_rate: 48_000,
             hw_encoder: neko_engine_types::HwEncoderType::Auto,
             time_range: None,
             preset: neko_engine_types::EncoderPreset::default(),

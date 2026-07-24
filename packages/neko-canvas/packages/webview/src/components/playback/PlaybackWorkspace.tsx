@@ -86,7 +86,6 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     readonly stale: boolean;
     readonly error?: string;
   }>({ plan: null, stale: false });
-  const [matrixRuntimeDiagnostics, setMatrixRuntimeDiagnostics] = useState<readonly string[]>([]);
   const [playbackRequest, setPlaybackRequest] = useState<CanvasPlaybackRequest | undefined>();
   const [playbackCompletionSignal, setPlaybackCompletionSignal] = useState<
     PlaybackCompletionSignal | undefined
@@ -251,7 +250,6 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
       markStale(false);
     }
     setHostPlanState({ plan: null, stale: false });
-    setMatrixRuntimeDiagnostics([]);
   }, [canvasData, markStale]);
 
   useEffect(() => {
@@ -285,16 +283,6 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
       cellIds: routeMatrix.rows.flatMap((row) => row.cells.map((cell) => cell.id)),
     });
   }, [reconcileMatrixState, routeMatrix, routeMatrixProjectionKey, session.matrix.projectionKey]);
-
-  useEffect(() => {
-    setMatrixRuntimeDiagnostics([]);
-  }, [routeMatrixProjectionKey]);
-
-  useEffect(() => {
-    if (!hostPlanState.stale && !session.stale && routeResolution) {
-      setMatrixRuntimeDiagnostics([]);
-    }
-  }, [hostPlanState.stale, routeResolution, session.stale]);
 
   useEffect(() => {
     if (!session.visible && session.playbackState === 'playing') {
@@ -398,25 +386,6 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
         x: width / 2 - centerX * viewportZoom,
         y: height / 2 - centerY * viewportZoom,
       },
-    });
-  };
-  const sendMatrixRouteToCut = (row: RouteStoryboardMatrixRow) => {
-    const vscode = getGlobalVSCodeApi();
-    if (!vscode || !plan) return;
-    if (hostPlanState.stale || session.stale) {
-      setMatrixRuntimeDiagnostics([t('playback.matrix.cutDraftStale')]);
-      return;
-    }
-    if (!routeResolution?.routes.some((route) => route.id === row.routeId)) {
-      setMatrixRuntimeDiagnostics([t('playback.matrix.cutDraftMissingRoute')]);
-      return;
-    }
-    setMatrixRuntimeDiagnostics([]);
-    vscode.postMessage({
-      type: 'playback:createCutDraftFromRoute',
-      _requestId: Date.now(),
-      routeId: row.routeId,
-      sourceRevision: readFiniteNumber(plan.metadata['sourceRevision']),
     });
   };
   const handlePreviewPlaybackTimeUpdate = useCallback(
@@ -572,7 +541,6 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
               focusedCellId={
                 session.matrix.focus?.kind === 'cell' ? session.matrix.focus.id : undefined
               }
-              runtimeDiagnostics={matrixRuntimeDiagnostics}
               onSelectRoute={selectMatrixRow}
               onSelectCell={selectMatrixCell}
               onSelectSummaryCell={selectMatrixSummaryCell}
@@ -581,7 +549,6 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
               onSelectColumn={(columnId) => focusMatrix({ kind: 'column', id: columnId })}
               onSelectFamily={(family) => setMatrixRouteFamily(family.id)}
               onToggleContainerFold={(container) => toggleMatrixContainerFold(container.id)}
-              onSendToCut={sendMatrixRouteToCut}
               onFocus={() => setFocusOwner('route')}
             />
           ) : (

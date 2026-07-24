@@ -895,6 +895,11 @@ describe('AgentStreamProcessor', () => {
         source: createManagedDocumentResourceRef(archiveRef, 'project'),
         mimeTypeHint: 'image/jpeg',
       });
+      expect(
+        contentAccessRuntime.loadProviderAsset.mock.calls.every(
+          ([input]) => !Object.hasOwn(input, 'variant'),
+        ),
+      ).toBe(true);
       expect(localResourceAccess.toWebviewUri).not.toHaveBeenCalled();
       expect(getProjectedTimelineToolResult('conv-1', 'tc-read-doc-image')?.data).toMatchObject({
         images: [
@@ -1053,6 +1058,11 @@ describe('AgentStreamProcessor', () => {
         source: createManagedDocumentResourceRef(archiveRef, 'project'),
         mimeTypeHint: 'image/jpeg',
       });
+      expect(
+        contentAccessRuntime.loadProviderAsset.mock.calls.every(
+          ([input]) => !Object.hasOwn(input, 'variant'),
+        ),
+      ).toBe(true);
     });
 
     it('projects top-level tool result media fields for webview delivery', async () => {

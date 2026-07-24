@@ -6,13 +6,8 @@ import {
 } from '..';
 
 describe('neko-suite plugin transfer host adapters', () => {
-  it('lets TUI execute canonical authoring plans without VSCode/Webview assumptions', async () => {
-    const executeCommand = vi.fn(async () => ({
-      version: 1,
-      ok: true,
-      documentUri: 'file:///workspace/timeline.nkv',
-      diagnostics: [],
-    }));
+  it('rejects Cut transfers before the OTIO target contract is registered', async () => {
+    const executeCommand = vi.fn();
     const adapter: NekoSuitePluginTransferHostAdapter = {
       client: 'tui',
       executeCommand,
@@ -22,35 +17,23 @@ describe('neko-suite plugin transfer host adapters', () => {
       payload: {
         kind: 'singleAsset',
         asset: { path: '/workspace/generated/shot.mp4', mediaType: 'video' },
-        target: {
-          kind: 'file',
-          documentUri: 'file:///workspace/timeline.nkv',
-          expectedProjectRevision: 'revision-1',
-        },
       },
     });
 
     await expect(
       executeNekoSuitePluginTransferPlan(plan, adapter, { target: 'cut' }),
     ).resolves.toEqual({
-      success: true,
-      executed: 1,
-      results: [
+      success: false,
+      executed: 0,
+      results: [],
+      unsupported: [
         {
-          version: 1,
-          ok: true,
-          documentUri: 'file:///workspace/timeline.nkv',
-          diagnostics: [],
+          target: 'cut',
+          reason: 'cut-otio-target-not-registered',
         },
       ],
-      unsupported: [],
     });
-    expect(executeCommand).toHaveBeenCalledWith('neko.cut.authoring.importGeneratedClip', {
-      assetPath: '/workspace/generated/shot.mp4',
-      mediaType: 'video',
-      target: { kind: 'file', documentUri: 'file:///workspace/timeline.nkv' },
-      expectedProjectRevision: 'revision-1',
-    });
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 
   it('lets Electron keep native reveal separate from authoring execution', async () => {

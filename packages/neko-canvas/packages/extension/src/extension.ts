@@ -28,6 +28,9 @@ import {
   CANVAS_WORKSPACE_BOARD_PATH,
   resolveGlobalStorageLayout,
   type LocalMetadataStore,
+  type NekoCutAPI,
+  NEKO_EXTENSION_IDS,
+  isNekoCutAPI,
 } from '@neko/shared';
 import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
 import { resolveNodeWorkspaceIdentity } from '@neko/shared/local-metadata/node-workspace-identity';
@@ -63,6 +66,7 @@ import { CanvasProjectAuthoringService } from './services/canvasProjectAuthoring
 import { WorkspaceBoardProjector } from './services/workspaceBoardProjector';
 import { WorkspaceBoardEditorLeaseOwner } from './services/workspaceBoardEditorLeaseOwner';
 import { registerWorkspaceBoardFunctionalAcceptance } from './debug/workspaceBoardFunctionalAcceptance';
+import { handoffCanvasDraftToCut } from './services/CanvasCutRouteHandoff';
 
 // Extension state
 let canvasEditorProvider: CanvasEditorProvider;
@@ -331,6 +335,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCa
       revealWorkspace: (request) => canvasEditorProvider.revealPlaybackWorkspace(request),
       createCutDraftFromRoute: async (request) =>
         canvasEditorProvider.createCutDraftFromRoute(request),
+      sendRouteToCut: async (request) => {
+        const draft = canvasEditorProvider.createCutDraftFromRoute(request);
+        return handoffCanvasDraftToCut(await resolveCutApi(), draft, request.target);
+      },
       reorderUnits: (request) => canvasEditorProvider.reorderPlaybackUnits(request),
     },
     nodes: {
@@ -391,6 +399,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCa
     handleError(error),
   );
 
+  return api;
+}
+
+async function resolveCutApi(): Promise<NekoCutAPI> {
+  const extension = vscode.extensions.getExtension(NEKO_EXTENSION_IDS.NEKO_CUT);
+  if (!extension) throw new Error('Neko Cut extension is not installed.');
+  const api = extension.isActive ? extension.exports : await extension.activate();
+  if (!isNekoCutAPI(api)) throw new Error('Neko Cut extension API contract mismatch.');
   return api;
 }
 

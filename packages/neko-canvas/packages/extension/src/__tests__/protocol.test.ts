@@ -161,18 +161,10 @@ describe('canvasEditorProvider message contracts', () => {
     });
   });
 
-  describe('NKV-006: timeline import round-trip', () => {
-    it('extension sends shared timelineSync payload with minimal backflow fields', () => {
-      expect(providerSource).toContain("type: 'timelineSync'");
-      expect(providerSource).toContain('buildStoryboardImportTimelineSyncPayload(');
-      expect(providerSource).toContain('payload,');
-    });
-
-    it('webview consumes timelineSync payload', () => {
-      expect(webviewSource).toContain("case 'timelineSync'");
-      expect(webviewSource).toContain(
-        'onTimelineSyncRef.current?.(message.payload as CanvasTimelineSyncPayload)',
-      );
+  describe('NKV-006: removed legacy timeline backflow', () => {
+    it('does not retain the old Canvas timelineSync bridge', () => {
+      expect(providerSource).not.toContain("type: 'timelineSync'");
+      expect(webviewSource).not.toContain("case 'timelineSync'");
     });
   });
 
@@ -799,16 +791,10 @@ describe('canvasEditorProvider message contracts', () => {
       expect(providerSource).not.toContain('timelineOrder');
     });
 
-    it('routes Canvas route matrix send-to-Cut through plan-derived draft handoff only', () => {
-      expect(playbackWorkspaceSource).toContain("type: 'playback:createCutDraftFromRoute'");
-      expect(playbackWorkspaceSource).toContain('routeId: row.routeId');
-      expect(playbackWorkspaceSource).not.toContain('CanvasCutDraftPayload');
-      expect(providerSource).toContain("case 'playback:createCutDraftFromRoute'");
-      expect(providerSource).toContain('const draft = this.createCutDraftFromRoute({');
-      expect(providerSource).toContain("'neko.cut.authoring.importCanvasDraft'");
-      expect(providerSource).toContain('requestedRevision < currentRevision');
-      expect(providerSource).not.toContain('message.cells');
-      expect(providerSource).not.toContain('message.matrix');
+    it('does not expose the removed route-matrix Cut handoff', () => {
+      expect(playbackWorkspaceSource).not.toContain('playback:createCutDraftFromRoute');
+      expect(providerSource).not.toContain('playback:createCutDraftFromRoute');
+      expect(providerSource).not.toContain('neko.cut.authoring.importCanvasDraft');
       expect(routeStoryboardMatrixSource).toContain('projectRouteStoryboardMatrix');
       expect(routeStoryboardMatrixSource).toContain('resolveEffectiveCanvasPlaybackRoutes');
       expect(routeStoryboardMatrixSource).toContain('foldDuplicateRoutes');

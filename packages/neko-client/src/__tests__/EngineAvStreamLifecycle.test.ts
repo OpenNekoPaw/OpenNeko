@@ -243,6 +243,106 @@ describe('EngineAvStreamLifecycle', () => {
     expect(lifecycleEnd).toHaveBeenCalledWith('video');
   });
 
+  it('ignores callbacks from a client replaced by a newer stream generation', async () => {
+    const videoConfigs: Array<{
+      onFrame?: (frame: VideoFrame) => void;
+      onConnectionChange?: (connected: boolean) => void;
+      onError?: (error: Error) => void;
+      onStreamEnd?: () => void;
+    }> = [];
+    const onFrame = vi.fn();
+    const onConnectionChange = vi.fn();
+    const onError = vi.fn();
+    const onStreamEnd = vi.fn();
+    const lifecycle = new EngineAvStreamLifecycle({
+      factories: {
+        createVideoClient: (config) => {
+          videoConfigs.push(config);
+          return createVideoClient([], `video-${videoConfigs.length}`);
+        },
+      },
+      callbacks: { onVideoConnectionChange: onConnectionChange, onError, onStreamEnd },
+    });
+
+    await lifecycle.start({
+      video: {
+        websocketUrl: 'ws://video-1',
+        width: 1,
+        height: 1,
+        onFrame,
+      },
+    });
+    await lifecycle.start({
+      video: {
+        websocketUrl: 'ws://video-2',
+        width: 1,
+        height: 1,
+        onFrame,
+      },
+    });
+
+    const staleFrame = { close: vi.fn() } as unknown as VideoFrame;
+    videoConfigs[0]?.onFrame?.(staleFrame);
+    videoConfigs[0]?.onConnectionChange?.(false);
+    videoConfigs[0]?.onError?.(new Error('stale failure'));
+    videoConfigs[0]?.onStreamEnd?.();
+
+    expect(staleFrame.close).toHaveBeenCalledOnce();
+    expect(onFrame).not.toHaveBeenCalled();
+    expect(onConnectionChange).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    expect(onStreamEnd).not.toHaveBeenCalled();
+
+    const activeFrame = { close: vi.fn() } as unknown as VideoFrame;
+    videoConfigs[1]?.onFrame?.(activeFrame);
+    videoConfigs[1]?.onConnectionChange?.(true);
+    videoConfigs[1]?.onError?.(new Error('active failure'));
+    videoConfigs[1]?.onStreamEnd?.();
+
+    expect(onFrame).toHaveBeenCalledWith(activeFrame);
+    expect(activeFrame.close).not.toHaveBeenCalled();
+    expect(onConnectionChange).toHaveBeenCalledWith(true);
+    expect(onError).toHaveBeenCalledWith(new Error('active failure'));
+    expect(onStreamEnd).toHaveBeenCalledWith('video');
+  });
+
+  it('rejects a pending start after a newer stream generation replaces it', async () => {
+    let releaseFirstConnection: (() => void) | undefined;
+    let run = 0;
+    const lifecycle = new EngineAvStreamLifecycle({
+      factories: {
+        createVideoClient: () => {
+          run += 1;
+          if (run > 1) return createVideoClient([], 'active-video');
+          return {
+            ...createVideoClient([], 'stale-video'),
+            async connect() {
+              await new Promise<void>((resolve) => {
+                releaseFirstConnection = resolve;
+              });
+            },
+          };
+        },
+      },
+    });
+
+    const staleStart = lifecycle.start({
+      video: { websocketUrl: 'ws://video-1', width: 1, height: 1 },
+    });
+    await Promise.resolve();
+    const activeSnapshot = await lifecycle.start({
+      video: { websocketUrl: 'ws://video-2', width: 1, height: 1 },
+    });
+    releaseFirstConnection?.();
+
+    await expect(staleStart).rejects.toThrow(
+      'Engine AV stream generation 1 was superseded before startup.',
+    );
+    expect(activeSnapshot.descriptor?.video?.websocketUrl).toBe('ws://video-2');
+    expect(lifecycle.getSnapshot()).toBeDefined();
+    expect(lifecycle.getSnapshot().descriptor).toBe(activeSnapshot.descriptor);
+  });
+
   it('reports stats from active clients', async () => {
     const lifecycle = new EngineAvStreamLifecycle({
       factories: {

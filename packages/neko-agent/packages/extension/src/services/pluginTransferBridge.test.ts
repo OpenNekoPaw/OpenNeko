@@ -275,7 +275,7 @@ describe('PluginTransferBridge', () => {
     );
   });
 
-  it('sends generated clips to the Cut authoring command without Canvas materialization', async () => {
+  it('rejects generated-asset Cut transfer until the OTIO target contract exists', async () => {
     const persist = vi.fn();
     const executeCommand = vi.fn().mockResolvedValue(undefined);
 
@@ -290,24 +290,13 @@ describe('PluginTransferBridge', () => {
           mediaType: 'image',
           name: 'shot.png',
         },
-        target: {
-          kind: 'file',
-          documentUri: 'file:///workspace/edit.nkv',
-          expectedProjectRevision: 'revision-1',
-        },
       },
       createDeps({ persist, executeCommand }),
     );
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     expect(persist).not.toHaveBeenCalled();
-    expect(executeCommand).toHaveBeenCalledWith('neko.cut.authoring.importGeneratedClip', {
-      assetPath: '/tmp/agent-private/shot.png',
-      mediaType: 'image',
-      name: 'shot.png',
-      target: { kind: 'file', documentUri: 'file:///workspace/edit.nkv' },
-      expectedProjectRevision: 'revision-1',
-    });
+    expect(executeCommand).not.toHaveBeenCalled();
   });
 
   it.each(['sketch', 'model'] as const)(
