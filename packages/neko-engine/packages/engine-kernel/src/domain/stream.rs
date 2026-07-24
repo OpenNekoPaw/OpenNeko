@@ -145,6 +145,8 @@ pub struct StreamConfig {
     pub fps: f64,
     /// Start time in seconds
     pub start_time: f64,
+    /// Initial playback speed
+    pub playback_speed: f64,
     /// Stream codec
     pub codec: StreamCodec,
     /// If true, start the stream in paused state (no frames produced until resume)
@@ -157,6 +159,7 @@ impl Default for StreamConfig {
             resolution: Resolution::full_hd(),
             fps: 30.0,
             start_time: 0.0,
+            playback_speed: 1.0,
             codec: StreamCodec::H264,
             initial_paused: false,
         }

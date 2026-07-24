@@ -2,6 +2,7 @@
 
 use crate::controllers::utils::{
     base64_encode, handle_stream_control, resolve_file_source_ref, resolve_resource,
+    validate_stream_playback_options,
 };
 use crate::controllers::Controller;
 use crate::error::{ApiError, ApiResult};
@@ -165,6 +166,19 @@ struct StreamRequestOptions {
     source_ref: Option<FileSourceRef>,
     /// Session ID for the stream
     session_id: Option<String>,
+    /// Initial media position
+    #[serde(default)]
+    start_time: f64,
+    /// Initial playback speed
+    #[serde(default = "default_playback_speed")]
+    speed: f64,
+    /// Keep the stream paused until an explicit resume command
+    #[serde(default)]
+    initial_paused: bool,
+}
+
+fn default_playback_speed() -> f64 {
+    1.0
 }
 
 /// Options for videos:transcode
@@ -415,10 +429,17 @@ impl Controller for VideoController {
                     .await?;
 
                 let session_id = opts.session_id.unwrap_or_else(|| "default".to_string());
+                validate_stream_playback_options(opts.start_time, opts.speed, "videos:stream")?;
+                let config = StreamConfig {
+                    start_time: opts.start_time,
+                    playback_speed: opts.speed,
+                    initial_paused: opts.initial_paused,
+                    ..StreamConfig::default()
+                };
 
                 let (stream_id, rx) = self
                     .video_service
-                    .start_stream(&file_path, &session_id)
+                    .start_stream(&file_path, &session_id, config.clone())
                     .await?;
 
                 // Register the stream into StreamRegistry so WebSocket subscribers can find it
@@ -428,7 +449,7 @@ impl Controller for VideoController {
                         stream_id.clone(),
                         &session_id,
                         res_id.as_str(),
-                        StreamConfig::default(),
+                        config,
                         rx,
                         cancel_token,
                     )
@@ -703,5 +724,21 @@ mod tests {
         let result = controller.handle("extract", None, Value::Null, None).await;
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn video_stream_options_preserve_atomic_initial_playback_state() {
+        let options: StreamRequestOptions = serde_json::from_value(serde_json::json!({
+            "source": "/tmp/video.mp4",
+            "sessionId": "preview-generation-2",
+            "startTime": 17.5,
+            "speed": 1.25,
+            "initialPaused": true
+        }))
+        .unwrap();
+
+        assert_eq!(options.start_time, 17.5);
+        assert_eq!(options.speed, 1.25);
+        assert!(options.initial_paused);
     }
 }
