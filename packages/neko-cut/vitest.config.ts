@@ -19,7 +19,7 @@ export default defineConfig({
     include: ['packages/extension/src/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     coverage: sharedCoverage({
-      include: ['src/**/*.{ts,tsx}', 'packages/extension/src/**/*.{ts,tsx}'],
+      include: ['packages/extension/src/**/*.{ts,tsx}'],
     }),
   },
 });
