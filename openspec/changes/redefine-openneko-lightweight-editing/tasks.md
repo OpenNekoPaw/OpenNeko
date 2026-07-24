@@ -242,3 +242,9 @@
 - [x] 28.1 Update proposal/design/spec with responsive Inspector alignment, density, control grouping and non-overlap requirements across the supported width range.
 - [x] 28.2 Add focused layout/value assertions, refine the Cut-scoped property surface, group, control and action styles, and normalize frame-derived seconds without changing shared property behavior or the canonical typed command path.
 - [x] 28.3 Run focused Webview tests/build, strict OpenSpec and isolated Extension Development Host scenarios at the narrow and wide Inspector bounds; record geometry, interaction, console and screenshot evidence.
+
+## 29. Close the repository local-CI baseline after the Cut refinement
+
+- [x] 29.1 Reproduce and classify the remaining local-CI failures across Cut test ownership, Canvas presentation labels and Agent content-access contract assertions.
+- [x] 29.2 Register the Cut Domain test and shared-coverage owner, align stale tests with the canonical Canvas and Agent contracts, and remove unused Cut legacy fallback style tokens without restoring compatibility paths.
+- [x] 29.3 Run the focused regressions, residual/unused checks and full `pnpm ci:local`; record the exact results and any remaining external runtime risk.

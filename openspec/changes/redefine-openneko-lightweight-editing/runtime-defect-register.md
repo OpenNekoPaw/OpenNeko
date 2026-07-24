@@ -209,7 +209,7 @@ Preview 内容画布之外的剩余背景区域使用了与当前 VS Code 主题
 - 聚焦测试通过：Domain `39`、Cut Extension `105`、Cut Webview `221`、共享 UI `150`；受影响 typecheck、Cut compile、全仓 build/check、unused、legacy-debt、strict OpenSpec 与 `git diff --check` 通过。
 - 真实 Extension Development Host 从 Inspector 提交重叠位置后只显示右下中文 Toast。CDP 断言 `role=alert` 恰好一个，父容器为 `fixed bottom-4 right-4`，`.cut-basic-error=0`、`.cut-basic-notice=0`，且 DOM 不包含旧英文 overlap 文案。
 - 运行态 console 只有 VS Code 已知的 `local-network-access` warning；脱敏截图位于 gitignored `reports/webview-functional/cut-runtime-2026-07-24/diagnostic-toast-zh-cn.png`。
-- 全仓 `pnpm test` 的相关套件均通过，但 aggregate 仍被无关 Canvas `NodeContentDispatcher.test.ts:968` 的 `Video Project` 文案断言阻塞；该 Canvas 语义不在本缺陷边界内。
+- 全仓相关套件均通过；此前阻塞 aggregate 的 Canvas `Video Project` 旧文案断言已对齐 canonical `Project` 投影。后续完整 `pnpm ci:local` 以退出码 0 通过，该仓库基线阻塞已关闭，但不替代 24.7 的 Extension Development Host 组合场景。
 
 ## 7. 删除末尾 Clip 后出现长空白，移动与媒体插入语义不明确
 
