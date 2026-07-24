@@ -2,7 +2,11 @@
 
 本目录用于单个保留领域的能力模型、领域数据流和领域内部架构。当前稳定的跨领域约束仍集中在 [`../architecture/README.md`](../architecture/README.md)；领域文档应在形成独立、稳定的领域事实后再建立子目录。
 
-当前保留产品领域包括 Agent、Chara、Assets/Entity、Canvas、Cut、Preview、Tools 和 Media Engine。Chara 的稳定边界见 [`chara/README.md`](chara/README.md)。新增领域目录时使用 `docs/domains/<domain>/`，并优先提供：
+当前保留产品领域包括 Agent、Generation、Chara、Assets/Entity、Canvas、Cut、Preview、Tools 和
+Media Engine。Generation 的实现中边界由
+[`extract-generation-domain-package`](../../openspec/changes/extract-generation-domain-package/)
+约束，稳定后再建立领域目录；Chara 的稳定边界见
+[`chara/README.md`](chara/README.md)。新增领域目录时使用 `docs/domains/<domain>/`，并优先提供：
 
 - `README.md`：范围、参与包、横切能力和阅读路径；
 - `architecture.md`：领域 owner、contract、依赖、生命周期和错误边界；

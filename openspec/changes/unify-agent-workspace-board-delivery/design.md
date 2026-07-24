@@ -100,7 +100,7 @@ no workspace / ambiguous workspace / unsupported Host
   -> blocked diagnostic
 ```
 
-Agent core/session 不保存 destination。活动/最近 Canvas、会话 binding、文件名、scope 或 UI selection 都不是 fallback。Canvas 发起的 creative action 已携带 explicit document identity/revision，因此只更新源 Canvas；Agent chat、后台 Agent 和 TUI 的 unbound typed result 才使用 Workspace Board。
+Agent core/session 不保存 destination。活动/最近 Canvas、会话 binding、文件名、scope 或 UI selection 都不是 fallback。Canvas 发起的 creative action 已携带 explicit document identity/revision，因此只更新源 Canvas；Agent chat、Subagent 和 TUI 的 unbound typed result 才使用 Workspace Board。
 
 ### 4. Reuse `tasks` and `task_checkpoints` through a Canvas-owned ledger wrapper
 

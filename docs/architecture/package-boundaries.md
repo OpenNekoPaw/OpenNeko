@@ -155,6 +155,22 @@ Engine 当前只拥有媒体能力：文件/Range、probe/capture、编解码、
 
 TUI 的产品级组合位于 `apps/neko-tui`。Agent core/platform 不导入 VS Code、React 或 Webview；Webview 不导入 Agent runtime、provider adapter 或 Extension API。Prompt、Skill、capability/tool schema 和宿主副作用按各自边界维护。Pi 只接收已经解析好的 model/prompt/tool snapshot，不接收 `ConfigManager`、领域 service 或 Host process adapter。
 
+`@neko/shared/job-lifecycle` 只提供 typed Job identity、phase、revision/CAS、终态不可变和
+versioned observation。Generation、Cut 等 owning domain 各自拥有 submit、具体 snapshot
+schema、provider/Engine identity、持久 migration、reconciliation、retry policy 和原子结果提交；
+不得建立中央 `GenericJobManager`、共享 payload/result 表或跨领域 execution registry。Agent
+只能通过 Tool Call 调用具体领域 port，Webview 只消费 Host-owned Activity projection，不拥有
+Job 生命周期或 provider/Engine observer。
+
+所有媒体生成入口统一调用 `@neko/generation` 的 public Job application port。Canvas、Cut、
+Character、Agent Tool 和 TUI 都是调用方；领域包不得通过 Agent chat、Agent Extension
+`purposeMediaService` 或 Platform media service 转发生成。Host 解析 immutable effective
+provider/model binding 并注入 port。调用方只保存 target/provenance 与 JobRef 的关联，通过
+snapshot-first `observe(afterRevision)` 消费 commit 后事件，不直接轮询 provider。
+
+Agent 运行身份只保留前台 Agent Run 和显式 SubagentRun。独立 BackgroundAgentRun 没有生产
+owner，不进入 runtime、协议或 UI；未来若出现真实独立需求，必须重新建立 OpenSpec。
+
 Quality 的边界由 [`adr-agent-runtime-single-authority-and-simplification-boundary.md`](adr-agent-runtime-single-authority-and-simplification-boundary.md) 定义：`@neko/quality` 已建立为中立 runtime，拥有 canonical contract validation、evidence freshness、Gate aggregation、evaluator port、provider-neutral model adapter 和通用 ProjectQuality facade orchestration；owning package 继续拥有领域 rubric、目标 materialization、确定性检查、Gate policy、repair 和 apply。跨包 contract 暂留 `@neko/shared`；Agent Extension 只保留 Tool/Capability、purpose-model 和授权资源 materializer 适配。
 
 Capability 是 OpenNeko 产品扩展 seam，领域包提供定义，Host 负责 discovery/trust/lifecycle，Pi bridge 只投影当前 turn 的不可变 Tool snapshot。External Processor 不是 Pi 或平行 Capability 系统；它只能作为 Host 中受管、可取消的 Tool implementation，并继续遵守路径、资源、环境、网络、审批和用户数据边界。
@@ -164,6 +180,7 @@ Capability 是 OpenNeko 产品扩展 seam，领域包提供定义，Host 负责 
 | 包                 | 主要职责                                              | 关键边界                                                                                                                                       |
 | ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `neko-agent`       | Agent session、provider、Skill、capability 与 Chat UI | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation                                                                        |
+| `neko-generation`  | 生成请求/结果契约、execution port 与 recoverable Job  | 只依赖共享契约；不读取配置或 credential；provider runtime 由现有 Host 注入；不创建独立 Host、Extension 或 Webview                              |
 | `neko-chara`       | Character Dialogue、Embody、角色证据与角色运行编排    | core/application host-neutral；VS Code 依赖只在 `host-vscode`；只消费 Agent contract，不拥有第二套 Agent loop                                  |
 | `neko-quality`     | canonical Quality Gate、evaluator port 与模型证据适配 | 只依赖共享 contract；领域 rubric/repair/apply 留在 owning package；provider/config/credential 和 Host IO 由组合层注入                          |
 | `neko-assets`      | 素材库、元数据、缩略图、Entity VS Code surface        | 路径走公共 resolver；Entity 走 canonical facade；缓存不伪装事实                                                                                |

@@ -17,6 +17,7 @@ Pi 已经拥有 Tool Call 调度、严格参数校验、事件、结果和 `Abor
 **Non-Goals:**
 
 - 把所有领域 Job 改名后塞回 Agent。
+- 在没有生产 producer 时预先实现 GenerationJob 或 application Agent supervisor。
 - 建立云端调度器、通用工作流引擎或跨设备任务服务。
 - 让 Webview 保存后台执行事实或通过 active tab 推断 owner。
 - 声称本次文档变更已经完成 runtime 迁移。
@@ -55,17 +56,16 @@ ToolCall B -> observe GenerationJob(jobId) -> terminal result
 必须区分：
 
 - `cancel`：请求 owner 停止工作并进入 terminal cancelled；不能恢复同一执行。
-- `detach`：观察者结束，但领域 Job 或后台 Agent 继续；必须由显式 contract 创建，不能由页面丢失隐式触发。
+- `detach`：观察者结束，但领域 Job 或 Subagent 按其 owner policy 继续；必须由显式 contract 创建，不能由页面丢失隐式触发。
 - `recover/reattach`：进程或观察连接丢失后，以新 Tool Call/Host observer 连接稳定领域身份。
 
 ### 3. 后台继续运行使用 Agent Run，不使用 Task
 
-当用户或 Agent 明确要求工作脱离当前页面/前台 turn 继续时，创建：
+Agent delegation 只创建 `SubagentRun`。独立 `BackgroundAgentRun` 没有不同于前台 Agent 或
+Subagent 的稳定职责和生产入口，因此从目标模型删除。
 
-- `BackgroundAgentRun`：由后台 Agent Tool/Host operation 创建；
-- `SubagentRun`：由 Agent 创建的独立子运行。
-
-创建成功后，应用级 `AgentRunSupervisor` 成为它们的 live owner；原始 Agent Run 和 Tool Call 只保留 creator/provenance 关系。关闭创建 Tab/Window 不取消这些运行。显式“中断后台 Agent”或“中断 Subagent”调用 supervisor 的精确 cancel operation。
+Subagent 创建成功后，明确的 parent run 或未来 application supervisor 成为 live owner；原始
+Tool Call 只保留 creator/provenance 关系。显式“中断 Subagent”调用精确 cancel operation。
 
 spawn Tool Call 只负责创建和返回 child run identity，不应持续充当 child run 的生命周期容器。若 spawn 在 child identity 提交前被取消，则不得产生孤儿运行；提交后取消 spawn 不得伪装成 child 已取消。
 
@@ -90,7 +90,7 @@ spawn Tool Call 只负责创建和返回 child run identity，不应持续充当
 | Cut 导出 | Cut `ExportJobPort` / `ExportJob` |
 | 批量素材导入且允许脱离页面继续 | Assets `ImportJob` |
 | 角色/世界互动 | `CharacterRun` / `WorldRun`，内部复用 Agent Run 和 Tool Call |
-| 后台研究、长篇创作协作 | `BackgroundAgentRun` 或 `SubagentRun` |
+| 委派研究、长篇创作协作 | `SubagentRun` |
 
 领域 Job 可以被 Tool 创建、观察或取消，但 Tool 只是调用者。Agent transcript、TaskManager、Webview store 和通用 SQLite task table 都不是领域 Job 的事实源。
 
@@ -117,7 +117,6 @@ SurfaceOwner
        -> ToolCallExecution
 
 ApplicationAgentSupervisor
-  -> BackgroundAgentRun
   -> SubagentRun
 
 GenerationDomain
@@ -127,14 +126,16 @@ CutDomain
   -> ExportJob
 ```
 
-`transfer` 只用于显式 ownership handoff，例如后台 Agent 创建成功后从 spawn 调用转移给 supervisor。它不能把任意 Tool Call 静默转为后台工作。
+`transfer` 只用于显式 ownership handoff，例如 Subagent 创建成功后从 spawn 调用转移给其
+committed owner。它不能把任意 Tool Call 静默转为后台工作。
 
 ### 6. 页面关闭按 owner 级联，而不是按 active selection 猜测
 
 - 关闭 Tab/Webview：取消该 surface 创建且仍由它拥有的前台 Agent Run，以及 Run 下未终态 Tool Calls。
 - 关闭 Window：取消该 window 的所有 surface-owned 前台运行。
-- Quit：先取消 surface-owned 前台运行；应用级后台 Agent/Subagent 和 detached domain Job 按各自 shutdown policy 处理。需要跨进程恢复的 Job 必须先持久化稳定身份，不能仅靠内存 registry 继续。
-- Background Agent/Subagent：由应用级 supervisor 维护，不因创建 surface 消失而取消。
+- Quit：先取消 surface-owned 前台运行；Subagent 和 detached domain Job 按各自 shutdown
+  policy 处理。需要跨进程恢复的 Job 必须先持久化稳定身份，不能仅靠内存 registry 继续。
+- Subagent：按明确 parent/supervisor ownership 处理，不根据 active surface 猜测。
 - Domain Job：按提交时明确的 linked/detached policy 处理；没有显式 detached contract 时默认 linked cancel。
 
 所有 operation 和 event 必须携带精确 owner/instance identity。缺失、陈旧或不匹配时 fail-visible，不得回退到 active tab、active conversation 或最近 task。
@@ -148,7 +149,7 @@ UI 投影收敛为：
 | Message Queue | 尚未执行的用户输入 | edit/cancel/promote message |
 | Plan Progress | Agent 的计划/checklist | 展开、查看、更新计划 |
 | Tool Execution | 当前/历史 Tool Call | approve/cancel/view result |
-| Agent Activity | 前台/后台 Agent Run、SubagentRun | open/interrupt |
+| Agent Activity | 前台 Agent Run、SubagentRun | open/interrupt |
 | Domain Activity | GenerationJob、ExportJob、ImportJob 等 | owning-domain cancel/retry/open result |
 
 `TaskCard` 应替换为 `ToolExecutionCard`、`AgentRunCard` 或领域卡片；`AgentTaskQueue` 应改为 `PlanProgress`。不得提供一个不知道实际 owner 的 `cancelTask` 或 `retryTask`。
@@ -165,10 +166,10 @@ Tool Call 的状态、确认、进度、部分结构化观察、终态结果和�
 
 1. 定义 `ToolCallExecution`、Agent Run supervisor、领域 Job ports 和 ownership registry 的最小 contract。
 2. 让 media Tool 直接等待 media executor 终态并消费 Pi `AbortSignal`；加入同一 Timeline item 的 progress/result projection。
-3. 对确需恢复/脱离的 provider 路径建立 Media-owned `GenerationJob`，不复用通用 Task DTO/table。
+3. 当真实 provider 路径需要恢复/脱离时，通过独立 OpenSpec 建立 Media-owned `GenerationJob`，不复用通用 Task DTO/table。
 4. 将 Canvas 直接动作接入同一 Generation domain port；保留 surface/domain owner，不绕行 Agent TaskManager。
 5. 保留 Cut `ExportJobPort`，并让其他领域只在满足独立生命周期条件时定义具体 Job。
-6. 将后台继续执行迁移为 BackgroundAgentRun/SubagentRun supervisor。
+6. 当生产入口需要委派推理时，通过独立 OpenSpec 引入 SubagentRun producer/supervisor。
 7. 先把 Canvas Board delivery 等非 Agent 使用者迁入 owning-domain ledger，再删除 TaskManager、TaskRef、task continuation、通用 task handlers/cards/storage 和 fallback；旧入口必须 poison 或 fail-visible。
 8. 更新 TUI/VS Code/Desktop 投影和关闭生命周期，并完成真实运行态验收。
 
@@ -176,7 +177,8 @@ Tool Call 的状态、确认、进度、部分结构化观察、终态结果和�
 
 ## Risks / Trade-offs
 
-- **长 Tool Call 占用 Agent turn 更久**：这是调用者需要终态结果的真实语义；用流式 Tool progress 和显式 BackgroundAgentRun 解决交互，而不是隐藏 Task。
+- **长 Tool Call 占用 Agent turn 更久**：这是调用者需要终态结果的真实语义；用流式 Tool
+  progress、领域 Job 或显式 Subagent delegation 解决交互，而不是隐藏 Task。
 - **部分 provider 天生异步**：adapter 可以在 Tool 内轮询；只有需要独立恢复/脱离时才提升为 GenerationJob。
 - **领域 Job 类型增多**：它们拥有不同事实、恢复和原子提交语义，强行统一为 Task 会增加耦合；共享的仅是 ownership/cancellation primitive。
 - **页面关闭和 spawn 存在竞态**：用 identity 提交点和显式 ownership transfer 测试，禁止“可能创建成功”的静默状态。
@@ -187,6 +189,6 @@ Tool Call 的状态、确认、进度、部分结构化观察、终态结果和�
 - Deterministic contract tests：owner identity、attach/transfer、级联取消、迟到事件拒绝、Tool terminal state。
 - Pi path tests：`AbortSignal` 到 provider、Tool progress/result 同 item、TaskManager poison 未命中。
 - Domain tests：GenerationJob/ExportJob 的提交、观察、取消、恢复、原子产物提交和 owner 隔离。
-- Host tests：Tab/Window close 取消前台 Tool；BackgroundAgent/Subagent 保持运行并可显式中断。
+- Host tests：Tab/Window close 取消前台 Tool；Subagent 按 owner policy 处理并可精确中断。
 - Agent Evaluation：真实 TUI/Agent 路径证明 Tool 等到终态、取消不产生 Task continuation、旧 TaskRef/TaskManager 未参与。
 - Webview runtime：Extension Development Host 验证 streaming、Tool card、Activity 和关闭竞态；普通浏览器不能替代。

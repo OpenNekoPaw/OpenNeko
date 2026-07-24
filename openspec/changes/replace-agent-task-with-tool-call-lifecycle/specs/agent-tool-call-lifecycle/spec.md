@@ -16,21 +16,23 @@ Work invoked by an Agent that requires no independent lifetime MUST execute as a
 - **THEN** the Tool Call receives cancellation, stops or reconciles its provider operation according to the provider contract, rejects late updates, and reaches a terminal cancelled state
 - **AND** all Tool-scoped resources are released
 
-### Requirement: Background continuation uses explicit Agent Runs
+### Requirement: Delegated reasoning uses explicit Subagent Runs
 
-Work that intentionally continues after the creating surface closes MUST use a BackgroundAgentRun or SubagentRun owned by an application-level Agent supervisor. The child run MUST retain creator provenance and MUST expose an explicit interrupt operation. It MUST NOT be represented as a generic Task.
+Delegated Agent reasoning MUST use a SubagentRun with an explicit owner, creator provenance and interrupt
+operation. The product MUST NOT expose a standalone BackgroundAgentRun kind without a distinct production
+owner and lifecycle. A SubagentRun MUST NOT be represented as a generic Task.
 
-#### Scenario: A Tab creates a background Agent
+#### Scenario: A Tool creates a Subagent
 
-- **WHEN** a foreground Tool successfully creates and commits a BackgroundAgentRun identity
-- **THEN** live ownership transfers to the application Agent supervisor while creator Agent Run and Tool Call identities remain provenance
-- **AND** closing the Tab does not cancel the BackgroundAgentRun
+- **WHEN** a foreground Tool successfully creates and commits a SubagentRun identity
+- **THEN** live ownership attaches to its explicit parent or application supervisor while creator Tool Call identity remains provenance
+- **AND** cancellation follows the committed owner policy rather than active Tab selection
 
 #### Scenario: The user interrupts a Subagent
 
 - **WHEN** the user invokes interrupt for an identified SubagentRun
 - **THEN** the Agent supervisor cancels that exact run and its owned Tool Calls
-- **AND** unrelated foreground, background, and domain executions continue
+- **AND** unrelated foreground, Subagent, and domain executions continue
 
 ### Requirement: Independent work is owned by a concrete domain Job or Session
 
@@ -56,7 +58,7 @@ The Host SHALL provide one host-neutral ownership mechanism for transient owner-
 
 - **WHEN** a Tab, Webview, or Window owner is disposed
 - **THEN** the ownership mechanism cancels its foreground Agent Runs and their Tool Calls
-- **AND** application-owned background Agents, Subagents, and explicitly detached domain Jobs are not selected by active UI state or cancelled by proximity
+- **AND** Subagents and explicitly detached domain Jobs are not selected by active UI state or cancelled by proximity
 
 #### Scenario: An execution identity is stale
 
@@ -76,7 +78,7 @@ The product MUST distinguish message queue, plan progress, Tool execution, Agent
 
 #### Scenario: The Activity view lists ongoing work
 
-- **WHEN** foreground Tools, background Agents, Subagents, GenerationJobs, or ExportJobs are active
+- **WHEN** foreground Tools, Subagents, GenerationJobs, or ExportJobs are active
 - **THEN** the Activity view labels each by its concrete kind and exposes only operations supported by that owner
 - **AND** it does not synthesize a generic cancelTask or retryTask operation
 

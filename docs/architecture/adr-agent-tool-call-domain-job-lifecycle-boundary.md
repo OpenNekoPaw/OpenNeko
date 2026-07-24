@@ -1,8 +1,8 @@
-# ADR: Agent Tool Call、后台 Agent 与领域 Job 生命周期边界
+# ADR: Agent Tool Call、Subagent 与领域 Job 生命周期边界
 
-状态：Accepted（目标架构，尚未实施）
+状态：Accepted（部分实施）
 日期：2026-07-23
-范围：`neko-agent`、Pi Tool bridge、媒体生成、Canvas/Cut/Assets 创作入口、TUI、VS Code、拟议 Desktop、后台 Agent、Subagent、页面关闭和执行恢复。
+范围：`neko-agent`、Pi Tool bridge、媒体生成、Canvas/Cut/Assets 创作入口、TUI、VS Code、拟议 Desktop、Subagent、页面关闭和执行恢复。
 
 本文决定以 Tool Call 取代通用 Agent `Task`/`TaskManager`，同时保留真正具有独立产品生命周期的领域 Job/Session。它补充 [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)、[`adr-agent-runtime-architecture-comparison-boundary.md`](adr-agent-runtime-architecture-comparison-boundary.md)、[`adr-cut-otio-vscode-desktop-media-runtime-boundary.md`](adr-cut-otio-vscode-desktop-media-runtime-boundary.md) 和 [`package-boundaries.md`](package-boundaries.md)。
 
@@ -13,7 +13,11 @@
 - [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md) 和 `adopt-pi-agent-runtime` OpenSpec 中“长媒体 Tool 快速返回 `TaskRef`，由 OpenNeko Task runtime 观察”的部分。
 - [`adr-agent-creative-invocation-run-boundary.md`](adr-agent-creative-invocation-run-boundary.md) 与 [`adr-canvas-creative-ai-candidate-actions.md`](adr-canvas-creative-ai-candidate-actions.md) 中由 Agent 通用 run/workItem/TaskManager 统一拥有 Canvas 直接创作动作的部分。Document/candidate/ResourceRef/package-owned apply 边界继续有效。
 
-在对应 OpenSpec 完成前，现有 TaskManager/TaskRef 仍是部分代码的实际行为；实现和 UI 不得把本目标架构误报为已经迁移。
+Agent 通用 TaskManager/TaskRef 已从当前 canonical Agent 路径删除。Generation 已实现最小
+versioned lifecycle kernel、具体 coordinator、持久 store、重启恢复、Agent 领域 Job Tools、
+TUI direct consumer 和 VS Code Host composition；Cut ExportJob 与 Webview Domain Activity 仍在
+[`introduce-domain-job-lifecycle-kernel`](../../openspec/changes/introduce-domain-job-lifecycle-kernel/)
+中实施。实现和 UI 不得把尚未接入的 VS Code 重启恢复或 Webview 管理误报为已经完成。
 
 ## 背景
 
@@ -32,13 +36,13 @@ Agent Run
 
 ## 五层分析
 
-| 层 | 决策 |
-| --- | --- |
-| 职责 | Agent Run 拥有 Tool Call；Agent supervisor 拥有后台 Agent/Subagent；Generation/Cut/Assets 等领域拥有各自 Job/Session。 |
-| 依赖 | Pi 只调度 Tool；领域通过窄 port 暴露 operation/job；Host 组合 owner，不把业务状态塞进 Webview 或全局 TaskManager。 |
-| 接口 | Tool Call、Agent Run 和具体 Domain Job 使用不同 identity；底层只共享最小 ownership/cancellation primitive。 |
-| 扩展 | 新增长任务先判断是否需要独立生命周期；只有满足条件才定义领域 Job，不新增通用 Task 类型。 |
-| 测试 | 必须证明 owner 级联、Pi signal、同一 Tool Timeline、后台存活、领域恢复和旧 TaskManager 未参与。 |
+| 层   | 决策                                                                                                                   |
+| ---- | ---------------------------------------------------------------------------------------------------------------------- |
+| 职责 | 前台 Agent Run 拥有 Tool Call；明确 owner 拥有 Subagent；Generation/Cut/Assets 等领域拥有各自 Job/Session。 |
+| 依赖 | Pi 只调度 Tool；领域通过窄 port 暴露 operation/job；Host 组合 owner，不把业务状态塞进 Webview 或全局 TaskManager。     |
+| 接口 | Tool Call、Agent Run 和具体 Domain Job 使用不同 identity；底层只共享最小 ownership/cancellation primitive。            |
+| 扩展 | 新增长任务先判断是否需要独立生命周期；只有满足条件才定义领域 Job，不新增通用 Task 类型。                               |
+| 测试 | 必须证明 owner 级联、Pi signal、同一 Tool Timeline、后台存活、领域恢复和旧 TaskManager 未参与。                        |
 
 ## 决策
 
@@ -68,14 +72,14 @@ Tool Call
   -> task continuation resumes Agent
 ```
 
-### 2. 后台工作用 BackgroundAgentRun/SubagentRun
+### 2. 委派推理使用 SubagentRun
 
-需要脱离前台 turn 或创建页面继续推理时，必须显式创建：
+Agent 需要委派独立推理时，必须显式创建 `SubagentRun`。产品不保留独立
+`BackgroundAgentRun`；它没有不同于前台 Agent 或 Subagent 的生产 owner 和生命周期。
 
-- `BackgroundAgentRun`：由后台 Agent Tool 或 Host operation 创建；
-- `SubagentRun`：由 Agent 创建的独立子运行。
-
-创建成功后，应用级 `AgentRunSupervisor` 成为 live owner；原 Agent Run/Tool Call 只保留 `createdByAgentRunId`、`createdByToolCallId` 等 provenance。关闭创建 Tab、Window 或 Webview 不自动取消它们，用户可以通过精确 identity 显式中断。
+创建成功后，明确 parent run 或应用级 supervisor 成为 live owner；原 Tool Call 只保留
+`createdByAgentRunId`、`createdByToolCallId` 等 provenance。关闭 surface 时按 committed owner
+policy 处理，用户通过精确 identity 显式中断。
 
 spawn Tool Call 只负责创建 child run，不持续充当 child run 的 owner。child identity 提交前取消，不得留下孤儿运行；提交后 spawn Tool 取消，不得伪装成 child 也已取消。
 
@@ -91,22 +95,26 @@ spawn Tool Call 只负责创建 child run，不持续充当 child run 的 owner�
 
 典型 owner：
 
-| 场景 | Canonical owner |
-| --- | --- |
-| 文档读取、搜索、局部解析、受限感知 | 当前 `ToolCallExecution` |
-| 只由 Agent 使用且随 Agent 取消的媒体生成 | 当前 `ToolCallExecution` |
-| 需要跨页面/重启恢复的媒体生成 | Media/Generation `GenerationJob` |
-| Canvas 直接 AI 按钮 | Canvas operation + Generation domain |
-| Cut 导出 | Cut `ExportJobPort` / `ExportJob` |
-| 可脱离页面的批量素材导入 | Assets `ImportJob` |
-| 角色/世界运行 | `CharacterRun` / `WorldRun`，内部复用 Agent Run 与 Tool Call |
-| 后台研究或长篇协作 | `BackgroundAgentRun` / `SubagentRun` |
+| 场景                                     | Canonical owner                                              |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| 文档读取、搜索、局部解析、受限感知       | 当前 `ToolCallExecution`                                     |
+| 所有媒体生成                              | Media/Generation `GenerationJob`                             |
+| Canvas 直接 AI 按钮                      | Canvas operation + Generation domain                         |
+| Cut 导出                                 | Cut `ExportJobPort` / `ExportJob`                            |
+| 可脱离页面的批量素材导入                 | Assets `ImportJob`                                           |
+| 角色/世界运行                            | `CharacterRun` / `WorldRun`，内部复用 Agent Run 与 Tool Call |
+| 委派研究或长篇协作                       | `SubagentRun`                                                |
 
 Agent 可以通过 Tool 创建、观察、取消或重新附着领域 Job，但不拥有 provider external id、领域进度、恢复 checkpoint、原子产物提交或最终领域事实。
 
-### 4. 底层统一生命周期机制，由各 owner 调用
+### 4. 底层只统一生命周期机制，由各 owner 调用
 
-Host-neutral `ExecutionOwnershipRegistry` 只负责：
+`@neko/shared/job-lifecycle` 只负责 typed Job identity、phase、revision/CAS、终态不可变和
+versioned observation；它没有 submit、payload/result、provider、artifact、retry policy 或
+跨领域 handler registry。Generation/Cut 等领域各自拥有 snapshot schema、coordinator、
+reconciliation 和结果提交。
+
+Host-neutral `ExecutionOwnershipRegistry` 另只负责：
 
 - 将 execution 附着到明确 owner；
 - 显式 transfer ownership；
@@ -122,7 +130,6 @@ SurfaceOwner
        -> ToolCallExecution
 
 ApplicationAgentSupervisor
-  -> BackgroundAgentRun
   -> SubagentRun
 
 GenerationDomain
@@ -138,8 +145,8 @@ CutDomain
 
 - 关闭 Tab/Webview：取消由该 surface 创建且仍由它拥有的前台 Agent Run，以及其未终态 Tool Calls。
 - 关闭 Window：取消该 Window 所有 surface-owned 前台运行。
-- Quit：先取消 surface-owned 前台运行；后台 Agent/Subagent 和 detached domain Job 按自己的 shutdown/recovery policy 处理。
-- Background Agent/Subagent：由应用级 supervisor 维护，不因创建页面关闭而停止。
+- Quit：先取消 surface-owned 前台运行；Subagent 和 detached domain Job 按自己的 shutdown/recovery policy 处理。
+- Subagent：按明确 parent/supervisor owner policy 处理，不根据创建页面或 active selection 猜测。
 - Domain Job：提交时必须明确 `linked` 或 `detached/recoverable`；没有显式 detached contract 时默认随 caller/owner 取消。
 
 关闭事件不能按当前选中的 Tab 或 conversation 猜测目标。取消、event 和 dispose 都必须携带精确 instance identity。
@@ -158,7 +165,7 @@ ToolCall B -> observe GenerationJob(jobId) -> terminal result
 必须区分：
 
 - `cancel`：停止并终结执行，不能恢复同一 execution；
-- `detach`：观察者退出，显式后台 Agent 或领域 Job 继续；
+- `detach`：观察者退出，Subagent 或领域 Job 按其 owner policy 继续；
 - `recover/reattach`：通过新 observer/Tool Call 连接稳定 Job identity。
 
 没有领域 Job identity 的普通 Tool Call 中断后只能重新调用；是否允许重试由 operation 幂等性和 provider outcome 语义决定。远端提交后连接丢失但没有 external id 时，应返回 outcome-unknown diagnostic，不能自动重提付费请求。
@@ -167,12 +174,12 @@ ToolCall B -> observe GenerationJob(jobId) -> terminal result
 
 UI 使用精确投影：
 
-| UI | 权威语义 |
-| --- | --- |
-| Message Queue | 尚未执行的用户输入 |
-| Plan Progress | Agent 计划/checklist，不是执行任务 |
-| Tool Execution | 当前或历史 Tool Call |
-| Agent Activity | 前台/后台 Agent Run、SubagentRun |
+| UI              | 权威语义                               |
+| --------------- | -------------------------------------- |
+| Message Queue   | 尚未执行的用户输入                     |
+| Plan Progress   | Agent 计划/checklist，不是执行任务     |
+| Tool Execution  | 当前或历史 Tool Call                   |
+| Agent Activity  | 前台 Agent Run、SubagentRun            |
 | Domain Activity | GenerationJob、ExportJob、ImportJob 等 |
 
 `TaskCard` 应替换为 `ToolExecutionCard`、`AgentRunCard` 或领域卡片；`AgentTaskQueue` 应改为 `PlanProgress`。取消、重试、打开结果和恢复操作必须指向精确 owner，不提供语义不明的 `cancelTask`/`retryTask`。
@@ -197,11 +204,15 @@ assistant turn
 
 ### Agent 对话内生成
 
-如果图片、视频、语音或音乐生成只服务当前 Agent 目标，并且 Agent 中断就应停止，生成直接在 Tool Call 内完成。Tool 可以长时间 streaming，不需要 TaskRef。
+所有图片、视频、语音或音乐生成都提交 GenerationJob。linked Tool Call 订阅 Job revision、在同一
+Timeline item 投影进度并等待终态；detached Tool Call 返回 JobRef。两者不建立第二条直接 provider
+执行路径，也不需要 TaskRef。
 
 ### Canvas 直接生成
 
-Canvas 按钮的 owner 是 Canvas document/action。它调用 Generation domain port，并按 candidate-first 规则写回；只有用户显式选择“交给后台 Agent”时才创建 BackgroundAgentRun。不能为了复用 provider 而伪造一个 Agent Task。
+Canvas 按钮的 owner 是 Canvas document/action。它直接调用 Generation Job port，并按
+candidate-first 规则写回；需要委派开放式推理时可显式创建 SubagentRun，但媒体执行本身仍由
+GenerationJob 拥有。不能通过 Agent chat 转发 provider 调用。
 
 ### Cut OTIO 导出
 
@@ -219,10 +230,10 @@ Cut 已有明确 `ExportJobPort`，导出进度、取消、输入 revision、输
 
 1. 定义最小 `ToolCallExecution`、`AgentRunSupervisor`、领域 Job port 和 `ExecutionOwnershipRegistry` contract。
 2. 让 media Tool 等待现有 media executor 的终态，接入 Pi `AbortSignal`，并将 progress/result 投影到同一 Tool item。
-3. 仅为确需 detached/recovery 的路径建立 Media-owned `GenerationJob`。
+3. 让所有媒体生成入口统一建立 Media-owned `GenerationJob`，linked/detached 只作为调用策略。
 4. 将 Canvas 直接动作接入 Generation domain port；保留 Canvas/domain owner。
 5. 保留 Cut `ExportJobPort`，其他领域只在满足独立生命周期条件时增加具体 Job。
-6. 让 BackgroundAgentRun/SubagentRun 由应用 supervisor 维护。
+6. 删除独立 BackgroundAgentRun；真实 Subagent producer 出现时由明确 parent/supervisor 维护。
 7. 先将 Canvas Board delivery 等非 Agent 使用者迁入 owning-domain ledger，再删除 TaskManager、TaskRef、task continuation、通用 task handler/storage/card/export 和 fallback。
 8. 更新 TUI、VS Code、Desktop 的 Activity、流式渲染和关闭生命周期。
 
@@ -233,11 +244,14 @@ Cut 已有明确 `ExportJobPort`，导出进度、取消、输入 revision、输
 - deterministic：owner attach/transfer/cascade cancel/release、identity mismatch、迟到 progress、terminal state。
 - Agent path：Pi `AbortSignal` 到 provider、Tool progress/result 同 item、TaskManager poison 未命中。
 - 领域 Job：linked/detached cancel、以新 Tool Call 重新附着、provider reconciliation、原子产物提交。
-- Host：Tab/Window close 取消前台 Agent/Tool，后台 Agent/Subagent 保持运行并可显式中断。
+- Host：Tab/Window close 取消前台 Agent/Tool，Subagent 按 owner policy 处理并可显式中断。
 - Agent Evaluation：真实 TUI/Agent 路径证明没有 TaskRef、task continuation 或旧 TaskManager fallback。
 - Webview：Extension Development Host 验证 Tool streaming、Activity、关闭竞态和资源释放；普通浏览器不能替代。
 
-本次仅记录架构决策，没有改变运行时代码，因此不把文档检查描述为真实 Agent 行为验收。实施约束与 Evaluation 计划见 [`replace-agent-task-with-tool-call-lifecycle`](../../openspec/changes/replace-agent-task-with-tool-call-lifecycle/)。
+已实现路径的确定性验证与剩余运行态验收记录在
+[`introduce-domain-job-lifecycle-kernel`](../../openspec/changes/introduce-domain-job-lifecycle-kernel/)；
+真实 Agent provider case 和 Extension Development Host Webview Activity 尚未通过，因此不能
+把单元测试或 key-free harness 描述为完整产品验收。
 
 ## 后果
 
@@ -251,14 +265,14 @@ Cut 已有明确 `ExportJobPort`，导出进度、取消、输入 revision、输
 ### 代价
 
 - 长 Tool Call 会占用当前 Agent turn 更久；UI 必须做好流式进度和中断。
-- 需要明确区分普通 Tool、后台 Agent 和领域 Job，不能用一个 Task DTO 省略建模。
+- 需要明确区分普通 Tool、Subagent 和领域 Job，不能用一个 Task DTO 省略建模。
 - 现有 TaskManager、TaskRef、continuation、TaskCard 和持久 task 数据需要一次破坏性迁移。
 - provider 取消可能只能停止观察，远端 outcome-unknown 仍需领域 reconciliation。
 
 ## 被拒绝的替代方案
 
 - **所有异步工作都保留为通用 Task：** 继续复制 Tool Call 生命周期并混淆领域 owner。
-- **所有异步工作都强制为 Tool Call：** 无法表达 Cut export、Canvas direct job、跨进程恢复和后台 Agent。
+- **所有异步工作都强制为 Tool Call：** 无法表达 Cut export、Canvas direct job、跨进程恢复和 Subagent。
 - **Tool 提前返回 taskId，但改名为 executionId：** 只是隐藏 Task，并未消除第二套生命周期。
 - **Webview 管理任务存活：** 页面关闭即丢失事实，且违反 Host/领域 ownership。
 - **Agent TaskManager 统一管理所有领域 Job：** Agent 会成为 provider、导出、素材和项目事实的错误 owner。

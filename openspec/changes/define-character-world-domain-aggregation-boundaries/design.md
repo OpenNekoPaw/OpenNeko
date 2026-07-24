@@ -102,12 +102,12 @@ CharacterRun / WorldRun
   -> create or resume neko-agent AgentSession
   -> inject domain context + allowed capability projection
   -> Pi Agent loop
-  -> typed Tool Call / BackgroundAgentRun / Approval
+  -> typed Tool Call / SubagentRun / Approval
   -> owning Character or World operation
   -> domain event / revision / diagnostic
 ```
 
-Agent 拥有模型调用、turn loop、Tool Call、BackgroundAgentRun/SubagentRun、Approval、事件、取消、transcript 和 compaction。Character/World 分别拥有身份、版本、run、save、记忆策略、表现绑定、规则和项目事实；具体领域 Job 仍由对应领域拥有。不得新增 `RoleplayAgent`、`CharacterAgentExecutor`、`WorldAgentRuntime` 等平行通用循环。
+Agent 拥有模型调用、turn loop、Tool Call、SubagentRun、Approval、事件、取消、transcript 和 compaction。Character/World 分别拥有身份、版本、run、save、记忆策略、表现绑定、规则和项目事实；具体领域 Job 仍由对应领域拥有。不得新增 `RoleplayAgent`、`CharacterAgentExecutor`、`WorldAgentRuntime` 等平行通用循环，也不得恢复独立 BackgroundAgentRun。
 
 角色或世界可以提供 `agent-contribution` adapter，将领域上下文、Tool 和 capability prompt 投影给 Agent；该 adapter 不拥有领域事实，也不能导入 Agent 私有实现。
 

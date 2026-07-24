@@ -120,7 +120,7 @@ Webview/Extension 与 Terminal TUI/headless 是不同本地宿主，不要求功
 执行闭环归明确 owner，而不是 Webview、TUI 或通用 TaskManager：
 
 - `AgentRun` 拥有当前 Tool Call；普通 Tool 在同一调用中投影进度并返回终态结果，随 Agent Run 取消。
-- 显式 `BackgroundAgentRun`/`SubagentRun` 由应用级 Agent supervisor 维护，并提供精确中断操作。
+- 显式 `SubagentRun` 由 parent/supervisor 维护，并提供精确中断操作；不定义独立 `BackgroundAgentRun`。
 - 需要跨页面/重启恢复或直接领域 UI 操作的工作由具体领域 Job/Session 拥有；Agent 只通过 Tool 调用领域 port。
 - VS Code Extension、Terminal TUI、Desktop/Electron 只提供 host delivery/lifecycle adapter，例如 Webview URI、通知、Node workspace 保存目录、Electron IPC 或终端诊断。
 - 同一工作区的生成结果通过稳定 `ResourceRef`、领域 Job identity 或 generated asset index 观察；Webview URI、blob URL、临时下载路径和 host-private live handle 不能成为业务事实。

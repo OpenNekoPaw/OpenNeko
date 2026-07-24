@@ -1,6 +1,6 @@
 # ADR: Agent 创作调用、Run 与写回边界
 
-> 后续决策：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 已取代本文中由 Agent 通用 run/workItem/TaskManager 统一拥有外部创作执行的部分。Document/candidate/ResourceRef/package-owned apply 继续有效；直接创作动作由 surface/领域 operation 或具体领域 Job 拥有，只有显式后台推理才创建 BackgroundAgentRun。
+> 后续决策：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 已取代本文中由 Agent 通用 run/workItem/TaskManager 统一拥有外部创作执行的部分。Document/candidate/ResourceRef/package-owned apply 继续有效；直接创作动作由 surface/领域 operation 或具体领域 Job 拥有，委派推理只创建 SubagentRun，不创建独立 BackgroundAgentRun。
 
 状态：Accepted
 日期：2026-07-09
