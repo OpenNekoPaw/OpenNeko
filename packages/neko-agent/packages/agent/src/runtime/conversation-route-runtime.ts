@@ -33,13 +33,13 @@ export function resolveRequiredConversationRoute(
   };
 }
 
-export function readExplicitConversationId(message: ExplicitConversationMessage): string | null {
+function readExplicitConversationId(message: ExplicitConversationMessage): string | null {
   return typeof message.conversationId === 'string' && message.conversationId.trim().length > 0
     ? message.conversationId
     : null;
 }
 
-export function buildMissingConversationIdMessage(action: string): GlobalErrorMessage {
+function buildMissingConversationIdMessage(action: string): GlobalErrorMessage {
   return {
     type: 'globalError',
     message: `Cannot ${action} without an explicit conversationId.`,

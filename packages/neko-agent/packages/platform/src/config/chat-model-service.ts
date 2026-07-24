@@ -104,13 +104,6 @@ export class ChatModelService implements IChatModelService {
   }
 }
 
-/**
- * Create a chat model service instance
- */
-export function createChatModelService(): IChatModelService {
-  return new ChatModelService();
-}
-
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }

@@ -4,12 +4,8 @@
  * Follows the same pattern as AgentError in @neko/agent.
  */
 
-import { BaseError, type BaseErrorInfo, calculateBackoff, shouldRetry, sleep } from '@neko/shared';
+import { BaseError, type BaseErrorInfo } from '@neko/shared';
 import type { PlatformErrorInfo } from '../types/error';
-
-// Re-export shared utilities for backward compatibility
-export { calculateBackoff, shouldRetry, sleep };
-
 /**
  * Platform error with classification
  */

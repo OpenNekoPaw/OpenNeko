@@ -55,7 +55,7 @@ const AUDIO_EXTS = new Set([
  * Used for fast-path: show video/audio UI before full analysis completes.
  * Returns null for non-video/audio types (they don't benefit from lazy loading).
  */
-export function detectMediaTypeFromExtension(filePath: string): 'video' | 'audio' | null {
+function detectMediaTypeFromExtension(filePath: string): 'video' | 'audio' | null {
   const ext = filePath.toLowerCase().match(/\.[^.]+$/)?.[0];
   if (!ext) return null;
   if (VIDEO_EXTS.has(ext)) return 'video';
@@ -84,7 +84,7 @@ async function computeFileHash(filePath: string): Promise<string> {
  * Check if two files are identical by MD5 hash.
  * Returns true if files have the same content.
  */
-export async function areFilesIdentical(pathA: string, pathB: string): Promise<boolean> {
+async function areFilesIdentical(pathA: string, pathB: string): Promise<boolean> {
   try {
     const [hashA, hashB] = await Promise.all([computeFileHash(pathA), computeFileHash(pathB)]);
     const identical = hashA === hashB;
@@ -105,7 +105,7 @@ export async function areFilesIdentical(pathA: string, pathB: string): Promise<b
  * In Git mode, extracts the previous version directly to a temp file
  * via `git show` — never loads file content into extension memory.
  */
-export async function ensurePreviousFilePath(ctx: IHandlerContext, ref: string): Promise<void> {
+async function ensurePreviousFilePath(ctx: IHandlerContext, ref: string): Promise<void> {
   // Already have a path (local comparison or previously cached)
   if (ctx.previousUri || ctx.requestState.hasPreviousFileForRef(ref)) return;
 

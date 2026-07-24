@@ -69,7 +69,7 @@ export class AgentTaskProjectionSource {
   }
 }
 
-export function toTaskProjectionStatus(status: AgentWorkItemTaskStatus): TaskProjection['status'] {
+function toTaskProjectionStatus(status: AgentWorkItemTaskStatus): TaskProjection['status'] {
   switch (status) {
     case 'queued':
       return 'queued';

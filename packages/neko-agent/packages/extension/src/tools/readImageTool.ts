@@ -1,10 +1,5 @@
 export {
   createReadImageTool,
-  executeReadImage,
-  DEFAULT_READ_IMAGE_LIMIT,
-  MAX_READ_IMAGE_BYTES,
-  MAX_READ_IMAGE_LIMIT,
-  READ_IMAGE_MODEL_ANALYSIS_UNSUPPORTED,
   type ReadImageAnalysisKind,
   type ReadImageContentAccessRuntime,
   type ReadImageInputImage,

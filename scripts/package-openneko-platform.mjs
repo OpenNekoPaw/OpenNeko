@@ -92,7 +92,7 @@ export function createComposedManifest() {
   return manifest;
 }
 
-export function packageOpenNekoPlatform({ target, engineVsix }, command = runCommand) {
+function packageOpenNekoPlatform({ target, engineVsix }, command = runCommand) {
   const manifest = createComposedManifest();
   const version = manifest.version;
   const buildRoot = join(repoRoot, '.tmp', 'openneko-vsix', target);

@@ -5,7 +5,7 @@ import { resolveHostContentMediaPath } from '@neko/shared/vscode/extension';
 
 const PATH_VARIABLE_RE = /\$\{[^}]+\}/;
 
-export function hasPathVariable(src: string): boolean {
+function hasPathVariable(src: string): boolean {
   return PATH_VARIABLE_RE.test(src);
 }
 

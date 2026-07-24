@@ -315,7 +315,7 @@ export class EmbodyCharacterController implements vscode.Disposable {
   private readonly now = (): string => this.deps.now?.() ?? new Date().toISOString();
 }
 
-export function projectEmbodyCharacterSession(
+function projectEmbodyCharacterSession(
   session: Pick<
     EmbodyCharacterSession,
     'id' | 'entityRef' | 'profileSnapshot' | 'prompt' | 'status'

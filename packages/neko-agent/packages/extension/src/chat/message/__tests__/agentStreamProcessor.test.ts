@@ -8,6 +8,10 @@ import type { AgentTurnTimelineItem } from '@neko-agent/types';
 import { createGeneratedAssetRevisionRef, type EntityMemoryContribution } from '@neko/shared';
 import { evaluateAgentTaskResultDelivery, normalizeAgentTaskResultObservation } from '@neko/agent';
 import { createConversationProjectionStore } from '@neko/agent/runtime';
+import {
+  createManagedDocumentResourceRef,
+  type DocumentArchiveResourceRef,
+} from '@neko/content/document';
 
 vi.mock('vscode', () => ({
   Uri: {
@@ -812,7 +816,7 @@ describe('AgentStreamProcessor', () => {
         source: { filePath: '/books/a.epub', format: 'epub' },
         entryPath: 'image/Page_1.jpg',
         versionPolicy: 'versioned-export',
-      };
+      } satisfies DocumentArchiveResourceRef;
       const localResourceAccess = {
         toWebviewUri: vi.fn((_webview, filePath: string) =>
           filePath === materializedPath ? 'vscode-webview://page-1.jpg' : undefined,
@@ -887,19 +891,10 @@ describe('AgentStreamProcessor', () => {
           },
         ],
       });
-      expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith(
-        expect.objectContaining({
-          source: expect.objectContaining({
-            kind: 'document',
-            provider: 'document-archive',
-            locator: expect.objectContaining({
-              kind: 'document',
-              entryPath: 'image/Page_1.jpg',
-            }),
-          }),
-          mimeTypeHint: 'image/jpeg',
-        }),
-      );
+      expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith({
+        source: createManagedDocumentResourceRef(archiveRef, 'project'),
+        mimeTypeHint: 'image/jpeg',
+      });
       expect(
         contentAccessRuntime.loadProviderAsset.mock.calls.every(
           ([input]) => !Object.hasOwn(input, 'variant'),
@@ -957,7 +952,7 @@ describe('AgentStreamProcessor', () => {
         source: { filePath: '${BOOKS}/story.epub', format: 'epub' },
         entryPath: 'OPS/page-1.jpg',
         versionPolicy: 'versioned-export',
-      };
+      } satisfies DocumentArchiveResourceRef;
       const localResourceAccess = {
         toWebviewUri: vi.fn((_webview, filePath: string) =>
           filePath === materializedPath ? 'vscode-webview://page-1.jpg' : undefined,
@@ -1059,19 +1054,10 @@ describe('AgentStreamProcessor', () => {
         isStreaming: false,
       });
       expect(JSON.stringify(streamComplete?.contentBlocks)).not.toContain('镜号');
-      expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith(
-        expect.objectContaining({
-          source: expect.objectContaining({
-            kind: 'document',
-            provider: 'document-archive',
-            locator: expect.objectContaining({
-              kind: 'document',
-              entryPath: 'OPS/page-1.jpg',
-            }),
-          }),
-          mimeTypeHint: 'image/jpeg',
-        }),
-      );
+      expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith({
+        source: createManagedDocumentResourceRef(archiveRef, 'project'),
+        mimeTypeHint: 'image/jpeg',
+      });
       expect(
         contentAccessRuntime.loadProviderAsset.mock.calls.every(
           ([input]) => !Object.hasOwn(input, 'variant'),

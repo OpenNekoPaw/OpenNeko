@@ -6,11 +6,7 @@ import {
   resolveLogLevelSetting,
   watchLogLevel,
 } from '@neko/shared/vscode/extension';
-import {
-  clearGlobalServices,
-  ServiceCollection,
-  setGlobalServices,
-} from '../base/serviceCollection';
+import { ServiceCollection } from '../base/serviceCollection';
 import type { IEngineMediaService } from '../contracts/IEngineMediaService';
 import type { IEngineRuntimeResolver } from '../contracts/IEngineRuntimeResolver';
 import type { IExtensionI18n } from '../contracts/IExtensionI18n';
@@ -85,8 +81,6 @@ export function bootstrapCoreServices(
   services.set(IWorkspaceIOId, workspaceIO);
   services.set(ISchedulerId, scheduler);
   services.set(ITempFileServiceId, tempFileService);
-  setGlobalServices(services);
-
   logger.info('Activating extension...');
 
   return {
@@ -100,7 +94,6 @@ export function bootstrapCoreServices(
     scheduler,
     tempFileService,
     dispose() {
-      clearGlobalServices();
       services.dispose();
     },
   };

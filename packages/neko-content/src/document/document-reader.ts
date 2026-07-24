@@ -848,7 +848,7 @@ export function extractLocalImageReferences(html: string): string[] {
   return dedupeStrings(paths);
 }
 
-export function extractHtmlImageSources(html: string): string[] {
+function extractHtmlImageSources(html: string): string[] {
   const sources: string[] = [];
   HTML_IMAGE_ATTRIBUTE_PATTERN.lastIndex = 0;
   let htmlMatch: RegExpExecArray | null;
@@ -871,7 +871,7 @@ export function extractHtmlImageSources(html: string): string[] {
   return sources;
 }
 
-export function extractLocalImageReferencesFromValue(value: string): string[] {
+function extractLocalImageReferencesFromValue(value: string): string[] {
   return dedupeStrings(
     splitImageAttributeValue(value)
       .map((source) => normalizeLocalImageReference(source))
@@ -909,7 +909,7 @@ export function resolveEpubEntryReference(
   return resolved.startsWith('../') ? resolved.replace(/^(\.\.\/)+/, '') : resolved;
 }
 
-export function dedupeStrings(values: readonly string[]): string[] {
+function dedupeStrings(values: readonly string[]): string[] {
   return Array.from(new Set(values));
 }
 

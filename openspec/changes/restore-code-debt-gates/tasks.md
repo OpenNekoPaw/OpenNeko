@@ -24,6 +24,12 @@
 - [x] 4.3 Run repository quality checks and record unrelated residual failures
 - [x] 4.4 Split the OpenSpec, gate, and dormant-code changes into focused commits
 
+## 5. Knip Drift Repair
+
+- [x] 5.1 Audit current package exports, CLI scripts, host adapters, generated checks, and test entries against Knip's entry model
+- [x] 5.2 Delete newly orphaned barrels, helpers, and manual scripts instead of suppressing them
+- [x] 5.3 Re-run Knip, dependency checks, repository quality gates, and local CI
+
 ## Verification Notes
 
 - `node scripts/check-legacy-debt-surfaces.mjs --self-test`, `pnpm check:legacy-debt`, `pnpm check:legacy-debt:ledger`, and `pnpm check:agent-boundaries` pass.
