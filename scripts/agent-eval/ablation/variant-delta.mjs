@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 
 export function projectAggregateMetrics(aggregate, qualityPolicy, samples = []) {
   const toolCalls = aggregate.tools.calls;
-  const taskTotal = aggregate.tasks.total;
   const quality = projectContentQuality(aggregate, qualityPolicy, samples);
   return {
     passRate: aggregate.passRate,
@@ -20,10 +19,6 @@ export function projectAggregateMetrics(aggregate, qualityPolicy, samples = []) 
       successRate: toolCalls === 0 ? 1 : aggregate.tools.successes / toolCalls,
     },
     retries: aggregate.retries,
-    tasks: {
-      ...aggregate.tasks,
-      successRate: taskTotal === 0 ? 1 : aggregate.tasks.completed / taskTotal,
-    },
     quality,
   };
 }
@@ -130,7 +125,6 @@ export function metricDelta(baseline, current) {
     iterations: current.iterations.total - baseline.iterations.total,
     toolCalls: current.tools.calls - baseline.tools.calls,
     retries: current.retries.count - baseline.retries.count,
-    completedTasks: current.tasks.completed - baseline.tasks.completed,
   };
   if (baseline.cost.status === 'available' && current.cost.status === 'available') {
     delta.costUsd = current.cost.totalUsd - baseline.cost.totalUsd;

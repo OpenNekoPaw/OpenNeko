@@ -76,12 +76,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "backgroundTasksIdle",
-        "taskResultObservationIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "turn-facts"
     },
     {

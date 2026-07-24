@@ -70,13 +70,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "backgroundTasksIdle",
-        "mediaDeliveryIdle",
-        "taskResultObservationIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "recovery-facts"
     }
   ],

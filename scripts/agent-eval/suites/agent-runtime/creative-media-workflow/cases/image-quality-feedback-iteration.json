@@ -11,14 +11,11 @@
       "TUI queue",
       "Pi Agent turn",
       "flat image.generate domain-model snapshot",
-      "GenerateImage",
-      "TaskRef",
-      "image_generation task",
-      "task result continuation",
+      "terminal GenerateImage Tool call",
       "bounded TODO",
       "assistant review",
       "closed-loop feedback",
-      "second task",
+      "second terminal GenerateImage Tool call",
       "neko/generated workspace output",
       "stable unpromoted generated-output ResourceRef",
       "Workspace Board projection"
@@ -28,9 +25,9 @@
       "agent.main generation fallback",
       "nested mediaModels routing",
       "static second prompt",
-      "review before task result",
+      "review before terminal Tool result",
       "best-run selection",
-      "mock image task",
+      "mock image execution",
       "IDC stage or run",
       "plan completion substituted for artifact delivery",
       "pre-promotion Asset lookup or import",
@@ -42,12 +39,12 @@
       {
         "ref": "workflow-facts",
         "kind": "runtime-fact",
-        "description": "Exact image.generate model snapshot, two TaskRefs and task rounds, feedback source digest, final ResourceRefs, ordered steps, and terminal idle facts.",
+        "description": "Exact image.generate model snapshot, two terminal GenerateImage Tool results, feedback source digest, final ResourceRefs, ordered steps, and terminal idle facts.",
         "required": true
       }
     ],
-    "expectedResult": "The second turn is generated from the first assistant review, completes a second image task, retains generated-output identity, and projects outputs to the Workspace Board without Asset lookup/import.",
-    "expectedFailure": "Missing first review, static feedback, fewer than two task observations, pre-promotion Asset participation, multi-Board or runtime-draft routing, active-Canvas fallback, or incomplete idle fails."
+    "expectedResult": "The second turn is generated from the first assistant review, completes a second terminal GenerateImage Tool call, retains generated-output identity, and projects outputs to the Workspace Board without Asset lookup/import.",
+    "expectedFailure": "Missing first review, static feedback, fewer than two terminal GenerateImage Tool results, pre-promotion Asset participation, multi-Board or runtime-draft routing, active-Canvas fallback, or incomplete idle fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -86,22 +83,16 @@
       "kind": "process-order",
       "events": [
         { "kind": "workflow-step", "stepId": "round-one", "method": "message.submit" },
-        { "kind": "task", "taskType": "image_generation", "status": "completed" },
+        { "kind": "tool", "name": "GenerateImage", "status": "success" },
         { "kind": "workflow-step", "stepId": "round-two", "method": "message.submit" },
-        { "kind": "task", "taskType": "image_generation", "status": "completed" }
+        { "kind": "tool", "name": "GenerateImage", "status": "success" }
       ],
       "evidenceRef": "workflow-facts"
     },
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "backgroundTasksIdle",
-        "mediaDeliveryIdle",
-        "taskResultObservationIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "workflow-facts"
     },
     {
@@ -146,7 +137,10 @@
         "AgentCanvasBoardWorkRuntime",
         "CanvasGeneratedDraftProjectionService",
         "GeneratedDraftLayer",
-        "active-canvas"
+        "active-canvas",
+        "generic-task-manager",
+        "TaskRef",
+        "task-result-continuation"
       ],
       "evidenceRef": "workflow-facts"
     }

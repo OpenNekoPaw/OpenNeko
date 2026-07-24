@@ -69,8 +69,6 @@ function runGate(assertion, facts, context) {
       return assertModel(assertion, facts, context);
     case 'tool-call':
       return assertToolCall(assertion, facts);
-    case 'task-terminal':
-      return assertTaskTerminal(assertion, facts);
     case 'todo-projection':
       return assertTodoProjection(assertion, facts);
     case 'process-order':
@@ -83,10 +81,10 @@ function runGate(assertion, facts, context) {
       return assertRecovery(assertion, facts);
     case 'conversation-persistence':
       return assertConversationPersistence(assertion, facts);
-    case 'retries':
-      return assertRetries(assertion, facts);
     case 'terminal-idle':
       return assertTerminalIdle(assertion, facts);
+    case 'timeline-projection':
+      return assertTimelineProjection(assertion, facts);
     case 'structured-output':
       return evaluateStructuredOutput(assertion, facts, context);
     case 'markdown-path':
@@ -496,32 +494,6 @@ function containsExpectedValue(actual, expected) {
   return Object.is(actual, expected);
 }
 
-function assertTaskTerminal(assertion, facts) {
-  assertCompleteEvidence(facts, ['tasks']);
-  const task = arrayOrEmpty(facts?.tasks).find(
-    (candidate) => candidate?.type === assertion.taskType && candidate?.status === assertion.status,
-  );
-  if (!task) {
-    throw new Error(`task ${assertion.taskType} did not reach terminal status ${assertion.status}`);
-  }
-  if (
-    assertion.status === 'completed' &&
-    !['available', 'observed'].includes(task.resultObservation?.status)
-  ) {
-    throw new Error(
-      `completed task ${assertion.taskType} has no available/observed result evidence`,
-    );
-  }
-  return {
-    taskId: task.id,
-    taskType: task.type,
-    status: task.status,
-    resultObservation: task.resultObservation?.status,
-    ...(task.providerId ? { providerId: task.providerId } : {}),
-    ...(task.modelId ? { modelId: task.modelId } : {}),
-  };
-}
-
 function assertProcessOrder(assertion, facts) {
   const collections = new Set();
   for (const event of assertion.events) {
@@ -534,7 +506,6 @@ function assertProcessOrder(assertion, facts) {
       collections.add('turns');
       collections.add('turnToolCalls');
     }
-    if (event.kind === 'task') collections.add('tasks');
     if (event.kind === 'continuation') collections.add('continuations');
   }
   assertCompleteEvidence(facts, [...collections]);
@@ -675,25 +646,6 @@ function assertConversationPersistence(assertion, facts) {
   };
 }
 
-function assertRetries(assertion, facts) {
-  assertCompleteEvidence(facts, assertion.taskType ? ['tasks'] : []);
-  const count = assertion.taskType
-    ? arrayOrEmpty(facts?.tasks)
-        .filter((task) => task?.type === assertion.taskType)
-        .reduce((total, task) => total + readNonNegativeInteger(task?.retryCount), 0)
-    : readNonNegativeInteger(facts?.retries?.taskRetryCount);
-  if (count < assertion.min || (assertion.max !== undefined && count > assertion.max)) {
-    throw new Error(
-      `retry count ${count} is outside ${assertion.min}..${assertion.max ?? 'unbounded'}`,
-    );
-  }
-  return {
-    count,
-    min: assertion.min,
-    ...(assertion.max !== undefined ? { max: assertion.max } : {}),
-  };
-}
-
 function assertTerminalIdle(assertion, facts) {
   const failed = assertion.concerns.filter((name) => {
     const concern = facts?.idle?.[name];
@@ -703,6 +655,118 @@ function assertTerminalIdle(assertion, facts) {
     throw new Error(`terminal idle concern(s) failed: ${failed.join(', ')}`);
   }
   return { concerns: assertion.concerns };
+}
+
+function assertTimelineProjection(assertion, facts) {
+  const projection = facts?.timelineProjection;
+  if (!projection || typeof projection !== 'object') {
+    throw new Error('shared Timeline projection facts are unavailable');
+  }
+  const expectedPath = [
+    'pi-product-event',
+    'shared-pi-timeline-projector',
+    'conversation-projection-store',
+    'terminal-timeline-presenter',
+  ];
+  if (
+    projection.implementation !== expectedPath[1] ||
+    projection.store !== expectedPath[2] ||
+    projection.presenter !== expectedPath[3] ||
+    JSON.stringify(projection.path) !== JSON.stringify(expectedPath)
+  ) {
+    throw new Error('Timeline projection did not use the canonical shared projector/store path');
+  }
+  if (
+    !nonEmpty(projection.conversationId) ||
+    !nonEmpty(projection.turnId) ||
+    !nonEmpty(projection.runId) ||
+    !nonEmpty(projection.messageId)
+  ) {
+    throw new Error('Timeline projection identity is incomplete');
+  }
+  if (
+    projection.conversationId !== facts?.conversationId ||
+    projection.turnId !== facts?.piRuntime?.lastTurn?.turnId ||
+    projection.runId !== facts?.piRuntime?.lastTurn?.runId
+  ) {
+    throw new Error('Timeline projection identity disagrees with session/Pi runtime facts');
+  }
+  if (projection.completionStatus !== assertion.terminalStatus) {
+    throw new Error(
+      `Timeline terminal status expected=${assertion.terminalStatus} observed=${projection.completionStatus ?? 'unavailable'}`,
+    );
+  }
+  if (
+    !Number.isInteger(projection.projectionVersion) ||
+    projection.projectionVersion < 1 ||
+    projection.terminalProjectionVersion !== projection.projectionVersion
+  ) {
+    throw new Error('Timeline projection did not remain frozen at its terminal version');
+  }
+  if (projection.droppedPatchCount !== 0) {
+    throw new Error(`Timeline patch evidence dropped ${projection.droppedPatchCount} patch(es)`);
+  }
+  if (projection.acceptedPostTerminalPatchCount !== 0) {
+    throw new Error(
+      `Timeline accepted ${projection.acceptedPostTerminalPatchCount} post-terminal patch(es)`,
+    );
+  }
+  const patches = arrayOrEmpty(projection.patches);
+  if (patches.length === 0) {
+    throw new Error('Timeline projection patch chain is empty');
+  }
+  let previousVersion;
+  for (const patch of patches) {
+    if (
+      !Number.isInteger(patch?.baseProjectionVersion) ||
+      !Number.isInteger(patch?.projectionVersion) ||
+      patch.projectionVersion !== patch.baseProjectionVersion + 1 ||
+      (previousVersion !== undefined && patch.baseProjectionVersion !== previousVersion)
+    ) {
+      throw new Error('Timeline projection patch versions are not contiguous and monotonic');
+    }
+    previousVersion = patch.projectionVersion;
+  }
+  if (previousVersion !== projection.projectionVersion) {
+    throw new Error('Timeline projection patch chain does not end at the reported version');
+  }
+  const itemIds = new Set();
+  for (const item of arrayOrEmpty(projection.items)) {
+    if (
+      !nonEmpty(item?.itemId) ||
+      !nonEmpty(item?.kind) ||
+      !Number.isInteger(item?.itemRevision) ||
+      item.itemRevision < 1 ||
+      itemIds.has(item.itemId)
+    ) {
+      throw new Error('Timeline item identity or revision evidence is invalid');
+    }
+    itemIds.add(item.itemId);
+  }
+  if (assertion.toolName) {
+    const tools = arrayOrEmpty(projection.items).filter(
+      (item) => item?.kind === 'tool_call' && item?.toolName === assertion.toolName,
+    );
+    if (tools.length !== 1 || !nonEmpty(tools[0]?.toolCallId)) {
+      throw new Error(
+        `Timeline expected exactly one ${assertion.toolName} Tool item with identity; observed ${tools.length}`,
+      );
+    }
+  }
+  return {
+    path: projection.path,
+    conversationId: projection.conversationId,
+    turnId: projection.turnId,
+    runId: projection.runId,
+    messageId: projection.messageId,
+    projectionVersion: projection.projectionVersion,
+    completionStatus: projection.completionStatus,
+    patchCount: patches.length,
+    itemRevisions: arrayOrEmpty(projection.items).map((item) => ({
+      itemId: item.itemId,
+      itemRevision: item.itemRevision,
+    })),
+  };
 }
 
 function assertMarkdownPath(assertion, facts) {
@@ -783,11 +847,6 @@ function eventItems(event, step) {
       .flatMap((turn) => arrayOrEmpty(turn?.timeline))
       .sort((left, right) => (left?.sequence ?? 0) - (right?.sequence ?? 0));
   }
-  if (event.kind === 'task') {
-    return [...arrayOrEmpty(snapshot.tasks)].sort(
-      (left, right) => (left?.createdAt ?? 0) - (right?.createdAt ?? 0),
-    );
-  }
   return [...arrayOrEmpty(snapshot.continuations)].sort(
     (left, right) => (left?.timestamp ?? 0) - (right?.timestamp ?? 0),
   );
@@ -810,9 +869,6 @@ function matchesProcessEvent(event, item) {
   }
   if (event.kind === 'tool') {
     return item?.name === event.name && (!event.status || item?.status === event.status);
-  }
-  if (event.kind === 'task') {
-    return item?.type === event.taskType && (!event.status || item?.status === event.status);
   }
   return item?.source === event.source && (!event.status || item?.status === event.status);
 }
@@ -895,7 +951,6 @@ function assertNoFallback(assertion, facts) {
     'turns',
     'turnToolCalls',
     'skillActivations',
-    'tasks',
     'continuations',
     'promptComposition',
     'artifacts',
@@ -1040,6 +1095,7 @@ function matchesToolStatus(actual, expected) {
 function collectRuntimeRefs(facts) {
   const refs = new Set();
   addValues(refs, facts?.piRuntime);
+  addValues(refs, facts?.timelineProjection);
   addValues(refs, facts?.model);
   addValues(refs, facts?.configuration?.chat);
   addValue(refs, facts?.configuration?.digest);
@@ -1060,17 +1116,6 @@ function collectRuntimeRefs(facts) {
         call?.diagnostics?.map((item) => item?.code),
       );
     }
-  }
-  for (const task of arrayOrEmpty(facts?.tasks)) {
-    addValue(refs, task?.id);
-    addValue(refs, task?.type);
-    addValue(refs, task?.providerId);
-    addValue(refs, task?.modelId);
-    addValues(refs, task?.resultObservation?.observationIds);
-    addValues(
-      refs,
-      task?.diagnostics?.map((item) => item?.code),
-    );
   }
   for (const continuation of arrayOrEmpty(facts?.continuations)) {
     addValue(refs, continuation?.id);

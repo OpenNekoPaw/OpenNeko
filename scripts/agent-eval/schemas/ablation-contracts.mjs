@@ -16,8 +16,6 @@ export const ABLATION_METRICS = Object.freeze([
   'tool-calls',
   'tool-success',
   'retries',
-  'task-count',
-  'task-success',
 ]);
 
 const CONFIGURATION_DIMENSIONS = Object.freeze([
@@ -191,13 +189,6 @@ const VARIANT_METRICS_SCHEMA = s.object({
     successRate: s.number({ min: 0, max: 1 }),
   }),
   retries: s.object({ count: s.integer({ min: 0 }) }),
-  tasks: s.object({
-    total: s.integer({ min: 0 }),
-    completed: s.integer({ min: 0 }),
-    failed: s.integer({ min: 0 }),
-    cancelled: s.integer({ min: 0 }),
-    successRate: s.number({ min: 0, max: 1 }),
-  }),
   quality: s.union([
     s.object({ status: s.literal('not-evaluated'), reason: s.literal('hard-gates-only') }),
     s.object({
@@ -252,7 +243,6 @@ const BASELINE_DELTA_SCHEMA = s.object(
     iterations: s.number(),
     toolCalls: s.number(),
     retries: s.number(),
-    completedTasks: s.number(),
   },
   { costUsd: s.number(), qualityMean: s.number() },
 );

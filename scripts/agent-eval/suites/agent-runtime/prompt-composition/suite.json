@@ -9,7 +9,7 @@
   "judgeProfiles": [],
   "fixtures": [
     { "id": "empty-workspace", "root": "shared-fixtures/empty-workspace", "source": "repository", "digest": "sha256:789049929d67cf16d190dc363325175f3d63ef62ca210de508ede615e2376081", "mutable": true },
-    { "id": "prompt-environment-workspace", "root": "shared-fixtures/prompt-environment-workspace", "source": "repository", "digest": "sha256:9c6e1e2364c8ca13c31e4389dac2ede078687a217d1861e2705e33319ed1f187", "mutable": true }
+    { "id": "prompt-environment-workspace", "root": "shared-fixtures/prompt-environment-workspace", "source": "repository", "digest": "sha256:4572b06fed72cf90e95002783fe249670d04607e228b64e82caf1a305573fd20", "mutable": true }
   ],
   "cases": [
     { "id": "base-and-skill-fragments", "file": "cases/base-and-skill-fragments.json", "group": "canonical", "visibility": "public" },

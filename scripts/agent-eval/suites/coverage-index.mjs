@@ -75,9 +75,10 @@ const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'capability-tool-routing',
   'provider-model-routing',
   'session-workflows',
-  'task-recovery',
+  'tool-call-lifecycle',
   'creative-media-workflow',
   'workspace-board-delivery',
+  'timeline-projection-authority',
   'tool-result-delivery',
   'tui-event-projection',
 ]);

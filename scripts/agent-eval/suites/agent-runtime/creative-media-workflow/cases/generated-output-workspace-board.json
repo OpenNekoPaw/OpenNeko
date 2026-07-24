@@ -8,8 +8,7 @@
     "userBehavior": "Generate one image and observe it as a durable workspace file, a stable generated-output resource, and an ordinary node on the canonical Workspace Board.",
     "canonicalPath": [
       "TUI App session owner",
-      "GenerateImage",
-      "image_generation task",
+      "terminal GenerateImage Tool call",
       "neko/generated/image workspace file",
       "generated-output ResourceRef",
       "Node Workspace Board projection",
@@ -25,7 +24,7 @@
       {
         "ref": "workflow-facts",
         "kind": "runtime-fact",
-        "description": "Tool, task, stable generated resource, Workspace Board projection, no-fallback, and terminal idle facts from the canonical TUI owner.",
+        "description": "Terminal Tool result, stable generated resource, Workspace Board projection, no-fallback, and terminal idle facts from the canonical TUI owner.",
         "required": true
       },
       {
@@ -35,7 +34,7 @@
         "required": true
       }
     ],
-    "expectedResult": "The image task materializes a file under neko/generated/image, publishes a valid stable generated-output ResourceRef, and projects ordinary nodes into the Workspace Board.",
+    "expectedResult": "The GenerateImage Tool materializes a file under neko/generated/image, publishes a valid stable generated-output ResourceRef, and projects ordinary nodes into the Workspace Board.",
     "expectedFailure": "Missing file, invalid resource identity, blocked or missing Workspace Board projection, incomplete facts, Asset participation, multi-Board routing, runtime draft participation, or non-idle delivery fails visibly."
   },
   "fixtureRefs": ["empty-workspace"],
@@ -59,13 +58,6 @@
       "evidenceRef": "workflow-facts"
     },
     {
-      "id": "task",
-      "kind": "task-terminal",
-      "taskType": "image_generation",
-      "status": "completed",
-      "evidenceRef": "workflow-facts"
-    },
-    {
       "id": "resource",
       "kind": "artifact",
       "artifactKind": "generated-asset",
@@ -86,13 +78,7 @@
     {
       "id": "terminal",
       "kind": "terminal-idle",
-      "concerns": [
-        "turnIdle",
-        "backgroundTasksIdle",
-        "mediaDeliveryIdle",
-        "taskResultObservationIdle",
-        "continuationQueueIdle"
-      ],
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "workflow-facts"
     },
     {
@@ -108,7 +94,10 @@
         "CanvasGeneratedDraftProjectionService",
         "GeneratedDraftLayer",
         "active-canvas",
-        ".neko/generated-drafts"
+        ".neko/generated-drafts",
+        "generic-task-manager",
+        "TaskRef",
+        "task-result-continuation"
       ],
       "evidenceRef": "workflow-facts"
     }

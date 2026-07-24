@@ -303,7 +303,6 @@ const PROCESS_EVENT_SELECTOR_SCHEMA = s.union([
     { status: ID, toolName: EXTERNAL_ID, contentContains: SHORT_TEXT },
   ),
   s.object({ kind: s.literal('tool'), name: EXTERNAL_ID }, { status: ID }),
-  s.object({ kind: s.literal('task'), taskType: ID }, { status: ID }),
   s.object({ kind: s.literal('continuation'), source: ID }, { status: ID }),
 ]);
 const ASSERTION_SCHEMA = s.union([
@@ -378,12 +377,6 @@ const ASSERTION_SCHEMA = s.union([
     },
     { expectedArguments: s.anyJson(), resultIncludes: s.anyJson() },
   ),
-  s.object({
-    ...ASSERTION_COMMON,
-    kind: s.literal('task-terminal'),
-    taskType: ID,
-    status: s.enum(['completed', 'failed', 'cancelled']),
-  }),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -435,28 +428,25 @@ const ASSERTION_SCHEMA = s.union([
     recordSource: s.literal('pi-session'),
     minRestoredMessages: s.integer({ min: 1 }),
   }),
-  s.object(
-    {
-      ...ASSERTION_COMMON,
-      kind: s.literal('retries'),
-      min: s.integer({ min: 0 }),
-    },
-    { max: s.integer({ min: 0 }), taskType: ID },
-  ),
   s.object({
     ...ASSERTION_COMMON,
     kind: s.literal('terminal-idle'),
     concerns: s.array(
       s.enum([
         'turnIdle',
-        'backgroundTasksIdle',
-        'mediaDeliveryIdle',
-        'taskResultObservationIdle',
         'continuationQueueIdle',
       ]),
-      { minLength: 1, maxLength: 5 },
+      { minLength: 1, maxLength: 2 },
     ),
   }),
+  s.object(
+    {
+      ...ASSERTION_COMMON,
+      kind: s.literal('timeline-projection'),
+      terminalStatus: s.enum(['completed', 'cancelled', 'failed']),
+    },
+    { toolName: EXTERNAL_ID },
+  ),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -828,12 +818,6 @@ const REPEATED_RUN_SCHEMA = s.object({
     failures: s.integer({ min: 0 }),
   }),
   retries: s.object({ count: s.integer({ min: 0 }) }),
-  tasks: s.object({
-    total: s.integer({ min: 0 }),
-    completed: s.integer({ min: 0 }),
-    failed: s.integer({ min: 0 }),
-    cancelled: s.integer({ min: 0 }),
-  }),
 });
 
 const FAILURE_ATTRIBUTION_SCHEMA = s.object({
@@ -885,15 +869,14 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'prompt-composition',
     'model',
     'tool-call',
-    'task-terminal',
     'todo-projection',
     'process-order',
     'queue-state',
     'cancellation',
     'recovery',
     'conversation-persistence',
-    'retries',
     'terminal-idle',
+    'timeline-projection',
     'structured-output',
     'markdown-path',
     'artifact',

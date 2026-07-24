@@ -74,7 +74,7 @@ describe('M1 deterministic hard gates', () => {
     ],
     [
       'non-idle state',
-      (facts) => (facts.idle = { fullyIdle: false, backgroundTasksIdle: { idle: false } }),
+      (facts) => (facts.idle = { fullyIdle: false, turnIdle: { idle: false } }),
     ],
     ['missing canonical user turn', (facts) => (facts.turns = facts.turns.slice(1))],
     ['empty final answer', (facts) => (facts.turns[1].content = '  ')],
@@ -201,24 +201,13 @@ function m2Facts() {
       diagnostics: [],
     },
   ];
-  facts.tasks = [
-    {
-      id: 'task-1',
-      type: 'image-generation',
-      status: 'completed',
-      providerId: 'fal',
-      modelId: 'flux-pro',
-      resultObservation: { status: 'observed', observationIds: ['observation-1'] },
-      diagnostics: [],
-    },
-  ];
   facts.continuations = [];
   facts.artifacts = [
     {
       ref: 'asset:scene-1',
       kind: 'generated-asset',
       digest: HASH_B,
-      provenance: { source: 'generated-asset', toolCallId: 'tool-1', taskId: 'task-1' },
+      provenance: { source: 'generated-asset', toolCallId: 'tool-1' },
       deliveryStatus: 'delivered',
       validator: { id: 'durable-resource-ref', status: 'valid' },
       diagnostics: [],
@@ -247,7 +236,6 @@ function m2Facts() {
   Object.assign(facts.evidenceCompleteness, {
     turnToolCalls: { limit: 256, droppedCount: 0 },
     skillActivations: { limit: 128, droppedCount: 0 },
-    tasks: { limit: 512, droppedCount: 0 },
     continuations: { limit: 512, droppedCount: 0 },
     promptComposition: { limit: 256, droppedCount: 0 },
     artifacts: { limit: 512, droppedCount: 0 },
@@ -280,13 +268,6 @@ const M2_ASSERTIONS = [
     evidenceRef: 'tool-facts',
   },
   {
-    id: 'task',
-    kind: 'task-terminal',
-    taskType: 'image-generation',
-    status: 'completed',
-    evidenceRef: 'task-facts',
-  },
-  {
     id: 'artifact',
     kind: 'artifact',
     artifactRef: 'asset:scene-1',
@@ -316,7 +297,7 @@ const M2_CONTEXT = {
 };
 
 describe('M2 typed path hard gates', () => {
-  it('passes Skill injection, actual model, Tool, task, artifact, and no-fallback facts', () => {
+  it('passes Skill injection, actual model, Tool, artifact, and no-fallback facts', () => {
     const results = evaluateHardGates(M2_ASSERTIONS, m2Facts(), M2_CONTEXT);
     expect(results.every((result) => result.status === 'pass')).toBe(true);
   });
@@ -472,11 +453,10 @@ describe('M2 typed path hard gates', () => {
       2,
       (facts) => (facts.turns[1].toolCalls[0].resultObservation = 'missing'),
     ],
-    ['task result missing', 3, (facts) => (facts.tasks[0].resultObservation.status = 'missing')],
-    ['artifact not delivered', 4, (facts) => (facts.artifacts[0].deliveryStatus = 'failed')],
+    ['artifact not delivered', 3, (facts) => (facts.artifacts[0].deliveryStatus = 'failed')],
     [
       'forbidden fallback participated',
-      5,
+      4,
       (facts) => facts.turns[1].toolCalls.push({ id: 'legacy-call', name: 'legacy-tool' }),
     ],
   ])('fails a correct-looking answer when %s', (_label, assertionIndex, mutate) => {
@@ -491,7 +471,9 @@ describe('M2 typed path hard gates', () => {
   it('fails absence assertions when any required no-fallback collection is incomplete', () => {
     const facts = m2Facts();
     facts.evidenceCompleteness.promptComposition.droppedCount = 1;
-    const [result] = evaluateHardGates([M2_ASSERTIONS[5]], facts, M2_CONTEXT);
+    const assertion = M2_ASSERTIONS.find((candidate) => candidate.id === 'fallback');
+    expect(assertion).toBeDefined();
+    const [result] = evaluateHardGates([assertion], facts, M2_CONTEXT);
     expect(result).toMatchObject({
       status: 'fail',
       message: expect.stringContaining('evidence for promptComposition is incomplete'),
@@ -554,6 +536,41 @@ function m3Facts() {
       durability: 'durable',
     },
   };
+  facts.timelineProjection = {
+    implementation: 'shared-pi-timeline-projector',
+    store: 'conversation-projection-store',
+    presenter: 'terminal-timeline-presenter',
+    path: [
+      'pi-product-event',
+      'shared-pi-timeline-projector',
+      'conversation-projection-store',
+      'terminal-timeline-presenter',
+    ],
+    conversationId: 'conversation-1',
+    turnId: 'turn-1',
+    runId: 'run-1',
+    messageId: 'assistant-turn-1',
+    projectionVersion: 3,
+    terminalProjectionVersion: 3,
+    completionStatus: 'completed',
+    patches: [
+      { baseProjectionVersion: 0, projectionVersion: 1 },
+      { baseProjectionVersion: 1, projectionVersion: 2 },
+      { baseProjectionVersion: 2, projectionVersion: 3 },
+    ],
+    droppedPatchCount: 0,
+    acceptedPostTerminalPatchCount: 0,
+    items: [
+      {
+        itemId: 'tool-call-1',
+        kind: 'tool_call',
+        itemRevision: 2,
+        toolCallId: 'call-1',
+        toolName: 'GetContext',
+      },
+      { itemId: 'text-1-0', kind: 'assistant_text', itemRevision: 3 },
+    ],
+  };
   facts.conversationPersistence = {
     authority: 'pi-session',
     catalog: 'sqlite',
@@ -569,18 +586,12 @@ function m3Facts() {
   facts.idle = {
     fullyIdle: true,
     turnIdle: { idle: true, terminal: true },
-    backgroundTasksIdle: { idle: true, terminal: true },
-    mediaDeliveryIdle: { idle: true, terminal: true },
-    taskResultObservationIdle: { idle: true, terminal: true },
     continuationQueueIdle: { idle: true, terminal: true },
   };
-  facts.tasks[0].retryCount = 1;
-  facts.tasks[0].createdAt = 20;
-  facts.tasks[0].updatedAt = 30;
   facts.continuations = [
     {
       id: 'continuation-1',
-      source: 'task-result-continuation',
+      source: 'subagent-result-continuation',
       status: 'completed',
       timestamp: 40,
     },
@@ -614,7 +625,6 @@ function m3Facts() {
         snapshot: snapshot({
           pendingCount: 0,
           turns: facts.turns,
-          tasks: facts.tasks,
           continuations: facts.continuations,
         }),
       },
@@ -663,7 +673,6 @@ function snapshot(options = {}) {
       items: [],
     },
     turns: options.turns ?? [],
-    tasks: options.tasks ?? [],
     continuations: options.continuations ?? [],
     evidenceCompleteness: {},
   };
@@ -682,6 +691,13 @@ const M3_ASSERTIONS = [
     evidenceRef: 'runtime-facts',
   },
   {
+    id: 'timeline-projection',
+    kind: 'timeline-projection',
+    terminalStatus: 'completed',
+    toolName: 'GetContext',
+    evidenceRef: 'projection-facts',
+  },
+  {
     id: 'order',
     kind: 'process-order',
     evidenceRef: 'process-facts',
@@ -690,10 +706,9 @@ const M3_ASSERTIONS = [
       { kind: 'turn', role: 'user', source: 'user' },
       { kind: 'workflow-step', stepId: 'queue', method: 'message.submit' },
       { kind: 'tool', name: 'canvas.create', status: 'success' },
-      { kind: 'task', taskType: 'image-generation', status: 'completed' },
       {
         kind: 'continuation',
-        source: 'task-result-continuation',
+        source: 'subagent-result-continuation',
         status: 'completed',
       },
     ],
@@ -740,28 +755,15 @@ const M3_ASSERTIONS = [
     evidenceRef: 'recovery-facts',
   },
   {
-    id: 'retries',
-    kind: 'retries',
-    taskType: 'image-generation',
-    min: 1,
-    max: 1,
-    evidenceRef: 'task-facts',
-  },
-  {
     id: 'terminal',
     kind: 'terminal-idle',
-    concerns: [
-      'turnIdle',
-      'backgroundTasksIdle',
-      'taskResultObservationIdle',
-      'continuationQueueIdle',
-    ],
+    concerns: ['turnIdle', 'continuationQueueIdle'],
     evidenceRef: 'idle-facts',
   },
 ];
 
 describe('M3 process hard gates', () => {
-  it('passes ordered workflow, queue, cancellation, persistence, retry, and idle evidence', () => {
+  it('passes ordered workflow, queue, cancellation, persistence, and idle evidence', () => {
     const results = evaluateHardGates(M3_ASSERTIONS, m3Facts());
     expect(results.every((result) => result.status === 'pass')).toBe(true);
   });
@@ -807,26 +809,30 @@ describe('M3 process hard gates', () => {
       0,
       (facts) => (facts.piRuntime.implementation = 'AgentSession'),
     ],
-    ['out-of-order event', 1, (facts) => facts.automation.steps.splice(1, 1)],
-    ['queue not accepted', 2, (facts) => (facts.automation.steps[1].queued = false)],
+    [
+      'projection version gap',
+      1,
+      (facts) => (facts.timelineProjection.patches[1].baseProjectionVersion = 0),
+    ],
+    ['out-of-order event', 2, (facts) => facts.automation.steps.splice(1, 1)],
+    ['queue not accepted', 3, (facts) => (facts.automation.steps[1].queued = false)],
     [
       'queue not drained',
-      3,
+      4,
       (facts) => (facts.automation.steps[2].snapshot.messageQueue.pendingCount = 1),
     ],
-    ['cancel rejected', 4, (facts) => (facts.automation.steps[3].accepted = false)],
+    ['cancel rejected', 5, (facts) => (facts.automation.steps[3].accepted = false)],
     [
       'resume changed conversation',
-      5,
+      6,
       (facts) => (facts.automation.steps[5].snapshot.conversationId = 'other'),
     ],
     [
       'persistence source mismatch',
-      6,
+      7,
       (facts) => (facts.conversationPersistence.catalog = 'memory'),
     ],
-    ['retry outside range', 7, (facts) => (facts.tasks[0].retryCount = 2)],
-    ['idle concern non-terminal', 8, (facts) => (facts.idle.backgroundTasksIdle.terminal = false)],
+    ['idle concern non-terminal', 8, (facts) => (facts.idle.turnIdle.terminal = false)],
   ])('fails when %s', (_label, assertionIndex, mutate) => {
     const facts = m3Facts();
     mutate(facts);
@@ -837,7 +843,7 @@ describe('M3 process hard gates', () => {
   it('fails ordering when dependent evidence was dropped', () => {
     const facts = m3Facts();
     facts.evidenceCompleteness.turnToolCalls.droppedCount = 1;
-    const [result] = evaluateHardGates([M3_ASSERTIONS[1]], facts);
+    const [result] = evaluateHardGates([M3_ASSERTIONS[2]], facts);
     expect(result).toMatchObject({
       status: 'fail',
       message: expect.stringContaining('turnToolCalls is incomplete'),

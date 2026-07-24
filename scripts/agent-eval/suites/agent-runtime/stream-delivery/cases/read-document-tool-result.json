@@ -10,20 +10,25 @@
       "TUI input queue",
       "Pi Agent Tool schema",
       "ReadDocument",
-      "Pi Tool result projector",
+      "shared Pi Timeline projector",
+      "conversation projection store",
+      "terminal Timeline presenter",
       "terminal answer"
     ],
     "forbiddenFallback": [
       "private EPUB fixture",
       "direct Host file read",
       "empty Tool result projection",
+      "legacy AgentEvent projector",
+      "direct Pi conversation mutation",
+      "terminal Tool-result accumulator",
       "textual Tool imitation"
     ],
     "observables": [
       {
         "ref": "read-document-facts",
         "kind": "runtime-fact",
-        "description": "Pi runtime identity, successful ReadDocument Tool result, and terminal answer facts.",
+        "description": "Pi runtime and exact Timeline identity, monotonic projection/item revisions, one successful ReadDocument Tool item, terminal freeze, no-fallback, and terminal answer facts.",
         "required": true
       }
     ],
@@ -63,10 +68,27 @@
       "evidenceRef": "read-document-facts"
     },
     {
+      "id": "projection",
+      "kind": "timeline-projection",
+      "terminalStatus": "completed",
+      "toolName": "ReadDocument",
+      "evidenceRef": "read-document-facts"
+    },
+    {
       "id": "answer",
       "kind": "final-answer",
       "mode": "contains",
       "text": ["READ_DOCUMENT_DELIVERY_OK"],
+      "evidenceRef": "read-document-facts"
+    },
+    {
+      "id": "no-legacy-projection",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "legacy-agent-event-projector",
+        "direct-pi-conversation-mutation",
+        "terminal-tool-result-accumulator"
+      ],
       "evidenceRef": "read-document-facts"
     }
   ],

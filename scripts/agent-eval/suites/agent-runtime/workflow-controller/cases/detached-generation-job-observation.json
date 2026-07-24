@@ -1,0 +1,169 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "detached-generation-job-observation",
+  "suiteId": "agent-runtime.workflow-controller",
+  "caseGroup": "workflow",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Submit one detached image Generation Job, then use new Tool Calls to describe and observe the exact returned identity without retrying or using a generic Task.",
+    "canonicalPath": [
+      "TUI input queue",
+      "PiConversationRuntime",
+      "SubmitGenerationJob Tool call",
+      "GenerationJobCoordinator",
+      "versioned Generation Job store",
+      "DescribeGenerationJob Tool call",
+      "ObserveGenerationJob Tool call"
+    ],
+    "forbiddenFallback": [
+      "generic TaskManager",
+      "TaskRef",
+      "task-result continuation",
+      "direct provider execution",
+      "model-authored provider or model id",
+      "active or latest Job fallback",
+      "reused terminal Tool Call",
+      "automatic retry"
+    ],
+    "observables": [
+      {
+        "ref": "detached-generation-facts",
+        "kind": "runtime-fact",
+        "description": "Distinct submit, describe and observe Tool Calls; exact Generation Job identity; owning coordinator; revision sequence; model binding; and forbidden fallback facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "Submit returns a pending revisioned Generation Job immediately; separate Tool Calls describe and observe that exact identity with monotonic revisions and no retry.",
+    "expectedFailure": "Missing Job identity, reused Tool Call, revision regression, direct provider or generic Task participation, model-authored routing, latest fallback, or retry fails."
+  },
+  "fixtureRefs": ["empty-workspace"],
+  "runtimeProfileId": "canonical-default",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "manage-detached-generation",
+      "kind": "submit",
+      "prompt": "Submit one detached image Generation Job for a simple red circle on white. Use the returned exact jobId and revision in separate DescribeGenerationJob and ObserveGenerationJob Tool calls. Stop after reporting the latest authoritative snapshot. Do not retry, do not use a generic Task, and do not choose a provider or model yourself."
+    },
+    {
+      "id": "idle",
+      "kind": "wait-for-idle",
+      "timeoutMs": 300000
+    }
+  ],
+  "assertions": [
+    {
+      "id": "runtime",
+      "kind": "runtime-errors-empty",
+      "evidenceRef": "detached-generation-facts"
+    },
+    {
+      "id": "submit-generation-job",
+      "kind": "tool-call",
+      "name": "SubmitGenerationJob",
+      "status": "success",
+      "resultIncludes": {
+        "success": true,
+        "data": {
+          "jobKind": "generation",
+          "jobLifecycleOwner": "generation-job-coordinator",
+          "phase": "pending",
+          "revision": 1
+        }
+      },
+      "evidenceRef": "detached-generation-facts"
+    },
+    {
+      "id": "describe-generation-job",
+      "kind": "tool-call",
+      "name": "DescribeGenerationJob",
+      "status": "success",
+      "resultIncludes": {
+        "success": true,
+        "data": {
+          "jobKind": "generation",
+          "jobLifecycleOwner": "generation-job-coordinator"
+        }
+      },
+      "evidenceRef": "detached-generation-facts"
+    },
+    {
+      "id": "observe-generation-job",
+      "kind": "tool-call",
+      "name": "ObserveGenerationJob",
+      "status": "success",
+      "resultIncludes": {
+        "success": true,
+        "data": {
+          "jobKind": "generation",
+          "jobLifecycleOwner": "generation-job-coordinator"
+        }
+      },
+      "evidenceRef": "detached-generation-facts"
+    },
+    {
+      "id": "no-retry",
+      "kind": "tool-call",
+      "name": "RetryGenerationJob",
+      "status": "absent",
+      "evidenceRef": "detached-generation-facts"
+    },
+    {
+      "id": "no-generic-task-path",
+      "kind": "no-fallback",
+      "forbiddenRefs": [
+        "generic-task-manager",
+        "TaskRef",
+        "task-result-continuation",
+        "direct-generation-execution",
+        "active-job-fallback",
+        "latest-job-fallback"
+      ],
+      "evidenceRef": "detached-generation-facts"
+    },
+    {
+      "id": "order",
+      "kind": "process-order",
+      "events": [
+        {
+          "kind": "workflow-step",
+          "stepId": "manage-detached-generation",
+          "method": "message.submit"
+        },
+        {
+          "kind": "tool",
+          "name": "SubmitGenerationJob",
+          "status": "success"
+        },
+        {
+          "kind": "tool",
+          "name": "DescribeGenerationJob",
+          "status": "success"
+        },
+        {
+          "kind": "tool",
+          "name": "ObserveGenerationJob",
+          "status": "success"
+        }
+      ],
+      "evidenceRef": "detached-generation-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
+      "evidenceRef": "detached-generation-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "non-empty",
+      "evidenceRef": "detached-generation-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": {
+    "timeoutMs": 300000,
+    "repetitions": 1
+  }
+}

@@ -67,7 +67,7 @@ function hypothesize(kind) {
   if (kind === 'model') {
     return hypothesis('routing', 0.75, 'Requested-to-effective routing trace.', 'Review model profile application and provider routing.');
   }
-  if (kind === 'tool-call' || kind === 'task-terminal') {
+  if (kind === 'tool-call') {
     return hypothesis('capability-tool', 0.65, 'Owning capability diagnostics and Tool result details.', 'Handoff to the owning Capability/Tool maintainer.');
   }
   if (kind === 'artifact' || kind === 'file') {

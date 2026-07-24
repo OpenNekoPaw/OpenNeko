@@ -254,7 +254,7 @@ async function runV2Sample(selection, options = {}) {
       artifacts: projectReportArtifacts(facts, artifactCheckResults),
       usage: {
         latencyMs: Date.now() - startedAt,
-        retries: readNonNegativeInteger(facts?.retries?.taskRetryCount),
+        retries: readNonNegativeInteger(facts?.retries?.count),
         inputTokens: readNonNegativeInteger(facts?.usage?.inputTokens),
         outputTokens: readNonNegativeInteger(facts?.usage?.outputTokens),
         ...(readNonNegativeInteger(facts?.usage?.contextTokens) !== undefined
@@ -293,7 +293,7 @@ async function runV2Sample(selection, options = {}) {
       ...(documents.baselineDiff ? { baselineDiff: documents.baselineDiff } : {}),
       metrics: {
         ...readExecutionMetrics(facts),
-        retries: readNonNegativeInteger(facts?.retries?.taskRetryCount),
+        retries: readNonNegativeInteger(facts?.retries?.count),
       },
     };
   } finally {
@@ -399,12 +399,6 @@ function createRepeatedRunAggregate(selection, runId, samples) {
       failures: sum(samples.map((sample) => sample.metrics.toolFailures)),
     },
     retries: { count: sum(samples.map((sample) => sample.metrics.retries)) },
-    tasks: {
-      total: sum(samples.map((sample) => sample.metrics.tasks.total)),
-      completed: sum(samples.map((sample) => sample.metrics.tasks.completed)),
-      failed: sum(samples.map((sample) => sample.metrics.tasks.failed)),
-      cancelled: sum(samples.map((sample) => sample.metrics.tasks.cancelled)),
-    },
   });
 }
 
@@ -626,19 +620,12 @@ function readExecutionMetrics(facts) {
   const toolCalls = (Array.isArray(facts?.turns) ? facts.turns : []).flatMap((turn) =>
     Array.isArray(turn?.toolCalls) ? turn.toolCalls : [],
   );
-  const tasks = Array.isArray(facts?.tasks) ? facts.tasks : [];
   return {
     toolCalls: toolCalls.length,
     toolSuccesses: toolCalls.filter((call) => ['success', 'complete'].includes(call?.status))
       .length,
     toolFailures: toolCalls.filter((call) => call?.status === 'error').length,
     iterations: readNonNegativeInteger(facts?.iteration?.current),
-    tasks: {
-      total: tasks.length,
-      completed: tasks.filter((task) => task?.status === 'completed').length,
-      failed: tasks.filter((task) => task?.status === 'failed').length,
-      cancelled: tasks.filter((task) => task?.status === 'cancelled').length,
-    },
   };
 }
 

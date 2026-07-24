@@ -115,6 +115,9 @@ importers:
       '@neko/entity':
         specifier: workspace:*
         version: link:../../packages/neko-entity
+      '@neko/generation':
+        specifier: workspace:*
+        version: link:../../packages/neko-generation
       '@neko/host':
         specifier: workspace:*
         version: link:../../packages/neko-host
@@ -309,6 +312,9 @@ importers:
       '@neko/entity':
         specifier: workspace:*
         version: link:../../../neko-entity
+      '@neko/generation':
+        specifier: workspace:*
+        version: link:../../../neko-generation
       '@neko/neko-client':
         specifier: workspace:*
         version: link:../../../neko-client
@@ -346,6 +352,9 @@ importers:
       '@neko/ai-sdk':
         specifier: workspace:*
         version: link:../ai-sdk
+      '@neko/generation':
+        specifier: workspace:*
+        version: link:../../../neko-generation
       '@neko/shared':
         specifier: workspace:*
         version: link:../../../neko-types
@@ -849,6 +858,22 @@ importers:
         version: 1.125.0
       typescript:
         specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.2
+        version: 4.1.2(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(jsdom@27.4.0)(vite@6.4.2(@types/node@24.13.3)(jiti@2.7.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/neko-generation:
+    dependencies:
+      '@neko/shared':
+        specifier: workspace:*
+        version: link:../neko-types
+    devDependencies:
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.9.3
         version: 5.9.3
       vitest:
         specifier: 4.1.2

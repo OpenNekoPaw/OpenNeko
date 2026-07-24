@@ -385,7 +385,6 @@ function facts(options = {}) {
         timeline: [],
       },
     ],
-    tasks: [],
     continuations: [],
     workspaceBoardProjections: [],
     workspaceBoardDelivery: {
@@ -398,7 +397,7 @@ function facts(options = {}) {
         genericSendToCanvas: 0,
       },
     },
-    retries: { taskRetryCount: 0, tasksWithRetries: 0 },
+    retries: { count: 0 },
     runtimeErrors: [],
     evidenceCompleteness: {
       turns: { limit: 512, droppedCount: options.droppedTurns ?? 0 },

@@ -29,7 +29,7 @@
       { "kind": "workflow-step", "stepId": "review", "method": "message.submit" },
       { "kind": "turn", "role": "assistant" }
     ], "evidenceRef": "workflow-facts" },
-    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "backgroundTasksIdle", "taskResultObservationIdle", "continuationQueueIdle"], "evidenceRef": "workflow-facts" },
+    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "continuationQueueIdle"], "evidenceRef": "workflow-facts" },
     { "id": "answer", "kind": "final-answer", "mode": "non-empty", "evidenceRef": "workflow-facts" }
   ],
   "artifactChecks": [],
