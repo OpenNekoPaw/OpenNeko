@@ -240,6 +240,8 @@ The retained presentation SHALL be migrated from the pre-change component, hook,
 - **WHEN** a Video Clip, Audio Clip, Gap or project summary is selected
 - **THEN** the Inspector shows the selected context's basic editable name/timing/duration/constant-speed/audio/link controls plus read-only source/project fields
 - **AND** every edit invokes a revisioned typed command rather than mutating the projection
+- **AND** all applicable properties remain visible in one vertically scrollable surface grouped by responsibility
+- **AND** the Inspector does not introduce Tabs, a basic/professional selector or unsupported transform/blend/mask groups
 
 #### Scenario: Navigate a long timeline
 

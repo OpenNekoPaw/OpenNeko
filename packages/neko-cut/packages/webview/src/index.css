@@ -1640,6 +1640,29 @@ body[data-vscode-theme-kind="vscode-light"] .nk-select {
   min-width: 0;
 }
 
+.cut-inspector-group {
+  gap: 6px;
+  padding: 10px 8px 12px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.cut-inspector-group:first-child {
+  padding-top: 10px;
+  border-top: 0;
+}
+
+.cut-inspector-group > header {
+  padding: 0 2px 3px;
+}
+
+.cut-inspector-group > header h3 {
+  color: var(--vscode-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .cut-shared-property-panel > div {
   min-width: 0;
 }

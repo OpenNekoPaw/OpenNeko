@@ -16,6 +16,12 @@ export const propertyPanel = {
   'propertyPanel.emptyState.tip3': 'Use keyboard shortcuts for speed',
 
   'propertyPanel.group.basic': 'Basic Info',
+  'propertyPanel.group.timing': 'Timing & Trim',
+  'propertyPanel.group.canvas': 'Canvas',
+  'propertyPanel.group.timeline': 'Timeline',
+  'propertyPanel.group.state': 'Track State',
+  'propertyPanel.group.location': 'Location',
+  'propertyPanel.group.range': 'Time Range',
   'propertyPanel.group.transform': 'Transform',
   'propertyPanel.group.appearance': 'Appearance',
   'propertyPanel.group.text': 'Text',

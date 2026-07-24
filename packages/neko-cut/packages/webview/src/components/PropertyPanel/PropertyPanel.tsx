@@ -43,7 +43,12 @@ export const PropertyPanel = memo(function PropertyPanel(props: PropertyPanelPro
 
   return (
     <div className="nk-prop-panel cut-shared-property-panel">
-      <PanelSection density="compact" disabled={disabled} title={t('propertyPanel.group.basic')}>
+      <PanelSection
+        className="cut-inspector-group"
+        density="compact"
+        disabled={disabled}
+        title={t('propertyPanel.group.basic')}
+      >
         <PropertyRow
           density="compact"
           disabled={disabled}
@@ -63,6 +68,14 @@ export const PropertyPanel = memo(function PropertyPanel(props: PropertyPanelPro
             value={element.name}
           />
         </PropertyRow>
+      </PanelSection>
+
+      <PanelSection
+        className="cut-inspector-group"
+        density="compact"
+        disabled={disabled}
+        title={t('propertyPanel.group.timing')}
+      >
         <NumberPropertyRow
           density="compact"
           disabled={disabled}
@@ -116,7 +129,12 @@ export const PropertyPanel = memo(function PropertyPanel(props: PropertyPanelPro
       </PanelSection>
 
       {element.type !== 'subtitle' ? (
-        <PanelSection density="compact" disabled={disabled} title={t('propertyPanel.group.speed')}>
+        <PanelSection
+          className="cut-inspector-group"
+          density="compact"
+          disabled={disabled}
+          title={t('propertyPanel.group.speed')}
+        >
           <SliderPropertyRow
             density="compact"
             disabled={disabled}
@@ -133,8 +151,13 @@ export const PropertyPanel = memo(function PropertyPanel(props: PropertyPanelPro
         </PanelSection>
       ) : null}
 
-      {audio ? (
-        <PanelSection density="compact" disabled={disabled} title={t('propertyPanel.group.audio')}>
+      {audio && element.type !== 'subtitle' ? (
+        <PanelSection
+          className="cut-inspector-group"
+          density="compact"
+          disabled={disabled}
+          title={t('propertyPanel.group.audio')}
+        >
           <PropertyRow
             density="compact"
             disabled={disabled}

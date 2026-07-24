@@ -224,3 +224,9 @@
 - [x] 25.6 Make retained canvas extent depend on Track/item identity-order structure, shrink after delete/move/reorder, and visually distinguish projected Gap from ordinary Track background.
 - [x] 25.7 Run focused Domain/Extension/Webview tests and builds, strict OpenSpec and isolated Extension Development Host scenarios for both modes, tail deletion, real Gap, pointer drop and picker insertion; record evidence in `validation.md`.
 - [x] 25.8 Replace the two-option placement `SegmentedControl` with one localized icon-only toolbar button, infer position mode for an initial projection containing Gap, and enter sequence mode through a revisioned trailing-Gap trim without removing internal synchronization Gaps.
+
+## 26. Group the contextual Inspector without Tabs
+
+- [x] 26.1 Update proposal/design/spec so Project, Track, Clip and Gap properties use one continuous grouped Inspector surface without Tab or unsupported professional groups.
+- [x] 26.2 Add DOM/path tests and adapt the retained `PropertyPanel`/`PropertyPanelInline` through shared property primitives for context-specific basic, timing, speed, audio, canvas and state groups.
+- [x] 26.3 Run focused Webview tests/build, strict OpenSpec and an isolated Extension Development Host visual/interaction scenario; record evidence and remaining limits.

@@ -309,6 +309,53 @@ describe('PropertyPanelInline OTIO adapter', () => {
     expect(projectCanvasPresetId({ width: 1280, height: 720 })).toBe('custom');
   });
 
+  it('groups Project, Track and Gap contexts in one continuous surface without tabs', () => {
+    const store = createCutPresentationStore();
+    const view = createView();
+    const videoTrack = view.tracks[0];
+    if (!videoTrack) throw new Error('Video Track fixture is missing.');
+    const viewWithGap: TimelineView = {
+      ...view,
+      durationSeconds: 5,
+      tracks: [
+        {
+          ...videoTrack,
+          items: [...videoTrack.items, { kind: 'gap', startSeconds: 3, durationSeconds: 2 }],
+        },
+      ],
+    };
+    const render = () => {
+      act(() => {
+        root.render(
+          <CutPresentationStoreProvider store={store}>
+            <CutOtioControllerProvider>
+              <PropertyPanelInline mode="basic" />
+            </CutOtioControllerProvider>
+          </CutPresentationStoreProvider>,
+        );
+      });
+    };
+    const groupLabels = () =>
+      Array.from(host.querySelectorAll('.cut-inspector-group')).map((section) =>
+        section.getAttribute('aria-label'),
+      );
+
+    store.setState({ view: viewWithGap, selection: undefined });
+    render();
+    expect(groupLabels()).toEqual(['propertyPanel.group.canvas', 'propertyPanel.group.timeline']);
+
+    act(() => store.setState({ selection: { kind: 'track', trackId: 'video-track' } }));
+    expect(groupLabels()).toEqual(['propertyPanel.group.basic', 'propertyPanel.group.state']);
+
+    act(() =>
+      store.setState({
+        selection: { kind: 'gap', trackId: 'video-track', itemIndex: 1 },
+      }),
+    );
+    expect(groupLabels()).toEqual(['propertyPanel.group.location', 'propertyPanel.group.range']);
+    expect(host.querySelector('[role="tab"], [role="tablist"]')).toBeNull();
+  });
+
   function click(label: string): void {
     const button = Array.from(host.querySelectorAll('button')).find(
       (candidate) => candidate.textContent === label,

@@ -157,7 +157,11 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
     return (
       <div className="cut-basic-inspector-content">
         <div className="nk-prop-panel cut-shared-property-panel">
-          <PanelSection density="compact" title={t('propertyPanel.context.track')}>
+          <PanelSection
+            className="cut-inspector-group"
+            density="compact"
+            title={t('propertyPanel.group.basic')}
+          >
             <PropertyRow
               density="compact"
               label={t('propertyPanel.basic.name')}
@@ -186,6 +190,12 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
                 type="text"
               />
             </PropertyRow>
+          </PanelSection>
+          <PanelSection
+            className="cut-inspector-group"
+            density="compact"
+            title={t('propertyPanel.group.state')}
+          >
             <PropertyRow
               density="compact"
               label={t('propertyPanel.track.enabled')}
@@ -260,12 +270,19 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
   if (selectedGap) {
     return (
       <ReadOnlyInspector
-        rows={[
-          [t('propertyPanel.context.track'), selectedGap.track.name],
-          [t('propertyPanel.basic.startTime'), formatSeconds(selectedGap.gap.startSeconds)],
-          [t('propertyPanel.basic.duration'), formatSeconds(selectedGap.gap.durationSeconds)],
+        groups={[
+          {
+            title: t('propertyPanel.group.location'),
+            rows: [[t('propertyPanel.context.track'), selectedGap.track.name]],
+          },
+          {
+            title: t('propertyPanel.group.range'),
+            rows: [
+              [t('propertyPanel.basic.startTime'), formatSeconds(selectedGap.gap.startSeconds)],
+              [t('propertyPanel.basic.duration'), formatSeconds(selectedGap.gap.durationSeconds)],
+            ],
+          },
         ]}
-        title={t('propertyPanel.context.gap')}
       />
     );
   }
@@ -276,12 +293,11 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
     return (
       <div className="cut-basic-inspector-content">
         <div className="nk-prop-panel cut-shared-property-panel">
-          <PanelSection density="compact" title={t('propertyPanel.context.project')}>
-            <ReadOnlyPropertyRow
-              label={t('propertyPanel.basic.name')}
-              propertyId="project.name"
-              value={view.name}
-            />
+          <PanelSection
+            className="cut-inspector-group"
+            density="compact"
+            title={t('propertyPanel.group.canvas')}
+          >
             {profile ? (
               <SelectPropertyRow
                 density="compact"
@@ -315,6 +331,17 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
               label={t('propertyPanel.project.resolution')}
               propertyId="project.resolution"
               value={profile ? `${profile.width} × ${profile.height}` : '—'}
+            />
+          </PanelSection>
+          <PanelSection
+            className="cut-inspector-group"
+            density="compact"
+            title={t('propertyPanel.group.timeline')}
+          >
+            <ReadOnlyPropertyRow
+              label={t('propertyPanel.basic.name')}
+              propertyId="project.name"
+              value={view.name}
             />
             <ReadOnlyPropertyRow
               label={t('propertyPanel.project.frameRate')}
@@ -387,19 +414,28 @@ export const PropertyPanelInline = memo(function PropertyPanelInline({
 });
 
 function ReadOnlyInspector(props: {
-  readonly title: string;
-  readonly rows: readonly (readonly [label: string, value: string])[];
+  readonly groups: readonly {
+    readonly title: string;
+    readonly rows: readonly (readonly [label: string, value: string])[];
+  }[];
 }) {
   return (
     <div className="cut-basic-inspector-content">
       <div className="nk-prop-panel cut-shared-property-panel">
-        <PanelSection density="compact" title={props.title}>
-          {props.rows.map(([label, value]) => (
-            <PropertyRow density="compact" key={label} label={label} propertyId={label}>
-              <span className="cut-basic-property-value">{value}</span>
-            </PropertyRow>
-          ))}
-        </PanelSection>
+        {props.groups.map((group) => (
+          <PanelSection
+            className="cut-inspector-group"
+            density="compact"
+            key={group.title}
+            title={group.title}
+          >
+            {group.rows.map(([label, value]) => (
+              <PropertyRow density="compact" key={label} label={label} propertyId={label}>
+                <span className="cut-basic-property-value">{value}</span>
+              </PropertyRow>
+            ))}
+          </PanelSection>
+        ))}
       </div>
     </div>
   );

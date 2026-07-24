@@ -27,17 +27,53 @@ describe('Cut PropertyPanel retained basic UI', () => {
     host.remove();
   });
 
-  it('renders only OTIO-backed basic, speed and audio sections', () => {
+  it('renders one continuous OTIO-backed grouped surface without tabs', () => {
     act(() => root.render(<PropertyPanel {...props()} />));
 
-    expect(host.querySelector('[aria-label="propertyPanel.group.basic"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="propertyPanel.group.speed"]')).not.toBeNull();
-    expect(host.querySelector('[aria-label="propertyPanel.group.audio"]')).not.toBeNull();
+    expect(
+      Array.from(host.querySelectorAll('.cut-inspector-group')).map((section) =>
+        section.getAttribute('aria-label'),
+      ),
+    ).toEqual([
+      'propertyPanel.group.basic',
+      'propertyPanel.group.timing',
+      'propertyPanel.group.speed',
+      'propertyPanel.group.audio',
+    ]);
+    expect(
+      host
+        .querySelector('[data-property-id="startTime"]')
+        ?.closest('.cut-inspector-group')
+        ?.getAttribute('aria-label'),
+    ).toBe('propertyPanel.group.timing');
     expect(host.querySelector('[data-property-id="name"]')).not.toBeNull();
     expect(host.querySelector('[data-property-id="audio.gain"]')).not.toBeNull();
+    expect(host.querySelector('[role="tab"], [role="tablist"]')).toBeNull();
     expect(host.textContent).not.toContain('colorCorrection');
     expect(host.textContent).not.toContain('effects.title');
     expect(host.textContent).not.toContain('masks.title');
+  });
+
+  it('omits speed and audio groups for Subtitle Clips', () => {
+    const subtitle = {
+      ...createElement(),
+      type: 'subtitle' as const,
+      text: 'Subtitle',
+      fontSize: 48,
+      fontFamily: 'Arial',
+      color: '#ffffff',
+      backgroundColor: 'transparent',
+      textAlign: 'center' as const,
+      strokeColor: 'transparent',
+      strokeWidth: 0,
+    };
+    act(() => root.render(<PropertyPanel {...props({ element: subtitle })} />));
+
+    expect(
+      Array.from(host.querySelectorAll('.cut-inspector-group')).map((section) =>
+        section.getAttribute('aria-label'),
+      ),
+    ).toEqual(['propertyPanel.group.basic', 'propertyPanel.group.timing']);
   });
 
   it('keeps preview and commit callbacks separate for controlled text input', () => {

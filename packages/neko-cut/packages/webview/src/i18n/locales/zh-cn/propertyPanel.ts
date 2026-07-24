@@ -15,6 +15,12 @@ export const propertyPanel = {
   'propertyPanel.emptyState.tip3': '使用快捷键提升效率',
 
   'propertyPanel.group.basic': '基本信息',
+  'propertyPanel.group.timing': '时间与裁剪',
+  'propertyPanel.group.canvas': '画布',
+  'propertyPanel.group.timeline': '时间线',
+  'propertyPanel.group.state': '轨道状态',
+  'propertyPanel.group.location': '位置',
+  'propertyPanel.group.range': '时间范围',
   'propertyPanel.group.transform': '变换',
   'propertyPanel.group.appearance': '外观',
   'propertyPanel.group.text': '文本',
