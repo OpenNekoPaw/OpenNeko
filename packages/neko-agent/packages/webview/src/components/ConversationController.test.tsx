@@ -35,8 +35,11 @@ const vscodeMocks = vi.hoisted(() => ({
   getSettings: vi.fn(),
   getConversationSnapshot: vi.fn(),
   getContextTokenCount: vi.fn(),
-  getTasks: vi.fn(),
   getMessageQueue: vi.fn(),
+  attachDomainActivity: vi.fn(),
+  acknowledgeDomainActivity: vi.fn(),
+  detachDomainActivity: vi.fn(),
+  commandDomainJob: vi.fn(),
 }));
 
 vi.mock('@/messages', () => ({
@@ -1267,7 +1270,7 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('workspace-agent-state').textContent).toBe('acting:1000:ReadFile');
   });
 
-  it('disposes only the deleted background conversation render resources', () => {
+  it('disposes only the deleted non-visible conversation render resources', () => {
     vi.clearAllMocks();
     render(
       <ConversationController
@@ -1857,11 +1860,15 @@ function projectionSnapshot(conversationId: string, messageId: string, content: 
     turns: [
       {
         turnId: `turn-${conversationId}`,
+
+        runId: 'run-a',
         messageId,
         items: [
           {
             conversationId,
             turnId: `turn-${conversationId}`,
+
+            runId: 'run-a',
             messageId,
             itemId: 'text-1',
             sequence: 1,

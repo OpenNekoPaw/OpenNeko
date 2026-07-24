@@ -9,7 +9,6 @@ import { history } from './history';
 import { onboarding } from './onboarding';
 import { preview } from './preview';
 import { settings } from './settings';
-import { tasks } from './tasks';
 import { toolCalls } from './toolCalls';
 
 export const bundles: Record<string, MessageBundle> = {
@@ -22,6 +21,5 @@ export const bundles: Record<string, MessageBundle> = {
   onboarding,
   preview,
   settings,
-  tasks,
   toolCalls,
 };

@@ -34,7 +34,7 @@ export interface TabState {
   activeTabId: string | null;
 }
 
-export type TabType = 'chat';
+export type TabType = 'chat' | 'activity';
 export type ConversationKind = 'chat' | 'character-dialogue' | 'embody-character';
 
 export interface CharacterDialogueSessionProjection {

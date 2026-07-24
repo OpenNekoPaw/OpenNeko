@@ -18,7 +18,7 @@ neko-agent 是 OpenNeko 的 AI 能力中枢。它将 LLM 对话、工具执行�
 packages/neko-agent/
 ├── packages/
 │   ├── agent/        # @neko/agent — Agent 运行时（核心，零 VSCode 依赖）
-│   ├── platform/     # @neko/platform — AI 服务平台（LLM 适配 + 媒体生成）
+│   ├── platform/     # @neko/platform — 迁移中的 Host config/provider 集成层
 │   ├── extension/    # @neko-agent/extension — VSCode Extension Host（纯胶水层）
 │   └── webview/      # @neko-agent/webview — React 对话 UI
 
@@ -39,7 +39,8 @@ apps/neko-tui ──→ agent ──→ platform ──→ shared
 ```
 
 > **说明**：`agent` 通过 `@neko/shared` 的 `IService` 接口抽象 LLM 调用，`platform` 提供具体实现。
-> `apps/neko-tui` 直接复用 `@neko/platform`，通过 `createCLIPlatform()` 创建实例，`toSharedService()` 适配为 `IService`。
+> `apps/neko-tui` 通过 `createCLIPlatform()` 复用当前 provider runtime，并直接消费一级
+> `@neko/generation` contract/Job；配置仍由 Host 统一读取，不由领域包读取。
 > Extension、Terminal TUI 和 headless 工具共享同一套 LLM 和 Provider 管理。
 
 ---
@@ -62,8 +63,8 @@ apps/neko-tui ──→ agent ──→ platform ──→ shared
 │  │    ├─ AgentRunner (薄包装 AgentSession)   │           │
 │  │    ├─ AgentManager (LRU 多会话池)         │           │
 │  │    ├─ ConfigBridge (配置消息路由)          │           │
-│  │    ├─ AgentStreamProcessor (事件→UI)      │           │
-│  │    └─ 10 个专用 Handler (task/skill/plan...)│         │
+│  │    ├─ Pi Timeline Session (事件→投影)     │           │
+│  │    └─ 专用 Handler (skill/context/settings...)│       │
 │  └──────────┬───────────────────────────────┘           │
 │             │                                            │
 │  ┌──────────▼──────────┐     ┌────────────────────────┐ │
@@ -123,25 +124,25 @@ apps/neko-tui ──→ agent ──→ platform ──→ shared
 
 Neko Agent 的 VS Code Extension/Webview 与 Terminal TUI/headless 是两个本地宿主，功能差异必须保留。Extension/Webview 可以拥有 VS Code API、`postMessage`、`webview.asWebviewUri()`、文件 watcher、memento/recovery、Extension command 和 Webview timeline projection；Terminal TUI/headless 可以拥有 Ink 键盘流、终端展示、进程生命周期、stdout/stderr 报告和真实 API 验证 lane。
 
-对齐目标不是统一 UI，而是让同一个工作区配置和工作区数据能同时被 TUI 与 Webview 使用。业务逻辑进入共享 runtime/config/catalog/task/cache contract，宿主只提供 adapter 和 presentation。
+对齐目标不是统一 UI，而是让同一个工作区配置和工作区数据能同时被 TUI 与 Webview 使用。业务逻辑进入共享 runtime/config/catalog/cache contract，Agent 执行由 AgentRun/ToolCall、领域执行由 owning-domain Job 管理，宿主只提供 adapter 和 presentation。
 
-| 工作区共享业务面          | 共享规则                                                                                                                                                                                                                                         |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Effective config snapshot | `~/.neko/config.toml`、`.neko/config.toml`、环境凭据和账号 catalog 通过共享 resolver 形成同一份快照；Webview 与 TUI 不得分别手写 provider/model/scalar/MCP 解析策略。运行时模型/参数选择只影响当前 session，不自动重写 TOML。                    |
-| Session/runtime assembly  | 交互式 Webview 和 TUI 会话都走 `createAgentSessionWithRuntime()` 及 host-neutral runtime bindings；AGENTS overlay、project memory、context settings、capability prompt fragments 和 task projection 在共享路径注入。                             |
-| Conversation identity     | 交互式会话使用 workspace-scoped canonical conversation id。旧 `cli-*` 记录不作为 TUI resume 兼容输入，不读取、不迁移、不重写、不删除；旧 runtime state source 不能作为共享状态成功读入。                                                         |
-| Skill/catalog             | 标准来源是 `~/.agents/skills`、`~/.neko/commands`、`.agents/skills`、`.neko/commands`，由共享 Skill file runtime 与 command catalog 解析；`.codex/skills` 或 `skillsDir` 之类非标准来源只能通过显式 source provider 进入，并必须带 diagnostics。 |
-| Command effects           | `/command` 工件、内置命令和 `$skill` 激活使用共享 catalog。TUI-only 或 Extension-only 行为必须注册为 `tui` / `extension` surface scope 的 effect，另一端请求时返回 unavailable diagnostic。                                                      |
-| Async tasks               | 可序列化 Task/Run 与最小 checkpoint 进入用户级 `neko.db` state tables，并按显式 `workspaceId` 分区；terminal/process handle、cancel object、runtime token 等 live lease 是 host-private。                                                        |
-| Context                   | 项目记忆、AGENTS overlays、context settings、授权读根、capability fragments 通过共享 runtime assembly 进入会话；Webview/TUI 只负责展示或输入采集。                                                                                               |
-| Content access / cache    | 工作区资源共用 project cache artifact root；metadata ledger、quota、touch 和 GC eligibility 进入用户级 `neko.db` cache tables。Extension-private artifact 只服务 no-workspace 或 VS Code 私有资源。                                              |
-| Dependency injection      | 文档、图片和可选解析依赖通过 host content-access runtime 注入；缺失依赖要返回一致 diagnostic，不能在某个宿主静默 fallback 成空内容。                                                                                                             |
+| 工作区共享业务面          | 共享规则                                                                                                                                                                                                                                           |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Effective config snapshot | `~/.neko/config.toml`、`.neko/config.toml`、环境凭据和账号 catalog 通过共享 resolver 形成同一份快照；Webview 与 TUI 不得分别手写 provider/model/scalar/MCP 解析策略。运行时模型/参数选择只影响当前 session，不自动重写 TOML。                      |
+| Session/runtime assembly  | 交互式 Webview 和 TUI 会话都走 `createAgentSessionWithRuntime()` 及 host-neutral runtime bindings；AGENTS overlay、project memory、context settings、capability prompt fragments 和 conversation projection 在共享路径注入。                       |
+| Conversation identity     | 交互式会话使用 workspace-scoped canonical conversation id。旧 `cli-*` 记录不作为 TUI resume 兼容输入，不读取、不迁移、不重写、不删除；旧 runtime state source 不能作为共享状态成功读入。                                                           |
+| Skill/catalog             | 标准来源是 `~/.agents/skills`、`~/.neko/commands`、`.agents/skills`、`.neko/commands`，由共享 Skill file runtime 与 command catalog 解析；`.codex/skills` 或 `skillsDir` 之类非标准来源只能通过显式 source provider 进入，并必须带 diagnostics。   |
+| Command effects           | `/command` 工件、内置命令和 `$skill` 激活使用共享 catalog。TUI-only 或 Extension-only 行为必须注册为 `tui` / `extension` surface scope 的 effect，另一端请求时返回 unavailable diagnostic。                                                        |
+| Async execution           | 前台 AgentRun/ToolCall 的 live state 按实例隔离；显式 SubagentRun 由 parent/supervisor 持有；可恢复工作必须进入 owning-domain Job。不存在独立 BackgroundAgentRun。cancel handle、provider observer、runtime token 等 live lease 不写入 Webview 或通用 Task 表。 |
+| Context                   | 项目记忆、AGENTS overlays、context settings、授权读根、capability fragments 通过共享 runtime assembly 进入会话；Webview/TUI 只负责展示或输入采集。                                                                                                 |
+| Content access / cache    | 工作区资源共用 project cache artifact root；metadata ledger、quota、touch 和 GC eligibility 进入用户级 `neko.db` cache tables。Extension-private artifact 只服务 no-workspace 或 VS Code 私有资源。                                                |
+| Dependency injection      | 文档、图片和可选解析依赖通过 host content-access runtime 注入；缺失依赖要返回一致 diagnostic，不能在某个宿主静默 fallback 成空内容。                                                                                                               |
 
 Host-private 数据不能伪装成共享业务结果。Webview URI、blob URL、Extension memento、VS Code handle、Extension-private cache、TUI 进程 handle、终端尺寸、键盘状态和 headless 报告路径都不是 durable workspace identity。跨宿主请求遇到这些能力时，应返回 host-private/unavailable diagnostic，而不是 no-op、当作普通 prompt、读另一端私有缓存，或回退旧实现。
 
 ### Generated output 与 AssetLibrary 身份
 
-媒体生成完成后，生成文件及 generated-output index 记录服务于预览、`ReadImage`、perception、异步 continuation、重载以及 revision/digest/generation lineage；它们不是 AssetLibrary `AssetEntity`。Agent task-result observation 对未显式加入资产库的生成结果只投影 `ResourceRef`，不得根据 presentation `assets[]` 字段名推断 `kind: asset`。
+媒体生成完成后，生成文件及 generated-output index 记录服务于预览、`ReadImage`、perception、provider reconciliation、重载以及 revision/digest/generation lineage；它们不是 AssetLibrary `AssetEntity`。Tool terminal-result observation 对未显式加入资产库的生成结果只投影 `ResourceRef`，不得根据 presentation `assets[]` 字段名推断 `kind: asset`。
 
 ```text
 GeneratedOutput / ResourceRef
@@ -150,9 +151,9 @@ GeneratedOutput / ResourceRef
   -> AssetLibrary AssetEntity
 ```
 
-`ListAssets` 和 `GetAsset` 只查询 AssetLibrary。它们不得 fallback 到 generated-output index；用户或 Agent 显式 Import/Promote 成功后，使用该操作返回的新 AssetEntity id 访问资产库。真实 AssetLibrary task result 必须通过 typed `asset` result ref、`assetId` 或 `assetIds` 声明身份，不能依赖通用集合名。
+`ListAssets` 和 `GetAsset` 只查询 AssetLibrary。它们不得 fallback 到 generated-output index；用户或 Agent 显式 Import/Promote 成功后，使用该操作返回的新 AssetEntity id 访问资产库。真实 AssetLibrary Tool result 必须通过 typed `asset` result ref、`assetId` 或 `assetIds` 声明身份，不能依赖通用集合名。
 
-新增 Agent 业务能力时，默认接入顺序是：先定义共享 contract 和 path-level 测试，再实现 Extension/TUI adapter，最后做 Webview 或终端展示。测试应能证明 canonical runtime、catalog、task/cache path 被命中，并能 poison legacy path 证明旧 readline interactive、TUI-local raw config、TUI-local Skill loader 或结果型 fallback 没有参与成功路径。
+新增 Agent 业务能力时，默认接入顺序是：先定义共享 contract 和 path-level 测试，再实现 Extension/TUI adapter，最后做 Webview 或终端展示。测试应能证明 canonical runtime、catalog、ToolCall/领域 Job、cache path 被命中，并能 poison legacy path 证明旧 readline interactive、TUI-local raw config、TUI-local Skill loader 或结果型 fallback 没有参与成功路径。
 
 新增 Agent 功能的验收顺序是：先用 mock 与 real workflow/TUI lane 验证 Agent 核心行为、Skill/Tool/prompt 效果、长时间任务、失败诊断和稳定性；确认核心路径可用后，再用 VS Code Extension Development Host + `vscode-extension-debugger` 验证 Webview UI 投影、交互、`invokeSkill` / active Skill 指示器和 UI Skill 使用效果。Webview 验收不能替代 Agent/TUI 核心行为验证，TUI/headless 验收也不能替代 VS Code Webview runtime 验收。
 
@@ -175,20 +176,28 @@ Agent 的核心执行引擎，零 VSCode 依赖，Terminal TUI/headless 与 Exte
 | `permission/`  | IPermissionManager 接口 + 规则匹配（plan/ask/auto 三模式）                                                                         |
 | `hooks/`       | ExecutorHooks + composeHooks + factory                                                                                             |
 | `hook-loader/` | SettingsHookLoader（settings-based hooks；`.neko/hooks` 仅作为弃用诊断路径，不再加载）                                             |
-| `prompt/`      | SystemPromptComposer（分层合成）+ SystemPromptBuilder（多语言 + AGENTS.md）                                                        |
+| `prompt/`      | SystemPromptBuilder（多语言 + AGENTS.md）+ prompt file projector/runtime                                                           |
 | `runtime/`     | 统一 runtime bootstrap 契约（workflow/artifact/capability/feedback）+ `createAgentSessionWithRuntime()`                            |
 | `plan/`        | Plan 管理器 + Markdown 解析                                                                                                        |
 | `input/`       | InputProcessor — @ 文件引用解析（IFileReader 接口）                                                                                |
 | `subagent/`    | 子 Agent 管理                                                                                                                      |
-| `task/`        | 后台任务管理器 + 持久化 + 恢复                                                                                                     |
 | `validation/`  | 输出验证器（Image/Output/Mermaid/JSON/Length）                                                                                     |
 | `memory/`      | 项目记忆（`.neko/memory.md`）+ recall / extraction                                                                                 |
 | `commands/`    | 内置斜杠命令处理（help/status/clear/config/skills/tools/plan 等）                                                                  |
 | `errors/`      | 统一错误类型                                                                                                                       |
 
-### @neko/platform — AI 服务平台
+### @neko/generation — Generation 领域
 
-LLM 适配和媒体生成服务。62 个源文件。
+`@neko/generation` 是与 `neko-agent` 平级的一级领域包，拥有 image/video/audio 请求与结果
+contract、窄 `GenerationExecutionPort`、可恢复 `GenerationJob` coordinator/store/codec/migration。
+它不读取 TOML、credential 或 workspace 文件，不创建 Extension Host/Webview/进程；VS Code 和
+TUI composition root 注入当前 Platform provider runtime 与 Host-owned result committer。
+
+### @neko/platform — 迁移中的 AI 集成层
+
+Host 配置、LLM/provider adapter 与尚未迁出的 generation provider implementation。Generation
+contract 和 Job 不再由 Platform 定义或 re-export；`MediaGenerationService` 只作为
+`GenerationExecutionPort` 的当前实现。
 
 ```
 配置策略：
@@ -206,8 +215,8 @@ LLM 适配和媒体生成服务。62 个源文件。
 | `llm/adapter/` | 7 个 LLM 适配器（Anthropic/OpenAI/Google/Azure/Ollama/Generic + AI-SDK 统一）+ AdapterRegistry + StreamAggregator |
 | `provider/`    | ProviderRegistry（适配器查找）+ PlatformError（统一错误分类）                                                     |
 | `config/`      | ConfigManager（用户配置 + 工作区 MCP 合并）+ ChatModelService + 导入导出 + 首次运行默认值                         |
-| `media/`       | MediaService + 8 个适配器（Runway/Luma/MiniMax/Suno/Vidu/Midjourney/LibLib/OpenAI-compat）+ 路由 + 任务执行       |
-| `service/`     | IService 门面 + ModelSelector（优先级 fallback）+ PromptManager + ToolRegistry                                    |
+| `media/`       | Generation execution port 的临时 provider 实现、路由和产物 delivery helper；不拥有 GenerationJob                  |
+| `service/`     | IService 门面 + ModelSelector（优先级 fallback）+ ToolRegistry                                                    |
 | `core/`        | BaseRegistry + HttpClient + ConcurrencyPool（re-export from @neko/shared）                                        |
 | `types/`       | Provider/Model/Config 类型定义                                                                                    |
 
@@ -225,8 +234,8 @@ LLM 适配和媒体生成服务。62 个源文件。
 | 模块            | 职责                                                                                                                                                                                                                                                                                     |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `bootstrap/`    | 服务初始化 + ServiceCollection 组装                                                                                                                                                                                                                                                      |
-| `chat/`         | ChatViewProvider + Webview 消息 Router + 专用桥接 Handler（task/skill/plan/settings/context/conversation/file/integration/slashCommand）                                                                                                                                                 |
-| `chat/message/` | AgentMessageTurnHandler（消息回合桥接）+ AgentTurnBridge + AgentStreamProcessor（AgentEvent → postMessage）+ AttachmentProcessor                                                                                                                                                         |
+| `chat/`         | ChatViewProvider + Webview 消息 Router + 专用桥接 Handler（skill/settings/context/conversation/file/slashCommand）                                                                                                                                                                       |
+| `chat/message/` | AgentMessageTurnHandler（消息回合桥接）+ AgentTurnBridge + run-scoped Pi Timeline session（Pi event → ConversationProjectionStore）+ AttachmentProcessor                                                                                                                                 |
 | `ai/`           | AgentRunner（薄包装 AgentSessionRunner）+ AgentManager（多会话池委托 @neko/agent/runtime）+ AgentContext                                                                                                                                                                                 |
 | `services/`     | ConfigBridge（配置消息路由）+ SkillFileService/HookFileService（文件监听）+ ConnectionStateManager                                                                                                                                                                                       |
 | `editor/`       | EditorModel + EditorRegistry（活动编辑器抽象）                                                                                                                                                                                                                                           |
@@ -240,7 +249,7 @@ React 对话界面，通过 postMessage 与 Extension Host 通信。117 个源�
 | 模块          | 职责                                                                              |
 | ------------- | --------------------------------------------------------------------------------- |
 | `components/` | ChatView + ContentBlocks 时序渲染 + SettingsView + ToolCallDisplay + MermaidBlock |
-| `handlers/`   | 消息处理注册表（streaming/tool/conversation/config/task）                         |
+| `handlers/`   | 消息处理注册表（projection/conversation/config/subagent）                         |
 | `hooks/`      | Zustand 状态管理（多会话隔离：conversation/config/ui/resource）                   |
 | `messages/`   | type-safe postMessage 构建器                                                      |
 | `config/`     | 预设配置（providers/prompts/MCP servers）                                         |
@@ -423,24 +432,21 @@ Webview → Extension:
 Extension → Webview:
   projectionEndpointReady, projectionSnapshot,
   projectionPatch, projectionAttachmentDiagnostic,
-  thinking, streamText, streamThinking,
-  toolCall, toolResult, toolConfirmation,
-  streamComplete, agentPhase, error,
-  taskCreated, taskUpdated, tasksUpdated,
-  mediaTaskCreated, mediaTaskProgress, subagentEvent,
+  agentPhase, error,
+  subagentEvent,
   contextTokenCount,
   conversations, activeConversation, settings, tabState
 ```
 
 ### Workspace Board 投影与历史 Authoring Handoff
 
-Agent core 和 session 不拥有 Canvas destination、Board work session、conversation binding、Board index/scope resolver、delivery runtime 或 Cut target state。核心只观察通用 Tool/Task/result、diagnostic 与 Approval。VS Code/TUI Host composition 可以把已声明的 creator-visible typed result 交给 owning Canvas projector，但目的地状态不能进入 Agent contract。
+Agent core 和 session 不拥有 Canvas destination、Board work session、conversation binding、Board index/scope resolver、delivery runtime 或 Cut target state。核心只观察 Tool/AgentRun result、diagnostic 与 Approval。VS Code/TUI Host composition 可以把已声明的 creator-visible typed result 交给 owning Canvas projector，但目的地状态不能进入 Agent contract。
 
 没有显式 Canvas target 时，公共 `NekoCanvasAPI.boards.project()` 只写 `neko/boards/workspace.nkc`；显式 target 是普通 `.nkc` identity。它不解析活动/最近文档、会话、scope 或文件名。Generated Output owner 先将 creator-visible binary 保存到 `neko/generated/<kind>/` 并建立 revision/digest/lineage/`ResourceRef`，Canvas 再创建或复用顶层普通内容节点，并把已证明的素材依赖写为 `derived-from` connection；AssetLibrary promotion 是独立可选动作。
 
 普通问答、reasoning、日志、provider scratch、未选搜索结果、runtime handle 和 non-reviewable failure 不投影。目标缺失、权限失败或 revision conflict 只产生 projection diagnostic；生成文件继续由 generated-output owner 保留，不重新解析或改投其他 Canvas。
 
-一次 terminal creator-visible 结果以 `CanvasWorkspaceProjectionRequest` 批次提交，而不是逐 asset 写入。Host 在结果 owner 已确认 durable 后收集实际消费的 `ResourceRef`/`DocumentArchiveResourceRef`、命名 reviewable Markdown 和生成生命周期，按 `source → analysis → output` 角色和 `sourceArtifactIds` 交给 Canvas-owned coordinator。批次只是原子写入与恢复边界，不成为视觉容器；同一内容 revision 跨 Task、Run 和 Host delivery 复用同一节点，且不得覆盖用户标题、位置、尺寸或既有分组。批次通过用户级 `LocalMetadataStore` 的 `tasks` / `task_checkpoints` 账本排队、claim、receipt 和恢复；`system:canvas-board-*` 行不会进入 Agent TaskManager、`/tasks` 或通用 cleanup。SQLite 只保存投递状态，`.nkc` 仍保存节点、关系、布局和用户编辑事实。
+一次 terminal creator-visible 结果以 `CanvasWorkspaceProjectionRequest` 批次提交，而不是逐 asset 写入。Host 在结果 owner 已确认 durable 后收集实际消费的 `ResourceRef`/`DocumentArchiveResourceRef`、命名 reviewable Markdown 和生成生命周期，按 `source → analysis → output` 角色和 `sourceArtifactIds` 交给 Canvas-owned coordinator。批次只是原子写入与恢复边界，不成为视觉容器；同一内容 revision 跨 operation、Agent Run 和 Host delivery 复用同一节点，且不得覆盖用户标题、位置、尺寸或既有分组。批次通过用户级 `LocalMetadataStore` 的历史 `tasks` / `task_checkpoints` 表作为 Board-owned delivery ledger 排队、claim、receipt 和恢复；`system:canvas-board-*` 行不是 Agent execution，不进入任何通用任务路由或清理。为保护本地用户数据，本次迁移保留这些 SQLite 表及已物化资源；SQLite 只保存投递状态，`.nkc` 仍保存节点、关系、布局和用户编辑事实。
 
 多 Host 通过 workspace-scoped fenced writer epoch 串行化 load-plan-save；保存前重新校验 epoch 与 revision。重复 delivery 返回同一 receipt/no-op，dirty 的已打开 Canvas 返回 conflict，失效 Host 不得写入或将结果改投另一个 Canvas。Board 投递失败不影响已 durable 的 artifact，presentation 分开显示 artifact durability 与 Board 状态。
 
@@ -509,11 +515,11 @@ AgentSessionRunner → AgentSession → AgentExecutor（ReAct 循环）
   └─ 上下文 → ContextManager + TokenBudgetManager → 压缩/摘要
          │
          ▼
-AgentStreamProcessor（Extension — 语义事件翻译与 delivery barrier）
-  ├─ provider fragment → turn accumulator
-  ├─ semantic event → Timeline V2 operation
-  ├─ delivery scheduler → bounded/serialized webview.postMessage
-  └─ completion barrier → terminal delivery + durable persistence result
+run-scoped Pi Timeline session（Extension）
+  ├─ Pi product event → host-neutral Timeline projector
+  ├─ Timeline update → ConversationProjectionStore
+  ├─ versioned snapshot/patch → projection attachment
+  └─ terminal projection → durable persistence result
 ```
 
 ---

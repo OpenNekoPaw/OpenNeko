@@ -10,7 +10,7 @@ import {
   WEBVIEW_TO_EXTENSION_MESSAGE_TYPES,
   type WebviewToExtensionMessage,
 } from '@neko-agent/types';
-import type { AgentCapabilityLifecycleDescriptor, TaskRunScope } from '@neko/shared';
+import type { AgentCapabilityLifecycleDescriptor } from '@neko/shared';
 import { CONFIG_BRIDGE_MESSAGE_TYPES } from '../../services/configBridge';
 import { sendGeneratedAssetToPlugin } from '../../services/pluginTransferBridge';
 
@@ -130,12 +130,6 @@ function createDeps(): ChatWebviewMessageRouterDeps {
       routeUserMessage: vi.fn(),
       cancel: vi.fn(() => false),
       exit: vi.fn(),
-    } as any,
-    taskHandler: {
-      sendTasks: vi.fn(),
-      handleCancelTask: vi.fn(),
-      handleRetryTask: vi.fn(),
-      handleViewTaskResult: vi.fn(),
     } as any,
     skillHandler: {
       sendSkillsList: vi.fn(),
@@ -293,7 +287,6 @@ describe('handleChatWebviewMessage', () => {
     );
     expect(deps.messages?.handleUserMessage).toHaveBeenCalledTimes(1);
     expect(deps.slashCommandHandler.handleCommand).not.toHaveBeenCalled();
-    expect(deps.taskHandler.sendTasks).not.toHaveBeenCalled();
   });
 
   it('routes message queue commands with explicit conversation scope', () => {
@@ -489,25 +482,6 @@ describe('handleChatWebviewMessage', () => {
     );
 
     expect(deps.embodyCharacter?.exit).toHaveBeenCalledWith('embody-session-1');
-  });
-
-  it('routes Task actions with the complete owner scope unchanged', () => {
-    const deps = createDeps();
-    const scope = taskScope('task-1');
-
-    handleChatWebviewMessage({ type: 'cancelTask', taskScope: scope }, deps);
-    handleChatWebviewMessage({ type: 'retryTask', taskScope: scope }, deps);
-    handleChatWebviewMessage(
-      { type: 'viewTaskResult', taskScope: scope, resultRef: 'generated-assets/result.png' },
-      deps,
-    );
-
-    expect(deps.taskHandler.handleCancelTask).toHaveBeenCalledWith(deps.webview, scope);
-    expect(deps.taskHandler.handleRetryTask).toHaveBeenCalledWith(deps.webview, scope);
-    expect(deps.taskHandler.handleViewTaskResult).toHaveBeenCalledWith(
-      scope,
-      'generated-assets/result.png',
-    );
   });
 
   it('routes ordinary conversation switches through atomic activation', () => {
@@ -1679,15 +1653,5 @@ function createCanonicalStoryboardHandoffFixture() {
         ],
       },
     ],
-  };
-}
-
-function taskScope(childRunId: string): TaskRunScope {
-  return {
-    conversationId: 'conv-1',
-    runId: 'run-1',
-    parentRunId: 'run-1',
-    childRunId,
-    childKind: 'task',
   };
 }

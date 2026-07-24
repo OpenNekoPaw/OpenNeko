@@ -802,21 +802,6 @@ export function ChatWorkspace({
         pluginsAvailable={pluginsAvailable}
         contextChips={contextChips}
         ambientNodes={ambientNodes}
-        onCancelTask={(taskScope) => {
-          if (!isCharacterRoleSession && sessionMutationConversationId) {
-            AgentHostMessages.cancelTask(taskScope);
-          }
-        }}
-        onRetryTask={(taskScope) => {
-          if (!isCharacterRoleSession && sessionMutationConversationId) {
-            AgentHostMessages.retryTask(taskScope);
-          }
-        }}
-        onViewTaskResult={(taskScope, resultRef) => {
-          if (!isCharacterRoleSession && sessionMutationConversationId) {
-            AgentHostMessages.viewTaskResult(taskScope, resultRef);
-          }
-        }}
         onInputChange={setInputValue}
         onSend={handleSend}
         onCancel={handleCancelMessage}

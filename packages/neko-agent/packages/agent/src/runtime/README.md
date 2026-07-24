@@ -59,15 +59,15 @@ Prefer existing owner directories before adding runtime files:
 
 ## Current Audit
 
-| Category               | Canonical files                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Session product state  | `session/agent-message-queue.ts`, `session/conversation-run-registry.ts`                                                                                                                                                                                                                                                                                                                                                              |
-| Turn product adapters  | `turn/message-runtime.ts`, `turn/agent-turn-context.ts`, `turn/multimodal-context-packet.ts`, `turn/media-turn-runtime.ts`, `turn/timeline-context-runtime.ts`, `turn/canvas-ambient-context-runtime.ts`, `turn/context-control-runtime.ts`, `turn/workspace-input-processor-runtime.ts`                                                                                                                                        |
-| Capability consumption | `capability/capability-registry-runtime.ts`, `capability/capability-runtime-bindings.ts`, `capability/capability-runtime-registries.ts`, `capability/agent-content-access-runtime.ts`, `capability/external-processor-runtime.ts` |
-| Stream                 | `stream/agent-event-stream-runtime.ts`, `stream/agent-stream-background-task.ts`, `stream/agent-stream-state.ts`, `stream/agent-stream-task-observer.ts`                                                                                                                                                                                                                                                                             |
-| Projection             | `projection/conversation-projection-store.ts` with shared contracts/projector in `@neko-agent/types`                                                                                                                                                                                                                                                                                                                                 |
-| Existing owner moves   | `artifact/artifact-service.ts`, `artifact/node-artifact-store.ts`, `input/attachment-projection.ts`, `input/message-resource-projector.ts`, `session/context-host-message.ts`, `session/conversation-host-message.ts`                                                                                                                                                                                                                |
-| Root collaborators     | `document-module-diagnostics.ts`, `persisted-child-run-ownership.ts`, `resource-cache-runtime.ts`                                                                                                                                                                                                                                                                 |
+| Category               | Canonical files                                                                                                                                                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Session product state  | `session/agent-message-queue.ts`, `session/conversation-run-registry.ts`                                                                                                                                                                                                                 |
+| Turn product adapters  | `turn/message-runtime.ts`, `turn/agent-turn-context.ts`, `turn/multimodal-context-packet.ts`, `turn/media-turn-runtime.ts`, `turn/timeline-context-runtime.ts`, `turn/canvas-ambient-context-runtime.ts`, `turn/context-control-runtime.ts`, `turn/workspace-input-processor-runtime.ts` |
+| Capability consumption | `capability/capability-registry-runtime.ts`, `capability/capability-runtime-bindings.ts`, `capability/capability-runtime-registries.ts`, `capability/agent-content-access-runtime.ts`, `capability/external-processor-runtime.ts`                                                        |
+| Stream                 | `stream/agent-event-stream-runtime.ts`, `stream/agent-stream-background-task.ts`, `stream/agent-stream-state.ts`, `stream/agent-stream-task-observer.ts`                                                                                                                                 |
+| Projection             | `projection/conversation-projection-store.ts` with shared contracts/projector in `@neko-agent/types`                                                                                                                                                                                     |
+| Existing owner moves   | `artifact/artifact-service.ts`, `artifact/node-artifact-store.ts`, `input/attachment-projection.ts`, `input/message-resource-projector.ts`, `session/context-host-message.ts`, `session/conversation-host-message.ts`                                                                    |
+| Root collaborators     | `document-module-diagnostics.ts`, `persisted-child-run-ownership.ts`, `resource-cache-runtime.ts`                                                                                                                                                                                        |
 
 `runtime/index.ts` exposes only retained product adapters. The replaced
 Executor/AgentSession/AgentRunner public surface is intentionally removed.
@@ -76,17 +76,17 @@ Executor/AgentSession/AgentRunner public surface is intentionally removed.
 
 Agent chat isolation uses layered local identities:
 
-| Identity         | Owner                  | Scope                                                                                                                                              |
-| ---------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tabId`          | Webview / Extension UI | View binding only. It restores which conversation a tab shows, but it does not own runtime state.                                                  |
-| `conversationId` | Agent session          | Complete session owner for transcript, prompt mode, Skill projection, context, queues, tasks, logs, and UI actions.                                |
-| `turnId`         | Agent turn runtime     | One chat turn. Model calls, ordinary tool calls, and turn timeline logs use `{ conversationId, turnId, requestId }`.                               |
-| `runId`          | Durable work lease     | Long-lived workflows, artifacts, media/background tasks, terminal/process handles, and cancellable task observers use `{ conversationId, runId }`. |
+| Identity         | Owner                  | Scope                                                                                                                              |
+| ---------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `tabId`          | Webview / Extension UI | View binding only. It restores which conversation a tab shows, but it does not own runtime state.                                  |
+| `conversationId` | Agent session          | Complete session owner for transcript, prompt mode, Skill projection, context, queues, logs, and UI actions.                       |
+| `turnId`         | Agent turn runtime     | One chat turn. Model calls and turn timeline logs use `{ conversationId, turnId, requestId }`.                                     |
+| `runId`          | Agent run              | One foreground Agent or explicit Subagent execution; Tool Calls add exact `toolCallId` and inherit this run's cancellation signal. |
 
-`runId` is not a generic alias for `turnId`. Ordinary LLM/tool logs omit
-`runId` when it would duplicate the turn identity. Durable work may include the
-initiating `turnId` for correlation, but partitioning and cancellation use the
-real `runId`.
+`runId` is not a generic alias for `turnId`. Tool Call execution carries both
+the turn/run identity and its exact `toolCallId`. Work that must detach or
+recover uses an owning-domain Job identity rather than reusing `runId` as a
+generic Task id.
 
 ## Logs And Storage Boundaries
 
@@ -104,11 +104,11 @@ real `runId`.
 - Per-conversation journals are the transcript authority. Recovery and
   projection must request the target `conversationId` explicitly and must not
   infer ownership from the current active tab or active conversation.
-- Extension and TUI share one user-level `~/.neko/neko.db`. Serializable
-  Task/Run recovery uses state-owned tables; conversation/catalog and other
-  rebuildable metadata use cache-owned tables. Workspace rows always carry an
-  explicit `workspaceId`; normal runtime cannot construct the retired JSON or
-  Memento stores.
+- Extension and TUI share one user-level `~/.neko/neko.db` for owning-domain
+  metadata. Historical `tasks` / `task_checkpoints` rows used by the Canvas
+  Board delivery ledger remain for user-data protection, but Agent runtime
+  cannot create, recover, or route generic Tasks through them. Conversation,
+  catalog, and other rebuildable metadata use their owning cache tables.
 - VS Code `workspaceState` remains limited to Host view projection such as tabs,
-  active selection, scroll, and panel state. It is not a conversation, Task, or
-  runtime session authority.
+  active selection, scroll, and panel state. It is not a conversation,
+  AgentRun/ToolCall, domain Job, or runtime session authority.

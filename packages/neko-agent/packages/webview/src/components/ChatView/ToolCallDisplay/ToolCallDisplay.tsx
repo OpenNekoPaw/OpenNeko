@@ -11,18 +11,16 @@ import { useTranslation } from '@/i18n/I18nContext';
 import { RichContentRenderer } from '@/components/ChatView/RichContent';
 import { AgentHostMessages } from '@/messages';
 import { useMessageActions } from '@/components/ChatView/MessageActionsContext';
-import { TaskCard } from '@/components/ChatView/TaskCard/TaskCard';
 import { SubAgentCard } from '@/components/ChatView/SubAgentCard';
 import type { AgentArtifactTransferPayload } from '@neko-agent/types';
 import type { CompositeArtifactPageRichData } from '@/components/ChatView/RichContent/renderers';
-import { getTaskWorkItemById, selectRelatedSubAgentWorkItems } from '@/components/AgentWorkItem';
+import { selectRelatedSubAgentWorkItems } from '@/components/AgentWorkItem';
 import {
   projectToolCallDisplayState,
   type CanvasAuthoringResultProjection,
   type CanvasAuthoringDiagnosticProjection,
   type CanvasAuthoringPromptFieldAlignmentProjection,
 } from '@/presenters/tool-call-presenter';
-import { isTaskWorkItem } from '@/presenters/work-item-projection-presenter';
 import { getLogger } from '../../../utils/logger';
 import { CopyIcon } from '@neko/shared/icons';
 import {
@@ -45,8 +43,7 @@ interface ToolCallDisplayProps {
 
 function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: ToolCallDisplayProps) {
   const { t } = useTranslation();
-  const { workItems, pluginsAvailable, onCancelTask, onRetryTask, onViewTaskResult } =
-    useMessageActions();
+  const { workItems } = useMessageActions();
   const [isExpanded, setIsExpanded] = useState(false);
 
   const toggleExpand = useCallback(() => {
@@ -83,8 +80,6 @@ function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: Too
     argsJson,
     resultJson,
     hasExpandableContent,
-    isBackgroundMode,
-    backgroundTaskId,
     isImageTool,
     imageUrls,
     isVideoTool,
@@ -102,9 +97,6 @@ function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: Too
     needsConfirmation,
     canvasAuthoringResult,
   } = projection;
-  const liveTask = backgroundTaskId
-    ? getTaskWorkItemById(workItems, backgroundTaskId)?.task
-    : selectAnchoredTask(workItems, workItemIds, toolCall.id);
   const relatedSubAgents = selectRelatedSubAgentWorkItems({
     toolCallId: toolCall.id,
     toolResultData: toolCall.result?.data,
@@ -312,16 +304,6 @@ function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: Too
         )}
       </div>
 
-      {/* Inline task progress card for background media tasks */}
-      {(isBackgroundMode || liveTask) && liveTask && (
-        <TaskCard
-          task={liveTask}
-          onCancel={onCancelTask}
-          onRetry={onRetryTask}
-          onViewResult={onViewTaskResult}
-          plugins={pluginsAvailable}
-        />
-      )}
       {relatedSubAgents.map((item) => (
         <SubAgentCard key={item.id} item={item} />
       ))}
@@ -632,18 +614,3 @@ function getArtifactTransferKey(artifact: AgentArtifactTransferPayload): string 
 }
 
 export const ToolCallDisplay = memo(ToolCallDisplayComponent);
-
-function selectAnchoredTask(
-  workItems: readonly import('@neko-agent/types').AgentWorkItem[] | undefined,
-  workItemIds: readonly string[] | undefined,
-  toolCallId: string,
-) {
-  if (!workItems || !workItemIds || workItemIds.length === 0) {
-    return undefined;
-  }
-  const linkedIds = new Set(workItemIds);
-  const anchoredItem = workItems.find((item) => {
-    return isTaskWorkItem(item) && linkedIds.has(item.id) && item.parentToolCallId === toolCallId;
-  });
-  return anchoredItem && isTaskWorkItem(anchoredItem) ? anchoredItem.task : undefined;
-}

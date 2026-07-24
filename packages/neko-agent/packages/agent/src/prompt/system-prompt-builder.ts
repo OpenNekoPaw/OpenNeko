@@ -1,38 +1,30 @@
 /**
  * System Prompt Builder — Initialization-phase prompt construction from static sources
  *
- * Responsibility: Load AGENTS.md overlay content from disk, handle locale/mode
- * switching, and produce the base system prompt string. The base output is
- * typically passed to SystemPromptComposer.setBase(), while AGENTS.md is routed
- * through the environment-layer overlay.
- *
- * Lifecycle:
- *   Builder.build() → initial prompt string → Composer.setBase() → runtime sections
- *
- * NOT to be confused with SystemPromptComposer, which handles runtime section-based
- * composition with token budgets and reversible injection.
+ * Responsibility: load AGENTS.md environment content, select locale/mode, and
+ * produce the exact base system prompt supplied to the Pi runtime.
  *
  * Usage:
  * ```typescript
  * const builder = new SystemPromptBuilder({ locale: 'en' });
  * await builder.loadAgentsFile('/path/to/project', '/home/user/.neko');
- * const basePrompt = builder.build();
- * // Then: composer.setBase(basePrompt);
+ * const systemPrompt = builder.build();
  * ```
  */
 
+import { createHash } from 'node:crypto';
 import * as fs from 'fs';
 import { promises as fsp } from 'fs';
 import * as path from 'path';
 
 import type {
-  ISystemPromptBuilder,
   SystemPromptBuilderConfig,
   PromptExecutionMode,
   PromptLocale,
   AgentsSource,
   AgentsLoadResult,
 } from './system-prompt-builder-types';
+import type { PromptCompositionFragmentProjection } from './prompt-composition-projection';
 
 import { BUILTIN_PROMPTS } from './builtin-prompts';
 
@@ -53,7 +45,7 @@ const CONFIG_DIR = '.neko';
 /**
  * System Prompt Builder
  */
-export class SystemPromptBuilder implements ISystemPromptBuilder {
+export class SystemPromptBuilder {
   private _locale: PromptLocale;
   private _executionMode: PromptExecutionMode;
   private _customDefaultPrompt?: string;
@@ -149,43 +141,27 @@ export class SystemPromptBuilder implements ISystemPromptBuilder {
     return this._buildForExecutionMode(mode);
   }
 
-  buildWithSkill(skillPrompt: string): string {
-    const basePrompt = this.build();
-    return `${basePrompt}\n\n# Active Skill\n\n${skillPrompt}`;
-  }
-
-  buildWithSuffix(suffix: string): string {
-    const basePrompt = this.build();
-    return `${basePrompt}\n\n${suffix}`;
-  }
-
-  /**
-   * Base layer only — returns the plan prompt in plan mode, else the built-in
-   * (or custom) default prompt. AGENTS.md content is NOT merged in; callers
-   * wanting the overlay behaviour should additionally consume
-   * {@link buildAgentsOverlay}.
-   *
-   * Introduced in PR3b alongside the AGENTS.md overlay pattern. `build()` and
-   * `buildForExecutionMode()` share this same non-replacing base semantics so the
-   * base protocol stays visible even when the user supplies AGENTS.md.
-   */
-  buildBaseOnly(): string {
-    if (this._executionMode === 'plan') {
-      return this._getPlanPrompt();
+  projectCompositionForExecutionMode(
+    mode: PromptExecutionMode,
+  ): readonly PromptCompositionFragmentProjection[] {
+    const base = this._baseForExecutionMode(mode);
+    const fragments: PromptCompositionFragmentProjection[] = [
+      {
+        id: 'base',
+        source: 'base',
+        order: 0,
+        hash: hashPromptFragment(base),
+      },
+    ];
+    if (this._agentsContent !== null) {
+      fragments.push({
+        id: 'agents-md:override',
+        source: 'agents-md',
+        order: 1,
+        hash: hashPromptFragment(this._agentsContent),
+      });
     }
-    return this._getDefaultPrompt();
-  }
-
-  /**
-   * AGENTS.md overlay content — returns the currently loaded AGENTS.md
-   * string regardless of mode, or null when no file has been loaded.
-   *
-   * Intended to be routed into the session's L3 environment layer so that
-   * user-authored project/personal instructions layer on top of the base
-   * protocol instead of replacing it.
-   */
-  buildAgentsOverlay(): string | null {
-    return this._agentsContent;
+    return Object.freeze(fragments.map((fragment) => Object.freeze(fragment)));
   }
 
   // ---------------------------------------------------------------------------
@@ -215,6 +191,12 @@ export class SystemPromptBuilder implements ISystemPromptBuilder {
   }
 
   private _buildForExecutionMode(mode: PromptExecutionMode): string {
+    const base = this._baseForExecutionMode(mode);
+    if (this._agentsContent === null) return base;
+    return `${base}\n\n# Environment Instructions\n\n${this._agentsContent}`;
+  }
+
+  private _baseForExecutionMode(mode: PromptExecutionMode): string {
     if (mode === 'plan') {
       return this._getPlanPrompt();
     }
@@ -233,6 +215,10 @@ export class SystemPromptBuilder implements ISystemPromptBuilder {
       return null;
     }
   }
+}
+
+function hashPromptFragment(content: string): string {
+  return `sha256:${createHash('sha256').update(content).digest('hex')}`;
 }
 
 // =============================================================================

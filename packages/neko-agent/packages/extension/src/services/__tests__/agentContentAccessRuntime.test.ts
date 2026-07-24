@@ -181,7 +181,7 @@ describe('createExtensionAgentContentAccessRuntime', () => {
       contentDigest: 'sha256:asset-1',
       mediaKind: 'image',
       mimeType: 'image/png',
-      generation: { taskId: 'task-1' },
+      generation: { operationId: 'operation-asset-1' },
     });
     const getGeneratedAsset = vi.fn(() => ({
       type: 'generated-image' as const,

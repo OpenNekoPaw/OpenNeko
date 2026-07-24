@@ -203,6 +203,34 @@ describe('VSCodePiRuntimeManager credential projection', () => {
     });
   });
 
+  it('retains every configured detached-generation purpose and excludes unrelated bindings', () => {
+    const selection = (id: string, capability: string) => ({
+      provider: configuredProvider,
+      model: {
+        id,
+        name: id,
+        providerId: configuredProvider.id,
+        capabilities: [capability],
+        enabled: true,
+      },
+      providerSource: 'explicit-config' as const,
+    });
+    const input = {
+      purposeModels: {
+        'image.generate': selection('image-model', 'image.generate'),
+        'video.generate': selection('video-model', 'video.generate'),
+        'audio.generate': selection('audio-model', 'audio.generate'),
+        'video.understand': selection('video-understanding', 'video.understand'),
+      },
+    } as never;
+
+    const filtered = filterVSCodePiTurnPurposeModels(input, [{ name: 'SubmitGenerationJob' }]);
+    expect(filtered.purposeModels?.['image.generate']?.model.id).toBe('image-model');
+    expect(filtered.purposeModels?.['video.generate']?.model.id).toBe('video-model');
+    expect(filtered.purposeModels?.['audio.generate']?.model.id).toBe('audio-model');
+    expect(filtered.purposeModels).not.toHaveProperty('video.understand');
+  });
+
   it('freezes main and bounded understanding as peer purpose entries', async () => {
     const credentials = new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence());
     const models = createOpenNekoPiModels(credentials);

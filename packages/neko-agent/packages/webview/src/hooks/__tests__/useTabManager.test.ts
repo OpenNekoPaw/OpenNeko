@@ -10,7 +10,6 @@ const vscodeMocks = vi.hoisted(() => ({
   exitCharacterDialogueSession: vi.fn(),
   exitEmbodyCharacterSession: vi.fn(),
   deleteConversation: vi.fn(),
-  getTasks: vi.fn(),
 }));
 
 vi.mock('@/messages', () => ({
@@ -63,7 +62,6 @@ describe('useTabManager', () => {
     expect(result.current.activeTabId).toBe('tab-role');
     expect(onActivateCharacterRoleTab).toHaveBeenCalledWith(roleTab);
     expect(vscodeMocks.activateConversation).not.toHaveBeenCalled();
-    expect(vscodeMocks.getTasks).not.toHaveBeenCalled();
     expect(setActiveTab).toHaveBeenCalledWith('chat');
   });
 
@@ -124,42 +122,6 @@ describe('useTabManager', () => {
       },
     });
     expect(vscodeMocks.updateTabState).not.toHaveBeenCalled();
-  });
-
-  it('reloads task snapshots when switching ordinary tabs', () => {
-    const onConversationActivated = vi.fn((conversationId: string) => {
-      vscodeMocks.getTasks(conversationId);
-    });
-
-    const { result } = renderHook(() => {
-      const [openTabs, setOpenTabs] = useState<OpenTab[]>([
-        { id: 'tab-a', title: 'Chat A', conversationId: 'conv-a' },
-        { id: 'tab-b', title: 'Chat B', conversationId: 'conv-b' },
-      ]);
-      const [activeTabId, setActiveTabId] = useState<string | null>('tab-a');
-
-      return useTabManager({
-        openTabs,
-        setOpenTabs,
-        activeTabId,
-        setActiveTabId,
-        tabStateRevision: 0,
-        onTabStateRevisionAllocated: vi.fn(),
-        conversations: [
-          { id: 'conv-a', title: 'Chat A', messageCount: 1, updatedAt: 1 },
-          { id: 'conv-b', title: 'Chat B', messageCount: 1, updatedAt: 2 },
-        ],
-        setActiveTab: vi.fn(),
-        onConversationActivated,
-      });
-    });
-
-    act(() => {
-      result.current.handleSwitchTab('tab-b');
-    });
-
-    expect(onConversationActivated).toHaveBeenCalledWith('conv-b');
-    expect(vscodeMocks.getTasks).toHaveBeenCalledWith('conv-b');
   });
 
   it('requests a config snapshot only when opening a new tab', () => {

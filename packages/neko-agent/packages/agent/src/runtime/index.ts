@@ -3,21 +3,18 @@
  *
  * Canonical implementation owners live in the narrow runtime subdirectories
  * documented in README.md:
- * - session/: host-neutral session bootstrap, manager, pool, controller, and
- *   host-neutral product projection around the Pi conversation runtime.
- * - runner/: one configured session execution port, confirmation flow, cancel,
- *   history, and queue contracts.
- * - turn/: one user-message dispatch, provider/model selection, context and
- *   attachment assembly, runner configuration, stream processing, and
- *   assistant-message persistence.
+ * - session/: host-neutral session bootstrap, conversation/run ownership,
+ *   cancellation, queueing, and exact Tool Call execution identity.
+ * - projection/: versioned conversation projection store and operation buffer.
+ * - turn/: one user-message dispatch plus context, artifact, and multimodal
+ *   assembly around the Pi conversation runtime.
  * - capability/: Agent-side consumption of AgentCapabilityProvider
  *   contributions into Agent registries and bindings.
- * - stream/: event stream projection, background task observation, and stream
- *   state.
+ * - stream/: pure Markdown/composite render projection.
  *
  * Existing owner directories remain canonical for input/message
  * projection, context, memory, prompt, Skill lifecycle, permission, approval,
- * plan/task projection, and commands. This barrel preserves package imports; it
+ * plan projection, and commands. This barrel preserves package imports; it
  * must not become a governance or compatibility layer.
  */
 export {
@@ -83,6 +80,19 @@ export {
   type ConversationProjectionListener,
   type ConversationProjectionStore,
 } from './projection/conversation-projection-store';
+
+export {
+  ExecutionOwnershipRegistryError,
+  createExecutionOwnershipRegistry,
+  createToolCallExecution,
+  type ExecutionOwnerKind,
+  type ExecutionOwnershipAttachment,
+  type ExecutionOwnershipRegistry,
+  type ExecutionRef,
+  type OwnedExecution,
+  type ToolCallExecution,
+  type ToolCallExecutionIdentity,
+} from './session/execution-ownership';
 
 export {
   ConversationRunRegistryError,
@@ -236,7 +246,6 @@ export {
   prepareAgentMessageDispatch,
   prepareAgentMessageFileReferences,
   appendAmbientCanvasSystemPrompt,
-  summarizeAgentEventProgress,
   selectAgentTurnProvider,
   shouldPersistAgentAssistantStream,
   type AgentAmbientCanvasNode,
@@ -311,30 +320,8 @@ export {
   projectMessageForResourceDisplay,
   projectMessagesForResourceDisplay,
   projectResourceValue,
-  updateBackgroundTaskToolResultUrls,
-  type MessageResourceUpdateResult,
   type MessageResourceProjectionOptions,
 } from '../input/message-resource-projector';
-
-export {
-  applyAgentStreamEventToState,
-  createAgentStreamMessageId,
-  createAgentStreamProjectionState,
-  finalizeAgentStreamProjectionState,
-  projectAgentStreamEventToHostMessages,
-  projectAgentStreamEventToWebviewMessages,
-  type AgentStreamProjectionMessage,
-  type AgentStreamProjectionState,
-  type AgentStreamCompositeProjector,
-  type AgentStreamFinalizeOptions,
-  type AgentStreamMessageIdOptions,
-  type AgentStreamStateOptions,
-  type AgentStreamStateUpdate,
-  type AgentStreamWebviewMessage,
-  type CollectedToolCall,
-  type ProjectAgentStreamEventToHostMessagesInput,
-  type ProjectAgentStreamEventToWebviewMessagesInput,
-} from './stream/agent-stream-state';
 
 export type {
   BackfillSink,
@@ -347,63 +334,6 @@ export type {
   ResolvedPerceptualAsset,
 } from '../perception';
 export { createPerceptionPipeline, PerceptionPipeline } from '../perception';
-
-export {
-  applyToolResultBackfillToResult,
-  mergeToolResultAttachments,
-  mergeToolResultBackfillData,
-  mergeToolResultPerceptionCards,
-  type ApplyToolResultBackfillResult,
-  type BackfillableToolResult,
-} from './tool-result-backfill';
-
-export {
-  createAgentTurnTimelineAccumulator,
-  type AgentTurnTimelineAccumulator,
-  type AgentTurnTimelineAccumulatorUpdate,
-} from './stream/agent-turn-timeline-accumulator';
-
-export {
-  AgentEventStreamRuntimeProcessor,
-  type AgentEventStreamRuntimeBackgroundTasks,
-  type AgentEventStreamRuntimeMessage,
-  type ProcessAgentEventStreamRuntimeInput,
-} from './stream/agent-event-stream-runtime';
-
-export {
-  persistAgentStreamBackgroundTaskResultUrls,
-  projectAgentStreamBackgroundTaskProgress,
-  projectAgentStreamBackgroundTaskStart,
-  type AgentStreamBackgroundTaskProgressInput,
-  type AgentStreamBackgroundTaskProgressProjection,
-  type AgentStreamBackgroundTaskStartInput,
-  type AgentStreamBackgroundTaskStartProjection,
-  type PersistAgentStreamBackgroundTaskResultUrlsInput,
-} from './stream/agent-stream-background-task';
-
-export {
-  startAgentStreamBackgroundTaskObserver,
-  type AgentStreamBackgroundTaskDeliveryContext,
-  type AgentStreamBackgroundTaskIgnoredEvent,
-  type AgentStreamBackgroundTaskObservedProgress,
-  type AgentStreamBackgroundTaskProgressErrorEvent,
-  type AgentStreamBackgroundTaskProgressEvent,
-  type AgentStreamBackgroundTaskTerminalEvent,
-  type ObserveAgentStreamBackgroundTaskProgressInput,
-  type StartAgentStreamBackgroundTaskObserverInput,
-  type StartAgentStreamBackgroundTaskObserverResult,
-} from './stream/agent-stream-task-observer';
-
-export {
-  runAgentMediaTurn,
-  type AgentMediaTurnExecutionInput,
-  type AgentMediaTurnIgnoredTaskEvent,
-  type AgentMediaTurnProgressErrorEvent,
-  type AgentMediaTurnRuntimeMessage,
-  type AgentMediaTurnTaskEvent,
-  type RunAgentMediaTurnInput,
-  type RunAgentMediaTurnResult,
-} from './turn/media-turn-runtime';
 
 export {
   buildActiveConversationMessage,

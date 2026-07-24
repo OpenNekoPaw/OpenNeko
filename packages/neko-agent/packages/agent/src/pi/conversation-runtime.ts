@@ -172,15 +172,6 @@ export class PiConversationRuntime {
     this.agent.followUp(message);
   }
 
-  async observeTask(
-    identity: Pick<PiToolRunIdentity, 'turnId' | 'runId'>,
-    taskRef: string,
-    observation: unknown,
-  ): Promise<void> {
-    const active = this.requireActiveIdentity(identity);
-    await active.projector.taskObserved(taskRef, observation);
-  }
-
   async clearContext(): Promise<void> {
     this.assertReady();
     this.lease = this.options.authority.renewLease(this.lease);

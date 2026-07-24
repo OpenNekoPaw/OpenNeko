@@ -25,7 +25,7 @@ import type {
   SendMessageWebviewMessage,
   WebviewToExtensionMessage,
 } from '@neko-agent/types';
-import type { DocumentLocator, DocumentSourceRef, TaskRunScope } from '@neko/shared';
+import type { DocumentLocator, DocumentSourceRef } from '@neko/shared';
 import type { AgentContextType } from '@neko/shared';
 
 export type { AgentHostRuntimeAdapter, AgentHostRuntimeSubscription, VSCodeAPI };
@@ -113,6 +113,33 @@ function postConversationMessage<
  * Each method constructs and sends a properly typed message.
  */
 export const AgentHostMessages = {
+  attachDomainActivity: (attachmentId: string) => {
+    postWebviewMessage({ type: 'domainActivityAttach', key: { attachmentId } });
+  },
+
+  acknowledgeDomainActivity: (
+    attachmentId: string,
+    sequence: number,
+    projectionVersion: number,
+  ) => {
+    postWebviewMessage({
+      type: 'domainActivityAck',
+      key: { attachmentId },
+      sequence,
+      projectionVersion,
+    });
+  },
+
+  detachDomainActivity: (attachmentId: string) => {
+    postWebviewMessage({ type: 'domainActivityDetach', key: { attachmentId } });
+  },
+
+  commandDomainJob: (
+    request: Omit<import('@neko-agent/types').DomainJobCommandRequest, 'type'>,
+  ) => {
+    postWebviewMessage({ type: 'domainJobCommand', ...request });
+  },
+
   /**
    * Send a chat message to the AI assistant.
    * conversationId and model refs are explicit to avoid multi-tab leakage.
@@ -257,34 +284,9 @@ export const AgentHostMessages = {
     postWebviewMessage({ type: 'exitEmbodyCharacterSession', sessionId });
   },
 
-  /** Request the list of background tasks */
-  getTasks: (conversationId: string) => {
-    postConversationMessage({ type: 'getTasks', conversationId });
-  },
-
   /** Request current agent states snapshot */
   getAgentStates: () => {
     postWebviewMessage({ type: 'getAgentStates' });
-  },
-
-  /**
-   * Cancel a running task
-   * @param taskId - The task ID to cancel
-   */
-  cancelTask: (taskScope: TaskRunScope) => {
-    postWebviewMessage({ type: 'cancelTask', taskScope });
-  },
-
-  /**
-   * View a task's result
-   * @param taskId - The task ID
-   */
-  viewTaskResult: (taskScope: TaskRunScope, resultRef?: string) => {
-    postWebviewMessage({
-      type: 'viewTaskResult',
-      taskScope,
-      ...(resultRef ? { resultRef } : {}),
-    });
   },
 
   /** Request full configuration from extension */
@@ -496,11 +498,6 @@ export const AgentHostMessages = {
     payload: Omit<RequestCanvasAuthoringHandoffWebviewMessage, 'type'>,
   ) => {
     postConversationMessage({ type: 'requestCanvasAuthoringHandoff', ...payload });
-  },
-
-  /** Retry a failed background task */
-  retryTask: (taskScope: TaskRunScope) => {
-    postWebviewMessage({ type: 'retryTask', taskScope });
   },
 
   /** Download a Mermaid diagram as SVG file */

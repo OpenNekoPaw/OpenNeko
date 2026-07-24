@@ -3,6 +3,7 @@ import type {
   AgentFlatPurposeModelRefs,
   AgentFileReference,
   AgentMediaModelSelections,
+  AgentPhaseMessage,
   MediaUnderstandingModelSelections,
   AgentModelSlots,
   AgentQueuedMessageSource,
@@ -21,12 +22,11 @@ import type {
   ProjectMentionSource,
   RuntimeMediaModelSelections,
   SessionMode,
-  ThinkingMessage,
 } from '@neko-agent/types';
 import {
+  buildAgentPhaseMessage,
   buildErrorMessage,
   buildGlobalErrorMessage,
-  buildThinkingMessage,
 } from '@neko-agent/types';
 import type {
   AgentContextPayload,
@@ -46,7 +46,6 @@ import {
   isThreeReferenceContextData,
   projectThreeReferenceMediaControls,
 } from '@neko/shared';
-import type { AgentEvent } from '../../session/types';
 import { DEFAULT_MENTION_EXCLUDE_GLOB } from '../../input/mention-excludes';
 import {
   extractFileReferencePaths,
@@ -249,7 +248,7 @@ export interface PreparedAgentMessageDispatch {
   readonly route: AgentMessageDispatchRoute;
 }
 
-export type AgentMessageTurnRuntimeMessage = ErrorMessage | GlobalErrorMessage | ThinkingMessage;
+export type AgentMessageTurnRuntimeMessage = ErrorMessage | GlobalErrorMessage | AgentPhaseMessage;
 
 export interface AgentMessageTurnMediaExecutionInput {
   readonly conversationId: string;
@@ -871,6 +870,7 @@ export async function prepareAgentMessageDispatch(
     hasChatModel: request.chatModel !== undefined,
     hasMediaModel: request.mediaModel !== undefined,
     mediaModelCategories: request.mediaModels ? Object.keys(request.mediaModels) : [],
+    purposeModelPurposes: request.purposeModels ? Object.keys(request.purposeModels) : [],
     promptId: request.promptId,
     hasExecutionOverrides: request.executionOverrides !== undefined,
     hasAgentModels: request.agentModels !== undefined,
@@ -887,6 +887,7 @@ export async function prepareAgentMessageDispatch(
     chatModel: request.chatModel,
     mediaModel: request.mediaModel,
     mediaModels: request.mediaModels,
+    purposeModelPurposes: request.purposeModels ? Object.keys(request.purposeModels) : [],
     promptId: request.promptId,
     executionOverrides: sanitizeForDebugLog(request.executionOverrides),
     agentModels: request.agentModels,
@@ -1032,7 +1033,13 @@ export async function runAgentMessageTurnRuntime(
   });
 
   input.persistUserMessage(conversationId, prepared.userMessage);
-  input.postMessage(buildThinkingMessage(conversationId));
+  input.postMessage(
+    buildAgentPhaseMessage({
+      conversationId,
+      phase: 'thinking',
+      timestamp: input.now?.() ?? Date.now(),
+    }),
+  );
 
   if (prepared.route.kind === 'media' && input.executeMediaTurn) {
     const threeReferenceControls = projectAgentThreeReferenceMediaControls(
@@ -1949,30 +1956,6 @@ export function withAgentRuntimeLocaleMetadata(
       locale: normalizeAgentRuntimePromptLocale(locale),
     },
   };
-}
-
-export function summarizeAgentEventProgress(event: AgentEvent): string | undefined {
-  switch (event.type) {
-    case 'iteration': {
-      if (!event.iteration) {
-        return '20% Running iteration';
-      }
-      const percent = Math.min(90, Math.max(10, event.iteration.current * 10));
-      return `${percent}% Iteration ${event.iteration.current}/${event.iteration.max}`;
-    }
-    case 'tool_call':
-      return event.toolCall ? `35% Calling ${event.toolCall.name}` : '35% Calling tool';
-    case 'tool_progress':
-      return event.toolProgress
-        ? `${Math.min(95, Math.max(0, event.toolProgress.percent))}% ${event.toolProgress.stage}`
-        : '50% Tool running';
-    case 'tool_result':
-      return '75% Tool result received';
-    case 'done':
-      return '95% Finalizing';
-    default:
-      return undefined;
-  }
 }
 
 function summarizeMessageAttachments(

@@ -57,12 +57,19 @@ export function ConversationTabRuntimeView({
     [isThinking, messages, projectionSnapshot.projection, streamingMessageId, workItems],
   );
   streamingMessageIdRef.current = renderState.streamingMessageId;
+  const attachmentSnapshot = runtime.projectionAttachment?.getSnapshot();
+  const attachmentKey = attachmentSnapshot?.key;
 
   return (
     <AgentMarkdownSessionRegistryProvider registry={runtime.markdownSessions}>
       <div
         data-agent-tab-runtime={tab.id}
         data-agent-conversation={tab.conversationId}
+        data-agent-projection-attachment={attachmentKey?.attachmentId}
+        data-agent-projection-endpoint={attachmentKey?.endpointEpoch}
+        data-agent-projection-phase={attachmentSnapshot?.phase ?? 'detached'}
+        data-agent-projection-sequence={attachmentSnapshot?.lastSequence ?? -1}
+        data-agent-projection-version={attachmentSnapshot?.projectionVersion ?? -1}
         hidden={!visible}
         aria-hidden={!visible}
         className={visible ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}

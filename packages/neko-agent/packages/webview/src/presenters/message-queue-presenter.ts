@@ -69,7 +69,6 @@ export function projectReleasedQueuedMessageIntoTranscript(
   );
 
   switch (input.item.source) {
-    case 'task-result-continuation':
     case 'subagent-result-continuation':
     case 'system-continuation':
     case 'user':

@@ -29,11 +29,6 @@ export interface MessageResourceProjectionOptions {
   resolveLocalMediaPath?: (path: string) => string | undefined;
 }
 
-export interface MessageResourceUpdateResult {
-  messages: Message[];
-  updated: boolean;
-}
-
 export function isLocalMediaFilePath(value: string): boolean {
   if (!isAbsolutePath(value)) return false;
 
@@ -131,49 +126,6 @@ export function projectResourceValue(
   options: MessageResourceProjectionOptions = {},
 ): unknown {
   return projectResourceValueInternal(value, options, new WeakSet<object>());
-}
-
-export function updateBackgroundTaskToolResultUrls(
-  messages: readonly Message[],
-  taskId: string,
-  urls: readonly string[],
-): MessageResourceUpdateResult {
-  let updated = false;
-
-  const nextMessages = messages.map((message) => {
-    if (!message.contentBlocks) return message;
-
-    const projectedMessage = { ...message };
-
-    if (message.contentBlocks) {
-      projectedMessage.contentBlocks = message.contentBlocks.map((block) => {
-        if (block.type !== 'tool_call' || !block.toolCall) {
-          return block;
-        }
-
-        const result = block.toolCall.result;
-        if (!result || !isMatchingBackgroundTaskData(result.data, taskId)) {
-          return block;
-        }
-
-        updated = true;
-        return {
-          ...block,
-          toolCall: {
-            ...block.toolCall,
-            result: {
-              ...result,
-              data: completeBackgroundTaskData(result.data, urls),
-            },
-          },
-        };
-      });
-    }
-
-    return projectedMessage;
-  });
-
-  return { messages: nextMessages, updated };
 }
 
 function projectResourceValueInternal(
@@ -292,25 +244,6 @@ function resolveLocalMediaPath(
 
 function isAbsolutePath(value: string): boolean {
   return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value);
-}
-
-function isMatchingBackgroundTaskData(
-  data: unknown,
-  taskId: string,
-): data is Record<string, unknown> {
-  return isRecord(data) && data.taskId === taskId && data.backgroundMode === true;
-}
-
-function completeBackgroundTaskData(
-  data: Record<string, unknown>,
-  urls: readonly string[],
-): Record<string, unknown> {
-  return {
-    ...data,
-    status: 'completed',
-    url: urls[0],
-    urls,
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

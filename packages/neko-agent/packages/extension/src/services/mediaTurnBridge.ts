@@ -1,230 +1,118 @@
-/**
- * Webview bridge for direct media turns.
- *
- * Platform owns media routing/execution. This bridge only connects that runtime
- * to VSCode Webview messages and the VSCode-only delivery host.
- */
+import { randomUUID } from 'node:crypto';
+import type * as vscode from 'vscode';
 
-import * as vscode from 'vscode';
-import type { MediaTaskView, Platform } from '@neko/platform';
-import {
-  createMediaTaskView,
-  isTerminalMediaTaskStatus,
-  readMediaTaskResultDeliveryPolicy,
-  runMediaTurn,
-  toMediaTaskResultObservationTask,
-} from '@neko/platform';
-import type { MediaTaskProgressDeliveryPlan } from '@neko/platform/media/media-task-progress-plan';
-import type { MediaModelCategory, ModelRef } from '@neko-agent/types';
-import { runAgentMediaTurn } from '@neko/agent/runtime';
-import type { AgentFileReference } from '@neko-agent/types';
+import type {
+  AgentTurnTimelineAssistantTextItem,
+  MediaModelCategory,
+  ModelRef,
+} from '@neko-agent/types';
+import type { ConversationProjectionStore } from '@neko/agent/runtime';
+import type {
+  GenerationJobPort,
+  GenerationJobSnapshot,
+  SubmitGenerationJobInput,
+} from '@neko/generation';
 import {
   createGeneratedAssetsWorkspaceDeliveryBatch,
-  type ThreeReferenceMediaControls,
-  type AgentTaskResultDeliveryPolicy,
   type GeneratedAsset,
-  type Task,
+  type ResourceRef,
+  type ThreeReferenceMediaControls,
 } from '@neko/shared';
+
+import type { AgentFileReference } from '@neko-agent/types';
 import { getLogger } from '../base';
-import { MediaTaskDeliveryHost } from './mediaTaskDeliveryHost';
-import type { AgentWorkItemProjectionSource } from './workItemProjectionSource';
-import type { AgentLocalResourceAccess } from './localResourceAccess';
-import type { ConversationBridge } from '../chat/conversationBridge';
+import { MediaGenerationDeliveryHost } from './mediaGenerationDeliveryHost';
 import type { WorkspaceBoardProjectionHost } from './workspaceBoardProjectionHost';
 
 const logger = getLogger('MediaTurnBridge');
 
 export interface MediaTurnBridgeDeps {
-  platform?: Platform;
-  mediaDeliveryHost: MediaTaskDeliveryHost;
-  workItemProjections?: AgentWorkItemProjectionSource;
-  localResourceAccess?: AgentLocalResourceAccess;
-  conversations?: ConversationBridge;
-  workspaceBoardProjection?: Pick<WorkspaceBoardProjectionHost, 'deliverBatch'>;
-  taskResultObservations?: {
-    handleTerminalTask(
-      task: Task,
-      options: {
-        readonly source: 'media-task';
-        readonly deliveryPolicy?: AgentTaskResultDeliveryPolicy;
-      },
-    ): Promise<void>;
-  };
-  generateMessageId?: () => string;
-  now?: () => number;
+  readonly generationJobs?: GenerationJobPort;
+  readonly resolveGenerationResult?: (
+    ref: ResourceRef,
+  ) => ResolvedGenerationResource | Promise<ResolvedGenerationResource>;
+  readonly mediaDeliveryHost: Pick<MediaGenerationDeliveryHost, 'toWebviewMediaUri'>;
+  readonly getConversationProjection?: (conversationId: string) => ConversationProjectionStore;
+  readonly workspaceBoardProjection?: Pick<WorkspaceBoardProjectionHost, 'deliverBatch'>;
+  readonly now?: () => number;
+}
+
+export interface ResolvedGenerationResource {
+  readonly path: string;
+  readonly asset: GeneratedAsset;
 }
 
 export interface ExecuteMediaTurnForWebviewInput {
-  webview: vscode.Webview;
-  conversationId: string;
-  prompt: string;
-  mediaModel: ModelRef<MediaModelCategory>;
-  threeReferenceControls?: ThreeReferenceMediaControls;
-  selectedFileReferences?: readonly AgentFileReference[];
-}
-
-interface MediaTurnTaskDelivery {
-  readonly view: MediaTaskView;
-  readonly deliveryPlan?: MediaTaskProgressDeliveryPlan;
+  readonly webview: vscode.Webview;
+  readonly conversationId: string;
+  readonly prompt: string;
+  readonly mediaModel: ModelRef<MediaModelCategory>;
+  readonly threeReferenceControls?: ThreeReferenceMediaControls;
+  readonly selectedFileReferences?: readonly AgentFileReference[];
 }
 
 export class MediaTurnBridge {
   constructor(private readonly deps: MediaTurnBridgeDeps) {}
 
   async execute(input: ExecuteMediaTurnForWebviewInput): Promise<void> {
-    const media = this.deps.platform?.media;
-    await runAgentMediaTurn({
-      conversationId: input.conversationId,
-      prompt: input.prompt,
-      mediaModel: input.mediaModel,
-      now: this.deps.now,
-      postMessage: (message) => {
-        this.deps.workItemProjections?.acceptWebviewMessage(message);
-        void input.webview.postMessage(message);
-      },
-      persistErrorMessage: (message) => {
-        this.deps.conversations?.addMessageToConversation(input.conversationId, message);
-      },
-      buildErrorMessageInput: (message) => ({
-        id: this.deps.generateMessageId?.() ?? `media-error-${Date.now()}`,
-        timestamp: this.deps.now?.() ?? Date.now(),
-        message,
-      }),
-      ...(media
-        ? {
-            executeMediaTurn: (runtimeInput) =>
-              runMediaTurn({
-                media,
-                prompt: runtimeInput.prompt,
-                mediaModel: runtimeInput.mediaModel,
-                conversationId: runtimeInput.conversationId,
-                ...(input.threeReferenceControls
-                  ? { threeReferenceControls: input.threeReferenceControls }
-                  : {}),
-                createTaskView: (task) => this.createTaskDelivery(input.webview, task),
-                createRecoveryTaskView: (task): MediaTurnTaskDelivery => ({
-                  view: createMediaTaskView(task),
-                }),
-                onTaskCreated: ({ conversationId, task, mediaTask }) =>
-                  runtimeInput.onTaskCreated({
-                    conversationId,
-                    task: task.view,
-                    sourceTask: mediaTask,
-                  }),
-                onTaskProgress: async ({ conversationId, task, mediaTask }) => {
-                  runtimeInput.onTaskProgress({
-                    conversationId,
-                    task: task.view,
-                    sourceTask: mediaTask,
-                  });
-                  if (isTerminalMediaTaskStatus(mediaTask.status)) {
-                    await this.recordTerminalMediaTaskObservation({
-                      conversationId,
-                      task: task.view,
-                      ...(task.deliveryPlan ? { deliveryPlan: task.deliveryPlan } : {}),
-                      mediaTask,
-                    });
-                  }
-                },
-                onIgnoredConversationTask: ({ taskId, conversationId, mediaTask }) => {
-                  runtimeInput.onIgnoredConversationTask?.({
-                    taskId,
-                    conversationId,
-                    sourceTask: mediaTask,
-                  });
-                },
-                onAlreadyTerminalTask: ({ taskId, conversationId, mediaTask }) => {
-                  runtimeInput.onAlreadyTerminalTask?.({
-                    taskId,
-                    conversationId,
-                    sourceTask: mediaTask,
-                  });
-                },
-                onProgressDeliveryError: ({
-                  taskId,
-                  conversationId,
-                  mediaTask,
-                  error,
-                  recoveryTask,
-                }) => {
-                  runtimeInput.onProgressDeliveryError?.({
-                    taskId,
-                    conversationId,
-                    sourceTask: mediaTask,
-                    error,
-                    ...(recoveryTask ? { recoveryTask: recoveryTask.view } : {}),
-                  });
-                },
-              }),
-          }
-        : {}),
-      onIgnoredConversationTask: ({ taskId }) => {
-        logger.warn('Ignoring media task progress for a different conversation', {
-          taskId,
-          conversationId: input.conversationId,
-        });
-      },
-      onAlreadyTerminalTask: ({ taskId, sourceTask }) => {
-        logger.debug(`Media task ${taskId} already in terminal state`, {
-          sourceTask,
-        });
-      },
-      onProgressDeliveryError: ({ taskId, error }) => {
-        logger.warn('Failed to deliver media task progress', { taskId, error });
-      },
-      onExecutionError: (error) => {
-        logger.error('Media generation error:', error);
-      },
-    });
-  }
-
-  private async recordTerminalMediaTaskObservation(input: {
-    readonly conversationId: string;
-    readonly task: MediaTaskView;
-    readonly deliveryPlan?: MediaTaskProgressDeliveryPlan;
-    readonly mediaTask: Parameters<MediaTaskDeliveryHost['createTaskView']>[1];
-  }): Promise<void> {
-    if (!this.deps.taskResultObservations) {
-      return;
+    const jobs = this.deps.generationJobs;
+    const resolveGenerationResult = this.deps.resolveGenerationResult;
+    const projection = this.deps.getConversationProjection?.(input.conversationId);
+    if (!jobs || !resolveGenerationResult || !projection) {
+      throw new Error(
+        'Direct media generation requires Generation Job, result resolver, and Timeline projection owners.',
+      );
     }
-    const deliveryPolicy = readMediaTaskResultDeliveryPolicy(input.mediaTask.request.metadata);
-    await this.deps.taskResultObservations.handleTerminalTask(
-      toMediaTaskResultObservationTask({
+
+    const operationId = randomUUID();
+    const initial = await jobs.submitGeneration(
+      createGenerationJobRequest(input, {
+        operationId,
+        source: 'direct-media-webview',
         conversationId: input.conversationId,
-        taskId: input.task.id,
-        progress: input.task.progress,
-        mediaTask: input.mediaTask,
-        ...(input.deliveryPlan ? { deliveryPlan: input.deliveryPlan } : {}),
-        ...(input.task.result?.assets ? { assets: input.task.result.assets } : {}),
-        ...(input.task.result?.urls ? { resultUrls: input.task.result.urls } : {}),
-        ...(input.task.error?.message ? { error: input.task.error.message } : {}),
       }),
-      {
-        source: 'media-task',
-        ...(deliveryPolicy ? { deliveryPolicy } : {}),
-      },
     );
-  }
-
-  private async createTaskDelivery(
-    webview: vscode.Webview,
-    task: Parameters<MediaTaskDeliveryHost['createTaskView']>[1],
-  ): Promise<MediaTurnTaskDelivery> {
-    if (
-      isTerminalMediaTaskStatus(task.status) &&
-      typeof this.deps.mediaDeliveryHost.createTaskViewDelivery === 'function'
-    ) {
-      const delivery = await this.deps.mediaDeliveryHost.createTaskViewDelivery(webview, task);
-      await this.deliverWorkspaceBatch(delivery.deliveryPlan.generatedAssets);
-      return {
-        view: delivery.view,
-        deliveryPlan: delivery.deliveryPlan,
-      };
+    if (!isTerminalGeneration(initial)) {
+      projectMediaJobProgress(projection, input.mediaModel.category, initial);
     }
-
-    return {
-      view: await this.deps.mediaDeliveryHost.createTaskView(webview, task),
-    };
+    const terminal = await waitForTerminalGeneration(jobs, initial, (snapshot) => {
+      projectMediaJobProgress(projection, input.mediaModel.category, snapshot);
+    });
+    if (terminal.phase !== 'succeeded') {
+      projectFailedMediaResult(projection, input.mediaModel.category, terminal);
+      throw new Error(
+        terminal.failure?.message ??
+          `Generation Job ${terminal.ref.jobId} ended in phase ${terminal.phase}.`,
+      );
+    }
+    const resultRefs = terminal.resultRefs ?? [];
+    if (resultRefs.length === 0) {
+      throw new Error(
+        `Generation Job ${terminal.ref.jobId} completed without stable ResourceRef results.`,
+      );
+    }
+    const resolved = await Promise.all(
+      resultRefs.map((resourceRef) => resolveGenerationResult(resourceRef)),
+    );
+    const resultUrls = resolved.map(({ path }) => {
+      const uri = this.deps.mediaDeliveryHost.toWebviewMediaUri(input.webview, path);
+      if (!uri) {
+        throw new Error(
+          `Generation Job ${terminal.ref.jobId} result cannot be projected into the Webview.`,
+        );
+      }
+      return uri;
+    });
+    await this.deliverWorkspaceBatch(resolved.map(({ asset }) => asset));
+    projectTerminalMediaResult(projection, {
+      conversationId: input.conversationId,
+      operationId: terminal.ref.jobId,
+      category: input.mediaModel.category,
+      resultUrls,
+      itemRevision: terminal.revision,
+      createdAt: terminal.createdAt,
+      timestamp: this.deps.now?.() ?? Date.now(),
+    });
   }
 
   private async deliverWorkspaceBatch(assets: readonly GeneratedAsset[]): Promise<void> {
@@ -240,4 +128,217 @@ export class MediaTurnBridge {
       }
     }
   }
+}
+
+function createGenerationJobRequest(
+  input: ExecuteMediaTurnForWebviewInput,
+  metadata: Record<string, unknown>,
+): SubmitGenerationJobInput {
+  const binding = {
+    providerId: input.mediaModel.providerId,
+    modelId: input.mediaModel.modelId,
+  };
+  const request = {
+    prompt: input.prompt,
+    ...binding,
+    metadata,
+  };
+  switch (input.mediaModel.category) {
+    case 'image':
+      return {
+        ...binding,
+        lifecycleMode: 'linked',
+        generationType: 'text-to-image',
+        request: {
+          ...request,
+          ...(input.threeReferenceControls?.controlImage
+            ? {
+                controlImageRef: input.threeReferenceControls.controlImage.imageRef,
+                controlMode: input.threeReferenceControls.controlImage.mode,
+              }
+            : {}),
+          ...(input.threeReferenceControls?.appearanceReferences.length
+            ? {
+                ipAdapterRefs: input.threeReferenceControls.appearanceReferences.map(
+                  (reference) => ({
+                    imageRef: reference.imageRef,
+                    mode: 'subject' as const,
+                  }),
+                ),
+              }
+            : {}),
+          ...(input.threeReferenceControls?.camera
+            ? { cameraReference: input.threeReferenceControls.camera }
+            : {}),
+          ...(input.threeReferenceControls?.panorama
+            ? { panoramaReference: input.threeReferenceControls.panorama }
+            : {}),
+        },
+      };
+    case 'video':
+      assertNoThreeReferenceControls(input);
+      return { ...binding, lifecycleMode: 'linked', generationType: 'text-to-video', request };
+    case 'audio':
+      assertNoThreeReferenceControls(input);
+      return { ...binding, lifecycleMode: 'linked', generationType: 'text-to-audio', request };
+  }
+}
+
+async function waitForTerminalGeneration(
+  jobs: GenerationJobPort,
+  initial: GenerationJobSnapshot,
+  onProgress: (snapshot: GenerationJobSnapshot) => void,
+): Promise<GenerationJobSnapshot> {
+  if (isTerminalGeneration(initial)) return initial;
+  for await (const snapshot of jobs.observeGeneration(initial.ref, initial.revision)) {
+    if (isTerminalGeneration(snapshot)) return snapshot;
+    onProgress(snapshot);
+  }
+  throw new Error(
+    `Generation Job ${initial.ref.jobId} observation ended before a terminal snapshot.`,
+  );
+}
+
+function isTerminalGeneration(snapshot: GenerationJobSnapshot): boolean {
+  return (
+    snapshot.phase === 'succeeded' ||
+    snapshot.phase === 'failed' ||
+    snapshot.phase === 'cancelled' ||
+    snapshot.phase === 'outcome-unknown'
+  );
+}
+
+function assertNoThreeReferenceControls(input: ExecuteMediaTurnForWebviewInput): void {
+  if (input.threeReferenceControls) {
+    throw new Error(
+      `3D reference media controls are not supported for ${input.mediaModel.category} generation.`,
+    );
+  }
+}
+
+function projectMediaJobProgress(
+  projection: ConversationProjectionStore,
+  category: MediaModelCategory,
+  snapshot: GenerationJobSnapshot,
+): void {
+  const label = mediaLabel(category);
+  const item = createMediaTimelineItem({
+    conversationId: projection.conversationId,
+    operationId: snapshot.ref.jobId,
+    itemRevision: snapshot.revision,
+    status: 'streaming',
+    content: `${label} ${snapshot.progress.percent}%`,
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.updatedAt,
+  });
+  projection.apply({
+    type: 'agentTurnTimelineUpdate',
+    conversationId: projection.conversationId,
+    turnId: item.turnId,
+    runId: item.runId,
+    messageId: item.messageId,
+    operations: [{ operation: 'snapshot', item }],
+  });
+}
+
+function projectFailedMediaResult(
+  projection: ConversationProjectionStore,
+  category: MediaModelCategory,
+  snapshot: GenerationJobSnapshot,
+): void {
+  const item = createMediaTimelineItem({
+    conversationId: projection.conversationId,
+    operationId: snapshot.ref.jobId,
+    itemRevision: snapshot.revision,
+    status: 'complete',
+    content:
+      snapshot.failure?.message ?? `${mediaLabel(category)} ended in phase ${snapshot.phase}.`,
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.updatedAt,
+  });
+  projection.apply({
+    type: 'agentTurnTimelineUpdate',
+    conversationId: projection.conversationId,
+    turnId: item.turnId,
+    runId: item.runId,
+    messageId: item.messageId,
+    operations: [{ operation: 'snapshot', item }],
+    completion: { status: 'failed', completedAt: snapshot.updatedAt },
+  });
+}
+
+function projectTerminalMediaResult(
+  projection: ConversationProjectionStore,
+  input: {
+    readonly conversationId: string;
+    readonly operationId: string;
+    readonly category: MediaModelCategory;
+    readonly resultUrls: readonly string[];
+    readonly itemRevision: number;
+    readonly createdAt: number;
+    readonly timestamp: number;
+  },
+): void {
+  if (input.resultUrls.length === 0) {
+    throw new Error(`Media generation ${input.operationId} produced no renderable resources.`);
+  }
+  const label = mediaLabel(input.category);
+  const item = createMediaTimelineItem({
+    conversationId: input.conversationId,
+    operationId: input.operationId,
+    itemRevision: input.itemRevision,
+    status: 'complete',
+    content: input.resultUrls.map((url) => `[${label}](${url})`).join('\n\n'),
+    createdAt: input.createdAt,
+    updatedAt: input.timestamp,
+  });
+  projection.apply({
+    type: 'agentTurnTimelineUpdate',
+    conversationId: input.conversationId,
+    turnId: item.turnId,
+    runId: item.runId,
+    messageId: item.messageId,
+    operations: [{ operation: 'snapshot', item }],
+    completion: { status: 'completed', completedAt: input.timestamp },
+  });
+}
+
+function createMediaTimelineItem(input: {
+  readonly conversationId: string;
+  readonly operationId: string;
+  readonly itemRevision: number;
+  readonly status: AgentTurnTimelineAssistantTextItem['status'];
+  readonly content: string;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}): AgentTurnTimelineAssistantTextItem {
+  const turnId = `direct-media:${input.operationId}`;
+  const runId = `${turnId}:run`;
+  const messageId = `${turnId}:message`;
+  return {
+    kind: 'assistant_text',
+    conversationId: input.conversationId,
+    turnId,
+    runId,
+    messageId,
+    itemId: `${messageId}:assistant-text`,
+    sequence: 1,
+    itemRevision: input.itemRevision,
+    status: input.status,
+    createdAt: input.createdAt,
+    updatedAt: input.updatedAt,
+    payload: {
+      content: input.content,
+      format: 'markdown',
+      sourceGeneration: input.itemRevision,
+    },
+  };
+}
+
+function mediaLabel(category: MediaModelCategory): string {
+  return category === 'image'
+    ? 'Generated image'
+    : category === 'video'
+      ? 'Generated video'
+      : 'Generated audio';
 }

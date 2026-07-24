@@ -5,7 +5,7 @@ import type { PiProductEventSink } from '@neko/agent/pi';
 
 import type { IAgentManager } from '../../ai/agentManager';
 import { AgentTurnBridge, type ExecuteAgentTurnForWebviewInput } from './agentTurnBridge';
-import type { AgentStreamProcessor, StreamProcessingResult } from './agentStreamProcessor';
+import type { StreamProcessingResult } from './piAgentStreamProcessor';
 
 vi.mock('vscode', () => ({}));
 
@@ -67,7 +67,7 @@ describe('AgentTurnBridge Pi canonical path', () => {
     conversationId: string;
     content: string;
     createdAt: number;
-    source: 'composer' | 'task-result-continuation';
+    source: 'composer' | 'system-continuation' | 'subagent-result-continuation';
   }> = [];
   const executePiTurn = vi.fn();
   const legacyGetOrCreate = vi.fn(() => {
@@ -112,7 +112,6 @@ describe('AgentTurnBridge Pi canonical path', () => {
       }),
     );
     expect(createPiStream).toHaveBeenCalledWith(
-      expect.objectContaining({ postMessage }),
       'conversation-1',
       'message-1',
       expect.any(Function),
@@ -329,7 +328,7 @@ describe('AgentTurnBridge Pi canonical path', () => {
         dequeuePendingMessage: vi.fn(() => pendingItems.shift() ?? null),
       } as unknown as IAgentManager,
       getSystemPrompt: () => 'system prompt',
-      streamProcessor: { createPiStream } as unknown as AgentStreamProcessor,
+      createPiStream,
       terminalArtifactDelivery: { deliverCreatorVisibleArtifacts },
       onPhaseChange: vi.fn(),
       generateMessageId: () => 'message-1',

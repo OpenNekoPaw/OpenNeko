@@ -10,7 +10,7 @@ import { WorkspaceBoardProjectionHost } from './workspaceBoardProjectionHost';
 vi.mock('vscode', async () => await import('../__mocks__/vscode'));
 
 describe('WorkspaceBoardProjectionHost', () => {
-  it('maps a terminal Markdown artifact batch with its original run/task identities', async () => {
+  it('maps a terminal Markdown artifact batch with its original run identity', async () => {
     const project = vi.fn(async (request) => ({
       version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
       deliveryId: request.process.deliveryId,
@@ -30,7 +30,6 @@ describe('WorkspaceBoardProjectionHost', () => {
     await host.deliverCreatorVisibleArtifacts({
       deliveryId: 'agent-turn:turn-1',
       createdAt: '2026-07-18T00:00:00.000Z',
-      taskId: 'task-1',
       runId: 'run-1',
       artifacts: [
         {
@@ -49,13 +48,12 @@ describe('WorkspaceBoardProjectionHost', () => {
       expect.objectContaining({
         process: expect.objectContaining({
           deliveryId: 'agent-turn:turn-1',
-          taskId: 'task-1',
           runId: 'run-1',
         }),
         artifacts: [
           expect.objectContaining({
             kind: 'markdown',
-            provenance: expect.objectContaining({ taskId: 'task-1', runId: 'run-1' }),
+            provenance: expect.objectContaining({ runId: 'run-1' }),
           }),
         ],
       }),
@@ -87,7 +85,7 @@ describe('WorkspaceBoardProjectionHost', () => {
         target: { workspaceId: 'workspace-1', workspaceUri: 'file:///workspace/project/' },
         process: expect.objectContaining({
           sourceHost: 'vscode',
-          taskId: 'task-1',
+          operationId: 'operation-generated-1',
           runId: 'run-1',
         }),
         artifacts: [
@@ -211,7 +209,7 @@ function generatedImage(): GeneratedImage {
     contentDigest: 'sha256:generated-1',
     mediaKind: 'image',
     mimeType: 'image/png',
-    generation: { taskId: 'task-1', runId: 'run-1' },
+    generation: { operationId: 'operation-generated-1', runId: 'run-1' },
   });
   return {
     id: 'generated-1',
@@ -233,6 +231,6 @@ function generatedRefForCandidate() {
     contentDigest: 'sha256:image-1',
     mediaKind: 'image',
     mimeType: 'image/png',
-    generation: { taskId: 'task-image-1' },
+    generation: { operationId: 'operation-image-1' },
   }).resourceRef;
 }

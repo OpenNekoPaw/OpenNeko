@@ -71,12 +71,10 @@ export interface ChatStateContext {
   streamingMessageIdRef: MutableRefObject<string | null>;
 }
 
-/** Conversation refs: current ID + per-conversation message/streaming maps */
+/** Active conversation identity. Render snapshots are owned by the coordinator. */
 export interface ConversationRefContext {
   activeConversationId: string | null;
   activeConversationIdRef: MutableRefObject<string | null>;
-  conversationMessagesRef: MutableRefObject<Map<string, Message[]>>;
-  conversationStreamingRef: MutableRefObject<Map<string, StreamingState>>;
 }
 
 /** Tab management: open tabs, active tab selection */
@@ -154,7 +152,7 @@ export interface HelperContext {
   /** Required canonical message/item-scoped normalized Markdown session owner. */
   markdownSessionRegistry?: AgentMarkdownSessionRegistry;
   /** Canonical Webview-local owner for conversation render snapshots and activation. */
-  conversationRenderCoordinator?: ConversationRenderCoordinator;
+  conversationRenderCoordinator: ConversationRenderCoordinator;
   disposeConversationRendering?: (
     conversationId: string,
     reason: 'conversation-delete' | 'confirmed-empty-conversation',
@@ -240,8 +238,8 @@ export type MessageHandler<T extends WebviewMessageType = WebviewMessageType> = 
 /**
  * Type-safe message handler that receives a narrowed message type.
  *
- * Usage: `const handler: TypedMessageHandler<'streamText'> = (message, ctx) => { ... }`
- * The `message` parameter is automatically narrowed to `StreamTextMessage`.
+ * Usage: `const handler: TypedMessageHandler<'agentPhase'> = (message, ctx) => { ... }`
+ * The `message` parameter is automatically narrowed to `AgentPhaseMessage`.
  */
 export type TypedMessageHandler<T extends WebviewMessageType> = (
   message: MessageOfType<T>,

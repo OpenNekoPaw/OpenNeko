@@ -4,6 +4,7 @@ import type { AgentCapabilityActivationProgressEvent } from '@neko/shared';
 import { activationProgressHandlers } from '../activation-progress-handlers';
 import type { MessageHandlerContext } from '../types';
 import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
+import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
 
 describe('activationProgressHandlers', () => {
   it('merges activation progress events into per-conversation timelines', () => {
@@ -81,8 +82,7 @@ function createContext(): MessageHandlerContext {
     streamingMessageIdRef: { current: null },
     activeConversationId: null,
     activeConversationIdRef: { current: null },
-    conversationMessagesRef: { current: new Map() },
-    conversationStreamingRef: { current: new Map() },
+    conversationRenderCoordinator: new ConversationRenderCoordinator(),
     openTabs: [],
     activeTabId: null,
     isTablessConversationViewRef: { current: false },

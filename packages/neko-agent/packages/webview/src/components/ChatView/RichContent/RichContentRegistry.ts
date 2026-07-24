@@ -3,7 +3,7 @@
  *
  * Consumers call `registry.get(kind)` to look up the appropriate renderer.
  * New content types are added via `registry.register(entry)` — zero changes
- * needed in TaskCard or ToolCallDisplay (OCP).
+ * needed in ToolCallDisplay or another result surface (OCP).
  */
 
 import type { RichContentRendererEntry } from './types';

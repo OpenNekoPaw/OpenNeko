@@ -3,15 +3,15 @@
  *
  * Specialized processors used by AgentMessageTurnHandler:
  * - AttachmentProcessor: File/image attachment handling
- * - AgentStreamProcessor: Agent event stream processing
+ * - PiAgentStreamSession: canonical Pi Timeline event processing
  */
 
 export { AttachmentProcessor, type ProcessedAttachments } from './attachmentProcessor';
 export {
-  AgentStreamProcessor,
-  type AgentStreamProcessorDeps,
+  createPiAgentStreamSession,
+  type CollectedToolCall,
+  type PiAgentStreamProcessorOptions,
+  type PiAgentStreamSession,
   type StreamProcessingResult,
-  type StreamCallbacks,
-} from './agentStreamProcessor';
-export type { CollectedToolCall } from '@neko/agent/runtime';
+} from './piAgentStreamProcessor';
 export type { ContentBlock } from '@neko-agent/types';

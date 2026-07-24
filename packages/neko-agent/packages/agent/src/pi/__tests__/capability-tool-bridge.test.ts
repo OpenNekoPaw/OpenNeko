@@ -88,6 +88,76 @@ function policy(withVision = false) {
 }
 
 describe('bridgePiCapabilityTools', () => {
+  it('binds a multi-purpose tool from its validated call arguments without main-model fallback', async () => {
+    const modelPolicy = resolveAgentModelPolicy({
+      catalog: [
+        {
+          model: mainModel,
+          capabilities: ['llm.chat', 'tools'],
+          credentialState: 'configured',
+        },
+        {
+          model: { provider: 'media', id: 'image-v2', name: 'Image v2' },
+          execution: 'domain',
+          capabilities: ['image.generate'],
+          credentialState: 'ambient',
+        },
+        {
+          model: { provider: 'media', id: 'video-v2', name: 'Video v2' },
+          execution: 'domain',
+          capabilities: ['video.generate'],
+          credentialState: 'ambient',
+        },
+      ],
+      userBindings: {
+        'agent.main': { providerId: 'openai', modelId: 'main' },
+        'image.generate': { providerId: 'media', modelId: 'image-v2' },
+        'video.generate': { providerId: 'media', modelId: 'video-v2' },
+      },
+    });
+    const execute = vi.fn(async ({ context }) => ({
+      content: [],
+      details: {
+        purpose: context.modelUse?.purpose,
+        provider: context.modelUse?.model.provider,
+      },
+    }));
+    const bridge = bridgePiCapabilityTools({
+      tools: [
+        {
+          name: 'SubmitGenerationJob',
+          label: 'Submit generation job',
+          description: 'Submit detached media work',
+          parameters: Type.Object({
+            kind: Type.Union([Type.Literal('image'), Type.Literal('video'), Type.Literal('audio')]),
+          }),
+          modelPurposes: ['image.generate', 'video.generate', 'audio.generate'],
+          resolveModelPurpose: (args) => {
+            if (typeof args !== 'object' || args === null) throw new Error('Invalid arguments.');
+            const kind = Reflect.get(args, 'kind');
+            if (kind === 'image') return 'image.generate';
+            if (kind === 'video') return 'video.generate';
+            return 'audio.generate';
+          },
+          execute,
+        },
+      ],
+      identity,
+      workspaceTrusted: true,
+      modelPolicy,
+      models,
+      permissionPolicy: { preflight: () => ({ allowed: true }) },
+    });
+
+    await expect(bridge.tools[0]!.execute('image-call', { kind: 'image' })).resolves.toMatchObject({
+      details: { purpose: 'image.generate', provider: 'media' },
+    });
+    await expect(bridge.tools[0]!.execute('audio-call', { kind: 'audio' })).rejects.toThrow(
+      'Pi Capability tool SubmitGenerationJob requires configured model purpose audio.generate.',
+    );
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
   it('projects domain tool identities to distinct OpenAI-compatible wire names', async () => {
     const executeDotTool = vi.fn(async () => ({ content: [], details: {} }));
     const executeColonTool = vi.fn(async () => ({ content: [], details: {} }));

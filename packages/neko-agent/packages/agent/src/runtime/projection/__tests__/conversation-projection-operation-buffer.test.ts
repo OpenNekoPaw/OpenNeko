@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type {
   AgentTurnTimelineAssistantTextItem,
   AgentTurnTimelineOperation,
-  AgentTurnTimelineStructuralItem,
 } from '@neko-agent/types';
 import { createConversationProjectionOperationBuffer } from '../conversation-projection-operation-buffer';
 
 const identity = {
   conversationId: 'conversation-a',
   turnId: 'turn-message-a',
+  runId: 'run-a',
   messageId: 'message-a',
 } as const;
 
@@ -25,22 +25,6 @@ function append(content: string, itemRevision: number): AgentTurnTimelineOperati
     updatedAt: itemRevision,
   } satisfies AgentTurnTimelineAssistantTextItem;
   return { operation: 'append', item };
-}
-
-function progress(itemRevision: number, value: number): AgentTurnTimelineOperation {
-  const item = {
-    ...identity,
-    itemId: 'media-1',
-    sequence: 2,
-    itemRevision,
-    kind: 'media',
-    status: 'pending',
-    parentAnchor: 'turn',
-    payload: { workItem: { id: 'task-1', progress: value } },
-    createdAt: 1,
-    updatedAt: itemRevision,
-  } satisfies AgentTurnTimelineStructuralItem;
-  return { operation: 'upsert', item };
 }
 
 describe('ConversationProjectionOperationBuffer', () => {
@@ -74,20 +58,23 @@ describe('ConversationProjectionOperationBuffer', () => {
     expect(buffer.textBytes).toBe(0);
   });
 
-  it('retains only the latest pending task or media progress for each item', () => {
+  it('preserves discrete Tool updates without creating a second progress authority', () => {
     const buffer = createConversationProjectionOperationBuffer();
 
-    buffer.push(progress(1, 10));
-    buffer.push(progress(2, 40));
-    buffer.push(progress(3, 90));
+    buffer.push(toolProgress(1, 10));
+    buffer.push(toolProgress(2, 40));
+    buffer.push(toolProgress(3, 90));
 
-    expect(buffer.operationCount).toBe(1);
-    const operation = buffer.drain()[0];
-    if (operation?.operation !== 'upsert' || operation.item.kind !== 'media') {
-      throw new Error('Expected latest media progress.');
-    }
-    expect(operation.item.itemRevision).toBe(3);
-    expect(operation.item.payload.workItem.progress).toBe(90);
+    expect(buffer.operationCount).toBe(3);
+    expect(
+      buffer
+        .drain()
+        .map((operation) =>
+          operation.operation === 'upsert' && operation.item.kind === 'tool_call'
+            ? operation.item.payload.progress?.data
+            : undefined,
+        ),
+    ).toEqual([{ percent: 10 }, { percent: 40 }, { percent: 90 }]);
   });
 
   it('preserves semantic boundaries between different text generations', () => {
@@ -108,3 +95,28 @@ describe('ConversationProjectionOperationBuffer', () => {
     expect(buffer.drain()).toHaveLength(2);
   });
 });
+
+function toolProgress(itemRevision: number, percent: number): AgentTurnTimelineOperation {
+  return {
+    operation: 'upsert',
+    item: {
+      ...identity,
+      itemId: 'tool-1',
+      sequence: 2,
+      itemRevision,
+      kind: 'tool_call',
+      status: 'pending',
+      parentAnchor: 'turn',
+      payload: {
+        toolCall: {
+          id: 'call-1',
+          name: 'GenerateImage',
+          arguments: {},
+        },
+        progress: { summary: `${percent}%`, data: { percent } },
+      },
+      createdAt: 1,
+      updatedAt: itemRevision,
+    },
+  };
+}

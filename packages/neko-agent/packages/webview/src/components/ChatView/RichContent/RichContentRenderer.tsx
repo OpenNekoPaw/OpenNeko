@@ -18,7 +18,7 @@ interface RichContentRendererProps {
   data: unknown;
   conversationId?: string | null;
   className?: string;
-  /** Compact mode for inline embedding (e.g. inside TaskCard) */
+  /** Compact mode for inline Tool result embedding. */
   inline?: boolean;
   /** Whether clicking the rendered media should request the host to open it. */
   openOnClick?: boolean;

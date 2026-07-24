@@ -10,7 +10,8 @@ import {
   createNodePiSkillHost,
   createOpenNekoPiModels,
   projectOpenNekoTools,
-  resolveOpenNekoToolModelPurpose,
+  resolveOpenNekoToolCallModelPurpose,
+  resolveOpenNekoToolModelPurposes,
   registerOpenNekoPiProvider,
   resolvePiToolPermissionAction,
   resolveAgentPurposeModelUse,
@@ -548,7 +549,8 @@ class VSCodePiConversationOwner {
       skillSnapshot,
       capabilityTools: projectOpenNekoTools(this.options.tools.list(), {
         locale: input.locale,
-        purposeForTool: resolveOpenNekoToolModelPurpose,
+        purposesForTool: resolveOpenNekoToolModelPurposes,
+        purposeForToolCall: resolveOpenNekoToolCallModelPurpose,
         isPurposeOptionalForTool: (tool) => tool.name === TOOL_NAMES_QUALITY.QUALITY_CHECK,
       }),
       permissionPolicy,
@@ -827,11 +829,7 @@ export function filterVSCodePiTurnPurposeModels(
   tools: readonly Pick<Tool, 'name'>[],
 ): ExecuteVSCodePiTurnInput {
   if (!input.purposeModels) return input;
-  const activePurposes = new Set(
-    tools
-      .map((tool) => resolveOpenNekoToolModelPurpose(tool))
-      .filter((purpose): purpose is VSCodePiToolPurpose => purpose !== undefined),
-  );
+  const activePurposes = new Set(tools.flatMap((tool) => resolveOpenNekoToolModelPurposes(tool)));
   const purposeModels: Partial<Record<VSCodePiToolPurpose, VSCodePiPurposeModelSelection>> = {};
   for (const purpose of VSCODE_PI_TOOL_PURPOSES) {
     const selection = input.purposeModels[purpose];

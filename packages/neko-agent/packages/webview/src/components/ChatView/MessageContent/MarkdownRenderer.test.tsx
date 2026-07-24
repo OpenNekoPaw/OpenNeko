@@ -982,6 +982,8 @@ function createTimelineMarkdownSession(content: string): string {
     type: 'conversationProjectionPatch',
     conversationId,
     turnId: `turn-render-${suffix}`,
+
+    runId: 'run-a',
     messageId,
     projectionVersion: 1,
     baseProjectionVersion: 0,
@@ -991,6 +993,8 @@ function createTimelineMarkdownSession(content: string): string {
         item: {
           conversationId,
           turnId: `turn-render-${suffix}`,
+
+          runId: 'run-a',
           messageId,
           itemId,
           sequence: 1,

@@ -6,7 +6,7 @@ export const header = {
   'header.closeTab': 'Close tab',
   'header.history': 'History',
   'header.settings': 'Settings',
-  'header.tasks': 'Tasks',
+  'header.activity': 'Activity',
   'header.noConversations': 'No conversations yet',
   'header.deleteConversation': 'Delete conversation',
   'header.tabStatus.running': 'Running',

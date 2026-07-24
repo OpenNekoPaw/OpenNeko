@@ -129,15 +129,16 @@ describe('SystemPromptBuilder', () => {
       expect(prompt).toBe(BUILTIN_PLAN_PROMPT_ZH);
     });
 
-    it('should keep base prompt when AGENTS.md content is available', () => {
+    it('should append AGENTS.md content without replacing the base prompt', () => {
       const builder = new SystemPromptBuilder();
       const agentsContent = '# My Custom Instructions\n\nDo this and that.';
 
       builder.setAgentsContent(agentsContent, 'project');
       const prompt = builder.build();
 
-      expect(prompt).toBe(BUILTIN_DEFAULT_PROMPT_EN);
-      expect(builder.buildAgentsOverlay()).toBe(agentsContent);
+      expect(prompt).toContain(BUILTIN_DEFAULT_PROMPT_EN);
+      expect(prompt).toContain('# Environment Instructions');
+      expect(prompt).toContain(agentsContent);
     });
 
     it('should use plan prompt even when AGENTS.md is set', () => {
@@ -146,8 +147,8 @@ describe('SystemPromptBuilder', () => {
 
       const prompt = builder.build();
 
-      // Plan mode takes priority
-      expect(prompt).toBe(BUILTIN_PLAN_PROMPT_EN);
+      expect(prompt).toContain(BUILTIN_PLAN_PROMPT_EN);
+      expect(prompt).toContain('Custom content');
     });
 
     it('should use custom default prompt when provided', () => {
@@ -177,34 +178,30 @@ describe('SystemPromptBuilder', () => {
       const builder = new SystemPromptBuilder({ executionMode: 'ask' });
       builder.setAgentsContent('# Project rules', 'project');
 
-      expect(builder.buildForExecutionMode('plan')).toBe(BUILTIN_PLAN_PROMPT_EN);
+      expect(builder.buildForExecutionMode('plan')).toContain(BUILTIN_PLAN_PROMPT_EN);
       expect(builder.getExecutionMode()).toBe('ask');
-      expect(builder.buildForExecutionMode('auto')).toBe(BUILTIN_DEFAULT_PROMPT_EN);
-      expect(builder.buildAgentsOverlay()).toBe('# Project rules');
+      expect(builder.buildForExecutionMode('auto')).toContain(BUILTIN_DEFAULT_PROMPT_EN);
+      expect(builder.buildForExecutionMode('auto')).toContain('# Project rules');
       expect(builder.getExecutionMode()).toBe('ask');
     });
-  });
-
-  describe('Prompt Building with Suffix', () => {
-    it('should append skill prompt', () => {
+    it('projects secret-free base and AGENTS.md facts from the same inputs', () => {
       const builder = new SystemPromptBuilder();
-      const skillPrompt = 'You are now in code review mode.';
+      builder.setAgentsContent('# Project rules', 'project');
 
-      const prompt = builder.buildWithSkill(skillPrompt);
-
-      expect(prompt).toContain(BUILTIN_DEFAULT_PROMPT_EN);
-      expect(prompt).toContain('# Active Skill');
-      expect(prompt).toContain(skillPrompt);
-    });
-
-    it('should append custom suffix', () => {
-      const builder = new SystemPromptBuilder();
-      const suffix = 'Additional context here.';
-
-      const prompt = builder.buildWithSuffix(suffix);
-
-      expect(prompt).toContain(BUILTIN_DEFAULT_PROMPT_EN);
-      expect(prompt).toContain(suffix);
+      expect(builder.projectCompositionForExecutionMode('ask')).toEqual([
+        expect.objectContaining({
+          id: 'base',
+          source: 'base',
+          order: 0,
+          hash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        }),
+        expect.objectContaining({
+          id: 'agents-md:override',
+          source: 'agents-md',
+          order: 1,
+          hash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        }),
+      ]);
     });
   });
 
@@ -214,42 +211,6 @@ describe('SystemPromptBuilder', () => {
 
       expect(builder.getLocale()).toBe('zh');
       expect(builder.getExecutionMode()).toBe('plan');
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // PR3b: buildBaseOnly + buildAgentsOverlay (AGENTS.md overlay pattern)
-  // ---------------------------------------------------------------------------
-
-  describe('buildBaseOnly', () => {
-    it('returns builtin default (without AGENTS.md) when in default mode', () => {
-      const builder = new SystemPromptBuilder();
-      builder.setAgentsContent('# Project rules\nUse strict mode.', 'project');
-      expect(builder.buildBaseOnly()).toBe(BUILTIN_DEFAULT_PROMPT_EN);
-      expect(builder.build()).toBe(BUILTIN_DEFAULT_PROMPT_EN);
-    });
-
-    it('returns plan prompt in plan mode (ignoring AGENTS.md)', () => {
-      const builder = new SystemPromptBuilder({ executionMode: 'plan' });
-      builder.setAgentsContent('# Project rules', 'project');
-      expect(builder.buildBaseOnly()).toBe(BUILTIN_PLAN_PROMPT_EN);
-    });
-  });
-
-  describe('buildAgentsOverlay', () => {
-    it('returns null when no AGENTS.md has been loaded', () => {
-      const builder = new SystemPromptBuilder();
-      expect(builder.buildAgentsOverlay()).toBeNull();
-    });
-
-    it('returns the loaded AGENTS.md content regardless of mode', () => {
-      const content = '# Project Overrides\nUse TypeScript strict.';
-      const builder = new SystemPromptBuilder();
-      builder.setAgentsContent(content, 'project');
-      expect(builder.buildAgentsOverlay()).toBe(content);
-
-      builder.setExecutionMode('plan');
-      expect(builder.buildAgentsOverlay()).toBe(content);
     });
   });
 });

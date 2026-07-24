@@ -34,7 +34,6 @@ import {
   runAgentMessageTurnRuntime,
   selectAgentTurnProvider,
   shouldPersistAgentAssistantStream,
-  summarizeAgentEventProgress,
   type AgentThreeReferenceImageResource,
 } from '../turn/message-runtime';
 
@@ -123,20 +122,6 @@ describe('message runtime helpers', () => {
       conversationId: 'conv-1',
       parentAgentId: 'agent-conv-1',
     });
-  });
-
-  it('summarizes agent events into subagent progress labels', () => {
-    expect(
-      summarizeAgentEventProgress({
-        type: 'tool_progress',
-        toolProgress: {
-          toolCallId: 'tool-1',
-          toolName: 'read_file',
-          percent: 42,
-          stage: 'Reading file',
-        },
-      }),
-    ).toBe('42% Reading file');
   });
 
   it('assembles enhanced user message from referenced files and attachments', () => {
@@ -619,6 +604,13 @@ describe('message runtime helpers', () => {
           understandingModels: {
             image: { providerId: 'google', modelId: 'gemini-2.5-flash', category: 'llm' },
           },
+          purposeModels: {
+            'image.generate': {
+              providerId: 'flux',
+              modelId: 'flux-pro-1.1',
+              category: 'image',
+            },
+          },
         },
         inputProcessor: {
           process: async () => ({
@@ -642,7 +634,7 @@ describe('message runtime helpers', () => {
       }),
     ).resolves.toEqual({ status: 'agent-dispatched' });
 
-    expect(events).toEqual(['persist:conv-1:user', 'post:thinking', 'execute-agent']);
+    expect(events).toEqual(['persist:conv-1:user', 'post:agentPhase', 'execute-agent']);
     expect(executeAgentTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-1',
@@ -662,6 +654,13 @@ describe('message runtime helpers', () => {
         },
         understandingModels: {
           image: { providerId: 'google', modelId: 'gemini-2.5-flash', category: 'llm' },
+        },
+        purposeModels: {
+          'image.generate': {
+            providerId: 'flux',
+            modelId: 'flux-pro-1.1',
+            category: 'image',
+          },
         },
         imageAttachments: [{ type: 'base64', media_type: 'image/png', data: 'image-1' }],
       }),
@@ -813,7 +812,7 @@ describe('message runtime helpers', () => {
       'preflight:conv-1:分析前10页，生成分镜表',
       'prepare-attachments',
       'persist-user',
-      'post:thinking',
+      'post:agentPhase',
       'execute-agent',
     ]);
   });
@@ -927,8 +926,10 @@ describe('message runtime helpers', () => {
       isError: true,
     });
     expect(postMessage).toHaveBeenNthCalledWith(1, {
-      type: 'thinking',
+      type: 'agentPhase',
       conversationId: 'conv-1',
+      phase: 'thinking',
+      timestamp: 123,
     });
     expect(postMessage).toHaveBeenNthCalledWith(
       2,

@@ -6,7 +6,7 @@ export const header = {
   'header.closeTab': '关闭标签',
   'header.history': '历史记录',
   'header.settings': '设置',
-  'header.tasks': '任务',
+  'header.activity': '任务活动',
   'header.noConversations': '暂无对话记录',
   'header.deleteConversation': '删除对话',
   'header.tabStatus.running': '执行中',

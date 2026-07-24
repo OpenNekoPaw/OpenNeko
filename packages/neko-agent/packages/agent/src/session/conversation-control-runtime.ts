@@ -1,14 +1,13 @@
 import {
+  buildAgentPhaseMessage,
   buildHistoryClearedMessage,
-  buildMessageCancelledMessage,
   type AgentPhaseMessage,
   type HistoryClearedMessage,
-  type MessageCancelledMessage,
   type MessageQueueSnapshotMessage,
 } from '@neko-agent/types';
 
 export type ConversationControlRuntimeMessage =
-  HistoryClearedMessage | MessageCancelledMessage | AgentPhaseMessage | MessageQueueSnapshotMessage;
+  HistoryClearedMessage | AgentPhaseMessage | MessageQueueSnapshotMessage;
 
 export interface ConversationControlDisposable {
   dispose(): void;
@@ -232,19 +231,37 @@ export async function runCancelMessageRuntime(
     const disposableRef: { current?: ConversationControlDisposable } = {};
     disposableRef.current = effects.onAgentStopped?.(input.conversationId, () => {
       disposableRef.current?.dispose();
-      void effects.postMessage?.(buildMessageCancelledMessage(input.conversationId));
+      void effects.postMessage?.(
+        buildAgentPhaseMessage({
+          conversationId: input.conversationId,
+          phase: 'idle',
+          timestamp: effects.now?.() ?? Date.now(),
+        }),
+      );
     });
     effects.cancelAgent(input.conversationId);
     effects.clearPendingMessages?.(input.conversationId);
     if (!disposableRef.current) {
-      await effects.postMessage?.(buildMessageCancelledMessage(input.conversationId));
+      await effects.postMessage?.(
+        buildAgentPhaseMessage({
+          conversationId: input.conversationId,
+          phase: 'idle',
+          timestamp: effects.now?.() ?? Date.now(),
+        }),
+      );
     }
     return { action: 'cancel-message', handled: true, conversationId: input.conversationId };
   }
 
   effects.cancelAgent(input.conversationId);
   effects.clearPendingMessages?.(input.conversationId);
-  await effects.postMessage?.(buildMessageCancelledMessage(input.conversationId));
+  await effects.postMessage?.(
+    buildAgentPhaseMessage({
+      conversationId: input.conversationId,
+      phase: 'idle',
+      timestamp: effects.now?.() ?? Date.now(),
+    }),
+  );
 
   return {
     action: 'cancel-message',

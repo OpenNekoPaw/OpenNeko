@@ -20,7 +20,7 @@ import type {
 import { DropZone } from '@/components/ChatView/DropZone';
 import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
 import type { AgentWorkItem, SubAgentWorkItem } from '@/components/AgentWorkItem';
-import type { AgentContextPayload, TaskRunScope } from '@neko/shared';
+import type { AgentContextPayload } from '@neko/shared';
 import type { AmbientCanvasNodeProjection } from '@/presenters/plugin-transfer-presenter';
 import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
 import type { ForegroundConversationAvailability } from '@/render-lifecycle/conversation-render-contract';
@@ -30,7 +30,6 @@ import { EmbodyCharacterHeader } from '@/components/ChatView/EmbodyCharacterHead
 import { AgentRunStatus } from '@/components/ChatView/AgentRunStatus';
 import { useTranslation } from '@/i18n/I18nContext';
 import { projectMessageIdentities } from '@/components/ChatView/message-identity';
-import { TaskCard, BatchTaskCard } from '@/components/ChatView/TaskCard';
 import { SubAgentCard } from '@/components/ChatView/SubAgentCard';
 interface ChatViewProps {
   messages: Message[];
@@ -56,9 +55,6 @@ interface ChatViewProps {
   pluginsAvailable?: PluginsAvailable;
   contextChips?: readonly AgentContextPayload[];
   ambientNodes?: readonly AmbientCanvasNodeProjection[];
-  onCancelTask?: (taskScope: TaskRunScope) => void;
-  onRetryTask?: (taskScope: TaskRunScope) => void;
-  onViewTaskResult?: (taskScope: TaskRunScope, resultRef?: string) => void;
   // Code diff actions
   onAcceptDiff?: (filePath: string) => void;
   onRejectDiff?: (filePath: string) => void;
@@ -122,9 +118,6 @@ export function ChatView({
   pluginsAvailable,
   contextChips,
   ambientNodes,
-  onCancelTask,
-  onRetryTask,
-  onViewTaskResult,
   onAcceptDiff,
   onRejectDiff,
   onInputChange,
@@ -195,9 +188,6 @@ export function ChatView({
           pluginsAvailable={pluginsAvailable}
           contextChips={contextChips}
           ambientNodes={ambientNodes}
-          onCancelTask={onCancelTask}
-          onRetryTask={onRetryTask}
-          onViewTaskResult={onViewTaskResult}
           onAcceptDiff={onAcceptDiff}
           onRejectDiff={onRejectDiff}
         >
@@ -212,23 +202,11 @@ export function ChatView({
             </div>
           ) : isEmpty ? (
             <div className="agent-chat-empty-scroll flex-1 overflow-y-auto">
-              <ConversationWorkItemShelf
-                workItems={unanchoredWorkItems}
-                pluginsAvailable={pluginsAvailable}
-                onCancelTask={onCancelTask}
-                onRetryTask={onRetryTask}
-                onViewTaskResult={onViewTaskResult}
-              />
+              <ConversationWorkItemShelf workItems={unanchoredWorkItems} />
             </div>
           ) : (
             <>
-              <ConversationWorkItemShelf
-                workItems={unanchoredWorkItems}
-                pluginsAvailable={pluginsAvailable}
-                onCancelTask={onCancelTask}
-                onRetryTask={onRetryTask}
-                onViewTaskResult={onViewTaskResult}
-              />
+              <ConversationWorkItemShelf workItems={unanchoredWorkItems} />
               <MessageList
                 messages={messages}
                 isThinking={isThinking}
@@ -289,40 +267,14 @@ export function ChatView({
 
 function ConversationWorkItemShelf({
   workItems,
-  pluginsAvailable,
-  onCancelTask,
-  onRetryTask,
-  onViewTaskResult,
 }: {
   readonly workItems: readonly AgentWorkItem[];
-  readonly pluginsAvailable?: PluginsAvailable;
-  readonly onCancelTask?: (taskScope: TaskRunScope) => void;
-  readonly onRetryTask?: (taskScope: TaskRunScope) => void;
-  readonly onViewTaskResult?: (taskScope: TaskRunScope, resultRef?: string) => void;
 }) {
   if (workItems.length === 0) return null;
-  const taskItems = workItems.filter(isTaskWorkItem);
   const subAgentItems = workItems.filter(isSubAgentWorkItem);
 
   return (
     <div className="agent-workitem-shelf px-3 py-2">
-      {taskItems.length === 1 && (
-        <TaskCard
-          task={taskItems[0].task}
-          onCancel={onCancelTask}
-          onRetry={onRetryTask}
-          onViewResult={onViewTaskResult}
-          plugins={pluginsAvailable}
-        />
-      )}
-      {taskItems.length > 1 && (
-        <BatchTaskCard
-          tasks={taskItems.map((item) => item.task)}
-          onCancel={onCancelTask}
-          onCancelAll={() => taskItems.forEach((item) => onCancelTask?.(item.task.scope))}
-          onViewResult={onViewTaskResult}
-        />
-      )}
       {subAgentItems.map((item) => (
         <SubAgentCard key={item.id} item={item} />
       ))}
@@ -337,12 +289,6 @@ function selectUnanchoredWorkItems(
   if (workItems.length === 0) return [];
   const linkedIds = new Set(messages.flatMap((message) => message.workItemIds ?? []));
   return workItems.filter((item) => !linkedIds.has(item.id));
-}
-
-function isTaskWorkItem(
-  item: AgentWorkItem,
-): item is Extract<AgentWorkItem, { kind: 'media-task' | 'tool-background-task' }> {
-  return item.kind !== 'subagent';
 }
 
 function isSubAgentWorkItem(item: AgentWorkItem): item is SubAgentWorkItem {

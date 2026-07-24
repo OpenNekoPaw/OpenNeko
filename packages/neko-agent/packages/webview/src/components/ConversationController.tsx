@@ -68,8 +68,10 @@ import { shouldActivateForegroundConversation } from '@/handlers/foreground-acti
 import { ConversationTabRuntimeView } from './ConversationTabRuntimeView';
 import { useRetainedTabComponents } from '@/render-runtime/useRetainedTabComponents';
 import { isCharacterRoleConversationKind } from '@/presenters/character-role-session-presenter';
-import { discardConversationSnapshotProjection } from '@/render-lifecycle/conversation-render-state-adapter';
-import type { ForegroundConversationAvailability } from '@/render-lifecycle/conversation-render-contract';
+import type {
+  ConversationStreamingSnapshot,
+  ForegroundConversationAvailability,
+} from '@/render-lifecycle/conversation-render-contract';
 import {
   applyUserMessageToConversationSummaries,
   applyUserMessageToOpenTabs,
@@ -96,6 +98,9 @@ import { DEFAULT_GENERATION_PARAMS } from '@/components/ChatView/InputArea/types
 import { useTabRenderRuntimeRegistry } from '@/render-runtime/useTabRenderRuntimeRegistry';
 import { useProjectionEndpoint } from '@/render-runtime/useProjectionEndpoint';
 import type { AgentContextPayload } from '@neko/shared';
+import type { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
+import { useDomainActivity } from '@/hooks/useDomainActivity';
+import { DomainActivityView } from './DomainActivityView';
 
 // =============================================================================
 // Props
@@ -110,6 +115,7 @@ interface HeaderRenderProps {
   onSwitchTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onNewChat: () => void;
+  onShowActivity: () => void;
   onOpenConversation: (conversationId: string, title: string) => void;
   onDeleteConversation: (conversationId: string) => void;
   onClearClosedConversations: () => void;
@@ -200,8 +206,6 @@ export function ConversationController({
     activeConversationId,
     setActiveConversationId,
     activeConversationIdRef,
-    conversationMessagesRef,
-    conversationStreamingRef,
     conversationRenderCoordinator,
     updateConversationRenderState: commitConversationRenderState,
     clearVisibleState,
@@ -215,6 +219,7 @@ export function ConversationController({
 
   // ---- UI state for active tab ----
   const [activeTab, setActiveTab] = useState<TabType>('chat');
+  const domainActivity = useDomainActivity();
   const activeTabConversationId = activeTabId
     ? (openTabs.find((tab) => tab.id === activeTabId)?.conversationId ?? null)
     : null;
@@ -396,8 +401,14 @@ export function ConversationController({
     const conversationIds = new Set(openTabs.map((tab) => tab.conversationId));
     if (visibleConversationId) conversationIds.add(visibleConversationId);
 
-    const messagesByConversation = new Map(conversationMessagesRef.current);
-    const streamingByConversation = new Map(conversationStreamingRef.current);
+    const messagesByConversation = new Map<string, readonly Message[]>();
+    const streamingByConversation = new Map<string, ConversationStreamingSnapshot>();
+    for (const conversationId of conversationIds) {
+      const snapshot = conversationRenderCoordinator.read(conversationId);
+      if (!snapshot) continue;
+      messagesByConversation.set(conversationId, snapshot.messages);
+      streamingByConversation.set(conversationId, snapshot.streaming);
+    }
     const states = new Map<string, ConversationSessionState>();
     for (const conversationId of conversationIds) {
       states.set(
@@ -419,8 +430,7 @@ export function ConversationController({
   }, [
     activationProgressByConversation,
     ambientNodesByConversation,
-    conversationMessagesRef,
-    conversationStreamingRef,
+    conversationRenderCoordinator,
     openTabs,
     projectionVersion,
     visibleConversationId,
@@ -553,7 +563,6 @@ export function ConversationController({
   const requestConversationResourceSnapshot = useCallback((conversationId: string) => {
     AgentHostMessages.getSettings(conversationId);
     AgentHostMessages.getContextTokenCount(conversationId);
-    AgentHostMessages.getTasks(conversationId);
     AgentHostMessages.getMessageQueue(conversationId);
   }, []);
 
@@ -728,8 +737,6 @@ export function ConversationController({
     requestConfigSnapshot,
     activeConversationIdRef,
     streamingMessageIdRef,
-    conversationMessagesRef,
-    conversationStreamingRef,
     conversationRenderCoordinator,
     updateConversationRenderState,
     setConversations,
@@ -1043,16 +1050,14 @@ export function ConversationController({
       setIsForegroundConversationActivationPending(true);
       isTablessConversationViewRef.current = false;
       const hasRetainedProjection =
-        conversationRenderCoordinator.read(conversationId) !== undefined ||
-        conversationMessagesRef.current.has(conversationId) ||
-        conversationStreamingRef.current.has(conversationId);
+        conversationRenderCoordinator.read(conversationId) !== undefined;
       setForegroundAvailabilityByConversation((previous) => {
         const next = new Map(previous);
         next.set(conversationId, hasRetainedProjection ? { kind: 'ready' } : { kind: 'loading' });
         return next;
       });
     },
-    [conversationMessagesRef, conversationRenderCoordinator, conversationStreamingRef],
+    [conversationRenderCoordinator],
   );
 
   const handleAllTabsClosed = useCallback(() => {
@@ -1070,7 +1075,7 @@ export function ConversationController({
 
   const isProtectedConversation = useCallback(
     (conversationId: string): boolean => {
-      const cachedStreaming = conversationStreamingRef.current.get(conversationId);
+      const cachedStreaming = conversationRenderCoordinator.read(conversationId)?.streaming;
       const cachedAgentState = conversationAgentStateRef.current.get(conversationId);
       return Boolean(
         openTabs.some((tab) => tab.conversationId === conversationId) ||
@@ -1080,26 +1085,19 @@ export function ConversationController({
         (cachedAgentState && cachedAgentState.phase !== 'idle'),
       );
     },
-    [activeConversationId, conversationStreamingRef, conversationAgentStateRef, openTabs],
+    [activeConversationId, conversationRenderCoordinator, conversationAgentStateRef, openTabs],
   );
 
   const cleanupClosedConversation = useCallback(
     (conversationId: string) => {
       disposeConversationRendering(conversationId, 'conversation-delete');
       cleanupConversation(conversationId);
-      discardConversationSnapshotProjection({
-        conversationId,
-        conversationMessagesRef,
-        conversationStreamingRef,
-      });
       conversationAgentStateRef.current.delete(conversationId);
       setConversations((prev) => prev.filter((conversation) => conversation.id !== conversationId));
     },
     [
       cleanupConversation,
       disposeConversationRendering,
-      conversationMessagesRef,
-      conversationStreamingRef,
       conversationAgentStateRef,
       setConversations,
     ],
@@ -1118,6 +1116,10 @@ export function ConversationController({
   );
 
   const handleClearClosedConversations = useCallback(() => {
+    const streamingByConversation = projectStreamingSnapshots(
+      conversationRenderCoordinator,
+      conversations.map((conversation) => conversation.id),
+    );
     const historyItems = projectHistoryConversationItems({
       conversations,
       openTabs,
@@ -1127,7 +1129,7 @@ export function ConversationController({
         isThinking,
         queuedMessageCount,
       },
-      streamingByConversation: conversationStreamingRef.current,
+      streamingByConversation,
       agentStateByConversation: conversationAgentStateRef.current,
     });
     const cleanup = projectHistoryCleanup({ historyItems });
@@ -1142,7 +1144,7 @@ export function ConversationController({
     streamingMessageId,
     isThinking,
     queuedMessageCount,
-    conversationStreamingRef,
+    conversationRenderCoordinator,
     conversationAgentStateRef,
     cleanupClosedConversation,
   ]);
@@ -1166,13 +1168,12 @@ export function ConversationController({
       tabStateRevisionRef.current = revision;
     },
     hasLocalConversationActivity: (conversationId) => {
-      const cachedMessages = conversationMessagesRef.current.get(conversationId);
-      const cachedStreaming = conversationStreamingRef.current.get(conversationId);
+      const cached = conversationRenderCoordinator.read(conversationId);
       const cachedAgentState = conversationAgentStateRef.current.get(conversationId);
       return Boolean(
-        (cachedMessages?.length ?? 0) > 0 ||
-        cachedStreaming?.isThinking ||
-        cachedStreaming?.streamingMessageId ||
+        (cached?.messages.length ?? 0) > 0 ||
+        cached?.streaming.isThinking ||
+        cached?.streaming.streamingMessageId ||
         (cachedAgentState && cachedAgentState.phase !== 'idle'),
       );
     },
@@ -1218,17 +1219,20 @@ export function ConversationController({
       ),
     [conversationRenderCoordinator, tabConversationIds, tabRenderRevisionSignature],
   );
+  const historyStreamingByConversation = useMemo(
+    () =>
+      projectStreamingSnapshots(
+        conversationRenderCoordinator,
+        conversations.map((conversation) => conversation.id),
+      ),
+    [conversationRenderCoordinator, conversations, projectionVersion],
+  );
 
   const displayTabs = useMemo(
     () =>
       projectDisplayTabs({
         openTabs,
         conversations,
-        activeConversationId: visibleConversationId,
-        activeMessages: [...visibleSessionState.messages],
-        activeStreaming: visibleSessionState.streaming,
-        messagesByConversation: conversationMessagesRef.current,
-        streamingByConversation: conversationStreamingRef.current,
         renderSnapshotsByConversation: tabRenderSnapshots,
         agentStateByConversation: conversationAgentStateRef.current,
       }),
@@ -1248,10 +1252,16 @@ export function ConversationController({
         openTabs,
         activeConversationId: visibleConversationId,
         activeStreaming: visibleSessionState.streaming,
-        streamingByConversation: conversationStreamingRef.current,
+        streamingByConversation: historyStreamingByConversation,
         agentStateByConversation: conversationAgentStateRef.current,
       }),
-    [conversations, openTabs, visibleConversationId, visibleSessionState, projectionVersion],
+    [
+      conversations,
+      historyStreamingByConversation,
+      openTabs,
+      visibleConversationId,
+      visibleSessionState,
+    ],
   );
   const historyCleanup = useMemo(
     () => projectHistoryCleanup({ historyItems: historyConversations }),
@@ -1269,12 +1279,17 @@ export function ConversationController({
         onSwitchTab: handleSwitchTab,
         onCloseTab: handleCloseTab,
         onNewChat: handleNewChat,
+        onShowActivity: () => setActiveTab('activity'),
         onOpenConversation: handleOpenTab,
         onDeleteConversation: handleDeleteConversation,
         onClearClosedConversations: handleClearClosedConversations,
         clearableConversationCount: historyCleanup.deletableConversationIds.length,
         protectedConversationCount: historyCleanup.protectedConversationCount,
       })}
+
+      {activeTab === 'activity' ? (
+        <DomainActivityView state={domainActivity.state} onCommand={domainActivity.execute} />
+      ) : null}
 
       {activeTab === 'chat' ? (
         openTabs.length === 0 ? (
@@ -1442,5 +1457,17 @@ export function ConversationController({
         </div>
       ) : null}
     </>
+  );
+}
+
+function projectStreamingSnapshots(
+  coordinator: ConversationRenderCoordinator,
+  conversationIds: readonly string[],
+): ReadonlyMap<string, ConversationStreamingSnapshot> {
+  return new Map(
+    conversationIds.flatMap((conversationId) => {
+      const snapshot = coordinator.read(conversationId);
+      return snapshot ? [[conversationId, snapshot.streaming] as const] : [];
+    }),
   );
 }

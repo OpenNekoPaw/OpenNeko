@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createResourceFingerprint, createResourceRef, type TaskRunScope } from '@neko/shared';
+import { createResourceFingerprint, createResourceRef } from '@neko/shared';
 import {
   AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildInjectContextMessage,
@@ -113,6 +113,101 @@ describe('webview protocol parser', () => {
         reason: 'endpoint-replaced',
       }),
     ).toEqual({ type: 'projectionDetach', key, reason: 'endpoint-replaced' });
+  });
+
+  it('accepts Domain Activity attachment lifecycle messages with exact versions', () => {
+    const key = { attachmentId: 'activity-1' };
+
+    expect(parseWebviewToExtensionMessage({ type: 'domainActivityAttach', key })).toEqual({
+      type: 'domainActivityAttach',
+      key,
+    });
+    expect(
+      parseWebviewToExtensionMessage({
+        type: 'domainActivityAck',
+        key,
+        sequence: 3,
+        projectionVersion: 7,
+      }),
+    ).toEqual({
+      type: 'domainActivityAck',
+      key,
+      sequence: 3,
+      projectionVersion: 7,
+    });
+    expect(parseWebviewToExtensionMessage({ type: 'domainActivityDetach', key })).toEqual({
+      type: 'domainActivityDetach',
+      key,
+    });
+  });
+
+  it('accepts only exact revisioned Domain Job commands', () => {
+    const command = {
+      type: 'domainJobCommand',
+      requestId: 'request-1',
+      jobKind: 'generation',
+      jobId: 'generation-1',
+      expectedRevision: 4,
+      command: 'cancel',
+    };
+
+    expect(parseWebviewToExtensionMessage(command)).toEqual(command);
+    expect(
+      parseWebviewToExtensionMessage({
+        ...command,
+        jobKind: 'export',
+        command: 'retry',
+      }),
+    ).toEqual({
+      ...command,
+      jobKind: 'export',
+      command: 'retry',
+    });
+
+    for (const invalid of [
+      { ...command, requestId: '' },
+      { ...command, jobId: '' },
+      { ...command, expectedRevision: 0 },
+      { ...command, expectedRevision: -1 },
+      { ...command, expectedRevision: 1.5 },
+      { ...command, jobKind: 'analysis' },
+      { ...command, command: 'finish' },
+    ]) {
+      expect(parseWebviewToExtensionMessage(invalid)).toBeNull();
+    }
+  });
+
+  it('rejects malformed Domain Activity attachment lifecycle messages', () => {
+    const key = { attachmentId: 'activity-1' };
+
+    expect(
+      parseWebviewToExtensionMessage({
+        type: 'domainActivityAttach',
+        key: { attachmentId: '' },
+      }),
+    ).toBeNull();
+    expect(
+      parseWebviewToExtensionMessage({
+        type: 'domainActivityAck',
+        key,
+        sequence: -1,
+        projectionVersion: 2,
+      }),
+    ).toBeNull();
+    expect(
+      parseWebviewToExtensionMessage({
+        type: 'domainActivityAck',
+        key,
+        sequence: 1,
+        projectionVersion: 2.5,
+      }),
+    ).toBeNull();
+    expect(
+      parseWebviewToExtensionMessage({
+        type: 'domainActivityDetach',
+        key: {},
+      }),
+    ).toBeNull();
   });
 
   it('rejects the removed Timeline snapshot recovery message', () => {
@@ -404,21 +499,6 @@ describe('webview protocol parser', () => {
         },
       }),
     ).toThrow('queuedMessageEditRequested requires non-empty tabId');
-  });
-
-  it('requires the complete Task run scope and preserves optional displayed result refs', () => {
-    const scope = taskScope('task-1');
-    expect(
-      parseWebviewToExtensionMessage({
-        type: 'viewTaskResult',
-        taskScope: scope,
-        resultRef: 'generated-assets/asset-1.png',
-      }),
-    ).toEqual({
-      type: 'viewTaskResult',
-      taskScope: scope,
-      resultRef: 'generated-assets/asset-1.png',
-    });
   });
 
   it('rejects legacy Task action identities even when conversationId is present', () => {
@@ -1085,15 +1165,5 @@ function legacyModelPreviewContextData(): Record<string, unknown> {
       height: 1024,
       cameraId: camera.id,
     },
-  };
-}
-
-function taskScope(childRunId: string): TaskRunScope {
-  return {
-    conversationId: 'conv-1',
-    runId: 'run-1',
-    parentRunId: 'run-1',
-    childRunId,
-    childKind: 'task',
   };
 }

@@ -4,7 +4,7 @@ import { HistoryMenu } from '@/components/Header/HistoryMenu';
 import { useTranslation } from '@/i18n/I18nContext';
 import { AccountBar } from '@/components/AccountBar';
 import type { ConfiguredProvider } from '@neko-agent/types';
-import { PlusIcon } from '@neko/shared/icons';
+import { ClockIcon, PlusIcon } from '@neko/shared/icons';
 import type { DisplayTab } from '@/presenters/tab-display-presenter';
 import type { HistoryConversationItem } from '@/presenters/history-menu-presenter';
 
@@ -17,6 +17,7 @@ interface HeaderProps {
   onSwitchTab: (tabId: string) => void;
   onCloseTab: (tabId: string, e?: React.MouseEvent) => void;
   onNewChat: () => void;
+  onShowActivity: () => void;
   onOpenConversation: (conversationId: string, title: string) => void;
   onDeleteConversation: (conversationId: string) => void;
   onClearClosedConversations?: () => void;
@@ -36,6 +37,7 @@ export function Header({
   onSwitchTab,
   onCloseTab,
   onNewChat,
+  onShowActivity,
   onOpenConversation,
   onDeleteConversation,
   onClearClosedConversations,
@@ -68,6 +70,17 @@ export function Header({
           title={t('header.newChat')}
         >
           <PlusIcon className="w-4 h-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={onShowActivity}
+          className={`agent-header-action ${activeView === 'activity' ? 'bg-[var(--vscode-toolbar-activeBackground)]' : ''}`}
+          aria-label={t('header.activity')}
+          title={t('header.activity')}
+          aria-pressed={activeView === 'activity'}
+        >
+          <ClockIcon className="w-4 h-4" />
         </button>
 
         {/* History dropdown */}

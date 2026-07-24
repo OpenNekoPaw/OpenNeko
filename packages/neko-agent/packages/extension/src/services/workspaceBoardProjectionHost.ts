@@ -26,7 +26,6 @@ export class WorkspaceBoardProjectionHost {
     readonly deliveryId: string;
     readonly createdAt: string;
     readonly artifacts: readonly CreatorVisibleArtifactCandidate[];
-    readonly taskId?: string;
     readonly runId?: string;
   }): Promise<readonly CanvasWorkspaceProjectionResult[]> {
     if (input.artifacts.length === 0) return [];
@@ -35,7 +34,6 @@ export class WorkspaceBoardProjectionHost {
         deliveryId: input.deliveryId,
         sourceHost: 'vscode',
         createdAt: input.createdAt,
-        ...(input.taskId ? { taskId: input.taskId } : {}),
         ...(input.runId ? { runId: input.runId } : {}),
       },
       artifacts: input.artifacts.map((artifact) => toProjectionArtifact(artifact, input)),
@@ -82,7 +80,6 @@ function toProjectionArtifact(
   input: {
     readonly deliveryId: string;
     readonly createdAt: string;
-    readonly taskId?: string;
     readonly runId?: string;
   },
 ): CanvasWorkspaceProjectionArtifact {
@@ -95,7 +92,6 @@ function toProjectionArtifact(
     role: artifact.role,
     sourceId: artifact.sourceId,
     ...(artifact.sourceArtifactIds ? { sourceArtifactIds: artifact.sourceArtifactIds } : {}),
-    ...(input.taskId ? { taskId: input.taskId } : {}),
     ...(input.runId ? { runId: input.runId } : {}),
     createdAt: input.createdAt,
   };

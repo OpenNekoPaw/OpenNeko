@@ -14,10 +14,12 @@ export type PiProductEventPayload =
   | {
       readonly type: 'assistant.text.delta';
       readonly delta: string;
+      readonly sourceIndex: number;
     }
   | {
       readonly type: 'assistant.thinking.delta';
       readonly delta: string;
+      readonly sourceIndex: number;
     }
   | {
       readonly type: 'assistant.message.completed';
@@ -54,11 +56,6 @@ export type PiProductEventPayload =
       readonly toolCallId: string;
       readonly toolName: string;
       readonly summary: string;
-    }
-  | {
-      readonly type: 'task.observed';
-      readonly taskRef: string;
-      readonly observation: unknown;
     }
   | {
       readonly type: 'turn.persistence';
@@ -164,15 +161,6 @@ export class PiEventProjector {
     await this.emit({ type: 'confirmation.required', ...input });
   }
 
-  async taskObserved(taskRef: string, observation: unknown): Promise<void> {
-    if (taskRef.trim().length === 0) throw new Error('Task observation requires a TaskRef.');
-    await this.emit({
-      type: 'task.observed',
-      taskRef,
-      observation: structuredClone(observation),
-    });
-  }
-
   async persistenceChanged(state: PiTurnDurabilityState, diagnostic?: string): Promise<void> {
     await this.emit({
       type: 'turn.persistence',
@@ -185,9 +173,17 @@ export class PiEventProjector {
     event: Extract<AgentEvent, { type: 'message_update' }>['assistantMessageEvent'],
   ): Promise<void> {
     if (event.type === 'text_delta') {
-      await this.emit({ type: 'assistant.text.delta', delta: event.delta });
+      await this.emit({
+        type: 'assistant.text.delta',
+        delta: event.delta,
+        sourceIndex: event.contentIndex,
+      });
     } else if (event.type === 'thinking_delta') {
-      await this.emit({ type: 'assistant.thinking.delta', delta: event.delta });
+      await this.emit({
+        type: 'assistant.thinking.delta',
+        delta: event.delta,
+        sourceIndex: event.contentIndex,
+      });
     }
   }
 

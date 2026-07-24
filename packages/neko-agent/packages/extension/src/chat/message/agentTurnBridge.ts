@@ -16,7 +16,7 @@ import type { IAgentManager } from '../../ai/agentManager';
 import type { ExecuteVSCodePiTurnInput } from '../../ai/vscodePiRuntimeManager';
 import { getLogger } from '../../base';
 import type { ProviderManager } from '../providerManager';
-import type { AgentStreamProcessor, StreamProcessingResult } from './agentStreamProcessor';
+import type { PiAgentStreamSession, StreamProcessingResult } from './piAgentStreamProcessor';
 import type { WorkspaceBoardProjectionHost } from '../../services/workspaceBoardProjectionHost';
 
 const logger = getLogger('AgentTurnBridge');
@@ -25,7 +25,11 @@ export interface AgentTurnBridgeDeps {
   providers: ProviderManager;
   agentManager?: IAgentManager;
   getSystemPrompt: (conversationId: string, executionMode: 'auto' | 'ask' | 'plan') => string;
-  streamProcessor: AgentStreamProcessor;
+  createPiStream: (
+    conversationId: string,
+    messageId: string,
+    onPhaseChange: (phase: AgentPhase, toolName?: string) => void,
+  ) => PiAgentStreamSession;
   terminalArtifactDelivery?: Pick<WorkspaceBoardProjectionHost, 'deliverCreatorVisibleArtifacts'>;
   onPhaseChange: (event: {
     conversationId: string;
@@ -111,17 +115,13 @@ export class AgentTurnBridge {
       const selection = this.resolveModelSelection(input.chatModel);
       const executionMode = input.executionOverrides?.executionMode ?? input.settings.executionMode;
       const messageId = this.deps.generateMessageId();
-      const stream = this.deps.streamProcessor.createPiStream(
-        input.webview,
-        input.conversationId,
-        messageId,
-        (phase, toolName) =>
-          this.deps.onPhaseChange({
-            conversationId: input.conversationId,
-            phase,
-            ...(toolName === undefined ? {} : { toolName }),
-            timestamp: Date.now(),
-          }),
+      const stream = this.deps.createPiStream(input.conversationId, messageId, (phase, toolName) =>
+        this.deps.onPhaseChange({
+          conversationId: input.conversationId,
+          phase,
+          ...(toolName === undefined ? {} : { toolName }),
+          timestamp: Date.now(),
+        }),
       );
       try {
         const runtimeOptions = resolvePiTurnRuntimeOptions(input);
@@ -273,9 +273,6 @@ export class AgentTurnBridge {
       content: input.message,
       source: input.pendingMessageSource ?? 'composer',
     });
-    if (input.pendingMessageSource === 'task-result-continuation') {
-      manager.promotePendingMessage(input.conversationId, item.id);
-    }
     const pending = this.pendingTurns.get(input.conversationId) ?? new Map();
     pending.set(item.id, input);
     this.pendingTurns.set(input.conversationId, pending);

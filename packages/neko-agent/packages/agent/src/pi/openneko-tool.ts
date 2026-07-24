@@ -17,9 +17,16 @@ import type {
 import type { AgentModelPurpose } from './model-policy';
 
 type ToolModelPurpose = Exclude<AgentModelPurpose, 'agent.main'>;
+const DETACHED_GENERATION_MODEL_PURPOSES = Object.freeze([
+  'image.generate',
+  'video.generate',
+  'audio.generate',
+] as const satisfies readonly ToolModelPurpose[]);
 
 export interface ProjectOpenNekoToolOptions {
   readonly modelPurpose?: ToolModelPurpose;
+  readonly modelPurposes?: readonly ToolModelPurpose[];
+  readonly resolveModelPurpose?: (args: unknown) => ToolModelPurpose;
   readonly modelPurposeRequirement?: 'required' | 'optional';
   readonly locale?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
@@ -47,6 +54,38 @@ export function resolveOpenNekoToolModelPurpose(
   }
 }
 
+export function resolveOpenNekoToolModelPurposes(
+  tool: Pick<Tool, 'name'>,
+): readonly ToolModelPurpose[] {
+  if (tool.name === 'SubmitGenerationJob') {
+    return DETACHED_GENERATION_MODEL_PURPOSES;
+  }
+  const purpose = resolveOpenNekoToolModelPurpose(tool);
+  return purpose === undefined ? [] : [purpose];
+}
+
+export function resolveOpenNekoToolCallModelPurpose(
+  tool: Pick<Tool, 'name'>,
+  args: unknown,
+): ToolModelPurpose | undefined {
+  const staticPurpose = resolveOpenNekoToolModelPurpose(tool);
+  if (staticPurpose !== undefined) return staticPurpose;
+  if (tool.name !== 'SubmitGenerationJob') return undefined;
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+    throw new Error('SubmitGenerationJob requires object arguments.');
+  }
+  switch (Reflect.get(args, 'kind')) {
+    case 'image':
+      return 'image.generate';
+    case 'video':
+      return 'video.generate';
+    case 'audio':
+      return 'audio.generate';
+    default:
+      throw new Error('SubmitGenerationJob requires kind image, video, or audio.');
+  }
+}
+
 export class OpenNekoPiToolExecutionError extends Error {
   constructor(
     readonly toolName: string,
@@ -69,6 +108,12 @@ export function projectOpenNekoTool(
     description: resolveDescription(tool, options.locale),
     parameters,
     ...(options.modelPurpose === undefined ? {} : { modelPurpose: options.modelPurpose }),
+    ...(options.modelPurposes === undefined
+      ? {}
+      : { modelPurposes: Object.freeze([...options.modelPurposes]) }),
+    ...(options.resolveModelPurpose === undefined
+      ? {}
+      : { resolveModelPurpose: options.resolveModelPurpose }),
     ...(options.modelPurposeRequirement === undefined
       ? {}
       : { modelPurposeRequirement: options.modelPurposeRequirement }),
@@ -129,23 +174,44 @@ export function projectOpenNekoTools(
   options?: {
     readonly locale?: string;
     readonly metadata?: Readonly<Record<string, unknown>>;
-    readonly purposeForTool?: (tool: Tool) => ToolModelPurpose | undefined;
+    readonly purposesForTool?: (tool: Tool) => readonly ToolModelPurpose[];
+    readonly purposeForToolCall?: (tool: Tool, args: unknown) => ToolModelPurpose | undefined;
     readonly isPurposeOptionalForTool?: (tool: Tool) => boolean;
   },
 ): readonly PiCapabilityTool<ToolResult>[] {
   return Object.freeze(
-    tools.map((tool) =>
-      projectOpenNekoTool(tool, {
+    tools.map((tool) => {
+      const purposes = options?.purposesForTool?.(tool) ?? [];
+      const purposeForToolCall = options?.purposeForToolCall;
+      if (purposes.length > 1 && purposeForToolCall === undefined) {
+        throw new Error(
+          `OpenNeko tool ${tool.name} declares multiple model purposes without call-time routing.`,
+        );
+      }
+      return projectOpenNekoTool(tool, {
         ...(options?.locale === undefined ? {} : { locale: options.locale }),
         ...(options?.metadata === undefined ? {} : { metadata: options.metadata }),
-        ...(options?.purposeForTool?.(tool) === undefined
+        ...(purposes.length === 0
           ? {}
-          : { modelPurpose: options.purposeForTool(tool) }),
+          : purposes.length === 1
+            ? { modelPurpose: purposes[0] }
+            : {
+                modelPurposes: purposes,
+                resolveModelPurpose: (args: unknown) => {
+                  const purpose = purposeForToolCall?.(tool, args);
+                  if (purpose === undefined) {
+                    throw new Error(
+                      `OpenNeko tool ${tool.name} did not resolve a model purpose for this call.`,
+                    );
+                  }
+                  return purpose;
+                },
+              }),
         ...(options?.isPurposeOptionalForTool?.(tool) === true
           ? { modelPurposeRequirement: 'optional' as const }
           : {}),
-      }),
-    ),
+      });
+    }),
   );
 }
 

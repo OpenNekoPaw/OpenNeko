@@ -1,12 +1,9 @@
-import type { CompositeBlockData, ContentBlock, ToolCall } from './message';
-import type { AgentWorkItem, TaskWorkItem } from './work-item';
+import type { CompositeBlockData, ToolCall } from './message';
 
 export const AGENT_TURN_TIMELINE_ITEM_KINDS = [
   'assistant_text',
   'thinking',
   'tool_call',
-  'task',
-  'media',
   'composite',
   'error',
 ] as const;
@@ -52,6 +49,7 @@ export type AgentTurnTimelineParentAnchor =
 export interface AgentTurnTimelineItemCore {
   readonly conversationId: string;
   readonly turnId: string;
+  readonly runId: string;
   readonly messageId: string;
   readonly itemId: string;
   readonly sequence: number;
@@ -78,14 +76,10 @@ export interface AgentTurnTimelineThinkingPayload {
 export interface AgentTurnTimelineToolCallPayload {
   readonly toolCall: ToolCall;
   readonly displayName?: string;
-}
-
-export interface AgentTurnTimelineTaskPayload {
-  readonly workItem: AgentWorkItem;
-}
-
-export interface AgentTurnTimelineMediaPayload {
-  readonly workItem: TaskWorkItem;
+  readonly progress?: {
+    readonly summary: string;
+    readonly data?: unknown;
+  };
 }
 
 export interface AgentTurnTimelineCompositePayload {
@@ -121,14 +115,6 @@ export type AgentTurnTimelineToolCallItem = AgentTurnTimelineItemBase<
   'tool_call',
   AgentTurnTimelineToolCallPayload
 >;
-export type AgentTurnTimelineTaskItem = AgentTurnTimelineItemBase<
-  'task',
-  AgentTurnTimelineTaskPayload
->;
-export type AgentTurnTimelineMediaItem = AgentTurnTimelineItemBase<
-  'media',
-  AgentTurnTimelineMediaPayload
->;
 export type AgentTurnTimelineCompositeItem = AgentTurnTimelineItemBase<
   'composite',
   AgentTurnTimelineCompositePayload
@@ -148,8 +134,6 @@ export type AgentTurnTimelineItem =
   | AgentTurnTimelineAssistantTextItem
   | AgentTurnTimelineThinkingItem
   | AgentTurnTimelineToolCallItem
-  | AgentTurnTimelineTaskItem
-  | AgentTurnTimelineMediaItem
   | AgentTurnTimelineCompositeItem
   | AgentTurnTimelineErrorItem;
 
@@ -199,5 +183,4 @@ export type AgentTurnTimelineCompletionStatus = 'completed' | 'cancelled' | 'fai
 export interface AgentTurnTimelineCompletion {
   readonly status: AgentTurnTimelineCompletionStatus;
   readonly completedAt: number;
-  readonly finalContentBlocks?: readonly ContentBlock[];
 }

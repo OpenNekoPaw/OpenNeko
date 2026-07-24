@@ -15,7 +15,7 @@ interface ImagePreviewProps {
   className?: string;
   /** Local file path for opening in VSCode */
   localPath?: string;
-  /** Inline mode: show only image without header (for use inside cards like TaskCard) */
+  /** Inline mode: show only the image for embedded Tool results. */
   inline?: boolean;
   /** Whether clicking the image should request the host to open it. */
   openOnClick?: boolean;

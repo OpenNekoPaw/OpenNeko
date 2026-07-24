@@ -42,13 +42,6 @@ export const handleTools: CommandHandler = (args, context) => ({
   },
 });
 
-/** Handle /tasks command (extension only). */
-export const handleTasks: CommandHandler = () => ({
-  handled: true,
-  continueExecution: true,
-  action: 'showTasks',
-});
-
 /** Handle /mcp command (extension only). */
 export const handleMcp: CommandHandler = () => ({
   handled: true,

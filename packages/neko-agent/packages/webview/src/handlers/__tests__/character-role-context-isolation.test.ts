@@ -73,8 +73,8 @@ describe('character role context isolation', () => {
       streamingMessageId: 'visible-stream',
       queuedMessageCount: 2,
     });
-    expect(harness.conversationMessages().get('conv-a')).toEqual([authoritativeMessage]);
-    expect(harness.conversationStreaming().get('conv-a')).toMatchObject({
+    expect(harness.conversationMessages('conv-a')).toEqual([authoritativeMessage]);
+    expect(harness.conversationStreaming('conv-a')).toMatchObject({
       isThinking: false,
       streamingMessageId: null,
       queuedMessageCount: 0,
@@ -102,7 +102,7 @@ describe('character role context isolation', () => {
     expect(harness.activeConversationId()).toBe('conv-a');
     expect(harness.activeTabId()).toBe('tab-a');
     expect(harness.openTabs()).toEqual([{ id: 'tab-a', title: 'A', conversationId: 'conv-a' }]);
-    expect(harness.conversationMessages().get('conv-b')).toEqual([backgroundMessage]);
+    expect(harness.conversationMessages('conv-b')).toEqual([backgroundMessage]);
     expect(harness.messages()).toEqual([message('visible-old', 'assistant', 'visible old')]);
   });
 
@@ -128,7 +128,7 @@ describe('character role context isolation', () => {
 
     expect(harness.activeConversationId()).toBe('conv-a');
     expect(harness.activeTabId()).toBe('tab-a');
-    expect(harness.conversationMessages().get('conv-b')).toEqual([backgroundMessage]);
+    expect(harness.conversationMessages('conv-b')).toEqual([backgroundMessage]);
     expect(harness.messages()).toEqual([message('visible-old', 'assistant', 'visible old')]);
     expect(harness.forceUpdateCount()).toBe(1);
   });
@@ -175,7 +175,7 @@ describe('character role context isolation', () => {
     expect(harness.activeConversationId()).toBe('role-session');
     expect(harness.activeTabId()).toBe(roleTab.id);
     expect(harness.openTabs()[0]).toEqual(roleTab);
-    expect(harness.conversationMessages().get('conv-a')).toHaveLength(1);
+    expect(harness.conversationMessages('conv-a')).toHaveLength(1);
   });
 
   it('accepts an explicit foreground activation while preserving Tab-owned content state', () => {
@@ -352,8 +352,8 @@ interface ContextHarness {
   messages(): Message[];
   streaming(): StreamingState;
   openTabs(): OpenTab[];
-  conversationMessages(): Map<string, Message[]>;
-  conversationStreaming(): Map<string, StreamingState>;
+  conversationMessages(conversationId: string): readonly Message[] | undefined;
+  conversationStreaming(conversationId: string): StreamingState | undefined;
   conversations(): ConversationSummary[];
   globalError(): string | null;
   conversationDiagnostics(): AgentSessionDiagnosticMessage[];
@@ -383,8 +383,7 @@ function createContextHarness(options: ContextHarnessOptions = {}): ContextHarne
   const reconciliations: TabRuntimeReconciliation[] = [];
   const activeConversationIdRef = ref(activeConversationId);
   const streamingMessageIdRef = ref(streaming.streamingMessageId);
-  const conversationMessagesRef = ref(new Map<string, Message[]>());
-  const conversationStreamingRef = ref(new Map<string, StreamingState>());
+  const conversationRenderCoordinator = new ConversationRenderCoordinator();
   const pendingForegroundConversationActivationRef = ref(
     options.pendingForegroundActivation ?? null,
   );
@@ -398,9 +397,7 @@ function createContextHarness(options: ContextHarnessOptions = {}): ContextHarne
     streamingMessageIdRef,
     activeConversationId,
     activeConversationIdRef,
-    conversationMessagesRef,
-    conversationStreamingRef,
-    conversationRenderCoordinator: new ConversationRenderCoordinator(),
+    conversationRenderCoordinator,
     openTabs,
     activeTabId,
     isTablessConversationViewRef: ref(false),
@@ -492,8 +489,10 @@ function createContextHarness(options: ContextHarnessOptions = {}): ContextHarne
     messages: () => messages,
     streaming: () => streaming,
     openTabs: () => openTabs,
-    conversationMessages: () => conversationMessagesRef.current,
-    conversationStreaming: () => conversationStreamingRef.current,
+    conversationMessages: (conversationId) =>
+      conversationRenderCoordinator.read(conversationId)?.messages,
+    conversationStreaming: (conversationId) =>
+      conversationRenderCoordinator.read(conversationId)?.streaming,
     conversations: () => conversations,
     globalError: () => globalError,
     conversationDiagnostics: () => [...conversationDiagnostics],

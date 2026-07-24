@@ -10,8 +10,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   projectOpenNekoTool,
+  projectOpenNekoTools,
   OpenNekoPiToolExecutionError,
+  resolveOpenNekoToolCallModelPurpose,
   resolveOpenNekoToolModelPurpose,
+  resolveOpenNekoToolModelPurposes,
 } from '../openneko-tool';
 
 function tool(overrides: Partial<Tool> = {}): Tool {
@@ -62,6 +65,47 @@ describe('OpenNeko tool projection to Pi', () => {
 
   it('does not invent a purpose for a tool without a configured model contract', () => {
     expect(resolveOpenNekoToolModelPurpose({ name: 'InspectAsset' })).toBeUndefined();
+  });
+
+  it('routes detached generation to one call-time purpose from a bounded candidate set', () => {
+    const detachedTool = tool({
+      name: 'SubmitGenerationJob',
+      parameters: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['image', 'video', 'audio'] },
+          prompt: { type: 'string' },
+        },
+        required: ['kind', 'prompt'],
+      },
+    });
+
+    expect(resolveOpenNekoToolModelPurposes(detachedTool)).toEqual([
+      'image.generate',
+      'video.generate',
+      'audio.generate',
+    ]);
+    expect(resolveOpenNekoToolCallModelPurpose(detachedTool, { kind: 'image' })).toBe(
+      'image.generate',
+    );
+    expect(resolveOpenNekoToolCallModelPurpose(detachedTool, { kind: 'video' })).toBe(
+      'video.generate',
+    );
+    expect(resolveOpenNekoToolCallModelPurpose(detachedTool, { kind: 'audio' })).toBe(
+      'audio.generate',
+    );
+    expect(() => resolveOpenNekoToolCallModelPurpose(detachedTool, { kind: 'document' })).toThrow(
+      'SubmitGenerationJob requires kind image, video, or audio.',
+    );
+
+    const [projected] = projectOpenNekoTools([detachedTool], {
+      purposesForTool: resolveOpenNekoToolModelPurposes,
+      purposeForToolCall: resolveOpenNekoToolCallModelPurpose,
+    });
+    expect(projected).toMatchObject({
+      modelPurposes: ['image.generate', 'video.generate', 'audio.generate'],
+    });
+    expect(projected?.resolveModelPurpose?.({ kind: 'video' })).toBe('video.generate');
   });
 
   it('preserves the strict JSON schema and localized description', () => {

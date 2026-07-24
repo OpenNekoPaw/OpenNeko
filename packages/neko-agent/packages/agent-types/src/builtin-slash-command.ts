@@ -26,7 +26,6 @@ export type BuiltinSlashCommandName =
   | 'skills'
   | 'commands'
   | 'tools'
-  | 'tasks'
   | 'mcp';
 
 export type BuiltinSlashCommandCategory =
@@ -179,14 +178,6 @@ export const BUILTIN_SLASH_COMMANDS: readonly BuiltinSlashCommandDefinition[] = 
     usage: '[info <name> | search <query>]',
     category: 'resources',
     availableInCli: true,
-    availableInExtension: true,
-  },
-  {
-    name: 'tasks',
-    aliases: ['todos'],
-    description: 'Show background tasks',
-    category: 'resources',
-    availableInCli: false,
     availableInExtension: true,
   },
   {

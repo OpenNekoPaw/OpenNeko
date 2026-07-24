@@ -351,6 +351,8 @@ describe('TabRenderRuntimeRegistry', () => {
         turns: [
           {
             turnId: 'turn-1',
+
+            runId: 'run-a',
             messageId: 'message-1',
             items: [projectionTextItem('initial', 1)],
           },
@@ -374,6 +376,8 @@ describe('TabRenderRuntimeRegistry', () => {
         baseProjectionVersion: 0,
         projectionVersion: 1,
         turnId: 'turn-1',
+
+        runId: 'run-a',
         messageId: 'message-1',
         operations: [{ operation: 'append', item: projectionTextItem(' update', 2) }],
       },
@@ -439,7 +443,14 @@ describe('TabRenderRuntimeRegistry', () => {
       projection: {
         conversationId: 'conversation-shared',
         projectionVersion: 0,
-        turns: [{ turnId: 'turn-1', messageId: 'message-1', items: [projectionTextItem('A0', 1)] }],
+        turns: [
+          {
+            turnId: 'turn-1',
+            runId: 'run-a',
+            messageId: 'message-1',
+            items: [projectionTextItem('A0', 1)],
+          },
+        ],
       },
     });
     runtimeB.acceptProjectionFrame({
@@ -450,7 +461,14 @@ describe('TabRenderRuntimeRegistry', () => {
       projection: {
         conversationId: 'conversation-shared',
         projectionVersion: 0,
-        turns: [{ turnId: 'turn-1', messageId: 'message-1', items: [projectionTextItem('B0', 1)] }],
+        turns: [
+          {
+            turnId: 'turn-1',
+            runId: 'run-a',
+            messageId: 'message-1',
+            items: [projectionTextItem('B0', 1)],
+          },
+        ],
       },
     });
 
@@ -472,6 +490,8 @@ describe('TabRenderRuntimeRegistry', () => {
             baseProjectionVersion: revision - 1,
             projectionVersion: revision,
             turnId: 'turn-1',
+
+            runId: 'run-a',
             messageId: 'message-1',
             operations: [
               {
@@ -534,6 +554,8 @@ describe('TabRenderRuntimeRegistry', () => {
         turns: [
           {
             turnId: 'turn-1',
+
+            runId: 'run-a',
             messageId: 'message-1',
             items: [projectionTextItem('initial', 1)],
           },
@@ -559,6 +581,8 @@ describe('TabRenderRuntimeRegistry', () => {
           baseProjectionVersion: 0,
           projectionVersion: 1,
           turnId: 'turn-1',
+
+          runId: 'run-a',
           messageId: 'message-1',
           operations: [
             {
@@ -611,6 +635,8 @@ function projectionTextItem(content: string, itemRevision: number) {
   return {
     conversationId: 'conversation-shared',
     turnId: 'turn-1',
+
+    runId: 'run-a',
     messageId: 'message-1',
     itemId: 'text-1',
     sequence: 1,

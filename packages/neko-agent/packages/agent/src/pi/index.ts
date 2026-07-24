@@ -85,6 +85,11 @@ export {
   type PiProductEventSink,
 } from './event-projector';
 export {
+  createPiTimelineProjector,
+  type PiTimelineProjector,
+  type PiTimelineProjectorOptions,
+} from './timeline-projector';
+export {
   PiConversationRuntime,
   type ExecutePiConversationSkillInput,
   type ExecutePiConversationTurnInput,
@@ -122,7 +127,9 @@ export {
   OpenNekoPiToolExecutionError,
   projectOpenNekoTool,
   projectOpenNekoTools,
+  resolveOpenNekoToolCallModelPurpose,
   resolveOpenNekoToolModelPurpose,
+  resolveOpenNekoToolModelPurposes,
   type ProjectOpenNekoToolOptions,
 } from './openneko-tool';
 export type { AuthEvent, AuthPrompt } from '@earendil-works/pi-ai';

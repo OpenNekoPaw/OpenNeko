@@ -146,8 +146,10 @@ describe('conversation control runtime', () => {
 
     expect(dispose).toHaveBeenCalledTimes(1);
     expect(postMessage).toHaveBeenCalledWith({
-      type: 'messageCancelled',
+      type: 'agentPhase',
       conversationId: 'conv-1',
+      phase: 'idle',
+      timestamp: 1234,
     });
   });
 });

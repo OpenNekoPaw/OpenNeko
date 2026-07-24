@@ -26,6 +26,7 @@ function appendUpdate(content: string, revision: number) {
   const item = {
     conversationId: 'conversation-a',
     turnId: 'turn-a',
+    runId: 'run-a',
     messageId: 'message-a',
     itemId: 'text-a',
     sequence: 1,
@@ -40,6 +41,7 @@ function appendUpdate(content: string, revision: number) {
     type: 'agentTurnTimelineUpdate' as const,
     conversationId: item.conversationId,
     turnId: item.turnId,
+    runId: item.runId,
     messageId: item.messageId,
     operations: [{ operation: 'append' as const, item }],
   };
@@ -50,6 +52,7 @@ function completeUpdate(revision: number) {
     type: 'agentTurnTimelineUpdate' as const,
     conversationId: 'conversation-a',
     turnId: 'turn-a',
+    runId: 'run-a',
     messageId: 'message-a',
     operations: [
       {

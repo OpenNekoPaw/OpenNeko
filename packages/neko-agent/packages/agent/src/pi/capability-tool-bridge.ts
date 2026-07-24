@@ -44,6 +44,8 @@ export interface PiCapabilityTool<TDetails = unknown> {
   readonly parameters: TSchema;
   readonly requirements?: PiCapabilityToolRequirements;
   readonly modelPurpose?: Exclude<AgentModelPurpose, 'agent.main'>;
+  readonly modelPurposes?: readonly Exclude<AgentModelPurpose, 'agent.main'>[];
+  readonly resolveModelPurpose?: (args: unknown) => Exclude<AgentModelPurpose, 'agent.main'>;
   readonly modelPurposeRequirement?: 'required' | 'optional';
   readonly executionMode?: ToolExecutionMode;
   readonly isReadOnly?: boolean;
@@ -131,9 +133,10 @@ export function bridgePiCapabilityTools(
       );
     }
     registeredDomainNames.add(definition.name);
+    const declaredModelPurposes = resolveDeclaredModelPurposes(definition);
     if (
-      definition.modelPurpose !== undefined &&
-      input.modelPolicy[definition.modelPurpose] === undefined &&
+      declaredModelPurposes.length > 0 &&
+      !declaredModelPurposes.some((purpose) => input.modelPolicy[purpose] !== undefined) &&
       definition.modelPurposeRequirement !== 'optional'
     ) {
       continue;
@@ -147,12 +150,14 @@ export function bridgePiCapabilityTools(
       );
     }
     definitionsByWireName.set(wireName, definition);
-    const modelUse =
+    const staticModelUse =
       definition.modelPurpose === undefined
         ? undefined
         : input.modelPolicy[definition.modelPurpose];
-    const purposeModel =
-      modelUse === undefined ? undefined : createToolPurposeModelRuntime(input.models, modelUse);
+    const staticPurposeModel =
+      staticModelUse === undefined
+        ? undefined
+        : createToolPurposeModelRuntime(input.models, staticModelUse);
     tools.push({
       name: wireName,
       label: definition.label,
@@ -161,8 +166,36 @@ export function bridgePiCapabilityTools(
       ...(definition.executionMode === undefined
         ? {}
         : { executionMode: definition.executionMode }),
-      execute: async (toolCallId, args, signal, onUpdate) =>
-        definition.execute({
+      execute: async (toolCallId, args, signal, onUpdate) => {
+        const modelPurpose = definition.resolveModelPurpose?.(args) ?? definition.modelPurpose;
+        if (modelPurpose !== undefined && !declaredModelPurposes.includes(modelPurpose)) {
+          throw new PiCapabilityToolBridgeError(
+            'invalid-tool',
+            `Pi Capability tool ${definition.name} resolved undeclared model purpose ${modelPurpose}.`,
+          );
+        }
+        const modelUse =
+          definition.resolveModelPurpose === undefined
+            ? staticModelUse
+            : modelPurpose === undefined
+              ? undefined
+              : input.modelPolicy[modelPurpose];
+        if (
+          modelPurpose !== undefined &&
+          modelUse === undefined &&
+          definition.modelPurposeRequirement !== 'optional'
+        ) {
+          throw new Error(
+            `Pi Capability tool ${definition.name} requires configured model purpose ${modelPurpose}.`,
+          );
+        }
+        const purposeModel =
+          definition.resolveModelPurpose === undefined
+            ? staticPurposeModel
+            : modelUse === undefined
+              ? undefined
+              : createToolPurposeModelRuntime(input.models, modelUse);
+        return definition.execute({
           args,
           context: {
             identity: Object.freeze({ ...input.identity, toolCallId }),
@@ -172,7 +205,8 @@ export function bridgePiCapabilityTools(
           },
           ...(signal === undefined ? {} : { signal }),
           ...(onUpdate === undefined ? {} : { onUpdate }),
-        }),
+        });
+      },
     });
   }
 
@@ -311,12 +345,43 @@ function validateTool(tool: PiCapabilityTool): void {
       `Pi Capability tool ${tool.name} requires a strict object parameter schema.`,
     );
   }
-  if (tool.modelPurposeRequirement !== undefined && tool.modelPurpose === undefined) {
+  if (tool.modelPurpose !== undefined && tool.modelPurposes !== undefined) {
+    throw new PiCapabilityToolBridgeError(
+      'invalid-tool',
+      `Pi Capability tool ${tool.name} cannot declare both static and dynamic model purposes.`,
+    );
+  }
+  if (
+    tool.modelPurposes !== undefined &&
+    (tool.modelPurposes.length === 0 || tool.resolveModelPurpose === undefined)
+  ) {
+    throw new PiCapabilityToolBridgeError(
+      'invalid-tool',
+      `Pi Capability tool ${tool.name} requires a resolver for a non-empty dynamic model purpose set.`,
+    );
+  }
+  if (tool.resolveModelPurpose !== undefined && tool.modelPurposes === undefined) {
+    throw new PiCapabilityToolBridgeError(
+      'invalid-tool',
+      `Pi Capability tool ${tool.name} cannot resolve a model purpose without declaring its candidates.`,
+    );
+  }
+  if (
+    tool.modelPurposeRequirement !== undefined &&
+    tool.modelPurpose === undefined &&
+    tool.modelPurposes === undefined
+  ) {
     throw new PiCapabilityToolBridgeError(
       'invalid-tool',
       `Pi Capability tool ${tool.name} cannot declare a purpose requirement without a model purpose.`,
     );
   }
+}
+
+function resolveDeclaredModelPurposes(
+  tool: PiCapabilityTool,
+): readonly Exclude<AgentModelPurpose, 'agent.main'>[] {
+  return tool.modelPurpose === undefined ? (tool.modelPurposes ?? []) : [tool.modelPurpose];
 }
 
 function validateIdentity(identity: PiToolRunIdentity): void {

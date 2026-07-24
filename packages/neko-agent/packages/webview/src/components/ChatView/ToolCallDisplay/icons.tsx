@@ -1,6 +1,6 @@
 /**
  * SVG icons for ToolCallDisplay components
- * Also reusable by TaskCard and other tool-related UI
+ * Also reusable by other Tool execution UI.
  */
 
 export { FileIcon, WarningIcon } from '@neko/shared/icons';

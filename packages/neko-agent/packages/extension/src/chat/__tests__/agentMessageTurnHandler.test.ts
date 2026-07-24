@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const agentStreamProcessorInstances = vi.hoisted(
-  () => [] as Array<{ deps: Record<string, unknown> }>,
-);
+const piStreamSessionOptions = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 
 vi.mock('vscode', () => {
   class EventEmitter<T> {
@@ -69,8 +67,6 @@ import * as vscode from 'vscode';
 import {
   AGENT_RESOLVED_ENTITY_CONTEXT_KIND,
   AGENT_RESOLVED_ENTITY_CONTEXT_SCHEMA_VERSION,
-  createAgentCapabilityActivationIntent,
-  createAgentCapabilityActivationProgressEvent,
   ENTITY_FACADE_COMMANDS,
 } from '@neko/shared';
 import {
@@ -137,25 +133,15 @@ vi.mock('../message/attachmentProcessor', () => {
   };
 });
 
-vi.mock('../message/agentStreamProcessor', () => {
+vi.mock('../message/piAgentStreamProcessor', () => {
   return {
-    AgentStreamProcessor: class {
-      constructor(public readonly deps: Record<string, unknown>) {
-        agentStreamProcessorInstances.push(this);
-      }
-
-      processStream = vi.fn().mockResolvedValue({
-        accumulatedResponse: 'mock response',
-        accumulatedThinking: '',
-        collectedToolCalls: [],
-        contentBlocks: [],
-        hasError: false,
-        terminalStatus: 'completed',
-      });
-      createPiStream = vi.fn(() => ({
+    createPiAgentStreamSession: vi.fn((options: Record<string, unknown>) => {
+      piStreamSessionOptions.push(options);
+      return {
         events: { emit: vi.fn().mockResolvedValue(undefined) },
         result: () => ({
           messageId: 'message-pi',
+          identity: { turnId: 'turn-pi', runId: 'run-pi' },
           accumulatedResponse: 'mock response',
           accumulatedThinking: '',
           collectedToolCalls: [],
@@ -164,10 +150,8 @@ vi.mock('../message/agentStreamProcessor', () => {
           terminalStatus: 'completed' as const,
         }),
         dispose: vi.fn(),
-      }));
-      clearConversation = vi.fn();
-      dispose = vi.fn();
-    },
+      };
+    }),
   };
 });
 
@@ -440,7 +424,7 @@ function createMockAgentRunner() {
     conversationId: string;
     content: string;
     createdAt: number;
-    source: 'composer' | 'task-result-continuation';
+    source: 'composer' | 'system-continuation' | 'subagent-result-continuation';
   }> = [];
   return {
     getHistory: vi.fn().mockReturnValue([]),
@@ -453,7 +437,7 @@ function createMockAgentRunner() {
         conversationId: string;
         content: string;
         now?: number;
-        source?: 'composer' | 'task-result-continuation';
+        source?: 'composer' | 'system-continuation' | 'subagent-result-continuation';
       }) => {
         const item = {
           id: `queue-${pendingMessages.length + 1}`,
@@ -494,7 +478,7 @@ function createMockAgentManager(agentRunner = createMockAgentRunner()) {
     conversationId: string;
     content: string;
     createdAt: number;
-    source: 'composer' | 'task-result-continuation';
+    source: 'composer' | 'system-continuation' | 'subagent-result-continuation';
   }> = [];
   return {
     executePiTurn: vi.fn().mockResolvedValue({
@@ -509,7 +493,10 @@ function createMockAgentManager(agentRunner = createMockAgentRunner()) {
     enqueuePendingMessage: vi.fn(
       (
         conversationId: string,
-        input: { content: string; source?: 'composer' | 'task-result-continuation' },
+        input: {
+          content: string;
+          source?: 'composer' | 'system-continuation' | 'subagent-result-continuation';
+        },
       ) => {
         const item = {
           id: `queue-${pendingMessages.length + 1}`,
@@ -585,8 +572,6 @@ function buildHandler(
     () => 'mock system prompt',
     platform as any,
     undefined,
-    undefined,
-    undefined,
     overrides.localResourceAccess as any,
     {},
   );
@@ -599,7 +584,7 @@ function buildHandler(
 describe('AgentMessageTurnHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    agentStreamProcessorInstances.length = 0;
+    piStreamSessionOptions.length = 0;
     (vscode.env as any).language = 'en';
     (vscode.workspace as any).workspaceFolders = undefined;
     vi.mocked(vscode.extensions.getExtension).mockReturnValue(undefined);
@@ -640,15 +625,24 @@ describe('AgentMessageTurnHandler', () => {
   });
 
   describe('local resource access wiring', () => {
-    it('passes local resource access into the stream processor for tool-result thumbnails', () => {
+    it('keeps Host resource materialization out of the canonical stream processor', async () => {
       const localResourceAccess = {
         toWebviewUri: vi.fn(),
       };
+      const webview = createMockWebview();
+      const handler = buildHandler({
+        localResourceAccess,
+        agentManager: createMockAgentManager(),
+        providers: createMockProviders(true),
+      });
 
-      buildHandler({ localResourceAccess });
+      await handler.handleUserMessage(
+        webview as any,
+        createChatModelRequest('inspect projection input', { conversationId: 'conv-1' }),
+      );
 
-      expect(agentStreamProcessorInstances).toHaveLength(1);
-      expect(agentStreamProcessorInstances[0]!.deps.localResourceAccess).toBe(localResourceAccess);
+      expect(piStreamSessionOptions).toHaveLength(1);
+      expect(piStreamSessionOptions[0]).not.toHaveProperty('localResourceAccess');
     });
   });
 
@@ -1200,11 +1194,11 @@ describe('AgentMessageTurnHandler', () => {
   });
 
   // -------------------------------------------------------------------------
-  // handleUserMessage — thinking indicator
+  // handleUserMessage — thinking phase
   // -------------------------------------------------------------------------
 
-  describe('handleUserMessage() — thinking indicator', () => {
-    it('posts a thinking message before executing', async () => {
+  describe('handleUserMessage() — thinking phase', () => {
+    it('posts a thinking phase before executing', async () => {
       const webview = createMockWebview();
       const handler = buildHandler();
 
@@ -1212,8 +1206,11 @@ describe('AgentMessageTurnHandler', () => {
 
       const calls = webview.postMessage.mock.calls.map((c: unknown[]) => c[0]) as Array<{
         type: string;
+        phase?: string;
       }>;
-      const hasThinking = calls.some((msg) => msg.type === 'thinking');
+      const hasThinking = calls.some(
+        (msg) => msg.type === 'agentPhase' && msg.phase === 'thinking',
+      );
       expect(hasThinking).toBe(true);
     });
 
@@ -1226,7 +1223,7 @@ describe('AgentMessageTurnHandler', () => {
       const calls = webview.postMessage.mock.calls.map((c: unknown[]) => c[0]) as Array<{
         type: string;
       }>;
-      expect(calls[0]?.type).toBe('thinking');
+      expect(calls[0]).toMatchObject({ type: 'agentPhase', phase: 'thinking' });
     });
   });
 
@@ -1265,7 +1262,7 @@ describe('AgentMessageTurnHandler', () => {
       );
     });
 
-    it('thinking message includes the correct conversationId', async () => {
+    it('thinking phase includes the correct conversationId', async () => {
       const webview = createMockWebview();
       const handler = buildHandler();
 
@@ -1277,8 +1274,11 @@ describe('AgentMessageTurnHandler', () => {
       const calls = webview.postMessage.mock.calls.map((c: unknown[]) => c[0]) as Array<{
         type: string;
         conversationId?: string;
+        phase?: string;
       }>;
-      const thinkingMsg = calls.find((msg) => msg.type === 'thinking');
+      const thinkingMsg = calls.find(
+        (msg) => msg.type === 'agentPhase' && msg.phase === 'thinking',
+      );
       expect(thinkingMsg?.conversationId).toBe('my-conv');
     });
   });
@@ -1374,318 +1374,6 @@ describe('AgentMessageTurnHandler', () => {
 
       expect(agentManager.executePiTurn).toHaveBeenCalledOnce();
       expect(conversations.persistConversationTerminal).not.toHaveBeenCalled();
-    });
-
-    it('dispatches task-result continuations without storing user transcript messages', async () => {
-      const webview = createMockWebview();
-      const conversations = createMockConversations();
-      const agentManager = createMockAgentManager();
-      const settings = createMockSettings();
-      settings.selectedProviderId = 'anthropic';
-      settings.selectedModelId = 'claude-3';
-      const handler = buildHandler({
-        conversations,
-        agentManager,
-        settings,
-      });
-
-      await handler.handleTaskResultContinuation(webview as any, {
-        id: 'followup-1',
-        conversationId: 'conv-1',
-        runId: 'run-1',
-        observationId: 'observation-1',
-        taskId: 'task-1',
-        policy: { kind: 'auto-resume-agent', prompt: 'Continue' },
-        prompt: 'Continue from the completed async task result.',
-        createdAt: 123,
-      });
-
-      expect(conversations.addMessageToConversation).not.toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          role: 'user',
-          content: 'Continue from the completed async task result.',
-        }),
-      );
-      expect(agentManager.executePiTurn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          conversationId: 'conv-1',
-          prompt: 'Continue from the completed async task result.',
-        }),
-      );
-    });
-  });
-
-  describe.skip('legacy AgentRunner SubAgent event bridge (removed by Pi task routing)', () => {
-    it('forwards activation progress events for the subscribed conversation', async () => {
-      const webview = createMockWebview();
-      const agentRunner = createMockAgentRunner();
-      const handler = buildHandler({
-        agentManager: createMockAgentManager(agentRunner),
-        providers: createMockProviders(true),
-      });
-      const intent = createAgentCapabilityActivationIntent({
-        conversationId: 'conv-1',
-        source: 'agent-tool',
-        target: 'skill',
-        action: 'activate',
-        name: 'quality-review',
-        requestedBy: 'agent',
-        createdAt: 100,
-      });
-      const event = createAgentCapabilityActivationProgressEvent({
-        intent,
-        step: 'requested',
-        status: 'succeeded',
-        at: 101,
-      });
-
-      await handler.handleUserMessage(
-        webview as any,
-        createChatModelRequest('start activation', { conversationId: 'conv-1' }),
-      );
-
-      agentRunner.emitRunnerEvent({
-        type: 'activationProgress',
-        conversationId: 'conv-1',
-        events: [event],
-      });
-
-      expect(webview.postMessage).toHaveBeenCalledWith({
-        type: 'agentCapabilityActivationProgress',
-        conversationId: 'conv-1',
-        events: [event],
-      });
-    });
-
-    it('forwards SubAgent events for the subscribed conversation', async () => {
-      const webview = createMockWebview();
-      const agentRunner = createMockAgentRunner();
-      const handler = buildHandler({
-        agentManager: createMockAgentManager(agentRunner),
-        providers: createMockProviders(true),
-      });
-
-      await handler.handleUserMessage(
-        webview as any,
-        createChatModelRequest('start subagent task', { conversationId: 'conv-1' }),
-      );
-
-      agentRunner.emitSubAgentEvent({
-        type: 'progress',
-        scope: {
-          conversationId: 'conv-1',
-          runId: 'run-subagent',
-          parentRunId: 'agent-1',
-          childRunId: 'sub-1',
-          childKind: 'subagent',
-        },
-        subAgentId: 'sub-1',
-        parentAgentId: 'agent-1',
-        conversationId: 'conv-1',
-        data: {
-          status: 'running',
-          progress: 'reading files',
-        },
-        timestamp: 100,
-      });
-
-      expect(webview.postMessage).toHaveBeenCalledWith({
-        type: 'subagentEvent',
-        conversationId: 'conv-1',
-        event: expect.objectContaining({
-          type: 'progress',
-          subAgentId: 'sub-1',
-          conversationId: 'conv-1',
-        }),
-        workItem: expect.objectContaining({
-          id: 'sub-1',
-          conversationId: 'conv-1',
-          kind: 'subagent',
-        }),
-      });
-    });
-
-    it('projects terminal SubAgent events to task-result observation coordinator', async () => {
-      const webview = createMockWebview();
-      const agentRunner = createMockAgentRunner();
-      const taskResultObservationCoordinator = {
-        handleTerminalChildRun: vi.fn(async () => undefined),
-      };
-      const handler = buildHandler({
-        agentManager: createMockAgentManager(agentRunner),
-        providers: createMockProviders(true),
-        taskResultObservationCoordinator,
-      });
-
-      await handler.handleUserMessage(
-        webview as any,
-        createChatModelRequest('start subagent task', { conversationId: 'conv-1' }),
-      );
-
-      agentRunner.emitSubAgentEvent({
-        type: 'completed',
-        scope: {
-          conversationId: 'conv-1',
-          runId: 'run-subagent',
-          parentRunId: 'agent-1',
-          childRunId: 'sub-1',
-          childKind: 'subagent',
-        },
-        subAgentId: 'sub-1',
-        parentAgentId: 'agent-1',
-        conversationId: 'conv-1',
-        data: {
-          runId: 'run-subagent',
-          runStartedAt: 101,
-          parentMessageId: 'msg-1',
-          parentToolCallId: 'tool-1',
-          result: { response: 'done' },
-        },
-        timestamp: 100,
-      });
-
-      expect(taskResultObservationCoordinator.handleTerminalChildRun).toHaveBeenCalledWith(
-        expect.objectContaining({
-          scope: {
-            conversationId: 'conv-1',
-            runId: 'run-subagent',
-            parentRunId: 'agent-1',
-            childRunId: 'sub-1',
-            childKind: 'subagent',
-          },
-          childId: 'sub-1',
-          status: 'completed',
-          source: 'subagent',
-          parentMessageId: 'msg-1',
-          parentToolCallId: 'tool-1',
-          runStartedAt: 101,
-        }),
-      );
-    });
-
-    it('does not forward SubAgent events from another conversation', async () => {
-      const webview = createMockWebview();
-      const agentRunner = createMockAgentRunner();
-      const handler = buildHandler({
-        agentManager: createMockAgentManager(agentRunner),
-        providers: createMockProviders(true),
-      });
-
-      await handler.handleUserMessage(
-        webview as any,
-        createChatModelRequest('start subagent task', { conversationId: 'conv-1' }),
-      );
-
-      agentRunner.emitSubAgentEvent({
-        type: 'started',
-        scope: {
-          conversationId: 'conv-2',
-          runId: 'run-subagent-2',
-          parentRunId: 'agent-2',
-          childRunId: 'sub-2',
-          childKind: 'subagent',
-        },
-        subAgentId: 'sub-2',
-        parentAgentId: 'agent-2',
-        conversationId: 'conv-2',
-        timestamp: 200,
-      });
-
-      const subAgentMessages = webview.postMessage.mock.calls
-        .map((call: unknown[]) => call[0])
-        .filter((message: unknown): message is { type: string } => {
-          return (
-            typeof message === 'object' &&
-            message !== null &&
-            'type' in message &&
-            (message as { type?: unknown }).type === 'subagentEvent'
-          );
-        });
-      expect(subAgentMessages).toEqual([]);
-    });
-
-    it('does not record terminal SubAgent observations from another conversation', async () => {
-      const webview = createMockWebview();
-      const agentRunner = createMockAgentRunner();
-      const taskResultObservationCoordinator = {
-        handleTerminalChildRun: vi.fn(async () => undefined),
-      };
-      const handler = buildHandler({
-        agentManager: createMockAgentManager(agentRunner),
-        providers: createMockProviders(true),
-        taskResultObservationCoordinator,
-      });
-
-      await handler.handleUserMessage(
-        webview as any,
-        createChatModelRequest('start subagent task', { conversationId: 'conv-1' }),
-      );
-
-      agentRunner.emitSubAgentEvent({
-        type: 'completed',
-        scope: {
-          conversationId: 'conv-2',
-          runId: 'run-subagent-2',
-          parentRunId: 'agent-2',
-          childRunId: 'sub-2',
-          childKind: 'subagent',
-        },
-        subAgentId: 'sub-2',
-        parentAgentId: 'agent-2',
-        conversationId: 'conv-2',
-        data: {
-          runId: 'run-subagent-2',
-          result: { response: 'done' },
-        },
-        timestamp: 200,
-      });
-
-      expect(taskResultObservationCoordinator.handleTerminalChildRun).not.toHaveBeenCalled();
-    });
-
-    it('disposes the SubAgent event subscription when clearing agent state', async () => {
-      const webview = createMockWebview();
-      const agentRunner = createMockAgentRunner();
-      const handler = buildHandler({
-        agentManager: createMockAgentManager(agentRunner),
-        providers: createMockProviders(true),
-      });
-
-      await handler.handleUserMessage(
-        webview as any,
-        createChatModelRequest('start subagent task', { conversationId: 'conv-1' }),
-      );
-      handler.clearAgentState('conv-1');
-
-      expect(agentRunner.subAgentEventDisposable.dispose).toHaveBeenCalledTimes(1);
-
-      agentRunner.emitSubAgentEvent({
-        type: 'completed',
-        scope: {
-          conversationId: 'conv-1',
-          runId: 'run-subagent',
-          parentRunId: 'agent-1',
-          childRunId: 'sub-1',
-          childKind: 'subagent',
-        },
-        subAgentId: 'sub-1',
-        parentAgentId: 'agent-1',
-        conversationId: 'conv-1',
-        timestamp: 300,
-      });
-
-      const subAgentMessages = webview.postMessage.mock.calls
-        .map((call: unknown[]) => call[0])
-        .filter((message: unknown): message is { type: string } => {
-          return (
-            typeof message === 'object' &&
-            message !== null &&
-            'type' in message &&
-            (message as { type?: unknown }).type === 'subagentEvent'
-          );
-        });
-      expect(subAgentMessages).toEqual([]);
     });
   });
 

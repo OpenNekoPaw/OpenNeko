@@ -7,6 +7,8 @@ import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
 import { setLocale } from '@/i18n';
 import { commandHandlers } from '../command-handlers';
 import type { HandlerRegistration, MessageHandlerContext, StreamingState } from '../types';
+import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
+import { ingestConversationRenderSnapshot } from '@/render-lifecycle/conversation-render-state-adapter';
 
 describe('command handlers conversation isolation', () => {
   beforeEach(() => {
@@ -33,13 +35,13 @@ describe('command handlers conversation isolation', () => {
     );
 
     expect(harness.messages()).toEqual([visibleMessage]);
-    expect(harness.conversationMessages().get('conv-a')).toEqual([
+    expect(harness.conversationMessages('conv-a')).toEqual([
       expect.objectContaining({
         role: 'assistant',
         content: 'A 会话命令结果',
       }),
     ]);
-    expect(harness.conversationMessages().get('conv-b')).toBeUndefined();
+    expect(harness.conversationMessages('conv-b')).toBeUndefined();
   });
 
   it('does not close the visible tab for an exit result from a non-current conversation', () => {
@@ -72,7 +74,7 @@ describe('command handlers conversation isolation', () => {
     expect(setOpenTabs).not.toHaveBeenCalled();
     expect(setActiveTabId).not.toHaveBeenCalled();
     expect(setActiveConversationId).not.toHaveBeenCalled();
-    expect(harness.conversationMessages().get('conv-a')).toEqual([
+    expect(harness.conversationMessages('conv-a')).toEqual([
       expect.objectContaining({
         content: '退出 A',
       }),
@@ -143,7 +145,7 @@ describe('command handlers conversation isolation', () => {
     );
 
     expect(harness.messages()).toEqual([visibleMessage]);
-    expect(harness.conversationMessages().get('conv-a')).toEqual([
+    expect(harness.conversationMessages('conv-a')).toEqual([
       expect.objectContaining({
         role: 'assistant',
         content: expect.stringContaining('canvas-markdown-missing-resource-token'),
@@ -167,7 +169,7 @@ describe('command handlers conversation isolation', () => {
         ],
       }),
     ]);
-    const content = harness.conversationMessages().get('conv-a')?.[0]?.content ?? '';
+    const content = harness.conversationMessages('conv-a')?.[0]?.content ?? '';
     expect(content).toContain('Canvas 生命周期动作 已阻止');
     expect(content).toContain('诊断');
     expect(content).toContain('Markdown 资源标记 "P1" 未匹配到已知资源。');
@@ -176,9 +178,7 @@ describe('command handlers conversation isolation', () => {
     expect(content).not.toContain('Repair resource references');
     expect(content).not.toContain('Available Canvas lifecycle actions');
     expect(content).not.toContain('Markdown resource token');
-    expect(harness.conversationMessages().get('conv-a')?.[0]?.content).not.toContain(
-      'Next actions',
-    );
+    expect(harness.conversationMessages('conv-a')?.[0]?.content).not.toContain('Next actions');
   });
 });
 
@@ -203,7 +203,7 @@ interface ContextHarnessOptions {
 interface ContextHarness {
   context: MessageHandlerContext;
   messages(): Message[];
-  conversationMessages(): Map<string, Message[]>;
+  conversationMessages(conversationId: string): readonly Message[] | undefined;
 }
 
 function createContextHarness(options: ContextHarnessOptions): ContextHarness {
@@ -218,8 +218,7 @@ function createContextHarness(options: ContextHarnessOptions): ContextHarness {
   let pluginsAvailable: PluginsAvailable = {};
   const activeConversationIdRef = ref<string | null>(options.activeConversationId);
   const streamingMessageIdRef = ref<string | null>(streaming.streamingMessageId);
-  const conversationMessagesRef = ref(new Map<string, Message[]>());
-  const conversationStreamingRef = ref(new Map<string, StreamingState>());
+  const conversationRenderCoordinator = new ConversationRenderCoordinator();
   const isTablessConversationViewRef = ref(false);
 
   const context: MessageHandlerContext = {
@@ -230,8 +229,7 @@ function createContextHarness(options: ContextHarnessOptions): ContextHarness {
     streamingMessageIdRef,
     activeConversationId,
     activeConversationIdRef,
-    conversationMessagesRef,
-    conversationStreamingRef,
+    conversationRenderCoordinator,
     openTabs: [
       { id: 'tab-a', title: 'Chat A', conversationId: 'conv-a' },
       { id: 'tab-b', title: 'Chat B', conversationId: 'conv-b' },
@@ -257,15 +255,21 @@ function createContextHarness(options: ContextHarnessOptions): ContextHarness {
     isCurrentConversation: (conversationId?: string) =>
       conversationId === activeConversationIdRef.current,
     updateConversationRenderState: (conversationId, updater) => {
-      const existingMessages = conversationMessagesRef.current.get(conversationId) ?? [];
-      const existingStreaming = conversationStreamingRef.current.get(conversationId) ?? {
+      const current = conversationRenderCoordinator.read(conversationId);
+      const existingMessages = current?.messages ?? [];
+      const existingStreaming = current?.streaming ?? {
         isThinking: false,
         streamingMessageId: null,
         queuedMessageCount: 0,
+        queuedMessages: [],
       };
-      const result = updater(existingMessages, existingStreaming);
-      conversationMessagesRef.current.set(conversationId, result.messages);
-      conversationStreamingRef.current.set(conversationId, result.streaming);
+      const result = updater([...existingMessages], existingStreaming);
+      ingestConversationRenderSnapshot({
+        coordinator: conversationRenderCoordinator,
+        conversationId,
+        messages: result.messages,
+        streaming: result.streaming,
+      });
     },
     setConversations: noopDispatch(),
     setActiveConversationId:
@@ -299,7 +303,8 @@ function createContextHarness(options: ContextHarnessOptions): ContextHarness {
   return {
     context,
     messages: () => messages,
-    conversationMessages: () => conversationMessagesRef.current,
+    conversationMessages: (conversationId) =>
+      conversationRenderCoordinator.read(conversationId)?.messages,
   };
 }
 

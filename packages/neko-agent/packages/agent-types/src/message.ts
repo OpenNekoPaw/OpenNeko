@@ -185,7 +185,7 @@ export interface Message {
   attachments?: MessageAttachment[];
   /** Lightweight context references attached when the user sent this message */
   contextReferences?: MessageContextReference[];
-  /** Associated unified work item IDs (media tasks, tool background tasks, subagents) */
+  /** Associated subagent work item IDs. */
   workItemIds?: string[];
   /** Message feedback */
   feedback?: 'positive' | 'negative';

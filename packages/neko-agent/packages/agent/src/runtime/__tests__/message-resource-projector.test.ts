@@ -4,7 +4,6 @@ import {
   isLocalMediaFilePath,
   projectMessagesForResourceDisplay,
   projectResourceValue,
-  updateBackgroundTaskToolResultUrls,
 } from '../../input/message-resource-projector';
 
 describe('message resource projector', () => {
@@ -385,61 +384,6 @@ describe('message resource projector', () => {
             'Local media path could not be projected for Webview display. Use ResourceRef, source refs, workspace-relative paths, or adapter-projected render descriptors.',
         },
       ],
-    });
-  });
-
-  it('updates matching background task tool results with completed urls', () => {
-    const messages: Message[] = [
-      {
-        id: 'msg-1',
-        role: 'assistant',
-        content: '',
-        timestamp: 1,
-        contentBlocks: [
-          {
-            id: 'block-1',
-            type: 'tool_call',
-            timestamp: 1,
-            toolCall: {
-              id: 'tool-1',
-              name: 'GenerateImage',
-              arguments: {},
-              result: {
-                success: true,
-                data: { taskId: 'task-1', backgroundMode: true, status: 'running' },
-              },
-            },
-          },
-        ],
-      },
-    ];
-
-    const result = updateBackgroundTaskToolResultUrls(messages, 'task-1', ['/tmp/output.png']);
-
-    expect(result.updated).toBe(true);
-    expect(result.messages[0]?.contentBlocks?.[0]?.toolCall?.result?.data).toEqual({
-      taskId: 'task-1',
-      backgroundMode: true,
-      status: 'completed',
-      url: '/tmp/output.png',
-      urls: ['/tmp/output.png'],
-    });
-  });
-
-  it('does not update non-matching background task tool results', () => {
-    const messages: Message[] = [
-      {
-        id: 'msg-1',
-        role: 'assistant',
-        content: '',
-        timestamp: 1,
-        contentBlocks: [],
-      },
-    ];
-
-    expect(updateBackgroundTaskToolResultUrls(messages, 'task-1', ['/tmp/output.png'])).toEqual({
-      messages,
-      updated: false,
     });
   });
 });

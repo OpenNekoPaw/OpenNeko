@@ -52,7 +52,7 @@ packages/
 │   ├── permission/   工具权限（plan/ask/auto 三模式）
 │   ├── hooks/        可组合中间件（ExecutorHooks + factory）
 │   ├── hook-loader/  Settings-based hooks（.neko/hooks 仅用于弃用诊断）
-│   ├── prompt/       SystemPromptComposer + Builder（多语言）
+│   ├── prompt/       SystemPromptBuilder（多语言 + AGENTS.md）+ prompt file runtime
 │   ├── runtime/      统一 runtime bootstrap 契约 + helper
 │   ├── plan/         Plan 管理器
 │   ├── input/        InputProcessor（@ 文件引用解析）
@@ -67,19 +67,19 @@ packages/
 │   ├── config/       ConfigManager（用户配置 + 工作区 MCP 合并）+ 首次运行默认值
 │   ├── media/        媒体生成服务（8 个适配器：Runway/Luma/MiniMax/Suno/Vidu/Midjourney/LibLib/OpenAI-compat）
 │   ├── provider/     ProviderRegistry（适配器路由）+ PlatformError（错误分类）
-│   ├── service/      IService 门面 + ModelSelector + PromptManager + ToolRegistry
+│   ├── service/      IService 门面 + ModelSelector + ToolRegistry
 │   └── core/         BaseRegistry + HttpClient + ConcurrencyPool
 ├── extension/  # @neko-agent/extension — VSCode 扩展宿主（纯胶水层）
 │   ├── bootstrap/    服务初始化 + ServiceCollection
 │   ├── chat/         ChatViewProvider + Webview 消息 Router + 专用桥接 Handler
-│   ├── chat/message/ AgentMessageTurnHandler + AgentTurnBridge + AgentStreamProcessor
+│   ├── chat/message/ AgentMessageTurnHandler + AgentTurnBridge + run-scoped Pi Timeline session
 │   ├── ai/           AgentRunner（薄包装）+ AgentManager（runtime 多会话池）
 │   ├── services/     ConfigBridge + SkillFileService + HookFileService
 │   ├── editor/       EditorModel + EditorRegistry
 │   └── tools/        扩展工具注册（NekoCut/NekoCanvas 桥接）
 └── webview/    # @neko-agent/webview — React 对话 UI
 │   ├── components/   ChatView + ContentBlocks 时序渲染 + SettingsView
-│   ├── handlers/     消息处理注册（streaming/tool/conversation/config）
+│   ├── handlers/     消息处理注册（projection/conversation/config）
 │   ├── hooks/        Zustand 状态管理（多会话隔离）
 │   ├── messages/     type-safe postMessage 构建器
 │   ├── config/       预设配置
@@ -92,7 +92,7 @@ packages/
 
 Webview/Extension 与 Terminal TUI/headless 是不同本地宿主，功能差异需要保留：Webview 可以拥有 VS Code API、`postMessage`、Webview URI、watcher、memento/recovery 和 Extension command；TUI/headless 可以拥有 Ink 终端交互、进程生命周期、stdout/stderr 报告和真实 API 验证 lane。
 
-共享的是同一工作区的业务逻辑和数据面，而不是 UI 表现。Webview 和 TUI 必须通过共享 runtime/config/catalog/task/cache contract 使用以下输入：`~/.neko/config.toml`、`.neko/config.toml`、workspace-scoped canonical conversation id、`~/.agents/skills`、`~/.neko/commands`、`.agents/skills`、`.neko/commands`、`~/.neko/neko.db` 中按 `workspaceId` 分区的 Task/Run、conversation/catalog 和 ResourceCache metadata、project memory、AGENTS overlays、context settings、授权读根，以及 `.neko/.cache/resources` 下的 project cache artifact bytes。运行时模型/参数选择只影响当前 session，不自动重写 TOML；`skillsDir` 之类非标准 Skill 来源不能让 TUI/headless 单独看到不同 catalog。
+共享的是同一工作区的业务逻辑和数据面，而不是 UI 表现。Webview 和 TUI 必须通过共享 runtime/config/catalog/cache contract 使用以下输入：`~/.neko/config.toml`、`.neko/config.toml`、workspace-scoped canonical conversation id、`~/.agents/skills`、`~/.neko/commands`、`.agents/skills`、`.neko/commands`、conversation/catalog、ResourceCache metadata、project memory、AGENTS overlays、context settings、授权读根，以及 `.neko/.cache/resources` 下的 project cache artifact bytes。前台 AgentRun/ToolCall 保持实例级 live ownership；显式 SubagentRun 和可恢复领域 Job 分别由 parent/supervisor 与 owning domain 持有，不经通用 Task runtime。运行时模型/参数选择只影响当前 session，不自动重写 TOML；`skillsDir` 之类非标准 Skill 来源不能让 TUI/headless 单独看到不同 catalog。
 
 Host-private 能力不互通，也不能伪装为共享成功结果。VS Code handle、Webview URI、Extension-private cache、memento/recovery、TUI process handle、终端键盘状态和 headless 报告路径跨宿主请求时必须返回 host-private 或 unavailable diagnostic，不允许 no-op、转成普通 prompt、读取另一端私有缓存或回退旧实现。旧 `cli-*` conversation id 不作为 TUI resume 兼容输入；共享 command catalog 的 surface scope 使用 `tui` / `extension`。
 
@@ -160,7 +160,7 @@ model_id = "neko-gateway-tts"
 
 | Track | 注入内容                                                  |
 | ----- | --------------------------------------------------------- |
-| A     | Skill prompt content section（SystemPromptComposer）      |
+| A     | Skill prompt content（Pi Skill snapshot/invocation）      |
 | B     | 权限允许规则（PermissionHooks）                           |
 | C     | 机器可读 tool policy（ToolGuard，运行时 `isToolAllowed`） |
 
