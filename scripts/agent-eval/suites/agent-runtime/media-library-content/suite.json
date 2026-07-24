@@ -1,0 +1,66 @@
+{
+  "schema": "neko.agent-eval.suite.v2",
+  "id": "agent-runtime.media-library-content",
+  "owner": { "kind": "agent-runtime", "id": "media-library-content" },
+  "target": {
+    "kind": "capability",
+    "id": "media-library-content",
+    "contractHash": "sha256:18a712135ab0d135e764d2cebca6933196c03bccc4b8d2be5872b87f4b23444e"
+  },
+  "repositoryRevision": "working-tree",
+  "runtimeProfiles": [
+    {
+      "id": "canonical-default",
+      "settings": { "executionMode": "auto", "outputFormat": "markdown" },
+      "configurationHash": "sha256:490490ff384f4e1aab458fca6d4f513029e38bc1c4e824bffb8f01cd46124fdc"
+    }
+  ],
+  "modelProfiles": [
+    {
+      "id": "configured-default",
+      "selection": "configured-default",
+      "configurationHash": "sha256:e183fac48c090594694dc19a3e356145a40821960e6f06ad1a4b67e8dfc6f915"
+    }
+  ],
+  "judgeProfiles": [],
+  "fixtures": [
+    {
+      "id": "media-library-workspace",
+      "root": "shared-fixtures/media-library-workspace",
+      "source": "repository",
+      "digest": "sha256:d28afb6074e7876857cee1093d0ea3f92386c9e72b0836cd27ddfac0a702edad",
+      "mutable": true,
+      "links": [
+        { "path": "neko/assets/Reference", "target": "media-source" }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "linked-media-search-read",
+      "file": "cases/linked-media-search-read.json",
+      "group": "canonical",
+      "visibility": "public"
+    },
+    {
+      "id": "legacy-asset-reference-rejected",
+      "file": "cases/legacy-asset-reference-rejected.json",
+      "group": "boundary",
+      "visibility": "public"
+    },
+    {
+      "id": "generated-output-entity-binding",
+      "file": "cases/generated-output-entity-binding.json",
+      "group": "artifact",
+      "visibility": "public"
+    }
+  ],
+  "rubricRefs": [],
+  "baselinePolicy": { "mode": "none" },
+  "reportPolicy": {
+    "rawRetentionDays": 14,
+    "trustedCiRetentionDays": 14,
+    "committedSummary": true,
+    "includeHistory": false
+  }
+}

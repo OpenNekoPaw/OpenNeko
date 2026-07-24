@@ -83,6 +83,15 @@ describe('PiSkillHost', () => {
     expect(snapshot.skills[0]!.filePath).toBe(record.locator.value);
     await expect(snapshot.readText(record.locator)).resolves.toContain('Read references/guide.md');
     await expect(snapshot.readText(resource)).resolves.toBe('Guide body');
+    await expect(snapshot.readModelSelectedContent(record.locator.value)).resolves.toMatchObject({
+      receipt: {
+        skillName: 'portable',
+        source: { kind: 'project' },
+        fingerprint: record.fingerprint,
+        locator: record.locator.value,
+        locatorKind: 'skill',
+      },
+    });
     expect(() => snapshot.resource('portable', '../secret.txt')).toThrowError(
       expect.objectContaining<Partial<SkillHostError>>({ code: 'invalid-resource-path' }),
     );

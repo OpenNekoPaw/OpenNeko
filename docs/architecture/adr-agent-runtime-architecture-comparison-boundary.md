@@ -107,7 +107,7 @@ VS Code / TUI / future client projection
   -> domain packages / Engine / Assets / Entity / Search
 ```
 
-Extension 可以拥有 VS Code API、workspace trust、`asWebviewUri`、Engine client provider、ContentAccess 和 host effect。`@neko/agent` runtime 不得导入 VS Code、React、Webview 或 Extension 实现。
+Extension 可以拥有 VS Code API、workspace trust、`asWebviewUri`、Engine client provider、Host content read/projection ports 和 host effect。`@neko/agent` runtime 不得导入 VS Code、React、Webview 或 Extension 实现。
 
 客户端 adapter 的共享 contract 应先保持 in-process/package-level：
 
@@ -256,7 +256,7 @@ Codex/OpenCode 都把 session/thread/history/event store 作为 agent 产品主�
 - `@neko/agent`：host-neutral Agent runtime、session facade、turn assembly、runner port、capability consumption。
 - `@neko-agent/types`：Webview/Extension/Agent projection contract。
 - `@neko/shared`：跨包 capability、permission、provider、ResourceRef、task/artifact 基础 contract。
-- Extension：VS Code API、workspace trust、resource URI projection、Engine client provider、ContentAccess、host effect。
+- Extension：VS Code API、workspace trust、resource URI projection、Engine client provider、Host content read/projection ports、host effect。
 - Domain packages：贡献领域 capability provider、typed operation、artifact/schema adapter，不反向依赖 Agent internals。
 
 ### 依赖

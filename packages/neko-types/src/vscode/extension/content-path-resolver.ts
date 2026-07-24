@@ -8,7 +8,7 @@ import {
   type PathVariableMap,
   type WorkspaceMediaPathContext,
 } from '../../path';
-import { NEKO_EXTENSION_IDS, type NekoAssetsAPI } from '../../types/extension-api';
+import { authorizeWorkspaceLinkedPath } from './workspace-linked-path-guard';
 
 export interface HostContentPathResolverOptions {
   readonly workspaceRoot?: string;
@@ -25,7 +25,6 @@ export interface HostContentPathResolverOptions {
 export interface HostContentPathPolicy {
   readonly pathVariables: PathVariableMap;
   readonly pathResolver: PathResolver;
-  readonly mediaLibraryRoots: readonly string[];
   readonly authorizedReadRoots: readonly string[];
 }
 
@@ -34,27 +33,13 @@ export async function loadHostContentPathPolicy(
 ): Promise<HostContentPathPolicy> {
   const workspaceRoot = resolveWorkspaceRoot(options);
   const variables = createWorkspacePathVariables(workspaceRoot);
-  const assetsApi = await getNekoAssetsApi(options);
-  const assetVariables = await assetsApi?.getPathVariables?.();
-  for (const [key, value] of assetVariables ?? []) {
-    if (key && value) {
-      variables.set(key, value);
-    }
-  }
-  const mediaLibraryRoots = dedupeNonEmptyPaths((await assetsApi?.getMediaLibraryRoots?.()) ?? []);
-  const assetVariableRoots = (assetVariables ?? [])
-    .map(([, value]) => value)
-    .filter((value): value is string => Boolean(value));
   const authorizedReadRoots = dedupeNonEmptyPaths([
     ...(workspaceRoot ? [workspaceRoot] : []),
-    ...mediaLibraryRoots,
-    ...assetVariableRoots,
     ...(options.allowedRoots ?? []),
   ]);
   return {
     pathVariables: new Map(variables),
     pathResolver: new PathResolver(variables),
-    mediaLibraryRoots,
     authorizedReadRoots,
   };
 }
@@ -104,6 +89,17 @@ export async function createHostContentMediaPathContext(
     ...(documentDir ? { documentDir } : {}),
     pathVariables,
     allowedRoots: policy.authorizedReadRoots,
+    ...(owningWorkspaceRoot
+      ? {
+          authorizePath: async (filePath: string) =>
+            (
+              await authorizeWorkspaceLinkedPath({
+                workspaceRoot: owningWorkspaceRoot,
+                requestedPath: filePath,
+              })
+            ).authorized,
+        }
+      : {}),
   };
 }
 
@@ -119,7 +115,8 @@ export async function resolveHostContentMediaPath(
     source,
     context,
     fileExists: options.fileExists,
-    isPathAuthorized: (filePath) => isPathAuthorized(filePath, context.allowedRoots),
+    isPathAuthorized: (filePath) =>
+      context.authorizePath?.(filePath) ?? isPathAuthorized(filePath, context.allowedRoots),
   });
   if (result.status === 'resolved-local') return result.path;
   if (result.status === 'remote') return result.url;
@@ -165,22 +162,6 @@ function resolveWorkspaceRoot(options: HostContentPathResolverOptions): string |
     return findOwningWorkspaceRoot(options.documentUri.fsPath, workspaceRoots);
   }
   return workspaceRoots[0];
-}
-
-async function getNekoAssetsApi(
-  options: HostContentPathResolverOptions,
-): Promise<NekoAssetsAPI | undefined> {
-  const getExtension = options.getExtension;
-  const extension = getExtension
-    ? getExtension<NekoAssetsAPI>(NEKO_EXTENSION_IDS.NEKO_ASSETS)
-    : undefined;
-  if (!extension) return undefined;
-  try {
-    return extension.isActive ? extension.exports : await extension.activate();
-  } catch (error) {
-    options.logger?.warn('Failed to activate neko-assets for content path variables', { error });
-    return undefined;
-  }
 }
 
 function findOwningWorkspaceRoot(

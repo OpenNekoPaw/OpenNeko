@@ -6,7 +6,6 @@ import {
   createDefaultLocalResourceAccessService,
   createExtensionAssetLocalResourceRootProvider,
   createExtensionCacheLocalResourceRootProvider,
-  createMediaLibraryLocalResourceRootProvider,
   createStaticLocalResourceRootProvider,
   createWorkspaceCacheLocalResourceRootProvider,
   createWorkspaceLocalResourceRootProvider,
@@ -15,14 +14,17 @@ import {
 } from '../local-resource-access';
 
 vi.mock('vscode', () => ({
-  Uri: {
-    file: (filePath: string) => ({
-      scheme: 'file',
-      fsPath: filePath,
-      path: filePath,
-      toString: () => `file://${filePath}`,
-    }),
-    parse: (value: string) => {
+  Uri: class Uri {
+    static file(filePath: string) {
+      return {
+        scheme: 'file',
+        fsPath: filePath,
+        path: filePath,
+        toString: () => `file://${filePath}`,
+      };
+    }
+
+    static parse(value: string) {
       if (value.startsWith('file://')) {
         const filePath = value.slice('file://'.length);
         return {
@@ -39,8 +41,9 @@ vi.mock('vscode', () => ({
         path: value,
         toString: () => value,
       };
-    },
-    joinPath: (base: { fsPath: string }, ...segments: string[]) => {
+    }
+
+    static joinPath(base: { fsPath: string }, ...segments: string[]) {
       const filePath = [base.fsPath, ...segments].join('/');
       return {
         scheme: 'file',
@@ -48,7 +51,7 @@ vi.mock('vscode', () => ({
         path: filePath,
         toString: () => `file://${filePath}`,
       };
-    },
+    }
   },
   workspace: {
     workspaceFolders: [
@@ -82,7 +85,7 @@ describe('VSCodeLocalResourceAccessService', () => {
     const service = new VSCodeLocalResourceAccessService({
       rootProviders: [
         createExtensionAssetLocalResourceRootProvider(vscode.Uri.file('/ext'), 'dist', 'webview'),
-        createWorkspaceLocalResourceRootProvider(),
+        createWorkspaceLocalResourceRootProvider(() => vscode.workspace.workspaceFolders),
         createStaticLocalResourceRootProvider('media', 'media-library', [
           vscode.Uri.file('/assets'),
           vscode.Uri.file('/assets'),
@@ -335,79 +338,17 @@ describe('VSCodeLocalResourceAccessService', () => {
     expect(normalizeLocalFilePath('')).toBeUndefined();
   });
 
-  it('creates media library roots from the neko-assets command', async () => {
+  it('keeps Host-private cache roots out of default Webview authorization', async () => {
     const vscode = await import('vscode');
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue(undefined);
-    vi.mocked(vscode.commands.executeCommand).mockResolvedValue(['/media/a', '/media/b']);
-    const provider = createMediaLibraryLocalResourceRootProvider();
-
-    await expect(provider.getRoots()).resolves.toEqual([
-      expect.objectContaining({ uri: expect.objectContaining({ fsPath: '/media/a' }) }),
-      expect.objectContaining({ uri: expect.objectContaining({ fsPath: '/media/b' }) }),
-    ]);
-    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('neko.assets.getMediaLibraryRoots');
-  });
-
-  it('prefers the neko-assets extension API for media library roots', async () => {
-    const vscode = await import('vscode');
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      isActive: true,
-      exports: { getMediaLibraryRoots: vi.fn(async () => ['/media/api']) },
-      activate: vi.fn(),
-    } as never);
-    const provider = createMediaLibraryLocalResourceRootProvider();
-
-    await expect(provider.getRoots()).resolves.toEqual([
-      expect.objectContaining({ uri: expect.objectContaining({ fsPath: '/media/api' }) }),
-    ]);
-    expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
-  });
-
-  it('returns empty media library roots without warning when neko-assets is unavailable', async () => {
-    const vscode = await import('vscode');
-    const logger = { warn: vi.fn() };
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue(undefined);
-    vi.mocked(vscode.commands.executeCommand).mockRejectedValue(
-      new Error('command neko.assets.getMediaLibraryRoots not found'),
-    );
-    const provider = createMediaLibraryLocalResourceRootProvider({ logger });
-
-    await expect(provider.getRoots()).resolves.toEqual([]);
-    expect(logger.warn).not.toHaveBeenCalled();
-  });
-
-  it('logs media library root errors from an installed neko-assets extension', async () => {
-    const vscode = await import('vscode');
-    const logger = { warn: vi.fn() };
-    const error = new Error('settings failed');
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      isActive: true,
-      exports: { getMediaLibraryRoots: vi.fn(async () => Promise.reject(error)) },
-      activate: vi.fn(),
-    } as never);
-    const provider = createMediaLibraryLocalResourceRootProvider({ logger });
-
-    await expect(provider.getRoots()).resolves.toEqual([]);
-    expect(logger.warn).toHaveBeenCalledWith('Failed to get neko-assets media library roots', {
-      error,
-    });
-  });
-
-  it('creates default roots for extension assets, workspace, media libraries, and caches', async () => {
-    const vscode = await import('vscode');
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue(undefined);
-    vi.mocked(vscode.commands.executeCommand).mockResolvedValue(['/media']);
     const service = createDefaultLocalResourceAccessService({
       extensionUri: vscode.Uri.file('/ext'),
       context: { globalStorageUri: vscode.Uri.file('/global') } as never,
+      getWorkspaceFolders: () => vscode.workspace.workspaceFolders,
     });
 
     await expect(service.getLocalResourceRoots()).resolves.toEqual([
       expect.objectContaining({ fsPath: '/ext/dist/webview' }),
       expect.objectContaining({ fsPath: '/workspace' }),
-      expect.objectContaining({ fsPath: '/media' }),
-      expect.objectContaining({ fsPath: '/global' }),
-      expect.objectContaining({ fsPath: '/workspace/.neko/.cache' }),
     ]);
   });
 

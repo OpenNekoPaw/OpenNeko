@@ -123,10 +123,14 @@ export async function executeDirectMediaCommand(
   const model = resolveDirectMediaModel(input);
   let submitted: GenerationJobSnapshot;
   try {
-    submitted = await runtime.submitGeneration({
-      ...toGenerationJobInput(input.kind, prompt, model),
-      lifecycleMode: input.detached ? 'detached' : 'linked',
-    });
+    submitted = await runtime.submitGeneration(
+      toGenerationJobInput(
+        input.kind,
+        prompt,
+        model,
+        input.detached ? 'detached' : 'linked',
+      ),
+    );
   } catch (error) {
     throw new DirectMediaCommandError(
       error instanceof DOMException && error.name === 'AbortError'
@@ -179,10 +183,12 @@ function toGenerationJobInput(
   kind: DirectMediaKind,
   prompt: string,
   model: DirectMediaModelRef,
+  lifecycleMode: SubmitGenerationJobInput['lifecycleMode'],
 ): SubmitGenerationJobInput {
   const base = {
     providerId: model.providerId,
     modelId: model.modelId,
+    lifecycleMode,
     request: {
       prompt,
       providerId: model.providerId,

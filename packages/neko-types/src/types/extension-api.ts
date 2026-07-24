@@ -44,8 +44,6 @@ import type {
   CanvasMarkdownCapabilityResult,
 } from './canvas-markdown-capabilities';
 import type { CanvasCutDraftPayload } from './canvas-cut-draft';
-import type { CanvasCutDraftDiagnostic } from './canvas-cut-draft';
-import type { CanvasTimelineSyncPayload } from './canvas-timeline-sync';
 import type { CanvasPlaybackPlan, CanvasPlaybackRouteCandidate } from './canvas-playback';
 import type {
   ApplyCanvasStoryboardOptions,
@@ -58,7 +56,6 @@ import type {
 } from './storyboard-readiness';
 import type { DocumentArchiveResourceRef } from './document-reading';
 import type { SkillCatalogMeta } from './skill';
-import type { ProjectSearchVisualResource } from './project-cache-search';
 import type { ResourceRef, ResourceVariantRequest } from './resource-cache';
 
 export interface NekoDisposableLike {
@@ -94,196 +91,45 @@ export interface NekoEngineRuntimeStatus {
 // NekoCut API
 // =============================================================================
 
-/**
- * Timeline element configuration for adding new elements
- */
-export interface TimelineElementConfig {
-  type: 'video' | 'audio' | 'image' | 'text' | 'shape' | 'subtitle';
-  trackId: string;
-  startTime: number;
-  duration: number;
-  source?: string;
-  [key: string]: unknown;
+export type CutRouteHandoffItem =
+  | {
+      readonly kind: 'media';
+      readonly workspaceRelativePath: string;
+      readonly name: string;
+      readonly durationSeconds: number;
+    }
+  | { readonly kind: 'gap'; readonly durationSeconds: number };
+
+export type CutRouteHandoffTarget =
+  | { readonly kind: 'new'; readonly projectName: string }
+  | {
+      readonly kind: 'append';
+      readonly documentUri: string;
+      readonly expectedRevision: number;
+    };
+
+export interface CutRouteHandoffRequest {
+  readonly target: CutRouteHandoffTarget;
+  readonly items: readonly CutRouteHandoffItem[];
 }
 
-/**
- * Timeline element update payload
- */
-export interface TimelineElementUpdate {
-  startTime?: number;
-  duration?: number;
-  source?: string;
-  [key: string]: unknown;
-}
-
-/**
- * Timeline information
- */
-export interface TimelineInfo {
-  documentUri: string;
-  projectRevision: string;
-  duration: number;
-  fps: number;
-  width: number;
-  height: number;
-  trackCount: number;
-}
-
-export interface CutTimelineRevealRequest {
-  readonly projectUri?: string;
-  readonly sequenceId?: string;
-  readonly clipId?: string;
-}
-
-export interface CutCanvasDraftImportResult {
-  readonly accepted: boolean;
-  readonly status: 'imported' | 'rejected' | 'failed' | 'unavailable' | 'timeout' | 'post-failed';
-  readonly projectUri?: string;
-  readonly syncPayload?: CanvasTimelineSyncPayload;
-  readonly diagnostics?: readonly CanvasCutDraftDiagnostic[];
-  readonly error?: string;
-}
-
-/**
- * Timeline element representation (for API response)
- */
-export interface NekoCutTimelineElement {
-  id: string;
-  type: string;
-  trackId: string;
-  startTime: number;
-  duration: number;
-  source?: string;
-  [key: string]: unknown;
-}
-
-export interface CutTimelineDocumentTarget {
+export interface CutRouteHandoffResult {
   readonly documentUri: string;
-  readonly expectedProjectRevision?: string;
+  readonly revision: number;
+  readonly created: boolean;
 }
 
-export interface CutTimelineCanvasDraftImportRequest extends CutTimelineDocumentTarget {
-  readonly payload: CanvasCutDraftPayload;
-}
-
-export interface CutProjectAuthoringCreateOptions {
-  readonly name?: string;
-  readonly width?: number;
-  readonly height?: number;
-  readonly fps?: number;
-}
-
-export interface CutProjectAuthoringImportGeneratedClipRequest {
-  readonly target: import('../project-authoring').NekoProjectAuthoringTarget;
-  readonly expectedProjectRevision?: string;
-  readonly sourcePath?: string;
-  readonly bytes?: Uint8Array;
-  readonly name?: string;
-  readonly mediaType?: 'video' | 'audio' | 'image';
-  readonly duration?: number;
-  readonly startTime?: number;
-  readonly trackId?: string;
-  readonly trackIndex?: number;
-  readonly requestId?: string;
-  readonly createProjectOptions?: CutProjectAuthoringCreateOptions;
-}
-
-export interface CutProjectAuthoringImportedClip {
-  readonly sourcePath: string;
-  readonly mediaType: 'video' | 'audio' | 'image';
-  readonly trackId: string;
-  readonly elementId: string;
-  readonly createdTrack: boolean;
-  readonly startTime: number;
-  readonly duration: number;
-}
-
-export interface NekoCutAuthoringAPI {
-  importGeneratedClip(
-    request: CutProjectAuthoringImportGeneratedClipRequest,
-  ): Promise<
-    import('../project-authoring').NekoProjectAuthoringResult<CutProjectAuthoringImportedClip>
-  >;
-}
-
-/**
- * NekoCut Extension API
- * Exported by neko-cut extension for timeline manipulation
- */
+/** NekoCut VS Code extension API. */
 export interface NekoCutAPI {
-  /** Package-owned structural, review-render, runtime, and export-readiness facade for .nkv projects. */
-  readonly projectQuality: import('../project-authoring/project-quality').ProjectQualityFacade;
-  /** Explicit-target, Webview-independent durable .nkv authoring. */
-  readonly authoring: NekoCutAuthoringAPI;
-
-  timeline: {
-    /**
-     * Get information about the current timeline
-     */
-    getInfo(target: CutTimelineDocumentTarget): Promise<TimelineInfo>;
-
-    /**
-     * Add a new element to the timeline
-     * @returns The ID of the created element
-     */
-    addElement(target: CutTimelineDocumentTarget, config: TimelineElementConfig): Promise<string>;
-
-    /**
-     * Update an existing timeline element
-     */
-    updateElement(
-      target: CutTimelineDocumentTarget,
-      id: string,
-      updates: TimelineElementUpdate,
-    ): Promise<void>;
-
-    /**
-     * Delete an element from the timeline
-     */
-    deleteElement(target: CutTimelineDocumentTarget, id: string): Promise<void>;
-
-    /**
-     * List all elements in the timeline
-     */
-    listElements(target: CutTimelineDocumentTarget): Promise<NekoCutTimelineElement[]>;
-
-    /**
-     * Reveal the owning Cut timeline surface. Playback and timeline focus stay in Cut.
-     */
-    reveal(request: CutTimelineRevealRequest & { readonly projectUri: string }): Promise<boolean>;
-
-    /**
-     * Import a Canvas route snapshot into an explicitly identified Cut project.
-     */
-    importCanvasDraft(
-      request: CutTimelineCanvasDraftImportRequest,
-    ): Promise<CutCanvasDraftImportResult>;
+  readonly status: 'ready';
+  readonly routes: {
+    handoff(request: CutRouteHandoffRequest): Promise<CutRouteHandoffResult>;
   };
 }
 
 // =============================================================================
 // NekoCanvas API
 // =============================================================================
-
-/**
- * Asset filter options
- */
-export interface AssetFilter {
-  type?: 'video' | 'audio' | 'image' | 'text' | 'other';
-  search?: string;
-}
-
-/**
- * Asset representation
- */
-export interface Asset {
-  id: string;
-  name: string;
-  type: string;
-  path: string;
-  thumbnail?: string;
-  metadata?: Record<string, unknown>;
-}
 
 /**
  * Canvas configuration for creation
@@ -359,6 +205,10 @@ export interface CanvasPlaybackCreateCutDraftRequest {
   readonly projectName?: string;
 }
 
+export interface CanvasPlaybackSendRouteToCutRequest extends CanvasPlaybackCreateCutDraftRequest {
+  readonly target: CutRouteHandoffTarget;
+}
+
 export interface CanvasPlaybackReorderUnitsRequest {
   readonly sourceCanvasUri?: string;
   readonly routeId?: string;
@@ -373,15 +223,6 @@ export interface CanvasPlaybackReorderUnitsResult {
   readonly sourceCanvasUri?: string;
   readonly orderedUnitIds: readonly string[];
   readonly plan: CanvasPlaybackPlan;
-}
-
-/**
- * Fired when an asset is added, updated, or removed from the canvas asset library.
- * Distinct from the asset-registry AssetChangeEvent to avoid naming conflicts.
- */
-export interface NekoCanvasAssetChangeEvent {
-  readonly type: 'add' | 'update' | 'delete';
-  readonly assetId: string;
 }
 
 /**
@@ -402,27 +243,9 @@ export interface CanvasChangeEvent {
 
 /**
  * NekoCanvas Extension API
- * Exported by neko-canvas extension for asset and canvas manipulation
+ * Exported by neko-canvas extension for canvas manipulation
  */
 export interface NekoCanvasAPI {
-  asset: {
-    /**
-     * Import an asset into the project asset library.
-     * This namespace is a proxy to neko-assets; canvas is not the asset source of truth.
-     */
-    import(path: string): Promise<Asset>;
-
-    /**
-     * List assets through the neko-assets proxy.
-     */
-    list(filter?: AssetFilter): Promise<Asset[]>;
-
-    /**
-     * Get an asset by ID through the neko-assets proxy.
-     */
-    getById(id: string): Promise<Asset | null>;
-  };
-
   /**
    * Import media/resource facts into a Canvas document through headless authoring.
    */
@@ -498,6 +321,8 @@ export interface NekoCanvasAPI {
     createCutDraftFromRoute(
       request?: CanvasPlaybackCreateCutDraftRequest,
     ): Promise<CanvasCutDraftPayload>;
+
+    sendRouteToCut(request: CanvasPlaybackSendRouteToCutRequest): Promise<CutRouteHandoffResult>;
 
     /**
      * Reorder Canvas playback units through Canvas graph commands, then return the reprojected plan.
@@ -596,11 +421,6 @@ export interface NekoCanvasAPI {
    */
   events: {
     /**
-     * Fired whenever an asset is added, updated, or deleted in the project library.
-     */
-    onDidChangeAssets: NekoEventLike<NekoCanvasAssetChangeEvent>;
-
-    /**
      * Fired whenever nodes or shapes on the active canvas are added, updated, or deleted.
      */
     onDidChangeCanvas: NekoEventLike<CanvasChangeEvent>;
@@ -612,84 +432,23 @@ export interface NekoCanvasAPI {
 // =============================================================================
 
 /**
- * NekoAssets Extension API
- * Exported by neko-assets extension for programmatic asset library access.
- * Replaces the former command-level proxy pattern (neko.assets.getAllEntities etc.).
+ * Media representation generation API exported by neko-assets.
+ * Consumers receive derived bytes and never observe the owning cache path.
  */
-export interface NekoAssetsAPI {
-  /** Get all asset entities in the library. */
-  getAllEntities(): Promise<import('./asset/entity').AssetEntity[]>;
-
-  /**
-   * Import a file into the asset library.
-   * Returns the created/existing entity and rejects visibly on unavailable source or import failure.
-   */
-  importFile(uri: { fsPath: string }): Promise<import('./asset/entity').AssetEntity>;
-
-  /** Get the thumbnail file path for a given asset file path. */
-  getThumbnailPath(filePath: string): Promise<string | undefined>;
-
-  /** Create a stable resource ref for a media thumbnail without exposing package-local cache paths. */
-  createThumbnailResourceRef?(
-    filePath: string,
-    options?: {
-      readonly width?: number;
-      readonly height?: number;
-      readonly mediaLibraryId?: string;
-      readonly projectRelativePath?: string;
-    },
-  ): Promise<ResourceRef | undefined>;
-
-  /** Return a host-projected or resource-ref-backed visual for search and mention consumers. */
-  getThumbnailVisual?(
+export interface NekoMediaRepresentationAPI {
+  /** Generate thumbnail bytes without exposing package-local cache paths. */
+  generateThumbnail(
     filePath: string,
     variant?: ResourceVariantRequest,
-  ): Promise<ProjectSearchVisualResource | undefined>;
-
-  /** Get resolved, enabled, and accessible media library roots for Webview authorization. */
-  getMediaLibraryRoots(): Promise<string[]>;
-
-  /** Get path variables used by shared PathResolver for portable media/library refs. */
-  getPathVariables?(): Promise<ReadonlyArray<readonly [string, string]>>;
-
-  /** Resolve an entity:// URI to a concrete variant file and absolute path. */
-  resolveEntityUri(
-    uri: string,
-  ): Promise<import('../entity-uri/index').ResolvedEntityRef | undefined>;
-
-  /** Resolve a character name to its thumbnail absolute path via CharacterRegistry → AssetEntity. */
-  getCharacterThumbnail(name: string): Promise<string | undefined>;
-
-  /** Project an asset entity into binding candidate roles without persisting bindings. */
-  getBindingCandidate(entityId: string): Promise<
+  ): Promise<
     | {
-        assetEntityId: string;
-        assetRef: string;
-        suggestedRoles: readonly import('./creative-entity-asset-composition').EntityAssetBindingRole[];
-        confidence: number;
-        reason: string;
+        readonly bytes: Uint8Array;
+        readonly width: number;
+        readonly height: number;
+        readonly mimeType: 'image/jpeg';
       }
     | undefined
   >;
-
-  /** Project an asset entity into representation package component details. */
-  getRepresentationPackageDetail(entityId: string): Promise<
-    | {
-        assetEntityId: string;
-        assetRef: string;
-        representationKinds: readonly import('./creative-entity-asset-composition').RepresentationKind[];
-        files: readonly import('./creative-entity-asset-composition').ResolvedRepresentationFile[];
-        capabilities: readonly string[];
-        missingRoles: readonly import('./creative-entity-asset-composition').RepresentationFileRole[];
-      }
-    | undefined
-  >;
-
-  /** Fired when asset entities are added, removed, or modified. */
-  onDidChangeEntities: { (listener: () => void): { dispose(): void } };
-
-  /** Fired when media library roots are added, removed, disabled, or overridden. */
-  onDidChangeMediaLibraryRoots: { (listener: () => void): { dispose(): void } };
 }
 
 // =============================================================================
@@ -719,10 +478,6 @@ export interface NekoAgentAPI {
   /** Pi Skill catalog owned by the Agent runtime. */
   getSkills(): readonly SkillDef[];
   resolveGeneratedOutput(resourceRef: ResourceRef): Promise<NekoAgentGeneratedOutputResolution>;
-  setGeneratedOutputReviewPin(
-    resourceRef: ResourceRef,
-    input: { readonly pinned: boolean; readonly ownerId: string },
-  ): Promise<void>;
 }
 
 // =============================================================================
@@ -739,23 +494,21 @@ export const NEKO_EXTENSION_IDS = {
   NEKO_ASSETS: 'neko.neko-assets',
 } as const;
 
-export function isNekoAssetsAPI(value: unknown): value is NekoAssetsAPI {
-  return hasCallableMembers(value, [
-    'getAllEntities',
-    'importFile',
-    'getThumbnailPath',
-    'resolveEntityUri',
-    'getCharacterThumbnail',
-    'getBindingCandidate',
-    'getRepresentationPackageDetail',
-    'onDidChangeEntities',
-  ]);
+export function isNekoMediaRepresentationAPI(value: unknown): value is NekoMediaRepresentationAPI {
+  return hasCallableMembers(value, ['generateThumbnail']);
+}
+
+export function isNekoCutAPI(value: unknown): value is NekoCutAPI {
+  return (
+    isExtensionApiRecord(value) &&
+    value['status'] === 'ready' &&
+    hasCallableMember(value['routes'], 'handoff')
+  );
 }
 
 export function isNekoCanvasAPI(value: unknown): value is NekoCanvasAPI {
   if (!isExtensionApiRecord(value)) return false;
   return (
-    hasCallableMembers(value['asset'], ['import', 'list', 'getById']) &&
     hasCallableMember(value['authoring'], 'importAsset') &&
     hasCallableMember(value['markdown'], 'invoke') &&
     hasCallableMember(value['boards'], 'project') &&
@@ -784,24 +537,7 @@ export function isNekoCanvasAPI(value: unknown): value is NekoCanvasAPI {
       'generateBatch',
       'onSelectionChange',
     ]) &&
-    hasCallableMembers(value['events'], ['onDidChangeAssets', 'onDidChangeCanvas'])
-  );
-}
-
-export function isNekoCutAPI(value: unknown): value is NekoCutAPI {
-  if (!isExtensionApiRecord(value)) return false;
-  return (
-    isExtensionApiRecord(value['projectQuality']) &&
-    hasCallableMember(value['authoring'], 'importGeneratedClip') &&
-    hasCallableMembers(value['timeline'], [
-      'getInfo',
-      'addElement',
-      'updateElement',
-      'deleteElement',
-      'listElements',
-      'reveal',
-      'importCanvasDraft',
-    ])
+    hasCallableMember(value['events'], 'onDidChangeCanvas')
   );
 }
 

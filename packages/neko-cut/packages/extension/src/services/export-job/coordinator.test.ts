@@ -320,6 +320,9 @@ function createInput() {
       fps: 24,
       quality: 'high' as const,
       audioBitrate: 192_000,
+      videoBitrate: 8_000_000,
+      includeAudio: true,
+      audioSampleRate: 48_000 as const,
     },
     engineConfig: {
       timeline: { version: 1, tracks: [] },

@@ -151,15 +151,15 @@ export function createAssetSearchProviderContribution(input: {
     providerId: input.providerId,
     ...(input.displayName ? { displayName: input.displayName } : {}),
     adapters: input.adapters,
-    partitions: ['asset-library', 'media-library', 'generated-assets'],
+    partitions: ['media-library', 'generated-assets'],
     capabilities: {
       providerId: input.providerId,
-      modes: ['mention', 'global', 'asset-picker', 'agent-tool'],
-      itemKinds: ['asset', 'media', 'document', 'generated-asset'],
-      partitions: ['asset-library', 'media-library', 'generated-assets'],
+      modes: ['mention', 'global', 'media-picker', 'agent-tool'],
+      itemKinds: ['media', 'document', 'generated-asset'],
+      partitions: ['media-library', 'generated-assets'],
     },
     ...(input.replacesCompatibility
-      ? { replacesCompatibilityPartitions: ['asset-library', 'media-library', 'generated-assets'] }
+      ? { replacesCompatibilityPartitions: ['media-library', 'generated-assets'] }
       : {}),
   };
 }

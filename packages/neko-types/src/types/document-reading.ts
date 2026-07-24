@@ -1,3 +1,6 @@
+import type { ContentRepresentationLocator } from './content-representation';
+import type { DocumentEntryContentLocator } from './content-locator';
+
 // =============================================================================
 // Document Reading Contracts
 // =============================================================================
@@ -167,6 +170,8 @@ export interface DocumentImageInfo {
   readonly byteSize?: number;
   readonly locator?: DocumentLocator;
   readonly resourceRef?: DocumentArchiveResourceRef;
+  readonly contentLocator?: DocumentEntryContentLocator;
+  readonly representationLocator?: ContentRepresentationLocator;
 }
 
 export interface DocumentExcerpt {

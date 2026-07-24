@@ -163,6 +163,25 @@ describe('NodeDocumentPreviewServer', () => {
     },
   );
 
+  it.each(['ENOENT', 'ENOTDIR'])(
+    'maps linked EPUB source loss (%s) to a safe not-found response',
+    async (code) => {
+      const filePath = await createDocumentFixture('epub-placeholder');
+      const readEntry = vi.fn(async () => {
+        throw Object.assign(new Error(`source disappeared: ${filePath}`), { code });
+      });
+      const server = createServer({ documentAccess: { readEntry } });
+      const registration = await server.register(filePath, 'epub');
+
+      const response = await fetch(`${registration.url}OPS/chapter.xhtml`);
+
+      expect(response.status).toBe(404);
+      const body = await response.text();
+      expect(body).toBe('document file not found');
+      expect(body).not.toContain(filePath);
+    },
+  );
+
   function createServer(
     options: ConstructorParameters<typeof NodeDocumentPreviewServer>[0] = {},
   ): NodeDocumentPreviewServer {

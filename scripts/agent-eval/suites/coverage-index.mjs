@@ -77,6 +77,7 @@ const EXPECTED_RUNTIME_CAPABILITIES = Object.freeze([
   'session-workflows',
   'tool-call-lifecycle',
   'creative-media-workflow',
+  'media-library-content',
   'workspace-board-delivery',
   'timeline-projection-authority',
   'tool-result-delivery',

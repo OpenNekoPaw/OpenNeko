@@ -61,13 +61,29 @@ const resourceRef = createResourceRef({
 });
 
 describe('content access tools', () => {
-  it('publishes ReadImage resourceRef as a required image item field', () => {
+  it('publishes strict ReadImage resourceRef or workspace locator identity branches', () => {
     const tool = createReadImageTool({ contentAccessRuntime: createRuntime() });
     const images = tool.parameters.properties['images'] as {
-      readonly items?: { readonly required?: readonly string[] };
+      readonly items?: {
+        readonly anyOf?: readonly { readonly required?: readonly string[] }[];
+        readonly properties?: {
+          readonly resourceRef?: {
+            readonly anyOf?: readonly { readonly required?: readonly string[] }[];
+          };
+        };
+      };
     };
 
-    expect(images.items?.required).toContain('resourceRef');
+    expect(images.items?.anyOf?.map((branch) => branch.required)).toEqual([
+      ['resourceRef'],
+      ['contentLocator'],
+      ['locator'],
+      ['representationLocator'],
+    ]);
+    expect(images.items?.properties?.resourceRef?.anyOf?.map((branch) => branch.required)).toEqual([
+      ['kind', 'source', 'entryPath'],
+      ['id', 'scope', 'provider', 'kind', 'source', 'fingerprint'],
+    ]);
   });
 
   it('advertises metadata-only ReadImage mode and rejects legacy model-backed vision mode', async () => {
@@ -104,9 +120,7 @@ describe('content access tools', () => {
 
     expect(result.success).toBe(true);
     expect(runtime.resolveDocumentContent).toHaveBeenCalledWith({
-      caller: 'read-document',
       source: documentContentSource,
-      intent: 'agent-context',
       mode: 'content',
       startBatch: false,
       includeManifest: false,
@@ -147,9 +161,7 @@ describe('content access tools', () => {
 
     expect(result.success).toBe(true);
     expect(runtime.resolveDocumentContent).toHaveBeenCalledWith({
-      caller: 'read-document',
       source: { kind: 'file', path: '${A}/books/book.epub' },
-      intent: 'agent-context',
       mode: 'range',
       range,
       startBatch: false,
@@ -256,8 +268,6 @@ describe('content access tools', () => {
     expect(imageResult.success).toBe(true);
     expect(runtime.loadProviderAsset).toHaveBeenCalledWith(
       expect.objectContaining({
-        caller: 'read-image',
-        preferredTarget: 'bytes',
         source: expect.objectContaining({
           provider: 'document-archive',
           locator: expect.objectContaining({
@@ -296,14 +306,11 @@ describe('content access tools', () => {
     expect(result.success).toBe(true);
     expect(runtime.loadProviderAsset).toHaveBeenCalledWith(
       expect.objectContaining({
-        caller: 'read-image',
         source: resourceRef,
-        preferredTarget: 'bytes',
       }),
     );
     expect(runtime.resolveImageMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
-        caller: 'read-image',
         source: resourceRef,
       }),
     );
@@ -317,7 +324,7 @@ describe('content access tools', () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('Missing required field: images[].resourceRef');
+    expect(result.error).toContain('Missing required stable image identity');
     expect(result.error).toContain('Do not inspect cache directories');
     expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
     expect(runtime.resolveImageMetadata).not.toHaveBeenCalled();

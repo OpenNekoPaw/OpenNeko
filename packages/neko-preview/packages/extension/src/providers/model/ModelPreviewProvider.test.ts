@@ -24,24 +24,24 @@ vi.mock('vscode', () => ({
 }));
 
 vi.mock('@neko/shared/vscode/extension', () => ({
-  createHostContentAccessRuntime: ({ extensionUri }: { extensionUri: { fsPath: string } }) => ({
-    localResourceAccess: {
-      configureWebview: vi.fn(
-        async (
-          webview: { options: Record<string, unknown> },
-          options: { enableScripts?: boolean },
-        ) => {
-          webview.options = {
-            ...webview.options,
-            ...(options.enableScripts === undefined
-              ? {}
-              : { enableScripts: options.enableScripts }),
-            localResourceRoots: [uri(`${extensionUri.fsPath}/dist/webview`)],
-          };
-        },
-      ),
-      isAuthorizedPath: vi.fn(async () => true),
-    },
+  createDefaultLocalResourceAccessService: ({
+    extensionUri,
+  }: {
+    extensionUri: { fsPath: string };
+  }) => ({
+    configureWebview: vi.fn(
+      async (
+        webview: { options: Record<string, unknown> },
+        options: { enableScripts?: boolean },
+      ) => {
+        webview.options = {
+          ...webview.options,
+          ...(options.enableScripts === undefined ? {} : { enableScripts: options.enableScripts }),
+          localResourceRoots: [uri(`${extensionUri.fsPath}/dist/webview`)],
+        };
+      },
+    ),
+    isAuthorizedPath: vi.fn(async () => true),
   }),
   loadHostContentPathPolicy: vi.fn(),
 }));

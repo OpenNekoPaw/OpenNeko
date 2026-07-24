@@ -25,7 +25,8 @@ const {
 function parseArgs(argv) {
   const args = [...argv];
   const explicitTargetIndex = args.indexOf('--target');
-  const explicitTarget = explicitTargetIndex === -1 ? null : args[explicitTargetIndex + 1] ?? null;
+  const explicitTarget =
+    explicitTargetIndex === -1 ? null : (args[explicitTargetIndex + 1] ?? null);
   const positionalTarget = args.find((arg) => arg !== '--' && !arg.startsWith('--'));
 
   return {
@@ -40,11 +41,15 @@ function parseArgs(argv) {
  */
 function assertTarget(target) {
   if (!target) {
-    throw new Error(`Usage: node scripts/package-platform.js --target <${getSupportedTargets().join('|')}>`);
+    throw new Error(
+      `Usage: node scripts/package-platform.js --target <${getSupportedTargets().join('|')}>`,
+    );
   }
 
   if (!getTargetConfig(target)) {
-    throw new Error(`Unknown target "${target}". Valid targets: ${getSupportedTargets().join(', ')}`);
+    throw new Error(
+      `Unknown target "${target}". Valid targets: ${getSupportedTargets().join(', ')}`,
+    );
   }
 }
 
@@ -149,7 +154,9 @@ function ensureNativeBinary(target, options, ctx) {
   ctx.runPnpm(path.join(ENGINE_DIR, 'packages', 'host-napi'), ['run', 'build:napi']);
 
   if (!ctx.existsSync(nodePath)) {
-    throw new Error(`Native binary build finished but ${path.basename(nodePath)} was not produced.`);
+    throw new Error(
+      `Native binary build finished but ${path.basename(nodePath)} was not produced.`,
+    );
   }
 
   return {
@@ -195,7 +202,9 @@ function packageTarget(target, options = {}, ctx = createContext()) {
   const nativeBinary = ensureNativeBinary(target, options, ctx);
 
   ctx.log(`🔨 Packaging neko-engine for: ${target}`);
-  ctx.log(`✅ Native binary: ${path.basename(nativeBinary.path)}${nativeBinary.built ? ' (rebuilt)' : ''}`);
+  ctx.log(
+    `✅ Native binary: ${path.basename(nativeBinary.path)}${nativeBinary.built ? ' (rebuilt)' : ''}`,
+  );
   ctx.log('🧹 Cleaning other platform artifacts...');
   pruneOtherNativeBinaries(target, ctx);
 
@@ -257,11 +266,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  createContext,
   ensureNativeBinary,
-  listVsixFiles,
   packageTarget,
   parseArgs,
-  pruneOtherNativeBinaries,
-  selectGeneratedVsix,
 };

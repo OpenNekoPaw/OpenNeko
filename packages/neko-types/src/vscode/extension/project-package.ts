@@ -1,13 +1,8 @@
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import * as vscode from 'vscode';
-import type { ContentAccessService } from './content-access-service';
-import { HostContentAccessService } from './content-access-service';
-import { SourceFileContentAccessProvider } from './content-access-providers';
-import {
-  createHostContentMediaPathContext,
-  resolveHostContentMediaPath,
-} from './content-path-resolver';
+import type { ContentReadService } from '../../types/content-io';
+import { normalizeWorkspaceContentPath } from '../../types/content-locator';
+import { createNodeHostContentReadService } from './node-content-read-service';
 
 export interface ProjectPackageRequest {
   readonly packageId: string;
@@ -15,7 +10,7 @@ export interface ProjectPackageRequest {
   readonly sourceUri: vscode.Uri;
   readonly sourceBytes?: Uint8Array;
   readonly metadata?: Record<string, unknown>;
-  readonly contentAccess?: ContentAccessService;
+  readonly contentRead?: ContentReadService;
 }
 
 export interface ProjectPackageResult {
@@ -27,6 +22,7 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 const MAX_REFERENCE_COUNT = 1000;
 const MAX_REFERENCE_SCAN_DEPTH = 4;
+const MAX_PACKAGE_ASSET_BYTES = 2 * 1024 * 1024 * 1024;
 const LOCAL_FILE_EXTENSIONS = new Set([
   '.aac',
   '.aif',
@@ -163,12 +159,18 @@ export async function createProjectSnapshotPackage(
   const sourceFileName = path.basename(request.sourceUri.fsPath);
   const sourceBytes =
     request.sourceBytes ?? (await vscode.workspace.fs.readFile(request.sourceUri));
+  const workspaceRoot = resolvePackageWorkspaceRoot(request.sourceUri);
   const packageAssets = await collectPackageAssets({
     sourceBytes,
     sourcePath: request.sourceUri.fsPath,
     sourceDir: path.dirname(request.sourceUri.fsPath),
-    contentAccess:
-      request.contentAccess ?? (await createDefaultPackageContentAccessService(request.sourceUri)),
+    workspaceRoot,
+    contentRead:
+      request.contentRead ??
+      createNodeHostContentReadService({
+        workspaceRoot,
+        defaultMaxBytes: MAX_PACKAGE_ASSET_BYTES,
+      }),
   });
 
   const manifest = {
@@ -247,8 +249,8 @@ interface PendingReference {
 
 interface ResolvedReference {
   readonly filePath: string;
-  readonly uri: vscode.Uri;
   readonly source: PackageReferenceManifestSource;
+  readonly packagePath?: string;
 }
 
 interface PackageAssetCollection {
@@ -310,7 +312,8 @@ async function collectPackageAssets(options: {
   readonly sourceBytes: Uint8Array;
   readonly sourcePath: string;
   readonly sourceDir: string;
-  readonly contentAccess: ContentAccessService;
+  readonly workspaceRoot: string;
+  readonly contentRead: ContentReadService;
 }): Promise<PackageAssetCollection> {
   const entries: ZipEntryInput[] = [];
   const assets: PackageAssetManifestEntry[] = [];
@@ -347,7 +350,11 @@ async function collectPackageAssets(options: {
       continue;
     }
 
-    const bytes = await readPackageReferenceBytes(options.contentAccess, resolved.filePath);
+    const bytes = await readPackageReferenceBytes(
+      options.contentRead,
+      options.workspaceRoot,
+      resolved.filePath,
+    );
     if (!bytes) {
       reportMissingReference(missingReferences, reportedMissing, resolved.source, 'read-failed');
       continue;
@@ -357,6 +364,7 @@ async function collectPackageAssets(options: {
       resolved.filePath,
       options.sourceDir,
       usedEntryNames,
+      resolved.packagePath,
     );
     entries.push({ name: packagePath, data: bytes });
     assets.push({
@@ -426,39 +434,33 @@ function discoverReferences(bytes: Uint8Array, baseDir: string, depth: number): 
 }
 
 async function readPackageReferenceBytes(
-  contentAccess: ContentAccessService,
+  contentRead: ContentReadService,
+  workspaceRoot: string,
   filePath: string,
 ): Promise<Uint8Array | undefined> {
-  const result = await contentAccess.resolve({
-    ref: { kind: 'file', path: filePath },
-    intent: 'package',
-    target: 'bytes',
-    caller: 'neko.project-package',
-  });
+  const relativePath = path.relative(workspaceRoot, filePath).split(path.sep).join('/');
+  const workspacePath = normalizeWorkspaceContentPath(relativePath);
+  if (!workspacePath || workspacePath !== relativePath) return undefined;
+
+  const result = await contentRead.read(
+    { kind: 'workspace-file', path: workspacePath },
+    { maxBytes: MAX_PACKAGE_ASSET_BYTES },
+  );
   return result.status === 'ready' ? result.bytes : undefined;
 }
 
-async function createDefaultPackageContentAccessService(
-  sourceUri: vscode.Uri,
-): Promise<ContentAccessService> {
-  const projectRoot = path.dirname(sourceUri.fsPath);
-  const mediaPathContext = await createHostContentMediaPathContext({
-    documentUri: sourceUri,
-    workspaceFolders: vscode.workspace.workspaceFolders ?? [],
-    getExtension: vscode.extensions.getExtension,
-  });
-  return new HostContentAccessService({
-    providers: [
-      new SourceFileContentAccessProvider({
-        projectRoot,
-        mediaPathContext,
-        fileExists: isVSCodeFile,
-        fileOps: {
-          readFile: async (filePath) => vscode.workspace.fs.readFile(vscode.Uri.file(filePath)),
-        },
-      }),
-    ],
-  });
+function resolvePackageWorkspaceRoot(sourceUri: vscode.Uri): string {
+  const directWorkspace = vscode.workspace.getWorkspaceFolder?.(sourceUri);
+  if (directWorkspace) return directWorkspace.uri.fsPath;
+
+  const candidates = (vscode.workspace.workspaceFolders ?? [])
+    .map((folder) => folder.uri.fsPath)
+    .filter((root) => {
+      const relative = path.relative(root, sourceUri.fsPath);
+      return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+    })
+    .sort((left, right) => right.length - left.length);
+  return candidates[0] ?? path.dirname(sourceUri.fsPath);
 }
 
 function normalizeReferenceCandidate(value: string): string | undefined {
@@ -536,23 +538,17 @@ async function resolveReference(
   if (!clean) return undefined;
 
   if (hasPathVariableReference(clean)) {
-    return resolvePathVariableReference(clean, baseDir);
+    return {
+      source: { kind: 'variable', reference: clean },
+      reason: 'unsupported-reference',
+    };
   }
 
   if (/^file:/i.test(clean)) {
-    try {
-      const filePath = fileURLToPath(clean);
-      return {
-        filePath,
-        uri: vscode.Uri.file(filePath),
-        source: { kind: 'file-uri', fileName: path.basename(filePath) },
-      };
-    } catch {
-      return {
-        source: { kind: 'file-uri', fileName: path.basename(clean) },
-        reason: 'unsupported-reference',
-      };
-    }
+    return {
+      source: { kind: 'file-uri', fileName: path.basename(clean) },
+      reason: 'unsupported-reference',
+    };
   }
 
   if (/^[a-z][a-z0-9+.-]*:/i.test(clean)) {
@@ -561,82 +557,28 @@ async function resolveReference(
 
   if (isAbsoluteFsPath(clean)) {
     return {
-      filePath: clean,
-      uri: vscode.Uri.file(clean),
       source: { kind: 'absolute', fileName: path.basename(clean) },
+      reason: 'unsupported-reference',
     };
   }
 
-  const filePath = path.resolve(baseDir, clean);
+  const workspaceLinked = isWorkspaceLinkedMediaPath(clean);
+  const filePath = path.resolve(
+    workspaceLinked ? (resolveLinkedWorkspaceRoot(baseDir) ?? baseDir) : baseDir,
+    clean,
+  );
   return {
     filePath,
-    uri: vscode.Uri.file(filePath),
     source: { kind: 'relative', reference: toZipPath(clean) },
+    ...(workspaceLinked ? { packagePath: toZipPath(clean) } : {}),
   };
 }
 
-async function resolvePathVariableReference(
-  reference: string,
-  baseDir: string,
-): Promise<
-  | ResolvedReference
-  | {
-      readonly source: PackageReferenceManifestSource;
-      readonly reason: PackageMissingReference['reason'];
-    }
-> {
-  const source: PackageReferenceManifestSource = { kind: 'variable', reference };
-  try {
-    const resolved = await resolveHostContentMediaPath(reference, {
-      workspaceRoot: resolvePackageWorkspaceRoot(baseDir),
-      workspaceFolders: vscode.workspace.workspaceFolders ?? [],
-      getExtension: vscode.extensions.getExtension,
-      fileExists: isVSCodeFile,
-    });
-    const filePath = resolveCommandFilePath(resolved, baseDir);
-    if (filePath) {
-      return {
-        filePath,
-        uri: vscode.Uri.file(filePath),
-        source,
-      };
-    }
-  } catch {
-    // Shared content policy may be unavailable; unresolved variables are reported in the manifest.
-  }
-
-  return { source, reason: 'unsupported-reference' };
-}
-
-function resolvePackageWorkspaceRoot(baseDir: string): string | undefined {
+function resolveLinkedWorkspaceRoot(baseDir: string): string | undefined {
   return (
     vscode.workspace.getWorkspaceFolder?.(vscode.Uri.file(baseDir))?.uri.fsPath ??
     vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
   );
-}
-
-async function isVSCodeFile(filePath: string): Promise<boolean> {
-  try {
-    return (
-      (await vscode.workspace.fs.stat(vscode.Uri.file(filePath))).type === vscode.FileType.File
-    );
-  } catch {
-    return false;
-  }
-}
-
-function resolveCommandFilePath(value: string, baseDir: string): string | undefined {
-  const clean = stripQueryAndFragment(value.trim());
-  if (!clean || hasPathVariableReference(clean)) return undefined;
-  if (/^file:/i.test(clean)) {
-    try {
-      return fileURLToPath(clean);
-    } catch {
-      return undefined;
-    }
-  }
-  if (/^[a-z][a-z0-9+.-]*:/i.test(clean)) return undefined;
-  return isAbsoluteFsPath(clean) ? clean : path.resolve(baseDir, clean);
 }
 
 function stripQueryAndFragment(value: string): string {
@@ -663,6 +605,10 @@ function hasPathVariableReference(value: string): boolean {
   return /^\/?\$\{[^}]+}/.test(value);
 }
 
+function isWorkspaceLinkedMediaPath(value: string): boolean {
+  return value.replace(/\\/gu, '/').startsWith('neko/assets/');
+}
+
 function isAbsoluteFsPath(value: string): boolean {
   return path.isAbsolute(value) || /^[A-Za-z]:[\\/]/.test(value);
 }
@@ -686,13 +632,15 @@ function allocatePackageEntryPath(
   filePath: string,
   sourceDir: string,
   usedEntryNames: Set<string>,
+  preferredPath?: string,
 ): string {
   const relative = path.relative(sourceDir, filePath);
-  const candidate =
-    relative &&
-    !relative.startsWith('..') &&
-    !path.isAbsolute(relative) &&
-    !relative.split(/[\\/]/).includes('..')
+  const candidate = preferredPath
+    ? toZipPath(preferredPath)
+    : relative &&
+        !relative.startsWith('..') &&
+        !path.isAbsolute(relative) &&
+        !relative.split(/[\\/]/).includes('..')
       ? toZipPath(relative)
       : toZipPath(
           path.join('assets', 'external', `${hashString(filePath)}-${path.basename(filePath)}`),

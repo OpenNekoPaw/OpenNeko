@@ -10,8 +10,6 @@ export type { MessageAttachment, AttachmentType } from '@neko/shared';
 
 // Re-export from @neko-agent/types (Single Source of Truth)
 export type { AIAssistantSettings, ConfiguredProvider } from '@neko-agent/types';
-export { DEFAULT_SETTINGS } from '@neko-agent/types';
-
 // =============================================================================
 // Extension-only types (NOT shared with webview)
 // =============================================================================

@@ -140,18 +140,18 @@ Neko Agent 的 VS Code Extension/Webview 与 Terminal TUI/headless 是两个本�
 
 Host-private 数据不能伪装成共享业务结果。Webview URI、blob URL、Extension memento、VS Code handle、Extension-private cache、TUI 进程 handle、终端尺寸、键盘状态和 headless 报告路径都不是 durable workspace identity。跨宿主请求遇到这些能力时，应返回 host-private/unavailable diagnostic，而不是 no-op、当作普通 prompt、读另一端私有缓存，或回退旧实现。
 
-### Generated output 与 AssetLibrary 身份
+### Generated output 与 Media Library
 
-媒体生成完成后，生成文件及 generated-output index 记录服务于预览、`ReadImage`、perception、provider reconciliation、重载以及 revision/digest/generation lineage；它们不是 AssetLibrary `AssetEntity`。Tool terminal-result observation 对未显式加入资产库的生成结果只投影 `ResourceRef`，不得根据 presentation `assets[]` 字段名推断 `kind: asset`。
+媒体生成完成后，generated-output owner 保存文件、revision、digest 和 generation lineage，供预览、`ReadImage`、perception、异步 continuation 与重载使用。presentation 中的 `assets[]` 只是展示集合名，不能改变 owner identity。
 
 ```text
 GeneratedOutput / ResourceRef
   -> preview / ReadImage / perception / async recovery
-  -> explicit Import or Promote
-  -> AssetLibrary AssetEntity
+  -> explicit retain / copy to selected Media Library / Entity bind
+  -> ContentLocator remains the durable resource identity
 ```
 
-`ListAssets` 和 `GetAsset` 只查询 AssetLibrary。它们不得 fallback 到 generated-output index；用户或 Agent 显式 Import/Promote 成功后，使用该操作返回的新 AssetEntity id 访问资产库。真实 AssetLibrary Tool result 必须通过 typed `asset` result ref、`assetId` 或 `assetIds` 声明身份，不能依赖通用集合名。
+Agent 使用 Media Library search/read 与 Creative Entity query/bind capability，不存在 Asset catalog 的 List/Get/Import 成功路径。生成结果复制到媒体库后，source generated-output identity 与目标 workspace-file locator 各自保留；复制不会建立 membership 或替代 ID。
 
 新增 Agent 业务能力时，默认接入顺序是：先定义共享 contract 和 path-level 测试，再实现 Extension/TUI adapter，最后做 Webview 或终端展示。测试应能证明 canonical runtime、catalog、ToolCall/领域 Job、cache path 被命中，并能 poison legacy path 证明旧 readline interactive、TUI-local raw config、TUI-local Skill loader 或结果型 fallback 没有参与成功路径。
 
@@ -442,7 +442,7 @@ Extension → Webview:
 
 Agent core 和 session 不拥有 Canvas destination、Board work session、conversation binding、Board index/scope resolver、delivery runtime 或 Cut target state。核心只观察 Tool/AgentRun result、diagnostic 与 Approval。VS Code/TUI Host composition 可以把已声明的 creator-visible typed result 交给 owning Canvas projector，但目的地状态不能进入 Agent contract。
 
-没有显式 Canvas target 时，公共 `NekoCanvasAPI.boards.project()` 只写 `neko/boards/workspace.nkc`；显式 target 是普通 `.nkc` identity。它不解析活动/最近文档、会话、scope 或文件名。Generated Output owner 先将 creator-visible binary 保存到 `neko/generated/<kind>/` 并建立 revision/digest/lineage/`ResourceRef`，Canvas 再创建或复用顶层普通内容节点，并把已证明的素材依赖写为 `derived-from` connection；AssetLibrary promotion 是独立可选动作。
+没有显式 Canvas target 时，公共 `NekoCanvasAPI.boards.project()` 只写 `neko/boards/workspace.nkc`；显式 target 是普通 `.nkc` identity。它不解析活动/最近文档、会话、scope 或文件名。Generated Output owner 先将 creator-visible binary 保存到 `neko/generated/<kind>/` 并建立 revision/digest/lineage/`ResourceRef`，Canvas 再创建或复用顶层普通内容节点，并把已证明的资源依赖写为 `derived-from` connection；复制到 Media Library 或绑定 Entity 都是独立显式动作。
 
 普通问答、reasoning、日志、provider scratch、未选搜索结果、runtime handle 和 non-reviewable failure 不投影。目标缺失、权限失败或 revision conflict 只产生 projection diagnostic；生成文件继续由 generated-output owner 保留，不重新解析或改投其他 Canvas。
 
@@ -471,7 +471,7 @@ Historical/external Add to Board button
 - Extension/Webview 不通过关键词、表头、profile hint 或资源类型预激活 Canvas Skill。
 - Markdown projections from `@neko/markdown` are metadata only：stable refs、diagnostics、prompt spans 和 `declared*Hint` 可帮助 Agent 决策，但不成为 Canvas validation/mutation authority。
 - Canvas authoring tool results are rendered read-only in Agent Webview: refs、diagnostics、blocked reason、prompt-field alignment 和 next actions 会展示给用户，但 approval-gated next actions 不能因渲染自动执行。
-- 历史/外部素材导入必须使用显式 Import / Add Source affordance；当前 typed result 已由 Board 自动投递，不再显示通用 `Send to Canvas`。
+- 历史/外部媒体进入 Canvas 必须使用显式 Add Source affordance；当前 typed result 已由 Board 自动投递，不再显示通用 `Send to Canvas`。
 
 ### Package Authoring Transfer
 

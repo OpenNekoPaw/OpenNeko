@@ -13,7 +13,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { getMediaType } from '@neko/shared';
 import {
-  createHostContentAccessRuntime,
+  createDefaultLocalResourceAccessService,
   injectLocaleAttribute,
   type LocalResourceAccessService,
 } from '@neko/shared/vscode/extension';
@@ -52,17 +52,10 @@ export class MediaDiffEditorProvider implements vscode.CustomReadonlyEditorProvi
   ) {
     this.diffService = diffService;
     this.sessionFactory = sessionFactory;
-    const contentRuntime = createHostContentAccessRuntime({
+    this.localResourceAccess = createDefaultLocalResourceAccessService({
       extensionUri: context.extensionUri,
       context,
-      sourceFileProvider: { enabled: false },
-      documentEntryProvider: { enabled: false },
-      ingest: { enabled: false },
     });
-    if (!contentRuntime.localResourceAccess) {
-      throw new Error('Media diff editor requires LocalResourceAccessService.');
-    }
-    this.localResourceAccess = contentRuntime.localResourceAccess;
     // Restore persisted local compare files
     this.restoreLocalCompareFiles();
   }

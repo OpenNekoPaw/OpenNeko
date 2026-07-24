@@ -158,6 +158,46 @@ describe('storyboard import utilities', () => {
     ]);
   });
 
+  it('rejects legacy Asset locators instead of resolving an Asset fallback', () => {
+    expect(() =>
+      normalizeCutStoryboardImportPayload({
+        projectName: 'Legacy',
+        shots: [
+          {
+            id: 'shot-legacy',
+            shotNumber: 1,
+            duration: 2,
+            preparedKeyframeRef: {
+              refId: 'legacy-asset-ref',
+              role: 'source',
+              locator: { type: 'asset', assetId: 'legacy-asset' },
+            },
+            label: 'Legacy shot',
+          },
+        ],
+      }),
+    ).toThrow('require explicit inspection and migration');
+
+    expect(() =>
+      buildStoryboardImageClips({
+        projectName: 'Legacy',
+        shots: [
+          {
+            id: 'shot-legacy',
+            shotNumber: 1,
+            duration: 2,
+            preparedKeyframeRef: {
+              refId: 'legacy-asset-ref',
+              role: 'source',
+              locator: { type: 'asset', assetId: 'legacy-asset' },
+            },
+            label: 'Legacy shot',
+          },
+        ],
+      }),
+    ).toThrow('require explicit inspection and migration');
+  });
+
   it('keeps storyboard timing stable when a shot has no image', () => {
     const payload = normalizeCutStoryboardImportPayload({
       projectName: 'Opening',

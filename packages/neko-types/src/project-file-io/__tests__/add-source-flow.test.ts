@@ -33,8 +33,7 @@ describe('Project source add Webview client', () => {
       kind: 'drag-drop',
       formatId: 'nkv',
       sourcePath: '/workspace/project/media/clip.mp4',
-      destination: { kind: 'project', directory: 'media', copyMode: 'link' },
-      ingestMode: 'link',
+      assetDirectory: 'media',
     });
     await Promise.resolve();
 
@@ -74,8 +73,7 @@ describe('Project source add Webview client', () => {
       kind: 'drag-drop',
       formatId: 'nkc',
       browserFile: { name: 'clip.mp4' },
-      destination: { kind: 'project', directory: 'media', copyMode: 'copy' },
-      ingestMode: 'create-asset',
+      assetDirectory: 'media',
     });
     await Promise.resolve();
 
@@ -112,8 +110,7 @@ describe('Project source add Webview client', () => {
       kind: 'drag-drop',
       formatId: 'nkv',
       browserFile: { name: 'clip.mp4' },
-      destination: { kind: 'project', directory: 'media', copyMode: 'copy' },
-      ingestMode: 'create-asset',
+      assetDirectory: 'media',
     });
     await Promise.resolve();
     timeoutCallback?.();
@@ -140,8 +137,7 @@ describe('Project source add Webview client', () => {
           lastModified: 12,
           arrayBuffer: async () => bytes.buffer.slice(0),
         },
-        destination: { kind: 'project', directory: 'media', copyMode: 'copy' },
-        ingestMode: 'create-asset',
+        assetDirectory: 'media',
       },
       'add-file',
     );
@@ -181,8 +177,7 @@ describe('Project source add Webview client', () => {
         requestId: 'picker-1',
         kind: 'file-picker',
         formatId: 'nkv',
-        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
-        ingestMode: 'link',
+        assetDirectory: 'media',
       }),
     ).toEqual([]);
 
@@ -191,8 +186,7 @@ describe('Project source add Webview client', () => {
         requestId: 'drag-1',
         kind: 'drag-drop',
         formatId: 'nkv',
-        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
-        ingestMode: 'link',
+        assetDirectory: 'media',
       }),
     ).toEqual([expect.objectContaining({ code: 'missing-source' })]);
   });
@@ -207,16 +201,15 @@ describe('Project source add Extension Host adapter', () => {
         kind: 'drag-drop',
         formatId: 'nkv',
         sourcePath: '/workspace/project/media/clip.mp4',
-        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
+        assetDirectory: 'media',
       },
       {
         postMessage: (message) => posted.push(message),
-        ingestPort: {
-          ingest: async (request) => ({
+        storagePort: {
+          store: async () => ({
             status: 'ready',
-            request,
-            source: { kind: 'file', path: 'media/clip.mp4' },
-            contractedPath: 'media/clip.mp4',
+            storage: 'referenced',
+            durablePath: 'media/clip.mp4',
           }),
         },
       },
@@ -242,17 +235,15 @@ describe('Project source add Extension Host adapter', () => {
         formatId: 'nkc',
         bytes,
         browserFile: { name: 'clip.mp4', type: 'video/mp4' },
-        destination: { kind: 'project', directory: 'media', copyMode: 'copy' },
-        ingestMode: 'create-asset',
+        assetDirectory: 'media',
       },
       {
         postMessage: (message) => posted.push(message),
-        ingestPort: {
-          ingest: async (request) => ({
+        storagePort: {
+          store: async () => ({
             status: 'ready',
-            request,
-            source: { kind: 'file', path: 'media/clip.mp4' },
-            outputPath: '/workspace/project/media/clip.mp4',
+            storage: 'copied',
+            durablePath: 'media/clip.mp4',
           }),
         },
       },
@@ -271,16 +262,18 @@ describe('Project source add Extension Host adapter', () => {
         kind: 'drag-drop',
         formatId: 'nkv',
         sourcePath: '/Downloads/clip.mp4',
-        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
-        ingestMode: 'link',
+        assetDirectory: 'media',
       },
       {
         postMessage: (message) => posted.push(message),
-        ingestPort: {
-          ingest: async (request) => ({
-            status: 'non-portable',
-            request,
-            error: 'Move this file into the workspace first.',
+        storagePort: {
+          store: async () => ({
+            status: 'unavailable',
+            diagnostic: {
+              code: 'non-portable-path',
+              severity: 'error',
+              message: 'Move this file into the workspace first.',
+            },
           }),
         },
       },
@@ -292,16 +285,16 @@ describe('Project source add Extension Host adapter', () => {
   });
 
   it('rejects runtime and cache source handles before ingest', async () => {
-    const ingest = vi.fn();
+    const store = vi.fn();
     const runtime = await handleProjectSourceAddHostRequest(
       {
         requestId: 'runtime-1',
         kind: 'drag-drop',
         formatId: 'nkc',
         sourcePath: 'blob:vscode-runtime',
-        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
+        assetDirectory: 'media',
       },
-      { postMessage: vi.fn(), ingestPort: { ingest } },
+      { postMessage: vi.fn(), storagePort: { store } },
     );
     const cache = await handleProjectSourceAddHostRequest(
       {
@@ -309,9 +302,9 @@ describe('Project source add Extension Host adapter', () => {
         kind: 'drag-drop',
         formatId: 'nkc',
         sourcePath: '/workspace/project/.neko/.cache/proxy/clip.mp4',
-        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
+        assetDirectory: 'media',
       },
-      { postMessage: vi.fn(), ingestPort: { ingest } },
+      { postMessage: vi.fn(), storagePort: { store } },
     );
 
     expect(runtime.diagnostics).toEqual([
@@ -320,7 +313,7 @@ describe('Project source add Extension Host adapter', () => {
     expect(cache.diagnostics).toEqual([
       expect.objectContaining({ code: 'cache-source-persisted' }),
     ]);
-    expect(ingest).not.toHaveBeenCalled();
+    expect(store).not.toHaveBeenCalled();
   });
 
   it('converts thrown host errors into rejected results', async () => {
@@ -331,7 +324,7 @@ describe('Project source add Extension Host adapter', () => {
         kind: 'drag-drop',
         formatId: 'nkv',
         sourcePath: '/workspace/project/media/clip.mp4',
-        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
+        assetDirectory: 'media',
       },
       {
         postMessage: (message) => posted.push(message),

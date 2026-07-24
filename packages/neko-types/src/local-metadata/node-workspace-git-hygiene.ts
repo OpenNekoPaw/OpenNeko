@@ -1,6 +1,10 @@
 import { execFile } from 'node:child_process';
-import { appendFile, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import {
+  assertWorkspaceLinkedMediaLibraryName,
+  workspaceLinkedMediaLibraryPath,
+} from '../types/asset/workspace-linked-media-library';
 import type {
   WorkspaceGitHygieneDiagnostic,
   WorkspaceGitHygieneReport,
@@ -14,6 +18,30 @@ const NEKO_GITIGNORE_BLOCK = '# Neko workspace-local state and cache\n.neko/\n';
 export interface EnsureWorkspaceGitHygieneOptions {
   readonly workDir: string;
   readonly updateGitignore: boolean;
+}
+
+export interface EnsureWorkspaceLinkedMediaLibraryGitExcludeOptions {
+  readonly workDir: string;
+  readonly libraryName: string;
+}
+
+export async function ensureWorkspaceLinkedMediaLibraryGitExclude(
+  options: EnsureWorkspaceLinkedMediaLibraryGitExcludeOptions,
+): Promise<void> {
+  assertWorkspaceLinkedMediaLibraryName(options.libraryName);
+  const relativePath = workspaceLinkedMediaLibraryPath(options.libraryName);
+  const exactRule = `/${relativePath}`;
+  const excludePath = await resolveGitExcludePath(options.workDir);
+  if (!excludePath) return;
+  const existing = await readFileIfExists(excludePath);
+  if (existing.split(/\r?\n/u).includes(exactRule)) return;
+  await mkdir(dirname(excludePath), { recursive: true });
+  const separator = existing.length === 0 ? '' : existing.endsWith('\n') ? '' : '\n';
+  await appendFile(excludePath, `${separator}${exactRule}\n`, 'utf8');
+  const match = await checkIgnore(options.workDir, relativePath);
+  if (!match.ignored || match.matchedRule !== exactRule) {
+    throw new Error('Git did not apply the exact workspace media library exclude rule.');
+  }
 }
 
 export async function ensureWorkspaceGitHygiene(
@@ -82,6 +110,41 @@ function executeGitCheckIgnore(
       },
     );
   });
+}
+
+function resolveGitExcludePath(workDir: string): Promise<string | undefined> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      'git',
+      ['-C', workDir, 'rev-parse', '--path-format=absolute', '--git-path', 'info/exclude'],
+      { encoding: 'utf8', env: { ...process.env, LANG: 'C', LC_ALL: 'C' } },
+      (error, stdout, stderr) => {
+        if (!error && stdout.trim()) {
+          resolve(stdout.trim());
+          return;
+        }
+        if (isNotGitRepositoryFailure(error, stderr)) {
+          resolve(undefined);
+          return;
+        }
+        reject(
+          new Error(
+            `Workspace Git exclude path inspection failed: ${stderr.trim() || error?.message || 'unknown error'}`,
+          ),
+        );
+      },
+    );
+  });
+}
+
+function isNotGitRepositoryFailure(error: unknown, stderr: string): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 128 &&
+    /fatal: not a git repository(?: |$)/u.test(stderr.trim())
+  );
 }
 
 async function appendNekoIgnoreBlock(gitignorePath: string): Promise<void> {

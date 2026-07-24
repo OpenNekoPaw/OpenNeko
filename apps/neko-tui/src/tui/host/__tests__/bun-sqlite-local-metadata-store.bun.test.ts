@@ -228,13 +228,12 @@ describe('bun:sqlite local metadata store', () => {
           kind: 'binding-availability',
           sourceId: 'neko-entity-facts',
           entityId: 'char_rin',
-          assetRef: 'project://assets/rin.png',
           freshness: 'fresh',
           value: {
             bindingId: 'binding:rin-portrait',
             entityId: 'char_rin',
             entityKind: 'character',
-            assetRef: 'project://assets/rin.png',
+            representation: { kind: 'workspace-file', path: 'neko/assets/rin.png' },
             role: 'portrait',
             status: 'confirmed',
             availability: 'active',
@@ -247,9 +246,16 @@ describe('bun:sqlite local metadata store', () => {
     expect(
       await store.repositories.entityAssetProjections.list({
         partition: entityPartition,
-        assetRef: 'project://assets/rin.png',
+        entityId: 'char_rin',
       }),
-    ).toEqual([expect.objectContaining({ entityId: 'char_rin' })]);
+    ).toEqual([
+      expect.objectContaining({
+        entityId: 'char_rin',
+        value: expect.objectContaining({
+          representation: { kind: 'workspace-file', path: 'neko/assets/rin.png' },
+        }),
+      }),
+    ]);
     const catalogPartition = {
       scope: 'global' as const,
       workspaceId: null,

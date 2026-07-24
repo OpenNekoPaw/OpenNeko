@@ -3,12 +3,14 @@ import {
   ENTITY_FACADE_COMMANDS,
   isCreativeEntityRef,
   isEntityFacadeCommandError,
+  isEntityRepresentationBinding,
   type CreativeEntity,
   type CreativeEntityCandidate,
   type CreativeEntityRef,
   type EntityFacadeEntityDetailResult,
-  type EntityAssetBindingAvailability,
-  type EntityAssetBindingRole,
+  type EntityRepresentationBindingAvailability,
+  type EntityRepresentationRole,
+  type EntityRepresentationTarget,
 } from '@neko/shared';
 
 export type CanvasEntityRouteType = 'entity.summary' | 'entity.confirmCandidate' | 'entity.inspect';
@@ -35,9 +37,9 @@ export interface CanvasEntitySummary {
   };
   readonly candidateCount?: number;
   readonly defaultRepresentation?: {
-    readonly role: EntityAssetBindingRole;
-    readonly assetRef: string;
-    readonly availability: EntityAssetBindingAvailability;
+    readonly role: EntityRepresentationRole;
+    readonly representation: EntityRepresentationTarget;
+    readonly availability: EntityRepresentationBindingAvailability;
     readonly orphanedAt?: string;
   };
 }
@@ -247,20 +249,19 @@ function shortMetadata(source: { readonly metadata?: Record<string, unknown> } |
 function summarizeDefaultRepresentation(
   bindings: readonly unknown[],
 ): CanvasEntitySummary['defaultRepresentation'] | undefined {
-  for (const binding of bindings) {
-    if (!isRecord(binding) || binding['isDefault'] !== true) continue;
-    const role = readEntityAssetBindingRole(binding['role']);
-    const assetRef = readString(binding['assetRef']);
-    const availability = readEntityAssetBindingAvailability(binding['availability']);
-    if (!role || !assetRef || !availability) continue;
-    return {
-      role,
-      assetRef,
-      availability,
-      ...(typeof binding['orphanedAt'] === 'string' ? { orphanedAt: binding['orphanedAt'] } : {}),
-    };
-  }
-  return undefined;
+  const validBindings = bindings.filter(isEntityRepresentationBinding);
+  const binding =
+    validBindings.find((candidate) => candidate.isDefault === true) ??
+    validBindings.find(
+      (candidate) => candidate.status === 'confirmed' && candidate.availability === 'orphaned',
+    );
+  if (!binding) return undefined;
+  return {
+    role: binding.role,
+    representation: binding.representation,
+    availability: binding.availability,
+    ...(binding.orphanedAt ? { orphanedAt: binding.orphanedAt } : {}),
+  };
 }
 
 function commandErrorResult(error: {
@@ -305,23 +306,4 @@ function isNonEmptyString(value: unknown): value is string {
 
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
-
-function readEntityAssetBindingRole(value: unknown): EntityAssetBindingRole | undefined {
-  return value === 'portrait' ||
-    value === 'reference' ||
-    value === 'puppet-bone' ||
-    value === 'live2d' ||
-    value === 'live3d' ||
-    value === 'voice' ||
-    value === 'motion' ||
-    value === 'style'
-    ? value
-    : undefined;
-}
-
-function readEntityAssetBindingAvailability(
-  value: unknown,
-): EntityAssetBindingAvailability | undefined {
-  return value === 'active' || value === 'orphaned' || value === 'archived' ? value : undefined;
 }

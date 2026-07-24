@@ -2,7 +2,9 @@
 //!
 //! Provides audio-related operations: probing, transcoding, streaming, and waveform generation.
 
-use crate::domain::{AudioTranscodeOptions, FrameData, LoudnessAnalysis, SilenceAnalysis};
+use crate::domain::{
+    AudioTranscodeOptions, FrameData, LoudnessAnalysis, SilenceAnalysis, StreamConfig,
+};
 use crate::error::{Error, Result};
 use crate::services::audio_mixdown::MixdownConfig;
 use crate::services::impls::audio_mix_stream::start_mix_stream;
@@ -296,12 +298,13 @@ impl IAudioService for AudioService {
         &self,
         source: &Path,
         session_id: &str,
+        config: StreamConfig,
     ) -> Result<(StreamId, broadcast::Receiver<FrameData>)> {
         let path = source.to_string_lossy().to_string();
 
         // Create stream channels
         let (stream_id, tx, rx, cancel, state_tx, state_rx) =
-            create_stream_channels(session_id, 64);
+            create_stream_channels(session_id, 64, &config);
 
         // Spawn decode loop in a single blocking thread
         // No Opus encoding — send raw PCM f32le directly (WebView doesn't support WebCodecs AudioDecoder)
@@ -605,7 +608,11 @@ mod tests {
     async fn test_audio_service_start_stream_nonexistent() {
         let service = create_test_service();
         let result = service
-            .start_stream(Path::new("/nonexistent/file.mp3"), "session1")
+            .start_stream(
+                Path::new("/nonexistent/file.mp3"),
+                "session1",
+                StreamConfig::default(),
+            )
             .await;
         // Stream creation succeeds (async), but the decode loop will fail internally
         // The stream_id is returned immediately
@@ -724,7 +731,9 @@ mod tests {
         };
 
         let service = create_test_service();
-        let result = service.start_stream(&test_file, "test-audio").await;
+        let result = service
+            .start_stream(&test_file, "test-audio", StreamConfig::default())
+            .await;
         assert!(result.is_ok(), "start_stream should succeed");
 
         let (stream_id, mut rx) = result.unwrap();
@@ -786,7 +795,9 @@ mod tests {
         };
 
         let service = create_test_service();
-        let result = service.start_stream(&test_file, "test-aac").await;
+        let result = service
+            .start_stream(&test_file, "test-aac", StreamConfig::default())
+            .await;
         assert!(result.is_ok(), "start_stream should succeed for aac");
 
         let (stream_id, mut rx) = result.unwrap();

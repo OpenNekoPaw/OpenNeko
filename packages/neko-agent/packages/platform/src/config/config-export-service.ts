@@ -246,10 +246,3 @@ export class ConfigExportService implements IConfigExportService {
     }
   }
 }
-
-/**
- * Create a config export service instance
- */
-export function createConfigExportService(): IConfigExportService {
-  return new ConfigExportService();
-}

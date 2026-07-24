@@ -92,6 +92,8 @@ export const CLI_TERMINAL_MESSAGES_EN = {
     'No default provider is configured in ~/.neko/config.toml.',
   'agent.terminal.cli.configLoad.providerNotConfigured':
     'Provider "{providerId}" is not configured in ~/.neko/config.toml.',
+  'agent.terminal.cli.configLoad.providerProtocolNotConfigured':
+    'Provider "{providerId}" has no protocol profile configured.',
   'agent.terminal.cli.configLoad.missingProviderModel':
     'No model is configured for provider "{providerId}".',
   'agent.terminal.cli.configLoad.empty':
@@ -156,12 +158,6 @@ export const CLI_TERMINAL_MESSAGES_EN = {
     'Workspace configuration defines models: {path}. Move model definitions to user configuration or the account catalog, then restart Neko Agent.',
   'agent.terminal.cli.configLoad.unsupportedSkillSource':
     'Configuration references a non-standard Skill source: {path}. Use .agents/skills, .neko/commands, or an explicit source provider.',
-  'agent.terminal.cli.configLoad.missingAccountCatalog':
-    'The Neko account AI catalog is unavailable. Sign in or configure a local AI provider, then restart Neko Agent.',
-  'agent.terminal.cli.configLoad.accountCatalogUnavailable':
-    'The Neko account AI catalog is temporarily unavailable. Refresh Agent or configure a local AI provider.',
-  'agent.terminal.cli.configLoad.accountModelNotEntitled':
-    'The selected AI model is not included in the current Neko account entitlement. Choose another model or update the plan.',
   'agent.terminal.cli.validation.header': 'Configuration errors:',
   'agent.terminal.cli.validation.missingApiKey':
     'API key not found for provider "{providerId}". Use --api-key, the provider environment variable, or ~/.neko/config.toml.',
@@ -328,7 +324,6 @@ export const CLI_TERMINAL_MESSAGES_EN = {
   'agent.terminal.reference.expectedStringField': '{source}.{field} must be a string.',
   'agent.terminal.runtime.workspaceContentReadFailed': 'Failed to read {path}: {detail}',
   'agent.terminal.runtime.workspaceContentParseFailed': 'Failed to parse {path}: {detail}',
-  'agent.terminal.runtime.resourceCacheGcFailed': 'Resource cache startup cleanup failed: {detail}',
   'agent.terminal.runtime.resumeNotFoundStartingFresh':
     'Conversation "{conversationId}" was not found; starting fresh.',
   'agent.terminal.runtime.continuationDiscarded': 'Continuation discarded: {itemId}',
@@ -683,7 +678,6 @@ export const CLI_TERMINAL_MESSAGES_EN = {
   'agent.terminal.value.mediaCategory.text': 'text',
   'agent.terminal.value.mediaCategory.document': 'document',
   'agent.terminal.value.referenceSource.workspaceFile': 'workspace file',
-  'agent.terminal.value.referenceSource.assetLibrary': 'asset-library',
   'agent.terminal.value.referenceSource.generatedAssets': 'generated-assets',
   'agent.terminal.value.referenceSource.mediaLibrary': 'media-library',
   'agent.terminal.value.referenceSource.entityGraph': 'entity-graph',
@@ -859,6 +853,8 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
     '未在 ~/.neko/config.toml 中配置默认提供方。',
   'agent.terminal.cli.configLoad.providerNotConfigured':
     '提供方“{providerId}”未在 ~/.neko/config.toml 中配置。',
+  'agent.terminal.cli.configLoad.providerProtocolNotConfigured':
+    '提供方“{providerId}”未配置协议 profile。',
   'agent.terminal.cli.configLoad.missingProviderModel': '未为提供方“{providerId}”配置模型。',
   'agent.terminal.cli.configLoad.empty': '配置文件为空：{path}。请修复后重启 Neko Agent。',
   'agent.terminal.cli.configLoad.invalidToml':
@@ -921,12 +917,6 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
     '工作区配置定义了模型：{path}。请将模型定义移到用户配置或账号目录，然后重启 Neko Agent。',
   'agent.terminal.cli.configLoad.unsupportedSkillSource':
     '配置引用了非标准 Skill 来源：{path}。请使用 .agents/skills、.neko/commands 或显式来源提供方。',
-  'agent.terminal.cli.configLoad.missingAccountCatalog':
-    'Neko 账号 AI 目录不可用。请登录或配置本地 AI 提供方，然后重启 Neko Agent。',
-  'agent.terminal.cli.configLoad.accountCatalogUnavailable':
-    'Neko 账号 AI 目录暂时不可用。请刷新 Agent 或配置本地 AI 提供方。',
-  'agent.terminal.cli.configLoad.accountModelNotEntitled':
-    '当前 Neko 账号权益不包含所选 AI 模型。请选择其他模型或更新方案。',
   'agent.terminal.cli.validation.header': '配置错误：',
   'agent.terminal.cli.validation.missingApiKey':
     '未找到提供方“{providerId}”的 API 密钥。请使用 --api-key、对应提供方的环境变量或 ~/.neko/config.toml 进行配置。',
@@ -1075,7 +1065,6 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
   'agent.terminal.reference.expectedStringField': '{source}.{field} 必须是字符串。',
   'agent.terminal.runtime.workspaceContentReadFailed': '读取 {path} 失败：{detail}',
   'agent.terminal.runtime.workspaceContentParseFailed': '解析 {path} 失败：{detail}',
-  'agent.terminal.runtime.resourceCacheGcFailed': '启动时清理资源缓存失败：{detail}',
   'agent.terminal.runtime.resumeNotFoundStartingFresh':
     '未找到对话“{conversationId}”；将开始新对话。',
   'agent.terminal.runtime.continuationDiscarded': '已丢弃续跑：{itemId}',
@@ -1394,7 +1383,6 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
   'agent.terminal.value.mediaCategory.text': '文本',
   'agent.terminal.value.mediaCategory.document': '文档',
   'agent.terminal.value.referenceSource.workspaceFile': '工作区文件',
-  'agent.terminal.value.referenceSource.assetLibrary': '素材库',
   'agent.terminal.value.referenceSource.generatedAssets': '生成素材',
   'agent.terminal.value.referenceSource.mediaLibrary': '媒体库',
   'agent.terminal.value.referenceSource.entityGraph': '实体图谱',

@@ -5,7 +5,7 @@ import {
   createExternalProcessorRegistry,
   type ExternalProcessorManifest,
 } from '@neko-agent/types';
-import { createResourceFingerprint, createResourceRef, type ResourceRef } from '@neko/shared';
+import type { ProcessorOutputLocator } from '@neko/shared';
 import {
   createAgentExternalProcessorRuntime,
   createDeveloperModeTemporaryProcessorRequest,
@@ -33,7 +33,7 @@ const manifest = {
     image: { accepts: ['image/*'], required: true },
   },
   outputs: {
-    image: { produces: ['image/png'], root: 'resourceCache', pathHint: 'upscale' },
+    image: { produces: ['image/png'], ownership: 'candidate', pathHint: 'upscale' },
   },
   params: {
     scale: { type: 'number', required: true, allowed: [2, 4] },
@@ -41,8 +41,8 @@ const manifest = {
   policy: {
     requiresApproval: true,
     allowNetwork: false,
-    allowedInputRoots: ['workspace', 'mediaLibrary', 'resourceCache'],
-    allowedOutputRoots: ['resourceCache'],
+    allowedInputRoots: ['workspace', 'mediaLibrary'],
+    allowedOutputOwnerships: ['candidate'],
     timeoutMs: 120_000,
   },
 } satisfies ExternalProcessorManifest;
@@ -124,9 +124,8 @@ describe('Agent external processor runtime', () => {
 
     const plan = runtime.planInvocation({
       processorId: 'upscale-image',
-      inputs: [{ slot: 'image', root: 'workspace', sourcePath: '${PROJECT}/input.png' }],
+      inputs: [{ slot: 'image', locator: { kind: 'workspace-file', path: 'input.png' } }],
       params: { scale: 4 },
-      retentionHint: 'debug',
     });
 
     expect(plan).toEqual(
@@ -138,15 +137,14 @@ describe('Agent external processor runtime', () => {
           registrationId: registration.registrationId,
           registrationRevision: registration.revision,
           run: { processorRunId: 'processor-run-1', stageId: 'stage-1', attempt: 1 },
-          outputs: [{ slot: 'image', root: 'resourceCache', pathHint: 'upscale' }],
-          retentionHint: 'debug',
+          outputs: [{ slot: 'image', ownership: 'candidate', pathHint: 'upscale' }],
         }),
         diagnostics: [],
       }),
     );
   });
 
-  it('blocks plans with undeclared inputs, invalid roots, or invalid params before Host execution', () => {
+  it('blocks plans with undeclared inputs, invalid locators, or invalid params before Host execution', () => {
     const registry = createExternalProcessorRegistry();
     registry.upsert(
       { sourceScope: 'builtin', agentCapabilitySource: 'builtin', sourceId: 'builtin' },
@@ -157,9 +155,12 @@ describe('Agent external processor runtime', () => {
     const plan = runtime.planInvocation({
       processorId: 'upscale-image',
       inputs: [
-        { slot: 'missing', root: 'extensionPrivateResources', sourcePath: '${PROJECT}/input.png' },
+        {
+          slot: 'missing',
+          locator: { kind: 'workspace-file', path: '../input.png' } as never,
+        },
       ],
-      outputs: [{ slot: 'image', root: 'workspace' }],
+      outputs: [{ slot: 'image', ownership: 'debug' }],
       params: { scale: 3, extra: true },
     });
 
@@ -168,8 +169,8 @@ describe('Agent external processor runtime', () => {
       expect.arrayContaining([
         'missing-required-field',
         'undeclared-template-reference',
-        'invalid-root-alias',
-        'illegal-output-root',
+        'unauthorized-path',
+        'illegal-output-ownership',
         'invalid-field-type',
       ]),
     );
@@ -194,7 +195,7 @@ describe('Agent external processor runtime', () => {
         stageId: 'stage-existing',
         attempt: 2,
       },
-      inputs: [{ slot: 'image', root: 'workspace', sourcePath: '${PROJECT}/input.png' }],
+      inputs: [{ slot: 'image', locator: { kind: 'workspace-file', path: 'input.png' } }],
       params: { scale: 2 },
     });
 
@@ -208,7 +209,7 @@ describe('Agent external processor runtime', () => {
     }
   });
 
-  it('projects Host results as ResourceRef outputs and reports provenance mismatches', () => {
+  it('projects Host results as opaque processor outputs and reports provenance mismatches', () => {
     const registry = createExternalProcessorRegistry();
     registry.upsert(
       { sourceScope: 'builtin', agentCapabilitySource: 'builtin', sourceId: 'builtin' },
@@ -221,13 +222,13 @@ describe('Agent external processor runtime', () => {
     });
     const plan = runtime.planInvocation({
       processorId: 'upscale-image',
-      inputs: [{ slot: 'image', root: 'workspace', sourcePath: '${PROJECT}/input.png' }],
+      inputs: [{ slot: 'image', locator: { kind: 'workspace-file', path: 'input.png' } }],
       params: { scale: 2 },
     });
     expect(plan.status).toBe('ready');
     if (plan.status !== 'ready') return;
 
-    const resourceRef = createProcessorResourceRef('output-1');
+    const output = createProcessorOutputLocator('output-1');
     const projection = runtime.projectResult({
       invocation: plan.invocation,
       result: {
@@ -239,8 +240,8 @@ describe('Agent external processor runtime', () => {
         outputs: [
           {
             slot: 'image',
-            resourceRef,
-            retentionHint: 'intermediate',
+            output,
+            ownership: 'candidate',
             mimeType: 'image/png',
           },
         ],
@@ -249,9 +250,25 @@ describe('Agent external processor runtime', () => {
     });
 
     expect(projection.outputs).toEqual([
-      expect.objectContaining({ slot: 'image', resourceRef, mimeType: 'image/png' }),
+      expect.objectContaining({
+        slot: 'image',
+        output,
+        ownership: 'candidate',
+        mimeType: 'image/png',
+      }),
     ]);
     expect(projection.diagnostics).toEqual([]);
+
+    const ownershipMismatch = runtime.projectResult({
+      invocation: plan.invocation,
+      result: {
+        ...projection,
+        outputs: [{ ...projection.outputs[0]!, ownership: 'debug' }],
+      },
+    });
+    expect(ownershipMismatch.diagnostics).toEqual([
+      expect.objectContaining({ code: 'illegal-output-ownership' }),
+    ]);
 
     const mismatched = runtime.projectResult({
       invocation: plan.invocation,
@@ -262,8 +279,8 @@ describe('Agent external processor runtime', () => {
           ...projection.outputs,
           {
             slot: 'sidecar',
-            resourceRef: createProcessorResourceRef('sidecar'),
-            retentionHint: 'debug',
+            output: createProcessorOutputLocator('sidecar'),
+            ownership: 'debug',
           },
         ],
       },
@@ -293,7 +310,7 @@ describe('Agent external processor runtime', () => {
         policy: expect.objectContaining({
           requiresApproval: true,
           allowNetwork: false,
-          allowedOutputRoots: ['resourceCache'],
+          allowedOutputOwnerships: ['debug'],
           cwdRoot: 'workspace',
           timeoutMs: 10_000,
         }),
@@ -304,11 +321,10 @@ describe('Agent external processor runtime', () => {
         processorId: 'developer-mode.one-shot-command',
         registrationId: 'temporary:developer-mode:one-shot-command',
         outputs: [
-          { slot: 'stdout', root: 'resourceCache', pathHint: 'stdout.txt' },
-          { slot: 'stderr', root: 'resourceCache', pathHint: 'stderr.txt' },
+          { slot: 'stdout', ownership: 'debug', pathHint: 'stdout.txt' },
+          { slot: 'stderr', ownership: 'debug', pathHint: 'stderr.txt' },
         ],
         params: { command: 'ffmpeg -version' },
-        retentionHint: 'debug',
       }),
     );
   });
@@ -322,16 +338,11 @@ describe('Agent external processor runtime', () => {
   });
 });
 
-function createProcessorResourceRef(id: string): ResourceRef {
-  return createResourceRef({
+function createProcessorOutputLocator(id: string): ProcessorOutputLocator {
+  return {
+    kind: 'processor-output',
     id,
-    scope: 'project',
-    provider: 'external-processor',
-    kind: 'generated',
-    source: {
-      kind: 'generated-asset',
-      generatedAssetId: id,
-    },
-    fingerprint: createResourceFingerprint({ strategy: 'provider', value: id }),
-  });
+    ownership: 'candidate',
+    mediaType: 'image/png',
+  };
 }

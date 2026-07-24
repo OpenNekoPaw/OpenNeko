@@ -100,9 +100,7 @@ async function executeImageUnderstanding(
     );
   }
   const loaded = await contentAccess.loadProviderAsset({
-    caller: 'perception-asset-loader',
     source: resourceRef,
-    preferredTarget: 'bytes',
     metadata: {
       conversationId: options?.trace?.conversationId,
       runId: options?.trace?.runId,

@@ -68,26 +68,6 @@ const mediaDiff: MessageBundle = {
   'mediaDiff.flicker': 'Flicker: {version}',
 };
 
-const assetDiff: MessageBundle = {
-  'assetDiff.title': 'Asset Variant Diff',
-  'assetDiff.loading': 'Loading...',
-  'assetDiff.analyzing': 'Analyzing...',
-  'assetDiff.retry': 'Retry',
-  'assetDiff.similar': 'Similar',
-  'assetDiff.attributes': 'Attributes',
-  'assetDiff.noChanges': 'No changes',
-  'assetDiff.viewMode.sideBySide': 'Side by Side',
-  'assetDiff.viewMode.slider': 'Slider',
-  'assetDiff.viewMode.overlay': 'Overlay',
-  'assetDiff.tabs.media': 'Media',
-  'assetDiff.tabs.attributes': 'Attributes',
-  'assetDiff.tabs.ai': 'AI Analysis',
-  'assetDiff.aiAnalysis': 'AI Analysis',
-  'assetDiff.requestAI': 'Generate AI Summary',
-  'assetDiff.noFile': 'No preview file',
-};
-
 export const bundles: Record<string, MessageBundle> = {
-  assetDiff,
   mediaDiff,
 };

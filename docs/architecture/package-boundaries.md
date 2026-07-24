@@ -114,8 +114,8 @@ Extension 不导入 React，不复制 Rust 媒体计算，不直接依赖其他�
 
 文件发现边界：
 
-- Assets Extension 可以将 workspace 与 `MediaLibrarySettingsService` 解析出的外部 root 注册为 semantic source scope，并负责 watcher、trust、PathResolver、目录读取、取消和生命周期。
-- 文件事件只触发 host-neutral coordinator；发现文件不得直接调用 `AssetFileImportService` 或写 `library.json`。
+- Assets Extension 从 `neko/assets/<libraryName>` direct links 派生授权 root，并负责 watcher、trust、Host path guard、目录读取、取消和生命周期；不存在 target settings registry。
+- 文件事件只触发 host-neutral coordinator；发现文件不得创建 Entity/binding、写 catalog 或分配文件 identity。
 - semantic/entity projection 使用 `LocalMetadataStore` 的用户级 SQLite binding；Webview 和功能包不接收数据库路径或 raw SQL。
 
 ## Webview
@@ -183,7 +183,7 @@ Capability 是 OpenNeko 产品扩展 seam，领域包提供定义，Host 负责 
 | `neko-generation`  | 生成请求/结果契约、execution port 与 recoverable Job  | 只依赖共享契约；不读取配置或 credential；provider runtime 由现有 Host 注入；不创建独立 Host、Extension 或 Webview                              |
 | `neko-chara`       | Character Dialogue、Embody、角色证据与角色运行编排    | core/application host-neutral；VS Code 依赖只在 `host-vscode`；只消费 Agent contract，不拥有第二套 Agent loop                                  |
 | `neko-quality`     | canonical Quality Gate、evaluator port 与模型证据适配 | 只依赖共享 contract；领域 rubric/repair/apply 留在 owning package；provider/config/credential 和 Host IO 由组合层注入                          |
-| `neko-assets`      | 素材库、元数据、缩略图、Entity VS Code surface        | 路径走公共 resolver；Entity 走 canonical facade；缓存不伪装事实                                                                                |
+| `neko-assets`      | Media Library 文件入口、投影和 Entity VS Code surface | 文件走 canonical locator/Host Content I/O；Entity 走 canonical facade；不拥有 catalog、package/generated lifecycle 或 cache                    |
 | `neko-canvas`      | 画布、创作结构、投影与领域 authoring                  | Webview 管交互；持久写入走 domain/host contract；复用公共 UI                                                                                   |
 | `neko-cut`         | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Extension 管 editor/export；媒体走 Engine client                                                                         |
 | `neko-preview`     | 授权只读预览与临时 3D Reference staging               | Preview 拥有面板级 Three.js 会话及形象、动作、机位、全景输出；Agent/Canvas/media 只消费共享 contract；不恢复 Engine Model/Scene 或持久 3D 项目 |
@@ -220,11 +220,40 @@ host-* -> public package entry + concrete host adapters
 
 Character 不直接写 World store；跨域 mutation 必须通过显式 world run/actor/action identity 与 expected revision 的 WorldAction contract，由 World runtime 原子提交 WorldEvent/revision 或返回 typed rejection。CharacterVersion、CharacterRun、WorldSave 与 Memory infrastructure 的事实/派生边界必须保持独立，Device/Renderer/Engine live handle 和本机路径不得进入持久项目、版本或存档。
 
+## 拟议顶级领域聚合包
+
+Character IP 与 Interactive World 已确定为独立 bounded context，但当前 workspace 尚无已接受实现。后续实施必须创建平级顶级领域包，不得嵌入 `neko-agent`、应用根或现有 Assets/Preview 内部：
+
+| 拟议包 | 聚合主线 | 主要职责 | 关键边界 |
+| --- | --- | --- | --- |
+| `neko-chara` | `CharacterProject -> CharacterVersion -> CharacterRun` | 角色 IP、发布版本、Roleplay、记忆/能力策略、表现绑定和角色运行 | 完全复用 `neko-agent`/Pi；Entity、Assets、Voice、2D/3D、Device/Perception、Engine 只通过公共 ref/port/provider 组合 |
+| `neko-world` | `WorldProject -> WorldVersion -> WorldRun -> WorldSave/Replay` | 世界事实、规则/事件、Gameplay、运行、存档、分支和回放 | 只通过 CharacterVersion/WorldCharacterBinding 使用角色；世界局部状态不回写全局角色；不以 Agent/UI 状态代替世界事实 |
+
+“顶级”指领域所有权，不指 concrete Composition Root。`apps/neko-desktop`、`apps/neko-vscode` 或其他宿主负责注入具体 Agent、Renderer、Device、Engine 和 host adapter。`neko-agent` 不导入 Character/World；Character core 不导入 World 私有实现；运行期环境交互通过窄 port 或 host-owned adapter 组合。
+
+角色只拥有说话、动作、表情、移动意图、感知、交互 affordance 和个体行为策略；地图、目标、任务、战斗、经济、成长、事件调度和整体胜负状态归 World。当前缺失的 Character/World、Device/Live、Scene/Puppet 和持久 2D/3D 路径必须保持 fail-visible，不能因为本节命名了目标包就恢复旧实现或宣称支持。
+
+两个聚合包内部必须保持以下依赖层级：
+
+```text
+core -> shared refs / domain values
+application -> core + package-local consumer ports
+adapters/agent -> application ports + public Agent contracts
+adapters/chara|world -> public cross-domain contracts + owning ports
+host-* -> public package entry + concrete host adapters
+```
+
+`core` 不得导入 Agent、VS Code、React、Renderer、Device、Engine 或另一领域私有 runtime。应用 Host 只构造、注入和释放 adapter；Character/World application service 分别拥有 run、turn/action、memory candidate、event/save/replay 编排。上述依赖必须通过 public/subpath exports 和 architecture test 强制执行，不能只依赖目录命名。
+
+同一 published character actor 的运行路径固定为 `WorldActorInstance -> CharacterRun -> primary AgentSession`，World 不得再创建第二个 actor-level session；Ambient NPC 和 World Director 使用独立显式 scope。有效能力固定为 Host permission、workspace trust、Character policy、World binding policy 与 run scope 的交集，副作用提交时由 owner 重验 permission、identity、revision 和 Approval。
+
+Character 不直接写 World store；跨域 mutation 必须通过显式 world run/actor/action identity 与 expected revision 的 WorldAction contract，由 World runtime 原子提交 WorldEvent/revision 或返回 typed rejection。CharacterVersion、CharacterRun、WorldSave 与 Memory infrastructure 的事实/派生边界必须保持独立，Device/Renderer/Engine live handle 和本机路径不得进入持久项目、版本或存档。
+
 ## 路径、缓存与用户数据
 
-- 持久事实保存 workspace-relative path、`${VAR}/path`、stable `ResourceRef`、asset/entity ID 和 provenance。
+- 持久事实保存 workspace-relative path、保留用途的 `${VAR}/path`、stable `ContentLocator`/`ResourceRef`、entity ID 和 provenance。
 - 本机绝对路径只允许存在于本机设置、临时运行时状态或明确 host adapter 内。
-- Cache 是可重建派生数据，不能替代项目、Entity、Asset 或 Agent 事实。
+- Cache 是可重建派生数据，不能替代项目、Entity、Media Library locator、generated/package owner 或 Agent 事实。
 - 用户 secret 不写入项目文件、日志、Webview state、prompt 或 Skill。
 - 跨包 mutation 通过 facade/port/command 和明确 error contract，不直接写另一个包的私有存储。
 

@@ -143,13 +143,14 @@ session 稳定。Skill Host 负责把 locator 映射回受信 Skill 内容或宿
 
 | 形态                                   | 语义与 owner                                            | 持久性           |
 | -------------------------------------- | ------------------------------------------------------- | ---------------- |
-| workspace-relative 或 `${VAR}/path`    | `PathResolver` 拥有的可移植源路径                       | 可持久化         |
-| `ResourceRef` / `ResourceVariantRef`   | `ResourceCacheService` 背后的稳定资源引用；不是文件路径 | 可持久化         |
+| workspace-relative `ContentLocator`    | Host Content I/O 拥有的稳定源定位                       | 可持久化         |
+| document/generated/package locator     | 对应 source owner 的稳定内容身份；不是 cache 路径       | 可持久化         |
+| representation locator                 | Host 派生服务返回的 opaque 可重建表现身份               | 仅按契约传递     |
 | 物理 cache 路径、Webview URI、绝对路径 | Host/runtime 投影                                       | 不可写入项目事实 |
 | `SkillLocator`                         | Skill Host 拥有的模型可见运行态定位符                   | 不可持久化       |
 
 因此透明缓存不是虚拟路径，`${VAR}/path` 也不与 `SkillLocator` 共用 resolver。Skill 内容不得为了
-适配 Pi 而进入 `ResourceCacheService`；`SkillLocator` 不得交给 `PathResolver`、ContentAccess 或
+适配 Pi 而进入 `ResourceCacheService`；`SkillLocator` 不得交给 `PathResolver`、workspace content reader 或
 项目持久化。只有指定的 Agent content-read boundary 识别 `/__neko_skills/` namespace，并委托 Skill
 Host 读取。Skill 包内 `references/`、`assets/`、`scripts/` 使用同一虚拟根下的相对
 `SkillResourceLocator`，由程序执行规范化、包根 containment、trust 和权限检查；不建立通用 VFS、
@@ -422,7 +423,7 @@ turn-scoped `ToolPurposeModelRuntime`。该 runtime 只暴露一次受限的多�
 混合工具可以保留非模型能力，但不得执行该 perception evaluator，更不得回退到 `agent.main`。
 
 首个 canonical bounded-perception 入口是 `perception.image.understand`：参数只接受稳定
-`ResourceRef` 和可选的观察重点，由 ContentAccess 在工具内部物化字节，并且只能使用当前 turn 的
+`ResourceRef` 和可选的观察重点，由 stable locator + `ContentReadService` 在工具内部有界读取字节，并且只能使用当前 turn 的
 `image.understand` binding。工具返回 `neko.image-understanding.v1` 结构化证据、原始
 `ResourceRef`、准确 purpose/model facts 和 usage；不得接受或回传绝对路径、cache path、
 `providerId` 或 `modelId` 参数。旧 `perception.perceive` 的 `understandingModels` 覆盖属于待删除

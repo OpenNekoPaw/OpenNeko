@@ -8,8 +8,17 @@
 import type { ProjectIndexFreshness } from './project-cache-search';
 import type { CharacterMemorySourceRange } from './character-memory';
 import type { DocumentLocator } from './document-reading';
+import { isCreativeEntityKind, type CreativeEntityKind } from './creative-entity-identity';
+import {
+  type EntityRepresentationRole,
+  type EntityRepresentationTarget,
+} from './entity-representation-binding';
 
-export type CreativeEntityKind = 'character' | 'scene' | 'object' | 'location' | 'style';
+export {
+  CREATIVE_ENTITY_KINDS,
+  isCreativeEntityKind,
+  type CreativeEntityKind,
+} from './creative-entity-identity';
 
 export type CreativeEntityStatus = 'candidate' | 'confirmed' | 'deprecated';
 
@@ -120,10 +129,10 @@ export type CreativeEntityLifecycleAction =
   | 'reactivate'
   | 'merge'
   | 'bind'
+  | 'rebind'
   | 'unbind'
   | 'set-default-binding'
   | 'mark-binding-orphaned'
-  | 'restore-binding'
   | 'archive-binding'
   | 'update-requirement'
   | 'update-visual-draft'
@@ -207,8 +216,8 @@ export interface CreativeEntityRelationshipProjection {
 export interface CreativeEntityRepresentationHint {
   readonly entityRef?: CreativeEntityRef;
   readonly candidateId?: string;
-  readonly assetRef: string;
-  readonly roles: readonly EntityAssetBindingRole[];
+  readonly representation: EntityRepresentationTarget;
+  readonly roles: readonly EntityRepresentationRole[];
   readonly source: CreativeEntitySourceMetadata;
   readonly confidence?: number;
   readonly reason?: string;
@@ -222,36 +231,6 @@ export interface CreativeEntitySyncSuggestion {
   readonly reason: string;
   readonly source: CreativeEntitySourceMetadata;
   readonly readonlyTarget?: boolean;
-}
-
-export type EntityAssetBindingRole =
-  'portrait' | 'reference' | 'puppet-bone' | 'live2d' | 'live3d' | 'voice' | 'motion' | 'style';
-
-export type EntityAssetBindingStatus = 'suggested' | 'confirmed' | 'rejected';
-
-export type EntityAssetBindingAvailability = 'active' | 'orphaned' | 'archived';
-
-export type EntityAssetBindingSource =
-  'user' | 'importer' | 'story' | 'canvas' | 'agent' | 'matcher';
-
-export interface EntityAssetBinding {
-  readonly id: string;
-  readonly entityId: string;
-  readonly entityKind: CreativeEntityKind;
-  readonly assetRef: string;
-  readonly role: EntityAssetBindingRole;
-  readonly isDefault?: boolean;
-  readonly status: EntityAssetBindingStatus;
-  readonly availability: EntityAssetBindingAvailability;
-  readonly orphanedAt?: string;
-  readonly source: EntityAssetBindingSource;
-  readonly confidence?: number;
-  readonly updatedAt: string;
-}
-
-export interface EntityAssetBindingFile {
-  readonly version: 1;
-  readonly bindings: readonly EntityAssetBinding[];
 }
 
 export type RepresentationKind =
@@ -293,7 +272,7 @@ export type RepresentationResolveResult =
       readonly assetEntityId?: string;
       readonly resolvedKind: RepresentationKind;
       readonly fallback: boolean;
-      readonly role: EntityAssetBindingRole | RepresentationKind;
+      readonly role: EntityRepresentationRole | RepresentationKind;
       readonly files: readonly ResolvedRepresentationFile[];
       readonly capabilities: readonly string[];
     }
@@ -429,25 +408,6 @@ export type RepresentationFileRole =
   | 'tracking-profile'
   | 'source';
 
-export const CREATIVE_ENTITY_KINDS: readonly CreativeEntityKind[] = [
-  'character',
-  'scene',
-  'object',
-  'location',
-  'style',
-] as const;
-
-export const ENTITY_ASSET_BINDING_ROLES: readonly EntityAssetBindingRole[] = [
-  'portrait',
-  'reference',
-  'puppet-bone',
-  'live2d',
-  'live3d',
-  'voice',
-  'motion',
-  'style',
-] as const;
-
 export const REPRESENTATION_KINDS: readonly RepresentationKind[] = [
   'portrait',
   'reference',
@@ -519,12 +479,6 @@ export const CREATIVE_ENTITY_CANDIDATE_STATUSES: readonly CreativeEntityCandidat
 export const CREATIVE_ENTITY_CANDIDATE_IDENTITY_BASES: readonly CreativeEntityCandidateIdentityBasis[] =
   ['user-named', 'placeholder', 'visual', 'asset'] as const;
 
-export const ENTITY_ASSET_BINDING_AVAILABILITIES: readonly EntityAssetBindingAvailability[] = [
-  'active',
-  'orphaned',
-  'archived',
-] as const;
-
 export const CREATIVE_ENTITY_LIFECYCLE_ACTIONS: readonly CreativeEntityLifecycleAction[] = [
   'create',
   'confirm-candidate',
@@ -541,20 +495,16 @@ export const CREATIVE_ENTITY_LIFECYCLE_ACTIONS: readonly CreativeEntityLifecycle
   'reactivate',
   'merge',
   'bind',
+  'rebind',
   'unbind',
   'set-default-binding',
   'mark-binding-orphaned',
-  'restore-binding',
   'archive-binding',
   'update-requirement',
   'update-visual-draft',
   'apply-sync-suggestion',
   'ignore-sync-suggestion',
 ] as const;
-
-export function isCreativeEntityKind(value: unknown): value is CreativeEntityKind {
-  return includesString(CREATIVE_ENTITY_KINDS, value);
-}
 
 export function isCreativeEntityStatus(value: unknown): value is CreativeEntityStatus {
   return value === 'candidate' || value === 'confirmed' || value === 'deprecated';
@@ -588,16 +538,6 @@ export function isRepresentationKind(value: unknown): value is RepresentationKin
 
 export function isAssetRefScheme(value: unknown): value is AssetRefScheme {
   return includesString(ASSET_REF_SCHEMES, value);
-}
-
-export function isEntityAssetBindingRole(value: unknown): value is EntityAssetBindingRole {
-  return includesString(ENTITY_ASSET_BINDING_ROLES, value);
-}
-
-export function isEntityAssetBindingAvailability(
-  value: unknown,
-): value is EntityAssetBindingAvailability {
-  return includesString(ENTITY_ASSET_BINDING_AVAILABILITIES, value);
 }
 
 export function isRepresentationFileRole(value: unknown): value is RepresentationFileRole {
@@ -764,32 +704,6 @@ export function isCreativeEntityProviderStatus(
   );
 }
 
-export function isEntityAssetBinding(value: unknown): value is EntityAssetBinding {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value['id'] === 'string' &&
-    typeof value['entityId'] === 'string' &&
-    isCreativeEntityKind(value['entityKind']) &&
-    typeof value['assetRef'] === 'string' &&
-    isEntityAssetBindingRole(value['role']) &&
-    isEntityAssetBindingStatus(value['status']) &&
-    (value['availability'] === undefined ||
-      isEntityAssetBindingAvailability(value['availability'])) &&
-    (value['orphanedAt'] === undefined || typeof value['orphanedAt'] === 'string') &&
-    isEntityAssetBindingSource(value['source']) &&
-    typeof value['updatedAt'] === 'string'
-  );
-}
-
-export function isEntityAssetBindingFile(value: unknown): value is EntityAssetBindingFile {
-  if (!isRecord(value)) return false;
-  return (
-    value['version'] === 1 &&
-    Array.isArray(value['bindings']) &&
-    value['bindings'].every((binding) => isEntityAssetBinding(binding))
-  );
-}
-
 export function withCreativeEntityCandidateDefaults(
   candidate: CreativeEntityCandidate,
 ): CreativeEntityCandidate {
@@ -808,22 +722,6 @@ export function withCreativeEntityCandidateFileDefaults(
   };
 }
 
-export function withEntityAssetBindingDefaults(binding: EntityAssetBinding): EntityAssetBinding {
-  return {
-    ...binding,
-    availability: binding.availability ?? 'active',
-  };
-}
-
-export function withEntityAssetBindingFileDefaults(
-  file: EntityAssetBindingFile,
-): EntityAssetBindingFile {
-  return {
-    version: 1,
-    bindings: file.bindings.map((binding) => withEntityAssetBindingDefaults(binding)),
-  };
-}
-
 export function isVisualIdentityDraftFile(value: unknown): value is VisualIdentityDraftFile {
   if (!isRecord(value)) return false;
   return (
@@ -839,21 +737,6 @@ export function isEntityAssetRequirementFile(value: unknown): value is EntityAss
     value['version'] === 1 &&
     Array.isArray(value['requirements']) &&
     value['requirements'].every((requirement) => isEntityAssetRequirement(requirement))
-  );
-}
-
-function isEntityAssetBindingStatus(value: unknown): value is EntityAssetBindingStatus {
-  return value === 'suggested' || value === 'confirmed' || value === 'rejected';
-}
-
-function isEntityAssetBindingSource(value: unknown): value is EntityAssetBindingSource {
-  return (
-    value === 'user' ||
-    value === 'importer' ||
-    value === 'story' ||
-    value === 'canvas' ||
-    value === 'agent' ||
-    value === 'matcher'
   );
 }
 

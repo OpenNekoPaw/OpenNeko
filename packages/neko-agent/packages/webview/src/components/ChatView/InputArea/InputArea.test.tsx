@@ -1502,17 +1502,17 @@ describe('InputArea composer controls', () => {
     );
   });
 
-  it('moves completed path-backed asset mentions into reference tokens', () => {
+  it('moves completed Media Library mentions into reference tokens', () => {
     const onSend = vi.fn();
     render(
       <Harness
         mentionItems={[
           {
-            id: 'asset-hero',
-            kind: 'asset',
+            id: 'media-hero',
+            kind: 'media',
             label: 'Hero portrait',
-            filePath: 'assets/hero.png',
-            source: 'asset-library',
+            filePath: 'neko/assets/Characters/hero.png',
+            source: 'media-library',
             mediaType: 'image',
           },
         ]}
@@ -1522,13 +1522,12 @@ describe('InputArea composer controls', () => {
     );
 
     fireEvent.change(screen.getByPlaceholderText('输入任何问题...'), {
-      target: { value: '参考 @assets/hero.png' },
+      target: { value: '参考 @neko/assets/Characters/hero.png' },
     });
 
     const token = screen.getByText('Hero portrait').closest('[data-agent-reference-token]');
     expect(token?.getAttribute('data-reference-kind')).toBe('image');
     expect(token?.getAttribute('data-reference-variant')).toBe('attached');
-    expect(screen.getByText('assets')).toBeTruthy();
     expect((screen.getByPlaceholderText('输入任何问题...') as HTMLTextAreaElement).value).toBe(
       '参考 ',
     );
@@ -1536,32 +1535,32 @@ describe('InputArea composer controls', () => {
     fireEvent.click(screen.getByTitle('发送'));
     expect(onSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        messageText: '参考 @assets/hero.png',
+        messageText: '参考 @neko/assets/Characters/hero.png',
         displayMessageText: '参考 ',
         fileReferences: [
           expect.objectContaining({
             label: 'Hero portrait',
-            path: 'assets/hero.png',
+            path: 'neko/assets/Characters/hero.png',
             mediaType: 'image',
-            source: 'asset-library',
+            source: 'media-library',
           }),
         ],
       }),
     );
   });
 
-  it('opens mention search for a controlled prefilled asset-library query', () => {
+  it('opens mention search for a controlled prefilled Media Library query', () => {
     const onRequestFiles = vi.fn();
     render(
       <Harness
         onRequestFiles={onRequestFiles}
         mentionItems={[
           {
-            id: 'asset-lamp-spirit',
-            kind: 'asset',
+            id: 'media-lamp-spirit',
+            kind: 'media',
             label: '灯神立绘',
-            filePath: 'assets/characters/lamp-spirit.png',
-            source: 'asset-library',
+            filePath: 'neko/assets/Characters/lamp-spirit.png',
+            source: 'media-library',
             mediaType: 'image',
             searchText: '灯神 神灯 aladdin genie',
           },

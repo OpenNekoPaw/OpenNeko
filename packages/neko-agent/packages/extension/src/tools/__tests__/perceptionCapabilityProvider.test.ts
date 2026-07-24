@@ -83,9 +83,7 @@ describe('PerceptionCapabilityProvider', () => {
     expect(tool.parameters.properties).not.toHaveProperty('path');
     expect(loadProviderAsset).toHaveBeenCalledWith(
       expect.objectContaining({
-        caller: 'perception-asset-loader',
         source: resourceRef,
-        preferredTarget: 'bytes',
       }),
     );
     expect(complete).toHaveBeenCalledWith(

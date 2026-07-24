@@ -6,6 +6,7 @@ const runtimeMocks = vi.hoisted(() => ({
   coordinatorDispose: vi.fn(async () => undefined),
   coordinatorRecovery: vi.fn(async () => undefined),
   deliveryDispose: vi.fn(),
+  generatedAssetDispose: vi.fn(async () => undefined),
   metadataDispose: vi.fn(async () => undefined),
   migrateNamespace: vi.fn(async () => undefined),
   platformDispose: vi.fn(),
@@ -26,10 +27,11 @@ vi.mock('@neko/generation', () => ({
   },
 }));
 
-vi.mock('@neko/platform', () => ({
-  createResourceCacheGeneratedAssetIndex: vi.fn(async () => ({
+vi.mock('../../host/node-generated-asset-index', () => ({
+  createNodeGeneratedAssetIndexBinding: vi.fn(async () => ({
     index: {},
     migrationReport: { sourceStatus: 'missing' },
+    dispose: runtimeMocks.generatedAssetDispose,
   })),
 }));
 
@@ -45,7 +47,6 @@ vi.mock('../platform-bootstrap', () => ({
 vi.mock('../../host/tui-local-metadata-binding', () => ({
   createTuiLocalMetadataBinding: vi.fn(async () => ({
     workspaceId: 'workspace-1',
-    resourceCacheManifestStore: {},
     metadataStore: {
       migrateNamespace: runtimeMocks.migrateNamespace,
     },
@@ -100,6 +101,7 @@ describe('direct media runtime production path', () => {
     expect(runtimeMocks.coordinatorDispose).toHaveBeenCalledOnce();
     expect(runtimeMocks.deliveryDispose).toHaveBeenCalledOnce();
     expect(runtimeMocks.platformDispose).toHaveBeenCalledOnce();
+    expect(runtimeMocks.generatedAssetDispose).toHaveBeenCalledOnce();
     expect(runtimeMocks.metadataDispose).toHaveBeenCalledOnce();
   });
 });

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "characters": [
+    {
+      "id": "char_rin",
+      "canonicalName": "Rin",
+      "displayName": "Rin",
+      "aliases": [],
+      "status": "confirmed"
+    }
+  ]
+}

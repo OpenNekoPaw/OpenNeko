@@ -38,6 +38,7 @@
     "package:vscode": "pnpm --dir apps/neko-vscode run package",
     "clean": "turbo run clean && rm -rf .turbo node_modules/.cache",
     "generate:types": "node scripts/proto-gen-ts.mjs",
+    "generate:agent-eval:document-image-fixture": "node scripts/agent-eval/fixtures/generate-synthetic-document-image-epub.mjs",
     "nekoagent": "pnpm --filter @neko/app-tui dev",
     "format": "prettier --write \"packages/**/src/**/*.{ts,tsx,json}\"",
     "format:check": "prettier --check \"packages/**/src/**/*.{ts,tsx,json}\"",

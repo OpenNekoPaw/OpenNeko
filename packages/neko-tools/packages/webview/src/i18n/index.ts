@@ -2,7 +2,7 @@
  * i18n setup for neko-tools webview
  *
  * Uses shared I18nService from @neko/shared with Model B namespacing.
- * Registers 'mediaDiff' and 'assetDiff' namespaces.
+ * Registers the mediaDiff namespace.
  */
 import { createWebviewI18n } from '@neko/shared/i18n/webview';
 

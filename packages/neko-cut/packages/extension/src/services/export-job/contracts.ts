@@ -12,6 +12,9 @@ export interface ExportConfig {
   readonly fps: number;
   readonly quality: 'low' | 'medium' | 'high';
   readonly audioBitrate: number;
+  readonly videoBitrate: number;
+  readonly includeAudio: boolean;
+  readonly audioSampleRate: 44_100 | 48_000;
   readonly videoCodec?: string;
   readonly audioCodec?: string;
   readonly qualityMode?: 'source' | 'draft-proxy';

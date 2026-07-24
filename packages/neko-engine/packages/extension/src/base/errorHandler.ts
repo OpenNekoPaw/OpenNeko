@@ -25,13 +25,6 @@ export function setErrorHandler(handler: IErrorHandler): void {
 }
 
 /**
- * Get the global error handler
- */
-export function getErrorHandler(): IErrorHandler {
-  return _errorHandler;
-}
-
-/**
  * Convenience: handle an error with options
  */
 export async function handleError(

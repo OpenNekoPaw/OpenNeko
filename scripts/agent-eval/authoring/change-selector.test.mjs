@@ -58,6 +58,7 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/neko-agent/packages/platform/src/media/media-generation-executor.ts',
         'packages/neko-agent/packages/platform/src/media/generated-output-adoption.ts',
         'packages/neko-content/src/document/read-document-tool.ts',
+        'packages/neko-content/src/document/read-image-tool.ts',
         'packages/neko-agent/packages/agent/src/pi/event-projector.ts',
         'packages/neko-agent/packages/agent/src/pi/timeline-projector.ts',
         'packages/neko-agent/packages/agent/src/runtime/projection/conversation-projection-store.ts',

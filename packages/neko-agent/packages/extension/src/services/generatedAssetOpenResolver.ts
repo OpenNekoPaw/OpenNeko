@@ -1,8 +1,9 @@
 import * as path from 'node:path';
-import type { GeneratedAsset, ResourceCacheManifestStore } from '@neko/shared';
+import type { GeneratedAsset } from '@neko/shared';
+import { createNodeGeneratedOutputProjectionBinding } from '@neko/shared/local-metadata/node';
 import {
-  createResourceCacheGeneratedAssetIndex,
-  type GeneratedAssetIndex,
+  GeneratedAssetIndex,
+  migrateLegacyGeneratedAssetIndex,
 } from '@neko/platform/media/generated-asset-index';
 
 export interface GeneratedAssetLookup {
@@ -23,22 +24,38 @@ export function resolveGeneratedAssetOpenPath(
   return lookup.get(assetId)?.path;
 }
 
+export interface WorkspaceGeneratedAssetIndexBinding {
+  readonly index: GeneratedAssetIndex;
+  dispose(): Promise<void>;
+}
+
 export async function createWorkspaceGeneratedAssetIndex(options: {
-  readonly manifestStore: ResourceCacheManifestStore;
   readonly workspaceRoot: string;
   readonly homedir: string;
   readonly logger?: {
     warn(message: string, details?: unknown): void;
   };
-}): Promise<GeneratedAssetIndex> {
-  const binding = await createResourceCacheGeneratedAssetIndex(options);
-  if (
-    binding.migrationReport.sourceStatus === 'quarantined' ||
-    binding.migrationReport.verifiedEntryCount !== binding.migrationReport.importedEntryCount
-  ) {
-    options.logger?.warn('Generated asset index migration requires attention', {
-      report: binding.migrationReport,
+}): Promise<WorkspaceGeneratedAssetIndexBinding> {
+  const projectionBinding = await createNodeGeneratedOutputProjectionBinding(options);
+  try {
+    const migrationReport = await migrateLegacyGeneratedAssetIndex({
+      indexPath: path.join(options.workspaceRoot, 'neko', 'generated', 'index.json'),
+      store: projectionBinding.store,
     });
+    if (
+      migrationReport.sourceStatus === 'quarantined' ||
+      migrationReport.verifiedEntryCount !== migrationReport.importedEntryCount
+    ) {
+      options.logger?.warn('Generated asset index migration requires attention', {
+        report: migrationReport,
+      });
+    }
+    await projectionBinding.store.update((assets) => assets);
+    const index = new GeneratedAssetIndex(projectionBinding.store);
+    await index.load();
+    return { index, dispose: () => projectionBinding.dispose() };
+  } catch (error) {
+    await projectionBinding.dispose();
+    throw error;
   }
-  return binding.index;
 }

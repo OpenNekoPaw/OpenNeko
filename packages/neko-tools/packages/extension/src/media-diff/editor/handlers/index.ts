@@ -9,26 +9,9 @@
  */
 
 export type { IHandlerContext } from './types';
-export { MAX_CONCURRENT_FRAMES } from './types';
-
-export {
-  initializeDiff,
-  initializeLocalDiff,
-  cancelCurrentAnalysis,
-  detectMediaTypeFromExtension,
-  areFilesIdentical,
-  ensurePreviousFilePath,
-} from './AnalysisPipeline';
+export { initializeDiff, initializeLocalDiff, cancelCurrentAnalysis } from './AnalysisPipeline';
 
 export { handleSeek, handleGetFrame, handleInspectElement } from './FrameOperations';
-
-export {
-  sendVisualizationData,
-  sendVisualizationDataForLocal,
-  sendWaveformFromResult,
-  startEarlyWaveform,
-  startEarlyFrameExtraction,
-} from './VisualizationHandler';
 
 export {
   handleStartStreaming,

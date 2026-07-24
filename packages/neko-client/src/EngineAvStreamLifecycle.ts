@@ -95,6 +95,7 @@ export class EngineAvStreamLifecycle {
   private audioClient: EngineAvAudioStreamClient | null = null;
   private scheduler: EngineAvFrameScheduler | null = null;
   private disposed = false;
+  private generation = 0;
 
   constructor(options: EngineAvStreamLifecycleOptions = {}) {
     this.factories = {
@@ -118,6 +119,7 @@ export class EngineAvStreamLifecycle {
     }
 
     this.stop();
+    const generation = this.generation;
     this.descriptor = descriptor;
 
     const scheduler = shouldCreateScheduler(descriptor)
@@ -128,14 +130,21 @@ export class EngineAvStreamLifecycle {
     const audioClient = descriptor.audio
       ? this.factories.createAudioClient({
           ...descriptor.audio,
-          onConnectionChange: chainConnectionChange(
-            descriptor.audio.onConnectionChange,
-            this.callbacks.onAudioConnectionChange,
-          ),
-          onError: chainError(descriptor.audio.onError, this.callbacks.onError),
-          onStreamEnd: chainStreamEnd(descriptor.audio.onStreamEnd, () =>
-            this.callbacks.onStreamEnd?.('audio'),
-          ),
+          onConnectionChange: (connected) => {
+            if (!this.isCurrentGeneration(generation)) return;
+            descriptor.audio?.onConnectionChange?.(connected);
+            this.callbacks.onAudioConnectionChange?.(connected);
+          },
+          onError: (error) => {
+            if (!this.isCurrentGeneration(generation)) return;
+            descriptor.audio?.onError?.(error);
+            this.callbacks.onError?.(error);
+          },
+          onStreamEnd: () => {
+            if (!this.isCurrentGeneration(generation)) return;
+            descriptor.audio?.onStreamEnd?.();
+            this.callbacks.onStreamEnd?.('audio');
+          },
         })
       : null;
     this.audioClient = audioClient;
@@ -143,18 +152,40 @@ export class EngineAvStreamLifecycle {
     const videoClient = descriptor.video
       ? this.factories.createVideoClient({
           ...descriptor.video,
-          onFrame:
-            scheduler && (descriptor.videoFrameRoute ?? 'scheduler') === 'scheduler'
-              ? (frame) => scheduler.enqueue(frame)
-              : descriptor.video.onFrame,
-          onConnectionChange: chainConnectionChange(
-            descriptor.video.onConnectionChange,
-            this.callbacks.onVideoConnectionChange,
-          ),
-          onError: chainError(descriptor.video.onError, this.callbacks.onError),
-          onStreamEnd: chainStreamEnd(descriptor.video.onStreamEnd, () =>
-            this.callbacks.onStreamEnd?.('video'),
-          ),
+          onFrame: (frame) => {
+            if (!this.isCurrentGeneration(generation)) {
+              frame.close();
+              return;
+            }
+            if (scheduler && (descriptor.videoFrameRoute ?? 'scheduler') === 'scheduler') {
+              scheduler.enqueue(frame);
+              return;
+            }
+            if (descriptor.video?.onFrame) {
+              descriptor.video.onFrame(frame);
+              return;
+            }
+            frame.close();
+          },
+          onConnectionChange: (connected) => {
+            if (!this.isCurrentGeneration(generation)) return;
+            descriptor.video?.onConnectionChange?.(connected);
+            this.callbacks.onVideoConnectionChange?.(connected);
+          },
+          onError: (error) => {
+            if (!this.isCurrentGeneration(generation)) return;
+            descriptor.video?.onError?.(error);
+            this.callbacks.onError?.(error);
+          },
+          onPacketReceived: (sizeBytes) => {
+            if (!this.isCurrentGeneration(generation)) return;
+            descriptor.video?.onPacketReceived?.(sizeBytes);
+          },
+          onStreamEnd: () => {
+            if (!this.isCurrentGeneration(generation)) return;
+            descriptor.video?.onStreamEnd?.();
+            this.callbacks.onStreamEnd?.('video');
+          },
         })
       : null;
     this.videoClient = videoClient;
@@ -165,10 +196,14 @@ export class EngineAvStreamLifecycle {
 
     await Promise.all([videoConnect, audioConnect]);
 
+    if (!this.isCurrentGeneration(generation)) {
+      throw new Error(`Engine AV stream generation ${generation} was superseded before startup.`);
+    }
     return this.getSnapshot();
   }
 
   stop(): void {
+    this.generation += 1;
     this.disposeCurrentClients();
     this.descriptor = null;
     this.callbacks.onClientsChanged?.(this.getClients());
@@ -179,6 +214,7 @@ export class EngineAvStreamLifecycle {
       return;
     }
     this.disposed = true;
+    this.generation += 1;
     this.disposeCurrentClients();
     this.callbacks.onClientsChanged?.(this.getClients());
   }
@@ -204,6 +240,10 @@ export class EngineAvStreamLifecycle {
       audioClient: this.audioClient,
       scheduler: this.scheduler,
     };
+  }
+
+  private isCurrentGeneration(generation: number): boolean {
+    return !this.disposed && this.generation === generation;
   }
 
   private disposeCurrentClients(): void {
@@ -235,34 +275,4 @@ function shouldCreateScheduler(descriptor: EngineAvStreamDescriptor): boolean {
     case 'auto':
       return Boolean(descriptor.audio);
   }
-}
-
-function chainConnectionChange(
-  first: ((connected: boolean) => void) | undefined,
-  second: ((connected: boolean) => void) | undefined,
-): (connected: boolean) => void {
-  return (connected) => {
-    first?.(connected);
-    second?.(connected);
-  };
-}
-
-function chainError(
-  first: ((error: Error) => void) | undefined,
-  second: ((error: Error) => void) | undefined,
-): (error: Error) => void {
-  return (error) => {
-    first?.(error);
-    second?.(error);
-  };
-}
-
-function chainStreamEnd(
-  first: (() => void) | undefined,
-  second: (() => void) | undefined,
-): () => void {
-  return () => {
-    first?.();
-    second?.();
-  };
 }

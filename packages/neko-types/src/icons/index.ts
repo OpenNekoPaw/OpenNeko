@@ -45,6 +45,10 @@ export { ErrorIcon, WarningIcon, SuccessIcon, LoadingIcon, InfoIcon } from './st
 export {
   CodeIcon,
   FileIcon,
+  EyeIcon,
+  EyeOffIcon,
+  LockIcon,
+  UnlockIcon,
   FolderIcon,
   ZoomInIcon,
   ZoomOutIcon,

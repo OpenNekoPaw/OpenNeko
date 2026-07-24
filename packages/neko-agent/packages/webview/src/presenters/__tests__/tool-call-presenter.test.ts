@@ -341,6 +341,146 @@ describe('tool-call-presenter', () => {
     expect(projection.documentThumbnails[0]!.referenceJson).not.toContain('.neko/.cache');
   });
 
+  it('keeps locator-only ReadImage selections visible and aligns their attachment previews', () => {
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
+      entryPath: 'pages/001.png',
+    };
+    const projection = projectToolCallDisplayState({
+      id: 'tool-locator-only',
+      name: 'ReadImage',
+      arguments: {},
+      result: {
+        success: true,
+        data: {
+          images: [
+            {
+              label: 'Page 1',
+              width: 1200,
+              height: 1800,
+              byteSize: 2048,
+              mimeType: 'image/png',
+              contentLocator,
+            },
+          ],
+        },
+        attachments: [
+          {
+            type: 'image',
+            path: 'content:document-entry',
+            mimeType: 'image/png',
+            assetRef: {
+              assetId: 'page-1',
+              uri: 'content:document-entry',
+              mimeType: 'image/png',
+              contentLocator,
+              previewUri: 'data:image/webp;base64,dGh1bWI=',
+            },
+          },
+        ],
+      },
+    });
+
+    expect(projection.documentThumbnails).toEqual([
+      expect.objectContaining({
+        path: 'pages/001.png',
+        filePath: 'books/comic.cbz',
+        label: 'Page 1',
+        src: 'data:image/webp;base64,dGh1bWI=',
+        contentLocator,
+      }),
+    ]);
+  });
+
+  it('keeps an ordered locator-only placeholder when preview projection fails', () => {
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
+      entryPath: 'pages/002.png',
+    };
+    const projection = projectToolCallDisplayState({
+      id: 'tool-preview-failed',
+      name: 'ReadImage',
+      arguments: {},
+      result: {
+        success: true,
+        data: { images: [{ label: 'Page 2', contentLocator }] },
+        attachments: [
+          {
+            type: 'image',
+            path: 'content:page-2',
+            assetRef: {
+              assetId: 'page-2',
+              uri: 'content:page-2',
+              mimeType: 'image/png',
+              contentLocator,
+              previewDiagnostic: 'Image preview is unavailable: unauthorized.',
+            },
+          },
+        ],
+      },
+    });
+
+    expect(projection.documentThumbnails).toEqual([
+      expect.objectContaining({
+        index: 0,
+        label: 'Page 2',
+        contentLocator,
+        previewDiagnostic: 'Image preview is unavailable: unauthorized.',
+      }),
+    ]);
+    expect(projection.documentThumbnails[0]).not.toHaveProperty('src');
+  });
+
+  it('uses a hydrated perception-card preview when legacy history has no attachments', () => {
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
+      entryPath: 'pages/003.png',
+    };
+    const projection = projectToolCallDisplayState({
+      id: 'tool-hydrated-preview',
+      name: 'ReadImage',
+      arguments: {},
+      result: {
+        success: true,
+        data: {
+          success: true,
+          data: { images: [{ label: 'Page 3', contentLocator }] },
+          perceptionCards: [
+            {
+              version: 1,
+              assetId: 'page-3',
+              modality: 'image',
+              createdAt: 1,
+              layerStatus: { layer0: 'complete', layer1: 'skipped', layer2: 'complete' },
+              structural: { format: 'png', mimeType: 'image/png', byteSize: 2048 },
+              perceptual: {
+                thumbnailRef: {
+                  assetId: 'page-3',
+                  uri: 'content:page-3',
+                  mimeType: 'image/png',
+                  contentLocator,
+                  previewUri: 'data:image/webp;base64,aGlzdG9yeQ==',
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(projection.documentThumbnails).toEqual([
+      expect.objectContaining({
+        index: 0,
+        label: 'Page 3',
+        contentLocator,
+        src: 'data:image/webp;base64,aGlzdG9yeQ==',
+      }),
+    ]);
+  });
+
   it('projects ReadImage argument images into thumbnails when failed', () => {
     const projection = projectToolCallDisplayState({
       id: 'tool-5',

@@ -20,7 +20,6 @@ export default defineConfig({
     '@neko-canvas/domain',
     '@neko/agent',
     '@neko/ai-sdk',
-    '@neko/asset',
     '@neko/content',
     '@neko/entity',
     '@neko/generation',
@@ -29,7 +28,6 @@ export default defineConfig({
     '@neko/platform',
     '@neko/search',
     '@neko/shared',
-    'neko-assets',
   ],
   external: ['ink', 'react', 'yoga-wasm-web', 'mermaid', 'ajv', 'bun:sqlite', 'node:sqlite'],
   esbuildOptions(options) {
@@ -38,8 +36,8 @@ export default defineConfig({
   banner: {
     js: [
       '#!/usr/bin/env node',
-      "import { createRequire } from 'node:module';",
-      'const require = createRequire(import.meta.url);',
+      "import { createRequire as createNekoTuiRequire } from 'node:module';",
+      'const require = createNekoTuiRequire(import.meta.url);',
     ].join('\n'),
   },
 });

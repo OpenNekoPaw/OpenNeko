@@ -1,10 +1,3 @@
-import type {
-  ContentAccessDiagnostic,
-  ContentIngestDestinationPolicy,
-  ContentIngestMode,
-  ContentIngestRequest,
-  ContentIngestResult,
-} from '../types/content-access';
 import type { ProjectFileDiagnostic } from './diagnostics';
 import { createProjectFileDiagnostic } from './diagnostics';
 import {
@@ -38,28 +31,39 @@ export interface ProjectSourceAddRequest {
   readonly browserFile?: BrowserFileProjection;
   readonly bytes?: Uint8Array;
   readonly generatedAssetId?: string;
-  readonly destination: ContentIngestDestinationPolicy;
-  readonly ingestMode?: ContentIngestMode;
+  /** Domain-owned directory used only when bytes must be copied into the project. */
+  readonly assetDirectory: string;
   readonly mimeType?: string;
-  readonly caller?: string;
   readonly metadata?: Record<string, unknown>;
 }
 
 export interface ProjectSourceAddResult {
   readonly requestId: string;
   readonly ok: boolean;
-  readonly ingest?: ContentIngestResult;
   readonly durablePath?: string;
+  readonly metadata?: Record<string, unknown>;
   readonly diagnostics: readonly ProjectFileDiagnostic[];
 }
 
-export interface ProjectSourceIngestPort {
-  ingest(request: ContentIngestRequest): Promise<ContentIngestResult>;
+export type ProjectSourceStorageResult =
+  | {
+      readonly status: 'ready';
+      readonly storage: 'referenced' | 'copied';
+      readonly durablePath: string;
+      readonly metadata?: Record<string, unknown>;
+    }
+  | {
+      readonly status: 'unavailable';
+      readonly diagnostic: ProjectFileDiagnostic;
+    };
+
+export interface ProjectSourceStoragePort {
+  store(request: ProjectSourceAddRequest): Promise<ProjectSourceStorageResult>;
 }
 
 export async function handleProjectSourceAddRequest(
   request: ProjectSourceAddRequest,
-  ingestPort: ProjectSourceIngestPort,
+  storagePort: ProjectSourceStoragePort,
 ): Promise<ProjectSourceAddResult> {
   const preflightDiagnostics = validateProjectSourceAddRequest(request);
   if (preflightDiagnostics.length > 0) {
@@ -70,69 +74,37 @@ export async function handleProjectSourceAddRequest(
     };
   }
 
-  const ingest = await ingestPort.ingest(toContentIngestRequest(request));
-  const diagnostics = [
-    ...projectDiagnosticsFromContentDiagnostics(ingest.diagnostics ?? []),
-    ...(ingest.error
-      ? [
-          createProjectFileDiagnostic({
-            code: ingest.status === 'non-portable' ? 'non-portable-path' : 'missing-source',
-            message: ingest.error,
-            recoverability: ingest.status === 'non-portable' ? 'create-asset' : 'relink',
-          }),
-        ]
-      : []),
-  ];
-  const durablePath = extractDurablePathFromIngest(ingest);
+  const stored = await storagePort.store(request);
+  if (stored.status === 'unavailable') {
+    return {
+      requestId: request.requestId,
+      ok: false,
+      diagnostics: [stored.diagnostic],
+    };
+  }
 
   return {
     requestId: request.requestId,
-    ok:
-      ingest.status === 'ready' &&
-      diagnostics.every((diagnostic) => diagnostic.severity !== 'error'),
-    ingest,
-    ...(durablePath ? { durablePath } : {}),
-    diagnostics,
+    ok: true,
+    durablePath: stored.durablePath,
+    ...(stored.metadata ? { metadata: stored.metadata } : {}),
+    diagnostics: [],
   };
-}
-
-export function toContentIngestRequest(request: ProjectSourceAddRequest): ContentIngestRequest {
-  return {
-    mode: request.ingestMode ?? inferIngestMode(request),
-    ...(request.sourcePath ? { sourcePath: request.sourcePath } : {}),
-    ...(request.bytes ? { bytes: request.bytes } : {}),
-    destination: request.destination,
-    ...((request.mimeType ?? request.browserFile?.type)
-      ? { mimeType: request.mimeType ?? request.browserFile?.type }
-      : {}),
-    ...(request.browserFile?.name ? { fileName: request.browserFile.name } : {}),
-    ...(request.caller ? { caller: request.caller } : {}),
-    metadata: {
-      ...(request.metadata ?? {}),
-      projectFormatId: request.formatId,
-      projectSourceAddKind: request.kind,
-      ...(request.documentUri ? { documentUri: request.documentUri } : {}),
-      ...(request.sourceUri ? { sourceUri: request.sourceUri } : {}),
-      ...(request.generatedAssetId ? { generatedAssetId: request.generatedAssetId } : {}),
-    },
-  };
-}
-
-export function extractDurablePathFromIngest(result: ContentIngestResult): string | undefined {
-  if (result.contractedPath) return result.contractedPath;
-  if (result.source && 'kind' in result.source && result.source.kind === 'file') {
-    return result.source.path;
-  }
-  if (result.source && 'kind' in result.source && result.source.kind === 'generated-asset') {
-    return result.source.path;
-  }
-  return result.outputPath;
 }
 
 export function validateProjectSourceAddRequest(
   request: ProjectSourceAddRequest,
 ): readonly ProjectFileDiagnostic[] {
   const diagnostics: ProjectFileDiagnostic[] = [];
+  if (!isSafeProjectAssetDirectory(request.assetDirectory)) {
+    diagnostics.push(
+      createProjectFileDiagnostic({
+        code: 'unauthorized-root',
+        message: 'Project source asset directory must be a normalized project-relative path.',
+        recoverability: 'manual',
+      }),
+    );
+  }
   if (
     !request.sourcePath &&
     !request.bytes &&
@@ -152,6 +124,12 @@ export function validateProjectSourceAddRequest(
   }
   diagnostics.push(...detectRuntimeOrCacheAddSourceHandles(request));
   return diagnostics;
+}
+
+function isSafeProjectAssetDirectory(value: string): boolean {
+  if (!value || value !== value.trim() || value.includes('\\')) return false;
+  if (value.startsWith('/') || /^[A-Za-z]:/u.test(value)) return false;
+  return value.split('/').every((segment) => segment && segment !== '.' && segment !== '..');
 }
 
 function detectRuntimeOrCacheAddSourceHandles(
@@ -185,33 +163,4 @@ function detectRuntimeOrCacheAddSourceHandles(
     }
   }
   return diagnostics;
-}
-
-function projectDiagnosticsFromContentDiagnostics(
-  diagnostics: readonly ContentAccessDiagnostic[],
-): readonly ProjectFileDiagnostic[] {
-  return diagnostics.map((diagnostic) =>
-    createProjectFileDiagnostic({
-      code: mapContentDiagnosticCode(diagnostic.code),
-      severity: diagnostic.severity,
-      message: diagnostic.message,
-      sourceId: diagnostic.sourceId,
-      recoverability: diagnostic.code.includes('non-portable') ? 'create-asset' : 'manual',
-    }),
-  );
-}
-
-function mapContentDiagnosticCode(code: string): ProjectFileDiagnostic['code'] {
-  if (code.includes('runtime')) return 'runtime-handle-persisted';
-  if (code.includes('cache')) return 'cache-source-persisted';
-  if (code.includes('unauthorized')) return 'unauthorized-root';
-  if (code.includes('non-portable')) return 'non-portable-path';
-  if (code.includes('missing')) return 'missing-source';
-  return 'invalid-document';
-}
-
-function inferIngestMode(request: ProjectSourceAddRequest): ContentIngestMode {
-  if (request.generatedAssetId || request.kind === 'generated-output') return 'create-asset';
-  if (request.bytes) return 'create-asset';
-  return 'link';
 }

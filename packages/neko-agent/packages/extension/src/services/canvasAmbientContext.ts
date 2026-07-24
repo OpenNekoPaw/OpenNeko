@@ -32,11 +32,6 @@ const _onDidChangeCanvasSelection = new vscode.EventEmitter<SelectedNodeSummary[
 export const onDidChangeCanvasSelection = _onDidChangeCanvasSelection.event;
 
 const _onDidReceiveCanvasChange = new vscode.EventEmitter<CanvasChangeSummary>();
-/**
- * Fired when a canvas or asset change event is received from neko-canvas.
- * Subscribers can surface a "canvas changed" indicator without polling.
- */
-export const onDidReceiveCanvasChange = _onDidReceiveCanvasChange.event;
 
 // =============================================================================
 // Public API
@@ -70,15 +65,6 @@ export function getCanvasSelection(scopeId = activeScopeId): SelectedNodeSummary
 export function clearCanvasSelection(scopeId = activeScopeId): void {
   const selectedNodes = runtime.clearCanvasSelection(scopeId);
   _onDidChangeCanvasSelection.fire(selectedNodes);
-}
-
-/** Update the active generation model config (called after set_project_generation_config). */
-export function setActiveGenerationConfig(
-  config: GenerationModelConfig,
-  scopeId = activeScopeId,
-): void {
-  runtime.setActiveGenerationConfig(config, scopeId);
-  _onDidChangeGenerationConfig.fire(config);
 }
 
 /** Read the active generation model config. */

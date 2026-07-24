@@ -85,3 +85,10 @@
 - [x] 11.6 Run focused producer/consumer/typecheck/quality gates, then prove the real visual and interaction path only in external `~/Git/neko-test` under `Debug Dev (All)` with full-image visibility, no generated Groups, reference deduplication, visible relation, and preserved user movement. The replayed relation batch left the `.nkc` byte-identical, proving existing layout/content was not rewritten; unrelated dirty-worktree typecheck blockers are recorded in `verification.md`.
 - [x] 11.7 Reproduce and fix duplicate source-file nodes when one portable file is observed through weak and hashed ResourceRefs; prefer the strongest durable observation, preserve existing user layout, and verify the real Board only in external `~/Git/neko-test` under `Debug Dev (All)`.
 - [x] 11.8 Preserve portable intrinsic dimensions for generated and `ReadImage`-referenced images, size only newly projected image nodes to the source aspect ratio, preserve existing creator sizing on replay, and verify the real Board only in external `~/Git/neko-test` under `Debug Dev (All)`.
+
+## 12. Native Image Analysis Board Finalization
+
+- [x] 12.1 Add a red regression proving successful `ReadImage.analysis` currently leaves ordinary final Markdown outside the terminal delivery batch and misclassifies the image evidence.
+- [x] 12.2 Finalize explicitly declared native image analysis as one stable named Markdown artifact with source image roles and deterministic `sourceArtifactIds`, while keeping unrelated final answers excluded.
+- [x] 12.3 Cover Agent collector plus TUI and VS Code terminal-turn consumers, and update the owning real Agent Evaluation case with no-fallback evidence.
+- [x] 12.4 Run focused tests/typechecks, key-free Evaluation gates, the focused real TUI case, and Extension Development Host Board acceptance; record blockers and residual risk.

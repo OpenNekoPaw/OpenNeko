@@ -91,7 +91,7 @@ describe('createTuiReferenceSuggestions', () => {
     expect(suggestions[0]?.name).toBe('a/one.md');
   });
 
-  it('projects local asset and media library files before ordinary workspace files', async () => {
+  it('treats ordinary asset and media directories as workspace files', async () => {
     await fs.mkdir(path.join(tempRoot, 'assets', 'shots'), { recursive: true });
     await fs.mkdir(path.join(tempRoot, 'media'), { recursive: true });
     await fs.writeFile(path.join(tempRoot, 'assets', 'shots', 'hero image.png'), 'image\n');
@@ -100,40 +100,49 @@ describe('createTuiReferenceSuggestions', () => {
 
     const suggestions = await createTuiReferenceSuggestions({ workspaceRoot: tempRoot });
 
-    expect(suggestions.slice(0, 2)).toMatchObject([
-      {
-        name: 'assets/shots/hero image.png',
-        kind: 'asset',
-        description: expect.stringContaining('asset-library · image'),
-        insertText: '@"assets/shots/hero image.png" ',
-      },
-      {
-        name: 'media/voice.wav',
-        kind: 'media',
-        description: expect.stringContaining('media-library · audio'),
-        insertText: '@media/voice.wav ',
-      },
-    ]);
+    expect(suggestions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'assets/shots/hero image.png',
+          kind: 'file',
+          description: expect.stringContaining('workspace file'),
+          insertText: '@"assets/shots/hero image.png" ',
+        }),
+        expect.objectContaining({
+          name: 'media/voice.wav',
+          kind: 'file',
+          description: expect.stringContaining('workspace file'),
+          insertText: '@media/voice.wav ',
+        }),
+      ]),
+    );
     expect(suggestions.map((suggestion) => suggestion.name)).toContain('notes.md');
   });
 
-  it('localizes local library descriptions when TUI locale is Chinese', async () => {
-    await fs.mkdir(path.join(tempRoot, 'assets'), { recursive: true });
-    await fs.writeFile(path.join(tempRoot, 'assets', 'hero.png'), 'image\n');
+  it('localizes linked Media Library descriptions when TUI locale is Chinese', async () => {
+    const mediaRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-media-zh-'));
+    try {
+      await fs.writeFile(path.join(mediaRoot, 'hero.png'), 'image\n');
+      const assetsRoot = path.join(tempRoot, 'neko', 'assets');
+      await fs.mkdir(assetsRoot, { recursive: true });
+      await fs.symlink(mediaRoot, path.join(assetsRoot, '图片'), directoryLinkType());
 
-    const suggestions = await createTuiReferenceSuggestionsWithOptions({
-      workspaceRoot: tempRoot,
-      presentation: TEST_ZH_PRESENTATION,
-    });
+      const suggestions = await createTuiReferenceSuggestionsWithOptions({
+        workspaceRoot: tempRoot,
+        presentation: TEST_ZH_PRESENTATION,
+      });
 
-    expect(suggestions[0]).toMatchObject({
-      name: 'assets/hero.png',
-      kind: 'asset',
-      description: expect.stringContaining('素材库 · 图像'),
-    });
+      expect(suggestions[0]).toMatchObject({
+        name: 'neko/assets/图片/hero.png',
+        kind: 'media',
+        description: expect.stringContaining('图片 · 图像'),
+      });
+    } finally {
+      await fs.rm(mediaRoot, { recursive: true, force: true });
+    }
   });
 
-  it('projects configured media library roots through durable variable references', async () => {
+  it('projects workspace-linked media libraries through canonical workspace paths', async () => {
     const mediaRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-media-root-'));
     const overrideRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-media-override-'));
     try {
@@ -141,29 +150,14 @@ describe('createTuiReferenceSuggestions', () => {
       await fs.mkdir(path.join(overrideRoot, 'shots'), { recursive: true });
       await fs.writeFile(path.join(mediaRoot, 'voice', 'line.wav'), 'audio\n');
       await fs.writeFile(path.join(overrideRoot, 'shots', 'take.mov'), 'video\n');
-      await fs.mkdir(path.join(tempRoot, 'neko'), { recursive: true });
-      await fs.mkdir(path.join(tempRoot, '.neko'), { recursive: true });
-      await fs.writeFile(
-        path.join(tempRoot, 'neko', 'settings.json'),
-        JSON.stringify({
-          mediaLibraries: [
-            { name: 'Project Media', path: mediaRoot, variable: 'PROJECT_MEDIA' },
-            {
-              name: 'Local Override',
-              path: path.join(tempRoot, 'missing-media-root'),
-              variable: 'LOCAL_MEDIA',
-            },
-            { name: 'Disabled Media', path: mediaRoot, variable: 'DISABLED_MEDIA', enabled: false },
-          ],
-        }),
-      );
-      await fs.writeFile(
-        path.join(tempRoot, '.neko', 'settings.local.json'),
-        JSON.stringify({
-          mediaLibraryOverrides: {
-            LOCAL_MEDIA: overrideRoot,
-          },
-        }),
+      const assetsRoot = path.join(tempRoot, 'neko', 'assets');
+      await fs.mkdir(assetsRoot, { recursive: true });
+      await fs.symlink(mediaRoot, path.join(assetsRoot, 'Project Media'), directoryLinkType());
+      await fs.symlink(overrideRoot, path.join(assetsRoot, 'Local Override'), directoryLinkType());
+      await fs.symlink(
+        path.join(tempRoot, 'missing-media-root'),
+        path.join(assetsRoot, 'Disabled Media'),
+        directoryLinkType(),
       );
 
       const suggestions = await createTuiReferenceSuggestions({ workspaceRoot: tempRoot });
@@ -171,21 +165,21 @@ describe('createTuiReferenceSuggestions', () => {
       expect(suggestions).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            name: '${PROJECT_MEDIA}/voice/line.wav',
+            name: 'neko/assets/Project Media/voice/line.wav',
             kind: 'media',
             description: expect.stringContaining('Project Media · audio'),
-            insertText: '@${PROJECT_MEDIA}/voice/line.wav ',
+            insertText: '@"neko/assets/Project Media/voice/line.wav" ',
           }),
           expect.objectContaining({
-            name: '${LOCAL_MEDIA}/shots/take.mov',
+            name: 'neko/assets/Local Override/shots/take.mov',
             kind: 'media',
             description: expect.stringContaining('Local Override · video'),
-            insertText: '@${LOCAL_MEDIA}/shots/take.mov ',
+            insertText: '@"neko/assets/Local Override/shots/take.mov" ',
           }),
         ]),
       );
       expect(suggestions.map((suggestion) => suggestion.name)).not.toContain(
-        '${DISABLED_MEDIA}/voice/line.wav',
+        'neko/assets/Disabled Media/voice/line.wav',
       );
     } finally {
       await fs.rm(mediaRoot, { recursive: true, force: true });
@@ -193,61 +187,7 @@ describe('createTuiReferenceSuggestions', () => {
     }
   });
 
-  it('projects asset library facts as stable asset references', async () => {
-    await fs.mkdir(path.join(tempRoot, 'neko', 'assets'), { recursive: true });
-    await fs.writeFile(
-      path.join(tempRoot, 'neko', 'assets', 'library.json'),
-      JSON.stringify({
-        version: 1,
-        entities: [
-          {
-            id: 'asset-hero',
-            name: 'Hero Concept',
-            category: 'image',
-            description: 'Approved key art',
-            metadata: {},
-            variants: [
-              {
-                id: 'variant-hero',
-                entityId: 'asset-hero',
-                name: 'Default',
-                attributes: {},
-                files: [
-                  {
-                    id: 'file-hero',
-                    variantId: 'variant-hero',
-                    name: 'hero.png',
-                    path: '${ASSETS}/hero.png',
-                    mediaType: 'image',
-                    metadata: {},
-                    createdAt: 1,
-                  },
-                ],
-                createdAt: 1,
-              },
-            ],
-            tags: ['cover'],
-            aliases: ['protagonist'],
-            usageCount: 0,
-            createdAt: 1,
-            updatedAt: 1,
-          },
-        ],
-      }),
-    );
-
-    const suggestions = await createTuiReferenceSuggestions({ workspaceRoot: tempRoot });
-    const hero = suggestions.find((suggestion) => suggestion.name === 'Hero Concept');
-
-    expect(hero).toMatchObject({
-      kind: 'asset',
-      description: expect.stringContaining('asset-library · image · image · Approved key art'),
-      matchText: expect.stringContaining('protagonist'),
-      insertText: '@asset:asset-hero ',
-    });
-  });
-
-  it('finds workspace file query matches even when library candidates fill the default list', async () => {
+  it('finds workspace file query matches amid many generated workspace files', async () => {
     await fs.mkdir(path.join(tempRoot, 'neko', 'generated', 'image'), { recursive: true });
     await fs.mkdir(path.join(tempRoot, 'cases'), { recursive: true });
     for (let index = 0; index < 100; index += 1) {
@@ -324,10 +264,10 @@ describe('createTuiReferenceSuggestions', () => {
           description: 'Reference Books',
           source: {
             partition: 'media-library',
-            sourceId: '${BOOKS}/BLAME/volume-01.epub',
-            filePath: '${BOOKS}/BLAME/volume-01.epub',
+            sourceId: 'neko/assets/Reference Books/BLAME/volume-01.epub',
+            filePath: 'neko/assets/Reference Books/BLAME/volume-01.epub',
           },
-          fileKey: '${BOOKS}/BLAME/volume-01.epub',
+          fileKey: 'neko/assets/Reference Books/BLAME/volume-01.epub',
           searchText: 'BLAME volume 01 Reference Books document',
           freshness: 'fresh',
           metadata: { mediaType: 'document', libraryName: 'Reference Books' },
@@ -342,7 +282,7 @@ describe('createTuiReferenceSuggestions', () => {
           name: 'BLAME volume 01.epub',
           kind: 'file',
           description: expect.stringContaining('media-library · document · Reference Books'),
-          insertText: '@${BOOKS}/BLAME/volume-01.epub ',
+          insertText: '@"neko/assets/Reference Books/BLAME/volume-01.epub" ',
         }),
       ]),
     );
@@ -355,12 +295,12 @@ describe('createTuiReferenceSuggestions', () => {
       workspaceRoot: tempRoot,
       extraReferences: [
         {
-          kind: 'asset',
-          id: 'asset-hero',
+          kind: 'media',
+          id: 'media-hero',
           label: 'Hero Key Art',
           description: 'Approved cover frame',
-          filePath: '${ASSETS}/hero.png',
-          source: 'asset-library',
+          filePath: 'neko/assets/Images/hero.png',
+          source: 'media-library',
           mediaType: 'image',
           searchText: 'cover poster',
         },
@@ -379,10 +319,10 @@ describe('createTuiReferenceSuggestions', () => {
     const unsafe = suggestions.find((suggestion) => suggestion.name === 'Unsafe Preview');
 
     expect(hero).toMatchObject({
-      kind: 'asset',
-      description: expect.stringContaining('asset-library · image'),
+      kind: 'media',
+      description: expect.stringContaining('media-library · image'),
       matchText: expect.stringContaining('cover poster'),
-      insertText: '@${ASSETS}/hero.png ',
+      insertText: '@neko/assets/Images/hero.png ',
     });
     expect(unsafe?.insertText).toBe('@media:unsafe-video ');
     expect(unsafe?.insertText).not.toContain('/tmp/');
@@ -395,17 +335,17 @@ describe('createTuiReferenceSuggestions', () => {
       workspaceRoot: tempRoot,
       referenceContributors: [
         {
-          id: 'neko-assets',
-          displayName: 'Assets',
+          id: 'media-library',
+          displayName: 'Media Library',
           search: async () => ({
             diagnostics: [],
             candidates: [
               {
-                id: 'asset:hero',
+                id: 'media:hero',
                 label: 'Hero Concept',
-                source: 'assets',
-                kind: 'asset',
-                insertText: '@asset:hero',
+                source: 'media-library',
+                kind: 'media',
+                insertText: '@neko/assets/Images/hero.png',
                 description: 'Main character key art',
                 path: '/tmp/rendered-preview.png',
               },
@@ -417,11 +357,15 @@ describe('createTuiReferenceSuggestions', () => {
 
     expect(suggestions[0]).toMatchObject({
       name: 'Hero Concept',
-      kind: 'asset',
-      description: 'assets · asset · Main character key art',
-      insertText: '@asset:hero ',
+      kind: 'media',
+      description: 'media-library · media · Main character key art',
+      insertText: '@neko/assets/Images/hero.png ',
     });
     expect(suggestions[0]?.description).not.toContain('/tmp/');
     expect(suggestions.map((suggestion) => suggestion.name)).toContain('brief.md');
   });
 });
+
+function directoryLinkType(): 'dir' | 'junction' {
+  return process.platform === 'win32' ? 'junction' : 'dir';
+}

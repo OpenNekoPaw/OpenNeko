@@ -61,7 +61,7 @@ class FrameCache {
 // Video Frame Provider
 // =============================================================================
 
-export class VideoFrameProvider implements FrameProvider {
+class VideoFrameProvider implements FrameProvider {
   private _engine: NativeEngineType | null = null;
   private _cache: FrameCache;
   private _initialized = false;

@@ -49,7 +49,7 @@ export function resolveAiProviderSources(input: AiProviderSourceInput): AiProvid
   };
 }
 
-export function detectExplicitAiConfig(input: AiProviderSourceInput): ExplicitAiConfigState {
+function detectExplicitAiConfig(input: AiProviderSourceInput): ExplicitAiConfigState {
   const result = input.userConfigReadResult;
   if (result?.status !== 'ok') return { isExplicit: false };
 

@@ -1,133 +1,103 @@
-/**
- * TimelineMinimap Component
- * 时间线缩略图预览组件
- *
- * 功能:
- * - 显示整个项目时间范围的缩略图
- * - 高亮显示当前可视时间线范围
- * - 点击跳转到指定时间位置
- * - 支持开关隐藏/显示
- */
+import { memo, useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import type { TimelineView } from '@neko-cut/domain';
+import { useTranslation } from '../../../i18n/I18nContext';
+import { TRACK_HEADER_WIDTH } from '../timelineMath';
+import { readOverviewRange, readOverviewScrollLeft, readOverviewViewport } from '../overviewMath';
 
-import { memo, useRef, useMemo, useState, useEffect } from 'react';
-import { MinimapThumbnails } from './MinimapThumbnails';
-import { MinimapViewport } from './MinimapViewport';
-import { MinimapToggle } from './MinimapToggle';
-import { useThumbnailGenerator } from '../../../hooks/useThumbnailGenerator';
-import { useMinimapInteraction } from '../../../hooks/useMinimapInteraction';
-import { TRACK_LABEL_WIDTH } from '../../../constants';
-import type { TimelineMinimapProps } from './types';
-import { DEFAULT_MINIMAP_CONFIG, calculateMinimapHeight } from './types';
+export interface TimelineMinimapProps {
+  readonly view: TimelineView;
+  readonly scrollRef: RefObject<HTMLDivElement>;
+  readonly timelineDurationSeconds: number;
+}
 
-export const TimelineMinimap = memo(function TimelineMinimap({
-  totalDuration,
-  currentTime,
-  visibleStart,
-  visibleEnd,
-  zoomLevel: _zoomLevel, // 标记为未使用但必须接收
-  project,
-  onScrollToTime,
-  config: configOverride,
-  onToggle,
-}: TimelineMinimapProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // 合并配置
-  const config = { ...DEFAULT_MINIMAP_CONFIG, ...configOverride };
-
-  // 动态计算高度
-  const minimapHeight = useMemo(() => {
-    return calculateMinimapHeight(project.tracks.length, config);
-  }, [project.tracks.length, config]);
-
-  // 生成缩略图
-  const { thumbnails, isGenerating, progress, error } = useThumbnailGenerator({
-    project,
-    totalDuration,
-    sampleInterval: config.sampleInterval,
-    maxCacheSize: config.maxCacheSize,
-    enabled: config.enabled,
-  });
-
-  // 交互逻辑
-  const { isDragging, handleMouseDown, handleClick } = useMinimapInteraction({
-    totalDuration,
-    visibleStart,
-    visibleEnd,
-    onScrollToTime,
-    containerRef,
-  });
-
-  // 使用 ResizeObserver 监听容器宽度变化，避免同步 DOM 查询
-  const [containerWidth, setContainerWidth] = useState(0);
+export const TimelineMinimap = memo(function TimelineMinimap(props: TimelineMinimapProps) {
+  const { t } = useTranslation();
+  const overviewRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState({ leftPercent: 0, widthPercent: 100 });
+  const update = useCallback(() => {
+    const element = props.scrollRef.current;
+    if (!element) return;
+    setViewport(readOverviewViewport(element));
+  }, [props.scrollRef]);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    const element = props.scrollRef.current;
+    if (!element) return;
+    update();
+    element.addEventListener('scroll', update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => {
+      element.removeEventListener('scroll', update);
+      observer.disconnect();
+    };
+  }, [props.scrollRef, update]);
 
-    const resizeObserver = new ResizeObserver(([entry]) => {
-      if (entry) {
-        setContainerWidth(entry.contentRect.width);
-      }
-    });
-
-    resizeObserver.observe(container);
-    // 初始化宽度
-    setContainerWidth(container.offsetWidth);
-
-    return () => resizeObserver.disconnect();
-  }, []);
-
-  // 如果未启用，不渲染
-  if (!config.enabled) {
-    return null;
-  }
+  const navigate = useCallback(
+    (clientX: number) => {
+      const overview = overviewRef.current;
+      const scroller = props.scrollRef.current;
+      if (!overview || !scroller) return;
+      const rect = overview.getBoundingClientRect();
+      scroller.scrollLeft = readOverviewScrollLeft({
+        pointerRatio: (clientX - rect.left) / rect.width,
+        clientWidth: scroller.clientWidth,
+        scrollWidth: scroller.scrollWidth,
+      });
+    },
+    [props.scrollRef],
+  );
+  const navigateWithKeyboard = (event: React.KeyboardEvent) => {
+    const scroller = props.scrollRef.current;
+    if (!scroller || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+    event.preventDefault();
+    scroller.scrollLeft +=
+      event.key === 'ArrowLeft' ? -scroller.clientWidth / 3 : scroller.clientWidth / 3;
+  };
 
   return (
-    <div className="flex border-b border-vscode-panel-border" style={{ height: minimapHeight }}>
-      {/* Track labels header - spacer to align with track labels */}
+    <div className="cut-basic-overview-row">
+      <div className="cut-basic-overview-spacer" style={{ width: TRACK_HEADER_WIDTH }} />
       <div
-        className="shrink-0 border-r border-vscode-panel-border bg-vscode-sidebar-bg flex items-center justify-center"
-        style={{ width: TRACK_LABEL_WIDTH }}
-      >
-        {onToggle && <MinimapToggle enabled={config.enabled} onToggle={onToggle} />}
-      </div>
-
-      {/* Minimap content */}
-      <div
-        ref={containerRef}
-        className="flex-1 relative cursor-pointer select-none overflow-hidden bg-vscode-editor-bg"
-        onClick={handleClick}
-        onMouseDown={handleMouseDown}
-        style={{
-          cursor: isDragging ? 'grabbing' : 'pointer',
-        }}
-      >
-        {/* 缩略图条 */}
-        <MinimapThumbnails
-          thumbnails={thumbnails}
-          totalDuration={totalDuration}
-          width={containerWidth}
-          height={minimapHeight}
-          isGenerating={isGenerating}
-          progress={progress}
-        />
-
-        {/* 可视范围指示器 */}
-        <MinimapViewport
-          visibleStart={visibleStart}
-          visibleEnd={visibleEnd}
-          currentTime={currentTime}
-          totalDuration={totalDuration}
-          width={containerWidth}
-        />
-
-        {/* 错误提示 */}
-        {error && (
-          <div className="absolute top-1 right-1 px-2 py-1 bg-vscode-inputValidation-errorBackground text-vscode-inputValidation-errorForeground text-xs rounded">
-            {error}
-          </div>
+        aria-label={t('timeline.basic.overview')}
+        aria-valuemax={Math.round(props.timelineDurationSeconds * 1000)}
+        aria-valuemin={0}
+        aria-valuenow={Math.round(
+          (viewport.leftPercent / 100) * props.timelineDurationSeconds * 1000,
         )}
+        className="cut-basic-overview"
+        onClick={(event) => navigate(event.clientX)}
+        onKeyDown={navigateWithKeyboard}
+        ref={overviewRef}
+        role="scrollbar"
+        tabIndex={0}
+      >
+        {props.view.tracks.flatMap((track, trackIndex) =>
+          track.items.flatMap((item, itemIndex) => {
+            if (item.kind !== 'clip') return [];
+            const range = readOverviewRange({
+              startSeconds: item.startSeconds,
+              durationSeconds: item.durationSeconds,
+              timelineSeconds: props.timelineDurationSeconds,
+            });
+            return [
+              <span
+                className="cut-basic-overview-clip"
+                data-kind={track.kind}
+                key={`${track.trackId}-${item.clipId}-${itemIndex}`}
+                style={{
+                  left: `${range.leftPercent}%`,
+                  top: `${4 + trackIndex * 9}px`,
+                  width: `${range.widthPercent}%`,
+                }}
+              />,
+            ];
+          }),
+        )}
+        <span
+          className="cut-basic-overview-viewport"
+          style={{ left: `${viewport.leftPercent}%`, width: `${viewport.widthPercent}%` }}
+        />
       </div>
     </div>
   );

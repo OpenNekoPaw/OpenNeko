@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { createHostContentAccessRuntime } from '@neko/shared/vscode/extension';
+import { createDefaultLocalResourceAccessService } from '@neko/shared/vscode/extension';
 import type { PreviewEntry } from '../utils/html';
 import { getWebviewHtml } from '../utils/html';
 
@@ -21,18 +21,12 @@ export async function setupPreviewWebviewPanel({
   readonly context?: vscode.ExtensionContext;
   readonly pinEditor?: boolean;
 }): Promise<void> {
-  const contentRuntime = createHostContentAccessRuntime({
+  const localResourceAccess = createDefaultLocalResourceAccessService({
     extensionUri,
-    context,
-    localResourceAccessOptions: { includeExtensionCache: false },
-    sourceFileProvider: { enabled: false },
-    documentEntryProvider: { enabled: false },
-    ingest: { enabled: false },
+    ...(context ? { context } : {}),
+    includeExtensionCache: false,
   });
-  if (!contentRuntime.localResourceAccess) {
-    throw new Error('Preview webview setup requires LocalResourceAccessService.');
-  }
-  await contentRuntime.localResourceAccess.configureWebview(webviewPanel.webview, {
+  await localResourceAccess.configureWebview(webviewPanel.webview, {
     enableScripts: true,
   });
 

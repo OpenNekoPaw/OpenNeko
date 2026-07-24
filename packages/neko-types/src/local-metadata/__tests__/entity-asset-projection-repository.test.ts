@@ -148,13 +148,12 @@ describe('Entity/Asset projection repository', () => {
           kind: 'binding-availability',
           sourceId: 'entity-runtime',
           entityId: 'char_rin',
-          assetRef: 'project://assets/rin.png',
           freshness: 'fresh',
           value: {
             bindingId: 'binding:rin-portrait',
             entityId: 'char_rin',
             entityKind: 'character',
-            assetRef: 'project://assets/rin.png',
+            representation: { kind: 'workspace-file', path: 'neko/assets/rin.png' },
             role: 'portrait',
             status: 'confirmed',
             availability: 'active',
@@ -171,13 +170,7 @@ describe('Entity/Asset projection repository', () => {
         partition,
         assetRef: 'project://assets/rin.png',
       }),
-    ).resolves.toEqual([
-      expect.objectContaining({ kind: 'asset-graph-edge' }),
-      expect.objectContaining({
-        kind: 'binding-availability',
-        value: expect.objectContaining({ bindingId: 'binding:rin-portrait' }),
-      }),
-    ]);
+    ).resolves.toEqual([expect.objectContaining({ kind: 'asset-graph-edge' })]);
     await expect(
       store.repositories.entityAssetProjections.list({ partition, entityId: 'char_rin' }),
     ).resolves.toHaveLength(5);

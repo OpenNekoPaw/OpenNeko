@@ -39,9 +39,7 @@ export async function loadWorkspaceFileIgnoreRules(
   };
 }
 
-export async function readWorkspaceGitignoreRules(
-  workspaceRoot: string,
-): Promise<readonly string[]> {
+async function readWorkspaceGitignoreRules(workspaceRoot: string): Promise<readonly string[]> {
   try {
     const uri = vscode.Uri.joinPath(vscode.Uri.file(workspaceRoot), '.gitignore');
     const content = await vscode.workspace.fs.readFile(uri);

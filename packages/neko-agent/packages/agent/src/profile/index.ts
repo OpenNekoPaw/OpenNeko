@@ -11,7 +11,6 @@ export {
 } from './profile-registry';
 
 export {
-  composeAgentProfiles,
   type AgentProfileCompositionInput,
   type AgentProfileCompositionResult,
 } from './profile-composition';

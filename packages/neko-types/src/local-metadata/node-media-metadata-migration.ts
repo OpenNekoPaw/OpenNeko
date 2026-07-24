@@ -1,6 +1,6 @@
 import { access, copyFile, readFile, rename } from 'node:fs/promises';
 import { PathResolver } from '../path';
-import type { MediaFileMetadata } from '../types/asset/entity';
+import type { MediaFileMetadata } from '../types/media-file';
 import type { LocalMetadataStore } from './contracts';
 import type { LocalMetadataPartition } from './model';
 import type { MediaMetadataRecord } from './repositories';

@@ -1,8 +1,6 @@
 {
   "neko.canvas.new.title": "新建画布",
   "neko.canvas.outline.title": "画布大纲",
-  "neko.asset.import.title": "导入素材",
-  "neko.addToAssetLibrary.title": "添加到素材库",
   "neko.canvas.previewMedia.title": "预览媒体",
   "neko.canvas.revealPlaybackWorkspace.title": "显示播放工作区",
   "neko.canvas.deleteSelected.title": "删除选中",

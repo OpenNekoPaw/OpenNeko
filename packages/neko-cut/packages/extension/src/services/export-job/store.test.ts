@@ -178,6 +178,9 @@ function snapshot(): ExportJobSnapshot {
         fps: 24,
         quality: 'high',
         audioBitrate: 192_000,
+        videoBitrate: 8_000_000,
+        includeAudio: true,
+        audioSampleRate: 48_000,
       },
       engineConfig: {
         timeline: { version: 1, tracks: [] },

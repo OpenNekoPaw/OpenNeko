@@ -11,8 +11,8 @@ export interface CreateNodeDocumentLowLevelAccessOptions {
 }
 
 export const DEFAULT_DOCUMENT_WHOLE_FILE_MAX_BYTES = 256 * 1024 * 1024;
-export const DEFAULT_DOCUMENT_RANGE_MAX_BYTES = 64 * 1024 * 1024;
-export const DEFAULT_DOCUMENT_ARCHIVE_ENTRY_MAX_BYTES = 64 * 1024 * 1024;
+const DEFAULT_DOCUMENT_RANGE_MAX_BYTES = 64 * 1024 * 1024;
+const DEFAULT_DOCUMENT_ARCHIVE_ENTRY_MAX_BYTES = 64 * 1024 * 1024;
 
 export interface NodeDocumentLowLevelAccess extends DocumentLowLevelAccess {
   identify(filePath: string): Promise<{ fileId?: string; sizeBytes?: number; mtimeMs?: number }>;

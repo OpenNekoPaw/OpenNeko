@@ -18,10 +18,8 @@ export function createVSCodeProjectSourceAddRequest(input: {
   readonly formatId: string;
   readonly sourceUri: vscode.Uri;
   readonly role: NonNullable<ProjectSourceAddRequest['target']>['role'];
-  readonly destination: ProjectSourceAddRequest['destination'];
-  readonly caller: string;
+  readonly assetDirectory: string;
   readonly metadata?: Record<string, unknown>;
-  readonly ingestMode?: ProjectSourceAddRequest['ingestMode'];
 }): ProjectSourceAddRequest {
   return {
     requestId: input.requestId,
@@ -30,9 +28,7 @@ export function createVSCodeProjectSourceAddRequest(input: {
     sourceUri: input.sourceUri.toString(),
     sourcePath: input.sourceUri.fsPath,
     target: { role: input.role },
-    destination: input.destination,
-    ingestMode: input.ingestMode ?? 'link',
-    caller: input.caller,
+    assetDirectory: input.assetDirectory,
     browserFile: {
       name: input.sourceUri.path.split('/').pop() ?? 'source',
     },

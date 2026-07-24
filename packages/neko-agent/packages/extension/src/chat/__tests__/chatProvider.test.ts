@@ -957,20 +957,7 @@ describe('chatProvider', () => {
     provider.dispose();
   });
 
-  it('configures chat roots for extension assets, workspace, workspace cache, and media libraries', async () => {
-    vi.mocked(vscode.extensions.getExtension).mockReturnValue({
-      id: 'neko.neko-assets',
-      extensionUri: vscode.Uri.file('/ext/neko-assets'),
-      extensionPath: '/ext/neko-assets',
-      isActive: true,
-      packageJSON: {},
-      extensionKind: 1,
-      exports: {
-        getMediaLibraryRoots: vi.fn(async () => ['/external/media-library']),
-        onDidChangeMediaLibraryRoots: vi.fn(() => ({ dispose: vi.fn() })),
-      },
-      activate: vi.fn(),
-    } as any);
+  it('configures chat roots for extension assets and source workspace without derived storage', async () => {
     const extensionUri = vscode.Uri.file('/ext/neko-agent');
     const context = {
       globalStorageUri: vscode.Uri.file('/global/neko-agent'),
@@ -981,15 +968,7 @@ describe('chatProvider', () => {
     await access.configureChatWebview(webview as any);
     const roots = webview.options.localResourceRoots?.map((uri) => uri.fsPath);
 
-    expect(roots).toEqual([
-      '/ext/neko-agent/dist/webview',
-      '/mock/workspace',
-      '/external/media-library',
-      '/mock/workspace/.neko/.cache',
-    ]);
-    expect(access.toWebviewUri(webview as any, '/external/media-library/page.jpg', 'test')).toBe(
-      'file:///external/media-library/page.jpg',
-    );
+    expect(roots).toEqual(['/ext/neko-agent/dist/webview', '/mock/workspace']);
 
     access.dispose();
   });
@@ -1019,7 +998,7 @@ describe('chatProvider', () => {
     access.dispose();
   });
 
-  it('re-authorizes workspace resource cache paths when a restored webview has stale roots', async () => {
+  it('rejects workspace derived storage paths without mutating restored Webview roots', async () => {
     const extensionUri = vscode.Uri.file('/ext/neko-agent');
     const context = {
       globalStorageUri: vscode.Uri.file('/global/neko-agent'),
@@ -1036,10 +1015,9 @@ describe('chatProvider', () => {
       'test',
     );
 
-    expect(uri).toBe('file:///mock/workspace/.neko/.cache/resources/documents/doc_1/page.jpg');
+    expect(uri).toBeUndefined();
     expect(webview.options.localResourceRoots?.map((root) => root.fsPath)).toEqual([
       '/ext/neko-agent/dist/webview',
-      '/mock/workspace/.neko/.cache',
     ]);
 
     access.dispose();

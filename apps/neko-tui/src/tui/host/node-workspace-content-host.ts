@@ -2,18 +2,17 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
-  WORKSPACE_CONTENT_LOCAL_SETTINGS_SEGMENTS,
-  WORKSPACE_CONTENT_SETTINGS_SEGMENTS,
   cloneHostContentPolicySnapshot,
   createHostContentPolicySnapshot,
-  createMediaLibraryPathVariableMap,
-  readMediaLibraryLocalSettings,
-  readMediaLibrarySettings,
-  resolveWorkspaceMediaLibrariesSync,
   type HostContentPolicySnapshot,
-  type HostWorkspaceContentSnapshot,
 } from '@neko/host';
-import { PathResolver, type PathVariableMap } from '@neko/shared';
+import {
+  WORKSPACE_MEDIA_LIBRARY_DIRECTORY,
+  validateWorkspaceLinkedMediaLibraryName,
+  workspaceLinkedMediaLibraryPath,
+  type PathVariableMap,
+  type WorkspaceLinkedMediaLibrary,
+} from '@neko/shared';
 import {
   createNodeHostAdapter,
   createNodeHostPathVariables,
@@ -73,86 +72,51 @@ function readNodeWorkspaceContentPolicy(input: {
   const workspaceRoot = path.resolve(input.workspaceRoot);
   const basePathVariables = new Map(input.basePathVariables ?? []);
   if (basePathVariables.size === 0) {
-    basePathVariables.set('A', workspaceRoot);
     basePathVariables.set('WORKSPACE', workspaceRoot);
     basePathVariables.set('PROJECT', workspaceRoot);
   }
-  return createHostContentPolicySnapshot(
-    readNodeWorkspaceContentSnapshot({
-      workspaceRoot,
-      basePathVariables,
-    }),
-  );
-}
-
-function readNodeWorkspaceContentSnapshot(input: {
-  readonly workspaceRoot: string;
-  readonly basePathVariables: PathVariableMap | ReadonlyMap<string, string>;
-}): HostWorkspaceContentSnapshot {
-  const workspaceRoot = path.resolve(input.workspaceRoot);
-  const settingsPath = path.join(workspaceRoot, ...WORKSPACE_CONTENT_SETTINGS_SEGMENTS);
-  const localSettingsPath = path.join(workspaceRoot, ...WORKSPACE_CONTENT_LOCAL_SETTINGS_SEGMENTS);
-  const settings = readMediaLibrarySettings(readOptionalJsonFile(settingsPath), settingsPath);
-  const localSettings = readMediaLibraryLocalSettings(
-    readOptionalJsonFile(localSettingsPath),
-    localSettingsPath,
-  );
-  const libraries = resolveWorkspaceMediaLibrariesSync({
-    settings,
-    localSettings,
+  return createHostContentPolicySnapshot({
     workspaceRoot,
-    resolvePath: (source, workspaceRoot) =>
-      resolveNodeWorkspaceSourcePath(source, workspaceRoot, input.basePathVariables),
-    checkAccessible: (resolvedPath) => isReadableDirectory(resolvedPath),
+    pathVariables: basePathVariables,
+    mediaLibraries: listNodeWorkspaceLinkedMediaLibraries(workspaceRoot),
   });
-  const mediaLibraryPathVariables = createMediaLibraryPathVariableMap(libraries);
-  const pathVariables = new Map(input.basePathVariables);
-  for (const [key, value] of mediaLibraryPathVariables) {
-    pathVariables.set(key, value);
-  }
-  return {
-    workspaceRoot,
-    settings,
-    localSettings,
-    mediaLibraries: libraries,
-    mediaLibraryPathVariables,
-    pathVariables,
-  };
 }
 
-function resolveNodeWorkspaceSourcePath(
-  source: string,
+function listNodeWorkspaceLinkedMediaLibraries(
   workspaceRoot: string,
-  variables: PathVariableMap | ReadonlyMap<string, string>,
-): string {
-  const resolved = new PathResolver(new Map(variables)).resolveSource(source, workspaceRoot);
-  return resolved.type === 'local' ? path.resolve(resolved.path) : source;
-}
-
-function readOptionalJsonFile(filePath: string): unknown | undefined {
-  let content: string;
+): readonly WorkspaceLinkedMediaLibrary[] {
+  const assetsDirectory = path.join(workspaceRoot, ...WORKSPACE_MEDIA_LIBRARY_DIRECTORY.split('/'));
+  let entries: fs.Dirent[];
   try {
-    content = fs.readFileSync(filePath, 'utf8');
+    entries = fs.readdirSync(assetsDirectory, { withFileTypes: true });
   } catch (error) {
-    if (isMissingFileError(error)) {
-      return undefined;
+    if (isMissingFileError(error)) return [];
+    throw error;
+  }
+
+  const libraries: WorkspaceLinkedMediaLibrary[] = [];
+  for (const entry of entries) {
+    if (!entry.isSymbolicLink() || validateWorkspaceLinkedMediaLibraryName(entry.name)) continue;
+    const workspacePath = workspaceLinkedMediaLibraryPath(entry.name);
+    const runtimePath = path.join(workspaceRoot, ...workspacePath.split('/'));
+    if (isReadableDirectory(runtimePath)) {
+      libraries.push({ name: entry.name, workspacePath, availability: 'available' });
+    } else {
+      libraries.push({
+        name: entry.name,
+        workspacePath,
+        availability: 'unavailable',
+        diagnostic: {
+          code: 'library-link-broken',
+          severity: 'error',
+          message: 'Media library link target is unavailable.',
+          libraryName: entry.name,
+          workspacePath,
+        },
+      });
     }
-    throw new NodeWorkspaceContentError({
-      code: 'read-failed',
-      filePath,
-      detail: error instanceof Error ? error.message : String(error),
-    });
   }
-
-  try {
-    return JSON.parse(content) as unknown;
-  } catch (error) {
-    throw new NodeWorkspaceContentError({
-      code: 'parse-failed',
-      filePath,
-      detail: error instanceof Error ? error.message : String(error),
-    });
-  }
+  return libraries.sort((left, right) => left.name.localeCompare(right.name));
 }
 
 function isReadableDirectory(dirPath: string): boolean {
@@ -169,9 +133,10 @@ function isReadableDirectory(dirPath: string): boolean {
 }
 
 function isMissingFileError(error: unknown): boolean {
-  return isRecord(error) && error['code'] === 'ENOENT';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { readonly code?: unknown }).code === 'ENOENT'
+  );
 }

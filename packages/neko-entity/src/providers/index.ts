@@ -6,6 +6,7 @@ import type {
   CreativeEntityRepresentationHint,
   CreativeEntitySyncSuggestion,
 } from '@neko/shared';
+import { contentLocatorKey } from '@neko/shared';
 
 export interface CreativeEntityProviderContext {
   readonly projectRoot: string;
@@ -122,5 +123,5 @@ function relationshipKey(item: CreativeEntityRelationshipProjection): string {
 }
 
 function hintKey(item: CreativeEntityRepresentationHint): string {
-  return `${item.entityRef?.entityId ?? item.candidateId ?? ''}:${item.assetRef}:${item.roles.join(',')}:${item.source.sourceId}`;
+  return `${item.entityRef?.entityId ?? item.candidateId ?? ''}:${contentLocatorKey(item.representation)}:${item.roles.join(',')}:${item.source.sourceId}`;
 }

@@ -7,7 +7,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./EngineClient": "./src/EngineClient.ts",
-    "./engine-file-access": "./src/engine-file-access.ts",
     "./*": "./src/*"
   },
   "scripts": {

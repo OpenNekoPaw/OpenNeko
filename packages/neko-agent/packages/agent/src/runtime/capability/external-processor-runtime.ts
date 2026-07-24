@@ -12,10 +12,9 @@ import type {
   ExternalProcessorRegistryContext,
   ExternalProcessorRegistrySubscription,
   ExternalProcessorResult,
-  ExternalProcessorRetentionHint,
   ExternalProcessorRunIdentity,
 } from '@neko-agent/types';
-import type { ResourceRef } from '@neko/shared';
+import { isContentLocator, type ResourceRef } from '@neko/shared';
 
 export interface AgentExternalProcessorRuntimeOptions {
   readonly registry: ExternalProcessorRegistry;
@@ -56,7 +55,6 @@ export interface AgentExternalProcessorPlanInput {
   readonly inputs: readonly ExternalProcessorInvocationInputBinding[];
   readonly outputs?: readonly ExternalProcessorInvocationOutputBinding[];
   readonly params?: Readonly<Record<string, string | number | boolean>>;
-  readonly retentionHint?: ExternalProcessorRetentionHint;
 }
 
 export type AgentExternalProcessorPlanResult =
@@ -84,7 +82,6 @@ export interface DeveloperModeTemporaryProcessorRequestInput {
   readonly command: string;
   readonly cwdRoot?: ExternalProcessorManifest['policy']['cwdRoot'];
   readonly allowedInputRoots?: ExternalProcessorManifest['policy']['allowedInputRoots'];
-  readonly allowedOutputRoots?: ExternalProcessorManifest['policy']['allowedOutputRoots'];
   readonly timeoutMs?: number;
   readonly allowNetwork?: boolean;
   readonly run?: Partial<ExternalProcessorRunIdentity>;
@@ -191,7 +188,6 @@ export function createDeveloperModeTemporaryProcessorRequest(
         command: '',
         allowNetwork: input.allowNetwork,
         allowedInputRoots: input.allowedInputRoots,
-        allowedOutputRoots: input.allowedOutputRoots,
         cwdRoot: input.cwdRoot,
         timeoutMs: input.timeoutMs,
       }),
@@ -216,7 +212,6 @@ export function createDeveloperModeTemporaryProcessorRequest(
     command,
     allowNetwork: input.allowNetwork,
     allowedInputRoots: input.allowedInputRoots,
-    allowedOutputRoots: input.allowedOutputRoots,
     cwdRoot: input.cwdRoot,
     timeoutMs: input.timeoutMs,
   });
@@ -299,7 +294,6 @@ class DefaultAgentExternalProcessorRuntime implements AgentExternalProcessorRunt
         inputs: [...input.inputs],
         outputs,
         ...(input.params ? { params: { ...input.params } } : {}),
-        retentionHint: input.retentionHint ?? 'intermediate',
       },
       diagnostics,
     };
@@ -375,7 +369,6 @@ class DefaultAgentExternalProcessorRuntime implements AgentExternalProcessorRunt
       inputs: input.inputs,
       outputs: input.outputs,
       params: input.params,
-      retentionHint: input.retentionHint,
       run: {
         processorRunId: run.processorRunId,
         stageId,
@@ -500,7 +493,7 @@ function createDefaultOutputBindings(
 ): readonly ExternalProcessorInvocationOutputBinding[] {
   return Object.entries(registration.manifest.outputs).map(([slot, declaration]) => ({
     slot,
-    root: declaration.root,
+    ownership: declaration.ownership,
     ...(declaration.pathHint ? { pathHint: declaration.pathHint } : {}),
   }));
 }
@@ -525,7 +518,6 @@ function validateInvocationInputs(
 ): readonly ExternalProcessorDiagnostic[] {
   const diagnostics: ExternalProcessorDiagnostic[] = [];
   const declarations = registration.manifest.inputs;
-  const policyRoots = new Set(registration.manifest.policy.allowedInputRoots);
   const providedSlots = new Set(inputs.map((input) => input.slot));
 
   for (const [slot, declaration] of Object.entries(declarations)) {
@@ -552,23 +544,13 @@ function validateInvocationInputs(
         ),
       );
     }
-    if (!policyRoots.has(input.root)) {
+    if ('locator' in input && !isContentLocator(input.locator)) {
       diagnostics.push(
         diagnostic(
-          'invalid-root-alias',
+          'unauthorized-path',
           'error',
-          `Processor input "${input.slot}" uses unauthorized root "${input.root}".`,
-          `inputs.${input.slot}.root`,
-        ),
-      );
-    }
-    if (!input.resourceRef && !input.sourcePath) {
-      diagnostics.push(
-        diagnostic(
-          'missing-required-field',
-          'error',
-          `Processor input "${input.slot}" requires a ResourceRef or source path binding.`,
-          `inputs.${input.slot}`,
+          `Processor input "${input.slot}" has an invalid content locator.`,
+          `inputs.${input.slot}.locator`,
         ),
       );
     }
@@ -583,7 +565,7 @@ function validateInvocationOutputs(
 ): readonly ExternalProcessorDiagnostic[] {
   const diagnostics: ExternalProcessorDiagnostic[] = [];
   const declarations = registration.manifest.outputs;
-  const policyRoots = new Set(registration.manifest.policy.allowedOutputRoots);
+  const allowedOwnerships = new Set(registration.manifest.policy.allowedOutputOwnerships);
   const providedSlots = new Set(outputs.map((output) => output.slot));
 
   for (const slot of Object.keys(declarations)) {
@@ -612,13 +594,13 @@ function validateInvocationOutputs(
       );
       continue;
     }
-    if (!policyRoots.has(output.root) || output.root !== declaration.root) {
+    if (!allowedOwnerships.has(output.ownership) || output.ownership !== declaration.ownership) {
       diagnostics.push(
         diagnostic(
-          'illegal-output-root',
+          'illegal-output-ownership',
           'error',
-          `Processor output "${output.slot}" must use declared root "${declaration.root}".`,
-          `outputs.${output.slot}.root`,
+          `Processor output "${output.slot}" must use declared ownership "${declaration.ownership}".`,
+          `outputs.${output.slot}.ownership`,
         ),
       );
     }
@@ -752,6 +734,20 @@ function validateResultMatchesInvocation(
         ),
       );
     }
+    const binding = invocation.outputs.find((item) => item.slot === output.slot);
+    if (
+      binding &&
+      (output.ownership !== binding.ownership || output.output.ownership !== output.ownership)
+    ) {
+      diagnostics.push(
+        diagnostic(
+          'illegal-output-ownership',
+          'error',
+          `Processor result output "${output.slot}" does not match the allocated ownership.`,
+          `outputs.${output.slot}.ownership`,
+        ),
+      );
+    }
   }
   return diagnostics;
 }
@@ -760,15 +756,13 @@ function createDeveloperModeManifest(input: {
   readonly command: string;
   readonly cwdRoot?: ExternalProcessorManifest['policy']['cwdRoot'];
   readonly allowedInputRoots?: ExternalProcessorManifest['policy']['allowedInputRoots'];
-  readonly allowedOutputRoots?: ExternalProcessorManifest['policy']['allowedOutputRoots'];
   readonly timeoutMs?: number;
   readonly allowNetwork?: boolean;
 }): ExternalProcessorManifest {
-  const allowedInputRoots = input.allowedInputRoots ?? ['workspace', 'resourceCache'];
-  const allowedOutputRoots = input.allowedOutputRoots ?? ['resourceCache'];
+  const allowedInputRoots = input.allowedInputRoots ?? ['workspace'];
   return {
     schema: 'neko.externalProcessor',
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: 'developer-mode.one-shot-command',
     kind: 'external-processor',
     displayName: 'Developer Mode One-shot Command',
@@ -779,8 +773,8 @@ function createDeveloperModeManifest(input: {
     },
     inputs: {},
     outputs: {
-      stdout: { produces: ['text/plain'], root: 'resourceCache', pathHint: 'stdout.txt' },
-      stderr: { produces: ['text/plain'], root: 'resourceCache', pathHint: 'stderr.txt' },
+      stdout: { produces: ['text/plain'], ownership: 'debug', pathHint: 'stdout.txt' },
+      stderr: { produces: ['text/plain'], ownership: 'debug', pathHint: 'stderr.txt' },
     },
     params: {
       command: { type: 'string', required: true, default: input.command },
@@ -789,7 +783,7 @@ function createDeveloperModeManifest(input: {
       requiresApproval: true,
       allowNetwork: input.allowNetwork ?? false,
       allowedInputRoots,
-      allowedOutputRoots,
+      allowedOutputOwnerships: ['debug'],
       timeoutMs: input.timeoutMs ?? 120_000,
       ...(input.cwdRoot ? { cwdRoot: input.cwdRoot } : {}),
     },
@@ -819,13 +813,12 @@ function createDeveloperModeInvocation(
     ),
     inputs: [],
     outputs: [
-      { slot: 'stdout', root: 'resourceCache', pathHint: 'stdout.txt' },
-      { slot: 'stderr', root: 'resourceCache', pathHint: 'stderr.txt' },
+      { slot: 'stdout', ownership: 'debug', pathHint: 'stdout.txt' },
+      { slot: 'stderr', ownership: 'debug', pathHint: 'stderr.txt' },
     ],
     params: {
       command,
     },
-    retentionHint: 'debug',
   };
 }
 

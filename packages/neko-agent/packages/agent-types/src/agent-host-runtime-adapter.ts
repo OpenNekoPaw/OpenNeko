@@ -62,7 +62,6 @@ export const AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES = [
   'openFile',
   'revealDocumentLocator',
   'revealFile',
-  'revealAsset',
   'openUrl',
   'sendToPlugin',
   'invokeAgentCapabilityLifecycle',

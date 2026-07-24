@@ -48,7 +48,7 @@ registry server
 | `neko-market/packages/extension` | VS Code commands、下载、校验、安装、卸载、workspace trust、auth bridge |
 | `neko-market/packages/webview`   | 浏览、展示、安装意图、管理 UI                                          |
 | `neko-auth`                      | token/session/credential provider                                      |
-| `neko-assets`                    | 本地素材库消费安装结果                                                 |
+| `neko-assets`                    | Media Library 展示可用的 package-owned representation                 |
 | `neko-agent`                     | Skill、tool、provider capability 的市场来源                            |
 | `neko-engine`                    | shader/native plugin 等 engine artifact 的加载边界                     |
 

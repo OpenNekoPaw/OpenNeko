@@ -6,7 +6,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     maxWorkers: resolveActVitestMaxWorkers(),
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
     coverage: sharedCoverage({ include: ['src/**/*.{ts,tsx}'] }),
   },
 });

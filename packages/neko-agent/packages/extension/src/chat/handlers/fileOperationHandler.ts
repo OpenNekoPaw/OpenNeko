@@ -121,17 +121,6 @@ export class FileOperationHandler {
     }
   }
 
-  async handleRevealAsset(assetId: string): Promise<void> {
-    if (!assetId) return;
-
-    try {
-      await vscode.commands.executeCommand('neko.assets.revealEntity', assetId);
-    } catch (error) {
-      logger.error('Failed to reveal asset:', error);
-      handleError(error, { showToUser: true, severity: 'warning' });
-    }
-  }
-
   async handleDownloadSvg(svg: string, filename: string): Promise<void> {
     const plan = buildSvgDownloadPlan({ svg, filename });
     if (!plan) return;

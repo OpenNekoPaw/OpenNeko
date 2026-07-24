@@ -14,6 +14,7 @@ import {
   planCanvasNodeCreation,
   planCanvasStoryboardSceneShotCreation,
   ProjectFileStore,
+  type ProjectFileStoreOptions,
   type CanvasCreateCompositeRequest,
   type CanvasCreateCompositeResult,
   type CanvasCreateConnectionRequest,
@@ -59,6 +60,7 @@ export interface CanvasProjectAuthoringServiceOptions {
   > &
     Partial<Pick<CanvasEditorProvider, 'getOpenCanvasDocumentSnapshot'>>;
   readonly logger?: Pick<ILogger, 'debug' | 'info' | 'warn' | 'error'>;
+  readonly resolveAuthorizedWrite?: ProjectFileStoreOptions['resolveAuthorizedWrite'];
 }
 
 interface LoadedCanvasTarget {
@@ -75,6 +77,7 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
   private readonly projectFileStore = new ProjectFileStore({
     registry: createDefaultProjectFormatCodecRegistry(),
     fileOps: this.projectFileAdapter.fileOps,
+    resolveAuthorizedWrite: this.options.resolveAuthorizedWrite,
     logger: this.options.logger,
   });
 

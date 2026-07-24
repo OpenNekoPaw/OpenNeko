@@ -1,4 +1,5 @@
 import type { AgentObservationModality } from './agent-observation';
+import type { ContentLocator } from './content-locator';
 import type { DocumentArchiveResourceRef } from './document-reading';
 import type { ResourceRef } from './resource-cache';
 import type { ToolResultArtifactTransfer, ToolResultAttachment } from './tool';
@@ -15,13 +16,18 @@ export type PerceptionLayer = 0 | 1 | 2;
 export interface PerceptualAssetRef {
   readonly assetId: string;
   /**
-   * Portable display/load locator used only when no stable reference is present.
+   * Portable display/load locator used only when no stable locator or reference is present.
    * Persist relative paths or ${VAR}/path values only.
-   * When a stable resource reference is present, adapters must resolve that reference
+   * When a stable content locator or resource reference is present, adapters must resolve it
    * instead of interpreting this value as a local file path.
    */
   readonly uri: string;
   readonly mimeType: string;
+  /** Host-projected, runtime-only preview for Webview display. Never persist this data URI. */
+  readonly previewUri?: string;
+  /** Host-projected, runtime-only display failure. Model loading may still succeed independently. */
+  readonly previewDiagnostic?: string;
+  readonly contentLocator?: ContentLocator;
   readonly resourceRef?: ResourceRef;
   readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly label?: string;

@@ -137,6 +137,7 @@ impl Controller for StreamController {
                     resolution: Resolution::new(width, height),
                     fps,
                     start_time: 0.0,
+                    playback_speed: 1.0,
                     codec,
                     initial_paused: false,
                 };

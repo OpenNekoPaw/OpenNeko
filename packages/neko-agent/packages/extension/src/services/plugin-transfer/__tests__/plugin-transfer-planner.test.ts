@@ -22,22 +22,12 @@ describe('neko-suite plugin transfer planner', () => {
         payload: {
           kind: 'singleAsset',
           asset: { path: '/tmp/sound.wav', mediaType: 'audio' },
-          target: {
-            kind: 'file',
-            documentUri: 'file:///project/edit.nkv',
-            expectedProjectRevision: 'revision-1',
-          },
         },
       }),
     ).toEqual({
-      status: 'execute-command',
-      command: 'neko.cut.authoring.importGeneratedClip',
-      payload: {
-        assetPath: '/tmp/sound.wav',
-        mediaType: 'audio',
-        target: { kind: 'file', documentUri: 'file:///project/edit.nkv' },
-        expectedProjectRevision: 'revision-1',
-      },
+      status: 'unsupported',
+      target: 'cut',
+      reason: 'cut-otio-target-not-registered',
     });
 
     expect(
@@ -78,7 +68,7 @@ describe('neko-suite plugin transfer planner', () => {
     });
   });
 
-  it('builds structured cut storyboard transfer plans', () => {
+  it('rejects structured Cut storyboard transfers until the OTIO target is registered', () => {
     const storyboard = {
       projectName: 'Opening',
       shots: [
@@ -98,16 +88,12 @@ describe('neko-suite plugin transfer planner', () => {
         payload: {
           kind: 'cutStoryboard',
           storyboard,
-          target: { kind: 'new', documentUri: 'file:///project/opening.nkv' },
         },
       }),
     ).toEqual({
-      status: 'execute-command',
-      command: 'neko.cut.authoring.importStoryboard',
-      payload: {
-        ...storyboard,
-        target: { kind: 'new', documentUri: 'file:///project/opening.nkv' },
-      },
+      status: 'unsupported',
+      target: 'cut',
+      reason: 'cut-otio-target-not-registered',
     });
 
     expect(
@@ -122,7 +108,7 @@ describe('neko-suite plugin transfer planner', () => {
     });
   });
 
-  it('fails closed when a Cut transfer omits an explicit file or new target', () => {
+  it('fails closed for Cut transfers while the OTIO target is unavailable', () => {
     expect(
       buildNekoSuitePluginTransferPlan({
         target: 'cut',
@@ -132,7 +118,7 @@ describe('neko-suite plugin transfer planner', () => {
     ).toEqual({
       status: 'unsupported',
       target: 'cut',
-      reason: 'explicit-cut-target-required',
+      reason: 'cut-otio-target-not-registered',
     });
 
     expect(
@@ -141,13 +127,13 @@ describe('neko-suite plugin transfer planner', () => {
         payload: {
           kind: 'singleAsset',
           asset: { path: '/tmp/shot.mp4', mediaType: 'video' },
-          target: { kind: 'file', documentUri: 'file:///project/edit.nkv' },
+          target: { kind: 'file', documentUri: 'file:///project/edit.otio' },
         },
       }),
     ).toEqual({
       status: 'unsupported',
       target: 'cut',
-      reason: 'cut-project-revision-required',
+      reason: 'cut-otio-target-not-registered',
     });
   });
 
@@ -209,18 +195,13 @@ describe('neko-suite plugin transfer planner', () => {
     });
   });
 
-  it('does not emit legacy UI-bound durable command ids', () => {
+  it('does not emit a Cut command before the OTIO command contract exists', () => {
     const plans = [
       buildNekoSuitePluginTransferPlan({
         target: 'cut',
         payload: {
           kind: 'singleAsset',
           asset: { path: '/tmp/shot.mp4', mediaType: 'video' },
-          target: {
-            kind: 'file',
-            documentUri: 'file:///project/edit.nkv',
-            expectedProjectRevision: 'revision-1',
-          },
         },
       }),
       buildNekoSuitePluginTransferPlan({
@@ -240,13 +221,14 @@ describe('neko-suite plugin transfer planner', () => {
     ];
 
     expect(plans).toEqual([
-      expect.objectContaining({ command: 'neko.cut.authoring.importGeneratedClip' }),
+      {
+        status: 'unsupported',
+        target: 'cut',
+        reason: 'cut-otio-target-not-registered',
+      },
       { status: 'unsupported', target: 'sketch' },
       { status: 'unsupported', target: 'model' },
     ]);
-    expect(
-      plans.map((plan) => (plan.status === 'execute-command' ? plan.command : '')),
-    ).not.toEqual(expect.arrayContaining(['neko.cut.importGeneratedClip']));
   });
 
   it.each([

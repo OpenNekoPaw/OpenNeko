@@ -882,16 +882,6 @@ export function CanvasApp() {
     onTextDocumentReadResult: (result) => {
       setDocumentTextProjections((current) => applyTextDocumentReadResult(current, result));
     },
-    onTimelineSync: (payload) => {
-      payload.shots.forEach(({ shotId, projectName, importedAt }) => {
-        const node = useCanvasStore.getState().canvasData?.nodes.find((n) => n.id === shotId);
-        if (node?.type !== 'shot') return;
-        updateNodeData(shotId, {
-          lastImportedToTimelineAt: importedAt ?? node.data.lastImportedToTimelineAt,
-          lastImportedToTimelineProject: projectName ?? node.data.lastImportedToTimelineProject,
-        });
-      });
-    },
     onKeyboardFocusChange: setKeyboardFocused,
     isKeyboardFocusedRef,
     isComposingRef,

@@ -3,7 +3,7 @@
 //! Provides frame pacing + playback state control + cancellation mechanism.
 //! Video/Audio/Timeline start_stream all reuse this abstraction.
 
-use crate::domain::{FrameData, Timeline};
+use crate::domain::{FrameData, StreamConfig, Timeline};
 use crate::encoder::EncodedPacket;
 use crate::error::{Error, Result};
 use crate::preview::PreviewPipelineConfig;
@@ -573,6 +573,7 @@ pub fn eof_idle_wait(
 pub fn create_stream_channels(
     session_id: &str,
     buffer_size: usize,
+    config: &StreamConfig,
 ) -> (
     StreamId,
     broadcast::Sender<FrameData>,
@@ -584,7 +585,14 @@ pub fn create_stream_channels(
     let stream_id = StreamId::new(session_id);
     let (tx, rx) = broadcast::channel(buffer_size);
     let cancel = CancellationToken::new();
-    let (state_tx, state_rx) = watch::channel(PlaybackState::default());
+    let initial_state = PlaybackState {
+        paused: config.initial_paused,
+        speed: normalize_playback_speed(config.playback_speed),
+        seek_to: (config.start_time > 0.0).then_some(config.start_time),
+        seek_seq: u64::from(config.start_time > 0.0),
+        ..PlaybackState::default()
+    };
+    let (state_tx, state_rx) = watch::channel(initial_state);
 
     (stream_id, tx, rx, cancel, state_tx, state_rx)
 }
@@ -844,9 +852,27 @@ mod tests {
     #[test]
     fn test_create_stream_channels() {
         let (stream_id, _tx, _rx, _cancel, _state_tx, _state_rx) =
-            create_stream_channels("test_session", 64);
+            create_stream_channels("test_session", 64, &StreamConfig::default());
 
         assert!(stream_id.as_str().starts_with("strm_"));
+    }
+
+    #[test]
+    fn prepared_stream_channels_start_paused_at_the_requested_media_state() {
+        let config = StreamConfig {
+            initial_paused: true,
+            playback_speed: 1.5,
+            start_time: 12.25,
+            ..StreamConfig::default()
+        };
+        let (_stream_id, _tx, _rx, _cancel, _state_tx, state_rx) =
+            create_stream_channels("prepared", 64, &config);
+
+        let state = state_rx.borrow();
+        assert!(state.paused);
+        assert_eq!(state.speed, 1.5);
+        assert_eq!(state.seek_to, Some(12.25));
+        assert_eq!(state.seek_seq, 1);
     }
 
     #[test]

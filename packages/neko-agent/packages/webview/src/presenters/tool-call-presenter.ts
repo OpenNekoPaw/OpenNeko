@@ -1,10 +1,16 @@
 import type { ToolCall } from '@neko-agent/types';
-import type { DocumentArchiveResourceRef, DocumentLocator, DocumentSourceRef } from '@neko/shared';
+import type {
+  ContentLocator,
+  DocumentArchiveResourceRef,
+  DocumentLocator,
+  DocumentSourceRef,
+} from '@neko/shared';
 import {
   isPublicGeneratedAssetResultUri,
   parseDocumentArchiveResourceRef,
   parseDocumentLocator,
   parseDocumentSourceRef,
+  validateContentLocator,
   validateCanvasAuthoringResultEnvelope,
 } from '@neko/shared';
 import {
@@ -32,6 +38,8 @@ export interface DocumentImageThumbnailProjection {
   mimeType?: string;
   locator?: DocumentLocator;
   resourceRef?: DocumentArchiveResourceRef;
+  contentLocator?: ContentLocator;
+  previewDiagnostic?: string;
   label: string;
   referenceJson: string;
 }
@@ -123,6 +131,8 @@ export function projectToolCallDisplayState(toolCall: ToolCall): ToolCallDisplay
     toolCall.name,
     toolCall.arguments,
     resultSuccess ? toolCall.result?.data : undefined,
+    toolCall.result?.attachments,
+    toolCall.result?.perceptionCards,
   );
   const copyText = resultSuccess ? extractToolCopyText(toolCall.name, toolCall.result?.data) : null;
 
@@ -426,7 +436,11 @@ function extractDocumentImageThumbnails(data: unknown): DocumentImageThumbnailPr
   return thumbnails;
 }
 
-function extractReadImageThumbnails(data: unknown): DocumentImageThumbnailProjection[] {
+function extractReadImageThumbnails(
+  data: unknown,
+  attachments?: readonly unknown[],
+  perceptionCards?: readonly unknown[],
+): DocumentImageThumbnailProjection[] {
   const result = asRecord(data);
   if (!result) return [];
 
@@ -455,6 +469,14 @@ function extractReadImageThumbnails(data: unknown): DocumentImageThumbnailProjec
       const resourceRef =
         parseStableDocumentArchiveResourceRef(documentImage?.resourceRef) ??
         parseStableDocumentArchiveResourceRef(image.resourceRef);
+      const contentLocator =
+        parseStableContentLocator(image.contentLocator) ??
+        parseStableContentLocator(documentImage?.contentLocator);
+      const attachment = asRecord(attachments?.[index]);
+      const attachmentAssetRef = asRecord(attachment?.assetRef);
+      const perceptionCard = asRecord(perceptionCards?.[index]);
+      const perceptual = asRecord(perceptionCard?.perceptual);
+      const perceptionThumbnailRef = asRecord(perceptual?.thumbnailRef);
       const path =
         resourceRef === undefined
           ? (readString(image, 'path') ?? readString(documentImage, 'path'))
@@ -463,12 +485,23 @@ function extractReadImageThumbnails(data: unknown): DocumentImageThumbnailProjec
         readString(image, 'renderUri') ??
         readString(documentImage, 'renderUri') ??
         readString(image, 'src') ??
-        readString(documentImage, 'src');
-      const displayPath = resourceRef?.entryPath ?? readString(image, 'entryPath') ?? path;
-      if (!displayPath || (!src && !resourceRef)) return [];
+        readString(documentImage, 'src') ??
+        readString(attachment, 'previewUri') ??
+        readString(attachmentAssetRef, 'previewUri') ??
+        readString(attachmentAssetRef, 'renderUri') ??
+        readString(perceptionThumbnailRef, 'previewUri');
+      const previewDiagnostic =
+        readString(attachmentAssetRef, 'previewDiagnostic') ??
+        readString(perceptionThumbnailRef, 'previewDiagnostic');
+      const locatorIdentity = contentLocator
+        ? describeContentLocatorForDisplay(contentLocator)
+        : undefined;
+      const displayPath =
+        resourceRef?.entryPath ?? readString(image, 'entryPath') ?? path ?? locatorIdentity?.path;
+      if (!displayPath || (!src && !resourceRef && !contentLocator)) return [];
 
       const thumbnailFilePath = resolveDocumentThumbnailFilePath(
-        filePath ?? displayPath,
+        filePath ?? locatorIdentity?.filePath ?? displayPath,
         resourceRef,
       );
       const thumbnailSource = resolveDocumentThumbnailSource(source, resourceRef);
@@ -488,6 +521,8 @@ function extractReadImageThumbnails(data: unknown): DocumentImageThumbnailProjec
           ...(mimeType ? { mimeType } : {}),
           ...(locator ? { locator } : {}),
           ...(resourceRef ? { resourceRef } : {}),
+          ...(contentLocator ? { contentLocator } : {}),
+          ...(previewDiagnostic ? { previewDiagnostic } : {}),
           label,
           referenceJson: formatDocumentImageReferenceJson({
             filePath: thumbnailFilePath,
@@ -501,6 +536,7 @@ function extractReadImageThumbnails(data: unknown): DocumentImageThumbnailProjec
             mimeType,
             locator,
             resourceRef,
+            contentLocator,
             ...(resourceRef ? {} : { displayPath }),
           }),
         },
@@ -515,9 +551,31 @@ function extractToolDocumentThumbnails(
   toolName: string,
   args: unknown,
   resultData: unknown,
+  attachments?: readonly unknown[],
+  perceptionCards?: readonly unknown[],
 ): DocumentImageThumbnailProjection[] {
   if (toolName === 'ReadImage') {
-    const resultThumbnails = resultData ? extractReadImageThumbnails(resultData) : [];
+    const resultRecord = asRecord(resultData);
+    const hydratedData = asRecord(resultRecord?.data);
+    // Older durable journal entries retain the Tool result envelope inside
+    // result.data. Normalize that display-only shape without changing runtime
+    // or provider contracts so existing user history keeps its visual evidence.
+    const isHydratedResultEnvelope =
+      typeof resultRecord?.success === 'boolean' && Array.isArray(hydratedData?.images);
+    const readImageData = isHydratedResultEnvelope ? hydratedData : resultData;
+    const readImageAttachments =
+      attachments ??
+      (isHydratedResultEnvelope && Array.isArray(resultRecord?.attachments)
+        ? resultRecord.attachments
+        : undefined);
+    const readImagePerceptionCards =
+      perceptionCards ??
+      (isHydratedResultEnvelope && Array.isArray(resultRecord?.perceptionCards)
+        ? resultRecord.perceptionCards
+        : undefined);
+    const resultThumbnails = resultData
+      ? extractReadImageThumbnails(readImageData, readImageAttachments, readImagePerceptionCards)
+      : [];
     return resultThumbnails.length > 0 ? resultThumbnails : extractReadImageThumbnails(args);
   }
 
@@ -536,6 +594,7 @@ function formatDocumentImageReferenceJson(input: {
   readonly mimeType?: string;
   readonly locator?: DocumentLocator;
   readonly resourceRef?: DocumentArchiveResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly displayPath?: string;
 }): string {
   return JSON.stringify(
@@ -547,6 +606,7 @@ function formatDocumentImageReferenceJson(input: {
         ...(input.source ? { source: input.source } : {}),
         ...(input.locator ? { locator: input.locator } : {}),
         ...(input.resourceRef ? { resourceRef: input.resourceRef } : {}),
+        ...(input.contentLocator ? { contentLocator: input.contentLocator } : {}),
       },
       image: {
         index: input.index,
@@ -555,6 +615,7 @@ function formatDocumentImageReferenceJson(input: {
         ...(input.byteSize !== undefined ? { byteSize: input.byteSize } : {}),
         ...(input.mimeType ? { mimeType: input.mimeType } : {}),
         ...(input.resourceRef ? { resourceRef: input.resourceRef } : {}),
+        ...(input.contentLocator ? { contentLocator: input.contentLocator } : {}),
       },
       ...(input.displayPath
         ? {
@@ -568,6 +629,30 @@ function formatDocumentImageReferenceJson(input: {
     null,
     2,
   );
+}
+
+function parseStableContentLocator(value: unknown): ContentLocator | undefined {
+  const result = validateContentLocator(value);
+  return result.ok ? result.locator : undefined;
+}
+
+function describeContentLocatorForDisplay(locator: ContentLocator): {
+  readonly filePath: string;
+  readonly path: string;
+} {
+  switch (locator.kind) {
+    case 'document-entry':
+      return { filePath: locator.source.path, path: locator.entryPath };
+    case 'workspace-file':
+      return { filePath: locator.path, path: locator.path };
+    case 'generated-output':
+      return { filePath: locator.path, path: locator.path };
+    case 'package-resource':
+      return {
+        filePath: locator.manifestPath ?? `${locator.packageId}@${locator.revision}`,
+        path: locator.resourcePath,
+      };
+  }
 }
 
 function extractToolFilePath(data: unknown): string | null {

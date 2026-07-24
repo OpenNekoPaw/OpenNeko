@@ -6,7 +6,6 @@
 
 export {
   ExportService,
-  createExportService,
   type ExportConfig,
   type ExportProgress,
   type ExportResult,
@@ -22,4 +21,4 @@ export {
   type JviElement,
 } from './JviProjectLoader';
 
-export { VideoFrameProvider, createVideoFrameProvider } from './VideoFrameProvider';
+export { createVideoFrameProvider } from './VideoFrameProvider';

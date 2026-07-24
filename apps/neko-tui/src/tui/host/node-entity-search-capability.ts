@@ -10,6 +10,7 @@ import {
   createProjectSearchHeadlessCapabilityProvider,
 } from '@neko/search';
 import type { AgentCapabilityProvider } from '@neko/shared';
+import { createNodeMediaLibrarySearchAdapter } from './node-media-library-search-adapter';
 
 export interface CreateNodeEntitySearchCapabilityProvidersOptions {
   readonly host: NekoHostPorts;
@@ -54,6 +55,7 @@ export function createNodeEntitySearchCapabilityProviders(
       now: () => new Date().toISOString(),
     }),
   );
+  searchRuntime.registerAdapter(createNodeMediaLibrarySearchAdapter(options.host));
 
   return [
     createCreativeEntityHeadlessCapabilityProvider(entityRuntime),

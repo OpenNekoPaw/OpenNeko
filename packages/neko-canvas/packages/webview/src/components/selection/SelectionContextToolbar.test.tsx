@@ -38,7 +38,7 @@ describe('SelectionContextToolbar', () => {
     expect(markup).not.toContain('data-selection-action="node:edit-media"');
     expect(markup).toContain('data-selection-action="node:open-media-preview"');
     expect(markup).toContain('data-selection-action="node:duplicate"');
-    expect(markup).toContain('data-selection-action="node:save-to-asset-library"');
+    expect(markup).toContain('data-selection-action="node:copy-to-media-library"');
     expect(markup).toContain('data-selection-action="node:open-content-overlay"');
     expect(markup).toContain('data-selection-overflow-actions="delete-selection"');
   });

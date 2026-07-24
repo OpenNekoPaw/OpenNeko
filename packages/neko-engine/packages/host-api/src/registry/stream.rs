@@ -602,6 +602,7 @@ mod tests {
             resolution: Resolution::new(1920, 1080),
             fps: 30.0,
             start_time: 0.0,
+            playback_speed: 1.0,
             codec: neko_engine_kernel::contracts::domain::StreamCodec::H264,
             initial_paused: false,
         }

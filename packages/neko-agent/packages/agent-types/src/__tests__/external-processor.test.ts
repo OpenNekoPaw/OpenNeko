@@ -29,7 +29,7 @@ const validManifest = {
     image: { accepts: ['image/*'], required: true },
   },
   outputs: {
-    image: { produces: ['image/png'], root: 'resourceCache', pathHint: 'generated' },
+    image: { produces: ['image/png'], ownership: 'candidate', pathHint: 'generated' },
   },
   params: {
     scale: { type: 'number', allowed: [2, 4], default: 2 },
@@ -37,8 +37,8 @@ const validManifest = {
   policy: {
     requiresApproval: true,
     allowNetwork: false,
-    allowedInputRoots: ['workspace', 'mediaLibrary', 'resourceCache'],
-    allowedOutputRoots: ['resourceCache'],
+    allowedInputRoots: ['workspace', 'mediaLibrary'],
+    allowedOutputOwnerships: ['candidate'],
     timeoutMs: 120_000,
   },
   envProfile: {
@@ -69,18 +69,38 @@ describe('external processor contract', () => {
     );
   });
 
-  it('rejects invalid root aliases and output roots not declared by policy', () => {
+  it('rejects legacy resourceCache output policy instead of migrating it implicitly', () => {
     const result = validateExternalProcessorManifest({
       ...validManifest,
+      schemaVersion: 1,
       outputs: {
-        image: { produces: ['image/png'], root: 'extensionPrivateResources' },
-        sidecar: { produces: ['application/json'], root: 'tmp' },
+        image: { produces: ['image/png'], root: 'resourceCache' },
+      },
+      policy: {
+        ...validManifest.policy,
+        allowedInputRoots: ['workspace', 'resourceCache'],
+        allowedOutputRoots: ['resourceCache'],
       },
     });
 
     expect(result.manifest).toBeUndefined();
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
-      expect.arrayContaining(['illegal-output-root', 'invalid-root-alias']),
+      expect.arrayContaining(['unknown-schema-version', 'invalid-root-alias']),
+    );
+  });
+
+  it('rejects invalid input roots and output ownership not declared by policy', () => {
+    const result = validateExternalProcessorManifest({
+      ...validManifest,
+      outputs: {
+        image: { produces: ['image/png'], ownership: 'debug' },
+        sidecar: { produces: ['application/json'], ownership: 'promoted' },
+      },
+    });
+
+    expect(result.manifest).toBeUndefined();
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
+      expect.arrayContaining(['illegal-output-ownership']),
     );
   });
 
@@ -135,7 +155,8 @@ describe('external processor contract', () => {
   });
 
   it('exposes root alias and secret env helpers', () => {
-    expect(isExternalProcessorRootAlias('resourceCache')).toBe(true);
+    expect(isExternalProcessorRootAlias('resourceCache')).toBe(false);
+    expect(isExternalProcessorRootAlias('extensionPrivateResources')).toBe(true);
     expect(isExternalProcessorRootAlias('tmp')).toBe(false);
     expect(matchesExternalProcessorSecretEnvPattern('NPM_TOKEN')).toBe(true);
     expect(matchesExternalProcessorSecretEnvPattern('CUDA_VISIBLE_DEVICES')).toBe(false);

@@ -6,14 +6,14 @@ describe('binding availability projection', () => {
     expect(
       projectEntityBindingAvailabilityText({
         role: 'portrait',
-        assetRef: 'project://assets/missing-portrait',
+        representation: { kind: 'workspace-file', path: 'neko/assets/missing-portrait.png' },
         status: 'confirmed',
         availability: 'orphaned',
         orphanedAt: '2026-06-10T01:00:00.000Z',
         isDefault: true,
       }),
     ).toBe(
-      'portrait: project://assets/missing-portrait · confirmed · unavailable · default · orphaned at 2026-06-10T01:00:00.000Z',
+      'portrait: neko/assets/missing-portrait.png · confirmed · unavailable · default · orphaned at 2026-06-10T01:00:00.000Z',
     );
   });
 });

@@ -29,7 +29,6 @@ import { resolvePiToolPermissionAction } from '@neko/agent/pi';
 import {
   projectLlmParameters,
   ConfigManager,
-  createResourceCacheGeneratedAssetIndex,
   FileUserConfigManager,
   registerMediaAgentTools,
   type GeneratedAssetIndex,
@@ -60,7 +59,6 @@ import {
   presentContinuationDiscarded,
   presentContinuationReady,
   presentQueuedContinuation,
-  presentResourceCacheGcFailure,
   presentSkillInvocationRejected,
   presentWorkspaceContentDiagnostic,
 } from '../presentation/runtime-presentation';
@@ -70,7 +68,6 @@ import {
   type ChatMessage,
   type CanvasWorkspaceProjectionResult,
   type GeneratedAssetRevisionRef,
-  type ResourceCacheManifestStore,
   type SearchDocumentRecord,
   formatLocalMetadataUserDiagnostic,
   projectLocalMetadataUserDiagnostic,
@@ -113,13 +110,20 @@ import {
   createTuiSlashCommandCatalog,
   type TuiSlashCommandOption,
 } from '../core/slash-command-catalog';
-import { withTuiDefaultCapabilityProviders } from '../host/tui-default-capabilities';
+import {
+  createTuiDefaultCapabilityRuntime,
+  type TuiDefaultCapabilityRuntime,
+} from '../host/tui-default-capabilities';
 import {
   assertCanonicalTuiConversationId,
   TuiConversationIdError,
 } from '../core/tui-conversation-id';
 import { NodeWorkspaceContentError } from '../host/node-workspace-content-host';
-import { runNodeResourceCacheStartupGc } from '../host/node-resource-cache-startup-gc';
+import {
+  createNodeGeneratedAssetIndexBinding,
+  type NodeGeneratedAssetIndexBinding,
+} from '../host/node-generated-asset-index';
+import { createNodePerceptionAssetLoader } from '../host/node-perception-asset-loader';
 import { TuiPiRuntimeOwner, type TuiPiRuntimeEvidence } from '../core/pi-runtime-owner';
 import type { TuiConversationCatalogPort } from '../core/slash-commands';
 import {
@@ -335,6 +339,8 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
   const generatedAssetIndexRef = useRef<GeneratedAssetIndex | null>(null);
   const mediaGenerationDeliveryHostRef = useRef<NodeMediaGenerationDeliveryHost | null>(null);
   const generationJobCoordinatorRef = useRef<GenerationJobCoordinator | null>(null);
+  const generatedAssetIndexBindingRef = useRef<NodeGeneratedAssetIndexBinding | null>(null);
+  const defaultCapabilityRuntimeRef = useRef<TuiDefaultCapabilityRuntime | null>(null);
   const capabilityLoadResultRef = useRef<TuiCapabilityLoaderResult | null>(null);
   const localMetadataBindingRef = useRef<TuiLocalMetadataBinding | null>(null);
   const conversationPersistenceSnapshotRef = useRef<TuiConversationPersistenceSnapshot | null>(
@@ -358,16 +364,13 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
   );
 
   const requireGeneratedAssetIndex = useCallback(
-    async (
-      workDir: string,
-      manifestStore: ResourceCacheManifestStore,
-    ): Promise<GeneratedAssetIndex> => {
+    async (workDir: string): Promise<GeneratedAssetIndex> => {
       if (!generatedAssetIndexRef.current) {
-        const binding = await createResourceCacheGeneratedAssetIndex({
-          manifestStore,
+        const binding = await createNodeGeneratedAssetIndexBinding({
           workspaceRoot: workDir,
           homedir: options.localMetadataHome ?? os.homedir(),
         });
+        generatedAssetIndexBindingRef.current = binding;
         generatedAssetIndexRef.current = binding.index;
         if (binding.migrationReport.sourceStatus === 'quarantined') {
           stores.conversation
@@ -420,6 +423,13 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       mediaGenerationDeliveryHostRef.current = null;
       platformRef.current?.dispose();
       platformRef.current = null;
+      const defaultCapabilityRuntime = defaultCapabilityRuntimeRef.current;
+      defaultCapabilityRuntimeRef.current = null;
+      void defaultCapabilityRuntime?.dispose().catch(() => undefined);
+      const generatedAssetIndexBinding = generatedAssetIndexBindingRef.current;
+      generatedAssetIndexBindingRef.current = null;
+      generatedAssetIndexRef.current = null;
+      void generatedAssetIndexBinding?.dispose().catch(() => undefined);
       const localMetadataBinding = localMetadataBindingRef.current;
       localMetadataBindingRef.current = null;
       conversationPersistenceSnapshotRef.current = null;
@@ -468,23 +478,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           ...localMetadataBinding.persistenceBackend,
           resume: { status: 'new', restoredMessageCount: 0 },
         };
-        const generatedAssetIndex = await requireGeneratedAssetIndex(
-          config.workDir,
-          localMetadataBinding.resourceCacheManifestStore,
-        );
-        const resourceCacheGcResults = await runNodeResourceCacheStartupGc({
-          workDir: config.workDir,
-          manifestStore: localMetadataBinding.resourceCacheManifestStore,
-        });
-        for (const result of resourceCacheGcResults) {
-          if (result.error) {
-            const message =
-              result.error instanceof Error ? result.error.message : String(result.error);
-            stores.conversation
-              .getState()
-              .addError(new Error(presentResourceCacheGcFailure(message, presentation)));
-          }
-        }
+        const generatedAssetIndex = await requireGeneratedAssetIndex(config.workDir);
         conversationTitleRef.current = '';
         const explicitResumeId = resumeConversationId?.trim();
         if (explicitResumeId) {
@@ -501,13 +495,15 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           providerExpressionProfileRegistry: profileRegistries.providerExpressionProfileRegistry,
           locale: promptDomainLocale,
         });
+        const defaultCapabilityRuntime = createTuiDefaultCapabilityRuntime({
+          workDir: config.workDir,
+          generatedAssetIndex,
+          derivedStorageHomedir: localMetadataHome,
+        });
+        defaultCapabilityRuntimeRef.current = defaultCapabilityRuntime;
         const capabilityLoadResult = capabilityLoader.registerProviders([
-          ...withTuiDefaultCapabilityProviders({
-            workDir: config.workDir,
-            resourceCacheManifestStore: localMetadataBinding.resourceCacheManifestStore,
-            generatedAssetIndex,
-            capabilityProviders,
-          }),
+          ...defaultCapabilityRuntime.providers,
+          ...(capabilityProviders ?? []),
           createExternalResearchCapabilityProviderFromMcpConfig({
             config: config.externalResearch,
             mcpManager,
@@ -584,6 +580,10 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           builtinSkillRoot: resolveTuiBuiltinSkillRoot(),
           getConfig: () => stores.config.getState().config,
           getTools: () => toolRegistry.list(),
+          assetLoader: createNodePerceptionAssetLoader(
+            defaultCapabilityRuntime.contentAccessRuntime,
+            { assetIndex: generatedAssetIndex },
+          ),
           getSystemPrompt: () =>
             buildSystemPromptWithContext(
               basePromptBuilder.buildForExecutionMode(

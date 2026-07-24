@@ -95,6 +95,7 @@ impl ProjectConverter {
             video_bitrate: Some(5_000_000), // 5 Mbps default
             audio_codec: ExportAudioCodec::Aac,
             audio_bitrate: Some(128_000), // 128 kbps default
+            audio_sample_rate: 48_000,
             hw_encoder: ExportHwEncoder::Auto,
             time_range: None,
             preset: ExportPreset::Medium,

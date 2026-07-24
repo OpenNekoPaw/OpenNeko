@@ -2,15 +2,6 @@
  * Base module exports
  */
 
-export {
-  ServiceCollection,
-  ServiceIdentifier,
-  createServiceId,
-  setGlobalServices,
-  getService,
-  getGlobalServices,
-} from './serviceCollection';
-
 export { setRootLogger, getLogger, getRootLogger } from './logger';
 
-export { setErrorHandler, getErrorHandler, handleError } from './errorHandler';
+export { setErrorHandler, handleError } from './errorHandler';

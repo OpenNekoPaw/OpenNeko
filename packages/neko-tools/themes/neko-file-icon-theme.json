@@ -15,7 +15,6 @@
     "_neko_audio":    { "iconPath": "./icons/file-audio.svg" },
     "_neko_3d":       { "iconPath": "./icons/file-3d.svg" },
     "_neko_avatar":   { "iconPath": "./icons/file-avatar.svg" },
-    "_neko_diff":     { "iconPath": "./icons/file-diff.svg" },
 
     "_ts":       { "iconPath": "./icons/file-ts.svg" },
     "_js":       { "iconPath": "./icons/file-js.svg" },
@@ -56,7 +55,6 @@
     "gltf": "_neko_3d",
     "glb": "_neko_3d",
     "vrm": "_neko_avatar",
-    "asset-diff": "_neko_diff",
 
     "ts": "_ts",
     "mts": "_ts",

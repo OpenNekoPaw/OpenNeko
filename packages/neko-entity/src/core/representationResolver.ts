@@ -1,140 +1,82 @@
 import type {
-  AssetFederationCapabilityProvider,
-  AssetRefResolver,
   CreativeEntityRegistry,
-  EntityAssetBinding,
-  EntityAssetBindingRole,
-  RepresentationKind,
-  RepresentationResolveRequest,
-  RepresentationResolveResult,
-  ResolvedAssetRef,
-  ResolvedRepresentationFile,
+  EntityRepresentationBinding,
+  EntityRepresentationResolveRequest,
+  EntityRepresentationResolveResult,
+  EntityRepresentationRole,
 } from '@neko/shared';
-import { DEFAULT_REPRESENTATION_FALLBACKS } from '@neko/shared';
+import { ENTITY_REPRESENTATION_ROLE_ORDER } from '@neko/shared';
 
 export interface RepresentationBindingReader {
-  list(): Promise<readonly EntityAssetBinding[]>;
+  list(): Promise<readonly EntityRepresentationBinding[]>;
 }
 
-export interface RepresentationResolverOptions {
+export interface EntityRepresentationResolverOptions {
   readonly entities: CreativeEntityRegistry;
   readonly bindings: RepresentationBindingReader;
-  readonly assetRefs: AssetRefResolver;
-  readonly federation?: AssetFederationCapabilityProvider;
 }
 
-export class RepresentationResolver {
-  constructor(private readonly options: RepresentationResolverOptions) {}
+export class EntityRepresentationResolver {
+  constructor(private readonly options: EntityRepresentationResolverOptions) {}
 
-  async resolve(request: RepresentationResolveRequest): Promise<RepresentationResolveResult> {
+  async resolve(
+    request: EntityRepresentationResolveRequest,
+  ): Promise<EntityRepresentationResolveResult> {
     const entity = await this.options.entities.get(request.entityId);
-    const allBindings = await this.options.bindings.list();
-    const candidates = allBindings.filter(
+    const candidates = (await this.options.bindings.list()).filter(
       (binding) =>
         binding.entityId === request.entityId &&
         (!entity || binding.entityKind === entity.kind) &&
-        binding.status === 'confirmed',
+        binding.status === 'confirmed' &&
+        binding.availability === 'active',
     );
 
-    const order = getRepresentationFallbackOrder(request);
-    for (const kind of order) {
-      const binding = pickBindingForKind(candidates, kind);
-      if (!binding) {
-        continue;
-      }
-
-      const resolvedRef = await this.options.assetRefs.resolve(binding.assetRef);
-      const federationSemantics = await this.options.federation?.describeAsset(resolvedRef);
+    const roles = candidateRoleOrder(request);
+    for (const role of roles) {
+      const binding = pickBindingForRole(candidates, role);
+      if (!binding) continue;
       return {
         status: 'resolved',
         entityId: request.entityId,
-        assetRef: binding.assetRef,
-        assetEntityId: resolvedRef.assetEntityId,
-        resolvedKind: kind,
-        fallback: request.preferredKind ? kind !== request.preferredKind : false,
-        role: binding.role,
-        files:
-          federationSemantics?.files && federationSemantics.files.length > 0
-            ? federationSemantics.files
-            : buildResolvedRepresentationFiles(binding, resolvedRef, kind),
-        capabilities: mergeCapabilities(
-          resolvedRef.capabilities,
-          federationSemantics?.capabilities,
-        ),
+        binding,
+        representation: binding.representation,
+        resolvedRole: role,
+        usedAlternativeRole: request.preferredRole ? role !== request.preferredRole : false,
       };
     }
 
     return {
       status: 'missing-representation',
       entityId: request.entityId,
-      missingKinds: order,
-      suggestedActions: ['generate', 'import', 'bind-existing', 'dismiss'],
+      missingRoles: roles,
+      suggestedActions: ['generate', 'bind-existing', 'dismiss'],
     };
   }
 }
 
-function getRepresentationFallbackOrder(
-  request: RepresentationResolveRequest,
-): readonly RepresentationKind[] {
-  if (request.allowFallback === false && request.preferredKind) {
-    return [request.preferredKind];
+function candidateRoleOrder(
+  request: EntityRepresentationResolveRequest,
+): readonly EntityRepresentationRole[] {
+  if (request.allowAlternativeRoles === false && request.preferredRole) {
+    return [request.preferredRole];
   }
-
-  const baseOrder =
-    request.fallbackOrder ??
-    (request.preferredKind
+  const configured =
+    request.candidateRoles ??
+    (request.preferredRole
       ? [
-          request.preferredKind,
-          ...DEFAULT_REPRESENTATION_FALLBACKS[request.target].filter(
-            (kind) => kind !== request.preferredKind,
+          request.preferredRole,
+          ...ENTITY_REPRESENTATION_ROLE_ORDER[request.consumer].filter(
+            (role) => role !== request.preferredRole,
           ),
         ]
-      : DEFAULT_REPRESENTATION_FALLBACKS[request.target]);
-
-  return Array.from(new Set(baseOrder));
+      : ENTITY_REPRESENTATION_ROLE_ORDER[request.consumer]);
+  return Array.from(new Set(configured));
 }
 
-function pickBindingForKind(
-  bindings: readonly EntityAssetBinding[],
-  kind: RepresentationKind,
-): EntityAssetBinding | undefined {
-  const roleBindings = bindings.filter((binding) => binding.role === kind);
+function pickBindingForRole(
+  bindings: readonly EntityRepresentationBinding[],
+  role: EntityRepresentationRole,
+): EntityRepresentationBinding | undefined {
+  const roleBindings = bindings.filter((binding) => binding.role === role);
   return roleBindings.find((binding) => binding.isDefault) ?? roleBindings[0];
-}
-
-function buildResolvedRepresentationFiles(
-  binding: EntityAssetBinding,
-  resolvedRef: ResolvedAssetRef,
-  kind: RepresentationKind,
-): readonly ResolvedRepresentationFile[] {
-  return [
-    {
-      role: kind === 'voice' ? 'voice' : kind === 'motion' ? 'motion' : 'main',
-      assetRef: binding.assetRef,
-      path: resolvedRef.localPath,
-      mediaType: kind,
-    },
-  ];
-}
-
-function mergeCapabilities(
-  ...capabilityGroups: Array<readonly string[] | undefined>
-): readonly string[] {
-  return Array.from(new Set(capabilityGroups.flatMap((group) => group ?? []))).sort();
-}
-
-export function representationKindToBindingRole(
-  kind: RepresentationKind,
-): EntityAssetBindingRole | undefined {
-  switch (kind) {
-    case 'portrait':
-    case 'reference':
-    case 'live2d':
-    case 'live3d':
-    case 'voice':
-    case 'motion':
-      return kind;
-    case 'video':
-      return 'motion';
-  }
 }

@@ -34,7 +34,7 @@ describe('plugin transfer presenter', () => {
         mediaType: 'video',
         plugins: { canvas: true, cut: true },
       }).targets.map((target) => target.id),
-    ).toEqual(['cut', 'explorer']);
+    ).toEqual(['explorer']);
 
     expect(
       projectPluginTransferMenu({
@@ -61,14 +61,14 @@ describe('plugin transfer presenter', () => {
     ).toEqual(['explorer']);
   });
 
-  it('limits structured cut storyboard payloads to the timeline target', () => {
+  it('hides structured Cut storyboard transfer until the OTIO target is registered', () => {
     expect(
       projectPluginTransferMenu({
         mediaType: 'image',
         plugins: { canvas: true, cut: true },
         structuredKind: 'cutStoryboard',
       }).targets.map((target) => target.id),
-    ).toEqual(['cut']);
+    ).toEqual([]);
   });
 
   it('projects Canvas content transfer targets from selected node context', () => {

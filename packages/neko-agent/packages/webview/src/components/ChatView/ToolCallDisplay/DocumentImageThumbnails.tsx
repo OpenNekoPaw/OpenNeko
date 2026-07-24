@@ -47,7 +47,11 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                 onClick={() => handleOpen(thumbnail)}
                 className="block w-full disabled:cursor-default"
                 title={
-                  thumbnail.locator ? `Open ${title || thumbnail.label}` : title || thumbnail.path
+                  thumbnail.locator
+                    ? `Open ${title || thumbnail.label}`
+                    : [title || thumbnail.path, thumbnail.previewDiagnostic]
+                        .filter(Boolean)
+                        .join(' · ')
                 }
               >
                 <div className="relative h-28 w-full bg-[var(--agent-bg)]">
@@ -60,7 +64,10 @@ function DocumentImageThumbnailsComponent({ thumbnails }: DocumentImageThumbnail
                       className="h-full w-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[var(--agent-fg-secondary)]">
+                    <div
+                      className="flex h-full w-full items-center justify-center text-[var(--agent-fg-secondary)]"
+                      title={thumbnail.previewDiagnostic}
+                    >
                       <FileIcon className="h-5 w-5" />
                     </div>
                   )}

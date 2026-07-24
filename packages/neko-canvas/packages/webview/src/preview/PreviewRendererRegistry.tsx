@@ -1001,13 +1001,9 @@ function ProjectPreviewRenderer({
 }
 
 function resolveProjectTypeLabel(value: unknown, defaultExt: string): string {
-  const projectType = typeof value === 'string' ? value : defaultExt;
-  switch (projectType) {
-    case 'nkv':
-      return t('project.type.nkv');
-    default:
-      return t('node.project');
-  }
+  void value;
+  void defaultExt;
+  return t('node.project');
 }
 
 function getStableSafeUrl(source: PreviewSourceDescriptor): string | undefined {

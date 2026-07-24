@@ -101,16 +101,16 @@ describe('project search aggregation policy', () => {
       aggregateProjectSearchItemsFreshness([
         createProjectSearchItem({
           id: 'fresh',
-          kind: 'asset',
+          kind: 'media',
           label: 'fresh',
-          partition: 'asset-library',
+          partition: 'media-library',
           freshness: 'fresh',
         }),
         createProjectSearchItem({
           id: 'stale',
-          kind: 'asset',
+          kind: 'media',
           label: 'stale',
-          partition: 'asset-library',
+          partition: 'media-library',
           freshness: 'stale',
         }),
       ]),

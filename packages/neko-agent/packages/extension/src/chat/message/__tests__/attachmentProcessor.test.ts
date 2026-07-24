@@ -93,9 +93,7 @@ describe('AttachmentProcessor', () => {
       const result = await processor.processAttachments(attachments);
 
       expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith({
-        caller: 'attachment-processor',
         source: { kind: 'file', path: '/tmp/photo.jpg' },
-        preferredTarget: 'bytes',
         mimeTypeHint: 'image/jpeg',
       });
       expect(fs.promises.readFile).not.toHaveBeenCalled();
@@ -133,9 +131,7 @@ describe('AttachmentProcessor', () => {
       const result = await processor.processAttachments(attachments);
 
       expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith({
-        caller: 'attachment-processor',
         source: { kind: 'file', path: '/tmp/missing.png' },
-        preferredTarget: 'bytes',
         mimeTypeHint: 'image/png',
       });
       expect(fs.promises.readFile).not.toHaveBeenCalled();
@@ -252,9 +248,7 @@ describe('AttachmentProcessor', () => {
         { type: 'base64', media_type: 'image/png', data: Buffer.from(bytes).toString('base64') },
       ]);
       expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith({
-        caller: 'attachment-processor',
         source: resource,
-        preferredTarget: 'bytes',
         mimeTypeHint: 'image/png',
         metadata: { threeReferenceRole: 'pose' },
       });
@@ -297,9 +291,7 @@ describe('AttachmentProcessor', () => {
       const result = await processor.readFileAsBase64('/path/to/image.webp');
 
       expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith({
-        caller: 'attachment-processor',
         source: { kind: 'file', path: '/path/to/image.webp' },
-        preferredTarget: 'bytes',
         mimeTypeHint: 'image/webp',
       });
       expect(fs.promises.readFile).not.toHaveBeenCalled();

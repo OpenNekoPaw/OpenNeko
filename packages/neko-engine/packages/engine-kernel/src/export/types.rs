@@ -53,6 +53,9 @@ pub struct ExportSettings {
     pub audio_codec: AudioCodec,
     /// Audio bitrate (bps)
     pub audio_bitrate: Option<u64>,
+    /// Audio output sample rate (Hz)
+    #[serde(default = "default_audio_sample_rate")]
+    pub audio_sample_rate: u32,
     /// Hardware encoder type
     #[serde(default)]
     pub hw_encoder: HwEncoderType,
@@ -64,6 +67,10 @@ pub struct ExportSettings {
     /// Enable zero-copy GPU encoding (macOS VideoToolbox only)
     #[serde(default)]
     pub use_zero_copy_gpu: bool,
+}
+
+const fn default_audio_sample_rate() -> u32 {
+    48_000
 }
 
 impl ExportSettings {
@@ -280,6 +287,7 @@ mod tests {
             video_bitrate: Some(5_000_000),
             audio_codec: AudioCodec::Aac,
             audio_bitrate: Some(128_000),
+            audio_sample_rate: 44_100,
             hw_encoder: HwEncoderType::Auto,
             time_range: None,
             preset: EncoderPreset::Fast,

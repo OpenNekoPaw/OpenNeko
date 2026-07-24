@@ -67,7 +67,7 @@ Prefer existing owner directories before adding runtime files:
 | Stream                 | `stream/agent-event-stream-runtime.ts`, `stream/agent-stream-background-task.ts`, `stream/agent-stream-state.ts`, `stream/agent-stream-task-observer.ts`                                                                                                                                 |
 | Projection             | `projection/conversation-projection-store.ts` with shared contracts/projector in `@neko-agent/types`                                                                                                                                                                                     |
 | Existing owner moves   | `artifact/artifact-service.ts`, `artifact/node-artifact-store.ts`, `input/attachment-projection.ts`, `input/message-resource-projector.ts`, `session/context-host-message.ts`, `session/conversation-host-message.ts`                                                                    |
-| Root collaborators     | `document-module-diagnostics.ts`, `persisted-child-run-ownership.ts`, `resource-cache-runtime.ts`                                                                                                                                                                                        |
+| Root collaborators     | `document-module-diagnostics.ts`                                                                                                                                                                                                                                                         |
 
 `runtime/index.ts` exposes only retained product adapters. The replaced
 Executor/AgentSession/AgentRunner public surface is intentionally removed.

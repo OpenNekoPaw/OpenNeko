@@ -53,6 +53,7 @@ export interface SkillContentReadResult {
     readonly source: SkillSource;
     readonly fingerprint: string;
     readonly locator: string;
+    readonly locatorKind: 'skill' | 'skill-resource';
   };
 }
 
@@ -292,6 +293,7 @@ export class PiSkillHostSnapshot {
         source: stored.record.source,
         fingerprint: stored.record.fingerprint,
         locator: locator.value,
+        locatorKind: locator.kind,
       }),
     });
   }

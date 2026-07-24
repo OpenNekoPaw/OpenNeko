@@ -255,19 +255,19 @@ describe('PermissionRuleMatcher - plan mode with injected domain tools', () => {
   it('allows caller-provided domain read-only tools in plan mode', () => {
     const matcher = new PermissionRuleMatcher(
       makePlanConfig({
-        readOnlyTools: [...DEFAULT_READ_ONLY_TOOLS, 'canvas_get_node', 'ListAssets'],
+        readOnlyTools: [...DEFAULT_READ_ONLY_TOOLS, 'canvas_get_node', 'ReadProjectMedia'],
       }),
     );
 
     expect(matcher.check(makeToolCall('canvas_get_node')).decision).toBe('allow');
-    expect(matcher.check(makeToolCall('ListAssets')).decision).toBe('allow');
+    expect(matcher.check(makeToolCall('ReadProjectMedia')).decision).toBe('allow');
   });
 
   it('does not ship domain read-only tools in Agent defaults', () => {
     const matcher = new PermissionRuleMatcher(makePlanConfig());
 
     expect(matcher.check(makeToolCall('canvas_get_node')).decision).toBe('deny');
-    expect(matcher.check(makeToolCall('ListAssets')).decision).toBe('deny');
+    expect(matcher.check(makeToolCall('ReadProjectMedia')).decision).toBe('deny');
   });
 
   it('does not treat external research tools as default read-only tools before registration', () => {
@@ -379,7 +379,7 @@ describe('DEFAULT_CREATIVE_TOOL_TRAITS', () => {
         'canvas_get_node',
         'canvas_generate_image',
         'ListVideoEffects',
-        'ListAssets',
+        'ReadProjectMedia',
       ]),
     );
   });

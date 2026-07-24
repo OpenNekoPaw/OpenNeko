@@ -1,8 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import { ENTITY_FACADE_COMMANDS, isEntityFacadeCommandError } from '@neko/shared';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  ENTITY_FACADE_COMMANDS,
+  isEntityFacadeCommandError,
+  type ContentReadService,
+} from '@neko/shared';
 import { registerEntityFacadeCommands, VSCodeEntityRuntimeRegistry } from '../host-vscode';
 import { CreativeEntityService } from '../core/CreativeEntityService';
-import { resolveCharacterRegistryPath, resolveEntityAssetBindingsPath } from '../core/paths';
+import { EntityRepresentationRebindService } from '../core/representationAccess';
+import {
+  resolveCharacterRegistryPath,
+  resolveEntityRepresentationBindingsPath,
+} from '../core/paths';
 import type { EntityRuntimePorts } from '../core/ports';
 import { MemoryEntityFileStore, createFixedClock } from '../testing';
 import { EventEmitter, commands, resetVSCodeTestDouble } from '../testing/vscode';
@@ -211,7 +219,7 @@ describe('entity facade commands', () => {
         id: 'binding-portrait',
         entityId: 'char_xiaoju',
         entityKind: 'character',
-        assetRef: 'project://assets/xiaoju-portrait',
+        representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju-portrait.png' },
         role: 'portrait',
         status: 'confirmed',
         availability: 'active',
@@ -225,15 +233,15 @@ describe('entity facade commands', () => {
       ENTITY_FACADE_COMMANDS.triggerBindingWidgetAction,
       {
         context: { surface: 'canvas', projectRoot, nodeId: 'shot-1' },
-        action: 'bind-asset',
+        action: 'bind-representation',
         entityRef: { entityId: 'char_xiaoju', entityKind: 'character' },
-        assetRef: 'project://assets/xiaoju-reference',
+        representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju-reference.png' },
         role: 'reference',
       },
     );
     expect(widget).toEqual(expect.objectContaining({ ok: true, action: 'bind' }));
-    expect(files.get(resolveEntityAssetBindingsPath(projectRoot))).toEqual({
-      version: 1,
+    expect(files.get(resolveEntityRepresentationBindingsPath(projectRoot))).toEqual({
+      version: 2,
       bindings: expect.arrayContaining([
         expect.objectContaining({
           id: 'binding-portrait',
@@ -241,7 +249,10 @@ describe('entity facade commands', () => {
           isDefault: true,
         }),
         expect.objectContaining({
-          assetRef: 'project://assets/xiaoju-reference',
+          representation: {
+            kind: 'workspace-file',
+            path: 'neko/assets/xiaoju-reference.png',
+          },
           role: 'reference',
         }),
       ]),
@@ -264,16 +275,16 @@ describe('entity facade commands', () => {
           },
         ],
       },
-      [resolveEntityAssetBindingsPath(projectRoot)]: {
-        version: 1,
+      [resolveEntityRepresentationBindingsPath(projectRoot)]: {
+        version: 2,
         bindings: [
           {
             id: 'binding-active',
             entityId: 'char_xiaoju',
             entityKind: 'character',
-            assetRef: 'project://assets/xiaoju-active',
+            representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju-active.png' },
             role: 'reference',
-            status: 'suggested',
+            status: 'confirmed',
             availability: 'active',
             source: 'user',
             updatedAt: now,
@@ -282,7 +293,10 @@ describe('entity facade commands', () => {
             id: 'binding-orphaned',
             entityId: 'char_xiaoju',
             entityKind: 'character',
-            assetRef: 'project://assets/missing-portrait',
+            representation: {
+              kind: 'workspace-file',
+              path: 'neko/assets/missing-portrait.png',
+            },
             role: 'portrait',
             status: 'confirmed',
             availability: 'orphaned',
@@ -311,38 +325,38 @@ describe('entity facade commands', () => {
     expect(quickPickCalls[0]).toEqual([
       expect.arrayContaining([
         expect.objectContaining({
-          label: 'portrait: project://assets/missing-portrait',
+          label: 'portrait: neko/assets/missing-portrait.png',
           description: 'confirmed · unavailable · orphaned at 2026-06-10T01:00:00.000Z',
-          detail: expect.stringContaining('Representation asset is unavailable'),
+          detail: expect.stringContaining('Representation is unavailable'),
         }),
       ]),
       expect.objectContaining({ title: 'Set default binding' }),
     ]);
-    const nextBindings = files.get(resolveEntityAssetBindingsPath(projectRoot));
+    const nextBindings = files.get(resolveEntityRepresentationBindingsPath(projectRoot));
     expect(nextBindings).toEqual({
-      version: 1,
+      version: 2,
       bindings: expect.arrayContaining([
-        expect.objectContaining({
-          id: 'binding-orphaned',
-          availability: 'orphaned',
-          isDefault: true,
-        }),
         expect.objectContaining({
           id: 'binding-active',
           availability: 'active',
+          isDefault: true,
+        }),
+        expect.objectContaining({
+          id: 'binding-orphaned',
+          availability: 'orphaned',
         }),
       ]),
     });
-    const active = isBindingFile(nextBindings)
-      ? nextBindings.bindings.find((binding) => binding.id === 'binding-active')
+    const orphaned = isBindingFile(nextBindings)
+      ? nextBindings.bindings.find((binding) => binding.id === 'binding-orphaned')
       : undefined;
-    expect(active?.isDefault).not.toBe(true);
+    expect(orphaned?.isDefault).not.toBe(true);
 
     disposable.dispose();
     registry.dispose();
   });
 
-  it('finds creative entities bound to an asset without mutating facts', async () => {
+  it('finds creative entities bound to a representation without mutating facts', async () => {
     const files = new MemoryEntityFileStore({
       [resolveCharacterRegistryPath(projectRoot)]: {
         version: 1,
@@ -356,14 +370,17 @@ describe('entity facade commands', () => {
           },
         ],
       },
-      [resolveEntityAssetBindingsPath(projectRoot)]: {
-        version: 1,
+      [resolveEntityRepresentationBindingsPath(projectRoot)]: {
+        version: 2,
         bindings: [
           {
             id: 'binding-portrait',
             entityId: 'char_xiaoju',
             entityKind: 'character',
-            assetRef: 'project://assets/xiaoju-portrait',
+            representation: {
+              kind: 'workspace-file',
+              path: 'neko/assets/xiaoju-portrait.png',
+            },
             role: 'portrait',
             status: 'confirmed',
             availability: 'active',
@@ -377,17 +394,23 @@ describe('entity facade commands', () => {
     const registry = createMemoryRuntimeRegistry(files);
     const disposable = registerEntityFacadeCommands({ runtimeRegistry: registry });
 
-    const result = await commands.executeCommand(ENTITY_FACADE_COMMANDS.findEntitiesByAsset, {
-      projectRoot,
-      assetRef: 'project://assets/xiaoju-portrait',
-    });
-    const missing = await commands.executeCommand(ENTITY_FACADE_COMMANDS.findEntitiesByAsset, {
-      projectRoot,
-      assetRef: 'project://assets/missing',
-    });
+    const result = await commands.executeCommand(
+      ENTITY_FACADE_COMMANDS.findEntitiesByRepresentation,
+      {
+        projectRoot,
+        representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju-portrait.png' },
+      },
+    );
+    const missing = await commands.executeCommand(
+      ENTITY_FACADE_COMMANDS.findEntitiesByRepresentation,
+      {
+        projectRoot,
+        representation: { kind: 'workspace-file', path: 'neko/assets/missing.png' },
+      },
+    );
 
     expect(result).toEqual({
-      assetRef: 'project://assets/xiaoju-portrait',
+      representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju-portrait.png' },
       entities: [
         {
           entityRef: {
@@ -406,7 +429,7 @@ describe('entity facade commands', () => {
       ],
     });
     expect(missing).toEqual({
-      assetRef: 'project://assets/missing',
+      representation: { kind: 'workspace-file', path: 'neko/assets/missing.png' },
       entities: [],
     });
 
@@ -414,7 +437,7 @@ describe('entity facade commands', () => {
     registry.dispose();
   });
 
-  it('lists and unbinds creative entity asset bindings through facade commands', async () => {
+  it('lists and unbinds creative entity representation bindings through facade commands', async () => {
     const files = new MemoryEntityFileStore({
       [resolveCharacterRegistryPath(projectRoot)]: {
         version: 1,
@@ -427,14 +450,17 @@ describe('entity facade commands', () => {
           },
         ],
       },
-      [resolveEntityAssetBindingsPath(projectRoot)]: {
-        version: 1,
+      [resolveEntityRepresentationBindingsPath(projectRoot)]: {
+        version: 2,
         bindings: [
           {
             id: 'binding-portrait',
             entityId: 'char_xiaoju',
             entityKind: 'character',
-            assetRef: 'project://assets/xiaoju-portrait',
+            representation: {
+              kind: 'workspace-file',
+              path: 'neko/assets/xiaoju-portrait.png',
+            },
             role: 'portrait',
             status: 'confirmed',
             availability: 'active',
@@ -451,7 +477,7 @@ describe('entity facade commands', () => {
     await expect(
       commands.executeCommand(ENTITY_FACADE_COMMANDS.listBindings, {
         projectRoot,
-        assetRef: 'project://assets/xiaoju-portrait',
+        representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju-portrait.png' },
       }),
     ).resolves.toEqual([
       expect.objectContaining({
@@ -464,14 +490,14 @@ describe('entity facade commands', () => {
       ENTITY_FACADE_COMMANDS.triggerBindingWidgetAction,
       {
         context: { surface: 'assets', projectRoot },
-        action: 'unbind-asset',
+        action: 'unbind-representation',
         payload: { bindingId: 'binding-portrait' },
       },
     );
 
     expect(result).toEqual(expect.objectContaining({ ok: true, action: 'unbind' }));
-    expect(files.get(resolveEntityAssetBindingsPath(projectRoot))).toEqual({
-      version: 1,
+    expect(files.get(resolveEntityRepresentationBindingsPath(projectRoot))).toEqual({
+      version: 2,
       bindings: [],
     });
     expect(events).toEqual(
@@ -506,14 +532,17 @@ describe('entity facade commands', () => {
           },
         ],
       },
-      [resolveEntityAssetBindingsPath(projectRoot)]: {
-        version: 1,
+      [resolveEntityRepresentationBindingsPath(projectRoot)]: {
+        version: 2,
         bindings: [
           {
             id: 'binding-portrait',
             entityId: 'char_xiaoju',
             entityKind: 'character',
-            assetRef: 'project://assets/xiaoju-portrait',
+            representation: {
+              kind: 'workspace-file',
+              path: 'neko/assets/xiaoju-portrait.png',
+            },
             role: 'portrait',
             status: 'confirmed',
             availability: 'active',
@@ -531,8 +560,8 @@ describe('entity facade commands', () => {
       bindingIds: ['binding-portrait'],
       orphanedAt: '2026-06-10T01:00:00.000Z',
     });
-    expect(files.get(resolveEntityAssetBindingsPath(projectRoot))).toEqual({
-      version: 1,
+    expect(files.get(resolveEntityRepresentationBindingsPath(projectRoot))).toEqual({
+      version: 2,
       bindings: [
         expect.objectContaining({
           id: 'binding-portrait',
@@ -543,27 +572,12 @@ describe('entity facade commands', () => {
       ],
     });
 
-    await commands.executeCommand(ENTITY_FACADE_COMMANDS.restoreBinding, {
-      projectRoot,
-      bindingIds: ['binding-portrait'],
-    });
-    expect(files.get(resolveEntityAssetBindingsPath(projectRoot))).toEqual({
-      version: 1,
-      bindings: [
-        expect.objectContaining({
-          id: 'binding-portrait',
-          status: 'confirmed',
-          availability: 'active',
-        }),
-      ],
-    });
-
     await commands.executeCommand(ENTITY_FACADE_COMMANDS.archiveBinding, {
       projectRoot,
       bindingIds: ['binding-portrait'],
     });
-    expect(files.get(resolveEntityAssetBindingsPath(projectRoot))).toEqual({
-      version: 1,
+    expect(files.get(resolveEntityRepresentationBindingsPath(projectRoot))).toEqual({
+      version: 2,
       bindings: [
         expect.objectContaining({
           id: 'binding-portrait',
@@ -576,11 +590,74 @@ describe('entity facade commands', () => {
     disposable.dispose();
     registry.dispose();
   });
+
+  it('validates and explicitly rebinds an orphaned representation', async () => {
+    const files = new MemoryEntityFileStore({
+      [resolveEntityRepresentationBindingsPath(projectRoot)]: {
+        version: 2,
+        bindings: [
+          {
+            id: 'binding-portrait',
+            entityId: 'char_xiaoju',
+            entityKind: 'character',
+            representation: {
+              kind: 'workspace-file',
+              path: 'neko/assets/missing.png',
+              fingerprint: { strategy: 'sha256', value: 'sha256:missing' },
+            },
+            role: 'portrait',
+            status: 'confirmed',
+            availability: 'orphaned',
+            orphanedAt: '2026-06-10T01:00:00.000Z',
+            source: 'user',
+            updatedAt: now,
+          },
+        ],
+      },
+    });
+    const contentRead: ContentReadService = {
+      stat: async (locator) => ({
+        status: 'ready',
+        locator,
+        byteLength: 12,
+        fingerprint: { strategy: 'sha256', value: 'sha256:rebound' },
+      }),
+      read: vi.fn(),
+    };
+    const registry = createMemoryRuntimeRegistry(files, [], contentRead);
+    const disposable = registerEntityFacadeCommands({ runtimeRegistry: registry });
+
+    await expect(
+      commands.executeCommand(ENTITY_FACADE_COMMANDS.rebindRepresentation, {
+        projectRoot,
+        bindingId: 'binding-portrait',
+        representation: { kind: 'workspace-file', path: 'neko/assets/rebound.png' },
+      }),
+    ).resolves.toMatchObject({ status: 'rebound' });
+    expect(files.get(resolveEntityRepresentationBindingsPath(projectRoot))).toEqual({
+      version: 2,
+      bindings: [
+        expect.objectContaining({
+          id: 'binding-portrait',
+          availability: 'active',
+          representation: {
+            kind: 'workspace-file',
+            path: 'neko/assets/rebound.png',
+            fingerprint: { strategy: 'sha256', value: 'sha256:rebound' },
+          },
+        }),
+      ],
+    });
+
+    disposable.dispose();
+    registry.dispose();
+  });
 });
 
 function createMemoryRuntimeRegistry(
   files: MemoryEntityFileStore,
   events: unknown[] = [],
+  contentRead?: ContentReadService,
 ): VSCodeEntityRuntimeRegistry {
   return new VSCodeEntityRuntimeRegistry({
     createRuntime({ projectRoot }) {
@@ -599,8 +676,16 @@ function createMemoryRuntimeRegistry(
         projectRoot,
         ports,
       });
+      const representationRebind = contentRead
+        ? new EntityRepresentationRebindService({
+            bindings: service.bindings,
+            content: contentRead,
+            commit: (input) => service.rebindRepresentation(input),
+          })
+        : undefined;
       return {
         service,
+        ...(representationRebind ? { representationRebind } : {}),
         ports,
         onDidChangeEntity: eventEmitter.event,
         flushProjection: async () => undefined,
@@ -622,11 +707,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isOrphanedBindingPick(
+function isActiveBindingPick(
   value: unknown,
-): value is { readonly binding: { readonly id: 'binding-orphaned' } } {
+): value is { readonly binding: { readonly id: 'binding-active' } } {
   return (
-    isRecord(value) && isRecord(value['binding']) && value['binding']['id'] === 'binding-orphaned'
+    isRecord(value) && isRecord(value['binding']) && value['binding']['id'] === 'binding-active'
   );
 }
 
@@ -655,7 +740,7 @@ function createDefaultBindingQuickPick(
   ): Thenable<T | undefined>;
   function showQuickPick(items: unknown, options?: unknown, _token?: unknown): Thenable<unknown> {
     calls.push([items, options]);
-    return Promise.resolve(Array.isArray(items) ? items.find(isOrphanedBindingPick) : undefined);
+    return Promise.resolve(Array.isArray(items) ? items.find(isActiveBindingPick) : undefined);
   }
   return showQuickPick;
 }

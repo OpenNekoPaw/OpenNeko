@@ -8,7 +8,7 @@
  * - Thumbnails for video/image files
  * - Metadata tooltips (resolution, duration, codec, etc.)
  * - Preview integration (video/audio/image)
- * - Fixed drag protocol (ASSET_DRAG_MIME + MediaFileDragData)
+ * - Stable Media Library file drag protocol
  */
 
 import * as vscode from 'vscode';
@@ -18,12 +18,16 @@ import {
   isMediaFile,
   isDocumentFile,
   detectMediaType,
-  ASSET_DRAG_MIME,
+  MEDIA_LIBRARY_DRAG_MIME,
+  normalizeWorkspaceContentPath,
+  WORKSPACE_MEDIA_LIBRARY_DIRECTORY,
   type MediaFileMetadata,
-  type MediaFileDragData,
+  type MediaLibraryDragData,
+  type MediaLibraryProjectionEntry,
+  type WorkspaceFileContentLocator,
+  type WorkspaceLinkedMediaLibrary,
 } from '@neko/shared';
-import type { ResolvedMediaLibrary } from '@neko/shared';
-import type { MediaLibrarySettingsService } from '../services/MediaLibrarySettingsService';
+import type { WorkspaceLinkedMediaLibraryService } from '../services/WorkspaceLinkedMediaLibraryService';
 import type { ThumbnailService } from '../services/ThumbnailService';
 import type { MediaMetadataCache } from '../services/MediaMetadataCache';
 import { buildMetadataTooltipLines } from '../utils/formatters';
@@ -36,7 +40,7 @@ import { t } from '../i18n';
 // =============================================================================
 
 export interface MediaLibraryDeps {
-  settingsService: MediaLibrarySettingsService;
+  libraryService: WorkspaceLinkedMediaLibraryService;
   thumbnailService: ThumbnailService;
   metadataExtractor: (filePath: string) => Promise<MediaFileMetadata>;
   metadataCache?: MediaMetadataCache;
@@ -51,21 +55,24 @@ export type MediaLibraryItem = LibraryRootItem | DirectoryItem | MediaFileItem;
 class LibraryRootItem extends vscode.TreeItem {
   readonly type = 'libraryRoot' as const;
 
-  constructor(public readonly library: ResolvedMediaLibrary) {
+  constructor(public readonly library: WorkspaceLinkedMediaLibrary) {
     super(library.name, vscode.TreeItemCollapsibleState.Collapsed);
-    this.description = library.resolvedPath;
-    this.contextValue = library.accessible ? 'mediaLibrary' : 'mediaLibrary:offline';
+    this.description = library.workspacePath;
+    this.contextValue =
+      library.availability === 'available' ? 'mediaLibrary' : 'mediaLibrary:offline';
 
-    this.iconPath = library.accessible
-      ? new vscode.ThemeIcon('folder-library')
-      : new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'));
+    this.iconPath =
+      library.availability === 'available'
+        ? new vscode.ThemeIcon('folder-library')
+        : new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'));
 
     this.tooltip = [
       library.name,
-      `Path: ${library.resolvedPath}`,
-      `Variable: \${${library.variable}}`,
-      library.overridden ? `Overridden from: ${library.originalPath}` : null,
-      library.accessible ? t('mediaLibrary.status.online') : t('mediaLibrary.status.offline'),
+      `Path: ${library.workspacePath}`,
+      library.availability === 'available'
+        ? t('mediaLibrary.status.online')
+        : t('mediaLibrary.status.offline'),
+      library.diagnostic?.message,
     ]
       .filter(Boolean)
       .join('\n');
@@ -94,22 +101,26 @@ class DirectoryItem extends vscode.TreeItem {
 
 class MediaFileItem extends vscode.TreeItem {
   readonly type = 'file' as const;
+  readonly filePath: string;
 
   constructor(
-    public readonly filePath: string,
+    public readonly projection: MediaLibraryProjectionEntry & {
+      readonly locator: WorkspaceFileContentLocator;
+    },
+    public readonly absolutePath: string,
     fileName: string,
     metadata?: MediaFileMetadata,
-    thumbnailPath?: string | null,
+    thumbnailUri?: vscode.Uri | null,
   ) {
     super(fileName, vscode.TreeItemCollapsibleState.None);
-    this.resourceUri = vscode.Uri.file(filePath);
+    this.filePath = projection.locator.path;
 
-    const mediaType = detectMediaType(filePath);
+    const mediaType = detectMediaType(this.filePath);
     // Encode media type into contextValue so view/item/context `when` clauses can
     // filter menu items precisely (e.g. don't show "Add to Timeline" for documents).
     this.contextValue = `mediaLibrary:file:${mediaType}`;
-    const uri = vscode.Uri.file(filePath);
-    const viewType = getPreviewViewType(filePath);
+    const uri = vscode.Uri.file(absolutePath);
+    const viewType = getPreviewViewType(this.filePath);
 
     // Command: route to the registered preview editor when one exists, otherwise
     // fall back to VS Code's default file opener.
@@ -130,20 +141,20 @@ class MediaFileItem extends vscode.TreeItem {
           arguments: [uri],
         };
 
-    // Icon: thumbnail or image preview when available; otherwise let
-    // resourceUri + active file icon theme resolve the correct icon.
-    if (thumbnailPath) {
-      this.iconPath = vscode.Uri.file(thumbnailPath);
+    // Keep linked descendants out of VS Code Git decorations: Git rejects
+    // pathspecs below symlinks. The command URI remains the file-open boundary.
+    if (thumbnailUri) {
+      this.iconPath = thumbnailUri;
     } else if (mediaType === 'image') {
       // Images use original file as icon (VSCode auto-scales)
       this.iconPath = uri;
+    } else {
+      this.iconPath = new vscode.ThemeIcon(mediaType === 'document' ? 'file' : 'file-media');
     }
-    // For other types (video/audio/document/text), no explicit iconPath —
-    // VSCode uses resourceUri to match the active file icon theme.
 
     // Tooltip: thumbnail + metadata
     const metaLines = metadata ? [fileName, ...buildMetadataTooltipLines(metadata)] : [fileName];
-    this.tooltip = createThumbnailTooltip(thumbnailPath, metaLines);
+    this.tooltip = createThumbnailTooltip(thumbnailUri, metaLines);
   }
 }
 
@@ -161,13 +172,13 @@ export class MediaLibraryTreeProvider
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   // TreeDragAndDropController
-  readonly dragMimeTypes = [ASSET_DRAG_MIME];
+  readonly dragMimeTypes = [MEDIA_LIBRARY_DRAG_MIME];
   readonly dropMimeTypes: string[] = [];
 
   private disposables: vscode.Disposable[] = [];
 
   // Caches
-  private thumbnailCache = new Map<string, string | null>();
+  private thumbnailCache = new Map<string, vscode.Uri | null>();
   private metadataCache = new Map<string, MediaFileMetadata>();
   private pendingThumbnails = new Set<string>();
   private refreshDebounceTimer?: NodeJS.Timeout;
@@ -188,18 +199,18 @@ export class MediaLibraryTreeProvider
   private thumbnailRunning = 0;
   private readonly thumbnailConcurrency = 2;
 
-  private readonly settingsService: MediaLibrarySettingsService;
+  private readonly libraryService: WorkspaceLinkedMediaLibraryService;
   private readonly thumbnailService: ThumbnailService;
   private readonly metadataExtractor: (filePath: string) => Promise<MediaFileMetadata>;
   private readonly persistentCache?: MediaMetadataCache;
 
   constructor(deps: MediaLibraryDeps) {
-    this.settingsService = deps.settingsService;
+    this.libraryService = deps.libraryService;
     this.thumbnailService = deps.thumbnailService;
     this.metadataExtractor = deps.metadataExtractor;
     this.persistentCache = deps.metadataCache;
 
-    this.disposables.push(deps.settingsService.onDidChange(() => this.refresh()));
+    this.disposables.push(deps.libraryService.onDidChange(() => this.refresh()));
     this.disposables.push(
       deps.thumbnailService.onDidGenerateThumbnail((fp) => this.debouncedRefresh(fp)),
     );
@@ -225,7 +236,17 @@ export class MediaLibraryTreeProvider
   }
 
   getMediaFileTreeItem(filePath: string): MediaLibraryItem {
-    return new MediaFileItem(filePath, path.basename(filePath));
+    const absolutePath = path.isAbsolute(filePath)
+      ? filePath
+      : this.libraryService.resolveWorkspacePath(filePath);
+    const workspacePath = path
+      .relative(this.libraryService.workspaceRoot, absolutePath)
+      .replace(/\\/gu, '/');
+    return new MediaFileItem(
+      createMediaFileProjection(workspacePath, path.basename(absolutePath)),
+      absolutePath,
+      path.basename(absolutePath),
+    );
   }
 
   async getParent(element: MediaLibraryItem): Promise<MediaLibraryItem | undefined> {
@@ -236,7 +257,7 @@ export class MediaLibraryTreeProvider
       return this.getParentForPath(element.dirPath);
     }
     if (element instanceof MediaFileItem) {
-      return this.getParentForPath(element.filePath);
+      return this.getParentForPath(element.absolutePath);
     }
     return undefined;
   }
@@ -246,8 +267,10 @@ export class MediaLibraryTreeProvider
       return this.getRootItems();
     }
     if (element instanceof LibraryRootItem) {
-      if (!element.library.accessible) return [];
-      return this.listDirectory(element.library.resolvedPath);
+      if (element.library.availability !== 'available') return [];
+      return this.listDirectory(
+        this.libraryService.resolveWorkspacePath(element.library.workspacePath),
+      );
     }
     if (element instanceof DirectoryItem) {
       return this.listDirectory(element.dirPath);
@@ -260,7 +283,7 @@ export class MediaLibraryTreeProvider
     const files = source.filter((s): s is MediaFileItem => s instanceof MediaFileItem);
     if (files.length === 0) return;
 
-    const dragData: MediaFileDragData = {
+    const dragData: MediaLibraryDragData = {
       type: 'media-file',
       files: files.map((f) => ({
         path: f.filePath,
@@ -269,7 +292,10 @@ export class MediaLibraryTreeProvider
       })),
     };
 
-    dataTransfer.set(ASSET_DRAG_MIME, new vscode.DataTransferItem(JSON.stringify(dragData)));
+    dataTransfer.set(
+      MEDIA_LIBRARY_DRAG_MIME,
+      new vscode.DataTransferItem(JSON.stringify(dragData)),
+    );
   }
 
   // =========================================================================
@@ -277,30 +303,35 @@ export class MediaLibraryTreeProvider
   // =========================================================================
 
   private async getRootItems(): Promise<MediaLibraryItem[]> {
-    const libraries = await this.settingsService.getResolvedLibraries();
+    const libraries = await this.libraryService.list();
     if (libraries.length === 0) {
       return [this.createPlaceholder()];
     }
-    return libraries.filter((lib) => lib.enabled).map((lib) => new LibraryRootItem(lib));
+    return libraries.map((library) => new LibraryRootItem(library));
   }
 
   private async getParentForPath(targetPath: string): Promise<MediaLibraryItem | undefined> {
     const parentPath = path.dirname(targetPath);
     const root = await this.findLibraryRootForPath(targetPath);
     if (!root) return undefined;
-    if (normalizePath(parentPath) === normalizePath(root.library.resolvedPath)) {
+    const rootPath = this.libraryService.resolveWorkspacePath(root.library.workspacePath);
+    if (normalizePath(parentPath) === normalizePath(rootPath)) {
       return root;
     }
     return new DirectoryItem(parentPath, path.basename(parentPath));
   }
 
   private async findLibraryRootForPath(targetPath: string): Promise<LibraryRootItem | undefined> {
-    const libraries = await this.settingsService.getResolvedLibraries();
+    const libraries = await this.libraryService.list();
     const normalizedTarget = normalizePath(targetPath);
     const candidates = libraries
-      .filter((library) => library.enabled && library.accessible)
-      .filter((library) => normalizedTarget.startsWith(normalizePath(library.resolvedPath)))
-      .sort((a, b) => b.resolvedPath.length - a.resolvedPath.length);
+      .filter((library) => library.availability === 'available')
+      .filter((library) =>
+        normalizedTarget.startsWith(
+          normalizePath(this.libraryService.resolveWorkspacePath(library.workspacePath)),
+        ),
+      )
+      .sort((a, b) => b.workspacePath.length - a.workspacePath.length);
     return candidates[0] ? new LibraryRootItem(candidates[0]) : undefined;
   }
 
@@ -339,13 +370,24 @@ export class MediaLibraryTreeProvider
           this.enqueueMetadata(filePath);
         }
 
-        let thumbnailPath: string | null | undefined = this.thumbnailCache.get(filePath);
-        if (thumbnailPath === undefined && mediaType === 'video') {
+        let thumbnailUri: vscode.Uri | null | undefined = this.thumbnailCache.get(filePath);
+        if (thumbnailUri === undefined && mediaType === 'video') {
           this.enqueueThumbnail(filePath);
-          thumbnailPath = null;
+          thumbnailUri = null;
         }
 
-        items.push(new MediaFileItem(filePath, file.name, metadata, thumbnailPath));
+        const workspacePath = path
+          .relative(this.libraryService.workspaceRoot, filePath)
+          .replace(/\\/gu, '/');
+        items.push(
+          new MediaFileItem(
+            createMediaFileProjection(workspacePath, file.name, metadata),
+            filePath,
+            file.name,
+            metadata,
+            thumbnailUri,
+          ),
+        );
       }
 
       // Cache result and start watching for changes
@@ -392,7 +434,7 @@ export class MediaLibraryTreeProvider
 
     try {
       const result = await this.thumbnailService.generate(filePath);
-      this.thumbnailCache.set(filePath, result?.path ?? null);
+      this.thumbnailCache.set(filePath, result?.uri ?? null);
       if (result) {
         this.debouncedRefresh(filePath);
       }
@@ -506,4 +548,33 @@ export class MediaLibraryTreeProvider
 
 function normalizePath(value: string): string {
   return path.resolve(value);
+}
+
+function createMediaFileProjection(
+  workspacePath: string,
+  fileName: string,
+  metadata?: MediaFileMetadata,
+): MediaLibraryProjectionEntry & { readonly locator: WorkspaceFileContentLocator } {
+  const normalizedPath = normalizeWorkspaceContentPath(workspacePath);
+  const linkedPrefix = `${WORKSPACE_MEDIA_LIBRARY_DIRECTORY}/`;
+  if (normalizedPath !== workspacePath || !workspacePath.startsWith(linkedPrefix)) {
+    throw new Error('Media Library projection requires a canonical linked workspace file path.');
+  }
+  return {
+    locator: { kind: 'workspace-file', path: workspacePath },
+    label: fileName,
+    availability: 'available',
+    capabilities: ['read', 'preview', 'bind', 'copy', 'delete'],
+    ...(metadata
+      ? {
+          metadata: {
+            mediaType: metadata.mimeType,
+            byteLength: metadata.fileSize,
+            ...(metadata.width !== undefined ? { width: metadata.width } : {}),
+            ...(metadata.height !== undefined ? { height: metadata.height } : {}),
+            ...(metadata.duration !== undefined ? { durationSeconds: metadata.duration } : {}),
+          },
+        }
+      : {}),
+  };
 }

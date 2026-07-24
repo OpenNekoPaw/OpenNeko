@@ -15,14 +15,16 @@ import {
   isMediaFile,
   isDocumentFile,
   detectMediaType,
-  type AssetMediaType,
+  WORKSPACE_MEDIA_LIBRARY_DIRECTORY,
+  validateWorkspaceLinkedMediaLibraryName,
+  type MediaFileType,
   type LocalMetadataPartition,
   type LocalMetadataPartitionRevision,
   type MediaFileMetadata,
   type SearchDocumentRepository,
+  type WorkspaceFileContentLocator,
 } from '@neko/shared';
-import { PathResolver } from '@neko/shared/path';
-import type { MediaLibrarySettingsService } from './MediaLibrarySettingsService';
+import type { WorkspaceLinkedMediaLibraryService } from './WorkspaceLinkedMediaLibraryService';
 import type { MediaMetadataCache } from './MediaMetadataCache';
 import { getLogger } from '../utils/logger';
 
@@ -35,21 +37,23 @@ const MAX_RESULTS = 200;
 // =============================================================================
 
 export interface MediaSearchResult {
-  /** Absolute file path */
+  /** Canonical resource identity used by Search and content consumers. */
+  locator: WorkspaceFileContentLocator;
+  /** Exact workspace-relative file path */
   filePath: string;
   /** File name (basename) */
   fileName: string;
   /** Library display name */
   libraryName: string;
   /** Detected media type */
-  mediaType: AssetMediaType;
+  mediaType: MediaFileType;
   /** Cached metadata (if available, not extracted on-demand) */
   metadata?: MediaFileMetadata;
 }
 
 export interface SearchOptions {
   /** Filter by media type(s). If empty or undefined, match all types. */
-  types?: AssetMediaType[];
+  types?: MediaFileType[];
   /** Maximum results to return (default MAX_RESULTS) */
   limit?: number;
 }
@@ -59,14 +63,14 @@ interface IndexEntry {
   fileName: string;
   fileNameLower: string;
   libraryName: string;
-  mediaType: AssetMediaType;
+  mediaType: MediaFileType;
 }
 
 export interface MediaLibrarySearchIndexRecord {
   readonly filePath: string;
   readonly fileName: string;
   readonly libraryName: string;
-  readonly mediaType: AssetMediaType;
+  readonly mediaType: MediaFileType;
 }
 
 export interface MediaLibrarySearchIndexStore {
@@ -74,30 +78,36 @@ export interface MediaLibrarySearchIndexStore {
   save(entries: readonly MediaLibrarySearchIndexRecord[]): Promise<void>;
 }
 
+export interface MediaLibraryRecentStore {
+  load(): Promise<readonly string[]>;
+  save(paths: readonly string[]): Promise<void>;
+}
+
 export function createLocalMetadataMediaLibrarySearchIndexStore(options: {
   readonly repository: SearchDocumentRepository;
   readonly partition: LocalMetadataPartition;
-  readonly pathResolver: PathResolver;
   readonly readRevision: () => Promise<LocalMetadataPartitionRevision | null>;
   readonly now?: () => string;
 }): MediaLibrarySearchIndexStore {
   return {
     async load() {
-      if (!(await options.readRevision())) return undefined;
+      const revision = await options.readRevision();
+      if (!revision || revision.freshness !== 'fresh') return undefined;
       const documents = await options.repository.list(options.partition);
-      const mediaDocuments = documents.filter(
-        (document) => document.partition === 'media-library' && document.fileKey,
-      );
+      const mediaDocuments = documents.filter((document) => document.partition === 'media-library');
       if (mediaDocuments.length === 0) return undefined;
-      return mediaDocuments.flatMap((document) => {
-        if (!document.fileKey) return [];
-        const filePath = options.pathResolver.resolve(document.fileKey);
-        if (!path.isAbsolute(filePath)) return [];
+      if (mediaDocuments.some((document) => document.freshness !== 'fresh')) return undefined;
+      const entries: MediaLibrarySearchIndexRecord[] = [];
+      for (const document of mediaDocuments) {
+        if (!document.fileKey || !isPortableSearchFileKey(document.fileKey)) return undefined;
+        const filePath = document.fileKey;
         const mediaType = readMediaType(document.metadata?.['mediaType']);
         const libraryName = readString(document.metadata?.['libraryName']);
-        if (!mediaType || !libraryName) return [];
-        return [{ filePath, fileName: document.label, libraryName, mediaType }];
-      });
+        if (!mediaType || !libraryName || libraryName !== readLibraryName(filePath))
+          return undefined;
+        entries.push({ filePath, fileName: document.label, libraryName, mediaType });
+      }
+      return entries;
     },
     async save(entries) {
       const updatedAt = options.now ? options.now() : new Date().toISOString();
@@ -105,7 +115,7 @@ export function createLocalMetadataMediaLibrarySearchIndexStore(options: {
         partition: options.partition,
         searchPartition: 'media-library',
         documents: entries.map((entry) => {
-          const fileKey = options.pathResolver.contract(entry.filePath).replace(/\\/gu, '/');
+          const fileKey = entry.filePath.replace(/\\/gu, '/');
           assertPortableSearchFileKey(fileKey);
           return {
             documentId: `media:${createHash('sha256').update(fileKey).digest('hex').slice(0, 24)}`,
@@ -141,22 +151,30 @@ export class MediaLibrarySearchService implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
   private readonly watchers = new Map<string, vscode.FileSystemWatcher>();
   private rebuildTimer: ReturnType<typeof setTimeout> | null = null;
+  private libraryRevision = 0;
+  private rebuildPromise: Promise<void> | null = null;
+  private projectionInvalidated = false;
+  private disposed = false;
+  private recentLoaded = false;
+  private recentPaths: string[] = [];
 
   constructor(
-    private readonly settingsService: MediaLibrarySettingsService,
+    private readonly libraryService: WorkspaceLinkedMediaLibraryService,
+    private readonly workspaceRoot: string,
     private readonly metadataCache: MediaMetadataCache,
     private readonly indexStore: MediaLibrarySearchIndexStore,
+    private readonly recentStore?: MediaLibraryRecentStore,
   ) {
     // Invalidate index when libraries change
     this.disposables.push(
-      settingsService.onDidChange(() => {
-        this.fileIndex = null;
-        this.disposeWatchers();
+      libraryService.onDidChange(() => {
+        this.scheduleLibraryRebuild();
       }),
     );
   }
 
   dispose(): void {
+    this.disposed = true;
     this.disposeWatchers();
     this.disposables.forEach((d) => d.dispose());
     if (this.rebuildTimer) clearTimeout(this.rebuildTimer);
@@ -170,9 +188,15 @@ export class MediaLibrarySearchService implements vscode.Disposable {
    * index path in the background.
    */
   async warmup(): Promise<void> {
+    const pendingRebuild = this.rebuildPromise;
+    if (pendingRebuild) await pendingRebuild;
     if (!this.fileIndex) {
-      this.fileIndex = await this.loadOrBuildIndex();
+      this.fileIndex = this.projectionInvalidated
+        ? await this.buildAndPersistIndex()
+        : await this.loadOrBuildIndex();
+      this.projectionInvalidated = false;
     }
+    await this.loadRecentProjection();
     await this.setupWatchers();
   }
 
@@ -186,19 +210,24 @@ export class MediaLibrarySearchService implements vscode.Disposable {
     if (!this.fileIndex) {
       await this.warmup();
     }
+    const fileIndex = this.fileIndex;
+    if (!fileIndex) {
+      throw new Error('Media library search warmup completed without an index.');
+    }
 
     const lower = keyword.toLowerCase();
     const typeFilter = options?.types?.length ? new Set(options.types) : null;
     const limit = options?.limit ?? MAX_RESULTS;
     const results: MediaSearchResult[] = [];
 
-    for (const entry of this.fileIndex) {
+    for (const entry of fileIndex) {
       if (!entry.fileNameLower.includes(lower)) continue;
       if (typeFilter && !typeFilter.has(entry.mediaType)) continue;
 
-      const metadata = await this.metadataCache.get(entry.filePath);
+      const metadata = await this.metadataCache.get(this.resolveWorkspacePath(entry.filePath));
 
       results.push({
+        locator: { kind: 'workspace-file', path: entry.filePath },
         filePath: entry.filePath,
         fileName: entry.fileName,
         libraryName: entry.libraryName,
@@ -209,6 +238,39 @@ export class MediaLibrarySearchService implements vscode.Disposable {
       if (results.length >= limit) break;
     }
 
+    return results;
+  }
+
+  async recordRecentUse(locator: WorkspaceFileContentLocator): Promise<void> {
+    if (!isPortableSearchFileKey(locator.path)) {
+      throw new Error('Media Library recent use requires a canonical workspace locator.');
+    }
+    await this.loadRecentProjection();
+    this.recentPaths = [
+      locator.path,
+      ...this.recentPaths.filter((path) => path !== locator.path),
+    ].slice(0, 50);
+    await this.recentStore?.save(this.recentPaths);
+  }
+
+  async getRecent(limit = 20): Promise<MediaSearchResult[]> {
+    if (!this.fileIndex) await this.warmup();
+    else await this.loadRecentProjection();
+    const entriesByPath = new Map((this.fileIndex ?? []).map((entry) => [entry.filePath, entry]));
+    const results: MediaSearchResult[] = [];
+    for (const filePath of this.recentPaths.slice(0, Math.max(0, limit))) {
+      const entry = entriesByPath.get(filePath);
+      if (!entry) continue;
+      const metadata = await this.metadataCache.get(this.resolveWorkspacePath(entry.filePath));
+      results.push({
+        locator: { kind: 'workspace-file', path: entry.filePath },
+        filePath: entry.filePath,
+        fileName: entry.fileName,
+        libraryName: entry.libraryName,
+        mediaType: entry.mediaType,
+        metadata: metadata ?? undefined,
+      });
+    }
     return results;
   }
 
@@ -226,6 +288,13 @@ export class MediaLibrarySearchService implements vscode.Disposable {
     return this.fileIndex?.length ?? 0;
   }
 
+  private async loadRecentProjection(): Promise<void> {
+    if (this.recentLoaded) return;
+    this.recentLoaded = true;
+    const stored = (await this.recentStore?.load()) ?? [];
+    this.recentPaths = stored.filter(isPortableSearchFileKey).filter(dedupeString).slice(0, 50);
+  }
+
   // =========================================================================
   // Persistent index (L0)
   // =========================================================================
@@ -234,17 +303,19 @@ export class MediaLibrarySearchService implements vscode.Disposable {
     const persisted = await this.indexStore.load();
     if (persisted !== undefined) {
       logger.info(`Loaded persisted search index: ${persisted.length} entries`);
-      return persisted.map((entry) => ({
-        ...entry,
-        fileNameLower: entry.fileName.toLowerCase(),
-      }));
+      return dedupeIndexByLocator(
+        persisted.map((entry) => ({
+          ...entry,
+          fileNameLower: entry.fileName.toLowerCase(),
+        })),
+      );
     }
 
     return this.buildAndPersistIndex();
   }
 
   private async buildAndPersistIndex(): Promise<IndexEntry[]> {
-    const entries = await this.buildIndex();
+    const entries = dedupeIndexByLocator(await this.buildIndex());
 
     try {
       await this.persistIndex(entries);
@@ -263,23 +334,25 @@ export class MediaLibrarySearchService implements vscode.Disposable {
   private async setupWatchers(): Promise<void> {
     this.disposeWatchers();
 
-    const libraries = await this.settingsService.getResolvedLibraries();
+    const libraries = await this.libraryService.list();
     for (const lib of libraries) {
-      if (!lib.enabled || !lib.accessible) continue;
+      if (lib.availability !== 'available') continue;
 
-      const pattern = new vscode.RelativePattern(lib.resolvedPath, '**/*');
+      const libraryRoot = this.resolveWorkspacePath(lib.workspacePath);
+      const pattern = new vscode.RelativePattern(libraryRoot, '**/*');
       const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
       watcher.onDidCreate((uri) => this.handleFileEvent('create', uri, lib.name));
       watcher.onDidDelete((uri) => this.handleFileEvent('delete', uri, lib.name));
 
-      this.watchers.set(lib.resolvedPath, watcher);
+      this.watchers.set(lib.workspacePath, watcher);
     }
   }
 
   private handleFileEvent(type: 'create' | 'delete', uri: vscode.Uri, libraryName: string): void {
-    const filePath = uri.fsPath;
-    const fileName = path.basename(filePath);
+    const absolutePath = uri.fsPath;
+    const filePath = path.relative(this.workspaceRoot, absolutePath).replace(/\\/gu, '/');
+    const fileName = path.basename(absolutePath);
 
     if (fileName.startsWith('.')) return;
     if (!isMediaFile(fileName) && !isDocumentFile(fileName)) return;
@@ -327,6 +400,39 @@ export class MediaLibrarySearchService implements vscode.Disposable {
     );
   }
 
+  private scheduleLibraryRebuild(): void {
+    this.libraryRevision += 1;
+    this.projectionInvalidated = true;
+    this.fileIndex = null;
+    this.disposeWatchers();
+    if (this.rebuildPromise) return;
+
+    const rebuild = this.rebuildUntilCurrent();
+    this.rebuildPromise = rebuild;
+    void rebuild
+      .catch((error) => logger.warn('Failed to rebuild media library search projection', { error }))
+      .finally(() => {
+        if (this.rebuildPromise === rebuild) this.rebuildPromise = null;
+      });
+  }
+
+  private async rebuildUntilCurrent(): Promise<void> {
+    while (!this.disposed) {
+      const revision = this.libraryRevision;
+      const entries = await this.buildAndPersistIndex();
+      if (revision !== this.libraryRevision) continue;
+
+      this.fileIndex = entries;
+      this.projectionInvalidated = false;
+      await this.setupWatchers();
+      if (revision === this.libraryRevision) return;
+
+      this.fileIndex = null;
+      this.projectionInvalidated = true;
+      this.disposeWatchers();
+    }
+  }
+
   private disposeWatchers(): void {
     for (const watcher of this.watchers.values()) {
       watcher.dispose();
@@ -339,21 +445,21 @@ export class MediaLibrarySearchService implements vscode.Disposable {
   // =========================================================================
 
   private async buildIndex(): Promise<IndexEntry[]> {
-    const libraries = await this.settingsService.getResolvedLibraries();
+    const libraries = await this.libraryService.list();
     const entries: IndexEntry[] = [];
 
     for (const lib of libraries) {
-      if (!lib.enabled || !lib.accessible) continue;
+      if (lib.availability !== 'available') continue;
 
       try {
-        await this.walkDirectory(lib.resolvedPath, lib.name, entries);
+        await this.walkDirectory(this.resolveWorkspacePath(lib.workspacePath), lib.name, entries);
       } catch (error) {
         logger.debug(`Failed to index library ${lib.name}:`, error);
       }
     }
 
     logger.info(
-      `Built search index: ${entries.length} files across ${libraries.filter((l) => l.enabled && l.accessible).length} libraries`,
+      `Built search index: ${entries.length} files across ${libraries.filter((library) => library.availability === 'available').length} libraries`,
     );
     return entries;
   }
@@ -363,30 +469,25 @@ export class MediaLibrarySearchService implements vscode.Disposable {
     libraryName: string,
     entries: IndexEntry[],
   ): Promise<void> {
-    let names: string[];
+    let children: import('node:fs').Dirent[];
     try {
-      names = await fs.readdir(dirPath);
+      children = await fs.readdir(dirPath, { withFileTypes: true });
     } catch {
       return;
     }
 
-    for (const name of names) {
+    for (const child of children) {
+      const name = child.name;
       if (name.startsWith('.')) continue;
+      if (child.isSymbolicLink()) continue;
 
       const fullPath = path.join(dirPath, name);
-
-      let stat;
-      try {
-        stat = await fs.stat(fullPath);
-      } catch {
-        continue;
-      }
-
-      if (stat.isDirectory()) {
+      if (child.isDirectory()) {
         await this.walkDirectory(fullPath, libraryName, entries);
-      } else if (stat.isFile() && (isMediaFile(name) || isDocumentFile(name))) {
+      } else if (child.isFile() && (isMediaFile(name) || isDocumentFile(name))) {
+        const workspacePath = path.relative(this.workspaceRoot, fullPath).replace(/\\/gu, '/');
         entries.push({
-          filePath: fullPath,
+          filePath: workspacePath,
           fileName: name,
           fileNameLower: name.toLowerCase(),
           libraryName,
@@ -395,24 +496,48 @@ export class MediaLibrarySearchService implements vscode.Disposable {
       }
     }
   }
+
+  private resolveWorkspacePath(workspacePath: string): string {
+    return path.join(this.workspaceRoot, ...workspacePath.split('/'));
+  }
 }
 
 function assertPortableSearchFileKey(fileKey: string): void {
-  if (
-    !fileKey.trim() ||
-    path.posix.isAbsolute(fileKey) ||
-    /^[A-Za-z]:\//u.test(fileKey) ||
-    fileKey === '..' ||
-    fileKey.startsWith('../') ||
-    fileKey.includes('/../') ||
-    fileKey.includes('/.neko/.cache/') ||
-    fileKey.startsWith('.neko/.cache/')
-  ) {
+  if (!isPortableSearchFileKey(fileKey)) {
     throw new Error(`Media search source path cannot be persisted: ${fileKey}`);
   }
 }
 
-function readMediaType(value: unknown): AssetMediaType | undefined {
+function isPortableSearchFileKey(fileKey: string): boolean {
+  const linkedPrefix = `${WORKSPACE_MEDIA_LIBRARY_DIRECTORY}/`;
+  const linkedSegments = fileKey.startsWith(linkedPrefix)
+    ? fileKey.slice(linkedPrefix.length).split('/')
+    : [];
+  const libraryName = linkedSegments[0];
+  return !(
+    !fileKey.trim() ||
+    fileKey.normalize('NFC') !== fileKey ||
+    path.posix.isAbsolute(fileKey) ||
+    /^[A-Za-z]:\//u.test(fileKey) ||
+    /^[A-Za-z][A-Za-z0-9+.-]*:/u.test(fileKey) ||
+    fileKey.startsWith('${') ||
+    fileKey === '..' ||
+    fileKey.startsWith('../') ||
+    fileKey.includes('/../') ||
+    fileKey.includes('/.neko/.cache/') ||
+    fileKey.startsWith('.neko/.cache/') ||
+    linkedSegments.length < 2 ||
+    !libraryName ||
+    validateWorkspaceLinkedMediaLibraryName(libraryName) !== undefined ||
+    linkedSegments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')
+  );
+}
+
+function readLibraryName(fileKey: string): string | undefined {
+  return fileKey.split('/')[2];
+}
+
+function readMediaType(value: unknown): MediaFileType | undefined {
   return value === 'video' ||
     value === 'audio' ||
     value === 'image' ||
@@ -425,4 +550,16 @@ function readMediaType(value: unknown): AssetMediaType | undefined {
 
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
+}
+
+function dedupeIndexByLocator(entries: readonly IndexEntry[]): IndexEntry[] {
+  const byPath = new Map<string, IndexEntry>();
+  for (const entry of entries) {
+    if (!byPath.has(entry.filePath)) byPath.set(entry.filePath, entry);
+  }
+  return [...byPath.values()];
+}
+
+function dedupeString(value: string, index: number, values: readonly string[]): boolean {
+  return values.indexOf(value) === index;
 }

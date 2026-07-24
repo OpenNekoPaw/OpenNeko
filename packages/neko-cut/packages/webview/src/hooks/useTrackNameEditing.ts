@@ -1,48 +1,29 @@
-/**
- * useTrackNameEditing Hook
- * 管理轨道名称编辑
- */
-
 import { useCallback, useRef, useState } from 'react';
-import type { ProjectData } from '../types';
+import type { TimelineTrackView } from '@neko-cut/domain';
 
-export interface TrackNameEditingOptions {
-  project: ProjectData | null;
-  updateTrack: (trackId: string, updates: Partial<{ name: string }>) => void;
-}
-
-export function useTrackNameEditing({ project, updateTrack }: TrackNameEditingOptions) {
-  // Track name editing state
-  const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
+export function useTrackNameEditing(input: {
+  readonly onRename: (trackId: string, name: string) => void;
+}) {
+  const [editingTrackId, setEditingTrackId] = useState<string>();
   const [editingTrackName, setEditingTrackName] = useState('');
   const trackNameInputRef = useRef<HTMLInputElement>(null);
 
-  // Start editing track name on double-click
-  const handleTrackNameDoubleClick = useCallback((trackId: string, currentName: string) => {
-    setEditingTrackId(trackId);
-    setEditingTrackName(currentName);
-    // Focus input after state update
-    setTimeout(() => trackNameInputRef.current?.focus(), 0);
+  const begin = useCallback((track: TimelineTrackView) => {
+    setEditingTrackId(track.trackId);
+    setEditingTrackName(track.name);
+    queueMicrotask(() => trackNameInputRef.current?.focus());
   }, []);
-
-  // Save track name edit
-  const handleSaveTrackName = useCallback(
-    (trackId: string) => {
-      if (
-        editingTrackName.trim() &&
-        editingTrackName !== project?.tracks.find((t) => t.id === trackId)?.name
-      ) {
-        updateTrack(trackId, { name: editingTrackName.trim() });
-      }
-      setEditingTrackId(null);
+  const save = useCallback(
+    (track: TimelineTrackView) => {
+      const name = editingTrackName.trim();
+      if (name && name !== track.name) input.onRename(track.trackId, name);
+      setEditingTrackId(undefined);
       setEditingTrackName('');
     },
-    [editingTrackName, updateTrack, project],
+    [editingTrackName, input],
   );
-
-  // Cancel track name edit
-  const handleCancelTrackNameEdit = useCallback(() => {
-    setEditingTrackId(null);
+  const cancel = useCallback(() => {
+    setEditingTrackId(undefined);
     setEditingTrackName('');
   }, []);
 
@@ -51,8 +32,8 @@ export function useTrackNameEditing({ project, updateTrack }: TrackNameEditingOp
     editingTrackName,
     trackNameInputRef,
     setEditingTrackName,
-    handleTrackNameDoubleClick,
-    handleSaveTrackName,
-    handleCancelTrackNameEdit,
+    begin,
+    save,
+    cancel,
   };
 }

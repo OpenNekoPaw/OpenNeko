@@ -6,8 +6,9 @@ import {
   detectMediaType,
   isDocumentFile,
   isMediaFile,
+  normalizeWorkspaceContentPath,
   resolveStorageLayout,
-  type AssetMediaType,
+  type MediaFileType,
   type EntityAssetProjectionRecord,
   type EntityAssetProjectionRepository,
   type GeneratedAsset,
@@ -23,6 +24,7 @@ import {
   type LocalMetadataPartition,
   type LocalMetadataPartitionRevision,
   type SearchDocumentRepository,
+  type WorkspaceFileContentLocator,
 } from '@neko/shared';
 import { buildProjectSearchText, matchesProjectSearchItem } from '../core/normalization';
 import type { ProjectSearchLogger } from '../core/ports';
@@ -35,49 +37,6 @@ export interface JsonReader {
 
 export interface WorkspaceFileFinder {
   findFiles(include: string, exclude?: string): Promise<readonly vscode.Uri[]>;
-}
-
-interface AssetLibraryData {
-  readonly entities?: readonly AssetLibraryEntity[];
-}
-
-interface AssetLibraryEntity {
-  readonly id?: unknown;
-  readonly name?: unknown;
-  readonly category?: unknown;
-  readonly description?: unknown;
-  readonly tags?: unknown;
-  readonly aliases?: unknown;
-  readonly variants?: unknown;
-}
-
-interface AssetVariantRecord {
-  readonly id?: string;
-  readonly name?: string;
-  readonly thumbnailPath?: string;
-  readonly files: readonly AssetFileRecord[];
-}
-
-interface AssetFileRecord {
-  readonly id?: string;
-  readonly name?: string;
-  readonly path?: string;
-  readonly mediaType?: string;
-  readonly purpose?: string;
-  readonly characterAsset?: CharacterAssetRecord;
-}
-
-interface CharacterAssetRecord {
-  readonly assetDimension?: string;
-  readonly mediaKind?: string;
-  readonly storageMode?: string;
-  readonly bundleLocator?: {
-    readonly bundlePath?: string;
-    readonly entryPath?: string;
-    readonly fragmentRef?: string;
-  };
-  readonly sourceOrigin?: string;
-  readonly sourceHash?: string;
 }
 
 interface MediaLibraryCacheQueryResult {
@@ -127,10 +86,6 @@ export interface CompatibilityProjectSearchAdaptersOptions {
   readonly jsonReader?: JsonReader;
   readonly workspaceFileFinder?: WorkspaceFileFinder;
   readonly resolveThumbnailUri?: (filePath: string) => string | undefined;
-  readonly contractPath?: (
-    filePath: string,
-    context: { readonly projectRoot: string },
-  ) => Promise<string | undefined>;
   readonly queryMediaLibrary?: (
     query: MediaLibraryRuntimeQuery,
   ) => Promise<readonly MediaLibraryRuntimeResult[]>;
@@ -140,7 +95,6 @@ export interface CompatibilityProjectSearchAdaptersOptions {
     readonly repository: SearchDocumentRepository;
     readonly partition: LocalMetadataPartition;
     readonly hasProjection: () => Promise<boolean>;
-    readonly resolveFileKey: (fileKey: string) => string | Promise<string>;
   };
   readonly entityAssetProjection?: {
     readonly repository: EntityAssetProjectionRepository;
@@ -153,15 +107,15 @@ export interface CompatibilityProjectSearchAdaptersOptions {
 export interface MediaLibraryRuntimeQuery {
   readonly keyword: string;
   readonly limit?: number;
-  readonly types?: readonly AssetMediaType[];
+  readonly types?: readonly MediaFileType[];
   readonly projectRoot?: string;
 }
 
 export interface MediaLibraryRuntimeResult {
-  readonly filePath: string;
+  readonly locator: WorkspaceFileContentLocator;
   readonly fileName?: string;
   readonly libraryName?: string;
-  readonly mediaType?: AssetMediaType;
+  readonly mediaType?: MediaFileType;
 }
 
 export function createCompatibilityProjectSearchAdapters(
@@ -172,9 +126,7 @@ export function createCompatibilityProjectSearchAdapters(
     new StorySymbolProjectSearchAdapter(
       options.workspaceFileFinder ?? new VscodeWorkspaceFileFinder(),
     ),
-    new AssetLibraryProjectSearchAdapter(jsonReader, options.resolveThumbnailUri),
     new MediaLibraryProjectSearchAdapter({
-      contractPath: options.contractPath ?? contractPathWithAssetsCommand,
       queryMediaLibrary: options.queryMediaLibrary ?? queryMediaLibraryWithAssetsCommand,
       searchProjection: options.searchProjection,
       logger: options.logger,
@@ -320,122 +272,9 @@ class StorySymbolProjectSearchAdapter extends BaseProjectSearchAdapter {
   }
 }
 
-class AssetLibraryProjectSearchAdapter extends BaseProjectSearchAdapter {
-  constructor(
-    private readonly jsonReader: JsonReader,
-    private readonly resolveThumbnailUri: ((filePath: string) => string | undefined) | undefined,
-  ) {
-    super('asset-library');
-  }
-
-  override async query(
-    query: ProjectSearchQuery,
-    context: ProjectSearchQueryContext,
-  ): Promise<readonly ProjectSearchItem[]> {
-    const projectRoot = context.projectRoot;
-    if (!projectRoot) return [];
-    const layout = resolveStorageLayout(projectRoot, os.homedir());
-    const data = await this.jsonReader.read<AssetLibraryData>(layout.project.facts.assetLibrary);
-    const entities = Array.isArray(data?.entities) ? data.entities : [];
-    const items: ProjectSearchItem[] = [];
-
-    for (const entity of entities) {
-      const id = optionalString(entity.id);
-      const name = optionalString(entity.name);
-      if (!id || !name) continue;
-
-      const category = optionalString(entity.category);
-      const description = optionalString(entity.description);
-      const tags = readStringArray(entity.tags);
-      const aliases = readStringArray(entity.aliases);
-      const variants = readVariants(entity.variants);
-      const defaultVariant = variants[0];
-      const primaryFile = defaultVariant?.files[0];
-      const characterAsset = primaryFile?.characterAsset;
-      const mediaType =
-        readAssetMediaType(primaryFile?.mediaType) ?? detectMediaTypeSafe(primaryFile?.path);
-      const thumbnailUri = defaultVariant?.thumbnailPath
-        ? this.resolveThumbnailUri?.(defaultVariant.thumbnailPath)
-        : undefined;
-      const item: ProjectSearchItem = {
-        id: `asset:${id}`,
-        kind: category === 'document' || mediaType === 'document' ? 'document' : 'asset',
-        label: name,
-        ...(description ? { description } : {}),
-        icon: iconForAssetCategory(category, mediaType),
-        source: {
-          partition: 'asset-library',
-          sourceId: id,
-          sourceKind: category,
-          filePath: layout.project.facts.assetLibrary,
-        },
-        projectRoot,
-        ...(primaryFile?.path ? { filePath: primaryFile.path } : {}),
-        canonicalName: name,
-        aliases,
-        searchText: buildProjectSearchText([
-          name,
-          category,
-          description,
-          tags,
-          aliases,
-          variants.map((variant) => variant.name ?? ''),
-          variants.flatMap((variant) => variant.files.map((file) => file.name ?? file.path ?? '')),
-          variants.flatMap((variant) =>
-            variant.files.flatMap((file) =>
-              compactStrings([
-                file.characterAsset?.assetDimension,
-                file.characterAsset?.mediaKind,
-                file.characterAsset?.storageMode,
-                file.characterAsset?.bundleLocator?.fragmentRef,
-              ]),
-            ),
-          ),
-        ]),
-        navigationData: {
-          assetId: id,
-          ...(category ? { category } : {}),
-          ...(primaryFile?.id ? { fileId: primaryFile.id } : {}),
-          ...(defaultVariant?.id ? { variantId: defaultVariant.id } : {}),
-          ...(characterAsset?.assetDimension
-            ? { assetDimension: characterAsset.assetDimension }
-            : {}),
-          ...(characterAsset?.mediaKind ? { mediaKind: characterAsset.mediaKind } : {}),
-          ...(characterAsset?.storageMode ? { storageMode: characterAsset.storageMode } : {}),
-          ...(characterAsset?.bundleLocator ? { bundleLocator: characterAsset.bundleLocator } : {}),
-        },
-        ...(thumbnailUri ? { thumbnailUri } : {}),
-        freshness: 'fresh',
-        metadata: {
-          ...(mediaType ? { mediaType } : {}),
-          ...(category ? { category } : {}),
-          ...(characterAsset?.assetDimension
-            ? { assetDimension: characterAsset.assetDimension }
-            : {}),
-          ...(characterAsset?.mediaKind ? { mediaKind: characterAsset.mediaKind } : {}),
-          ...(characterAsset?.storageMode ? { storageMode: characterAsset.storageMode } : {}),
-          ...(characterAsset?.bundleLocator ? { bundleLocator: characterAsset.bundleLocator } : {}),
-          ...(characterAsset?.sourceOrigin ? { sourceOrigin: characterAsset.sourceOrigin } : {}),
-          ...(characterAsset?.sourceHash ? { sourceHash: characterAsset.sourceHash } : {}),
-        },
-      };
-      if (matchesProjectSearchItem(item, query)) {
-        items.push(item);
-      }
-    }
-
-    this.setStatus(projectRoot, 'ready', 'fresh', items.length);
-    return items;
-  }
-}
-
 class MediaLibraryProjectSearchAdapter extends BaseProjectSearchAdapter {
   constructor(
     private readonly options: {
-      readonly contractPath: (
-        filePath: string,
-        context: { readonly projectRoot: string },
-      ) => Promise<string | undefined>;
       readonly queryMediaLibrary: (
         query: MediaLibraryRuntimeQuery,
       ) => Promise<readonly MediaLibraryRuntimeResult[]>;
@@ -498,9 +337,9 @@ class MediaLibraryProjectSearchAdapter extends BaseProjectSearchAdapter {
     const items: ProjectSearchItem[] = [];
     for (const document of documents) {
       if (document.partition !== 'media-library' || !document.fileKey) continue;
-      const filePath = await projection.resolveFileKey(document.fileKey);
-      if (!path.isAbsolute(filePath)) continue;
-      const mediaType = readAssetMediaType(document.metadata?.['mediaType']);
+      const filePath = canonicalMediaLibraryPath(document.fileKey);
+      if (!filePath) continue;
+      const mediaType = readMediaFileType(document.metadata?.['mediaType']);
       const libraryName = optionalString(document.metadata?.['libraryName']);
       if (
         !matchesMediaLibraryRawItem(projectRoot, filePath, document.label, query, {
@@ -538,10 +377,11 @@ class MediaLibraryProjectSearchAdapter extends BaseProjectSearchAdapter {
     });
     const items: ProjectSearchItem[] = [];
     for (const result of results) {
-      const filePath = optionalString(result.filePath);
+      const filePath = canonicalMediaLibraryPath(result.locator.path);
+      if (result.locator.kind !== 'workspace-file') continue;
       if (!filePath) continue;
       const fileName = optionalString(result.fileName) ?? path.basename(filePath);
-      const mediaType = readAssetMediaType(result.mediaType) ?? detectMediaTypeSafe(filePath);
+      const mediaType = readMediaFileType(result.mediaType) ?? detectMediaTypeSafe(filePath);
       if (
         !matchesMediaLibraryRawItem(projectRoot, filePath, fileName, query, {
           libraryName: optionalString(result.libraryName),
@@ -550,7 +390,7 @@ class MediaLibraryProjectSearchAdapter extends BaseProjectSearchAdapter {
       ) {
         continue;
       }
-      const item = await this.createMediaItem(projectRoot, filePath, fileName, 'fresh', {
+      const item = this.createMediaItem(projectRoot, filePath, fileName, 'fresh', {
         libraryName: optionalString(result.libraryName),
         mediaType,
       });
@@ -561,43 +401,19 @@ class MediaLibraryProjectSearchAdapter extends BaseProjectSearchAdapter {
     return items;
   }
 
-  private async createMediaItem(
+  private createMediaItem(
     projectRoot: string,
     filePath: string,
     fileName: string,
     freshness: ProjectIndexFreshness,
-    input: { readonly libraryName?: string; readonly mediaType?: AssetMediaType },
-  ): Promise<ProjectSearchItem> {
-    const portablePath = await this.portableMediaPath(projectRoot, filePath);
+    input: { readonly libraryName?: string; readonly mediaType?: MediaFileType },
+  ): ProjectSearchItem {
     return createMediaItem(projectRoot, {
-      filePath: portablePath,
-      resolvedPath: filePath,
+      filePath,
       fileName,
       freshness,
       ...input,
     });
-  }
-
-  private async portableMediaPath(projectRoot: string, filePath: string): Promise<string> {
-    if (!isLocalAbsolutePath(filePath)) return normalizeSlashes(filePath);
-    const projectRelative = contractWithProjectRoot(filePath, projectRoot);
-    if (projectRelative) return projectRelative;
-    const contracted = await this.contractPath(filePath, projectRoot);
-    if (contracted && !isLocalAbsolutePath(contracted)) return normalizeSlashes(contracted);
-    return normalizeSlashes(filePath);
-  }
-
-  private async contractPath(filePath: string, projectRoot: string): Promise<string | undefined> {
-    try {
-      return await this.options.contractPath(filePath, { projectRoot });
-    } catch (error) {
-      this.options.logger?.warn('Media library path contraction failed', {
-        projectRoot,
-        filePath,
-        error: formatUnknownError(error),
-      });
-      return undefined;
-    }
   }
 }
 
@@ -863,7 +679,7 @@ class GeneratedAssetProjectSearchAdapter extends BaseProjectSearchAdapter {
     const fileName = path.basename(filePath);
     const extension = path.extname(fileName);
     const stableRef = `generated-assets/${asset.id}${extension}`;
-    const mediaType = generatedAssetMediaType(asset.type, asset.mimeType, filePath);
+    const mediaType = generatedMediaFileType(asset.type, asset.mimeType, filePath);
     const thumbnailUri =
       mediaType === 'image' ? this.options.resolveThumbnailUri?.(filePath) : undefined;
 
@@ -938,21 +754,6 @@ class VscodeWorkspaceFileFinder implements WorkspaceFileFinder {
   }
 }
 
-async function contractPathWithAssetsCommand(
-  filePath: string,
-  context: { readonly projectRoot: string },
-): Promise<string | undefined> {
-  const contracted = await vscode.commands.executeCommand<unknown>(
-    'neko.assets.contractPath',
-    filePath,
-    {
-      owningWorkspaceRoot: context.projectRoot,
-      workspaceRoots: [context.projectRoot],
-    },
-  );
-  return typeof contracted === 'string' && contracted.length > 0 ? contracted : undefined;
-}
-
 async function queryMediaLibraryWithAssetsCommand(
   query: MediaLibraryRuntimeQuery,
 ): Promise<readonly MediaLibraryRuntimeResult[]> {
@@ -966,35 +767,23 @@ async function queryMediaLibraryWithAssetsCommand(
 
 function isMediaLibraryRuntimeResult(value: unknown): value is MediaLibraryRuntimeResult {
   if (!isRecord(value)) return false;
+  const locator = value.locator;
   return (
-    typeof value.filePath === 'string' &&
+    isRecord(locator) &&
+    locator.kind === 'workspace-file' &&
+    typeof locator.path === 'string' &&
+    canonicalMediaLibraryPath(locator.path) === locator.path &&
     (value.fileName === undefined || typeof value.fileName === 'string') &&
     (value.libraryName === undefined || typeof value.libraryName === 'string') &&
-    (value.mediaType === undefined || isAssetMediaType(value.mediaType))
+    (value.mediaType === undefined || isMediaFileType(value.mediaType))
   );
 }
 
-function queryMediaTypes(query: ProjectSearchQuery): readonly AssetMediaType[] | undefined {
+function queryMediaTypes(query: ProjectSearchQuery): readonly MediaFileType[] | undefined {
   const values = query.mediaTypes ?? query.fileTypes;
   if (!values?.length) return undefined;
-  const types = values.filter(isAssetMediaType);
+  const types = values.filter(isMediaFileType);
   return types.length > 0 ? types : undefined;
-}
-
-function contractWithProjectRoot(filePath: string, projectRoot: string): string | undefined {
-  const relativePath = path.relative(projectRoot, filePath);
-  if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-    return undefined;
-  }
-  return normalizeSlashes(relativePath);
-}
-
-function isLocalAbsolutePath(filePath: string): boolean {
-  return path.isAbsolute(filePath) || /^[A-Za-z]:[\\/]/.test(filePath) || /^\\\\/.test(filePath);
-}
-
-function normalizeSlashes(value: string): string {
-  return value.replace(/\\/g, '/');
 }
 
 function createStoryItem(
@@ -1041,16 +830,15 @@ function createMediaItem(
   projectRoot: string,
   input: {
     readonly filePath: string;
-    readonly resolvedPath: string;
     readonly fileName: string;
     readonly freshness: ProjectIndexFreshness;
     readonly libraryName?: string;
-    readonly mediaType?: AssetMediaType;
+    readonly mediaType?: MediaFileType;
   },
 ): ProjectSearchItem {
   const mediaType = input.mediaType;
   const filePath = input.filePath;
-  const resolvedPath = normalizeSlashes(input.resolvedPath);
+  const locator: WorkspaceFileContentLocator = { kind: 'workspace-file', path: filePath };
   return {
     id: `media:${filePath}`,
     kind: mediaType === 'document' || mediaType === 'text' ? 'document' : 'media',
@@ -1066,24 +854,24 @@ function createMediaItem(
     projectRoot,
     filePath,
     canonicalName: input.fileName,
-    searchText: buildProjectSearchText([
-      input.fileName,
-      filePath,
-      resolvedPath,
-      input.libraryName,
-      mediaType,
-    ]),
+    searchText: buildProjectSearchText([input.fileName, filePath, input.libraryName, mediaType]),
     navigationData: {
       filePath,
       portablePath: filePath,
-      resolvedPath,
+      locator,
       ...(input.libraryName ? { libraryName: input.libraryName } : {}),
     },
     freshness: input.freshness,
     metadata: {
       ...(mediaType ? { mediaType } : {}),
+      locator,
     },
   };
+}
+
+function canonicalMediaLibraryPath(value: string): string | undefined {
+  const normalized = normalizeWorkspaceContentPath(value);
+  return normalized === value && value.startsWith('neko/assets/') ? value : undefined;
 }
 
 function matchesMediaLibraryRawItem(
@@ -1091,7 +879,7 @@ function matchesMediaLibraryRawItem(
   filePath: string,
   fileName: string,
   query: ProjectSearchQuery,
-  input: { readonly libraryName?: string; readonly mediaType?: AssetMediaType },
+  input: { readonly libraryName?: string; readonly mediaType?: MediaFileType },
 ): boolean {
   return matchesProjectSearchItem(
     {
@@ -1126,83 +914,33 @@ async function readWorkspaceText(filePath: string): Promise<string> {
   }
 }
 
-function readVariants(value: unknown): readonly AssetVariantRecord[] {
-  if (!Array.isArray(value)) return [];
-  return value.map((item) => {
-    const record = isRecord(item) ? item : {};
-    return {
-      id: optionalString(record.id),
-      name: optionalString(record.name),
-      thumbnailPath: optionalString(record.thumbnailPath),
-      files: readAssetFiles(record.files),
-    };
-  });
-}
-
-function readAssetFiles(value: unknown): readonly AssetFileRecord[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .filter((item): item is Record<string, unknown> => isRecord(item))
-    .map((item) => ({
-      id: optionalString(item.id),
-      name: optionalString(item.name),
-      path: optionalString(item.path),
-      mediaType: optionalString(item.mediaType),
-      purpose: optionalString(item.purpose),
-      characterAsset: readCharacterAsset(item.characterAsset),
-    }));
-}
-
-function readCharacterAsset(value: unknown): CharacterAssetRecord | undefined {
-  if (!isRecord(value)) return undefined;
-  const bundleLocator = isRecord(value.bundleLocator)
-    ? {
-        bundlePath: optionalString(value.bundleLocator.bundlePath),
-        entryPath: optionalString(value.bundleLocator.entryPath),
-        fragmentRef: optionalString(value.bundleLocator.fragmentRef),
-      }
-    : undefined;
-  return {
-    assetDimension: optionalString(value.assetDimension),
-    mediaKind: optionalString(value.mediaKind),
-    storageMode: optionalString(value.storageMode),
-    ...(bundleLocator ? { bundleLocator } : {}),
-    sourceOrigin: optionalString(value.sourceOrigin),
-    sourceHash: optionalString(value.sourceHash),
-  };
-}
-
 function readStringArray(value: unknown): readonly string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
     : [];
 }
 
-function compactStrings(values: readonly (string | undefined)[]): readonly string[] {
-  return values.filter((value): value is string => typeof value === 'string' && value.length > 0);
+function readMediaFileType(value: unknown): MediaFileType | undefined {
+  return isMediaFileType(value) ? value : undefined;
 }
 
-function readAssetMediaType(value: unknown): AssetMediaType | undefined {
-  return isAssetMediaType(value) ? value : undefined;
-}
-
-function detectMediaTypeSafe(filePath: string | undefined): AssetMediaType | undefined {
+function detectMediaTypeSafe(filePath: string | undefined): MediaFileType | undefined {
   if (!filePath || (!isMediaFile(filePath) && !isDocumentFile(filePath))) return undefined;
   return detectMediaType(filePath);
 }
 
-function generatedAssetMediaType(
+function generatedMediaFileType(
   type: GeneratedAsset['type'],
   mimeType: string,
   filePath: string,
-): AssetMediaType | undefined {
+): MediaFileType | undefined {
   if (type === 'generated-image' || mimeType.startsWith('image/')) return 'image';
   if (type === 'generated-video' || mimeType.startsWith('video/')) return 'video';
   if (type === 'generated-audio' || mimeType.startsWith('audio/')) return 'audio';
   return detectMediaTypeSafe(filePath);
 }
 
-function isAssetMediaType(value: unknown): value is AssetMediaType {
+function isMediaFileType(value: unknown): value is MediaFileType {
   return (
     value === 'video' ||
     value === 'audio' ||
@@ -1213,20 +951,7 @@ function isAssetMediaType(value: unknown): value is AssetMediaType {
   );
 }
 
-function iconForAssetCategory(
-  category: string | undefined,
-  mediaType: AssetMediaType | undefined,
-): string {
-  if (category === 'character') return '🎭';
-  if (category === 'environment') return '🏞';
-  if (category === 'object') return '◆';
-  if (category === 'vehicle') return '▰';
-  if (category === 'audio') return '♪';
-  if (category === 'document') return '📄';
-  return iconForMediaType(mediaType);
-}
-
-function iconForMediaType(mediaType: AssetMediaType | undefined): string {
+function iconForMediaType(mediaType: MediaFileType | undefined): string {
   if (mediaType === 'video') return '🎬';
   if (mediaType === 'audio') return '♪';
   if (mediaType === 'image') return '🖼';

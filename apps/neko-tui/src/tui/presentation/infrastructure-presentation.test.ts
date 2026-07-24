@@ -21,8 +21,8 @@ const MCP_SERVERS: readonly TerminalMcpServerSnapshot[] = [
     toolCount: 2,
   },
   {
-    id: 'asset-library',
-    name: 'asset-library',
+    id: 'reference-service',
+    name: 'reference-service',
     enabled: false,
     connected: false,
     transport: 'custom-http',
@@ -80,7 +80,7 @@ describe('infrastructure command presenters', () => {
       'filesystem',
       'Filesystem Provider',
       'stdio+vendor-detail',
-      'asset-library',
+      'reference-service',
       'custom-http',
     ]) {
       expect(en.output).toContain(stableValue);

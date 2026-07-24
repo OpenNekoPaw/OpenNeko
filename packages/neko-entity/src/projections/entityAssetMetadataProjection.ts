@@ -4,7 +4,7 @@ import {
   type CreativeEntityOccurrenceProjection,
   type CreativeEntityRelationshipProjection,
   type CreativeEntitySourceMetadata,
-  type EntityAssetBinding,
+  type EntityRepresentationBinding,
   type EntityAssetProjectionRecord,
   type EntityAssetProjectionRepository,
   type LocalMetadataPartition,
@@ -15,7 +15,7 @@ export interface EntityAssetMetadataProjectorOptions {
   readonly partition: LocalMetadataPartition;
   readonly repository: EntityAssetProjectionRepository;
   readonly listCandidates: () => Promise<readonly CreativeEntityCandidate[]>;
-  readonly listBindings: () => Promise<readonly EntityAssetBinding[]>;
+  readonly listBindings: () => Promise<readonly EntityRepresentationBinding[]>;
   readonly now?: () => string;
 }
 
@@ -86,7 +86,7 @@ function candidateProjection(
 }
 
 function bindingProjection(
-  binding: EntityAssetBinding,
+  binding: EntityRepresentationBinding,
   updatedAt: string,
 ): EntityAssetProjectionRecord {
   return {
@@ -94,13 +94,12 @@ function bindingProjection(
     kind: 'binding-availability',
     sourceId: 'neko-entity-facts',
     entityId: binding.entityId,
-    assetRef: binding.assetRef,
     freshness: 'fresh',
     value: {
       bindingId: binding.id,
       entityId: binding.entityId,
       entityKind: binding.entityKind,
-      assetRef: binding.assetRef,
+      representation: binding.representation,
       role: binding.role,
       status: binding.status,
       availability: binding.availability,

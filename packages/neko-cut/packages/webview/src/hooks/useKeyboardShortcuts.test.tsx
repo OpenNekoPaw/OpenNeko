@@ -3,39 +3,40 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProjectData } from '../types';
-import { useEditorStore } from '../stores/editor-store';
-import { useKeyboardShortcuts } from './useKeyboardShortcuts';
-
-vi.mock('./useVSCodeMessaging', () => ({
-  useVSCodeMessaging: () => ({}),
-}));
+import {
+  useKeyboardShortcuts,
+  type CutKeyboardShortcutActions,
+  type CutKeyboardShortcutState,
+} from './useKeyboardShortcuts';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+const state: CutKeyboardShortcutState = {
+  hasView: true,
+  hasSelection: true,
+  hasClipboard: true,
+  canSplit: true,
+};
 
 describe('useKeyboardShortcuts', () => {
   let host: HTMLDivElement;
   let root: Root;
+  let actions: CutKeyboardShortcutActions;
 
   beforeEach(() => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
-    useEditorStore.setState(createKeyboardState(), true);
+    actions = createActions();
   });
 
   afterEach(() => {
-    act(() => {
-      root.unmount();
-    });
+    act(() => root.unmount());
     host.remove();
   });
 
-  it('keeps Delete, Space, and primary+A inside text inputs', () => {
-    act(() => {
-      root.render(<KeyboardHarness />);
-    });
-
+  it('keeps editor shortcuts inside text inputs', () => {
+    act(() => root.render(<KeyboardHarness actions={actions} />));
     const input = document.createElement('input');
     document.body.appendChild(input);
     input.focus();
@@ -43,125 +44,65 @@ describe('useKeyboardShortcuts', () => {
     act(() => {
       input.dispatchEvent(createKeyEvent('Delete', 'Delete'));
       input.dispatchEvent(createKeyEvent(' ', 'Space'));
-      input.dispatchEvent(createKeyEvent('a', 'KeyA', { metaKey: true }));
     });
 
-    expect(useEditorStore.getState().selectedElements).toEqual([
-      { trackId: 'track-1', elementId: 'clip-1' },
-    ]);
-    expect(useEditorStore.getState().isPlaying).toBe(false);
-
+    expect(actions.deleteSelection).not.toHaveBeenCalled();
+    expect(actions.togglePlayback).not.toHaveBeenCalled();
     input.remove();
   });
 
   it('ignores editor shortcuts during IME composition', () => {
-    act(() => {
-      root.render(<KeyboardHarness />);
-    });
-
-    act(() => {
-      window.dispatchEvent(createKeyEvent(' ', 'Space', { isComposing: true }));
-      window.dispatchEvent(createKeyEvent('Enter', 'Enter', { isComposing: true }));
-    });
-
-    expect(useEditorStore.getState().isPlaying).toBe(false);
+    act(() => root.render(<KeyboardHarness actions={actions} />));
+    act(() => window.dispatchEvent(createKeyEvent(' ', 'Space', { isComposing: true })));
+    expect(actions.togglePlayback).not.toHaveBeenCalled();
   });
 
   it('dispatches editor shortcuts when the editor owns the key event', () => {
-    act(() => {
-      root.render(<KeyboardHarness />);
-    });
-
+    act(() => root.render(<KeyboardHarness actions={actions} />));
     act(() => {
       window.dispatchEvent(createKeyEvent('Delete', 'Delete'));
-    });
-    expect(useEditorStore.getState().selectedElements).toEqual([]);
-
-    act(() => {
-      window.dispatchEvent(createKeyEvent('a', 'KeyA', { ctrlKey: true }));
-    });
-    expect(useEditorStore.getState().selectedElements).toEqual([
-      { trackId: 'track-1', elementId: 'clip-2' },
-    ]);
-
-    act(() => {
       window.dispatchEvent(createKeyEvent(' ', 'Space'));
+      window.dispatchEvent(createKeyEvent('d', 'KeyD', { ctrlKey: true }));
     });
-    expect(useEditorStore.getState().isPlaying).toBe(true);
+    expect(actions.deleteSelection).toHaveBeenCalledOnce();
+    expect(actions.togglePlayback).toHaveBeenCalledOnce();
+    expect(actions.duplicateSelection).toHaveBeenCalledOnce();
   });
 
   it('leaves primary+S to the VS Code workbench save keybinding', () => {
-    act(() => {
-      root.render(<KeyboardHarness />);
-    });
-
+    act(() => root.render(<KeyboardHarness actions={actions} />));
     const event = createKeyEvent('s', 'KeyS', { metaKey: true });
-    act(() => {
-      window.dispatchEvent(event);
-    });
-
+    act(() => window.dispatchEvent(event));
     expect(event.defaultPrevented).toBe(false);
+    expect(actions.split).not.toHaveBeenCalled();
   });
 });
 
-function KeyboardHarness(): React.ReactElement | null {
-  useKeyboardShortcuts();
+function KeyboardHarness({
+  actions,
+}: {
+  readonly actions: CutKeyboardShortcutActions;
+}): React.ReactElement | null {
+  useKeyboardShortcuts({ enabled: true, state, actions });
   return null;
 }
 
-function createKeyboardState(): ReturnType<typeof useEditorStore.getState> {
-  const project = createProject();
-
+function createActions(): CutKeyboardShortcutActions {
   return {
-    ...useEditorStore.getState(),
-    project,
-    currentTime: 1,
-    isPlaying: false,
-    selectedElements: [{ trackId: 'track-1', elementId: 'clip-1' }],
-  };
-}
-
-function createProject(): ProjectData {
-  return {
-    version: '2.0',
-    name: 'Keyboard Test',
-    resolution: { width: 1920, height: 1080 },
-    fps: 30,
-    tracks: [
-      {
-        id: 'track-1',
-        name: 'Video',
-        type: 'media',
-        muted: false,
-        locked: false,
-        hidden: false,
-        isMain: true,
-        elements: [createMediaElement('clip-1', 0), createMediaElement('clip-2', 2)],
-      },
-    ],
-  };
-}
-
-function createMediaElement(
-  id: string,
-  startTime: number,
-): ProjectData['tracks'][number]['elements'][number] {
-  return {
-    id,
-    type: 'media',
-    name: id,
-    src: `${id}.mp4`,
-    startTime,
-    duration: 2,
-    trimStart: 0,
-    trimEnd: 0,
-    transform: { x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, anchorX: 0, anchorY: 0 },
-    opacity: 1,
-    blendMode: 'normal',
-    effects: [],
-    muted: false,
-    hidden: false,
-    locked: false,
+    togglePlayback: vi.fn(),
+    seekByFrames: vi.fn(),
+    seekStart: vi.fn(),
+    seekEnd: vi.fn(),
+    undo: vi.fn(),
+    redo: vi.fn(),
+    split: vi.fn(),
+    duplicateSelection: vi.fn(),
+    cutSelection: vi.fn(),
+    copySelection: vi.fn(),
+    paste: vi.fn(),
+    selectAll: vi.fn(),
+    deleteSelection: vi.fn(),
+    clearSelection: vi.fn(),
   };
 }
 

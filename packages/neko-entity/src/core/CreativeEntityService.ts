@@ -9,16 +9,18 @@ import type {
   CreativeEntityOperationResult,
   CreativeEntityQuery,
   CreativeEntityRef,
-  EntityAssetBinding,
+  EntityRepresentationBinding,
+  EntityRepresentationRole,
+  EntityRepresentationTarget,
   EntityAssetRequirement,
   VisualIdentityDraft,
 } from '@neko/shared';
-import { isCreativeEntityKind } from '@neko/shared';
+import { contentLocatorKey, isCreativeEntityKind } from '@neko/shared';
 import { buildEntityId, normalizeAliasList, stableIdPart } from './adapters';
 import { EntityCandidateStore, type CreateEntityCandidateInput } from './candidateStore';
 import { ProjectEntityStore } from './entityStore';
 import {
-  EntityAssetBindingService,
+  EntityRepresentationBindingService,
   EntityAssetRequirementService,
   VisualIdentityDraftService,
 } from './factStores';
@@ -26,7 +28,7 @@ import type { EntityRuntimePorts } from './ports';
 import { nowFromPorts } from './ports';
 import {
   resolveCharacterRegistryPath,
-  resolveEntityAssetBindingsPath,
+  resolveEntityRepresentationBindingsPath,
   resolveEntityAssetRequirementsPath,
   resolveEntityCandidateFilePath,
   resolveProjectEntityFilePath,
@@ -38,7 +40,7 @@ export interface CreativeEntityServiceOptions {
   readonly ports: EntityRuntimePorts;
   readonly store?: ProjectEntityStore;
   readonly candidates?: EntityCandidateStore;
-  readonly bindings?: EntityAssetBindingService;
+  readonly bindings?: EntityRepresentationBindingService;
   readonly requirements?: EntityAssetRequirementService;
   readonly drafts?: VisualIdentityDraftService;
 }
@@ -78,9 +80,26 @@ export interface MergeEntitiesInput {
   readonly targetEntityId: string;
 }
 
-export interface EntityAssetBindingLifecycleInput {
+export interface EntityRepresentationBindingLifecycleInput {
   readonly bindingIds: readonly string[];
   readonly orphanedAt?: string;
+}
+
+export interface RebindEntityRepresentationInput {
+  readonly bindingId: string;
+  readonly representation: EntityRepresentationTarget;
+}
+
+export interface BindEntityRepresentationInput {
+  readonly entityId: string;
+  readonly entityKind: CreativeEntityKind;
+  readonly representation: EntityRepresentationTarget;
+  readonly role: EntityRepresentationRole;
+  readonly isDefault?: boolean;
+}
+
+export interface BindEntityRepresentationResult extends CreativeEntityOperationResult {
+  readonly binding: EntityRepresentationBinding;
 }
 
 export interface NameEntityCandidateInput {
@@ -93,14 +112,14 @@ export class CreativeEntityService {
   private generation = 0;
   readonly store: ProjectEntityStore;
   readonly candidates: EntityCandidateStore;
-  readonly bindings: EntityAssetBindingService;
+  readonly bindings: EntityRepresentationBindingService;
   readonly requirements: EntityAssetRequirementService;
   readonly drafts: VisualIdentityDraftService;
 
   constructor(private readonly options: CreativeEntityServiceOptions) {
     this.store = options.store ?? new ProjectEntityStore(options);
     this.candidates = options.candidates ?? new EntityCandidateStore(options);
-    this.bindings = options.bindings ?? new EntityAssetBindingService(options);
+    this.bindings = options.bindings ?? new EntityRepresentationBindingService(options);
     this.requirements = options.requirements ?? new EntityAssetRequirementService(options);
     this.drafts = options.drafts ?? new VisualIdentityDraftService(options);
   }
@@ -377,7 +396,7 @@ export class CreativeEntityService {
           kind: 'binding',
           id: source.id,
           entityRef: this.entityRef(survivor),
-          factRef: resolveEntityAssetBindingsPath(this.options.projectRoot),
+          factRef: resolveEntityRepresentationBindingsPath(this.options.projectRoot),
         },
         {
           kind: 'requirement',
@@ -400,7 +419,9 @@ export class CreativeEntityService {
     };
   }
 
-  async upsertBinding(binding: EntityAssetBinding): Promise<CreativeEntityOperationResult> {
+  async upsertBinding(
+    binding: EntityRepresentationBinding,
+  ): Promise<CreativeEntityOperationResult> {
     await this.bindings.upsert(binding);
     const entity = await this.store.get(binding.entityId);
     return this.result('bind', entity ? [entity] : [], [
@@ -412,12 +433,42 @@ export class CreativeEntityService {
           entityKind: binding.entityKind,
           projectRoot: this.options.projectRoot,
         },
-        factRef: resolveEntityAssetBindingsPath(this.options.projectRoot),
+        factRef: resolveEntityRepresentationBindingsPath(this.options.projectRoot),
       },
     ]);
   }
 
-  async setDefaultBinding(binding: EntityAssetBinding): Promise<CreativeEntityOperationResult> {
+  async bindRepresentation(
+    input: BindEntityRepresentationInput,
+  ): Promise<BindEntityRepresentationResult> {
+    const entity = await this.store.get(input.entityId);
+    if (!entity) {
+      throw new Error(`Creative entity not found: ${input.entityId}`);
+    }
+    if (entity.kind !== input.entityKind) {
+      throw new Error(
+        `Creative entity kind mismatch: expected ${entity.kind}, received ${input.entityKind}`,
+      );
+    }
+    const binding: EntityRepresentationBinding = {
+      id: buildBindingId(input),
+      entityId: input.entityId,
+      entityKind: input.entityKind,
+      representation: input.representation,
+      role: input.role,
+      ...(input.isDefault === true ? { isDefault: true } : {}),
+      status: 'confirmed',
+      availability: 'active',
+      source: 'agent',
+      updatedAt: nowFromPorts(this.options.ports),
+    };
+    const operation = await this.upsertBinding(binding);
+    return { ...operation, binding };
+  }
+
+  async setDefaultBinding(
+    binding: EntityRepresentationBinding,
+  ): Promise<CreativeEntityOperationResult> {
     await this.bindings.setDefault(binding);
     const entity = await this.store.get(binding.entityId);
     return this.result('set-default-binding', entity ? [entity] : [], [
@@ -429,12 +480,12 @@ export class CreativeEntityService {
           entityKind: binding.entityKind,
           projectRoot: this.options.projectRoot,
         },
-        factRef: resolveEntityAssetBindingsPath(this.options.projectRoot),
+        factRef: resolveEntityRepresentationBindingsPath(this.options.projectRoot),
       },
     ]);
   }
 
-  async unbindAsset(bindingId: string): Promise<CreativeEntityOperationResult> {
+  async unbindRepresentation(bindingId: string): Promise<CreativeEntityOperationResult> {
     const binding = (await this.bindings.list()).find((candidate) => candidate.id === bindingId);
     await this.bindings.remove(bindingId);
     const entity = binding ? await this.store.get(binding.entityId) : undefined;
@@ -451,18 +502,19 @@ export class CreativeEntityService {
               },
             }
           : {}),
-        factRef: resolveEntityAssetBindingsPath(this.options.projectRoot),
+        factRef: resolveEntityRepresentationBindingsPath(this.options.projectRoot),
       },
     ]);
   }
 
   async markBindingsOrphaned(
-    input: EntityAssetBindingLifecycleInput,
+    input: EntityRepresentationBindingLifecycleInput,
   ): Promise<CreativeEntityOperationResult> {
     return this.updateBindingAvailability('mark-binding-orphaned', input.bindingIds, (binding) => {
       if (binding.availability === 'orphaned') return binding;
+      const { isDefault: _isDefault, ...withoutDefault } = binding;
       return {
-        ...binding,
+        ...withoutDefault,
         availability: 'orphaned',
         orphanedAt: input.orphanedAt ?? nowFromPorts(this.options.ports),
         updatedAt: nowFromPorts(this.options.ports),
@@ -470,26 +522,36 @@ export class CreativeEntityService {
     });
   }
 
-  async restoreOrphanedBindings(
-    input: EntityAssetBindingLifecycleInput,
+  async rebindRepresentation(
+    input: RebindEntityRepresentationInput,
   ): Promise<CreativeEntityOperationResult> {
-    return this.updateBindingAvailability('restore-binding', input.bindingIds, (binding) => {
-      if (binding.availability !== 'orphaned') return binding;
-      const { orphanedAt: _orphanedAt, ...rest } = binding;
-      return {
-        ...rest,
-        availability: 'active',
-        updatedAt: nowFromPorts(this.options.ports),
-      };
-    });
+    const binding = (await this.bindings.list()).find(
+      (candidate) => candidate.id === input.bindingId,
+    );
+    if (!binding) throw new Error(`Entity representation binding not found: ${input.bindingId}`);
+    if (binding.availability !== 'orphaned') {
+      throw new Error(`Entity representation binding is not orphaned: ${input.bindingId}`);
+    }
+    const { isDefault: _isDefault, orphanedAt: _orphanedAt, ...retained } = binding;
+    const rebound: EntityRepresentationBinding = {
+      ...retained,
+      representation: input.representation,
+      availability: 'active',
+      updatedAt: nowFromPorts(this.options.ports),
+    };
+    await this.bindings.upsert(rebound);
+    const entity = await this.store.get(rebound.entityId);
+    return this.result('rebind', entity ? [entity] : [], [
+      bindingChangedRef(rebound, this.options.projectRoot),
+    ]);
   }
 
   async archiveBindings(
-    input: EntityAssetBindingLifecycleInput,
+    input: EntityRepresentationBindingLifecycleInput,
   ): Promise<CreativeEntityOperationResult> {
     return this.updateBindingAvailability('archive-binding', input.bindingIds, (binding) => {
       if (binding.availability === 'archived') return binding;
-      const { orphanedAt: _orphanedAt, ...rest } = binding;
+      const { isDefault: _isDefault, orphanedAt: _orphanedAt, ...rest } = binding;
       return {
         ...rest,
         availability: 'archived',
@@ -619,13 +681,13 @@ export class CreativeEntityService {
   }
 
   private async updateBindingAvailability(
-    action: 'mark-binding-orphaned' | 'restore-binding' | 'archive-binding',
+    action: 'mark-binding-orphaned' | 'archive-binding',
     bindingIds: readonly string[],
-    operation: (binding: EntityAssetBinding) => EntityAssetBinding,
+    operation: (binding: EntityRepresentationBinding) => EntityRepresentationBinding,
   ): Promise<CreativeEntityOperationResult> {
     const idSet = new Set(bindingIds);
     const bindings = await this.bindings.list();
-    const changed: EntityAssetBinding[] = [];
+    const changed: EntityRepresentationBinding[] = [];
     const nextBindings = bindings.map((binding) => {
       if (!idSet.has(binding.id)) return binding;
       const next = operation(binding);
@@ -646,7 +708,7 @@ export class CreativeEntityService {
   }
 
   private async entitiesForBindings(
-    bindings: readonly EntityAssetBinding[],
+    bindings: readonly EntityRepresentationBinding[],
   ): Promise<readonly CreativeEntity[]> {
     const entities: CreativeEntity[] = [];
     const seen = new Set<string>();
@@ -791,7 +853,7 @@ function entityChangedRef(entity: CreativeEntity, factRef: string): CreativeEnti
 }
 
 function bindingChangedRef(
-  binding: EntityAssetBinding,
+  binding: EntityRepresentationBinding,
   projectRoot: string,
 ): CreativeEntityChangedRef {
   return {
@@ -802,7 +864,7 @@ function bindingChangedRef(
       entityKind: binding.entityKind,
       projectRoot,
     },
-    factRef: resolveEntityAssetBindingsPath(projectRoot),
+    factRef: resolveEntityRepresentationBindingsPath(projectRoot),
   };
 }
 
@@ -825,7 +887,7 @@ export function buildBindingId(input: {
   readonly entityId: string;
   readonly entityKind: CreativeEntityKind;
   readonly role: string;
-  readonly assetRef: string;
+  readonly representation: EntityRepresentationTarget;
 }): string {
-  return `binding:${input.entityKind}:${stableIdPart(input.entityId)}:${stableIdPart(input.role)}:${stableIdPart(input.assetRef)}`;
+  return `binding:${input.entityKind}:${stableIdPart(input.entityId)}:${stableIdPart(input.role)}:${stableIdPart(contentLocatorKey(input.representation))}`;
 }

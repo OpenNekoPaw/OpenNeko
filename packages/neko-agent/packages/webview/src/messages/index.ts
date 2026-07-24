@@ -407,11 +407,6 @@ export const AgentHostMessages = {
     });
   },
 
-  /** Reveal an asset entity in the asset library view. */
-  revealAsset: (assetId: string) => {
-    postWebviewMessage({ type: 'revealAsset', assetId });
-  },
-
   /**
    * Invoke a skill via slash command
    * @param command - Slash command (without /)

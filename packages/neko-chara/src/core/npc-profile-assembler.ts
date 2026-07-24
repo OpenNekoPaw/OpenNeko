@@ -5,7 +5,8 @@ import type {
   CreativeEntityRef,
   CreativeEntityRelationshipProjection,
   CreativeEntityRepresentationHint,
-  EntityAssetBinding,
+  EntityRepresentationBinding,
+  EntityRepresentationTarget,
   NpcProfileFact,
   NpcProfileFactSource,
   NpcProfileRelationshipValue,
@@ -16,9 +17,9 @@ import type {
   NpcSerializableValue,
   VisualIdentityDraft,
 } from '@neko/shared';
+import { contentLocatorKey } from '@neko/shared';
 
-export interface NpcProfileAssetMetadata {
-  readonly assetRef: string;
+export interface NpcProfileRepresentationMetadata {
   readonly label?: string;
   readonly summary?: string;
   readonly facts?: readonly NpcProfileFact[];
@@ -27,7 +28,9 @@ export interface NpcProfileAssetMetadata {
 export interface NpcProfileAssemblerReaders {
   readonly getEntity: (entityId: string) => Promise<CreativeEntity | undefined>;
   readonly getCandidate?: (candidateId: string) => Promise<CreativeEntityCandidate | undefined>;
-  readonly listBindings?: (entityRef: CreativeEntityRef) => Promise<readonly EntityAssetBinding[]>;
+  readonly listBindings?: (
+    entityRef: CreativeEntityRef,
+  ) => Promise<readonly EntityRepresentationBinding[]>;
   readonly listVisualDrafts?: (
     entityRef: CreativeEntityRef,
   ) => Promise<readonly VisualIdentityDraft[]>;
@@ -40,10 +43,10 @@ export interface NpcProfileAssemblerReaders {
   readonly listRepresentationHints?: (
     entityRef: CreativeEntityRef,
   ) => Promise<readonly CreativeEntityRepresentationHint[]>;
-  readonly describeAsset?: (
-    assetRef: string,
+  readonly describeRepresentation?: (
+    representation: EntityRepresentationTarget,
     entityRef: CreativeEntityRef,
-  ) => Promise<NpcProfileAssetMetadata | undefined>;
+  ) => Promise<NpcProfileRepresentationMetadata | undefined>;
 }
 
 export interface AssembleNpcProfileInput {
@@ -114,7 +117,10 @@ export class NpcProfileAssembler {
       bindings.value,
       representationHints.value,
     );
-    const assetFacts = await this.collectAssetFacts(entityRef, representationBindings);
+    const representationFacts = await this.collectRepresentationFacts(
+      entityRef,
+      representationBindings,
+    );
     const visualFacts = this.collectVisualFacts(drafts.value);
     const relationshipFacts = this.collectRelationshipFacts(entityRef, relationships.value);
     const occurrenceFacts = this.collectOccurrenceFacts(occurrences.value);
@@ -124,7 +130,7 @@ export class NpcProfileAssembler {
     const sceneAppearances = collectSceneAppearances(occurrences.value);
     const allFacts = dedupeFacts([
       ...facts,
-      ...assetFacts,
+      ...representationFacts,
       ...visualFacts,
       ...occurrenceFacts,
       ...userSupplementFacts,
@@ -208,14 +214,14 @@ export class NpcProfileAssembler {
 
   private collectRepresentationBindings(
     entityRef: CreativeEntityRef,
-    bindings: readonly EntityAssetBinding[],
+    bindings: readonly EntityRepresentationBinding[],
     hints: readonly CreativeEntityRepresentationHint[],
   ): readonly NpcProfileRepresentationBinding[] {
     const fromBindings = bindings
       .filter((binding) => binding.entityId === entityRef.entityId && binding.status !== 'rejected')
       .map((binding): NpcProfileRepresentationBinding => ({
         role: binding.role,
-        assetRef: binding.assetRef,
+        representation: binding.representation,
         isDefault: binding.isDefault,
         sourceRef: binding.id,
       }));
@@ -224,7 +230,7 @@ export class NpcProfileAssembler {
       .flatMap((hint) =>
         hint.roles.map((role): NpcProfileRepresentationBinding => ({
           role,
-          assetRef: hint.assetRef,
+          representation: hint.representation,
           sourceRef: hint.source.sourceRef,
           summary: hint.reason,
         })),
@@ -233,28 +239,36 @@ export class NpcProfileAssembler {
     return dedupeRepresentationBindings([...fromBindings, ...fromHints]);
   }
 
-  private async collectAssetFacts(
+  private async collectRepresentationFacts(
     entityRef: CreativeEntityRef,
     bindings: readonly NpcProfileRepresentationBinding[],
   ): Promise<readonly NpcProfileFact[]> {
-    if (!this.readers.describeAsset) return [];
+    if (!this.readers.describeRepresentation) return [];
 
     const facts: NpcProfileFact[] = [];
     for (const binding of bindings) {
-      const metadata = await this.readers.describeAsset(binding.assetRef, entityRef);
+      const metadata = await this.readers.describeRepresentation(binding.representation, entityRef);
       if (!metadata) continue;
       if (metadata.label) {
         facts.push(
-          fact(`asset.${binding.role}.label`, metadata.label, 'asset-metadata', 'confirmed', {
-            sourceRef: metadata.assetRef,
-          }),
+          fact(
+            `representation.${binding.role}.label`,
+            metadata.label,
+            'representation-metadata',
+            'confirmed',
+            { sourceRef: contentLocatorKey(binding.representation) },
+          ),
         );
       }
       if (metadata.summary) {
         facts.push(
-          fact(`asset.${binding.role}.summary`, metadata.summary, 'asset-metadata', 'confirmed', {
-            sourceRef: metadata.assetRef,
-          }),
+          fact(
+            `representation.${binding.role}.summary`,
+            metadata.summary,
+            'representation-metadata',
+            'confirmed',
+            { sourceRef: contentLocatorKey(binding.representation) },
+          ),
         );
       }
       facts.push(...(metadata.facts ?? []));
@@ -315,7 +329,7 @@ export class NpcProfileAssembler {
   private async callOptionalReader(
     key: 'listBindings',
     entityRef: CreativeEntityRef,
-  ): Promise<ReaderResult<readonly EntityAssetBinding[]>>;
+  ): Promise<ReaderResult<readonly EntityRepresentationBinding[]>>;
   private async callOptionalReader(
     key: 'listVisualDrafts',
     entityRef: CreativeEntityRef,
@@ -540,7 +554,7 @@ function dedupeRepresentationBindings(
   const seen = new Set<string>();
   const deduped: NpcProfileRepresentationBinding[] = [];
   for (const binding of bindings) {
-    const key = `${binding.role}\u0000${binding.assetRef}`;
+    const key = `${binding.role}\u0000${contentLocatorKey(binding.representation)}`;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(binding);

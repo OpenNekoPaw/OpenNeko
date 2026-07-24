@@ -263,11 +263,6 @@ export interface FilePathWebviewMessage {
   filePath: string;
 }
 
-export interface RevealAssetWebviewMessage {
-  type: 'revealAsset';
-  assetId: string;
-}
-
 export interface OpenUrlWebviewMessage {
   type: 'openUrl';
   url: string;
@@ -473,7 +468,6 @@ export type WebviewToExtensionMessage =
   | OpenFileWebviewMessage
   | RevealDocumentLocatorWebviewMessage
   | FilePathWebviewMessage
-  | RevealAssetWebviewMessage
   | OpenUrlWebviewMessage
   | SendToPluginWebviewMessage
   | InvokeAgentCapabilityLifecycleWebviewMessage
@@ -510,7 +504,7 @@ export type ProjectMentionExtraType =
   'canvas-node' | 'character' | 'scene' | 'asset' | 'media' | 'entity';
 
 export type ProjectMentionSource =
-  'workspace' | 'asset-library' | 'media-library' | 'entity-graph' | 'story' | 'canvas';
+  'workspace' | 'media-library' | 'entity-graph' | 'story' | 'canvas';
 
 export type ProjectMentionMediaType =
   'video' | 'audio' | 'image' | 'sequence' | 'text' | 'document';
@@ -1018,7 +1012,6 @@ export const WEBVIEW_TO_EXTENSION_MESSAGE_TYPES = [
   'openFile',
   'revealDocumentLocator',
   'revealFile',
-  'revealAsset',
   'openUrl',
   'sendToPlugin',
   'invokeAgentCapabilityLifecycle',
@@ -1440,8 +1433,6 @@ export function parseWebviewToExtensionMessage(raw: unknown): WebviewToExtension
       return parseRevealDocumentLocatorMessage(raw);
     case 'revealFile':
       return parseFilePathMessage('revealFile', raw);
-    case 'revealAsset':
-      return parseRevealAssetMessage(raw);
     case 'openUrl':
       return parseOpenUrlMessage(raw);
     case 'sendToPlugin':
@@ -1620,7 +1611,6 @@ function isAgentFileReferenceMediaType(value: unknown): value is AgentFileRefere
 function isAgentFileReferenceSource(value: unknown): value is AgentFileReference['source'] {
   return (
     value === 'workspace' ||
-    value === 'asset-library' ||
     value === 'media-library' ||
     value === 'entity-graph' ||
     value === 'story' ||
@@ -1818,11 +1808,6 @@ function parseFilePathMessage(
 ): FilePathWebviewMessage | null {
   const filePath = requiredString(raw.filePath);
   return filePath ? { type, filePath } : null;
-}
-
-function parseRevealAssetMessage(raw: Record<string, unknown>): RevealAssetWebviewMessage | null {
-  const assetId = requiredString(raw.assetId);
-  return assetId ? { type: 'revealAsset', assetId } : null;
 }
 
 function parseOpenUrlMessage(raw: Record<string, unknown>): OpenUrlWebviewMessage | null {

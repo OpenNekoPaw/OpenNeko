@@ -22,6 +22,7 @@
   "semanticClasses": {
     "delete-now": "No current runtime or entrypoint depends on the surface; delete it and keep stale-surface scans.",
     "migrate-now": "Current code still touches an old or deprecated surface; migrate callers to the canonical contract and remove the old path.",
+    "migration-only": "The surface is confined to explicit inspection, migration, rejection, or recovery code and is not registered in normal runtime.",
     "current-bridge": "A bridge is still part of a current feature path; preserve only with owner, replacement, remove condition, and tests.",
     "runtime-resilience": "Fallback handles current provider, model, GPU, media, network, file, cancellation, timeout, or capability absence.",
     "boundary-canonicalizer": "Compatibility is isolated at an input boundary that converts multiple current inputs into one canonical shape.",

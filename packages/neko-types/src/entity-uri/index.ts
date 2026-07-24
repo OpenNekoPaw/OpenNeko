@@ -1,8 +1,9 @@
-import type { AssetMediaType, FilePurpose } from '../types/asset/entity';
-
 const ENTITY_URI_PATTERN = /^entity:\/\/([^/]+)(?:\/([a-z]+))?$/;
 
-const VALID_PURPOSES = new Set<FilePurpose>([
+export type EntityRepresentationPurpose =
+  'main' | 'thumbnail' | 'preview' | 'texture' | 'reference' | 'source';
+
+const VALID_PURPOSES = new Set<EntityRepresentationPurpose>([
   'main',
   'thumbnail',
   'preview',
@@ -13,15 +14,7 @@ const VALID_PURPOSES = new Set<FilePurpose>([
 
 export interface ParsedEntityUri {
   readonly entityId: string;
-  readonly purpose: FilePurpose;
-}
-
-export interface ResolvedEntityRef {
-  readonly entityId: string;
-  readonly variantId: string;
-  readonly filePath: string;
-  readonly resolvedPath: string;
-  readonly mediaType: AssetMediaType;
+  readonly purpose: EntityRepresentationPurpose;
 }
 
 export function parseEntityUri(uri: string): ParsedEntityUri | null {
@@ -31,7 +24,7 @@ export function parseEntityUri(uri: string): ParsedEntityUri | null {
   const entityId = match[1]!;
   if (!entityId) return null;
 
-  const rawPurpose = match[2] as FilePurpose | undefined;
+  const rawPurpose = match[2] as EntityRepresentationPurpose | undefined;
   if (rawPurpose && !VALID_PURPOSES.has(rawPurpose)) return null;
 
   return { entityId, purpose: rawPurpose ?? 'thumbnail' };
@@ -41,7 +34,7 @@ export function isEntityUri(uri: string): boolean {
   return ENTITY_URI_PATTERN.test(uri);
 }
 
-export function buildEntityUri(entityId: string, purpose?: FilePurpose): string {
+export function buildEntityUri(entityId: string, purpose?: EntityRepresentationPurpose): string {
   if (!purpose || purpose === 'thumbnail') return `entity://${entityId}`;
   return `entity://${entityId}/${purpose}`;
 }

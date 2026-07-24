@@ -106,6 +106,9 @@ function isExportConfig(value: unknown): value is ExportConfig {
     typeof value['quality'] === 'string' &&
     EXPORT_QUALITIES.has(value['quality']) &&
     isPositiveInteger(value['audioBitrate']) &&
+    isPositiveInteger(value['videoBitrate']) &&
+    typeof value['includeAudio'] === 'boolean' &&
+    (value['audioSampleRate'] === 44_100 || value['audioSampleRate'] === 48_000) &&
     optionalNonEmptyString(value['videoCodec']) &&
     optionalNonEmptyString(value['audioCodec']) &&
     (value['qualityMode'] === undefined ||

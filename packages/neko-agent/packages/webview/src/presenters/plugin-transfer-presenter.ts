@@ -34,12 +34,6 @@ const PLUGIN_TRANSFER_TARGETS: readonly PluginTransferTargetProjection[] = [
     requiresPlugin: 'canvas',
   },
   {
-    id: 'cut',
-    label: 'Timeline',
-    accepts: ['image', 'video', 'audio'],
-    requiresPlugin: 'cut',
-  },
-  {
     id: 'explorer',
     label: 'Explorer',
     accepts: ['image', 'video', 'audio', 'model'],
@@ -54,7 +48,7 @@ export function projectPluginTransferMenu(input: {
 }): PluginTransferMenuProjection {
   const targets = PLUGIN_TRANSFER_TARGETS.filter((target) => {
     if (input.structuredKind === 'cutStoryboard') {
-      if (target.id !== 'cut') return false;
+      return false;
     } else if (!target.accepts.includes(input.mediaType)) {
       return false;
     }

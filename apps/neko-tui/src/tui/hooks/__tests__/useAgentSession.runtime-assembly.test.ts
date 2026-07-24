@@ -11,7 +11,6 @@ import type {
   PiProductEventSink,
   PiToolPermissionPolicy,
 } from '@neko/agent/pi';
-import type { IService } from '@neko/shared';
 
 import {
   createTuiTestRuntime,
@@ -335,6 +334,119 @@ describe('useAgentSession Pi runtime assembly', () => {
       projectionVersion: 1,
       acceptedPostTerminalPatchCount: 0,
     });
+  });
+
+  it('submits native ReadImage analysis through the TUI terminal delivery path', async () => {
+    const analysisMarkdown = '# 分镜分析\n\n第 1 页建立场景。';
+    const documentResourceRef = {
+      kind: 'document-entry' as const,
+      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      entryPath: 'OEBPS/images/page-01.jpg',
+      versionPolicy: 'read-only-source' as const,
+    };
+    piMocks.execute.mockImplementationOnce(async (input: PiExecuteInput) => {
+      piMocks.busy = true;
+      const identity = createIdentity(input);
+      await emit(input.events, { type: 'turn.started', identity, timestamp: 1 });
+      await emit(input.events, {
+        type: 'tool.started',
+        toolCallId: 'read-image-1',
+        toolName: 'ReadImage',
+        args: {},
+        identity,
+        timestamp: 2,
+      });
+      await emit(input.events, {
+        type: 'tool.completed',
+        toolCallId: 'read-image-1',
+        toolName: 'ReadImage',
+        result: {
+          details: {
+            success: true,
+            data: {
+              mode: 'metadata',
+              analysis: 'storyboard',
+              images: [{ resourceRef: documentResourceRef, width: 1200, height: 1800 }],
+            },
+            attachments: [
+              {
+                type: 'image',
+                path: 'document-entry://page-01',
+                assetRef: {
+                  assetId: 'page-01',
+                  uri: 'document-entry://page-01',
+                  mimeType: 'image/jpeg',
+                  documentResourceRef,
+                },
+              },
+            ],
+          },
+        },
+        isError: false,
+        identity,
+        timestamp: 3,
+      });
+      await emit(input.events, {
+        type: 'assistant.text.delta',
+        delta: analysisMarkdown,
+        sourceIndex: 0,
+        identity,
+        timestamp: 4,
+      });
+      await emit(input.events, {
+        type: 'assistant.message.completed',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: analysisMarkdown }],
+          provider: 'anthropic',
+          model: 'claude-sonnet-4-20250514',
+          api: 'anthropic-messages',
+          usage: {
+            input: 4,
+            output: 2,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 6,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+          },
+          stopReason: 'stop',
+          timestamp: 3,
+        },
+        identity,
+        timestamp: 4,
+      } as PiProductAgentEvent);
+      piMocks.messages = [
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: analysisMarkdown }],
+        },
+      ];
+      await emit(input.events, { type: 'turn.completed', identity, timestamp: 5 });
+      piMocks.busy = false;
+    });
+    let handle: AgentSessionHandle | undefined;
+    renderProbe(validConfig(), (session) => {
+      handle = session;
+    });
+    await waitFor(() => handle?.isReady === true);
+
+    await handle!.submit('分析这一页的分镜');
+
+    expect(handle!.getCreatorVisibleArtifacts()).toEqual([
+      expect.objectContaining({ artifactId: 'page-01', role: 'source' }),
+      expect.objectContaining({
+        role: 'analysis',
+        title: 'Storyboard Analysis',
+        sourceArtifactIds: ['page-01'],
+        markdown: analysisMarkdown,
+      }),
+    ]);
+    expect(handle!.getWorkspaceBoardProjections()).toEqual([
+      expect.objectContaining({
+        status: 'projected',
+        artifactRoleCounts: { source: 1, analysis: 1, output: 0 },
+      }),
+    ]);
   });
 
   it('allows registered workspace read tools without approval in ask mode', async () => {
@@ -667,7 +779,6 @@ function SessionProbe(props: {
     config: props.config,
     presentation: createTestAgentTerminalPresentation('en'),
     promptLocale: 'en',
-    service: createNoopService(),
     capabilityProviders: [],
     createLocalMetadata: createMemoryLocalMetadataBinding,
     localMetadataHome: props.config.workDir,
@@ -681,20 +792,6 @@ function SessionProbe(props: {
   }, [props, session]);
 
   return React.createElement(Text, null, 'pi-runtime-probe');
-}
-
-function createNoopService(): IService {
-  return {
-    async chat() {
-      throw new Error('Legacy IService chat must not be reached.');
-    },
-    async *chatStream() {
-      throw new Error('Legacy IService chatStream must not be reached.');
-    },
-    async embed(texts: string[]) {
-      return { embeddings: texts.map(() => []) };
-    },
-  };
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

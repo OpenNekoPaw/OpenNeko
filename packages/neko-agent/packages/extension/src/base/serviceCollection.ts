@@ -112,10 +112,3 @@ export function setGlobalServices(services: ServiceCollection): void {
 export function getService<T>(id: ServiceIdentifier<T>): T | undefined {
   return _globalServices?.get(id);
 }
-
-/**
- * Get the global service collection
- */
-export function getGlobalServices(): ServiceCollection | undefined {
-  return _globalServices;
-}

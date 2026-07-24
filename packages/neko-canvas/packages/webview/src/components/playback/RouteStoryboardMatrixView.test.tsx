@@ -41,13 +41,12 @@ describe('RouteStoryboardMatrix', () => {
     host.remove();
   });
 
-  it('renders route families, aligned cells, diagnostics, and row send actions', () => {
+  it('renders route families, aligned cells, and diagnostics', () => {
     const onSelectRoute = vi.fn();
     const onSelectCell = vi.fn();
     const onSelectColumn = vi.fn();
     const onSelectFamily = vi.fn();
     const onToggleContainerFold = vi.fn();
-    const onSendToCut = vi.fn();
     const onFocusCell = vi.fn();
     const onSelectSummaryCell = vi.fn();
 
@@ -64,7 +63,6 @@ describe('RouteStoryboardMatrix', () => {
           onSelectColumn={onSelectColumn}
           onSelectFamily={onSelectFamily}
           onToggleContainerFold={onToggleContainerFold}
-          onSendToCut={onSendToCut}
           onFocusCell={onFocusCell}
         />,
       );
@@ -139,9 +137,6 @@ describe('RouteStoryboardMatrix', () => {
         .querySelector<HTMLButtonElement>('.canvas-route-storyboard-matrix-step')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       host
-        .querySelector<HTMLButtonElement>('.canvas-route-storyboard-matrix-send')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      host
         .querySelector<HTMLButtonElement>('.canvas-route-storyboard-matrix-cell-summary')
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
@@ -153,7 +148,6 @@ describe('RouteStoryboardMatrix', () => {
       expect.objectContaining({ kind: 'playable', unitId: 'unit-a' }),
     );
     expect(onSelectColumn).toHaveBeenCalledWith('column:container:scene-a:shot-a');
-    expect(onSendToCut).toHaveBeenCalledWith(expect.objectContaining({ routeId: 'route-a' }));
     expect(onSelectSummaryCell).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'summary', containerNodeId: 'scene-a' }),
     );
@@ -174,7 +168,6 @@ describe('RouteStoryboardMatrix', () => {
           onSelectColumn={onSelectColumn}
           onSelectFamily={() => undefined}
           onToggleContainerFold={() => undefined}
-          onSendToCut={() => undefined}
           onFocusCell={onFocusCell}
           onClearFocus={onClearFocus}
         />,
@@ -255,7 +248,6 @@ describe('RouteStoryboardMatrix', () => {
           onSelectColumn={() => undefined}
           onSelectFamily={() => undefined}
           onToggleContainerFold={() => undefined}
-          onSendToCut={() => undefined}
         />,
       );
     });
@@ -289,7 +281,6 @@ describe('RouteStoryboardMatrix', () => {
           onSelectColumn={() => undefined}
           onSelectFamily={() => undefined}
           onToggleContainerFold={() => undefined}
-          onSendToCut={() => undefined}
         />,
       );
     });

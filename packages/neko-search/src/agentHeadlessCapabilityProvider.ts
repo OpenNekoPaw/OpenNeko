@@ -37,7 +37,6 @@ interface SanitizedProjectSearchItem {
   readonly description?: string;
   readonly icon?: string;
   readonly source: ProjectSearchSourceRef;
-  readonly projectRoot: string;
   readonly filePath?: string;
   readonly canonicalName?: string;
   readonly aliases?: readonly string[];
@@ -81,7 +80,7 @@ class ProjectSearchHeadlessCapabilityProvider implements AgentCapabilityProvider
               enum: [
                 'mention',
                 'global',
-                'asset-picker',
+                'media-picker',
                 'entity-picker',
                 'document',
                 'agent-tool',
@@ -161,7 +160,6 @@ function sanitizeProjectSearchItem(item: ProjectSearchItem): SanitizedProjectSea
     ...(item.description ? { description: item.description } : {}),
     ...(item.icon ? { icon: item.icon } : {}),
     source,
-    projectRoot: item.projectRoot,
     ...(isSafeVisiblePath(item.filePath) ? { filePath: item.filePath } : {}),
     ...(item.canonicalName ? { canonicalName: item.canonicalName } : {}),
     ...(item.aliases ? { aliases: item.aliases } : {}),

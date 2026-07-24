@@ -252,11 +252,5 @@ if (require.main === module) {
 }
 
 module.exports = {
-  FFMPEG_DIR,
-  isAlreadyPresent,
-  main,
-  parseArgs,
-  setupFromBtbn,
-  setupFromHomebrew,
   setupPlatform,
 };

@@ -1,13 +1,6 @@
 import { isWebviewLikeRuntimeValue } from './content-access';
-import type {
-  ContentAccessIntent,
-  ContentAccessRequest,
-  ContentAccessTarget,
-  ContentStableSourceRef,
-} from './content-access';
 import type { ArtifactResourceRef } from './composite-artifact';
 import type { NarrativeAssetRef } from './narrative-asset';
-import type { ResourceRef } from './resource-cache';
 
 export const NARRATIVE_PRODUCTION_BINDING_KINDS = [
   'storyboard-scene',
@@ -81,12 +74,6 @@ export interface NarrativeProductionBindingDiagnostic {
   readonly nodeId?: string;
 }
 
-export interface NarrativeProductionBindingContentAccessOptions {
-  readonly intent: ContentAccessIntent;
-  readonly target?: ContentAccessTarget;
-  readonly caller?: string;
-}
-
 export function isNarrativeProductionBinding(value: unknown): value is NarrativeProductionBinding {
   if (!isRecord(value)) return false;
   return (
@@ -110,77 +97,6 @@ export function validateNarrativeProductionBinding(
         },
       ]
     : [];
-}
-
-export function createNarrativeProductionBindingContentAccessRequest(
-  binding: NarrativeProductionBinding,
-  options: NarrativeProductionBindingContentAccessOptions,
-): ContentAccessRequest | undefined {
-  const ref = readProductionBindingStableSource(binding.target);
-  if (!ref) return undefined;
-  return {
-    ref,
-    intent: options.intent,
-    target: options.target ?? defaultContentAccessTargetForIntent(options.intent),
-    caller: options.caller ?? 'neko-canvas.narrative-production-binding',
-    metadata: {
-      bindingId: binding.bindingId,
-      bindingRole: binding.role,
-      productionTargetKind: binding.target.kind,
-    },
-  };
-}
-
-function readProductionBindingStableSource(
-  target: NarrativeProductionBindingTarget,
-): ContentStableSourceRef | undefined {
-  switch (target.kind) {
-    case 'generated-video':
-      return artifactResourceRefToStableSource(target.ref);
-    case 'asset':
-      return artifactResourceRefToStableSource(target.ref);
-    case 'storyboard-scene':
-    case 'storyboard-shot':
-    case 'canvas-node':
-    case 'cut-clip':
-      return undefined;
-  }
-}
-
-function artifactResourceRefToStableSource(
-  ref: ArtifactResourceRef | NarrativeAssetRef,
-): ContentStableSourceRef | undefined {
-  if (isResourceRefLike(ref)) {
-    return ref;
-  }
-  if (ref.kind === 'relative-path') {
-    return { kind: 'file', path: ref.path, scope: 'project' };
-  }
-  if (ref.kind === 'resource') {
-    return ref.resource;
-  }
-  if (ref.kind === 'document-entry') {
-    return undefined;
-  }
-  if (ref.kind === 'generated-asset') {
-    return {
-      kind: 'generated-asset',
-      assetId: ref.assetId,
-      resource: ref.resourceRef,
-      promoted: true,
-    };
-  }
-  if (ref.kind === 'tool-result' && ref.resourceRef) {
-    return ref.resourceRef;
-  }
-  if (ref.kind === 'perception-card' && ref.resourceRef) {
-    return ref.resourceRef;
-  }
-  return undefined;
-}
-
-function defaultContentAccessTargetForIntent(intent: ContentAccessIntent): ContentAccessTarget {
-  return intent === 'package' ? 'bytes' : intent === 'final-export' ? 'local-path' : 'webview-uri';
 }
 
 function isProductionBindingTarget(value: unknown): value is NarrativeProductionBindingTarget {
@@ -211,18 +127,6 @@ function isProductionBindingRole(value: unknown): value is NarrativeProductionBi
   return (
     typeof value === 'string' &&
     (NARRATIVE_PRODUCTION_BINDING_ROLES as readonly string[]).includes(value)
-  );
-}
-
-function isResourceRefLike(value: unknown): value is ResourceRef {
-  return (
-    isRecord(value) &&
-    typeof value['id'] === 'string' &&
-    typeof value['scope'] === 'string' &&
-    typeof value['provider'] === 'string' &&
-    typeof value['kind'] === 'string' &&
-    isRecord(value['source']) &&
-    isRecord(value['fingerprint'])
   );
 }
 

@@ -5,7 +5,7 @@ import type {
   CreativeEntityOccurrenceProjection,
   CreativeEntityRef,
   CreativeEntityRelationshipProjection,
-  EntityAssetBinding,
+  EntityRepresentationBinding,
   VisualIdentityDraft,
 } from '@neko/shared';
 import { isNpcProfileSource } from '@neko/shared';
@@ -69,14 +69,17 @@ describe('NpcProfileAssembler', () => {
           id: 'binding-portrait',
           entityId: 'char_xiaoju',
           entityKind: 'character',
-          assetRef: 'project://assets/xiaoju-portrait',
+          representation: {
+            kind: 'workspace-file',
+            path: 'neko/assets/xiaoju-portrait.png',
+          },
           role: 'portrait',
           status: 'confirmed',
           availability: 'active',
           source: 'user',
           isDefault: true,
           updatedAt: '2026-06-01T00:00:00.000Z',
-        } satisfies EntityAssetBinding,
+        } satisfies EntityRepresentationBinding,
       ],
       listVisualDrafts: async () => [
         {
@@ -101,7 +104,10 @@ describe('NpcProfileAssembler', () => {
     expect(result.profile.representationBindings).toEqual([
       expect.objectContaining({
         role: 'portrait',
-        assetRef: 'project://assets/xiaoju-portrait',
+        representation: {
+          kind: 'workspace-file',
+          path: 'neko/assets/xiaoju-portrait.png',
+        },
         isDefault: true,
       }),
     ]);
@@ -167,18 +173,17 @@ describe('NpcProfileAssembler', () => {
           id: 'binding-voice',
           entityId: 'char_xiaoju',
           entityKind: 'character',
-          assetRef: 'project://assets/xiaoju-voice',
+          representation: { kind: 'workspace-file', path: 'neko/assets/xiaoju-voice.wav' },
           role: 'voice',
           status: 'confirmed',
           availability: 'active',
           source: 'user',
           updatedAt: '2026-06-01T00:00:00.000Z',
-        } satisfies EntityAssetBinding,
+        } satisfies EntityRepresentationBinding,
       ],
       listRelationships: async () => relationships,
       listOccurrences: async () => occurrences,
-      describeAsset: async () => ({
-        assetRef: 'project://assets/xiaoju-voice',
+      describeRepresentation: async () => ({
         summary: 'Warm, quick voice',
       }),
     });
@@ -214,7 +219,10 @@ describe('NpcProfileAssembler', () => {
     ]);
     expect(result.profile.facts).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ key: 'asset.voice.summary', source: 'asset-metadata' }),
+        expect.objectContaining({
+          key: 'representation.voice.summary',
+          source: 'representation-metadata',
+        }),
         expect.objectContaining({
           key: 'user.supplement',
           source: 'user-supplement',

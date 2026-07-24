@@ -5,8 +5,7 @@
   "description": "NekoTools extension source code",
   "type": "module",
   "exports": {
-    ".": "./src/asset-diff/index.ts",
-    "./asset-diff": "./src/asset-diff/index.ts",
+    ".": "./src/bootstrap/index.ts",
     "./media-diff": "./src/media-diff/index.ts",
     "./media-lsp": "./src/media-lsp/index.ts",
     "./*": "./src/*"

@@ -1,0 +1,140 @@
+{
+  "schema": "neko.agent-eval.scenario.v2",
+  "id": "document-image-native-delivery",
+  "suiteId": "agent-runtime.stream-delivery",
+  "caseGroup": "regression",
+  "visibility": "public",
+  "evidenceContract": {
+    "userBehavior": "Read two committed synthetic EPUB images through canonical document-entry contentLocators and deliver one bounded contact sheet to the native multimodal Pi turn.",
+    "canonicalPath": [
+      "TUI input queue",
+      "Pi Agent Tool schema",
+      "ReadDocument imageInfo document-entry contentLocator",
+      "ReadImage canonical content locator validation",
+      "ReadImage direct document-entry content read",
+      "Host labeled contact-sheet composition",
+      "native multimodal Pi turn",
+      "terminal answer"
+    ],
+    "forbiddenFallback": [
+      "whole EPUB archive bytes as an image",
+      "fabricated source or entry path",
+      "provider fallback after canonical content loading",
+      "conflicting outer and nested entry paths",
+      "cache or scratch path",
+      "one provider image part per source page",
+      "textual Tool imitation"
+    ],
+    "observables": [
+      {
+        "ref": "document-image-facts",
+        "kind": "runtime-fact",
+        "description": "Pi identity, ordered successful Tool calls, normalized matching document-entry results, and terminal native-image answer facts.",
+        "required": true
+      }
+    ],
+    "expectedResult": "ReadDocument returns two synthetic page contentLocators, ReadImage preserves and directly reads both identities, and the native multimodal turn identifies both contact-sheet tiles before the final marker.",
+    "expectedFailure": "Missing or conflicting entry identity, whole-archive or fabricated-ref loading, failed Tool execution, runtime diagnostics, or a missing visual answer fails visibly."
+  },
+  "fixtureRefs": ["document-image-workspace"],
+  "runtimeProfileId": "markdown",
+  "modelProfileIds": ["configured-default"],
+  "steps": [
+    {
+      "id": "submit",
+      "kind": "submit",
+      "prompt": "严格执行两步文档图片读取：先调用 ReadDocument 一次，以 content mode 读取工作区相对路径 synthetic-document.epub，include_images=true、max_images=2；再把返回的 imageInfo[0] 和 imageInfo[1] 原样作为 ReadImage.images[0] 和 images[1]，保留每项 contentLocator 的 kind、source.path 和 entryPath，analysis=storyboard、mode=metadata、max_images=2。不要改写 contentLocator，不要传 resourceRef、整本 EPUB、裸 entryPath、缓存路径或临时路径。根据 ReadImage 交付的原生 contact sheet，按 tile 1、tile 2 顺序写出两个黑色区域里的四字符代码，再简短说明两页主色，最后单独输出 DOCUMENT_IMAGE_NATIVE_OK。"
+    },
+    { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 180000 }
+  ],
+  "assertions": [
+    { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "document-image-facts" },
+    { "id": "idle", "kind": "fully-idle", "evidenceRef": "document-image-facts" },
+    {
+      "id": "pi-runtime",
+      "kind": "pi-runtime",
+      "implementation": "pi-agent-core",
+      "transcriptAuthority": "pi-session",
+      "productMetadataAuthority": "sqlite",
+      "purpose": "agent.main",
+      "workspaceLocatorKind": "virtual",
+      "turnDurability": "durable",
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "read-document",
+      "kind": "tool-call",
+      "name": "ReadDocument",
+      "status": "success",
+      "resultIncludes": {
+        "imageCount": 2,
+        "imageInfo": [
+          {
+            "entryPath": "OEBPS/images/page-1.png",
+            "contentLocator": {
+              "kind": "document-entry",
+              "source": { "kind": "workspace-file", "path": "synthetic-document.epub" },
+              "entryPath": "OEBPS/images/page-1.png"
+            }
+          },
+          {
+            "entryPath": "OEBPS/images/page-2.png",
+            "contentLocator": {
+              "kind": "document-entry",
+              "source": { "kind": "workspace-file", "path": "synthetic-document.epub" },
+              "entryPath": "OEBPS/images/page-2.png"
+            }
+          }
+        ]
+      },
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "read-image",
+      "kind": "tool-call",
+      "name": "ReadImage",
+      "status": "success",
+      "resultIncludes": {
+        "mode": "metadata",
+        "analysis": "storyboard",
+        "imageCount": 2,
+        "imagesTruncated": false,
+        "images": [
+          {
+            "contentLocator": {
+              "kind": "document-entry",
+              "source": { "kind": "workspace-file", "path": "synthetic-document.epub" },
+              "entryPath": "OEBPS/images/page-1.png"
+            }
+          },
+          {
+            "contentLocator": {
+              "kind": "document-entry",
+              "source": { "kind": "workspace-file", "path": "synthetic-document.epub" },
+              "entryPath": "OEBPS/images/page-2.png"
+            }
+          }
+        ]
+      },
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "tool-order",
+      "kind": "process-order",
+      "events": [
+        { "kind": "tool", "name": "ReadDocument", "status": "success" },
+        { "kind": "tool", "name": "ReadImage", "status": "success" }
+      ],
+      "evidenceRef": "document-image-facts"
+    },
+    {
+      "id": "answer",
+      "kind": "final-answer",
+      "mode": "contains",
+      "text": ["N7Q4", "Q47N", "DOCUMENT_IMAGE_NATIVE_OK"],
+      "evidenceRef": "document-image-facts"
+    }
+  ],
+  "artifactChecks": [],
+  "budget": { "timeoutMs": 180000, "repetitions": 1 }
+}

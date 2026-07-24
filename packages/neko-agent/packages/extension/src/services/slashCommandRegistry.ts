@@ -27,7 +27,7 @@ export type { PluginSlashCommandDef, RegisteredPluginSlashCommand };
  * Registry that aggregates plugin slash commands from all registered extensions.
  * Implements vscode.Disposable for clean teardown.
  */
-export class SlashCommandRegistry implements vscode.Disposable {
+class SlashCommandRegistry implements vscode.Disposable {
   private readonly _runtime: RuntimePluginSlashCommandRegistry =
     createRuntimePluginSlashCommandRegistry();
   private readonly _onChange = new vscode.EventEmitter<void>();

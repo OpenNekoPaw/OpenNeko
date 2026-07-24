@@ -42,7 +42,7 @@ describe('EntityAssetMetadataProjector', () => {
           id: 'binding:rin-portrait',
           entityId: 'char_rin',
           entityKind: 'character',
-          assetRef: 'project://assets/rin.png',
+          representation: { kind: 'workspace-file', path: 'neko/assets/rin.png' },
           role: 'portrait',
           status: 'confirmed',
           availability: 'active',
@@ -62,7 +62,9 @@ describe('EntityAssetMetadataProjector', () => {
       expect.objectContaining({
         kind: 'binding-availability',
         entityId: 'char_rin',
-        assetRef: 'project://assets/rin.png',
+        value: expect.objectContaining({
+          representation: { kind: 'workspace-file', path: 'neko/assets/rin.png' },
+        }),
       }),
       expect.objectContaining({
         kind: 'entity-candidate',

@@ -50,6 +50,33 @@ describe('MediaPlaybackService', () => {
     expect(handle.audioStreamId).toBe('audio-stream');
   });
 
+  it('creates prepared streams with atomic initial playback state', async () => {
+    const client = createEngineClientMock();
+    const service = new MediaPlaybackService(client);
+
+    await service.startPlayback('/tmp/clip.mp4', {
+      mediaType: 'video',
+      hasAudio: true,
+      startPaused: true,
+      startTime: 0,
+      speed: 2,
+    });
+
+    expect(client.createStream).toHaveBeenNthCalledWith(1, 'videos', '/tmp/clip.mp4', {
+      initialPaused: true,
+      sessionId: expect.stringMatching(/^playback-/),
+      speed: 2,
+      startTime: 0,
+    });
+    expect(client.createStream).toHaveBeenNthCalledWith(2, 'audios', '/tmp/clip.mp4', {
+      initialPaused: true,
+      sessionId: expect.stringMatching(/^playback-audio-/),
+      speed: 2,
+      startTime: 0,
+    });
+    expect(client.controlStream).not.toHaveBeenCalled();
+  });
+
   it('probes audio media through the audio action group when a type hint is present', async () => {
     const client = createEngineClientMock();
     const service = new MediaPlaybackService(client);

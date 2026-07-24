@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import sharp from 'sharp';
 import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
 import {
   createResourceFingerprint,
@@ -9,21 +10,100 @@ import { createReadImageTool } from '../../tools/readImageTool';
 import { createLocalPerceptionAssetLoader } from '../perceptionAssetLoader';
 
 describe('createLocalPerceptionAssetLoader', () => {
+  it('composes ordered locator-backed images into one bounded labeled overview sheet', async () => {
+    const sourceBytes = await Promise.all(
+      ['#ff0000', '#0000ff'].map((background) =>
+        sharp({ create: { width: 800, height: 1200, channels: 3, background } })
+          .jpeg()
+          .toBuffer(),
+      ),
+    );
+    const runtime = createContentAccessRuntime(sourceBytes[0], 'image/jpeg');
+    vi.mocked(runtime.loadContentAsset)
+      .mockResolvedValueOnce({
+        status: 'ready',
+        diagnostics: [],
+        bytes: sourceBytes[0],
+        mimeType: 'image/jpeg',
+        sizeBytes: sourceBytes[0].byteLength,
+      })
+      .mockResolvedValueOnce({
+        status: 'ready',
+        diagnostics: [],
+        bytes: sourceBytes[1],
+        mimeType: 'image/jpeg',
+        sizeBytes: sourceBytes[1].byteLength,
+      });
+    const refs = [1, 2].map((page) => ({
+      assetId: `page-${page}`,
+      label: `Page ${page}`,
+      uri: `content:page-${page}`,
+      mimeType: 'image/jpeg',
+      contentLocator: {
+        kind: 'document-entry' as const,
+        source: { kind: 'workspace-file' as const, path: 'books/comic.cbz' },
+        entryPath: `pages/${String(page).padStart(3, '0')}.jpg`,
+      },
+    }));
+    const loader = createLocalPerceptionAssetLoader(runtime);
+
+    const batches = await loader.loadBatch!(refs, { layout: 'overview' });
+
+    expect(batches).toHaveLength(1);
+    expect(batches[0]?.sourceIndexes).toEqual([0, 1]);
+    expect(batches[0]?.payload).toMatchObject({ kind: 'image', mimeType: 'image/jpeg' });
+    const encoded = batches[0]?.payload.url.split(',')[1];
+    if (!encoded) throw new Error('Contact sheet payload was not base64 encoded.');
+    const bytes = Buffer.from(encoded, 'base64');
+    expect(bytes.byteLength).toBeLessThanOrEqual(4 * 1024 * 1024);
+    await expect(sharp(bytes).metadata()).resolves.toMatchObject({
+      format: 'jpeg',
+      width: 2048,
+      height: 2048,
+    });
+    expect(runtime.loadContentAsset).toHaveBeenCalledTimes(2);
+  });
+
   it('passes data URLs through without content access', async () => {
     const runtime = createContentAccessRuntime();
     const loader = createLocalPerceptionAssetLoader(runtime);
 
     const result = await loader.load({
       assetId: 'inline',
-      uri: 'data:image/png;base64,abc',
+      uri: 'data:image/png;base64,YWJj',
       mimeType: 'image/png',
     });
 
     expect(result).toEqual({
       kind: 'image',
-      url: 'data:image/png;base64,abc',
+      url: 'data:image/png;base64,YWJj',
       mimeType: 'image/png',
     });
+    expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
+  });
+
+  it('normalizes oversized inline images before provider delivery', async () => {
+    const runtime = createContentAccessRuntime();
+    const source = await sharp({
+      create: { width: 4096, height: 1024, channels: 3, background: '#6622aa' },
+    })
+      .png()
+      .toBuffer();
+    const loader = createLocalPerceptionAssetLoader(runtime);
+
+    const result = await loader.load({
+      assetId: 'inline-large',
+      uri: `data:image/png;base64,${source.toString('base64')}`,
+      mimeType: 'image/png',
+    });
+
+    expect(result.kind).toBe('image');
+    expect(result.mimeType).toBe('image/jpeg');
+    const encoded = result.url.split(',')[1];
+    if (!encoded) throw new Error('Normalized inline image was not base64 encoded.');
+    const bytes = Buffer.from(encoded, 'base64');
+    expect(bytes.byteLength).toBeLessThanOrEqual(4 * 1024 * 1024);
+    await expect(sharp(bytes).metadata()).resolves.toMatchObject({ width: 2048, height: 512 });
     expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
   });
 
@@ -75,9 +155,7 @@ describe('createLocalPerceptionAssetLoader', () => {
     });
 
     expect(runtime.loadProviderAsset).toHaveBeenCalledWith({
-      caller: 'perception-asset-loader',
       source: { kind: 'file', path: '${A}/images/frame.png' },
-      preferredTarget: 'bytes',
       mimeTypeHint: 'image/png',
     });
     expect(result).toEqual({
@@ -106,7 +184,6 @@ describe('createLocalPerceptionAssetLoader', () => {
     const result = await loader.load(documentAsset);
 
     expect(runtime.loadProviderAsset).toHaveBeenCalledWith({
-      caller: 'perception-asset-loader',
       source: {
         kind: 'document',
         source: {
@@ -116,9 +193,37 @@ describe('createLocalPerceptionAssetLoader', () => {
         entryPath: 'OPS/images/page-1.jpg',
         locator: { kind: 'document', entryPath: 'OPS/images/page-1.jpg' },
       },
-      preferredTarget: 'bytes',
       mimeTypeHint: 'image/jpeg',
     });
+    expect(result).toEqual({
+      kind: 'image',
+      url: `data:image/jpeg;base64,${bytes.toString('base64')}`,
+      mimeType: 'image/jpeg',
+    });
+  });
+
+  it('loads canonical content locators without provider fallback', async () => {
+    const bytes = Buffer.from('canonical-document-image-bytes');
+    const runtime = createContentAccessRuntime(bytes, 'image/jpeg');
+    const loader = createLocalPerceptionAssetLoader(runtime);
+    const contentLocator = {
+      kind: 'document-entry' as const,
+      source: { kind: 'workspace-file' as const, path: 'book.epub' },
+      entryPath: 'OPS/images/page-1.jpg',
+    };
+
+    const result = await loader.load({
+      assetId: 'doc-image-content-locator-1',
+      uri: 'content:document-entry',
+      mimeType: 'image/jpeg',
+      contentLocator,
+    });
+
+    expect(runtime.loadContentAsset).toHaveBeenCalledWith({
+      locator: contentLocator,
+      maxBytes: 20 * 1024 * 1024,
+    });
+    expect(runtime.loadProviderAsset).not.toHaveBeenCalled();
     expect(result).toEqual({
       kind: 'image',
       url: `data:image/jpeg;base64,${bytes.toString('base64')}`,
@@ -175,9 +280,7 @@ describe('createLocalPerceptionAssetLoader', () => {
     const loaded = await createLocalPerceptionAssetLoader(runtime).load(assetRef);
 
     expect(runtime.loadProviderAsset).toHaveBeenLastCalledWith({
-      caller: 'perception-asset-loader',
       source: generatedResourceRef,
-      preferredTarget: 'bytes',
       mimeTypeHint: 'image/png',
     });
     expect(loaded).toEqual({
@@ -232,6 +335,13 @@ function createContentAccessRuntime(
     resolveImageMetadata: vi.fn(),
     resolveDocumentContent: vi.fn(),
     loadProviderAsset: vi.fn(async () => ({
+      status: 'ready' as const,
+      diagnostics: [],
+      bytes,
+      mimeType,
+      sizeBytes: bytes.byteLength,
+    })),
+    loadContentAsset: vi.fn(async () => ({
       status: 'ready' as const,
       diagnostics: [],
       bytes,

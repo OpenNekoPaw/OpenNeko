@@ -13,8 +13,6 @@ import type { UnifiedConfig } from '@neko/shared';
 // Node.js config reader - direct import
 import {
   readWorkspaceConfigResult as readWorkspaceConfigFileResult,
-  writeWorkspaceConfig as writeWorkspaceConfigFile,
-  getWorkspaceConfigPath,
   type ConfigReadResult,
 } from '@neko/shared/config/config-reader';
 
@@ -44,26 +42,6 @@ function unifiedToWorkspaceConfig(unified: UnifiedConfig | null): WorkspaceConfi
   };
 }
 
-/**
- * Convert workspace config to unified config for saving
- */
-function workspaceToUnifiedConfig(workspace: WorkspaceConfig): UnifiedConfig {
-  return {
-    mcpServers: workspace.mcpServers,
-    mcpServerOverrides: workspace.mcpServerOverrides,
-  };
-}
-
-/**
- * Load workspace configuration from file
- */
-export function loadWorkspaceConfig(workspacePath: string): WorkspaceConfig | null {
-  const result = readWorkspaceConfigFileResult(workspacePath);
-  if (result.status === 'missing') return null;
-  if (result.status === 'ok') return unifiedToWorkspaceConfig(result.config);
-  throw new Error(result.diagnostic.message);
-}
-
 export function loadWorkspaceConfigResult(workspacePath: string): {
   raw: ConfigReadResult;
   config: WorkspaceConfig | null;
@@ -74,14 +52,3 @@ export function loadWorkspaceConfigResult(workspacePath: string): {
     config: raw.status === 'ok' ? unifiedToWorkspaceConfig(raw.config) : null,
   };
 }
-
-/**
- * Save workspace configuration to file
- */
-export function saveWorkspaceConfig(workspacePath: string, config: WorkspaceConfig): void {
-  const unified = workspaceToUnifiedConfig(config);
-  writeWorkspaceConfigFile(workspacePath, unified);
-}
-
-// Re-export path utility for convenience
-export { getWorkspaceConfigPath };

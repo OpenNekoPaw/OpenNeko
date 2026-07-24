@@ -90,11 +90,6 @@
       "outputs": ["coverage/**"],
       "cache": false
     },
-    "neko-assets#test": {
-      "dependsOn": ["@neko/asset#test"],
-      "outputs": ["coverage/**"],
-      "cache": false
-    },
     "neko-canvas#test": {
       "dependsOn": ["@neko-canvas/webview#test"],
       "outputs": ["coverage/**"],

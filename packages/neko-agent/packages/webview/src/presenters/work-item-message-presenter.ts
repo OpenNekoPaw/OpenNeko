@@ -105,7 +105,7 @@ export function projectSubAgentToolResultToWorkItem(
   };
 }
 
-export function extractSubAgentWorkItemIds(data: Record<string, unknown> | undefined): string[] {
+function extractSubAgentWorkItemIds(data: Record<string, unknown> | undefined): string[] {
   if (!data || data.backgroundMode === true) return [];
 
   const ids: string[] = [];
@@ -163,7 +163,7 @@ export function projectConversationWorkItemsFromMessages(
   };
 }
 
-export function deriveInlineWorkLinksFromMessages(messages: readonly Message[]): Message[] {
+function deriveInlineWorkLinksFromMessages(messages: readonly Message[]): Message[] {
   return messages.map((message) => {
     const workItemIds = (message.contentBlocks ?? []).flatMap((block) =>
       block.type === 'tool_call'
@@ -178,7 +178,7 @@ export function deriveInlineWorkLinksFromMessages(messages: readonly Message[]):
   });
 }
 
-export function rehydrateSubAgentWorkItemsFromMessages(
+function rehydrateSubAgentWorkItemsFromMessages(
   messages: readonly Message[],
   conversationId: string,
   options: RehydrateWorkItemsFromMessagesOptions = {},

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { resolveNekoExtension } from '@neko/shared/vscode/extension';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {
   buildRuntimePluginsAvailableMessage,
@@ -11,15 +12,14 @@ import {
 } from './plugin-transfer';
 import type { PluginTransferAssetRef, PluginTransferPayload } from '@neko-agent/types';
 import {
-  PathResolver,
   isPrivateCachePath,
-  type ContentIngestResult,
   type ResourceRef,
+  type WorkspaceFileContentLocator,
 } from '@neko/shared';
 import {
-  createHostContentAccessRuntime,
   createGeneratedAssetResourceRef,
-  type ContentIngestService,
+  NodeAuthorizedOutputAllocator,
+  NodeAuthorizedWorkspaceWriter,
 } from '@neko/shared/vscode/extension';
 import { getLogger, handleError } from '../base';
 
@@ -36,9 +36,18 @@ export interface PluginTransferBridgeResult {
 
 export interface PluginTransferBridgeDeps {
   readonly workspaceRoot?: string;
-  readonly ingestService?: ContentIngestService;
-  readonly pathResolver?: PathResolver;
+  readonly persistGeneratedOutput?: (
+    input: PersistGeneratedOutputInput,
+  ) => Promise<WorkspaceFileContentLocator | undefined>;
   readonly executeCommand?: typeof vscode.commands.executeCommand;
+}
+
+export interface PersistGeneratedOutputInput {
+  readonly workspaceRoot: string;
+  readonly sourcePath: string;
+  readonly outputDirectory: string;
+  readonly fileNameHint: string;
+  readonly mediaType?: string;
 }
 
 /**
@@ -185,40 +194,24 @@ async function materializeCanvasGeneratedOutput(
     return undefined;
   }
 
-  const ingestService =
-    deps.ingestService ?? createGeneratedOutputIngestService(workspaceRoot, deps.pathResolver);
-  const generatedDir = path.join(workspaceRoot, 'neko', 'generated', mediaDir(asset));
-  const result = await ingestService.ingest({
-    mode: 'generated-output',
+  const outputDirectory = `neko/generated/${mediaDir(asset)}`;
+  const persist = deps.persistGeneratedOutput ?? persistGeneratedOutput;
+  const locator = await persist({
+    workspaceRoot,
     sourcePath: asset.path,
-    destination: {
-      kind: 'generated-assets',
-      directory: generatedDir,
-    },
-    fileName: asset.name ?? path.basename(asset.path),
-    mimeType: mimeTypeForAsset(asset),
-    caller: 'neko-agent.plugin-transfer',
-    prewarm: [{ role: 'preview', mimeType: mimeTypeForAsset(asset) }],
-    metadata: {
-      assetId: assetIdForGeneratedAsset(asset),
-      sourcePath: asset.path,
-      mediaType: asset.mediaType,
-      provenance: asset.provenance,
-    },
+    outputDirectory,
+    fileNameHint: asset.name ?? path.basename(asset.path),
+    ...(mimeTypeForAsset(asset) ? { mediaType: mimeTypeForAsset(asset) } : {}),
   });
-
-  if (result.status !== 'ready' || !result.outputPath) {
-    logger.warn('Unable to materialize generated output before Canvas transfer', {
-      status: result.status,
-      error: result.error,
-    });
+  if (!locator) {
+    logger.warn('Unable to materialize generated output before Canvas transfer');
     return undefined;
   }
 
   return {
     ...asset,
-    path: result.outputPath,
-    resourceRef: createMaterializedGeneratedResourceRef(asset, result),
+    path: path.join(workspaceRoot, ...locator.path.split('/')),
+    resourceRef: createMaterializedGeneratedResourceRef(asset, locator),
   };
 }
 
@@ -249,54 +242,36 @@ function isCacheBackedGeneratedResourceRef(
   );
 }
 
-function createGeneratedOutputIngestService(
-  workspaceRoot: string,
-  pathResolver = createWorkspacePathResolver(workspaceRoot),
-): ContentIngestService {
-  return createHostContentAccessRuntime({
-    workspaceRoot,
-    sourceFileProvider: { enabled: false },
-    documentEntryProvider: { enabled: false },
-    ingest: {
-      pathResolver,
-      projectRoot: workspaceRoot,
-      includeImportSource: false,
-      includeRegisterExistingSource: false,
-      includeExportStaging: false,
-      includeCacheArtifact: false,
-      guardOptions: {
-        projectRoot: workspaceRoot,
-      },
-    },
-  }).contentIngest;
-}
-
-function createWorkspacePathResolver(workspaceRoot: string): PathResolver {
-  return new PathResolver(
-    new Map([
-      ['WORKSPACE', workspaceRoot],
-      ['PROJECT', workspaceRoot],
-    ]),
-  );
-}
-
 function createMaterializedGeneratedResourceRef(
   asset: PluginTransferAssetRef,
-  result: ContentIngestResult,
+  locator: WorkspaceFileContentLocator,
 ): ResourceRef {
   return createGeneratedAssetResourceRef({
-    assetId: readGeneratedAssetId(result, asset),
-    path:
-      result.contractedPath ?? result.outputPath ?? asset.path ?? assetIdForGeneratedAsset(asset),
+    assetId: assetIdForGeneratedAsset(asset),
+    path: `\${WORKSPACE}/${locator.path}`,
     mimeType: mimeTypeForAsset(asset),
     scope: 'project',
   });
 }
 
-function readGeneratedAssetId(result: ContentIngestResult, asset: PluginTransferAssetRef): string {
-  const source = result.source;
-  if (source?.kind === 'generated-asset') return source.assetId;
-  return assetIdForGeneratedAsset(asset);
+async function persistGeneratedOutput(
+  input: PersistGeneratedOutputInput,
+): Promise<WorkspaceFileContentLocator | undefined> {
+  await fs.mkdir(path.join(input.workspaceRoot, ...input.outputDirectory.split('/')), {
+    recursive: true,
+  });
+  const allocator = new NodeAuthorizedOutputAllocator({
+    outputDirectory: input.outputDirectory,
+  });
+  const allocation = await allocator.allocate({
+    fileNameHint: input.fileNameHint,
+    ...(input.mediaType ? { mediaType: input.mediaType } : {}),
+  });
+  if (allocation.status !== 'allocated') return undefined;
+  const bytes = new Uint8Array(await fs.readFile(input.sourcePath));
+  const writer = new NodeAuthorizedWorkspaceWriter({ workspaceRoot: input.workspaceRoot });
+  const written = await writer.write(allocation.locator, bytes, { conflict: 'fail-if-exists' });
+  return written.status === 'written' ? written.locator : undefined;
 }
 
 function assetIdForGeneratedAsset(asset: PluginTransferAssetRef): string {

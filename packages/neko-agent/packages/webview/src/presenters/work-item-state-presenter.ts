@@ -33,16 +33,6 @@ export function upsertWorkItemsForConversation(
   return next;
 }
 
-export function replaceWorkItemsForConversation(
-  previous: AgentWorkItemStore,
-  conversationId: string,
-  items: AgentWorkItem[],
-): AgentWorkItemStore {
-  const next = new Map(previous);
-  next.set(conversationId, new Map(items.map((item) => [getAgentWorkItemRuntimeKey(item), item])));
-  return next;
-}
-
 export function removeConversationWorkItems(
   previous: AgentWorkItemStore,
   conversationId: string,

@@ -94,9 +94,7 @@ export function buildRuntimePluginsAvailableMessage(
   return buildPluginsAvailableMessage(projectRuntimeNekoPluginsAvailable(input));
 }
 
-export function projectRuntimeNekoPluginsAvailable(
-  input: ProjectPluginsAvailableInput,
-): PluginsAvailable {
+function projectRuntimeNekoPluginsAvailable(input: ProjectPluginsAvailableInput): PluginsAvailable {
   return Object.fromEntries(
     Object.entries(NEKO_PLUGIN_EXTENSION_IDS).map(([plugin, extensionId]) => [
       plugin,

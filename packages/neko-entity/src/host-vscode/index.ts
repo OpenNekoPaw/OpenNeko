@@ -4,12 +4,14 @@ import * as vscode from 'vscode';
 import type {
   CharacterRecord,
   CharacterRegistryFile,
+  ContentReadService,
   CreativeEntityChangeEvent,
   CreativeEntityKind,
   CreativeEntityRef,
   EntityBindingWidgetTriggerRequest,
-  EntityAssetBinding,
-  EntityFacadeAssetReverseLookupRequest,
+  EntityRepresentationBinding,
+  EntityRepresentationTarget,
+  EntityFacadeRepresentationReverseLookupRequest,
   EntityFacadeAliasRequest,
   EntityFacadeBindingLifecycleRequest,
   EntityFacadeCandidateActionRequest,
@@ -23,10 +25,11 @@ import type {
   EntityFacadeNameCandidateRequest,
   EntityFacadeProposeCandidateRequest,
   EntityFacadeProjectContext,
+  EntityFacadeRebindRepresentationRequest,
   EntityFacadeRenameEntityRequest,
   EntityFacadeResolveByNameRequest,
   EntityFacadeSetDefaultBindingRequest,
-  EntityFacadeUnbindAssetRequest,
+  EntityFacadeUnbindRepresentationRequest,
   EntityFacadeUpdateMetadataRequest,
   EntityFacadeUpsertBindingRequest,
   EntityFacadeUpsertVisualDraftRequest,
@@ -37,9 +40,11 @@ import type {
 import {
   ENTITY_FACADE_COMMANDS,
   ENTITY_FACADE_SHORT_METADATA_KEYS,
+  contentLocatorKey,
+  contentLocatorsEqual,
   createEmptyCharacterRegistryFile,
   isEntityBindingWidgetTriggerRequest,
-  isEntityFacadeAssetReverseLookupRequest,
+  isEntityFacadeRepresentationReverseLookupRequest,
   isEntityFacadeAliasRequest,
   isEntityFacadeBindingLifecycleRequest,
   isEntityFacadeCandidateActionRequest,
@@ -52,23 +57,25 @@ import {
   isEntityFacadeMergeCandidateRequest,
   isEntityFacadeNameCandidateRequest,
   isEntityFacadeProposeCandidateRequest,
+  isEntityFacadeRebindRepresentationRequest,
   isEntityFacadeRenameEntityRequest,
   isEntityFacadeResolveByNameRequest,
   isEntityFacadeSetDefaultBindingRequest,
-  isEntityFacadeUnbindAssetRequest,
+  isEntityFacadeUnbindRepresentationRequest,
   isEntityFacadeUpdateMetadataRequest,
   isEntityFacadeUpsertBindingRequest,
   isEntityFacadeUpsertVisualDraftRequest,
   isEntityMemoryContribution,
 } from '@neko/shared';
 import { CreativeEntityService } from '../core/CreativeEntityService';
+import { EntityRepresentationRebindService } from '../core/representationAccess';
 import {
   EntityContributionAutomationService,
   type EntityContributionAutomationOptions,
   type EntityContributionAutomationResult,
 } from '../core/contributionAutomation';
 import {
-  EntityAssetBindingService,
+  EntityRepresentationBindingService,
   EntityAssetRequirementService,
   VisualIdentityDraftService,
 } from '../core/factStores';
@@ -77,10 +84,7 @@ import { CreativeEntityRegistryService, ProjectEntityStore } from '../core/entit
 import type { EntityRuntimeFileStore, EntityRuntimePorts } from '../core/ports';
 import { SerialEntityRuntimeLock } from '../core/ports';
 import { resolveCharacterRegistryPath } from '../core/paths';
-import {
-  CommandProjectAssetRefResolver,
-  ProjectAssetBindingAvailabilityWatcher,
-} from './projectAssetBindingAvailabilityWatcher';
+import { WorkspaceRepresentationBindingAvailabilityWatcher } from './workspaceRepresentationBindingAvailabilityWatcher';
 
 export {
   EntityInspectorProvider,
@@ -96,8 +100,9 @@ export class NodeJsonEntityFileStore implements EntityRuntimeFileStore {
     try {
       const raw = await fs.readFile(filePath, 'utf8');
       return JSON.parse(raw) as unknown;
-    } catch {
-      return undefined;
+    } catch (error) {
+      if (isNodeError(error) && error.code === 'ENOENT') return undefined;
+      throw error;
     }
   }
 
@@ -112,8 +117,9 @@ export class NodeJsonEntityFileStore implements EntityRuntimeFileStore {
     try {
       await fs.access(filePath);
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      if (isNodeError(error) && error.code === 'ENOENT') return false;
+      throw error;
     }
   }
 }
@@ -190,6 +196,7 @@ export class CharacterRegistryService {
 
 export interface VSCodeEntityRuntimeOptions {
   readonly projectRoot: string;
+  readonly contentRead?: ContentReadService;
   readonly logger?: {
     warn(message: string, metadata?: Record<string, unknown>): void;
     info?(message: string, metadata?: Record<string, unknown>): void;
@@ -226,6 +233,7 @@ export interface VSCodeEntityContributionAutomationRequest {
 
 export interface VSCodeEntityRuntime {
   readonly service: CreativeEntityService;
+  readonly representationRebind?: EntityRepresentationRebindService;
   readonly ports: EntityRuntimePorts;
   readonly onDidChangeEntity: vscode.Event<CreativeEntityChangeEvent>;
   flushProjection(): Promise<void>;
@@ -240,6 +248,7 @@ export interface VSCodeEntityRuntimeRegistryOptions extends Pick<
   readonly resolveProjection?: (
     projectRoot: string,
   ) => VSCodeEntityRuntimeOptions['projection'] | undefined;
+  readonly resolveContentRead?: (projectRoot: string) => ContentReadService | undefined;
 }
 
 export class VSCodeEntityRuntimeRegistry implements vscode.Disposable {
@@ -254,6 +263,7 @@ export class VSCodeEntityRuntimeRegistry implements vscode.Disposable {
       projectRoot,
       logger: this.options.logger,
       projection: this.options.resolveProjection?.(projectRoot),
+      contentRead: this.options.resolveContentRead?.(projectRoot),
     });
     this.runtimes.set(projectRoot, next);
     return next;
@@ -284,6 +294,13 @@ export function createVSCodeEntityRuntime(
     events: { emit: (event) => emitter.fire(event) },
   };
   const service = new CreativeEntityService({ projectRoot: options.projectRoot, ports });
+  const representationRebind = options.contentRead
+    ? new EntityRepresentationRebindService({
+        bindings: service.bindings,
+        content: options.contentRead,
+        commit: (input) => service.rebindRepresentation(input),
+      })
+    : undefined;
   const projector = options.projection
     ? new EntityAssetMetadataProjector({
         partition: options.projection.partition,
@@ -315,13 +332,14 @@ export function createVSCodeEntityRuntime(
   };
   const projectionSubscription = projector ? emitter.event(refreshProjection) : undefined;
   refreshProjection();
-  const bindingAvailabilityWatcher = new ProjectAssetBindingAvailabilityWatcher({
+  const bindingAvailabilityWatcher = new WorkspaceRepresentationBindingAvailabilityWatcher({
     projectRoot: options.projectRoot,
     service,
-    resolver: new CommandProjectAssetRefResolver(),
+    ...(representationRebind ? { representationRebind } : {}),
   });
   return {
     service,
+    ...(representationRebind ? { representationRebind } : {}),
     ports,
     onDidChangeEntity: emitter.event,
     flushProjection: () => projectionRefresh,
@@ -347,7 +365,7 @@ export function createVSCodeEntityServices(options: VSCodeEntityRuntimeOptions):
   readonly ports: EntityRuntimePorts;
   readonly store: ProjectEntityStore;
   readonly registry: CreativeEntityRegistryService;
-  readonly bindings: EntityAssetBindingService;
+  readonly bindings: EntityRepresentationBindingService;
   readonly requirements: EntityAssetRequirementService;
   readonly drafts: VisualIdentityDraftService;
   readonly service: CreativeEntityService;
@@ -355,7 +373,7 @@ export function createVSCodeEntityServices(options: VSCodeEntityRuntimeOptions):
   const ports = createVSCodeEntityPorts(options);
   const store = new ProjectEntityStore({ projectRoot: options.projectRoot, ports });
   const registry = new CreativeEntityRegistryService(store);
-  const bindings = EntityAssetBindingService.fromProjectRoot(options.projectRoot, ports);
+  const bindings = EntityRepresentationBindingService.fromProjectRoot(options.projectRoot, ports);
   const requirements = EntityAssetRequirementService.fromProjectRoot(options.projectRoot, ports);
   const drafts = VisualIdentityDraftService.fromProjectRoot(options.projectRoot, ports);
   const service = new CreativeEntityService({
@@ -453,21 +471,28 @@ export function registerEntityFacadeCommands(
           ) {
             return false;
           }
-          if (request.assetRef && binding.assetRef !== request.assetRef) return false;
+          if (
+            request.representation &&
+            !contentLocatorsEqual(binding.representation, request.representation)
+          ) {
+            return false;
+          }
           return true;
         });
       },
     ),
     vscode.commands.registerCommand(
-      ENTITY_FACADE_COMMANDS.findEntitiesByAsset,
-      async (request: EntityFacadeAssetReverseLookupRequest | unknown) => {
-        if (!isEntityFacadeAssetReverseLookupRequest(request)) {
-          return invalidRequest('findEntitiesByAsset');
+      ENTITY_FACADE_COMMANDS.findEntitiesByRepresentation,
+      async (request: EntityFacadeRepresentationReverseLookupRequest | unknown) => {
+        if (!isEntityFacadeRepresentationReverseLookupRequest(request)) {
+          return invalidRequest('findEntitiesByRepresentation');
         }
         const resolved = resolveRuntime(runtimeRegistry, request, undefined, options);
         if ('code' in resolved) return resolved;
         const bindings = await resolved.runtime.service.bindings.list();
-        const matchedBindings = bindings.filter((binding) => binding.assetRef === request.assetRef);
+        const matchedBindings = bindings.filter((binding) =>
+          contentLocatorsEqual(binding.representation, request.representation),
+        );
         const entities = await Promise.all(
           matchedBindings.map(async (binding) => {
             const entity = await resolved.runtime.service.get(binding.entityId);
@@ -488,7 +513,7 @@ export function registerEntityFacadeCommands(
           }),
         );
         return {
-          assetRef: request.assetRef,
+          representation: request.representation,
           entities,
         };
       },
@@ -568,21 +593,42 @@ export function registerEntityFacadeCommands(
       },
     ),
     vscode.commands.registerCommand(
-      ENTITY_FACADE_COMMANDS.bindAsset,
+      ENTITY_FACADE_COMMANDS.bindRepresentation,
       async (request: EntityFacadeUpsertBindingRequest | unknown) => {
-        if (!isEntityFacadeUpsertBindingRequest(request)) return invalidRequest('bindAsset');
+        if (!isEntityFacadeUpsertBindingRequest(request)) {
+          return invalidRequest('bindRepresentation');
+        }
         const resolved = resolveRuntime(runtimeRegistry, request, undefined, options);
         if ('code' in resolved) return resolved;
         return resolved.runtime.service.upsertBinding(request.binding);
       },
     ),
     vscode.commands.registerCommand(
-      ENTITY_FACADE_COMMANDS.unbindAsset,
-      async (request: EntityFacadeUnbindAssetRequest | unknown) => {
-        if (!isEntityFacadeUnbindAssetRequest(request)) return invalidRequest('unbindAsset');
+      ENTITY_FACADE_COMMANDS.unbindRepresentation,
+      async (request: EntityFacadeUnbindRepresentationRequest | unknown) => {
+        if (!isEntityFacadeUnbindRepresentationRequest(request)) {
+          return invalidRequest('unbindRepresentation');
+        }
         const resolved = resolveRuntime(runtimeRegistry, request, undefined, options);
         if ('code' in resolved) return resolved;
-        return resolved.runtime.service.unbindAsset(request.bindingId);
+        return resolved.runtime.service.unbindRepresentation(request.bindingId);
+      },
+    ),
+    vscode.commands.registerCommand(
+      ENTITY_FACADE_COMMANDS.rebindRepresentation,
+      async (request: EntityFacadeRebindRepresentationRequest | unknown) => {
+        if (!isEntityFacadeRebindRepresentationRequest(request)) {
+          return invalidRequest('rebindRepresentation');
+        }
+        const resolved = resolveRuntime(runtimeRegistry, request, undefined, options);
+        if ('code' in resolved) return resolved;
+        if (!resolved.runtime.representationRebind) {
+          return unsupportedEdit('Entity rebind requires an injected ContentReadService.');
+        }
+        return resolved.runtime.representationRebind.rebind(
+          request.bindingId,
+          request.representation,
+        );
       },
     ),
     vscode.commands.registerCommand(
@@ -594,16 +640,6 @@ export function registerEntityFacadeCommands(
         const resolved = resolveRuntime(runtimeRegistry, request, undefined, options);
         if ('code' in resolved) return resolved;
         return resolved.runtime.service.markBindingsOrphaned(request);
-      },
-    ),
-    vscode.commands.registerCommand(
-      ENTITY_FACADE_COMMANDS.restoreBinding,
-      async (request: EntityFacadeBindingLifecycleRequest | unknown) => {
-        if (!isEntityFacadeBindingLifecycleRequest(request))
-          return invalidRequest('restoreBinding');
-        const resolved = resolveRuntime(runtimeRegistry, request, undefined, options);
-        if ('code' in resolved) return resolved;
-        return resolved.runtime.service.restoreOrphanedBindings(request);
       },
     ),
     vscode.commands.registerCommand(
@@ -882,19 +918,19 @@ async function executeWidgetAction(
         ...context,
         candidateId: request.candidateId,
       });
-    case 'bind-asset': {
+    case 'bind-representation': {
       const entityRef = request.entityRef;
-      const assetRef = request.assetRef ?? request.context.assetRef;
-      if (!entityRef || !assetRef || !request.role) {
-        return invalidRequest('Widget bind requires entityRef, assetRef, and role.');
+      const representation = request.representation ?? request.context.representation;
+      if (!entityRef || !representation || !request.role) {
+        return invalidRequest('Widget bind requires entityRef, representation, and role.');
       }
-      return executeCommand(ENTITY_FACADE_COMMANDS.bindAsset, {
+      return executeCommand(ENTITY_FACADE_COMMANDS.bindRepresentation, {
         ...context,
         binding: {
-          id: buildWidgetBindingId(entityRef.entityId, request.role, assetRef),
+          id: buildWidgetBindingId(entityRef.entityId, request.role, representation),
           entityId: entityRef.entityId,
           entityKind: entityRef.entityKind,
-          assetRef,
+          representation,
           role: request.role,
           status: 'confirmed',
           availability: 'active',
@@ -903,11 +939,11 @@ async function executeWidgetAction(
         },
       });
     }
-    case 'unbind-asset':
+    case 'unbind-representation':
       if (!request.payload || typeof request.payload['bindingId'] !== 'string') {
         return invalidRequest('Widget unbind requires payload.bindingId.');
       }
-      return executeCommand(ENTITY_FACADE_COMMANDS.unbindAsset, {
+      return executeCommand(ENTITY_FACADE_COMMANDS.unbindRepresentation, {
         ...context,
         bindingId: request.payload['bindingId'],
       });
@@ -982,7 +1018,7 @@ async function pickDefaultBinding(
   service: CreativeEntityService,
   entityRef: CreativeEntityRef,
   quickPick: Pick<typeof vscode.window, 'showQuickPick'>,
-): Promise<EntityAssetBinding | undefined> {
+): Promise<EntityRepresentationBinding | undefined> {
   const bindings = (await service.bindings.list()).filter(
     (binding) =>
       binding.entityId === entityRef.entityId &&
@@ -999,9 +1035,9 @@ async function pickDefaultBinding(
         description: projection.description,
         detail: projection.unavailable
           ? vscode.l10n.t(
-              'Representation asset is unavailable; choosing it preserves the entity link but keeps the broken marker visible.',
+              'Representation is unavailable; choosing it preserves the entity link but keeps the broken marker visible.',
             )
-          : binding.assetRef,
+          : describeRepresentation(binding.representation),
         binding,
       };
     }),
@@ -1032,8 +1068,25 @@ function projectRootFromContextUri(contextUri: string | undefined): string | und
   }
 }
 
-function buildWidgetBindingId(entityId: string, role: string, assetRef: string): string {
-  return `binding:${safeIdPart(entityId)}:${safeIdPart(role)}:${safeIdPart(assetRef)}`;
+function buildWidgetBindingId(
+  entityId: string,
+  role: string,
+  representation: EntityRepresentationTarget,
+): string {
+  return `binding:${safeIdPart(entityId)}:${safeIdPart(role)}:${safeIdPart(contentLocatorKey(representation))}`;
+}
+
+function describeRepresentation(representation: EntityRepresentationTarget): string {
+  switch (representation.kind) {
+    case 'workspace-file':
+      return representation.path;
+    case 'document-entry':
+      return `${representation.source.path}#${representation.entryPath}`;
+    case 'generated-output':
+      return representation.path;
+    case 'package-resource':
+      return `${representation.packageId}/${representation.resourcePath}`;
+  }
 }
 
 function safeIdPart(value: string): string {
@@ -1155,9 +1208,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error;
+}
+
 export { createEmptyCharacterRegistryFile, resolveCharacterRegistryPath };
 export type {
-  EntityAssetBindingService,
+  EntityRepresentationBindingService,
   EntityAssetRequirementService,
   VisualIdentityDraftService,
 } from '../core/factStores';

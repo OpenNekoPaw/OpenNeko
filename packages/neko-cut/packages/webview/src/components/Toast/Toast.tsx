@@ -4,6 +4,7 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, memo } from 'react';
+import { useTranslation } from '../../i18n/I18nContext';
 
 // =============================================================================
 // Types
@@ -113,6 +114,7 @@ interface ToastItemProps {
 }
 
 const ToastItem = memo(function ToastItem({ toast, onRemove }: ToastItemProps) {
+  const { t } = useTranslation();
   const bgColor = {
     success: 'bg-green-600',
     error: 'bg-red-600',
@@ -137,7 +139,7 @@ const ToastItem = memo(function ToastItem({ toast, onRemove }: ToastItemProps) {
       <button
         onClick={() => onRemove(toast.id)}
         className="text-white/80 hover:text-white transition-colors"
-        aria-label="Close"
+        aria-label={t('toast.close')}
       >
         ✕
       </button>

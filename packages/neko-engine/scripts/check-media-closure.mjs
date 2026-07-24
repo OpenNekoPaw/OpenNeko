@@ -79,7 +79,6 @@ for (const pkg of workspacePackages) {
 const publicSurfaceFiles = [
   'packages/neko-client/src/EngineClient.ts',
   'packages/neko-client/src/engine/types.ts',
-  'packages/neko-client/src/engine-file-access.ts',
   'packages/neko-engine/packages/extension/src/agentCapabilityProvider.ts',
   'packages/neko-agent/packages/extension/src/services/engineClientProvider.ts',
 ];

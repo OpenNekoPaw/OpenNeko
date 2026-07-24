@@ -4,7 +4,8 @@
  * Validates tool arguments against their parameter schema before execution.
  * Returns structured errors that LLMs can use to self-correct on retry.
  *
- * Supports: type, required, enum, minimum, maximum, pattern, items.type, items.required
+ * Supports: type, required, enum, minimum, maximum, minLength, pattern,
+ * nested object/array properties, and anyOf.
  * Does NOT depend on Zod to keep @neko/agent lightweight.
  */
 
@@ -93,8 +94,8 @@ function validateProperty(
 
   // Numeric range checks
   if (typeof value === 'number') {
-    const min = prop.minimum as number | undefined;
-    const max = prop.maximum as number | undefined;
+    const min = typeof prop.minimum === 'number' ? prop.minimum : undefined;
+    const max = typeof prop.maximum === 'number' ? prop.maximum : undefined;
     if (min !== undefined && value < min) {
       errors.push({
         field,
@@ -113,9 +114,21 @@ function validateProperty(
     }
   }
 
+  if (typeof value === 'string' && typeof prop.minLength === 'number') {
+    if (value.length < prop.minLength) {
+      errors.push({
+        field,
+        expected: `length >= ${prop.minLength}`,
+        actual: value,
+        message: `Field "${field}" must have length >= ${prop.minLength}`,
+      });
+    }
+  }
+
   // Pattern check (strings only)
   if (typeof value === 'string' && prop.pattern) {
-    const pattern = prop.pattern as string;
+    const pattern = typeof prop.pattern === 'string' ? prop.pattern : undefined;
+    if (!pattern) return errors;
     try {
       if (!new RegExp(pattern).test(value)) {
         errors.push({
@@ -130,38 +143,88 @@ function validateProperty(
     }
   }
 
-  // Array items type check
-  if (Array.isArray(value) && prop.items) {
-    const itemSchema = prop.items as { type?: string; required?: readonly string[] };
-    const itemType = itemSchema.type;
-    if (itemType) {
-      for (let i = 0; i < value.length; i++) {
-        if (!checkType(value[i], itemType)) {
-          errors.push({
-            field: `${field}[${i}]`,
-            expected: `item type "${itemType}"`,
-            actual: value[i],
-            message: `Field "${field}[${i}]" expected type "${itemType}", got ${typeof value[i]}`,
-          });
-          continue;
-        }
-        if (itemType === 'object' && itemSchema.required && isRecord(value[i])) {
-          for (const requiredField of itemSchema.required) {
-            if (value[i][requiredField] === undefined || value[i][requiredField] === null) {
-              errors.push({
-                field: `${field}[${i}].${requiredField}`,
-                expected: 'required field',
-                actual: undefined,
-                message: `Missing required field: "${field}[${i}].${requiredField}"`,
-              });
-            }
-          }
-        }
-      }
+  if (isRecord(value)) {
+    errors.push(...validateObject(field, value, prop));
+  }
+
+  if (Array.isArray(value) && isToolParameterProperty(prop.items)) {
+    for (let index = 0; index < value.length; index++) {
+      errors.push(...validateProperty(`${field}[${index}]`, value[index], prop.items));
+    }
+  }
+
+  const branches = readSchemaBranches(prop.anyOf);
+  if (branches.length > 0) {
+    const branchErrors = branches.map((branch) => validateProperty(field, value, branch));
+    if (!branchErrors.some((candidate) => candidate.length === 0)) {
+      const closest = branchErrors.reduce((best, candidate) =>
+        candidate.length < best.length ? candidate : best,
+      );
+      errors.push(...closest);
     }
   }
 
   return errors;
+}
+
+function validateObject(
+  field: string,
+  value: Record<string, unknown>,
+  prop: ToolParameterProperty,
+): ToolValidationError[] {
+  const errors: ToolValidationError[] = [];
+  for (const requiredField of prop.required ?? []) {
+    if (value[requiredField] === undefined || value[requiredField] === null) {
+      const nestedField = joinField(field, requiredField);
+      errors.push({
+        field: nestedField,
+        expected: 'required field',
+        actual: undefined,
+        message: `Missing required field: "${nestedField}"`,
+      });
+    }
+  }
+
+  for (const [name, nestedValue] of Object.entries(value)) {
+    const nestedSchema = prop.properties?.[name];
+    if (!nestedSchema) {
+      if (prop.additionalProperties === false) {
+        const nestedField = joinField(field, name);
+        errors.push({
+          field: nestedField,
+          expected: 'declared field',
+          actual: nestedValue,
+          message: `Unknown field: "${nestedField}"`,
+        });
+      }
+      continue;
+    }
+    errors.push(...validateProperty(joinField(field, name), nestedValue, nestedSchema));
+  }
+  return errors;
+}
+
+function joinField(parent: string, child: string): string {
+  return parent ? `${parent}.${child}` : child;
+}
+
+function readSchemaBranches(value: unknown): ToolParameterProperty[] {
+  return Array.isArray(value) ? value.filter(isToolParameterProperty) : [];
+}
+
+function isToolParameterProperty(value: unknown): value is ToolParameterProperty {
+  return isRecord(value) && isToolParameterType(value['type']);
+}
+
+function isToolParameterType(value: unknown): value is ToolParameterProperty['type'] {
+  return (
+    value === 'string' ||
+    value === 'number' ||
+    value === 'integer' ||
+    value === 'boolean' ||
+    value === 'array' ||
+    value === 'object'
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

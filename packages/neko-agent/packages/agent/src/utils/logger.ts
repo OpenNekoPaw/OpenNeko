@@ -6,4 +6,4 @@
  */
 import { createLoggerRegistry } from '@neko/shared';
 
-export const { setRootLogger, getRootLogger, getLogger } = createLoggerRegistry('Agent');
+export const { setRootLogger, getLogger } = createLoggerRegistry('Agent');

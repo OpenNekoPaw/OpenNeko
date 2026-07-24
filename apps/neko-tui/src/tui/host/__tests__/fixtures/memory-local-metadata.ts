@@ -1,8 +1,6 @@
 import type {
   CatalogItemRecord,
   CatalogProjectionRepository,
-  ResourceCacheManifest,
-  ResourceCacheManifestStore,
   EntityAssetProjectionRecord,
   EntityAssetProjectionRepository,
   SearchDocumentRecord,
@@ -35,7 +33,6 @@ export async function createMemoryLocalMetadataBinding(
     homedir,
     metadataStore,
   });
-  const resourceCacheManifestStore = createMemoryResourceCacheManifestStore();
   const searchDocuments = createMemorySearchDocumentRepository();
   const semanticProjections = createMemorySemanticProjectionRepository();
   const entityAssetProjections = createMemoryEntityAssetProjectionRepository();
@@ -64,34 +61,6 @@ export async function createMemoryLocalMetadataBinding(
     },
     workspaceId,
     metadataStore,
-    resourceCacheManifestStore,
-    resourceCacheMigrationReport: {
-      sourceStatus: 'absent',
-      sourcePath: '<memory>',
-      backupPath: null,
-      archivedPath: null,
-      quarantinePath: null,
-      sourceDiagnostic: null,
-      importedEntryCount: 0,
-      importedVariantCount: 0,
-      verifiedEntryCount: 0,
-      verifiedVariantCount: 0,
-      unrecoverable: [],
-    },
-    proxyMigrationReport: {
-      sourceStatus: 'absent',
-      sourcePath: '<memory>',
-      backupPath: null,
-      archivedPath: null,
-      quarantinePath: null,
-      sourceDiagnostic: null,
-      importedEntryCount: 0,
-      importedVariantCount: 0,
-      copiedArtifactCount: 0,
-      verifiedEntryCount: 0,
-      verifiedVariantCount: 0,
-      unrecoverable: [],
-    },
     searchPartition,
     semanticPartition,
     entityAssetPartition,
@@ -196,9 +165,24 @@ function createMemorySemanticProjectionRepository(): SemanticProjectionRepositor
   let records: readonly SemanticProjectionRecord[] = [];
   return {
     list: async () => records,
+    get: async (_partition, sourceId) =>
+      records.find((record) => record.sourceId === sourceId) ?? null,
     replacePartition: async (request) => {
       records = request.sources;
     },
+    replaceSource: async (request) => {
+      records = [
+        ...records.filter((record) => record.sourceId !== request.source.sourceId),
+        request.source,
+      ];
+    },
+    deleteSource: async (_partition, sourceId) => {
+      const next = records.filter((record) => record.sourceId !== sourceId);
+      if (next.length === records.length) return false;
+      records = next;
+      return true;
+    },
+    clearBodyBearingSources: async () => [],
     insertMissing: async (request) => {
       const existingIds = new Set(records.map((record) => record.sourceId));
       const inserted = request.sources.filter((record) => !existingIds.has(record.sourceId));
@@ -246,25 +230,5 @@ function createMemoryEntityAssetProjectionRepository(): EntityAssetProjectionRep
           .map((record) => `${record.kind}:${record.projectionId}`),
       };
     },
-  };
-}
-
-function createMemoryResourceCacheManifestStore(): ResourceCacheManifestStore {
-  let manifest: ResourceCacheManifest = {
-    version: 1,
-    createdAt: '2026-07-13T00:00:00.000Z',
-    updatedAt: '2026-07-13T00:00:00.000Z',
-    entries: {},
-  };
-  return {
-    load: async () => manifest,
-    save: async (next) => {
-      manifest = next;
-    },
-    update: async (operation) => {
-      manifest = await operation(manifest);
-      return manifest;
-    },
-    invalidateCache() {},
   };
 }

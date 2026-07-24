@@ -3,6 +3,7 @@
   "ownerKind": "agent-runtime",
   "entries": [
     { "suiteId": "agent-runtime.creative-media-workflow", "path": "creative-media-workflow/suite.json", "ownerId": "creative-media-workflow", "targetKind": "workflow" },
+    { "suiteId": "agent-runtime.media-library-content", "path": "media-library-content/suite.json", "ownerId": "media-library-content", "targetKind": "capability" },
     { "suiteId": "agent-runtime.model-binding", "path": "model-binding/suite.json", "ownerId": "session-model-binding", "targetKind": "model" },
     { "suiteId": "agent-runtime.perception-routing", "path": "perception-routing/suite.json", "ownerId": "perception-routing", "targetKind": "capability" },
     { "suiteId": "agent-runtime.prompt-composition", "path": "prompt-composition/suite.json", "ownerId": "prompt-composition", "targetKind": "prompt" },

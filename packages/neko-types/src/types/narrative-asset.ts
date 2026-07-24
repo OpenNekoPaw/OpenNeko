@@ -1,17 +1,5 @@
-import {
-  isContentAccessIntent,
-  isWebviewLikeRuntimeValue,
-  type ContentAccessDiagnostic,
-  type ContentAccessIntent,
-  type ContentAccessStatus,
-  type ContentAccessTarget,
-} from './content-access';
-import {
-  isResourceRef,
-  isResourceVariantRole,
-  type ResourceRef,
-  type ResourceVariantRole,
-} from './resource-cache';
+import { isWebviewLikeRuntimeValue } from './content-access';
+import { isResourceRef, type ResourceRef } from './resource-cache';
 
 export interface NarrativeRelativePathAssetRef {
   readonly kind: 'relative-path';
@@ -30,32 +18,6 @@ export interface NarrativeAssetValidationDiagnostic {
   readonly code: NarrativeAssetValidationCode;
   readonly message: string;
   readonly path?: string;
-}
-
-export interface NarrativeAssetResolveOptions {
-  readonly target?: ContentAccessTarget;
-  readonly role?: ResourceVariantRole;
-  readonly signal?: AbortSignal;
-  readonly metadata?: Record<string, unknown>;
-}
-
-export interface NarrativeAssetResolveResult {
-  readonly status: ContentAccessStatus;
-  readonly ref: NarrativeAssetRef;
-  readonly intent: ContentAccessIntent;
-  readonly role?: ResourceVariantRole;
-  readonly url?: string;
-  readonly path?: string;
-  readonly mimeType?: string;
-  readonly diagnostics?: readonly ContentAccessDiagnostic[];
-}
-
-export interface NarrativeAssetResolver {
-  resolve(
-    ref: NarrativeAssetRef,
-    intent: ContentAccessIntent,
-    options?: NarrativeAssetResolveOptions,
-  ): Promise<NarrativeAssetResolveResult>;
 }
 
 export function createNarrativeRelativePathAssetRef(path: string): NarrativeRelativePathAssetRef {
@@ -116,22 +78,6 @@ export function validateNarrativeAssetRef(
   }
 
   return diagnostics;
-}
-
-export function isNarrativeAssetAccessIntent(value: unknown): value is ContentAccessIntent {
-  return isContentAccessIntent(value);
-}
-
-export function isNarrativeAssetResolveOptions(
-  value: unknown,
-): value is NarrativeAssetResolveOptions {
-  if (value === undefined) return true;
-  if (!isRecord(value)) return false;
-  return (
-    (value['target'] === undefined || typeof value['target'] === 'string') &&
-    (value['role'] === undefined || isResourceVariantRole(value['role'])) &&
-    (value['metadata'] === undefined || isRecord(value['metadata']))
-  );
 }
 
 function isAbsoluteLocalPath(path: string): boolean {

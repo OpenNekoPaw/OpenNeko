@@ -79,8 +79,8 @@ pub trait ExportAudioBackend {
 
 /// Factory for audio mix backends.
 pub trait ExportAudioBackendFactory: Send + Sync {
-    /// Create a backend for one export job. `Ok(None)` means export continues
-    /// without audio, preserving current best-effort behavior.
+    /// Create a backend for one export job. `Ok(None)` means the timeline has
+    /// no audible input.
     fn create(&self, config: &ExportJobConfig) -> Result<Option<Box<dyn ExportAudioBackend>>>;
 }
 
@@ -96,10 +96,7 @@ pub trait ExportAudioEncodeBackend {
 /// Factory for audio encode backends.
 pub trait ExportAudioEncodeBackendFactory: Send + Sync {
     /// Create an encoder for the selected audio stream.
-    fn create(
-        &self,
-        config: AudioEncoderConfig,
-    ) -> Result<Option<Box<dyn ExportAudioEncodeBackend>>>;
+    fn create(&self, config: AudioEncoderConfig) -> Result<Box<dyn ExportAudioEncodeBackend>>;
 }
 
 /// Encode-only export backend wrapping the legacy async encode/mux pipeline.
@@ -259,14 +256,9 @@ impl ExportAudioBackendFactory for DefaultExportAudioBackendFactory {
     fn create(&self, config: &ExportJobConfig) -> Result<Option<Box<dyn ExportAudioBackend>>> {
         let mut mixer = AudioMixer::new(config.timeline.clone(), &config.settings);
         match mixer.initialize() {
-            Ok(()) => Ok(Some(Box::new(DefaultExportAudioBackend { mixer }))),
-            Err(e) => {
-                tracing::warn!(
-                    "Audio mixer initialization failed (continuing without audio): {}",
-                    e
-                );
-                Ok(None)
-            }
+            Ok(true) => Ok(Some(Box::new(DefaultExportAudioBackend { mixer }))),
+            Ok(false) => Ok(None),
+            Err(error) => Err(error),
         }
     }
 }
@@ -293,29 +285,16 @@ impl ExportAudioBackend for DefaultExportAudioBackend {
 pub struct DefaultExportAudioEncodeBackendFactory;
 
 impl ExportAudioEncodeBackendFactory for DefaultExportAudioEncodeBackendFactory {
-    fn create(
-        &self,
-        config: AudioEncoderConfig,
-    ) -> Result<Option<Box<dyn ExportAudioEncodeBackend>>> {
+    fn create(&self, config: AudioEncoderConfig) -> Result<Box<dyn ExportAudioEncodeBackend>> {
         let mut encoder = FfmpegAudioEncoder::new();
-        match encoder.open(&config) {
-            Ok(()) => {
-                tracing::info!(
-                    "Audio encoder opened: {:?}, {}Hz, {}ch",
-                    config.codec,
-                    config.sample_rate,
-                    config.channels
-                );
-                Ok(Some(Box::new(DefaultExportAudioEncodeBackend { encoder })))
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Audio encoder init failed (continuing without audio): {}",
-                    e
-                );
-                Ok(None)
-            }
-        }
+        encoder.open(&config)?;
+        tracing::info!(
+            "Audio encoder opened: {:?}, {}Hz, {}ch",
+            config.codec,
+            config.sample_rate,
+            config.channels
+        );
+        Ok(Box::new(DefaultExportAudioEncodeBackend { encoder }))
     }
 }
 
@@ -557,11 +536,8 @@ mod tests {
     struct FakeAudioEncodeFactory;
 
     impl ExportAudioEncodeBackendFactory for FakeAudioEncodeFactory {
-        fn create(
-            &self,
-            _config: AudioEncoderConfig,
-        ) -> Result<Option<Box<dyn ExportAudioEncodeBackend>>> {
-            Ok(Some(Box::new(FakeAudioEncoder { flushed: false })))
+        fn create(&self, _config: AudioEncoderConfig) -> Result<Box<dyn ExportAudioEncodeBackend>> {
+            Ok(Box::new(FakeAudioEncoder { flushed: false }))
         }
     }
 
@@ -593,6 +569,137 @@ mod tests {
                 duration: 1,
                 stream_index: 1,
             }])
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum AudioFailureStage {
+        Mix,
+        Encode,
+        Submit,
+        Flush,
+    }
+
+    struct FailingAudioFactory {
+        stage: AudioFailureStage,
+    }
+
+    impl ExportAudioBackendFactory for FailingAudioFactory {
+        fn create(&self, _config: &ExportJobConfig) -> Result<Option<Box<dyn ExportAudioBackend>>> {
+            Ok(Some(Box::new(FailingAudioBackend { stage: self.stage })))
+        }
+    }
+
+    struct FailingAudioBackend {
+        stage: AudioFailureStage,
+    }
+
+    impl ExportAudioBackend for FailingAudioBackend {
+        fn sample_rate(&self) -> u32 {
+            48_000
+        }
+
+        fn channels(&self) -> u16 {
+            2
+        }
+
+        fn mix_frame(&mut self, _time: f64) -> Result<Option<MixedAudioFrame>> {
+            if self.stage == AudioFailureStage::Mix {
+                return Err(Error::Other("injected audio mix failure".to_string()));
+            }
+            Ok(Some(MixedAudioFrame {
+                data: vec![0.0, 0.0],
+                samples: 1,
+                timestamp: 0.0,
+                sample_rate: 48_000,
+                channels: 2,
+            }))
+        }
+    }
+
+    struct FailingAudioEncodeFactory {
+        stage: AudioFailureStage,
+    }
+
+    impl ExportAudioEncodeBackendFactory for FailingAudioEncodeFactory {
+        fn create(&self, _config: AudioEncoderConfig) -> Result<Box<dyn ExportAudioEncodeBackend>> {
+            Ok(Box::new(FailingAudioEncoder { stage: self.stage }))
+        }
+    }
+
+    struct FailingAudioEncoder {
+        stage: AudioFailureStage,
+    }
+
+    impl ExportAudioEncodeBackend for FailingAudioEncoder {
+        fn encode_frame(&mut self, _frame: &MixedAudioFrame) -> Result<Vec<EncodedPacket>> {
+            if self.stage == AudioFailureStage::Encode {
+                return Err(Error::Other("injected audio encode failure".to_string()));
+            }
+            Ok(vec![EncodedPacket {
+                data: vec![1],
+                pts: 0,
+                dts: 0,
+                is_keyframe: true,
+                duration: 1,
+                stream_index: 1,
+            }])
+        }
+
+        fn flush(&mut self) -> Result<Vec<EncodedPacket>> {
+            if self.stage == AudioFailureStage::Flush {
+                return Err(Error::Other("injected audio flush failure".to_string()));
+            }
+            Ok(Vec::new())
+        }
+    }
+
+    struct FailingSinkFactory {
+        events: Arc<Mutex<Vec<&'static str>>>,
+        stage: AudioFailureStage,
+    }
+
+    impl ExportSinkFactory for FailingSinkFactory {
+        fn create(&self, _config: PipelineConfig) -> Result<Box<dyn ExportSink>> {
+            Ok(Box::new(FailingSink {
+                events: Arc::clone(&self.events),
+                stage: self.stage,
+            }))
+        }
+    }
+
+    struct FailingSink {
+        events: Arc<Mutex<Vec<&'static str>>>,
+        stage: AudioFailureStage,
+    }
+
+    impl PipelineSink for FailingSink {
+        fn accepts(&self, output: &PipelineOutput) -> bool {
+            matches!(output.as_video(), Some(VideoOutput::GpuFrame(_)))
+                || matches!(output, PipelineOutput::Audio(AudioOutput::EncodedPacket(_)))
+        }
+
+        fn submit(&self, output: PipelineOutput) -> Result<()> {
+            if matches!(output, PipelineOutput::Audio(_)) && self.stage == AudioFailureStage::Submit
+            {
+                return Err(Error::Other("injected audio submit failure".to_string()));
+            }
+            self.events.lock().unwrap().push("sink:submit");
+            Ok(())
+        }
+
+        fn flush(&self) -> Result<()> {
+            Ok(())
+        }
+
+        fn close(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    impl ExportSink for FailingSink {
+        fn cancel(&self) -> Result<()> {
+            Ok(())
         }
     }
 
@@ -699,6 +806,7 @@ mod tests {
                 video_bitrate: Some(1_000),
                 audio_codec: AudioCodec::Aac,
                 audio_bitrate: Some(128_000),
+                audio_sample_rate: 48_000,
                 hw_encoder: neko_engine_types::HwEncoderType::None,
                 time_range: None,
                 preset: ExportPreset::Medium,
@@ -757,6 +865,55 @@ mod tests {
             "expected encoded and flushed audio packets"
         );
         assert!(events.contains(&"sink:close"));
+    }
+
+    #[test]
+    fn export_worker_propagates_audio_mix_failure() {
+        assert_worker_audio_failure_is_visible(AudioFailureStage::Mix, "audio mix");
+    }
+
+    #[test]
+    fn export_worker_propagates_audio_encode_failure() {
+        assert_worker_audio_failure_is_visible(AudioFailureStage::Encode, "audio encode");
+    }
+
+    #[test]
+    fn export_worker_propagates_audio_submit_failure() {
+        assert_worker_audio_failure_is_visible(AudioFailureStage::Submit, "audio submit");
+    }
+
+    #[test]
+    fn export_worker_propagates_audio_flush_failure() {
+        assert_worker_audio_failure_is_visible(AudioFailureStage::Flush, "audio flush");
+    }
+
+    fn assert_worker_audio_failure_is_visible(stage: AudioFailureStage, expected: &str) {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let backends = Arc::new(ExportBackendBundle {
+            render_factory: Arc::new(FakeRenderFactory::new(Arc::clone(&events))),
+            audio_factory: Arc::new(FailingAudioFactory { stage }),
+            audio_encode_factory: Arc::new(FailingAudioEncodeFactory { stage }),
+            encode_factory: Arc::new(FakeEncodeFactory),
+            sink_factory: Arc::new(FailingSinkFactory { events, stage }),
+        });
+        let config = test_config();
+        let job = ExportJob::new(config.clone(), 2);
+        let cancel = Arc::clone(&job.cancel_flag);
+        let jobs = Arc::new(RwLock::new(HashMap::new()));
+        let rt = tokio::runtime::Runtime::new().expect("runtime");
+        rt.block_on(async {
+            jobs.write().await.insert(config.job_id.clone(), job);
+        });
+        let (progress_tx, _) = broadcast::channel(8);
+
+        let _guard = rt.enter();
+        let error = ExportService::export_worker_sync(config, jobs, progress_tx, backends, cancel)
+            .expect_err("audio pipeline failure must fail the export");
+
+        assert!(
+            error.to_string().contains(expected),
+            "unexpected {stage:?} error: {error}"
+        );
     }
 
     #[test]

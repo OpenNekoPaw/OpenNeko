@@ -22,6 +22,7 @@ export async function prepareWorkspaceFixture(fixture, options = {}) {
   const workspace = await fs.mkdtemp(join(temporaryRoot, `neko-agent-eval-${fixture.id}-`));
   try {
     await copyFixtureTree(sourceRoot, workspace);
+    await createFixtureLinks(workspace, fixture.links ?? []);
   } catch (error) {
     await fs.rm(workspace, { recursive: true, force: true });
     throw error;
@@ -34,6 +35,30 @@ export async function prepareWorkspaceFixture(fixture, options = {}) {
       await fs.rm(workspace, { recursive: true, force: true });
     },
   };
+}
+
+async function createFixtureLinks(workspace, links) {
+  for (const link of links) {
+    const linkPath = resolve(workspace, link.path);
+    const targetPath = resolve(workspace, link.target);
+    assertContained(workspace, linkPath, 'fixture link path');
+    assertContained(workspace, targetPath, 'fixture link target');
+    const target = await fs.stat(targetPath);
+    await fs.mkdir(dirname(linkPath), { recursive: true });
+    await assertLinkPathMissing(linkPath);
+    const relativeTarget = relative(dirname(linkPath), targetPath) || '.';
+    await fs.symlink(relativeTarget, linkPath, target.isDirectory() ? 'dir' : 'file');
+  }
+}
+
+async function assertLinkPathMissing(linkPath) {
+  try {
+    await fs.lstat(linkPath);
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return;
+    throw error;
+  }
+  throw new Error(`fixture link path already exists: ${linkPath}`);
 }
 
 export async function computeFixtureDigest(root) {

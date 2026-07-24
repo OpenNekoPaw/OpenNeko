@@ -278,7 +278,6 @@ function partitionMayReturnKind(
       kinds.has('creative-entity') || kinds.has('entity-candidate') || kinds.has('generated-asset')
     );
   }
-  if (partition === 'asset-library') return kinds.has('asset') || kinds.has('document');
   if (partition === 'media-library') return kinds.has('media') || kinds.has('document');
   if (partition === 'documents') return kinds.has('document');
   if (partition === 'generated-assets') return kinds.has('generated-asset');

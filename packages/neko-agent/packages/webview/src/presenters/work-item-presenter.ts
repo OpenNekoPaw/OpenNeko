@@ -51,9 +51,7 @@ export interface SubAgentCardProjection {
   parentAgentId: string;
 }
 
-export function projectAgentWorkItemStatus(
-  status: AgentWorkItemStatus,
-): AgentWorkItemStatusProjection {
+function projectAgentWorkItemStatus(status: AgentWorkItemStatus): AgentWorkItemStatusProjection {
   const isActive = status === 'queued' || status === 'processing';
   const isCompleted = status === 'completed';
   const isFailed = status === 'failed' || status === 'cancelled';

@@ -407,7 +407,7 @@ export function createPermissionHooks(options?: PermissionHooksOptions): Permiss
   return new PermissionHooks(options);
 }
 
-export function isPersistentShellAllowRuleForbidden(pattern: string): boolean {
+function isPersistentShellAllowRuleForbidden(pattern: string): boolean {
   const trimmed = pattern.trim();
   return trimmed === 'Bash' || /^Bash\(/.test(trimmed);
 }

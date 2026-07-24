@@ -29,7 +29,7 @@ describe('Agent external processor chain runtime', () => {
     const stage = runtime.planChainStage({
       processorRunId: run.processorRunId,
       processorId: 'remove-background',
-      inputs: [{ slot: 'source', root: 'workspace', sourcePath: '${PROJECT}/shot.png' }],
+      inputs: [{ slot: 'source', locator: { kind: 'workspace-file', path: 'shot.png' } }],
       requireApprovalContinuation: true,
       approvalToken: 'approval-1',
     });
@@ -61,7 +61,7 @@ describe('Agent external processor chain runtime', () => {
     const first = runtime.planChainStage({
       processorRunId: run.processorRunId,
       processorId: 'upscale-image',
-      inputs: [{ slot: 'image', root: 'workspace', sourcePath: '${PROJECT}/shot.png' }],
+      inputs: [{ slot: 'image', locator: { kind: 'workspace-file', path: 'shot.png' } }],
       params: { scale: 4 },
     });
     expect(first.status).toBe('ready');
@@ -71,7 +71,7 @@ describe('Agent external processor chain runtime', () => {
       processorRunId: run.processorRunId,
       stageId: first.stage.stageId,
       processorId: 'upscale-image',
-      inputs: [{ slot: 'image', root: 'workspace', sourcePath: '${PROJECT}/shot.png' }],
+      inputs: [{ slot: 'image', locator: { kind: 'workspace-file', path: 'shot.png' } }],
       params: { scale: 2 },
     });
 
@@ -179,15 +179,15 @@ function manifest(
     outputs: {
       [options.outputSlot]: {
         produces: [options.outputMime],
-        root: 'resourceCache',
+        ownership: 'intermediate',
       },
     },
     ...(options.params ? { params: options.params } : {}),
     policy: {
       requiresApproval: true,
       allowNetwork: false,
-      allowedInputRoots: ['workspace', 'resourceCache'],
-      allowedOutputRoots: ['resourceCache'],
+      allowedInputRoots: ['workspace'],
+      allowedOutputOwnerships: ['intermediate'],
     },
   };
 }

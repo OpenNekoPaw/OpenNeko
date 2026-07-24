@@ -32,6 +32,7 @@ import {
   type PiConversationTranscriptEntry,
   type PiSkillHostSnapshot,
   type PiToolPermissionPolicy,
+  type PiToolResultAssetLoader,
   type PiToolRunIdentity,
   type SkillHostRecord,
   type SkillSourceRoot,
@@ -86,6 +87,7 @@ export interface VSCodePiRuntimeManagerOptions {
   readonly builtinSkillRoot: string;
   readonly credentials: OpenNekoCredentialStore;
   readonly tools: IToolRegistry;
+  readonly assetLoader?: PiToolResultAssetLoader;
   readonly workspaceTrusted: () => boolean;
 }
 
@@ -551,6 +553,9 @@ class VSCodePiConversationOwner {
         locale: input.locale,
         purposesForTool: resolveOpenNekoToolModelPurposes,
         purposeForToolCall: resolveOpenNekoToolCallModelPurpose,
+        ...(this.options.assetLoader === undefined
+          ? {}
+          : { assetLoader: this.options.assetLoader }),
         isPurposeOptionalForTool: (tool) => tool.name === TOOL_NAMES_QUALITY.QUALITY_CHECK,
       }),
       permissionPolicy,
@@ -1136,7 +1141,7 @@ function requiredPiPurposeCapabilities(
   }
 }
 
-export async function ensureVSCodePiProviderCredential(
+async function ensureVSCodePiProviderCredential(
   credentials: OpenNekoCredentialStore,
   input: Pick<ExecuteVSCodePiTurnInput, 'provider'>,
 ): Promise<void> {

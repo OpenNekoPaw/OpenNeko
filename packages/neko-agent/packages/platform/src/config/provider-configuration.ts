@@ -6,7 +6,7 @@ export function isProviderConfigured(provider: Provider): boolean {
   return hasProviderApiKey(provider);
 }
 
-export function hasProviderApiKey(provider: Provider): boolean {
+function hasProviderApiKey(provider: Provider): boolean {
   return typeof provider.apiKey === 'string' && provider.apiKey.length > 0;
 }
 

@@ -26,6 +26,7 @@ export interface WorkspaceMediaPathContext {
   readonly documentDir?: string;
   readonly pathVariables?: PathVariableMap | ReadonlyMap<string, string>;
   readonly allowedRoots?: readonly string[];
+  readonly authorizePath?: (filePath: string) => boolean | Promise<boolean>;
 }
 
 export interface WorkspaceMediaPathClassification {

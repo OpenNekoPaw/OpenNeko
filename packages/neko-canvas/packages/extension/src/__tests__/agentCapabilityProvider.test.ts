@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import type { CanvasPlaybackPlan, CutCanvasDraftImportResult, NekoCanvasAPI } from '@neko/shared';
+import type { CanvasPlaybackPlan, NekoCanvasAPI } from '@neko/shared';
 import {
   CANVAS_STORYBOARD_ACTION_INTENT_IDS,
   MEDIA_PRODUCTION_ANIMATION_PLAN_PROFILE_ID,
@@ -82,11 +82,6 @@ function createPlaybackPlan(): CanvasPlaybackPlan {
 function createApi(): NekoCanvasAPI {
   const plan = createPlaybackPlan();
   return {
-    asset: {
-      import: vi.fn(),
-      list: vi.fn(),
-      getById: vi.fn(),
-    },
     importAsset: vi.fn(),
     canvas: {
       create: vi.fn(),
@@ -154,7 +149,6 @@ function createApi(): NekoCanvasAPI {
       onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
     },
     events: {
-      onDidChangeAssets: vi.fn(() => ({ dispose: vi.fn() })),
       onDidChangeCanvas: vi.fn(() => ({ dispose: vi.fn() })),
     },
   } as unknown as NekoCanvasAPI;
@@ -185,21 +179,8 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     expect(editorProviderSource).toContain("operationType: 'nodes.applyAgentContent'");
   });
 
-  it('syncs shot timeline import metadata after neko-cut import', () => {
-    expect(providerSource).toContain('applyCanvasTimelineSyncToCanvas');
-    expect(providerSource).toContain(
-      "await vscode.commands.executeCommand('neko.cut.authoring.importStoryboard'",
-    );
-    expect(providerSource).toContain('buildStoryboardImportTimelineSyncPayload(');
-  });
-
-  it('hands off prepared keyframe references to neko-cut without reparsing source media', () => {
-    expect(providerSource).toContain('collectShotKeyframeReferenceDescriptors');
-    expect(providerSource).toContain('readShotPreparedKeyframeRef');
-    expect(providerSource).toContain('preparedKeyframeRef: readShotPreparedKeyframeRef(data)');
-    expect(providerSource).toContain('referenceDescriptors');
-    expect(providerSource).toContain('readShotGeneratedImageFallback(data)');
-    expect(providerSource).not.toContain("['generatedImage'] as string | undefined");
+  it('does not retain the removed Cut storyboard command handoff', () => {
+    expect(providerSource).not.toContain('neko.cut.authoring.importStoryboard');
   });
 
   it('routes first/end frames through canonical stable keyframe identity', () => {
@@ -1707,14 +1688,13 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     });
   });
 
-  it('keeps playback display and reveal read-only while import/reorder are confirmation-gated', () => {
+  it('keeps playback display and reveal read-only while reorder remains confirmation-gated', () => {
     expect(providerSource).toContain('api.playback.getPlan');
     expect(providerSource).toContain('api.playback.getRoutes');
     expect(providerSource).toContain('api.playback.revealWorkspace');
     expect(providerSource).toContain('api.playback.createCutDraftFromRoute');
     expect(providerSource).toContain('api.playback.reorderUnits');
-    expect(providerSource).toContain('await vscode.commands.executeCommand');
-    expect(providerSource).toContain("'neko.cut.authoring.importCanvasDraft'");
+    expect(providerSource).not.toContain('neko.cut.authoring.importCanvasDraft');
     expect(providerSource).toContain("approvalContext === 'agent-inferred'");
     expect(providerSource).toContain(
       'Agent-inferred Canvas playback reorder requires confirmation',
@@ -1723,15 +1703,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
   });
 
   it('executes playback tools through Canvas/Cut owning APIs with approval policy', async () => {
-    vscodeCommandState.executeCommand.mockImplementation(async (command: string) =>
-      command === 'neko.cut.authoring.importCanvasDraft'
-        ? ({
-            accepted: true,
-            status: 'imported',
-            projectUri: 'file:///cut.nkv',
-          } satisfies CutCanvasDraftImportResult)
-        : undefined,
-    );
     const api = createApi();
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
@@ -1819,19 +1790,11 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     await expect(
       createDraftTool!.execute({
         routeId: 'route-main',
-        sendToCut: true,
-        cutProjectUri: 'file:///cut.nkv',
-        cutProjectRevision: 'revision-1',
       }),
     ).resolves.toMatchObject({
       success: true,
       data: {
-        sentToCut: true,
-        cutImportResult: {
-          accepted: true,
-          status: 'imported',
-          projectUri: 'file:///cut.nkv',
-        },
+        draft: expect.objectContaining({ kind: 'canvas-cut-draft', routeId: 'route-main' }),
       },
     });
     expect(api.playback.createCutDraftFromRoute).toHaveBeenCalledWith({
@@ -1839,13 +1802,9 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
       routeId: 'route-main',
       projectName: undefined,
     });
-    expect(vscodeCommandState.executeCommand).toHaveBeenCalledWith(
+    expect(vscodeCommandState.executeCommand).not.toHaveBeenCalledWith(
       'neko.cut.authoring.importCanvasDraft',
-      expect.objectContaining({
-        payload: expect.objectContaining({ kind: 'canvas-cut-draft', routeId: 'route-main' }),
-        target: { kind: 'file', documentUri: 'file:///cut.nkv' },
-        expectedProjectRevision: 'revision-1',
-      }),
+      expect.anything(),
     );
   });
 

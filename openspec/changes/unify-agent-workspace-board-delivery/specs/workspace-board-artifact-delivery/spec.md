@@ -9,6 +9,12 @@ The system SHALL automatically deliver a terminal Agent processing batch to the 
 - **WHEN** an Agent terminal result records one or more actually consumed durable material references and a named reviewable Markdown analysis
 - **THEN** the Host SHALL submit one typed delivery batch containing the source references, Markdown artifact, stable provenance, and their source/analysis roles to the canonical Workspace Board
 
+#### Scenario: Native image analysis is finalized as a reviewable artifact
+
+- **WHEN** a successful `ReadImage` result explicitly declares an `analysis` kind, exposes one or more durable perceptual image references to the current native multimodal turn, and that turn completes with non-empty final Markdown
+- **THEN** the terminal collector SHALL create one stable named Markdown analysis artifact, classify the actually exposed images as source artifacts, connect the analysis through `sourceArtifactIds`, and submit the batch to the canonical Workspace Board
+- **AND** a failed `ReadImage`, a result without explicit `analysis`, an image without stable source identity, or an unrelated ordinary final answer SHALL NOT be promoted through this rule
+
 #### Scenario: Generated media completes in a background task
 
 - **WHEN** a recoverable background task reaches a successful terminal state with a durable generated-output ResourceRef

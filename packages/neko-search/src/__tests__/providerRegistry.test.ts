@@ -36,9 +36,11 @@ describe('project search provider registry helpers', () => {
     expect(assets.capabilities).toEqual(
       expect.objectContaining({
         providerId: 'assets.library',
-        itemKinds: expect.arrayContaining(['asset', 'media', 'generated-asset']),
+        itemKinds: expect.arrayContaining(['media', 'document', 'generated-asset']),
       }),
     );
+    expect(assets.capabilities?.itemKinds).not.toContain('asset');
+    expect(assets.capabilities?.partitions).not.toContain('asset-library');
     expect(documents.capabilities).toEqual(
       expect.objectContaining({
         providerId: 'documents.lightweight',
@@ -54,17 +56,17 @@ describe('project search provider registry helpers', () => {
     const registry = createProviderRegistration(registerAdapter, {
       onCompatibilityPartitionReplaced,
     });
-    const adapter = createStaticProjectSearchAdapter('asset-library', []);
+    const adapter = createStaticProjectSearchAdapter('media-library', []);
 
     registry.registerProvider({
       providerId: 'assets.library',
       adapters: [adapter],
-      replacesCompatibilityPartitions: ['asset-library', 'media-library'],
+      replacesCompatibilityPartitions: ['media-library'],
     });
 
     expect(registerAdapter).toHaveBeenCalledWith(adapter);
     expect(onCompatibilityPartitionReplaced).toHaveBeenCalledWith(
-      ['asset-library', 'media-library'],
+      ['media-library'],
       expect.objectContaining({ providerId: 'assets.library' }),
     );
   });

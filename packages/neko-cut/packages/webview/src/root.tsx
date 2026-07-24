@@ -1,45 +1,38 @@
 import { useEffect, type ReactElement } from 'react';
-import App from './App';
-import { I18nProvider } from './i18n/I18nContext';
-import { ToastProvider } from './components/Toast';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import { i18nService, setLocale } from './i18n';
-import { useEditorStore } from './stores/editor-store';
-import type { ProjectData } from './types';
 import type { SupportedLocale } from '@neko/shared';
+import App from './App';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastProvider } from './components/Toast';
+import { I18nProvider } from './i18n/I18nContext';
+import { i18nService, setLocale } from './i18n';
+import { CutPresentationStoreProvider } from './stores/cut-presentation-store';
+import { CutOtioControllerProvider } from './controllers/CutOtioControllerContext';
 import '@neko/ui/keyboard/focus.css';
+import '@neko/ui/workbench/editor-workbench.css';
 import './index.css';
 
 export interface CutWebviewRootProps {
-  readonly initialProject?: ProjectData;
-  readonly projectRoot?: string;
   readonly locale?: SupportedLocale;
 }
 
-export function CutWebviewRoot({
-  initialProject,
-  locale,
-  projectRoot,
-}: CutWebviewRootProps): ReactElement {
+export function CutWebviewRoot({ locale }: CutWebviewRootProps): ReactElement {
   useEffect(() => {
     if (locale) {
       setLocale(locale);
     }
   }, [locale]);
 
-  useEffect(() => {
-    if (initialProject) {
-      useEditorStore.getState().setProject(initialProject, projectRoot);
-    }
-  }, [initialProject, projectRoot]);
-
   return (
-    <ErrorBoundary>
-      <I18nProvider service={i18nService}>
+    <I18nProvider service={i18nService}>
+      <ErrorBoundary>
         <ToastProvider>
-          <App />
+          <CutPresentationStoreProvider>
+            <CutOtioControllerProvider>
+              <App />
+            </CutOtioControllerProvider>
+          </CutPresentationStoreProvider>
         </ToastProvider>
-      </I18nProvider>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </I18nProvider>
   );
 }

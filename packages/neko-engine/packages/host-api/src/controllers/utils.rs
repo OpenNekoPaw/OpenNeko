@@ -115,6 +115,20 @@ pub fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
     Ok(output)
 }
 
+pub fn validate_stream_playback_options(start_time: f64, speed: f64, label: &str) -> ApiResult<()> {
+    if !start_time.is_finite() || start_time < 0.0 {
+        return Err(ApiError::InvalidRequest(format!(
+            "{label} startTime must be a non-negative finite number"
+        )));
+    }
+    if !speed.is_finite() || speed <= 0.0 {
+        return Err(ApiError::InvalidRequest(format!(
+            "{label} speed must be a positive finite number"
+        )));
+    }
+    Ok(())
+}
+
 /// Resolve resource: either by ID or by source path (self-healing)
 ///
 /// Returns (ResourceId, file_path) — the ResourceId for API responses,
@@ -344,5 +358,13 @@ mod tests {
         assert_eq!(base64_encode(&[0, 0]), "AAA=");
         // 3 bytes → 4 chars no padding
         assert_eq!(base64_encode(&[0, 0, 0]), "AAAA");
+    }
+
+    #[test]
+    fn stream_playback_options_reject_invalid_initial_state() {
+        assert!(validate_stream_playback_options(-1.0, 1.0, "videos:stream").is_err());
+        assert!(validate_stream_playback_options(0.0, f64::NAN, "videos:stream").is_err());
+        assert!(validate_stream_playback_options(0.0, 0.0, "videos:stream").is_err());
+        assert!(validate_stream_playback_options(4.5, 2.0, "videos:stream").is_ok());
     }
 }

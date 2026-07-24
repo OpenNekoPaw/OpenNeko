@@ -141,11 +141,6 @@ export const en = {
   'playback.matrix.stepTitle': 'Step {index}: {title}',
   'playback.matrix.rowTitle': '{title} · {units} units · {duration}',
   'playback.matrix.rowMeta': '{units} units · {duration}',
-  'playback.matrix.sendToCut': 'Send route to Cut',
-  'playback.matrix.sendRouteToCut': 'Send {title} to Cut',
-  'playback.matrix.cutDraftStale':
-    'Route changed before Cut import. Refresh playback routes first.',
-  'playback.matrix.cutDraftMissingRoute': 'Selected route is no longer available for Cut import.',
   'playback.matrix.summaryCellTitle': '{label} · {count} folded units · {duration}',
   'playback.matrix.foldedSummary': '{count} units · {duration}',
   'playback.matrix.cellTitle': '{label} · {kind} · {timing} · {state}',
@@ -701,7 +696,7 @@ export const en = {
   'action.openPreview': 'Open preview',
   'action.duplicateShort': 'Dup',
   'action.editShort': 'Edit',
-  'action.saveToAssetLibrary': 'Save asset',
+  'action.copyToMediaLibrary': 'Copy to Media Library',
   'material.generatedContext': 'Generation prompt',
   'material.promptUnavailable': 'No generation prompt was recorded for this material',
   'material.generateAgain': 'Generate again',
@@ -872,7 +867,6 @@ export const en = {
   'preset.media.duration': 'Duration',
   'preset.project.preview': 'Preview',
   'preview.open': 'Open',
-  'project.type.nkv': 'Video Project',
 
   // Generation panel — advanced section
   'gen.advanced': 'Advanced',

@@ -25,7 +25,6 @@ function projectContextNavigationData(payload: AgentContextPayload): Record<stri
     copyStringField(nav, 'filePath', data.filePath);
     copyStringField(nav, 'path', data.path);
     if (typeof data.resolvedPath === 'string') nav.filePath = data.resolvedPath;
-    copyStringField(nav, 'assetId', data.assetId);
 
     const embeddedNavigation = data.navigationData;
     if (embeddedNavigation && typeof embeddedNavigation === 'object') {
@@ -42,7 +41,6 @@ function projectContextNavigationData(payload: AgentContextPayload): Record<stri
     const nodeId = target?.nodeId;
     if (typeof nodeId === 'string') nav.nodeId = nodeId;
   }
-  if (payload.type === 'asset' && !nav.assetId) nav.assetId = payload.id;
   return nav;
 }
 

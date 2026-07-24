@@ -68,26 +68,6 @@ const mediaDiff: MessageBundle = {
   'mediaDiff.flicker': '闪烁：{version}',
 };
 
-const assetDiff: MessageBundle = {
-  'assetDiff.title': '素材变体对比',
-  'assetDiff.loading': '加载中...',
-  'assetDiff.analyzing': '分析中...',
-  'assetDiff.retry': '重试',
-  'assetDiff.similar': '相似',
-  'assetDiff.attributes': '属性',
-  'assetDiff.noChanges': '无变化',
-  'assetDiff.viewMode.sideBySide': '并排',
-  'assetDiff.viewMode.slider': '滑块',
-  'assetDiff.viewMode.overlay': '叠加',
-  'assetDiff.tabs.media': '媒体',
-  'assetDiff.tabs.attributes': '属性',
-  'assetDiff.tabs.ai': 'AI 分析',
-  'assetDiff.aiAnalysis': 'AI 分析',
-  'assetDiff.requestAI': '生成 AI 摘要',
-  'assetDiff.noFile': '无预览文件',
-};
-
 export const bundles: Record<string, MessageBundle> = {
-  assetDiff,
   mediaDiff,
 };

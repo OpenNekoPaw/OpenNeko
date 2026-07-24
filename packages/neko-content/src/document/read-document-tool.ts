@@ -1,7 +1,5 @@
 import {
   TOOL_NAMES_SYSTEM,
-  type ContentAccessDiagnostic,
-  type ContentAccessResult,
   type DocumentArchiveResourceRef,
   createTool,
   isContentSourceRef,
@@ -32,7 +30,7 @@ const CONTENT_SOURCE_REF_PARAMETER: ToolParameterProperty = {
   properties: {
     kind: {
       type: 'string',
-      enum: ['file', 'document', 'asset', 'media-library', 'generated-asset'],
+      enum: ['file', 'document', 'asset', 'generated-asset'],
     },
     path: {
       type: 'string',
@@ -158,9 +156,7 @@ export interface ReadDocumentContentAccessRuntime {
 }
 
 export interface ReadDocumentContentAccessInput {
-  readonly caller: 'read-document';
   readonly source: ContentSourceRef;
-  readonly intent: 'agent-context';
   readonly mode?: ReadDocumentMode;
   readonly range?: DocumentRange;
   readonly cursor?: DocumentBatchCursor;
@@ -172,9 +168,9 @@ export interface ReadDocumentContentAccessInput {
 }
 
 export interface ReadDocumentContentAccessResult {
-  readonly status: ContentAccessResult['status'];
+  readonly status: 'ready' | 'missing-source' | 'unsupported-source' | 'unauthorized' | 'failed';
   readonly source?: Exclude<ContentSourceRef, { readonly kind: 'runtime' }>;
-  readonly diagnostics: readonly ContentAccessDiagnostic[];
+  readonly diagnostics: readonly ReadDocumentDiagnostic[];
   readonly resourceRef?: ResourceRef;
   readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly text?: string;
@@ -191,6 +187,12 @@ export interface ReadDocumentContentAccessResult {
   readonly imageCount?: number;
   readonly imagesTruncated?: boolean;
   readonly metadata?: Record<string, unknown>;
+}
+
+export interface ReadDocumentDiagnostic {
+  readonly code: string;
+  readonly severity: 'info' | 'warning' | 'error';
+  readonly message: string;
 }
 
 interface ReadDocumentToolData {
@@ -319,9 +321,7 @@ async function executeReadDocument(
     return { success: false, error: 'ReadDocument next mode requires a valid cursor.' };
   }
   const result = await contentAccessRuntime.resolveDocumentContent({
-    caller: 'read-document',
     source,
-    intent: 'agent-context',
     mode,
     ...(range ? { range } : {}),
     ...(cursor ? { cursor } : {}),

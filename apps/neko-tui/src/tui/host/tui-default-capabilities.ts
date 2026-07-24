@@ -1,48 +1,40 @@
 import { createContentReadCapabilityProvider } from '@neko/content/document';
+import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
 import { createGeneratedAssetResourceResolver, type GeneratedAssetIndex } from '@neko/platform';
 import type { AgentCapabilityProvider } from '@neko/shared';
-import type { ResourceCacheManifestStore } from '@neko/shared/content-access';
-import { createNodeAssetsCapabilityProvider } from './node-assets-capability';
 import { createNodeContentAccessRuntime } from './node-content-access-runtime';
 import { createNodeEntitySearchCapabilityProviders } from './node-entity-search-capability';
 import { createNodeWorkspaceContentHostAdapter } from './node-workspace-content-host';
 
 export interface CreateTuiDefaultCapabilityProvidersOptions {
   readonly workDir: string;
-  readonly resourceCacheManifestStore: ResourceCacheManifestStore;
   readonly generatedAssetIndex: Pick<GeneratedAssetIndex, 'get'>;
+  readonly derivedStorageHomedir?: string;
 }
 
-function createTuiDefaultCapabilityProviders(
+export interface TuiDefaultCapabilityRuntime {
+  readonly contentAccessRuntime: AgentContentAccessRuntime;
+  readonly providers: readonly AgentCapabilityProvider[];
+  dispose(): Promise<void>;
+}
+
+export function createTuiDefaultCapabilityRuntime(
   options: CreateTuiDefaultCapabilityProvidersOptions,
-): readonly AgentCapabilityProvider[] {
+): TuiDefaultCapabilityRuntime {
   const host = createNodeWorkspaceContentHostAdapter({ workDir: options.workDir });
   const contentAccessRuntime = createNodeContentAccessRuntime({
     host,
-    resourceCacheManifestStore: options.resourceCacheManifestStore,
     resolveGeneratedAsset: createGeneratedAssetResourceResolver(options.generatedAssetIndex),
+    ...(options.derivedStorageHomedir
+      ? { derivedStorageHomedir: options.derivedStorageHomedir }
+      : {}),
   });
-  return [
-    createContentReadCapabilityProvider({
-      contentAccessRuntime,
-    }),
-    createNodeAssetsCapabilityProvider({ host }),
-    ...createNodeEntitySearchCapabilityProviders({ host }),
-  ];
-}
-
-export function withTuiDefaultCapabilityProviders(input: {
-  readonly workDir: string;
-  readonly resourceCacheManifestStore: ResourceCacheManifestStore;
-  readonly generatedAssetIndex: Pick<GeneratedAssetIndex, 'get'>;
-  readonly capabilityProviders?: readonly AgentCapabilityProvider[];
-}): readonly AgentCapabilityProvider[] {
-  return [
-    ...createTuiDefaultCapabilityProviders({
-      workDir: input.workDir,
-      resourceCacheManifestStore: input.resourceCacheManifestStore,
-      generatedAssetIndex: input.generatedAssetIndex,
-    }),
-    ...(input.capabilityProviders ?? []),
-  ];
+  return {
+    contentAccessRuntime,
+    providers: [
+      createContentReadCapabilityProvider({ contentAccessRuntime }),
+      ...createNodeEntitySearchCapabilityProviders({ host }),
+    ],
+    dispose: () => contentAccessRuntime.dispose(),
+  };
 }

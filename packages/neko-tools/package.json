@@ -91,16 +91,6 @@
           }
         ],
         "priority": "option"
-      },
-      {
-        "viewType": "neko.assetVariantDiff",
-        "displayName": "Asset Variant Diff",
-        "selector": [
-          {
-            "filenamePattern": "*.asset-diff"
-          }
-        ],
-        "priority": "default"
       }
     ],
     "commands": [
@@ -122,11 +112,6 @@
       {
         "command": "neko.tools.compareAudio",
         "title": "%neko.tools.compareAudio.title%",
-        "category": "Neko Tools"
-      },
-      {
-        "command": "neko.tools.compareAssetVariants",
-        "title": "%neko.tools.compareAssetVariants.title%",
         "category": "Neko Tools"
       },
       {

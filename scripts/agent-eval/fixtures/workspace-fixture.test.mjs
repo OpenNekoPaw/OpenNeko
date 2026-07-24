@@ -42,6 +42,39 @@ describe('Agent Evaluation workspace fixtures', () => {
     await expect(fs.stat(prepared.workspace)).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('creates declared links only after copying into the isolated workspace', async () => {
+    const root = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-fixture-links-'));
+    temporaryDirectories.push(root);
+    const source = join(root, 'fixtures', 'sample');
+    await fs.mkdir(join(source, 'media-source'), { recursive: true });
+    await fs.writeFile(join(source, 'media-source', 'notes.txt'), 'linked media');
+    const digest = await computeFixtureDigest(source);
+
+    const prepared = await prepareWorkspaceFixture(
+      {
+        id: 'sample',
+        root: 'fixtures/sample',
+        digest,
+        links: [{ path: 'neko/assets/Reference', target: 'media-source' }],
+      },
+      { agentEvalRoot: root },
+    );
+
+    await expect(fs.lstat(join(prepared.workspace, 'neko/assets/Reference'))).resolves.toMatchObject({
+      isSymbolicLink: expect.any(Function),
+    });
+    expect((await fs.lstat(join(prepared.workspace, 'neko/assets/Reference'))).isSymbolicLink()).toBe(
+      true,
+    );
+    await expect(
+      fs.readFile(join(prepared.workspace, 'neko/assets/Reference/notes.txt'), 'utf8'),
+    ).resolves.toBe('linked media');
+    await expect(fs.lstat(join(source, 'neko/assets/Reference'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    await prepared.cleanup();
+  });
+
   it('rejects digest drift and symlink fixtures', async () => {
     const root = await fs.mkdtemp(join(os.tmpdir(), 'neko-agent-eval-fixture-reject-'));
     temporaryDirectories.push(root);

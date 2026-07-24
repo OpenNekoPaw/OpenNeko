@@ -57,7 +57,6 @@ const MEDIA_TYPE_TAG_LABELS: Record<
 
 const SOURCE_TAG_LABELS: Record<NonNullable<MentionItem['source']>, MentionLocalizedLabel> = {
   workspace: { key: 'chat.input.mentionTags.source.workspace', defaultText: 'Workspace' },
-  'asset-library': { key: 'chat.input.mentionTags.source.assetLibrary', defaultText: 'Assets' },
   'media-library': { key: 'chat.input.mentionTags.source.mediaLibrary', defaultText: 'Media' },
   'entity-graph': { key: 'chat.input.mentionTags.source.entityGraph', defaultText: 'Entity' },
   story: { key: 'chat.input.mentionTags.source.story', defaultText: 'Story' },
@@ -490,7 +489,7 @@ function getToneColor(key: string): string {
   if (key === 'archive') return 'var(--vscode-terminal-ansiMagenta,#bc3fbc)';
   if (key === 'document' || key === 'text') return 'var(--vscode-textLink-foreground,#3794ff)';
   if (key === 'workspace') return 'var(--vscode-descriptionForeground,#8a8a8a)';
-  if (key === 'asset-library' || key === 'asset') return 'var(--vscode-charts-green,#89d185)';
+  if (key === 'asset') return 'var(--vscode-charts-green,#89d185)';
   if (key === 'media-library' || key === 'media') return 'var(--vscode-charts-orange,#d18616)';
   if (key === 'entity-graph' || key === 'entity') return 'var(--vscode-charts-purple,#b180d7)';
   if (key === 'story' || key === 'scene' || key === 'character')

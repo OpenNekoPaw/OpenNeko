@@ -6,7 +6,6 @@ import { createAgentTerminalFormatters } from './formatters';
 import {
   presentContinuationReady,
   presentQueuedContinuation,
-  presentResourceCacheGcFailure,
   presentResumeFallback,
   presentSkillInvocationRejected,
   presentWorkspaceContentDiagnostic,
@@ -84,9 +83,6 @@ describe('runtime presentation', () => {
   it('localizes runtime recovery notices without rewriting external values', () => {
     const presentation = createPresentation('zh-cn');
 
-    expect(presentResourceCacheGcFailure('EACCES 原文', presentation)).toBe(
-      '启动时清理资源缓存失败：EACCES 原文',
-    );
     expect(presentResumeFallback('conv-原文', presentation)).toBe(
       '未找到对话“conv-原文”；将开始新对话。',
     );

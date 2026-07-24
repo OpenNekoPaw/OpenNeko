@@ -47,7 +47,6 @@ export {
   createDefaultLocalResourceAccessService,
   createExtensionAssetLocalResourceRootProvider,
   createExtensionCacheLocalResourceRootProvider,
-  createMediaLibraryLocalResourceRootProvider,
   createStaticLocalResourceRootProvider,
   createWorkspaceCacheLocalResourceRootProvider,
   createWorkspaceLocalResourceRootProvider,
@@ -67,7 +66,6 @@ export type {
   LocalResourceRootKind,
   LocalResourceRootProvider,
   LocalResourceWebviewOptions,
-  MediaLibraryLocalResourceRootProviderOptions,
 } from './local-resource-access';
 
 // Resource cache identity, materialization, manifest, and projection orchestration.
@@ -122,53 +120,10 @@ export type {
   ThumbnailResourceGeneratorResult,
 } from './resource-cache-providers';
 export {
-  DOCUMENT_RESOURCE_CACHE_PROVIDER_ID,
-  DocumentResourceCacheProvider,
   createDocumentResourceRef,
   createDocumentResourceRefFromArchiveRef,
-} from './document-resource-cache-provider';
-export type {
-  CreateDocumentResourceRefInput,
-  DocumentEntryReader,
-  DocumentResourceCacheFsOps,
-  DocumentResourceCacheProviderOptions,
-} from './document-resource-cache-provider';
-// Intent-aware content read/write orchestration.
-export { HostContentAccessService, HostContentIngestService } from './content-access-service';
-export type {
-  ContentAccessLogger,
-  ContentAccessService,
-  ContentAccessServiceOptions,
-  ContentIngestGuardOptions,
-  ContentIngestService,
-  ContentIngestServiceOptions,
-} from './content-access-service';
-export {
-  CacheArtifactContentIngestProvider,
-  DocumentEntryContentAccessProvider,
-  GeneratedAssetSourceContentAccessProvider,
-  ExportStagingContentIngestProvider,
-  GeneratedOutputContentIngestProvider,
-  ImportSourceContentIngestProvider,
-  PreviewVariantContentAccessProvider,
-  RegisterExistingSourceContentIngestProvider,
-  ResourceCacheContentAccessProvider,
-  SourceFileContentAccessProvider,
-  VideoProxyContentAccessProvider,
-} from './content-access-providers';
-export type {
-  CacheArtifactContentIngestProviderOptions,
-  ContentAccessFileOps,
-  ContentAccessFileExists,
-  ContentAccessWebviewResolver,
-  ContentIngestFileProviderOptions,
-  DocumentEntryContentAccessProviderOptions,
-  GeneratedAssetSourceContentAccessProviderOptions,
-  PreviewVariantContentAccessProviderOptions,
-  ResourceCacheContentAccessProviderOptions,
-  SourceFileContentAccessProviderOptions,
-  VideoProxyContentAccessProviderOptions,
-} from './content-access-providers';
+} from './document-resource-ref';
+export type { CreateDocumentResourceRefInput } from './document-resource-ref';
 export {
   contractHostContentMediaPath,
   createHostContentMediaPathContext,
@@ -182,25 +137,64 @@ export type {
   HostContentPathPolicy,
   HostContentPathResolverOptions,
 } from './content-path-resolver';
-export {
-  createExtensionPrivateResourceCacheOptions,
-  createHostContentAccessRuntime,
-  createWorkspaceResourceCacheOptions,
-} from './content-access-runtime';
+export { createHostDerivedContentRuntime } from './host-derived-content-runtime';
 export type {
-  CreateHostContentAccessRuntimeOptions,
-  HostContentAccessRuntime,
-  HostContentAccessRuntimeCacheOptions,
-  HostContentAccessRuntimeDocumentProviderOptions,
-  HostContentAccessRuntimeGeneratedSourceProviderOptions,
-  HostContentAccessRuntimeIngestProviderOptions,
-  HostContentAccessRuntimeSourceProviderOptions,
-} from './content-access-runtime';
+  CreateHostDerivedContentRuntimeOptions,
+  HostDerivedContentMaintenanceOptions,
+  HostDerivedContentMaintenanceResult,
+  HostDerivedContentRuntime,
+  HostDerivedContentTarget,
+} from './host-derived-content-runtime';
+export {
+  CONTENT_REPRESENTATION_RESOURCE_PROVIDER_ID,
+  HostContentRepresentationService,
+} from './content-representation-service';
+export type {
+  ContentRepresentationFileOps,
+  HostContentRepresentationServiceOptions,
+} from './content-representation-service';
 export {
   createVSCodeWorkspaceMediaPathContext,
   createVSCodeWorkspacePathResolver,
 } from './workspace-media-path';
 export type { VSCodeWorkspaceMediaPathContextInput } from './workspace-media-path';
+export { authorizeWorkspaceLinkedPath } from './workspace-linked-path-guard';
+export type {
+  AuthorizeWorkspaceLinkedPathInput,
+  WorkspaceLinkedPathGuardDiagnostic,
+  WorkspaceLinkedPathGuardDiagnosticCode,
+  WorkspaceLinkedPathGuardFileSystem,
+  WorkspaceLinkedPathGuardResult,
+} from './workspace-linked-path-guard';
+export { NodeWorkspaceContentReadHandler } from './workspace-content-read-handler';
+export type { NodeWorkspaceContentReadHandlerOptions } from './workspace-content-read-handler';
+export {
+  NodeDocumentEntryContentReadHandler,
+  NodeGeneratedOutputContentReadHandler,
+  UnavailableContentReadHandler,
+  createNodeHostContentReadService,
+} from './node-content-read-service';
+export type {
+  CreateNodeHostContentReadServiceOptions,
+  NodeDocumentEntryReader,
+} from './node-content-read-service';
+export { NodeAuthorizedWorkspaceWriter } from './workspace-content-writer';
+export {
+  HostEngineContentProjectionPort,
+  HostProcessorContentProjectionPort,
+  HostWebviewContentProjectionPort,
+} from './content-projection-ports';
+export type {
+  HostContentProjectionPortOptions,
+  HostOpaqueContentProjectionResolver,
+} from './content-projection-ports';
+export { NodeAuthorizedOutputAllocator } from './workspace-content-writer';
+export type {
+  NodeAuthorizedOutputAllocatorOptions,
+  NodeAuthorizedWorkspaceWriterOptions,
+} from './workspace-content-writer';
+export { NodeAuthorizedWorkspaceDeleter } from './workspace-content-deleter';
+export type { NodeAuthorizedWorkspaceDeleterOptions } from './workspace-content-deleter';
 export { readStringMetadata } from './metadata';
 export {
   NodeLocalMetadataBulkWorkerExecutor,
@@ -246,24 +240,18 @@ export {
 export {
   CharacterRecordAdapter,
   CreativeEntityRegistryService,
-  DefaultAssetRefResolver,
-  EntityAssetBindingService,
+  EntityRepresentationBindingService,
   EntityAssetRequirementService,
-  RepresentationResolver,
   VisualIdentityDraftService,
   characterRecordToCreativeEntity,
-  createEmptyEntityAssetBindingFile,
+  createEmptyEntityRepresentationBindingFile,
   createEmptyEntityAssetRequirementFile,
   createEmptyVisualIdentityDraftFile,
   resolveEntityAssetRequirementsPath,
-  resolveEntityAssetBindingsPath,
+  resolveEntityRepresentationBindingsPath,
   resolveVisualIdentityDraftsPath,
 } from './creative-entity-composition';
-export type {
-  AssetRefBackendResolver,
-  CreativeEntityAdapter,
-  RepresentationResolverOptions,
-} from './creative-entity-composition';
+export type { CreativeEntityAdapter } from './creative-entity-composition';
 
 // New-file UX (unique name → write → reveal → rename)
 export { createNewFile } from './create-new-file';

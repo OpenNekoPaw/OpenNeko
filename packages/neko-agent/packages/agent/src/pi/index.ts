@@ -130,6 +130,11 @@ export {
   resolveOpenNekoToolCallModelPurpose,
   resolveOpenNekoToolModelPurpose,
   resolveOpenNekoToolModelPurposes,
+  type PiToolResultAssetLoader,
+  type PiToolResultAssetPayload,
+  type PiToolResultImageBatchItem,
+  type PiToolResultImageBatchLayout,
+  type PiToolResultImageBatchOptions,
   type ProjectOpenNekoToolOptions,
 } from './openneko-tool';
 export type { AuthEvent, AuthPrompt } from '@earendil-works/pi-ai';

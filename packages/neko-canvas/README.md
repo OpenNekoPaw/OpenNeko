@@ -30,7 +30,7 @@
 Extension Host
   ├── CanvasProjectAuthoringService → 无 UI 创建/修改 .nkc 生产事实
   ├── CanvasEditorProvider  → CustomEditorProvider（Webview 交互投影）
-  └── AssetLibrary 视图
+  └── Media source adapters → canonical locator / document entry
 
 Webview (React + Vite)
   ├── InfiniteCanvas        → 无限画布（CSS Transform 平移/缩放）
@@ -48,7 +48,7 @@ Webview (React + Vite)
 packages/
 ├── extension/src/
 │   ├── editor/     # CanvasEditorProvider
-│   └── views/      # 资产库侧边栏
+│   └── views/      # 大纲、状态与 Canvas-owned 投影
 └── webview/src/
     ├── components/ # InfiniteCanvas + 节点组件
     ├── hooks/      # 交互 Hooks
@@ -74,7 +74,7 @@ Webview 端通过 `canvasOperationStore` 作为运行时桥接层生成 `EditOpe
 | 方式             | 状态 | 说明                                                                                                                           |
 | ---------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------ |
 | Explorer 拖拽    | ✅   | `useDragDrop` → `project:addSource` → `dropAssets`（media/text/document/model/canvas）；文本文件统一导入 TextNode              |
-| 素材库拖拽       | ✅   | `application/json` 协议 → `project:addSource`，Extension Host 统一解析路径变量                                                 |
+| 媒体库拖拽       | ✅   | `media-file` payload → `project:addSource`，持久化 canonical workspace locator                                                |
 | 工具栏文件选择器 | ✅   | `pickMedia` / `pickFile` 生成 `ProjectSourceAddRequest` 后再创建节点                                                           |
 | 引用节点选择器   | ✅   | `pickScriptDocument` / `pickReferenceDocument` / `pickModelReference` / `pickCanvasDocument`                                   |
 | 文件类型         | ✅   | `.md` / `.markdown` / `.txt` / `.log` / `.fountain` 统一导入 `TextNode`；二进制文档继续创建 `DocumentNode` |
@@ -85,9 +85,9 @@ Webview 端通过 `canvasOperationStore` 作为运行时桥接层生成 `EditOpe
 
 `NekoCanvasAPI.boards.project()` 是唯一公共 Workspace Board 投影入口。未指定显式 `.nkc` 时，Canvas 确定性写入 `neko/boards/workspace.nkc`；显式目标只接受调用方给出的普通 `.nkc` identity。它不扫描目录选择“最近/匹配”画布，也不读取会话绑定或活动编辑器。Markdown 使用普通 Text/Markdown 内容；文件引用使用支持稳定 `ResourceRef` 的 DocumentNode；图片、音频和视频使用普通 MediaNode。所有重放按 provenance/artifact identity 幂等。
 
-Creator-visible generated output 在投影前已由 owning service 持久化到 `neko/generated/<kind>/`。Canvas 将其稳定 generated-output `ResourceRef` 写成普通持久 Inbox Group/Media/Document 节点，不要求先加入 AssetLibrary，也不创建 runtime-only review Group。AssetLibrary promotion 是独立的显式整理动作；`.nkc` 不保存 cache path、render URI、Webview URI 或 runtime Group ID。
+Creator-visible generated output 在投影前已由 owning service 持久化到 `neko/generated/<kind>/`。Canvas 将其稳定 generated-output identity 写成普通持久 Inbox Group/Media/Document 节点，不要求 catalog membership，也不创建 runtime-only review Group。复制到 Media Library 或绑定 Creative Entity 是独立显式动作；`.nkc` 不保存 cache path、render URI、Webview URI 或 runtime Group ID。
 
-选中引用或生成素材时，Canvas 通过统一的素材展示解析器提供预览、复制、存入素材库和全屏等当前保留的操作；Webview 只发送带节点与稳定资源身份的动作消息，文件读取、资源解析和 AssetLibrary 导入均由 Extension Host 执行。已移除或不可用的能力不会显示，也不会以空操作或运行时路径兜底。
+选中引用或生成媒体时，Canvas 通过统一表示解析器提供预览、复制到 Media Library 和全屏等操作；Webview 只发送带节点与稳定 locator 的动作消息，文件读取、资源解析和授权写入均由 Extension Host 执行。已移除或不可用的能力不会显示，也不会以空操作或运行时路径兜底。
 
 生成素材可在节点下方展示持久化的生成提示词、模型与画面参数。只有生成上下文包含仍存在的 Shot 来源时才显示“再次生成”，并复用该 Shot 的 `GenerationPromptPanel` 与 Canvas creative action；缺少来源或历史提示词时只展示可验证的信息，不把 Media 节点伪装成新的生成目标。
 

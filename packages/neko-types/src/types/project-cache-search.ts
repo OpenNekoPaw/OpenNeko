@@ -32,7 +32,6 @@ export type ProjectSearchItemKind =
   | 'script-role'
   | 'creative-entity'
   | 'entity-candidate'
-  | 'asset'
   | 'media'
   | 'document'
   | 'generated-asset'
@@ -42,7 +41,6 @@ export type ProjectSearchItemKind =
 export type ProjectSearchPartitionKind =
   | 'story-symbols'
   | 'creative-entities'
-  | 'asset-library'
   | 'media-library'
   | 'documents'
   | 'generated-assets'
@@ -73,7 +71,7 @@ export type ProjectIndexPartitionStatus =
 export type ProjectSearchFreshnessPolicy = 'allow-stale' | 'fresh-only';
 
 export type ProjectSearchMode =
-  'mention' | 'global' | 'asset-picker' | 'entity-picker' | 'document' | 'agent-tool';
+  'mention' | 'global' | 'media-picker' | 'entity-picker' | 'document' | 'agent-tool';
 
 export type ProjectSearchScopeKind =
   'project' | 'workspace' | 'media-library' | 'document' | 'current-file';
@@ -347,7 +345,6 @@ export const PROJECT_SEARCH_ITEM_KINDS: readonly ProjectSearchItemKind[] = [
   'script-role',
   'creative-entity',
   'entity-candidate',
-  'asset',
   'media',
   'document',
   'generated-asset',
@@ -358,7 +355,6 @@ export const PROJECT_SEARCH_ITEM_KINDS: readonly ProjectSearchItemKind[] = [
 export const PROJECT_SEARCH_PARTITION_KINDS: readonly ProjectSearchPartitionKind[] = [
   'story-symbols',
   'creative-entities',
-  'asset-library',
   'media-library',
   'documents',
   'generated-assets',
@@ -418,7 +414,7 @@ export const PROJECT_INDEX_PARTITION_STATUS_VALUES: readonly ProjectIndexPartiti
 export const PROJECT_SEARCH_MODES: readonly ProjectSearchMode[] = [
   'mention',
   'global',
-  'asset-picker',
+  'media-picker',
   'entity-picker',
   'document',
   'agent-tool',

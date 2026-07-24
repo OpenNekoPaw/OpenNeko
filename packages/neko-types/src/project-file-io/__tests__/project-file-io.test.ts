@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ProjectData } from '../../types/project';
+import type { WorkspaceFileContentLocator } from '../../types/content-locator';
 import {
   ProjectFileStore,
   ProjectFormatCodecRegistry,
@@ -11,11 +12,11 @@ import {
   createProjectFileDiagnostic,
   detectRuntimeOrCacheSourceHandle,
   handleProjectSourceAddRequest,
-  ingestProjectSourceAddRequest,
+  storeProjectSourceAddRequest,
   nkcSourcePathPolicy,
   nkvSourcePathPolicy,
   resolveProjectSourceDiagnostics,
-  toContentIngestRequest,
+  validateProjectSourceAddRequest,
   isProjectFileSnapshotRequestMessage,
   isProjectFileSnapshotResponseMessage,
   type PortableSourcePathPolicy,
@@ -110,6 +111,39 @@ describe('ProjectFileStore', () => {
 
     expect(files.renames).toEqual([]);
     expect(files.readText('/project/edit.nkv')).toContain('"name": "in-place"');
+  });
+
+  it('routes Host-composed project writes through the authorized workspace writer', async () => {
+    const files = createMemoryFileOps();
+    const write = vi.fn(async (locator: WorkspaceFileContentLocator, bytes: Uint8Array) => ({
+      status: 'written' as const,
+      locator,
+      byteLength: bytes.byteLength,
+    }));
+    const store = new ProjectFileStore({
+      registry: createDefaultProjectFormatCodecRegistry(),
+      fileOps: files,
+      resolveAuthorizedWrite: (filePath) =>
+        filePath === '/project/edit.nkv'
+          ? {
+              writer: { write },
+              locator: { kind: 'workspace-file', path: 'edit.nkv' },
+            }
+          : undefined,
+    });
+
+    const result = await store.save({
+      filePath: '/project/edit.nkv',
+      document: createProject('authorized'),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(write).toHaveBeenCalledWith(
+      { kind: 'workspace-file', path: 'edit.nkv' },
+      expect.any(Uint8Array),
+      { conflict: 'replace' },
+    );
+    expect(files.readText('/project/edit.nkv')).toBe('');
   });
 
   it('uses atomic rename only when explicitly requested', async () => {
@@ -307,7 +341,7 @@ describe('default project format codecs', () => {
 });
 
 describe('portable source path policy', () => {
-  it('contracts workspace sources before save', () => {
+  it('rejects absolute workspace sources before save instead of rewriting persisted data', () => {
     const policy = createNkvSourcePolicy();
     const project = createProject('portable', '/workspace/project/media/clip.mp4');
 
@@ -320,8 +354,10 @@ describe('portable source path policy', () => {
     });
 
     const element = result.document.tracks[0]?.elements[0];
-    expect(element?.type === 'media' ? element.src : undefined).toBe('media/clip.mp4');
-    expect(result.diagnostics).toEqual([]);
+    expect(element?.type === 'media' ? element.src : undefined).toBe(
+      '/workspace/project/media/clip.mp4',
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['migration-required']);
   });
 
   it('diagnoses non-portable absolute paths', () => {
@@ -337,12 +373,12 @@ describe('portable source path policy', () => {
       },
     );
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('non-portable-path');
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain('migration-required');
   });
 
-  it('contracts configured variable root sources', () => {
+  it('retains explicitly configured non-media path variables', () => {
     const result = applyPortableSourcePathPolicy(
-      createProject('variable', '/Volumes/media/clip.mp4'),
+      createProject('variable', '${CUSTOM}/clip.mp4'),
       createNkvSourcePolicy(),
       {
         context: {
@@ -350,14 +386,37 @@ describe('portable source path policy', () => {
           workspaceRoots: ['/workspace/project'],
           pathVariables: new Map([
             ['WORKSPACE', '/workspace/project'],
-            ['MEDIA', '/Volumes/media'],
+            ['CUSTOM', '/Volumes/content'],
           ]),
         },
       },
     );
 
     const element = result.document.tracks[0]?.elements[0];
-    expect(element?.type === 'media' ? element.src : undefined).toBe('${MEDIA}/clip.mp4');
+    expect(element?.type === 'media' ? element.src : undefined).toBe('${CUSTOM}/clip.mp4');
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('requires migration for retired media-library variables', () => {
+    const result = applyPortableSourcePathPolicy(
+      createProject('variable', '${MEDIA}/clip.mp4'),
+      createNkvSourcePolicy(),
+      {
+        context: {
+          owningWorkspaceRoot: '/workspace/project',
+          workspaceRoots: ['/workspace/project'],
+          pathVariables: new Map([['WORKSPACE', '/workspace/project']]),
+        },
+      },
+    );
+
+    expect(result.replacements).toEqual([]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'migration-required',
+        context: { variable: 'MEDIA' },
+      }),
+    ]);
   });
 
   it('keeps already portable relative sources during save', () => {
@@ -420,7 +479,7 @@ describe('portable source path policy', () => {
       },
     );
     const unauthorized = resolveProjectSourceDiagnostics(
-      createProject('unauthorized', '/workspace/project/media/clip.mp4'),
+      createProject('unauthorized', 'media/clip.mp4'),
       createNkvSourcePolicy(),
       {
         context: {
@@ -434,7 +493,7 @@ describe('portable source path policy', () => {
     );
 
     expect(missingVariable.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
-      'unresolved-variable',
+      'migration-required',
     );
     expect(missingSource.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
       'missing-source',
@@ -537,7 +596,7 @@ describe('source descriptor helpers', () => {
           size: { width: 320, height: 180 },
           zIndex: 0,
           data: {
-            assetPath: '/workspace/project/media/hero.png',
+            assetPath: 'media/hero.png',
             mediaType: 'image',
           },
           content: {
@@ -613,7 +672,7 @@ describe('source descriptor helpers', () => {
     const canvas = {
       version: '2.1',
       name: 'Typed Canvas sources',
-      linkedProject: '/workspace/project/timeline/edit.nkv',
+      linkedProject: 'timeline/edit.nkv',
       nodes: [
         {
           id: 'media-1',
@@ -622,9 +681,9 @@ describe('source descriptor helpers', () => {
           size: { width: 320, height: 180 },
           zIndex: 0,
           data: {
-            assetPath: '/workspace/project/media/clip.mp4',
+            assetPath: 'media/clip.mp4',
             runtimeAssetPath: 'vscode-webview-resource://panel/media/clip.mp4',
-            thumbnailPath: '/workspace/project/thumbs/clip.jpg',
+            thumbnailPath: 'thumbs/clip.jpg',
             runtimeThumbnailPath: 'blob:thumb',
             mediaType: 'video',
           },
@@ -664,7 +723,7 @@ describe('source descriptor helpers', () => {
           size: { width: 320, height: 180 },
           zIndex: 1,
           data: {
-            scriptPath: '/workspace/project/story/main.fountain',
+            scriptPath: 'story/main.fountain',
             scriptTitle: 'Main',
             scenes: [],
           },
@@ -676,7 +735,7 @@ describe('source descriptor helpers', () => {
           size: { width: 320, height: 180 },
           zIndex: 2,
           data: {
-            docPath: '/workspace/project/docs/ref.pdf',
+            docPath: 'docs/ref.pdf',
             docType: 'pdf',
             title: 'Reference',
             thumbnailData: 'data:image/png;base64,inline',
@@ -689,7 +748,7 @@ describe('source descriptor helpers', () => {
           size: { width: 320, height: 180 },
           zIndex: 3,
           data: {
-            modelPath: '/workspace/project/models/style.safetensors',
+            modelPath: 'models/style.safetensors',
             modelName: 'Style',
             modelType: 'lora',
             role: 'reference',
@@ -702,7 +761,7 @@ describe('source descriptor helpers', () => {
           size: { width: 320, height: 180 },
           zIndex: 4,
           data: {
-            canvasPath: '/workspace/project/boards/scene.nkc',
+            canvasPath: 'boards/scene.nkc',
             canvasTitle: 'Scene',
             thumbnailData: 'data:image/png;base64,inline',
           },
@@ -714,7 +773,7 @@ describe('source descriptor helpers', () => {
           size: { width: 320, height: 180 },
           zIndex: 5,
           data: {
-            projectPath: '/workspace/project/projects/cut.nkv',
+            projectPath: 'projects/cut.nkv',
             projectTitle: 'Cut',
             projectType: 'nkv',
           },
@@ -764,20 +823,20 @@ describe('source descriptor helpers', () => {
             sceneTags: [],
             generationStatus: 'idle',
             generationHistory: [],
-            referenceImagePath: '/workspace/project/refs/shot.png',
+            referenceImagePath: 'refs/shot.png',
             runtimeReferenceImagePath: 'blob:reference',
             sourceMediaRefs: [
               {
                 refId: 'source-1',
                 role: 'source',
-                locator: { type: 'workspace-path', path: '/workspace/project/refs/source.png' },
+                locator: { type: 'workspace-path', path: 'refs/source.png' },
               },
             ],
             generatedMediaRefs: [
               {
                 refId: 'generated-1',
                 role: 'generated',
-                locator: { type: 'workspace-path', path: '/workspace/project/generated/shot.png' },
+                locator: { type: 'workspace-path', path: 'generated/shot.png' },
               },
             ],
           },
@@ -791,7 +850,7 @@ describe('source descriptor helpers', () => {
           data: {
             content: 'plain text',
             binding: { path: '/workspace/project/not-an-asset.png' },
-            assetPath: '/workspace/project/assets/memory.png',
+            assetPath: 'assets/memory.png',
             runtimeAssetPath: 'blob:memory-preview',
           },
         },
@@ -800,7 +859,7 @@ describe('source descriptor helpers', () => {
       relatedBoards: [
         {
           role: 'source',
-          ref: { kind: 'workspace-path', path: '/workspace/project/boards/source.nkc' },
+          ref: { kind: 'workspace-path', path: 'boards/source.nkc' },
         },
       ],
     };
@@ -974,10 +1033,10 @@ describe('InMemoryProjectDocumentHost', () => {
 });
 
 describe('project source add DTOs', () => {
-  it('projects add-source intent to content ingest request', () => {
-    const request = toContentIngestRequest({
+  it('uses a domain-owned asset directory without exposing ingest routing fields', () => {
+    const request = {
       requestId: 'add-1',
-      kind: 'drag-drop',
+      kind: 'drag-drop' as const,
       formatId: 'nkv',
       documentUri: 'file:///workspace/project/edit.nkv',
       sourcePath: '/workspace/project/media/clip.mp4',
@@ -985,61 +1044,41 @@ describe('project source add DTOs', () => {
         name: 'clip.mp4',
         type: 'video/mp4',
       },
-      destination: {
-        kind: 'project',
-        projectRoot: '/workspace/project',
-        copyMode: 'register',
-      },
-      caller: 'neko-cut',
-    });
+      assetDirectory: 'media',
+    };
 
-    expect(request.mode).toBe('link');
-    expect(request.sourcePath).toBe('/workspace/project/media/clip.mp4');
-    expect(request.fileName).toBe('clip.mp4');
-    expect(request.metadata?.['projectFormatId']).toBe('nkv');
+    expect(validateProjectSourceAddRequest(request)).toEqual([]);
+    expect(request).not.toHaveProperty('destination');
+    expect(request).not.toHaveProperty('ingestMode');
+    expect(request).not.toHaveProperty('caller');
   });
 
-  it('projects byte-only source add as Create Asset', () => {
-    const bytes = new Uint8Array([1, 2, 3]);
-    const request = toContentIngestRequest({
-      requestId: 'add-bytes',
-      kind: 'paste',
-      formatId: 'nkc',
-      browserFile: { name: 'paste.png', type: 'image/png', size: bytes.byteLength },
-      bytes,
-      destination: {
-        kind: 'project',
-        projectRoot: '/workspace/project',
-        directory: 'media',
-        copyMode: 'copy',
-      },
-      caller: 'neko-canvas',
-    });
-
-    expect(request.mode).toBe('create-asset');
-    expect(request.bytes).toBe(bytes);
-    expect(request.fileName).toBe('paste.png');
+  it('rejects project asset directories that escape the owner root', () => {
+    expect(
+      validateProjectSourceAddRequest({
+        requestId: 'add-invalid-root',
+        kind: 'paste',
+        formatId: 'nkc',
+        bytes: new Uint8Array([1]),
+        assetDirectory: '../outside',
+      }).map((diagnostic) => diagnostic.code),
+    ).toContain('unauthorized-root');
   });
 
-  it('handles source add through injected ingest port', async () => {
+  it('handles source add through the injected project storage port', async () => {
     const result = await handleProjectSourceAddRequest(
       {
         requestId: 'add-2',
         kind: 'file-picker',
         formatId: 'nkv',
         sourcePath: '/workspace/project/media/clip.mp4',
-        destination: {
-          kind: 'project',
-          projectRoot: '/workspace/project',
-          copyMode: 'register',
-        },
+        assetDirectory: 'media',
       },
       {
-        ingest: async (request) => ({
+        store: async () => ({
           status: 'ready',
-          request,
-          source: { kind: 'file', path: 'media/clip.mp4' },
-          contractedPath: 'media/clip.mp4',
+          storage: 'referenced',
+          durablePath: 'media/clip.mp4',
         }),
       },
     );
@@ -1055,9 +1094,9 @@ describe('project source add DTOs', () => {
         kind: 'drag-drop',
         formatId: 'nkv',
         browserFile: { name: 'clip.mp4' },
-        destination: { kind: 'project', projectRoot: '/workspace/project' },
+        assetDirectory: 'media',
       },
-      { ingest: vi.fn() },
+      { store: vi.fn() },
     );
     const blobUrl = await handleProjectSourceAddRequest(
       {
@@ -1065,9 +1104,9 @@ describe('project source add DTOs', () => {
         kind: 'drag-drop',
         formatId: 'nkv',
         sourcePath: 'blob:runtime',
-        destination: { kind: 'project', projectRoot: '/workspace/project' },
+        assetDirectory: 'media',
       },
-      { ingest: vi.fn() },
+      { store: vi.fn() },
     );
 
     expect(fileNameOnly.ok).toBe(false);
@@ -1082,14 +1121,16 @@ describe('project source add DTOs', () => {
 
 describe('project source add host helper', () => {
   it('links durable workspace sources without copying them', async () => {
-    const files = createAssetFileOps();
+    const storage = createAssetStorage();
 
-    const result = await ingestProjectSourceAddRequest(
+    const result = await storeProjectSourceAddRequest(
       {
-        mode: 'link',
+        requestId: 'link-workspace',
+        kind: 'file-picker',
+        formatId: 'nkv',
         sourcePath: '/workspace/project/media/clip.mp4',
-        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
-        fileName: 'clip.mp4',
+        browserFile: { name: 'clip.mp4' },
+        assetDirectory: 'media',
       },
       {
         documentPath: '/workspace/project/edit.nkv',
@@ -1099,24 +1140,27 @@ describe('project source add host helper', () => {
           documentDir: '/workspace/project',
           allowedRoots: ['/workspace/project'],
         },
-        fileOps: files,
+        fileOps: storage.fileOps,
+        writer: storage.writer,
       },
     );
 
     expect(result.status).toBe('ready');
-    expect(result.contractedPath).toBe('media/clip.mp4');
-    expect(files.writes).toEqual([]);
+    expect(result).toMatchObject({ storage: 'referenced', durablePath: 'media/clip.mp4' });
+    expect(storage.writes).toEqual([]);
   });
 
   it('links configured variable sources without copying them', async () => {
-    const files = createAssetFileOps();
+    const storage = createAssetStorage();
 
-    const result = await ingestProjectSourceAddRequest(
+    const result = await storeProjectSourceAddRequest(
       {
-        mode: 'link',
+        requestId: 'link-variable',
+        kind: 'file-picker',
+        formatId: 'nkv',
         sourcePath: '/Volumes/media/clip.mp4',
-        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
-        fileName: 'clip.mp4',
+        browserFile: { name: 'clip.mp4' },
+        assetDirectory: 'media',
       },
       {
         documentPath: '/workspace/project/edit.nkv',
@@ -1127,24 +1171,27 @@ describe('project source add host helper', () => {
           allowedRoots: ['/workspace/project', '/Volumes/media'],
           pathVariables: new Map([['MEDIA', '/Volumes/media']]),
         },
-        fileOps: files,
+        fileOps: storage.fileOps,
+        writer: storage.writer,
       },
     );
 
     expect(result.status).toBe('ready');
-    expect(result.contractedPath).toBe('${MEDIA}/clip.mp4');
-    expect(files.writes).toEqual([]);
+    expect(result).toMatchObject({ storage: 'referenced', durablePath: '${MEDIA}/clip.mp4' });
+    expect(storage.writes).toEqual([]);
   });
 
-  it('links asset-library contracted sources through an injected path contractor', async () => {
-    const files = createAssetFileOps();
+  it('rejects retired asset-library variables returned by an injected path contractor', async () => {
+    const storage = createAssetStorage();
 
-    const result = await ingestProjectSourceAddRequest(
+    const result = await storeProjectSourceAddRequest(
       {
-        mode: 'link',
+        requestId: 'reject-retired-variable',
+        kind: 'file-picker',
+        formatId: 'nkv',
         sourcePath: '/Volumes/assets/clip.mp4',
-        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
-        fileName: 'clip.mp4',
+        browserFile: { name: 'clip.mp4' },
+        assetDirectory: 'media',
       },
       {
         documentPath: '/workspace/project/edit.nkv',
@@ -1154,26 +1201,31 @@ describe('project source add host helper', () => {
           documentDir: '/workspace/project',
           allowedRoots: ['/workspace/project'],
         },
-        fileOps: files,
+        fileOps: storage.fileOps,
+        writer: storage.writer,
         contractPath: (absolutePath) =>
           absolutePath === '/Volumes/assets/clip.mp4' ? '${ASSETS}/clip.mp4' : undefined,
       },
     );
 
-    expect(result.status).toBe('ready');
-    expect(result.contractedPath).toBe('${ASSETS}/clip.mp4');
-    expect(files.writes).toEqual([]);
+    expect(result).toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'non-portable-path' },
+    });
+    expect(storage.writes).toEqual([]);
   });
 
   it('rejects unmanaged absolute source paths instead of copying them', async () => {
-    const files = createAssetFileOps();
+    const storage = createAssetStorage();
 
-    const result = await ingestProjectSourceAddRequest(
+    const result = await storeProjectSourceAddRequest(
       {
-        mode: 'link',
+        requestId: 'reject-unmanaged',
+        kind: 'file-picker',
+        formatId: 'nkv',
         sourcePath: '/downloads/clip.mp4',
-        destination: { kind: 'project', directory: 'media', copyMode: 'link' },
-        fileName: 'clip.mp4',
+        browserFile: { name: 'clip.mp4' },
+        assetDirectory: 'media',
       },
       {
         documentPath: '/workspace/project/edit.nkv',
@@ -1183,26 +1235,30 @@ describe('project source add host helper', () => {
           documentDir: '/workspace/project',
           allowedRoots: ['/workspace/project'],
         },
-        fileOps: files,
+        fileOps: storage.fileOps,
+        writer: storage.writer,
       },
     );
 
-    expect(result.status).toBe('non-portable');
-    expect(result.error).toContain('must be moved into the project');
-    expect(files.writes).toEqual([]);
+    expect(result).toMatchObject({
+      status: 'unavailable',
+      diagnostic: { code: 'non-portable-path', message: expect.stringContaining('must be moved') },
+    });
+    expect(storage.writes).toEqual([]);
   });
 
   it('creates project assets from bytes with a collision-safe name', async () => {
-    const existing = new Set(['/workspace/project/media/clip.mp4']);
-    const files = createAssetFileOps(existing);
+    const storage = createAssetStorage(new Set(['media/clip.mp4']));
     const bytes = new Uint8Array([1, 2, 3]);
 
-    const result = await ingestProjectSourceAddRequest(
+    const result = await storeProjectSourceAddRequest(
       {
-        mode: 'create-asset',
+        requestId: 'copy-bytes',
+        kind: 'paste',
+        formatId: 'nkc',
         bytes,
-        destination: { kind: 'project', directory: 'media', copyMode: 'copy' },
-        fileName: 'clip.mp4',
+        browserFile: { name: 'clip.mp4' },
+        assetDirectory: 'media',
       },
       {
         documentPath: '/workspace/project/edit.nkv',
@@ -1212,13 +1268,14 @@ describe('project source add host helper', () => {
           documentDir: '/workspace/project',
           allowedRoots: ['/workspace/project'],
         },
-        fileOps: files,
+        fileOps: storage.fileOps,
+        writer: storage.writer,
       },
     );
 
     expect(result.status).toBe('ready');
-    expect(result.contractedPath).toBe('media/clip-1.mp4');
-    expect(files.writes).toEqual([{ filePath: '/workspace/project/media/clip-1.mp4', bytes }]);
+    expect(result).toMatchObject({ storage: 'copied', durablePath: 'media/clip-1.mp4' });
+    expect(storage.writes).toEqual([{ path: 'media/clip-1.mp4', bytes }]);
   });
 });
 
@@ -1270,23 +1327,34 @@ function createMemoryFileOps(initial: Record<string, string> = {}): ProjectFileO
   };
 }
 
-function createAssetFileOps(existing = new Set<string>()): {
-  readonly writes: Array<{ readonly filePath: string; readonly bytes: Uint8Array }>;
-  createDirectory(dirPath: string): Promise<void>;
-  fileExists(filePath: string): Promise<boolean>;
-  writeFile(filePath: string, bytes: Uint8Array): Promise<void>;
-} {
-  const writes: Array<{ readonly filePath: string; readonly bytes: Uint8Array }> = [];
+function createAssetStorage(existing = new Set<string>()) {
+  const writes: Array<{ readonly path: string; readonly bytes: Uint8Array }> = [];
   return {
     writes,
-    async createDirectory(_dirPath) {
-      return undefined;
+    fileOps: {
+      async createDirectory(_dirPath: string) {
+        return undefined;
+      },
     },
-    async fileExists(filePath) {
-      return existing.has(filePath) || writes.some((write) => write.filePath === filePath);
-    },
-    async writeFile(filePath, bytes) {
-      writes.push({ filePath, bytes });
+    writer: {
+      async write(
+        locator: { readonly kind: 'workspace-file'; readonly path: string },
+        bytes: Uint8Array,
+      ) {
+        if (existing.has(locator.path) || writes.some((write) => write.path === locator.path)) {
+          return {
+            status: 'unavailable' as const,
+            locator,
+            diagnostic: { code: 'content-conflict' as const },
+          };
+        }
+        writes.push({ path: locator.path, bytes });
+        return {
+          status: 'written' as const,
+          locator,
+          byteLength: bytes.byteLength,
+        };
+      },
     },
   };
 }

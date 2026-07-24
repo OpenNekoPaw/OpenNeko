@@ -48,21 +48,3 @@ export class ServiceCollection implements vscode.Disposable {
     this.services.clear();
   }
 }
-
-let globalServices: ServiceCollection | undefined;
-
-export function setGlobalServices(services: ServiceCollection | undefined): void {
-  globalServices = services;
-}
-
-export function clearGlobalServices(): void {
-  globalServices = undefined;
-}
-
-export function getService<T>(id: ServiceIdentifier<T>): T | undefined {
-  return globalServices?.get(id);
-}
-
-export function getGlobalServices(): ServiceCollection | undefined {
-  return globalServices;
-}

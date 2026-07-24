@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { isNekoCanvasAPI } from '@neko/shared';
 import { resolveNekoExtension } from '@neko/shared/vscode/extension';
 import { NEKO_PLUGIN_EXTENSION_IDS } from '@neko-agent/types';
-import { projectCanvasAssetChangeSummary, projectCanvasChangeSummary } from '@neko/agent/runtime';
+import { projectCanvasChangeSummary } from '@neko/agent/runtime';
 import {
   onDidChangeCanvasSelection,
   recordCanvasChange,
@@ -35,8 +35,8 @@ export function registerCanvasAmbientExtensionBridge(
 
 /**
  * Subscribe to NekoCanvas selection changes for ambient context injection.
- * Also subscribes to asset and canvas change events so the agent can track
- * mutations between interactions.
+ * Also subscribes to canvas change events so the agent can track mutations
+ * between interactions.
  */
 export function subscribeCanvasSelection(context: vscode.ExtensionContext): void {
   const canvasExt = resolveNekoExtension(NEKO_PLUGIN_EXTENSION_IDS.canvas, (id) =>
@@ -55,17 +55,6 @@ export function subscribeCanvasSelection(context: vscode.ExtensionContext): void
       if (api.nodes?.onSelectionChange) {
         context.subscriptions.push(
           api.nodes.onSelectionChange((nodes) => setCanvasSelection(nodes)),
-        );
-      }
-
-      if (api.events?.onDidChangeAssets) {
-        context.subscriptions.push(
-          api.events.onDidChangeAssets((ev) => {
-            const summary = projectCanvasAssetChangeSummary(ev);
-            if (summary) {
-              recordCanvasChange(summary);
-            }
-          }),
         );
       }
 

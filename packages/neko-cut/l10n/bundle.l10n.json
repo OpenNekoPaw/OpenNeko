@@ -1,9 +1,20 @@
 {
-  "neko.outline.title": "Project Outline",
-  "neko.outline.contextualTitle": "Video Project Outline",
-  "neko.newProject.title": "New Video Project",
-  "neko.newProject.noFolder": "No workspace folder is open.",
-  "neko.addToTimeline.title": "Add to Timeline",
-  "neko.openInEditor.title": "Open in Video Editor",
-  "neko.mediaDiff.compareFiles.title": "Compare Media Files"
+  "neko.cut.newProject.title": "New OTIO Project",
+  "neko.cut.previewMedia.title": "Preview Media",
+  "Neko Cut Export": "Neko Cut Export",
+  "Neko Cut Document": "Neko Cut Document",
+  "{0} Clips": "{0} Clips",
+  "{0} Tracks": "{0} Tracks",
+  "Duration: {0}": "Duration: {0}",
+  "Unsaved changes": "Unsaved changes",
+  "Export Cut media": "Export Cut media",
+  "Cut: {0}": "Cut: {0}",
+  "{0} exports": "{0} exports",
+  "Exporting {0}": "Exporting {0}",
+  "Export completed: {0}": "Export completed: {0}",
+  "Cut export failed": "Cut export failed",
+  "Export failed: {0}": "Export failed: {0}",
+  "Cut export cancelled": "Cut export cancelled",
+  "Export cancelled: {0}": "Export cancelled: {0}",
+  "Unknown error": "Unknown error"
 }

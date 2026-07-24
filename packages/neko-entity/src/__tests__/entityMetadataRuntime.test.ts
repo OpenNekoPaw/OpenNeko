@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   resolveGlobalStorageLayout,
+  type ContentReadService,
   type EntityAssetProjectionReplaceSourceRequest,
 } from '@neko/shared';
 import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
@@ -27,6 +28,62 @@ afterEach(async () => {
 });
 
 describe('VS Code Entity metadata runtime', () => {
+  it('exposes the injected content reader through explicit representation rebind', async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), 'neko-entity-rebind-runtime-'));
+    temporaryDirectories.push(projectRoot);
+    const contentRead: ContentReadService = {
+      stat: vi.fn(async (locator) => ({
+        status: 'ready' as const,
+        locator,
+        byteLength: 4,
+        fingerprint: { strategy: 'sha256' as const, value: 'sha256:rebound' },
+      })),
+      read: vi.fn(async () => {
+        throw new Error('rebind must use stat, not read');
+      }),
+    };
+    const runtime = createVSCodeEntityRuntime({ projectRoot, contentRead });
+    await runtime.service.createEntity({
+      id: 'char-rin',
+      kind: 'character',
+      canonicalName: 'Rin',
+      aliases: [],
+    });
+    await runtime.service.upsertBinding({
+      id: 'binding-rin-reference',
+      entityId: 'char-rin',
+      entityKind: 'character',
+      representation: { kind: 'workspace-file', path: 'neko/assets/old.png' },
+      role: 'reference',
+      status: 'confirmed',
+      availability: 'orphaned',
+      orphanedAt: '2026-07-22T00:00:00.000Z',
+      source: 'user',
+      updatedAt: '2026-07-22T00:00:00.000Z',
+    });
+
+    await expect(
+      runtime.representationRebind?.rebind('binding-rin-reference', {
+        kind: 'workspace-file',
+        path: 'neko/assets/rebound.png',
+      }),
+    ).resolves.toMatchObject({
+      status: 'rebound',
+      operation: { ok: true, action: 'rebind' },
+    });
+    await expect(runtime.service.bindings.list()).resolves.toEqual([
+      expect.objectContaining({
+        id: 'binding-rin-reference',
+        availability: 'active',
+        representation: expect.objectContaining({
+          kind: 'workspace-file',
+          path: 'neko/assets/rebound.png',
+        }),
+      }),
+    ]);
+    runtime.dispose();
+  });
+
   it('reads confirmed Entity facts from project files after the SQLite projection is cleared', async () => {
     const homedir = await mkdtemp(join(tmpdir(), 'neko-entity-file-authority-'));
     temporaryDirectories.push(homedir);
@@ -61,7 +118,7 @@ describe('VS Code Entity metadata runtime', () => {
       id: 'binding-rin-portrait',
       entityId: 'char-rin',
       entityKind: 'character',
-      assetRef: 'project://assets/rin-portrait',
+      representation: { kind: 'workspace-file', path: 'neko/assets/rin-portrait.png' },
       role: 'portrait',
       isDefault: true,
       status: 'confirmed',
@@ -92,7 +149,9 @@ describe('VS Code Entity metadata runtime', () => {
       expect.objectContaining({
         kind: 'binding-availability',
         entityId: 'char-rin',
-        assetRef: 'project://assets/rin-portrait',
+        value: expect.objectContaining({
+          representation: { kind: 'workspace-file', path: 'neko/assets/rin-portrait.png' },
+        }),
       }),
     ]);
     await store.repositories.cacheMaintenance.clearPartition({

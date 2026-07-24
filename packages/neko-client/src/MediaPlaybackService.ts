@@ -36,6 +36,7 @@ export interface MediaPlaybackEnginePort {
 export interface StartPlaybackOptions {
   hasAudio?: boolean;
   mediaType?: PlaybackMediaType;
+  startPaused?: boolean;
   startTime?: number;
   speed?: number;
 }
@@ -79,7 +80,13 @@ export class MediaPlaybackService {
   }
 
   async startPlayback(filePath: string, options?: StartPlaybackOptions): Promise<PlaybackHandle> {
-    const { hasAudio = true, mediaType = 'auto', startTime = 0, speed = 1.0 } = options ?? {};
+    const {
+      hasAudio = true,
+      mediaType = 'auto',
+      startPaused = false,
+      startTime = 0,
+      speed = 1.0,
+    } = options ?? {};
 
     const handle: PlaybackHandle = {
       videoStreamId: null,
@@ -88,39 +95,48 @@ export class MediaPlaybackService {
       audioStreamUrl: null,
     };
 
-    if (mediaType !== 'audio') {
-      try {
-        const videoStream = await this.client.createStream('videos', filePath, {
-          sessionId: `playback-${Date.now()}`,
-        });
-        handle.videoStreamId = videoStream.streamId;
-        handle.videoStreamUrl = videoStream.wsUrl;
-      } catch (err) {
-        logger.warn('Failed to create video stream', err);
+    try {
+      if (mediaType !== 'audio') {
+        let videoStream: StreamHandle | undefined;
+        try {
+          videoStream = await this.client.createStream('videos', filePath, {
+            sessionId: `playback-${Date.now()}`,
+            initialPaused: startPaused,
+            startTime,
+            speed,
+          });
+        } catch (err) {
+          logger.warn('Failed to create video stream', err);
+        }
+        if (videoStream) {
+          handle.videoStreamId = videoStream.streamId;
+          handle.videoStreamUrl = videoStream.wsUrl;
+        }
       }
-    }
 
-    if (hasAudio) {
-      try {
-        const audioStream = await this.client.createStream('audios', filePath, {
-          sessionId: `playback-audio-${Date.now()}`,
-        });
-        handle.audioStreamId = audioStream.streamId;
-        handle.audioStreamUrl = audioStream.audioWsUrl ?? audioStream.wsUrl;
-      } catch (err) {
-        logger.warn('Failed to create audio stream', err);
+      if (hasAudio) {
+        let audioStream: StreamHandle | undefined;
+        try {
+          audioStream = await this.client.createStream('audios', filePath, {
+            sessionId: `playback-audio-${Date.now()}`,
+            initialPaused: startPaused,
+            startTime,
+            speed,
+          });
+        } catch (err) {
+          logger.warn('Failed to create audio stream', err);
+        }
+        if (audioStream) {
+          handle.audioStreamId = audioStream.streamId;
+          handle.audioStreamUrl = audioStream.audioWsUrl ?? audioStream.wsUrl;
+        }
       }
-    }
 
-    if (startTime > 0) {
-      await this.seekPlayback(handle, startTime);
+      return handle;
+    } catch (error) {
+      await this.stopPlayback(handle);
+      throw error;
     }
-
-    if (speed !== 1.0) {
-      await this.setPlaybackSpeed(handle, speed);
-    }
-
-    return handle;
   }
 
   async stopPlayback(handle: PlaybackHandle): Promise<void> {

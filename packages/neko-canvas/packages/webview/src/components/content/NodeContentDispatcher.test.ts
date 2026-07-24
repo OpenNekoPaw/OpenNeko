@@ -760,7 +760,10 @@ describe('NodeContentDispatcher', () => {
               entityRef: { entityId: 'entity-broken', entityKind: 'character' },
               defaultRepresentation: {
                 role: 'portrait',
-                assetRef: 'project://assets/missing',
+                representation: {
+                  kind: 'workspace-file',
+                  path: 'neko/assets/Characters/missing.png',
+                },
                 availability: 'orphaned',
               },
             },
@@ -962,7 +965,7 @@ describe('NodeContentDispatcher', () => {
     );
 
     expect(markup).toContain('data-content-block-id="project-asset-preview"');
-    expect(markup).toContain('Video Project');
+    expect(markup).toContain('title="Project">Project</span>');
     expect(markup).not.toContain('Default path');
     expect(markup).not.toContain('UNSUPPORTED');
   });

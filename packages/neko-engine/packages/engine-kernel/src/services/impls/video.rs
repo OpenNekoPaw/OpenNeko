@@ -4,7 +4,8 @@
 //! streaming, transcoding, keyframe analysis, waveform generation, and proxy creation.
 
 use crate::domain::{
-    CaptureOptions, ExtractOptions, ExtractType, FrameData, TaskHandle, TranscodeOptions,
+    CaptureOptions, ExtractOptions, ExtractType, FrameData, StreamConfig, TaskHandle,
+    TranscodeOptions,
 };
 use crate::encoder::{ContainerFormat, Encoder, EncoderConfig, FfmpegMuxer, HwAccelEncoder, Muxer};
 use crate::error::{Error, Result};
@@ -29,7 +30,8 @@ use neko_runtime_media::{
     VideoFrameCaptureOptions,
 };
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{mpsc::Receiver, Arc};
+use std::thread::JoinHandle;
 use tokio::sync::broadcast;
 
 /// Infer ContainerFormat from output file extension
@@ -51,6 +53,14 @@ fn validate_video_probe(media_info: &neko_runtime_media::MediaInfo, source: &Pat
         )));
     }
     Ok(())
+}
+
+fn join_frame_producer(
+    frame_rx: Receiver<FrameData>,
+    producer: JoinHandle<()>,
+) -> std::thread::Result<()> {
+    drop(frame_rx);
+    producer.join()
 }
 
 /// VideoService implementation
@@ -223,6 +233,7 @@ impl IVideoService for VideoService {
         &self,
         source: &Path,
         session_id: &str,
+        config: StreamConfig,
     ) -> Result<(StreamId, broadcast::Receiver<FrameData>)> {
         let gpu_ctx = self
             .gpu_ctx
@@ -247,7 +258,7 @@ impl IVideoService for VideoService {
 
         // Create stream channels
         let (stream_id, tx, rx, cancel, state_tx, state_rx) =
-            create_stream_channels(session_id, 64);
+            create_stream_channels(session_id, 64, &config);
 
         // =====================================================================
         // Two-thread architecture: Encode Thread + Pacing Thread
@@ -589,8 +600,10 @@ impl IVideoService for VideoService {
                 }
             }
 
-            // Wait for encode thread to finish
-            let _ = encode_handle.join();
+            // Dropping the bounded queue receiver releases an encoder blocked on send.
+            if join_frame_producer(queue_rx, encode_handle).is_err() {
+                tracing::error!("Video stream encode thread panicked during shutdown");
+            }
 
             // Self-cleanup: remove handle from ActiveStreams when loop exits
             let rt = tokio::runtime::Handle::current();
@@ -951,6 +964,7 @@ impl IVideoService for VideoService {
 mod tests {
     use super::*;
     use crate::services::TaskService;
+    use std::sync::mpsc;
 
     fn create_test_service() -> VideoService {
         let task_service = Arc::new(TaskService::new());
@@ -1030,7 +1044,9 @@ mod tests {
     #[tokio::test]
     async fn test_video_service_start_stream_no_gpu() {
         let service = create_test_service();
-        let result = service.start_stream(Path::new("test"), "session1").await;
+        let result = service
+            .start_stream(Path::new("test"), "session1", StreamConfig::default())
+            .await;
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -1045,6 +1061,33 @@ mod tests {
         let result = service.stop_stream(&stream_id).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Stream not found"));
+    }
+
+    #[test]
+    fn frame_producer_join_releases_a_full_queue_before_waiting() {
+        let (frame_tx, frame_rx) = mpsc::sync_channel::<FrameData>(1);
+        let (first_frame_tx, first_frame_rx) = mpsc::channel();
+        let producer = std::thread::spawn(move || {
+            frame_tx.send(test_frame()).unwrap();
+            first_frame_tx.send(()).unwrap();
+            assert!(frame_tx.send(test_frame()).is_err());
+        });
+        first_frame_rx
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .unwrap();
+
+        join_frame_producer(frame_rx, producer).unwrap();
+    }
+
+    fn test_frame() -> FrameData {
+        FrameData {
+            data: Vec::new(),
+            width: 1,
+            height: 1,
+            format: FrameFormat::H264,
+            timestamp: 0.0,
+            diagnostics: None,
+        }
     }
 
     #[tokio::test]

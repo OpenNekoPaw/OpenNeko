@@ -13,7 +13,6 @@ const translations: Record<string, string> = {
   'chat.input.mentionTags.media.image': 'Image',
   'chat.input.mentionTags.media.document': 'Document',
   'chat.input.mentionTags.source.workspace': 'Workspace',
-  'chat.input.mentionTags.source.assetLibrary': 'Assets',
   'chat.input.mentionTags.source.mediaLibrary': 'Media',
   'chat.input.mentionTags.entity.character': 'Character',
 };
@@ -131,20 +130,20 @@ describe('MentionMenu icon projection', () => {
         items={[
           mention({
             id: 'file',
-            label: 'library.json',
-            filePath: 'neko/assets/library.json',
+            label: 'project.json',
+            filePath: 'config/project.json',
             source: 'workspace',
           }),
           mention({
-            id: 'asset',
-            kind: 'asset',
+            id: 'media',
+            kind: 'media',
             label: 'Hero portrait',
-            filePath: 'assets/hero.png',
+            filePath: 'neko/assets/Characters/hero.png',
             mediaType: 'image',
-            source: 'asset-library',
+            source: 'media-library',
             contextPayload: {
-              type: 'asset',
-              id: 'asset',
+              type: 'media',
+              id: 'media',
               label: 'Hero portrait',
               summary: 'Character reference portrait',
               data: {},
@@ -173,23 +172,23 @@ describe('MentionMenu icon projection', () => {
     const panel = container.firstElementChild as HTMLElement;
 
     expect(screen.getByText('Files')).toBeTruthy();
-    expect(screen.getAllByText('Assets').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('Media Library')).toBeTruthy();
     expect(screen.getByText('Entities')).toBeTruthy();
-    expect(screen.getByText('neko/assets/library.json')).toBeTruthy();
-    expect(screen.getByText('assets/hero.png')).toBeTruthy();
+    expect(screen.getByText('config/project.json')).toBeTruthy();
+    expect(screen.getByText('neko/assets/Characters/hero.png')).toBeTruthy();
     expect(screen.getByText('Image')).toBeTruthy();
     expect(screen.getByText('Character')).toBeTruthy();
     expect(panel.className).toContain('agent-composer-popover');
     expect(panel.className).toContain('agent-composer-mention-menu');
     expect(screen.getByRole('menu')).toBe(panel);
 
-    const fileButton = screen.getByRole('menuitem', { name: /library\.json/i });
+    const fileButton = screen.getByRole('menuitem', { name: /project\.json/i });
     expect(fileButton.className).toContain('agent-composer-popover-row');
     expect(fileButton.className).toContain('agent-composer-mention-row');
-    expect(fileButton.getAttribute('title')).toBe('neko/assets/library.json');
+    expect(fileButton.getAttribute('title')).toBe('config/project.json');
 
-    const fileName = screen.getByText('library.json');
-    const filePath = screen.getByText('neko/assets/library.json');
+    const fileName = screen.getByText('project.json');
+    const filePath = screen.getByText('config/project.json');
     expect(fileName.parentElement).toBe(filePath.parentElement);
     expect(fileName.parentElement?.className).toContain('agent-composer-mention-main');
   });
@@ -226,19 +225,19 @@ describe('MentionMenu icon projection', () => {
     expect(screen.getByText('${EPUBS}/Blame/book.epub')).toBeTruthy();
   });
 
-  it('selects path-backed asset mentions as file references', () => {
+  it('selects path-backed Media Library mentions as file references', () => {
     const onSelectFile = vi.fn();
     const onSelectContext = vi.fn();
-    const asset = mention({
-      id: 'asset',
-      kind: 'asset',
+    const media = mention({
+      id: 'media',
+      kind: 'media',
       label: 'Hero portrait',
-      filePath: 'assets/hero.png',
+      filePath: 'neko/assets/Characters/hero.png',
       mediaType: 'image',
-      source: 'asset-library',
+      source: 'media-library',
       contextPayload: {
-        type: 'asset',
-        id: 'asset',
+        type: 'media',
+        id: 'media',
         label: 'Hero portrait',
         summary: 'Character reference portrait',
         data: {},
@@ -249,7 +248,7 @@ describe('MentionMenu icon projection', () => {
       <MentionMenu
         isOpen
         filter=""
-        items={[asset]}
+        items={[media]}
         selectedIndex={0}
         onSelectFile={onSelectFile}
         onSelectContext={onSelectContext}
@@ -259,7 +258,7 @@ describe('MentionMenu icon projection', () => {
 
     fireEvent.click(screen.getByRole('menuitem', { name: /Hero portrait/i }));
 
-    expect(onSelectFile).toHaveBeenCalledWith(asset);
+    expect(onSelectFile).toHaveBeenCalledWith(media);
     expect(onSelectContext).not.toHaveBeenCalled();
   });
 

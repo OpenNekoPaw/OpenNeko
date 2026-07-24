@@ -82,6 +82,58 @@ describe('external TUI workflow controller', () => {
     expect(child.requests.at(-1).method).toBe('session.dispose');
   });
 
+  it('routes a bounded Tool confirmation through the TUI owner', async () => {
+    const child = createFakeChild();
+    const result = await runTuiWorkflowController(
+      child,
+      dynamicResponses(child, (request) => {
+        if (request.method === 'session.create') {
+          return ok({ sessionId: 's1', conversationId: 'conversation-1' });
+        }
+        if (request.method === 'message.submit') return ok({ queued: false });
+        if (request.method === 'tool.confirm') {
+          return ok({
+            toolCallId: 'call-bind',
+            toolName: 'BindEntityRepresentation',
+            approved: true,
+          });
+        }
+        if (request.method === 'session.waitForIdle') return ok({ fullyIdle: true });
+        if (request.method === 'session.facts') return ok(facts());
+        if (request.method === 'session.dispose') return ok({ disposed: true });
+        throw new Error(`unexpected method ${request.method}`);
+      }),
+      {
+        steps: [
+          { id: 'submit', kind: 'submit', prompt: 'Bind this representation.' },
+          {
+            id: 'confirm',
+            kind: 'confirm',
+            afterStepId: 'submit',
+            toolName: 'BindEntityRepresentation',
+            approved: true,
+            timeoutMs: 1_000,
+          },
+          { id: 'idle', kind: 'wait-for-idle', timeoutMs: 1_000 },
+        ],
+      },
+    );
+
+    expect(child.requests.find((request) => request.method === 'tool.confirm')).toMatchObject({
+      params: {
+        sessionId: 's1',
+        toolName: 'BindEntityRepresentation',
+        approved: true,
+        timeoutMs: 1_000,
+      },
+    });
+    expect(result.automation.steps.find((step) => step.id === 'confirm')).toMatchObject({
+      method: 'tool.confirm',
+      toolCallId: 'call-bind',
+      approved: true,
+    });
+  });
+
   it('keeps one TUI session open while delaying a later submit step', async () => {
     vi.useFakeTimers();
     const child = createFakeChild();

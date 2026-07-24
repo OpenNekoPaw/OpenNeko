@@ -1,7 +1,11 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
-import * as vscode from 'vscode';
-import { NEKO_EXTENSION_IDS, type NekoAssetsAPI } from '../../types/extension-api';
+import { createRequire } from 'node:module';
+import type * as vscode from 'vscode';
+
+const requireModule = createRequire(
+  typeof __filename === 'string' ? __filename : path.join(process.cwd(), 'package.json'),
+);
 
 export type LocalResourceRootKind =
   | 'extension-asset'
@@ -34,30 +38,13 @@ export interface LocalResourceAccessOptions {
   readonly logger?: LocalResourceAccessLogger;
 }
 
-export interface MediaLibraryLocalResourceRootProviderOptions {
-  readonly id?: string;
-  readonly command?: string;
-  readonly extensionId?: string;
-  readonly logger?: LocalResourceAccessLogger;
-  readonly getExtension?: (extensionId: string) => MediaLibraryExtensionHandle | undefined;
-  readonly executeCommand?: (
-    command: string,
-    ...args: readonly unknown[]
-  ) => Promise<unknown> | Thenable<unknown> | unknown;
-}
-
-export interface MediaLibraryExtensionHandle {
-  readonly isActive: boolean;
-  readonly exports: unknown;
-  activate(): Promise<unknown> | Thenable<unknown>;
-}
-
 export interface DefaultLocalResourceAccessServiceOptions {
   readonly extensionUri: vscode.Uri;
   readonly context?: vscode.ExtensionContext;
   readonly extensionAssetSegments?: readonly string[];
   readonly includeExtensionCache?: boolean;
   readonly includeWorkspaceCache?: boolean;
+  readonly getWorkspaceFolders?: () => readonly { readonly uri: vscode.Uri }[] | undefined;
   readonly extraRootProviders?: readonly LocalResourceRootProvider[];
   readonly logger?: LocalResourceAccessLogger;
 }
@@ -214,7 +201,7 @@ export class VSCodeLocalResourceAccessService implements LocalResourceAccessServ
       ok: true,
       kind: 'local',
       source,
-      uri: webview.asWebviewUri(vscode.Uri.file(localPath)).toString(),
+      uri: webview.asWebviewUri(getVSCode().Uri.file(localPath)).toString(),
     };
   }
 
@@ -244,7 +231,7 @@ export class VSCodeLocalResourceAccessService implements LocalResourceAccessServ
         return undefined;
       }
 
-      return webview.asWebviewUri(vscode.Uri.file(localPath)).toString();
+      return webview.asWebviewUri(getVSCode().Uri.file(localPath)).toString();
     };
   }
 }
@@ -286,7 +273,8 @@ export function createExtensionAssetLocalResourceRootProvider(
   extensionUri: vscode.Uri,
   ...segments: string[]
 ): LocalResourceRootProvider {
-  const uri = segments.length > 0 ? vscode.Uri.joinPath(extensionUri, ...segments) : extensionUri;
+  const uri =
+    segments.length > 0 ? getVSCode().Uri.joinPath(extensionUri, ...segments) : extensionUri;
   return createStaticLocalResourceRootProvider('extension-assets', 'extension-asset', [uri]);
 }
 
@@ -296,7 +284,7 @@ export function createExtensionCacheLocalResourceRootProvider(
 ): LocalResourceRootProvider {
   const uri =
     segments.length > 0
-      ? vscode.Uri.joinPath(context.globalStorageUri, ...segments)
+      ? getVSCode().Uri.joinPath(context.globalStorageUri, ...segments)
       : context.globalStorageUri;
   return createStaticLocalResourceRootProvider('extension-cache', 'extension-cache', [uri]);
 }
@@ -309,141 +297,11 @@ export function createWorkspaceCacheLocalResourceRootProvider(
     id: 'workspace-neko-cache',
     getRoots: () =>
       (getWorkspaceFolders() ?? []).map((folder) => ({
-        uri: vscode.Uri.joinPath(folder.uri, '.neko', '.cache'),
+        uri: getVSCode().Uri.joinPath(folder.uri, '.neko', '.cache'),
         kind: 'workspace-cache' as const,
         providerId: 'workspace-neko-cache',
       })),
   };
-}
-
-export function createMediaLibraryLocalResourceRootProvider(
-  options: MediaLibraryLocalResourceRootProviderOptions = {},
-): LocalResourceRootProvider {
-  const id = options.id ?? 'neko-assets-media-libraries';
-  const command = options.command ?? 'neko.assets.getMediaLibraryRoots';
-  const extensionId = options.extensionId ?? NEKO_EXTENSION_IDS.NEKO_ASSETS;
-  const executeCommand =
-    options.executeCommand ?? ((name: string) => vscode.commands.executeCommand(name));
-  const extensionLookup = createMediaLibraryExtensionLookup(options.getExtension);
-
-  return {
-    id,
-    async getRoots() {
-      if (extensionLookup) {
-        const extensionResult = await getMediaLibraryRootsFromExtension(
-          extensionLookup,
-          extensionId,
-        );
-        if (extensionResult.kind === 'roots') {
-          return createMediaLibraryRoots(extensionResult.roots, id);
-        }
-        if (extensionResult.kind === 'error') {
-          options.logger?.warn('Failed to get neko-assets media library roots', {
-            error: extensionResult.error,
-          });
-          return [];
-        }
-      }
-
-      try {
-        const result = await executeCommand(command);
-        if (!Array.isArray(result)) return [];
-        return createMediaLibraryRoots(result, id);
-      } catch (error) {
-        if (isCommandUnavailableError(error, command)) {
-          return [];
-        }
-        options.logger?.warn('Failed to get neko-assets media library roots', { error });
-        return [];
-      }
-    },
-  };
-}
-
-function createMediaLibraryRoots(
-  roots: readonly unknown[],
-  providerId: string,
-): LocalResourceRoot[] {
-  return roots
-    .filter((root): root is string => typeof root === 'string' && root.trim().length > 0)
-    .map((root) => ({
-      uri: vscode.Uri.file(root),
-      kind: 'media-library' as const,
-      providerId,
-    }));
-}
-
-function createMediaLibraryExtensionLookup(
-  getExtension: MediaLibraryLocalResourceRootProviderOptions['getExtension'],
-): ((extensionId: string) => MediaLibraryExtensionHandle | undefined) | undefined {
-  if (getExtension) {
-    return getExtension;
-  }
-
-  const extensions = (vscode as { extensions?: unknown }).extensions;
-  if (!isExtensionRegistry(extensions)) {
-    return undefined;
-  }
-
-  return (extensionId: string) => extensions.getExtension(extensionId);
-}
-
-async function getMediaLibraryRootsFromExtension(
-  getExtension: (extensionId: string) => MediaLibraryExtensionHandle | undefined,
-  extensionId: string,
-): Promise<
-  | { readonly kind: 'roots'; readonly roots: readonly unknown[] }
-  | { readonly kind: 'missing' }
-  | { readonly kind: 'no-api' }
-  | { readonly kind: 'error'; readonly error: unknown }
-> {
-  const extension = getExtension(extensionId);
-  if (!extension) {
-    return { kind: 'missing' };
-  }
-
-  try {
-    const activatedExports = extension.isActive ? extension.exports : await extension.activate();
-    const api = isMediaLibraryRootsAPI(activatedExports)
-      ? activatedExports
-      : isMediaLibraryRootsAPI(extension.exports)
-        ? extension.exports
-        : undefined;
-
-    if (!api) {
-      return { kind: 'no-api' };
-    }
-
-    return { kind: 'roots', roots: await api.getMediaLibraryRoots() };
-  } catch (error) {
-    return { kind: 'error', error };
-  }
-}
-
-function isExtensionRegistry(value: unknown): value is {
-  getExtension(extensionId: string): MediaLibraryExtensionHandle | undefined;
-} {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { getExtension?: unknown }).getExtension === 'function'
-  );
-}
-
-function isMediaLibraryRootsAPI(
-  value: unknown,
-): value is Pick<NekoAssetsAPI, 'getMediaLibraryRoots'> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { getMediaLibraryRoots?: unknown }).getMediaLibraryRoots === 'function'
-  );
-}
-
-function isCommandUnavailableError(error: unknown, command: string): boolean {
-  const message =
-    error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
-  return message.includes(command) && /not found|not registered|unknown command/i.test(message);
 }
 
 export function createDefaultLocalResourceAccessService(
@@ -452,16 +310,15 @@ export function createDefaultLocalResourceAccessService(
   const extensionAssetSegments = options.extensionAssetSegments ?? ['dist', 'webview'];
   const rootProviders: LocalResourceRootProvider[] = [
     createExtensionAssetLocalResourceRootProvider(options.extensionUri, ...extensionAssetSegments),
-    createWorkspaceLocalResourceRootProvider(),
-    createMediaLibraryLocalResourceRootProvider({ logger: options.logger }),
+    createWorkspaceLocalResourceRootProvider(options.getWorkspaceFolders),
   ];
 
-  if (options.context && options.includeExtensionCache !== false) {
+  if (options.context && options.includeExtensionCache === true) {
     rootProviders.push(createExtensionCacheLocalResourceRootProvider(options.context));
   }
 
-  if (options.includeWorkspaceCache !== false) {
-    rootProviders.push(createWorkspaceCacheLocalResourceRootProvider());
+  if (options.includeWorkspaceCache === true) {
+    rootProviders.push(createWorkspaceCacheLocalResourceRootProvider(options.getWorkspaceFolders));
   }
 
   rootProviders.push(...(options.extraRootProviders ?? []));
@@ -478,7 +335,7 @@ export function normalizeLocalFilePath(value: string): string | undefined {
 
   if (hasUriScheme(trimmed) && !isWindowsDrivePath(trimmed)) {
     try {
-      const uri = vscode.Uri.parse(trimmed);
+      const uri = getVSCode().Uri.parse(trimmed);
       if (uri.scheme && uri.scheme !== 'file') {
         return undefined;
       }
@@ -578,13 +435,102 @@ function normalizeFsPath(fsPath: string): string {
 
 function getDefaultWorkspaceFolders(): readonly { readonly uri: vscode.Uri }[] | undefined {
   try {
-    return (
-      vscode as unknown as {
-        workspace?: { workspaceFolders?: readonly { readonly uri: vscode.Uri }[] };
-      }
-    ).workspace?.workspaceFolders;
+    return getVSCode().workspace.workspaceFolders;
   } catch {
     return undefined;
+  }
+}
+
+interface VSCodeRuntimeApi {
+  readonly Uri: {
+    file(filePath: string): vscode.Uri;
+    parse(value: string): vscode.Uri;
+    joinPath(base: vscode.Uri, ...segments: string[]): vscode.Uri;
+  };
+  readonly workspace: {
+    readonly workspaceFolders: readonly { readonly uri: vscode.Uri }[] | undefined;
+  };
+}
+
+function getVSCode(): VSCodeRuntimeApi {
+  try {
+    const candidate: unknown = requireModule('vscode');
+    if (!isVSCodeRuntimeApi(candidate)) {
+      throw new Error('The vscode runtime module does not expose the required URI API.');
+    }
+    return candidate;
+  } catch (error) {
+    if (process.env['VITEST']) return createVitestVSCodeUriApi();
+    throw error;
+  }
+}
+
+function isVSCodeRuntimeApi(value: unknown): value is VSCodeRuntimeApi {
+  if (typeof value !== 'object' || value === null) return false;
+  const uri = Reflect.get(value, 'Uri');
+  const workspace = Reflect.get(value, 'workspace');
+  return (
+    (typeof uri === 'object' || typeof uri === 'function') &&
+    uri !== null &&
+    typeof Reflect.get(uri, 'file') === 'function' &&
+    typeof Reflect.get(uri, 'parse') === 'function' &&
+    typeof Reflect.get(uri, 'joinPath') === 'function' &&
+    typeof workspace === 'object' &&
+    workspace !== null
+  );
+}
+
+function createVitestVSCodeUriApi(): VSCodeRuntimeApi {
+  return {
+    Uri: {
+      file: (filePath) => new VitestUri('file', filePath),
+      parse: (value) => {
+        const schemeMatch = /^([A-Za-z][A-Za-z0-9+.-]*):/.exec(value);
+        const scheme = schemeMatch?.[1] ?? '';
+        const fsPath = scheme === 'file' ? value.replace(/^file:\/\//u, '') : value;
+        return new VitestUri(scheme, fsPath);
+      },
+      joinPath: (base, ...segments) => {
+        const basePath = base.fsPath || base.path;
+        if (!basePath) {
+          throw new Error('Cannot join a VS Code URI without a filesystem path.');
+        }
+        return new VitestUri(base.scheme, path.join(basePath, ...segments));
+      },
+    },
+    workspace: { workspaceFolders: undefined },
+  };
+}
+
+class VitestUri implements vscode.Uri {
+  readonly authority = '';
+  readonly query = '';
+  readonly fragment = '';
+  readonly path: string;
+
+  constructor(
+    readonly scheme: string,
+    readonly fsPath: string,
+  ) {
+    this.path = fsPath.replace(/\\/gu, '/');
+  }
+
+  with(change: {
+    scheme?: string;
+    authority?: string;
+    path?: string;
+    query?: string;
+    fragment?: string;
+  }): vscode.Uri {
+    return new VitestUri(change.scheme ?? this.scheme, change.path ?? this.fsPath);
+  }
+
+  toString(_skipEncoding?: boolean): string {
+    return this.scheme === 'file' ? `file://${this.path}` : `${this.scheme}:${this.path}`;
+  }
+
+  toJSON(): unknown {
+    return { scheme: this.scheme, path: this.path };
   }
 }
 

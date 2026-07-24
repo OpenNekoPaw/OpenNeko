@@ -1,23 +1,24 @@
 import type {
-  EntityAssetBinding,
-  EntityAssetBindingFile,
+  EntityRepresentationBinding,
+  EntityRepresentationBindingFile,
   EntityAssetRequirement,
   EntityAssetRequirementFile,
   VisualIdentityDraft,
   VisualIdentityDraftFile,
 } from '@neko/shared';
 import {
-  isEntityAssetBindingFile,
+  ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
+  assertEntityRepresentationBindingFile,
+  createEmptyEntityRepresentationBindingFile,
   isEntityAssetRequirementFile,
   isVisualIdentityDraftFile,
-  withEntityAssetBindingDefaults,
-  withEntityAssetBindingFileDefaults,
+  normalizeEntityRepresentationBindingFile,
 } from '@neko/shared';
 import type { EntityRuntimePorts } from './ports';
 import { SerialEntityRuntimeLock } from './ports';
 import {
   assertGitTrackedEntityFactPath,
-  resolveEntityAssetBindingsPath,
+  resolveEntityRepresentationBindingsPath,
   resolveEntityAssetRequirementsPath,
   resolveVisualIdentityDraftsPath,
 } from './paths';
@@ -27,12 +28,12 @@ export interface EntityFactServiceOptions {
   readonly ports: EntityRuntimePorts;
 }
 
-export class EntityAssetBindingService {
+export class EntityRepresentationBindingService {
   private readonly filePath: string;
   private readonly lock;
 
   constructor(private readonly options: EntityFactServiceOptions) {
-    this.filePath = resolveEntityAssetBindingsPath(options.projectRoot);
+    this.filePath = resolveEntityRepresentationBindingsPath(options.projectRoot);
     this.lock = options.ports.lock ?? new SerialEntityRuntimeLock();
     assertGitTrackedEntityFactPath(this.filePath);
   }
@@ -40,47 +41,44 @@ export class EntityAssetBindingService {
   static fromProjectRoot(
     projectRoot: string,
     ports: EntityRuntimePorts,
-  ): EntityAssetBindingService {
-    return new EntityAssetBindingService({ projectRoot, ports });
+  ): EntityRepresentationBindingService {
+    return new EntityRepresentationBindingService({ projectRoot, ports });
   }
 
-  async load(): Promise<EntityAssetBindingFile> {
+  async load(): Promise<EntityRepresentationBindingFile> {
     const parsed = await this.options.ports.files.readJson(this.filePath);
-    return isEntityAssetBindingFile(parsed)
-      ? withEntityAssetBindingFileDefaults(parsed)
-      : createEmptyEntityAssetBindingFile();
+    return parsed === undefined
+      ? createEmptyEntityRepresentationBindingFile()
+      : assertEntityRepresentationBindingFile(parsed);
   }
 
-  async save(file: EntityAssetBindingFile): Promise<void> {
-    if (!isEntityAssetBindingFile(file)) {
-      throw new Error('Invalid entity asset binding file.');
-    }
+  async save(file: EntityRepresentationBindingFile): Promise<void> {
+    assertEntityRepresentationBindingFile(file);
     await this.lock.withLock(this.filePath, async () => {
       await this.write(file);
     });
   }
 
-  async list(): Promise<readonly EntityAssetBinding[]> {
+  async list(): Promise<readonly EntityRepresentationBinding[]> {
     return (await this.load()).bindings;
   }
 
-  async upsert(binding: EntityAssetBinding): Promise<EntityAssetBindingFile> {
+  async upsert(binding: EntityRepresentationBinding): Promise<EntityRepresentationBindingFile> {
     return this.mutate((file) => ({
-      version: 1,
-      bindings: [
-        ...file.bindings.filter((candidate) => candidate.id !== binding.id),
-        withEntityAssetBindingDefaults(binding),
-      ].sort(compareBindings),
+      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
+      bindings: [...file.bindings.filter((candidate) => candidate.id !== binding.id), binding].sort(
+        compareBindings,
+      ),
     }));
   }
 
-  async setDefault(binding: EntityAssetBinding): Promise<EntityAssetBindingFile> {
-    const nextBinding: EntityAssetBinding = withEntityAssetBindingDefaults({
+  async setDefault(binding: EntityRepresentationBinding): Promise<EntityRepresentationBindingFile> {
+    const nextBinding: EntityRepresentationBinding = {
       ...binding,
       isDefault: true,
-    });
+    };
     return this.mutate((file) => ({
-      version: 1,
+      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
       bindings: [
         ...file.bindings
           .filter((candidate) => candidate.id !== nextBinding.id)
@@ -92,27 +90,27 @@ export class EntityAssetBindingService {
     }));
   }
 
-  async remove(id: string): Promise<EntityAssetBindingFile> {
+  async remove(id: string): Promise<EntityRepresentationBindingFile> {
     return this.mutate((file) => ({
-      version: 1,
+      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
       bindings: file.bindings.filter((binding) => binding.id !== id),
     }));
   }
 
-  async replaceAll(bindings: readonly EntityAssetBinding[]): Promise<EntityAssetBindingFile> {
-    const next: EntityAssetBindingFile = {
-      version: 1,
-      bindings: bindings
-        .map((binding) => withEntityAssetBindingDefaults(binding))
-        .sort(compareBindings),
+  async replaceAll(
+    bindings: readonly EntityRepresentationBinding[],
+  ): Promise<EntityRepresentationBindingFile> {
+    const next: EntityRepresentationBindingFile = {
+      version: ENTITY_REPRESENTATION_BINDING_FILE_VERSION,
+      bindings: [...bindings].sort(compareBindings),
     };
     await this.save(next);
     return next;
   }
 
   private async mutate(
-    operation: (file: EntityAssetBindingFile) => EntityAssetBindingFile,
-  ): Promise<EntityAssetBindingFile> {
+    operation: (file: EntityRepresentationBindingFile) => EntityRepresentationBindingFile,
+  ): Promise<EntityRepresentationBindingFile> {
     return this.lock.withLock(this.filePath, async () => {
       const current = await this.load();
       const next = operation(current);
@@ -121,13 +119,11 @@ export class EntityAssetBindingService {
     });
   }
 
-  private async write(file: EntityAssetBindingFile): Promise<void> {
-    await this.options.ports.files.writeJson(this.filePath, {
-      version: 1,
-      bindings: file.bindings
-        .map((binding) => withEntityAssetBindingDefaults(binding))
-        .sort(compareBindings),
-    });
+  private async write(file: EntityRepresentationBindingFile): Promise<void> {
+    await this.options.ports.files.writeJson(
+      this.filePath,
+      normalizeEntityRepresentationBindingFile(assertEntityRepresentationBindingFile(file)),
+    );
   }
 }
 
@@ -250,13 +246,6 @@ export class EntityAssetRequirementService {
   }
 }
 
-export function createEmptyEntityAssetBindingFile(): EntityAssetBindingFile {
-  return {
-    version: 1,
-    bindings: [],
-  };
-}
-
 export function createEmptyVisualIdentityDraftFile(): VisualIdentityDraftFile {
   return {
     version: 1,
@@ -271,7 +260,7 @@ export function createEmptyEntityAssetRequirementFile(): EntityAssetRequirementF
   };
 }
 
-function compareBindings(a: EntityAssetBinding, b: EntityAssetBinding): number {
+function compareBindings(a: EntityRepresentationBinding, b: EntityRepresentationBinding): number {
   return (
     a.entityKind.localeCompare(b.entityKind) ||
     a.entityId.localeCompare(b.entityId) ||
@@ -293,11 +282,11 @@ function compareRequirements(a: EntityAssetRequirement, b: EntityAssetRequiremen
   );
 }
 
-function isSameEntityRole(a: EntityAssetBinding, b: EntityAssetBinding): boolean {
+function isSameEntityRole(a: EntityRepresentationBinding, b: EntityRepresentationBinding): boolean {
   return a.entityKind === b.entityKind && a.entityId === b.entityId && a.role === b.role;
 }
 
-function omitDefaultFlag(binding: EntityAssetBinding): EntityAssetBinding {
+function omitDefaultFlag(binding: EntityRepresentationBinding): EntityRepresentationBinding {
   const { isDefault: _isDefault, ...rest } = binding;
   return rest;
 }

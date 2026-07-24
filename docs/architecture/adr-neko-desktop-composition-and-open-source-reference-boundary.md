@@ -5,7 +5,7 @@
 更新日期：2026-07-22
 范围：拟议中的 `apps/neko-desktop`、现有领域子包、Desktop Host bridge、Rust Engine，以及 OpenCode、Zed、Craft Agents、Goose、MiniMax Hub 等外部参考的采用边界。
 
-Cut 媒体边界更新（2026-07-22）：Desktop Cut 不再复用 Rust Engine，改用 WebCodecs/WebAudio、Host bounded file access 和打包 FFmpeg；VS Code 仅在过渡期保留 Engine adapter。OTIO 工程、轻量操作和双宿主边界以 [`adr-cut-otio-vscode-desktop-media-runtime-boundary.md`](adr-cut-otio-vscode-desktop-media-runtime-boundary.md) 为准。本文其他 Desktop composition、Agent、项目壳和 host adapter 决策继续有效。
+Cut 媒体边界更新（2026-07-22）：VS Code Cut 的已实现 OTIO 工程和 Engine adapter 以 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 为准；Desktop Cut 不复用 Rust Engine，目标改用 WebCodecs/WebAudio、Host bounded file access 和打包 FFmpeg，并由 [`adr-cut-otio-vscode-desktop-media-runtime-boundary.md`](adr-cut-otio-vscode-desktop-media-runtime-boundary.md) 约束。不得从任一文档恢复 NKV 或推断未实现宿主能力。本文其他 Desktop composition、Agent、项目壳和 host adapter 决策继续有效。
 
 ## 背景
 
@@ -62,11 +62,11 @@ Desktop 优先复用以下公共能力：
 | --- | --- | --- |
 | Agent、会话、模型、Skill、工具编排 | `packages/neko-agent` | 复用 Pi runtime、`AgentHostRuntimeAdapter` 和公共 Web UI root；实现 Electron adapter |
 | Canvas 项目事实与交互 | `packages/neko-canvas` | 保留 `.nkc` 与 Canvas domain 为真值；把完整 UI root 的 VS Code message 依赖改为注入式 host adapter |
-| Cut 时间线与编辑 | `packages/neko-cut` | 保留 `.nkv` 与 Cut domain 为真值；通过 host-neutral authoring/runtime contract 接入 |
+| Cut 时间线与编辑 | `packages/neko-cut` | 以 `.otio`、Cut Core command 和派生执行计划为真值；通过 host-neutral authoring/runtime contract 接入 |
 | 素材、实体与搜索 | `packages/neko-assets`、`packages/neko-entity`、`packages/neko-search` | 复用 domain service 与 DTO；为 Desktop 组合 React 素材管理面，不复用 VS Code TreeView 宿主实现 |
 | Preview | `packages/neko-preview` | 保留只读投影职责；把完整 root 的宿主通信抽到 adapter |
 | Host、UI 与基础能力 | `packages/neko-host`、`packages/neko-ui`、`packages/neko-types` | 扩展现有公共 ports/primitives，不在 Desktop 建第二套 host framework、design system、i18n、日志或错误类型 |
-| Engine 与跨层契约 | `packages/neko-engine`、`packages/neko-client`、`packages/neko-proto` | 复用 EngineClient 与 Proto；计算、媒体处理和导出继续以 Rust Engine 为权威 |
+| Engine 与跨层契约 | `packages/neko-engine`、`packages/neko-client`、`packages/neko-proto` | 是否复用 Engine 由各领域/宿主 ADR 决定；当前 VS Code Cut 通过 adapter 复用，Desktop Cut 尚未决策 |
 
 当前复用成熟度不同：Agent Web UI 已存在 `AgentHostRuntimeAdapter` 与 `electron` host kind，可作为第一阶段入口；Canvas、Cut、Preview 的完整 UI root 仍有较强 VS Code `postMessage` 耦合；Assets 的主要宿主 UI 仍偏向 VS Code TreeView。后两类必须先完成宿主适配器和公共入口收敛，不能在 Desktop 中复制一套平行实现。
 
@@ -160,7 +160,7 @@ MiniMax Hub 用于校准用户体验：桌面创作指挥中心、多 Agent 创�
 
 OpenNeko 只采用其“Home 入口与管理、顶部项目工作集、项目内创作工作台”的宏观层级。内容创作、角色 IP 和互动世界分别拥有闭合 Project Profile；角色调试和世界体验不能作为 Canvas 节点类型或插件面板绕过自己的项目事实与运行生命周期。
 
-Desktop MVP 仍遵守本地产品边界：workspace、本地文件、Host 权限、Pi runtime 和 Rust Engine 组成 canonical path。商业云服务、团队协作、市场和远程同步若进入范围，应分别提出新变更。
+Desktop MVP 仍遵守本地产品边界：workspace、本地文件、Host 权限、Pi runtime，以及各领域 ADR 明确要求的本地 Engine/Host runtime 组成 canonical path。商业云服务、团队协作、市场和远程同步若进入范围，应分别提出新变更。
 
 ### 6. 开源组件按“直接采用、协议参考、交互参考”分级
 
@@ -169,7 +169,7 @@ Desktop MVP 仍遵守本地产品边界：workspace、本地文件、Host 权限
 | Electron Forge | 优先直接采用 | 用于 Electron 打包、发布和 native module rebuild；最终选择仍需通过实施 OpenSpec 和平台 spike |
 | Electron Security Guidance | 必须落实 | `contextIsolation`、sandbox、CSP、最小 preload API、sender 校验和安全自定义协议是宿主基线 |
 | Playwright Electron | 评估后采用 | 用于 Desktop 运行态 E2E；其 Electron 支持状态要求同时保留 IPC/contract 测试，不能只靠 UI 自动化 |
-| OpenTimelineIO | 协议/语义参考 | 用于时间线交换边界；MVP 不要求嵌入其 Python/C++ runtime，也不替换 `.nkv` 真值 |
+| OpenTimelineIO | Cut 工程协议 | Cut 以受限 OTIO profile 作为唯一项目真值；MVP 不要求嵌入其 Python/C++ runtime |
 | Agent Skills | 格式参考并保持兼容 | 用于开放 Skill 可移植格式；Neko overlay、trust 和 capability 仍由现有 Agent 边界拥有 |
 | ComfyUI | 交互参考 | 参考 queue、history、provenance 与节点工作流体验；不采用其后端或工作流格式 |
 | React Flow | 技术 spike 候选 | 只评估图交互、可访问性与自动布局；未经 Canvas 架构和性能 spike 不替换现有 Canvas |
@@ -190,7 +190,7 @@ Subagent/delegation 使用父 Conversation 下的 child `AgentRunId`；导出、
 
 ## 五层分析
 
-职责：Desktop 负责宿主和组合；领域包负责事实与操作；Engine 负责计算和媒体真值；公共包负责稳定跨层契约。
+职责：Desktop 负责宿主和组合；领域包负责事实与操作；Engine 或 Host runtime 只负责各领域明确委托的计算/媒体执行；公共包负责稳定跨层契约。Cut 的 OTIO、命令和执行计划不归 Engine。
 
 依赖：renderer 只能依赖浏览器安全的公共入口；preload 依赖 Electron 并暴露窄桥；main 依赖 Host/application service 但不依赖 React；功能包之间不直接导入私有实现。
 
@@ -208,7 +208,7 @@ Subagent/delegation 使用父 Conversation 下的 child `AgentRunId`；导出、
 
 1. 定义 Desktop application contract、Electron 安全模型、typed IPC 和复用审计，删除或 poison 本次边界内的旧 application alias。
 2. 建立 `apps/neko-desktop` main/preload/renderer、AppHost、Electron Host ports 和 workspace lifecycle；把 Agent router 收敛为 host-neutral controller，并接入 Agent Electron adapter。
-3. 依次完成 Canvas、Cut、Preview 完整 Root 的 adapter 化以及 Assets React 管理面，接入 Engine 生命周期；不得以现有简化 HostAdapterSurface 代替完整运行路径。
+3. 依次完成 Canvas、Cut、Preview 完整 Root 的 adapter 化以及 Assets React 管理面，按各领域 ADR 接入 Engine 或 Host runtime 生命周期；不得以现有简化 HostAdapterSurface 代替完整运行路径。
 4. 在 canonical path 稳定后增加多 Agent 展示、模型路由、Skill 管理、质量检查和导出闭环。
 
 商业云、Marketplace、团队协作、远程 server 和 native professional viewport 不随 Desktop shell 自动进入 MVP；每项需要独立的职责与契约决策。

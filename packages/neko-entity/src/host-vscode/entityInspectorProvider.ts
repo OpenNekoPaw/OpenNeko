@@ -3,7 +3,7 @@ import {
   ENTITY_FACADE_COMMANDS,
   isCreativeEntity,
   isCreativeEntityCandidate,
-  isEntityAssetBinding,
+  isEntityRepresentationBinding,
   isEntityBindingWidgetAction,
   isEntityFacadeInspectEntityRequest,
   isVisualIdentityDraft,
@@ -12,7 +12,7 @@ import {
   type CreativeEntityChangeEvent,
   type CreativeEntityChangedRef,
   type CreativeEntityRef,
-  type EntityAssetBinding,
+  type EntityRepresentationBinding,
   type EntityBindingWidgetAction,
   type EntityFacadeEntityDetailResult,
   type EntityFacadeInspectEntityRequest,
@@ -41,7 +41,7 @@ interface EntityInspectorState {
   readonly candidateId?: string;
   readonly entity?: CreativeEntity;
   readonly candidate?: CreativeEntityCandidate;
-  readonly bindings?: readonly EntityAssetBinding[];
+  readonly bindings?: readonly EntityRepresentationBinding[];
   readonly bindingTexts?: readonly string[];
   readonly error?: string;
 }
@@ -405,7 +405,7 @@ function readEntityFacadeDetail(value: unknown): EntityFacadeEntityDetailResult 
   const visualDrafts = value['visualDrafts'];
   if (entity !== undefined && !isCreativeEntity(entity)) return undefined;
   if (!Array.isArray(candidates) || !candidates.every(isCreativeEntityCandidate)) return undefined;
-  if (!Array.isArray(bindings) || !bindings.every(isEntityAssetBinding)) return undefined;
+  if (!Array.isArray(bindings) || !bindings.every(isEntityRepresentationBinding)) return undefined;
   if (!Array.isArray(visualDrafts) || !visualDrafts.every(isVisualIdentityDraft)) return undefined;
   return {
     ...(entity ? { entity } : {}),

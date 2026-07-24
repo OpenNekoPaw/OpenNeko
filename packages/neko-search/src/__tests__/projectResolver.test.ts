@@ -83,7 +83,7 @@ describe('resolveProjectSearchContext', () => {
   it('infers external Neko project roots from context file markers', async () => {
     vi.mocked(vscode.workspace.fs.stat).mockImplementation(async (uri: unknown) => {
       const filePath = isUriLike(uri) ? uri.fsPath : '';
-      if (filePath === '/Users/feng/git/neko-test/neko/assets/library.json') {
+      if (filePath === '/Users/feng/git/neko-test/neko/settings.json') {
         return { type: vscode.FileType.File } as never;
       }
       throw Object.assign(new Error('missing'), { code: 'ENOENT' });

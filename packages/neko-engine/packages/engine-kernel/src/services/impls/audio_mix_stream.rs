@@ -3,7 +3,7 @@
 //! Spawns a blocking thread that runs `AudioMixdown::mix_buffer()` in a loop,
 //! packing output as PCM f32le frames and broadcasting via the stream infrastructure.
 
-use crate::domain::FrameData;
+use crate::domain::{FrameData, StreamConfig};
 use crate::error::Result;
 use crate::services::audio_mixdown::{AudioMixdown, MixdownConfig};
 use crate::services::impls::stream_loop::{
@@ -31,7 +31,8 @@ pub async fn start_mix_stream(
     session_id: &str,
     active_streams: Arc<ActiveStreams>,
 ) -> Result<(StreamId, broadcast::Receiver<FrameData>)> {
-    let (stream_id, tx, rx, cancel, _state_tx, state_rx) = create_stream_channels(session_id, 64);
+    let (stream_id, tx, rx, cancel, _state_tx, state_rx) =
+        create_stream_channels(session_id, 64, &StreamConfig::default());
 
     let cancel_clone = cancel.clone();
     let streams_clone = active_streams.clone();

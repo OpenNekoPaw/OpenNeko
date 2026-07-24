@@ -5,12 +5,7 @@ import type { ProjectSearchQuery, ProjectSearchQueryContext } from '@neko/shared
 
 const URI_SCHEME_RE = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 const WINDOWS_DRIVE_RE = /^[A-Za-z]:[\\/]/;
-const PROJECT_ROOT_MARKERS = [
-  path.join('neko', 'settings.json'),
-  path.join('neko', 'assets', 'library.json'),
-  '.neko',
-  '.git',
-] as const;
+const PROJECT_ROOT_MARKERS = [path.join('neko', 'settings.json'), '.neko', '.git'] as const;
 
 export interface VSCodeProjectSearchContextResolverOptions {
   readonly resolvePath?: (filePath: string) => Promise<string>;

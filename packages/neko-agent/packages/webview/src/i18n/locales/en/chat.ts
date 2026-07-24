@@ -278,7 +278,6 @@ export const chat = {
   'chat.input.mentionTags.media.text': 'Text',
   'chat.input.mentionTags.media.document': 'Document',
   'chat.input.mentionTags.source.workspace': 'Workspace',
-  'chat.input.mentionTags.source.assetLibrary': 'Assets',
   'chat.input.mentionTags.source.mediaLibrary': 'Media',
   'chat.input.mentionTags.source.entityGraph': 'Entity',
   'chat.input.mentionTags.source.story': 'Story',

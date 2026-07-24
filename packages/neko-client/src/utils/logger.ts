@@ -8,5 +8,3 @@ registry.setRootLogger(rootLogger);
 export function getLogger(source: string): ILogger {
   return registry.getLogger(source);
 }
-
-export { rootLogger };

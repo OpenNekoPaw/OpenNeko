@@ -200,7 +200,7 @@ Agent Chat 可以展示外部 run 的摘要、进度、结果卡、诊断、重�
 - Webview 不导入 Agent runtime、VS Code API、provider SDK 或其他功能包内部实现。
 - Agent runtime 不导入 Webview、React、VS Code 或具体创作包内部实现。
 - 创作包之间不直接 import 对方内部状态；跨包写回通过 shared contract、command/facade 或 package-owned capability provider。
-- Rust Engine、Assets、ResourceCache 和 PathAccessPolicy 继续作为媒体计算、资源身份和路径授权的权威边界。
+- Rust Engine、Assets、`ContentReadService` / `ContentRepresentationService` 和 Host path policy 继续作为媒体计算、资源身份、派生表现与路径授权的权威边界；ResourceCache 仅是 Host-private 实现。
 
 ### 接口
 
