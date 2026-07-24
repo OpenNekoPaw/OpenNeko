@@ -889,9 +889,22 @@ describe('AgentStreamProcessor', () => {
       });
       expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith(
         expect.objectContaining({
-          variant: expect.objectContaining({ role: 'document-entry', mimeType: 'image/jpeg' }),
+          source: expect.objectContaining({
+            kind: 'document',
+            provider: 'document-archive',
+            locator: expect.objectContaining({
+              kind: 'document',
+              entryPath: 'image/Page_1.jpg',
+            }),
+          }),
+          mimeTypeHint: 'image/jpeg',
         }),
       );
+      expect(
+        contentAccessRuntime.loadProviderAsset.mock.calls.every(
+          ([input]) => !Object.hasOwn(input, 'variant'),
+        ),
+      ).toBe(true);
       expect(localResourceAccess.toWebviewUri).not.toHaveBeenCalled();
       expect(getProjectedTimelineToolResult('conv-1', 'tc-read-doc-image')?.data).toMatchObject({
         images: [
@@ -1048,9 +1061,22 @@ describe('AgentStreamProcessor', () => {
       expect(JSON.stringify(streamComplete?.contentBlocks)).not.toContain('镜号');
       expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith(
         expect.objectContaining({
-          variant: expect.objectContaining({ role: 'document-entry', mimeType: 'image/jpeg' }),
+          source: expect.objectContaining({
+            kind: 'document',
+            provider: 'document-archive',
+            locator: expect.objectContaining({
+              kind: 'document',
+              entryPath: 'OPS/page-1.jpg',
+            }),
+          }),
+          mimeTypeHint: 'image/jpeg',
         }),
       );
+      expect(
+        contentAccessRuntime.loadProviderAsset.mock.calls.every(
+          ([input]) => !Object.hasOwn(input, 'variant'),
+        ),
+      ).toBe(true);
     });
 
     it('projects top-level tool result media fields for webview delivery', async () => {
