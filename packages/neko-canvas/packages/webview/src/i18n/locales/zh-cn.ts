@@ -361,9 +361,9 @@ export const zhCN = {
     '视频提示词为空，视频操作可能会在 Agent 执行前被拒绝。',
   'content.overlayShotPromptImageEditSourceMissing': '编辑图片需要已生成图片或图片参考。',
   'content.overlayShotPromptVideoEditSourceMissing': '编辑视频需要已生成视频或视频参考。',
-  'content.overlayShotPromptAiPending': '正在启动后台 Agent 任务',
-  'content.overlayShotPromptAiAccepted': '后台 Agent 任务已接受',
-  'content.overlayShotPromptAiFailed': '后台 Agent 任务失败',
+  'content.overlayShotPromptAiPending': '正在启动 AI 操作',
+  'content.overlayShotPromptAiAccepted': 'AI 操作已接受',
+  'content.overlayShotPromptAiFailed': 'AI 操作失败',
   'content.overlayShotPromptAiProgress':
     '进度 {completed}/{total}，运行 {running}，队列 {queued}，失败 {failed}',
   'content.overlayShotPromptCandidates': '创作 AI 候选',

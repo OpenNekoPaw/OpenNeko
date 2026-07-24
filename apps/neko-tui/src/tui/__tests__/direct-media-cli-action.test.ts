@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MediaTask, MediaTaskView } from '@neko/platform';
-import type { TaskRunScope } from '@neko/shared';
+import { createResourceFingerprint, createResourceRef } from '@neko/shared';
+import type { GenerationJobSnapshot } from '@neko/generation';
 import type { CLIConfig } from '../core/types';
 import type { DirectMediaCommandRuntime } from '../core/direct-media-command';
 import { createTestAgentTerminalInvocationContext } from '../presentation/testing';
@@ -73,67 +73,137 @@ describe('direct media CLI actions', () => {
 
       await program.parseAsync(['node', 'neko', kind, `${kind} prompt`, '--json']);
 
-      expect(runtime.submit).toHaveBeenCalledWith({
-        kind,
-        prompt: `${kind} prompt`,
-        model: { providerId: 'media', modelId: `${kind}-model` },
+      expect(runtime.submitGeneration).toHaveBeenCalledWith({
+        lifecycleMode: 'linked',
+        generationType:
+          kind === 'image' ? 'text-to-image' : kind === 'video' ? 'text-to-video' : 'text-to-audio',
+        providerId: 'media',
+        modelId: `${kind}-model`,
+        request: expect.objectContaining({
+          prompt: `${kind} prompt`,
+          providerId: 'media',
+          modelId: `${kind}-model`,
+        }),
       });
       expect(runtimeFactory).toHaveBeenCalledWith({ workDir: process.cwd() });
       expect(dispose).toHaveBeenCalledOnce();
       expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
         kind,
         status: 'completed',
-        assetRefs: [`neko-generated://${kind}/asset-1`],
+        assetRefs: [`resource-${kind}`],
       });
     }, 120_000);
   }
+
+  it('returns a detached Generation Job identity without observing the provider result', async () => {
+    const runtime = createTestRuntime('image');
+    const dispose = vi.fn(async () => undefined);
+    const runtimeFactory = vi.fn(async () => ({ runtime, dispose }));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { createCliProgram } = await import('../cli');
+    const program = createCliProgram(createTestAgentTerminalInvocationContext('en'), {
+      createDirectMediaRuntime: runtimeFactory,
+    });
+    program.exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'neko',
+      'image',
+      'detached prompt',
+      '--detach',
+      '--json',
+    ]);
+
+    expect(runtime.submitGeneration).toHaveBeenCalledOnce();
+    expect(runtime.submitGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({ lifecycleMode: 'detached' }),
+    );
+    expect(runtime.observeGeneration).not.toHaveBeenCalled();
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      kind: 'image',
+      status: 'submitted',
+      operationId: 'job-image',
+      jobRevision: 1,
+      assetRefs: [],
+    });
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it('routes exact persistent Generation Job commands through the direct runtime', async () => {
+    const runtime = createTestRuntime('image');
+    const dispose = vi.fn(async () => undefined);
+    const runtimeFactory = vi.fn(async () => ({ runtime, dispose }));
+    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const { createCliProgram } = await import('../cli');
+    const program = createCliProgram(createTestAgentTerminalInvocationContext('en'), {
+      createDirectMediaRuntime: runtimeFactory,
+    });
+    program.exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'neko',
+      'generation',
+      'cancel',
+      'job-image',
+      '2',
+    ]);
+
+    expect(runtime.cancelGeneration).toHaveBeenCalledWith({
+      ref: { kind: 'generation', jobId: 'job-image' },
+      expectedRevision: 2,
+    });
+    expect(runtime.submitGeneration).not.toHaveBeenCalled();
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      ref: { kind: 'generation', jobId: 'job-image' },
+    });
+    expect(dispose).toHaveBeenCalledOnce();
+  });
 });
 
 function createTestRuntime(kind: 'image' | 'video' | 'audio') {
-  const task = createTask(kind, 'pending');
-  const terminal = createTask(kind, 'completed');
+  const terminal = createSnapshot(kind);
   return {
-    submit: vi.fn(async () => task),
-    waitForTask: vi.fn(async () => terminal),
-    deliver: vi.fn(async () => createView(kind)),
+    submitGeneration: vi.fn(async () => ({ ...terminal, phase: 'pending' as const, revision: 1 })),
+    observeGeneration: vi.fn(() => asyncSnapshots([terminal])),
+    describeGeneration: vi.fn(async () => terminal),
+    cancelGeneration: vi.fn(async () => terminal),
+    retryGeneration: vi.fn(async () => terminal),
+    reconcileGeneration: vi.fn(async () => terminal),
   } satisfies DirectMediaCommandRuntime;
 }
 
-const scope: TaskRunScope = {
-  conversationId: 'cli-media-1',
-  runId: 'run-1',
-  parentRunId: 'run-1',
-  childRunId: 'task-1',
-  childKind: 'task',
-};
-
-function createTask(kind: 'image' | 'video' | 'audio', status: MediaTask['status']): MediaTask {
+function createSnapshot(kind: 'image' | 'video' | 'audio'): GenerationJobSnapshot {
+  const generationType =
+    kind === 'image' ? 'text-to-image' : kind === 'video' ? 'text-to-video' : 'text-to-audio';
   return {
-    scope,
-    id: scope.childRunId,
-    type: kind === 'image' ? 'text-to-image' : kind === 'video' ? 'text-to-video' : 'text-to-audio',
-    status,
-    progress: status === 'completed' ? 100 : 0,
-    providerId: 'media',
-    modelId: `${kind}-model`,
-    createdAt: new Date(0),
-    updatedAt: new Date(0),
-    request: { prompt: `${kind} prompt` },
+    ref: { kind: 'generation', jobId: `job-${kind}` },
+    lifecycleMode: 'linked',
+    phase: 'succeeded',
+    revision: 2,
+    createdAt: 1,
+    updatedAt: 2,
+    request: {
+      generationType,
+      providerId: 'media',
+      modelId: `${kind}-model`,
+      request: { prompt: `${kind} prompt` },
+    },
+    progress: { stage: 'completed', percent: 100 },
+    resultRefs: [
+      createResourceRef({
+        id: `resource-${kind}`,
+        scope: 'project',
+        provider: 'generated-asset',
+        kind: 'generated',
+        source: { kind: 'generated-asset', generatedAssetId: `asset-${kind}` },
+        fingerprint: createResourceFingerprint({ strategy: 'hash', value: `sha256:${kind}` }),
+      }),
+    ],
   };
 }
 
-function createView(kind: 'image' | 'video' | 'audio'): MediaTaskView {
-  return {
-    scope,
-    id: scope.childRunId,
-    type: kind,
-    status: 'completed',
-    progress: 100,
-    providerId: 'media',
-    modelId: `${kind}-model`,
-    createdAt: new Date(0).toISOString(),
-    updatedAt: new Date(0).toISOString(),
-    result: { urls: [`neko-generated://${kind}/asset-1`] },
-    request: { prompt: `${kind} prompt` },
-  };
+async function* asyncSnapshots(snapshots: readonly GenerationJobSnapshot[]) {
+  yield* snapshots;
 }

@@ -4,8 +4,7 @@ import type {
   AgentQueuedMessageSource,
 } from '@neko-agent/types';
 
-export type TuiQueueRowKind =
-  'user-message' | 'task-continuation' | 'subagent-continuation' | 'system-continuation';
+export type TuiQueueRowKind = 'user-message' | 'subagent-continuation' | 'system-continuation';
 
 export interface TuiQueueRow {
   readonly id: string;
@@ -80,8 +79,6 @@ function presentQueueItem(
 
 function queueRowKind(source: AgentQueuedMessageSource): TuiQueueRowKind {
   switch (source) {
-    case 'task-result-continuation':
-      return 'task-continuation';
     case 'subagent-result-continuation':
       return 'subagent-continuation';
     case 'system-continuation':

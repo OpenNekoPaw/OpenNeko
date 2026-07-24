@@ -24,7 +24,22 @@ import { VideoProjectDocument } from './videoProjectDocument';
 import { saveCutProjectFile } from './cutProjectFilePersistence';
 import { MediaService } from '../../services/MediaService';
 import { EngineConnection } from '../../services/EngineConnection';
-import { ExportService } from '../../services/ExportService';
+import { ExportService, type ExportConfig } from '../../services/ExportService';
+import {
+  createDomainActivityTracker,
+  type DomainActivityPublisher,
+  type DomainActivityTracker,
+} from '@neko/shared/domain-activity';
+import {
+  ExportJobCoordinator,
+  projectExportJobActivity,
+  type ExportEnginePort,
+  type ExportJobPort,
+  type ExportJobRef,
+  type ExportJobResultCommitter,
+  type ExportJobSnapshot,
+  type ExportJobStore,
+} from '../../services/export-job';
 import { resolveMediaPath } from '../../services/tools/helpers';
 import { ExportPresetService } from '../../services/ExportPresetService';
 import { getService, getLogger } from '../../base';
@@ -47,12 +62,17 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
   private mediaServices: Map<string, MediaService> = new Map();
   private engineConnection: EngineConnection = new EngineConnection();
   private exportServices: Map<string, ExportService> = new Map();
+  private readonly exportJobs: ExportJobCoordinator | undefined;
+  private readonly exportActivity: DomainActivityTracker<ExportJobSnapshot> | undefined = undefined;
+  private readonly activeExportRefs = new Map<string, Map<string, number>>();
   private presetService: ExportPresetService | null = null;
-  /** Deferred cleanup subscriptions (cancelled when editor is reopened during export) */
-  private deferredCleanupSubs: Map<string, vscode.Disposable[]> = new Map();
   private readonly localResourceAccess: LocalResourceAccessService;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    exportJobStore?: ExportJobStore,
+    activityPublisher?: DomainActivityPublisher,
+  ) {
     const contentRuntime = createHostContentAccessRuntime({
       extensionUri: context.extensionUri,
       context,
@@ -65,6 +85,114 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
       throw new Error('Cut video editor requires LocalResourceAccessService.');
     }
     this.localResourceAccess = contentRuntime.localResourceAccess;
+    if (exportJobStore) {
+      const engine: ExportEnginePort = {
+        enqueueExport: (input) =>
+          this.requireExportAdapter(input.request.documentUri).enqueueExport(input),
+        describeExport: (input) =>
+          this.requireExportAdapter(input.request.documentUri).describeExport(input),
+        cancelExport: (input) =>
+          this.requireExportAdapter(input.request.documentUri).cancelExport(input),
+      };
+      const resultCommitter: ExportJobResultCommitter = {
+        commitExport: (input) =>
+          this.requireExportAdapter(input.request.documentUri).commitExport(input),
+      };
+      this.exportJobs = new ExportJobCoordinator({
+        store: exportJobStore,
+        engine,
+        resultCommitter,
+      });
+      if (activityPublisher) {
+        this.exportActivity = createDomainActivityTracker({
+          observe: (ref, afterRevision) =>
+            this.requireExportJobs().observeExport(ref, afterRevision),
+          project: projectExportJobActivity,
+          publisher: activityPublisher,
+          reportError: (error, ref) => {
+            logger.error(`Export Job ${ref.jobId} activity tracking failed`, error);
+          },
+        });
+      }
+    }
+  }
+
+  public getExportJobs(): ExportJobPort | undefined {
+    return this.exportJobs;
+  }
+
+  public async submitExport(
+    documentUri: string,
+    project: ProjectData,
+    config: ExportConfig,
+  ): Promise<ExportJobSnapshot> {
+    const jobs = this.requireExportJobs();
+    const request = await this.requireExportAdapter(documentUri).prepareExportRequest(
+      project,
+      config,
+    );
+    const snapshot = await jobs.submitExport(request);
+    this.exportActivity?.install(snapshot);
+    return snapshot;
+  }
+
+  public describeExport(ref: ExportJobRef): Promise<ExportJobSnapshot> {
+    return this.requireExportJobs().describeExport(ref);
+  }
+
+  public observeExport(ref: ExportJobRef, afterRevision: number): AsyncIterable<ExportJobSnapshot> {
+    return this.requireExportJobs().observeExport(ref, afterRevision);
+  }
+
+  public async cancelExport(input: {
+    readonly ref: ExportJobRef;
+    readonly expectedRevision: number;
+  }): Promise<ExportJobSnapshot> {
+    const snapshot = await this.requireExportJobs().cancelExport(input);
+    this.exportActivity?.install(snapshot);
+    return snapshot;
+  }
+
+  public async retryExport(input: {
+    readonly ref: ExportJobRef;
+    readonly expectedRevision: number;
+  }): Promise<ExportJobSnapshot> {
+    const snapshot = await this.requireExportJobs().retryExport(input);
+    this.exportActivity?.install(snapshot);
+    return snapshot;
+  }
+
+  public async reconcileExport(input: {
+    readonly ref: ExportJobRef;
+    readonly expectedRevision: number;
+  }): Promise<ExportJobSnapshot> {
+    const snapshot = await this.requireExportJobs().reconcileExport(input);
+    this.exportActivity?.install(snapshot);
+    return snapshot;
+  }
+
+  private requireExportJobs(): ExportJobCoordinator {
+    if (!this.exportJobs) {
+      throw new Error(
+        'Cut Export Jobs require the Host LocalMetadata binding; export is unavailable.',
+      );
+    }
+    return this.exportJobs;
+  }
+
+  private requireExportAdapter(documentUri: string): ExportService {
+    const adapter = this.exportServices.get(documentUri);
+    if (!adapter) {
+      throw new Error(`No Cut Engine export adapter is bound for ${documentUri}.`);
+    }
+    return adapter;
+  }
+
+  public async dispose(): Promise<void> {
+    await this.exportActivity?.dispose();
+    await this.exportJobs?.dispose();
+    this.activeExportRefs.clear();
+    this.exportServices.clear();
   }
 
   /**
@@ -187,13 +315,7 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
    * Broadcast export status to all active webviews
    */
   private broadcastExportStatus() {
-    let hasActiveExport = false;
-    for (const [, svc] of this.exportServices) {
-      if (svc.isExporting()) {
-        hasActiveExport = true;
-        break;
-      }
-    }
+    const hasActiveExport = this.activeExportRefs.size > 0;
     for (const [, webview] of this.activeWebviews) {
       webview.postMessage({
         type: 'export:globalStatus',
@@ -202,11 +324,93 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
     }
   }
 
-  /**
-   * Get the ExportService for a document URI (for non-Webview callers)
-   */
-  public getExportService(documentUri: string): ExportService | undefined {
-    return this.exportServices.get(documentUri);
+  private async presentExportJob(
+    initial: ExportJobSnapshot,
+    webview: vscode.Webview,
+    statusBar: IStatusBar | undefined,
+  ): Promise<void> {
+    let current = initial;
+    this.presentExportSnapshot(current, webview, statusBar);
+    if (isTerminalExport(current)) return;
+    for await (const snapshot of this.observeExport(current.ref, current.revision)) {
+      current = snapshot;
+      this.presentExportSnapshot(current, webview, statusBar);
+      if (isTerminalExport(current)) return;
+    }
+    throw new Error(
+      `Export Job ${initial.ref.jobId} observation ended before a terminal snapshot.`,
+    );
+  }
+
+  private presentExportSnapshot(
+    snapshot: ExportJobSnapshot,
+    webview: vscode.Webview,
+    statusBar: IStatusBar | undefined,
+  ): void {
+    this.updateActiveExportProjection(snapshot);
+    const identity = {
+      jobKind: snapshot.ref.kind,
+      jobId: snapshot.ref.jobId,
+      revision: snapshot.revision,
+    };
+    if (!isTerminalExport(snapshot)) {
+      void webview.postMessage({
+        type: 'export:progress',
+        ...identity,
+        progress: {
+          stage: snapshot.progress.stage,
+          percent: snapshot.progress.percent,
+          currentFrame: snapshot.progress.currentFrame,
+          totalFrames: snapshot.progress.totalFrames,
+          elapsedTime: snapshot.progress.elapsedMs,
+          estimatedTimeRemaining: snapshot.progress.estimatedRemainingMs,
+          currentFps: snapshot.progress.currentFps,
+        },
+      });
+      statusBar?.updateExportProgress({
+        isExporting: true,
+        percent: snapshot.progress.percent,
+        message: `Exporting ${Math.round(snapshot.progress.percent)}%`,
+        currentFrame: snapshot.progress.currentFrame,
+        totalFrames: snapshot.progress.totalFrames,
+        currentFps: snapshot.progress.currentFps,
+        estimatedTimeRemaining: snapshot.progress.estimatedRemainingMs,
+      });
+    } else if (snapshot.phase === 'succeeded') {
+      void webview.postMessage({
+        type: 'export:completed',
+        ...identity,
+        success: true,
+        outputPath: snapshot.result?.outputPath,
+        totalFrames: snapshot.result?.totalFrames,
+        elapsedMs: snapshot.result?.elapsedMs,
+      });
+      statusBar?.updateExportProgress({ isExporting: false, percent: 0, message: '' });
+    } else if (snapshot.phase === 'cancelled') {
+      void webview.postMessage({ type: 'export:cancelled', ...identity });
+      statusBar?.updateExportProgress({ isExporting: false, percent: 0, message: '' });
+    } else {
+      void webview.postMessage({
+        type: 'export:error',
+        ...identity,
+        error: snapshot.failure?.message ?? `Export ended in ${snapshot.phase}.`,
+      });
+      statusBar?.updateExportProgress({ isExporting: false, percent: 0, message: '' });
+    }
+    this.broadcastExportStatus();
+  }
+
+  private updateActiveExportProjection(snapshot: ExportJobSnapshot): void {
+    const documentUri = snapshot.request.documentUri;
+    if (isTerminalExport(snapshot)) {
+      const refs = this.activeExportRefs.get(documentUri);
+      refs?.delete(snapshot.ref.jobId);
+      if (refs?.size === 0) this.activeExportRefs.delete(documentUri);
+      return;
+    }
+    const refs = this.activeExportRefs.get(documentUri) ?? new Map<string, number>();
+    refs.set(snapshot.ref.jobId, snapshot.revision);
+    this.activeExportRefs.set(documentUri, refs);
   }
 
   /**
@@ -241,15 +445,6 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
     return model?.getProjectData() ?? this.documents.get(documentUri)?.projectData ?? null;
   }
 
-  /**
-   * Get the active ExportService (for the currently active document)
-   */
-  public getActiveExportService(): ExportService | undefined {
-    const uri = this.getActiveDocumentUri();
-    if (!uri) return undefined;
-    return this.getExportServiceForDocument(uri);
-  }
-
   public getExportServiceForDocument(documentUri: string): ExportService | undefined {
     return this.exportServices.get(documentUri);
   }
@@ -259,10 +454,7 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
    * Used to reopen the editor when user clicks the status bar export item.
    */
   public getExportingDocumentUri(): string | null {
-    for (const [uri, svc] of this.exportServices) {
-      if (svc.isExporting()) return uri;
-    }
-    return null;
+    return this.activeExportRefs.keys().next().value ?? null;
   }
 
   async openCustomDocument(
@@ -436,14 +628,6 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
     // 设置为活动编辑器
     editorRegistry.setActiveEditor(model);
 
-    // Cancel deferred cleanup if editor is being reopened during background export
-    const deferSubs = this.deferredCleanupSubs.get(docUri);
-    if (deferSubs) {
-      logger.info('Cancelling deferred cleanup — editor reopened');
-      for (const s of deferSubs) s.dispose();
-      this.deferredCleanupSubs.delete(docUri);
-    }
-
     // Initialize EngineClient — shared across all documents
     const client = await this.engineConnection.ensureClient();
     if (!client) {
@@ -468,128 +652,28 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
       // timeout and leaving the editor with a fragile first-load race.
     }
 
-    // Create or reuse ExportService — reuse if there's an active background export
+    // Bind one document-scoped request/Engine adapter. Job lifecycle remains
+    // owned by the provider-wide ExportJobCoordinator.
     let exportService = this.exportServices.get(docUri);
-    const reusingExport = exportService?.isExporting() ?? false;
-    if (client && !reusingExport) {
-      exportService?.dispose();
+    if (client && !exportService) {
       const jviDir = path.dirname(document.uri.fsPath);
       exportService = new ExportService(client, jviDir, {}, document.uri);
       this.exportServices.set(docUri, exportService);
-    }
-    if (reusingExport) {
-      logger.info('Reusing ExportService with active export');
-    }
-
-    if (client && exportService) {
-      // Forward export events to the Webview
-      // NOTE: postMessage may throw after panel disposal (background export).
-      // We wrap each call in try-catch so status bar updates always execute.
-      const postToWebview = (msg: unknown) => {
-        try {
-          webviewPanel.webview.postMessage(msg);
-        } catch {
-          /* panel disposed */
-        }
-      };
-
-      const disposables: vscode.Disposable[] = [];
-      disposables.push(
-        exportService.onDidProgress((progress) => {
-          // Map Rust ExportProgress to Webview expected format
-          postToWebview({
-            type: 'export:progress',
-            progress: {
-              stage: progress.state,
-              percent: progress.progress,
-              currentFrame: progress.currentFrame,
-              totalFrames: progress.totalFrames,
-              elapsedTime: progress.elapsedMs,
-              estimatedTimeRemaining: progress.estimatedRemainingMs,
-              currentFps: progress.stats?.avgFps ?? 0,
-              performanceStats: progress.stats
-                ? {
-                    avgDecodeTime: progress.stats.hwDecodeMs,
-                    avgRenderTime: progress.stats.compositeMs,
-                    avgEncodeTime: progress.stats.encodeSubmitMs,
-                    memoryUsedMB: progress.stats.peakMemoryBytes
-                      ? progress.stats.peakMemoryBytes / (1024 * 1024)
-                      : undefined,
-                    vramUsedMB: progress.stats.vramUsageBytes
-                      ? progress.stats.vramUsageBytes / (1024 * 1024)
-                      : undefined,
-                    cpuUsage: progress.stats.cpuUsagePercent,
-                    gpuUsage: progress.stats.gpuUsagePercent,
-                  }
-                : undefined,
-            },
-          });
-
-          // Update status bar (always executes, even when webview is disposed)
-          statusBar?.updateExportProgress({
-            isExporting: true,
-            percent: progress.progress,
-            message: `Exporting ${Math.round(progress.progress)}%`,
-            currentFrame: progress.currentFrame,
-            totalFrames: progress.totalFrames,
-            currentFps: progress.stats?.avgFps ?? 0,
-            estimatedTimeRemaining: progress.estimatedRemainingMs,
-          });
-        }),
-      );
-
-      disposables.push(
-        exportService.onDidComplete((result) => {
-          postToWebview({ type: 'export:completed', ...result });
-          statusBar?.updateExportProgress({ isExporting: false, percent: 0, message: '' });
-          this.broadcastExportStatus();
-
-          if (result.success && result.outputPath) {
-            vscode.window
-              .showInformationMessage(
-                `Video exported successfully: ${path.basename(result.outputPath)}`,
-                'Open File',
-                'Open Folder',
-              )
-              .then((selection) => {
-                if (selection === 'Open File' && result.outputPath) {
-                  vscode.env.openExternal(vscode.Uri.file(result.outputPath));
-                } else if (selection === 'Open Folder' && result.outputPath) {
-                  vscode.env.openExternal(vscode.Uri.file(path.dirname(result.outputPath)));
-                }
-              });
+      void this.exportJobs
+        ?.recoverPersistedExportJobs({
+          canRecover: (snapshot) => snapshot.request.documentUri === docUri,
+        })
+        .then((recovered) => {
+          for (const snapshot of recovered) {
+            this.exportActivity?.install(snapshot);
+            void this.presentExportJob(snapshot, webviewPanel.webview, statusBar).catch((error) => {
+              logger.error('Recovered Export Job presentation failed', error);
+            });
           }
-        }),
-      );
-
-      disposables.push(
-        exportService.onDidError((error) => {
-          postToWebview({ type: 'export:error', error });
-          statusBar?.updateExportProgress({ isExporting: false, percent: 0, message: '' });
-          this.broadcastExportStatus();
-        }),
-      );
-
-      disposables.push(
-        exportService.onDidCancel(() => {
-          postToWebview({ type: 'export:cancelled' });
-          statusBar?.updateExportProgress({ isExporting: false, percent: 0, message: '' });
-          this.broadcastExportStatus();
-        }),
-      );
-
-      disposables.push(
-        exportService.onDidQueueChange((status) => {
-          postToWebview({
-            type: 'export:queueStatus',
-            active: status.active,
-            pending: status.pending,
-          });
-        }),
-      );
-
-      // Store disposables for cleanup
-      this.context.subscriptions.push(...disposables);
+        })
+        .catch((error) => {
+          logger.error('Cut Export Job recovery failed', error);
+        });
     }
 
     // Create message handler
@@ -676,22 +760,23 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
           return;
         }
 
-        // Handle export start request (Webview → ExportService → NativeEngine)
+        // Handle export start through the authoritative ExportJob path.
         if (message.type === 'export:start') {
-          const exportService = this.exportServices.get(docUri);
-          if (!exportService) {
-            webviewPanel.webview.postMessage({
-              type: 'export:error',
-              error: 'Export service not available (NativeEngine required)',
-            });
-            return;
-          }
           try {
             this.pinEditorTab(document.uri);
-            await exportService.startExport(message.project, message.config);
-            this.broadcastExportStatus();
+            const initial = await this.submitExport(docUri, message.project, message.config);
+            this.updateActiveExportProjection(initial);
+            await webviewPanel.webview.postMessage({
+              type: 'export:started',
+              jobKind: initial.ref.kind,
+              jobId: initial.ref.jobId,
+              revision: initial.revision,
+            });
+            void this.presentExportJob(initial, webviewPanel.webview, statusBar).catch((error) => {
+              logger.error('Export Job presentation failed', error);
+            });
           } catch (e) {
-            webviewPanel.webview.postMessage({
+            await webviewPanel.webview.postMessage({
               type: 'export:error',
               error: e instanceof Error ? e.message : String(e),
             });
@@ -715,10 +800,17 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
 
         // Handle export cancel request
         if (message.type === 'export:cancel') {
-          const exportService = this.exportServices.get(docUri);
-          if (exportService) {
-            await exportService.cancelExport();
+          if (
+            message.jobKind !== 'export' ||
+            typeof message.jobId !== 'string' ||
+            !Number.isSafeInteger(message.expectedRevision)
+          ) {
+            throw new Error('export:cancel requires exact jobKind, jobId and expectedRevision.');
           }
+          await this.cancelExport({
+            ref: { kind: 'export', jobId: message.jobId },
+            expectedRevision: message.expectedRevision,
+          });
           return;
         }
 
@@ -737,16 +829,9 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
 
         // Handle export global status query
         if (message.type === 'export:queryGlobalStatus') {
-          let hasActiveExport = false;
-          for (const [, svc] of this.exportServices) {
-            if (svc.isExporting()) {
-              hasActiveExport = true;
-              break;
-            }
-          }
           webviewPanel.webview.postMessage({
             type: 'export:globalStatus',
-            hasActiveExport,
+            hasActiveExport: this.activeExportRefs.size > 0,
           });
           return;
         }
@@ -854,30 +939,17 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
           if (ms) {
             ms.notifyStreamCreated();
           }
-          // If there's a background export in progress, tell webview to show progress
-          const activeExport = this.exportServices.get(docUri);
-          if (activeExport?.isExporting()) {
-            // Open the export panel first, then send progress state
-            webviewPanel.webview.postMessage({ type: 'showExportPanel' });
-            activeExport
-              .getProgress()
-              .then((progress) => {
-                if (progress) {
-                  webviewPanel.webview.postMessage({
-                    type: 'export:activeExport',
-                    progress: {
-                      stage: progress.state,
-                      percent: progress.progress,
-                      currentFrame: progress.currentFrame,
-                      totalFrames: progress.totalFrames,
-                      elapsedTime: progress.elapsedMs,
-                      estimatedTimeRemaining: progress.estimatedRemainingMs,
-                      currentFps: progress.stats?.avgFps ?? 0,
-                    },
-                  });
-                }
-              })
-              .catch(() => {});
+          const activeRefs = this.activeExportRefs.get(docUri);
+          if (activeRefs && activeRefs.size > 0) {
+            await webviewPanel.webview.postMessage({ type: 'showExportPanel' });
+            for (const jobId of activeRefs.keys()) {
+              try {
+                const snapshot = await this.describeExport({ kind: 'export', jobId });
+                this.presentExportSnapshot(snapshot, webviewPanel.webview, statusBar);
+              } catch (error) {
+                logger.error(`Failed to restore Export Job ${jobId} presentation`, error);
+              }
+            }
           }
           return;
         }
@@ -1064,53 +1136,13 @@ export class VideoEditorProvider implements vscode.CustomEditorProvider<VideoPro
       this.activeWebviews.delete(docUri);
       this.activeWebviewPanels.delete(docUri);
 
-      // If export is running, defer cleanup until export completes
-      const exportService = this.exportServices.get(docUri);
-      if (exportService?.isExporting()) {
-        logger.info('Export in progress — deferring cleanup until export finishes');
-
-        const deferCleanup = () => {
-          // Now safe to dispose everything
-          exportService.dispose();
-          this.exportServices.delete(docUri);
-
-          const ms = this.mediaServices.get(docUri);
-          if (ms) {
-            ms.destroyEditorStream()
-              .then(() => ms.dispose())
-              .catch(() => ms.dispose());
-            this.mediaServices.delete(docUri);
-          }
-
-          this.broadcastExportStatus();
-        };
-
-        // Listen for terminal events to trigger deferred cleanup
-        const subs: vscode.Disposable[] = [];
-        const onDone = () => {
-          for (const s of subs) s.dispose();
-          this.deferredCleanupSubs.delete(docUri);
-          deferCleanup();
-        };
-        subs.push(exportService.onDidComplete(onDone));
-        subs.push(exportService.onDidError(onDone));
-        subs.push(exportService.onDidCancel(onDone));
-        // Store subs so they can be cancelled if editor is reopened
-        this.deferredCleanupSubs.set(docUri, subs);
-      } else {
-        // No active export — clean up immediately
-        if (exportService) {
-          exportService.dispose();
-          this.exportServices.delete(docUri);
-        }
-
-        // Destroy editor stream, then dispose MediaService
-        const mediaService = this.mediaServices.get(docUri);
-        if (mediaService) {
-          await mediaService.destroyEditorStream();
-          mediaService.dispose();
-          this.mediaServices.delete(docUri);
-        }
+      // Export adapters remain Host-owned so detached Jobs and retries keep
+      // their document binding after the Webview closes.
+      const mediaService = this.mediaServices.get(docUri);
+      if (mediaService) {
+        await mediaService.destroyEditorStream();
+        mediaService.dispose();
+        this.mediaServices.delete(docUri);
       }
 
       // Clear outline when editor is closed
@@ -1292,6 +1324,15 @@ function getNonce(): string {
     text += possible.charAt(Math.floor(Math.random() * possible.length));
   }
   return text;
+}
+
+function isTerminalExport(snapshot: ExportJobSnapshot): boolean {
+  return (
+    snapshot.phase === 'succeeded' ||
+    snapshot.phase === 'failed' ||
+    snapshot.phase === 'cancelled' ||
+    snapshot.phase === 'outcome-unknown'
+  );
 }
 
 function requestCutProjectSnapshot(

@@ -368,9 +368,9 @@ export const en = {
     'Image editing needs a generated image or image reference.',
   'content.overlayShotPromptVideoEditSourceMissing':
     'Video editing needs a generated video or video reference.',
-  'content.overlayShotPromptAiPending': 'Starting background Agent run',
-  'content.overlayShotPromptAiAccepted': 'Background Agent run accepted',
-  'content.overlayShotPromptAiFailed': 'Background Agent run failed',
+  'content.overlayShotPromptAiPending': 'Starting AI action',
+  'content.overlayShotPromptAiAccepted': 'AI action accepted',
+  'content.overlayShotPromptAiFailed': 'AI action failed',
   'content.overlayShotPromptAiProgress':
     'Progress {completed}/{total}, running {running}, queued {queued}, failed {failed}',
   'content.overlayShotPromptCandidates': 'Creative AI candidates',

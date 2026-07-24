@@ -66,6 +66,11 @@ import { CanvasProjectAuthoringService } from './services/canvasProjectAuthoring
 import { WorkspaceBoardProjector } from './services/workspaceBoardProjector';
 import { WorkspaceBoardEditorLeaseOwner } from './services/workspaceBoardEditorLeaseOwner';
 import { registerWorkspaceBoardFunctionalAcceptance } from './debug/workspaceBoardFunctionalAcceptance';
+import type { PurposeGenerationJobPort } from '@neko/generation';
+
+export interface NekoCanvasHostServices {
+  readonly purposeGenerationJobs?: PurposeGenerationJobPort;
+}
 
 // Extension state
 let canvasEditorProvider: CanvasEditorProvider;
@@ -183,7 +188,10 @@ function matchesAssetFilter(
 /**
  * Activate the extension
  */
-export async function activate(context: vscode.ExtensionContext): Promise<NekoCanvasAPI> {
+export async function activate(
+  context: vscode.ExtensionContext,
+  hostServices?: NekoCanvasHostServices,
+): Promise<NekoCanvasAPI> {
   const rootLogger = createVSCodeLogger(
     'Neko Canvas',
     'NekoCanvas',
@@ -528,7 +536,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCa
 
   logger.info('Extension activated');
 
-  const capabilityProvider = createNekoCanvasCapabilityProvider(api);
+  const capabilityProvider = createNekoCanvasCapabilityProvider(api, {
+    ...(hostServices?.purposeGenerationJobs
+      ? { generationJobs: hostServices.purposeGenerationJobs }
+      : {}),
+  });
   context.subscriptions.push(
     vscode.commands.registerCommand(
       CANVAS_CREATIVE_AI_INVOKE_EXTERNAL_COMMAND,

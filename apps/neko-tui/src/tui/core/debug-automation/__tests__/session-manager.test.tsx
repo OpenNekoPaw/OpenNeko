@@ -279,9 +279,6 @@ function createFakePort(): TuiDebugAutomationAppPort {
     async waitForIdle() {
       return {
         turnIdle: { idle: true, terminal: true, status: 'idle' },
-        backgroundTasksIdle: { idle: true, terminal: true, status: 'idle' },
-        mediaDeliveryIdle: { idle: true, terminal: true, status: 'idle' },
-        taskResultObservationIdle: { idle: true, terminal: true, status: 'idle' },
         fullyIdle: true,
       };
     },
@@ -303,6 +300,7 @@ function createFakePort(): TuiDebugAutomationAppPort {
           chat: { providerId: 'nekoapi-chat', modelId: 'gpt-test' },
           modelPurposes: {},
         },
+        timelineProjection: null,
         idle: await this.waitForIdle({ timeoutMs: 1, pollIntervalMs: 1 }),
         turns: [],
         skillActivations: [],

@@ -45,8 +45,6 @@ describe('MessageItem timeline localization', () => {
     const view = renderInChinese(
       assistantMessage([
         timelineRow('tool-fallback', { kind: 'tool' }),
-        timelineRow('task-fallback', { kind: 'task' }),
-        timelineRow('media-fallback', { kind: 'media' }),
         timelineRow('external-tool', {
           kind: 'tool',
           toolName: 'VendorSearch',
@@ -63,8 +61,6 @@ describe('MessageItem timeline localization', () => {
 
     const frame = view.lastFrame();
     expect(frame).toContain('工具');
-    expect(frame).toContain('任务');
-    expect(frame).toContain('媒体任务');
     expect(frame).toContain('VendorSearch');
     expect(frame).toContain('Provider stage: quota_probe');
     expect(frame).toContain('tool_result 事件引用了未知工具。');

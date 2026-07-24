@@ -10,14 +10,16 @@ import {
   type CreativeAiDiagnostic,
   type ExternalCreativeAiInvocation,
   type CreativeAiOutputRef,
-  type ICapabilityPurposeMediaService,
   type ICapabilityPurposeTextRuntime,
   type StoryboardMediaRef,
 } from '@neko/shared';
+import type {
+  GenerationJobSnapshot,
+  PurposeGenerationJobPort,
+  SubmitPurposeGenerationJobInput,
+} from '@neko/generation';
 
 const CANVAS_CREATIVE_AI_APPLY_COMMAND = 'neko.canvas.creativeAi.apply';
-const CANVAS_MEDIA_TIMEOUT_MS = 3 * 60 * 1000;
-
 export interface CanvasCreativeAiExecutionInput {
   readonly invocation: ExternalCreativeAiInvocation;
   readonly conversationId: string;
@@ -37,7 +39,7 @@ export type CanvasCreativeAiExecutionResult =
     };
 
 export interface CanvasCreativeAiRuntimeContext {
-  readonly purposeMediaService?: ICapabilityPurposeMediaService;
+  readonly generationJobs?: PurposeGenerationJobPort;
   readonly purposeTextRuntime?: ICapabilityPurposeTextRuntime;
 }
 
@@ -164,13 +166,13 @@ async function generateMedia(
   input: CanvasCreativeAiExecutionInput,
   context: CanvasCreativeAiRuntimeContext,
 ): Promise<OutputResolution> {
-  const media = context.purposeMediaService;
-  if (!media) {
+  const jobs = context.generationJobs;
+  if (!jobs) {
     return failedOutput(
       diagnostic(
-        'canvas-purpose-media-runtime-unavailable',
-        'Canvas media generation requires the product purpose media port.',
-        'media',
+        'canvas-generation-job-runtime-unavailable',
+        'Canvas media generation requires the Generation Job port.',
+        'generationJob',
       ),
     );
   }
@@ -192,68 +194,57 @@ async function generateMedia(
       targetRefId: request.targetRef.id,
       candidateTargetRefId: request.candidateTargetRef.id,
     };
-    const task =
-      actionId === 'generate-image' || actionId === 'edit-image'
-        ? await media.generateImage(actionId === 'edit-image' ? 'image.edit' : 'image.generate', {
-            prompt,
-            ...(generation?.aspectRatio ? { aspectRatio: generation.aspectRatio } : {}),
-            ...(actionId === 'edit-image' ? { editInstruction: prompt } : {}),
-            ...(referenceImageUri ? { referenceImageUri } : {}),
-            metadata,
-          })
-        : await media.generateVideo('video.generate', {
-            prompt,
-            ...(typeof generation?.duration === 'number' ? { duration: generation.duration } : {}),
-            ...(generation?.aspectRatio ? { aspectRatio: generation.aspectRatio } : {}),
-            ...(actionId === 'edit-video' ? { editInstruction: prompt } : {}),
-            ...(referenceImageUri ? { referenceImageUri } : {}),
-            ...(resolveFirstReferenceMediaUri(request.creativeParameters?.referenceMedia?.videoRefs)
-              ? {
-                  sourceVideoUrl: resolveFirstReferenceMediaUri(
-                    request.creativeParameters?.referenceMedia?.videoRefs,
-                  ),
-                }
-              : {}),
-            metadata,
-          });
-    const completed = await media.waitForTask(task.scope, CANVAS_MEDIA_TIMEOUT_MS);
-    if (completed.status !== 'completed' || !completed.outputs?.length) {
+    const submitted = await jobs.submitGeneration(
+      buildCanvasGenerationJobInput(actionId, {
+        prompt,
+        generation,
+        referenceImageUri,
+        referenceVideoUri: resolveFirstReferenceMediaUri(
+          request.creativeParameters?.referenceMedia?.videoRefs,
+        ),
+        metadata,
+      }),
+    );
+    const completed = await waitForTerminalGeneration(jobs, submitted);
+    if (completed.phase !== 'succeeded') {
       return failedOutput(
         diagnostic(
-          'canvas-media-task-failed',
-          `Canvas media task ${task.id} completed without output.`,
-          'mediaTask',
+          'canvas-media-generation-failed',
+          completed.failure?.message ??
+            `Generation Job ${completed.ref.jobId} ended in phase ${completed.phase}.`,
+          'generationJob',
+        ),
+      );
+    }
+    const resultRefs = completed.resultRefs ?? [];
+    if (resultRefs.length === 0) {
+      return failedOutput(
+        diagnostic(
+          'canvas-media-generation-failed',
+          'Canvas media generation completed without a stable ResourceRef.',
+          'generationJob',
         ),
       );
     }
     return {
       ok: true,
-      outputRefs: completed.outputs.map((output, index) => {
-        const generatedAssetId = `${task.id}:output:${index}`;
+      outputRefs: resultRefs.map((resourceRef, index) => {
+        const generatedAssetId =
+          resourceRef.source.kind === 'generated-asset'
+            ? resourceRef.source.generatedAssetId
+            : resourceRef.id;
         return {
           kind: 'generated-asset',
-          id: generatedAssetId,
+          id: resourceRef.id,
           generatedAssetId,
-          mimeType: output.mimeType,
           label: `${actionId} output ${index + 1}`,
-          resourceRef: {
-            id: generatedAssetId,
-            scope: 'project',
-            provider: 'neko-canvas',
-            kind: 'generated',
-            source: {
-              kind: 'generated-asset',
-              generatedAssetId,
-              metadata: { mediaTaskId: task.id, outputIndex: index },
-            },
-            locator: { kind: 'generated-asset', assetId: generatedAssetId },
-            fingerprint: {
-              strategy: 'provider',
-              value: `${task.id}:${index}`,
-              providerId: 'neko-canvas',
-            },
+          resourceRef,
+          metadata: {
+            workItemId: input.workItemId,
+            outputIndex: index,
+            actionId,
+            generationJobId: completed.ref.jobId,
           },
-          metadata: { mediaTaskId: task.id, outputIndex: index, actionId },
         } satisfies CreativeAiOutputRef;
       }),
     };
@@ -262,10 +253,157 @@ async function generateMedia(
       diagnostic(
         'canvas-media-generation-failed',
         error instanceof Error ? error.message : String(error),
-        'media',
+        'generationJob',
       ),
     );
   }
+}
+
+function buildCanvasGenerationJobInput(
+  actionId: CanvasCreativeAiActionId,
+  input: {
+    readonly prompt: string;
+    readonly generation: NonNullable<
+      CanvasCreativeAiActionRequest['creativeParameters']
+    >['generation'];
+    readonly referenceImageUri?: string;
+    readonly referenceVideoUri?: string;
+    readonly metadata: Record<string, unknown>;
+  },
+): SubmitPurposeGenerationJobInput {
+  const common = {
+    prompt: input.prompt,
+    ...(input.generation?.aspectRatio ? { aspectRatio: input.generation.aspectRatio } : {}),
+    ...(input.referenceImageUri ? { referenceImageUri: input.referenceImageUri } : {}),
+    metadata: input.metadata,
+  };
+  switch (actionId) {
+    case 'generate-image':
+      return {
+        lifecycleMode: 'detached',
+        purpose: 'image.generate',
+        generationType: input.referenceImageUri ? 'image-to-image' : 'text-to-image',
+        request: common,
+      };
+    case 'edit-image':
+      return {
+        lifecycleMode: 'detached',
+        purpose: 'image.edit',
+        generationType: 'image-edit',
+        request: { ...common, operation: 'edit', editInstruction: input.prompt },
+      };
+    case 'generate-video':
+      return {
+        lifecycleMode: 'detached',
+        purpose: 'video.generate',
+        generationType: input.referenceImageUri ? 'image-to-video' : 'text-to-video',
+        request: {
+          ...common,
+          ...(typeof input.generation?.duration === 'number'
+            ? { duration: input.generation.duration }
+            : {}),
+        },
+      };
+    case 'edit-video':
+      return {
+        lifecycleMode: 'detached',
+        purpose: 'video.generate',
+        generationType: 'video-edit',
+        request: {
+          ...common,
+          operation: 'transform',
+          editInstruction: input.prompt,
+          ...(input.referenceVideoUri ? { sourceVideoUrl: input.referenceVideoUri } : {}),
+          ...(typeof input.generation?.duration === 'number'
+            ? { duration: input.generation.duration }
+            : {}),
+        },
+      };
+    case 'optimize-image-prompt':
+    case 'optimize-video-prompt':
+      throw new Error(`Prompt action ${actionId} cannot submit a Generation Job.`);
+  }
+}
+
+export async function waitForTerminalGeneration(
+  jobs: PurposeGenerationJobPort,
+  initial: GenerationJobSnapshot,
+  options: {
+    readonly signal?: AbortSignal;
+    readonly onSnapshot?: (snapshot: GenerationJobSnapshot) => void;
+  } = {},
+): Promise<GenerationJobSnapshot> {
+  if (isTerminalGeneration(initial)) return initial;
+  let latest = initial;
+  const iterator = jobs.observeGeneration(initial.ref, initial.revision)[Symbol.asyncIterator]();
+  try {
+    while (true) {
+      const next = await nextGenerationSnapshot(iterator, options.signal);
+      if (next.done) break;
+      latest = next.value;
+      options.onSnapshot?.(latest);
+      if (isTerminalGeneration(latest)) return latest;
+    }
+  } catch (error) {
+    if (!options.signal?.aborted) throw error;
+    const current = await jobs.describeGeneration(latest.ref);
+    if (!isTerminalGeneration(current)) {
+      await jobs.cancelGeneration({
+        ref: current.ref,
+        expectedRevision: current.revision,
+      });
+    }
+    throw options.signal.reason instanceof Error
+      ? options.signal.reason
+      : new Error('Canvas Generation Job observation cancelled.');
+  } finally {
+    await iterator.return?.();
+  }
+  throw new Error(
+    `Generation Job ${initial.ref.jobId} observation ended before a terminal snapshot.`,
+  );
+}
+
+function nextGenerationSnapshot(
+  iterator: AsyncIterator<GenerationJobSnapshot>,
+  signal: AbortSignal | undefined,
+): Promise<IteratorResult<GenerationJobSnapshot>> {
+  if (!signal) return iterator.next();
+  if (signal.aborted) {
+    return Promise.reject(
+      signal.reason instanceof Error
+        ? signal.reason
+        : new Error('Generation observation cancelled.'),
+    );
+  }
+  return new Promise((resolve, reject) => {
+    const onAbort = () =>
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new Error('Generation observation cancelled.'),
+      );
+    signal.addEventListener('abort', onAbort, { once: true });
+    void iterator.next().then(
+      (result) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(result);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+function isTerminalGeneration(snapshot: GenerationJobSnapshot): boolean {
+  return (
+    snapshot.phase === 'succeeded' ||
+    snapshot.phase === 'failed' ||
+    snapshot.phase === 'cancelled' ||
+    snapshot.phase === 'outcome-unknown'
+  );
 }
 
 async function judgeCandidate(

@@ -41,7 +41,7 @@ describe('withTuiDefaultCapabilityProviders', () => {
       contentDigest: 'sha256:generated-1',
       mediaKind: 'image',
       mimeType: 'image/png',
-      generation: { taskId: 'task-1' },
+      generation: { operationId: 'operation-generated-1' },
     });
     const generatedAssetIndex = createMemoryGeneratedAssetIndex();
     await generatedAssetIndex.add({

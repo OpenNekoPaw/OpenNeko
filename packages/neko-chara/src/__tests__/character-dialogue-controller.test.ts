@@ -135,8 +135,10 @@ function createHarness(
   const updateTabState = vi.fn((openTabs: OpenTab[], activeTabId: string | null) => {
     tabState = { openTabs, activeTabId };
   });
+  const projection = { apply: vi.fn() };
   const controller = new CharacterDialogueController({
     getWebview: () => webview as never,
+    getConversationProjection: () => projection,
     getProjectRoot: () => '/workspace/project-a',
     createAssembler: vi.fn(() => assembler),
     createEvidenceLoader: vi.fn(() => evidenceLoader),
@@ -163,6 +165,7 @@ function createHarness(
     controller,
     evidenceLoader,
     inferFacts,
+    projection,
     responder,
     tabState: () => tabState,
     updateTabState,
@@ -438,7 +441,7 @@ describe('CharacterDialogueController', () => {
     });
   });
 
-  it('routes NPC turns through session memory and webview streaming messages', async () => {
+  it('routes NPC turns through session memory and the canonical conversation projection', async () => {
     const harness = createHarness();
     await harness.controller.launch({ entityRef });
 
@@ -452,20 +455,38 @@ describe('CharacterDialogueController', () => {
       }),
     );
     expect(harness.webview.postMessage).toHaveBeenCalledWith({
-      type: 'thinking',
+      type: 'agentPhase',
       conversationId: 'npc-session-1',
+      phase: 'thinking',
     });
-    expect(harness.webview.postMessage).toHaveBeenCalledWith({
-      type: 'streamText',
+    expect(harness.projection.apply).toHaveBeenCalledWith({
+      type: 'agentTurnTimelineUpdate',
       conversationId: 'npc-session-1',
+      turnId: 'npc-session-1:turn:1',
+      runId: 'npc-session-1:turn:1:run',
       messageId: 'msg-1-npc',
-      content: 'NPC:hello',
+      operations: [
+        {
+          operation: 'snapshot',
+          item: expect.objectContaining({
+            kind: 'assistant_text',
+            messageId: 'msg-1-npc',
+            status: 'complete',
+            payload: expect.objectContaining({ content: 'NPC:hello' }),
+          }),
+        },
+      ],
+      completion: {
+        status: 'completed',
+        completedAt: Date.parse('2026-06-01T00:00:00.000Z'),
+      },
     });
-    expect(harness.webview.postMessage).toHaveBeenCalledWith({
-      type: 'streamComplete',
-      conversationId: 'npc-session-1',
-      messageId: 'msg-1-npc',
-    });
+    expect(harness.webview.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'streamText' }),
+    );
+    expect(harness.webview.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'streamComplete' }),
+    );
   });
 
   it('loads turn-scoped character evidence without granting tools or polluting transcript', async () => {

@@ -286,7 +286,6 @@ export function buildCanvasCreativeActionExternalInvocation(
     targetRevision,
     routing: {
       associationKey,
-      allowCreateBackgroundConversation: true,
     },
     idempotencyKey,
     requestedAt,

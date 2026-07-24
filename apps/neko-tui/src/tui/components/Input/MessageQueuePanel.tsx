@@ -114,8 +114,6 @@ function queueKindLabel(
   switch (kind) {
     case 'user-message':
       return presentation.t('agent.terminal.queue.userMessage');
-    case 'task-continuation':
-      return presentation.t('agent.terminal.queue.taskContinuation');
     case 'subagent-continuation':
       return presentation.t('agent.terminal.queue.subagentContinuation');
     case 'system-continuation':

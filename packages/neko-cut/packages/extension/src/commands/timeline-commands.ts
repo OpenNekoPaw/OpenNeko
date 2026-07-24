@@ -346,16 +346,24 @@ export function registerTimelineCommands(
     ),
   );
 
-  // Export Progress Command (uses ExportService directly)
+  // Exact Export Job snapshot query.
   context.subscriptions.push(
-    vscode.commands.registerCommand('neko.export.getProgress', async () => {
-      const exportService = _videoEditorProvider.getActiveExportService();
-      if (!exportService) {
-        return { success: false, error: 'No export service available' };
-      }
-      const progress = await exportService.getProgress();
-      return { success: true, data: progress };
-    }),
+    vscode.commands.registerCommand(
+      'neko.export.getProgress',
+      async (input?: { readonly jobKind?: unknown; readonly jobId?: unknown }) => {
+        if (input?.jobKind !== 'export' || typeof input.jobId !== 'string') {
+          return {
+            success: false,
+            error: 'neko.export.getProgress requires exact jobKind and jobId.',
+          };
+        }
+        const snapshot = await _videoEditorProvider.describeExport({
+          kind: 'export',
+          jobId: input.jobId,
+        });
+        return { success: true, data: snapshot };
+      },
+    ),
   );
 
   // Animation Commands (existing add_animation -> add_keyframe)
@@ -448,7 +456,7 @@ export function registerTimelineCommands(
     ),
   );
 
-  // Export Command (delegates to neko.exportVideo which uses ExportService directly)
+  // Export Command (delegates to neko.exportVideo and its provider-owned ExportJob path)
   context.subscriptions.push(
     vscode.commands.registerCommand('neko.export.video', async () => {
       await vscode.commands.executeCommand('neko.exportVideo');

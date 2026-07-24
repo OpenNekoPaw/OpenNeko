@@ -1,4 +1,3 @@
-import type { Task, TaskStatus } from '@neko/shared';
 import type { AgentMessageQueueSnapshot } from '@neko-agent/types';
 import type { CLIConfig } from './types';
 import type { AgentStatus, ExecutionMode, SessionMode, TokenUsage } from '../types/state';
@@ -15,7 +14,6 @@ export interface TuiStatusSnapshot {
   readonly usage: TokenUsage;
   readonly contextTokenCount?: number;
   readonly messageQueue?: AgentMessageQueueSnapshot;
-  readonly runningTask?: Task;
   readonly userConfigPath: string;
 }
 
@@ -55,14 +53,6 @@ export function presentTuiStatus(
     lines.push(
       context.t('agent.terminal.status.queue', {
         count: context.format.count(snapshot.messageQueue.pendingCount),
-      }),
-    );
-  }
-  if (snapshot.runningTask !== undefined) {
-    lines.push(
-      context.t('agent.terminal.status.task', {
-        taskId: snapshot.runningTask.id,
-        status: presentTaskStatus(snapshot.runningTask.status, context),
       }),
     );
   }
@@ -139,24 +129,6 @@ function presentMediaCategory(
       return context.t('agent.terminal.value.sessionMode.video');
     case 'audio':
       return context.t('agent.terminal.value.sessionMode.audio');
-  }
-}
-
-function presentTaskStatus(
-  status: TaskStatus,
-  context: AgentTerminalPresentationContext<AgentTerminalMessageKey>,
-): string {
-  switch (status) {
-    case 'pending':
-      return context.t('agent.terminal.value.taskStatus.pending');
-    case 'running':
-      return context.t('agent.terminal.value.taskStatus.running');
-    case 'completed':
-      return context.t('agent.terminal.value.taskStatus.completed');
-    case 'failed':
-      return context.t('agent.terminal.value.taskStatus.failed');
-    case 'cancelled':
-      return context.t('agent.terminal.value.taskStatus.cancelled');
   }
 }
 

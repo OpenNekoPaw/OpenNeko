@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   projectGeneratedOutputLifecycleArtifactFacts,
-  projectTaskOutputArtifactFacts,
   projectToolResultArtifactFacts,
 } from './artifact-fact-projector';
 import { createGeneratedAssetRevisionRef } from '@neko/shared';
@@ -149,67 +148,6 @@ describe('projectToolResultArtifactFacts', () => {
   });
 });
 
-describe('projectTaskOutputArtifactFacts', () => {
-  it('projects a revision-bound generated-output identity without exposing its local path', () => {
-    const [fact] = projectTaskOutputArtifactFacts([
-      {
-        scope: {
-          conversationId: 'conversation-1',
-          runId: 'run-1',
-          parentRunId: 'run-1',
-          childRunId: 'task-1',
-          childKind: 'task',
-        },
-        id: 'task-1',
-        type: 'image_generation',
-        status: 'completed',
-        input: { type: 'image_generation', payload: {} },
-        output: {
-          data: {
-            assets: [
-              {
-                id: 'generated-1',
-                localPath: '/private/runtime/generated-1.png',
-                resourceRef: {
-                  id: 'resource:generated-1:rev-1',
-                  scope: 'project',
-                  provider: 'generated-asset',
-                  kind: 'generated',
-                  source: {
-                    kind: 'generated-asset',
-                    generatedAssetId: 'generated-1',
-                    metadata: { revision: 'rev-1', contentDigest: 'sha256:content' },
-                  },
-                  locator: { kind: 'generated-asset', assetId: 'generated-1' },
-                  fingerprint: { strategy: 'hash', value: 'sha256:content' },
-                },
-              },
-            ],
-          },
-        },
-        progress: 100,
-        createdAt: 1,
-        updatedAt: 2,
-      },
-    ]);
-
-    expect(fact).toMatchObject({
-      ref: 'resource:generated-1:rev-1',
-      kind: 'generated-asset',
-      digest: 'sha256:content',
-      revision: 'rev-1',
-      provenance: {
-        source: 'generated-asset',
-        taskId: 'task-1',
-        providerId: 'generated-asset',
-      },
-      deliveryStatus: 'delivered',
-      validator: { id: 'durable-resource-ref', status: 'valid' },
-    });
-    expect(JSON.stringify(fact)).not.toContain('/private/runtime');
-  });
-});
-
 describe('projectGeneratedOutputLifecycleArtifactFacts', () => {
   it('projects delivered stable resource evidence without Host paths', () => {
     const lifecycle = createGeneratedAssetRevisionRef({
@@ -217,7 +155,7 @@ describe('projectGeneratedOutputLifecycleArtifactFacts', () => {
       contentDigest: 'sha256:content',
       mediaKind: 'image',
       mimeType: 'image/png',
-      generation: { taskId: 'task-1', providerId: 'image-provider' },
+      generation: { operationId: 'operation-1', providerId: 'image-provider' },
     });
 
     expect(projectGeneratedOutputLifecycleArtifactFacts([lifecycle])).toEqual([
@@ -228,7 +166,7 @@ describe('projectGeneratedOutputLifecycleArtifactFacts', () => {
         revision: lifecycle.revision,
         provenance: expect.objectContaining({
           source: 'generated-asset',
-          taskId: 'task-1',
+          operationId: 'operation-1',
         }),
         deliveryStatus: 'delivered',
         validator: { id: 'durable-resource-ref', status: 'valid' },

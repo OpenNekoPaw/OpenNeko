@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { MediaTask, MediaTaskView } from '@neko/platform';
-import type { TaskRunScope } from '@neko/shared';
+import { createResourceFingerprint, createResourceRef } from '@neko/shared';
+import type { GenerationJobSnapshot } from '@neko/generation';
 import {
   DirectMediaCommandError,
+  executeDirectGenerationJobCommand,
   executeDirectMediaCommand,
   resolveDirectMediaModel,
   type DirectMediaCommandRuntime,
@@ -10,40 +11,61 @@ import {
 } from '../direct-media-command';
 import type { DirectMediaCommandConfig } from '../direct-media-command';
 
-const scope: TaskRunScope = {
-  conversationId: 'cli-media-1',
-  runId: 'run-1',
-  parentRunId: 'run-1',
-  childRunId: 'task-1',
-  childKind: 'task',
-};
-
 describe('executeDirectMediaCommand', () => {
+  it('supports detached consumption without observing the Job', async () => {
+    const runtime = createRuntime(createSnapshot('image'));
+
+    await expect(
+      executeDirectMediaCommand(
+        {
+          ...createInput('image'),
+          detached: true,
+        },
+        runtime,
+      ),
+    ).resolves.toMatchObject({
+      status: 'submitted',
+      operationId: 'job-image',
+      jobRevision: 1,
+      assetRefs: [],
+    });
+    expect(runtime.observeGeneration).not.toHaveBeenCalled();
+    expect(runtime.submitGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({ lifecycleMode: 'detached' }),
+    );
+  });
+
   for (const kind of ['image', 'video', 'audio'] as const) {
-    it(`submits ${kind} directly and delivers a stable asset ref`, async () => {
-      const task = createTask(kind, 'pending');
-      const terminal = createTask(kind, 'completed');
-      const runtime = createRuntime(task, terminal);
+    it(`executes ${kind} to a terminal result and delivers a stable asset ref`, async () => {
+      const terminal = createSnapshot(kind);
+      const runtime = createRuntime(terminal);
 
       const result = await executeDirectMediaCommand(createInput(kind), runtime);
 
-      expect(runtime.submit).toHaveBeenCalledWith({
-        kind,
-        prompt: `${kind} prompt`,
-        model: { providerId: 'media-provider', modelId: `${kind}-model` },
+      expect(runtime.submitGeneration).toHaveBeenCalledWith({
+        lifecycleMode: 'linked',
+        generationType:
+          kind === 'image' ? 'text-to-image' : kind === 'video' ? 'text-to-video' : 'text-to-audio',
+        providerId: 'media-provider',
+        modelId: `${kind}-model`,
+        request: {
+          prompt: `${kind} prompt`,
+          providerId: 'media-provider',
+          modelId: `${kind}-model`,
+          metadata: { source: 'direct-media-cli' },
+        },
       });
-      expect(runtime.waitForTask).toHaveBeenCalledWith(scope);
-      expect(runtime.deliver).toHaveBeenCalledWith(terminal);
       expect(result).toMatchObject({
         kind,
         status: 'completed',
-        assetRefs: [`neko-generated://${kind}/asset-1`],
+        operationId: terminal.ref.jobId,
+        assetRefs: [`resource-${kind}`],
       });
     });
   }
 
   it('fails visibly when the target media model is missing', async () => {
-    const runtime = createRuntime(createTask('image', 'pending'), createTask('image', 'completed'));
+    const runtime = createRuntime(createSnapshot('image'));
 
     await expect(
       executeDirectMediaCommand(
@@ -54,7 +76,7 @@ describe('executeDirectMediaCommand', () => {
         runtime,
       ),
     ).rejects.toMatchObject({ code: 'direct-media-model-unavailable' });
-    expect(runtime.submit).not.toHaveBeenCalled();
+    expect(runtime.submitGeneration).not.toHaveBeenCalled();
   });
 
   it('rejects an explicit model from another media category', () => {
@@ -68,26 +90,61 @@ describe('executeDirectMediaCommand', () => {
     }
   });
 
-  it('does not deliver or return success for a failed task', async () => {
-    const runtime = createRuntime(createTask('audio', 'pending'), createTask('audio', 'failed'));
+  it('does not deliver or return success when generation fails', async () => {
+    const runtime = createRuntime(createSnapshot('audio', 'failed'));
 
     await expect(executeDirectMediaCommand(createInput('audio'), runtime)).rejects.toMatchObject({
-      code: 'direct-media-task-failed',
-      taskScope: scope,
+      code: 'direct-media-generation-failed',
+      operationId: expect.any(String),
     });
-    expect(runtime.deliver).not.toHaveBeenCalled();
   });
 
-  it('rejects completed tasks without stable generated asset refs', async () => {
-    const runtime = createRuntime(
-      createTask('image', 'pending'),
-      createTask('image', 'completed'),
-      { ...createView('image'), result: undefined },
-    );
+  it('rejects terminal generations without stable generated asset refs', async () => {
+    const runtime = createRuntime(createSnapshot('image', 'succeeded', false));
 
     await expect(executeDirectMediaCommand(createInput('image'), runtime)).rejects.toMatchObject({
       code: 'direct-media-result-unavailable',
     });
+  });
+
+  it('routes exact Generation Job management without active/latest fallback', async () => {
+    const terminal = createSnapshot('image');
+    const runtime = createRuntime(terminal);
+
+    await executeDirectGenerationJobCommand(
+      { action: 'cancel', jobId: terminal.ref.jobId, expectedRevision: 7 },
+      runtime,
+    );
+    await executeDirectGenerationJobCommand(
+      { action: 'retry', jobId: terminal.ref.jobId, expectedRevision: 8 },
+      runtime,
+    );
+    await executeDirectGenerationJobCommand(
+      { action: 'reconcile', jobId: terminal.ref.jobId, expectedRevision: 9 },
+      runtime,
+    );
+    await executeDirectGenerationJobCommand(
+      { action: 'describe', jobId: terminal.ref.jobId },
+      runtime,
+    );
+
+    const ref = { kind: 'generation', jobId: terminal.ref.jobId };
+    expect(runtime.cancelGeneration).toHaveBeenCalledWith({ ref, expectedRevision: 7 });
+    expect(runtime.retryGeneration).toHaveBeenCalledWith({ ref, expectedRevision: 8 });
+    expect(runtime.reconcileGeneration).toHaveBeenCalledWith({ ref, expectedRevision: 9 });
+    expect(runtime.describeGeneration).toHaveBeenCalledWith(ref);
+  });
+
+  it('rejects Generation Job mutations without an exact revision', async () => {
+    const runtime = createRuntime(createSnapshot('image'));
+
+    await expect(
+      executeDirectGenerationJobCommand(
+        { action: 'cancel', jobId: 'job-image' },
+        runtime,
+      ),
+    ).rejects.toThrow('exact expectedRevision');
+    expect(runtime.cancelGeneration).not.toHaveBeenCalled();
   });
 });
 
@@ -117,54 +174,73 @@ function createConfig(): DirectMediaCommandConfig {
   };
 }
 
-function createTask(kind: DirectMediaKind, status: MediaTask['status']): MediaTask {
+function createSnapshot(
+  kind: DirectMediaKind,
+  phase: GenerationJobSnapshot['phase'] = 'succeeded',
+  withResult = true,
+): GenerationJobSnapshot {
+  const generationType =
+    kind === 'image' ? 'text-to-image' : kind === 'video' ? 'text-to-video' : 'text-to-audio';
   return {
-    scope,
-    id: scope.childRunId,
-    type: kind === 'image' ? 'text-to-image' : kind === 'video' ? 'text-to-video' : 'text-to-audio',
-    status,
-    progress: status === 'completed' ? 100 : 0,
-    providerId: 'media-provider',
-    modelId: `${kind}-model`,
-    createdAt: new Date(0),
-    updatedAt: new Date(0),
-    ...(status === 'failed'
-      ? { error: { code: 'FAILED', message: 'provider failed', retryable: false } }
+    ref: { kind: 'generation', jobId: `job-${kind}` },
+    lifecycleMode: 'linked',
+    phase,
+    revision: 2,
+    createdAt: 1,
+    updatedAt: 2,
+    request: {
+      generationType,
+      providerId: 'media-provider',
+      modelId: `${kind}-model`,
+      request: { prompt: `${kind} prompt` },
+    },
+    progress: {
+      stage: phase === 'succeeded' ? 'completed' : 'submitting',
+      percent: phase === 'succeeded' ? 100 : 25,
+    },
+    ...(phase === 'failed'
+      ? {
+          failure: {
+            code: 'provider-failed',
+            message: 'provider failed',
+            retryable: true,
+          },
+        }
       : {}),
-    request: { prompt: `${kind} prompt` },
+    ...(withResult && phase === 'succeeded' ? { resultRefs: [createResultRef(kind)] } : {}),
   };
 }
 
-function createView(kind: DirectMediaKind): MediaTaskView {
-  return {
-    scope,
-    id: scope.childRunId,
-    type: kind,
-    status: 'completed',
-    progress: 100,
-    providerId: 'media-provider',
-    modelId: `${kind}-model`,
-    createdAt: new Date(0).toISOString(),
-    updatedAt: new Date(0).toISOString(),
-    result: { urls: [`neko-generated://${kind}/asset-1`] },
-    request: { prompt: `${kind} prompt` },
-  };
-}
-
-function createRuntime(
-  submitted: MediaTask,
-  terminal: MediaTask,
-  view: MediaTaskView = createView(
-    terminal.type.includes('video') ? 'video' : terminal.type.includes('audio') ? 'audio' : 'image',
-  ),
-): DirectMediaCommandRuntime & {
-  submit: ReturnType<typeof vi.fn>;
-  waitForTask: ReturnType<typeof vi.fn>;
-  deliver: ReturnType<typeof vi.fn>;
+function createRuntime(terminal: GenerationJobSnapshot): DirectMediaCommandRuntime & {
+  submitGeneration: ReturnType<typeof vi.fn>;
+  observeGeneration: ReturnType<typeof vi.fn>;
+  describeGeneration: ReturnType<typeof vi.fn>;
+  cancelGeneration: ReturnType<typeof vi.fn>;
+  retryGeneration: ReturnType<typeof vi.fn>;
+  reconcileGeneration: ReturnType<typeof vi.fn>;
 } {
+  const initial = { ...terminal, phase: 'pending' as const, revision: 1 };
   return {
-    submit: vi.fn(async () => submitted),
-    waitForTask: vi.fn(async () => terminal),
-    deliver: vi.fn(async () => view),
+    submitGeneration: vi.fn(async () => initial),
+    observeGeneration: vi.fn(() => asyncSnapshots([terminal])),
+    describeGeneration: vi.fn(async () => terminal),
+    cancelGeneration: vi.fn(async () => terminal),
+    retryGeneration: vi.fn(async () => terminal),
+    reconcileGeneration: vi.fn(async () => terminal),
   };
+}
+
+async function* asyncSnapshots(snapshots: readonly GenerationJobSnapshot[]) {
+  yield* snapshots;
+}
+
+function createResultRef(kind: DirectMediaKind) {
+  return createResourceRef({
+    id: `resource-${kind}`,
+    scope: 'project',
+    provider: 'generated-asset',
+    kind: 'generated',
+    source: { kind: 'generated-asset', generatedAssetId: `asset-${kind}` },
+    fingerprint: createResourceFingerprint({ strategy: 'hash', value: `sha256:${kind}` }),
+  });
 }

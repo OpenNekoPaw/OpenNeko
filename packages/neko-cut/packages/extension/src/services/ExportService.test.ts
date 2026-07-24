@@ -39,14 +39,21 @@ describe('ExportService', () => {
       },
     });
 
-    await service.startExport(createProject('/workspace/project/proxies/clip-proxy.mp4'), {
-      outputPath: '/exports/final.mp4',
-      format: 'mp4',
-      width: 1920,
-      height: 1080,
-      fps: 24,
-      quality: 'high',
-      audioBitrate: 192_000,
+    const request = await service.prepareExportRequest(
+      createProject('/workspace/project/proxies/clip-proxy.mp4'),
+      {
+        outputPath: '/exports/final.mp4',
+        format: 'mp4',
+        width: 1920,
+        height: 1080,
+        fps: 24,
+        quality: 'high',
+        audioBitrate: 192_000,
+      },
+    );
+    await service.enqueueExport({
+      ref: { kind: 'export', jobId: 'export-1' },
+      request,
     });
 
     expect(requests).toEqual([
@@ -93,7 +100,7 @@ describe('ExportService', () => {
       },
     });
 
-    await service.startExport(createProject('proxies/clip-proxy.mp4'), {
+    const request = await service.prepareExportRequest(createProject('proxies/clip-proxy.mp4'), {
       outputPath: '/exports/draft.mp4',
       format: 'mp4',
       width: 1280,
@@ -102,6 +109,10 @@ describe('ExportService', () => {
       quality: 'low',
       audioBitrate: 128_000,
       qualityMode: 'draft-proxy',
+    });
+    await service.enqueueExport({
+      ref: { kind: 'export', jobId: 'export-1' },
+      request,
     });
 
     expect(requests[0]).toMatchObject({
@@ -138,7 +149,7 @@ describe('ExportService', () => {
       } as never,
     );
 
-    await service.startExport(createProject('cases/clip.mp4'), {
+    const request = await service.prepareExportRequest(createProject('cases/clip.mp4'), {
       outputPath: '/exports/final.mp4',
       format: 'mp4',
       width: 1920,
@@ -146,6 +157,10 @@ describe('ExportService', () => {
       fps: 24,
       quality: 'high',
       audioBitrate: 192_000,
+    });
+    await service.enqueueExport({
+      ref: { kind: 'export', jobId: 'export-1' },
+      request,
     });
 
     expect(requests[0]).toMatchObject({
@@ -174,11 +189,30 @@ describe('ExportService', () => {
       },
     });
 
-    await (
-      service as unknown as {
-        stageExportOutput(outputPath: string): Promise<void>;
-      }
-    ).stageExportOutput('/exports/final.mp4');
+    await service.commitExport({
+      request: {
+        documentUri: 'file:///workspace/project.nkv',
+        config: {
+          outputPath: '/exports/final.mp4',
+          format: 'mp4',
+          width: 1920,
+          height: 1080,
+          fps: 24,
+          quality: 'high',
+          audioBitrate: 192_000,
+        },
+        engineConfig: {},
+      },
+      progress: {
+        engineJobId: 'engine-job-1',
+        state: 'completed',
+        progress: 100,
+        currentFrame: 100,
+        totalFrames: 100,
+        elapsedMs: 2_000,
+        estimatedRemainingMs: 0,
+      },
+    });
 
     expect(staged).toEqual(['/exports/final.mp4']);
   });

@@ -51,7 +51,7 @@ export function registerWorkspaceBoardFunctionalAcceptance(options: {
           contentDigest,
           mediaKind: 'image',
           mimeType: input.mimeType,
-          generation: { taskId: input.taskId },
+          generation: { operationId: input.operationId },
         });
         const asset: GeneratedImage = {
           id: input.assetId,
@@ -106,7 +106,7 @@ interface WorkspaceBoardFunctionalAcceptanceInput {
   readonly relativePath: string;
   readonly title: string;
   readonly mimeType: string;
-  readonly taskId: string;
+  readonly operationId: string;
   readonly generatedAt: string;
   readonly width: number;
   readonly height: number;
@@ -123,7 +123,7 @@ function parseInput(value: unknown): WorkspaceBoardFunctionalAcceptanceInput {
     relativePath: requireString(value['relativePath'], 'relativePath'),
     title: requireString(value['title'], 'title'),
     mimeType: requireString(value['mimeType'], 'mimeType'),
-    taskId: requireString(value['taskId'], 'taskId'),
+    operationId: requireString(value['operationId'], 'operationId'),
     generatedAt: requireString(value['generatedAt'], 'generatedAt'),
     width: requirePositiveNumber(value['width'], 'width'),
     height: requirePositiveNumber(value['height'], 'height'),

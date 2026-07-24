@@ -37,6 +37,9 @@
     "package": "node ../../scripts/package-openneko-platform.mjs"
   },
   "dependencies": {
+    "@neko/agent": "workspace:*",
+    "@neko/generation": "workspace:*",
+    "@neko/platform": "workspace:*",
     "@neko/shared": "workspace:*"
   },
   "devDependencies": {

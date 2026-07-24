@@ -23,12 +23,6 @@ import {
 } from '../canvas-generation-runtime';
 
 const OWNER_SCOPE = { conversationId: 'canvas-document-1', runId: 'generation-run-1' } as const;
-const TASK_SCOPE = {
-  ...OWNER_SCOPE,
-  parentRunId: OWNER_SCOPE.runId,
-  childRunId: 'task-1',
-  childKind: 'task',
-} as const;
 
 describe('canvas generation runtime', () => {
   it('does not expose LLM or provider routing through the Canvas runtime contract', () => {
@@ -323,81 +317,6 @@ describe('canvas generation runtime', () => {
         mode: 'both',
       },
     ]);
-  });
-
-  it('runs image generation and emits progress events', async () => {
-    const progress = vi.fn();
-    const generateImage = vi
-      .fn()
-      .mockResolvedValue({ scope: TASK_SCOPE, id: 'task-1', status: 'pending' });
-    const waitForTask = vi.fn().mockResolvedValue({
-      scope: TASK_SCOPE,
-      id: 'task-1',
-      status: 'completed',
-      outputs: [{ url: 'https://cdn.test/out.png', mimeType: 'image/png' }],
-    });
-    const runtime = new CanvasGenerationRuntime({
-      media: { generateImage, waitForTask },
-      fetchOutputAsDataUrl: async () => 'data:image/png;base64,abc',
-      onProgress: progress,
-    });
-
-    await expect(
-      runtime.generateForNode({
-        ownerScope: OWNER_SCOPE,
-        nodeId: 'shot-1',
-        cellId: 'cell-1',
-        prompt: 'cat',
-      }),
-    ).resolves.toEqual({ dataUrl: 'data:image/png;base64,abc' });
-
-    expect(generateImage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        prompt: 'cat',
-        aspectRatio: '16:9',
-        count: 1,
-        metadata: {
-          ...OWNER_SCOPE,
-          nodeId: 'shot-1',
-          sourceNodeId: 'shot-1',
-          cellId: 'cell-1',
-        },
-      }),
-    );
-    expect(waitForTask).toHaveBeenCalledWith(TASK_SCOPE, 180000);
-    expect(progress).toHaveBeenCalledWith({
-      nodeId: 'shot-1',
-      taskId: 'task-1',
-      cellId: 'cell-1',
-      status: 'generating',
-    });
-    expect(progress).toHaveBeenCalledWith({
-      nodeId: 'shot-1',
-      taskId: 'task-1',
-      cellId: 'cell-1',
-      status: 'done',
-    });
-  });
-
-  it('emits error progress when generation completes without outputs', async () => {
-    const progress = vi.fn();
-    const runtime = new CanvasGenerationRuntime({
-      media: {
-        generateImage: async () => ({ scope: TASK_SCOPE, id: 'task-1', status: 'pending' }),
-        waitForTask: async () => ({ scope: TASK_SCOPE, id: 'task-1', status: 'failed' }),
-      },
-      fetchOutputAsDataUrl: async () => 'data:image/png;base64,abc',
-      onProgress: progress,
-    });
-
-    await expect(
-      runtime.generateForNode({ ownerScope: OWNER_SCOPE, nodeId: 'shot-1', prompt: 'cat' }),
-    ).resolves.toBe(undefined);
-    expect(progress).toHaveBeenLastCalledWith({
-      nodeId: 'shot-1',
-      taskId: 'task-1',
-      status: 'error',
-    });
   });
 
   it('normalizes bounded generation fields', () => {

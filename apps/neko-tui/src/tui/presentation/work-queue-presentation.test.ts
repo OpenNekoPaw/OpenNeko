@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentMessageQueueSnapshot, AgentQueuedMessageItem } from '@neko-agent/types';
 import { createTestAgentTerminalPresentation } from './testing';
-import {
-  presentQueueCommand,
-  presentTaskCommand,
-  type TaskCommandRow,
-} from './work-queue-presentation';
+import { presentQueueCommand } from './work-queue-presentation';
 
 const ITEM: AgentQueuedMessageItem = {
   id: 'queue-1',
@@ -22,18 +18,6 @@ function snapshot(items: readonly AgentQueuedMessageItem[] = []): AgentMessageQu
     items,
     pendingCount: items.length,
     version: 7,
-  };
-}
-
-function taskRow(overrides: Partial<TaskCommandRow> = {}): TaskCommandRow {
-  return {
-    id: 'task-1',
-    status: 'running',
-    progress: 42,
-    runMode: 'background',
-    title: 'External task title',
-    updatedAt: 10,
-    ...overrides,
   };
 }
 
@@ -89,33 +73,4 @@ describe('work and queue terminal presentation', () => {
     });
   });
 
-  it('localizes task headers and status labels while preserving task payload text', () => {
-    const rows = [
-      taskRow({ id: 'older', updatedAt: 1, status: 'failed', error: 'External failure' }),
-      taskRow({ id: 'newer', updatedAt: 2 }),
-    ];
-    const projection = presentTaskCommand(
-      { kind: 'list', status: 'running', rows },
-      createTestAgentTerminalPresentation('zh-cn'),
-    );
-
-    expect(projection.kind).toBe('output');
-    if (projection.kind !== 'output') return;
-    expect(projection.output).toContain('任务（运行中）：');
-    expect(projection.output.indexOf('newer')).toBeLessThan(projection.output.indexOf('older'));
-    expect(projection.output).toContain('External task title');
-    expect(projection.output).toContain('External failure');
-  });
-
-  it('uses stable task diagnostic codes across locales', () => {
-    for (const locale of ['en', 'zh-cn'] as const) {
-      const projection = presentTaskCommand(
-        { kind: 'diagnostic', code: 'usage' },
-        createTestAgentTerminalPresentation(locale),
-      );
-      expect(projection.kind).toBe('error');
-      if (projection.kind !== 'error') return;
-      expect(projection.diagnosticCode).toBe('task.usage');
-    }
-  });
 });

@@ -13,10 +13,8 @@ import type {
   AgentTurnSource,
 } from '@neko-agent/types';
 
-import type { Task } from '@neko/shared';
-
 export type TerminalTimelineRowKind =
-  'assistant_text' | 'thinking' | 'tool' | 'task' | 'media' | 'error' | 'diagnostic';
+  'assistant_text' | 'thinking' | 'tool' | 'error' | 'diagnostic';
 
 export type TerminalTimelineRowStatus =
   | 'streaming'
@@ -54,9 +52,6 @@ export interface TerminalTimelineRow {
   readonly resultSummary?: string;
   readonly backfillSummary?: string;
   readonly confirmationSummary?: string;
-  readonly taskId?: string;
-  readonly taskTitle?: string;
-  readonly taskKind?: string;
   readonly progress?: number;
   readonly details?: string;
   readonly diagnosticCode?: string;
@@ -76,6 +71,7 @@ export interface TerminalArtifactFact {
     readonly skillId?: string;
     readonly toolCallId?: string;
     readonly taskId?: string;
+    readonly operationId?: string;
     readonly providerId?: string;
   };
   readonly deliveryStatus: 'delivered' | 'failed' | 'partial' | 'cancelled' | 'unavailable';
@@ -169,10 +165,6 @@ export interface MessageQueueState {
   readonly snapshot: AgentMessageQueueSnapshot | null;
   readonly diagnostic: string | null;
   readonly pausedAfterCancel: boolean;
-}
-
-export interface TaskStatusState {
-  readonly running: readonly Task[];
 }
 
 /**

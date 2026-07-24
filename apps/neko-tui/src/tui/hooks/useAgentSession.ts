@@ -17,9 +17,6 @@ import {
   ProviderCardRegistry,
   type PromptCompositionFragmentProjection,
   type InputProcessor,
-  type SystemPromptBuilder,
-  type IRuntimeTaskManager,
-  type AgentEvent,
 } from '@neko/agent';
 import {
   createAgentCapabilityRuntimeRegistries,
@@ -34,9 +31,15 @@ import {
   ConfigManager,
   createResourceCacheGeneratedAssetIndex,
   FileUserConfigManager,
+  registerMediaAgentTools,
   type GeneratedAssetIndex,
   type Platform,
 } from '@neko/platform';
+import {
+  createPersistentGenerationJobStore,
+  GENERATION_JOB_MIGRATIONS,
+  GenerationJobCoordinator,
+} from '@neko/generation';
 import type { AgentLlmConfig } from '@neko-agent/types';
 import type {
   AgentContinuationMetadata,
@@ -59,7 +62,6 @@ import {
   presentQueuedContinuation,
   presentResourceCacheGcFailure,
   presentSkillInvocationRejected,
-  presentTaskStatusRefreshFailure,
   presentWorkspaceContentDiagnostic,
 } from '../presentation/runtime-presentation';
 import type { ExecutionMode } from '../types/state';
@@ -68,8 +70,6 @@ import {
   type ChatMessage,
   type CanvasWorkspaceProjectionResult,
   type GeneratedAssetRevisionRef,
-  type Task,
-  type TaskStatus,
   type ResourceCacheManifestStore,
   type SearchDocumentRecord,
   formatLocalMetadataUserDiagnostic,
@@ -82,7 +82,7 @@ import type {
   TuiParameterValidationResult,
   TuiSkillOption,
 } from '../core/tui-command-router';
-import { createCLIPlatform, createCLITaskManager } from '../core/platform-bootstrap';
+import { createCLIPlatform } from '../core/platform-bootstrap';
 import {
   createTuiLocalMetadataBinding,
   type TuiConversationPersistenceSnapshot,
@@ -109,7 +109,6 @@ import {
   useTuiConversationRuntime,
   useTuiConversationStores,
 } from '../runtime/tui-runtime-context';
-import { createEventAdapter, type IEventAdapter } from '../adapters/event-adapter';
 import {
   createTuiSlashCommandCatalog,
   type TuiSlashCommandOption,
@@ -123,15 +122,15 @@ import { NodeWorkspaceContentError } from '../host/node-workspace-content-host';
 import { runNodeResourceCacheStartupGc } from '../host/node-resource-cache-startup-gc';
 import { TuiPiRuntimeOwner, type TuiPiRuntimeEvidence } from '../core/pi-runtime-owner';
 import type { TuiConversationCatalogPort } from '../core/slash-commands';
-import { createTuiPiEventAdapter, type TuiPiEventAdapter } from '../adapters/pi-event-adapter';
 import {
-  materializeTuiMediaTaskResult,
-  projectTuiTaskResultContinuation,
-} from '../core/tui-task-result-continuation';
+  createTuiPiEventAdapter,
+  type TuiPiEventAdapter,
+  type TuiPiProjectionEvidence,
+} from '../adapters/pi-event-adapter';
 import {
-  NodeMediaTaskDeliveryHost,
+  NodeMediaGenerationDeliveryHost,
   type WorkspaceBoardDeliveryObservability,
-} from '../host/node-media-task-delivery-host';
+} from '../host/node-media-generation-delivery-host';
 import {
   collectCreatorVisibleArtifacts,
   type CreatorVisibleArtifactCandidate,
@@ -153,8 +152,6 @@ interface SubmitInternalContinuationInput {
 
 export interface UseAgentSessionOptions {
   readonly config: CLIConfig;
-  /** Optional shared task plane provided by the host bootstrap */
-  readonly taskManager?: IRuntimeTaskManager;
   /** Host-agnostic package capability providers injected by the CLI host. */
   readonly capabilityProviders?: readonly AgentCapabilityProvider[];
   /** Optional persisted conversation id to load through the Ink TUI session path. */
@@ -209,8 +206,6 @@ export interface AgentSessionHandle {
     queueItemId: string,
     content: string,
   ) => import('@neko-agent/types').AgentQueuedMessageItem;
-  /** List async runtime tasks owned by the shared task plane. */
-  listTasks: (status?: TaskStatus) => Promise<readonly Task[]>;
   /** Refresh shared metadata at a TUI command/session boundary. */
   refreshSharedMetadataAtBoundary: () => Promise<void>;
   /** Validate and apply LLM parameter config. */
@@ -258,6 +253,8 @@ export interface AgentSessionHandle {
   readonly getConversationPersistenceSnapshot: () => TuiConversationPersistenceSnapshot | null;
   /** Secret-free canonical Pi runtime and immutable turn snapshot evidence. */
   readonly getPiRuntimeEvidence: () => TuiPiRuntimeEvidence | null;
+  /** Secret-free shared Timeline projection path and revision evidence. */
+  readonly getTimelineProjectionEvidence: () => TuiPiProjectionEvidence | null;
   /** Secret-free prompt composition facts from the canonical Pi runtime. */
   readonly getPromptCompositionProjection: () => readonly PromptCompositionFragmentProjection[];
   /** Secret-free Workspace Board projection outcomes for debug automation. */
@@ -268,8 +265,6 @@ export interface AgentSessionHandle {
   readonly getCreatorVisibleArtifacts: () => readonly CreatorVisibleArtifactCandidate[];
   /** Stable generated-output lifecycle facts retained without Host paths. */
   readonly getGeneratedOutputLifecycles: () => readonly GeneratedAssetRevisionRef[];
-  /** Terminal Task results still being materialized or delivered to a continuation. */
-  readonly getPendingTaskResultDeliveryCount: () => number;
   /** Flush the current TUI runtime projection into shared workspace state. */
   readonly syncRuntimeState: () => void;
   /** Slash command catalog for TUI autocomplete */
@@ -317,7 +312,6 @@ function presentQueueOutput(
 export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHandle {
   const {
     config,
-    taskManager: providedTaskManager,
     capabilityProviders,
     resumeConversationId,
     presentation,
@@ -331,19 +325,16 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
     throw new Error('TUI conversation runtime must be bound before session initialization.');
   }
   const promptDomainLocale = promptLocale === 'zh-cn' ? 'zh' : 'en';
-  const adapterRef = useRef<IEventAdapter | null>(null);
   const inputProcessorRef = useRef<InputProcessor | null>(null);
   const mcpManagerRef = useRef<MCPManager | null>(null);
   const platformRef = useRef<Platform | null>(null);
-  const promptBuilderRef = useRef<SystemPromptBuilder | null>(null);
   const toolRegistryRef = useRef<ToolRegistry | null>(null);
-  const taskManagerRef = useRef<IRuntimeTaskManager | null>(null);
   const workspaceBoardProjectionsRef = useRef<readonly CanvasWorkspaceProjectionResult[]>([]);
   const creatorVisibleArtifactsRef = useRef<readonly CreatorVisibleArtifactCandidate[]>([]);
   const generatedOutputLifecyclesRef = useRef<readonly GeneratedAssetRevisionRef[]>([]);
   const generatedAssetIndexRef = useRef<GeneratedAssetIndex | null>(null);
-  const mediaTaskDeliveryHostRef = useRef<NodeMediaTaskDeliveryHost | null>(null);
-  const taskTerminalUnsubscribeRef = useRef<(() => void) | null>(null);
+  const mediaGenerationDeliveryHostRef = useRef<NodeMediaGenerationDeliveryHost | null>(null);
+  const generationJobCoordinatorRef = useRef<GenerationJobCoordinator | null>(null);
   const capabilityLoadResultRef = useRef<TuiCapabilityLoaderResult | null>(null);
   const localMetadataBindingRef = useRef<TuiLocalMetadataBinding | null>(null);
   const conversationPersistenceSnapshotRef = useRef<TuiConversationPersistenceSnapshot | null>(
@@ -358,8 +349,6 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
   const submitInternalContinuationRef = useRef<
     ((input: SubmitInternalContinuationInput) => Promise<void>) | null
   >(null);
-  const taskSummaryErrorRef = useRef<string | null>(null);
-  const pendingTaskResultDeliveryCountRef = useRef(0);
   const isReadyRef = useRef(false);
   const initPromiseRef = useRef<Promise<void> | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -395,29 +384,6 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
     [options.localMetadataHome],
   );
 
-  const refreshTaskSummary = useCallback(async (): Promise<void> => {
-    const taskManager = taskManagerRef.current;
-    if (!taskManager) {
-      stores.agent.getState().setRunningTasks([]);
-      return;
-    }
-
-    try {
-      const tasks = await taskManager.list();
-      taskSummaryErrorRef.current = null;
-      stores.agent.getState().setRunningTasks(selectRunningTasks(tasks));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (taskSummaryErrorRef.current !== message) {
-        taskSummaryErrorRef.current = message;
-        stores.conversation
-          .getState()
-          .addError(new Error(presentTaskStatusRefreshFailure(message, presentation)));
-      }
-      stores.agent.getState().setRunningTasks([]);
-    }
-  }, []);
-
   const syncRuntimeProjection = useCallback((contextTokenCount: number | null = null): void => {
     stores.agent.getState().setContextTokenCount(contextTokenCount);
   }, []);
@@ -440,21 +406,18 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
   useEffect(() => {
     let disposed = false;
     const disposeResources = (projectState: boolean): void => {
-      taskTerminalUnsubscribeRef.current?.();
-      taskTerminalUnsubscribeRef.current = null;
-      pendingTaskResultDeliveryCountRef.current = 0;
-      taskManagerRef.current = null;
-      if (projectState) {
-        stores.agent.getState().setRunningTasks([]);
-      }
       messageQueueRef.current?.clear();
       messageQueueRef.current = null;
       const piRuntimeOwner = piRuntimeOwnerRef.current;
       piRuntimeOwnerRef.current = null;
+      piEventAdapterRef.current?.dispose();
       piEventAdapterRef.current = null;
       void piRuntimeOwner?.dispose().catch(() => undefined);
-      mediaTaskDeliveryHostRef.current?.dispose();
-      mediaTaskDeliveryHostRef.current = null;
+      const generationJobCoordinator = generationJobCoordinatorRef.current;
+      generationJobCoordinatorRef.current = null;
+      void generationJobCoordinator?.dispose().catch(() => undefined);
+      mediaGenerationDeliveryHostRef.current?.dispose();
+      mediaGenerationDeliveryHostRef.current = null;
       platformRef.current?.dispose();
       platformRef.current = null;
       const localMetadataBinding = localMetadataBindingRef.current;
@@ -553,22 +516,12 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
         capabilityLoadResultRef.current = capabilityLoadResult;
         setCapabilityRevision((revision) => revision + 1);
 
-        const taskManager =
-          providedTaskManager ??
-          createCLITaskManager({
-            taskStorage: localMetadataBinding.taskStorage,
-            taskRecoveryStorage: localMetadataBinding.taskRecoveryStorage,
-          });
-        await taskManager.initialize();
-        taskManagerRef.current = taskManager;
         const cliPlatform = createCLIPlatform({
           workspacePath: config.workDir,
           toolRegistry,
-          taskManager,
         });
         platformRef.current = cliPlatform.platform;
-        const mediaTaskDeliveryHost = new NodeMediaTaskDeliveryHost({
-          platform: cliPlatform.platform,
+        const mediaGenerationDeliveryHost = new NodeMediaGenerationDeliveryHost({
           workspaceRoot: config.workDir,
           workspaceId: localMetadataBinding.workspaceId,
           metadataStore: localMetadataBinding.metadataStore,
@@ -586,53 +539,41 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
             ]);
           },
         });
-        mediaTaskDeliveryHostRef.current = mediaTaskDeliveryHost;
-        await mediaTaskDeliveryHost.resumePendingWorkspaceBoardDeliveries();
-        taskTerminalUnsubscribeRef.current = taskManager.onTerminalTask(
-          (event) => {
-            void refreshTaskSummary();
-            pendingTaskResultDeliveryCountRef.current += 1;
-            void (async () => {
-              const deliveredEvent = await materializeTuiMediaTaskResult({
-                event,
-                platform: cliPlatform.platform,
-                deliveryHost: mediaTaskDeliveryHost,
+        mediaGenerationDeliveryHostRef.current = mediaGenerationDeliveryHost;
+        await localMetadataBinding.metadataStore.migrateNamespace(GENERATION_JOB_MIGRATIONS);
+        const generationJobCoordinator = new GenerationJobCoordinator({
+          store: createPersistentGenerationJobStore({
+            metadataStore: localMetadataBinding.metadataStore,
+            workspaceId: localMetadataBinding.workspaceId,
+          }),
+          execution: cliPlatform.platform.media,
+          resultCommitter: {
+            commit: async ({ ref, generation }) => {
+              const delivery = await mediaGenerationDeliveryHost.deliverMediaGeneration({
+                operationId: ref.jobId,
+                result: generation,
               });
-              if (disposed) return;
-              const continuation = projectTuiTaskResultContinuation({
-                event: deliveredEvent,
-                conversationId: conversationIdRef.current,
-              });
-              if (!continuation) return;
-              const submitContinuation = submitInternalContinuationRef.current;
-              if (!submitContinuation) {
-                throw new Error(`TUI task continuation owner is unavailable for ${event.task.id}.`);
-              }
-              await submitContinuation(continuation);
-            })()
-              .catch((error: unknown) => {
-                const diagnostic = error instanceof Error ? error : new Error(String(error));
-                stores.agent.getState().setError(diagnostic);
-                stores.conversation.getState().addError(diagnostic);
-                syncRuntimeProjection();
-              })
-              .finally(() => {
-                pendingTaskResultDeliveryCountRef.current = Math.max(
-                  0,
-                  pendingTaskResultDeliveryCountRef.current - 1,
-                );
-              });
+              return delivery.resourceRefs;
+            },
           },
-          { replayExisting: false },
-        );
-
+        });
+        generationJobCoordinatorRef.current = generationJobCoordinator;
+        await generationJobCoordinator.recoverPersistedGenerationJobs();
+        registerMediaAgentTools(toolRegistry, generationJobCoordinator);
+        await mediaGenerationDeliveryHost.resumePendingWorkspaceBoardDeliveries();
         const executionMode = stores.agent.getState().executionMode;
         const basePromptBuilder = createSystemPromptBuilder({
           locale: promptDomainLocale,
           executionMode,
         });
-        promptBuilderRef.current = basePromptBuilder;
-        const piEventAdapter = createTuiPiEventAdapter(stores);
+        await basePromptBuilder.loadAgentsFile(
+          config.workDir,
+          join(localMetadataHome, '.neko'),
+        );
+        const piEventAdapter = createTuiPiEventAdapter(stores, {
+          conversationId: conversationIdRef.current,
+          presentation,
+        });
         piEventAdapterRef.current = piEventAdapter;
         const piRuntimeOwner = new TuiPiRuntimeOwner({
           userHome: localMetadataHome,
@@ -645,11 +586,14 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           getTools: () => toolRegistry.list(),
           getSystemPrompt: () =>
             buildSystemPromptWithContext(
-              createSystemPromptBuilder({
-                locale: promptDomainLocale,
-                executionMode: stores.agent.getState().executionMode,
-              }),
+              basePromptBuilder.buildForExecutionMode(
+                stores.agent.getState().executionMode,
+              ),
               stores.config.getState().config,
+            ),
+          getPromptComposition: () =>
+            basePromptBuilder.projectCompositionForExecutionMode(
+              stores.agent.getState().executionMode,
             ),
           permissionPolicy: {
             preflight: async ({ tool, args, identity }) => {
@@ -718,7 +662,6 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
         });
         stores.agent.getState().setMessageQueuePausedAfterCancel(false);
         stores.agent.getState().setMessageQueueSnapshot(messageQueueRef.current.snapshot());
-        void refreshTaskSummary();
 
         // 7. Input Processor
         inputProcessorRef.current = createInputProcessor({
@@ -727,14 +670,6 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           maxFiles: 20,
           includeLineNumbers: true,
           includeLanguageHints: true,
-        });
-
-        // 8. Event Adapter
-        adapterRef.current = createEventAdapter({
-          conversationStore: () => stores.conversation.getState(),
-          agentStore: () => stores.agent.getState(),
-          uiStore: () => stores.ui.getState(),
-          presentation,
         });
 
         if (disposed) {
@@ -779,11 +714,10 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
 
   const executePrompt = useCallback(
     async (prompt: string, options: ExecutePromptOptions = {}): Promise<void> => {
-      const adapter = adapterRef.current;
       const piRuntimeOwner = piRuntimeOwnerRef.current;
       const piEventAdapter = piEventAdapterRef.current;
       const inputProcessor = inputProcessorRef.current;
-      if (!piRuntimeOwner || !piEventAdapter || !adapter) {
+      if (!piRuntimeOwner || !piEventAdapter) {
         throw new Error('Session not initialized');
       }
 
@@ -803,7 +737,6 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
         }
       }
 
-      adapter.reset();
       piEventAdapter.reset();
       if (!options.source || options.source === 'user') {
         stores.conversation.getState().addUserMessage(prompt);
@@ -842,11 +775,11 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       const runtimeEvidence = piRuntimeOwner.getRuntimeEvidence();
       const turnEvidence = runtimeEvidence?.lastTurn;
       const candidates = collectCreatorVisibleArtifacts({
-        toolResults: piEventAdapter.getTerminalToolResults(),
+        toolResults: piEventAdapter.readTerminalToolResults(),
         assistantMarkdown: readLastPiAssistantText(piRuntimeOwner.messages),
       });
       if (candidates.length > 0 && turnEvidence) {
-        const deliveryHost = mediaTaskDeliveryHostRef.current;
+        const deliveryHost = mediaGenerationDeliveryHostRef.current;
         if (!deliveryHost) {
           throw new Error('TUI Workspace Board delivery host is unavailable at turn completion.');
         }
@@ -855,19 +788,15 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           createdAt: new Date().toISOString(),
           artifacts: candidates,
           runId: options.continuationMetadata?.runId ?? turnEvidence.runId,
-          ...(options.continuationMetadata?.taskId
-            ? { taskId: options.continuationMetadata.taskId }
-            : {}),
         });
         creatorVisibleArtifactsRef.current = Object.freeze([
           ...creatorVisibleArtifactsRef.current,
           ...candidates,
         ]);
       }
-      void refreshTaskSummary();
       syncRuntimeProjection();
     },
-    [refreshTaskSummary, syncRuntimeProjection],
+    [syncRuntimeProjection],
   );
 
   const requireRuntimeMessageQueue = useCallback((): AgentConversationMessageQueue => {
@@ -885,21 +814,9 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
 
   const releaseRuntimeQueuedPrompts = useCallback(async (): Promise<void> => {
     const queue = requireRuntimeMessageQueue();
-    const adapter = adapterRef.current;
-    if (!adapter) {
-      throw new Error('Session event adapter is not initialized');
-    }
-
     await queue.drain(async (released) => {
-      const snapshot = queue.snapshot();
       projectRuntimeMessageQueue(queue);
       syncRuntimeProjection();
-      adapter.handleEvent({
-        type: 'messageQueued',
-        pendingCount: snapshot.pendingCount,
-        releasedQueuedMessageItem: released,
-        messageQueueSnapshot: snapshot,
-      } satisfies AgentEvent);
       await executePrompt(released.content, {
         source: normalizeTurnSource(released.source),
         displayKind: released.displayKind,
@@ -923,9 +840,8 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       }
 
       const piRuntimeOwner = piRuntimeOwnerRef.current;
-      const adapter = adapterRef.current;
 
-      if (!piRuntimeOwner || !adapter) {
+      if (!piRuntimeOwner) {
         stores.agent.getState().setError(new Error('Session not initialized'));
         return;
       }
@@ -939,7 +855,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
               'Prompts with execution metadata cannot be queued while an Agent turn is running.',
             );
           }
-          const item = queue.enqueue({
+          queue.enqueue({
             content: prompt,
             source: 'user',
             displayKind: 'user-message',
@@ -947,15 +863,13 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
           const snapshot = queue.snapshot();
           projectRuntimeMessageQueue(queue);
           syncRuntimeProjection();
-          adapter.handleEvent({
-            type: 'messageQueued',
+          stores.conversation.getState().addSystemMessage({
             content: presentQueueOutput(
               { kind: 'enqueued', pendingCount: snapshot.pendingCount },
               presentation,
             ),
-            pendingCount: snapshot.pendingCount,
-            queuedMessageItem: item,
-            messageQueueSnapshot: snapshot,
+            source: 'system-continuation',
+            displayKind: 'system-continuation',
           });
         } catch (error) {
           const message = presentQueueFailure(error, presentation);
@@ -972,14 +886,12 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
         const err = error instanceof Error ? error : new Error(String(error));
         stores.agent.getState().setError(err);
         stores.conversation.getState().addError(err);
-        void refreshTaskSummary();
         syncRuntimeProjection();
       }
     },
     [
       executePrompt,
       projectRuntimeMessageQueue,
-      refreshTaskSummary,
       releaseRuntimeQueuedPrompts,
       requireRuntimeMessageQueue,
       syncRuntimeProjection,
@@ -993,8 +905,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       }
 
       const piRuntimeOwner = piRuntimeOwnerRef.current;
-      const adapter = adapterRef.current;
-      if (!piRuntimeOwner || !adapter) {
+      if (!piRuntimeOwner) {
         throw new Error('Session not initialized');
       }
 
@@ -1014,12 +925,11 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       const snapshot = queue.snapshot();
       projectRuntimeMessageQueue(queue);
       syncRuntimeProjection();
-      adapter.handleEvent({
-        type: 'messageQueued',
+      stores.conversation.getState().addSystemMessage({
         content: presentQueuedContinuation(item, snapshot.pendingCount, presentation),
-        pendingCount: snapshot.pendingCount,
-        queuedMessageItem: item,
-        messageQueueSnapshot: snapshot,
+        source: normalizeTurnSource(item.source),
+        displayKind,
+        metadata: continuationMetadata,
       });
       if (piRuntimeOwner.isRunning || stores.agent.getState().status === 'running') return;
       await releaseRuntimeQueuedPrompts();
@@ -1027,7 +937,6 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
     [
       executePrompt,
       projectRuntimeMessageQueue,
-      refreshTaskSummary,
       releaseRuntimeQueuedPrompts,
       requireRuntimeMessageQueue,
       syncRuntimeProjection,
@@ -1045,9 +954,8 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       projectRuntimeMessageQueue(queue);
     }
     stores.agent.getState().setIdle();
-    void refreshTaskSummary();
     syncRuntimeProjection();
-  }, [projectRuntimeMessageQueue, refreshTaskSummary, syncRuntimeProjection]);
+  }, [projectRuntimeMessageQueue, syncRuntimeProjection]);
 
   const getMessageQueueSnapshot = useCallback(() => {
     return messageQueueRef.current?.snapshot() ?? null;
@@ -1056,32 +964,8 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
   const refreshSharedMetadataAtBoundary = useCallback(async (): Promise<void> => {
     const binding = localMetadataBindingRef.current;
     if (!binding) return;
-    const result = await binding.pollRevisions();
-    if (result.changedDomains.includes('tasks')) {
-      const taskManager = taskManagerRef.current;
-      if (!taskManager) {
-        throw new Error('Task manager is not initialized for shared metadata refresh');
-      }
-      await taskManager.initialize();
-    }
+    await binding.pollRevisions();
   }, []);
-
-  const listTasks = useCallback(
-    async (status?: TaskStatus): Promise<readonly Task[]> => {
-      if (initPromiseRef.current) {
-        await initPromiseRef.current;
-      }
-      const taskManager = taskManagerRef.current;
-      if (!taskManager) {
-        throw new Error('Task manager is not initialized');
-      }
-      await refreshSharedMetadataAtBoundary();
-      const tasks = await taskManager.list(status);
-      void refreshTaskSummary();
-      return tasks;
-    },
-    [refreshSharedMetadataAtBoundary, refreshTaskSummary],
-  );
 
   const resumeQueuedMessages = useCallback(async (): Promise<void> => {
     const queue = requireRuntimeMessageQueue();
@@ -1096,12 +980,10 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       const err = error instanceof Error ? error : new Error(String(error));
       stores.agent.getState().setError(err);
       stores.conversation.getState().addError(err);
-      void refreshTaskSummary();
       syncRuntimeProjection();
     }
   }, [
     projectRuntimeMessageQueue,
-    refreshTaskSummary,
     releaseRuntimeQueuedPrompts,
     requireRuntimeMessageQueue,
     syncRuntimeProjection,
@@ -1431,7 +1313,6 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
     getContextTokenCount,
     compactContext,
     getMessageQueueSnapshot,
-    listTasks,
     refreshSharedMetadataAtBoundary,
     resumeQueuedMessages,
     promoteQueuedMessage,
@@ -1477,10 +1358,13 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
     getHistory: () => projectPiHistoryToChatMessages(piRuntimeOwnerRef.current?.messages ?? []),
     getConversationPersistenceSnapshot: () => conversationPersistenceSnapshotRef.current,
     getPiRuntimeEvidence: () => piRuntimeOwnerRef.current?.getRuntimeEvidence() ?? null,
-    getPromptCompositionProjection: () => [],
+    getTimelineProjectionEvidence: () =>
+      piEventAdapterRef.current?.readProjectionEvidence() ?? null,
+    getPromptCompositionProjection: () =>
+      piRuntimeOwnerRef.current?.getPromptCompositionProjection() ?? [],
     getWorkspaceBoardProjections: () => workspaceBoardProjectionsRef.current,
     getWorkspaceBoardDeliveryObservability: () =>
-      mediaTaskDeliveryHostRef.current?.getWorkspaceBoardDeliveryObservability() ?? {
+      mediaGenerationDeliveryHostRef.current?.getWorkspaceBoardDeliveryObservability() ?? {
         canonicalSubmissionCount: 0,
         resumeScanCount: 0,
         legacyFallbackCounts: {
@@ -1492,7 +1376,6 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
       },
     getCreatorVisibleArtifacts: () => creatorVisibleArtifactsRef.current,
     getGeneratedOutputLifecycles: () => generatedOutputLifecyclesRef.current,
-    getPendingTaskResultDeliveryCount: () => pendingTaskResultDeliveryCountRef.current,
     syncRuntimeState: () => syncRuntimeProjection(),
     slashCommands,
     isReady,
@@ -1513,8 +1396,7 @@ function resolveTuiBuiltinSkillRoot(): string {
 }
 
 /** Build system prompt with runtime context appended */
-function buildSystemPromptWithContext(builder: SystemPromptBuilder, config: CLIConfig): string {
-  const base = builder.buildBaseOnly();
+function buildSystemPromptWithContext(base: string, config: CLIConfig): string {
   const context = [
     `\n\n---\n\n## Runtime Context`,
     `- Working directory: ${config.workDir}`,
@@ -1568,20 +1450,12 @@ function projectCliLlmParameters(
   }
 }
 
-function selectRunningTasks(tasks: readonly Task[]): readonly Task[] {
-  const activeTasks = tasks
-    .filter((task) => task.status === 'pending' || task.status === 'running')
-    .sort((left, right) => right.updatedAt - left.updatedAt);
-  return activeTasks;
-}
-
 function normalizeTurnSource(source: AgentQueuedMessageSource): AgentTurnSource {
   if (source === 'composer') return 'user';
   return source;
 }
 
 function displayKindForTurnSource(source: AgentTurnSource): AgentQueuedMessageDisplayKind {
-  if (source === 'task-result-continuation') return 'task-continuation';
   if (source === 'subagent-result-continuation') return 'subagent-continuation';
   if (source === 'system-continuation') return 'system-continuation';
   return 'user-message';

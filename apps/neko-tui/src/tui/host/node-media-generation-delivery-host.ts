@@ -11,8 +11,6 @@ import type {
   CanvasWorkspaceProjectionRequest,
   GeneratedAsset,
   GeneratedAssetRevisionRef,
-  RenderableGeneratedAsset,
-  TaskRunScope,
   LocalMetadataStore,
 } from '@neko/shared';
 import {
@@ -20,31 +18,17 @@ import {
   createSafeCanvasWorkspaceProjectionDiagnostic,
   createGeneratedAssetsWorkspaceDeliveryRequest,
   resolveWorkspaceGeneratedAssetRelativeDirectory,
-  stripRenderableGeneratedAssetPath,
 } from '@neko/shared';
 import {
-  buildMediaTaskDeliverySettingsPlan,
-  buildMediaTaskProgressViewDelivery,
-  buildMediaTaskViewDelivery,
+  buildMediaGenerationDeliverySettingsPlan,
+  finalizeMediaGenerationOutputs,
   GeneratedAssetIndex,
-  type DownloadMediaOptions,
-  type MediaTask,
-  type MediaTaskProgressViewDelivery,
-  type MediaTaskViewDelivery,
 } from '@neko/platform';
-import type { GeneratedMediaTaskType } from '@neko/platform/media/media-generated-asset';
+import type { MediaGenerationResult } from '@neko/generation';
+import type { GeneratedMediaKind } from '@neko/platform/media/media-generated-asset';
 import { NodeWorkspaceBoardMutationPort } from './node-workspace-board-mutation-port';
 
-export interface NodeMediaTaskDeliveryHostDeps {
-  readonly platform?: {
-    readonly media?: {
-      saveOutputs(
-        scope: TaskRunScope,
-        outputDir: string,
-        options?: DownloadMediaOptions,
-      ): Promise<string[]>;
-    };
-  };
+export interface NodeMediaGenerationDeliveryHostDeps {
   readonly workspaceRoot: string;
   readonly workspaceId: string;
   readonly metadataStore: LocalMetadataStore;
@@ -66,14 +50,14 @@ export interface WorkspaceBoardDeliveryObservability {
   };
 }
 
-export class NodeMediaTaskDeliveryHost {
+export class NodeMediaGenerationDeliveryHost {
   private readonly assetIndex: GeneratedAssetIndex;
   private readonly workspaceBoardMutation: NodeWorkspaceBoardMutationPort;
   private readonly workspaceBoardDelivery: WorkspaceBoardDeliveryCoordinator;
   private canonicalSubmissionCount = 0;
   private resumeScanCount = 0;
 
-  constructor(private readonly deps: NodeMediaTaskDeliveryHostDeps) {
+  constructor(private readonly deps: NodeMediaGenerationDeliveryHostDeps) {
     this.assetIndex = deps.assetIndex;
     this.workspaceBoardMutation = new NodeWorkspaceBoardMutationPort(deps.workspaceRoot);
     this.workspaceBoardDelivery = new WorkspaceBoardDeliveryCoordinator({
@@ -110,46 +94,43 @@ export class NodeMediaTaskDeliveryHost {
     };
   }
 
-  async createTaskViewDelivery(task: MediaTask): Promise<MediaTaskViewDelivery> {
-    const delivery = await buildMediaTaskViewDelivery({
-      ...this.createDeliveryInput(task, toGeneratedMediaTaskType(task.type)),
-      task,
-    });
-    await this.deliverGeneratedOutputBatch(delivery.deliveryPlan.generatedAssets);
-    return delivery;
-  }
-
-  async createProgressViewDelivery(
-    task: MediaTask,
-    taskType: GeneratedMediaTaskType,
-  ): Promise<MediaTaskProgressViewDelivery> {
-    const delivery = await buildMediaTaskProgressViewDelivery({
-      ...this.createDeliveryInput(task, taskType),
-      task,
-    });
-    await this.deliverGeneratedOutputBatch(delivery.deliveryPlan.generatedAssets);
-    return delivery;
-  }
-
-  private createDeliveryInput(task: MediaTask, taskType: GeneratedMediaTaskType) {
-    const settingsPlan = buildMediaTaskDeliverySettingsPlan({
+  async deliverMediaGeneration(input: {
+    readonly operationId: string;
+    readonly result: MediaGenerationResult;
+  }): Promise<{
+    readonly resultUrls: readonly string[];
+    readonly resourceRefs: readonly import('@neko/shared').ResourceRef[];
+  }> {
+    const mediaKind = toGeneratedMediaKind(input.result.type);
+    const settingsPlan = buildMediaGenerationDeliverySettingsPlan({
       workspaceRoot: this.deps.workspaceRoot,
-      defaultOutputDir: resolveGeneratedOutputDir(this.deps.workspaceRoot, taskType),
+      defaultOutputDir: resolveGeneratedOutputDir(this.deps.workspaceRoot, mediaKind),
       configuredOutputDir: '',
       configuredShowSaveNotification: false,
     });
-
-    return {
-      task,
-      taskType,
+    if (!settingsPlan.outputDir) {
+      throw new Error('TUI media generation delivery requires a workspace output directory.');
+    }
+    const finalized = await finalizeMediaGenerationOutputs({
+      operationId: input.operationId,
+      generationType: input.result.type,
+      mediaKind,
+      outputs: input.result.outputs,
+      providerId: input.result.providerId,
+      modelId: input.result.modelId,
+      request: input.result.request,
       outputDir: settingsPlan.outputDir,
-      saveOutputs: (scope: TaskRunScope, dir: string, options?: DownloadMediaOptions) =>
-        this.deps.platform?.media?.saveOutputs(scope, dir, options) ?? Promise.resolve([]),
       assetIndex: this.assetIndex,
-      workspaceRoot: settingsPlan.workspaceRoot,
-      showSaveNotification: settingsPlan.showSaveNotification,
-      resolveResultUrl: (url: string) => url,
-      toViewAsset,
+    });
+    await this.deliverGeneratedOutputBatch(finalized.generatedAssets);
+    return {
+      resultUrls: finalized.resultUrls,
+      resourceRefs: finalized.generatedAssets.map((asset) => {
+        if (!asset.lifecycle) {
+          throw new Error(`Generated asset ${asset.id} is missing its durable lifecycle.`);
+        }
+        return asset.lifecycle.resourceRef;
+      }),
     };
   }
 
@@ -171,7 +152,6 @@ export class NodeMediaTaskDeliveryHost {
     readonly deliveryId: string;
     readonly createdAt: string;
     readonly artifacts: readonly CreatorVisibleArtifactCandidate[];
-    readonly taskId?: string;
     readonly runId?: string;
   }): Promise<readonly CanvasWorkspaceProjectionResult[]> {
     if (input.artifacts.length === 0) return [];
@@ -185,7 +165,6 @@ export class NodeMediaTaskDeliveryHost {
         deliveryId: input.deliveryId,
         sourceHost: 'tui' as const,
         createdAt: input.createdAt,
-        ...(input.taskId ? { taskId: input.taskId } : {}),
         ...(input.runId ? { runId: input.runId } : {}),
       },
       artifacts: input.artifacts.map((artifact) => toProjectionArtifact(artifact, input)),
@@ -213,7 +192,6 @@ function toProjectionArtifact(
   input: {
     readonly deliveryId: string;
     readonly createdAt: string;
-    readonly taskId?: string;
     readonly runId?: string;
   },
 ): CanvasWorkspaceProjectionArtifact {
@@ -226,7 +204,6 @@ function toProjectionArtifact(
     role: artifact.role,
     sourceId: artifact.sourceId,
     ...(artifact.sourceArtifactIds ? { sourceArtifactIds: artifact.sourceArtifactIds } : {}),
-    ...(input.taskId ? { taskId: input.taskId } : {}),
     ...(input.runId ? { runId: input.runId } : {}),
     createdAt: input.createdAt,
   };
@@ -265,21 +242,13 @@ function blockedProjection(error: unknown): CanvasWorkspaceProjectionResult {
 
 function resolveGeneratedOutputDir(
   workspaceRoot: string,
-  mediaKind: GeneratedMediaTaskType | 'file',
+  mediaKind: GeneratedMediaKind | 'file',
 ): string {
   return path.join(workspaceRoot, resolveWorkspaceGeneratedAssetRelativeDirectory({ mediaKind }));
 }
 
-function toGeneratedMediaTaskType(type: MediaTask['type']): GeneratedMediaTaskType {
+function toGeneratedMediaKind(type: MediaGenerationResult['type']): GeneratedMediaKind {
   if (type.includes('video')) return 'video';
   if (type.includes('audio') || type.includes('music')) return 'audio';
   return 'image';
-}
-
-function toViewAsset(asset: GeneratedAsset): RenderableGeneratedAsset | undefined {
-  const renderUri = asset.assetRef?.uri;
-  if (!renderUri) {
-    return undefined;
-  }
-  return stripRenderableGeneratedAssetPath({ ...asset, renderUri });
 }

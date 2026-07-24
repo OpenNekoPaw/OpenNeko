@@ -81,7 +81,6 @@ describe('presentTuiStatus', () => {
       createSnapshot({
         contextTokenCount: undefined,
         messageQueue: undefined,
-        runningTask: undefined,
       }),
       createContext('en'),
     );

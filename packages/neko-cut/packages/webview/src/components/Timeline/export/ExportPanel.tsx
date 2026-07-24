@@ -28,7 +28,11 @@ export function ExportPanel({ isOpen, onClose }: ExportPanelProps) {
   const { sendMessage, sendExportProgress } = useVSCodeMessaging();
 
   // Export state ref
-  const exportRef = useRef<{ isActive: boolean }>({ isActive: false });
+  const exportRef = useRef<{
+    isActive: boolean;
+    jobId?: string;
+    revision?: number;
+  }>({ isActive: false });
 
   // ---------------------------------------------------------------------------
   // State
@@ -74,8 +78,21 @@ export function ExportPanel({ isOpen, onClose }: ExportPanelProps) {
           setQueueStatus({ active: message.active as number, pending: message.pending as number });
           break;
 
+        case 'export:started':
+          exportRef.current = {
+            isActive: true,
+            jobId: message.jobId,
+            revision: message.revision,
+          };
+          break;
+
         case 'export:progress':
-          if (exportRef.current.isActive) {
+          if (
+            exportRef.current.isActive &&
+            (!exportRef.current.jobId || exportRef.current.jobId === message.jobId)
+          ) {
+            exportRef.current.jobId = message.jobId;
+            exportRef.current.revision = message.revision;
             setExportProgress(message.progress);
             sendExportProgress({
               isExporting: true,
@@ -90,7 +107,7 @@ export function ExportPanel({ isOpen, onClose }: ExportPanelProps) {
           break;
 
         case 'export:completed':
-          if (exportRef.current.isActive) {
+          if (exportRef.current.isActive && exportRef.current.jobId === message.jobId) {
             setIsExporting(false);
             setExportProgress(null);
             sendExportProgress({ isExporting: false, percent: 0, message: '' });
@@ -100,7 +117,10 @@ export function ExportPanel({ isOpen, onClose }: ExportPanelProps) {
           break;
 
         case 'export:error':
-          if (exportRef.current.isActive) {
+          if (
+            exportRef.current.isActive &&
+            (!message.jobId || exportRef.current.jobId === message.jobId)
+          ) {
             setIsExporting(false);
             setExportProgress(null);
             sendExportProgress({ isExporting: false, percent: 0, message: '' });
@@ -114,20 +134,13 @@ export function ExportPanel({ isOpen, onClose }: ExportPanelProps) {
           break;
 
         case 'export:cancelled':
-          if (exportRef.current.isActive) {
+          if (exportRef.current.isActive && exportRef.current.jobId === message.jobId) {
             setIsExporting(false);
             setExportProgress(null);
             sendExportProgress({ isExporting: false, percent: 0, message: '' });
             exportRef.current.isActive = false;
             showToast(t('export.cancelled'), 'info');
           }
-          break;
-
-        case 'export:activeExport':
-          // Resume tracking a background export (editor was reopened during export)
-          exportRef.current.isActive = true;
-          setIsExporting(true);
-          setExportProgress(message.progress);
           break;
 
         case 'preset:list':
@@ -310,12 +323,18 @@ export function ExportPanel({ isOpen, onClose }: ExportPanelProps) {
   ]);
 
   const handleCancel = useCallback(() => {
-    vscodePostMessage({ type: 'export:cancel' });
-    setIsExporting(false);
-    setExportProgress(null);
-    sendExportProgress({ isExporting: false, percent: 0, message: '' });
-    exportRef.current.isActive = false;
-  }, [sendExportProgress]);
+    const { jobId, revision } = exportRef.current;
+    if (!jobId || revision === undefined) {
+      showToast(t('export.errors.exportFailed', { error: 'Missing Export Job identity' }), 'error');
+      return;
+    }
+    vscodePostMessage({
+      type: 'export:cancel',
+      jobKind: 'export',
+      jobId,
+      expectedRevision: revision,
+    });
+  }, [showToast, t]);
 
   const handleBackgroundExport = useCallback(() => {
     showToast('导出将在后台继续，请查看状态栏进度', 'info');

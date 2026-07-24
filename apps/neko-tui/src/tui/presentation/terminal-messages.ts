@@ -16,6 +16,13 @@ export const CLI_TERMINAL_MESSAGES_EN = {
   'agent.terminal.commander.command.image': 'Generate an image directly without Agent execution',
   'agent.terminal.commander.command.video': 'Generate a video directly without Agent execution',
   'agent.terminal.commander.command.audio': 'Generate audio directly without Agent execution',
+  'agent.terminal.commander.command.generation': 'Manage persistent Generation Jobs',
+  'agent.terminal.commander.command.generation.describe': 'Describe an exact Generation Job',
+  'agent.terminal.commander.command.generation.cancel': 'Cancel an exact Generation Job revision',
+  'agent.terminal.commander.command.generation.retry':
+    'Retry an exact Generation Job as a new Job',
+  'agent.terminal.commander.command.generation.reconcile':
+    'Reconcile an exact Generation Job revision',
   'agent.terminal.commander.command.resume': 'Resume a previous interactive session',
   'agent.terminal.commander.command.completion': 'Generate shell completion scripts',
   'agent.terminal.commander.command.config': 'Manage configuration',
@@ -34,6 +41,8 @@ export const CLI_TERMINAL_MESSAGES_EN = {
   'agent.terminal.commander.argument.resumePrompt': 'Optional prompt to submit after resume',
   'agent.terminal.commander.argument.shell': 'Shell type (bash, zsh, fish)',
   'agent.terminal.commander.argument.mediaPrompt': 'Media generation prompt',
+  'agent.terminal.commander.argument.generationJobId': 'Exact Generation Job ID',
+  'agent.terminal.commander.argument.expectedRevision': 'Expected authoritative Job revision',
   'agent.terminal.commander.option.workDir':
     'Working directory for workspace config and file tools',
   'agent.terminal.commander.option.workspaceConfigWorkDir':
@@ -41,6 +50,8 @@ export const CLI_TERMINAL_MESSAGES_EN = {
   'agent.terminal.commander.option.provider': 'AI provider (anthropic, openai, deepseek)',
   'agent.terminal.commander.option.model': 'Model ID',
   'agent.terminal.commander.option.mediaModel': 'Media model ID or provider:model identity',
+  'agent.terminal.commander.option.mediaDetach':
+    'Submit the Generation Job and return its identity without waiting',
   'agent.terminal.commander.option.json': 'Print structured JSON output',
   'agent.terminal.commander.option.apiKey': 'API key',
   'agent.terminal.commander.option.verbose': 'Enable verbose output',
@@ -62,19 +73,21 @@ export const CLI_TERMINAL_MESSAGES_EN = {
   'agent.terminal.commander.diagnostic.excessArguments':
     'error: too many arguments for {command}. Expected {expected} but got {received}.',
   'agent.terminal.commander.diagnostic.unknownCommand': "error: unknown command '{command}'",
-  'agent.terminal.directMedia.completed': '{kind} generation completed: {taskScope} ({model})',
+  'agent.terminal.directMedia.completed': '{kind} generation completed: {operationId} ({model})',
+  'agent.terminal.directMedia.submitted':
+    '{kind} generation submitted: {operationId} revision {revision} ({model})',
   'agent.terminal.directMedia.diagnostic.direct-media-empty-prompt':
     'Direct media generation requires a non-empty prompt. {detail}',
   'agent.terminal.directMedia.diagnostic.direct-media-model-unavailable':
     'Direct media model is unavailable. {detail}',
   'agent.terminal.directMedia.diagnostic.direct-media-model-kind-mismatch':
     'Direct media model category does not match the command. {detail}',
-  'agent.terminal.directMedia.diagnostic.direct-media-task-failed':
-    'Direct media task failed ({taskScope}). {detail}',
-  'agent.terminal.directMedia.diagnostic.direct-media-task-cancelled':
-    'Direct media task was cancelled ({taskScope}). {detail}',
+  'agent.terminal.directMedia.diagnostic.direct-media-generation-failed':
+    'Direct media generation failed ({operationId}). {detail}',
+  'agent.terminal.directMedia.diagnostic.direct-media-generation-cancelled':
+    'Direct media generation was cancelled ({operationId}). {detail}',
   'agent.terminal.directMedia.diagnostic.direct-media-result-unavailable':
-    'Direct media task completed without a stable result ({taskScope}). {detail}',
+    'Direct media generation completed without a stable result ({operationId}). {detail}',
   'agent.terminal.cli.configLoad.missingDefaultProvider':
     'No default provider is configured in ~/.neko/config.toml.',
   'agent.terminal.cli.configLoad.providerNotConfigured':
@@ -320,56 +333,18 @@ export const CLI_TERMINAL_MESSAGES_EN = {
     'Conversation "{conversationId}" was not found; starting fresh.',
   'agent.terminal.runtime.continuationDiscarded': 'Continuation discarded: {itemId}',
   'agent.terminal.runtime.skillInvocationRejected': 'Skill "{skillName}" is unavailable.',
-  'agent.terminal.runtime.taskContinuationReady':
-    'Task result is ready. Continuing from the completed asynchronous result.',
-  'agent.terminal.runtime.taskContinuationReadyWithId':
-    'Task result {taskId} is ready. Continuing from the completed asynchronous result.',
   'agent.terminal.runtime.subagentContinuationReady':
     'Subagent result is ready. Continuing from the completed subagent result.',
   'agent.terminal.runtime.subagentContinuationReadyWithId':
     'Subagent result {subagentId} is ready. Continuing from the completed subagent result.',
   'agent.terminal.runtime.systemContinuationReady':
     'System continuation is ready. Continuing Agent execution.',
-  'agent.terminal.runtime.taskContinuationQueued':
-    'Task continuation queued: {itemId} ({pendingCount} pending)',
   'agent.terminal.runtime.subagentContinuationQueued':
     'Subagent result continuation queued: {itemId} ({pendingCount} pending)',
   'agent.terminal.runtime.systemContinuationQueued':
     'System continuation queued: {itemId} ({pendingCount} pending)',
   'agent.terminal.runtime.workspaceStateSyncFailed':
     'Workspace runtime state sync failed: {detail}',
-  'agent.terminal.runtime.taskStatusRefreshFailed': 'Task status refresh failed: {detail}',
-  'agent.terminal.runtime.taskResultReady': 'Task result is ready. Continue with: {prompt}',
-  'agent.terminal.runtime.mediaResultPersistenceFailed':
-    'Failed to persist media task result URLs.',
-  'agent.terminal.runtime.mediaResultPersistenceFailedWithDetail':
-    'Failed to persist media task result URLs: {detail}',
-  'agent.terminal.runtime.mediaProgressDeliveryFailed':
-    'Failed to deliver media task progress: {taskId}',
-  'agent.terminal.runtime.mediaProgressDeliveryFailedWithDetail':
-    'Failed to deliver media task progress: {taskId}: {detail}',
-  'agent.terminal.runtime.taskObservation.notTerminal':
-    'Task result cannot be recorded because task {taskId} is not terminal.',
-  'agent.terminal.runtime.taskObservation.invalidOwnerScope':
-    'Task {taskId} has an invalid owner scope.',
-  'agent.terminal.runtime.taskObservation.ownerScopeMismatch':
-    'Task {taskId} result belongs to a different owner scope.',
-  'agent.terminal.runtime.taskObservation.malformedResultRef':
-    'Task {taskId} contains a malformed result reference.',
-  'agent.terminal.runtime.taskObservation.unsafeResultRef':
-    'Task {taskId} contains an unsafe result reference.',
-  'agent.terminal.runtime.taskObservation.invalidDeliveryPolicy':
-    'Task {taskId} has an invalid result delivery policy.',
-  'agent.terminal.runtime.taskObservation.invalidTaskGroup':
-    'Task {taskId} has an invalid result delivery group.',
-  'agent.terminal.runtime.taskObservation.recordingFailed':
-    'Failed to record the result for task {taskId}: {detail}',
-  'agent.terminal.runtime.taskObservation.recordingFailedWithoutDetail':
-    'Failed to record the result for task {taskId}.',
-  'agent.terminal.runtime.taskObservation.followupFailed':
-    'Failed to continue after task {taskId}: {detail}',
-  'agent.terminal.runtime.taskObservation.followupFailedWithoutDetail':
-    'Failed to continue after task {taskId}.',
   'agent.terminal.errorBoundary.crashed': '{label} crashed',
   'agent.terminal.errorBoundary.recovery': 'Press Ctrl+L to reset, or Ctrl+C to quit.',
   'agent.terminal.queue.unknownItem': 'Unknown queue item: {itemId}',
@@ -403,17 +378,6 @@ export const CLI_TERMINAL_MESSAGES_EN = {
   'agent.terminal.diagnostic.queue.operationFailed': 'Queue operation failed: {detail}',
   'agent.terminal.diagnostic.queue.operationFailedWithCode':
     'Queue operation failed ({operationCode}): {detail}',
-  'agent.terminal.task.empty': 'No tasks.',
-  'agent.terminal.task.emptyFiltered': 'No {status} tasks.',
-  'agent.terminal.task.header': 'Tasks:',
-  'agent.terminal.task.headerFiltered': 'Tasks ({status}):',
-  'agent.terminal.task.row': '  {id}  {status}  {progress}%  {runMode}  {title}',
-  'agent.terminal.task.rowWithError':
-    '  {id}  {status}  {progress}%  {runMode}  {title}  error={error}',
-  'agent.terminal.task.usage': 'Usage: /tasks [pending|running|completed|failed|cancelled|all]',
-  'agent.terminal.diagnostic.task.unavailable': 'Task status is not available for this session.',
-  'agent.terminal.diagnostic.task.usage':
-    'Usage: /tasks [pending|running|completed|failed|cancelled|all] or /tasks status [status]',
   'agent.terminal.mcp.servers.empty': 'No MCP servers configured.',
   'agent.terminal.mcp.servers.header': 'MCP Servers:',
   'agent.terminal.mcp.servers.transport': 'transport={transport}',
@@ -612,13 +576,7 @@ export const CLI_TERMINAL_MESSAGES_EN = {
   'agent.terminal.status.skills.one': 'Skills: {count} active',
   'agent.terminal.status.skills.many': 'Skills: {count} active',
   'agent.terminal.status.queue': 'Queue: {count}',
-  'agent.terminal.status.task': 'Task: {taskId} ({status})',
   'agent.terminal.status.config': 'User config: {path}',
-  'agent.terminal.value.taskStatus.pending': 'pending',
-  'agent.terminal.value.taskStatus.running': 'running',
-  'agent.terminal.value.taskStatus.completed': 'completed',
-  'agent.terminal.value.taskStatus.failed': 'failed',
-  'agent.terminal.value.taskStatus.cancelled': 'cancelled',
   'agent.terminal.value.agentStatus.idle': 'idle',
   'agent.terminal.value.agentStatus.running': 'running',
   'agent.terminal.value.agentStatus.waitingConfirmation': 'waiting for confirmation',
@@ -707,7 +665,6 @@ export const CLI_TERMINAL_MESSAGES_EN = {
   'agent.terminal.approval.cwd': 'cwd: {cwd}',
   'agent.terminal.queue.nextTurn': 'Next turn',
   'agent.terminal.queue.userMessage': 'message',
-  'agent.terminal.queue.taskContinuation': 'task continuation',
   'agent.terminal.queue.subagentContinuation': 'subagent continuation',
   'agent.terminal.queue.systemContinuation': 'system continuation',
   'agent.terminal.queue.continuationPriority': 'internal continuation first',
@@ -837,6 +794,13 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
   'agent.terminal.commander.command.image': '不经过 Agent 直接生成图像',
   'agent.terminal.commander.command.video': '不经过 Agent 直接生成视频',
   'agent.terminal.commander.command.audio': '不经过 Agent 直接生成音频',
+  'agent.terminal.commander.command.generation': '管理持久化 Generation Job',
+  'agent.terminal.commander.command.generation.describe': '查询指定 Generation Job',
+  'agent.terminal.commander.command.generation.cancel': '取消指定 revision 的 Generation Job',
+  'agent.terminal.commander.command.generation.retry':
+    '将指定 Generation Job 重试为一个新 Job',
+  'agent.terminal.commander.command.generation.reconcile':
+    '对指定 revision 的 Generation Job 执行 reconcile',
   'agent.terminal.commander.command.resume': '恢复之前的交互会话',
   'agent.terminal.commander.command.completion': '生成 shell 补全脚本',
   'agent.terminal.commander.command.config': '管理配置',
@@ -852,11 +816,14 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
   'agent.terminal.commander.argument.resumePrompt': '恢复后可选提交的提示词',
   'agent.terminal.commander.argument.shell': 'Shell 类型（bash、zsh、fish）',
   'agent.terminal.commander.argument.mediaPrompt': '媒体生成提示词',
+  'agent.terminal.commander.argument.generationJobId': '指定 Generation Job ID',
+  'agent.terminal.commander.argument.expectedRevision': '预期的权威 Job revision',
   'agent.terminal.commander.option.workDir': '工作区配置和文件工具使用的工作目录',
   'agent.terminal.commander.option.workspaceConfigWorkDir': '工作区配置使用的工作目录',
   'agent.terminal.commander.option.provider': 'AI 提供者（anthropic、openai、deepseek）',
   'agent.terminal.commander.option.model': '模型 ID',
   'agent.terminal.commander.option.mediaModel': '媒体模型 ID 或 provider:model 身份',
+  'agent.terminal.commander.option.mediaDetach': '提交 Generation Job 并立即返回任务身份',
   'agent.terminal.commander.option.json': '输出结构化 JSON',
   'agent.terminal.commander.option.apiKey': 'API 密钥',
   'agent.terminal.commander.option.verbose': '启用详细输出',
@@ -873,19 +840,21 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
   'agent.terminal.commander.diagnostic.excessArguments':
     '错误：命令 {command} 的参数过多。预期 {expected} 个，实际 {received} 个。',
   'agent.terminal.commander.diagnostic.unknownCommand': '错误：未知命令“{command}”',
-  'agent.terminal.directMedia.completed': '{kind} 生成已完成：{taskScope}（{model}）',
+  'agent.terminal.directMedia.completed': '{kind} 生成已完成：{operationId}（{model}）',
+  'agent.terminal.directMedia.submitted':
+    '{kind} 生成已提交：{operationId}，revision {revision}（{model}）',
   'agent.terminal.directMedia.diagnostic.direct-media-empty-prompt':
     '直接媒体生成需要非空提示词。{detail}',
   'agent.terminal.directMedia.diagnostic.direct-media-model-unavailable':
     '直接媒体模型不可用。{detail}',
   'agent.terminal.directMedia.diagnostic.direct-media-model-kind-mismatch':
     '直接媒体模型类别与命令不匹配。{detail}',
-  'agent.terminal.directMedia.diagnostic.direct-media-task-failed':
-    '直接媒体任务失败（{taskScope}）。{detail}',
-  'agent.terminal.directMedia.diagnostic.direct-media-task-cancelled':
-    '直接媒体任务已取消（{taskScope}）。{detail}',
+  'agent.terminal.directMedia.diagnostic.direct-media-generation-failed':
+    '直接媒体生成失败（{operationId}）。{detail}',
+  'agent.terminal.directMedia.diagnostic.direct-media-generation-cancelled':
+    '直接媒体生成已取消（{operationId}）。{detail}',
   'agent.terminal.directMedia.diagnostic.direct-media-result-unavailable':
-    '直接媒体任务完成但没有稳定结果（{taskScope}）。{detail}',
+    '直接媒体生成完成但没有稳定结果（{operationId}）。{detail}',
   'agent.terminal.cli.configLoad.missingDefaultProvider':
     '未在 ~/.neko/config.toml 中配置默认提供方。',
   'agent.terminal.cli.configLoad.providerNotConfigured':
@@ -1111,48 +1080,16 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
     '未找到对话“{conversationId}”；将开始新对话。',
   'agent.terminal.runtime.continuationDiscarded': '已丢弃续跑：{itemId}',
   'agent.terminal.runtime.skillInvocationRejected': 'Skill“{skillName}”不可用。',
-  'agent.terminal.runtime.taskContinuationReady': '任务结果已就绪，将从已完成的异步结果继续执行。',
-  'agent.terminal.runtime.taskContinuationReadyWithId':
-    '任务结果 {taskId} 已就绪，将从已完成的异步结果继续执行。',
   'agent.terminal.runtime.subagentContinuationReady':
     '子 Agent 结果已就绪，将从已完成的子 Agent 结果继续执行。',
   'agent.terminal.runtime.subagentContinuationReadyWithId':
     '子 Agent 结果 {subagentId} 已就绪，将从已完成的子 Agent 结果继续执行。',
   'agent.terminal.runtime.systemContinuationReady': '系统续跑已就绪，将继续执行 Agent。',
-  'agent.terminal.runtime.taskContinuationQueued':
-    '任务续跑已入队：{itemId}（{pendingCount} 条待处理）',
   'agent.terminal.runtime.subagentContinuationQueued':
     '子 Agent 结果续跑已入队：{itemId}（{pendingCount} 条待处理）',
   'agent.terminal.runtime.systemContinuationQueued':
     '系统续跑已入队：{itemId}（{pendingCount} 条待处理）',
   'agent.terminal.runtime.workspaceStateSyncFailed': '同步工作区运行状态失败：{detail}',
-  'agent.terminal.runtime.taskStatusRefreshFailed': '刷新任务状态失败：{detail}',
-  'agent.terminal.runtime.taskResultReady': '任务结果已就绪。继续执行：{prompt}',
-  'agent.terminal.runtime.mediaResultPersistenceFailed': '保存媒体任务结果 URL 失败。',
-  'agent.terminal.runtime.mediaResultPersistenceFailedWithDetail':
-    '保存媒体任务结果 URL 失败：{detail}',
-  'agent.terminal.runtime.mediaProgressDeliveryFailed': '传递媒体任务进度失败：{taskId}',
-  'agent.terminal.runtime.mediaProgressDeliveryFailedWithDetail':
-    '传递媒体任务进度失败：{taskId}：{detail}',
-  'agent.terminal.runtime.taskObservation.notTerminal':
-    '任务 {taskId} 尚未结束，无法记录任务结果。',
-  'agent.terminal.runtime.taskObservation.invalidOwnerScope': '任务 {taskId} 的所有者作用域无效。',
-  'agent.terminal.runtime.taskObservation.ownerScopeMismatch':
-    '任务 {taskId} 的结果属于另一个所有者作用域。',
-  'agent.terminal.runtime.taskObservation.malformedResultRef':
-    '任务 {taskId} 包含格式错误的结果引用。',
-  'agent.terminal.runtime.taskObservation.unsafeResultRef': '任务 {taskId} 包含不安全的结果引用。',
-  'agent.terminal.runtime.taskObservation.invalidDeliveryPolicy':
-    '任务 {taskId} 的结果传递策略无效。',
-  'agent.terminal.runtime.taskObservation.invalidTaskGroup': '任务 {taskId} 的结果传递组无效。',
-  'agent.terminal.runtime.taskObservation.recordingFailed':
-    '记录任务 {taskId} 的结果失败：{detail}',
-  'agent.terminal.runtime.taskObservation.recordingFailedWithoutDetail':
-    '记录任务 {taskId} 的结果失败。',
-  'agent.terminal.runtime.taskObservation.followupFailed':
-    '任务 {taskId} 完成后的续跑失败：{detail}',
-  'agent.terminal.runtime.taskObservation.followupFailedWithoutDetail':
-    '任务 {taskId} 完成后的续跑失败。',
   'agent.terminal.errorBoundary.crashed': '{label} 已崩溃',
   'agent.terminal.errorBoundary.recovery': '按 Ctrl+L 重置，或按 Ctrl+C 退出。',
   'agent.terminal.queue.unknownItem': '未知队列项：{itemId}',
@@ -1180,17 +1117,6 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
   'agent.terminal.diagnostic.queue.operationFailed': '队列操作失败：{detail}',
   'agent.terminal.diagnostic.queue.operationFailedWithCode':
     '队列操作失败（{operationCode}）：{detail}',
-  'agent.terminal.task.empty': '没有任务。',
-  'agent.terminal.task.emptyFiltered': '没有{status}任务。',
-  'agent.terminal.task.header': '任务：',
-  'agent.terminal.task.headerFiltered': '任务（{status}）：',
-  'agent.terminal.task.row': '  {id}  {status}  {progress}%  {runMode}  {title}',
-  'agent.terminal.task.rowWithError':
-    '  {id}  {status}  {progress}%  {runMode}  {title}  错误={error}',
-  'agent.terminal.task.usage': '用法：/tasks [pending|running|completed|failed|cancelled|all]',
-  'agent.terminal.diagnostic.task.unavailable': '当前会话无法查看任务状态。',
-  'agent.terminal.diagnostic.task.usage':
-    '用法：/tasks [pending|running|completed|failed|cancelled|all] 或 /tasks status [status]',
   'agent.terminal.mcp.servers.empty': '未配置 MCP 服务。',
   'agent.terminal.mcp.servers.header': 'MCP 服务：',
   'agent.terminal.mcp.servers.transport': '传输={transport}',
@@ -1370,13 +1296,7 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
   'agent.terminal.status.skills.one': '技能：{count} 个已激活',
   'agent.terminal.status.skills.many': '技能：{count} 个已激活',
   'agent.terminal.status.queue': '队列：{count}',
-  'agent.terminal.status.task': '任务：{taskId}（{status}）',
   'agent.terminal.status.config': '用户配置：{path}',
-  'agent.terminal.value.taskStatus.pending': '等待中',
-  'agent.terminal.value.taskStatus.running': '运行中',
-  'agent.terminal.value.taskStatus.completed': '已完成',
-  'agent.terminal.value.taskStatus.failed': '失败',
-  'agent.terminal.value.taskStatus.cancelled': '已取消',
   'agent.terminal.value.agentStatus.idle': '空闲',
   'agent.terminal.value.agentStatus.running': '运行中',
   'agent.terminal.value.agentStatus.waitingConfirmation': '等待确认',
@@ -1456,7 +1376,6 @@ const CLI_TERMINAL_MESSAGES_ZH_CN = {
   'agent.terminal.approval.cwd': '工作目录：{cwd}',
   'agent.terminal.queue.nextTurn': '下一轮',
   'agent.terminal.queue.userMessage': '消息',
-  'agent.terminal.queue.taskContinuation': '任务续跑',
   'agent.terminal.queue.subagentContinuation': '子代理续跑',
   'agent.terminal.queue.systemContinuation': '系统续跑',
   'agent.terminal.queue.continuationPriority': '内部续跑优先',

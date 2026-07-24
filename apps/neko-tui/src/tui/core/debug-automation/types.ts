@@ -4,12 +4,13 @@ import type {
   AgentQueuedMessageDisplayKind,
   AgentTurnSource,
 } from '@neko-agent/types';
-import type { CanvasWorkspaceProjectionResult, Task } from '@neko/shared';
+import type { CanvasWorkspaceProjectionResult } from '@neko/shared';
 import type { Message } from '../../types/state';
 import type { TerminalArtifactFact } from '../../types/state';
 import type { TerminalMarkdownPathEvent } from '../../markdown/path-observer';
 import type { PromptCompositionFragmentProjection } from '@neko/agent';
 import type { TuiPiRuntimeEvidence } from '../pi-runtime-owner';
+import type { TuiPiProjectionEvidence } from '../../adapters/pi-event-adapter';
 import type { TuiPurposeModelRef, TuiToolModelPurpose } from '../types';
 
 export const TUI_DEBUG_AUTOMATION_REQUEST_SCHEMA = 'neko.tui-debug-automation.request.v1';
@@ -145,9 +146,6 @@ export interface TuiDebugAutomationIdleConcern {
 
 export interface TuiDebugAutomationIdleState {
   readonly turnIdle: TuiDebugAutomationIdleConcern;
-  readonly backgroundTasksIdle: TuiDebugAutomationIdleConcern;
-  readonly mediaDeliveryIdle: TuiDebugAutomationIdleConcern;
-  readonly taskResultObservationIdle: TuiDebugAutomationIdleConcern;
   readonly continuationQueueIdle?: TuiDebugAutomationIdleConcern;
   readonly fullyIdle: boolean;
 }
@@ -224,26 +222,6 @@ export interface TuiDebugAutomationToolCallSummary {
   readonly diagnostics: readonly TuiDebugAutomationDiagnostic[];
 }
 
-export interface TuiDebugAutomationTaskFact {
-  readonly scope: Task['scope'];
-  readonly id: string;
-  readonly type: Task['type'];
-  readonly status: Task['status'];
-  readonly progress: number;
-  readonly createdAt: number;
-  readonly updatedAt: number;
-  readonly providerId?: string;
-  readonly modelId?: string;
-  readonly retryCount: number;
-  readonly lifecycle?: Task['lifecycle'];
-  readonly metrics?: NonNullable<Task['output']>['metrics'];
-  readonly resultObservation: {
-    readonly status: 'pending' | 'available' | 'observed' | 'failed' | 'missing';
-    readonly observationIds: readonly string[];
-  };
-  readonly diagnostics: readonly TuiDebugAutomationDiagnostic[];
-}
-
 export interface TuiDebugAutomationCanvasFacts {
   readonly messageSummaries: readonly string[];
   readonly toolCallSummaries: readonly TuiDebugAutomationToolCallSummary[];
@@ -301,7 +279,6 @@ export interface TuiDebugAutomationSessionFacts {
   readonly history?: readonly unknown[];
   /** Legacy activation lifecycle is intentionally absent; Pi Skills execute as turns. */
   readonly skillActivations: readonly never[];
-  readonly tasks: readonly TuiDebugAutomationTaskFact[];
   readonly messageQueue: AgentMessageQueueSnapshot | null;
   readonly continuations: readonly TuiDebugAutomationContinuationFact[];
   readonly promptComposition: readonly PromptCompositionFragmentProjection[];
@@ -313,6 +290,7 @@ export interface TuiDebugAutomationSessionFacts {
   readonly markdown: TuiDebugAutomationMarkdownFacts;
   readonly conversationPersistence: TuiDebugAutomationConversationPersistenceFacts;
   readonly piRuntime: TuiPiRuntimeEvidence | null;
+  readonly timelineProjection: TuiPiProjectionEvidence | null;
   readonly usage: {
     readonly inputTokens: number;
     readonly outputTokens: number;
@@ -329,10 +307,6 @@ export interface TuiDebugAutomationSessionFacts {
     readonly current: number;
     readonly max: number;
   };
-  readonly retries: {
-    readonly taskRetryCount: number;
-    readonly tasksWithRetries: number;
-  };
   readonly evidenceCompleteness: TuiDebugAutomationEvidenceCompleteness;
 }
 
@@ -346,7 +320,6 @@ export interface TuiDebugAutomationEvidenceCompleteness {
   readonly turnToolCalls: TuiDebugAutomationCollectionCompleteness;
   readonly timelineRows: TuiDebugAutomationCollectionCompleteness;
   readonly skillActivations: TuiDebugAutomationCollectionCompleteness;
-  readonly tasks: TuiDebugAutomationCollectionCompleteness;
   readonly continuations: TuiDebugAutomationCollectionCompleteness;
   readonly promptComposition: TuiDebugAutomationCollectionCompleteness;
   readonly artifacts: TuiDebugAutomationCollectionCompleteness;

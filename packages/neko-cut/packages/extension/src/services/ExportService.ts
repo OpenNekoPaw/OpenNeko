@@ -1,21 +1,10 @@
 /**
- * ExportService - Unified video export service with FIFO queue support
+ * Cut-owned Engine adapter and export request builder.
  *
- * Responsibilities:
- * - Dispatches export requests to NativeEngine via EngineClient
- * - Polls export progress for all active jobs and emits events
- * - Manages export lifecycle (enqueue, poll, cancel)
- * - Independent of Webview — supports VSCode commands and tool handlers
- *
- * Action protocol:
- * - timelines:export          — start export (immediate, backward compat)
- * - timelines:export_enqueue  — enqueue export (FIFO, new)
- * - timelines:export_progress — poll progress
- * - timelines:export_cancel   — cancel export
- * - timelines:export_queue    — list queue entries
+ * Export Job lifecycle, observation and recovery belong exclusively to
+ * ExportJobCoordinator.
  */
 
-import * as vscode from 'vscode';
 import * as path from 'path';
 import { EngineClient, type ActionRequest, type ActionResponse } from '@neko/neko-client';
 import type { ProjectData } from '@neko/shared';
@@ -26,96 +15,24 @@ import {
 } from '@neko/shared/vscode/extension';
 import { resolveMediaPath as resolveMediaPathHelper } from './tools/helpers';
 import { getLogger } from '../base';
+import type {
+  ExportConfig,
+  ExportEnginePort,
+  ExportEngineProgress,
+  ExportJobRequest,
+  ExportJobResult,
+  ExportJobResultCommitter,
+} from './export-job';
+
+export type { ExportConfig } from './export-job';
 
 const logger = getLogger('ExportService');
-
-// =============================================================================
-// Types
-// =============================================================================
-
-/** Export configuration from UI */
-export interface ExportConfig {
-  outputPath: string;
-  format: 'mp4' | 'webm' | 'mov' | 'mkv' | 'avi' | 'ts';
-  width: number;
-  height: number;
-  fps: number;
-  quality: 'low' | 'medium' | 'high';
-  audioBitrate: number;
-  /** Explicit video codec — if omitted, default for format is used */
-  videoCodec?: string;
-  /** Explicit audio codec — if omitted, default for format is used */
-  audioCodec?: string;
-  /** Explicitly allow proxy or derived media for low-fidelity draft exports. */
-  qualityMode?: 'source' | 'draft-proxy';
-}
 
 export interface ExportServiceOptions {
   readonly contentAccess?: ContentAccessService;
   readonly contentIngest?: ContentIngestService;
   readonly fileExists?: (filePath: string) => boolean;
 }
-
-/** Per-job info tracked by the service */
-interface ExportJobInfo {
-  config: ExportConfig;
-  startedAt: number;
-}
-
-/** Read-only export job metadata for source-owned task projection adapters. */
-export interface ExportJobSnapshot {
-  readonly jobId: string;
-  readonly config: ExportConfig;
-  readonly startedAt: number;
-}
-
-/** Progress reported by Rust export pipeline */
-export interface ExportProgress {
-  jobId: string;
-  state: string;
-  progress: number;
-  currentFrame: number;
-  totalFrames: number;
-  elapsedMs: number;
-  estimatedRemainingMs: number;
-  error?: string;
-  stats?: {
-    avgFps: number;
-    cpuUsagePercent: number;
-    gpuUsagePercent?: number;
-    hwDecodeMs: number;
-    compositeMs: number;
-    encodeSubmitMs: number;
-    peakMemoryBytes: number;
-    vramUsageBytes?: number;
-  };
-}
-
-/** Export result */
-export interface ExportResult {
-  success: boolean;
-  outputPath?: string;
-  error?: string;
-  totalFrames?: number;
-  elapsedMs?: number;
-}
-
-/** Queue status sent to Webview */
-export interface ExportQueueStatus {
-  /** Jobs currently running */
-  active: number;
-  /** Jobs waiting in queue */
-  pending: number;
-}
-
-// =============================================================================
-// Constants
-// =============================================================================
-
-const PROGRESS_POLL_INTERVAL_MS = 200;
-
-/** Terminal states that stop polling a specific job */
-const TERMINAL_STATES = new Set(['completed', 'cancelled', 'error']);
 
 /** Default video codec per container format (serde: rename_all = "lowercase") */
 const FORMAT_TO_VIDEO_CODEC: Record<string, string> = {
@@ -148,190 +65,76 @@ const QUALITY_PRESETS: Record<string, { preset: string; baseBitrate: number }> =
 // ExportService
 // =============================================================================
 
-export class ExportService implements vscode.Disposable {
-  /** Active jobs being polled (jobId → info) */
-  private _activeJobs = new Map<string, ExportJobInfo>();
-  private _pollingTimer: ReturnType<typeof setInterval> | null = null;
-  private _disposed = false;
-
-  // Event emitters
-  private readonly _onDidProgress = new vscode.EventEmitter<ExportProgress>();
-  private readonly _onDidComplete = new vscode.EventEmitter<ExportResult>();
-  private readonly _onDidError = new vscode.EventEmitter<string>();
-  private readonly _onDidCancel = new vscode.EventEmitter<void>();
-  private readonly _onDidQueueChange = new vscode.EventEmitter<ExportQueueStatus>();
-
-  /** Fired when export progress is updated */
-  readonly onDidProgress = this._onDidProgress.event;
-  /** Fired when export completes successfully */
-  readonly onDidComplete = this._onDidComplete.event;
-  /** Fired when export fails */
-  readonly onDidError = this._onDidError.event;
-  /** Fired when export is cancelled */
-  readonly onDidCancel = this._onDidCancel.event;
-  /** Fired when the queue state changes (job added, started, or finished) */
-  readonly onDidQueueChange = this._onDidQueueChange.event;
-
+export class ExportService implements ExportEnginePort, ExportJobResultCommitter {
   constructor(
     private readonly client: EngineClient,
     private readonly documentDir: string,
     private readonly options: ExportServiceOptions = {},
-    private readonly documentUri?: vscode.Uri,
+    private readonly documentUri?: {
+      readonly fsPath: string;
+      toString(): string;
+    },
   ) {}
 
-  // =========================================================================
-  // Public API
-  // =========================================================================
-
-  /**
-   * Enqueue an export job.
-   * If no job is currently running on the Rust side, it starts immediately.
-   * Otherwise it is placed in the FIFO queue and starts when ready.
-   *
-   * @returns The job ID for tracking
-   */
-  async enqueueExport(project: ProjectData, config: ExportConfig): Promise<string> {
-    const jobId = `export-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-
+  async prepareExportRequest(
+    project: ProjectData,
+    config: ExportConfig,
+  ): Promise<ExportJobRequest> {
     const duration = this.computeProjectDuration(project);
-    const exportJobConfig = await this.buildExportJobConfig(jobId, project, config, duration);
+    const engineConfig = await this.buildExportJobConfig(project, config, duration);
+    return {
+      documentUri: this.documentUri?.toString() ?? path.join(this.documentDir, 'project.nkv'),
+      config: { ...config },
+      engineConfig,
+    };
+  }
 
-    // Dispatch timelines:export_enqueue
+  async enqueueExport(input: {
+    readonly ref: { readonly kind: 'export'; readonly jobId: string };
+    readonly request: ExportJobRequest;
+  }): Promise<{ readonly engineJobId: string }> {
     const response = await this.dispatch({
       group: 'timelines',
       action: 'export_enqueue',
-      body: exportJobConfig,
+      body: { ...input.request.engineConfig, jobId: input.ref.jobId },
     });
-
     const responseData = response.data as Record<string, unknown> | undefined;
-    const actualJobId = (responseData?.jobId as string) ?? jobId;
-
-    this._activeJobs.set(actualJobId, { config, startedAt: Date.now() });
-
-    logger.info(`Export enqueued: jobId=${actualJobId}`);
-
-    this._onDidQueueChange.fire(this.buildQueueStatus());
-
-    // Ensure polling is running
-    if (!this._pollingTimer) {
-      this.startPolling();
+    const engineJobId = responseData?.jobId;
+    if (typeof engineJobId !== 'string' || !engineJobId.trim()) {
+      throw new Error('Engine export enqueue response did not include a jobId.');
     }
-
-    return actualJobId;
+    logger.info(`Export enqueued: jobId=${engineJobId}`);
+    return { engineJobId };
   }
 
-  /**
-   * Start an export job immediately (backward-compatible entry point).
-   * Internally delegates to `enqueueExport`.
-   *
-   * @returns The job ID for tracking
-   */
-  async startExport(project: ProjectData, config: ExportConfig): Promise<string> {
-    return this.enqueueExport(project, config);
+  async describeExport(input: { readonly engineJobId: string }): Promise<ExportEngineProgress> {
+    const response = await this.dispatch({
+      group: 'timelines',
+      action: 'export_progress',
+      id: input.engineJobId,
+    });
+    return this.parseProgress(response.data, input.engineJobId);
   }
 
-  /**
-   * Cancel the most-recently enqueued export job (or the first running one).
-   */
-  async cancelExport(): Promise<void> {
-    const jobId = [...this._activeJobs.keys()].at(-1);
-    if (!jobId) return;
-
-    try {
-      await this.dispatch({
-        group: 'timelines',
-        action: 'export_cancel',
-        id: jobId,
-      });
-      logger.info(`Export cancelled: jobId=${jobId}`);
-    } catch (error) {
-      logger.warn('Failed to cancel export:', error);
-    }
-
-    this._activeJobs.delete(jobId);
-    this._onDidCancel.fire();
-    this._onDidQueueChange.fire(this.buildQueueStatus());
-
-    if (this._activeJobs.size === 0) {
-      this.stopPolling();
-    }
+  async cancelExport(input: { readonly engineJobId: string }): Promise<void> {
+    await this.dispatch({
+      group: 'timelines',
+      action: 'export_cancel',
+      id: input.engineJobId,
+    });
+    logger.info(`Export cancelled: jobId=${input.engineJobId}`);
   }
 
-  /**
-   * Cancel a specific export job by ID.
-   */
-  async cancelJob(jobId: string): Promise<void> {
-    if (!this._activeJobs.has(jobId)) return;
-
-    try {
-      await this.dispatch({
-        group: 'timelines',
-        action: 'export_cancel',
-        id: jobId,
-      });
-      logger.info(`Export job cancelled: jobId=${jobId}`);
-    } catch (error) {
-      logger.warn('Failed to cancel export job:', error);
-    }
-
-    this._activeJobs.delete(jobId);
-    this._onDidCancel.fire();
-    this._onDidQueueChange.fire(this.buildQueueStatus());
-
-    if (this._activeJobs.size === 0) {
-      this.stopPolling();
-    }
-  }
-
-  /**
-   * Get current export progress for a specific job (one-shot query)
-   */
-  async getProgress(jobId?: string): Promise<ExportProgress | null> {
-    const id = jobId ?? [...this._activeJobs.keys()].at(-1);
-    if (!id) return null;
-
-    try {
-      const response = await this.dispatch({
-        group: 'timelines',
-        action: 'export_progress',
-        id,
-      });
-      return this.parseProgress(response.data as Record<string, unknown> | undefined);
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Whether any export job is currently active
-   */
-  isExporting(): boolean {
-    return this._activeJobs.size > 0;
-  }
-
-  /**
-   * Get the most recently added job ID (if any)
-   */
-  getCurrentJobId(): string | null {
-    return [...this._activeJobs.keys()].at(-1) ?? null;
-  }
-
-  /**
-   * Get the current queue status summary
-   */
-  getQueueStatus(): ExportQueueStatus {
-    return this.buildQueueStatus();
-  }
-
-  /**
-   * Return active export jobs without exposing the mutable internal registry.
-   */
-  getActiveExportJobs(): ExportJobSnapshot[] {
-    return [...this._activeJobs.entries()].map(([jobId, info]) => ({
-      jobId,
-      config: { ...info.config },
-      startedAt: info.startedAt,
-    }));
+  async commitExport(input: {
+    readonly request: ExportJobRequest;
+    readonly progress: ExportEngineProgress;
+  }): Promise<ExportJobResult> {
+    await this.stageExportOutput(input.request.config.outputPath);
+    return {
+      outputPath: input.request.config.outputPath,
+      totalFrames: input.progress.totalFrames,
+      elapsedMs: input.progress.elapsedMs,
+    };
   }
 
   /**
@@ -353,85 +156,6 @@ export class ExportService implements vscode.Disposable {
   }
 
   // =========================================================================
-  // Progress Polling
-  // =========================================================================
-
-  private startPolling(): void {
-    this.stopPolling();
-
-    this._pollingTimer = setInterval(async () => {
-      if (this._disposed) {
-        this.stopPolling();
-        return;
-      }
-      if (this._activeJobs.size === 0) {
-        this.stopPolling();
-        return;
-      }
-
-      // Poll all active jobs in parallel
-      const jobIds = [...this._activeJobs.keys()];
-      await Promise.allSettled(jobIds.map((jobId) => this.pollJob(jobId)));
-    }, PROGRESS_POLL_INTERVAL_MS);
-  }
-
-  private async pollJob(jobId: string): Promise<void> {
-    try {
-      const response = await this.dispatch({
-        group: 'timelines',
-        action: 'export_progress',
-        id: jobId,
-      });
-
-      const progress = this.parseProgress(response.data as Record<string, unknown> | undefined);
-      if (!progress) return;
-
-      this._onDidProgress.fire(progress);
-
-      // Handle terminal state
-      if (TERMINAL_STATES.has(progress.state)) {
-        // Read outputPath from job config before deleting
-        const completedJob = this._activeJobs.get(jobId);
-        this._activeJobs.delete(jobId);
-        this._onDidQueueChange.fire(this.buildQueueStatus());
-
-        if (progress.state === 'completed') {
-          await this.stageExportOutput(completedJob?.config.outputPath);
-          this._onDidComplete.fire({
-            success: true,
-            outputPath: completedJob?.config?.outputPath,
-            totalFrames: progress.totalFrames,
-            elapsedMs: progress.elapsedMs,
-          });
-        } else if (progress.state === 'cancelled') {
-          this._onDidCancel.fire();
-        } else if (progress.state === 'error') {
-          this._onDidError.fire(progress.error ?? 'Export failed');
-        }
-
-        logger.info(`Export ${progress.state}: jobId=${jobId}`);
-
-        if (this._activeJobs.size === 0) {
-          this.stopPolling();
-        }
-      }
-    } catch (error) {
-      logger.warn(`Progress poll error for jobId=${jobId}:`, error);
-    }
-  }
-
-  private stopPolling(): void {
-    if (this._pollingTimer) {
-      clearInterval(this._pollingTimer);
-      this._pollingTimer = null;
-    }
-  }
-
-  private buildQueueStatus(): ExportQueueStatus {
-    return { active: this._activeJobs.size, pending: 0 };
-  }
-
-  // =========================================================================
   // Config Building
   // =========================================================================
 
@@ -439,7 +163,6 @@ export class ExportService implements vscode.Disposable {
    * Build ExportJobConfig for Rust timelines:export_enqueue action
    */
   private async buildExportJobConfig(
-    jobId: string,
     project: ProjectData,
     config: ExportConfig,
     duration: number,
@@ -457,7 +180,6 @@ export class ExportService implements vscode.Disposable {
     const timeline = await this.buildTimeline(project, duration, config);
 
     return {
-      jobId,
       outputPath: config.outputPath,
       settings: {
         width: config.width,
@@ -970,8 +692,7 @@ export class ExportService implements vscode.Disposable {
     return result.localPath;
   }
 
-  private async stageExportOutput(outputPath: string | undefined): Promise<void> {
-    if (!outputPath) return;
+  private async stageExportOutput(outputPath: string): Promise<void> {
     const contentIngest =
       this.options.contentIngest ?? createExportContentIngestService(this.documentDir);
     const result = await contentIngest.ingest({
@@ -985,39 +706,29 @@ export class ExportService implements vscode.Disposable {
       caller: 'neko-cut.export',
     });
     if (result.status !== 'ready') {
-      logger.warn('Failed to stage export output', { outputPath, status: result.status });
+      throw new Error(
+        result.error ?? `Failed to commit export output ${outputPath}: ${result.status}.`,
+      );
     }
   }
 
-  /**
-   * Parse progress response data into ExportProgress
-   */
-  private parseProgress(data: Record<string, unknown> | undefined): ExportProgress | null {
-    if (!data) return null;
-
-    const statsRaw = data.stats as Record<string, unknown> | undefined;
-
+  private parseProgress(data: unknown, expectedEngineJobId: string): ExportEngineProgress {
+    if (!isRecord(data)) {
+      throw new Error(`Engine returned invalid progress for Export Job ${expectedEngineJobId}.`);
+    }
+    const engineJobId = requireString(data, 'jobId');
+    const state = requireExportEngineState(data['state']);
+    const statsRaw = data['stats'];
     return {
-      jobId: (data.jobId as string) ?? '',
-      state: (data.state as string) ?? 'pending',
-      progress: (data.progress as number) ?? 0,
-      currentFrame: (data.currentFrame as number) ?? 0,
-      totalFrames: (data.totalFrames as number) ?? 0,
-      elapsedMs: (data.elapsedMs as number) ?? 0,
-      estimatedRemainingMs: (data.estimatedRemainingMs as number) ?? 0,
-      error: data.error as string | undefined,
-      stats: statsRaw
-        ? {
-            avgFps: (statsRaw.avgFps as number) ?? 0,
-            cpuUsagePercent: (statsRaw.cpuUsagePercent as number) ?? 0,
-            gpuUsagePercent: statsRaw.gpuUsagePercent as number | undefined,
-            hwDecodeMs: (statsRaw.hwDecodeMs as number) ?? 0,
-            compositeMs: (statsRaw.compositeMs as number) ?? 0,
-            encodeSubmitMs: (statsRaw.encodeSubmitMs as number) ?? 0,
-            peakMemoryBytes: (statsRaw.peakMemoryBytes as number) ?? 0,
-            vramUsageBytes: statsRaw.vramUsageBytes as number | undefined,
-          }
-        : undefined,
+      engineJobId,
+      state,
+      progress: requireNumber(data, 'progress'),
+      currentFrame: requireNumber(data, 'currentFrame'),
+      totalFrames: requireNumber(data, 'totalFrames'),
+      elapsedMs: requireNumber(data, 'elapsedMs'),
+      estimatedRemainingMs: requireNumber(data, 'estimatedRemainingMs'),
+      ...(typeof data['error'] === 'string' ? { error: data['error'] } : {}),
+      ...(isRecord(statsRaw) ? { stats: { avgFps: requireNumber(statsRaw, 'avgFps') } } : {}),
     };
   }
 
@@ -1034,32 +745,39 @@ export class ExportService implements vscode.Disposable {
 
     return response;
   }
+}
 
-  // =========================================================================
-  // Disposal
-  // =========================================================================
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
-  dispose(): void {
-    if (this._disposed) return;
-    this._disposed = true;
+function requireString(value: Record<string, unknown>, field: string): string {
+  const result = value[field];
+  if (typeof result !== 'string' || !result.trim()) {
+    throw new Error(`Engine export progress field ${field} must be a non-empty string.`);
+  }
+  return result;
+}
 
-    this.stopPolling();
+function requireNumber(value: Record<string, unknown>, field: string): number {
+  const result = value[field];
+  if (typeof result !== 'number' || !Number.isFinite(result)) {
+    throw new Error(`Engine export progress field ${field} must be a finite number.`);
+  }
+  return result;
+}
 
-    // Fire-and-forget cancel for all active jobs
-    for (const jobId of this._activeJobs.keys()) {
-      this.dispatch({
-        group: 'timelines',
-        action: 'export_cancel',
-        id: jobId,
-      }).catch(() => {});
-    }
-    this._activeJobs.clear();
-
-    this._onDidProgress.dispose();
-    this._onDidComplete.dispose();
-    this._onDidError.dispose();
-    this._onDidCancel.dispose();
-    this._onDidQueueChange.dispose();
+function requireExportEngineState(value: unknown): ExportEngineProgress['state'] {
+  switch (value) {
+    case 'pending':
+    case 'queued':
+    case 'running':
+    case 'completed':
+    case 'cancelled':
+    case 'error':
+      return value;
+    default:
+      throw new Error(`Engine export progress state is invalid: ${String(value)}.`);
   }
 }
 

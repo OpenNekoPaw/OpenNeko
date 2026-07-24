@@ -156,7 +156,7 @@ export function registerCommands(
     }),
   );
 
-  // Command: Export Video (non-Webview, uses ExportService directly)
+  // Command: Export Video (non-Webview, uses the provider-owned ExportJob path)
   context.subscriptions.push(
     vscode.commands.registerCommand('neko.exportVideo', async () => {
       await exportVideoCommand(videoEditorProvider);
@@ -400,7 +400,7 @@ function dataUrlToBytes(data: string): Uint8Array {
 }
 
 /**
- * Export video using ExportService (non-Webview path)
+ * Export video through the provider-owned ExportJob path (non-Webview path)
  *
  * Shows a save dialog, reads project data from the active document,
  * and runs the export with a VSCode progress notification.
@@ -415,18 +415,9 @@ async function exportVideoCommand(editorProvider: VideoEditorProvider): Promise<
     return;
   }
 
-  const exportService = editorProvider.getExportService(docUri);
-  if (!exportService) {
+  if (!editorProvider.getExportServiceForDocument(docUri)) {
     void handleError(new Error('Export service not available for this document.'), {
       showToUser: true,
-    });
-    return;
-  }
-
-  if (exportService.isExporting()) {
-    void handleError(new Error('An export is already in progress.'), {
-      showToUser: true,
-      severity: 'warning',
     });
     return;
   }
@@ -482,65 +473,41 @@ async function exportVideoCommand(editorProvider: VideoEditorProvider): Promise<
       cancellable: true,
     },
     async (progress, token) => {
-      return new Promise<void>((resolve) => {
-        const disposables: vscode.Disposable[] = [];
-
-        // Subscribe to events
-        disposables.push(
-          exportService.onDidProgress((p) => {
-            progress.report({
-              message: `${p.progress}% — Frame ${p.currentFrame}/${p.totalFrames}`,
-              increment: undefined,
-            });
-          }),
-        );
-
-        disposables.push(
-          exportService.onDidComplete((result) => {
-            cleanup();
-            if (result.success) {
-              vscode.window.showInformationMessage(
-                `Export completed: ${path.basename(saveUri.fsPath)}`,
-              );
-            }
-            resolve();
-          }),
-        );
-
-        disposables.push(
-          exportService.onDidError((error) => {
-            cleanup();
-            handleError(error, { showToUser: true, severity: 'error' });
-            resolve();
-          }),
-        );
-
-        disposables.push(
-          exportService.onDidCancel(() => {
-            cleanup();
-            vscode.window.showInformationMessage('Export cancelled.');
-            resolve();
-          }),
-        );
-
-        // Handle cancellation from progress notification
-        token.onCancellationRequested(() => {
-          exportService.cancelExport().catch(() => {});
-        });
-
-        function cleanup() {
-          for (const d of disposables) {
-            d.dispose();
+      let latest = await editorProvider.submitExport(docUri, project, config);
+      const cancellation = token.onCancellationRequested(() => {
+        void editorProvider
+          .cancelExport({
+            ref: latest.ref,
+            expectedRevision: latest.revision,
+          })
+          .catch((error) => {
+            void handleError(error, { showToUser: true, severity: 'error' });
+          });
+      });
+      try {
+        for await (const snapshot of editorProvider.observeExport(latest.ref, latest.revision)) {
+          latest = snapshot;
+          progress.report({
+            message: `${snapshot.progress.percent}% - Frame ${snapshot.progress.currentFrame}/${snapshot.progress.totalFrames}`,
+          });
+          if (snapshot.phase === 'succeeded') {
+            await vscode.window.showInformationMessage(
+              `Export completed: ${path.basename(saveUri.fsPath)}`,
+            );
+            return;
+          }
+          if (snapshot.phase === 'cancelled') {
+            await vscode.window.showInformationMessage('Export cancelled.');
+            return;
+          }
+          if (snapshot.phase === 'failed' || snapshot.phase === 'outcome-unknown') {
+            throw new Error(snapshot.failure?.message ?? `Export ended in ${snapshot.phase}.`);
           }
         }
-
-        // Start the export
-        exportService.startExport(project, config).catch((error) => {
-          cleanup();
-          handleError(error, { showToUser: true, severity: 'error' });
-          resolve();
-        });
-      });
+        throw new Error(`Export Job ${latest.ref.jobId} observation ended before completion.`);
+      } finally {
+        cancellation.dispose();
+      }
     },
   );
 }

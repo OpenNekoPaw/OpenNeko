@@ -114,7 +114,11 @@ describe('createNodePerceptionAssetLoader', () => {
         contentDigest: 'sha256:indexed',
         mediaKind: 'image',
         mimeType: 'image/png',
-        generation: { taskId: 'task-1', providerId: 'openai', modelId: 'gpt-image-1' },
+        generation: {
+          operationId: 'operation-asset-1',
+          providerId: 'openai',
+          modelId: 'gpt-image-1',
+        },
       }),
       mimeType: 'image/png',
       generatedAt: new Date('2026-01-01T00:00:00.000Z').toISOString(),

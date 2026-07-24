@@ -297,7 +297,7 @@ function resolveSceneAwareShotState(
   if (!shotState || !sceneVideoPromptDocument || shotState.promptBlocks?.videoPromptDocument) {
     return fallback;
   }
-  if (fallback.taskRef || fallback.resultRef || fallback.target === 'result-review') {
+  if (fallback.resultRef || fallback.target === 'result-review') {
     return fallback;
   }
   return resolveCanvasStoryboardNextCreativeState({

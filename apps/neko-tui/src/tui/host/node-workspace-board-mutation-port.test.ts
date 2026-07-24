@@ -161,7 +161,7 @@ function generatedImage(root: string): GeneratedImage {
       contentDigest: 'sha256:generated-1',
       mediaKind: 'image',
       mimeType: 'image/png',
-      generation: { taskId: 'task-1' },
+      generation: { operationId: 'operation-generated-1' },
     }),
     width: 1024,
     height: 1024,

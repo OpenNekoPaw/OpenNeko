@@ -19,21 +19,16 @@ describe('timeline presentation', () => {
     const zh = createTestAgentTerminalPresentation('zh-cn');
 
     expect(presentTimelineProcessLabel(row({ kind: 'tool' }), zh)).toBe('工具');
-    expect(presentTimelineProcessLabel(row({ kind: 'task' }), zh)).toBe('任务');
-    expect(presentTimelineProcessLabel(row({ kind: 'media' }), zh)).toBe('媒体任务');
   });
 
   it('preserves external names, identifiers, and failure details across locales', () => {
     const en = createTestAgentTerminalPresentation('en');
     const zh = createTestAgentTerminalPresentation('zh-cn');
     const tool = row({ kind: 'tool', toolName: 'VendorSearch' });
-    const task = row({ kind: 'task', taskId: 'task-stable-1' });
     const failure = row({ kind: 'error', content: 'Provider detail: quota_exceeded' });
 
     expect(presentTimelineProcessLabel(tool, en)).toBe('VendorSearch');
     expect(presentTimelineProcessLabel(tool, zh)).toBe('VendorSearch');
-    expect(presentTimelineProcessLabel(task, en)).toBe('task-stable-1');
-    expect(presentTimelineProcessLabel(task, zh)).toBe('task-stable-1');
     expect(presentTimelineFailure(failure, en)).toBe('Provider detail: quota_exceeded');
     expect(presentTimelineFailure(failure, zh)).toBe('Provider detail: quota_exceeded');
   });

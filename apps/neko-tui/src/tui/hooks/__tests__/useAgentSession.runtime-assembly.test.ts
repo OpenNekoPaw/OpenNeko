@@ -89,6 +89,7 @@ beforeEach(async () => {
     await emit(input.events, {
       type: 'assistant.text.delta',
       delta: 'Pi response',
+      sourceIndex: 0,
       identity,
       timestamp: 2,
     });
@@ -179,6 +180,64 @@ describe('useAgentSession Pi runtime assembly', () => {
     );
   });
 
+  it('augments the Pi base prompt with workspace AGENTS.md through the Builder path', async () => {
+    await fs.mkdir(path.join(tempRoot, '.neko'), { recursive: true });
+    await fs.writeFile(
+      path.join(tempRoot, '.neko', 'AGENTS.md'),
+      '# Fixture guidance\n\nENVIRONMENT_LAYER_OBSERVED',
+      'utf8',
+    );
+    let handle: AgentSessionHandle | undefined;
+    renderProbe(validConfig(), (session) => {
+      handle = session;
+    });
+
+    await waitFor(() => handle?.isReady === true);
+
+    expect(piMocks.open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseSystemPrompt: expect.stringContaining('ENVIRONMENT_LAYER_OBSERVED'),
+      }),
+    );
+    await handle!.submit('Check environment guidance.');
+    expect(handle!.getPromptCompositionProjection()).toEqual([
+      expect.objectContaining({ id: 'base', source: 'base', order: 0 }),
+      expect.objectContaining({
+        id: 'agents-md:override',
+        source: 'agents-md',
+        order: 1,
+      }),
+    ]);
+  });
+
+  it('reports base and explicit Skill facts from the actual Pi turn inputs', async () => {
+    piMocks.executeSkill.mockResolvedValue(undefined);
+    let handle: AgentSessionHandle | undefined;
+    renderProbe(validConfig(), (session) => {
+      handle = session;
+    });
+    await waitFor(() => handle?.isReady === true);
+
+    await expect(handle!.executeSkill('storyboard', 'Create one shot.')).resolves.toBe(true);
+
+    expect(piMocks.executeSkill).toHaveBeenCalledOnce();
+    expect(handle!.getPromptCompositionProjection()).toEqual([
+      expect.objectContaining({
+        id: 'base',
+        source: 'base',
+        order: 0,
+        hash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      }),
+      expect.objectContaining({
+        id: 'skill:storyboard',
+        source: 'skill.injection',
+        order: 1,
+        version: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        hash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      }),
+    ]);
+  });
+
   it('routes the real hook submit path through Pi and projects product events into TUI stores', async () => {
     let handle: AgentSessionHandle | undefined;
     renderProbe(validConfig(), (session) => {
@@ -206,6 +265,75 @@ describe('useAgentSession Pi runtime assembly', () => {
       input: 4,
       output: 2,
       total: 6,
+    });
+  });
+
+  it('preserves cancellation requested while the immutable turn snapshot is preparing', async () => {
+    let handle: AgentSessionHandle | undefined;
+    renderProbe(validConfig(), (session) => {
+      handle = session;
+    });
+    await waitFor(() => handle?.isReady === true);
+
+    const credentialReadStarted = deferred<void>();
+    const releaseCredentialRead = deferred<void>();
+    const originalCredentialRead = runtime!.application.credentials.read.bind(
+      runtime!.application.credentials,
+    );
+    vi.spyOn(runtime!.application.credentials, 'read').mockImplementationOnce(
+      async (providerId) => {
+        credentialReadStarted.resolve();
+        await releaseCredentialRead.promise;
+        return originalCredentialRead(providerId);
+      },
+    );
+
+    const releaseExecution = deferred<void>();
+    let cancelled = false;
+    piMocks.cancel.mockImplementation(() => {
+      cancelled = true;
+      releaseExecution.resolve();
+    });
+    piMocks.execute.mockImplementation(async (input: PiExecuteInput) => {
+      piMocks.busy = true;
+      const runtimeIdentity = createIdentity(input);
+      await emit(input.events, {
+        type: 'turn.started',
+        identity: runtimeIdentity,
+        timestamp: 1,
+      });
+      await releaseExecution.promise;
+      expect(cancelled).toBe(true);
+      await emit(input.events, {
+        type: 'turn.cancelled',
+        identity: runtimeIdentity,
+        reason: 'cancelled during preparation',
+        timestamp: 2,
+      });
+      piMocks.busy = false;
+    });
+
+    const submission = handle!.submit('Cancel during turn preparation');
+    await credentialReadStarted.promise;
+    expect(handle!.getPiRuntimeEvidence()?.lastTurn).toBeUndefined();
+
+    handle!.cancel();
+    expect(piMocks.cancel).not.toHaveBeenCalled();
+    releaseCredentialRead.resolve();
+    await submission;
+
+    expect(piMocks.cancel).toHaveBeenCalledOnce();
+    expect(piMocks.cancel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        turnId: expect.stringMatching(/^turn-/),
+        runId: expect.stringMatching(/^run-/),
+      }),
+    );
+    expect(handle!.getTimelineProjectionEvidence()).toMatchObject({
+      completionStatus: 'cancelled',
+      terminalProjectionVersion: 1,
+      projectionVersion: 1,
+      acceptedPostTerminalPatchCount: 0,
     });
   });
 
@@ -486,6 +614,14 @@ function createIdentity(input: PiExecuteInput) {
 
 async function emit(sink: PiProductEventSink, event: PiProductAgentEvent): Promise<void> {
   await sink.emit(event);
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
 }
 
 function validConfig(): CLIConfig {

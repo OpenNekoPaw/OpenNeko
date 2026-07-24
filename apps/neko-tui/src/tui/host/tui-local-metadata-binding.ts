@@ -1,15 +1,9 @@
 import {
-  SqliteTaskRecoveryStorage,
-  SqliteTaskStorage,
-} from '@neko/agent';
-import {
   LocalMetadataResourceCacheManifestStore,
   createLocalMetadataRevisionCursor,
   resolveGlobalStorageLayout,
   resolveStorageLayout,
   type CatalogProjectionRepository,
-  type ITaskRecoveryStorage,
-  type ITaskStorage,
   type LocalMetadataRevisionCursorPollResult,
   type EntityAssetProjectionRepository,
   type LocalMetadataPartition,
@@ -47,8 +41,6 @@ export interface TuiLocalMetadataBinding {
   readonly persistenceBackend: TuiConversationPersistenceBackend;
   readonly workspaceId: string;
   readonly metadataStore: LocalMetadataStore;
-  readonly taskStorage: ITaskStorage;
-  readonly taskRecoveryStorage: ITaskRecoveryStorage;
   readonly resourceCacheManifestStore: ResourceCacheManifestStore;
   readonly resourceCacheMigrationReport: ResourceCacheManifestMigrationReport;
   readonly proxyMigrationReport: ProxyManifestMigrationReport;
@@ -109,7 +101,7 @@ export async function createTuiLocalMetadataBinding(options: {
     const revisionCursor = createLocalMetadataRevisionCursor({
       store: metadataStore,
       workspaceId,
-      domains: ['tasks', 'catalog', 'entity-asset-projection'],
+      domains: ['catalog', 'entity-asset-projection'],
     });
     await revisionCursor.initialize();
     const resourceCacheManifestStore = new LocalMetadataResourceCacheManifestStore({
@@ -170,14 +162,6 @@ export async function createTuiLocalMetadataBinding(options: {
       },
       workspaceId,
       metadataStore,
-      taskStorage: new SqliteTaskStorage({
-        workspaceId,
-        metadataStore,
-      }),
-      taskRecoveryStorage: new SqliteTaskRecoveryStorage({
-        workspaceId,
-        metadataStore,
-      }),
       resourceCacheManifestStore,
       resourceCacheMigrationReport,
       proxyMigrationReport,

@@ -12,11 +12,9 @@ import type {
   ExecutionMode,
   MessageQueueState,
   SessionMode,
-  TaskStatusState,
   TokenUsage,
   IterationProgress,
 } from '../types/state';
-import type { Task } from '@neko/shared';
 import type { PiTurnDurabilityState } from '@neko/agent/pi';
 
 export interface TuiTurnPersistenceState {
@@ -36,7 +34,6 @@ export interface AgentSlice {
   readonly startTime: number | null;
   readonly error: Error | null;
   readonly messageQueue: MessageQueueState;
-  readonly tasks: TaskStatusState;
   readonly turnPersistence: TuiTurnPersistenceState | null;
 
   // Actions
@@ -50,7 +47,6 @@ export interface AgentSlice {
   setMessageQueueSnapshot: (snapshot: MessageQueueState['snapshot']) => void;
   setMessageQueueDiagnostic: (diagnostic: string | null) => void;
   setMessageQueuePausedAfterCancel: (paused: boolean) => void;
-  setRunningTasks: (tasks: readonly Task[]) => void;
   setSessionMode: (mode: SessionMode) => void;
   setExecutionMode: (mode: ExecutionMode) => void;
   setTurnPersistence: (persistence: TuiTurnPersistenceState) => void;
@@ -71,9 +67,6 @@ const initialState = {
     diagnostic: null,
     pausedAfterCancel: false,
   } as MessageQueueState,
-  tasks: {
-    running: [],
-  } as TaskStatusState,
   turnPersistence: null as TuiTurnPersistenceState | null,
 };
 
@@ -166,14 +159,6 @@ function createAgentState(assertMutable: () => void): StateCreator<AgentSlice> {
             pausedAfterCancel,
           },
         }));
-      },
-
-      setRunningTasks: (tasks) => {
-        update({
-          tasks: {
-            running: [...tasks],
-          },
-        });
       },
 
       setSessionMode: (mode) => {

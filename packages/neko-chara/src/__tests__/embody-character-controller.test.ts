@@ -120,8 +120,10 @@ function createHarness(
   const updateTabState = vi.fn((openTabs: OpenTab[], activeTabId: string | null) => {
     tabState = { openTabs, activeTabId };
   });
+  const projection = { apply: vi.fn() };
   const controller = new EmbodyCharacterController({
     getWebview: () => webview as never,
+    getConversationProjection: () => projection,
     getProjectRoot: () => '/workspace/project-a',
     createAssembler: vi.fn(() => assembler),
     createEvidenceReader: vi.fn(() => evidenceReader),
@@ -141,6 +143,7 @@ function createHarness(
     controller,
     evidenceReader,
     evidenceLoader,
+    projection,
     responder,
     tabState: () => tabState,
     updateTabState,
@@ -194,8 +197,8 @@ describe('EmbodyCharacterController', () => {
     );
   });
 
-  it('routes user messages through the feedback responder without ordinary Agent tools', async () => {
-    const { controller, responder, webview } = createHarness();
+  it('routes user messages through the feedback responder and canonical projection', async () => {
+    const { controller, projection, responder, webview } = createHarness();
     await controller.launch(request);
 
     await controller.routeUserMessage('embody-session-1', '记录今天的日记');
@@ -219,12 +222,34 @@ describe('EmbodyCharacterController', () => {
         }),
       }),
     );
-    expect(webview.postMessage).toHaveBeenCalledWith(
+    expect(projection.apply).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'streamText',
+        type: 'agentTurnTimelineUpdate',
         conversationId: 'embody-session-1',
-        content: 'Feedback:记录今天的日记',
+        turnId: 'embody-session-1:turn:1',
+        runId: 'embody-session-1:turn:1:run',
+        messageId: 'embody-character-msg-embody-session-1-1-evaluator',
+        operations: [
+          {
+            operation: 'snapshot',
+            item: expect.objectContaining({
+              kind: 'assistant_text',
+              status: 'complete',
+              payload: expect.objectContaining({ content: 'Feedback:记录今天的日记' }),
+            }),
+          },
+        ],
+        completion: {
+          status: 'completed',
+          completedAt: Date.parse('2026-06-02T00:00:00.000Z'),
+        },
       }),
+    );
+    expect(webview.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'streamText' }),
+    );
+    expect(webview.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'streamComplete' }),
     );
   });
 
@@ -321,7 +346,7 @@ describe('EmbodyCharacterController', () => {
       content: `${systemPrompt}\nrelationships=${evidenceSnapshot.relationships.length}`,
       classifications: ['unknown' as const],
     }));
-    const { controller, webview } = createHarness({
+    const { controller, projection } = createHarness({
       createAssembler: vi.fn(() => ({
         assembleProfile: vi.fn(async () => ({
           status: 'assembled' as const,
@@ -363,10 +388,18 @@ describe('EmbodyCharacterController', () => {
         }),
       }),
     );
-    expect(webview.postMessage).toHaveBeenCalledWith(
+    expect(projection.apply).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'streamText',
-        content: expect.stringContaining('relationships=0'),
+        operations: [
+          {
+            operation: 'snapshot',
+            item: expect.objectContaining({
+              payload: expect.objectContaining({
+                content: expect.stringContaining('relationships=0'),
+              }),
+            }),
+          },
+        ],
       }),
     );
   });

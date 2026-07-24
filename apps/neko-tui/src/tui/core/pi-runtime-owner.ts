@@ -10,7 +10,8 @@ import {
   createOpenNekoPiModels,
   projectOpenNekoTools,
   registerOpenNekoPiProvider,
-  resolveOpenNekoToolModelPurpose,
+  resolveOpenNekoToolCallModelPurpose,
+  resolveOpenNekoToolModelPurposes,
   resolveAgentModelPolicy,
   type AgentModelBindingMap,
   type AgentModelCatalogEntry,
@@ -28,6 +29,7 @@ import {
   type SkillHostRecord,
   type SkillSourceRoot,
 } from '@neko/agent/pi';
+import type { PromptCompositionFragmentProjection } from '@neko/agent';
 
 import type { CLIConfig, TuiPurposeModelConfig, TuiToolModelPurpose } from './types';
 
@@ -40,6 +42,7 @@ export interface TuiPiRuntimeOwnerOptions {
   readonly getConfig: () => CLIConfig;
   readonly getTools: () => readonly Tool[];
   readonly getSystemPrompt: () => string;
+  readonly getPromptComposition: () => readonly PromptCompositionFragmentProjection[];
   readonly permissionPolicy: PiToolPermissionPolicy;
   readonly workspaceTrusted: boolean;
   readonly locale: 'en' | 'zh';
@@ -109,12 +112,14 @@ export class TuiPiRuntimeOwner {
   private branchId = 'main';
   private activeIdentity: Pick<PiToolRunIdentity, 'turnId' | 'runId'> | undefined;
   private activeOperation: Promise<void> | undefined;
+  private pendingCancellation = false;
   private skillSnapshot: PiSkillHostSnapshot | undefined;
   private disposeOperation: Promise<void> | undefined;
   private disposed = false;
   private titleInitialized = false;
   private restored = false;
   private runtimeEvidence: TuiPiRuntimeEvidence | undefined;
+  private promptComposition: readonly PromptCompositionFragmentProjection[] = [];
   private readonly models;
   private readonly skillHost;
 
@@ -130,7 +135,7 @@ export class TuiPiRuntimeOwner {
   }
 
   get isRunning(): boolean {
-    return this.runtime?.isBusy ?? false;
+    return this.activeIdentity !== undefined;
   }
 
   get messages(): readonly unknown[] {
@@ -147,6 +152,10 @@ export class TuiPiRuntimeOwner {
 
   getRuntimeEvidence(): TuiPiRuntimeEvidence | null {
     return this.runtimeEvidence === undefined ? null : structuredClone(this.runtimeEvidence);
+  }
+
+  getPromptCompositionProjection(): readonly PromptCompositionFragmentProjection[] {
+    return structuredClone(this.promptComposition);
   }
 
   async listConversations(): Promise<readonly TuiPiConversationSummary[]> {
@@ -244,69 +253,83 @@ export class TuiPiRuntimeOwner {
 
   async execute(input: ExecuteTuiPiTurnInput): Promise<void> {
     const runtime = this.requireRuntime();
-    const snapshot = await this.createTurnSnapshot(input.metadata);
     const identity = createTurnIdentity();
-    this.recordTurnEvidence(identity, snapshot.modelPolicy, snapshot.skills, snapshot.tools);
-    if (!this.titleInitialized) {
-      runtime.updateConversationTitle(conversationTitle(input.prompt));
-      this.titleInitialized = true;
-    }
-    this.activeIdentity = identity;
-    const operation = runtime.execute({
-      ...identity,
-      prompt: input.prompt,
-      modelPolicy: snapshot.modelPolicy,
-      skillSnapshot: snapshot.skills,
-      capabilityTools: snapshot.tools,
-      permissionPolicy: this.options.permissionPolicy,
-      workspaceTrusted: this.options.workspaceTrusted,
-      events: input.events,
-      systemPrompt: this.options.getSystemPrompt(),
-    });
-    this.activeOperation = operation;
+    this.reserveTurn(identity);
     try {
+      const snapshot = await this.createTurnSnapshot(input.metadata);
+      this.promptComposition = projectPromptComposition(
+        this.options.getPromptComposition(),
+        snapshot.skills,
+      );
+      this.recordTurnEvidence(identity, snapshot.modelPolicy, snapshot.skills, snapshot.tools);
+      if (!this.titleInitialized) {
+        runtime.updateConversationTitle(conversationTitle(input.prompt));
+        this.titleInitialized = true;
+      }
+      const operation = runtime.execute({
+        ...identity,
+        prompt: input.prompt,
+        modelPolicy: snapshot.modelPolicy,
+        skillSnapshot: snapshot.skills,
+        capabilityTools: snapshot.tools,
+        permissionPolicy: this.options.permissionPolicy,
+        workspaceTrusted: this.options.workspaceTrusted,
+        events: input.events,
+        systemPrompt: this.options.getSystemPrompt(),
+      });
+      this.activeOperation = operation;
+      this.applyPendingCancellation(runtime, identity);
       await operation;
     } finally {
       this.refreshTurnDurability(identity.turnId);
-      this.activeIdentity = undefined;
-      if (this.activeOperation === operation) this.activeOperation = undefined;
+      this.releaseTurn(identity);
     }
   }
 
   async executeSkill(input: ExecuteTuiPiSkillInput): Promise<void> {
     const runtime = this.requireRuntime();
-    const snapshot = await this.createTurnSnapshot(input.metadata);
     const identity = createTurnIdentity();
-    this.recordTurnEvidence(identity, snapshot.modelPolicy, snapshot.skills, snapshot.tools);
-    this.activeIdentity = identity;
-    const operation = runtime.executeSkill({
-      ...identity,
-      skillName: input.skillName,
-      ...(input.additionalInstructions === undefined
-        ? {}
-        : { additionalInstructions: input.additionalInstructions }),
-      modelPolicy: snapshot.modelPolicy,
-      skillSnapshot: snapshot.skills,
-      capabilityTools: snapshot.tools,
-      permissionPolicy: this.options.permissionPolicy,
-      workspaceTrusted: this.options.workspaceTrusted,
-      events: input.events,
-      systemPrompt: this.options.getSystemPrompt(),
-    });
-    this.activeOperation = operation;
+    this.reserveTurn(identity);
     try {
+      const snapshot = await this.createTurnSnapshot(input.metadata);
+      this.promptComposition = projectPromptComposition(
+        this.options.getPromptComposition(),
+        snapshot.skills,
+        input.skillName,
+      );
+      this.recordTurnEvidence(identity, snapshot.modelPolicy, snapshot.skills, snapshot.tools);
+      const operation = runtime.executeSkill({
+        ...identity,
+        skillName: input.skillName,
+        ...(input.additionalInstructions === undefined
+          ? {}
+          : { additionalInstructions: input.additionalInstructions }),
+        modelPolicy: snapshot.modelPolicy,
+        skillSnapshot: snapshot.skills,
+        capabilityTools: snapshot.tools,
+        permissionPolicy: this.options.permissionPolicy,
+        workspaceTrusted: this.options.workspaceTrusted,
+        events: input.events,
+        systemPrompt: this.options.getSystemPrompt(),
+      });
+      this.activeOperation = operation;
+      this.applyPendingCancellation(runtime, identity);
       await operation;
     } finally {
       this.refreshTurnDurability(identity.turnId);
-      this.activeIdentity = undefined;
-      if (this.activeOperation === operation) this.activeOperation = undefined;
+      this.releaseTurn(identity);
     }
   }
 
   cancel(): void {
     const identity = this.activeIdentity;
     if (identity === undefined) return;
-    this.requireRuntime().cancel(identity);
+    const runtime = this.requireRuntime();
+    if (runtime.isBusy) {
+      runtime.cancel(identity);
+      return;
+    }
+    this.pendingCancellation = true;
   }
 
   async clearContext(): Promise<void> {
@@ -353,7 +376,8 @@ export class TuiPiRuntimeOwner {
       skills,
       tools: projectOpenNekoTools(this.options.getTools(), {
         locale: this.options.locale,
-        purposeForTool: resolveOpenNekoToolModelPurpose,
+        purposesForTool: resolveOpenNekoToolModelPurposes,
+        purposeForToolCall: resolveOpenNekoToolCallModelPurpose,
         isPurposeOptionalForTool: (tool) => tool.name === TOOL_NAMES_QUALITY.QUALITY_CHECK,
         ...(metadata === undefined ? {} : { metadata }),
       }),
@@ -363,14 +387,9 @@ export class TuiPiRuntimeOwner {
   private async resolvePolicy(config: CLIConfig): Promise<AgentModelPolicy> {
     const activePurposes = this.options
       .getTools()
-      .map((tool) => resolveOpenNekoToolModelPurpose(tool))
+      .flatMap((tool) => resolveOpenNekoToolModelPurposes(tool))
       .filter((purpose): purpose is TuiToolModelPurpose => purpose !== undefined);
-    return resolveTuiPiModelPolicy(
-      this.models,
-      this.options.credentials,
-      config,
-      activePurposes,
-    );
+    return resolveTuiPiModelPolicy(this.models, this.options.credentials, config, activePurposes);
   }
 
   private async discoverSkills(config: CLIConfig): Promise<PiSkillHostSnapshot> {
@@ -474,6 +493,34 @@ export class TuiPiRuntimeOwner {
     });
   }
 
+  private reserveTurn(identity: Pick<PiToolRunIdentity, 'turnId' | 'runId'>): void {
+    if (this.activeIdentity !== undefined) {
+      throw new Error('TUI Pi runtime owner already has an active or preparing turn.');
+    }
+    this.activeIdentity = identity;
+    this.pendingCancellation = false;
+  }
+
+  private applyPendingCancellation(
+    runtime: PiConversationRuntime,
+    identity: Pick<PiToolRunIdentity, 'turnId' | 'runId'>,
+  ): void {
+    if (!this.pendingCancellation) return;
+    runtime.cancel(identity);
+  }
+
+  private releaseTurn(identity: Pick<PiToolRunIdentity, 'turnId' | 'runId'>): void {
+    if (
+      this.activeIdentity?.turnId !== identity.turnId ||
+      this.activeIdentity.runId !== identity.runId
+    ) {
+      throw new Error('TUI Pi runtime owner turn identity changed before release.');
+    }
+    this.activeIdentity = undefined;
+    this.activeOperation = undefined;
+    this.pendingCancellation = false;
+  }
+
   private requireRuntime(): PiConversationRuntime {
     this.assertNotDisposed();
     if (this.runtime === undefined) {
@@ -499,6 +546,28 @@ export class TuiPiRuntimeOwner {
     this.authority = undefined;
     this.disposed = true;
   }
+}
+
+function projectPromptComposition(
+  base: readonly PromptCompositionFragmentProjection[],
+  skills: PiSkillHostSnapshot,
+  explicitSkillName?: string,
+): readonly PromptCompositionFragmentProjection[] {
+  const fragments = base.map((fragment) => ({ ...fragment }));
+  if (explicitSkillName !== undefined) {
+    const skill = skills.records.find((record) => record.name === explicitSkillName);
+    if (skill === undefined) {
+      throw new Error(`Prompt composition cannot resolve Skill ${explicitSkillName}.`);
+    }
+    fragments.push({
+      id: `skill:${skill.name}`,
+      source: 'skill.injection',
+      order: fragments.length,
+      version: `sha256:${skill.fingerprint}`,
+      hash: `sha256:${skill.fingerprint}`,
+    });
+  }
+  return Object.freeze(fragments.map((fragment) => Object.freeze(fragment)));
 }
 
 const TUI_DOMAIN_MODEL_PURPOSES = new Set<TuiToolModelPurpose>([

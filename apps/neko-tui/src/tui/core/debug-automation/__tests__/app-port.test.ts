@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION } from '@neko/shared';
 import {
   createTuiAutomationAppPort as createProductionTuiAutomationAppPort,
-  projectTaskFacts,
   readContinuationFacts,
   readMessageSummaryContent,
   readMessageToolCallSummaries,
@@ -157,41 +156,13 @@ describe('readMessageToolCallSummaries', () => {
   });
 });
 
-describe('task result delivery idle projection', () => {
-  it('keeps the session non-idle while a terminal Task result is being delivered', async () => {
-    const port = createTuiAutomationAppPort({
-      stores: runtime.conversation.stores,
-      readHandle: () => ({
-        isReady: true,
-        submit: async () => undefined,
-        cancel: () => undefined,
-        listTasks: async () => [],
-        getCurrentConversationId: () => 'tui-2026-01-01T00-00-00-000Z-test',
-        getHistory: () => [],
-        getMessageQueueSnapshot: () => null,
-        getPendingTaskResultDeliveryCount: () => 1,
-        getConversationPersistenceSnapshot: memoryPersistenceSnapshot,
-      }),
-      readMarkdownFacts: () => ({ pathEvents: [], droppedPathEventCount: 0 }),
-    });
-
-    const facts = await port.readFacts({ sessionId: 'debug-session-1', includeHistory: false });
-
-    expect(facts.idle).toMatchObject({
-      fullyIdle: false,
-      mediaDeliveryIdle: { idle: false, status: 'delivering' },
-      taskResultObservationIdle: { idle: false, status: 'observing' },
-    });
-  });
-});
-
 describe('readContinuationFacts', () => {
   it('reports executed and queued continuations without user-message parsing', () => {
     runtime.conversation.stores.conversation.getState().addSystemMessage({
-      content: 'Task result ready task-1. Continuing from the completed async result.',
-      source: 'task-result-continuation',
-      displayKind: 'task-continuation',
-      metadata: { taskId: 'task-1', observationId: 'obs-1', status: 'running' },
+      content: 'System continuation is running.',
+      source: 'system-continuation',
+      displayKind: 'system-continuation',
+      metadata: { runId: 'run-1', status: 'running' },
     });
 
     const facts = readContinuationFacts(
@@ -215,9 +186,9 @@ describe('readContinuationFacts', () => {
     );
     expect(facts).toEqual([
       expect.objectContaining({
-        source: 'task-result-continuation',
-        displayKind: 'task-continuation',
-        metadata: expect.objectContaining({ taskId: 'task-1', observationId: 'obs-1' }),
+        source: 'system-continuation',
+        displayKind: 'system-continuation',
+        metadata: expect.objectContaining({ runId: 'run-1' }),
         status: 'running',
       }),
       expect.objectContaining({
@@ -233,94 +204,6 @@ describe('readContinuationFacts', () => {
   });
 });
 
-describe('projectTaskFacts', () => {
-  it('projects stable scope, provider/model, result observation, metrics, and diagnostics', () => {
-    const task = {
-      scope: {
-        conversationId: 'conversation-1',
-        runId: 'run-1',
-        runStartedAt: 1,
-        parentRunId: 'parent-1',
-        childRunId: 'task-child-1',
-        childKind: 'task' as const,
-      },
-      id: 'task-1',
-      type: 'image_generation' as const,
-      status: 'completed' as const,
-      input: {
-        type: 'image_generation' as const,
-        payload: { providerId: 'fal', modelId: 'flux-pro' },
-      },
-      output: {
-        data: { stableRef: 'asset-1' },
-        metrics: { startTime: 1, endTime: 4, duration: 3, retries: 1 },
-      },
-      progress: 100,
-      createdAt: 1,
-      updatedAt: 4,
-      retryCount: 1,
-    };
-    const [fact] = projectTaskFacts(
-      [task],
-      [
-        {
-          id: 'continuation-1',
-          conversationId: 'conversation-1',
-          source: 'task-result-continuation',
-          displayKind: 'task-continuation',
-          metadata: {
-            taskId: 'task-1',
-            observationId: 'observation-1',
-            status: 'completed',
-          },
-          status: 'completed',
-          timestamp: 5,
-          diagnostics: [],
-        },
-      ],
-    );
-    expect(fact).toMatchObject({
-      scope: task.scope,
-      id: 'task-1',
-      providerId: 'fal',
-      modelId: 'flux-pro',
-      retryCount: 1,
-      metrics: { duration: 3, retries: 1 },
-      resultObservation: { status: 'observed', observationIds: ['observation-1'] },
-      diagnostics: [],
-    });
-    expect(JSON.stringify(fact)).not.toContain('stableRef');
-  });
-
-  it('diagnoses a completed task with no output', () => {
-    const [fact] = projectTaskFacts(
-      [
-        {
-          scope: {
-            conversationId: 'conversation-1',
-            runId: 'run-1',
-            parentRunId: 'parent-1',
-            childRunId: 'task-child-1',
-            childKind: 'task',
-          },
-          id: 'task-1',
-          type: 'custom',
-          status: 'completed',
-          input: { type: 'custom', payload: {} },
-          progress: 100,
-          createdAt: 1,
-          updatedAt: 2,
-        },
-      ],
-      [],
-    );
-    expect(fact).toMatchObject({
-      resultObservation: { status: 'missing' },
-      diagnostics: [expect.objectContaining({ code: 'completed-task-output-missing' })],
-    });
-  });
-});
-
 describe('createTuiAutomationAppPort', () => {
   it('exposes a failed session initialization through the App owner port', () => {
     const initializationError = new Error('conversation storage initialization failed');
@@ -331,7 +214,6 @@ describe('createTuiAutomationAppPort', () => {
         isReady: false,
         submit: async () => undefined,
         cancel: () => undefined,
-        listTasks: async () => [],
         getCurrentConversationId: () => 'tui-2026-01-01T00-00-00-000Z-test',
         getHistory: () => [],
         getMessageQueueSnapshot: () => null,
@@ -357,7 +239,6 @@ describe('createTuiAutomationAppPort', () => {
         isReady: true,
         submit: rawSubmit,
         cancel: () => undefined,
-        listTasks: async () => [],
         getCurrentConversationId: () => 'tui-2026-01-01T00-00-00-000Z-test',
         getHistory: () => [],
         getMessageQueueSnapshot: () => null,
@@ -383,7 +264,6 @@ describe('createTuiAutomationAppPort', () => {
         isReady: true,
         submit: async () => undefined,
         cancel: () => undefined,
-        listTasks: async () => [],
         getCurrentConversationId: () => 'tui-2026-01-01T00-00-00-000Z-test',
         getHistory: () => [],
         getMessageQueueSnapshot: () => null,
@@ -412,7 +292,6 @@ describe('createTuiAutomationAppPort', () => {
         cancel: () => {
           cancelled = true;
         },
-        listTasks: async () => [],
         getCurrentConversationId: () => 'tui-2026-01-01T00-00-00-000Z-test',
         getHistory: () => [],
         getMessageQueueSnapshot: () => null,
@@ -429,30 +308,6 @@ describe('createTuiAutomationAppPort', () => {
     await accepted;
   });
 
-  it('fails the machine fact read visibly without injecting human transcript prose', async () => {
-    const port = createTuiAutomationAppPort({
-      stores: runtime.conversation.stores,
-      readHandle: () => ({
-        isReady: true,
-        submit: async () => undefined,
-        cancel: () => undefined,
-        listTasks: async () => {
-          throw new Error('TASK_PROVIDER_DETAIL');
-        },
-        getCurrentConversationId: () => 'tui-2026-01-01T00-00-00-000Z-test',
-        getHistory: () => [],
-        getMessageQueueSnapshot: () => null,
-        getConversationPersistenceSnapshot: memoryPersistenceSnapshot,
-      }),
-      readMarkdownFacts: () => ({ pathEvents: [], droppedPathEventCount: 0 }),
-    });
-
-    await expect(
-      port.readFacts({ sessionId: 'debug-session-1', includeHistory: false }),
-    ).rejects.toThrow('TASK_PROVIDER_DETAIL');
-    expect(runtime.conversation.stores.conversation.getState().messages).toEqual([]);
-  });
-
   it('exposes bounded Markdown facts and applies generic terminal resize through the UI store', async () => {
     const markdown = {
       pathEvents: [{ type: 'session-created' as const, key: 'assistant-1' }],
@@ -464,7 +319,6 @@ describe('createTuiAutomationAppPort', () => {
         isReady: true,
         submit: async () => undefined,
         cancel: () => undefined,
-        listTasks: async () => [],
         getCurrentConversationId: () => 'tui-2026-01-01T00-00-00-000Z-test',
         getHistory: () => [],
         getMessageQueueSnapshot: () => null,
@@ -499,7 +353,6 @@ describe('createTuiAutomationAppPort', () => {
         isReady: true,
         submit: async () => undefined,
         cancel: () => undefined,
-        listTasks: async () => [],
         getCurrentConversationId: () => 'conversation-1',
         getHistory: () => [],
         getMessageQueueSnapshot: () => null,
@@ -529,7 +382,6 @@ describe('createTuiAutomationAppPort', () => {
         isReady: true,
         submit: async () => undefined,
         cancel: () => undefined,
-        listTasks: async () => [],
         getCurrentConversationId: () => 'conversation-1',
         getHistory: () => [],
         getMessageQueueSnapshot: () => null,
@@ -596,7 +448,6 @@ describe('createTuiAutomationAppPort', () => {
         isReady: true,
         submit: async () => undefined,
         cancel: () => undefined,
-        listTasks: async () => [],
         getCurrentConversationId: () => 'conversation-1',
         getHistory: () => [],
         getMessageQueueSnapshot: () => null,
@@ -622,7 +473,6 @@ describe('createTuiAutomationAppPort', () => {
         isReady: true,
         submit: async () => undefined,
         cancel: () => undefined,
-        listTasks: async () => [],
         getCurrentConversationId: () => 'conversation-1',
         getHistory: () => [],
         getMessageQueueSnapshot: () => null,
@@ -764,77 +614,7 @@ describe('createTuiAutomationAppPort', () => {
     );
   });
 
-  it('collects revision-bound generated-output facts from completed media tasks', async () => {
-    const port = createTuiAutomationAppPort({
-      stores: runtime.conversation.stores,
-      readHandle: () => ({
-        isReady: true,
-        submit: async () => undefined,
-        cancel: () => undefined,
-        listTasks: async () => [
-          {
-            scope: {
-              conversationId: 'conversation-1',
-              runId: 'run-1',
-              parentRunId: 'run-1',
-              childRunId: 'task-1',
-              childKind: 'task' as const,
-            },
-            id: 'task-1',
-            type: 'image_generation' as const,
-            status: 'completed' as const,
-            input: { type: 'image_generation' as const, payload: {} },
-            output: {
-              data: {
-                assets: [
-                  {
-                    localPath: '/private/runtime/generated-1.png',
-                    resourceRef: {
-                      id: 'resource:generated-1:rev-1',
-                      scope: 'project' as const,
-                      provider: 'generated-asset',
-                      kind: 'generated' as const,
-                      source: {
-                        kind: 'generated-asset' as const,
-                        generatedAssetId: 'generated-1',
-                        metadata: { revision: 'rev-1', contentDigest: 'sha256:content' },
-                      },
-                      locator: { kind: 'generated-asset' as const, assetId: 'generated-1' },
-                      fingerprint: { strategy: 'hash' as const, value: 'sha256:content' },
-                    },
-                  },
-                ],
-              },
-            },
-            progress: 100,
-            createdAt: 1,
-            updatedAt: 2,
-          },
-        ],
-        getCurrentConversationId: () => 'conversation-1',
-        getHistory: () => [],
-        getMessageQueueSnapshot: () => null,
-        getConversationPersistenceSnapshot: memoryPersistenceSnapshot,
-      }),
-      readMarkdownFacts: () => ({ pathEvents: [], droppedPathEventCount: 0 }),
-    });
-
-    const facts = await port.readFacts({ sessionId: 'debug-session-1', includeHistory: false });
-
-    expect(facts.artifacts).toEqual([
-      expect.objectContaining({
-        ref: 'resource:generated-1:rev-1',
-        kind: 'generated-asset',
-        digest: 'sha256:content',
-        revision: 'rev-1',
-        provenance: expect.objectContaining({ taskId: 'task-1' }),
-        validator: { id: 'durable-resource-ref', status: 'valid' },
-      }),
-    ]);
-    expect(JSON.stringify(facts.artifacts)).not.toContain('/private/runtime');
-  });
-
-  it('bounds fact collections and projects usage, timing, retry, and dropped counts', async () => {
+  it('bounds fact collections and projects usage, timing, and dropped counts', async () => {
     runtime.conversation.stores.conversation
       .getState()
       .replaceMessages(
@@ -852,7 +632,6 @@ describe('createTuiAutomationAppPort', () => {
         isReady: true,
         submit: async () => undefined,
         cancel: () => undefined,
-        listTasks: async () => [],
         getCurrentConversationId: () => 'conversation-1',
         getHistory: () => Array.from({ length: 513 }, (_value, index) => ({ index })),
         getMessageQueueSnapshot: () => null,
@@ -870,7 +649,6 @@ describe('createTuiAutomationAppPort', () => {
       contextTokens: 321,
     });
     expect(facts.timing).toMatchObject({ firstTurnAt: 9, lastTurnAt: 520 });
-    expect(facts.retries).toEqual({ taskRetryCount: 0, tasksWithRetries: 0 });
     expect(facts.evidenceCompleteness).toMatchObject({
       turns: { limit: 512, droppedCount: 8 },
       history: { limit: 512, droppedCount: 1 },

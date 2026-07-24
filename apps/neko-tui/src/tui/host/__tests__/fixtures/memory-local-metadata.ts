@@ -1,4 +1,3 @@
-import { MemoryTaskRecoveryStorage, MemoryTaskStorage } from '@neko/agent';
 import type {
   CatalogItemRecord,
   CatalogProjectionRepository,
@@ -65,8 +64,6 @@ export async function createMemoryLocalMetadataBinding(
     },
     workspaceId,
     metadataStore,
-    taskStorage: new MemoryTaskStorage(),
-    taskRecoveryStorage: new MemoryTaskRecoveryStorage(),
     resourceCacheManifestStore,
     resourceCacheMigrationReport: {
       sourceStatus: 'absent',

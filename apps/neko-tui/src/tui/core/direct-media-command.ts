@@ -1,5 +1,9 @@
-import type { ChatModelOption, TaskRunScope } from '@neko/shared';
-import type { MediaTask, MediaTaskView } from '@neko/platform';
+import type { ChatModelOption } from '@neko/shared';
+import type {
+  GenerationJobRef,
+  GenerationJobSnapshot,
+  SubmitGenerationJobInput,
+} from '@neko/generation';
 import { buildTuiMediaModelMetadata } from './media-model-metadata';
 import type { TuiMediaCategory } from './types';
 
@@ -16,6 +20,7 @@ export interface DirectMediaCommandInput {
   readonly config: DirectMediaCommandConfig;
   readonly modelOptions: readonly ChatModelOption[];
   readonly model?: string;
+  readonly detached?: boolean;
 }
 
 export interface DirectMediaCommandConfig {
@@ -24,21 +29,63 @@ export interface DirectMediaCommandConfig {
 }
 
 export interface DirectMediaCommandRuntime {
-  readonly submit: (input: {
-    readonly kind: DirectMediaKind;
-    readonly prompt: string;
-    readonly model: DirectMediaModelRef;
-  }) => Promise<MediaTask>;
-  readonly waitForTask: (scope: TaskRunScope) => Promise<MediaTask>;
-  readonly deliver: (task: MediaTask) => Promise<MediaTaskView>;
+  readonly submitGeneration: (input: SubmitGenerationJobInput) => Promise<GenerationJobSnapshot>;
+  readonly observeGeneration: (
+    ref: GenerationJobRef,
+    afterRevision: number,
+  ) => AsyncIterable<GenerationJobSnapshot>;
+  readonly describeGeneration: (ref: GenerationJobRef) => Promise<GenerationJobSnapshot>;
+  readonly cancelGeneration: (input: {
+    readonly ref: GenerationJobRef;
+    readonly expectedRevision: number;
+  }) => Promise<GenerationJobSnapshot>;
+  readonly retryGeneration: (input: {
+    readonly ref: GenerationJobRef;
+    readonly expectedRevision: number;
+  }) => Promise<GenerationJobSnapshot>;
+  readonly reconcileGeneration: (input: {
+    readonly ref: GenerationJobRef;
+    readonly expectedRevision: number;
+  }) => Promise<GenerationJobSnapshot>;
+}
+
+export type DirectGenerationJobAction = 'describe' | 'cancel' | 'retry' | 'reconcile';
+
+export interface DirectGenerationJobCommandInput {
+  readonly action: DirectGenerationJobAction;
+  readonly jobId: string;
+  readonly expectedRevision?: number;
+}
+
+export async function executeDirectGenerationJobCommand(
+  input: DirectGenerationJobCommandInput,
+  runtime: DirectMediaCommandRuntime,
+): Promise<GenerationJobSnapshot> {
+  const jobId = input.jobId.trim();
+  if (!jobId) throw new Error('Generation Job command requires a non-empty jobId.');
+  const ref: GenerationJobRef = { kind: 'generation', jobId };
+  if (input.action === 'describe') return runtime.describeGeneration(ref);
+  if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision === undefined) {
+    throw new Error(`${input.action} requires an exact expectedRevision.`);
+  }
+  const command = { ref, expectedRevision: input.expectedRevision };
+  switch (input.action) {
+    case 'cancel':
+      return runtime.cancelGeneration(command);
+    case 'retry':
+      return runtime.retryGeneration(command);
+    case 'reconcile':
+      return runtime.reconcileGeneration(command);
+  }
 }
 
 export interface DirectMediaCommandResult {
   readonly kind: DirectMediaKind;
-  readonly status: 'completed';
+  readonly status: 'submitted' | 'completed';
   readonly providerId: string;
   readonly modelId: string;
-  readonly taskScope: TaskRunScope;
+  readonly operationId: string;
+  readonly jobRevision: number;
   readonly assetRefs: readonly string[];
 }
 
@@ -46,15 +93,15 @@ export type DirectMediaCommandDiagnosticCode =
   | 'direct-media-empty-prompt'
   | 'direct-media-model-unavailable'
   | 'direct-media-model-kind-mismatch'
-  | 'direct-media-task-failed'
-  | 'direct-media-task-cancelled'
+  | 'direct-media-generation-failed'
+  | 'direct-media-generation-cancelled'
   | 'direct-media-result-unavailable';
 
 export class DirectMediaCommandError extends Error {
   constructor(
     readonly code: DirectMediaCommandDiagnosticCode,
     message: string,
-    readonly taskScope?: TaskRunScope,
+    readonly operationId?: string,
   ) {
     super(message);
     this.name = 'DirectMediaCommandError';
@@ -74,40 +121,107 @@ export async function executeDirectMediaCommand(
   }
 
   const model = resolveDirectMediaModel(input);
-  const submitted = await runtime.submit({ kind: input.kind, prompt, model });
-  const terminal = await runtime.waitForTask(submitted.scope);
-  if (terminal.status === 'failed') {
+  let submitted: GenerationJobSnapshot;
+  try {
+    submitted = await runtime.submitGeneration({
+      ...toGenerationJobInput(input.kind, prompt, model),
+      lifecycleMode: input.detached ? 'detached' : 'linked',
+    });
+  } catch (error) {
     throw new DirectMediaCommandError(
-      'direct-media-task-failed',
-      terminal.error?.message ?? `${input.kind} generation task failed.`,
-      terminal.scope,
+      error instanceof DOMException && error.name === 'AbortError'
+        ? 'direct-media-generation-cancelled'
+        : 'direct-media-generation-failed',
+      error instanceof Error ? error.message : String(error),
     );
   }
-  if (terminal.status === 'cancelled') {
+  if (input.detached) {
+    return {
+      kind: input.kind,
+      status: 'submitted',
+      providerId: submitted.request.providerId,
+      modelId: submitted.request.modelId,
+      operationId: submitted.ref.jobId,
+      jobRevision: submitted.revision,
+      assetRefs: [],
+    };
+  }
+  const terminal = await waitForTerminalGeneration(runtime, submitted);
+  if (terminal.phase !== 'succeeded') {
     throw new DirectMediaCommandError(
-      'direct-media-task-cancelled',
-      `${input.kind} generation task was cancelled.`,
-      terminal.scope,
+      terminal.phase === 'cancelled'
+        ? 'direct-media-generation-cancelled'
+        : 'direct-media-generation-failed',
+      terminal.failure?.message ?? `${input.kind} generation ended in phase ${terminal.phase}.`,
+      terminal.ref.jobId,
     );
   }
-  if (terminal.status !== 'completed') {
-    throw new DirectMediaCommandError(
-      'direct-media-task-failed',
-      `${input.kind} generation task returned non-terminal status ${terminal.status}.`,
-      terminal.scope,
-    );
-  }
-
-  const view = await runtime.deliver(terminal);
-  const assetRefs = collectStableAssetRefs(view);
+  const assetRefs = terminal.resultRefs?.map((ref) => ref.id) ?? [];
   if (assetRefs.length === 0) {
     throw new DirectMediaCommandError(
       'direct-media-result-unavailable',
       `${input.kind} generation completed without a stable generated asset reference.`,
-      terminal.scope,
+      terminal.ref.jobId,
     );
   }
-  return toResult(input.kind, terminal, assetRefs);
+  return {
+    kind: input.kind,
+    status: 'completed',
+    providerId: terminal.request.providerId,
+    modelId: terminal.request.modelId,
+    operationId: terminal.ref.jobId,
+    jobRevision: terminal.revision,
+    assetRefs,
+  };
+}
+
+function toGenerationJobInput(
+  kind: DirectMediaKind,
+  prompt: string,
+  model: DirectMediaModelRef,
+): SubmitGenerationJobInput {
+  const base = {
+    providerId: model.providerId,
+    modelId: model.modelId,
+    request: {
+      prompt,
+      providerId: model.providerId,
+      modelId: model.modelId,
+      metadata: { source: 'direct-media-cli' },
+    },
+  };
+  switch (kind) {
+    case 'image':
+      return { ...base, generationType: 'text-to-image' };
+    case 'video':
+      return { ...base, generationType: 'text-to-video' };
+    case 'audio':
+      return { ...base, generationType: 'text-to-audio' };
+  }
+}
+
+async function waitForTerminalGeneration(
+  runtime: DirectMediaCommandRuntime,
+  initial: GenerationJobSnapshot,
+): Promise<GenerationJobSnapshot> {
+  if (isDirectMediaTerminal(initial)) return initial;
+  for await (const snapshot of runtime.observeGeneration(initial.ref, initial.revision)) {
+    if (isDirectMediaTerminal(snapshot)) return snapshot;
+  }
+  throw new DirectMediaCommandError(
+    'direct-media-generation-failed',
+    `Generation Job ${initial.ref.jobId} observation ended before a terminal snapshot.`,
+    initial.ref.jobId,
+  );
+}
+
+function isDirectMediaTerminal(snapshot: GenerationJobSnapshot): boolean {
+  return (
+    snapshot.phase === 'succeeded' ||
+    snapshot.phase === 'failed' ||
+    snapshot.phase === 'cancelled' ||
+    snapshot.phase === 'outcome-unknown'
+  );
 }
 
 export function resolveDirectMediaModel(input: DirectMediaCommandInput): DirectMediaModelRef {
@@ -149,26 +263,4 @@ function matchesModelRef(option: ChatModelOption, ref: string): boolean {
     `${option.providerId}:${option.modelId}` === ref ||
     `${option.providerId}/${option.modelId}` === ref
   );
-}
-
-function collectStableAssetRefs(view: MediaTaskView): string[] {
-  const refs = view.result?.assets
-    ?.map((asset) => asset.assetRef?.uri)
-    .filter((uri): uri is string => typeof uri === 'string' && uri.length > 0);
-  return refs && refs.length > 0 ? [...new Set(refs)] : [...new Set(view.result?.urls ?? [])];
-}
-
-function toResult(
-  kind: DirectMediaKind,
-  task: MediaTask,
-  assetRefs: readonly string[],
-): DirectMediaCommandResult {
-  return {
-    kind,
-    status: 'completed',
-    providerId: task.providerId,
-    modelId: task.modelId,
-    taskScope: task.scope,
-    assetRefs,
-  };
 }

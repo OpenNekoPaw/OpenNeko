@@ -39,12 +39,10 @@ import {
 import { createCharacterDialogueRuntimeService } from '../application/index';
 import { createVSCodeEntityServices } from '@neko/entity/host-vscode';
 import {
+  buildAgentPhaseMessage,
   buildCharacterDialogueSessionExitedMessage,
   buildCharacterDialogueSessionStartedMessage,
   buildErrorMessage,
-  buildStreamCompleteMessage,
-  buildStreamTextMessage,
-  buildThinkingMessage,
   type CharacterDialogueSessionProjection,
   type OpenTab,
 } from '@neko-agent/types';
@@ -54,9 +52,14 @@ import {
   resolveRoleplayCandidateSearchSelection,
   type RoleplayCandidateSearchSelection,
 } from './roleplay-project-search';
+import {
+  projectCharacterResponse,
+  type CharacterConversationProjection,
+} from './character-response-projection';
 
 export interface CharacterDialogueControllerDeps {
   readonly getWebview: () => vscode.Webview | undefined;
+  readonly getConversationProjection: (conversationId: string) => CharacterConversationProjection;
   readonly getProjectRoot: () => string | undefined;
   readonly createAssembler?: (projectRoot: string) => CharacterProfileAssemblerPort;
   readonly createEvidenceLoader?: (projectRoot: string) => CharacterEvidenceLoader;
@@ -322,7 +325,12 @@ export class CharacterDialogueController implements vscode.Disposable {
       return true;
     }
 
-    webview?.postMessage(buildThinkingMessage(sessionId));
+    webview?.postMessage(
+      buildAgentPhaseMessage({
+        conversationId: sessionId,
+        phase: 'thinking',
+      }),
+    );
     const routeAbortController = new AbortController();
     this.pendingRouteAbortControllers.set(sessionId, routeAbortController);
 
@@ -343,19 +351,10 @@ export class CharacterDialogueController implements vscode.Disposable {
       const turn = await session.sendUserMessage(trimmed, {
         ...(turnEvidence ? { turnEvidence } : {}),
       });
-      webview?.postMessage(
-        buildStreamTextMessage({
-          conversationId: sessionId,
-          messageId: turn.npcMessage.id,
-          content: turn.npcMessage.content,
-        }),
-      );
-      webview?.postMessage(
-        buildStreamCompleteMessage({
-          conversationId: sessionId,
-          messageId: turn.npcMessage.id,
-        }),
-      );
+      projectCharacterResponse(this.deps.getConversationProjection(sessionId), {
+        conversationId: sessionId,
+        response: turn.npcMessage,
+      });
     } catch (error) {
       webview?.postMessage(
         buildErrorMessage({
@@ -364,6 +363,12 @@ export class CharacterDialogueController implements vscode.Disposable {
         }),
       );
     } finally {
+      webview?.postMessage(
+        buildAgentPhaseMessage({
+          conversationId: sessionId,
+          phase: 'idle',
+        }),
+      );
       if (this.pendingRouteAbortControllers.get(sessionId) === routeAbortController) {
         this.pendingRouteAbortControllers.delete(sessionId);
       }

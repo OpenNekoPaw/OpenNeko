@@ -14,12 +14,10 @@ import {
   type NpcProfileAssemblyResult,
 } from '../core/index';
 import {
+  buildAgentPhaseMessage,
   buildEmbodyCharacterSessionExitedMessage,
   buildEmbodyCharacterSessionStartedMessage,
   buildErrorMessage,
-  buildStreamCompleteMessage,
-  buildStreamTextMessage,
-  buildThinkingMessage,
   type EmbodyCharacterSessionProjection,
   type OpenTab,
 } from '@neko-agent/types';
@@ -34,9 +32,14 @@ import {
   type CharacterProfileAssemblerPort,
 } from './character-dialogue-controller';
 import { createDefaultCharacterEvidenceLoader } from './character-evidence-loader';
+import {
+  projectCharacterResponse,
+  type CharacterConversationProjection,
+} from './character-response-projection';
 
 export interface EmbodyCharacterControllerDeps {
   readonly getWebview: () => vscode.Webview | undefined;
+  readonly getConversationProjection: (conversationId: string) => CharacterConversationProjection;
   readonly getProjectRoot: () => string | undefined;
   readonly createAssembler?: (projectRoot: string) => CharacterProfileAssemblerPort;
   readonly createEvidenceReader?: (projectRoot: string) => EmbodyCharacterEvidenceReaderPort;
@@ -142,31 +145,34 @@ export class EmbodyCharacterController implements vscode.Disposable {
     const trimmed = message.trim();
     if (!trimmed) return true;
 
-    webview?.postMessage(buildThinkingMessage(sessionId));
+    webview?.postMessage(
+      buildAgentPhaseMessage({
+        conversationId: sessionId,
+        phase: 'thinking',
+      }),
+    );
 
     try {
       const turnEvidence = await this.loadTurnEvidence(session, trimmed);
       const turn = await session.sendUserMessage(trimmed, {
         ...(turnEvidence ? { turnEvidence } : {}),
       });
-      webview?.postMessage(
-        buildStreamTextMessage({
-          conversationId: sessionId,
-          messageId: turn.feedbackMessage.id,
-          content: turn.feedbackMessage.content,
-        }),
-      );
-      webview?.postMessage(
-        buildStreamCompleteMessage({
-          conversationId: sessionId,
-          messageId: turn.feedbackMessage.id,
-        }),
-      );
+      projectCharacterResponse(this.deps.getConversationProjection(sessionId), {
+        conversationId: sessionId,
+        response: turn.feedbackMessage,
+      });
     } catch (error) {
       webview?.postMessage(
         buildErrorMessage({
           conversationId: sessionId,
           message: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    } finally {
+      webview?.postMessage(
+        buildAgentPhaseMessage({
+          conversationId: sessionId,
+          phase: 'idle',
         }),
       );
     }

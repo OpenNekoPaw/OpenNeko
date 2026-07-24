@@ -23,6 +23,7 @@ export default defineConfig({
     '@neko/asset',
     '@neko/content',
     '@neko/entity',
+    '@neko/generation',
     '@neko/host',
     '@neko/markdown',
     '@neko/platform',

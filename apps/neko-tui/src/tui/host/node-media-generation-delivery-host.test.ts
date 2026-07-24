@@ -2,15 +2,17 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceBoardDeliveryLedger } from '@neko-canvas/domain';
 import type { CreatorVisibleArtifactCandidate } from '@neko/agent/runtime';
-import { GeneratedAssetIndex, type MediaTask } from '@neko/platform';
+import type { MediaGenerationResult } from '@neko/generation';
+import { GeneratedAssetIndex } from '@neko/platform';
 import {
   loadNkc,
   resolveGlobalStorageLayout,
   type CanvasWorkspaceProjectionRequest,
   type GeneratedAsset,
+  type GeneratedAssetRevisionRef,
   type LocalMetadataStore,
 } from '@neko/shared';
 import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
@@ -18,7 +20,7 @@ import {
   AGENT_STATE_MIGRATIONS,
   M1_LOCAL_METADATA_MIGRATIONS,
 } from '@neko/shared/local-metadata/sqlite';
-import { NodeMediaTaskDeliveryHost } from './node-media-task-delivery-host';
+import { NodeMediaGenerationDeliveryHost } from './node-media-generation-delivery-host';
 
 const WORKSPACE_ID = 'workspace-board-tui-host-test';
 const temporaryDirectories: string[] = [];
@@ -33,35 +35,36 @@ afterEach(async () => {
   );
 });
 
-describe('NodeMediaTaskDeliveryHost Workspace Board delivery', () => {
-  it('delivers a completed generated output with its original task and run identities', async () => {
+describe('NodeMediaGenerationDeliveryHost Workspace Board delivery', () => {
+  it('delivers a terminal generated output with its operation identity', async () => {
     const fixture = await createFixture();
-    const outputPath = path.join(
-      fixture.workspaceRoot,
-      'neko',
-      'generated',
-      'image',
-      'generated.png',
-    );
-    const host = createHost(fixture, {
-      media: {
-        saveOutputs: async () => {
-          await fs.mkdir(path.dirname(outputPath), { recursive: true });
-          await fs.writeFile(outputPath, 'generated image bytes');
-          return [outputPath];
-        },
-      },
-    });
+    const sourcePath = path.join(fixture.workspaceRoot, 'provider-output.png');
+    await fs.writeFile(sourcePath, 'generated image bytes');
+    const onGeneratedOutputDelivery = vi.fn();
+    const host = createHost(fixture, onGeneratedOutputDelivery);
 
-    await expect(host.createTaskViewDelivery(completedImageTask())).resolves.toMatchObject({
-      view: { id: 'task-generated-image', status: 'completed' },
-      deliveryPlan: { generatedAssets: [expect.objectContaining({ type: 'generated-image' })] },
+    await expect(
+      host.deliverMediaGeneration({
+        operationId: 'operation-generated-image',
+        result: completedImageGeneration(sourcePath),
+      }),
+    ).resolves.toMatchObject({
+      resultUrls: [expect.stringMatching(/^generated-assets\/generated-[a-f0-9]{24}\.png$/)],
+      resourceRefs: [
+        expect.objectContaining({
+          provider: 'generated-asset',
+          kind: 'generated',
+        }),
+      ],
     });
 
     const board = await readWorkspaceBoard(fixture.workspaceRoot);
     expect(board.data.nodes.filter((node) => node.type === 'media')).toHaveLength(1);
-    expect(JSON.stringify(board.data.nodes)).toContain('task-generated-image');
-    expect(JSON.stringify(board.data.nodes)).toContain('run-generated-image');
+    expect(onGeneratedOutputDelivery).toHaveBeenCalledWith([
+      expect.objectContaining({
+        generation: expect.objectContaining({ operationId: 'operation-generated-image' }),
+      }),
+    ]);
   });
 
   it('delivers one source and Markdown batch once with its original run identity', async () => {
@@ -144,7 +147,7 @@ describe('NodeMediaTaskDeliveryHost Workspace Board delivery', () => {
 
   it('poisons explicit target mirroring and the removed direct writer', async () => {
     const source = await fs.readFile(
-      new URL('./node-media-task-delivery-host.ts', import.meta.url),
+      new URL('./node-media-generation-delivery-host.ts', import.meta.url),
       'utf8',
     );
 
@@ -159,17 +162,14 @@ function createHost(
     readonly workspaceRoot: string;
     readonly store: LocalMetadataStore;
   },
-  platform?: {
-    readonly media?: {
-      saveOutputs(scope: MediaTask['scope'], outputDir: string): Promise<string[]>;
-    };
-  },
-): NodeMediaTaskDeliveryHost {
+  onGeneratedOutputDelivery?: (lifecycles: readonly GeneratedAssetRevisionRef[]) => void,
+): NodeMediaGenerationDeliveryHost {
   let assets: readonly GeneratedAsset[] = [];
-  return new NodeMediaTaskDeliveryHost({
+  return new NodeMediaGenerationDeliveryHost({
     workspaceRoot: fixture.workspaceRoot,
     workspaceId: WORKSPACE_ID,
     metadataStore: fixture.store,
+    ...(onGeneratedOutputDelivery ? { onGeneratedOutputDelivery } : {}),
     assetIndex: new GeneratedAssetIndex({
       load: async () => assets,
       update: async (operation) => {
@@ -177,36 +177,21 @@ function createHost(
         return assets;
       },
     }),
-    ...(platform ? { platform } : {}),
   });
 }
 
-function completedImageTask(): MediaTask {
-  const now = new Date('2026-07-15T00:00:00.000Z');
+function completedImageGeneration(sourcePath: string): MediaGenerationResult {
   return {
-    scope: {
-      conversationId: 'conversation-generated-image',
-      runId: 'run-generated-image',
-      parentRunId: 'run-generated-image',
-      childRunId: 'task-generated-image',
-      childKind: 'task',
-    },
-    id: 'task-generated-image',
     type: 'text-to-image',
-    status: 'completed',
-    progress: 100,
     providerId: 'test-provider',
     modelId: 'test-image-model',
-    createdAt: now,
-    updatedAt: now,
     request: {
       prompt: 'A generated image for the Workspace Board',
-      metadata: { runId: 'run-generated-image' },
     },
     outputs: [
       {
         type: 'image',
-        url: 'https://provider.test/generated.png',
+        url: sourcePath,
         mimeType: 'image/png',
         width: 512,
         height: 512,

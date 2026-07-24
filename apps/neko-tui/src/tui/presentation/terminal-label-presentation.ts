@@ -35,19 +35,6 @@ export function createTerminalMarkdownMessages(
   };
 }
 
-export function presentTaskStatus(value: string, presentation: Presentation): string {
-  switch (value) {
-    case 'pending':
-    case 'running':
-    case 'completed':
-    case 'failed':
-    case 'cancelled':
-      return presentation.t(`agent.terminal.value.taskStatus.${value}`);
-    default:
-      return value;
-  }
-}
-
 export function presentSessionMode(value: string, presentation: Presentation): string {
   switch (value) {
     case 'agent':

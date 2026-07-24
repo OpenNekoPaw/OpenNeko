@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AGENT_COMMAND_MESSAGE_SOURCE } from '@neko/agent/commands/terminal-messages';
-import type { ChatModelOption, Task } from '@neko/shared';
+import type { ChatModelOption } from '@neko/shared';
 import {
   handleTuiControlCommand,
   type TuiCommandRouterContext,
@@ -562,35 +562,6 @@ describe('handleTuiControlCommand', () => {
     expect(result.output).toContain('User config: /Users/neko/.neko/config.toml');
   });
 
-  it('lists background tasks through the task port', async () => {
-    const context = createContext({
-      tasks: [
-        createTask({
-          id: 'task_1783527068036_1',
-          status: 'running',
-          progress: 35,
-          payload: {
-            prompt: '猫咪玩耍',
-            providerId: 'nekoapi-media',
-          },
-          lifecycle: {
-            ownerConversationId: 'conversation-1',
-            runMode: 'background',
-          },
-        }),
-      ],
-    });
-
-    const result = await handleTuiControlCommand('/tasks', context);
-
-    expect(result.source).toBe('tui-router');
-    expect(result.output).toContain('Tasks:');
-    expect(result.output).toContain('task_1783527068036_1');
-    expect(result.output).toContain('running');
-    expect(result.output).toContain('35%');
-    expect(result.output).toContain('猫咪玩耍');
-  });
-
   it('omits an unavailable optional context token row without fallback prose', async () => {
     const context = createContext({ getTokenCount: undefined });
 
@@ -940,7 +911,6 @@ function createContext(
     readonly mediaModelOptions?: readonly ChatModelOption[];
     readonly selectedMenuItem?: string | null;
     readonly queue?: ReturnType<typeof createAgentConversationMessageQueue>;
-    readonly tasks?: readonly Task[];
     readonly mcp?: TuiCommandRouterContext['ports']['mcp'];
     readonly capability?: TuiCapabilityPorts;
     readonly artifact?: TuiArtifactPorts;
@@ -1124,11 +1094,6 @@ function createContext(
             edit: (queueItemId, content) => overrides.queue!.edit(queueItemId, content),
           }
         : undefined,
-      task: overrides.tasks
-        ? {
-            list: vi.fn(() => overrides.tasks!),
-          }
-        : undefined,
       mcp:
         overrides.mcp === undefined && 'mcp' in overrides
           ? undefined
@@ -1241,52 +1206,10 @@ function createContext(
           ...(overrides.getTokenCount === undefined
             ? {}
             : { contextTokenCount: overrides.getTokenCount() }),
-          activeSkills: overrides.activeRecords ?? [],
           ...(overrides.queue === undefined ? {} : { messageQueue: overrides.queue.snapshot() }),
-          ...(overrides.tasks?.[0] === undefined ? {} : { runningTask: overrides.tasks[0] }),
           userConfigPath: '/Users/neko/.neko/config.toml',
         })),
       },
     },
-  };
-}
-
-function createTask(overrides: {
-  readonly id: string;
-  readonly status: Task['status'];
-  readonly progress: number;
-  readonly payload?: Record<string, unknown>;
-  readonly lifecycle?: Partial<NonNullable<Task['lifecycle']>>;
-}): Task {
-  return {
-    scope: {
-      conversationId: 'conversation-1',
-      runId: 'run-1',
-      parentRunId: 'run-1',
-      childRunId: overrides.id,
-      childKind: 'task',
-    },
-    id: overrides.id,
-    type: 'image_generation',
-    status: overrides.status,
-    input: {
-      type: 'image_generation',
-      payload: overrides.payload ?? {},
-      ...(overrides.lifecycle ? { lifecycle: overrides.lifecycle } : {}),
-    },
-    progress: overrides.progress,
-    createdAt: 1,
-    updatedAt: 2,
-    ...(overrides.lifecycle
-      ? {
-          lifecycle: {
-            runMode: 'foreground',
-            costPhase: 'idle',
-            interruptPolicy: 'cancel-with-agent',
-            recoverPolicy: 'retry-executor',
-            ...overrides.lifecycle,
-          },
-        }
-      : {}),
   };
 }
