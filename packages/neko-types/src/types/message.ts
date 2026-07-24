@@ -316,16 +316,26 @@ export type MessageToWebview =
       error?: string;
     }
   // Unified export messages (Extension -> WebView) — via ExportService
-  | { type: 'export:progress'; progress: ExportProgressToWebview }
+  | { type: 'export:started'; jobKind: 'export'; jobId: string; revision: number }
+  | {
+      type: 'export:progress';
+      jobKind: 'export';
+      jobId: string;
+      revision: number;
+      progress: ExportProgressToWebview;
+    }
   | {
       type: 'export:completed';
+      jobKind: 'export';
+      jobId: string;
+      revision: number;
       success: boolean;
       outputPath?: string;
       totalFrames?: number;
       elapsedMs?: number;
     }
-  | { type: 'export:error'; error: string }
-  | { type: 'export:cancelled' }
+  | { type: 'export:error'; jobKind?: 'export'; jobId?: string; revision?: number; error: string }
+  | { type: 'export:cancelled'; jobKind: 'export'; jobId: string; revision: number }
   | { type: 'export:globalStatus'; hasActiveExport: boolean }
   // LUT load response (Extension -> WebView)
   | { type: 'colorCorrection:lutLoaded'; lutId: string; name: string }
@@ -388,7 +398,12 @@ export type MessageFromWebview =
   | { type: 'saveBlobToPath'; data: ArrayBuffer; path: string; mimeType: string }
   // Unified export messages (WebView -> Extension -> NativeEngine)
   | { type: 'export:start'; project: ProjectData; config: ExportStartConfig }
-  | { type: 'export:cancel' }
+  | {
+      type: 'export:cancel';
+      jobKind: 'export';
+      jobId: string;
+      expectedRevision: number;
+    }
   | { type: 'export:queryGlobalStatus' }
   // File validation (WebView -> Extension)
   | { type: 'validateFile'; path: string }

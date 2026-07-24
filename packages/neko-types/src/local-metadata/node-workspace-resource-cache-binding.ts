@@ -8,9 +8,11 @@ import { M1_LOCAL_METADATA_MIGRATIONS, RESOURCE_CACHE_MIGRATIONS } from './sqlit
 import type { ResourceCacheManifestMigrationReport } from './node-resource-cache-manifest-migration';
 import type { ProxyManifestMigrationReport } from './node-proxy-manifest-migration';
 import type { ResourceCacheManifestStore } from '../types/resource-cache';
+import type { LocalMetadataStore } from './contracts';
 
 export interface NodeWorkspaceResourceCacheMetadataBinding {
   readonly workspaceId: string;
+  readonly metadataStore: LocalMetadataStore;
   readonly manifestStore: ResourceCacheManifestStore;
   readonly migrationReport: ResourceCacheManifestMigrationReport;
   readonly proxyMigrationReport: ProxyManifestMigrationReport;
@@ -92,6 +94,7 @@ export async function createNodeWorkspaceResourceCacheMetadataBinding(options: {
     });
     return {
       workspaceId: identity.workspaceId,
+      metadataStore,
       manifestStore,
       migrationReport,
       proxyMigrationReport,

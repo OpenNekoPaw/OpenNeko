@@ -7,7 +7,7 @@ import {
   type ImageOperationId,
   type VideoOperationId,
 } from '@neko/shared';
-import type { ImageGenerationRequest, VideoGenerationRequest } from './types';
+import type { ImageGenerationRequest, VideoGenerationRequest } from '@neko/generation';
 
 const PROMPT_VIDEO_CONTROLS = [
   'prompt',

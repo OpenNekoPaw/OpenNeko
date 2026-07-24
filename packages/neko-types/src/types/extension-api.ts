@@ -704,7 +704,7 @@ export type NekoAgentGeneratedOutputResolution =
       readonly contentDigest: string;
       readonly mediaKind: import('./generated-asset').GeneratedAssetMediaKind;
       readonly mimeType: string;
-      readonly taskId: string;
+      readonly operationId: string;
       readonly runId?: string;
       /** Extension-host path. This value must never be projected to a Webview or persisted. */
       readonly sourcePath: string;

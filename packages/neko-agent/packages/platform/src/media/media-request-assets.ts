@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { ResourceRef } from '@neko/shared';
-import type { ImageGenerationRequest, VideoGenerationRequest } from './types';
+import type { ImageGenerationRequest, VideoGenerationRequest } from '@neko/generation';
 
 export interface MediaRequestAssetMaterializer {
   readAsBase64(uriOrPath: string): Promise<string>;

@@ -20,17 +20,17 @@ describe('media generated asset helpers', () => {
   });
 
   it('builds generated image assets with lineage metadata', () => {
-    const assetId = createStableGeneratedOutputId('task-1', 0, 'sha256:image');
+    const assetId = createStableGeneratedOutputId('operation-1', 0, 'sha256:image');
     expect(
       buildGeneratedMediaAssets({
         hostOutputPaths: ['/tmp/image.png'],
         contentDigests: ['sha256:image'],
-        taskId: 'task-1',
+        operationId: 'operation-1',
         providerId: 'openai',
         outputs: [
           { type: 'image', url: 'https://example.test/image.png', width: 768, height: 512 },
         ],
-        taskType: 'image',
+        mediaKind: 'image',
         prompt: 'A cat',
         model: 'flux',
         request: {
@@ -60,9 +60,8 @@ describe('media generated asset helpers', () => {
           contentDigest: 'sha256:image',
           mediaKind: 'image',
           generation: {
-            taskId: 'task-1',
+            operationId: 'operation-1',
             runId: 'run-1',
-            operationId: 'generate',
             providerId: 'openai',
             modelId: 'flux',
             workflowStage: { workflowId: 'workflow-1', stageId: 'shot-generation' },
@@ -86,9 +85,9 @@ describe('media generated asset helpers', () => {
       buildGeneratedMediaAssets({
         hostOutputPaths: ['/tmp/video.mp4'],
         contentDigests: ['sha256:video'],
-        taskId: 'task-video',
+        operationId: 'operation-video',
         outputs: [{ type: 'video', url: 'https://example.test/video.mp4' }],
-        taskType: 'video',
+        mediaKind: 'video',
         now: () => '2026-01-01T00:00:00.000Z',
       })[0],
     ).toEqual(
@@ -105,9 +104,9 @@ describe('media generated asset helpers', () => {
       buildGeneratedMediaAssets({
         hostOutputPaths: ['/tmp/audio.mp3'],
         contentDigests: ['sha256:audio'],
-        taskId: 'task-audio',
+        operationId: 'operation-audio',
         outputs: [{ type: 'audio', url: 'https://example.test/audio.mp3' }],
-        taskType: 'audio',
+        mediaKind: 'audio',
         now: () => '2026-01-01T00:00:00.000Z',
       })[0],
     ).toEqual(

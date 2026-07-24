@@ -2,7 +2,7 @@
  * Media Adapter Registry Tests
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MediaAdapterRegistry,
   createMediaAdapterRegistry,
@@ -10,6 +10,16 @@ import {
 import { OpenAICompatMediaAdapter } from '../adapters/openai-compat-media-adapter';
 import { RunwayMediaAdapter } from '../adapters/runway-media-adapter';
 import { LumaMediaAdapter } from '../adapters/luma-media-adapter';
+import { DashScopeMediaAdapter } from '../adapters/dashscope-media-adapter';
+import { MidjourneyMediaAdapter } from '../adapters/midjourney-media-adapter';
+import {
+  isMediaAudioSubmitter,
+  isMediaImageSubmitter,
+  isMediaTaskCanceller,
+  isMediaTaskDescriber,
+  isMediaVideoSubmitter,
+  requireMediaTaskCanceller,
+} from '../media-adapter-capabilities';
 
 describe('MediaAdapterRegistry', () => {
   let registry: MediaAdapterRegistry;
@@ -126,6 +136,70 @@ describe('MediaAdapterRegistry', () => {
 });
 
 describe('Media Adapters', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  describe('async task capabilities', () => {
+    it('exposes describe and cancel only when the provider implements them', () => {
+      const runway = new RunwayMediaAdapter();
+      const dashscope = new DashScopeMediaAdapter();
+      const midjourney = new MidjourneyMediaAdapter();
+
+      expect(isMediaImageSubmitter(runway)).toBe(false);
+      expect(isMediaVideoSubmitter(runway)).toBe(true);
+      expect(isMediaAudioSubmitter(runway)).toBe(false);
+      expect(isMediaImageSubmitter(midjourney)).toBe(true);
+      expect(isMediaVideoSubmitter(midjourney)).toBe(false);
+      expect(isMediaAudioSubmitter(midjourney)).toBe(false);
+      expect(isMediaTaskDescriber(runway)).toBe(true);
+      expect(isMediaTaskDescriber(dashscope)).toBe(true);
+      expect(isMediaTaskCanceller(runway)).toBe(true);
+      expect(isMediaTaskCanceller(dashscope)).toBe(false);
+      expect(() => requireMediaTaskCanceller(dashscope)).toThrowError(
+        expect.objectContaining({
+          code: 'media-task-cancel-unsupported',
+        }),
+      );
+    });
+
+    it('propagates a supported provider cancellation failure', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              error: {
+                code: 'cancel-rejected',
+                message: 'The provider rejected cancellation.',
+              },
+            }),
+            {
+              status: 409,
+              headers: { 'content-type': 'application/json' },
+            },
+          ),
+        ),
+      );
+      const runway = requireMediaTaskCanceller(new RunwayMediaAdapter());
+
+      await expect(
+        runway.cancelTask('external-1', {
+          id: 'runway-provider',
+          name: 'Runway',
+          displayName: 'Runway',
+          type: 'runway',
+          apiUrl: 'https://example.test',
+          apiKey: 'test-key',
+          enabled: true,
+        }),
+      ).rejects.toMatchObject({
+        code: 'cancel-rejected',
+        statusCode: 409,
+      });
+    });
+  });
+
   describe('OpenAICompatMediaAdapter', () => {
     it('should support expected generation types', () => {
       const adapter = new OpenAICompatMediaAdapter();

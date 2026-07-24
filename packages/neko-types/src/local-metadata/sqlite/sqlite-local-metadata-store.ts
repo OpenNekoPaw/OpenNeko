@@ -104,6 +104,7 @@ import type {
   SqliteConnectionFactory,
   SqliteRow,
 } from './driver';
+import { serializeLocalMetadataJson } from '../secret-boundary';
 
 const MIGRATION_REGISTRY_SQL = `CREATE TABLE IF NOT EXISTS schema_migrations (
   namespace TEXT NOT NULL,
@@ -476,69 +477,6 @@ function decodeSemanticEvidence(row: SqliteRow): EncodedSemanticEvidence {
     ordinal: readNumber(row, 'ordinal'),
     payload: parseJsonColumn(readString(row, 'evidence_json'), 'decode-semantic-evidence'),
   };
-}
-
-function serializeJsonPayload(value: unknown, operation: string): string {
-  const secretPath = findForbiddenSecretPath(value);
-  if (secretPath) {
-    throw new LocalMetadataError({
-      code: 'metadata-secret-forbidden',
-      operation,
-      message: `Secret-bearing field cannot be persisted in local metadata: ${secretPath}`,
-    });
-  }
-  const serialized = JSON.stringify(value);
-  if (serialized === undefined) {
-    throw new LocalMetadataError({
-      code: 'metadata-transaction-failed',
-      operation,
-      message: `JSON payload cannot be undefined for ${operation}`,
-    });
-  }
-  return serialized;
-}
-
-const FORBIDDEN_SECRET_KEYS = new Set([
-  'apikey',
-  'accesstoken',
-  'refreshtoken',
-  'authtoken',
-  'sessiontoken',
-  'enginetoken',
-  'authorization',
-  'clientsecret',
-  'secret',
-  'secretkey',
-  'password',
-  'credential',
-  'credentials',
-]);
-
-function findForbiddenSecretPath(
-  value: unknown,
-  path = '$',
-  visited = new Set<object>(),
-): string | null {
-  if (Array.isArray(value)) {
-    if (visited.has(value)) return null;
-    visited.add(value);
-    for (const [index, item] of value.entries()) {
-      const nested = findForbiddenSecretPath(item, `${path}[${index}]`, visited);
-      if (nested) return nested;
-    }
-    return null;
-  }
-  if (!isRecord(value)) return null;
-  if (visited.has(value)) return null;
-  visited.add(value);
-  for (const [key, entry] of Object.entries(value)) {
-    const nextPath = `${path}.${key}`;
-    const normalizedKey = key.replace(/[^a-zA-Z0-9]/gu, '').toLowerCase();
-    if (FORBIDDEN_SECRET_KEYS.has(normalizedKey)) return nextPath;
-    const nested = findForbiddenSecretPath(entry, nextPath, visited);
-    if (nested) return nested;
-  }
-  return null;
 }
 
 function partitionKey(partition: LocalMetadataPartition): string {
@@ -926,7 +864,7 @@ class RawTaskStateRepository implements TaskStateRepository {
         record.taskKey,
         record.taskId,
         record.status,
-        serializeJsonPayload(record.payload, 'upsert-task-state'),
+        serializeLocalMetadataJson(record.payload, 'upsert-task-state'),
         record.createdAt,
         record.updatedAt,
       ],
@@ -986,7 +924,7 @@ class RawTaskCheckpointRepository implements TaskCheckpointRepository {
         record.workspaceId,
         record.taskKey,
         record.taskId,
-        serializeJsonPayload(record.payload, 'upsert-task-checkpoint'),
+        serializeLocalMetadataJson(record.payload, 'upsert-task-checkpoint'),
         record.updatedAt,
       ],
     );
@@ -1072,7 +1010,7 @@ class RawResourceCacheMetadataRepository implements ResourceCacheMetadataReposit
           request.partition.scope,
           request.partition.workspaceId,
           entry.resource.id,
-          serializeJsonPayload(metadata, 'replace-resource-cache-entry'),
+          serializeLocalMetadataJson(metadata, 'replace-resource-cache-entry'),
           entry.status,
           entry.createdAt,
           entry.updatedAt,
@@ -1094,7 +1032,7 @@ class RawResourceCacheMetadataRepository implements ResourceCacheMetadataReposit
             request.partition.workspaceId,
             entry.resource.id,
             variant.key,
-            serializeJsonPayload(variant, 'replace-resource-cache-variant'),
+            serializeLocalMetadataJson(variant, 'replace-resource-cache-variant'),
             variant.status,
             variant.role,
             variant.sizeBytes ?? null,
@@ -1167,7 +1105,7 @@ class RawMediaMetadataRepository implements MediaMetadataRepository {
         request.partition.workspaceId,
         request.record.sourceKey,
         request.record.sourceMtimeMs,
-        serializeJsonPayload(request.record.metadata, 'upsert-media-metadata'),
+        serializeLocalMetadataJson(request.record.metadata, 'upsert-media-metadata'),
         request.record.updatedAt,
       ],
     );
@@ -1266,7 +1204,7 @@ class RawSearchDocumentRepository implements SearchDocumentRepository {
           document.label,
           document.searchText,
           document.freshness,
-          serializeJsonPayload(document, 'replace-search-document'),
+          serializeLocalMetadataJson(document, 'replace-search-document'),
           document.updatedAt,
         ],
       );
@@ -1362,7 +1300,7 @@ class RawSearchDocumentRepository implements SearchDocumentRepository {
         document.label,
         document.searchText,
         document.freshness,
-        serializeJsonPayload(document, 'replace-search-document'),
+        serializeLocalMetadataJson(document, 'replace-search-document'),
         document.updatedAt,
       ],
     );
@@ -1606,12 +1544,12 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
         partition.workspaceId,
         item.source.sourceId,
         item.source.index.assetId,
-        serializeJsonPayload(item.source.index.sourceRef, 'write-semantic-source-ref'),
+        serializeLocalMetadataJson(item.source.index.sourceRef, 'write-semantic-source-ref'),
         item.source.sourceFingerprint,
-        serializeJsonPayload(item.source.provider, 'write-semantic-provider'),
-        serializeJsonPayload(item.source.coverage, 'write-semantic-coverage'),
+        serializeLocalMetadataJson(item.source.provider, 'write-semantic-provider'),
+        serializeLocalMetadataJson(item.source.coverage, 'write-semantic-coverage'),
         item.source.freshness,
-        serializeJsonPayload(item.indexMetadata, 'write-semantic-source-index'),
+        serializeLocalMetadataJson(item.indexMetadata, 'write-semantic-source-index'),
         item.source.updatedAt,
       ],
     );
@@ -1630,7 +1568,7 @@ class RawSemanticProjectionRepository implements SemanticProjectionRepository {
           evidence.kind,
           evidence.evidenceId,
           evidence.ordinal,
-          serializeJsonPayload(evidence.payload, 'write-semantic-evidence'),
+          serializeLocalMetadataJson(evidence.payload, 'write-semantic-evidence'),
         ],
       );
     }
@@ -1720,7 +1658,7 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
           record.candidateId ?? null,
           record.assetRef ?? null,
           record.freshness,
-          serializeJsonPayload(record, 'replace-entity-asset-projection'),
+          serializeLocalMetadataJson(record, 'replace-entity-asset-projection'),
           record.updatedAt,
         ],
       );
@@ -1773,7 +1711,7 @@ class RawEntityAssetProjectionRepository implements EntityAssetProjectionReposit
           record.candidateId ?? null,
           record.assetRef ?? null,
           record.freshness,
-          serializeJsonPayload(record, 'insert-entity-asset-projection'),
+          serializeLocalMetadataJson(record, 'insert-entity-asset-projection'),
           record.updatedAt,
         ],
       );
@@ -3463,6 +3401,7 @@ export class SqliteLocalMetadataStore implements LocalMetadataStore {
           mode: options.mode,
           ownership: options.ownership,
           repositories: this.rawRepositories,
+          sql: this.requireConnection(options.operation),
         }),
       ),
     );

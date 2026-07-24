@@ -52,10 +52,33 @@ export interface LocalMetadataTransactionOptions {
   readonly operation: string;
 }
 
+export type LocalMetadataSqlBindingValue = string | number | bigint | Uint8Array | null;
+
+export interface LocalMetadataSqlRunResult {
+  readonly changes: number;
+  readonly lastInsertRowid: number | bigint;
+}
+
+export interface LocalMetadataSqlRow {
+  readonly [column: string]: unknown;
+}
+
+export interface LocalMetadataSqlExecutor {
+  run(
+    sql: string,
+    parameters?: readonly LocalMetadataSqlBindingValue[],
+  ): Promise<LocalMetadataSqlRunResult>;
+  all(
+    sql: string,
+    parameters?: readonly LocalMetadataSqlBindingValue[],
+  ): Promise<readonly LocalMetadataSqlRow[]>;
+}
+
 export interface LocalMetadataTransactionContext {
   readonly mode: LocalMetadataTransactionMode;
   readonly ownership: NekoMetadataOwnership | 'system';
   readonly repositories: LocalMetadataRepositories;
+  readonly sql: LocalMetadataSqlExecutor;
 }
 
 export interface LocalMetadataMigration {

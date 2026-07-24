@@ -183,12 +183,6 @@ export { PlatformError } from './provider/platform-error';
 export { setRootLogger as setPlatformRootLogger } from './utils/logger';
 
 // =============================================================================
-// Service Layer
-// =============================================================================
-
-export { PromptManager } from './service/prompt-manager';
-
-// =============================================================================
 // File Operation Layer
 // =============================================================================
 
@@ -218,20 +212,7 @@ export {
 // =============================================================================
 
 export { MediaGenerationService } from './media/media-generation-service';
-export {
-  observeMediaTaskProgress,
-  runMediaTurn,
-  submitMediaTurn,
-  type MediaTurnCategory,
-  type MediaTurnDeliveryEvent,
-  type MediaTurnIgnoredTaskEvent,
-  type MediaTurnModelRef,
-  type MediaTurnProgressErrorEvent,
-  type ObserveMediaTaskProgressInput,
-  type RunMediaTurnInput,
-  type RunMediaTurnResult,
-  type SubmitMediaTurnInput,
-} from './media/media-turn-dispatcher';
+export { registerMediaAgentTools } from './media/media-agent-tools';
 export {
   DEFAULT_VISION_PREPROCESS_POLICY,
   VISION_IMAGE_OUTPUT_MEDIA_TYPE,
@@ -261,41 +242,20 @@ export {
 } from './media/media-file-downloader';
 export type { MediaRequestAssetMaterializer } from './media/media-request-assets';
 export {
-  createMediaTaskProgressView,
-  createMediaTaskView,
-  getMediaTaskConversationId,
-  matchesMediaTaskConversation,
-  type MediaTaskProgressView,
-  type MediaTaskProgressViewInput,
-  type MediaTaskResultView,
-  type MediaTaskView,
-  type MediaTaskViewOptions,
-} from './media/media-task-view';
-export { isTerminalMediaTaskStatus } from './media/media-task-progress-plan';
+  finalizeMediaGenerationOutputs,
+  type FinalizeMediaGenerationOutputsInput,
+  type FinalizedMediaGenerationOutputs,
+} from './media/media-generation-output-finalizer';
 export {
-  readMediaTaskResultDeliveryPolicy,
-  toMediaTaskResultObservationTask,
-  type MediaTaskResultObservationAssetData,
-  type MediaTaskResultObservationAssetInput,
-  type MediaTaskResultObservationProjectionInput,
-} from './media/media-task-result-observation';
-export {
-  buildMediaTaskViewDelivery,
-  buildMediaTaskProgressViewDelivery,
-  type BuildMediaTaskProgressViewDeliveryInput,
-  type MediaTaskProgressViewDelivery,
-  type MediaTaskViewDelivery,
-} from './media/media-task-progress-view';
-export {
-  DEFAULT_MEDIA_TASK_CONFIGURED_OUTPUT_DIR,
-  DEFAULT_MEDIA_TASK_SHOW_SAVE_NOTIFICATION,
-  MEDIA_TASK_DELIVERY_CONFIG_SECTION,
-  MEDIA_TASK_OUTPUT_DIR_SETTING_KEY,
-  MEDIA_TASK_SHOW_SAVE_NOTIFICATION_SETTING_KEY,
-  buildMediaTaskDeliverySettingsPlan,
-  type MediaTaskDeliverySettingsInput,
-  type MediaTaskDeliverySettingsPlan,
-} from './media/media-task-delivery-settings';
+  DEFAULT_MEDIA_GENERATION_CONFIGURED_OUTPUT_DIR,
+  DEFAULT_MEDIA_GENERATION_SHOW_SAVE_NOTIFICATION,
+  MEDIA_GENERATION_DELIVERY_CONFIG_SECTION,
+  MEDIA_GENERATION_OUTPUT_DIR_SETTING_KEY,
+  MEDIA_GENERATION_SHOW_SAVE_NOTIFICATION_SETTING_KEY,
+  buildMediaGenerationDeliverySettingsPlan,
+  type MediaGenerationDeliverySettingsInput,
+  type MediaGenerationDeliverySettingsPlan,
+} from './media/media-generation-delivery-settings';
 export {
   GeneratedAssetIndex,
   ResourceCacheGeneratedAssetIndexStore,
@@ -311,39 +271,32 @@ export {
   createGeneratedAssetResourceResolver,
   type GeneratedAssetResourceResolver,
 } from './media/generated-asset-resource-resolver';
-export type {
-  MediaGenerationType,
-  MediaTaskStatus,
-  MediaOutputType,
-  MediaGenerationRequestBase,
-  ImageGenerationRequest,
-  VideoGenerationRequest,
-  AudioGenerationRequest,
-  MediaOutput,
-  MediaAdapterResult,
-  MediaAdapterError,
-  MediaAdapter,
-  MediaRoutingResult,
-  MediaTask,
-  MediaProgressCallback,
-} from './media/types';
-
+export type { MediaRoutingResult } from './media/types';
+export {
+  isMediaTaskCanceller,
+  isMediaTaskDescriber,
+  isMediaImageSubmitter,
+  isMediaVideoSubmitter,
+  isMediaAudioSubmitter,
+  requireMediaTaskCanceller,
+  requireMediaTaskDescriber,
+  requireMediaImageSubmitter,
+  requireMediaVideoSubmitter,
+  requireMediaAudioSubmitter,
+  MediaAdapterCapabilityError,
+  type MediaAdapterCapabilityErrorCode,
+} from './media/media-adapter-capabilities';
 // =============================================================================
 // Factory Functions
 // =============================================================================
 
 import { type IUserConfigManager } from './config/user-config';
 import { ConfigManager, type ConfigManagerOptions } from './config/config-manager';
-import type { ITaskManager, IToolRegistry, TaskRunScope } from '@neko/shared';
-import { PromptManager } from './service/prompt-manager';
+import type { IToolRegistry } from '@neko/shared';
 // Media Generation imports
 import { MediaGenerationService } from './media/media-generation-service';
 import { createMediaPlatform } from './media';
-import { registerMediaAgentTools } from './media/media-agent-tools';
 import type { MediaRequestAssetMaterializer } from './media/media-request-assets';
-import { getLogger } from './utils/logger';
-
-const logger = getLogger('Platform');
 
 /**
  * Platform initialization options
@@ -353,27 +306,6 @@ export interface PlatformOptions {
   userConfigManager?: IUserConfigManager;
   /** Workspace path for .neko/config.toml */
   workspacePath?: string;
-  /**
-   * Task manager instance for media generation
-   * NOTE: TaskManager implementation is now in @neko/agent package.
-   * Pass an instance from agent package for full functionality.
-   */
-  taskManager?: ITaskManager & {
-    initialize?(): Promise<void>;
-    resumePendingTasks?(): Promise<TaskRunScope[]>;
-    dispose?(): void | Promise<void>;
-    registerExecutor?(type: string, executor: unknown): void;
-    saveRecoveryInfo?(
-      scope: TaskRunScope,
-      externalTaskId: string,
-      providerId: string,
-    ): Promise<void>;
-    deleteRecoveryInfo?(scope: TaskRunScope): Promise<void>;
-    getRecoveryStorage?(): import('@neko/shared').ITaskRecoveryStorage | undefined;
-    updateOutputData?(scope: TaskRunScope, outputData: Record<string, unknown>): Promise<boolean>;
-    upsertExternalTask?(task: import('@neko/shared').SerializableTask): Promise<void>;
-    delete?(scope: TaskRunScope): Promise<boolean>;
-  };
   /**
    * Tool registry instance (from @neko/agent).
    * Platform no longer creates its own ToolRegistry.
@@ -394,10 +326,8 @@ export interface Platform {
   config: ConfigManager;
   /** Tool registry */
   tools: IToolRegistry;
-  /** Prompt manager */
-  prompts: PromptManager;
-  /** Media generation service (undefined when taskManager not provided) */
-  media: MediaGenerationService | undefined;
+  /** Linked media generation service. */
+  media: MediaGenerationService;
   /** Dispose resources */
   dispose: () => void;
 }
@@ -416,35 +346,11 @@ export function createPlatform(options: PlatformOptions): Platform {
   // Use injected tool registry (from @neko/agent)
   const toolRegistry = options.toolRegistry;
 
-  // Initialize prompt manager (extension registers prompts via platform.prompts.register())
-  const promptManager = new PromptManager();
-
-  // ==========================================================================
-  // Initialize Media Generation Service (optional — requires taskManager)
-  // ==========================================================================
-  const mediaTaskManager = options.taskManager;
-  let mediaGenerationService: MediaGenerationService | undefined;
-  let resumeMediaRecovery: (() => Promise<number>) | undefined;
-
-  if (mediaTaskManager) {
-    // Initialize media platform with all components
-    const mediaPlatform = createMediaPlatform({
-      configManager,
-      taskManager: mediaTaskManager,
-      requestAssetMaterializer: options.requestAssetMaterializer,
-    });
-
-    mediaGenerationService = mediaPlatform.service;
-    resumeMediaRecovery = mediaPlatform.resumeFromRecovery;
-
-    // Register media generation tools so agents can call GenerateImage, GenerateVideo, etc.
-    registerMediaAgentTools(toolRegistry, mediaGenerationService);
-
-    startPlatformTaskManager(mediaTaskManager, resumeMediaRecovery);
-  } else {
-    logger.debug('taskManager not provided — media generation disabled');
-    mediaGenerationService = undefined;
-  }
+  const mediaPlatform = createMediaPlatform({
+    configManager,
+    requestAssetMaterializer: options.requestAssetMaterializer,
+  });
+  const mediaGenerationService = mediaPlatform.service;
 
   const dispose = (): void => {
     configManager.dispose();
@@ -453,27 +359,7 @@ export function createPlatform(options: PlatformOptions): Platform {
   return {
     config: configManager,
     tools: toolRegistry,
-    prompts: promptManager,
     media: mediaGenerationService,
     dispose,
   };
-}
-
-function startPlatformTaskManager(
-  taskManager: NonNullable<PlatformOptions['taskManager']>,
-  resumeMediaRecovery?: () => Promise<number>,
-): void {
-  void (async () => {
-    await taskManager.initialize?.();
-    const recoveryResumed = await resumeMediaRecovery?.();
-    if (recoveryResumed && recoveryResumed > 0) {
-      logger.info(`Resumed ${recoveryResumed} external media task(s)`);
-    }
-    const resumed = await taskManager.resumePendingTasks?.();
-    if (resumed && resumed.length > 0) {
-      logger.info(`Resumed ${resumed.length} pending task(s)`);
-    }
-  })().catch((err) => {
-    logger.error('Failed to initialize task manager', { error: err });
-  });
 }

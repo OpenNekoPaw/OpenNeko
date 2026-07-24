@@ -17,11 +17,11 @@ import type { Model, Provider } from '../../types/provider';
 import type {
   MediaGenerationType,
   MediaAdapterResult,
-  MediaTaskStatus,
+  MediaOperationStatus,
   ImageGenerationRequest,
   VideoGenerationRequest,
   MediaOutput,
-} from '../types';
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 // =============================================================================
@@ -87,7 +87,7 @@ const CAMERA_MOVEMENT_MAP: Record<string, string> = {
 export class DashScopeMediaAdapter extends BaseMediaAdapter {
   readonly type = 'dashscope';
 
-  private static readonly STATUS_MAP: Record<string, MediaTaskStatus> = {
+  private static readonly STATUS_MAP: Record<string, MediaOperationStatus> = {
     PENDING: 'pending',
     RUNNING: 'processing',
     SUCCEEDED: 'completed',
@@ -123,7 +123,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   // Image Generation (Qwen-Image 2.0)
   // ===========================================================================
 
-  override async generateImage(
+  async generateImage(
     request: ImageGenerationRequest,
     model: Model,
     provider: Provider,
@@ -157,7 +157,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   // Video Generation (Wan 2.7)
   // ===========================================================================
 
-  override async generateVideo(
+  async generateVideo(
     request: VideoGenerationRequest,
     model: Model,
     provider: Provider,
@@ -191,10 +191,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   // Task Status (shared for image and video)
   // ===========================================================================
 
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const url = `${provider.apiUrl}/tasks/${externalTaskId}`;
 
     const { data, error } = await this.request<DashScopeTaskResponse>(
@@ -253,14 +250,6 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
       progress: this.estimateProgressFrom(taskStatus, DashScopeMediaAdapter.PROGRESS_MAP),
       outputs,
     };
-  }
-
-  // ===========================================================================
-  // Cancel (DashScope does not support cancellation)
-  // ===========================================================================
-
-  override async cancelTask(_externalTaskId: string, _provider: Provider): Promise<void> {
-    // DashScope API does not provide a cancel endpoint
   }
 
   // ===========================================================================

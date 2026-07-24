@@ -75,14 +75,8 @@ export * from './fountain-script';
 // AI Actions
 export * from './aiAction';
 
-// Task core types (TaskManager interfaces)
 export * from './agent-runtime-scope';
-export * from './task';
 
-// Task Views (Extension ↔ Webview DTO)
-export * from './task-view';
-
-export * from './task-projection';
 export * from './creative-entity-facade';
 export * from './npc-test-bench';
 
@@ -118,8 +112,6 @@ export * from './reference-contributor';
 // Agent execution trace contracts
 export * from './agent-trace';
 export * from './agent-token-budget';
-export * from './agent-task-result-observation';
-
 // Memory types (for agent context management)
 export * from './memory';
 
@@ -179,11 +171,6 @@ export * from './context-persistence';
 // Project memory types (cross-session agent memory)
 export * from './project-memory';
 
-// Prompt types (prompt template management)
-export * from './prompt';
-
-// Agent message types (unified message types for Extension ↔ Webview ↔ CLI)
-export * from './agent-message';
 export * from './creative-ai-invocation';
 
 // Media engine types (progressive media processing architecture)

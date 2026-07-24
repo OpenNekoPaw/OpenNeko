@@ -26,11 +26,11 @@ function needsTranscode(ext: string): boolean {
 
 /**
  * Derive file extension from HTTP Content-Type header.
- * Falls back to taskType / outputType hint when Content-Type is absent or generic.
+ * Falls back to generationType / outputType when Content-Type is absent or generic.
  */
 export function detectMediaExtension(
   contentType: string,
-  taskType: string,
+  generationType: string,
   outputType?: string,
 ): string {
   const ct = (contentType.split(';')[0] ?? '').trim().toLowerCase();
@@ -56,7 +56,7 @@ export function detectMediaExtension(
   if (ct === 'image/gif') return '.gif';
 
   // Fallback to task-type hint
-  const hint = outputType || taskType;
+  const hint = outputType || generationType;
   if (hint.includes('video')) return '.mp4';
   if (hint.includes('audio') || hint.includes('music') || hint.includes('tts')) return '.mp3';
   return '.png';
@@ -80,16 +80,16 @@ export interface DownloadMediaOptions {
 /**
  * Download an array of media outputs to the local filesystem.
  *
- * @param taskId     - Used as filename prefix
- * @param taskType   - Used for format fallback detection (e.g. 'text-to-image')
+ * @param operationId   - Used as filename prefix
+ * @param generationType - Used for format fallback detection (e.g. 'text-to-image')
  * @param outputs    - Array of { url?, type? } from the media adapter
  * @param outputDir  - Absolute path to the target directory (created if absent)
  * @param options    - Optional transcoding callback
  * @returns Absolute paths of successfully saved files (same order as outputs)
  */
 export async function downloadMediaOutputs(
-  taskId: string,
-  taskType: string,
+  operationId: string,
+  generationType: string,
   outputs: Array<{ url?: string; type?: string }>,
   outputDir: string,
   options: DownloadMediaOptions = {},
@@ -116,14 +116,14 @@ export async function downloadMediaOutputs(
       remoteBuffer = Buffer.from(await response.arrayBuffer());
     }
     const detectedExt = sourcePath
-      ? path.extname(sourcePath) || detectMediaExtension('', taskType, output.type)
-      : detectMediaExtension(remoteContentType, taskType, output.type);
-    const rawPath = path.join(outputDir, `${taskId}_${i}${detectedExt}`);
+      ? path.extname(sourcePath) || detectMediaExtension('', generationType, output.type)
+      : detectMediaExtension(remoteContentType, generationType, output.type);
+    const rawPath = path.join(outputDir, `${operationId}_${i}${detectedExt}`);
     const rawTempPath = `${rawPath}.part-${randomUUID()}`;
     const requiresTranscode = needsTranscode(detectedExt) && options.transcodeFile;
-    const mediaType = taskType.includes('video') ? 'video' : 'audio';
+    const mediaType = generationType.includes('video') ? 'video' : 'audio';
     const compatExt = mediaType === 'video' ? '.mp4' : '.mp3';
-    const compatPath = path.join(outputDir, `${taskId}_${i}${compatExt}`);
+    const compatPath = path.join(outputDir, `${operationId}_${i}${compatExt}`);
     const compatTempPath = `${compatPath}.part-${randomUUID()}`;
 
     try {

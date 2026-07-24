@@ -34,6 +34,7 @@ describe('Canvas Board package boundaries', () => {
   it('keeps the replaced Agent coordinator and Canvas Board service paths deleted', () => {
     const deletedPaths = [
       'apps/neko-tui/src/tui/host/node-workspace-board-projector.ts',
+      'apps/neko-tui/src/tui/host/node-media-task-delivery-host.ts',
       'packages/neko-agent/packages/extension/src/services/agentCanvasBoardCoordinator.ts',
       'packages/neko-canvas/packages/extension/src/services/canvasBoardIndexService.ts',
       'packages/neko-canvas/packages/extension/src/services/canvasBoardResolverService.ts',
@@ -47,13 +48,10 @@ describe('Canvas Board package boundaries', () => {
   });
 
   it('keeps generated-only and direct Canvas Board writer APIs out of Host production paths', () => {
-    const tuiHost = read('apps/neko-tui/src/tui/host/node-media-task-delivery-host.ts');
     const vscodeHost = read(
       'packages/neko-agent/packages/extension/src/services/workspaceBoardProjectionHost.ts',
     );
 
-    expect(tuiHost).not.toMatch(/NodeWorkspaceBoardProjector|planCanvasWorkspaceBoardProjection/);
-    expect(tuiHost).not.toMatch(/saveNkc|writeFile\([^)]*workspace\.nkc/);
     expect(vscodeHost).not.toMatch(/projectGeneratedAssets|projectGeneratedAsset/);
     expect(vscodeHost).not.toMatch(/status:\s*['"]projected['"][\s\S]{0,200}catch/);
   });

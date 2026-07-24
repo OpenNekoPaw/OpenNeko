@@ -16,10 +16,10 @@ import type { Model, Provider } from '../../types/provider';
 import type {
   MediaGenerationType,
   MediaAdapterResult,
-  MediaTaskStatus,
+  MediaOperationStatus,
   ImageGenerationRequest,
   MediaOutput,
-} from '../types';
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 // =============================================================================
@@ -71,7 +71,7 @@ const FAL_QUEUE_BASE = 'https://queue.fal.run';
 export class FalMediaAdapter extends BaseMediaAdapter {
   readonly type = 'fal';
 
-  private static readonly STATUS_MAP: Record<string, MediaTaskStatus> = {
+  private static readonly STATUS_MAP: Record<string, MediaOperationStatus> = {
     IN_QUEUE: 'pending',
     IN_PROGRESS: 'processing',
     COMPLETED: 'completed',
@@ -104,7 +104,7 @@ export class FalMediaAdapter extends BaseMediaAdapter {
   // Image Generation
   // ===========================================================================
 
-  override async generateImage(
+  async generateImage(
     request: ImageGenerationRequest,
     model: Model,
     provider: Provider,
@@ -137,10 +137,7 @@ export class FalMediaAdapter extends BaseMediaAdapter {
   // Task Status
   // ===========================================================================
 
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const [modelId, requestId] = this.parseTaskId(externalTaskId);
 
     // First check status
@@ -199,12 +196,12 @@ export class FalMediaAdapter extends BaseMediaAdapter {
   // Cancel
   // ===========================================================================
 
-  override async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
+  async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
     const [modelId, requestId] = this.parseTaskId(externalTaskId);
     // fal.ai uses PUT for cancel (not POST/DELETE)
-    await this.request(
+    await this.requestSimple<unknown>(
       `${FAL_QUEUE_BASE}/${modelId}/requests/${requestId}/cancel`,
-      { method: 'PUT' },
+      'PUT',
       provider,
     );
   }

@@ -11,7 +11,7 @@ import {
 
 describe('generated asset lifecycle', () => {
   it('creates revision identity without persisting host/cache paths', () => {
-    const lifecycle = createLifecycle('draft-1', 'sha256:same', 'task-1');
+    const lifecycle = createLifecycle('draft-1', 'sha256:same', 'operation-1');
 
     expect(lifecycle.resourceRef).toMatchObject({
       provider: 'generated-asset',
@@ -34,8 +34,8 @@ describe('generated asset lifecycle', () => {
   });
 
   it('transfers evidence only when promotion preserves the content digest', () => {
-    const draft = createLifecycle('draft-1', 'sha256:same', 'task-1');
-    const promoted = createLifecycle('asset-1', 'sha256:same', 'task-2');
+    const draft = createLifecycle('draft-1', 'sha256:same', 'operation-1');
+    const promoted = createLifecycle('asset-1', 'sha256:same', 'operation-2');
     const evidence = createEvidence(draft);
 
     const result = transferGeneratedAssetEvidenceOnPromotion({
@@ -67,8 +67,8 @@ describe('generated asset lifecycle', () => {
   });
 
   it('marks draft evidence stale instead of transferring it when promoted content changes', () => {
-    const draft = createLifecycle('draft-1', 'sha256:draft', 'task-1');
-    const promoted = createLifecycle('asset-1', 'sha256:changed', 'task-2');
+    const draft = createLifecycle('draft-1', 'sha256:draft', 'operation-1');
+    const promoted = createLifecycle('asset-1', 'sha256:changed', 'operation-2');
 
     const result = transferGeneratedAssetEvidenceOnPromotion({
       draft,
@@ -87,14 +87,14 @@ describe('generated asset lifecycle', () => {
   });
 });
 
-function createLifecycle(assetId: string, contentDigest: string, taskId: string) {
+function createLifecycle(assetId: string, contentDigest: string, operationId: string) {
   return createGeneratedAssetRevisionRef({
     assetId,
     contentDigest,
     mediaKind: 'image',
     mimeType: 'image/png',
     generation: {
-      taskId,
+      operationId,
       runId: 'run-1',
       workflowStage: { workflowId: 'workflow-1', stageId: 'shot-generation' },
     },

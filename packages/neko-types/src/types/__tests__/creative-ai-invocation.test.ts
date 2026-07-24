@@ -65,7 +65,6 @@ function validExternalInvocation() {
     targetRevision: 'target-rev-1',
     routing: {
       associationKey: 'neko-canvas:doc-1',
-      allowCreateBackgroundConversation: true,
     },
     idempotencyKey: 'neko-canvas:doc-1:node-1:prompt:edit:doc-rev-1',
   } as const;
@@ -118,6 +117,25 @@ describe('creative AI invocation contracts', () => {
         severity: 'error',
         code: 'creative-ai-missing-source-ref',
         target: 'sourceRef',
+      }),
+    ]);
+  });
+
+  it('rejects the retired background conversation routing field', () => {
+    const result = validateExternalCreativeAiInvocation({
+      ...validExternalInvocation(),
+      routing: {
+        associationKey: 'neko-canvas:doc-1',
+        allowCreateBackgroundConversation: true,
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        severity: 'error',
+        code: 'creative-ai-retired-background-conversation-routing',
+        target: 'routing.allowCreateBackgroundConversation',
       }),
     ]);
   });

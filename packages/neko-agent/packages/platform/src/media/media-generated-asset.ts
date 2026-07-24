@@ -8,17 +8,17 @@ import {
   type GeneratedImage,
   type GeneratedVideo,
 } from '@neko/shared';
-import type { MediaGenerationRequestBase, MediaOutput } from './types';
+import type { MediaGenerationRequestBase, MediaOutput } from '@neko/generation';
 
-export type GeneratedMediaTaskType = 'image' | 'video' | 'audio';
+export type GeneratedMediaKind = 'image' | 'video' | 'audio';
 
 export interface BuildGeneratedMediaAssetsInput {
   hostOutputPaths: readonly string[];
   outputs: readonly MediaOutput[];
   contentDigests: readonly string[];
-  taskId: string;
+  operationId: string;
   providerId?: string;
-  taskType: GeneratedMediaTaskType;
+  mediaKind: GeneratedMediaKind;
   prompt?: string;
   model?: string;
   request?: Pick<MediaGenerationRequestBase, 'metadata'> & { readonly operation?: string };
@@ -40,12 +40,12 @@ export function buildGeneratedMediaAssets(input: BuildGeneratedMediaAssetsInput)
     if (!contentDigest) {
       throw new Error(`Generated output ${i} is missing a content digest.`);
     }
-    const assetId = createStableGeneratedOutputId(input.taskId, i, contentDigest);
+    const assetId = createStableGeneratedOutputId(input.operationId, i, contentDigest);
     const mimeType = output?.mimeType ?? inferGeneratedMediaMimeType(hostOutputPath);
     const lifecycle = createGeneratedAssetRevisionRef({
       assetId,
       contentDigest,
-      mediaKind: input.taskType,
+      mediaKind: input.mediaKind,
       mimeType,
       generation,
     });
@@ -65,7 +65,7 @@ export function buildGeneratedMediaAssets(input: BuildGeneratedMediaAssetsInput)
       mimeType: base.mimeType,
     };
 
-    switch (input.taskType) {
+    switch (input.mediaKind) {
       case 'image': {
         const width = output?.width ?? 1024;
         const height = output?.height ?? 1024;
@@ -112,12 +112,12 @@ export function buildGeneratedMediaAssets(input: BuildGeneratedMediaAssetsInput)
 }
 
 export function createStableGeneratedOutputId(
-  taskId: string,
+  operationId: string,
   outputIndex: number,
   contentDigest: string,
 ): string {
   const digest = createHash('sha256')
-    .update(`${taskId}\0${outputIndex}\0${contentDigest}`)
+    .update(`${operationId}\0${outputIndex}\0${contentDigest}`)
     .digest('hex')
     .slice(0, 24);
   return `generated-${digest}`;
@@ -185,16 +185,15 @@ function extractGeneratedAssetLineage(
 }
 
 function extractGeneratedAssetGenerationLineage(
-  input: Pick<BuildGeneratedMediaAssetsInput, 'taskId' | 'providerId' | 'model' | 'request'>,
+  input: Pick<BuildGeneratedMediaAssetsInput, 'operationId' | 'providerId' | 'model' | 'request'>,
 ): GeneratedAssetGenerationLineage {
   const metadata = input.request?.metadata;
   const workflowStage = readWorkflowStage(metadata);
   return {
-    taskId: input.taskId,
+    operationId: input.operationId,
     ...(readMetadataString(metadata, 'runId')
       ? { runId: readMetadataString(metadata, 'runId') }
       : {}),
-    ...(input.request?.operation ? { operationId: input.request.operation } : {}),
     ...(input.providerId ? { providerId: input.providerId } : {}),
     ...(input.model ? { modelId: input.model } : {}),
     ...(workflowStage ? { workflowStage } : {}),

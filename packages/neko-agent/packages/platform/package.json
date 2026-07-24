@@ -6,6 +6,7 @@
   "dependencies": {
     "@neko-agent/types": "workspace:*",
     "@neko/ai-sdk": "workspace:*",
+    "@neko/generation": "workspace:*",
     "@neko/shared": "workspace:*",
     "ai": "^6.0.134"
   },

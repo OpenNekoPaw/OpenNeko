@@ -12,7 +12,6 @@
 import type { AgentTraceContext } from './agent-trace';
 import type { CreativeDomainMetadata } from './domain-routing';
 import type { ToolPlanningMetadata } from './tool-planning';
-import type { TaskRunScope } from './task';
 
 /**
  * Chat message format
@@ -237,29 +236,15 @@ export interface IService {
   embed(texts: string[]): Promise<{ embeddings: number[][] }>;
 }
 
-/**
- * Media task status
- */
-export type MediaTaskStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
-
-/**
- * Media task
- */
-export interface MediaTask {
-  scope: TaskRunScope;
-  id: string;
+export interface MediaGenerationResult {
   type: 'image' | 'video' | 'audio';
-  status: MediaTaskStatus;
-  progress?: number;
-  result?: {
+  outputs: readonly {
     url: string;
+    mimeType?: string;
     width?: number;
     height?: number;
     duration?: number;
-  };
-  error?: string;
-  createdAt: number;
-  updatedAt: number;
+  }[];
 }
 
 /**
@@ -321,59 +306,17 @@ export interface IMediaGenerationService {
   /**
    * Generate an image
    */
-  generateImage(request: ImageGenerationRequest): Promise<MediaTask>;
+  generateImage(request: ImageGenerationRequest): Promise<MediaGenerationResult>;
 
   /**
    * Generate a video
    */
-  generateVideo(request: VideoGenerationRequest): Promise<MediaTask>;
+  generateVideo(request: VideoGenerationRequest): Promise<MediaGenerationResult>;
 
   /**
    * Generate audio
    */
-  generateAudio(request: AudioGenerationRequest): Promise<MediaTask>;
-
-  /**
-   * Wait for task completion
-   */
-  waitForTask(taskScope: TaskRunScope, timeoutMs?: number): Promise<MediaTask>;
-
-  /**
-   * Cancel a task
-   */
-  cancelTask(taskScope: TaskRunScope): Promise<boolean>;
-
-  /**
-   * Get task status
-   */
-  getTask(taskScope: TaskRunScope): Promise<MediaTask | undefined>;
-
-  /**
-   * Subscribe to task progress
-   */
-  onProgress(taskScope: TaskRunScope, callback: (task: MediaTask) => void): () => void;
-}
-
-/**
- * Media task manager interface (for async media generation tasks)
- * This is a simplified interface for UI/platform integration.
- * For the full TaskManager implementation, see @neko/agent.
- */
-export interface IMediaTaskManager {
-  /**
-   * Get task by ID
-   */
-  get(scope: TaskRunScope): Promise<MediaTask | undefined>;
-
-  /**
-   * List tasks
-   */
-  list(filter?: { status?: MediaTaskStatus; type?: string }): Promise<MediaTask[]>;
-
-  /**
-   * Cancel a task
-   */
-  cancel(scope: TaskRunScope): Promise<boolean>;
+  generateAudio(request: AudioGenerationRequest): Promise<MediaGenerationResult>;
 }
 
 /**
@@ -442,11 +385,6 @@ export interface IPlatform {
    * Media generation service
    */
   readonly media: IMediaGenerationService;
-
-  /**
-   * Task manager
-   */
-  readonly tasks: IMediaTaskManager;
 
   /**
    * Create a service instance for a specific group

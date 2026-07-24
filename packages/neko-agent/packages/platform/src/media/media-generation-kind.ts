@@ -1,6 +1,11 @@
-import type { ImageGenerationRequest, MediaGenerationType, VideoGenerationRequest } from './types';
+import type { ImageGenerationRequest, VideoGenerationRequest } from '@neko/generation';
 
-export function resolveImageGenerationType(request: ImageGenerationRequest): MediaGenerationType {
+export function resolveImageGenerationType(
+  request: ImageGenerationRequest,
+): 'text-to-image' | 'image-to-image' | 'image-edit' {
+  if (request.operation && request.operation !== 'generate') {
+    return 'image-edit';
+  }
   return request.referenceImageUrl ||
     request.referenceImageBase64 ||
     request.referenceImageUri ||
@@ -10,7 +15,17 @@ export function resolveImageGenerationType(request: ImageGenerationRequest): Med
     : 'text-to-image';
 }
 
-export function resolveVideoGenerationType(request: VideoGenerationRequest): MediaGenerationType {
+export function resolveVideoGenerationType(
+  request: VideoGenerationRequest,
+): 'text-to-video' | 'image-to-video' | 'video-to-video' | 'video-edit' {
+  if (
+    request.operation &&
+    request.operation !== 'generate-from-prompt' &&
+    request.operation !== 'generate-from-image' &&
+    request.operation !== 'generate-from-keyframes'
+  ) {
+    return 'video-edit';
+  }
   if (request.referenceVideoRef || request.referenceVideoUrl || request.sourceVideoUrl) {
     return 'video-to-video';
   }

@@ -10,7 +10,7 @@ import {
 import {
   buildGeneratedMediaAssets,
   toStableGeneratedAssetUri,
-  type GeneratedMediaTaskType,
+  type GeneratedMediaKind,
 } from './media-generated-asset';
 
 export interface GeneratedOutputAdoptionIndex {
@@ -62,7 +62,7 @@ export type LegacyGeneratedOutputRetentionResult =
       readonly diagnostics: readonly [LegacyGeneratedOutputRetentionDiagnostic];
     };
 
-const ADOPTABLE_KINDS: readonly GeneratedMediaTaskType[] = ['image', 'video', 'audio'];
+const ADOPTABLE_KINDS: readonly GeneratedMediaKind[] = ['image', 'video', 'audio'];
 
 export async function adoptWorkspaceGeneratedOutputs(options: {
   readonly workspaceRoot: string;
@@ -103,8 +103,8 @@ export async function adoptWorkspaceGeneratedOutputs(options: {
           hostOutputPaths: [filePath],
           outputs: [{ type: kind, url: filePath }],
           contentDigests: [contentDigest],
-          taskId: `legacy-adoption:${relativePath}`,
-          taskType: kind,
+          operationId: `legacy-adoption:${relativePath}`,
+          mediaKind: kind,
           request: { operation: 'legacy-adoption' },
           now: () => new Date(mtimeMs).toISOString(),
         });
@@ -194,7 +194,7 @@ export async function retainLegacyGeneratedOutput(options: {
       contentDigest,
       mediaKind,
       mimeType: asset.mimeType,
-      generation: { taskId: `legacy-retain:${asset.id}` },
+      generation: { operationId: `legacy-retain:${asset.id}` },
     });
   const retainedAsset: GeneratedAsset = {
     ...asset,
@@ -265,7 +265,7 @@ async function computeDigest(filePath: string): Promise<string> {
 async function retainCanonicalSource(input: {
   readonly workspaceRoot: string;
   readonly asset: GeneratedAsset;
-  readonly mediaKind: GeneratedMediaTaskType;
+  readonly mediaKind: GeneratedMediaKind;
   readonly contentDigest: string;
 }): Promise<string> {
   const kindRoot = path.resolve(input.workspaceRoot, 'neko', 'generated', input.mediaKind);
@@ -300,7 +300,7 @@ async function retainCanonicalSource(input: {
   return targetPath;
 }
 
-function toRetainableMediaKind(asset: GeneratedAsset): GeneratedMediaTaskType | undefined {
+function toRetainableMediaKind(asset: GeneratedAsset): GeneratedMediaKind | undefined {
   const kind: GeneratedAssetMediaKind =
     asset.type === 'generated-image'
       ? 'image'

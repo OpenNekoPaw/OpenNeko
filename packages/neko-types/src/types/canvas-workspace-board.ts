@@ -26,6 +26,7 @@ export interface CanvasWorkspaceDeliveryProcess {
   readonly sourceHost: CanvasWorkspaceDeliveryHost;
   readonly createdAt: string;
   readonly taskId?: string;
+  readonly operationId?: string;
   readonly runId?: string;
 }
 
@@ -39,6 +40,7 @@ export interface CanvasWorkspaceProjectionProvenance {
   readonly sourceId: string;
   readonly sourceArtifactIds?: readonly string[];
   readonly taskId?: string;
+  readonly operationId?: string;
   readonly runId?: string;
   readonly createdAt: string;
 }
@@ -223,8 +225,8 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
     revision: requireGeneratedAssetLifecycle(asset).revision,
   }));
   const deliveryId = `generated-output-batch:${hashGeneratedAssetIdentities(identities)}`;
-  const taskId = sharedString(
-    assets.map((asset) => requireGeneratedAssetLifecycle(asset).generation.taskId),
+  const operationId = sharedString(
+    assets.map((asset) => requireGeneratedAssetLifecycle(asset).generation.operationId),
   );
   const runId = sharedString(
     assets.map((asset) => requireGeneratedAssetLifecycle(asset).generation.runId),
@@ -237,7 +239,7 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
     process: {
       deliveryId,
       sourceHost,
-      ...(taskId ? { taskId } : {}),
+      ...(operationId ? { operationId } : {}),
       ...(runId ? { runId } : {}),
       createdAt,
     },
@@ -258,7 +260,7 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
           kind: lifecycle.mediaKind,
           role: 'output' as const,
           sourceId: lifecycle.resourceRef.id,
-          taskId: lifecycle.generation.taskId,
+          operationId: lifecycle.generation.operationId,
           ...(lifecycle.generation.runId ? { runId: lifecycle.generation.runId } : {}),
           createdAt: asset.generatedAt,
         },

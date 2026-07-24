@@ -14,7 +14,7 @@ describe('createGeneratedAssetResourceResolver', () => {
       contentDigest: 'sha256:generated-1',
       mediaKind: 'image',
       mimeType: 'image/png',
-      generation: { taskId: 'task-1' },
+      generation: { operationId: 'operation-1' },
     });
     const generatedOutput: GeneratedImage = {
       type: 'generated-image',
@@ -46,7 +46,7 @@ describe('createGeneratedAssetResourceResolver', () => {
     const fileRef = createResourceRef({
       scope: 'project',
       provider: 'source-file',
-      kind: 'file',
+      kind: 'document',
       source: { kind: 'file', filePath: 'images/source.png' },
       locator: { kind: 'file', path: 'images/source.png' },
       fingerprint: createResourceFingerprint({ strategy: 'provider', value: 'source-v1' }),
@@ -60,7 +60,7 @@ describe('createGeneratedAssetResourceResolver', () => {
       contentDigest: 'sha256:missing',
       mediaKind: 'image',
       mimeType: 'image/png',
-      generation: { taskId: 'task-missing' },
+      generation: { operationId: 'operation-missing' },
     }).resourceRef;
     await expect(resolve(generatedRef)).resolves.toBeUndefined();
     expect(get).toHaveBeenCalledWith('missing');

@@ -24,9 +24,8 @@ export interface GeneratedAssetWorkflowStageRef {
 }
 
 export interface GeneratedAssetGenerationLineage {
-  readonly taskId: string;
+  readonly operationId: string;
   readonly runId?: string;
-  readonly operationId?: string;
   readonly providerId?: string;
   readonly modelId?: string;
   readonly workflowStage?: GeneratedAssetWorkflowStageRef;
@@ -85,7 +84,7 @@ export function createGeneratedAssetRevisionRef(
   assertNonEmpty(input.assetId, 'assetId');
   assertNonEmpty(input.contentDigest, 'contentDigest');
   assertNonEmpty(input.mimeType, 'mimeType');
-  assertNonEmpty(input.generation.taskId, 'generation.taskId');
+  assertNonEmpty(input.generation.operationId, 'generation.operationId');
 
   const revision = `rev_${hashStableValue({
     assetId: input.assetId,

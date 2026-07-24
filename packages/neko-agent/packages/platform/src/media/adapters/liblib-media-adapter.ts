@@ -8,11 +8,11 @@ import type { Model, Provider } from '../../types/provider';
 import type {
   MediaGenerationType,
   MediaAdapterResult,
-  MediaTaskStatus,
+  MediaOperationStatus,
   ImageGenerationRequest,
   VideoGenerationRequest,
   MediaOutput,
-} from '../types';
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 /**
@@ -51,7 +51,7 @@ interface LiblibStatusResponse {
 export class LiblibMediaAdapter extends BaseMediaAdapter {
   readonly type = 'liblib';
 
-  private static readonly STATUS_MAP: Record<number, MediaTaskStatus> = {
+  private static readonly STATUS_MAP: Record<number, MediaOperationStatus> = {
     2: 'pending', // queued
     1: 'processing', // running
     5: 'completed', // success
@@ -105,7 +105,7 @@ export class LiblibMediaAdapter extends BaseMediaAdapter {
   /**
    * Generate image using LiblibAI API
    */
-  override async generateImage(
+  async generateImage(
     request: ImageGenerationRequest,
     model: Model,
     provider: Provider,
@@ -166,7 +166,7 @@ export class LiblibMediaAdapter extends BaseMediaAdapter {
   /**
    * Generate video using LiblibAI API
    */
-  override async generateVideo(
+  async generateVideo(
     request: VideoGenerationRequest,
     model: Model,
     provider: Provider,
@@ -225,10 +225,7 @@ export class LiblibMediaAdapter extends BaseMediaAdapter {
   /**
    * Get task status
    */
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const url = `${provider.apiUrl}/api/generate/status?generateUuid=${externalTaskId}`;
 
     const { data, error } = await this.request<LiblibStatusResponse>(
@@ -286,16 +283,9 @@ export class LiblibMediaAdapter extends BaseMediaAdapter {
   /**
    * Cancel a running task
    */
-  override async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
+  async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
     const url = `${provider.apiUrl}/api/generate/cancel`;
-    await this.request(
-      url,
-      {
-        method: 'POST',
-        body: JSON.stringify({ generateUuid: externalTaskId }),
-      },
-      provider,
-    );
+    await this.requestSimple<unknown>(url, 'POST', provider, { generateUuid: externalTaskId });
   }
 
   /**

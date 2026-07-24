@@ -213,7 +213,6 @@ export interface CreativeAiWritebackPolicy {
 export interface CreativeAiRoutingHint {
   readonly associationKey?: string;
   readonly requestedConversationId?: string;
-  readonly allowCreateBackgroundConversation?: boolean;
   readonly userSelectedConversationId?: string;
 }
 
@@ -1383,6 +1382,16 @@ function validateOptionalRoutingHint(
     );
     return;
   }
+  if ('allowCreateBackgroundConversation' in value) {
+    diagnostics.push(
+      diagnostic(
+        'error',
+        'creative-ai-retired-background-conversation-routing',
+        'Creative AI routing no longer supports background conversation creation.',
+        `${target}.allowCreateBackgroundConversation`,
+      ),
+    );
+  }
   validateOptionalStableString(value['associationKey'], `${target}.associationKey`, diagnostics);
   validateOptionalStableString(
     value['requestedConversationId'],
@@ -1394,19 +1403,6 @@ function validateOptionalRoutingHint(
     `${target}.userSelectedConversationId`,
     diagnostics,
   );
-  if (
-    value['allowCreateBackgroundConversation'] !== undefined &&
-    typeof value['allowCreateBackgroundConversation'] !== 'boolean'
-  ) {
-    diagnostics.push(
-      diagnostic(
-        'error',
-        'creative-ai-invalid-boolean',
-        'Creative AI routing allowCreateBackgroundConversation must be boolean.',
-        `${target}.allowCreateBackgroundConversation`,
-      ),
-    );
-  }
 }
 
 function validateOptionalModelSnapshot(

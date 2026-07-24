@@ -200,7 +200,7 @@ describe('Canvas Workspace Board delivery contract', () => {
     expect(delivery).toMatchObject({
       version: 2,
       target: { workspaceId: 'workspace-1', workspaceUri: 'file:///workspace/project/' },
-      process: { sourceHost: 'tui', taskId: 'task-1', runId: 'run-1' },
+      process: { sourceHost: 'tui', operationId: 'operation-1', runId: 'run-1' },
       artifacts: [
         {
           kind: 'image',
@@ -363,7 +363,7 @@ function generatedImage(): GeneratedImage {
       mediaKind: 'image',
       mimeType: 'image/png',
       generation: {
-        taskId: 'task-1',
+        operationId: 'operation-1',
         runId: 'run-1',
         providerId: 'image-provider',
         modelId: 'image-model-v2',

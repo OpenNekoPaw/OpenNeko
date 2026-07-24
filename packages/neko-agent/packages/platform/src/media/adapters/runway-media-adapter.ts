@@ -8,10 +8,10 @@ import type { Model, Provider } from '../../types/provider';
 import type {
   MediaGenerationType,
   MediaAdapterResult,
-  MediaTaskStatus,
+  MediaOperationStatus,
   VideoGenerationRequest,
   MediaOutput,
-} from '../types';
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 /**
@@ -34,7 +34,7 @@ export class RunwayMediaAdapter extends BaseMediaAdapter {
 
   private readonly apiVersion = '2024-11-06';
 
-  private static readonly STATUS_MAP: Record<string, MediaTaskStatus> = {
+  private static readonly STATUS_MAP: Record<string, MediaOperationStatus> = {
     PENDING: 'pending',
     RUNNING: 'processing',
     SUCCEEDED: 'completed',
@@ -68,7 +68,7 @@ export class RunwayMediaAdapter extends BaseMediaAdapter {
   /**
    * Generate video using Runway API
    */
-  override async generateVideo(
+  async generateVideo(
     request: VideoGenerationRequest,
     model: Model,
     provider: Provider,
@@ -116,10 +116,7 @@ export class RunwayMediaAdapter extends BaseMediaAdapter {
   /**
    * Get task status
    */
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const url = `${provider.apiUrl}/v1/tasks/${externalTaskId}`;
 
     const { data, error } = await this.request<RunwayTaskResponse>(
@@ -161,7 +158,7 @@ export class RunwayMediaAdapter extends BaseMediaAdapter {
   /**
    * Cancel a running task
    */
-  override async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
+  async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
     await this.cancelViaEndpoint(`${provider.apiUrl}/v1/tasks/${externalTaskId}/cancel`, provider);
   }
 }

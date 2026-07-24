@@ -8,10 +8,10 @@ import type { Model, Provider } from '../../types/provider';
 import type {
   MediaGenerationType,
   MediaAdapterResult,
-  MediaTaskStatus,
+  MediaOperationStatus,
   VideoGenerationRequest,
   MediaOutput,
-} from '../types';
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 /**
@@ -56,7 +56,7 @@ interface MiniMaxFileResponse {
 export class MiniMaxMediaAdapter extends BaseMediaAdapter {
   readonly type = 'minimax';
 
-  private static readonly STATUS_MAP: Record<string, MediaTaskStatus> = {
+  private static readonly STATUS_MAP: Record<string, MediaOperationStatus> = {
     Queueing: 'pending',
     Processing: 'processing',
     Success: 'completed',
@@ -77,7 +77,7 @@ export class MiniMaxMediaAdapter extends BaseMediaAdapter {
   /**
    * Generate video using MiniMax API
    */
-  override async generateVideo(
+  async generateVideo(
     request: VideoGenerationRequest,
     model: Model,
     provider: Provider,
@@ -120,10 +120,7 @@ export class MiniMaxMediaAdapter extends BaseMediaAdapter {
   /**
    * Get task status
    */
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const url = `${provider.apiUrl}/v1/query/video_generation?task_id=${externalTaskId}`;
 
     const { data, error } = await this.request<MiniMaxTaskStatusResponse>(
@@ -191,12 +188,5 @@ export class MiniMaxMediaAdapter extends BaseMediaAdapter {
         mimeType: 'video/mp4',
       },
     ];
-  }
-
-  /**
-   * Cancel a running task
-   */
-  override async cancelTask(_externalTaskId: string, _provider: Provider): Promise<void> {
-    // MiniMax does not support task cancellation
   }
 }

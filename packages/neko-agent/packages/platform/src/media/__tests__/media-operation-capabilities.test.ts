@@ -7,7 +7,7 @@ import {
   validateProviderImageRequest,
   validateProviderVideoRequest,
 } from '../media-operation-capabilities';
-import type { ImageGenerationRequest, VideoGenerationRequest } from '../types';
+import type { ImageGenerationRequest, VideoGenerationRequest } from '@neko/generation';
 
 function resourceRef(id: string): ResourceRef {
   return {
