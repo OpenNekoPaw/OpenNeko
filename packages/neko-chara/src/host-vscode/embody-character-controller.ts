@@ -94,7 +94,13 @@ export class EmbodyCharacterController implements vscode.Disposable {
     const assembler =
       this.deps.createAssembler?.(projectRoot) ??
       createDefaultCharacterProfileAssembler(projectRoot);
-    const assembly = await assembler.assembleProfile({ entityRef });
+    let assembly: NpcProfileAssemblyResult;
+    try {
+      assembly = await assembler.assembleProfile({ entityRef });
+    } catch (error) {
+      this.postGlobalError(error instanceof Error ? error.message : String(error));
+      return null;
+    }
     if (assembly.status !== 'assembled') {
       this.postGlobalError(assembly.reason);
       return null;

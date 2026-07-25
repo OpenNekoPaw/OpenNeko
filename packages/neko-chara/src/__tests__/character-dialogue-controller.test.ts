@@ -446,6 +446,25 @@ describe('CharacterDialogueController', () => {
     });
   });
 
+  it('projects profile evidence failures without creating a Character Dialogue session', async () => {
+    const assembleProfile = vi.fn(async () => {
+      throw new Error('Character project search is unavailable.');
+    });
+    const harness = createHarness({
+      createAssembler: () => ({ assembleProfile }),
+    });
+
+    await expect(harness.controller.launch({ entityRef })).resolves.toBeNull();
+
+    expect(assembleProfile).toHaveBeenCalledWith({ entityRef });
+    expect(harness.updateTabState).not.toHaveBeenCalled();
+    expect(harness.responder).not.toHaveBeenCalled();
+    expect(harness.webview.postMessage).toHaveBeenCalledWith({
+      type: 'globalError',
+      message: 'Character project search is unavailable.',
+    });
+  });
+
   it('reports unresolved entities without creating a session', async () => {
     const harness = createHarness({
       createAssembler: () => ({

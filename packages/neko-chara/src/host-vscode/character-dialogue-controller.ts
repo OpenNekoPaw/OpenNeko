@@ -259,10 +259,16 @@ export class CharacterDialogueController implements vscode.Disposable {
     const assembler =
       this.deps.createAssembler?.(projectRoot) ??
       createDefaultCharacterProfileAssembler(projectRoot);
-    const assembly = await assembler.assembleProfile({
-      entityRef,
-      ...(request.userSupplements ? { userSupplements: request.userSupplements } : {}),
-    });
+    let assembly: NpcProfileAssemblyResult;
+    try {
+      assembly = await assembler.assembleProfile({
+        entityRef,
+        ...(request.userSupplements ? { userSupplements: request.userSupplements } : {}),
+      });
+    } catch (error) {
+      this.postGlobalError(error instanceof Error ? error.message : String(error));
+      return null;
+    }
     if (assembly.status !== 'assembled') {
       this.postGlobalError(assembly.reason);
       return null;
