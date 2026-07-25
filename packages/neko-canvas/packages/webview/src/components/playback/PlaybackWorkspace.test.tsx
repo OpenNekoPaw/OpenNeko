@@ -31,6 +31,7 @@ vi.mock('@neko/ui/icons', () => ({
   ClockIcon: ({ size = 16 }: { size?: number }) => <span data-icon="clock">{size}</span>,
   SendIcon: ({ size = 16 }: { size?: number }) => <span data-icon="send">{size}</span>,
   WarningIcon: ({ size = 16 }: { size?: number }) => <span data-icon="warning">{size}</span>,
+  CloseIcon: ({ size = 16 }: { size?: number }) => <span data-icon="close">{size}</span>,
 }));
 
 vi.mock('../../preview/PreviewRendererRegistry', () => ({
@@ -94,9 +95,6 @@ describe('PlaybackWorkspace', () => {
       isConnecting: false,
       pendingConnectionSource: null,
       activePlayingNodeId: null,
-      expandedNodeId: null,
-      generationPanelState: { visible: false, nodeId: null, childNodeId: null },
-      contentOverlayState: { visible: false, nodeId: null },
     });
     usePlaybackStore.setState({
       activePlayback: null,
@@ -111,7 +109,7 @@ describe('PlaybackWorkspace', () => {
         playbackState: 'idle',
         stale: false,
         matrix: {
-          routeViewMode: 'matrix',
+          routeViewMode: 'compact',
           filters: {
             routeIds: [],
             containerIds: [],
@@ -146,23 +144,41 @@ describe('PlaybackWorkspace', () => {
     expect(host.querySelector('[data-testid="canvas-playback-route-strip"]')).toBeNull();
   });
 
-  it('reveals stage and route matrix from Webview-local session state', () => {
+  it('reveals the stage and top storyline overlay from Webview-local session state', () => {
     act(() => {
       usePlaybackStore.getState().revealPlaybackWorkspace();
       root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
     });
 
     expect(host.querySelector('[data-testid="canvas-playback-stage-pane"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="canvas-route-storyboard-matrix"]')).not.toBeNull();
-    expect(host.querySelector('[data-testid="canvas-playback-route-strip"]')).toBeNull();
+    expect(host.querySelector('[data-testid="canvas-route-storyboard-matrix"]')).toBeNull();
+    expect(host.querySelector('[data-testid="canvas-playback-route-strip"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="canvas-playback-route-pane"]')).toMatchObject({
+      className: expect.stringContaining('canvas-playback-route-overlay'),
+    });
+    expect(
+      host
+        .querySelector('[data-testid="canvas-playback-route-pane"]')
+        ?.closest('[data-testid="canvas-playback-canvas-pane"]'),
+    ).not.toBeNull();
+    expect(
+      host
+        .querySelector('[data-testid="canvas-playback-stage-pane"]')
+        ?.contains(host.querySelector('[data-testid="canvas-playback-route-pane"]')),
+    ).toBe(false);
+    expect(
+      host.querySelector<HTMLElement>('[data-testid="canvas-playback-route-pane"]')?.dataset
+        .routeViewMode,
+    ).toBe('compact');
+    expect(host.querySelectorAll('[data-testid="canvas-playback-controller"]')).toHaveLength(1);
     expect(host.querySelector('.canvas-playback-workspace-header')).toBeNull();
     expect(host.querySelector('.canvas-playback-route-pane-toolbar')).toBeNull();
-    expect(host.textContent).toContain('Route Storyboard Matrix');
-    expect(host.textContent).toContain('Shot 1');
-    expect(host.textContent).toContain('Shot 2');
+    expect(host.textContent).toContain('Storyline');
+    expect(host.textContent).toContain('Media 1');
+    expect(host.textContent).toContain('Media 2');
   });
 
-  it('localizes preview metadata field labels without changing playback metadata keys', () => {
+  it('localizes preview unit kinds without changing persisted media titles', () => {
     setLocale('zh-cn');
 
     act(() => {
@@ -178,14 +194,44 @@ describe('PlaybackWorkspace', () => {
       root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
     });
 
-    expect(host.textContent).toContain('镜头 1');
-    expect(host.textContent).toContain('镜头号');
-    expect(host.textContent).toContain('时长');
-    expect(host.textContent).toContain('画面描述');
-    expect(host.textContent).toContain('角色');
-    expect(host.textContent).not.toContain('shotNumber');
-    expect(host.textContent).not.toContain('visualDescription');
-    expect(host.textContent).not.toContain('characters');
+    expect(host.textContent).toContain('Media 1');
+    expect(host.textContent).toContain('媒体');
+    expect(host.textContent).not.toContain('playback.kind.media');
+  });
+
+  it('localizes the complete storyline overlay chrome without translating persisted titles', () => {
+    setLocale('zh-cn');
+
+    act(() => {
+      usePlaybackStore.getState().revealPlaybackWorkspace();
+      root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
+    });
+
+    const overlay = host.querySelector<HTMLElement>('[data-testid="canvas-playback-route-pane"]');
+    expect(overlay?.textContent).toContain('故事线');
+    expect(overlay?.textContent).toContain('路线比较');
+    expect(overlay?.textContent).toContain('Media 1');
+    expect(overlay?.querySelector('button[title="播放"]')).not.toBeNull();
+    expect(overlay?.querySelector('button[title="隐藏故事线浮层"]')).not.toBeNull();
+    expect(overlay?.querySelector('[aria-label="调整故事线浮层高度"]')).not.toBeNull();
+    expect(overlay?.textContent).not.toContain('Storyline');
+    expect(overlay?.textContent).not.toContain('Compare');
+  });
+
+  it('keeps route focus ownership when the overlay is nested inside the canvas pane', () => {
+    act(() => {
+      usePlaybackStore.getState().revealPlaybackWorkspace();
+      root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
+    });
+
+    const overlay = host.querySelector<HTMLElement>('[data-testid="canvas-playback-route-pane"]');
+    if (!overlay) throw new Error('storyline overlay was not rendered');
+
+    act(() => {
+      overlay.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+
+    expect(usePlaybackStore.getState().playbackSession.focusOwner).toBe('route');
   });
 
   it('changes current unit from the route matrix without writing private order to canvas data', () => {
@@ -195,10 +241,11 @@ describe('PlaybackWorkspace', () => {
       usePlaybackStore.getState().revealPlaybackWorkspace();
       root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
     });
+    switchRouteViewMode(host, 'Compare');
 
     const shotTwo = Array.from(
       host.querySelectorAll<HTMLButtonElement>('.canvas-route-storyboard-matrix-cell-playable'),
-    ).find((button) => button.textContent?.includes('Shot 2'));
+    ).find((button) => button.textContent?.includes('Media 2'));
 
     act(() => {
       shotTwo?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -218,6 +265,7 @@ describe('PlaybackWorkspace', () => {
       usePlaybackStore.getState().revealPlaybackWorkspace();
       root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
     });
+    switchRouteViewMode(host, 'Compare');
 
     const canvasPane = host.querySelector<HTMLElement>(
       '[data-testid="canvas-playback-canvas-pane"]',
@@ -240,7 +288,7 @@ describe('PlaybackWorkspace', () => {
 
     const shotTwo = Array.from(
       host.querySelectorAll<HTMLButtonElement>('.canvas-route-storyboard-matrix-cell-playable'),
-    ).find((button) => button.textContent?.includes('Shot 2'));
+    ).find((button) => button.textContent?.includes('Media 2'));
 
     act(() => {
       shotTwo?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -249,7 +297,7 @@ describe('PlaybackWorkspace', () => {
     expect(useCanvasStore.getState().selection.nodeIds).toEqual(['shot-a2']);
     expect(useRuntimeViewportStore.getState().viewport.pan).toEqual({
       x: -680,
-      y: 180,
+      y: 342,
     });
   });
 
@@ -266,11 +314,11 @@ describe('PlaybackWorkspace', () => {
 
     expect(usePlaybackStore.getState().playbackSession.panes.stage).toBe(false);
     expect(usePlaybackStore.getState().playbackSession.playbackState).toBe('paused');
-    expect(host.querySelector('[data-testid="canvas-route-storyboard-matrix"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="canvas-playback-route-strip"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="canvas-playback-stage-pane"]')).toBeNull();
   });
 
-  it('keeps route matrix reachable when the playback stage is hidden', () => {
+  it('keeps the storyline overlay reachable when the playback stage is hidden', () => {
     act(() => {
       usePlaybackStore.getState().revealPlaybackWorkspace();
       root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
@@ -281,7 +329,7 @@ describe('PlaybackWorkspace', () => {
     });
 
     expect(host.querySelector('[data-testid="canvas-playback-stage-pane"]')).toBeNull();
-    expect(host.querySelector('[data-testid="canvas-route-storyboard-matrix"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="canvas-playback-route-strip"]')).not.toBeNull();
     expect(host.querySelector('.canvas-playback-workspace-header')).toBeNull();
 
     act(() => {
@@ -304,9 +352,11 @@ describe('PlaybackWorkspace', () => {
     const stage = host.querySelector<HTMLElement>('[data-testid="canvas-playback-stage-pane"]');
     const route = host.querySelector<HTMLElement>('[data-testid="canvas-playback-route-pane"]');
 
-    expect(stage?.style.width).toBe('640px');
+    expect(stage?.style.getPropertyValue('--canvas-playback-stage-width')).toBe('640px');
+    expect(stage?.style.width).toBe('');
     expect(route?.style.height).toBe('260px');
-    expect(host.querySelector('[data-testid="canvas-route-storyboard-matrix"]')).not.toBeNull();
+    expect(route?.classList.contains('canvas-playback-route-overlay')).toBe(true);
+    expect(host.querySelector('[data-testid="canvas-playback-route-strip"]')).not.toBeNull();
   });
 
   it('seeks from the preview control bar into the route unit projection', () => {
@@ -386,6 +436,35 @@ describe('PlaybackWorkspace', () => {
     );
   });
 
+  it('opens the Preview when playback starts from the storyline and keeps one controller owner', () => {
+    act(() => {
+      useCanvasStore.setState({
+        canvasData: mediaRouteCanvas(),
+        selection: { nodeIds: ['media-a'], connectionIds: [] },
+      });
+      usePlaybackStore.getState().revealPlaybackWorkspace({
+        panes: { canvas: true, stage: false, route: true },
+      });
+      root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
+    });
+
+    expect(host.querySelector('[data-testid="canvas-playback-stage-pane"]')).toBeNull();
+    expect(host.querySelectorAll('[data-testid="canvas-playback-controller"]')).toHaveLength(1);
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>('button[title="Play"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(usePlaybackStore.getState().playbackSession.panes.stage).toBe(true);
+    expect(host.querySelector('[data-testid="canvas-playback-stage-pane"]')).not.toBeNull();
+    expect(
+      host.querySelector<HTMLElement>('[data-testid="preview-surface"]')?.dataset.playbackState,
+    ).toBe('playing');
+    expect(host.querySelectorAll('[data-testid="canvas-playback-controller"]')).toHaveLength(1);
+  });
+
   it('requests and renders host-enriched preview plans inside the same Webview', async () => {
     vscodeApi = { postMessage: vi.fn() };
     (window as unknown as { vscodeApi?: unknown }).vscodeApi = vscodeApi;
@@ -449,7 +528,7 @@ describe('PlaybackWorkspace', () => {
     );
   });
 
-  it('keeps matrix as the route pane surface without exposing the compact strip toggle', () => {
+  it('switches between storyline and route comparison without changing the selected route', () => {
     act(() => {
       usePlaybackStore.getState().revealPlaybackWorkspace();
       root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
@@ -457,9 +536,21 @@ describe('PlaybackWorkspace', () => {
 
     const beforeRouteId = usePlaybackStore.getState().playbackSession.routeId;
 
+    expect(host.querySelector('[data-testid="canvas-playback-route-strip"]')).not.toBeNull();
+    expect(host.querySelector('.canvas-playback-route-view-toggle')).not.toBeNull();
+
+    switchRouteViewMode(host, 'Compare');
+
+    expect(usePlaybackStore.getState().playbackSession.matrix.routeViewMode).toBe('matrix');
     expect(host.querySelector('[data-testid="canvas-route-storyboard-matrix"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="canvas-playback-route-strip"]')).toBeNull();
-    expect(host.querySelector('.canvas-playback-route-view-toggle')).toBeNull();
+    expect(usePlaybackStore.getState().playbackSession.routeId).toBe(beforeRouteId);
+
+    switchRouteViewMode(host, 'Storyline');
+
+    expect(usePlaybackStore.getState().playbackSession.matrix.routeViewMode).toBe('compact');
+    expect(host.querySelector('[data-testid="canvas-playback-route-strip"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="canvas-route-storyboard-matrix"]')).toBeNull();
     expect(usePlaybackStore.getState().playbackSession.routeId).toBe(beforeRouteId);
   });
 
@@ -468,6 +559,7 @@ describe('PlaybackWorkspace', () => {
       usePlaybackStore.getState().revealPlaybackWorkspace();
       root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
     });
+    switchRouteViewMode(host, 'Compare');
 
     act(() => {
       host
@@ -488,6 +580,7 @@ describe('PlaybackWorkspace', () => {
       usePlaybackStore.getState().revealPlaybackWorkspace();
       root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
     });
+    switchRouteViewMode(host, 'Compare');
 
     const canvasPane = host.querySelector<HTMLElement>(
       '[data-testid="canvas-playback-canvas-pane"]',
@@ -525,10 +618,20 @@ describe('PlaybackWorkspace', () => {
     expect(usePlaybackStore.getState().playbackSession.currentUnitId).toBe(currentUnitBefore);
     expect(useRuntimeViewportStore.getState().viewport.pan).toEqual({
       x: 300,
-      y: 240,
+      y: 402,
     });
   });
 });
+
+function switchRouteViewMode(host: HTMLElement, label: 'Storyline' | 'Compare'): void {
+  const button = Array.from(
+    host.querySelectorAll<HTMLButtonElement>('.canvas-playback-route-view-toggle [role="tab"]'),
+  ).find((candidate) => candidate.textContent === label);
+  if (!button) throw new Error(`route view mode "${label}" was not rendered`);
+  act(() => {
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+}
 
 function storyboardCanvas(): CanvasData {
   return {
@@ -579,12 +682,12 @@ function mediaNode(id: string, assetPath: string): CanvasNode {
 function scene(id: string, childIds: readonly string[]): CanvasNode {
   return {
     id,
-    type: 'scene',
+    type: 'group',
     position: { x: 0, y: 0 },
     size: { width: 200, height: 120 },
     zIndex: 0,
-    container: { policy: 'scene', childIds: [...childIds], layout: { mode: 'sequence' } },
-    data: { sceneTitle: 'Scene A', sceneNumber: 1 },
+    container: { policy: 'group', childIds: [...childIds], layout: { mode: 'sequence' } },
+    data: { label: 'Group A' },
   };
 }
 
@@ -596,40 +699,33 @@ function shot(
 ): CanvasNode {
   return {
     id,
-    type: 'shot',
+    type: 'media',
     parentId,
     position: { x: shotNumber * 220, y: 0 },
     size: { width: 200, height: 120 },
     zIndex: shotNumber,
     data: {
-      shotNumber,
+      assetPath: generatedImage || `assets/${id}.png`,
+      mediaType: 'image',
       duration: 2,
-      visualDescription: `Shot ${shotNumber}`,
-      characters: [],
-      shotScale: 'MS',
-      characterAction: '',
-      emotion: [],
-      sceneTags: [],
-      generatedImage,
-      generationStatus: 'idle',
-      generationHistory: [],
+      title: `Media ${shotNumber}`,
     },
   };
 }
 
 function hostEnrichedPlaybackPlan() {
   return {
-    adapterId: 'storyboard',
+    adapterId: 'generic',
     requestedAdapterId: 'auto',
     behaviorMode: 'linear',
-    advancePolicy: 'manual',
+    advancePolicy: 'user-input',
     entryUnitIds: ['shot-host'],
     units: [
       {
         id: 'shot-host',
         sourceNodeId: 'shot-a1',
-        kind: 'shot',
-        renderMode: 'preview',
+        kind: 'media',
+        renderMode: 'media-playback',
         label: 'Host Shot',
         assetPath: 'assets/host-shot.png',
         metadata: {

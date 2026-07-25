@@ -1,54 +1,21 @@
-import type {
-  CanvasNode,
-  CanvasNodeType,
-  ContainerDeleteBehavior,
-  ContainerPolicyName,
-} from '@neko/shared';
+import type { CanonicalCanvasNodeType, CanvasNode } from '@neko/shared';
 import { CANVAS_NODE_TYPES } from '@neko/shared';
 
 export interface ContainerPolicy {
-  name: ContainerPolicyName;
-  acceptedNodeTypes?: CanvasNodeType[];
-  deleteBehavior: ContainerDeleteBehavior;
-  layoutMode: 'manual' | 'grid' | 'sequence' | 'table';
+  name: 'group';
+  acceptedNodeTypes: readonly CanonicalCanvasNodeType[];
+  layoutMode: 'manual';
   allowNestedContainers: boolean;
 }
 
-export type ContainerPolicyRegistry = ReadonlyMap<ContainerPolicyName, ContainerPolicy>;
+export type ContainerPolicyRegistry = ReadonlyMap<'group', ContainerPolicy>;
 
 const BUILT_IN_CONTAINER_POLICIES: ContainerPolicy[] = [
   {
-    name: 'scene',
-    acceptedNodeTypes: ['shot'],
-    deleteBehavior: 'release-children',
-    layoutMode: 'sequence',
-    allowNestedContainers: false,
-  },
-  {
     name: 'group',
     acceptedNodeTypes: [...CANVAS_NODE_TYPES],
-    deleteBehavior: 'release-children',
     layoutMode: 'manual',
     allowNestedContainers: true,
-  },
-  {
-    name: 'artboard',
-    deleteBehavior: 'release-children',
-    layoutMode: 'grid',
-    allowNestedContainers: true,
-  },
-  {
-    name: 'table',
-    deleteBehavior: 'release-children',
-    layoutMode: 'table',
-    allowNestedContainers: true,
-  },
-  {
-    name: 'gallery',
-    acceptedNodeTypes: ['media'],
-    deleteBehavior: 'delete-subtree',
-    layoutMode: 'grid',
-    allowNestedContainers: false,
   },
 ];
 
@@ -58,9 +25,9 @@ export function createBuiltInContainerPolicyRegistry(): ContainerPolicyRegistry 
 
 export function getContainerPolicy(
   registry: ContainerPolicyRegistry,
-  policyName: ContainerPolicyName | undefined,
+  policyName: string | undefined,
 ): ContainerPolicy | undefined {
-  return policyName ? registry.get(policyName) : undefined;
+  return policyName === 'group' ? registry.get(policyName) : undefined;
 }
 
 export function canContainerAcceptChild(
@@ -75,5 +42,5 @@ export function canContainerAcceptChild(
     return false;
   }
 
-  return !policy.acceptedNodeTypes || policy.acceptedNodeTypes.includes(child.type);
+  return policy.acceptedNodeTypes.some((type) => type === child.type);
 }

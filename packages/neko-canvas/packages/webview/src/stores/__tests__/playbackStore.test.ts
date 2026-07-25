@@ -11,9 +11,6 @@ describe('playbackStore matrix runtime state', () => {
       isConnecting: false,
       pendingConnectionSource: null,
       activePlayingNodeId: null,
-      expandedNodeId: null,
-      generationPanelState: { visible: false, nodeId: null, childNodeId: null },
-      contentOverlayState: { visible: false, nodeId: null },
     });
     usePlaybackStore.setState({
       activePlayback: null,
@@ -28,7 +25,7 @@ describe('playbackStore matrix runtime state', () => {
         playbackState: 'idle',
         stale: false,
         matrix: {
-          routeViewMode: 'matrix',
+          routeViewMode: 'compact',
           filters: {
             routeIds: [],
             containerIds: [],
@@ -41,28 +38,51 @@ describe('playbackStore matrix runtime state', () => {
     });
   });
 
+  it('defaults to compact storyline mode and preserves it across matrix projection updates', () => {
+    expect(usePlaybackStore.getInitialState().playbackSession).toMatchObject({
+      layout: { routeHeightPx: 208 },
+      matrix: { routeViewMode: 'compact' },
+    });
+
+    usePlaybackStore.getState().setPlaybackMatrixFilters({
+      routeIds: ['route-a'],
+      highlightedNodeKinds: ['media'],
+    });
+    usePlaybackStore.getState().reconcilePlaybackMatrixState({
+      projectionKey: 'revision-1:storyboard',
+      routeFamilyIds: ['family:scene-a'],
+      routeIds: ['route-a'],
+      containerIds: ['container:scene-a'],
+      rowIds: ['row:route-a'],
+      columnIds: ['column:shot-a'],
+      cellIds: ['cell:route-a:shot-a'],
+    });
+
+    expect(usePlaybackStore.getState().playbackSession.matrix.routeViewMode).toBe('compact');
+  });
+
   it('stores matrix mode, route family, filters, focus, and folds as runtime-only state', () => {
     const before = JSON.stringify(useCanvasStore.getState().canvasData);
 
-    usePlaybackStore.getState().setPlaybackRouteViewMode('compact');
+    usePlaybackStore.getState().setPlaybackRouteViewMode('matrix');
     usePlaybackStore.getState().setPlaybackMatrixRouteFamily('family:scene-a');
     usePlaybackStore.getState().setPlaybackMatrixFilters({
       routeIds: ['route-b', 'route-a', 'route-a'],
       containerIds: ['container:scene-a'],
-      highlightedNodeKinds: ['media', 'shot', 'media'],
+      highlightedNodeKinds: ['media', 'node', 'media'],
       generationStatuses: ['ready'],
     });
     usePlaybackStore.getState().focusPlaybackMatrix({ kind: 'cell', id: 'cell:route-a:shot-a' });
     usePlaybackStore.getState().togglePlaybackMatrixContainerFold('container:scene-a');
 
     expect(usePlaybackStore.getState().playbackSession.matrix).toMatchObject({
-      routeViewMode: 'compact',
+      routeViewMode: 'matrix',
       activeRouteFamilyId: 'family:scene-a',
       filters: {
         routeFamilyId: 'family:scene-a',
         routeIds: ['route-a', 'route-b'],
         containerIds: ['container:scene-a'],
-        highlightedNodeKinds: ['media', 'shot'],
+        highlightedNodeKinds: ['media', 'node'],
         generationStatuses: ['ready'],
       },
       focus: { kind: 'cell', id: 'cell:route-a:shot-a' },

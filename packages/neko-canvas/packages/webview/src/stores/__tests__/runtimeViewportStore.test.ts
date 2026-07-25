@@ -26,9 +26,6 @@ describe('runtime viewport store', () => {
       isConnecting: false,
       pendingConnectionSource: null,
       activePlayingNodeId: null,
-      expandedNodeId: null,
-      generationPanelState: { visible: false, nodeId: null },
-      contentOverlayState: { visible: false, nodeId: null },
     });
     useRuntimeViewportStore.setState({
       viewport: DEFAULT_RUNTIME_VIEWPORT,

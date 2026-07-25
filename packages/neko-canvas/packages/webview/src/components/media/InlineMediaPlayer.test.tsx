@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InlineAudioPlayer } from './InlineAudioPlayer';
 import { InlineVideoPlayer } from './InlineVideoPlayer';
+import { setLocale } from '../../i18n';
 
 (globalThis as { React?: typeof React }).React = React;
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -81,6 +82,7 @@ describe('Inline media players', () => {
   let cancelAnimationFrameSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    setLocale('en');
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -171,6 +173,39 @@ describe('Inline media players', () => {
     expect(onStop).toHaveBeenCalledWith(2);
     expect(onEnded).toHaveBeenCalledTimes(1);
     expect(onEnded).toHaveBeenCalledWith(2);
+  });
+
+  it('localizes media playback controls', async () => {
+    setLocale('zh-cn');
+
+    await act(async () => {
+      root.render(
+        <InlineAudioPlayer
+          audioStreamUrl="ws://audio"
+          duration={2}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={() => undefined}
+          onStop={() => undefined}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const playbackButton = host.querySelector<HTMLButtonElement>('button[title="暂停"]');
+    const muteButton = host.querySelector<HTMLButtonElement>('button[title="静音"]');
+    expect(playbackButton?.getAttribute('aria-label')).toBe('暂停');
+    expect(muteButton?.getAttribute('aria-label')).toBe('静音');
+
+    act(() => {
+      playbackButton?.click();
+      muteButton?.click();
+    });
+
+    expect(playbackButton?.title).toBe('播放');
+    expect(playbackButton?.getAttribute('aria-label')).toBe('播放');
+    expect(muteButton?.title).toBe('取消静音');
+    expect(muteButton?.getAttribute('aria-label')).toBe('取消静音');
   });
 });
 

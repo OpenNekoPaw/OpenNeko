@@ -38,7 +38,6 @@ export interface UseKeyboardActionsOptions {
   handlePaste: () => void;
   handlePasteInPlace: () => void;
   handleDuplicate: () => void;
-  onGenerateSelected?: () => void;
   closeTransientSurface?: () => boolean;
   reportAction: (action: string, label: string, detail?: string) => void;
   isKeyboardFocusedRef?: React.MutableRefObject<boolean>;
@@ -74,7 +73,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
     handlePaste,
     handlePasteInPlace,
     handleDuplicate,
-    onGenerateSelected,
     closeTransientSurface,
     reportAction,
     isKeyboardFocusedRef,
@@ -102,16 +100,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
       if (action.startsWith('selectConnection:')) {
         const connId = action.slice('selectConnection:'.length);
         selectConnection(connId);
-        return;
-      }
-      if (action.startsWith('detachShot:')) {
-        const parts = action.slice('detachShot:'.length).split(':');
-        const shotId = parts[0];
-        const sceneId = parts[1];
-        if (shotId && sceneId) {
-          useCanvasStore.getState().detachShotFromScene(sceneId, shotId);
-          reportAction('detachShot', `Detached shot from scene`);
-        }
         return;
       }
       if (action.startsWith('deleteNode:')) {
@@ -177,9 +165,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
         case 'resetZoom':
           resetViewport();
           break;
-        case 'generateSelected':
-          onGenerateSelected?.();
-          break;
       }
     },
     [
@@ -200,7 +185,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
       handlePaste,
       handlePasteInPlace,
       handleDuplicate,
-      onGenerateSelected,
       closeTransientSurface,
       selectNode,
       selectConnection,

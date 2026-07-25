@@ -207,7 +207,7 @@ const SAFE_IMAGE_SOURCE_RE = /^(?:data:image\/|blob:|https?:)/i;
 const PRIMARY_SOURCE_KINDS = new Set<CanvasPlaybackRouteSourceKind>([
   'entry',
   'auto-entry',
-  'component',
+  'container',
 ]);
 
 export function projectRouteStoryboardMatrix(

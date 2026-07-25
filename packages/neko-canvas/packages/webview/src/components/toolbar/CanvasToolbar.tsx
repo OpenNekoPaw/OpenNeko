@@ -3,7 +3,7 @@
  *
  * Provides quick access to:
  * - Select / Hand tools
- * - Right node tree/library panel toggle
+ * - Contextual Canvas add actions
  * - Undo / Redo
  * - Playback workspace surfaces
  *
@@ -22,10 +22,10 @@ import {
   LayersIcon,
   PackageIcon,
   PointerIcon,
-  RightPanelIcon,
-  RightPanelOffIcon,
 } from '@neko/ui/icons';
 import type { PlaybackWorkspacePane } from '../../stores/playbackStore';
+import type { CanvasAddActionId } from '../../utils/canvasAddActions';
+import { CanvasAddActionPopover } from './CanvasAddActionPopover';
 
 type PlaybackToolbarSurfacePane = Exclude<PlaybackWorkspacePane, 'canvas'>;
 
@@ -39,9 +39,8 @@ export interface CanvasToolbarProps {
   /** Select tool mode */
   isSelectMode?: boolean;
   onSelectTool?: () => void;
-  /** Node tree/library panel visibility */
-  isNodeLibraryVisible?: boolean;
-  onToggleNodeLibrary?: () => void;
+  /** Creates or binds one user-authorable Canvas action. */
+  onSelectAddAction?: (actionId: CanvasAddActionId) => void;
   /** Playback workspace surface visibility, controlled from the floating toolbar. */
   workspaceSurfaceState?: Readonly<Record<PlaybackToolbarSurfacePane, boolean>>;
   onToggleWorkspaceSurface?: (pane: PlaybackToolbarSurfacePane) => void;
@@ -63,8 +62,7 @@ export function CanvasToolbar({
   onRedo,
   isSelectMode = true,
   onSelectTool,
-  isNodeLibraryVisible = true,
-  onToggleNodeLibrary,
+  onSelectAddAction,
   workspaceSurfaceState,
   onToggleWorkspaceSurface,
   onOpenExport,
@@ -74,9 +72,6 @@ export function CanvasToolbar({
 }: CanvasToolbarProps) {
   const canUndo = useHistoryStore((s) => s.canUndo());
   const canRedo = useHistoryStore((s) => s.canRedo());
-  const nodeLibraryTitle = isNodeLibraryVisible
-    ? t('toolbar.hideRightNodeTree')
-    : t('toolbar.showRightNodeTree');
   const canControlPlaybackPanes =
     workspaceSurfaceState !== undefined && onToggleWorkspaceSurface !== undefined;
 
@@ -119,22 +114,10 @@ export function CanvasToolbar({
         />
       </div>
 
-      {onToggleNodeLibrary && (
+      {onSelectAddAction && (
         <>
           <ToolbarSeparator />
-          <ToolbarButton
-            aria-controls="canvas-right-node-tree-panel"
-            aria-expanded={isNodeLibraryVisible}
-            data-canvas-toolbar-action="toggle-right-node-tree"
-            data-canvas-toolbar-kind="visibility-toggle"
-            data-canvas-toolbar-target="right-panel"
-            icon={
-              isNodeLibraryVisible ? <RightPanelIcon size={18} /> : <RightPanelOffIcon size={18} />
-            }
-            title={nodeLibraryTitle}
-            active={isNodeLibraryVisible}
-            onClick={onToggleNodeLibrary}
-          />
+          <CanvasAddActionPopover onSelectAction={onSelectAddAction} />
         </>
       )}
 

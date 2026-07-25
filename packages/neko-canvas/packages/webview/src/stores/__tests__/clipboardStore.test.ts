@@ -9,7 +9,7 @@ import type { CanvasNode, CanvasConnection } from '@neko/shared';
 function createNode(id: string, x = 0, y = 0, width = 100, height = 80): CanvasNode {
   return {
     id,
-    type: 'annotation',
+    type: 'markdown',
     position: { x, y },
     size: { width, height },
     zIndex: 0,
@@ -24,7 +24,7 @@ function createConnection(id: string, sourceId: string, targetId: string): Canva
     targetId,
     sourceEndpoint: { nodeId: sourceId, scope: 'node' },
     targetEndpoint: { nodeId: targetId, scope: 'node' },
-    type: 'default',
+    type: 'reference',
   };
 }
 
@@ -83,7 +83,7 @@ describe('clipboardStore', () => {
     // ID should be different from original
     expect(result?.nodes[0]?.id).not.toBe('original');
     // Type and data should be preserved
-    expect(result?.nodes[0]?.type).toBe('annotation');
+    expect(result?.nodes[0]?.type).toBe('markdown');
   });
 
   it('paste should offset positions', () => {
@@ -151,7 +151,7 @@ describe('clipboardStore', () => {
     const result = useClipboardStore.getState().paste();
 
     const pastedGroup = result?.nodes.find((node) => node.type === 'group');
-    const pastedChild = result?.nodes.find((node) => node.type === 'annotation');
+    const pastedChild = result?.nodes.find((node) => node.type === 'markdown');
 
     expect(pastedGroup?.id).not.toBe('group-1');
     expect(pastedChild?.id).not.toBe('child-1');
@@ -198,51 +198,9 @@ describe('clipboardStore', () => {
     expect(duplicate?.connections).toHaveLength(1);
     const duplicatedOuter = duplicate?.nodes.find((node) => !node.parentId);
     const duplicatedInner = duplicate?.nodes.find((node) => node.type === 'group' && node.parentId);
-    const duplicatedChild = duplicate?.nodes.find((node) => node.type === 'annotation');
+    const duplicatedChild = duplicate?.nodes.find((node) => node.type === 'markdown');
     expect(duplicatedOuter?.container?.childIds).toEqual([duplicatedInner?.id]);
     expect(duplicatedInner?.container?.childIds).toEqual([duplicatedChild?.id]);
-  });
-
-  it('paste should remap migrated Scene canonical children', () => {
-    const scene: CanvasNode = {
-      id: 'scene-1',
-      type: 'scene',
-      position: { x: 0, y: 0 },
-      size: { width: 400, height: 240 },
-      zIndex: 0,
-      preset: 'scene.basic',
-      container: { policy: 'scene', childIds: ['shot-1'] },
-      data: { sceneTitle: 'Scene', sceneNumber: 1 },
-    };
-    const shot: CanvasNode = {
-      id: 'shot-1',
-      type: 'shot',
-      position: { x: 20, y: 60 },
-      size: { width: 220, height: 200 },
-      zIndex: 1,
-      parentId: 'scene-1',
-      data: {
-        shotNumber: 1,
-        duration: 3,
-        visualDescription: '',
-        characters: [],
-        shotScale: 'MS',
-        characterAction: '',
-        emotion: [],
-        sceneTags: [],
-        generationStatus: 'idle',
-        generationHistory: [],
-      },
-    };
-
-    useClipboardStore.getState().copy(['scene-1', 'shot-1'], [scene, shot], []);
-    const result = useClipboardStore.getState().paste();
-
-    const pastedScene = result?.nodes.find((node) => node.type === 'scene');
-    const pastedShot = result?.nodes.find((node) => node.type === 'shot');
-
-    expect(pastedScene?.container?.childIds).toEqual([pastedShot?.id]);
-    expect(pastedShot?.parentId).toBe(pastedScene?.id);
   });
 
   it('duplicate should create copies with small offset', () => {

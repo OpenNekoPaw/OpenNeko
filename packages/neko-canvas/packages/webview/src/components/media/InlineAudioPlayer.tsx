@@ -6,6 +6,7 @@ import {
 } from '@neko/neko-client';
 import { ProgressBar } from '@neko/ui/creative';
 import { PlayIcon, PauseIcon, VolumeIcon, VolumeOffIcon } from '@neko/ui/icons';
+import { t } from '../../i18n';
 import { getLogger } from '../../utils/logger';
 
 const logger = getLogger('InlineAudioPlayer');
@@ -264,6 +265,8 @@ export function InlineAudioPlayer({
   // =========================================================================
 
   const progress = duration > 0 ? currentTime / duration : 0;
+  const playbackLabel = isPlaying ? t('toolbar.playbackPause') : t('toolbar.playbackPlay');
+  const muteLabel = isMuted ? t('media.unmute') : t('media.mute');
 
   return (
     <div className="flex flex-col gap-2 p-3" onMouseDown={(e) => e.stopPropagation()}>
@@ -301,7 +304,8 @@ export function InlineAudioPlayer({
           type="button"
           className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[var(--node-selected)] text-white hover:opacity-90"
           onClick={handleTogglePlay}
-          title={isPlaying ? 'Pause' : 'Play'}
+          aria-label={playbackLabel}
+          title={playbackLabel}
         >
           {isPlaying ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
         </button>
@@ -318,7 +322,8 @@ export function InlineAudioPlayer({
           type="button"
           className="flex h-5 w-5 items-center justify-center text-[var(--node-fg-secondary)] hover:text-[var(--node-fg)]"
           onClick={handleToggleMute}
-          title={isMuted ? 'Unmute' : 'Mute'}
+          aria-label={muteLabel}
+          title={muteLabel}
         >
           {isMuted ? <VolumeOffIcon size={14} /> : <VolumeIcon size={14} />}
         </button>

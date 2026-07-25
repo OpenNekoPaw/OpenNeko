@@ -27,8 +27,8 @@ describe('resolveCanvasMaterialPresentation', () => {
     });
   });
 
-  it('projects generated media provenance and resolves an existing Shot target', () => {
-    const shot = shotNode('shot-1');
+  it('projects generated media provenance and resolves an existing canonical source target', () => {
+    const source = markdownNode('prompt-1');
     const node = mediaNode('generated', {
       assetPath: '',
       mediaType: 'image',
@@ -36,35 +36,35 @@ describe('resolveCanvasMaterialPresentation', () => {
       generationContext: {
         prompt: 'Monolithic city at night',
         model: 'image-model-v2',
-        sourceNodeId: shot.id,
+        sourceNodeId: source.id,
         aspectRatio: '16:9',
       },
     });
 
-    expect(resolveCanvasMaterialPresentation(node, [node, shot])).toMatchObject({
+    expect(resolveCanvasMaterialPresentation(node, [node, source])).toMatchObject({
       source: 'generated',
       mediaType: 'image',
       generation: {
         prompt: 'Monolithic city at night',
         model: 'image-model-v2',
-        targetNodeId: 'shot-1',
+        targetNodeId: 'prompt-1',
       },
     });
   });
 
-  it('does not route generated audio into the image and video generation panel', () => {
-    const shot = shotNode('shot-1');
+  it('keeps generated audio eligible for the canonical Agent Job workflow', () => {
+    const source = markdownNode('prompt-1');
     const node = mediaNode('generated-audio', {
       assetPath: 'neko/generated/audio/shot-1.wav',
       mediaType: 'audio',
       generationContext: {
         prompt: 'Low industrial ambience',
-        sourceNodeId: shot.id,
+        sourceNodeId: source.id,
         duration: 12,
       },
     });
 
-    expect(resolveCanvasMaterialPresentation(node, [node, shot])).toMatchObject({
+    expect(resolveCanvasMaterialPresentation(node, [node, source])).toMatchObject({
       source: 'generated',
       mediaType: 'audio',
       generation: {
@@ -72,8 +72,8 @@ describe('resolveCanvasMaterialPresentation', () => {
         duration: 12,
       },
     });
-    expect(resolveCanvasMaterialPresentation(node, [node, shot])?.generation?.targetNodeId).toBe(
-      undefined,
+    expect(resolveCanvasMaterialPresentation(node, [node, source])?.generation?.targetNodeId).toBe(
+      'prompt-1',
     );
   });
 
@@ -110,37 +110,6 @@ describe('resolveCanvasMaterialPresentation', () => {
       mediaType: 'video',
     });
   });
-
-  it('uses Shot semantic prompt authority when historical asset prompt is absent', () => {
-    const node = shotNode('shot-1', {
-      generatedAsset: {
-        path: 'neko/generated/image/shot-1.png',
-        resourceRef: generatedResourceRef,
-      },
-      storyboardPrompt: {
-        version: 1,
-        promptBlocks: {
-          imagePromptDocument: {
-            version: 1,
-            documentId: 'shot-1:image:prompt',
-            blockKind: 'image',
-            text: 'A lone traveler beneath megastructures',
-          },
-        },
-        generationParams: { aspectRatio: '9:16', modelId: 'image-model-v2' },
-      },
-    });
-
-    expect(resolveCanvasMaterialPresentation(node, [node])).toMatchObject({
-      source: 'generated',
-      generation: {
-        prompt: 'A lone traveler beneath megastructures',
-        model: 'image-model-v2',
-        aspectRatio: '9:16',
-        targetNodeId: 'shot-1',
-      },
-    });
-  });
 });
 
 function mediaNode(id: string, data: Record<string, unknown>): CanvasNode {
@@ -154,13 +123,13 @@ function mediaNode(id: string, data: Record<string, unknown>): CanvasNode {
   } as CanvasNode;
 }
 
-function shotNode(id: string, data: Record<string, unknown> = {}): CanvasNode {
+function markdownNode(id: string): CanvasNode {
   return {
     id,
-    type: 'shot',
+    type: 'markdown',
     position: { x: 0, y: 0 },
     size: { width: 280, height: 200 },
     zIndex: 1,
-    data,
-  } as CanvasNode;
+    data: { content: '# Prompt' },
+  };
 }

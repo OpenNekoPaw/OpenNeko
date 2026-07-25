@@ -1,10 +1,5 @@
 import type { CanvasNode } from '@neko/shared';
-import {
-  getContainerChildIds,
-  getContainerPolicyName,
-  isGroupNode,
-  isSceneGroupNode,
-} from '@neko/shared';
+import { getContainerChildIds, getContainerPolicyName, isGroupNode } from '@neko/shared';
 import {
   canContainerAcceptChild,
   createBuiltInContainerPolicyRegistry,
@@ -34,6 +29,9 @@ export function addContainerChild(
   const child = nodes.find((node) => node.id === childId);
   if (!container || !child) {
     return { nodes, changed: false, error: 'container or child not found' };
+  }
+  if (!isGroupNode(container)) {
+    return { nodes, changed: false, error: 'Canvas Group container required' };
   }
 
   if (containerId === childId || isDescendant(nodes, childId, containerId)) {
@@ -77,6 +75,9 @@ export function removeContainerChild(
   if (!container || !child) {
     return { nodes, changed: false, error: 'container or child not found' };
   }
+  if (!isGroupNode(container)) {
+    return { nodes, changed: false, error: 'Canvas Group container required' };
+  }
 
   const nextChildIds = getContainerChildIds(container).filter((id) => id !== childId);
   const nextNodes = nodes.map((node) => {
@@ -102,6 +103,9 @@ export function reorderContainerChildren(
   const container = nodes.find((node) => node.id === containerId);
   if (!container) {
     return { nodes, changed: false, error: 'container not found' };
+  }
+  if (!isGroupNode(container)) {
+    return { nodes, changed: false, error: 'Canvas Group container required' };
   }
 
   const currentIds = getContainerChildIds(container);
@@ -129,6 +133,9 @@ export function releaseContainerChildren(
   if (!container) {
     return { nodes, changed: false, error: 'container not found' };
   }
+  if (!isGroupNode(container)) {
+    return { nodes, changed: false, error: 'Canvas Group container required' };
+  }
 
   const childIds = getContainerChildIds(container);
   const childIdSet = new Set(childIds);
@@ -145,21 +152,6 @@ export function releaseContainerChildren(
   });
 
   return { nodes: nextNodes, changed: true };
-}
-
-export function deleteContainerSubtree(
-  nodes: CanvasNode[],
-  containerId: string,
-): ContainerActionResult {
-  const idsToDelete = new Set([containerId, ...getContainerDescendantIds(nodes, containerId)]);
-  if (!nodes.some((node) => node.id === containerId)) {
-    return { nodes, changed: false, error: 'container not found' };
-  }
-
-  return {
-    nodes: nodes.filter((node) => !idsToDelete.has(node.id)),
-    changed: true,
-  };
 }
 
 export function createContainerComposite(
@@ -192,6 +184,13 @@ export function createContainerComposite(
 
 export function getContainerDescendantIds(nodes: CanvasNode[], containerId: string): string[] {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const container = nodeById.get(containerId);
+  if (!container) {
+    throw new Error(`Canvas Group "${containerId}" not found`);
+  }
+  if (!isGroupNode(container)) {
+    throw new Error(`Canvas node "${containerId}" is not a Group`);
+  }
   const result: string[] = [];
   const visiting = new Set<string>();
 
@@ -206,6 +205,9 @@ export function getContainerDescendantIds(nodes: CanvasNode[], containerId: stri
       return;
     }
 
+    if (!isGroupNode(parent)) {
+      return;
+    }
     for (const childId of getContainerChildIds(parent)) {
       result.push(childId);
       visit(childId);
@@ -236,28 +238,19 @@ export function translateContainerSubtree(
 }
 
 function withContainerChildIds(node: CanvasNode, childIds: string[]): CanvasNode {
-  const nextContainer = {
-    policy: getContainerPolicyName(node) ?? 'group',
-    ...(node.container ?? {}),
-    childIds,
+  if (!isGroupNode(node)) {
+    throw new Error(`Canvas node "${node.id}" is not a Group`);
+  }
+
+  return {
+    ...node,
+    container: {
+      ...(node.container ?? {}),
+      policy: 'group',
+      childIds,
+    },
+    data: { ...node.data },
   };
-
-  if (isSceneGroupNode(node)) {
-    return {
-      ...node,
-      container: { ...nextContainer, policy: 'scene' },
-    };
-  }
-
-  if (isGroupNode(node)) {
-    return {
-      ...node,
-      container: { ...nextContainer, policy: 'group' },
-      data: { ...node.data },
-    };
-  }
-
-  return { ...node, container: nextContainer };
 }
 
 function withParentId(node: CanvasNode, parent: CanvasNode): CanvasNode {
@@ -290,51 +283,9 @@ function isDescendant(
   ancestorId: string,
   candidateDescendantId: string,
 ): boolean {
+  const ancestor = nodes.find((node) => node.id === ancestorId);
+  if (!ancestor || !isGroupNode(ancestor)) {
+    return false;
+  }
   return getContainerDescendantIds(nodes, ancestorId).includes(candidateDescendantId);
-}
-
-// =============================================================================
-// Gallery-specific container helpers
-// =============================================================================
-
-export function addGalleryChild(
-  nodes: CanvasNode[],
-  galleryId: string,
-  childId: string,
-  metadata?: Record<string, unknown>,
-  insertIndex?: number,
-): ContainerActionResult {
-  const result = addContainerChild(nodes, galleryId, childId, insertIndex);
-  if (!result.changed) return result;
-
-  return {
-    ...result,
-    nodes: result.nodes.map((node) => {
-      if (node.id !== galleryId || !node.container) return node;
-      const placements = { ...(node.container.childPlacements ?? {}) };
-      placements[childId] = {
-        childId,
-        metadata: metadata ?? { label: '', generationStatus: 'idle' },
-      };
-      return { ...node, container: { ...node.container, childPlacements: placements } };
-    }),
-  };
-}
-
-export function removeGalleryChild(
-  nodes: CanvasNode[],
-  galleryId: string,
-  childId: string,
-): ContainerActionResult {
-  const result = removeContainerChild(nodes, galleryId, childId);
-  if (!result.changed) return result;
-
-  return {
-    ...result,
-    nodes: result.nodes.map((node) => {
-      if (node.id !== galleryId || !node.container?.childPlacements) return node;
-      const { [childId]: _, ...rest } = node.container.childPlacements;
-      return { ...node, container: { ...node.container, childPlacements: rest } };
-    }),
-  };
 }

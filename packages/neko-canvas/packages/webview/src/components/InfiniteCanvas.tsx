@@ -10,11 +10,6 @@ import { CanvasGrid } from './CanvasGrid';
 import { CanvasViewport } from './CanvasViewport';
 import { renderCanvasNode } from './nodes';
 import type { NodeRendererRegistry } from './nodes';
-import type {
-  ScriptIndexRuntimeState,
-  TextDocumentRuntimeProjection,
-} from './nodes/nodeRendererTypes';
-import type { NodeTypeDescriptorRegistry } from './nodes/nodeTypeDescriptor';
 import { ConnectionLayer, InlineConnectionEditor } from './connections';
 import { useViewportTransform } from '../hooks/useViewportTransform';
 import { useViewportCulling } from '../hooks/useViewportCulling';
@@ -22,7 +17,8 @@ import { useConnectionDrag } from '../hooks/useConnectionDrag';
 import { useMarqueeSelect } from '../hooks/useMarqueeSelect';
 import { useThrottledCanvasViewport } from '../hooks/useThrottledCanvasViewport';
 import { projectCanvasNodeRenderPlan } from '../utils/canvasOrganization';
-import { createBuiltInWebviewSubsystemRegistry } from '../subsystems';
+import { createCoreNodeTypeDescriptors } from './nodes/coreNodeTypeDescriptors';
+import { createCoreNodeRendererRegistry } from './nodes/coreNodeRenderers';
 import {
   resolveCanvasRenderRefreshDecision,
   type CanvasInteractionPhase,
@@ -76,28 +72,10 @@ export interface InfiniteCanvasProps {
   /** Background grid visibility, controlled by Canvas settings. */
   isGridVisible?: boolean;
 
-  // ── ScriptNode callbacks ───────────────────────────────────────────────────
-  /** Called to load a scene TOC from the retained Fountain content service. */
-  onScriptLoadScenes?: (nodeId: string, scriptPath: string) => void;
-  scriptIndexStates?: Readonly<Record<string, ScriptIndexRuntimeState>>;
-  /** Called when user opens a script file */
-  onScriptOpen?: (scriptPath: string) => void;
-  /** Called when user navigates to a linked SceneGroupNode */
-  onScriptNavigateToScene?: (linkedSceneGroupId: string) => void;
-
-  // ── DocumentNode callbacks ─────────────────────────────────────────────────
-  /** Called when user opens a document */
+  /** Called when user opens a referenced file. */
   onDocumentOpen?: (docPath: string) => void;
-  onDocumentLoadText?: (nodeId: string, docPath: string, docType: 'markdown' | 'text') => void;
-  documentTextProjections?: Readonly<Record<string, TextDocumentRuntimeProjection>>;
-  /** Called when user opens an embedded canvas */
+  /** Called when user opens an embedded canvas. */
   onCanvasEmbedOpen?: (canvasPath: string) => void;
-
-  // ── ModelNode callbacks ────────────────────────────────────────────────────
-  /** Called to check if a model is installed */
-  /** Called to remove a child node from its container */
-  onRemoveContainerChild?: (containerId: string, childId: string) => void;
-  expandedNodeId?: string | null;
 }
 
 // =============================================================================
@@ -126,37 +104,18 @@ export function InfiniteCanvas({
   enableCulling = true,
   isPanMode = false,
   isSpacePanActive = false,
-  onScriptLoadScenes,
-  scriptIndexStates,
-  onScriptOpen,
-  onScriptNavigateToScene,
   onDocumentOpen,
-  onDocumentLoadText,
-  documentTextProjections,
   onCanvasEmbedOpen,
-  onRemoveContainerChild,
-  expandedNodeId,
   isGridVisible = true,
 }: InfiniteCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-  const webviewSubsystemRegistryRef = useRef(createBuiltInWebviewSubsystemRegistry());
-  const [nodeRendererRegistry, setNodeRendererRegistry] = useState<NodeRendererRegistry>(() =>
-    webviewSubsystemRegistryRef.current.getCoreNodeRenderers(),
-  );
-  const [nodeTypeDescriptorRegistry, setNodeTypeDescriptorRegistry] =
-    useState<NodeTypeDescriptorRegistry>(() =>
-      webviewSubsystemRegistryRef.current.getCoreNodeTypeDescriptors(),
-    );
   const [transformingNodeIds, setTransformingNodeIds] = useState<readonly string[]>([]);
   const [dragPreview, setDragPreview] = useState<{
     readonly nodeId: string;
     readonly position: { readonly x: number; readonly y: number };
   } | null>(null);
   const frozenVisibleNodeIdsRef = useRef<readonly string[] | null>(null);
-  const activeSubsystemKey = webviewSubsystemRegistryRef.current
-    .getActiveSubsystems({ nodes })
-    .join('|');
   const renderPlan = useMemo(() => projectCanvasNodeRenderPlan(nodes), [nodes]);
 
   // Viewport transform hook
@@ -241,13 +200,8 @@ export function InfiniteCanvas({
     ? (frozenVisibleNodeIdsRef.current ?? renderedNodeIds)
     : renderedNodeIds;
   const expandedContainerIds = useMemo(
-    () => [
-      ...renderPlan.expandedSpatialContainerIds,
-      ...(expandedNodeId && !renderPlan.expandedSpatialContainerIds.has(expandedNodeId)
-        ? [expandedNodeId]
-        : []),
-    ],
-    [expandedNodeId, renderPlan.expandedSpatialContainerIds],
+    () => [...renderPlan.expandedSpatialContainerIds],
+    [renderPlan.expandedSpatialContainerIds],
   );
 
   const handleTransformStart = useCallback((nodeId: string) => {
@@ -330,43 +284,6 @@ export function InfiniteCanvas({
       resizeObserver.disconnect();
     };
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    webviewSubsystemRegistryRef.current
-      .loadForCanvas({ nodes })
-      .then((registrations) => {
-        if (cancelled) return;
-
-        const nextRegistry: NodeRendererRegistry = {
-          ...webviewSubsystemRegistryRef.current.getCoreNodeRenderers(),
-        };
-        for (const registration of registrations) {
-          Object.assign(nextRegistry, registration.nodeRenderers);
-        }
-        setNodeRendererRegistry(nextRegistry);
-        setNodeTypeDescriptorRegistry({
-          ...webviewSubsystemRegistryRef.current.getCoreNodeTypeDescriptors(),
-          ...Object.assign(
-            {},
-            ...registrations.map((registration) => registration.nodeTypeDescriptors),
-          ),
-        });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setNodeRendererRegistry(webviewSubsystemRegistryRef.current.getCoreNodeRenderers());
-          setNodeTypeDescriptorRegistry(
-            webviewSubsystemRegistryRef.current.getCoreNodeTypeDescriptors(),
-          );
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeSubsystemKey, nodes]);
 
   // Handle canvas click (deselect)
   const handleCanvasClick = useCallback(
@@ -476,7 +393,7 @@ export function InfiniteCanvas({
         {renderedNodes.map((node) => {
           const isSelected = selectedNodeIds.includes(node.id);
 
-          return renderNode(nodeRendererRegistry, {
+          return renderNode(CORE_NODE_RENDERERS, {
             node,
             allNodes: nodes,
             viewport,
@@ -493,18 +410,10 @@ export function InfiniteCanvas({
             interactionRenderMode: renderRefreshDecision.shouldUseHeavyContentShell
               ? 'shell'
               : 'full',
-            onScriptLoadScenes,
-            scriptIndexState: scriptIndexStates?.[node.id],
-            onScriptOpen,
-            onScriptNavigateToScene,
             onDocumentOpen,
-            onDocumentLoadText,
-            documentTextProjection: documentTextProjections?.[node.id],
             onCanvasEmbedOpen,
-            onRemoveContainerChild,
-            isExpanded: expandedNodeId === node.id,
             selectedNodeIds,
-            nodeTypeDescriptors: nodeTypeDescriptorRegistry,
+            nodeTypeDescriptors: CORE_NODE_TYPE_DESCRIPTORS,
           });
         })}
       </CanvasViewport>
@@ -523,7 +432,6 @@ export function InfiniteCanvas({
         viewportSize={containerSize}
         hidden={transformingNodeIds.length > 0 || isMarqueeSelecting}
       />
-
       {/* Marquee selection rectangle */}
       {marqueeRect && (
         <div
@@ -568,3 +476,6 @@ function renderNode(
 ): React.ReactNode {
   return renderCanvasNode(registry, context);
 }
+
+const CORE_NODE_RENDERERS = createCoreNodeRendererRegistry();
+const CORE_NODE_TYPE_DESCRIPTORS = createCoreNodeTypeDescriptors();

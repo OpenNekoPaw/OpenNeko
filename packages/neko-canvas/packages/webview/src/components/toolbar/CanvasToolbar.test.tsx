@@ -7,6 +7,7 @@ import { CanvasToolbar } from './CanvasToolbar';
 import { setLocale } from '../../i18n';
 
 vi.mock('@neko/ui/icons', () => ({
+  toCodiconClassName: (name: string) => `codicon codicon-${name}`,
   DownloadIcon: ({ size = 16 }: { size?: number }) => <span data-icon="download">{size}</span>,
   LayersIcon: ({ size = 16 }: { size?: number }) => <span data-icon="layers">{size}</span>,
   PackageIcon: ({ size = 16 }: { size?: number }) => <span data-icon="package">{size}</span>,
@@ -20,11 +21,20 @@ vi.mock('@neko/ui/icons', () => ({
   UndoIcon: ({ size = 16 }: { size?: number }) => <span data-icon="undo">{size}</span>,
 }));
 
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+class TestResizeObserver {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
 describe('CanvasToolbar', () => {
   let host: HTMLDivElement;
   let root: Root;
 
   beforeEach(() => {
+    globalThis.ResizeObserver = TestResizeObserver;
     setLocale('en');
     host = document.createElement('div');
     document.body.appendChild(host);
@@ -99,52 +109,36 @@ describe('CanvasToolbar', () => {
     expect(onTogglePanMode).toHaveBeenCalledTimes(1);
   });
 
-  it('controls the right node tree panel from the floating toolbar', () => {
-    const onToggleNodeLibrary = vi.fn();
+  it('opens the canonical add action popover from the floating toolbar', () => {
+    const onSelectAddAction = vi.fn();
 
     act(() => {
       root.render(
         <CanvasToolbar
           onUndo={() => undefined}
           onRedo={() => undefined}
-          isNodeLibraryVisible={true}
-          onToggleNodeLibrary={onToggleNodeLibrary}
+          onSelectAddAction={onSelectAddAction}
         />,
       );
     });
 
-    const toggleButton = host.querySelector<HTMLButtonElement>(
-      '[data-canvas-toolbar-action="toggle-right-node-tree"]',
+    const addButton = host.querySelector<HTMLButtonElement>(
+      '[data-canvas-toolbar-action="open-add-node-popover"]',
     );
-    expect(toggleButton?.getAttribute('aria-label')).toBe('Hide right node tree');
-    expect(toggleButton?.getAttribute('aria-controls')).toBe('canvas-right-node-tree-panel');
-    expect(toggleButton?.getAttribute('aria-expanded')).toBe('true');
-    expect(toggleButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(toggleButton?.getAttribute('data-canvas-toolbar-kind')).toBe('visibility-toggle');
-    expect(toggleButton?.getAttribute('data-canvas-toolbar-target')).toBe('right-panel');
+    expect(addButton?.getAttribute('aria-label')).toBe('Add Node');
+    expect(addButton?.getAttribute('aria-expanded')).toBe('false');
+    expect(addButton?.getAttribute('data-canvas-toolbar-kind')).toBe('common-action');
 
     act(() => {
-      toggleButton?.click();
+      addButton?.click();
     });
-    expect(onToggleNodeLibrary).toHaveBeenCalledTimes(1);
+    expect(addButton?.getAttribute('aria-expanded')).toBe('true');
 
     act(() => {
-      root.render(
-        <CanvasToolbar
-          onUndo={() => undefined}
-          onRedo={() => undefined}
-          isNodeLibraryVisible={false}
-          onToggleNodeLibrary={onToggleNodeLibrary}
-        />,
-      );
+      document.body.querySelector<HTMLButtonElement>('[data-canvas-add-action="group"]')?.click();
     });
-
-    const collapsedButton = host.querySelector<HTMLButtonElement>(
-      '[data-canvas-toolbar-action="toggle-right-node-tree"]',
-    );
-    expect(collapsedButton?.getAttribute('aria-label')).toBe('Show right node tree');
-    expect(collapsedButton?.getAttribute('aria-expanded')).toBe('false');
-    expect(collapsedButton?.getAttribute('aria-pressed')).toBe('false');
+    expect(onSelectAddAction).toHaveBeenCalledWith('group');
+    expect(document.body.querySelector('[data-canvas-add-action-popover="true"]')).toBeNull();
   });
 
   it('opens export/package flows without adding a playback reveal button', () => {
@@ -215,7 +209,7 @@ describe('CanvasToolbar', () => {
     expect(routeButton?.getAttribute('aria-controls')).toBe('canvas-playback-route-pane');
     expect(routeButton?.getAttribute('aria-expanded')).toBe('true');
     expect(routeButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(routeButton?.getAttribute('aria-label')).toBe('Hide route matrix');
+    expect(routeButton?.getAttribute('aria-label')).toBe('Hide storyline');
     expect(
       host.querySelector('[data-canvas-toolbar-action="reveal-playback-workspace"]'),
     ).toBeNull();
@@ -269,8 +263,7 @@ describe('CanvasToolbar', () => {
           onRedo={() => undefined}
           isSelectMode={false}
           onSelectTool={() => undefined}
-          isNodeLibraryVisible={true}
-          onToggleNodeLibrary={() => undefined}
+          onSelectAddAction={() => undefined}
           workspaceSurfaceState={{ stage: false, route: false }}
           onToggleWorkspaceSurface={() => undefined}
           onOpenExport={() => undefined}
@@ -288,7 +281,7 @@ describe('CanvasToolbar', () => {
     expect(actions).toEqual([
       'select-tool',
       'toggle-pan-mode',
-      'toggle-right-node-tree',
+      'open-add-node-popover',
       'undo',
       'redo',
       'toggle-playback-stage-pane',

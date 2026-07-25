@@ -10,8 +10,7 @@ import { hasEditableActiveElement, isKeyboardFocusMessage } from '@neko/ui/keybo
 import type {
   CanvasData,
   CanvasNode,
-  CanvasNodeType,
-  ScriptScene,
+  CanonicalCanvasNodeType,
   OperationSource,
   CanvasCreateCompositeRequest,
   CanvasCreateConnectionRequest,
@@ -19,17 +18,14 @@ import type {
   CanvasExtractStructuredContentRequest,
   CanvasAgentActiveContextRequest,
   CanvasAgentContentPayload,
-  CanvasUpsertNarrativeProductionBindingRequest,
   FieldBinding,
   CanvasUpdateBlockRequest,
   ProjectedCanvasStatus,
   ProjectionSourceChangeEvent,
   CanvasHostAppliedDocumentMessage,
-  CanvasTextDocumentReadResult,
 } from '@neko/shared';
 import {
   isCanvasNodeType,
-  isCanvasTextDocumentReadResult,
   isJsonPointerPath,
   isProjectFileSnapshotRequestMessage,
   PROJECT_FILE_SNAPSHOT_RESPONSE,
@@ -37,7 +33,6 @@ import {
 import { setLocale } from '../i18n';
 import { useCanvasStore } from '../stores/canvasStore';
 import { useCanvasOperationStore } from '../stores/canvasOperationStore';
-import { normalizeScriptScenes } from '../utils/scriptScenes';
 import { isEditorLevelKeyboardAction } from './keyboardActionPolicy';
 
 // =============================================================================
@@ -51,20 +46,6 @@ export type VSCodeAPI = {
   setState: (state: unknown) => void;
 } | null;
 
-export interface GenerationProgressPayload {
-  nodeId: string;
-  childNodeId?: string;
-  status: 'pending' | 'generating' | 'done' | 'error';
-  dataUrl?: string;
-}
-
-export interface CanvasCreativeAiActionResultPayload {
-  readonly nodeId: string;
-  readonly actionId?: string;
-  readonly ok: boolean;
-  readonly diagnostics?: readonly unknown[];
-}
-
 export interface UseVSCodeMessagesOptions {
   vscode: VSCodeAPI;
   defaultCanvasData: CanvasData;
@@ -74,13 +55,6 @@ export interface UseVSCodeMessagesOptions {
     readonly routeId?: string;
     readonly currentUnitId?: string;
   }) => void;
-  /** Called when generation status/image arrives from the extension scheduler */
-  onGenerationProgress?: (payload: GenerationProgressPayload) => void;
-  /** Called when a typed Canvas creative AI action is accepted or rejected by the host. */
-  onCanvasCreativeAiActionResult?: (payload: CanvasCreativeAiActionResultPayload) => void;
-  /** Called when scene TOC is available for a ScriptNode */
-  onScriptIndexResult?: (nodeId: string, scenes: ScriptScene[], error?: string) => void;
-  onTextDocumentReadResult?: (result: CanvasTextDocumentReadResult) => void;
   /** Return all nodes (optionally filtered by type) — used to respond to nodes.list requests */
   getNodes?: (type?: string) => CanvasNode[];
   /** Return a single node by id — used to respond to nodes.get requests */
@@ -89,26 +63,18 @@ export interface UseVSCodeMessagesOptions {
   updateNode?: (id: string, data: Record<string, unknown>) => void;
   /** Create a node from the contract DTO — used to respond to nodes.create requests */
   createNode?: (node: {
-    type: CanvasNodeType;
+    type: CanonicalCanvasNodeType;
     position: { x: number; y: number };
     data: Record<string, unknown>;
-    preset?: string;
   }) => string;
   deriveNode?: (request: CanvasDeriveNodeRequest) => unknown;
   createConnection?: (request: CanvasCreateConnectionRequest) => unknown;
   createComposite?: (request: CanvasCreateCompositeRequest) => unknown;
-  reorderSceneShots?: (request: {
-    readonly sceneId: string;
-    readonly shotIds: readonly string[];
-    readonly autoLayout?: boolean;
-  }) => unknown;
+  reorderGroupChildren?: (groupId: string, childIds: string[], autoLayout?: boolean) => unknown;
   updateBlock?: (request: CanvasUpdateBlockRequest) => unknown;
   extractStructuredContent?: (request: CanvasExtractStructuredContentRequest) => unknown;
   getActiveContext?: (request?: CanvasAgentActiveContextRequest) => unknown;
   applyAgentContent?: (payload: CanvasAgentContentPayload) => unknown;
-  upsertNarrativeProductionBinding?: (
-    request: CanvasUpsertNarrativeProductionBindingRequest,
-  ) => unknown;
   onProjectionStatus?: (status: ProjectedCanvasStatus) => void;
   onProjectionSourceChanged?: (event: ProjectionSourceChangeEvent) => void;
   /** Called after a Canvas document payload has been normalized and applied. */
@@ -126,6 +92,10 @@ function withOperationSource<T>(source: OperationSource, run: () => T): T {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
 function normalizeFieldBinding(value: unknown): FieldBinding | undefined {
@@ -193,10 +163,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
     defaultCanvasData,
     setCanvasData,
     onRevealPlaybackWorkspace,
-    onGenerationProgress,
-    onCanvasCreativeAiActionResult,
-    onScriptIndexResult,
-    onTextDocumentReadResult,
     getNodes,
     getNode,
     updateNode,
@@ -204,12 +170,11 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
     deriveNode,
     createConnection,
     createComposite,
-    reorderSceneShots,
+    reorderGroupChildren,
     updateBlock,
     extractStructuredContent,
     getActiveContext,
     applyAgentContent,
-    upsertNarrativeProductionBinding,
     onProjectionStatus,
     onProjectionSourceChanged,
     onCanvasDataLoaded,
@@ -226,14 +191,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
   // Stable refs for callbacks to avoid re-registering listener
   const onRevealPlaybackWorkspaceRef = useRef(onRevealPlaybackWorkspace);
   onRevealPlaybackWorkspaceRef.current = onRevealPlaybackWorkspace;
-  const onGenerationProgressRef = useRef(onGenerationProgress);
-  onGenerationProgressRef.current = onGenerationProgress;
-  const onCanvasCreativeAiActionResultRef = useRef(onCanvasCreativeAiActionResult);
-  onCanvasCreativeAiActionResultRef.current = onCanvasCreativeAiActionResult;
-  const onScriptIndexResultRef = useRef(onScriptIndexResult);
-  onScriptIndexResultRef.current = onScriptIndexResult;
-  const onTextDocumentReadResultRef = useRef(onTextDocumentReadResult);
-  onTextDocumentReadResultRef.current = onTextDocumentReadResult;
   const getNodesRef = useRef(getNodes);
   getNodesRef.current = getNodes;
   const getNodeRef = useRef(getNode);
@@ -248,6 +205,8 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
   createConnectionRef.current = createConnection;
   const createCompositeRef = useRef(createComposite);
   createCompositeRef.current = createComposite;
+  const reorderGroupChildrenRef = useRef(reorderGroupChildren);
+  reorderGroupChildrenRef.current = reorderGroupChildren;
   const updateBlockRef = useRef(updateBlock);
   updateBlockRef.current = updateBlock;
   const extractStructuredContentRef = useRef(extractStructuredContent);
@@ -256,14 +215,10 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
   getActiveContextRef.current = getActiveContext;
   const applyAgentContentRef = useRef(applyAgentContent);
   applyAgentContentRef.current = applyAgentContent;
-  const upsertNarrativeProductionBindingRef = useRef(upsertNarrativeProductionBinding);
-  upsertNarrativeProductionBindingRef.current = upsertNarrativeProductionBinding;
   const onProjectionStatusRef = useRef(onProjectionStatus);
   onProjectionStatusRef.current = onProjectionStatus;
   const onProjectionSourceChangedRef = useRef(onProjectionSourceChanged);
   onProjectionSourceChangedRef.current = onProjectionSourceChanged;
-  const reorderSceneShotsRef = useRef(reorderSceneShots);
-  reorderSceneShotsRef.current = reorderSceneShots;
   const onCanvasDataLoadedRef = useRef(onCanvasDataLoaded);
   onCanvasDataLoadedRef.current = onCanvasDataLoaded;
   const onSavedRef = useRef(onSaved);
@@ -356,36 +311,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
           case 'saved':
             onSavedRef.current?.();
             break;
-          case 'generationProgress':
-            onGenerationProgressRef.current?.({
-              nodeId: message.nodeId as string,
-              childNodeId: message.childNodeId as string | undefined,
-              status: message.status as GenerationProgressPayload['status'],
-              dataUrl: message.dataUrl as string | undefined,
-            });
-            break;
-          case 'canvasCreativeAiActionResult':
-            if (typeof message.nodeId === 'string') {
-              onCanvasCreativeAiActionResultRef.current?.({
-                nodeId: message.nodeId,
-                actionId: typeof message.actionId === 'string' ? message.actionId : undefined,
-                ok: message.ok === true,
-                diagnostics: Array.isArray(message.diagnostics) ? message.diagnostics : undefined,
-              });
-            }
-            break;
-          case 'scriptIndexResult':
-            onScriptIndexResultRef.current?.(
-              message.nodeId as string,
-              normalizeScriptScenes(message.scenes),
-              typeof message.error === 'string' ? message.error : undefined,
-            );
-            break;
-          case 'textDocument:readResult':
-            if (isCanvasTextDocumentReadResult(message)) {
-              onTextDocumentReadResultRef.current?.(message);
-            }
-            break;
           case 'projectionStatus':
             if (isRecord(message.status)) {
               onProjectionStatusRef.current?.(message.status as unknown as ProjectedCanvasStatus);
@@ -450,7 +375,7 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
                   preset?: string;
                 }
               | undefined) ?? { data: {} };
-            const type = payload.type ?? 'annotation';
+            const type = payload.type ?? 'markdown';
             if (!isCanvasNodeType(type)) {
               vscode.postMessage({
                 type: '_response',
@@ -464,10 +389,9 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
                 'ai',
                 () =>
                   createNodeRef.current?.({
-                    type,
+                    type: type as CanonicalCanvasNodeType,
                     position: payload.position ?? { x: 0, y: 0 },
                     data: payload.data ?? {},
-                    preset: payload.preset,
                   }) ?? '',
               );
               vscode.postMessage({ type: '_response', _requestId: requestId, nodeId: id });
@@ -553,27 +477,26 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
             }
             break;
           }
-          case 'nodes.reorderSceneShots': {
+          case 'nodes.reorderGroupChildren': {
             const requestId = message._requestId as number | undefined;
             if (requestId === undefined) break;
             try {
-              const payload = isRecord(message.payload) ? message.payload : {};
-              const shotIdValues: readonly unknown[] = Array.isArray(payload.shotIds)
-                ? payload.shotIds
-                : [];
-              const shotIds = shotIdValues.filter(
-                (shotId): shotId is string => typeof shotId === 'string',
-              );
+              const payload = message.payload;
+              if (
+                !isRecord(payload) ||
+                typeof payload.groupId !== 'string' ||
+                !isStringArray(payload.childIds)
+              ) {
+                throw new Error('Group reorder requires groupId and childIds');
+              }
+              const groupId = payload.groupId;
+              const childIds = payload.childIds;
+              const autoLayout = payload.autoLayout === true;
               const result = withOperationSource('ai', () =>
-                reorderSceneShotsRef.current?.({
-                  sceneId: typeof payload.sceneId === 'string' ? payload.sceneId : '',
-                  shotIds,
-                  autoLayout:
-                    typeof payload.autoLayout === 'boolean' ? payload.autoLayout : undefined,
-                }),
+                reorderGroupChildrenRef.current?.(groupId, childIds, autoLayout),
               );
               if (!isRecord(result)) {
-                throw new Error('Scene shot reorder failed');
+                throw new Error('Group reorder failed');
               }
               vscode.postMessage({ type: '_response', _requestId: requestId, ...result });
             } catch (error) {
@@ -662,28 +585,6 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
               );
               if (!isRecord(result)) {
                 throw new Error('Agent content application failed');
-              }
-              vscode.postMessage({ type: '_response', _requestId: requestId, ...result });
-            } catch (error) {
-              vscode.postMessage({
-                type: '_response',
-                _requestId: requestId,
-                error: error instanceof Error ? error.message : String(error),
-              });
-            }
-            break;
-          }
-          case 'narrative.upsertProductionBinding': {
-            const requestId = message._requestId as number | undefined;
-            if (requestId === undefined) break;
-            try {
-              const result = withOperationSource('ai', () =>
-                upsertNarrativeProductionBindingRef.current?.(
-                  message.payload as CanvasUpsertNarrativeProductionBindingRequest,
-                ),
-              );
-              if (!isRecord(result)) {
-                throw new Error('Narrative production binding update failed');
               }
               vscode.postMessage({ type: '_response', _requestId: requestId, ...result });
             } catch (error) {

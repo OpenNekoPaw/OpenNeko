@@ -12,6 +12,9 @@ import type {
   RouteStoryboardMatrixViewModel,
 } from './routeStoryboardMatrix';
 
+const MATRIX_ROW_HEADER_WIDTH_PX = 160;
+const MATRIX_MIN_COLUMN_WIDTH_PX = 112;
+
 export interface RouteStoryboardMatrixProps {
   readonly matrix: RouteStoryboardMatrixViewModel;
   readonly selectedRouteId?: string;
@@ -171,13 +174,23 @@ export function RouteStoryboardMatrix({
       </div>
 
       <div className="canvas-route-storyboard-matrix-grid" role="presentation">
-        <div className="canvas-route-storyboard-matrix-header" role="presentation">
+        <div
+          className="canvas-route-storyboard-matrix-header"
+          role="presentation"
+          style={{ minWidth: resolveMatrixGridMinWidth(matrix.columns.length) }}
+        >
           <div className="canvas-route-storyboard-matrix-corner" role="rowheader">
             <span>{t('playback.matrix.routes')}</span>
             <small>{containerSummary}</small>
           </div>
           <div className="canvas-route-storyboard-matrix-header-columns" role="presentation">
-            <div className="canvas-route-storyboard-matrix-container-row" role="row">
+            <div
+              className="canvas-route-storyboard-matrix-container-row"
+              role="row"
+              style={{
+                gridTemplateColumns: `repeat(${Math.max(matrix.columns.length, 1)}, minmax(112px, 1fr))`,
+              }}
+            >
               {matrix.containerGroups.map((container) => (
                 <button
                   key={container.id}
@@ -204,7 +217,13 @@ export function RouteStoryboardMatrix({
                 </button>
               ))}
             </div>
-            <div className="canvas-route-storyboard-matrix-step-row" role="row">
+            <div
+              className="canvas-route-storyboard-matrix-step-row"
+              role="row"
+              style={{
+                gridTemplateColumns: `repeat(${Math.max(matrix.columns.length, 1)}, minmax(112px, 1fr))`,
+              }}
+            >
               {matrix.columns.map((column, index) => (
                 <button
                   key={column.id}
@@ -234,6 +253,7 @@ export function RouteStoryboardMatrix({
             <MatrixRow
               key={row.id}
               row={row}
+              columnCount={matrix.columns.length}
               selected={row.routeId === selectedRoute?.routeId}
               currentUnitId={currentUnitId}
               focusedCellId={effectiveFocusedCellId}
@@ -267,6 +287,7 @@ function MatrixStat({ value, label }: { readonly value: number | string; readonl
 
 function MatrixRow({
   row,
+  columnCount,
   selected,
   currentUnitId,
   focusedCellId,
@@ -276,6 +297,7 @@ function MatrixRow({
   onFocusCell,
 }: {
   readonly row: RouteStoryboardMatrixRow;
+  readonly columnCount: number;
   readonly selected: boolean;
   readonly currentUnitId?: string;
   readonly focusedCellId?: string;
@@ -297,6 +319,7 @@ function MatrixRow({
       data-selected={selected ? 'true' : 'false'}
       role="row"
       aria-selected={selected}
+      style={{ minWidth: resolveMatrixGridMinWidth(columnCount) }}
     >
       <div className="canvas-route-storyboard-matrix-row-header">
         <button
@@ -317,7 +340,12 @@ function MatrixRow({
           </small>
         </button>
       </div>
-      <div className="canvas-route-storyboard-matrix-cells">
+      <div
+        className="canvas-route-storyboard-matrix-cells"
+        style={{
+          gridTemplateColumns: `repeat(${Math.max(columnCount, 1)}, minmax(112px, 1fr))`,
+        }}
+      >
         {row.cells.map((cell) => (
           <MatrixCell
             key={cell.id}
@@ -332,6 +360,10 @@ function MatrixRow({
       </div>
     </div>
   );
+}
+
+function resolveMatrixGridMinWidth(columnCount: number): number {
+  return MATRIX_ROW_HEADER_WIDTH_PX + Math.max(columnCount, 1) * MATRIX_MIN_COLUMN_WIDTH_PX;
 }
 
 function MatrixCell({
@@ -500,16 +532,10 @@ function formatContainerTitle(container: RouteStoryboardMatrixContainerGroup): s
 
 function formatUnitKind(kind: RouteStoryboardMatrixPlayableCell['unitKind']): string {
   switch (kind) {
-    case 'scene':
-      return t('playback.kind.scene');
-    case 'shot':
-      return t('playback.kind.shot');
     case 'media':
       return t('playback.kind.media');
     case 'container':
       return t('playback.kind.container');
-    case 'narrative':
-      return t('playback.kind.narrative');
     case 'node':
     default:
       return t('playback.kind.node');

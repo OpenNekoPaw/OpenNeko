@@ -64,7 +64,7 @@ export interface RevealPlaybackWorkspaceInput extends Partial<
 
 const PLAYBACK_WORKSPACE_LAYOUT_BOUNDS = {
   stageWidthPx: { min: 280, max: 760, defaultValue: 520 },
-  routeHeightPx: { min: 220, max: 640, defaultValue: 360 },
+  routeHeightPx: { min: 168, max: 640, defaultValue: 208 },
 } as const;
 
 const DEFAULT_PLAYBACK_SESSION: PlaybackSessionState = {
@@ -83,7 +83,7 @@ const DEFAULT_PLAYBACK_SESSION: PlaybackSessionState = {
   playbackState: 'idle',
   stale: false,
   matrix: {
-    routeViewMode: 'matrix',
+    routeViewMode: 'compact',
     filters: {
       routeIds: [],
       containerIds: [],

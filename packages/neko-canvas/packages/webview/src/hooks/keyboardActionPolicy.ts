@@ -10,7 +10,6 @@ const EDITOR_LEVEL_KEYBOARD_ACTIONS = new Set([
   'pasteInPlace',
   'duplicate',
   'resetZoom',
-  'generateSelected',
 ]);
 
 export function isEditorLevelKeyboardAction(action: unknown): action is string {

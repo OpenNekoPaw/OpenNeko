@@ -36,7 +36,7 @@ describe('projectRouteStoryboardMatrix', () => {
       routeCandidates: [
         route('entry:shot-a', ['shot-a', 'shot-b'], { sourceKind: 'entry' }),
         route('auto-entry:shot-a', ['shot-a', 'shot-b'], { sourceKind: 'auto-entry' }),
-        route('component:shot-a', ['shot-a', 'shot-c'], { sourceKind: 'component' }),
+        route('container:shot-a', ['shot-a', 'shot-c'], { sourceKind: 'container' }),
         route('selection:shot-a', ['shot-a', 'shot-b'], { sourceKind: 'selection' }),
       ],
     });
@@ -44,15 +44,15 @@ describe('projectRouteStoryboardMatrix', () => {
     const matrix = projectRouteStoryboardMatrix({ plan });
     const primary = matrix.families.find((family) => family.id === 'family:primary');
 
-    expect(primary?.routeIds).toEqual(['entry:shot-a', 'auto-entry:shot-a', 'component:shot-a']);
-    expect(primary?.visibleRouteIds).toEqual(['entry:shot-a', 'component:shot-a']);
+    expect(primary?.routeIds).toEqual(['entry:shot-a', 'auto-entry:shot-a', 'container:shot-a']);
+    expect(primary?.visibleRouteIds).toEqual(['entry:shot-a', 'container:shot-a']);
     expect(primary?.foldedRouteIds).toEqual(['auto-entry:shot-a']);
-    expect(matrix.rows.map((row) => row.routeId)).toEqual(['entry:shot-a', 'component:shot-a']);
+    expect(matrix.rows.map((row) => row.routeId)).toEqual(['entry:shot-a', 'container:shot-a']);
 
     const allCandidates = projectRouteStoryboardMatrix({ plan, showAllCandidates: true });
 
     expect(new Set(allCandidates.rows.map((row) => row.routeId))).toEqual(
-      new Set(['entry:shot-a', 'auto-entry:shot-a', 'component:shot-a', 'selection:shot-a']),
+      new Set(['entry:shot-a', 'auto-entry:shot-a', 'container:shot-a', 'selection:shot-a']),
     );
   });
 
@@ -255,11 +255,13 @@ describe('projectRouteStoryboardMatrix', () => {
     const canvas = storyboardCanvas([
       scene('scene-a', ['shot-a', 'shot-b', 'shot-c', 'media-d']),
       shot('shot-a', 1, 'scene-a'),
-      shot('shot-b', 2, 'scene-a', {
-        generatedImage: 'data:image/png;base64,node-generated',
+      media('shot-b', 'scene-a', {
+        mediaType: 'image',
+        runtimeThumbnailPath: 'data:image/png;base64,node-generated',
       }),
-      shot('shot-c', 3, 'scene-a', {
-        thumbnailData: 'bm9kZS10aHVtYg==',
+      media('shot-c', 'scene-a', {
+        mediaType: 'image',
+        runtimeThumbnailPath: 'data:image/png;base64,bm9kZS10aHVtYg==',
       }),
       media('media-d', 'scene-a', {
         thumbnailPath: 'assets/thumbs/media-d.png',
@@ -344,7 +346,7 @@ describe('projectRouteStoryboardMatrix', () => {
   it('highlights unit-property filters without hiding alignment slots', () => {
     const plan = playbackPlan({
       units: [
-        unit('shot-a', { kind: 'shot' }),
+        unit('shot-a', { kind: 'node' }),
         unit('media-b', { kind: 'media', assetPath: 'assets/b.mp4' }),
       ],
       routeCandidates: [route('entry:shot-a', ['shot-a', 'media-b'])],
@@ -372,7 +374,7 @@ function playbackPlan({
   readonly routeCandidates: readonly CanvasPlaybackRouteCandidate[];
 }): CanvasPlaybackPlan {
   return {
-    adapterId: 'storyboard',
+    adapterId: 'generic',
     requestedAdapterId: 'auto',
     behaviorMode: 'linear',
     advancePolicy: 'timer',
@@ -409,8 +411,8 @@ function unit(id: string, overrides: Partial<CanvasPlaybackUnit> = {}): CanvasPl
   return {
     id,
     sourceNodeId: id,
-    kind: 'shot',
-    renderMode: 'story-preview',
+    kind: 'node',
+    renderMode: 'inline-preview',
     label: id,
     durationMs: 1000,
     ...overrides,
@@ -424,12 +426,12 @@ function storyboardCanvas(nodes: readonly CanvasNode[]): Pick<CanvasData, 'nodes
 function scene(id: string, childIds: readonly string[]): CanvasNode {
   return {
     id,
-    type: 'scene',
+    type: 'group',
     position: { x: 0, y: 0 },
     size: { width: 200, height: 120 },
     zIndex: 0,
-    container: { policy: 'scene', childIds: [...childIds], layout: { mode: 'sequence' } },
-    data: { sceneTitle: id, sceneNumber: 1 },
+    container: { policy: 'group', childIds: [...childIds], layout: { mode: 'sequence' } },
+    data: { label: id },
   };
 }
 
@@ -441,23 +443,14 @@ function shot(
 ): CanvasNode {
   return {
     id,
-    type: 'shot',
+    type: 'markdown',
     parentId,
     position: { x: shotNumber * 220, y: 0 },
     size: { width: 200, height: 120 },
     zIndex: shotNumber,
     data: {
-      shotNumber,
-      duration: 1,
-      visualDescription: id,
-      characters: [],
-      shotScale: 'MS',
-      characterAction: '',
-      emotion: [],
-      sceneTags: [],
-      generationStatus: 'idle',
-      generationHistory: [],
-      ...dataOverrides,
+      title: id,
+      content: typeof dataOverrides['content'] === 'string' ? dataOverrides['content'] : id,
     },
   };
 }

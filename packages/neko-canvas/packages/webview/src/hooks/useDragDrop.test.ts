@@ -6,38 +6,7 @@ import {
   createCanvasMediaAddSourceInput,
   getCanvasFilePickerDefaultName,
   hasCanvasExternalDropPayload,
-  isDomNode,
-  isNodeLibraryDragLeavingCanvas,
 } from './useDragDrop';
-
-describe('useDragDrop node-library drag helpers', () => {
-  it('recognizes DOM-like nodes in the node test environment', () => {
-    const nodeLike = { nodeType: 1 } as unknown as EventTarget;
-    const eventTargetLike = {} as EventTarget;
-
-    expect(isDomNode(nodeLike)).toBe(true);
-    expect(isDomNode(eventTargetLike)).toBe(false);
-    expect(isDomNode(null)).toBe(false);
-  });
-
-  it('keeps node-library drag feedback while moving inside the canvas', () => {
-    const insideTarget = { nodeType: 1 } as unknown as Node;
-    const canvasElement = {
-      contains: (target: Node) => target === insideTarget,
-    } as HTMLDivElement;
-
-    expect(isNodeLibraryDragLeavingCanvas({ relatedTarget: insideTarget }, canvasElement)).toBe(
-      false,
-    );
-    expect(isNodeLibraryDragLeavingCanvas({ relatedTarget: null }, canvasElement)).toBe(true);
-    expect(
-      isNodeLibraryDragLeavingCanvas(
-        { relatedTarget: { nodeType: 1 } as unknown as EventTarget },
-        canvasElement,
-      ),
-    ).toBe(true);
-  });
-});
 
 describe('useDragDrop external payload detection', () => {
   it('detects file and URI drops as handled by the file drop path', () => {
@@ -67,7 +36,7 @@ describe('useDragDrop external payload detection', () => {
 });
 
 describe('useDragDrop add-source contract', () => {
-  it('builds canonical file-picker requests for Canvas node-library media adds', () => {
+  it('builds canonical file-picker requests for Canvas media add actions', () => {
     const request = createCanvasFilePickerAddSourceInput('media', { x: 12, y: 34 });
 
     expect(request).toEqual(
@@ -87,16 +56,15 @@ describe('useDragDrop add-source contract', () => {
       }),
     );
     expect(getCanvasFilePickerDefaultName('canvas-embed')).toBe('canvas.nkc');
-    expect(getCanvasFilePickerDefaultName('text')).toBe('text.txt');
+    expect(getCanvasFilePickerDefaultName('file')).toBe('file');
 
-    const futureScriptRequest = createCanvasFilePickerAddSourceInput('script', { x: 1, y: 2 });
-    expect(futureScriptRequest).toEqual(
+    const fileRequest = createCanvasFilePickerAddSourceInput('file', { x: 1, y: 2 });
+    expect(fileRequest).toEqual(
       expect.objectContaining({
-        browserFile: { name: 'script.fountain' },
+        browserFile: { name: 'file' },
         target: { role: 'document' },
         metadata: expect.objectContaining({
-          canvasAssetKind: 'text',
-          textFormat: 'plain',
+          canvasAssetKind: 'file',
         }),
       }),
     );

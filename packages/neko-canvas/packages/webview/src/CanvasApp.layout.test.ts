@@ -12,8 +12,12 @@ describe('Canvas creative workbench layout boundary', () => {
     resolve(__dirname, 'components/playback/PlaybackWorkspace.tsx'),
     'utf8',
   );
-  const nodeLibrarySource = readFileSync(
-    resolve(__dirname, 'components/panels/NodeLibraryPanel.tsx'),
+  const addActionPopoverSource = readFileSync(
+    resolve(__dirname, 'components/toolbar/CanvasAddActionPopover.tsx'),
+    'utf8',
+  );
+  const addActionCatalogSource = readFileSync(
+    resolve(__dirname, 'utils/canvasAddActions.ts'),
     'utf8',
   );
   const cssSource = readFileSync(resolve(__dirname, 'index.css'), 'utf8');
@@ -25,10 +29,6 @@ describe('Canvas creative workbench layout boundary', () => {
   );
   const connectionLayerSource = readFileSync(
     resolve(__dirname, 'components/connections/ConnectionLayer.tsx'),
-    'utf8',
-  );
-  const containerRendererSource = readFileSync(
-    resolve(__dirname, 'components/content/ContainerRenderer.tsx'),
     'utf8',
   );
 
@@ -120,16 +120,11 @@ describe('Canvas creative workbench layout boundary', () => {
   it('keeps canvas overlays and controls inside the main panel surface', () => {
     const mainStart = appSource.indexOf('className="canvas-main-surface"');
     expect(mainStart).toBeGreaterThan(-1);
-    for (const token of [
-      '<MiniMap',
-      '<ZoomControls',
-      '<CanvasToolbar',
-      '<FloatingPanelHost',
-      '<GenerationPromptPanel',
-      '<ContentOverlay',
-    ]) {
+    for (const token of ['<MiniMap', '<ZoomControls', '<CanvasToolbar']) {
       expect(appSource.indexOf(token)).toBeGreaterThan(mainStart);
     }
+    expect(appSource).not.toContain('<GenerationPromptPanel');
+    expect(appSource).not.toContain('<ContentOverlay');
     expect(appSource).toMatch(/id="canvas-hud-controls"/);
     expect(appSource).toMatch(/isHudVisible && \(/);
     expect(appSource).not.toMatch(/<CanvasSettingsPanel/);
@@ -152,39 +147,21 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).not.toMatch(/data-canvas-toolbar-host="right"/);
   });
 
-  it('routes Shot overlay AI buttons through typed Canvas creative actions', () => {
-    const overlayActionStart = appSource.indexOf('const postCanvasCreativeAiAction');
-    const overlayActionEnd = appSource.indexOf('/** Open GenerationPromptPanel in video mode');
-    expect(overlayActionStart).toBeGreaterThan(-1);
-    expect(overlayActionEnd).toBeGreaterThan(overlayActionStart);
-    const overlayActionSource = appSource.slice(overlayActionStart, overlayActionEnd);
-
-    expect(overlayActionSource).toMatch(/type: 'canvasCreativeAiAction'/);
-    expect(overlayActionSource).toMatch(/type: 'canvasCreativeAiCandidateAction'/);
-    for (const actionId of [
-      'optimize-video-prompt',
-      'generate-image',
-      'edit-image',
-      'generate-video',
-      'edit-video',
-    ]) {
-      expect(overlayActionSource).toContain(actionId);
-    }
-    expect(overlayActionSource).not.toContain("type: 'sendToAgent'");
-    expect(overlayActionSource).not.toContain("type: 'generateForNode'");
-    expect(overlayActionSource).not.toContain("type: 'generationProgress'");
-    expect(overlayActionSource).not.toContain('dataUrl');
-    expect(overlayActionSource).not.toContain('openGenerationPanel');
+  it('creates nodes through canonical add action ids', () => {
+    expect(appSource).toContain('getCanvasAddAction(actionId)');
+    expect(appSource).toContain("case 'markdown'");
+    expect(appSource).toContain("case 'group'");
+    expect(appSource).not.toContain("case 'job'");
+    expect(appSource).not.toContain("case 'shot'");
+    expect(appSource).not.toContain("case 'scene'");
+    expect(addActionCatalogSource).not.toContain("'job-card'");
   });
 
-  it('routes GenerationPromptPanel through the same Canvas-owned typed action', () => {
-    const panelGenerateStart = appSource.indexOf('const handlePanelGenerate');
-    const panelGenerateEnd = appSource.indexOf('// Context menu');
-    expect(panelGenerateStart).toBeGreaterThan(-1);
-    expect(panelGenerateEnd).toBeGreaterThan(panelGenerateStart);
-    const panelGenerateSource = appSource.slice(panelGenerateStart, panelGenerateEnd);
-    expect(panelGenerateSource).toContain("type: 'canvasCreativeAiAction'");
-    expect(panelGenerateSource).not.toContain("type: 'generateForNode'");
+  it('does not retain legacy generation and content overlay entry points', () => {
+    expect(appSource).not.toContain('handlePanelGenerate');
+    expect(appSource).not.toContain('canvasCreativeAiAction');
+    expect(appSource).not.toContain('GenerationPromptPanel');
+    expect(appSource).not.toContain('ContentOverlay');
   });
 
   it('does not duplicate the document title as a canvas scope chip', () => {
@@ -230,6 +207,35 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(/route: pane === 'route'/);
   });
 
+  it('renders the route projection as a top overlay with explicit storyline and comparison modes', () => {
+    expect(playbackWorkspaceSource).toMatch(
+      /className="canvas-playback-route-pane canvas-playback-route-overlay"/,
+    );
+    expect(playbackWorkspaceSource).toMatch(
+      /data-route-view-mode=\{session\.matrix\.routeViewMode\}/,
+    );
+    expect(playbackWorkspaceSource).toMatch(/<SegmentedControl/);
+    expect(playbackWorkspaceSource).toMatch(/value:\s*'compact'/);
+    expect(playbackWorkspaceSource).toMatch(/value:\s*'matrix'/);
+    expect(playbackWorkspaceSource).toMatch(
+      /session\.matrix\.routeViewMode === 'matrix' && routeMatrix/,
+    );
+    expect(playbackWorkspaceSource).toMatch(/<PlaybackRouteStrip/);
+    expect(playbackWorkspaceSource).toMatch(/--canvas-playback-overlay-safe-top/);
+    expect(cssSource).toMatch(
+      /\.canvas-playback-route-pane\s*\{[^}]*position:\s*absolute;[^}]*top:\s*12px;/s,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-board-navigation-bar\s*\{[^}]*var\(--canvas-playback-overlay-safe-top/s,
+    );
+    const narrowPlaybackStart = cssSource.indexOf('@media (max-width: 920px)');
+    const nextResponsiveBlock = cssSource.indexOf('@media (max-width:', narrowPlaybackStart + 1);
+    const narrowPlaybackCss = cssSource.slice(narrowPlaybackStart, nextResponsiveBlock);
+    expect(narrowPlaybackCss).toMatch(
+      /\.canvas-playback-workspace-main\s*\{[^}]*flex-direction:\s*column;/s,
+    );
+  });
+
   it('keeps floating toolbar actions grouped by canvas workflow frequency', () => {
     expect(toolbarSource).toMatch(/data-canvas-toolbar-action="select-tool"/);
     expect(toolbarSource).toMatch(/data-canvas-toolbar-kind="tool-mode"/);
@@ -237,20 +243,18 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="toggle-canvas-settings"/);
     expect(toolbarSource).not.toMatch(/aria-controls="canvas-settings-panel"/);
 
-    const orderedActions = [
-      'select-tool',
-      'toggle-pan-mode',
-      'toggle-right-node-tree',
-      'undo',
-      'redo',
-      'toggle-playback-stage-pane',
-      'toggle-playback-route-pane',
-      'open-export',
-      'open-package',
+    const orderedTokens = [
+      'data-canvas-toolbar-action="select-tool"',
+      'data-canvas-toolbar-action="toggle-pan-mode"',
+      '<CanvasAddActionPopover',
+      'data-canvas-toolbar-action="undo"',
+      'data-canvas-toolbar-action="redo"',
+      'data-canvas-toolbar-action="toggle-playback-stage-pane"',
+      'data-canvas-toolbar-action="toggle-playback-route-pane"',
+      'data-canvas-toolbar-action="open-export"',
+      'data-canvas-toolbar-action="open-package"',
     ];
-    const positions = orderedActions.map((action) =>
-      toolbarSource.indexOf(`data-canvas-toolbar-action="${action}"`),
-    );
+    const positions = orderedTokens.map((token) => toolbarSource.indexOf(token));
     expect(positions.every((position) => position > -1)).toBe(true);
     expect(positions).toEqual([...positions].sort((left, right) => left - right));
     expect(toolbarSource).not.toMatch(/ToolbarSpacer/);
@@ -271,61 +275,29 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(baseNodeSource).toMatch(/state\.activePlayingNodeId/);
     expect(baseNodeSource).toMatch(/data-playback-active=\{isPlaybackActive/);
     expect(baseNodeSource).toMatch(/isSelected \|\| isPlaybackActive/);
-    expect(containerRendererSource).toMatch(/state\.activePlayingNodeId === childNode\.id/);
-    expect(containerRendererSource).toMatch(/data-playback-active=\{isPlaybackActive/);
     expect(appSource).not.toMatch(/setActivePlayingNode\(/);
   });
 
-  it('keeps the right node library in the right-panel responsibility', () => {
-    expect(appSource).toMatch(
-      /const \[isRightNodeTreeVisible, setIsRightNodeTreeVisible\] = useState\(false\)/,
-    );
-    expect(appSource).toMatch(/rightDock=\{\s*isRightNodeTreeVisible/);
-    expect(appSource).toMatch(/id: 'canvas-right-node-tree-panel'/);
-    expect(appSource).toMatch(/panelId: 'canvas\.nodeLibraryDock'/);
-    expect(appSource).toMatch(
-      /const \[rightDockMode, setRightDockMode\] = useState<CanvasRightDockMode>\('basic'\)/,
-    );
-    expect(appSource).toMatch(/groups: \{/);
-    expect(appSource).toMatch(/activeId: rightDockMode/);
-    expect(appSource).toMatch(/label: t\('rightDock\.mode\.basic'\)/);
-    expect(appSource).toMatch(/label: t\('rightDock\.mode\.professional'\)/);
-    expect(appSource).not.toMatch(/isNodeTreeVisible=\{isRightNodeTreeVisible\}/);
-    expect(appSource).not.toMatch(/nodeTreeMode=\{rightDockMode\}/);
-    expect(appSource).not.toMatch(/BASIC_CANVAS_SUBSYSTEM_IDS/);
-    expect(appSource).toMatch(/basicNodeLibraryDescriptors/);
-    expect(appSource).toMatch(
-      /rightDockMode === 'professional'\s*\?\s*WEBVIEW_SUBSYSTEM_REGISTRY\.manifests\s*:\s*\[\]/,
-    );
-    expect(appSource).toMatch(
-      /rightDockMode === 'professional'\s*\?\s*coreNodeTypeDescriptors\s*:\s*basicNodeLibraryDescriptors/,
-    );
-    expect(appSource).toMatch(/<NodeLibraryPanel/);
-    expect(appSource).toMatch(/'data-canvas-right-node-tree': 'true'/);
-    expect(nodeLibrarySource).not.toMatch(/id="canvas-right-node-tree-panel"/);
-    expect(nodeLibrarySource).not.toMatch(/data-canvas-right-node-tree="true"/);
+  it('removes the persistent right node library Dock', () => {
+    expect(appSource).not.toMatch(/isRightNodeTreeVisible|canvas-right-node-tree/);
+    expect(appSource).not.toMatch(/rightDock=/);
+    expect(appSource).not.toMatch(/NodeLibraryPanel|canvas\.nodeLibraryDock/);
+    expect(cssSource).not.toMatch(/canvas-right-node-tree|canvas-node-library/);
   });
 
-  it('keeps the node library visually integrated with the right dock', () => {
-    expect(nodeLibrarySource).toContain('className="canvas-node-library-panel');
-    expect(nodeLibrarySource).toContain('className="canvas-node-library-header');
-    expect(nodeLibrarySource).toContain('className="canvas-node-library-scroll');
-    expect(cssSource).toMatch(/\.canvas-right-node-tree-panel-content\s*\{[^}]*width:\s*100%/);
-    expect(cssSource).toMatch(/\.canvas-node-library-panel\s*\{[^}]*width:\s*100%/);
-    expect(cssSource).toMatch(/\.canvas-node-library-section\s*\{[^}]*background:\s*transparent/);
-    expect(cssSource).toMatch(/\.canvas-node-library-section\s*\{[^}]*box-shadow:\s*none/);
-    expect(cssSource).toMatch(/#canvas-right-node-tree-panel \.neko-creative-tree-view/);
-    expect(cssSource).toMatch(
-      /#canvas-right-node-tree-panel \[role=["']treeitem["']\] > button:first-child/,
-    );
-    expect(cssSource).toMatch(
-      /#canvas-right-node-tree-panel \[role=["']treeitem["']\] > button:first-child\.invisible\s*\{[^}]*display:\s*none/,
-    );
+  it('projects the shared add catalog from the left toolbar popover', () => {
+    expect(toolbarSource).toMatch(/<CanvasAddActionPopover/);
+    expect(toolbarSource).toMatch(/onSelectAddAction/);
+    expect(addActionPopoverSource).toMatch(/CANVAS_ADD_ACTION_GROUPS\.map/);
+    expect(addActionPopoverSource).toMatch(/data-canvas-add-action-popover="true"/);
+    expect(addActionCatalogSource).toContain("id: 'create'");
+    expect(addActionCatalogSource).toContain("id: 'import'");
+    expect(addActionCatalogSource).toContain("id: 'reference'");
   });
 
   it('marks primary canvas tools and visibility toggles by responsibility', () => {
     expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-pan-mode"/);
-    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="open-add-node-popover"/);
+    expect(addActionPopoverSource).toMatch(/data-canvas-toolbar-action="open-add-node-popover"/);
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="import-file"/);
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="reveal-playback-workspace"/);
     expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="toggle-playback-canvas-pane"/);
@@ -348,10 +320,9 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(appSource).toMatch(
       /reportAction\('openPackage', t\('toolbar\.package'\), undefined, canvasData\)/,
     );
-    expect(toolbarSource).toMatch(/data-canvas-toolbar-action="toggle-right-node-tree"/);
-    expect(toolbarSource).toMatch(/data-canvas-toolbar-kind="visibility-toggle"/);
-    expect(toolbarSource).toMatch(/data-canvas-toolbar-target="right-panel"/);
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-action="toggle-right-node-tree"/);
+    expect(toolbarSource).not.toMatch(/data-canvas-toolbar-target="right-panel"/);
     expect(toolbarSource).not.toMatch(/aria-controls="canvas-hud-controls"/);
-    expect(toolbarSource).toMatch(/aria-controls="canvas-right-node-tree-panel"/);
+    expect(toolbarSource).not.toMatch(/aria-controls="canvas-right-node-tree-panel"/);
   });
 });

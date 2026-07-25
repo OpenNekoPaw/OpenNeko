@@ -1,5 +1,6 @@
 import type { CanvasNode, CanvasViewport } from '@neko/shared';
 import { BaseNode } from './BaseNode';
+import { t } from '../../i18n';
 
 export interface UnsupportedNodeProps {
   node: CanvasNode;
@@ -56,7 +57,7 @@ export function UnsupportedNode({
       <div className="flex h-full flex-col overflow-hidden">
         <div className="flex items-center gap-2 border-b border-[var(--node-border)] bg-[var(--node-header-bg)] px-2 py-1.5">
           <span className="rounded bg-[var(--danger-soft)] px-1.5 py-0.5 text-xs font-medium text-[var(--accent-red)]">
-            UNSUPPORTED
+            {t('node.unsupportedBadge')}
           </span>
           <span className="min-w-0 flex-1 truncate text-xs text-[var(--node-fg-secondary)]">
             {node.type}
@@ -64,7 +65,7 @@ export function UnsupportedNode({
         </div>
 
         <div className="flex-1 space-y-2 overflow-hidden p-3 text-xs text-[var(--node-fg)]">
-          <div className="text-[var(--node-fg-secondary)]">Unsupported node type</div>
+          <div className="text-[var(--node-fg-secondary)]">{t('node.unsupportedType')}</div>
           <pre className="max-h-24 overflow-hidden whitespace-pre-wrap break-words rounded border border-[var(--node-border)] bg-[var(--control-bg)] p-2 text-[11px] leading-4 text-[var(--node-fg-secondary)]">
             {summarizeNodeData(node.data)}
           </pre>
@@ -82,6 +83,6 @@ function summarizeNodeData(data: unknown): string {
     }
     return json.length > 420 ? `${json.slice(0, 420)}...` : json;
   } catch {
-    return '[unserializable data]';
+    return t('node.unserializableData');
   }
 }

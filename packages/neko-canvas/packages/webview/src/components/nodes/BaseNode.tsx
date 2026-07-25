@@ -7,14 +7,10 @@
  * - Otherwise renders node-level endpoint handles on each side
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import type { CanvasViewport, CanvasNodeType, PortDefinition } from '@neko/shared';
-import {
-  getDefaultPorts,
-  getBuiltInCanvasNodePresetMetadata,
-  getDefaultCanvasNodePresetName,
-} from '@neko/shared';
+import { getDefaultPorts } from '@neko/shared';
 import { useNodeDrag } from '../../hooks/useNodeDrag';
 import { useNodeResize, type ResizeHandle } from '../../hooks/useNodeResize';
 import { useNodeRotate } from '../../hooks/useNodeRotate';
@@ -22,9 +18,11 @@ import { useCanvasStore } from '../../stores/canvasStore';
 import { clampNodeRenderSize, clampNodeSize, resolveNodeMinSize } from '../../utils/nodeSizing';
 import type { NodeSize } from '../../utils/nodeSizing';
 import clsx from 'clsx';
-import { toCodiconClassName, type CodiconName } from '@neko/ui/icons';
-import { t } from '../../i18n';
+import { toCodiconClassName } from '@neko/ui/icons';
 import type { NodePresentation } from './nodeTypeDescriptor';
+import { getNodeLabel } from './nodeTypeDescriptor';
+import { createBuiltInNodeTypeDescriptors } from './nodeTypeDescriptors';
+import { t } from '../../i18n';
 
 // =============================================================================
 // Types
@@ -107,6 +105,8 @@ const PORT_DATA_COLORS: Record<string, string> = {
   any: '#6b7280', // gray-500
 };
 
+const NODE_TYPE_DESCRIPTORS = createBuiltInNodeTypeDescriptors();
+
 // =============================================================================
 // Resize handle config
 // =============================================================================
@@ -121,121 +121,6 @@ const RESIZE_HANDLES: { handle: ResizeHandle; cursor: string; style: React.CSSPr
   { handle: 'se', cursor: 'nwse-resize', style: { bottom: -8, right: -8, width: 12, height: 12 } },
   { handle: 'sw', cursor: 'nwse-resize', style: { bottom: -8, left: -8, width: 12, height: 12 } },
 ];
-
-// =============================================================================
-// DeriveButton — "+" with type picker popup
-// =============================================================================
-
-const DERIVE_NODE_TYPES: readonly {
-  readonly type: CanvasNodeType;
-  readonly icon: CodiconName;
-  readonly labelKey: string;
-}[] = [
-  { type: 'shot', icon: 'symbol-color', labelKey: 'node.shot' },
-  { type: 'scene', icon: 'symbol-structure', labelKey: 'node.sceneGroup' },
-  { type: 'gallery', icon: 'symbol-misc', labelKey: 'node.gallery' },
-  { type: 'media', icon: 'symbol-misc', labelKey: 'node.media' },
-  { type: 'annotation', icon: 'edit', labelKey: 'node.note' },
-] as const;
-
-function DeriveButton({ sourceNodeId }: { sourceNodeId: string }) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  const allowedTypes = useMemo(() => {
-    const node = useCanvasStore.getState().canvasData?.nodes.find((n) => n.id === sourceNodeId);
-    if (!node) return DERIVE_NODE_TYPES;
-    const presetName = node.preset ?? getDefaultCanvasNodePresetName(node.type);
-    const preset = getBuiltInCanvasNodePresetMetadata(presetName);
-    if (!preset) return DERIVE_NODE_TYPES;
-    const targetNodeTypes = new Set<string>();
-    for (const t of preset.deriveTargets) {
-      const p = getBuiltInCanvasNodePresetMetadata(t);
-      if (p) targetNodeTypes.add(p.nodeType);
-    }
-    return DERIVE_NODE_TYPES.filter(({ type }) => targetNodeTypes.has(type));
-  }, [sourceNodeId]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleDown = (e: PointerEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('pointerdown', handleDown, true);
-    return () => document.removeEventListener('pointerdown', handleDown, true);
-  }, [open]);
-
-  if (allowedTypes.length === 0) return null;
-
-  return (
-    <div
-      className="absolute z-30 derive-btn"
-      style={{ right: -16, top: '50%', transform: 'translateY(-50%)' }}
-    >
-      <button
-        className="flex items-center justify-center rounded-full"
-        style={{
-          width: 28,
-          height: 28,
-          backgroundColor: 'var(--node-selected, #3b82f6)',
-          color: '#fff',
-          border: '2px solid var(--node-bg, #1e1e1e)',
-          fontSize: 16,
-          fontWeight: 'bold',
-          lineHeight: 1,
-          cursor: 'pointer',
-        }}
-        title="添加后继节点"
-        onMouseDown={(e) => {
-          e.stopPropagation();
-          setOpen((v) => !v);
-        }}
-      >
-        +
-      </button>
-
-      {open && (
-        <div
-          ref={menuRef}
-          className="absolute rounded-lg shadow-xl py-1"
-          style={{
-            left: 30,
-            top: '50%',
-            transform: 'translateY(-50%)',
-            backgroundColor: 'var(--node-bg, #1e1e1e)',
-            border: '1px solid var(--node-border, #333)',
-            whiteSpace: 'nowrap',
-            minWidth: 100,
-          }}
-        >
-          {allowedTypes.map(({ type, icon, labelKey }) => (
-            <button
-              key={type}
-              className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs hover:bg-white/10 transition-colors"
-              style={{
-                color: 'var(--node-fg, #ccc)',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                useCanvasStore.getState().deriveSuccessorNode(sourceNodeId, type);
-                setOpen(false);
-              }}
-            >
-              <span className={toCodiconClassName(icon)} aria-hidden="true" />
-              <span>{t(labelKey)}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // =============================================================================
 // Component
@@ -485,7 +370,10 @@ export function BaseNode({
       }}
       tabIndex={0}
       role="group"
-      aria-label={`${node.type} ${node.id}`}
+      aria-label={t('node.ariaLabel', {
+        type: getNodeLabel(NODE_TYPE_DESCRIPTORS, node.type as CanvasNodeType, t),
+        id: node.id,
+      })}
     >
       {/* Node content */}
       <div
@@ -504,8 +392,6 @@ export function BaseNode({
       </div>
 
       {/* Derive successor node — "+" button with type picker */}
-      {!node.locked && <DeriveButton sourceNodeId={node.id} />}
-
       {/* Resize handles (visible when selected) */}
       {isSelected &&
         !node.locked &&
@@ -558,7 +444,7 @@ export function BaseNode({
               onTransformStart?.(node.id);
               startRotate(e);
             }}
-            title={`Rotation: ${Math.round(currentRotation)}°`}
+            title={t('node.rotation', { degrees: Math.round(currentRotation) })}
           >
             ↻
           </div>
@@ -583,7 +469,7 @@ export function BaseNode({
                   ? 'scale-110 opacity-100'
                   : 'scale-75 opacity-60 hover:scale-110 hover:opacity-100',
               )}
-              title={port.label ?? `${port.type}: ${port.dataType ?? 'any'}`}
+              title={port.label ?? resolvePortTooltip(port)}
             >
               {/* Port type indicator: input has inner dot, output is solid */}
               {port.type === 'input' && (
@@ -618,4 +504,25 @@ export function BaseNode({
       )}
     </div>
   );
+}
+
+function resolvePortTooltip(port: PortDefinition): string {
+  const direction = port.type === 'input' ? t('port.direction.input') : t('port.direction.output');
+  const dataType = resolvePortDataTypeLabel(port.dataType ?? 'any');
+  return t('port.tooltip', { direction, dataType });
+}
+
+function resolvePortDataTypeLabel(dataType: NonNullable<PortDefinition['dataType']>): string {
+  switch (dataType) {
+    case 'any':
+      return t('port.dataType.any');
+    case 'image':
+      return t('port.dataType.image');
+    case 'video':
+      return t('port.dataType.video');
+    case 'audio':
+      return t('port.dataType.audio');
+    case 'text':
+      return t('port.dataType.text');
+  }
 }

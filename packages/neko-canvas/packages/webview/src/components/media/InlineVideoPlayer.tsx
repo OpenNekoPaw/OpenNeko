@@ -8,6 +8,7 @@ import {
 } from '@neko/neko-client';
 import { ProgressBar } from '@neko/ui/creative';
 import { PlayIcon, PauseIcon, VolumeIcon, VolumeOffIcon } from '@neko/ui/icons';
+import { t } from '../../i18n';
 import { getLogger } from '../../utils/logger';
 import {
   createInlineVideoSeekGate,
@@ -374,6 +375,9 @@ export function InlineVideoPlayer({
   // Render
   // =========================================================================
 
+  const playbackLabel = isPlaying ? t('toolbar.playbackPause') : t('toolbar.playbackPlay');
+  const muteLabel = isMuted ? t('media.unmute') : t('media.mute');
+
   return (
     <div className="relative flex-1 bg-black overflow-hidden group">
       <canvas
@@ -407,7 +411,8 @@ export function InlineVideoPlayer({
             type="button"
             className="flex h-6 w-6 items-center justify-center rounded text-white/85 hover:text-white"
             onClick={handleTogglePlay}
-            title={isPlaying ? 'Pause' : 'Play'}
+            aria-label={playbackLabel}
+            title={playbackLabel}
           >
             {isPlaying ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
           </button>
@@ -425,7 +430,8 @@ export function InlineVideoPlayer({
               type="button"
               className="flex h-5 w-5 items-center justify-center text-white/80 hover:text-white"
               onClick={handleToggleMute}
-              title={isMuted ? 'Unmute' : 'Mute'}
+              aria-label={muteLabel}
+              title={muteLabel}
             >
               {isMuted ? <VolumeOffIcon size={12} /> : <VolumeIcon size={12} />}
             </button>

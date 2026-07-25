@@ -7,11 +7,8 @@ import {
   type PositionedContextMenuProps,
 } from '@neko/ui/primitives';
 import {
-  CameraIcon,
   CopyIcon,
-  EditIcon,
   LayersIcon,
-  PackageIcon,
   PlusIcon,
   RefreshIcon,
   ScissorsIcon,
@@ -23,6 +20,12 @@ import {
   PlayIcon,
 } from '@neko/shared/icons';
 import { t } from '../../i18n';
+import { createCanvasAddActionIcon } from '../adapters/sharedCanvasUiAdapter';
+import {
+  CANVAS_ADD_ACTION_GROUPS,
+  type CanvasAddActionGroup,
+  type CanvasAddActionId,
+} from '../../utils/canvasAddActions';
 
 export type MenuEntry = MenuItem;
 export type ContextMenuProps = PositionedContextMenuProps;
@@ -51,12 +54,7 @@ export interface CanvasMenuContext {
   hasSelection: boolean;
   selectedCount: number;
   isNodeLocked?: boolean;
-  onAddText: (pos: { x: number; y: number }) => void;
-  onAddScene: (pos: { x: number; y: number }) => void;
-  onAddShot?: (pos: { x: number; y: number }) => void;
-  onAddGallery?: (pos: { x: number; y: number }) => void;
-  onAddTable?: (pos: { x: number; y: number }) => void;
-  onImportFile?: () => void;
+  onAddAction: (actionId: CanvasAddActionId, pos: { x: number; y: number }) => void;
   onDelete: () => void;
   onSelectAll: () => void;
   onFitContent: () => void;
@@ -77,15 +75,7 @@ export interface CanvasMenuContext {
   canPaste?: boolean;
   canUndo?: boolean;
   canRedo?: boolean;
-  // AI actions
-  onGenerateSelected?: () => void;
-  onBatchGenerate?: () => void;
   onSendToAgent?: (intent?: string) => void;
-  hasShotSelected?: boolean;
-  hasShotWithImage?: boolean;
-  // E6: ControlNet editing + video generation
-  onGenerateVideo?: () => void;
-  onEditWithControlNet?: () => void;
 }
 
 /**
@@ -93,44 +83,7 @@ export interface CanvasMenuContext {
  */
 export function buildCanvasMenuItems(ctx: CanvasMenuContext): MenuEntry[] {
   return [
-    {
-      label: t('toolbar.addNode'),
-      icon: menuIcon(<PlusIcon size={MENU_ICON_SIZE} />),
-      onClick: () => {},
-      submenu: [
-        {
-          label: t('menu.addShot'),
-          icon: menuIcon(<CameraIcon size={MENU_ICON_SIZE} />),
-          onClick: () => ctx.onAddShot?.(ctx.canvasPosition),
-        },
-        {
-          label: t('menu.addScene'),
-          icon: menuIcon(<LayersIcon size={MENU_ICON_SIZE} />),
-          onClick: () => ctx.onAddScene(ctx.canvasPosition),
-        },
-        {
-          label: t('menu.addGallery'),
-          icon: menuIcon(<CameraIcon size={MENU_ICON_SIZE} />),
-          onClick: () => ctx.onAddGallery?.(ctx.canvasPosition),
-        },
-        {
-          label: t('menu.addTable'),
-          icon: menuIcon(<PackageIcon size={MENU_ICON_SIZE} />),
-          onClick: () => ctx.onAddTable?.(ctx.canvasPosition),
-        },
-        { separator: true },
-        {
-          label: t('menu.addText'),
-          icon: menuIcon(<EditIcon size={MENU_ICON_SIZE} />),
-          onClick: () => ctx.onAddText(ctx.canvasPosition),
-        },
-      ],
-    },
-    {
-      label: t('menu.importFile'),
-      icon: menuIcon(<UploadIcon size={MENU_ICON_SIZE} />),
-      onClick: () => ctx.onImportFile?.(),
-    },
+    ...CANVAS_ADD_ACTION_GROUPS.map((group) => buildCanvasAddActionGroup(group, ctx)),
     { separator: true },
     {
       label: t('menu.paste'),
@@ -179,6 +132,33 @@ export function buildCanvasMenuItems(ctx: CanvasMenuContext): MenuEntry[] {
       onClick: ctx.onResetView,
     },
   ];
+}
+
+function buildCanvasAddActionGroup(
+  group: CanvasAddActionGroup,
+  ctx: CanvasMenuContext,
+): MenuAction {
+  return {
+    label: t(group.labelKey),
+    icon: menuIcon(resolveAddActionGroupIcon(group.id)),
+    onClick: () => {},
+    submenu: group.actions.map((action) => ({
+      label: t(action.labelKey),
+      icon: createCanvasAddActionIcon(action.nodeType),
+      onClick: () => ctx.onAddAction(action.id, ctx.canvasPosition),
+    })),
+  };
+}
+
+function resolveAddActionGroupIcon(groupId: CanvasAddActionGroup['id']): ReactElement {
+  switch (groupId) {
+    case 'create':
+      return <PlusIcon size={MENU_ICON_SIZE} />;
+    case 'import':
+      return <UploadIcon size={MENU_ICON_SIZE} />;
+    case 'reference':
+      return <LayersIcon size={MENU_ICON_SIZE} />;
+  }
 }
 
 /**
@@ -247,54 +227,11 @@ export function buildNodeMenuItems(ctx: CanvasMenuContext): MenuEntry[] {
       },
       disabled: !ctx.contextNodeId || !ctx.onSetPlaybackEntry,
     },
-    // ── AI section (unified shell) ──
-    { separator: true },
-    {
-      label: t('menu.ai.generateImage'),
-      icon: menuIcon(<CameraIcon size={MENU_ICON_SIZE} />),
-      disabled: !ctx.hasShotSelected,
-      onClick: () => ctx.onGenerateSelected?.(),
-    },
-    {
-      label: t('menu.ai.batchGenerate'),
-      icon: menuIcon(<LayersIcon size={MENU_ICON_SIZE} />),
-      disabled: !ctx.hasShotSelected || (ctx.selectedCount ?? 0) < 2,
-      onClick: () => ctx.onBatchGenerate?.(),
-    },
-    {
-      label: t('menu.ai.editWithControlNet'),
-      icon: menuIcon(<EditIcon size={MENU_ICON_SIZE} />),
-      disabled: !ctx.hasShotWithImage,
-      onClick: () => ctx.onEditWithControlNet?.(),
-    },
-    {
-      label: t('menu.ai.generateVideo'),
-      icon: menuIcon(<PlayIcon size={MENU_ICON_SIZE} />),
-      disabled: !ctx.hasShotWithImage,
-      onClick: () => ctx.onGenerateVideo?.(),
-    },
     { separator: true },
     {
       label: t('menu.ai.sendToAgent'),
       icon: menuIcon(<SendIcon size={MENU_ICON_SIZE} />),
-      onClick: () => {},
-      submenu: [
-        {
-          label: t('menu.ai.optimizeDesc'),
-          icon: menuIcon(<EditIcon size={MENU_ICON_SIZE} />),
-          onClick: () => ctx.onSendToAgent?.('optimize'),
-        },
-        {
-          label: t('menu.ai.adjustCamera'),
-          icon: menuIcon(<CameraIcon size={MENU_ICON_SIZE} />),
-          onClick: () => ctx.onSendToAgent?.('camera'),
-        },
-        {
-          label: t('menu.ai.understand'),
-          icon: menuIcon(<SendIcon size={MENU_ICON_SIZE} />),
-          onClick: () => ctx.onSendToAgent?.('understand'),
-        },
-      ],
+      onClick: () => ctx.onSendToAgent?.(),
     },
   ];
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   createCanvasPlaybackPlan,
   resolveEffectiveCanvasPlaybackRoutes,
@@ -11,9 +11,9 @@ import {
 } from '@neko/shared';
 import { isResourceRef } from '@neko/shared';
 import { useResizable } from '@neko/ui/hooks';
-import { PlayIcon } from '@neko/ui/icons';
+import { CloseIcon, PlayIcon } from '@neko/ui/icons';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
-import { ResizeHandle } from '@neko/ui/primitives';
+import { IconButton, ResizeHandle, SegmentedControl } from '@neko/ui/primitives';
 import { t } from '../../i18n';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { usePlaybackStore } from '../../stores/playbackStore';
@@ -26,7 +26,8 @@ import type {
   PreviewSourceDescriptor,
 } from '../../preview/types';
 import {
-  CanvasPlaybackController,
+  CanvasPlaybackControls,
+  useCanvasPlaybackController,
   type CanvasPlaybackRequest,
   type PlaybackCompletionSignal,
 } from './CanvasPlaybackController';
@@ -41,7 +42,9 @@ import {
 } from './routeStoryboardMatrix';
 
 const PLAYBACK_STAGE_WIDTH_BOUNDS = { min: 280, max: 760 } as const;
-const PLAYBACK_ROUTE_HEIGHT_BOUNDS = { min: 220, max: 640 } as const;
+const PLAYBACK_ROUTE_HEIGHT_BOUNDS = { min: 168, max: 640 } as const;
+const PLAYBACK_ROUTE_OVERLAY_TOP_PX = 12;
+const PLAYBACK_ROUTE_OVERLAY_GAP_PX = 12;
 const HOST_PLAYBACK_PLAN_TIMEOUT_MS = 5_000;
 const DEFAULT_ROUTE_UNIT_DURATION_MS = 1200;
 const MAX_VISIBLE_ROUTE_TABS = 6;
@@ -50,6 +53,11 @@ export interface PlaybackWorkspaceProps {
   readonly canvasPane: React.ReactNode;
   readonly className?: string;
 }
+
+type PlaybackWorkspaceStyle = CSSProperties & {
+  readonly '--canvas-playback-overlay-safe-top'?: string;
+  readonly '--canvas-playback-stage-width'?: string;
+};
 
 export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspaceProps) {
   const canvasPaneRef = useRef<HTMLDivElement | null>(null);
@@ -65,8 +73,11 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
   const setFocusOwner = usePlaybackStore((state) => state.setPlaybackWorkspaceFocusOwner);
   const setPlaybackState = usePlaybackStore((state) => state.setPlaybackWorkspacePlaybackState);
   const setLayout = usePlaybackStore((state) => state.setPlaybackWorkspaceLayout);
+  const setPaneVisible = usePlaybackStore((state) => state.setPlaybackPaneVisible);
+  const hidePlaybackWorkspace = usePlaybackStore((state) => state.hidePlaybackWorkspace);
   const markStale = usePlaybackStore((state) => state.markPlaybackWorkspaceStale);
   const savePlayback = usePlaybackStore((state) => state.savePlayback);
+  const setRouteViewMode = usePlaybackStore((state) => state.setPlaybackRouteViewMode);
   const setMatrixRouteFamily = usePlaybackStore((state) => state.setPlaybackMatrixRouteFamily);
   const focusMatrix = usePlaybackStore((state) => state.focusPlaybackMatrix);
   const toggleMatrixContainerFold = usePlaybackStore(
@@ -175,7 +186,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     onSizeChange: (stageWidthPx) => setLayout({ stageWidthPx }),
   });
   const routeResize = useResizable<HTMLDivElement>({
-    edge: 'bottom',
+    edge: 'top',
     mode: 'pixel',
     size: session.layout.routeHeightPx,
     minSize: PLAYBACK_ROUTE_HEIGHT_BOUNDS.min,
@@ -305,6 +316,16 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
   const canvasVisible = !session.visible || session.panes.canvas;
   const stageVisible = session.visible && session.panes.stage;
   const routeVisible = session.visible && session.panes.route;
+  const workspaceStyle: PlaybackWorkspaceStyle = routeVisible
+    ? {
+        '--canvas-playback-overlay-safe-top': `${
+          routeResize.size + PLAYBACK_ROUTE_OVERLAY_TOP_PX + PLAYBACK_ROUTE_OVERLAY_GAP_PX
+        }px`,
+      }
+    : {};
+  const stageStyle: PlaybackWorkspaceStyle | undefined = canvasVisible
+    ? { '--canvas-playback-stage-width': `${stageResize.size}px` }
+    : undefined;
   const stageResizeLabel = t('playback.workspace.resizeStage');
   const routeResizeLabel = t('playback.workspace.resizeRoute');
   const stageResizeHandleProps = {
@@ -378,13 +399,20 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     const width = rect.width > 0 ? rect.width : pane.clientWidth;
     const height = rect.height > 0 ? rect.height : pane.clientHeight;
     if (width <= 0 || height <= 0) return;
+    const safeTop = routeVisible
+      ? Math.min(
+          height,
+          routeResize.size + PLAYBACK_ROUTE_OVERLAY_TOP_PX + PLAYBACK_ROUTE_OVERLAY_GAP_PX,
+        )
+      : 0;
+    const visibleCenterY = safeTop + Math.max(0, height - safeTop) / 2;
 
     const centerX = target.position.x + target.size.width / 2;
     const centerY = target.position.y + target.size.height / 2;
     setViewport({
       pan: {
         x: width / 2 - centerX * viewportZoom,
-        y: height / 2 - centerY * viewportZoom,
+        y: visibleCenterY - centerY * viewportZoom,
       },
     });
   };
@@ -423,6 +451,47 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     handlePreviewPlaybackTimeUpdate,
     playbackRequest,
   ]);
+  const playbackController = useCanvasPlaybackController({
+    plan,
+    routeUnitIds,
+    activeUnitId: currentUnit?.id ?? session.currentUnitId ?? null,
+    isPlaying: session.playbackState === 'playing',
+    currentTimeMs: absoluteRoutePlayheadMs,
+    durationMs: routeDurationMs,
+    playbackCompletionSignal,
+    onActiveUnitChange: (unitId) => {
+      selectPlaybackUnit(unitId, 0);
+    },
+    onPlayingChange: (playing) => {
+      setPlaybackState(playing ? 'playing' : 'paused');
+      if (playing && !usePlaybackStore.getState().playbackSession.panes.stage) {
+        setPaneVisible('stage', true);
+      }
+      if (!playing && currentUnit) {
+        setPlaybackRequest((previous) => ({
+          unitId: currentUnit.id,
+          startTimeMs: session.playheadMs,
+          state: 'paused',
+          requestId: `route-pause-${Date.now()}-${previous?.requestId ?? 'initial'}`,
+        }));
+      }
+    },
+    onSeek: selectPlaybackTime,
+    onPlaybackRequest: setPlaybackRequest,
+  });
+  const hideRouteOverlay = () => {
+    if (session.panes.stage) {
+      setPaneVisible('route', false);
+      return;
+    }
+    hidePlaybackWorkspace();
+  };
+  const changeRouteViewMode = (value: string) => {
+    if (value !== 'compact' && value !== 'matrix') {
+      throw new Error(`Unsupported Canvas route view mode "${value}".`);
+    }
+    setRouteViewMode(value);
+  };
 
   return (
     <section
@@ -431,6 +500,8 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
       data-testid="canvas-playback-workspace"
       data-playback-visible={session.visible ? 'true' : 'false'}
       data-playback-focus-owner={session.focusOwner}
+      data-route-overlay-visible={routeVisible ? 'true' : 'false'}
+      style={workspaceStyle}
     >
       <div
         className="canvas-playback-workspace-main"
@@ -448,9 +519,131 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
               ownerId: 'canvas-editor-pane',
               priority: 0,
             })}
-            onFocus={() => setFocusOwner('canvas')}
+            onFocus={(event) => {
+              if (
+                event.target instanceof Element &&
+                event.target.closest('#canvas-playback-route-pane')
+              ) {
+                return;
+              }
+              setFocusOwner('canvas');
+            }}
           >
             {canvasPane}
+            {routeVisible ? (
+              <div
+                id="canvas-playback-route-pane"
+                ref={routeResize.containerRef}
+                className="canvas-playback-route-pane canvas-playback-route-overlay"
+                data-testid="canvas-playback-route-pane"
+                data-resizing={routeResize.isResizing ? 'true' : 'false'}
+                data-route-view-mode={session.matrix.routeViewMode}
+                style={{ height: routeResize.size }}
+                {...getKeyboardBoundaryMetadata({
+                  scope: 'media-preview',
+                  ownerId: 'canvas-playback-route-overlay',
+                  priority: 32,
+                  ownedKeys: [
+                    'Enter',
+                    'Escape',
+                    'Space',
+                    'ArrowLeft',
+                    'ArrowRight',
+                    'ArrowUp',
+                    'ArrowDown',
+                    'Tab',
+                  ],
+                })}
+                onFocus={() => setFocusOwner('route')}
+              >
+                <div className="canvas-playback-route-overlay-header">
+                  <div className="canvas-playback-route-overlay-heading">
+                    <span>{t('playback.storyline.title')}</span>
+                    <strong>
+                      {selectedRoute
+                        ? formatPlaybackDisplayLabel(selectedRoute.title)
+                        : t('playback.route.title')}
+                    </strong>
+                  </div>
+                  <SegmentedControl
+                    id="canvas-playback-route-view-mode"
+                    className="canvas-playback-route-view-toggle"
+                    controls="canvas-playback-route-overlay-body"
+                    label={t('playback.storyline.viewMode')}
+                    value={session.matrix.routeViewMode}
+                    options={[
+                      {
+                        value: 'compact',
+                        label: t('playback.storyline.mode'),
+                        description: t('playback.storyline.modeDescription'),
+                      },
+                      {
+                        value: 'matrix',
+                        label: t('playback.matrix.mode'),
+                        description: t('playback.matrix.modeDescription'),
+                      },
+                    ]}
+                    onValueChange={changeRouteViewMode}
+                  />
+                  {playbackController ? (
+                    <CanvasPlaybackControls model={playbackController} presentation="overlay" />
+                  ) : null}
+                  <IconButton
+                    className="canvas-playback-route-overlay-close"
+                    icon={<CloseIcon size={15} />}
+                    label={t('playback.storyline.close')}
+                    title={t('playback.storyline.close')}
+                    size="sm"
+                    variant="ghost"
+                    onClick={hideRouteOverlay}
+                  />
+                </div>
+                <div
+                  id="canvas-playback-route-overlay-body"
+                  className="canvas-playback-route-overlay-body"
+                >
+                  {session.matrix.routeViewMode === 'matrix' && routeMatrix ? (
+                    <RouteStoryboardMatrix
+                      matrix={routeMatrix}
+                      selectedRouteId={selectedRoute?.id}
+                      currentUnitId={currentUnit?.id ?? session.currentUnitId}
+                      focusedCellId={
+                        session.matrix.focus?.kind === 'cell' ? session.matrix.focus.id : undefined
+                      }
+                      onSelectRoute={selectMatrixRow}
+                      onSelectCell={selectMatrixCell}
+                      onSelectSummaryCell={selectMatrixSummaryCell}
+                      onFocusCell={(cell) => focusMatrix({ kind: 'cell', id: cell.id })}
+                      onClearFocus={() => focusMatrix(undefined)}
+                      onSelectColumn={(columnId) => focusMatrix({ kind: 'column', id: columnId })}
+                      onSelectFamily={(family) => setMatrixRouteFamily(family.id)}
+                      onToggleContainerFold={(container) => toggleMatrixContainerFold(container.id)}
+                      onFocus={() => setFocusOwner('route')}
+                    />
+                  ) : (
+                    <PlaybackRouteStrip
+                      routes={routeResolution?.routes ?? []}
+                      diagnostics={routeResolution?.diagnostics ?? []}
+                      unitById={unitById}
+                      selectedRouteId={selectedRoute?.id}
+                      currentUnitId={currentUnit?.id ?? session.currentUnitId}
+                      currentPlayheadMs={session.playheadMs}
+                      panelHeightPx={routeResize.size}
+                      onSelectRoute={(route) => {
+                        setRoute(route.id, route.unitIds[0]);
+                        selectPlaybackUnit(route.unitIds[0], 0, route.id);
+                      }}
+                      onSelectUnit={selectPlaybackUnit}
+                      onFocus={() => setFocusOwner('route')}
+                    />
+                  )}
+                </div>
+                <ResizeHandle
+                  handleProps={routeResizeHandleProps}
+                  className="canvas-playback-route-resize-handle"
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -461,14 +654,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
             className="canvas-playback-stage-pane"
             data-testid="canvas-playback-stage-pane"
             data-resizing={stageResize.isResizing ? 'true' : 'false'}
-            style={
-              canvasVisible
-                ? {
-                    flexBasis: stageResize.size,
-                    width: stageResize.size,
-                  }
-                : undefined
-            }
+            style={stageStyle}
             {...getKeyboardBoundaryMetadata({
               scope: 'media-preview',
               ownerId: 'canvas-playback-stage',
@@ -491,85 +677,12 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
               previewError={hostPlanState.error}
               playbackControl={previewPlaybackControl}
             />
-            <CanvasPlaybackController
-              plan={plan}
-              routeUnitIds={routeUnitIds}
-              activeUnitId={currentUnit?.id ?? session.currentUnitId ?? null}
-              isPlaying={session.playbackState === 'playing'}
-              currentTimeMs={absoluteRoutePlayheadMs}
-              durationMs={routeDurationMs}
-              playbackCompletionSignal={playbackCompletionSignal}
-              onActiveUnitChange={(unitId) => {
-                selectPlaybackUnit(unitId, 0);
-              }}
-              onPlayingChange={(playing) => {
-                setPlaybackState(playing ? 'playing' : 'paused');
-                if (!playing && currentUnit) {
-                  setPlaybackRequest((previous) => ({
-                    unitId: currentUnit.id,
-                    startTimeMs: session.playheadMs,
-                    state: 'paused',
-                    requestId: `route-pause-${Date.now()}-${previous?.requestId ?? 'initial'}`,
-                  }));
-                }
-              }}
-              onSeek={selectPlaybackTime}
-              onPlaybackRequest={setPlaybackRequest}
-            />
+            {!routeVisible && playbackController ? (
+              <CanvasPlaybackControls model={playbackController} />
+            ) : null}
           </div>
         ) : null}
       </div>
-
-      {routeVisible ? (
-        <div
-          id="canvas-playback-route-pane"
-          ref={routeResize.containerRef}
-          className="canvas-playback-route-pane"
-          data-testid="canvas-playback-route-pane"
-          data-resizing={routeResize.isResizing ? 'true' : 'false'}
-          style={{ flexBasis: routeResize.size, height: routeResize.size }}
-        >
-          <ResizeHandle
-            handleProps={routeResizeHandleProps}
-            className="canvas-playback-route-resize-handle"
-          />
-          {routeMatrix ? (
-            <RouteStoryboardMatrix
-              matrix={routeMatrix}
-              selectedRouteId={selectedRoute?.id}
-              currentUnitId={currentUnit?.id ?? session.currentUnitId}
-              focusedCellId={
-                session.matrix.focus?.kind === 'cell' ? session.matrix.focus.id : undefined
-              }
-              onSelectRoute={selectMatrixRow}
-              onSelectCell={selectMatrixCell}
-              onSelectSummaryCell={selectMatrixSummaryCell}
-              onFocusCell={(cell) => focusMatrix({ kind: 'cell', id: cell.id })}
-              onClearFocus={() => focusMatrix(undefined)}
-              onSelectColumn={(columnId) => focusMatrix({ kind: 'column', id: columnId })}
-              onSelectFamily={(family) => setMatrixRouteFamily(family.id)}
-              onToggleContainerFold={(container) => toggleMatrixContainerFold(container.id)}
-              onFocus={() => setFocusOwner('route')}
-            />
-          ) : (
-            <PlaybackRouteStrip
-              routes={routeResolution?.routes ?? []}
-              diagnostics={routeResolution?.diagnostics ?? []}
-              unitById={unitById}
-              selectedRouteId={selectedRoute?.id}
-              currentUnitId={currentUnit?.id ?? session.currentUnitId}
-              currentPlayheadMs={session.playheadMs}
-              panelHeightPx={routeResize.size}
-              onSelectRoute={(route) => {
-                setRoute(route.id, route.unitIds[0]);
-                selectPlaybackUnit(route.unitIds[0], 0, route.id);
-              }}
-              onSelectUnit={selectPlaybackUnit}
-              onFocus={() => setFocusOwner('route')}
-            />
-          )}
-        </div>
-      ) : null}
     </section>
   );
 }
@@ -1060,16 +1173,10 @@ function inferMediaType(path: string | undefined): string | undefined {
 
 function formatUnitKind(unit: CanvasPlaybackUnit): string {
   switch (unit.kind) {
-    case 'scene':
-      return t('playback.kind.scene');
-    case 'shot':
-      return t('playback.kind.shot');
     case 'media':
       return t('playback.kind.media');
     case 'container':
       return t('playback.kind.container');
-    case 'narrative':
-      return t('playback.kind.narrative');
     case 'node':
     default:
       return t('playback.kind.node');

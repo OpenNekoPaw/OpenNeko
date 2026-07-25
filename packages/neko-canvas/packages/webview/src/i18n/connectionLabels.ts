@@ -1,8 +1,8 @@
 import type { CanvasConnection, CanvasNode } from '@neko/shared';
 import { t } from './index';
 
-export function resolveConnectionTypeLabel(type: CanvasConnection['type'] | 'default'): string {
-  return translateWithDefault(`connection.type.${type ?? 'default'}`, type ?? 'default');
+export function resolveConnectionTypeLabel(type: CanvasConnection['type']): string {
+  return translateWithDefault(`connection.type.${type ?? 'reference'}`, type ?? 'reference');
 }
 
 export function resolveConnectionDirectionLabel(
@@ -21,7 +21,7 @@ export function resolveConnectionTitle(
   targetNode: Pick<CanvasNode, 'type'>,
 ): string {
   return t('connection.title', {
-    type: resolveConnectionTypeLabel(connection.type ?? 'default'),
+    type: resolveConnectionTypeLabel(connection.type ?? 'reference'),
     direction: resolveConnectionDirectionLabel(sourceNode, targetNode),
   });
 }
@@ -45,15 +45,6 @@ function translateWithDefault(key: string, defaultValue: string): string {
 
 function toNodeLabelKeySegment(type: CanvasNode['type']): string {
   const overrides: Partial<Record<CanvasNode['type'], string>> = {
-    annotation: 'note',
-    group: 'group',
-    scene: 'sceneGroup',
-    'narrative-start': 'narrativeStart',
-    'narrative-scene': 'narrativeScene',
-    'narrative-note': 'narrativeNote',
-    'narrative-ending': 'narrativeEnding',
-    'representation-slot': 'representationSlot',
-    'generated-asset': 'generatedAsset',
     'canvas-embed': 'canvasEmbed',
   };
   return overrides[type] ?? toCamelCase(type);

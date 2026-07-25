@@ -37,10 +37,7 @@ function createPreviewRendererRegistry(): PreviewRendererRegistry {
     'video-poster': VisualPreviewRenderer,
     'video-proxy': VideoPreviewRenderer,
     'audio-waveform': AudioPreviewRenderer,
-    'model-screenshot': VisualPreviewRenderer,
-    'model-turntable': VisualPreviewRenderer,
     'generation-candidate': VisualPreviewRenderer,
-    'project-thumbnail': ProjectPreviewRenderer,
     unavailable: FallbackPreviewRenderer,
   };
 }
@@ -736,6 +733,8 @@ function VideoPreviewRenderer({
           startPlayback();
         }}
         disabled={probing || !canStartPlayback}
+        aria-label={t('toolbar.playbackPlay')}
+        title={t('toolbar.playbackPlay')}
       >
         {probing ? '...' : '▶'}
       </button>
@@ -867,6 +866,8 @@ function AudioPreviewRenderer({
             startPlayback();
           }}
           disabled={probing || !canStartPlayback}
+          aria-label={t('toolbar.playbackPlay')}
+          title={t('toolbar.playbackPlay')}
         >
           {probing ? '...' : '▶'}
         </button>
@@ -913,97 +914,6 @@ function getAudioPreviewFrameClassName(
 function readPreviewSourceResourceRef(source: PreviewSourceDescriptor): ResourceRef | undefined {
   const ref = source.metadata?.['resourceRef'];
   return isResourceRef(ref) ? ref : undefined;
-}
-
-function useProjectThumbnail(assetPath: string | undefined, nodeId: string): string | null {
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
-  const requestedRef = useRef(false);
-
-  useEffect(() => {
-    if (!assetPath || requestedRef.current) return;
-    const vscode = getGlobalVSCodeApi();
-    if (!vscode) return;
-
-    const ext = assetPath.split('.').pop()?.toLowerCase() ?? '';
-    requestedRef.current = true;
-
-    const handleMessage = (event: MessageEvent) => {
-      const msg = event.data as Record<string, unknown>;
-      if (msg.type === 'project:thumbnailResult' && msg.nodeId === nodeId) {
-        if (typeof msg.dataUrl === 'string') {
-          setThumbnailUrl(msg.dataUrl);
-        }
-        window.removeEventListener('message', handleMessage);
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    vscode.postMessage({
-      type: 'project:resolveThumbnail',
-      nodeId,
-      projectPath: assetPath,
-      projectType: ext,
-    });
-
-    return () => window.removeEventListener('message', handleMessage);
-  }, [assetPath, nodeId]);
-
-  return thumbnailUrl;
-}
-
-function ProjectPreviewRenderer({
-  source,
-  delegateActions,
-}: PreviewRendererProps): React.ReactNode {
-  const assetPath = source.asset?.path;
-  const ext = assetPath?.split('.').pop()?.toLowerCase() ?? '';
-  const thumbnailUrl = useProjectThumbnail(assetPath, source.id);
-  const typeLabel = resolveProjectTypeLabel(source.metadata?.['projectType'], ext);
-
-  return (
-    <div className="relative flex min-h-[80px] flex-col overflow-hidden rounded border border-[var(--node-border)] bg-black/20">
-      {thumbnailUrl ? (
-        <div className="flex flex-1 items-center justify-center overflow-hidden">
-          <img
-            src={thumbnailUrl}
-            alt={source.title ?? source.id}
-            className="h-full w-full object-cover"
-          />
-        </div>
-      ) : (
-        <div className="flex flex-1 items-center justify-center p-4 text-[var(--node-fg-secondary)]">
-          <span className="text-sm font-medium uppercase opacity-40">{ext || 'nk'}</span>
-        </div>
-      )}
-      <div className="flex items-center justify-between gap-2 border-t border-[var(--node-border)] px-2 py-1.5">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs text-[var(--node-fg)]">
-            {source.title ?? source.asset?.path ?? source.id}
-          </div>
-          <div className="text-[10px] text-[var(--node-fg-secondary)]">{typeLabel}</div>
-        </div>
-        {delegateActions && delegateActions.length > 0 && (
-          <button
-            type="button"
-            className="flex-shrink-0 rounded border border-[var(--node-border)] px-2 py-1 text-xs"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              dispatchPreviewDelegate({ action: delegateActions[0]!, asset: source.asset });
-            }}
-          >
-            {t('preview.open')}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function resolveProjectTypeLabel(value: unknown, defaultExt: string): string {
-  void value;
-  void defaultExt;
-  return t('node.project');
 }
 
 function getStableSafeUrl(source: PreviewSourceDescriptor): string | undefined {

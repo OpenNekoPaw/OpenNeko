@@ -1,17 +1,15 @@
-import type React from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { PauseIcon, PlayIcon, SkipBackIcon, SkipForwardIcon } from '@neko/ui/icons';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SeekBar } from '@neko/ui/creative';
+import { PauseIcon, PlayIcon, SkipBackIcon, SkipForwardIcon } from '@neko/ui/icons';
 import {
   createCanvasPlaybackPlan,
   resolveEffectiveCanvasPlaybackRoutes,
   type CanvasPlaybackPlan,
-  type CanvasPlaybackTransition,
 } from '@neko/shared';
 import { t } from '../../i18n';
 import { useCanvasStore } from '../../stores/canvasStore';
 
-const TIMER_INTERVAL_MS = 1200;
+const DEFAULT_UNIT_DURATION_MS = 1200;
 
 export interface CanvasPlaybackViewState {
   readonly currentUnitId?: string;
@@ -19,7 +17,18 @@ export interface CanvasPlaybackViewState {
   readonly canStepPrevious: boolean;
   readonly canStepNext: boolean;
   readonly canPlay: boolean;
-  readonly branchChoices: readonly CanvasPlaybackTransition[];
+}
+
+export interface CanvasPlaybackRequest {
+  readonly unitId: string;
+  readonly requestId: string;
+  readonly startTimeMs: number;
+  readonly state: 'playing' | 'paused';
+}
+
+export interface PlaybackCompletionSignal {
+  readonly unitId: string;
+  readonly nonce: number;
 }
 
 export interface CanvasPlaybackControllerProps {
@@ -37,21 +46,22 @@ export interface CanvasPlaybackControllerProps {
   readonly onPlaybackRequest?: (request: CanvasPlaybackRequest) => void;
 }
 
-export interface CanvasPlaybackRequest {
-  readonly unitId: string;
-  readonly requestId: string;
-  readonly startTimeMs: number;
-  readonly state: 'playing' | 'paused';
+export interface CanvasPlaybackControllerModel {
+  readonly adapterId: CanvasPlaybackPlan['adapterId'];
+  readonly routeLength: number;
+  readonly viewState: CanvasPlaybackViewState;
+  readonly isPlaying: boolean;
+  readonly currentTimeMs?: number;
+  readonly durationMs?: number;
+  readonly playPause: () => void;
+  readonly stepPrevious: () => void;
+  readonly stepNext: () => void;
+  readonly seek?: (playheadMs: number) => void;
 }
 
-export interface PlaybackCompletionSignal {
-  readonly unitId: string;
-  readonly nonce: number;
-}
-
-export function CanvasPlaybackController({
+export function useCanvasPlaybackController({
   plan: providedPlan,
-  routeUnitIds: controlledRouteUnitIds,
+  routeUnitIds: controlledRoute,
   activeUnitId: controlledActiveUnitId,
   isPlaying: controlledIsPlaying,
   currentTimeMs,
@@ -62,15 +72,24 @@ export function CanvasPlaybackController({
   onSeek,
   onRouteChange,
   onPlaybackRequest,
-}: CanvasPlaybackControllerProps = {}) {
+}: CanvasPlaybackControllerProps = {}): CanvasPlaybackControllerModel | null {
   const canvasData = useCanvasStore((state) => state.canvasData);
   const selectedNodeId = useCanvasStore((state) => state.selection.nodeIds[0]);
   const setActivePlayingNode = useCanvasStore((state) => state.setActivePlayingNode);
-  const [uncontrolledActiveUnitId, setUncontrolledActiveUnitId] = useState<string | null>(null);
-  const [uncontrolledIsPlaying, setUncontrolledIsPlaying] = useState(false);
-  const timerRef = useRef<number | null>(null);
-  const playbackRequestCounterRef = useRef(0);
-  const handledCompletionSignalRef = useRef<number | null>(null);
+  const [activeUnitId, setActiveUnitId] = useState<string | undefined>();
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [route, setRoute] = useState<readonly string[]>([]);
+  const timerRef = useRef<number>();
+  const requestCounterRef = useRef(0);
+  const handledCompletionRef = useRef<number>();
+  const onActiveUnitChangeRef = useRef(onActiveUnitChange);
+  const onPlayingChangeRef = useRef(onPlayingChange);
+  const onRouteChangeRef = useRef(onRouteChange);
+  const onPlaybackRequestRef = useRef(onPlaybackRequest);
+  onActiveUnitChangeRef.current = onActiveUnitChange;
+  onPlayingChangeRef.current = onPlayingChange;
+  onRouteChangeRef.current = onRouteChange;
+  onPlaybackRequestRef.current = onPlaybackRequest;
 
   const plan = useMemo(
     () =>
@@ -80,279 +99,195 @@ export function CanvasPlaybackController({
         : null),
     [canvasData, providedPlan, selectedNodeId],
   );
-  const initialRoute = useMemo(() => (plan ? buildInitialPlaybackRoute(plan) : []), [plan]);
-  const [uncontrolledRouteUnitIds, setUncontrolledRouteUnitIds] = useState<readonly string[]>([]);
-  const activeUnitId = controlledActiveUnitId ?? uncontrolledActiveUnitId;
-  const isPlaying = controlledIsPlaying ?? uncontrolledIsPlaying;
-  const routeUnitIds = controlledRouteUnitIds ?? uncontrolledRouteUnitIds;
-  const route = routeUnitIds.length > 0 ? routeUnitIds : initialRoute;
-  const state = resolveCanvasPlaybackViewState({ plan, route, activeUnitId, selectedNodeId });
-  const planResetKey = `${plan?.adapterId ?? 'none'}:${plan?.entryUnitIds.join('|') ?? ''}`;
-  const onActiveUnitChangeRef = useRef(onActiveUnitChange);
-  const onPlayingChangeRef = useRef(onPlayingChange);
-  const onSeekRef = useRef(onSeek);
-  const onRouteChangeRef = useRef(onRouteChange);
-  const onPlaybackRequestRef = useRef(onPlaybackRequest);
+  const defaultRoute = useMemo(() => (plan ? buildInitialPlaybackRoute(plan) : []), [plan]);
+  const defaultRouteRef = useRef(defaultRoute);
+  defaultRouteRef.current = defaultRoute;
+  const effectiveRoute = controlledRoute ?? (route.length > 0 ? route : defaultRoute);
+  const effectiveActiveUnitId = controlledActiveUnitId ?? activeUnitId;
+  const effectiveIsPlaying = controlledIsPlaying ?? isPlaying;
+  const viewState = resolveCanvasPlaybackViewState(
+    plan,
+    effectiveRoute,
+    effectiveActiveUnitId,
+    selectedNodeId,
+  );
+  const planKey = `${plan?.adapterId ?? 'none'}:${defaultRoute.join('|')}`;
 
-  onActiveUnitChangeRef.current = onActiveUnitChange;
-  onPlayingChangeRef.current = onPlayingChange;
-  onSeekRef.current = onSeek;
-  onRouteChangeRef.current = onRouteChange;
-  onPlaybackRequestRef.current = onPlaybackRequest;
+  const commitActive = useCallback(
+    (unitId: string | undefined, playbackState: 'playing' | 'paused') => {
+      if (!unitId || !plan) return;
+      const unit = plan.units.find((candidate) => candidate.id === unitId);
+      if (!unit) {
+        throw new Error(`Playback route references missing unit "${unitId}".`);
+      }
+      if (controlledActiveUnitId === undefined) setActiveUnitId(unitId);
+      onActiveUnitChangeRef.current?.(unitId);
+      setActivePlayingNode(unit.sourceNodeId);
+      requestCounterRef.current += 1;
+      onPlaybackRequestRef.current?.({
+        unitId,
+        state: playbackState,
+        startTimeMs: 0,
+        requestId: `canvas-playback-${requestCounterRef.current}`,
+      });
+    },
+    [controlledActiveUnitId, plan, setActivePlayingNode],
+  );
 
-  useEffect(() => () => clearTimer(), []);
+  const commitPlaying = useCallback(
+    (next: boolean) => {
+      if (controlledIsPlaying === undefined) setIsPlaying(next);
+      onPlayingChangeRef.current?.(next);
+    },
+    [controlledIsPlaying],
+  );
+
+  const advance = useCallback(
+    (delta: -1 | 1, continuePlaying = false) => {
+      clearTimer(timerRef);
+      const nextIndex = viewState.currentIndex + delta;
+      const nextUnitId = effectiveRoute[nextIndex];
+      if (!nextUnitId) {
+        commitPlaying(false);
+        return;
+      }
+      commitActive(nextUnitId, continuePlaying ? 'playing' : 'paused');
+      commitPlaying(continuePlaying);
+    },
+    [commitActive, commitPlaying, effectiveRoute, viewState.currentIndex],
+  );
+
   useEffect(() => {
-    setUncontrolledActiveUnitId(null);
-    setUncontrolledRouteUnitIds([]);
-    setUncontrolledIsPlaying(false);
+    clearTimer(timerRef);
+    setRoute(defaultRouteRef.current);
+    setActiveUnitId(undefined);
+    setIsPlaying(false);
+    onRouteChangeRef.current?.(defaultRouteRef.current);
     onActiveUnitChangeRef.current?.(undefined);
-    onRouteChangeRef.current?.([]);
     onPlayingChangeRef.current?.(false);
-    clearTimer();
-  }, [planResetKey, selectedNodeId]);
+    return () => clearTimer(timerRef);
+  }, [planKey]);
 
   useEffect(() => {
-    if (!playbackCompletionSignal || !isPlaying || !plan) return;
-    if (handledCompletionSignalRef.current === playbackCompletionSignal.nonce) return;
-    if (playbackCompletionSignal.unitId !== state.currentUnitId) return;
-    handledCompletionSignalRef.current = playbackCompletionSignal.nonce;
-    continueFromUnit(plan, playbackCompletionSignal.unitId, route);
-  }, [isPlaying, plan, playbackCompletionSignal, route, state.currentUnitId]);
+    if (!playbackCompletionSignal || !effectiveIsPlaying) return;
+    if (handledCompletionRef.current === playbackCompletionSignal.nonce) return;
+    if (playbackCompletionSignal.unitId !== viewState.currentUnitId) return;
+    handledCompletionRef.current = playbackCompletionSignal.nonce;
+    if (plan?.advancePolicy === 'user-input') {
+      commitPlaying(false);
+      return;
+    }
+    advance(1, true);
+  }, [
+    advance,
+    commitPlaying,
+    effectiveIsPlaying,
+    plan,
+    playbackCompletionSignal,
+    viewState.currentUnitId,
+  ]);
 
-  if (!plan || plan.units.length === 0 || state.canPlay === false) {
-    return null;
-  }
-
-  function moveToUnit(unitId: string | undefined) {
-    if (!unitId || !plan) return;
-    const unit = plan.units.find((candidate) => candidate.id === unitId);
-    if (!unit) return;
-    commitActiveUnit(unit.id);
-    setActivePlayingNode(unit.sourceNodeId);
-  }
-
-  function handlePrevious() {
-    clearTimer();
-    commitPlaying(false);
-    if (!state.canStepPrevious) return;
-    moveToUnit(route[state.currentIndex - 1]);
-  }
+  useEffect(() => {
+    clearTimer(timerRef);
+    if (!effectiveIsPlaying || plan?.advancePolicy !== 'timer' || !viewState.currentUnitId) {
+      return;
+    }
+    const unit = plan.units.find((candidate) => candidate.id === viewState.currentUnitId);
+    if (!unit) {
+      throw new Error(`Playback route references missing unit "${viewState.currentUnitId}".`);
+    }
+    timerRef.current = window.setTimeout(
+      () => advance(1, true),
+      unit.durationMs ?? DEFAULT_UNIT_DURATION_MS,
+    );
+    return () => clearTimer(timerRef);
+  }, [advance, effectiveIsPlaying, plan, viewState.currentUnitId]);
 
   function handlePlayPause() {
-    if (!plan) return;
-    if (isPlaying) {
-      clearTimer();
-      if (state.currentUnitId) {
-        requestUnitPlayback(state.currentUnitId, currentUnitPlaybackOffsetMs(), 'paused');
-      }
+    const unitId = viewState.currentUnitId ?? effectiveRoute[0];
+    if (!unitId) return;
+    if (effectiveIsPlaying) {
+      clearTimer(timerRef);
       commitPlaying(false);
+      commitActive(unitId, 'paused');
       return;
     }
-    if (!state.canPlay) return;
-    const activePlan = plan;
-    const startUnitId = state.currentUnitId ?? route[0];
-    if (!startUnitId) return;
-    const committedRoute = route.length > 0 ? route : [startUnitId];
-    commitRoute(committedRoute);
-    moveToUnit(startUnitId);
-    requestUnitPlayback(startUnitId, 0, 'playing');
-
-    if (activePlan.advancePolicy !== 'timer') {
-      commitPlaying(activePlan.advancePolicy === 'media-ended');
-      return;
-    }
-
+    commitActive(unitId, 'playing');
     commitPlaying(true);
-    scheduleNextStep(activePlan, startUnitId, committedRoute);
   }
 
-  function handleNext() {
-    clearTimer();
-    commitPlaying(false);
-    if (!state.canStepNext) return;
-    const nextStep = resolveNextRouteStep(plan, route, state.currentIndex, state.currentUnitId);
-    if (!nextStep) return;
-    commitRoute(nextStep.route);
-    moveToUnit(nextStep.unitId);
-    requestUnitPlayback(nextStep.unitId, 0, 'paused');
-  }
+  if (!plan || effectiveRoute.length === 0) return null;
 
-  function handleSeek(timeSeconds: number) {
-    onSeekRef.current?.(Math.round(timeSeconds * 1000));
-  }
+  return {
+    adapterId: plan.adapterId,
+    routeLength: effectiveRoute.length,
+    viewState,
+    isPlaying: effectiveIsPlaying,
+    ...(currentTimeMs !== undefined ? { currentTimeMs } : {}),
+    ...(durationMs !== undefined ? { durationMs } : {}),
+    playPause: handlePlayPause,
+    stepPrevious: () => advance(-1),
+    stepNext: () => advance(1),
+    ...(onSeek ? { seek: onSeek } : {}),
+  };
+}
 
-  function handleChoice(transition: CanvasPlaybackTransition) {
-    clearTimer();
-    commitPlaying(false);
-    commitRoute(
-      appendTargetToRoute(route, state.currentIndex, state.currentUnitId, transition.targetUnitId),
-    );
-    moveToUnit(transition.targetUnitId);
-    requestUnitPlayback(transition.targetUnitId, 0, 'paused');
-  }
+export function CanvasPlaybackController(props: CanvasPlaybackControllerProps = {}) {
+  const model = useCanvasPlaybackController(props);
+  return model ? <CanvasPlaybackControls model={model} /> : null;
+}
 
-  function scheduleNextStep(
-    activePlan: CanvasPlaybackPlan,
-    currentUnitId: string,
-    currentRoute: readonly string[],
-  ) {
-    clearTimer();
-    timerRef.current = window.setTimeout(
-      () => {
-        timerRef.current = null;
-        const nextStep = resolveNextRouteStep(
-          activePlan,
-          currentRoute,
-          currentRoute.indexOf(currentUnitId),
-          currentUnitId,
-        );
-        if (!nextStep) {
-          commitPlaying(false);
-          return;
-        }
-        const unit = activePlan.units.find((candidate) => candidate.id === nextStep.unitId);
-        if (!unit) {
-          commitPlaying(false);
-          return;
-        }
-        commitRoute(nextStep.route);
-        commitActiveUnit(unit.id);
-        setActivePlayingNode(unit.sourceNodeId);
-        requestUnitPlayback(unit.id, 0, 'playing');
-        scheduleNextStep(activePlan, unit.id, nextStep.route);
-      },
-      resolveUnitDurationMs(activePlan, currentUnitId),
-    );
-  }
-
-  function continueFromUnit(
-    activePlan: CanvasPlaybackPlan,
-    currentUnitId: string,
-    currentRoute: readonly string[],
-  ) {
-    clearTimer();
-    const nextStep = resolveNextRouteStep(
-      activePlan,
-      currentRoute,
-      currentRoute.indexOf(currentUnitId),
-      currentUnitId,
-    );
-    if (!nextStep) {
-      commitPlaying(false);
-      return;
-    }
-    const unit = activePlan.units.find((candidate) => candidate.id === nextStep.unitId);
-    if (!unit) {
-      commitPlaying(false);
-      return;
-    }
-    commitRoute(nextStep.route);
-    commitActiveUnit(unit.id);
-    setActivePlayingNode(unit.sourceNodeId);
-    requestUnitPlayback(unit.id, 0, 'playing');
-    if (activePlan.advancePolicy === 'timer') {
-      scheduleNextStep(activePlan, unit.id, nextStep.route);
-    }
-  }
-
-  function clearTimer() {
-    if (timerRef.current === null) return;
-    window.clearTimeout(timerRef.current);
-    timerRef.current = null;
-  }
-
-  function commitActiveUnit(unitId: string | undefined) {
-    if (controlledActiveUnitId !== undefined && (controlledActiveUnitId ?? undefined) === unitId) {
-      return;
-    }
-    setUncontrolledActiveUnitId(unitId ?? null);
-    onActiveUnitChangeRef.current?.(unitId);
-  }
-
-  function commitPlaying(nextIsPlaying: boolean) {
-    if (controlledIsPlaying !== undefined && controlledIsPlaying === nextIsPlaying) return;
-    setUncontrolledIsPlaying(nextIsPlaying);
-    onPlayingChangeRef.current?.(nextIsPlaying);
-  }
-
-  function commitRoute(nextRouteUnitIds: readonly string[]) {
-    if (
-      controlledRouteUnitIds !== undefined &&
-      areRouteUnitIdsEqual(controlledRouteUnitIds, nextRouteUnitIds)
-    ) {
-      return;
-    }
-    setUncontrolledRouteUnitIds(nextRouteUnitIds);
-    onRouteChangeRef.current?.(nextRouteUnitIds);
-  }
-
-  function requestUnitPlayback(
-    unitId: string,
-    startTimeMs: number,
-    requestState: CanvasPlaybackRequest['state'],
-  ) {
-    playbackRequestCounterRef.current += 1;
-    onPlaybackRequestRef.current?.({
-      unitId,
-      startTimeMs,
-      state: requestState,
-      requestId: `route-playback-${playbackRequestCounterRef.current}`,
-    });
-  }
-
-  function currentUnitPlaybackOffsetMs(): number {
-    if (!state.currentUnitId || currentTimeMs === undefined) return 0;
-    let cursor = 0;
-    for (const unitId of route) {
-      const unit = plan?.units.find((candidate) => candidate.id === unitId);
-      const durationMs = plan && unit ? resolveUnitDurationMs(plan, unit.id) : TIMER_INTERVAL_MS;
-      if (unitId === state.currentUnitId) {
-        return clampNumber(currentTimeMs - cursor, 0, durationMs);
-      }
-      cursor += durationMs;
-    }
-    return 0;
-  }
+export function CanvasPlaybackControls({
+  model,
+  presentation = 'default',
+}: {
+  readonly model: CanvasPlaybackControllerModel;
+  readonly presentation?: 'default' | 'overlay';
+}) {
+  const {
+    currentTimeMs,
+    durationMs,
+    isPlaying,
+    playPause,
+    seek,
+    stepNext,
+    stepPrevious,
+    viewState,
+  } = model;
 
   return (
     <div
       className="canvas-playback-controller"
       data-testid="canvas-playback-controller"
-      data-playback-adapter={plan.adapterId}
-      data-playback-mode={plan.behaviorMode}
+      data-playback-adapter={model.adapterId}
+      data-presentation={presentation}
     >
       <div className="canvas-playback-controller-row">
-        <span
-          className="canvas-playback-controller-label canvas-playback-controller-leading"
-          title={`${plan.adapterId} · ${plan.behaviorMode}`}
-        >
-          {formatPlaybackLabel(plan)}
-        </span>
         <div className="canvas-playback-controller-transport">
           <ToolbarIconButton
             title={t('toolbar.playbackPrevious')}
-            disabled={!state.canStepPrevious}
-            onClick={handlePrevious}
+            disabled={!viewState.canStepPrevious}
+            onClick={stepPrevious}
           >
             <SkipBackIcon size={14} />
           </ToolbarIconButton>
           <ToolbarIconButton
             title={isPlaying ? t('toolbar.playbackPause') : t('toolbar.playbackPlay')}
-            disabled={!state.canPlay}
-            onClick={handlePlayPause}
+            disabled={!viewState.canPlay}
+            onClick={playPause}
             variant="primary"
           >
             {isPlaying ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
           </ToolbarIconButton>
           <ToolbarIconButton
             title={t('toolbar.playbackNext')}
-            disabled={!state.canStepNext}
-            onClick={handleNext}
+            disabled={!viewState.canStepNext}
+            onClick={stepNext}
           >
             <SkipForwardIcon size={14} />
           </ToolbarIconButton>
           <span className="canvas-playback-controller-count">
-            {state.currentIndex + 1}/{route.length}
+            {Math.max(0, viewState.currentIndex) + 1}/{model.routeLength}
           </span>
         </div>
         {durationMs !== undefined ? (
@@ -362,48 +297,35 @@ export function CanvasPlaybackController({
           </span>
         ) : null}
       </div>
-      {durationMs !== undefined && onSeek ? (
+      {durationMs !== undefined && seek ? (
         <div className="canvas-playback-controller-seek">
           <SeekBar
             currentTime={(currentTimeMs ?? 0) / 1000}
             duration={durationMs / 1000}
-            onSeeking={handleSeek}
-            onSeekCommit={handleSeek}
+            onSeeking={(seconds) => seek(Math.round(seconds * 1000))}
+            onSeekCommit={(seconds) => seek(Math.round(seconds * 1000))}
             formatTooltip={formatControllerTime}
           />
-        </div>
-      ) : null}
-      {state.branchChoices.length > 1 ? (
-        <div className="canvas-playback-controller-branches" data-testid="canvas-playback-branches">
-          {state.branchChoices.map((choice) => (
-            <button
-              key={choice.id}
-              type="button"
-              className="canvas-playback-controller-branch"
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={() => handleChoice(choice)}
-              title={choice.label ?? t('toolbar.playbackContinue')}
-            >
-              {choice.label ?? t('toolbar.playbackContinue')}
-            </button>
-          ))}
         </div>
       ) : null}
     </div>
   );
 }
 
-function resolveCanvasPlaybackViewState({
-  plan,
-  route,
-  activeUnitId,
-  selectedNodeId,
-}: {
-  readonly plan: CanvasPlaybackPlan | null;
-  readonly route: readonly string[];
-  readonly activeUnitId?: string | null;
-  readonly selectedNodeId?: string | null;
-}): CanvasPlaybackViewState {
+function buildInitialPlaybackRoute(plan: CanvasPlaybackPlan): readonly string[] {
+  return buildDefaultPlaybackPath(plan);
+}
+
+export function buildDefaultPlaybackPath(plan: CanvasPlaybackPlan): readonly string[] {
+  return resolveEffectiveCanvasPlaybackRoutes(plan).routes[0]?.unitIds ?? [];
+}
+
+export function resolveCanvasPlaybackViewState(
+  plan: CanvasPlaybackPlan | null,
+  route: readonly string[],
+  activeUnitId?: string | null,
+  selectedNodeId?: string | null,
+): CanvasPlaybackViewState {
   const selectedUnit = selectedNodeId
     ? plan?.units.find((unit) => unit.sourceNodeId === selectedNodeId)
     : undefined;
@@ -414,137 +336,35 @@ function resolveCanvasPlaybackViewState({
         ? selectedUnit.id
         : route[0];
   const currentIndex = currentUnitId ? route.indexOf(currentUnitId) : -1;
-  const branchChoices = currentUnitId
-    ? (plan?.transitions.filter(
-        (transition) => transition.sourceUnitId === currentUnitId && transition.enabled !== false,
-      ) ?? [])
-    : [];
-  const nextStep = resolveNextRouteStep(plan, route, currentIndex, currentUnitId);
-
   return {
     currentUnitId,
     currentIndex,
     canStepPrevious: currentIndex > 0,
-    canStepNext: Boolean(nextStep),
+    canStepNext: currentIndex >= 0 && currentIndex < route.length - 1,
     canPlay: route.length > 0,
-    branchChoices,
   };
-}
-
-export function buildInitialPlaybackRoute(plan: CanvasPlaybackPlan): readonly string[] {
-  const route = buildDefaultPlaybackPath(plan);
-  if (plan.behaviorMode === 'interactive') {
-    return route[0] ? [route[0]] : [];
-  }
-  return route;
-}
-
-export function buildDefaultPlaybackPath(plan: CanvasPlaybackPlan): readonly string[] {
-  return resolveEffectiveCanvasPlaybackRoutes(plan).routes[0]?.unitIds ?? [];
-}
-
-function resolveNextRouteStep(
-  plan: CanvasPlaybackPlan | null,
-  route: readonly string[],
-  currentIndex: number,
-  currentUnitId: string | undefined,
-): { readonly unitId: string; readonly route: readonly string[] } | undefined {
-  if (!plan || !currentUnitId || currentIndex < 0) return undefined;
-  const existingNextUnitId = route[currentIndex + 1];
-  if (existingNextUnitId) return { unitId: existingNextUnitId, route };
-  const transition = resolveNextTransition(plan, currentUnitId, route);
-  if (!transition) return undefined;
-  return {
-    unitId: transition.targetUnitId,
-    route: appendTargetToRoute(route, currentIndex, currentUnitId, transition.targetUnitId),
-  };
-}
-
-function resolveNextTransition(
-  plan: CanvasPlaybackPlan,
-  currentUnitId: string,
-  route: readonly string[],
-): CanvasPlaybackTransition | undefined {
-  const transitions = plan.transitions
-    .filter(
-      (transition) => transition.sourceUnitId === currentUnitId && transition.enabled !== false,
-    )
-    .filter((transition) => !route.includes(transition.targetUnitId))
-    .slice()
-    .sort((left, right) => left.priority - right.priority || left.id.localeCompare(right.id));
-  if (plan.behaviorMode === 'interactive' && transitions.length > 1) {
-    return undefined;
-  }
-  return transitions[0];
-}
-
-function appendTargetToRoute(
-  route: readonly string[],
-  currentIndex: number,
-  currentUnitId: string | undefined,
-  targetUnitId: string,
-): readonly string[] {
-  const prefix =
-    currentIndex >= 0 ? route.slice(0, currentIndex + 1) : currentUnitId ? [currentUnitId] : [];
-  const existingIndex = prefix.indexOf(targetUnitId);
-  return existingIndex >= 0 ? prefix.slice(0, existingIndex + 1) : [...prefix, targetUnitId];
-}
-
-function resolveUnitDurationMs(plan: CanvasPlaybackPlan, unitId: string): number {
-  const durationMs = plan.units.find((unit) => unit.id === unitId)?.durationMs;
-  return typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs >= 0
-    ? durationMs
-    : TIMER_INTERVAL_MS;
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, value));
-}
-
-function areRouteUnitIdsEqual(
-  left: readonly string[] | undefined,
-  right: readonly string[],
-): boolean {
-  if (!left || left.length !== right.length) return false;
-  return left.every((unitId, index) => unitId === right[index]);
-}
-
-function formatPlaybackLabel(plan: CanvasPlaybackPlan): string {
-  switch (plan.adapterId) {
-    case 'storyboard':
-      return t('toolbar.playbackStoryboard');
-    case 'narrative':
-      return t('toolbar.playbackNarrative');
-    case 'media-sequence':
-      return t('toolbar.playbackMedia');
-    case 'generic':
-    default:
-      return t('toolbar.playbackGeneric');
-  }
 }
 
 function ToolbarIconButton({
-  title,
+  children,
   disabled,
   onClick,
-  children,
+  title,
   variant = 'default',
 }: {
-  readonly title: string;
-  readonly disabled?: boolean;
-  readonly onClick?: () => void;
   readonly children: React.ReactNode;
+  readonly disabled: boolean;
+  readonly onClick: () => void;
+  readonly title: string;
   readonly variant?: 'default' | 'primary';
 }) {
   return (
     <button
       type="button"
-      title={title}
-      aria-label={title}
-      disabled={disabled}
       className="canvas-playback-controller-button"
       data-variant={variant}
+      disabled={disabled}
+      title={title}
       onMouseDown={(event) => event.stopPropagation()}
       onClick={onClick}
     >
@@ -553,9 +373,15 @@ function ToolbarIconButton({
   );
 }
 
-function formatControllerTime(timeSeconds: number): string {
-  const totalSeconds = Math.max(0, Math.round(timeSeconds));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+function clearTimer(timerRef: React.MutableRefObject<number | undefined>): void {
+  if (timerRef.current === undefined) return;
+  window.clearTimeout(timerRef.current);
+  timerRef.current = undefined;
+}
+
+function formatControllerTime(seconds: number): string {
+  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = Math.floor(safeSeconds % 60);
+  return `${minutes}:${remainder.toString().padStart(2, '0')}`;
 }

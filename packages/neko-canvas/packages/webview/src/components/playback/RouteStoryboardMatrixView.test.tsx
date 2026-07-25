@@ -77,6 +77,14 @@ describe('RouteStoryboardMatrix', () => {
     expect(host.querySelector('.canvas-route-storyboard-matrix-header')).not.toBeNull();
     expect(host.querySelector('.canvas-route-storyboard-matrix-header-columns')).not.toBeNull();
     expect(host.querySelector('.canvas-route-storyboard-matrix-body')).not.toBeNull();
+    expect(
+      host.querySelector<HTMLElement>('.canvas-route-storyboard-matrix-header')?.style.minWidth,
+    ).toBe('384px');
+    expect(
+      Array.from(host.querySelectorAll<HTMLElement>('.canvas-route-storyboard-matrix-row')).map(
+        (row) => row.style.minWidth,
+      ),
+    ).toEqual(['384px', '384px']);
     expect(host.textContent).toContain('Primary routes');
     expect(host.textContent).toContain('Alt routes');
     expect(host.textContent).toContain('Scene A');
@@ -264,7 +272,7 @@ describe('RouteStoryboardMatrix', () => {
       host
         .querySelector<HTMLButtonElement>('.canvas-route-storyboard-matrix-cell-playable')
         ?.getAttribute('aria-label'),
-    ).toContain('镜头');
+    ).toContain('节点');
   });
 
   it('localizes system default shot labels in matrix rows and cells', () => {
@@ -309,7 +317,7 @@ function createKeyEvent(key: string): KeyboardEvent {
 
 function matrixFixture(): RouteStoryboardMatrixViewModel {
   return {
-    planAdapterId: 'storyboard',
+    planAdapterId: 'generic',
     activeRouteFamilyId: 'family:primary',
     selectedRouteId: 'route-a',
     families: [
@@ -363,7 +371,7 @@ function matrixFixture(): RouteStoryboardMatrixViewModel {
               endMs: 18_000,
               durationMs: 6_000,
             },
-            unitKind: 'shot',
+            unitKind: 'node',
             durationMs: 1000,
             startMs: 0,
             endMs: 1000,
