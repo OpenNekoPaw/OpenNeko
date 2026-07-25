@@ -2,6 +2,8 @@ import { act } from 'react';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmbodyCharacterSessionProjection } from '@neko-agent/types';
+import { I18nProvider } from '@/i18n/I18nContext';
+import { i18nService, setLocale } from '@/i18n';
 import { EmbodyCharacterHeader } from './EmbodyCharacterHeader';
 
 const exitEmbodyCharacterSession = vi.fn();
@@ -18,33 +20,40 @@ vi.mock('@/messages', () => ({
 describe('EmbodyCharacterHeader', () => {
   beforeEach(() => {
     exitEmbodyCharacterSession.mockClear();
+    setLocale('zh-cn');
   });
 
-  it('renders Embody Character identity, scope, status, and dispatches exit', async () => {
-    render(<EmbodyCharacterHeader session={createSession()} />);
+  it('localizes Embody Character identity, scope, status, and dispatches exit', async () => {
+    renderEmbodyCharacterHeader(createSession());
 
     expect(screen.getByText('小橘')).toBeTruthy();
-    expect(screen.getByText('embody')).toBeTruthy();
-    expect(screen.getByText('active')).toBeTruthy();
-    expect(screen.getByText('Scope: occurrence: rooftop scene cases/test.fountain:8')).toBeTruthy();
-    expect(screen.getByText('Note: Check knowledge boundary.')).toBeTruthy();
-    expect(
-      screen.getByText('User plays the character; Agent gives project knowledge feedback.'),
-    ).toBeTruthy();
+    expect(screen.getByText('扮演角色')).toBeTruthy();
+    expect(screen.getByText('进行中')).toBeTruthy();
+    expect(screen.getByText('范围：occurrence: rooftop scene cases/test.fountain:8')).toBeTruthy();
+    expect(screen.getByText('备注：Check knowledge boundary.')).toBeTruthy();
+    expect(screen.getByText('你扮演该角色，Agent 根据项目知识提供反馈。')).toBeTruthy();
 
     await act(async () => {
-      screen.getByRole('button', { name: 'Exit' }).click();
+      screen.getByRole('button', { name: '退出' }).click();
     });
     expect(exitEmbodyCharacterSession).toHaveBeenCalledWith('embody-session-1');
   });
 
   it('does not render exit action after the session is exited', () => {
-    render(<EmbodyCharacterHeader session={{ ...createSession(), status: 'exited' }} />);
+    renderEmbodyCharacterHeader({ ...createSession(), status: 'exited' });
 
-    expect(screen.queryByRole('button', { name: 'Exit' })).toBeNull();
-    expect(screen.getByText('exited')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '退出' })).toBeNull();
+    expect(screen.getByText('已退出')).toBeTruthy();
   });
 });
+
+function renderEmbodyCharacterHeader(session: EmbodyCharacterSessionProjection) {
+  return render(
+    <I18nProvider service={i18nService}>
+      <EmbodyCharacterHeader session={session} />
+    </I18nProvider>,
+  );
+}
 
 function createSession(): EmbodyCharacterSessionProjection {
   return {

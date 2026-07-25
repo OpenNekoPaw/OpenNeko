@@ -2,6 +2,7 @@ import type { MessageBundle } from '@neko/shared';
 
 import { accountBar } from './accountBar';
 import { chat } from './chat';
+import { characterRole } from './characterRole';
 import { common } from './common';
 import { errors } from './errors';
 import { header } from './header';
@@ -14,6 +15,7 @@ import { toolCalls } from './toolCalls';
 export const bundles: Record<string, MessageBundle> = {
   accountBar,
   chat,
+  characterRole,
   common,
   errors,
   header,
