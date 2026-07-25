@@ -18,7 +18,7 @@
 
 ## 4. Quality gates
 
-- [ ] 4.1 Run focused Chara and Search tests plus affected strict TypeScript checks.
-- [ ] 4.2 Run repository build/test/check, unused and legacy-debt gates, key-free Agent Evaluation, strict OpenSpec validation, and diff checks.
-- [ ] 4.3 Validate the project-backed Character response in Extension Development Host with the VS Code extension debugger, or record the exact external blocker.
-- [ ] 4.4 Perform the Neko quality review and document findings and residual risk.
+- [x] 4.1 Run focused Chara and Search tests plus affected strict TypeScript checks.
+- [x] 4.2 Run repository build/test/check, unused and legacy-debt gates, key-free Agent Evaluation, strict OpenSpec validation, and diff checks.
+- [x] 4.3 Validate the project-backed Character response in Extension Development Host with the VS Code extension debugger, or record the exact external blocker.
+- [x] 4.4 Perform the Neko quality review and document findings and residual risk.
