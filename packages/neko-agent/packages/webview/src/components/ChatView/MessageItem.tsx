@@ -30,7 +30,6 @@ import {
 import { AgentHostMessages } from '@/messages';
 import { projectMarkdownResourceRendering } from '@/presenters/markdown-resource-rendering-presenter';
 import {
-  DEFAULT_MESSAGE_IDENTITIES,
   selectMessageIdentity,
   type MessageIdentityMap,
 } from '@/components/ChatView/message-identity';
@@ -42,7 +41,7 @@ type MessageContextReference = NonNullable<Message['contextReferences']>[number]
 interface MessageItemProps {
   message: Message;
   conversationId: string | null;
-  identities?: MessageIdentityMap;
+  identities: MessageIdentityMap;
   // P2: Message operations
   onEditMessage?: (messageId: string) => void;
   onResendFrom?: (messageId: string) => void;
@@ -339,7 +338,7 @@ export const MessageItem = memo(function MessageItem({
   onEditMessage,
   onResendFrom,
   onFeedback,
-  identities = DEFAULT_MESSAGE_IDENTITIES,
+  identities,
   showAvatar = true,
   isGrouped = false,
 }: MessageItemProps) {

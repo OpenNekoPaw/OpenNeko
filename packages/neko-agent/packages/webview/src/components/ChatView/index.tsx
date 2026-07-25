@@ -148,12 +148,15 @@ export function ChatView({
   const isEmpty = messages.length === 0 && !isThinking;
   const messageIdentities = useMemo(
     () =>
-      projectMessageIdentities({
-        conversationKind,
-        characterDialogueSession,
-        embodyCharacterSession,
-      }),
-    [characterDialogueSession, conversationKind, embodyCharacterSession],
+      projectMessageIdentities(
+        {
+          conversationKind,
+          characterDialogueSession,
+          embodyCharacterSession,
+        },
+        t,
+      ),
+    [characterDialogueSession, conversationKind, embodyCharacterSession, t],
   );
   const unanchoredWorkItems = useMemo(
     () => selectUnanchoredWorkItems(messages, workItems ?? []),
