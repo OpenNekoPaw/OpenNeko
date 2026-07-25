@@ -276,6 +276,54 @@ describe('EmbodyCharacterController', () => {
     );
   });
 
+  it('does not route an existing Embody Character turn when model preparation fails', async () => {
+    const preparePurposeModels = vi
+      .fn<() => Promise<void>>()
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('Character purpose model is unavailable.'));
+    const { controller, evidenceLoader, projection, responder, webview } = createHarness({
+      preparePurposeModels,
+    });
+    await controller.launch(request);
+
+    await expect(controller.routeUserMessage('embody-session-1', 'hello')).resolves.toBe(true);
+
+    expect(preparePurposeModels).toHaveBeenCalledTimes(2);
+    expect(evidenceLoader.loadEvidence).not.toHaveBeenCalled();
+    expect(responder).not.toHaveBeenCalled();
+    expect(projection.apply).not.toHaveBeenCalled();
+    expect(webview.postMessage).toHaveBeenCalledWith({
+      type: 'error',
+      conversationId: 'embody-session-1',
+      message: 'Character purpose model is unavailable.',
+    });
+  });
+
+  it('does not invoke the responder when Character evidence discovery fails', async () => {
+    const evidenceLoader = {
+      loadEvidence: vi.fn(async () => {
+        throw new Error('Character project search is unavailable.');
+      }),
+    };
+    const harness = createHarness({
+      createEvidenceLoader: vi.fn(() => evidenceLoader),
+    });
+    await harness.controller.launch(request);
+
+    await expect(
+      harness.controller.routeUserMessage('embody-session-1', '今天去哪里了？'),
+    ).resolves.toBe(true);
+
+    expect(evidenceLoader.loadEvidence).toHaveBeenCalledTimes(1);
+    expect(harness.responder).not.toHaveBeenCalled();
+    expect(harness.projection.apply).not.toHaveBeenCalled();
+    expect(harness.webview.postMessage).toHaveBeenCalledWith({
+      type: 'error',
+      conversationId: 'embody-session-1',
+      message: 'Character project search is unavailable.',
+    });
+  });
+
   it('loads turn-scoped evidence for feedback without polluting transcript', async () => {
     const evidenceText = 'Script file: cases/late.fountain\n220: 小橘不知道幕后真相。';
     const evidenceLoader = {

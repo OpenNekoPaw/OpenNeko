@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { CreativeEntityRef } from '@neko/shared';
 import {
   createCharacterEvidenceStrategy,
@@ -27,6 +27,128 @@ describe('character evidence runtime helpers', () => {
       '42_alpha',
     ]);
     expect(normalizeCharacterEvidenceTokens(['小橘', ' 晚场景 '])).toEqual(['小橘', '晚场景']);
+  });
+
+  it('discovers Character scenes with identity terms instead of turn text or internal IDs', async () => {
+    const search = vi.fn(async () => []);
+    const strategy = createCharacterEvidenceStrategy({
+      projectRoot: '/project',
+      entityReader: {
+        getEntity: async () => ({
+          id: 'char-xiaoju',
+          kind: 'character',
+          canonicalName: '小橘',
+          displayName: '小橘',
+          aliases: ['Xiaoju'],
+          status: 'confirmed',
+        }),
+      },
+      projectSearchReader: { search },
+      textReader: { readTextFile: async () => '' },
+    });
+
+    await strategy.loadEvidence({
+      entityRef: {
+        entityId: 'char-xiaoju',
+        entityKind: 'character',
+        projectRoot: '/project',
+        source: 'neko-entity',
+      },
+      mode: 'character-dialogue',
+      query: '今天去哪里了？',
+      projectRoot: '/project',
+      budget: { maxChunks: 4, maxCharacters: 4000, perChunkMaxCharacters: 1200 },
+    });
+
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search).toHaveBeenNthCalledWith(1, expect.objectContaining({ query: '小橘' }));
+    expect(search).toHaveBeenNthCalledWith(2, expect.objectContaining({ query: 'Xiaoju' }));
+    expect(search).not.toHaveBeenCalledWith(
+      expect.objectContaining({ query: expect.stringContaining('今天去哪里了') }),
+    );
+    expect(search).not.toHaveBeenCalledWith(
+      expect.objectContaining({ query: expect.stringContaining('char-xiaoju') }),
+    );
+  });
+
+  it('bounds identity-scoped Project Search calls for large alias sets', async () => {
+    const search = vi.fn(async () => []);
+    const strategy = createCharacterEvidenceStrategy({
+      projectRoot: '/project',
+      entityReader: {
+        getEntity: async () => ({
+          id: 'char-xiaoju',
+          kind: 'character',
+          canonicalName: '小橘',
+          aliases: Array.from({ length: 20 }, (_, index) => `alias-${index + 1}`),
+          status: 'confirmed',
+        }),
+      },
+      projectSearchReader: { search },
+      textReader: { readTextFile: async () => '' },
+    });
+
+    await strategy.loadEvidence({
+      entityRef: {
+        entityId: 'char-xiaoju',
+        entityKind: 'character',
+        projectRoot: '/project',
+        source: 'neko-entity',
+      },
+      mode: 'character-dialogue',
+      query: 'where?',
+      projectRoot: '/project',
+      budget: { maxChunks: 4, maxCharacters: 4000, perChunkMaxCharacters: 1200 },
+    });
+
+    expect(search).toHaveBeenCalledTimes(8);
+    expect(search).toHaveBeenLastCalledWith(expect.objectContaining({ query: 'alias-7' }));
+  });
+
+  it('ranks Chinese turn evidence by bounded CJK overlap after scene discovery', async () => {
+    const strategy = createCharacterEvidenceStrategy({
+      projectRoot: '/project',
+      entityReader: {
+        getEntity: async () => ({
+          id: 'char-xiaoju',
+          kind: 'character',
+          canonicalName: '小橘',
+          aliases: [],
+          status: 'confirmed',
+        }),
+      },
+      projectSearchReader: {
+        search: async () => [
+          makeSearchItem('scene-home', 'cases/home.fountain', 1, 1),
+          makeSearchItem('scene-school', 'cases/school.fountain', 1, 1),
+        ],
+      },
+      textReader: {
+        readTextFile: async (filePath) =>
+          filePath.endsWith('school.fountain')
+            ? '小橘今天在学校上课，还交了新朋友。'
+            : '小橘在家门口整理围巾。',
+      },
+    });
+
+    const bundle = await strategy.loadEvidence({
+      entityRef: {
+        entityId: 'char-xiaoju',
+        entityKind: 'character',
+        projectRoot: '/project',
+        source: 'neko-entity',
+      },
+      mode: 'character-dialogue',
+      query: '今天去哪里了？',
+      projectRoot: '/project',
+      budget: { maxChunks: 1, maxCharacters: 4000, perChunkMaxCharacters: 1200 },
+    });
+
+    expect(bundle.chunks).toHaveLength(1);
+    expect(bundle.chunks[0]?.text).toContain('今天在学校');
+    expect(bundle.chunks[0]?.relevance.signals).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'query-token-match' })]),
+    );
   });
 
   it('scores and orders chunks deterministically by lexical signals and source position', () => {
@@ -239,6 +361,15 @@ describe('character evidence runtime helpers', () => {
   it('dedupes occurrence, story index, and project search locators for one range', async () => {
     const strategy = createCharacterEvidenceStrategy({
       projectRoot: '/project',
+      entityReader: {
+        getEntity: async () => ({
+          id: 'char-lin',
+          kind: 'character',
+          canonicalName: 'Lin',
+          aliases: [],
+          status: 'confirmed',
+        }),
+      },
       occurrenceReader: {
         listOccurrences: async () => [
           {
@@ -313,6 +444,15 @@ describe('character evidence runtime helpers', () => {
   it('records stale, unsafe, unsupported, and missing source omissions deterministically', async () => {
     const strategy = createCharacterEvidenceStrategy({
       projectRoot: '/project',
+      entityReader: {
+        getEntity: async () => ({
+          id: 'char-lin',
+          kind: 'character',
+          canonicalName: 'Lin',
+          aliases: [],
+          status: 'confirmed',
+        }),
+      },
       projectSearchReader: {
         search: async () => [makeSearchItem('scene-stale', 'cases/search.fountain', 5, 8, 'stale')],
       },

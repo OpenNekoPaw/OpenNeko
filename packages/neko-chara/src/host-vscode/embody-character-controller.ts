@@ -276,18 +276,7 @@ export class EmbodyCharacterController implements vscode.Disposable {
       budget: defaultCharacterEvidenceBudgetForMode('embody-character'),
       transcript: session.getTranscript(),
     };
-    try {
-      return await this.getEvidenceLoader(projectRoot).loadEvidence(request);
-    } catch (error) {
-      (this.deps.logger ?? logger).warn(
-        'Character evidence loading failed; continuing feedback turn',
-        {
-          entityId: request.entityRef.entityId,
-          error,
-        },
-      );
-      return undefined;
-    }
+    return this.getEvidenceLoader(projectRoot).loadEvidence(request);
   }
 
   private getEvidenceLoader(projectRoot: string): CharacterEvidenceLoader {

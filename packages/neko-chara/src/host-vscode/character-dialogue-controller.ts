@@ -31,6 +31,7 @@ import {
   type CharacterEvidenceBudget,
   type CharacterEvidenceLoader,
   type CharacterEvidenceRequest,
+  projectCharacterEvidenceBundleToProfileFacts,
   NpcProfileAssembler,
   type AssembleNpcProfileInput,
   type NpcProfileAssemblerReaders,
@@ -895,19 +896,71 @@ export interface DefaultCharacterProfileEnrichmentInput extends NpcProfileEnrich
 export function createCharacterProfileEvidenceReader(
   projectRoot: string,
 ): CharacterProfileEvidenceReader {
-  void projectRoot;
+  const loader = createDefaultCharacterEvidenceLoader(projectRoot);
+  const bundleByEntity = new Map<string, Promise<CharacterEvidenceBundle>>();
+  const loadEvidence = (entityRef: CreativeEntityRef): Promise<CharacterEvidenceBundle> => {
+    const key = `${entityRef.entityKind}:${entityRef.entityId}`;
+    const current = bundleByEntity.get(key);
+    if (current) return current;
+    const promise = loader.loadEvidence({
+      entityRef: {
+        ...entityRef,
+        projectRoot,
+        source: entityRef.source ?? 'neko-entity',
+      },
+      mode: 'character-validation',
+      query: '',
+      projectRoot,
+      budget: defaultCharacterEvidenceBudgetForMode('character-validation'),
+    });
+    bundleByEntity.set(key, promise);
+    return promise;
+  };
+
   return {
     async listRelationships() {
       return [];
     },
-    async listOccurrences() {
-      return [];
+    async listOccurrences(entityRef) {
+      const bundle = await loadEvidence(entityRef);
+      return bundle.chunks.flatMap((chunk) => {
+        const sourceRef = chunk.sourceRefs[0];
+        const projectRelativePath = sourceRef?.projectRelativePath;
+        if (!sourceRef || !projectRelativePath) return [];
+        const location =
+          sourceRef.lineStart === undefined
+            ? projectRelativePath
+            : `${projectRelativePath}:${sourceRef.lineStart}${
+                sourceRef.lineEnd !== undefined && sourceRef.lineEnd !== sourceRef.lineStart
+                  ? `-${sourceRef.lineEnd}`
+                  : ''
+              }`;
+        return [
+          {
+            entityRef: {
+              ...entityRef,
+              projectRoot,
+              source: entityRef.source ?? 'neko-entity',
+            },
+            label: sourceRef.label ?? projectRelativePath,
+            role: 'reference' as const,
+            location,
+            source: {
+              sourceId: sourceRef.providerId ?? sourceRef.kind,
+              sourceKind: 'story' as const,
+              sourceRef: location,
+              ...(sourceRef.providerId ? { providerId: sourceRef.providerId } : {}),
+              freshness: sourceRef.freshness,
+            },
+          },
+        ];
+      });
     },
     async listRepresentationHints() {
       return [];
     },
-    async listScriptContextFacts() {
-      return [];
+    async listScriptContextFacts(entityRef) {
+      return projectCharacterEvidenceBundleToProfileFacts(await loadEvidence(entityRef));
     },
   };
 }

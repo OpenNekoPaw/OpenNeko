@@ -18,7 +18,6 @@ import type {
   CharacterEvidenceBudget,
   CharacterEvidenceBundle,
   CharacterEvidenceLoader,
-  CharacterEvidenceRequest,
 } from '../core/character-evidence';
 
 export type CharacterDialogueThinProfileAction =
@@ -238,7 +237,7 @@ export class CharacterDialogueRuntimeService {
   ): Promise<CharacterEvidenceBundle | undefined> {
     const loader = this.ports.createEvidenceLoader?.(input.projectRoot);
     if (!loader) return undefined;
-    return this.safeLoadEvidence(loader, {
+    return loader.loadEvidence({
       entityRef: withProjectRoot(input.session.entityRef, input.projectRoot),
       mode: input.mode,
       query: input.query,
@@ -329,22 +328,6 @@ export class CharacterDialogueRuntimeService {
       case 'ask':
       case undefined:
         return (await this.ports.chooseThinProfileAction?.(input)) ?? 'start-now';
-    }
-  }
-
-  private async safeLoadEvidence(
-    loader: CharacterEvidenceLoader,
-    request: CharacterEvidenceRequest,
-  ): Promise<CharacterEvidenceBundle | undefined> {
-    try {
-      return await loader.loadEvidence(request);
-    } catch (error) {
-      this.logger?.warn('Character evidence loading failed; continuing turn', {
-        entityId: request.entityRef.entityId,
-        mode: request.mode,
-        error,
-      });
-      return undefined;
     }
   }
 

@@ -10,7 +10,11 @@ import type {
   NpcProfileSource,
 } from '@neko/shared';
 import type { OpenTab } from '@neko-agent/types';
-import type { CharacterEvidenceBundle, CharacterEvidenceRequest } from '../core/index';
+import {
+  createCharacterEvidenceStrategy,
+  type CharacterEvidenceBundle,
+  type CharacterEvidenceRequest,
+} from '../core/index';
 import { createMockWebview } from '../testing/vscode';
 import {
   CharacterDialogueController,
@@ -510,6 +514,52 @@ describe('CharacterDialogueController', () => {
     );
   });
 
+  it('does not route an existing Character Dialogue turn when model preparation fails', async () => {
+    const preparePurposeModels = vi
+      .fn<() => Promise<void>>()
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('Character purpose model is unavailable.'));
+    const harness = createHarness({ preparePurposeModels });
+    await harness.controller.launch({ entityRef });
+
+    await expect(harness.controller.routeUserMessage('npc-session-1', 'hello')).resolves.toBe(true);
+
+    expect(preparePurposeModels).toHaveBeenCalledTimes(2);
+    expect(harness.evidenceLoader.loadEvidence).not.toHaveBeenCalled();
+    expect(harness.responder).not.toHaveBeenCalled();
+    expect(harness.projection.apply).not.toHaveBeenCalled();
+    expect(harness.webview.postMessage).toHaveBeenCalledWith({
+      type: 'error',
+      conversationId: 'npc-session-1',
+      message: 'Character purpose model is unavailable.',
+    });
+  });
+
+  it('does not invoke the responder when Character evidence discovery fails', async () => {
+    const evidenceLoader = {
+      loadEvidence: vi.fn(async () => {
+        throw new Error('Character project search is unavailable.');
+      }),
+    };
+    const harness = createHarness({
+      createEvidenceLoader: vi.fn(() => evidenceLoader),
+    });
+    await harness.controller.launch({ entityRef });
+
+    await expect(
+      harness.controller.routeUserMessage('npc-session-1', '今天去哪里了？'),
+    ).resolves.toBe(true);
+
+    expect(evidenceLoader.loadEvidence).toHaveBeenCalledTimes(1);
+    expect(harness.responder).not.toHaveBeenCalled();
+    expect(harness.projection.apply).not.toHaveBeenCalled();
+    expect(harness.webview.postMessage).toHaveBeenCalledWith({
+      type: 'error',
+      conversationId: 'npc-session-1',
+      message: 'Character project search is unavailable.',
+    });
+  });
+
   it('loads turn-scoped character evidence without granting tools or polluting transcript', async () => {
     const evidenceText = 'Script file: cases/late.fountain\n220: 小橘只知道公开线索。';
     const evidenceLoader = {
@@ -574,6 +624,97 @@ describe('CharacterDialogueController', () => {
       '我知道什么？',
       'NPC:evidence:我知道什么？',
     ]);
+  });
+
+  it('routes Entity-scoped Search content through ranking into the responder prompt', async () => {
+    const getEntity = vi.fn(async () => ({
+      id: 'char-xiaoju',
+      kind: 'character' as const,
+      canonicalName: '小橘',
+      displayName: '小橘',
+      aliases: ['Xiaoju'],
+      status: 'confirmed' as const,
+    }));
+    const search = vi.fn(async () => [
+      {
+        id: 'scene-home',
+        kind: 'story-scene' as const,
+        label: 'Home',
+        source: {
+          partition: 'story-symbols' as const,
+          sourceId: 'scene-home',
+          sourceKind: 'story-scene',
+          filePath: '/workspace/project-a/cases/home.fountain',
+          projectRelativePath: 'cases/home.fountain',
+        },
+        projectRoot: '/workspace/project-a',
+        filePath: '/workspace/project-a/cases/home.fountain',
+        searchText: '小橘 home',
+        navigationData: { filePath: '/workspace/project-a/cases/home.fountain', lineStart: 0 },
+        freshness: 'fresh' as const,
+      },
+      {
+        id: 'scene-school',
+        kind: 'story-scene' as const,
+        label: 'School',
+        source: {
+          partition: 'story-symbols' as const,
+          sourceId: 'scene-school',
+          sourceKind: 'story-scene',
+          filePath: '/workspace/project-a/cases/school.fountain',
+          projectRelativePath: 'cases/school.fountain',
+        },
+        projectRoot: '/workspace/project-a',
+        filePath: '/workspace/project-a/cases/school.fountain',
+        searchText: '小橘 school',
+        navigationData: { filePath: '/workspace/project-a/cases/school.fountain', lineStart: 0 },
+        freshness: 'fresh' as const,
+      },
+    ]);
+    const readTextFile = vi.fn(async (filePath: string) =>
+      filePath.endsWith('school.fountain')
+        ? '小橘今天在学校上课，还交了新朋友。'
+        : '小橘在家门口整理围巾。',
+    );
+    const strategy = createCharacterEvidenceStrategy({
+      projectRoot: '/workspace/project-a',
+      entityReader: { getEntity },
+      projectSearchReader: { search },
+      textReader: { readTextFile },
+    });
+    const responder = vi.fn(async ({ systemPrompt }) => ({
+      content: systemPrompt.includes('今天在学校') ? '我今天去学校了。' : '没有找到。',
+    }));
+    const harness = createHarness({
+      createEvidenceLoader: () => ({
+        loadEvidence: (request) =>
+          strategy.loadEvidence({
+            ...request,
+            budget: { ...request.budget, maxChunks: 1 },
+          }),
+      }),
+      createResponder: () => responder,
+    });
+    await harness.controller.launch({ entityRef });
+
+    await harness.controller.routeUserMessage('npc-session-1', '今天去哪里了？');
+
+    expect(getEntity).toHaveBeenCalledWith(entityRef);
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ query: '小橘' }));
+    expect(search).toHaveBeenCalledWith(expect.objectContaining({ query: 'Xiaoju' }));
+    expect(search).not.toHaveBeenCalledWith(
+      expect.objectContaining({ query: expect.stringContaining('今天去哪里了') }),
+    );
+    expect(readTextFile).toHaveBeenCalledWith('/workspace/project-a/cases/school.fountain');
+    expect(responder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        systemPrompt: expect.stringContaining('小橘今天在学校上课，还交了新朋友。'),
+        turnEvidence: expect.objectContaining({
+          chunks: [expect.objectContaining({ text: expect.stringContaining('今天在学校') })],
+        }),
+      }),
+    );
   });
 
   it('extracts transcript on exit and marks the Character Dialogue tab as exited', async () => {
@@ -1019,7 +1160,7 @@ describe('CharacterDialogueController', () => {
     }
   });
 
-  it('assembles profile facts from the canonical Entity registry without source fallback', async () => {
+  it('assembles profile facts from the canonical Entity registry and project evidence path', async () => {
     const projectRoot = await createConfirmedCharacterProject();
     try {
       const assembler = createDefaultCharacterProfileAssembler(projectRoot);
@@ -1044,7 +1185,90 @@ describe('CharacterDialogueController', () => {
           }),
         }),
       );
-      expect(vscode.commands.executeCommand).not.toHaveBeenCalled();
+      expect(vscode.commands.executeCommand).toHaveBeenCalledTimes(2);
+      expect(vscode.commands.executeCommand).toHaveBeenNthCalledWith(
+        1,
+        'neko.projectSearch.query',
+        expect.objectContaining({ text: '小橘', projectRoot }),
+      );
+      expect(vscode.commands.executeCommand).toHaveBeenNthCalledWith(
+        2,
+        'neko.projectSearch.query',
+        expect.objectContaining({ text: 'Xiaoju', projectRoot }),
+      );
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('assembles script-backed profile evidence through canonical Project Search locators', async () => {
+    const projectRoot = await createConfirmedCharacterProject();
+    const fountainText = [
+      'EXT. 猫猫小学 - 上午',
+      '',
+      '@小橘',
+      '今天在学校上课，还交了新朋友。',
+    ].join('\n');
+    vi.mocked(vscode.commands.executeCommand).mockResolvedValue({
+      query: { text: '小橘' },
+      items: [
+        {
+          id: 'story-scene:school',
+          kind: 'story-scene',
+          label: 'EXT. 猫猫小学 - 上午',
+          source: {
+            partition: 'story-symbols',
+            sourceId: 'story-scene:school',
+            sourceKind: 'story-scene',
+            projectRelativePath: 'cases/test.fountain',
+          },
+          projectRoot,
+          filePath: path.join(projectRoot, 'cases/test.fountain'),
+          searchText: '猫猫小学 小橘 story scene',
+          navigationData: {
+            filePath: path.join(projectRoot, 'cases/test.fountain'),
+            lineStart: 0,
+            lineEnd: 3,
+          },
+          freshness: 'fresh',
+        },
+      ],
+      statuses: [],
+      freshness: 'fresh',
+    });
+    vi.mocked(vscode.workspace.fs.readFile).mockResolvedValue(
+      new TextEncoder().encode(fountainText),
+    );
+
+    try {
+      const assembler = createDefaultCharacterProfileAssembler(projectRoot);
+      const result = await assembler.assembleProfile({
+        entityRef: { ...entityRef, projectRoot },
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          status: 'assembled',
+          profile: expect.objectContaining({
+            sceneAppearances: ['cases/test.fountain:1-4'],
+            facts: expect.arrayContaining([
+              expect.objectContaining({
+                key: 'script.context.1',
+                value: expect.stringContaining('今天在学校上课'),
+                source: 'script-extraction',
+              }),
+            ]),
+          }),
+        }),
+      );
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+        'neko.projectSearch.query',
+        expect.objectContaining({
+          text: '小橘',
+          projectRoot,
+          partitions: ['story-symbols'],
+        }),
+      );
     } finally {
       await rm(projectRoot, { recursive: true, force: true });
     }

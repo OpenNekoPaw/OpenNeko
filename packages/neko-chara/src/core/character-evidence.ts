@@ -223,6 +223,7 @@ export const DEFAULT_CHARACTER_EVIDENCE_BUDGET: CharacterEvidenceBudget = {
 
 export const DEFAULT_CHARACTER_EVIDENCE_MAX_WINDOW_LINES = 120;
 export const DEFAULT_CHARACTER_EVIDENCE_MAX_LOCATORS = 96;
+export const DEFAULT_CHARACTER_EVIDENCE_MAX_SEARCH_QUERIES = 8;
 export const DEFAULT_CHARACTER_EVIDENCE_PROJECT_SEARCH_LIMIT = 24;
 export const DEFAULT_CHARACTER_EVIDENCE_SUPPORTED_EXTENSIONS = [
   '.fountain',
@@ -339,7 +340,7 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
     const budget = normalizeCharacterEvidenceBudget(request.budget);
     const omitted: CharacterEvidenceOmission[] = [];
     const entityRef = normalizeEntityRefProjectRoot(request.entityRef, request.projectRoot);
-    const entity = await this.loadEntity(entityRef, omitted);
+    const entity = await this.loadEntity(entityRef);
     const profileTokens = collectProfileTokens(entityRef, entity);
     const locators = await this.collectLocators({
       request: { ...request, entityRef },
@@ -372,19 +373,18 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
     };
   }
 
-  private async loadEntity(
-    entityRef: CreativeEntityRef,
-    omitted: CharacterEvidenceOmission[],
-  ): Promise<CreativeEntity | undefined> {
+  private async loadEntity(entityRef: CreativeEntityRef): Promise<CreativeEntity | undefined> {
     if (!this.entityReader) return undefined;
     try {
-      return await this.entityReader.getEntity(entityRef);
+      const entity = await this.entityReader.getEntity(entityRef);
+      if (!entity) {
+        throw new Error(`Character Entity was not found: ${entityRef.entityId}`);
+      }
+      return entity;
     } catch (error) {
-      omitted.push({
-        reason: 'unavailable',
-        message: `Canonical Entity evidence is unavailable: ${formatUnknownError(error)}`,
-      });
-      return undefined;
+      throw new Error(
+        `Canonical Character Entity evidence is unavailable: ${formatUnknownError(error)}`,
+      );
     }
   }
 
@@ -433,24 +433,25 @@ class CharacterEvidenceStrategy implements CharacterEvidenceLoader {
     readonly entity: CreativeEntity | undefined;
     readonly omitted: CharacterEvidenceOmission[];
   }): Promise<readonly CharacterEvidenceLocator[]> {
-    if (!this.projectSearchReader) return [];
-    const searchQuery = buildEvidenceSearchQuery(input.request, input.entity);
-    if (!searchQuery) return [];
+    const projectSearchReader = this.projectSearchReader;
+    if (!projectSearchReader) return [];
+    const searchQueries = buildEvidenceSearchQueries(input.entity);
+    if (searchQueries.length === 0) return [];
 
     try {
-      const items = await this.projectSearchReader.search({
-        projectRoot: input.request.projectRoot,
-        query: searchQuery,
-        entityRef: input.request.entityRef,
-        limit: DEFAULT_CHARACTER_EVIDENCE_PROJECT_SEARCH_LIMIT,
-      });
-      return items.flatMap(projectSearchItemToLocator);
+      const itemGroups = await Promise.all(
+        searchQueries.map((query) =>
+          projectSearchReader.search({
+            projectRoot: input.request.projectRoot,
+            query,
+            entityRef: input.request.entityRef,
+            limit: DEFAULT_CHARACTER_EVIDENCE_PROJECT_SEARCH_LIMIT,
+          }),
+        ),
+      );
+      return dedupeProjectSearchItems(itemGroups.flat()).flatMap(projectSearchItemToLocator);
     } catch (error) {
-      input.omitted.push({
-        reason: 'unavailable',
-        message: `Project search evidence locators are unavailable: ${formatUnknownError(error)}`,
-      });
-      return [];
+      throw new Error(`Character project search is unavailable: ${formatUnknownError(error)}`);
     }
   }
 
@@ -660,7 +661,8 @@ export function normalizeCharacterEvidenceTokens(
     .replace(/[^\p{L}\p{N}_]+/gu, ' ')
     .trim();
   if (!normalized) return [];
-  return dedupeStrings(normalized.split(/\s+/).filter((token) => token.length > 0));
+  const tokens = normalized.split(/\s+/).filter((token) => token.length > 0);
+  return dedupeStrings(tokens.flatMap((token) => [token, ...collectBoundedCjkBigrams(token)]));
 }
 
 export function scoreCharacterEvidenceChunk(
@@ -1149,17 +1151,14 @@ function characterEvidenceChunkId(sourceRef: CharacterEvidenceSourceRef): string
   ].join(':');
 }
 
-function buildEvidenceSearchQuery(
-  request: CharacterEvidenceRequest,
-  entity: CreativeEntity | undefined,
-): string {
-  return [
-    request.query,
-    request.entityRef.entityId,
-    ...(entity ? [entity.displayName, entity.canonicalName, ...entity.aliases] : []),
-  ]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .join(' ');
+function buildEvidenceSearchQueries(entity: CreativeEntity | undefined): readonly string[] {
+  if (!entity) return [];
+  return dedupeStrings(
+    [entity.displayName, entity.canonicalName, ...entity.aliases]
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0),
+  ).slice(0, DEFAULT_CHARACTER_EVIDENCE_MAX_SEARCH_QUERIES);
 }
 
 function collectProfileTokens(
@@ -1172,6 +1171,37 @@ function collectProfileTokens(
       ...(entity ? [entity.displayName, entity.canonicalName, ...entity.aliases] : []),
     ].filter((value): value is string => typeof value === 'string'),
   );
+}
+
+function collectBoundedCjkBigrams(token: string): readonly string[] {
+  const characters = Array.from(token);
+  if (characters.length < 4 || !characters.some((character) => /\p{Script=Han}/u.test(character))) {
+    return [];
+  }
+  const grams: string[] = [];
+  for (let index = 0; index < characters.length - 1; index += 1) {
+    const left = characters[index];
+    const right = characters[index + 1];
+    if (
+      left !== undefined &&
+      right !== undefined &&
+      /\p{Script=Han}/u.test(left) &&
+      /\p{Script=Han}/u.test(right)
+    ) {
+      grams.push(`${left}${right}`);
+    }
+  }
+  return grams;
+}
+
+function dedupeProjectSearchItems(
+  items: readonly ProjectSearchItem[],
+): readonly ProjectSearchItem[] {
+  const byId = new Map<string, ProjectSearchItem>();
+  for (const item of items) {
+    if (!byId.has(item.id)) byId.set(item.id, item);
+  }
+  return [...byId.values()];
 }
 
 function parseCandidatePath(location: string | undefined): string | undefined {
