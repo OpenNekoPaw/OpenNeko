@@ -553,6 +553,10 @@ describe('agent architecture boundary guards', () => {
       join(agentSrc, 'runtime/storyboard-action-task-runtime.ts'),
       join(extensionSrc, 'services/creativeAiConversationRoutingService.ts'),
       join(extensionSrc, 'services/creativeAiConversationLifecycleService.ts'),
+      join(
+        workspaceRoot,
+        'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
+      ),
     ];
     const existingFiles = forbiddenRuntimeFiles
       .filter((file) => existsSync(file))
@@ -574,24 +578,6 @@ describe('agent architecture boundary guards', () => {
       'buildCanvasStoryboardActionIntentPrompt',
     ]) {
       expect(agentProductionSource).not.toContain(forbiddenIdentity);
-    }
-
-    const canvasExecutorSource = readFileSync(
-      join(
-        workspaceRoot,
-        'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
-      ),
-      'utf-8',
-    );
-    for (const forbiddenLlmDetail of [
-      'modelId',
-      'credential',
-      'maxTokens',
-      'temperature',
-      'thinkingBudget',
-      'PiAgent',
-    ]) {
-      expect(canvasExecutorSource).not.toContain(forbiddenLlmDetail);
     }
   });
 

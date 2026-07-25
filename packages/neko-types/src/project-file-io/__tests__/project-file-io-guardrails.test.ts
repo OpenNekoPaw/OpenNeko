@@ -181,19 +181,25 @@ describe('project file I/O guardrails', () => {
     const canvasSource = readSource(
       'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
     );
-    const canvasNodeLibraryPolicySource = readSource(
-      'packages/neko-canvas/packages/webview/src/utils/nodeLibraryPolicy.ts',
+    const canvasAddActionCatalogSource = readSource(
+      'packages/neko-canvas/packages/webview/src/utils/canvasAddActions.ts',
     );
-    const canvasNodeLibraryPanelSource = readSource(
-      'packages/neko-canvas/packages/webview/src/components/panels/NodeLibraryPanel.tsx',
+    const canvasAddActionPopoverSource = readSource(
+      'packages/neko-canvas/packages/webview/src/components/toolbar/CanvasAddActionPopover.tsx',
     );
     const canvasAppSource = readSource('packages/neko-canvas/packages/webview/src/CanvasApp.tsx');
     expect(canvasSource).toContain('private async resolveCanvasProjectSourceAddRequest(');
     expect(canvasSource).toContain('private createCanvasProjectSourcePickerFilters(');
     expect(canvasSource).toContain('this.createCanvasPickerSourceAddRequest(uri, documentUri');
     expect(canvasSource).not.toContain('createCanvasDroppedAssetFromProjectAddSource(');
-    expect(canvasNodeLibraryPolicySource).toContain('requiresSourceAdd');
-    expect(canvasAppSource).toContain('createCanvasFilePickerAddSourceInput(type, position)');
+    expect(canvasAddActionCatalogSource).toContain("mode: 'source'");
+    expect(canvasAddActionCatalogSource).toContain("id: 'create'");
+    expect(canvasAddActionCatalogSource).toContain("id: 'import'");
+    expect(canvasAddActionCatalogSource).toContain("id: 'reference'");
+    expect(canvasAddActionCatalogSource).not.toContain("'job-card'");
+    expect(canvasAppSource).toContain(
+      'createCanvasFilePickerAddSourceInput(nodeType, position, mediaType)',
+    );
     for (const caseName of [
       'pickMedia',
       'pickCanvasDocument',
@@ -221,8 +227,8 @@ describe('project file I/O guardrails', () => {
     );
     expect(canvasWebviewMessagesSource).not.toMatch(/onAddMediaFromExtension|onDropAssets/);
     for (const source of [
-      canvasNodeLibraryPolicySource,
-      canvasNodeLibraryPanelSource,
+      canvasAddActionCatalogSource,
+      canvasAddActionPopoverSource,
       canvasAppSource,
     ]) {
       expect(source).not.toMatch(

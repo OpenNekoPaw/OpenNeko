@@ -4,6 +4,7 @@ import {
   AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildInjectContextMessage,
   buildQueuedMessageEditRequestedMessage,
+  parseAmbientCanvasUpdateNodes,
   parseSendMessageWebviewMessage,
   parseWebviewToExtensionMessage,
 } from '../webview-protocol';
@@ -26,6 +27,22 @@ const cacheResourceRef = createResourceRef({
 });
 
 describe('webview protocol parser', () => {
+  it('accepts canonical ambient Canvas nodes and rejects removed node types', () => {
+    expect(
+      parseAmbientCanvasUpdateNodes([
+        { nodeId: 'markdown-1', type: 'markdown', summary: 'Creative brief' },
+        { nodeId: 'job-1', type: 'job', summary: 'Generate keyframes' },
+      ]),
+    ).toEqual([
+      { nodeId: 'markdown-1', type: 'markdown', summary: 'Creative brief' },
+      { nodeId: 'job-1', type: 'job', summary: 'Generate keyframes' },
+    ]);
+
+    expect(() =>
+      parseAmbientCanvasUpdateNodes([{ nodeId: 'shot-1', type: 'shot', summary: 'Legacy shot' }]),
+    ).toThrow('not a canonical Canvas node type');
+  });
+
   it('preserves explicit Cut target identity and revision in plugin transfers', () => {
     expect(
       parseWebviewToExtensionMessage({

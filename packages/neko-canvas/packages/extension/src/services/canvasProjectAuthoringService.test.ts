@@ -345,30 +345,28 @@ describe('CanvasProjectAuthoringService', () => {
     });
 
     const result = await service.createComposite({
-      fallbackTitle: 'Headless Storyboard',
+      fallbackTitle: 'Headless Draft',
       request: {
-        containerType: 'scene',
-        data: { sceneTitle: 'Headless Storyboard', sceneNumber: 1 },
-        children: [{ type: 'shot', data: { shotNumber: 1, visualDescription: 'First shot' } }],
+        containerType: 'group',
+        data: { label: 'Headless Draft' },
+        children: [{ type: 'markdown', data: { content: 'First section' } }],
       },
     });
 
     expect(result.containerId).toBeDefined();
     expect(provider.revealCanvasDocument).not.toHaveBeenCalled();
     expect(vscodeMockState.executeCommand).not.toHaveBeenCalled();
-    const saved = readJsonFile('/workspace/project/Headless Storyboard.nkc') as {
+    const saved = readJsonFile('/workspace/project/Headless Draft.nkc') as {
       nodes?: unknown[];
     };
     expect(saved.nodes).toHaveLength(2);
     const reopened = loadNkc(
-      new TextDecoder().decode(
-        vscodeMockState.files.get('/workspace/project/Headless Storyboard.nkc'),
-      ),
+      new TextDecoder().decode(vscodeMockState.files.get('/workspace/project/Headless Draft.nkc')),
     );
     expect(reopened.validation.valid).toBe(true);
     expect(reopened.data.nodes).toHaveLength(2);
     expect(provider.applyHostCanvasData).toHaveBeenCalledWith(
-      expect.objectContaining({ fsPath: '/workspace/project/Headless Storyboard.nkc' }),
+      expect.objectContaining({ fsPath: '/workspace/project/Headless Draft.nkc' }),
       expect.objectContaining({ nodes: expect.any(Array) }),
     );
   });
@@ -386,14 +384,13 @@ describe('CanvasProjectAuthoringService', () => {
         {
           kind: 'node.create',
           node: {
-            id: 'text-atomic-1',
-            type: 'text',
+            id: 'markdown-atomic-1',
+            type: 'markdown',
             position: { x: 42, y: 64 },
             size: { width: 260, height: 120 },
             zIndex: 1,
             data: {
               content: 'Atomic host-authored note',
-              format: 'plain',
             },
           },
         },
@@ -413,8 +410,8 @@ describe('CanvasProjectAuthoringService', () => {
     );
     expect(reopened.validation.valid).toBe(true);
     expect(reopened.data.nodes[0]).toMatchObject({
-      id: 'text-atomic-1',
-      type: 'text',
+      id: 'markdown-atomic-1',
+      type: 'markdown',
       data: { content: 'Atomic host-authored note' },
     });
   });
@@ -444,7 +441,6 @@ describe('CanvasProjectAuthoringService', () => {
     expect(reopened.validation.valid).toBe(true);
     expect(reopened.data.nodes[0]).toMatchObject({
       type: 'media',
-      preset: 'media.basic',
       data: {
         assetPath: '${WORKSPACE}/assets/plate.png',
         mediaType: 'image',
@@ -507,7 +503,7 @@ describe('CanvasProjectAuthoringService', () => {
 
     const result = await service.createNode({
       node: {
-        type: 'text',
+        type: 'markdown',
         position: { x: 12, y: 34 },
         data: { content: 'host-authored' },
       },
@@ -518,7 +514,7 @@ describe('CanvasProjectAuthoringService', () => {
     const saved = readJsonFile('/workspace/project/Active.nkc') as {
       nodes?: Array<{ type?: string }>;
     };
-    expect(saved.nodes?.[0]?.type).toBe('text');
+    expect(saved.nodes?.[0]?.type).toBe('markdown');
     expect(vscodeMockState.files.has('/workspace/project/Agent Canvas.nkc')).toBe(false);
   });
 
@@ -546,7 +542,7 @@ describe('CanvasProjectAuthoringService', () => {
         expectedRevision: createCanvasWorkspaceBoardRevision(explicitData),
       },
       node: {
-        type: 'text',
+        type: 'markdown',
         position: { x: 1, y: 2 },
         data: { content: 'explicit-target' },
       },
@@ -572,7 +568,7 @@ describe('CanvasProjectAuthoringService', () => {
     await service.createNode({
       target: { kind: 'new', title: 'Reveal Target', reveal: true },
       node: {
-        type: 'text',
+        type: 'markdown',
         data: { content: 'show after save' },
       },
     });
@@ -614,225 +610,19 @@ describe('CanvasProjectAuthoringService', () => {
     );
     expect(reopened.validation.valid).toBe(true);
     expect(reopened.data.nodes[0]).toMatchObject({
-      type: 'text',
+      type: 'markdown',
       position: { x: 20, y: 30 },
-      data: { content: '## Review note', format: 'markdown' },
+      data: { content: '## Review note' },
     });
   });
 
-  it('preserves canonical scene/shot hierarchy, prompts, revision, and stable image refs after reopen', async () => {
-    const provider = createProvider();
+  it('does not expose legacy Scene/Shot authoring on the production service', () => {
     const service = new CanvasProjectAuthoringService({
       context: { subscriptions: [] } as never,
-      canvasEditorProvider: provider,
-    });
-    const sourceImageResourceRef = {
-      id: 'source-image-resource',
-      scope: 'project',
-      provider: 'workspace',
-      kind: 'media',
-      source: { kind: 'file', projectRelativePath: 'assets/cat.png' },
-      locator: { kind: 'file', path: '${WORKSPACE}/assets/cat.png' },
-      fingerprint: { strategy: 'hash', value: 'cat-source' },
-    } as const;
-    const documentImageResourceRef = {
-      kind: 'document-entry',
-      source: { filePath: '${WORKSPACE}/books/comic.cbz', format: 'cbz' },
-      entryPath: 'pages/page-002.png',
-    } as const;
-
-    const result = await service.createStoryboardFromPayload({
-      target: { title: 'Payload Storyboard' },
-      payload: {
-        mode: 'semantic',
-        sourceScriptUri: 'storyboard:storyboard-rev-1',
-        sourceStoryboardRevisionId: 'storyboard-rev-1',
-        projectionMode: 'read-only-projection',
-        scenes: [
-          {
-            sceneId: 'scene-alpha',
-            sceneTitle: 'Scene Alpha',
-            sceneNumber: 1,
-            storyboardPrompt: {
-              version: 1,
-              promptBlocks: {
-                videoPromptDocument: {
-                  version: 1,
-                  documentId: 'storyboard-scene:scene-alpha:video',
-                  blockKind: 'video',
-                  text: 'slow push through the corridor',
-                  baseRevision: 'storyboard-rev-1',
-                },
-              },
-            },
-            shotPlans: [
-              {
-                shotId: 'shot-alpha-1',
-                shotNumber: 1,
-                duration: 4,
-                visualDescription: 'A quiet corridor.',
-                characters: [],
-                shotScale: 'MS',
-                characterAction: 'A figure turns.',
-                emotion: [],
-                sceneTags: ['Scene Alpha'],
-                imagePrompt: 'cat corridor keyframe',
-                storyboardPrompt: {
-                  version: 1,
-                  promptBlocks: {
-                    imagePromptDocument: {
-                      version: 1,
-                      documentId: 'storyboard-shot:shot-alpha-1:image',
-                      blockKind: 'image',
-                      text: 'cat corridor keyframe',
-                      baseRevision: 'storyboard-rev-1',
-                    },
-                  },
-                },
-                referenceResourceRef: sourceImageResourceRef,
-                sourceMediaRefs: [
-                  {
-                    refId: 'source-image-1',
-                    role: 'source',
-                    locator: { type: 'workspace-path', path: '${WORKSPACE}/assets/cat.png' },
-                    resourceRef: sourceImageResourceRef,
-                  },
-                ],
-              },
-              {
-                shotId: 'shot-alpha-2',
-                shotNumber: 2,
-                duration: 2,
-                visualDescription: 'The cat jumps.',
-                characters: [],
-                shotScale: 'CU',
-                characterAction: 'The cat jumps.',
-                emotion: ['playful'],
-                sceneTags: ['Scene Alpha'],
-                imagePrompt: 'cat jumping keyframe',
-                storyboardPrompt: {
-                  version: 1,
-                  promptBlocks: {
-                    imagePromptDocument: {
-                      version: 1,
-                      documentId: 'storyboard-shot:shot-alpha-2:image',
-                      blockKind: 'image',
-                      text: 'cat jumping keyframe',
-                      baseRevision: 'storyboard-rev-1',
-                    },
-                  },
-                },
-                referenceImageResourceRef: documentImageResourceRef,
-                sourceMediaRefs: [
-                  {
-                    refId: 'document-page-2',
-                    role: 'reference',
-                    locator: {
-                      type: 'workspace-path',
-                      path: '${WORKSPACE}/books/pages/page-002.png',
-                    },
-                    documentResourceRef: documentImageResourceRef,
-                  },
-                ],
-              },
-            ],
-          },
-          {
-            sceneId: 'scene-beta',
-            sceneTitle: 'Scene Beta',
-            sceneNumber: 2,
-            shotPlans: [
-              {
-                shotId: 'shot-beta-1',
-                shotNumber: 1,
-                duration: 3,
-                visualDescription: 'The cat lands.',
-                characters: [],
-                shotScale: 'WS',
-                characterAction: 'The cat rolls over.',
-                emotion: ['content'],
-                sceneTags: ['Scene Beta'],
-                imagePrompt: 'cat landing keyframe',
-              },
-            ],
-          },
-        ],
-      },
+      canvasEditorProvider: createProvider(),
     });
 
-    expect(result.storyboard?.scenesCreated).toBe(2);
-    expect(result.storyboard?.totalShots).toBe(3);
-    const reopened = loadNkc(
-      new TextDecoder().decode(
-        vscodeMockState.files.get('/workspace/project/Payload Storyboard.nkc'),
-      ),
-    );
-    expect(reopened.validation.valid).toBe(true);
-    expect(reopened.data.nodes.map((node) => node.type)).toEqual([
-      'scene',
-      'shot',
-      'shot',
-      'scene',
-      'shot',
-    ]);
-
-    const scenes = reopened.data.nodes.filter((node) => node.type === 'scene');
-    const shots = reopened.data.nodes.filter((node) => node.type === 'shot');
-    expect(scenes).toHaveLength(2);
-    expect(shots).toHaveLength(3);
-    expect(scenes[0]).toMatchObject({
-      data: {
-        sceneId: 'scene-alpha',
-        sourceStoryboardRevisionId: 'storyboard-rev-1',
-        storyboardProjectionMode: 'read-only-projection',
-        storyboardPrompt: {
-          promptBlocks: {
-            videoPromptDocument: expect.objectContaining({
-              blockKind: 'video',
-              text: 'slow push through the corridor',
-              baseRevision: 'storyboard-rev-1',
-            }),
-          },
-        },
-      },
-      container: { policy: 'scene', childIds: [shots[0]!.id, shots[1]!.id] },
-    });
-    expect(scenes[1]).toMatchObject({
-      data: { sceneId: 'scene-beta' },
-      container: { policy: 'scene', childIds: [shots[2]!.id] },
-    });
-    expect(shots[0]).toMatchObject({
-      parentId: scenes[0]!.id,
-      data: {
-        shotId: 'shot-alpha-1',
-        sourceStoryboardRevisionId: 'storyboard-rev-1',
-        storyboardProjectionMode: 'read-only-projection',
-        referenceResourceRef: sourceImageResourceRef,
-        sourceMediaRefs: [expect.objectContaining({ refId: 'source-image-1' })],
-        storyboardPrompt: {
-          promptBlocks: {
-            imagePromptDocument: expect.objectContaining({ text: 'cat corridor keyframe' }),
-          },
-        },
-      },
-    });
-    expect(shots[0]?.data.storyboardPrompt?.promptBlocks?.videoPromptDocument).toBeUndefined();
-    expect(shots[1]).toMatchObject({
-      parentId: scenes[0]!.id,
-      data: {
-        shotId: 'shot-alpha-2',
-        referenceImageResourceRef: documentImageResourceRef,
-        sourceMediaRefs: [expect.objectContaining({ refId: 'document-page-2' })],
-        storyboardPrompt: {
-          promptBlocks: {
-            imagePromptDocument: expect.objectContaining({ text: 'cat jumping keyframe' }),
-          },
-        },
-      },
-    });
-    expect(shots[2]?.parentId).toBe(scenes[1]?.id);
-    expect(JSON.stringify(reopened.data)).not.toMatch(/blob:|webview|\/tmp\/neko-cache/);
-    expect(provider.revealCanvasDocument).not.toHaveBeenCalled();
+    expect('createStoryboardFromPayload' in service).toBe(false);
   });
 
   it('rejects runtime handles before saving nkc facts', async () => {
@@ -845,14 +635,14 @@ describe('CanvasProjectAuthoringService', () => {
     await expect(
       service.createNode({
         node: {
-          type: 'shot',
+          type: 'media',
           data: {
-            visualDescription: 'Bad runtime source',
-            referenceImagePath: '/var/folders/neko/page.png',
+            assetPath: 'blob:vscode-runtime-source',
+            mediaType: 'image',
           },
         },
       }),
-    ).rejects.toThrow(/runtime-only-resource-identity/);
+    ).rejects.toThrow(/runtime-handle-persisted|runtime-only/);
     expect(vscodeMockState.files.size).toBe(0);
     expect(provider.applyHostCanvasData).not.toHaveBeenCalled();
   });

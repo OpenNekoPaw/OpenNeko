@@ -2,35 +2,12 @@ import type {
   CanvasConnectionEndpoint,
   ContainerCapability,
   ContainerSection,
-  NodePreviewDescriptor,
 } from './canvas-layered';
 import type { CanvasSerializableRecord, CanvasSerializableValue } from './canvas-serializable';
-import type { NkProjectType } from './canvas-drop';
 import type { CanvasPlaybackMetadata } from './canvas-playback';
 import type { CanvasCreativeScope, CanvasRelatedBoardRef } from './canvas-creative-scope';
-import type { CreativeEntityRef } from './creative-entity-asset-composition';
 import type { DocumentArchiveResourceRef } from './document-reading';
-import type {
-  NarrativeEndingMetadata,
-  NarrativeMetadata,
-  NarrativeSceneMetadata,
-  NarrativeVariable,
-  StoryGenre,
-  VariableEffect,
-} from './narrative-preview';
 import type { ResourceRef } from './resource-cache';
-import type { CanvasStoryboardPromptState } from './canvas-semantic-storyboard';
-import type { StoryboardMediaRef, StoryboardTextCue, StoryboardVoiceCue } from './storyboard-table';
-import type {
-  BatchExecutionPlan,
-  ComicAnimationDiagnostic,
-  VisualOccurrence,
-} from './comic-animation-indexing';
-import type {
-  CreativeTablePromptMediaType,
-  CreativeTablePromptOperation,
-  CreativeTablePromptScope,
-} from './creative-table-profile';
 
 // =============================================================================
 // Canvas Types - Infinite Canvas Editor Data Model
@@ -42,68 +19,22 @@ export type { CanvasSerializableRecord, CanvasSerializableValue };
  * Canvas node type discriminator
  */
 export const CORE_CANVAS_NODE_TYPES = [
-  // Core nodes
+  'markdown',
   'media',
-  'storyboard',
-  'annotation',
   'group',
-  // Rich content nodes
-  'text',
-  'artboard',
-  'table',
-  // Storyboard system
-  'shot',
-  'scene',
-  'gallery',
-  // Content reference nodes
-  'script',
-  'document',
-  'model',
+  'job',
+  'file',
   'canvas-embed',
-  'project',
 ] as const;
 
-export type CoreCanvasNodeType = (typeof CORE_CANVAS_NODE_TYPES)[number];
+export type CanonicalCanvasNodeType = (typeof CORE_CANVAS_NODE_TYPES)[number];
 
-/**
- * Built-in subsystem node types registered by shared Canvas contracts.
- */
-export const REGISTERED_CANVAS_NODE_TYPES = [
-  // Narrative subsystem
-  'narrative-start',
-  'choice',
-  'merge',
-  'narrative-scene',
-  'narrative-note',
-  'narrative-ending',
-  // Behavior subsystem
-  'state',
-  'trigger',
-  'action',
-  'condition',
-  'composite',
-  // Entity graph subsystem
-  'entity',
-  'representation-slot',
-  'occurrence',
-  'generated-asset',
-  // Memory graph subsystem
-  'memory',
-  'conversation',
-  'fact',
-] as const;
+export const CANVAS_NODE_TYPES = [...CORE_CANVAS_NODE_TYPES] as const;
 
-export type RegisteredCanvasNodeType = (typeof REGISTERED_CANVAS_NODE_TYPES)[number];
-
-export const CANVAS_NODE_TYPES = [
-  ...CORE_CANVAS_NODE_TYPES,
-  ...REGISTERED_CANVAS_NODE_TYPES,
-] as const;
-
-export type CanvasNodeType = CoreCanvasNodeType | RegisteredCanvasNodeType;
+export type CanvasNodeType = CanonicalCanvasNodeType;
 
 export function isCanvasNodeType(value: unknown): value is CanvasNodeType {
-  return typeof value === 'string' && CANVAS_NODE_TYPES.includes(value as CanvasNodeType);
+  return typeof value === 'string' && (CANVAS_NODE_TYPES as readonly string[]).includes(value);
 }
 
 export type DocumentResourceStatusReason =
@@ -150,32 +81,18 @@ export type ConnectionAnchor = 'top' | 'right' | 'bottom' | 'left';
 /**
  * Connection type for styling
  */
-export const CORE_CONNECTION_TYPES = ['default', 'sequence', 'reference'] as const;
+export const CORE_CONNECTION_TYPES = ['sequence', 'reference', 'derived-from'] as const;
 
 export type CoreConnectionType = (typeof CORE_CONNECTION_TYPES)[number];
 
-/**
- * Built-in subsystem connection types registered by shared Canvas contracts.
- */
-export const REGISTERED_CONNECTION_TYPES = [
-  'choice',
-  'transition',
-  'child',
-  'association',
-  'derived-from',
-] as const;
+export const CANVAS_CONNECTION_TYPES = [...CORE_CONNECTION_TYPES] as const;
 
-export type RegisteredConnectionType = (typeof REGISTERED_CONNECTION_TYPES)[number];
-
-export const CANVAS_CONNECTION_TYPES = [
-  ...CORE_CONNECTION_TYPES,
-  ...REGISTERED_CONNECTION_TYPES,
-] as const;
-
-export type ConnectionType = CoreConnectionType | RegisteredConnectionType;
+export type ConnectionType = CoreConnectionType;
 
 export function isCanvasConnectionType(value: unknown): value is ConnectionType {
-  return typeof value === 'string' && CANVAS_CONNECTION_TYPES.includes(value as ConnectionType);
+  return (
+    typeof value === 'string' && (CANVAS_CONNECTION_TYPES as readonly string[]).includes(value)
+  );
 }
 
 /**
@@ -208,11 +125,11 @@ export interface PortDefinition {
 /**
  * Base interface for all canvas nodes
  */
-export interface CanvasNodeBase {
+export interface CanvasNodeBase<TType extends string = CanvasNodeType> {
   /** Unique node identifier */
   id: string;
   /** Node type discriminator */
-  type: CanvasNodeType;
+  type: TType;
   /** Position in canvas coordinates */
   position: { x: number; y: number };
   /** Size in canvas units */
@@ -229,14 +146,8 @@ export interface CanvasNodeBase {
   content?: ContainerSection;
   /** Optional organization parent. Position remains absolute canvas coordinates. */
   parentId?: string;
-  /** Optional generic container capability for Scene, Group, Artboard, and future policies. */
+  /** Optional Group container capability. */
   container?: ContainerCapability;
-  /** Optional stable node summary descriptor for child slots, minimaps, and Agent context. */
-  preview?: NodePreviewDescriptor;
-  /** Optional subsystem or feature extension data. Base Canvas semantics remain owned by core fields. */
-  extension?: CanvasSerializableRecord;
-  /** Optional registered preset that assembled this node's capabilities. */
-  preset?: string;
 }
 
 /**
@@ -329,40 +240,6 @@ export interface MediaCanvasNode extends CanvasNodeBase {
 }
 
 /**
- * Storyboard/scene node - represents a scene or shot
- */
-export interface StoryboardCanvasNode extends CanvasNodeBase {
-  type: 'storyboard';
-  data: {
-    /** Scene title */
-    title: string;
-    /** Scene description */
-    description?: string;
-    /** Estimated duration in seconds */
-    duration?: number;
-    /** Color for visual grouping (hex) */
-    color?: string;
-  };
-}
-
-/**
- * Text annotation node
- */
-export interface AnnotationCanvasNode extends CanvasNodeBase {
-  type: 'annotation';
-  data: {
-    /** Annotation text content */
-    content: string;
-    /** Text style options */
-    style?: {
-      fontSize?: number;
-      color?: string;
-      backgroundColor?: string;
-    };
-  };
-}
-
-/**
  * Group node - contains other nodes
  */
 export interface GroupCanvasNode extends CanvasNodeBase {
@@ -377,367 +254,63 @@ export interface GroupCanvasNode extends CanvasNodeBase {
   };
 }
 
-// =============================================================================
-// Rich Content Nodes (text / artboard)
-// =============================================================================
-
-export interface TextNodeStyle {
-  fontSize?: number;
-  fontWeight?: 'normal' | 'bold';
-  color?: string;
-  backgroundColor?: string;
-  textAlign?: 'left' | 'center' | 'right';
-  lineHeight?: number;
-  padding?: number;
-}
-
 /**
- * Rich text node - supports plain text and Markdown
+ * Canonical Markdown node. Canvas stores Markdown source and does not infer
+ * domain runtime semantics from its prose.
  */
-export interface TextCanvasNode extends CanvasNodeBase {
-  type: 'text';
+export interface MarkdownCanvasNode extends CanvasNodeBase {
+  type: 'markdown';
   data: {
     content: string;
-    format?: 'plain' | 'markdown';
-    style?: TextNodeStyle;
     title?: string;
     provenance?: CanvasSerializableRecord;
   };
 }
 
-export type ArtboardPreset = 'custom' | '1080p' | '4k' | 'instagram' | 'story' | 'youtube';
+export type CanvasJobStatus =
+  'draft' | 'queued' | 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled';
+
+export type CanvasJobArtifactRef =
+  | { kind: 'canvas-node'; nodeId: string }
+  | { kind: 'resource'; resourceRef: ResourceRef }
+  | { kind: 'file'; path: string };
 
 /**
- * Artboard node - fixed-size exportable canvas region
+ * Read-only projection of a Job owned by the project/Agent Job service.
  */
-export interface ArtboardCanvasNode extends CanvasNodeBase {
-  type: 'artboard';
+export interface JobCanvasNode extends CanvasNodeBase {
+  type: 'job';
   data: {
-    name: string;
-    description?: string;
-    backgroundColor?: string;
-    showBorder?: boolean;
-    preset?: ArtboardPreset;
-  };
-}
-
-/**
- * Table column definition
- */
-export interface TableColumnDef {
-  id: string;
-  label: string;
-  width: number;
-}
-
-/**
- * Table node - grid container for organizing mixed content in rows and columns
- */
-export interface TableCanvasNode extends CanvasNodeBase {
-  type: 'table';
-  data: {
-    label?: string;
-    columns: TableColumnDef[];
-    rowCount: number;
-    columnCount: number;
-    showHeader: boolean;
-    /**
-     * Canvas-owned Markdown review metadata. This keeps parsed rows, original
-     * Markdown, resource status, and diagnostics behind the Canvas node boundary
-     * without making the shared capability DTO a fixed storyboard-row protocol.
-     */
-    markdown?: CanvasSerializableRecord;
-  };
-}
-
-// =============================================================================
-// Storyboard System (shot / scene / gallery)
-// =============================================================================
-
-/** Shot scale codes following cinematography conventions */
-export type ShotScale = 'ECU' | 'CU' | 'MCU' | 'MS' | 'MLS' | 'LS' | 'VLS' | 'ELS' | 'OTS' | 'POV';
-
-/** Camera movement type */
-export type CameraMovement =
-  | 'static'
-  | 'pan'
-  | 'tilt'
-  | 'zoom-in'
-  | 'zoom-out'
-  | 'dolly'
-  | 'dolly-in'
-  | 'dolly-out'
-  | 'handheld'
-  | 'crane';
-
-/** Camera angle */
-export type CameraAngle = 'eye-level' | 'high-angle' | 'low-angle' | 'bird-eye' | 'dutch';
-
-/** Generation status for a shot or gallery cell */
-export type ShotGenerationStatus = 'idle' | 'pending' | 'generating' | 'done' | 'error';
-
-/** A single generated image candidate */
-export interface GeneratedImageVersion {
-  id: string;
-  /** Base64 data URL or asset path */
-  dataUrl: string;
-  prompt: string;
-  timestamp: number;
-  /** Whether this is the currently selected candidate */
-  selected: boolean;
-  /** GeneratedAsset ID reference (ADR-4 migration — present for new assets) */
-  assetId?: string;
-}
-
-/** Character reference within a shot */
-export interface ShotCharacter {
-  characterId?: string;
-  characterName: string;
-  /** Stable creative entity identity when the character is resolved. */
-  entityRef?: CreativeEntityRef;
-  /** Stable unresolved entity candidate identity used for later confirmation backfill. */
-  candidateId?: string;
-  /** Shot-local participation role such as primary, secondary, or background. */
-  role?: string;
-  /** Shot-local character action used by storyboard and generation projections. */
-  action?: string;
-  /** GalleryNode id used for IP-Adapter reference */
-  referenceNodeId?: string;
-  /**
-   * Phase 5 reference chain — ordered list of *prior* shot ids whose
-   * generated output should also be threaded in as reference images.
-   * Populated by PlanBuilder; consumed by PipelineExecutor.
-   *
-   * See docs/architecture/creative-consistency.md §4.
-   */
-  referenceChain?: string[];
-  emotion?: string;
-  /** Notes that help preserve character continuity across shots. */
-  continuityNotes?: string;
-  /** Bounded appearance/costume hints for this shot; durable details belong in character memory. */
-  appearanceNotes?: string;
-}
-
-/** Review-only candidate identity surfaced by comic-to-animation indexing. */
-export interface ShotCharacterCandidate {
-  readonly candidateId: string;
-  readonly entityRef?: CreativeEntityRef;
-  readonly displayName?: string;
-  readonly role?: string;
-  readonly confidence?: number;
-  readonly sourceRefId?: string;
-  readonly diagnostics?: readonly ComicAnimationDiagnostic[];
-}
-
-export interface CanvasCreativePromptSlot {
-  readonly fieldId: string;
-  readonly scope: CreativeTablePromptScope;
-  readonly mediaType: CreativeTablePromptMediaType;
-  readonly operation: CreativeTablePromptOperation;
-  readonly prompt: string;
-}
-
-/**
- * Shot node - a single storyboard panel with full production metadata
- */
-export interface ShotCanvasNode extends CanvasNodeBase {
-  type: 'shot';
-  data: {
-    shotNumber: number;
-    /** Estimated duration in seconds */
-    duration: number;
-    visualDescription: string;
-    characters: ShotCharacter[];
-    shotScale: ShotScale;
-    cameraMovement?: CameraMovement;
-    cameraAngle?: CameraAngle;
-    characterAction: string;
-    emotion: string[];
-    sceneTags: string[];
-    /** GalleryNode id for background/IP-Adapter reference */
-    referenceNodeId?: string;
-    /** Stable Canvas node / slot references used as generation or review references. */
-    referenceRefs?: string[];
-    /** Currently displayed image (data URL or asset path) @deprecated Use generatedAsset.path */
-    generatedImage?: string;
-    /** AI-generated video URL — result of keyframe/video generation @deprecated Use generatedVideoAsset */
-    generatedVideo?: string;
-    /** GeneratedAsset reference (ADR-4 — replaces generatedImage) */
-    generatedAsset?: import('./generated-asset').GeneratedImage;
-    /** GeneratedAsset reference for video (ADR-4 — replaces generatedVideo) */
-    generatedVideoAsset?: import('./generated-asset').GeneratedVideo;
-    generationStatus: ShotGenerationStatus;
-    generationHistory: GeneratedImageVersion[];
-    /** Script dialogue line */
-    dialogue?: string;
-    /** Voice-over text */
-    voiceOver?: string;
-    /** Sound effect cue */
-    soundCue?: string;
-    /** Structured OCR/dialogue/narration/caption text cues projected from StoryboardTable. */
-    textCues?: readonly StoryboardTextCue[];
-    /** Structured voice/dialogue cues with speaker and voice asset bindings. */
-    voiceCues?: readonly StoryboardVoiceCue[];
-    /** Semantic prompt-first storyboard authority for image/video/voice prompt authoring. */
-    storyboardPrompt?: CanvasStoryboardPromptState;
-    /** @deprecated Migration/import input only. Use storyboardPrompt prompt documents as authority. */
-    generationPrompt?: string;
-    /** Provider-neutral prompt slots imported from Creative Tables. */
-    promptSlots?: readonly CanvasCreativePromptSlot[];
-    /** Canonical Storyboard revision projected into this shot. */
-    sourceStoryboardRevisionId?: string;
-    /** Canvas is a projection and does not become a second Storyboard authority. */
-    storyboardProjectionMode?: 'read-only-projection';
-    /** Visual style directive (e.g. "noir", "cyberpunk") */
-    visualStyle?: string;
-    /** Reference image asset path from [[REF: path]] */
-    referenceImagePath?: string;
-    /** Runtime-safe document resource backing the reference image, when imported from a document. */
-    referenceImageResourceRef?: DocumentArchiveResourceRef;
-    /** Stable unified cache resource identity for the reference image. */
-    referenceResourceRef?: ResourceRef;
-    /** Runtime-only webview URI/path materialized from referenceImageResourceRef. Not persisted. */
-    runtimeReferenceImagePath?: string;
-    /** Visual effects cues */
-    vfx?: string[];
-    /** Source/reference media refs used to derive this shot. */
-    sourceMediaRefs?: readonly StoryboardMediaRef[];
-    /** Media refs generated from this shot. */
-    generatedMediaRefs?: readonly StoryboardMediaRef[];
-    /** Additional storyboard media refs retained for review and diagnostics. */
-    mediaRefs?: readonly StoryboardMediaRef[];
-    /** Comic-to-animation image preparation plan attached to this shot for review/execution. */
-    shotImagePrepPlan?: import('./shot-image-prep').ShotImagePrepPlan;
-    /** Review-only visual evidence refs projected from host-side semantic indexing. */
-    visualOccurrences?: readonly VisualOccurrence[];
-    /** Review-only candidate character bindings projected from host-side entity/memory matching. */
-    characterCandidates?: readonly ShotCharacterCandidate[];
-    /** Review-only continuity diagnostics for this shot's current story position. */
-    continuityDiagnostics?: readonly ComicAnimationDiagnostic[];
-    /** Review-only batch approval/execution envelope for this shot or its scene. */
-    batchExecutionPlan?: BatchExecutionPlan;
-    /** Last successful storyboard import into neko-cut timeline */
-    lastImportedToTimelineAt?: number;
-    /** Target project name used during the last storyboard import */
-    lastImportedToTimelineProject?: string;
-    /**
-     * Phase 6.3 — NkPlan id that produced or currently owns this shot.
-     * Set when the shot was created through Workflow Orchestration
-     * (PlanBuilder → batch-generate / render-engine stage).  Optional so
-     * manually-authored shots remain schema-compatible.  Read by timeline
-     * import to stamp EngineElement.lineage.planId.
-     */
-    workflowPlanId?: string;
-  };
-}
-
-/**
- * Scene group node - semantic container for a sequence of ShotNodes
- */
-export interface SceneGroupCanvasNode extends CanvasNodeBase {
-  type: 'scene';
-  data: {
-    /** Stable script scene ID binding (populated on storyboard import) */
-    sceneId?: string;
-    /** Source script URI that produced this scene binding, when imported from Story. */
-    sourceScriptUri?: string;
-    sceneTitle: string;
-    sceneNumber: number;
-    location?: string;
-    timeOfDay?: string;
-    /** Scene-scoped semantic prompt authority, especially continuous video generation prompts. */
-    storyboardPrompt?: CanvasStoryboardPromptState;
-    /** Provider-neutral scene prompt slots imported from Creative Tables. */
-    promptSlots?: readonly CanvasCreativePromptSlot[];
-    /** Canonical Storyboard revision projected into this scene container. */
-    sourceStoryboardRevisionId?: string;
-    /** Canvas is a projection and does not become a second Storyboard authority. */
-    storyboardProjectionMode?: 'read-only-projection';
-  };
-}
-
-/** Gallery preset layout */
-export type GalleryPreset =
-  | 'character-3view'
-  | 'character-4view'
-  | 'expression-9'
-  | 'turnaround-8'
-  | 'scene-views'
-  | 'custom';
-
-/**
- * Gallery node - multi-view character reference sheet (3-view, 9-expression, etc.)
- */
-export interface CharacterProfile {
-  description?: string;
-  tags?: string[];
-  referenceAssetId?: string;
-}
-
-export interface GalleryCanvasNode extends CanvasNodeBase {
-  type: 'gallery';
-  data: {
-    preset: GalleryPreset;
-    rows: number;
-    cols: number;
-    globalPromptPrefix?: string;
-    characterId?: string;
-    characterName?: string;
-    characterProfile?: CharacterProfile;
-  };
-}
-
-// =============================================================================
-// Content Reference Nodes (script / document / model / canvas-embed)
-// =============================================================================
-
-/** A scene entry returned by the retained Fountain content index. */
-export interface ScriptScene {
-  id: string;
-  title: string;
-  lineStart: number;
-  lineEnd: number;
-}
-
-/**
- * Script node - TOC-mode reference to a .fountain screenplay
- */
-export interface ScriptCanvasNode extends CanvasNodeBase {
-  type: 'script';
-  data: {
-    /** Relative or absolute path to script file */
-    scriptPath: string;
-    scriptTitle: string;
-    /** Scene list from getScriptIndex() — structure only, no full text */
-    scenes: ScriptScene[];
-    /** Linked SceneGroupNode id for scene → shot navigation */
-    linkedSceneGroupId?: string;
-  };
-}
-
-/**
- * Document node - thumbnail preview for PDF/DOCX/EPUB files
- */
-export interface DocumentCanvasNode extends CanvasNodeBase {
-  type: 'document';
-  data: {
-    /** Portable source path. Empty when a stable resource reference owns the source. */
-    docPath: string;
-    docType: 'pdf' | 'docx' | 'epub' | 'cbz' | 'markdown' | 'text' | 'file';
+    jobId: string;
+    revision: number;
     title: string;
-    mimeType?: string;
-    documentResourceRef?: DocumentArchiveResourceRef;
+    objective?: string;
+    status: CanvasJobStatus;
+    inputRefs: CanvasJobArtifactRef[];
+    outputRefs: CanvasJobArtifactRef[];
+    diagnostic?: string;
+  };
+}
+
+/**
+ * Generic non-media file reference. Specialized file meaning belongs to the
+ * owning artifact rather than the Canvas renderer.
+ */
+export interface FileCanvasNode extends CanvasNodeBase {
+  type: 'file';
+  data: {
+    path: string;
+    title: string;
+    mediaType?: string;
     resourceRef?: ResourceRef;
-    /** Base64 cover thumbnail */
-    thumbnailData?: string;
+    documentResourceRef?: DocumentArchiveResourceRef;
+    documentResourceStatus?: DocumentResourceStatus;
+    runtimePath?: string;
     provenance?: CanvasSerializableRecord;
   };
 }
 
-export type CanvasTextDocumentType = Extract<
-  DocumentCanvasNode['data']['docType'],
-  'markdown' | 'text'
->;
+export type CanvasTextDocumentType = 'markdown' | 'text';
 
 export const CANVAS_TEXT_DOCUMENT_MAX_BYTES = 1_000_000;
 
@@ -844,21 +417,6 @@ function isCanvasTextDocumentMessageRecord(value: unknown): value is Record<stri
 }
 
 /**
- * Model node - AI model reference card or workflow connector
- */
-export interface ModelCanvasNode extends CanvasNodeBase {
-  type: 'model';
-  data: {
-    modelPath: string;
-    modelName: string;
-    modelType: 'lora' | 'checkpoint' | 'controlnet' | 'vae';
-    /** reference: info card; workflow: has output port → connects to ShotNode */
-    role: 'reference' | 'workflow';
-    installedVersion?: string;
-  };
-}
-
-/**
  * Canvas embed node - nested .nkc reference with thumbnail
  */
 export interface CanvasEmbedCanvasNode extends CanvasNodeBase {
@@ -871,47 +429,15 @@ export interface CanvasEmbedCanvasNode extends CanvasNodeBase {
 }
 
 /**
- * Project node — reference to a retained .nkv project file
- */
-export interface ProjectCanvasNode extends CanvasNodeBase {
-  type: 'project';
-  data: {
-    projectPath: string;
-    projectTitle: string;
-    projectType: NkProjectType;
-    thumbnailData?: string;
-  };
-}
-
-/**
- * Generic node shape for built-in subsystem nodes before their domain-specific
- * data interfaces are introduced.
- */
-export interface RegisteredCanvasNode extends CanvasNodeBase {
-  type: RegisteredCanvasNodeType;
-  data: CanvasSerializableRecord;
-}
-
-/**
  * Union type of all canvas node types
  */
 export type CanvasNode =
+  | MarkdownCanvasNode
   | MediaCanvasNode
-  | StoryboardCanvasNode
-  | AnnotationCanvasNode
   | GroupCanvasNode
-  | TextCanvasNode
-  | ArtboardCanvasNode
-  | TableCanvasNode
-  | ShotCanvasNode
-  | SceneGroupCanvasNode
-  | GalleryCanvasNode
-  | ScriptCanvasNode
-  | DocumentCanvasNode
-  | ModelCanvasNode
-  | CanvasEmbedCanvasNode
-  | ProjectCanvasNode
-  | RegisteredCanvasNode;
+  | JobCanvasNode
+  | FileCanvasNode
+  | CanvasEmbedCanvasNode;
 
 // =============================================================================
 // Connection Types
@@ -928,25 +454,13 @@ export interface CanvasConnection {
   /** Target node ID */
   targetId: string;
   /** Connection type for styling */
-  type?: ConnectionType;
+  type: ConnectionType;
   /** Optional label on the connection */
   label?: string;
   /** Canonical source endpoint for node/port/block/field references. */
   sourceEndpoint: CanvasConnectionEndpoint;
   /** Canonical target endpoint for node/port/block/field references. */
   targetEndpoint: CanvasConnectionEndpoint;
-  /** Optional subsystem extension data. Edge ownership remains top-level. */
-  extension?: CanvasSerializableRecord;
-  /** Narrative choice label rendered on branch connections. */
-  choiceText?: string;
-  /** Subsystem condition expression for narrative or behavior connections. */
-  condition?: string;
-  /** Priority used by default path or transition ordering. */
-  priority?: number;
-  /** Memory association weight. */
-  weight?: number;
-  /** Memory association decay factor. */
-  decay?: number;
 }
 
 // =============================================================================
@@ -961,47 +475,6 @@ export interface CanvasViewport {
   pan: { x: number; y: number };
   /** Zoom level (1 = 100%) */
   zoom: number;
-}
-
-// =============================================================================
-// Subsystem Metadata
-// =============================================================================
-
-export type {
-  NarrativeEndingMetadata,
-  NarrativeMetadata,
-  NarrativeSceneMetadata,
-  NarrativeVariable,
-  StoryGenre,
-  VariableEffect,
-};
-
-export interface BlackboardVariable {
-  id: string;
-  name: string;
-  value: CanvasSerializableValue;
-}
-
-export interface BehaviorMetadata {
-  rootNodeId?: string;
-  blackboard: BlackboardVariable[];
-}
-
-export type EntityGraphScope = 'character' | 'scene' | 'object' | 'location' | 'style';
-
-export interface EntityGraphMetadata {
-  entityScope: EntityGraphScope[];
-  bindingSource: string;
-}
-
-export interface MemoryGraphTimeRange {
-  start: string;
-  end: string;
-}
-
-export interface MemoryGraphMetadata {
-  queryContext?: string;
-  timeRange?: MemoryGraphTimeRange;
 }
 
 // =============================================================================
@@ -1030,14 +503,6 @@ export interface CanvasData {
   creativeScope?: CanvasCreativeScope;
   /** Optional durable navigation refs to related Canvas boards. */
   relatedBoards?: readonly CanvasRelatedBoardRef[];
-  /** Narrative subsystem metadata. */
-  narrative?: NarrativeMetadata;
-  /** Behavior subsystem metadata. */
-  behavior?: BehaviorMetadata;
-  /** Entity graph subsystem metadata. */
-  entityGraph?: EntityGraphMetadata;
-  /** Memory graph subsystem metadata. */
-  memoryGraph?: MemoryGraphMetadata;
   /** Optional Canvas playback projection metadata. */
   playback?: CanvasPlaybackMetadata;
 }
@@ -1047,7 +512,7 @@ export interface CanvasData {
 // =============================================================================
 
 /** Current canvas file format version */
-export const CANVAS_VERSION = '2.1';
+export const CANVAS_VERSION = '3.0';
 
 /** Default canvas data for new files */
 export const DEFAULT_CANVAS_DATA: CanvasData = {
@@ -1066,52 +531,24 @@ export function isMediaNode(node: CanvasNode): node is MediaCanvasNode {
   return node.type === 'media';
 }
 
-export function isStoryboardNode(node: CanvasNode): node is StoryboardCanvasNode {
-  return node.type === 'storyboard';
-}
-
-export function isAnnotationNode(node: CanvasNode): node is AnnotationCanvasNode {
-  return node.type === 'annotation';
-}
-
 export function isGroupNode(node: CanvasNode): node is GroupCanvasNode {
   return node.type === 'group';
 }
 
-export function isTextNode(node: CanvasNode): node is TextCanvasNode {
-  return node.type === 'text';
-}
-
-export function isArtboardNode(node: CanvasNode): node is ArtboardCanvasNode {
-  return node.type === 'artboard';
-}
-
-export function isShotNode(node: CanvasNode): node is ShotCanvasNode {
-  return node.type === 'shot';
-}
-
-export function isSceneGroupNode(node: CanvasNode): node is SceneGroupCanvasNode {
-  return node.type === 'scene';
-}
-
-export function isGalleryNode(node: CanvasNode): node is GalleryCanvasNode {
-  return node.type === 'gallery';
-}
-
-export function isScriptNode(node: CanvasNode): node is ScriptCanvasNode {
-  return node.type === 'script';
-}
-
-export function isDocumentNode(node: CanvasNode): node is DocumentCanvasNode {
-  return node.type === 'document';
-}
-
-export function isModelNode(node: CanvasNode): node is ModelCanvasNode {
-  return node.type === 'model';
-}
-
 export function isCanvasEmbedNode(node: CanvasNode): node is CanvasEmbedCanvasNode {
   return node.type === 'canvas-embed';
+}
+
+export function isMarkdownNode(node: CanvasNode): node is MarkdownCanvasNode {
+  return node.type === 'markdown';
+}
+
+export function isJobNode(node: CanvasNode): node is JobCanvasNode {
+  return node.type === 'job';
+}
+
+export function isFileNode(node: CanvasNode): node is FileCanvasNode {
+  return node.type === 'file';
 }
 
 // =============================================================================
@@ -1123,40 +560,10 @@ export const MEDIA_NODE_PORTS: PortDefinition[] = [
   { id: 'out', type: 'output', position: 'right', dataType: 'any', label: 'Output' },
 ];
 
-/** Default ports for storyboard nodes */
-export const STORYBOARD_NODE_PORTS: PortDefinition[] = [
-  { id: 'in', type: 'input', position: 'left', dataType: 'any', label: 'Input' },
-  { id: 'out', type: 'output', position: 'right', dataType: 'any', label: 'Output' },
-];
-
-/** Default ports for annotation nodes. Empty means node-level endpoint handles are used. */
-export const ANNOTATION_NODE_PORTS: PortDefinition[] = [];
-
 /** Default ports for group nodes */
 export const GROUP_NODE_PORTS: PortDefinition[] = [
   { id: 'in', type: 'input', position: 'left', dataType: 'any', label: 'Input' },
   { id: 'out', type: 'output', position: 'right', dataType: 'any', label: 'Output' },
-];
-
-/** Shot node: output image port for IP-Adapter reference */
-export const SHOT_NODE_PORTS: PortDefinition[] = [
-  { id: 'img-out', type: 'output', position: 'right', dataType: 'image', label: 'Image' },
-];
-
-/** Scene group node: pass-through ports */
-export const SCENE_NODE_PORTS: PortDefinition[] = [
-  { id: 'in', type: 'input', position: 'left', dataType: 'any', label: 'Input' },
-  { id: 'out', type: 'output', position: 'right', dataType: 'any', label: 'Output' },
-];
-
-/** Gallery node: output image port (cell images → IP-Adapter) */
-export const GALLERY_NODE_PORTS: PortDefinition[] = [
-  { id: 'img-out', type: 'output', position: 'right', dataType: 'image', label: 'Reference' },
-];
-
-/** Model node (workflow role): output port → ShotNode model selector */
-export const MODEL_WORKFLOW_PORTS: PortDefinition[] = [
-  { id: 'model-out', type: 'output', position: 'right', dataType: 'any', label: 'Model' },
 ];
 
 /**
@@ -1167,70 +574,12 @@ export function getDefaultPorts(nodeType: CanvasNodeType): PortDefinition[] {
   switch (nodeType) {
     case 'media':
       return MEDIA_NODE_PORTS;
-    case 'storyboard':
-      return STORYBOARD_NODE_PORTS;
-    case 'annotation':
-      return ANNOTATION_NODE_PORTS;
     case 'group':
       return GROUP_NODE_PORTS;
-    case 'shot':
-      return SHOT_NODE_PORTS;
-    case 'scene':
-      return SCENE_NODE_PORTS;
-    case 'gallery':
-      return GALLERY_NODE_PORTS;
-    // text, artboard, script, document, canvas-embed: no default ports
     default:
       return [];
   }
 }
-
-// =============================================================================
-// Rich Content Constants
-// =============================================================================
-
-export const DEFAULT_TEXT_STYLE: Required<TextNodeStyle> = {
-  fontSize: 14,
-  fontWeight: 'normal',
-  color: '#e5e5e5',
-  backgroundColor: 'transparent',
-  textAlign: 'left',
-  lineHeight: 1.5,
-  padding: 12,
-};
-
-export const ARTBOARD_PRESETS: Record<
-  ArtboardPreset,
-  { width: number; height: number; label: string }
-> = {
-  custom: { width: 800, height: 600, label: 'Custom' },
-  '1080p': { width: 1920, height: 1080, label: '1080p (16:9)' },
-  '4k': { width: 3840, height: 2160, label: '4K (16:9)' },
-  instagram: { width: 1080, height: 1080, label: 'Instagram (1:1)' },
-  story: { width: 1080, height: 1920, label: 'Story (9:16)' },
-  youtube: { width: 1280, height: 720, label: 'YouTube (16:9)' },
-};
-
-/** Pre-defined gallery presets with layout and cell labels */
-export const GALLERY_PRESET_CONFIGS: Record<
-  GalleryPreset,
-  { rows: number; cols: number; labels: string[] }
-> = {
-  'character-3view': { rows: 1, cols: 3, labels: ['正面', '侧面', '背面'] },
-  'character-4view': { rows: 1, cols: 4, labels: ['正面', '3/4 正面', '侧面', '背面'] },
-  'expression-9': {
-    rows: 3,
-    cols: 3,
-    labels: ['开心', '悲伤', '愤怒', '恐惧', '惊讶', '厌恶', '平静', '轻蔑', '困惑'],
-  },
-  'turnaround-8': {
-    rows: 2,
-    cols: 4,
-    labels: ['0°', '45°', '90°', '135°', '180°', '225°', '270°', '315°'],
-  },
-  'scene-views': { rows: 1, cols: 3, labels: ['全景', '中景', '特写'] },
-  custom: { rows: 2, cols: 2, labels: [] },
-};
 
 /**
  * Check if two port data types are compatible for connection.

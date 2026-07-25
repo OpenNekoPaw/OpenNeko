@@ -282,12 +282,12 @@ describe('conversation-tab-runtime', () => {
 
     expect(
       buildChatAmbientCanvasUpdateMessage({
-        nodes: [{ id: 'node-1', label: 'Node 1', kind: 'image' }],
+        nodes: [{ nodeId: 'node-1', type: 'media', summary: 'Node 1' }],
         conversationId: 'conv-1',
       }),
     ).toEqual({
       type: 'ambientCanvasUpdate',
-      nodes: [{ id: 'node-1', label: 'Node 1', kind: 'image' }],
+      nodes: [{ nodeId: 'node-1', type: 'media', summary: 'Node 1' }],
       conversationId: 'conv-1',
     });
     expect(

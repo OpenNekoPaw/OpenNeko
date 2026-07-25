@@ -10,13 +10,7 @@
  * - neko-agent discovers and calls these APIs via vscode.extensions.getExtension()
  */
 
-import type {
-  CanvasNode,
-  CanvasNodeType,
-  ShotCanvasNode,
-  SceneGroupCanvasNode,
-  GalleryCanvasNode,
-} from './canvas';
+import type { CanvasNode, CanvasNodeType } from './canvas';
 import type {
   CanvasAgentActiveContextRequest,
   CanvasAgentActiveContextResult,
@@ -45,15 +39,6 @@ import type {
 } from './canvas-markdown-capabilities';
 import type { CanvasCutDraftPayload } from './canvas-cut-draft';
 import type { CanvasPlaybackPlan, CanvasPlaybackRouteCandidate } from './canvas-playback';
-import type {
-  ApplyCanvasStoryboardOptions,
-  CanvasStoryboardPayload,
-  CreatedCanvasStoryboard,
-} from './storyboard-planner';
-import type {
-  CanvasStoryboardExecutionSummary,
-  CanvasStoryboardExecutionSummaryRequest,
-} from './storyboard-readiness';
 import type { DocumentArchiveResourceRef } from './document-reading';
 import type { SkillCatalogMeta } from './skill';
 import type { ResourceRef, ResourceVariantRequest } from './resource-cache';
@@ -156,14 +141,11 @@ export interface ShapeConfig {
 }
 
 /** Partial update data for canvas nodes managed by the agent */
-export type CanvasNodeUpdateData =
-  | Partial<ShotCanvasNode['data']>
-  | Partial<SceneGroupCanvasNode['data']>
-  | Partial<GalleryCanvasNode['data']>;
+export type CanvasNodeUpdateData = Record<string, unknown>;
 
 export interface CanvasImportAssetRequest {
   readonly path?: string;
-  readonly type?: 'image' | 'video' | 'audio' | 'model';
+  readonly type?: 'image' | 'video' | 'audio';
   readonly name?: string;
   readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly resourceRef?: ResourceRef;
@@ -237,8 +219,6 @@ export interface CanvasChangeEvent {
   readonly entityType?: 'node' | 'connection' | 'selection' | 'generation' | 'import' | 'operation';
   readonly reason?: string;
   readonly operationType?: string;
-  readonly sourceScriptUri?: string;
-  readonly storyboardImport?: CreatedCanvasStoryboard;
 }
 
 /**
@@ -271,23 +251,6 @@ export interface NekoCanvasAPI {
      * @returns The ID of the created shape
      */
     addShape(canvasId: string, shape: ShapeConfig): Promise<string>;
-  };
-
-  storyboard: {
-    /**
-     * Import a storyboard payload into the active canvas as scene/shot nodes.
-     */
-    import(
-      payload: CanvasStoryboardPayload,
-      options?: ApplyCanvasStoryboardOptions,
-    ): Promise<CreatedCanvasStoryboard>;
-
-    /**
-     * Return a read-only scene/shot execution summary for Story and Agent consumers.
-     */
-    getExecutionSummary(
-      request?: CanvasStoryboardExecutionSummaryRequest,
-    ): Promise<CanvasStoryboardExecutionSummary>;
   };
 
   markdown: {
@@ -352,12 +315,7 @@ export interface NekoCanvasAPI {
      * Create a new node at the given canvas position
      * @returns The ID of the created node
      */
-    create(
-      type: CanvasNodeType,
-      position: { x: number; y: number },
-      data: object,
-      preset?: string,
-    ): Promise<string>;
+    create(type: CanvasNodeType, position: { x: number; y: number }, data: object): Promise<string>;
 
     /**
      * Derive a successor node from an existing node through registered preset rules.
@@ -397,16 +355,6 @@ export interface NekoCanvasAPI {
      * Apply Agent-generated text, prompt, or structured content to a validated Canvas target.
      */
     applyAgentContent(payload: CanvasAgentContentPayload): Promise<CanvasAgentApplyContentResult>;
-
-    /**
-     * Trigger Canvas-owned typed image generation for a ShotNode.
-     */
-    generateImage(nodeId: string, childNodeId?: string): Promise<void>;
-
-    /**
-     * Trigger batch image generation for multiple nodes
-     */
-    generateBatch(nodeIds: string[]): Promise<void>;
 
     /**
      * Fired whenever the canvas selection changes.
@@ -513,12 +461,12 @@ export function isNekoCanvasAPI(value: unknown): value is NekoCanvasAPI {
     hasCallableMember(value['markdown'], 'invoke') &&
     hasCallableMember(value['boards'], 'project') &&
     hasCallableMembers(value['canvas'], ['create', 'addShape']) &&
-    hasCallableMembers(value['storyboard'], ['import', 'getExecutionSummary']) &&
     hasCallableMembers(value['playback'], [
       'getPlan',
       'getRoutes',
       'revealWorkspace',
       'createCutDraftFromRoute',
+      'sendRouteToCut',
       'reorderUnits',
     ]) &&
     hasCallableMembers(value['nodes'], [
@@ -533,8 +481,6 @@ export function isNekoCanvasAPI(value: unknown): value is NekoCanvasAPI {
       'extractStructuredContent',
       'getActiveContext',
       'applyAgentContent',
-      'generateImage',
-      'generateBatch',
       'onSelectionChange',
     ]) &&
     hasCallableMember(value['events'], 'onDidChangeCanvas')

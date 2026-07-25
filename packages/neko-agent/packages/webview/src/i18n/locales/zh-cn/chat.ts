@@ -124,14 +124,10 @@ export const chat = {
   'chat.canvasLifecycle.status.applied': '已应用',
   'chat.canvasLifecycle.status.executed': '已执行',
   'chat.canvasLifecycle.status.blocked': '已阻止',
-  'chat.canvasLifecycle.badge.displayFallback': '仅显示兜底',
-  'chat.canvasLifecycle.badge.genericTable': '通用表格',
-  'chat.canvasLifecycle.badge.creativeTable': '创作表格',
   'chat.canvasLifecycle.blocked': '已阻止',
   'chat.canvasLifecycle.reviewArtifact': '审阅产物：{artifact}',
   'chat.canvasLifecycle.changedRefs': '变更引用：{refs}',
   'chat.canvasLifecycle.approvalRequired': '需确认',
-  'chat.canvasLifecycle.action.createStoryboardNodes': '创建分镜节点',
   'chat.canvasLifecycle.disabled.conversationUnavailable': '对话不可用',
   'chat.canvasLifecycle.disabled.unsupportedActionPayload': '不支持的动作载荷',
   'chat.canvasLifecycle.capabilityStatus.created': '已创建',
@@ -187,18 +183,6 @@ export const chat = {
     'Markdown 资源路径来自运行时临时地址，不能写入画布。',
   'chat.canvasLifecycle.diagnostic.canvasMarkdownRuntimeResourceToken':
     'Markdown 资源标记来自运行时临时地址，不能写入画布。',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardCreateApprovalRequired':
-    '创建正式分镜节点需要生命周期审批上下文。',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardCreateNotConfirmed':
-    '创建正式分镜节点需要明确的创建模式。',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardNextActionMissing':
-    '分镜表缺少下一步动作。',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardNoProductionRows':
-    '分镜表没有可生产的行。',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardVisualColumnRequired':
-    '分镜表需要画面或提示词列。',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardVisualOrPromptMissing':
-    '分镜行缺少画面描述或提示词。',
   'chat.canvasLifecycle.diagnostic.canvasMarkdownTableEmpty': 'Markdown 表格至少需要一行数据。',
   'chat.canvasLifecycle.diagnostic.canvasMarkdownTableMissing':
     '需要一个 GFM 表格才能创建画布表格或分镜节点。',
@@ -289,20 +273,18 @@ export const chat = {
   'chat.input.canvasContext.singleTitle': '已选中：{summary}',
   'chat.input.canvasContext.multiTitle': '已选 {count} 个画布节点',
   'chat.input.canvasContext.counts': '画布选中统计',
-  'chat.input.canvasContext.count.shots': '{count} 个镜头',
-  'chat.input.canvasContext.count.scenes': '{count} 个场景',
+  'chat.input.canvasContext.count.markdown': '{count} 个 Markdown',
   'chat.input.canvasContext.count.media': '{count} 个媒体',
-  'chat.input.canvasContext.count.galleries': '{count} 个画廊',
-  'chat.input.canvasContext.count.notes': '{count} 个笔记',
+  'chat.input.canvasContext.count.groups': '{count} 个分组',
+  'chat.input.canvasContext.count.jobs': '{count} 个作业',
+  'chat.input.canvasContext.count.files': '{count} 个文件',
+  'chat.input.canvasContext.count.canvases': '{count} 个子画布',
   'chat.input.canvasContext.count.generic': '{count} 个 {type}',
   'chat.input.canvasContext.more': '+{count} 个',
-  'chat.input.canvasContext.action.generateImage': '生成图片',
-  'chat.input.canvasContext.action.batchGenerate': '批量生成',
-  'chat.input.canvasContext.action.optimize': '优化节点',
+  'chat.input.canvasContext.action.createJob': '创建 JobCard',
   'chat.input.canvasContext.action.understand': '询问 Agent',
-  'chat.input.canvasContext.prompt.generateImage': '为选中的画布镜头生成图片。',
-  'chat.input.canvasContext.prompt.batchGenerate': '为选中的画布镜头批量生成图片。',
-  'chat.input.canvasContext.prompt.optimize': '优化选中的画布节点，让分镜结构和视觉提示词更清晰。',
+  'chat.input.canvasContext.prompt.createJob':
+    '为选中的画布节点创建 JobCard，并将这些节点作为显式输入引用。',
   'chat.input.canvasContext.prompt.understand': '分析选中的画布节点，并建议下一步可执行动作。',
   'chat.entryPrompt.generateAssets.hint':
     '选择素材生成模式，然后在输入框描述要生成的画面、视频或声音。',

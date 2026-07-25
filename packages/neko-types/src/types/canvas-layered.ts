@@ -29,8 +29,7 @@ export interface FieldBinding {
 
 export type CanvasContentVisibility = 'always' | 'selected' | 'expanded' | 'hover';
 
-export type CanvasContentLayout =
-  'stack' | 'row' | 'grid' | 'table' | 'gallery' | 'overlay' | 'custom';
+export type CanvasContentLayout = 'stack' | 'row' | 'grid' | 'overlay' | 'custom';
 
 export type CanvasBlockKind =
   | 'text'
@@ -126,9 +125,9 @@ export interface ChildNodeSlotFilter {
   roles?: string[];
 }
 
-export type ContainerPolicyName = 'scene' | 'group' | 'artboard' | 'gallery' | (string & {});
+export type ContainerPolicyName = 'group';
 
-export type ContainerLayoutMode = 'manual' | 'grid' | 'sequence' | 'stack' | 'table' | 'gallery';
+export type ContainerLayoutMode = 'manual' | 'grid' | 'sequence' | 'stack';
 
 export interface ContainerLayoutState {
   mode: ContainerLayoutMode;
@@ -157,7 +156,7 @@ export interface ContainerChildPlacement {
   metadata?: Record<string, unknown>;
 }
 
-export type ContainerDeleteBehavior = 'release-children' | 'delete-subtree' | 'prompt';
+export type ContainerDeleteBehavior = 'release-children';
 
 export interface ContainerCapability {
   policy: ContainerPolicyName;
@@ -179,13 +178,10 @@ export type CanvasPreviewRole =
   | 'audio-waveform'
   | 'video-poster'
   | 'video-proxy'
-  | 'model-screenshot'
-  | 'model-turntable'
   | 'panorama-fov-crop'
   | 'panorama-rotation'
   | 'generation-candidate'
   | 'collection'
-  | 'project-thumbnail'
   | 'node-summary'
   | 'unavailable';
 

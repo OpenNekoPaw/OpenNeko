@@ -41,16 +41,12 @@ vi.mock('@/i18n/I18nContext', () => ({
     t: (key: string, vars?: Record<string, unknown>) =>
       ({
         'chat.canvasLifecycle.status.needs-review': '待审阅',
-        'chat.canvasLifecycle.badge.displayFallback': '仅显示兜底',
-        'chat.canvasLifecycle.badge.genericTable': '通用表格',
-        'chat.canvasLifecycle.badge.creativeTable': '创作表格',
         'chat.canvasLifecycle.blocked': '已阻止',
         'chat.canvasLifecycle.diagnosticSeverity.warning': '警告',
         'chat.canvasLifecycle.diagnostic.canvasCreativeProfileUnsupported': '不支持的创作配置。',
         'chat.canvasLifecycle.reviewArtifact': `审阅产物：${String(vars?.['artifact'] ?? '')}`,
         'chat.canvasLifecycle.changedRefs': `变更引用：${String(vars?.['refs'] ?? '')}`,
         'chat.canvasLifecycle.approvalRequired': '需确认',
-        'chat.canvasLifecycle.action.createStoryboardNodes': '创建分镜节点',
         'chat.canvasLifecycle.disabled.conversationUnavailable': '对话不可用',
         'chat.canvasLifecycle.disabled.unsupportedActionPayload': '不支持的动作载荷',
       })[key] ?? (vars?.['count'] !== undefined ? `${String(vars['count'])} ${key}` : key),
@@ -279,7 +275,7 @@ describe('ContentBlockItem Canvas transfer actions', () => {
     expect(screen.queryByRole('button', { name: /execute|import/i })).toBeNull();
   });
 
-  it('renders Canvas lifecycle follow-up actions as approval-gated controls', () => {
+  it('renders canonical Canvas Markdown lifecycle actions as approval-gated controls', () => {
     renderContentBlock({
       id: 'canvas-result',
       type: 'canvas_lifecycle',
@@ -294,23 +290,21 @@ describe('ContentBlockItem Canvas transfer actions', () => {
           diagnostics: [],
           reviewArtifact: {
             kind: 'node',
-            id: 'table-1',
+            id: 'markdown-1',
             packageId: 'neko-canvas',
-            profile: 'storyboard',
           },
           actions: [
             {
-              actionId: 'create-storyboard-nodes',
-              label: 'Create storyboard nodes',
-              capabilityId: 'canvas.createStoryboardFromMarkdown',
+              actionId: 'create-markdown-note',
+              label: 'Create Markdown note',
+              capabilityId: 'canvas.createMarkdownNote',
               phase: 'apply',
               requiresApproval: true,
-              sourceRef: { kind: 'node', id: 'table-1', packageId: 'neko-canvas' },
+              sourceRef: { kind: 'node', id: 'markdown-1', packageId: 'neko-canvas' },
               payload: {
-                capabilityId: 'canvas.createStoryboardFromMarkdown',
-                markdown: '| Scene | Shot | Visual |\\n| --- | --- | --- |\\n| S1 | 1 | open |',
-                sourceFormat: 'gfm-table',
-                mode: 'create-nodes',
+                capabilityId: 'canvas.createMarkdownNote',
+                markdown: '# Creative brief\n\nOpening image.',
+                sourceFormat: 'markdown',
               },
             },
           ],
@@ -319,27 +313,27 @@ describe('ContentBlockItem Canvas transfer actions', () => {
     });
 
     expect(screen.getByText('Canvas 待审阅')).toBeTruthy();
-    expect(screen.queryByText('Create storyboard nodes')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /创建分镜节点/ }));
+    expect(screen.queryByText('Create Markdown note')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /create-markdown-note/ }));
 
     expect(mockPostMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'invokeAgentCapabilityLifecycle',
         conversationId: 'conv-1',
         invocation: expect.objectContaining({
-          capabilityId: 'canvas.createStoryboardFromMarkdown',
+          capabilityId: 'canvas.createMarkdownNote',
           phase: 'apply',
           approval: expect.objectContaining({ source: 'user-confirmation' }),
           payload: expect.objectContaining({
-            capabilityId: 'canvas.createStoryboardFromMarkdown',
-            mode: 'create-nodes',
+            capabilityId: 'canvas.createMarkdownNote',
+            sourceFormat: 'markdown',
           }),
         }),
       }),
     );
   });
 
-  it('marks generic fallback lifecycle results as display-only', () => {
+  it('does not revive removed display-fallback state from legacy lifecycle data', () => {
     renderContentBlock({
       id: 'canvas-result',
       type: 'canvas_lifecycle',
@@ -369,7 +363,7 @@ describe('ContentBlockItem Canvas transfer actions', () => {
       },
     });
 
-    expect(screen.getByText('仅显示兜底')).toBeTruthy();
+    expect(screen.queryByText('仅显示兜底')).toBeNull();
     expect(screen.getByText('警告')).toBeTruthy();
     expect(screen.getByText('不支持的创作配置。')).toBeTruthy();
     expect(screen.queryByText(/Unsupported creative profile/)).toBeNull();

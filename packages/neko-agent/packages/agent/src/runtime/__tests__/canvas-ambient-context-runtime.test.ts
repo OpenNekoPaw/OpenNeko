@@ -10,41 +10,76 @@ import {
 } from '../turn/canvas-ambient-context-runtime';
 
 describe('canvas ambient context runtime', () => {
-  it('summarizes selected shot nodes and caps ambient selection count', () => {
+  it('summarizes canonical nodes and caps ambient selection count', () => {
     const runtime = new CanvasAmbientContextRuntime({ maxAmbientNodes: 1 });
     const summaries = runtime.setCanvasSelection([
-      makeNode('shot-1', 'shot', {
-        shotNumber: 3,
-        shotScale: 'CU',
-        visualDescription: 'A detective under neon rain',
-        generatedAsset: { path: '/tmp/shot.png' },
+      makeNode('markdown-1', 'markdown', {
+        title: 'Detective brief',
+        content: 'A detective under neon rain',
       }),
-      makeNode('shot-2', 'annotation', { content: 'second node' }),
+      makeNode('markdown-2', 'markdown', { content: 'second node' }),
     ]);
 
     expect(summaries).toEqual([
       expect.objectContaining({
-        nodeId: 'shot-1',
-        type: 'shot',
-        summary: '#3 CU - A detective under neon rain',
-        assetUri: '/tmp/shot.png',
-        assetKind: 'image',
+        nodeId: 'markdown-1',
+        type: 'markdown',
+        summary: 'Detective brief',
         bounds: { x: 10, y: 20, width: 320, height: 180 },
       }),
     ]);
   });
 
-  it('summarizes gallery, scene, annotation and media nodes', () => {
+  it('summarizes every canonical node type', () => {
     expect(
-      summarizeCanvasNode(makeNode('gallery-1', 'gallery', { characterName: 'Mika', preset: '3v' }))
+      summarizeCanvasNode(
+        makeNode('markdown-1', 'markdown', { title: 'Outline', content: '# Outline' }),
+      ).summary,
+    ).toBe('Outline');
+    expect(
+      summarizeCanvasNode(
+        makeNode(
+          'group-1',
+          'group',
+          { label: 'Act one' },
+          {
+            container: {
+              policy: 'group',
+              childIds: ['markdown-1', 'media-1'],
+              childPlacements: {},
+            },
+          },
+        ),
+      ).summary,
+    ).toBe('Act one (2)');
+    expect(
+      summarizeCanvasNode(
+        makeNode('job-1', 'job', {
+          jobId: 'job-1',
+          revision: 1,
+          title: 'Generate trailer',
+          objective: 'Create a short trailer',
+          status: 'running',
+          inputRefs: [],
+          outputRefs: [],
+        }),
+      ).summary,
+    ).toBe('Generate trailer [running] Create a short trailer');
+    expect(
+      summarizeCanvasNode(makeNode('file-1', 'file', { path: 'notes/script.txt', title: 'Script' }))
         .summary,
-    ).toBe('Gallery: Mika (3v)');
-    expect(summarizeCanvasNode(makeNode('scene-1', 'scene', { sceneNumber: 2 })).summary).toBe(
-      'Scene 2: Scene',
-    );
+    ).toBe('Script');
     expect(
-      summarizeCanvasNode(makeNode('note-1', 'annotation', { content: 'remember this' })).summary,
-    ).toBe('Note: remember this');
+      summarizeCanvasNode(
+        makeNode('canvas-1', 'canvas-embed', {
+          canvasPath: 'boards/act-two.nkc',
+          canvasTitle: 'Act two',
+        }),
+      ).summary,
+    ).toBe('Act two');
+    expect(
+      summarizeCanvasNode(makeNode('markdown-2', 'markdown', { content: 'remember this' })).summary,
+    ).toBe('remember this');
     expect(
       summarizeCanvasNode(
         makeNode('media-1', 'media', { mediaType: 'video', assetPath: '/a/b.mp4' }),
@@ -52,14 +87,26 @@ describe('canvas ambient context runtime', () => {
     ).toBe('video: b.mp4');
   });
 
-  it('detects asset uri and kind from media and generated shot nodes', () => {
+  it('detects asset uri and kind only from media nodes', () => {
     const media = makeNode('media-1', 'media', { mediaType: 'audio', assetPath: '/tmp/a.wav' });
-    const shot = makeNode('shot-1', 'shot', { generatedImage: 'data:image/png;base64,abc' });
+    const markdown = makeNode('markdown-1', 'markdown', { content: 'No implicit asset' });
 
     expect(readCanvasNodeAssetUri(media)).toBe('/tmp/a.wav');
     expect(readCanvasNodeAssetKind(media)).toBe('audio');
-    expect(readCanvasNodeAssetUri(shot)).toBe('data:image/png;base64,abc');
-    expect(readCanvasNodeAssetKind(shot)).toBe('image');
+    expect(readCanvasNodeAssetUri(markdown)).toBeUndefined();
+    expect(readCanvasNodeAssetKind(markdown)).toBeUndefined();
+  });
+
+  it('prefers a creator-facing media title over the source filename', () => {
+    expect(
+      summarizeCanvasNode(
+        makeNode('media-1', 'media', {
+          title: 'Opening theme',
+          mediaType: 'audio',
+          assetPath: '/a/theme.wav',
+        }),
+      ).summary,
+    ).toBe('Opening theme');
   });
 
   it('keeps pending canvas changes in a scoped ring buffer', () => {
@@ -83,8 +130,8 @@ describe('canvas ambient context runtime', () => {
       image: { providerId: 'fal', modelId: 'flux' },
     } as unknown as GenerationModelConfig;
 
-    runtime.setCanvasSelection([makeNode('a', 'annotation', { content: 'A' })], 'conv-a');
-    runtime.setCanvasSelection([makeNode('b', 'annotation', { content: 'B' })], 'conv-b');
+    runtime.setCanvasSelection([makeNode('a', 'markdown', { content: 'A' })], 'conv-a');
+    runtime.setCanvasSelection([makeNode('b', 'markdown', { content: 'B' })], 'conv-b');
     runtime.setActiveGenerationConfig(config, 'conv-a');
     runtime.recordCanvasChange(
       { domain: 'canvas', changeType: 'add', id: 'node-a', timestamp: 1 },
@@ -116,7 +163,12 @@ describe('canvas ambient context runtime', () => {
   });
 });
 
-function makeNode(id: string, type: CanvasNode['type'], data: Record<string, unknown>): CanvasNode {
+function makeNode(
+  id: string,
+  type: CanvasNode['type'],
+  data: Record<string, unknown>,
+  overrides: Pick<Partial<CanvasNode>, 'container'> = {},
+): CanvasNode {
   return {
     id,
     type,
@@ -124,5 +176,6 @@ function makeNode(id: string, type: CanvasNode['type'], data: Record<string, unk
     position: { x: 10, y: 20 },
     size: { width: 320, height: 180 },
     zIndex: 0,
+    ...overrides,
   } as CanvasNode;
 }

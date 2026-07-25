@@ -20,7 +20,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(plan.canvasData.nodes).toHaveLength(3);
     expect(plan.canvasData.nodes.every((node) => node.type !== 'group')).toBe(true);
     expect(plan.canvasData.nodes.every((node) => node.parentId === undefined)).toBe(true);
-    expect(plan.canvasData.nodes.map((node) => node.type)).toEqual(['document', 'text', 'media']);
+    expect(plan.canvasData.nodes.map((node) => node.type)).toEqual(['file', 'markdown', 'media']);
     expect(plan.canvasData.nodes.map((node) => node.data.provenance?.['role'])).toEqual([
       'source',
       'analysis',
@@ -192,7 +192,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(plan.status).toBe('projected');
     expect(plan.canvasData.nodes).toHaveLength(1);
     expect(plan.canvasData.nodes[0]).toMatchObject({
-      type: 'document',
+      type: 'file',
       data: {
         resourceRef: {
           locator: { kind: 'file', path: portablePath },

@@ -16,7 +16,6 @@ export interface CanvasStatusInfo {
   connectionCount: number;
   zoom: number;
   selectedCount: number;
-  subsystemSummary?: string;
   projectionSummary?: string;
 }
 
@@ -62,7 +61,7 @@ export class CanvasStatusBar implements vscode.Disposable {
         alignment: vscode.StatusBarAlignment.Left,
         priority: 98,
         name: 'Canvas Context',
-        tooltip: 'Selected items, active subsystems, and projection status',
+        tooltip: 'Selected items and projection status',
         visible: 'conditional',
       },
     ]);
@@ -79,9 +78,6 @@ export class CanvasStatusBar implements vscode.Disposable {
     const contextParts: string[] = [];
     if (info.selectedCount > 0) {
       contextParts.push(`${info.selectedCount} selected`);
-    }
-    if (info.subsystemSummary) {
-      contextParts.push(info.subsystemSummary);
     }
     if (info.projectionSummary) {
       contextParts.push(info.projectionSummary);

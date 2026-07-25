@@ -15,7 +15,6 @@ import type {
   CanvasAuthoringDiagnostic,
   CanvasAuthoringResultStatus,
 } from './canvas-authoring-contracts';
-import type { CanvasStoryboardPayload, CreatedCanvasStoryboard } from './storyboard-planner';
 
 export const CANVAS_HEADLESS_AUTHORING_CONTRACT_VERSION = 1 as const;
 
@@ -51,7 +50,7 @@ export interface CanvasHeadlessAuthoringCreatedConnectionRef {
   readonly connectionId: string;
   readonly sourceId: string;
   readonly targetId: string;
-  readonly type?: CanvasConnection['type'];
+  readonly type: CanvasConnection['type'];
 }
 
 export type CanvasHeadlessAuthoringOperation =
@@ -138,18 +137,6 @@ export interface CanvasHeadlessApplyAgentContentAuthoringRequest {
 
 export interface CanvasHeadlessApplyAgentContentAuthoringResult extends CanvasHeadlessAuthoringResultBase {
   readonly applyAgentContentResult?: CanvasAgentApplyContentResult;
-}
-
-export interface CanvasHeadlessCreateStoryboardAuthoringRequest {
-  readonly target?: CanvasHeadlessAuthoringTarget;
-  readonly payload: CanvasStoryboardPayload;
-  readonly startX?: number;
-  readonly startY?: number;
-  readonly workflowPlanId?: string;
-}
-
-export interface CanvasHeadlessCreateStoryboardAuthoringResult extends CanvasHeadlessAuthoringResultBase {
-  readonly storyboard?: CreatedCanvasStoryboard;
 }
 
 export interface CanvasHeadlessAuthoringPlan<T> {

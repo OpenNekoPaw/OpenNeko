@@ -29,9 +29,9 @@ describe('multimodal-context-packet runtime', () => {
     const canvas = createCanvasSelectionContextPacket(
       [
         {
-          nodeId: 'shot-1',
-          type: 'shot',
-          summary: 'Hero shot',
+          nodeId: 'media-1',
+          type: 'media',
+          summary: 'Hero image',
           assetUri: '${WORKSPACE}/shot.png',
           assetKind: 'image',
         },

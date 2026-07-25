@@ -586,7 +586,7 @@ describe('source descriptor helpers', () => {
       fileOps: files,
     });
     const canvas = {
-      version: '2.1',
+      version: '3.0',
       name: 'Canvas',
       nodes: [
         {
@@ -717,41 +717,39 @@ describe('source descriptor helpers', () => {
           },
         },
         {
-          id: 'script-1',
-          type: 'script',
+          id: 'script-file-1',
+          type: 'file',
           position: { x: 0, y: 0 },
           size: { width: 320, height: 180 },
           zIndex: 1,
           data: {
-            scriptPath: 'story/main.fountain',
-            scriptTitle: 'Main',
-            scenes: [],
+            path: 'story/main.fountain',
+            title: 'Main',
+            mediaType: 'text/fountain',
           },
         },
         {
-          id: 'document-1',
-          type: 'document',
+          id: 'document-file-1',
+          type: 'file',
           position: { x: 0, y: 0 },
           size: { width: 320, height: 180 },
           zIndex: 2,
           data: {
-            docPath: 'docs/ref.pdf',
-            docType: 'pdf',
+            path: 'docs/ref.pdf',
             title: 'Reference',
-            thumbnailData: 'data:image/png;base64,inline',
+            mediaType: 'application/pdf',
           },
         },
         {
-          id: 'model-1',
-          type: 'model',
+          id: 'model-file-1',
+          type: 'file',
           position: { x: 0, y: 0 },
           size: { width: 320, height: 180 },
           zIndex: 3,
           data: {
-            modelPath: 'models/style.safetensors',
-            modelName: 'Style',
-            modelType: 'lora',
-            role: 'reference',
+            path: 'models/style.safetensors',
+            title: 'Style',
+            mediaType: 'application/octet-stream',
           },
         },
         {
@@ -767,15 +765,15 @@ describe('source descriptor helpers', () => {
           },
         },
         {
-          id: 'project-1',
-          type: 'project',
+          id: 'project-file-1',
+          type: 'file',
           position: { x: 0, y: 0 },
           size: { width: 320, height: 180 },
           zIndex: 5,
           data: {
-            projectPath: 'projects/cut.nkv',
-            projectTitle: 'Cut',
-            projectType: 'nkv',
+            path: 'projects/cut.nkv',
+            title: 'Cut',
+            mediaType: 'application/x-neko-project',
           },
           content: {
             id: 'project-root',
@@ -807,48 +805,28 @@ describe('source descriptor helpers', () => {
           },
         },
         {
-          id: 'shot-1',
-          type: 'shot',
+          id: 'job-1',
+          type: 'job',
           position: { x: 0, y: 0 },
           size: { width: 320, height: 180 },
           zIndex: 6,
           data: {
-            shotNumber: 1,
-            duration: 3,
-            visualDescription: 'Shot',
-            characters: [],
-            shotScale: 'medium',
-            characterAction: '',
-            emotion: [],
-            sceneTags: [],
-            generationStatus: 'idle',
-            generationHistory: [],
-            referenceImagePath: 'refs/shot.png',
-            runtimeReferenceImagePath: 'blob:reference',
-            sourceMediaRefs: [
-              {
-                refId: 'source-1',
-                role: 'source',
-                locator: { type: 'workspace-path', path: 'refs/source.png' },
-              },
-            ],
-            generatedMediaRefs: [
-              {
-                refId: 'generated-1',
-                role: 'generated',
-                locator: { type: 'workspace-path', path: 'generated/shot.png' },
-              },
-            ],
+            jobId: 'job-1',
+            revision: 0,
+            title: 'Generate shot',
+            status: 'draft',
+            inputRefs: [{ kind: 'file', path: 'refs/source.png' }],
+            outputRefs: [{ kind: 'file', path: 'generated/shot.png' }],
           },
         },
         {
-          id: 'memory-1',
-          type: 'memory',
+          id: 'markdown-1',
+          type: 'markdown',
           position: { x: 0, y: 0 },
           size: { width: 320, height: 180 },
           zIndex: 7,
           data: {
-            content: 'plain text',
+            content: '# Note',
             binding: { path: '/workspace/project/not-an-asset.png' },
             assetPath: 'assets/memory.png',
             runtimeAssetPath: 'blob:memory-preview',
@@ -882,27 +860,24 @@ describe('source descriptor helpers', () => {
       'canvas.linkedProject',
       'canvas.nodes.0.data.assetPath',
       'canvas.nodes.0.data.thumbnailPath',
-      'canvas.nodes.1.data.scriptPath',
-      'canvas.nodes.2.data.docPath',
-      'canvas.nodes.3.data.modelPath',
+      'canvas.nodes.1.data.path',
+      'canvas.nodes.2.data.path',
+      'canvas.nodes.3.data.path',
       'canvas.nodes.4.data.canvasPath',
-      'canvas.nodes.5.data.projectPath',
-      'canvas.nodes.6.data.referenceImagePath',
-      'canvas.nodes.6.data.sourceMediaRefs.0.locator.path',
-      'canvas.nodes.6.data.generatedMediaRefs.0.locator.path',
-      'canvas.nodes.7.data.assetPath',
+      'canvas.nodes.5.data.path',
+      'canvas.nodes.6.data.inputRefs.0.path',
+      'canvas.nodes.6.data.outputRefs.0.path',
       'canvas.relatedBoards.0.ref.path',
     ]);
     expect(result.ok).toBe(true);
     const saved = files.readText('/workspace/project/canvas.nkc');
     expect(saved).toContain('"assetPath": "media/clip.mp4"');
     expect(saved).toContain('"thumbnailPath": "thumbs/clip.jpg"');
-    expect(saved).toContain('"scriptPath": "story/main.fountain"');
-    expect(saved).toContain('"docPath": "docs/ref.pdf"');
-    expect(saved).toContain('"modelPath": "models/style.safetensors"');
+    expect(saved).toContain('"path": "story/main.fountain"');
+    expect(saved).toContain('"path": "docs/ref.pdf"');
+    expect(saved).toContain('"path": "models/style.safetensors"');
     expect(saved).toContain('"canvasPath": "boards/scene.nkc"');
-    expect(saved).toContain('"projectPath": "projects/cut.nkv"');
-    expect(saved).toContain('"referenceImagePath": "refs/shot.png"');
+    expect(saved).toContain('"path": "projects/cut.nkv"');
     expect(saved).toContain('"path": "refs/source.png"');
     expect(saved).toContain('"path": "generated/shot.png"');
     expect(saved).toContain('"path": "boards/source.nkc"');
@@ -918,7 +893,7 @@ describe('source descriptor helpers', () => {
       fileOps: files,
     });
     const canvas = {
-      version: '2.1',
+      version: '3.0',
       name: 'Canvas runtime source guard',
       nodes: [
         {
@@ -930,27 +905,27 @@ describe('source descriptor helpers', () => {
           data: { assetPath: 'blob:vscode-runtime-video', mediaType: 'video' },
         },
         {
-          id: 'script-node',
-          type: 'script',
+          id: 'webview-file-node',
+          type: 'file',
           position: { x: 0, y: 0 },
           size: { width: 320, height: 180 },
           zIndex: 1,
           data: {
-            scriptPath: 'vscode-webview-resource://panel/scripts/main.fountain',
-            scriptTitle: 'Main',
-            scenes: [],
+            path: 'vscode-webview-resource://panel/scripts/main.fountain',
+            title: 'Main',
+            mediaType: 'text/fountain',
           },
         },
         {
-          id: 'document-node',
-          type: 'document',
+          id: 'cache-file-node',
+          type: 'file',
           position: { x: 0, y: 0 },
           size: { width: 320, height: 180 },
           zIndex: 2,
           data: {
-            docPath: '/workspace/project/.neko/.cache/proxy/ref.pdf',
-            docType: 'pdf',
+            path: '/workspace/project/.neko/.cache/proxy/ref.pdf',
             title: 'Reference',
+            mediaType: 'application/pdf',
           },
         },
         {
@@ -962,15 +937,15 @@ describe('source descriptor helpers', () => {
           data: { thumbnailPath: 'media/thumbnail/hero.jpg' },
         },
         {
-          id: 'project-node',
-          type: 'project',
+          id: 'proxy-file-node',
+          type: 'file',
           position: { x: 0, y: 0 },
           size: { width: 320, height: 180 },
           zIndex: 4,
           data: {
-            projectPath: 'media/proxy/hero.nkv',
-            projectTitle: 'Proxy',
-            projectType: 'nkv',
+            path: 'media/proxy/hero.nkv',
+            title: 'Proxy',
+            mediaType: 'application/x-neko-project',
           },
         },
       ],
@@ -999,10 +974,10 @@ describe('source descriptor helpers', () => {
     expect(result.diagnostics.map((diagnostic) => diagnostic.sourceId)).toEqual(
       expect.arrayContaining([
         'canvas.nodes.0.data.assetPath',
-        'canvas.nodes.1.data.scriptPath',
-        'canvas.nodes.2.data.docPath',
+        'canvas.nodes.1.data.path',
+        'canvas.nodes.2.data.path',
         'canvas.nodes.3.data.thumbnailPath',
-        'canvas.nodes.4.data.projectPath',
+        'canvas.nodes.4.data.path',
       ]),
     );
   });

@@ -5,7 +5,7 @@
 // stable refs such as `assetRef`; host adapters project paths into render URIs.
 // =============================================================================
 
-import type { ShotScale, CameraMovement } from './canvas';
+import type { CameraMovement, ShotScale } from './storyboard-cinematography';
 
 /**
  * Discriminator for generated asset types.

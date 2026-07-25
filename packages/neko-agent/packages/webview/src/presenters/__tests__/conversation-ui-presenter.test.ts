@@ -192,8 +192,8 @@ describe('conversation UI presenter', () => {
         ['conv-b', [activationB]],
       ]),
       ambientNodesByConversation: new Map([
-        ['conv-a', [{ nodeId: 'node-a', type: 'scene', summary: 'A scene' }]],
-        ['conv-b', [{ nodeId: 'node-b', type: 'shot', summary: 'B shot' }]],
+        ['conv-a', [{ nodeId: 'node-a', type: 'markdown', summary: 'A note' }]],
+        ['conv-b', [{ nodeId: 'node-b', type: 'media', summary: 'B image' }]],
       ]),
       tokenCountByConversation: new Map([
         ['conv-a', 100],
@@ -226,7 +226,7 @@ describe('conversation UI presenter', () => {
         activationProgress: [activationB],
       },
       context: {
-        ambientNodes: [{ nodeId: 'node-b', type: 'shot', summary: 'B shot' }],
+        ambientNodes: [{ nodeId: 'node-b', type: 'media', summary: 'B image' }],
         tokenCount: 200,
         isCompressing: false,
       },

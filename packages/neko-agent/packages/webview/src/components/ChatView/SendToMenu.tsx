@@ -248,8 +248,6 @@ function projectCanvasAuthoringHandoffFromMarkdown(
     ...(handoff.userIntent ? { userIntent: handoff.userIntent } : {}),
     targetHints: {
       ...(handoff.sourceFormat ? { sourceFormat: handoff.sourceFormat } : {}),
-      ...(handoff.declaredIntentHint ? { declaredIntentHint: handoff.declaredIntentHint } : {}),
-      ...(handoff.declaredProfileHint ? { declaredProfileHint: handoff.declaredProfileHint } : {}),
     },
   };
 }

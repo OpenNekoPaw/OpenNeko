@@ -4,7 +4,7 @@ import { validateNkc } from '../index';
 
 function createValidCanvas(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    version: '2.1',
+    version: '3.0',
     name: 'Validator Fixture',
     nodes: [],
     connections: [],
@@ -23,11 +23,17 @@ function createCompleteNode(type: string): Record<string, unknown> {
   };
 }
 
-describe('NKC validator v2.1', () => {
-  it('accepts optional projected flag and subsystem metadata objects', () => {
+describe('NKC validator v3.0', () => {
+  it('accepts the optional projected flag', () => {
+    const result = validateNkc(createValidCanvas({ projected: true }));
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('rejects legacy root-level subsystem state in the canonical format', () => {
     const result = validateNkc(
       createValidCanvas({
-        projected: true,
         narrative: { entryNodeId: 'choice-1', variables: [] },
         behavior: { blackboard: [] },
         entityGraph: { entityScope: ['character'], bindingSource: 'entities.json' },
@@ -35,8 +41,15 @@ describe('NKC validator v2.1', () => {
       }),
     );
 
-    expect(result.valid).toBe(true);
-    expect(result.errors).toEqual([]);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'narrative' }),
+        expect.objectContaining({ field: 'behavior' }),
+        expect.objectContaining({ field: 'entityGraph' }),
+        expect.objectContaining({ field: 'memoryGraph' }),
+      ]),
+    );
   });
 
   it('rejects non-boolean projected flag', () => {
@@ -158,7 +171,7 @@ describe('NKC validator v2.1', () => {
     expect(result.errors).toEqual([]);
   });
 
-  it('accepts registered subsystem node and connection types', () => {
+  it('rejects removed subsystem node and connection types', () => {
     const result = validateNkc(
       createValidCanvas({
         nodes: [createCompleteNode('choice'), createCompleteNode('memory')],
@@ -176,27 +189,32 @@ describe('NKC validator v2.1', () => {
       }),
     );
 
-    expect(result.valid).toBe(true);
-    expect(result.errors).toEqual([]);
-    expect(result.warnings).toEqual([]);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'nodes[0].type' }),
+        expect.objectContaining({ field: 'nodes[1].type' }),
+        expect.objectContaining({ field: 'connections[0].type' }),
+      ]),
+    );
   });
 
-  it('reports structurally complete unknown nodes as warnings in normal mode', () => {
+  it('rejects structurally complete unknown nodes in normal mode', () => {
     const result = validateNkc(
       createValidCanvas({
         nodes: [createCompleteNode('future-node')],
       }),
     );
 
-    expect(result.valid).toBe(true);
-    expect(result.errors).toEqual([]);
-    expect(result.warnings).toContainEqual(
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContainEqual(
       expect.objectContaining({
         field: 'nodes[0].type',
         message: 'unknown node type: "future-node"',
-        severity: 'warning',
+        severity: 'error',
       }),
     );
+    expect(result.warnings).toEqual([]);
   });
 
   it('promotes unknown node warnings to errors in strict mode', () => {
@@ -240,7 +258,7 @@ describe('NKC validator v2.1', () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it('reports unknown connection types as warnings in normal mode and errors in strict mode', () => {
+  it('rejects unknown connection types in normal and strict modes', () => {
     const canvas = createValidCanvas({
       connections: [
         {
@@ -255,14 +273,15 @@ describe('NKC validator v2.1', () => {
     });
 
     const normal = validateNkc(canvas);
-    expect(normal.valid).toBe(true);
-    expect(normal.warnings).toContainEqual(
+    expect(normal.valid).toBe(false);
+    expect(normal.errors).toContainEqual(
       expect.objectContaining({
         field: 'connections[0].type',
         message: 'unknown connection type: "future-edge"',
-        severity: 'warning',
+        severity: 'error',
       }),
     );
+    expect(normal.warnings).toEqual([]);
 
     const strict = validateNkc(canvas, { strict: true });
     expect(strict.valid).toBe(false);

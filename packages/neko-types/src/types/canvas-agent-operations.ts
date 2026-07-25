@@ -1,27 +1,10 @@
-import type {
-  BehaviorMetadata,
-  CanvasConnection,
-  CanvasNode,
-  CanvasNodeType,
-  EntityGraphMetadata,
-  MemoryGraphMetadata,
-  NarrativeMetadata,
-} from './canvas';
+import type { CanvasConnection, CanvasNode, CanvasNodeType } from './canvas';
 import type {
   CanvasCreativeScope,
   CanvasRelatedBoardRef,
   CanvasBoardSummary,
 } from './canvas-creative-scope';
 import type { CanvasConnectionEndpoint, FieldBinding, JsonPointerPath } from './canvas-layered';
-import type {
-  CanvasNarrativeAgentDiagnostic,
-  CanvasNarrativeNodeAgentSummary,
-} from './canvas-narrative-agent';
-import type {
-  NarrativeProductionBinding,
-  NarrativeProductionBindingDiagnostic,
-} from './narrative-production-binding';
-import type { CanvasSubsystemId } from './canvas-subsystem';
 
 export interface CanvasPoint {
   x: number;
@@ -30,14 +13,12 @@ export interface CanvasPoint {
 
 export interface CanvasNodeCreateSpec {
   type?: CanvasNodeType;
-  preset?: string;
   position?: CanvasPoint;
   data?: Record<string, unknown>;
 }
 
 export interface CanvasDeriveNodeRequest {
   sourceNodeId: string;
-  targetPreset?: string;
   targetType?: CanvasNodeType;
   data?: Record<string, unknown>;
   connect?: boolean;
@@ -56,8 +37,6 @@ export interface CanvasCreateConnectionRequest {
   targetEndpoint?: CanvasConnectionEndpoint;
   type?: CanvasConnection['type'];
   label?: string;
-  priority?: number;
-  extension?: CanvasConnection['extension'];
 }
 
 export interface CanvasCreateConnectionResult {
@@ -77,14 +56,11 @@ export interface CanvasCompositeConnectionSpec {
   targetEndpoint?: Omit<CanvasConnectionEndpoint, 'nodeId'>;
   type?: CanvasConnection['type'];
   label?: string;
-  priority?: number;
-  extension?: CanvasConnection['extension'];
 }
 
 export interface CanvasCreateCompositeRequest {
   /** Optional stable container id for idempotent Host-owned composite replay. */
   containerId?: string;
-  containerPreset?: string;
   containerType?: CanvasNodeType;
   position?: CanvasPoint;
   data?: Record<string, unknown>;
@@ -114,18 +90,6 @@ export interface CanvasUpdateBlockResult {
   data?: Record<string, unknown>;
 }
 
-export interface CanvasUpsertNarrativeProductionBindingRequest {
-  nodeId: string;
-  binding: NarrativeProductionBinding;
-}
-
-export interface CanvasUpsertNarrativeProductionBindingResult {
-  nodeId: string;
-  changed: boolean;
-  productionRefs?: readonly NarrativeProductionBinding[];
-  diagnostics?: readonly NarrativeProductionBindingDiagnostic[];
-}
-
 export type CanvasStructuredContentFormat = 'json' | 'markdown' | 'prompt';
 
 export interface CanvasExtractStructuredContentRequest {
@@ -137,25 +101,17 @@ export interface CanvasExtractStructuredContentRequest {
 export interface CanvasStructuredNodeSummary {
   id: string;
   type: CanvasNodeType;
-  preset?: string;
   title?: string;
   summary?: string;
   parentId?: string;
   childIds?: string[];
   data: Record<string, unknown>;
-  bindings?: Array<{
-    blockId: string;
-    label?: string;
-    path: JsonPointerPath;
-    value: unknown;
-  }>;
   preview?: {
     title?: string;
     subtitle?: string;
     role?: string;
     thumbnailVariantId?: string;
   };
-  narrative?: CanvasNarrativeNodeAgentSummary;
 }
 
 export interface CanvasExtractStructuredContentResult {
@@ -208,7 +164,6 @@ export interface CanvasAgentContentPayload {
 export interface CanvasAgentContainerSummary {
   id: string;
   type: CanvasNodeType;
-  preset?: string;
   policy?: string;
   childIds: string[];
   acceptedChildTypes?: CanvasNodeType[];
@@ -238,15 +193,7 @@ export interface CanvasAgentActiveContextRequest {
   includeSelection?: boolean;
   includeFocusedContainer?: boolean;
   includeNodeDetails?: boolean;
-  includeSubsystemMetadata?: boolean;
   includeBoardNavigation?: boolean;
-}
-
-export interface CanvasAgentSubsystemMetadataSummary {
-  narrative?: Pick<NarrativeMetadata, 'entryNodeId' | 'variables'>;
-  behavior?: Pick<BehaviorMetadata, 'rootNodeId' | 'blackboard'>;
-  entityGraph?: Pick<EntityGraphMetadata, 'entityScope' | 'bindingSource'>;
-  memoryGraph?: Pick<MemoryGraphMetadata, 'queryContext' | 'timeRange'>;
 }
 
 export interface CanvasAgentActiveContextResult {
@@ -256,14 +203,11 @@ export interface CanvasAgentActiveContextResult {
   creativeScope?: CanvasCreativeScope;
   relatedBoards?: readonly CanvasRelatedBoardRef[];
   nodeTypeSummary?: Readonly<Record<string, number>>;
-  activeSubsystems?: readonly CanvasSubsystemId[];
   selectedNodeIds: string[];
   selectedNodeTypes?: readonly CanvasNodeType[];
   selectedNodes: CanvasAgentNodeSummary[];
   connections?: CanvasConnection[];
   focusedContainer?: CanvasAgentContainerSummary;
-  subsystemMetadata?: CanvasAgentSubsystemMetadataSummary;
-  narrativeDiagnostics?: readonly CanvasNarrativeAgentDiagnostic[];
   insertionPoint?: CanvasAgentInsertionPoint;
   viewport?: {
     pan: CanvasPoint;

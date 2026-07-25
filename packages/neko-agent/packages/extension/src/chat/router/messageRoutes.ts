@@ -222,27 +222,16 @@ function defaultCanvasAuthoringHandoffTitle(
 function projectCanvasAuthoringSourceGuidanceZh(
   message: CanvasAuthoringHandoffRouteMessage,
 ): readonly string[] {
-  if (message.canonicalStoryboard && isExplicitStructuredCanvasHandoffIntent(message.userIntent)) {
+  if (message.canonicalStoryboard) {
     return [
-      '这是 canonical Storyboard 生产交接；必须把 handoff 上下文中的 canonicalStoryboard 原样传给现有 Canvas 分镜创建 capability。',
-      '不得压平为 asset batch，不得从可见 Markdown 重建 scene/shot，也不得丢弃 shot media refs。',
-      '创建结果必须包含 scene 容器与其所属 shot 子节点；失败或无新增引用时按阻塞处理。',
+      '这是结构化内容交接；Canvas 只允许创建 Markdown、Media、Group、Job、File 和 CanvasEmbed 节点。',
+      '将可读内容写入 Markdown；稳定媒体或文件引用使用独立 Media/File 节点，并用 sequence、reference 或 derived-from 连接表达关系。',
+      '不得创建 Storyboard、Scene、Shot 或其他专用 Canvas 节点，也不得从 Markdown 推断领域运行时。',
     ];
-  }
-  if (isStoryboardCreativeTableHandoff(message)) {
-    return isExplicitStructuredCanvasHandoffIntent(message.userIntent)
-      ? [
-          '这是用户明确要求的专业结构化 Storyboard authoring；先验证来源，再创建 scene/shot 生产节点。',
-          '调用 canvas.createStoryboardFromMarkdown 时传入 profileHint=storyboard、mode=create-nodes 和显式 approval context；失败时不得降级为其他结构化路径。',
-        ]
-      : [
-          '这是普通 Storyboard Markdown 文档交接；保留灵活列、未决选择、来源追踪与引用，不创建专用 storyboard/table/scene/shot 节点。',
-          '不得因为内容包含分镜表或 Storyboard 术语就推断专业结构化 authoring；只有用户明确要求创建结构化生产节点时才升级。',
-        ];
   }
   if (message.sourceKind === 'markdown') {
     return [
-      '不要默认当作普通表格；只有合适时才选择笔记、通用表格、creative table、storyboard profile 或其他 Canvas 工具。',
+      'Markdown 内容只创建或更新 Markdown 节点；稳定资源应显式创建为 Media/File 节点并通过 canonical 连接关联。',
     ];
   }
   return ['只有合适时才创建或更新 Canvas 节点；也可以解释为什么当前内容不适合 Canvas。'];
@@ -251,59 +240,21 @@ function projectCanvasAuthoringSourceGuidanceZh(
 function projectCanvasAuthoringSourceGuidanceEn(
   message: CanvasAuthoringHandoffRouteMessage,
 ): readonly string[] {
-  if (message.canonicalStoryboard && isExplicitStructuredCanvasHandoffIntent(message.userIntent)) {
+  if (message.canonicalStoryboard) {
     return [
-      'This is a canonical Storyboard production handoff; pass canonicalStoryboard from the handoff context unchanged to the existing Canvas storyboard creation capability.',
-      'Do not flatten it to an asset batch, reconstruct scene/shot facts from visible Markdown, or drop shot media refs.',
-      'Creation must return scene containers and their owned shot child nodes; treat failure or no created refs as blocked.',
+      'This is a structured-content handoff. Canvas may create only Markdown, Media, Group, Job, File, and CanvasEmbed nodes.',
+      'Write readable content to Markdown; project stable media or file references as separate Media/File nodes connected with sequence, reference, or derived-from.',
+      'Do not create Storyboard, Scene, Shot, or other specialized Canvas nodes, and do not infer a domain runtime from Markdown.',
     ];
-  }
-  if (isStoryboardCreativeTableHandoff(message)) {
-    return isExplicitStructuredCanvasHandoffIntent(message.userIntent)
-      ? [
-          'This is explicit professional structured Storyboard authoring; validate the source before creating production scene/shot nodes.',
-          'Call canvas.createStoryboardFromMarkdown with profileHint=storyboard, mode=create-nodes, and explicit approval context; do not downgrade to another structured path on failure.',
-        ]
-      : [
-          'This is an ordinary Storyboard Markdown document handoff. Preserve flexible columns, unresolved choices, source trace, and references without creating specialized storyboard/table/scene/shot nodes.',
-          'Do not infer professional structured authoring from a table or Storyboard terminology; upgrade only when the user explicitly requests structured production nodes.',
-        ];
   }
   if (message.sourceKind === 'markdown') {
     return [
-      'Do not assume a generic table; choose a note, generic table, creative table, storyboard profile, or another Canvas tool only when appropriate.',
+      'Markdown content may only create or update Markdown nodes. Project stable resources as explicit Media/File nodes with canonical connections.',
     ];
   }
   return [
     'Create or update Canvas nodes only when appropriate; otherwise explain why Canvas is not the right target.',
   ];
-}
-
-function isStoryboardCreativeTableHandoff(message: CanvasAuthoringHandoffRouteMessage): boolean {
-  const targetHints = message.targetHints;
-  const declaredProfileHint = targetHints?.declaredProfileHint?.toLowerCase();
-  return (
-    message.sourceKind === 'markdown' &&
-    targetHints?.declaredIntentHint === 'creative-table' &&
-    declaredProfileHint === 'storyboard'
-  );
-}
-
-function isExplicitStructuredCanvasHandoffIntent(userIntent: string | undefined): boolean {
-  if (!userIntent) return false;
-  const normalized = userIntent.toLowerCase();
-  return (
-    normalized.includes('structured storyboard') ||
-    normalized.includes('structured production') ||
-    normalized.includes('production nodes') ||
-    normalized.includes('scene/shot nodes') ||
-    normalized.includes('professional storyboard') ||
-    normalized.includes('结构化 storyboard') ||
-    normalized.includes('结构化分镜') ||
-    normalized.includes('生产节点') ||
-    normalized.includes('scene/shot 节点') ||
-    normalized.includes('专业分镜')
-  );
 }
 
 function formatCanvasAuthoringSourceKindZh(

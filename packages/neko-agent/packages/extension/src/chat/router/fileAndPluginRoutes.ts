@@ -7,7 +7,6 @@ import {
 import {
   createAgentCapabilityLifecycleDiagnostic,
   isAgentCapabilityInvocationResult,
-  isCanvasMarkdownCapabilityId,
   isCanvasMarkdownCapabilityInput,
   isCanvasMarkdownCapabilityResult,
   isNekoCanvasAPI,
@@ -169,28 +168,34 @@ async function invokeAgentCapabilityLifecycleBackend(
     );
   }
 
-  const payload = applyCanvasMarkdownInvocationApproval(invocation.payload, invocation.approval);
   const canvasApi = await getCanvasApi();
-  return invokeCanvasMarkdownLifecycleCapability(canvasApi, payload, deps);
+  return invokeCanvasMarkdownLifecycleCapability(canvasApi, invocation, deps);
 }
 
 async function invokeCanvasMarkdownLifecycleCapability(
   canvasApi: NekoCanvasAPI,
-  input: CanvasMarkdownCapabilityInput,
+  sourceInvocation: AgentCapabilityInvocationInput & {
+    payload: CanvasMarkdownCapabilityInput;
+  },
   deps: ChatWebviewMessageRouterDeps,
 ): Promise<AgentCapabilityInvocationResult> {
+  const input = sourceInvocation.payload;
   const descriptor = deps.resolveLifecycleCapabilityDescriptor?.(input.capabilityId);
   if (!descriptor) {
     return createBlockedCanvasMarkdownLifecycleResult(
       input.capabilityId,
-      readCanvasMarkdownLifecyclePhase(input),
+      sourceInvocation.phase,
       'Canvas Markdown lifecycle descriptor is not registered.',
       'agent-capability-lifecycle-unknown-capability',
       'capabilityId',
     );
   }
 
-  const invocation = createCanvasMarkdownLifecycleInvocationInput(descriptor, input);
+  const invocation = createCanvasMarkdownLifecycleInvocationInput(
+    descriptor,
+    input,
+    sourceInvocation,
+  );
   const inputDiagnostics = validateAgentCapabilityInvocationInput(invocation);
   if (inputDiagnostics.length > 0) {
     return {
@@ -249,7 +254,7 @@ async function invokeCanvasMarkdownLifecycleCapability(
       missingMutationRef.code,
     );
   }
-  const lifecycleResult = toCanvasMarkdownLifecycleResult(descriptor, invocation, canvasResult);
+  const lifecycleResult = toCanvasMarkdownLifecycleResult(invocation, canvasResult);
   if (isAgentCapabilityInvocationResult(lifecycleResult)) {
     return lifecycleResult;
   }
@@ -271,14 +276,16 @@ async function invokeCanvasMarkdownLifecycleCapability(
 function createCanvasMarkdownLifecycleInvocationInput(
   descriptor: AgentCapabilityLifecycleDescriptor,
   input: CanvasMarkdownCapabilityInput,
+  sourceInvocation: AgentCapabilityInvocationInput,
 ): AgentCapabilityInvocationInput {
-  const phase = readCanvasMarkdownLifecyclePhase(input);
   const target =
-    'target' in input && input.target
+    sourceInvocation.target ??
+    ('target' in input && input.target
       ? projectCanvasMarkdownLifecycleTarget(input.target)
-      : undefined;
+      : undefined);
   const provenance =
-    'provenance' in input && input.provenance
+    sourceInvocation.provenance ??
+    ('provenance' in input && input.provenance
       ? {
           source: input.provenance.source,
           conversationId: input.provenance.conversationId,
@@ -286,19 +293,18 @@ function createCanvasMarkdownLifecycleInvocationInput(
           toolCallId: input.provenance.toolCallId,
           label: input.provenance.label,
         }
-      : undefined;
+      : undefined);
   return {
     capabilityId: descriptor.capabilityId,
-    phase,
+    phase: sourceInvocation.phase,
     payload: input,
     ...(target ? { target } : {}),
-    ...('approval' in input && input.approval ? { approval: input.approval } : {}),
     ...(provenance ? { provenance } : {}),
+    ...(sourceInvocation.approval ? { approval: sourceInvocation.approval } : {}),
   };
 }
 
 function toCanvasMarkdownLifecycleResult(
-  descriptor: AgentCapabilityLifecycleDescriptor,
   invocation: AgentCapabilityInvocationInput,
   result: CanvasMarkdownCapabilityResult,
 ): AgentCapabilityInvocationResult {
@@ -311,21 +317,7 @@ function toCanvasMarkdownLifecycleResult(
       code: diagnostic.code,
       message: diagnostic.message,
       ...(diagnostic.fieldKey ? { fieldKey: diagnostic.fieldKey } : {}),
-      ...(diagnostic.token ? { token: diagnostic.token } : {}),
-      ...(diagnostic.line !== undefined ? { line: diagnostic.line } : {}),
-      ...(diagnostic.column !== undefined ? { column: diagnostic.column } : {}),
     })),
-    ...(result.tableNodeId
-      ? {
-          reviewArtifact: {
-            kind: 'node' as const,
-            id: result.tableNodeId,
-            packageId: 'neko-canvas',
-            artifactKind: 'canvas.table',
-            profile: readCanvasMarkdownProfileFromResult(result) ?? 'storyboard',
-          },
-        }
-      : {}),
     ...(result.nodeIds?.length
       ? {
           changedRefs: result.nodeIds.map((nodeId) => ({
@@ -335,94 +327,8 @@ function toCanvasMarkdownLifecycleResult(
           })),
         }
       : {}),
-    ...(result.actions?.length
-      ? {
-          actions: result.actions.map((action) => ({
-            actionId: action.actionId,
-            ...(action.label ? { label: action.label } : {}),
-            capabilityId: action.capabilityId ?? descriptor.capabilityId,
-            phase:
-              action.capabilityId === 'canvas.createStoryboardFromMarkdown' ? 'apply' : 'review',
-            requiresApproval: action.capabilityId !== 'canvas.validateMarkdownStoryboard',
-            ...(result.tableNodeId
-              ? {
-                  sourceRef: {
-                    kind: 'node' as const,
-                    id: result.tableNodeId,
-                    packageId: 'neko-canvas',
-                  },
-                }
-              : {}),
-            ...(invocation.target ? { target: invocation.target } : {}),
-            payload: projectCanvasMarkdownActionPayload(invocation.payload, action.capabilityId),
-          })),
-        }
-      : {}),
     data: result,
   };
-}
-
-function projectCanvasMarkdownActionPayload(
-  input: AgentCapabilityInvocationInput['payload'],
-  actionCapabilityId: string | undefined,
-): CanvasMarkdownCapabilityInput | undefined {
-  if (!isCanvasMarkdownCapabilityInput(input)) return undefined;
-  const capabilityId = isCanvasMarkdownCapabilityId(actionCapabilityId)
-    ? actionCapabilityId
-    : input.capabilityId;
-  if (capabilityId === 'canvas.attachResource') return undefined;
-  if (!isCanvasMarkdownTextInput(input)) return undefined;
-  const base = {
-    markdown: input.markdown,
-    ...(input.title ? { title: input.title } : {}),
-    ...(input.sourceFormat ? { sourceFormat: input.sourceFormat } : {}),
-    ...(input.resources ? { resources: input.resources } : {}),
-    ...(input.target ? { target: input.target } : {}),
-    ...(input.provenance ? { provenance: input.provenance } : {}),
-    ...(input.intentHint ? { intentHint: input.intentHint } : {}),
-    ...(input.profileHint ? { profileHint: input.profileHint } : {}),
-  };
-
-  switch (capabilityId) {
-    case 'canvas.ingestMarkdown':
-      return { capabilityId, ...base };
-    case 'canvas.createMarkdownNote':
-      return { capabilityId, ...base };
-    case 'canvas.createTableFromMarkdown':
-      return {
-        capabilityId,
-        ...base,
-        ...('tableTitle' in input && input.tableTitle ? { tableTitle: input.tableTitle } : {}),
-      };
-    case 'canvas.createStoryboardFromMarkdown':
-      return {
-        capabilityId,
-        ...base,
-        mode: 'create-nodes',
-      };
-    case 'canvas.validateMarkdownStoryboard':
-      return { capabilityId, ...base };
-  }
-}
-
-type CanvasMarkdownTextInput = Exclude<
-  CanvasMarkdownCapabilityInput,
-  { capabilityId: 'canvas.attachResource' }
->;
-
-function isCanvasMarkdownTextInput(
-  input: CanvasMarkdownCapabilityInput,
-): input is CanvasMarkdownTextInput {
-  return input.capabilityId !== 'canvas.attachResource';
-}
-
-function readCanvasMarkdownLifecyclePhase(
-  input: CanvasMarkdownCapabilityInput,
-): AgentCapabilityLifecyclePhase {
-  if (input.capabilityId === 'canvas.validateMarkdownStoryboard') return 'validate';
-  if (input.capabilityId === 'canvas.createStoryboardFromMarkdown') return 'apply';
-  if (input.capabilityId === 'canvas.attachResource') return 'apply';
-  return 'review';
 }
 
 function toCanvasMarkdownLifecycleStatus(
@@ -430,7 +336,6 @@ function toCanvasMarkdownLifecycleStatus(
   status: CanvasMarkdownCapabilityResult['status'],
 ): AgentCapabilityInvocationResult['status'] {
   if (status === 'blocked') return 'blocked';
-  if (status === 'needs-review') return 'needs-review';
   if (phase === 'validate') return 'validated';
   if (phase === 'apply') return 'applied';
   if (phase === 'execute') return 'executed';
@@ -455,33 +360,14 @@ function projectCanvasMarkdownLifecycleTarget(
 function isCanvasMarkdownLifecycleInvocation(
   invocation: AgentCapabilityInvocationInput,
 ): invocation is AgentCapabilityInvocationInput & { payload: CanvasMarkdownCapabilityInput } {
-  return isCanvasMarkdownCapabilityInput(invocation.payload);
-}
-
-function applyCanvasMarkdownInvocationApproval(
-  payload: CanvasMarkdownCapabilityInput,
-  approval: AgentCapabilityInvocationInput['approval'],
-): CanvasMarkdownCapabilityInput {
-  if (!approval || payload.capabilityId !== 'canvas.createStoryboardFromMarkdown') {
-    return payload;
-  }
-  return { ...payload, approval };
+  return (
+    isCanvasMarkdownCapabilityInput(invocation.payload) &&
+    invocation.capabilityId === invocation.payload.capabilityId
+  );
 }
 
 function isMutatingLifecyclePhase(phase: AgentCapabilityLifecyclePhase): boolean {
   return phase === 'apply' || phase === 'execute';
-}
-
-function readCanvasMarkdownProfileFromResult(
-  result: CanvasMarkdownCapabilityResult,
-): string | undefined {
-  if (typeof result.profileId === 'string') return result.profileId;
-  const previewProfile = result.preview?.table?.profileId ?? result.preview?.profileId;
-  if (typeof previewProfile === 'string') return previewProfile;
-  const data = isRecord(result) ? result['data'] : undefined;
-  return isRecord(data) && typeof data['tableProfile'] === 'string'
-    ? data['tableProfile']
-    : undefined;
 }
 
 function createBlockedCanvasMarkdownLifecycleResult(
@@ -502,24 +388,16 @@ function createBlockedCanvasMarkdownLifecycleResult(
 function readMissingCanvasMarkdownMutationRefDiagnostic(
   result: CanvasMarkdownCapabilityResult,
 ): { readonly code: string; readonly message: string } | undefined {
-  if (
-    result.status !== 'created' &&
-    result.status !== 'changed' &&
-    result.status !== 'needs-review'
-  ) {
+  if (result.status !== 'created' && result.status !== 'changed') {
     return undefined;
   }
-  const hasRef = Boolean(result.tableNodeId) || (result.nodeIds?.length ?? 0) > 0;
+  const hasRef = (result.nodeIds?.length ?? 0) > 0;
   if (hasRef) return undefined;
   return {
     code: 'canvas-markdown-mutation-result-missing-ref',
     message:
       'Canvas Markdown capability reported a mutation status but did not return any Canvas node reference.',
   };
-}
-
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function getCanvasApi(): Promise<NekoCanvasAPI> {

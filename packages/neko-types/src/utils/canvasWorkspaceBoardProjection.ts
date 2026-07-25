@@ -344,7 +344,7 @@ function findCompatibleExistingResourceNode(
 
 function replaceNodeResourceRef(node: CanvasNode, resourceRef: ResourceRef): CanvasNode {
   switch (node.type) {
-    case 'document':
+    case 'file':
       return { ...node, data: { ...node.data, resourceRef } };
     case 'media':
       return { ...node, data: { ...node.data, resourceRef } };
@@ -464,13 +464,11 @@ function createArtifactNode(
   if (artifact.kind === 'markdown') {
     return {
       ...base,
-      type: 'text',
+      type: 'markdown',
       size: artifactNodeSize(artifact),
-      preset: 'text.basic',
       data: {
         title: artifact.title,
         content: artifact.markdown,
-        format: 'markdown',
         provenance,
       },
     };
@@ -481,7 +479,6 @@ function createArtifactNode(
       ...base,
       type: 'media',
       size: artifactNodeSize(artifact),
-      preset: 'media.basic',
       data: {
         assetPath: '',
         mediaType: artifact.kind,
@@ -498,14 +495,12 @@ function createArtifactNode(
 
   return {
     ...base,
-    type: 'document',
+    type: 'file',
     size: artifactNodeSize(artifact),
-    preset: 'document.basic',
     data: {
-      docPath: '',
-      docType: inferDocumentType(artifact.title, artifact.mimeType),
+      path: '',
       title: artifact.title,
-      ...(artifact.mimeType ? { mimeType: artifact.mimeType } : {}),
+      ...(artifact.mimeType ? { mediaType: artifact.mimeType } : {}),
       ...(artifact.resourceRef ? { resourceRef: artifact.resourceRef } : {}),
       ...(artifact.documentResourceRef
         ? { documentResourceRef: artifact.documentResourceRef }
@@ -651,26 +646,4 @@ function roleRank(role: CanvasWorkspaceArtifactRole): number {
 
 function nextZIndex(nodes: readonly CanvasNode[]): number {
   return nodes.reduce((maximum, node) => Math.max(maximum, node.zIndex), 0) + 10;
-}
-
-function inferDocumentType(
-  title: string,
-  mimeType: string | undefined,
-): 'pdf' | 'docx' | 'epub' | 'cbz' | 'markdown' | 'text' | 'file' {
-  const normalized = title.toLowerCase();
-  if (mimeType === 'application/pdf' || normalized.endsWith('.pdf')) return 'pdf';
-  if (normalized.endsWith('.docx')) return 'docx';
-  if (normalized.endsWith('.epub')) return 'epub';
-  if (normalized.endsWith('.cbz')) return 'cbz';
-  if (
-    mimeType === 'text/markdown' ||
-    normalized.endsWith('.md') ||
-    normalized.endsWith('.markdown')
-  ) {
-    return 'markdown';
-  }
-  if (mimeType?.startsWith('text/') || normalized.endsWith('.txt') || normalized.endsWith('.log')) {
-    return 'text';
-  }
-  return 'file';
 }
