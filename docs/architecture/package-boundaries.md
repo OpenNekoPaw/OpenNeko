@@ -161,7 +161,7 @@ TUI 的产品级组合位于 `apps/neko-tui`。Agent core/platform 不导入 VS 
 | ------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `neko-agent`       | Agent session、provider、Skill、capability 与 Chat UI | runtime host-neutral；宿主与 UI adapter 分离；行为变更需真实 evaluation                                                                        |
 | `neko-assets`      | Media Library 文件入口、投影和 Entity VS Code surface | 文件走 canonical locator/Host Content I/O；Entity 走 canonical facade；不拥有 catalog、package/generated lifecycle 或 cache                    |
-| `neko-canvas`      | 画布、创作结构、投影与领域 authoring                  | Webview 管交互；持久写入走 domain/host contract；复用公共 UI                                                                                   |
+| `neko-canvas`      | 六类通用节点、空间布局、连接、投影与 `.nkc` authoring | Webview 管交互；只持久化 Markdown/Media/Group/Job/File/CanvasEmbed 与三类连接；Job/Character/World runtime 外置；复用公共 UI                    |
 | `neko-cut`         | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Extension 管 editor/export；媒体走 Engine client                                                                         |
 | `neko-preview`     | 授权只读预览与临时 3D Reference staging               | Preview 拥有面板级 Three.js 会话及形象、动作、机位、全景输出；Agent/Canvas/media 只消费共享 contract；不恢复 Engine Model/Scene 或持久 3D 项目 |
 | `neko-tools`       | 工具、Media LSP、差异与诊断                           | LSP/diagnostic 在 Extension；不得贡献已移除 Device UI                                                                                          |

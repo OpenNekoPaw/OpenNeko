@@ -19,8 +19,9 @@
 | [`adr-agent-internal-continuation-boundary.md`](adr-agent-internal-continuation-boundary.md)                       | Agent 内部续跑、消息队列、异步任务结果和 subagent 回传边界                            |
 | [`adr-agent-runtime-architecture-comparison-boundary.md`](adr-agent-runtime-architecture-comparison-boundary.md)   | Agent runtime 对比 Codex/OpenCode/Pi/OpenClaw/Hermes 等后的本地边界、协议面和演进约束 |
 | [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)                                                               | Pi 作为唯一 Agent/LLM/Skill/Session canonical path，及模型、路径、凭据和产品职责边界  |
+| [`adr-ai-native-product-surface-and-capability-composition-boundary.md`](adr-ai-native-product-surface-and-capability-composition-boundary.md) | AI Native 产品入口、正交能力、真实运行时注入与直接操纵 UI 的简化边界 |
 | [`adr-agent-creative-invocation-run-boundary.md`](adr-agent-creative-invocation-run-boundary.md)                   | Agent 创作包 AI 调用、document/run 边界、ResourceRef 结果和 package-owned 写回约束    |
-| [`adr-canvas-creative-ai-candidate-actions.md`](adr-canvas-creative-ai-candidate-actions.md)                       | Canvas Shot/Scene AI 按钮、candidate-first 写回、后台 Agent run、媒体并发和晋升边界   |
+| [`adr-canvas-creative-ai-candidate-actions.md`](adr-canvas-creative-ai-candidate-actions.md)                       | 已被 Canvas 六节点/JobCard 模型取代的 Shot/Scene AI 按钮历史边界                     |
 | [`adr-agent-skill-catalog-activation-boundary.md`](adr-agent-skill-catalog-activation-boundary.md)                 | Agent Skill catalog、用户新增 Skill metadata 和激活权威边界                           |
 | [`adr-agent-skill-creator-and-validation.md`](adr-agent-skill-creator-and-validation.md)                           | 开放 Agent Skill 格式、原生创建、可选 Neko overlay、校验和 Host 边界                  |
 | [`adr-agent-prompt-skill-validator-boundary.md`](adr-agent-prompt-skill-validator-boundary.md)                     | Agent 默认提示词、Skill 提示词、Validator 和 Capability 的职责边界                    |
@@ -38,7 +39,7 @@
 | [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) | Cut 以 OTIO 为唯一工程、VS Code 保留 Engine adapter，并通过同源 MP4 引用完成显式逻辑音频分离 |
 | [`application-composition.md`](application-composition.md)                                                       | TUI、OpenNeko for VS Code 两个应用 composition root 和依赖方向                       |
 | [`adr-unified-markdown-resource-rendering.md`](adr-unified-markdown-resource-rendering.md)                         | Canvas MCP 式能力、Markdown 扩展语法、资源增强渲染和 Send to Canvas 边界              |
-| [`adr-canvas-cut-playback-route-and-timeline-boundary.md`](adr-canvas-cut-playback-route-and-timeline-boundary.md) | Canvas 预览路线矩阵、Cut 剪辑时间线、Agent 顺序感知和跨包协议边界                     |
+| [`adr-canvas-cut-playback-route-and-timeline-boundary.md`](adr-canvas-cut-playback-route-and-timeline-boundary.md) | Canvas 通用播放顺序与 Cut 时间线边界；Storyboard 矩阵部分已取代                       |
 | [`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md)                   | 创作领域面板与共享 UI 原语的复用边界                                                  |
 | [`adr-asset-library-sources-and-unified-entity-boundary.md`](adr-asset-library-sources-and-unified-entity-boundary.md) | 单一媒体库、ContentLocator 与统一实体的职责和迁移边界                             |
 | [`agent.md`](agent.md)                                                                                             | Agent-first、execution mode、skill/prompt/tool/provider 控制面和宿主分层              |

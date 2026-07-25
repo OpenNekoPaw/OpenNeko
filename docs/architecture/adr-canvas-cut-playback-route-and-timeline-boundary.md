@@ -6,6 +6,11 @@
 
 部分取代说明（2026-07-22）：本文只保留 Canvas 播放路线、Canvas 权威和 Canvas → Cut 单次快照原则。本文后续出现的 Cut `.nkv` 权威、专业多轨能力、`CanvasCutDraftPayload` 字段、`TimelineSync`、active/recent Cut 目标、持续同步和 Agent Cut 操作均已由 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 取代，不得作为新实现依据。新 v1 交接只允许有序 media/gap draft，并要求“创建新 `.otio`”或显式指定 `.otio` URI/revision。
 
+部分取代说明（2026-07-25）：Canvas 当前只从 Markdown、Media 和 Group 的显式
+顺序生成通用 Preview，不再提供 Route Storyboard Matrix、Scene/Shot 或 Narrative
+分支路线。本文只继续约束“Canvas 顺序不是 Cut 时间线”和显式单次交接；涉及
+Storyboard、分支或矩阵 UI 的段落均为历史背景。
+
 本文记录 Canvas 播放顺序、预览路线、Cut 时间线和 Agent 操作能力之间的稳定边界。它补充 [`package-boundaries.md`](package-boundaries.md)、[`proto-and-wire-contracts.md`](proto-and-wire-contracts.md) 和 [`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md)。
 
 ## 背景

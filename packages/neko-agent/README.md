@@ -187,7 +187,7 @@ Skill Markdown 正文只描述领域方法、创作语义、输出标准和示�
 - **元工具**：`GetContext` / `ActivateSkill` / `DeactivateSkill` — AI 自主发现和激活技能
 - **来源**：内置 typed tools、MCP 服务器、扩展工具（NekoCut/NekoCanvas）和受管 External Processor
 - **本地命令边界**：普通创作 Agent 不默认注入任意 `Bash`/shell。图片、视频、音频和脚本类本地工具通过 External Processor manifest、PathAccessPolicy、env allowlist、approval 和 `ResourceRef` 输出进入运行时；Developer Mode 的一次性命令也走同一策略，不生成持久 `Bash(*)` allow。
-- **资源交接**：Agent Webview、Canvas、Storyboard 和 `neko-composite` 传递图片时使用 `ResourceRef`、`documentResourceRef`、source ref、workspace-relative path 或 `${VAR}/path`。Webview URI、blob/object URL、系统 temp、旧 `cachePath` 和 `.neko/.cache/resources` 下的实体路径只属于 runtime/display，不作为 durable identity。
+- **资源交接**：Agent Webview、Canvas、Cut 和 `neko-composite` 传递图片时使用 `ResourceRef`、`documentResourceRef`、source ref、workspace-relative path 或 `${VAR}/path`。Webview URI、blob/object URL、系统 temp、旧 `cachePath` 和 `.neko/.cache/resources` 下的实体路径只属于 runtime/display，不作为 durable identity。
 
 ### Package Authoring Transfer
 
@@ -206,13 +206,13 @@ Agent core 不保存 Canvas destination、会话 Board binding、Board index/sco
 
 Canvas projector 在没有显式目标时只写 `neko/boards/workspace.nkc`，显式目标则是调用方提供的普通 `.nkc`。它不读取活动/最近 Canvas、会话或文件名相似度。Markdown、稳定文件引用和已由 generated-output owner 保存到 `neko/generated/<kind>/` 的图片/音频/视频会成为顶层普通内容节点；稳定内容 revision 跨 delivery 去重，已证明的资源依赖显示为普通 Canvas connection。Inbox、Task 和 Run 不创建视觉 Group；复制到 Media Library 或绑定 Creative Entity 都不是 Board 持久化前置条件。
 
-推理、日志、provider scratch、未选搜索结果、runtime/cache handle 和失败中间态不会成为节点。投影冲突单独返回 diagnostic，生成结果仍可恢复且不改投其他 Canvas。显式历史/外部内容仍可使用 owning Import/Add Source；专业 Storyboard 继续要求明确 authoring intent 和 Canvas validator。
+推理、日志、provider scratch、未选搜索结果、runtime/cache handle 和失败中间态不会成为节点。投影冲突单独返回 diagnostic，生成结果仍可恢复且不改投其他 Canvas。显式历史/外部内容仍可使用 owning Import/Add Source；结构化领域产物由 owning Job 形成稳定 artifact，再以 Markdown、Media 或 File 投影到 Canvas，不注册专业 Storyboard 节点。
 
 ### Canvas 能力边界
 
-`@neko/agent` 不拥有 Canvas creative run、work item、prompt/judge adapter、媒体调用、候选应用或 UI 生命周期。Canvas extension 在领域内解析 typed action、执行生成与评审，并通过 Canvas-owned apply adapter 写回候选。
+`@neko/agent` 不拥有 Canvas 布局、`.nkc` 持久化或 Webview 生命周期；Canvas 也不拥有 Job queue/session/provider runtime、取消、重试和恢复状态。JobCard 只保存显式 Job identity、revision、状态摘要和稳定输入/输出引用。
 
-Agent 只消费 Canvas Capability Provider 投影出的通用 Tool/schema；这允许 Agent 在用户对话中调用 Canvas 工具，但不会把 Canvas 的直接 UI 动作迁入 Agent。应用组合层只向 Canvas 注入 `purpose -> semantic request/result` 的窄端口，Canvas 不接收 Pi 对象、chat message、provider/model/credential 或 token/temperature 参数。
+Agent 只消费 Canvas Capability Provider 投影出的六类节点、三类连接和通用 authoring Tool/schema。AI 任务由 Agent/Job owner 执行，稳定结果再投影为 Markdown、Media、File 或 Job output refs；Canvas 不接收 Pi 对象、provider/model credential 或旧 Shot/Scene 生成动作。
 
 ### MCP 集成
 

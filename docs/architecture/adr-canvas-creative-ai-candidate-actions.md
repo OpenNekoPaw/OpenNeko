@@ -1,8 +1,13 @@
 # ADR: Canvas 创作 AI 按钮的 Candidate-First Agent Run 边界
 
-状态：Accepted
+状态：Superseded（2026-07-25）
 日期：2026-07-10
 范围：`neko-canvas` Shot/Scene AI 按钮、`neko-agent` 后台创作会话投影、run/workItem、candidate 写回、媒体并发和质量晋升边界。
+
+取代说明：Canvas 已收敛为 Markdown、Media、Group、Job、File 和 CanvasEmbed，不再注册 Shot/Scene 节点或 Canvas-owned 生成按钮。当前约束见
+[`../../openspec/changes/simplify-canvas-ai-workspace-node-model/`](../../openspec/changes/simplify-canvas-ai-workspace-node-model/)；
+本文仅保留为历史设计背景，不得作为新实现入口。AI 执行由 Agent/Job owner
+持有，Canvas 只展示 JobCard 和稳定结果引用。
 
 本文补充 [`adr-agent-creative-invocation-run-boundary.md`](adr-agent-creative-invocation-run-boundary.md)、[`adr-agent-message-task-queue-boundary.md`](adr-agent-message-task-queue-boundary.md)、[`agent.md`](agent.md)、[`headless-project-authoring.md`](headless-project-authoring.md) 与 [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)。通用 Agent 创作调用仍以 document/run/workItem 为执行权威；本文记录 Canvas Shot/Scene AI 按钮的更具体产品约束。
 
