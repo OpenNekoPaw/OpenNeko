@@ -4,7 +4,7 @@
  * Tests two-layer merge (User + Workspace) with no builtin presets.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConfigManager } from '../config-manager';
 import type { IUserConfigManager, UserConfig } from '../user-config';
 import type { Provider, Model } from '../../types/provider';
@@ -29,6 +29,7 @@ function createMockUserConfigManager(
     | 'mcpServerOverrides'
   > = {},
 ): IUserConfigManager {
+  let scalars = { ...rawScalars };
   let config: UserConfig = {
     providers: [],
     models: [],
@@ -93,7 +94,7 @@ function createMockUserConfigManager(
       };
     },
     loadRaw: () => ({
-      ...rawScalars,
+      ...scalars,
       providers: config.providers,
       models: config.models,
       mcpServers: config.mcpServers,
@@ -105,7 +106,7 @@ function createMockUserConfigManager(
       status: 'ok',
       filePath: '<test-config>',
       config: {
-        ...rawScalars,
+        ...scalars,
         providers: config.providers,
         models: config.models,
         mcpServers: config.mcpServers,
@@ -114,8 +115,12 @@ function createMockUserConfigManager(
         mcpServerOverrides: config.mcpServerOverrides,
       } satisfies UnifiedConfig,
     }),
-    updateScalar: async () => {},
-    updateScalars: async () => {},
+    updateScalar: async (key, value) => {
+      scalars = { ...scalars, [key]: value };
+    },
+    updateScalars: async (updates) => {
+      scalars = { ...scalars, ...updates };
+    },
     reload: () => {},
   };
 }
@@ -872,6 +877,113 @@ describe('ConfigManager', () => {
         providerId: 'google',
         modelId: 'gemini-pro',
       });
+    });
+
+    it('atomically persists explicit Character purpose bindings', async () => {
+      const userConfigManager = createMockUserConfigManager({
+        providers: [SAMPLE_PROVIDER],
+        models: [SAMPLE_MODEL],
+      });
+      const updateScalars = vi.spyOn(userConfigManager, 'updateScalars');
+      const manager = new ConfigManager({ userConfigManager });
+
+      await manager.setDefaultModelPurposeRefs({
+        'character.dialogue': {
+          providerId: SAMPLE_PROVIDER.id,
+          modelId: SAMPLE_MODEL.id,
+        },
+        'character.profile': {
+          providerId: SAMPLE_PROVIDER.id,
+          modelId: SAMPLE_MODEL.id,
+        },
+      });
+
+      expect(updateScalars).toHaveBeenCalledTimes(1);
+      expect(updateScalars).toHaveBeenCalledWith({
+        defaultModelPurposes: {
+          'character.dialogue': {
+            providerId: SAMPLE_PROVIDER.id,
+            modelId: SAMPLE_MODEL.id,
+          },
+          'character.profile': {
+            providerId: SAMPLE_PROVIDER.id,
+            modelId: SAMPLE_MODEL.id,
+          },
+        },
+      });
+      expect(manager.resolveModelRefForPurpose('character.dialogue')).toEqual({
+        providerId: SAMPLE_PROVIDER.id,
+        modelId: SAMPLE_MODEL.id,
+      });
+      expect(manager.resolveModelRefForPurpose('character.profile')).toEqual({
+        providerId: SAMPLE_PROVIDER.id,
+        modelId: SAMPLE_MODEL.id,
+      });
+    });
+
+    it('preserves existing purpose bindings while adding a missing Character purpose', async () => {
+      const userConfigManager = createMockUserConfigManager(
+        {
+          providers: [SAMPLE_PROVIDER],
+          models: [SAMPLE_MODEL],
+        },
+        {
+          defaultModelPurposes: {
+            'character.profile': {
+              providerId: 'profile-provider',
+              modelId: 'profile-model',
+            },
+          },
+        },
+      );
+      const updateScalars = vi.spyOn(userConfigManager, 'updateScalars');
+      const manager = new ConfigManager({ userConfigManager });
+
+      await manager.setDefaultModelPurposeRefs({
+        'character.dialogue': {
+          providerId: SAMPLE_PROVIDER.id,
+          modelId: SAMPLE_MODEL.id,
+        },
+      });
+
+      expect(updateScalars).toHaveBeenCalledWith({
+        defaultModelPurposes: {
+          'character.profile': {
+            providerId: 'profile-provider',
+            modelId: 'profile-model',
+          },
+          'character.dialogue': {
+            providerId: SAMPLE_PROVIDER.id,
+            modelId: SAMPLE_MODEL.id,
+          },
+        },
+      });
+    });
+
+    it('rejects incompatible Character purpose bindings before persistence', async () => {
+      const incompatibleModel: Model = {
+        ...SAMPLE_MODEL,
+        id: 'image-only',
+        capabilities: ['image.generate'],
+        type: 'image',
+      };
+      const userConfigManager = createMockUserConfigManager({
+        providers: [SAMPLE_PROVIDER],
+        models: [incompatibleModel],
+      });
+      const updateScalars = vi.spyOn(userConfigManager, 'updateScalars');
+      const manager = new ConfigManager({ userConfigManager });
+
+      await expect(
+        manager.setDefaultModelPurposeRefs({
+          'character.dialogue': {
+            providerId: SAMPLE_PROVIDER.id,
+            modelId: incompatibleModel.id,
+          },
+        }),
+      ).rejects.toThrow('Model anthropic/image-only does not support purpose character.dialogue.');
+      expect(updateScalars).not.toHaveBeenCalled();
+      expect(manager.resolveModelRefForPurpose('character.dialogue')).toBeUndefined();
     });
 
     it('projects media understanding model routing for frontend confirmation', () => {

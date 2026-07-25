@@ -67,8 +67,18 @@ export function getModelPurposeCapabilityMatches(purpose: AgentModelPurpose): re
   return PURPOSE_CAPABILITY_MATCHES[purpose].capabilities;
 }
 
-export function modelSupportsPurpose(model: Pick<Model, 'capabilities'>, purpose: string): boolean {
-  const modelCapabilities = model.capabilities as readonly string[];
+export function isAgentModelPurpose(value: string): value is AgentModelPurpose {
+  return value in PURPOSE_CAPABILITY_MATCHES;
+}
+
+export function modelSupportsPurpose(
+  model: {
+    readonly capabilities: readonly string[];
+    readonly type?: Model['type'];
+  },
+  purpose: string,
+): boolean {
+  const modelCapabilities = model.capabilities;
   const rule = PURPOSE_CAPABILITY_MATCHES[purpose as AgentModelPurpose];
   if (!rule) {
     return modelCapabilities.includes(purpose);
