@@ -45,6 +45,7 @@ export interface EmbodyCharacterControllerDeps {
   readonly createEvidenceReader?: (projectRoot: string) => EmbodyCharacterEvidenceReaderPort;
   readonly createEvidenceLoader?: (projectRoot: string) => CharacterEvidenceLoader;
   readonly createResponder?: () => EmbodyCharacterResponder;
+  readonly preparePurposeModels: () => Promise<void>;
   readonly updateTabState: (openTabs: OpenTab[], activeTabId: string | null) => void;
   readonly getTabState: () => {
     readonly openTabs: readonly OpenTab[];
@@ -87,6 +88,7 @@ export class EmbodyCharacterController implements vscode.Disposable {
       this.postGlobalError('Open a workspace before starting an Embody Character session.');
       return null;
     }
+    if (!(await this.preparePurposeModelsForLaunch())) return null;
 
     const entityRef = this.normalizeEntityRef(request.entityRef, projectRoot);
     const assembler =
@@ -153,6 +155,7 @@ export class EmbodyCharacterController implements vscode.Disposable {
     );
 
     try {
+      await this.deps.preparePurposeModels();
       const turnEvidence = await this.loadTurnEvidence(session, trimmed);
       const turn = await session.sendUserMessage(trimmed, {
         ...(turnEvidence ? { turnEvidence } : {}),
@@ -244,6 +247,16 @@ export class EmbodyCharacterController implements vscode.Disposable {
       throw new Error('Embody Character responder requires an Agent semantic port.');
     }
     return createResponder();
+  }
+
+  private async preparePurposeModelsForLaunch(): Promise<boolean> {
+    try {
+      await this.deps.preparePurposeModels();
+      return true;
+    } catch (error) {
+      this.postGlobalError(error instanceof Error ? error.message : String(error));
+      return false;
+    }
   }
 
   private async loadTurnEvidence(

@@ -121,6 +121,7 @@ function createHarness(
     tabState = { openTabs, activeTabId };
   });
   const projection = { apply: vi.fn() };
+  const preparePurposeModels = vi.fn(async () => {});
   const controller = new EmbodyCharacterController({
     getWebview: () => webview as never,
     getConversationProjection: () => projection,
@@ -129,6 +130,7 @@ function createHarness(
     createEvidenceReader: vi.fn(() => evidenceReader),
     createEvidenceLoader: vi.fn(() => evidenceLoader),
     createResponder: vi.fn(() => responder),
+    preparePurposeModels,
     getTabState: () => tabState,
     updateTabState,
     sendTabState: vi.fn(),
@@ -144,6 +146,7 @@ function createHarness(
     evidenceReader,
     evidenceLoader,
     projection,
+    preparePurposeModels,
     responder,
     tabState: () => tabState,
     updateTabState,
@@ -195,6 +198,26 @@ describe('EmbodyCharacterController', () => {
         session: expect.objectContaining({ sessionId: 'embody-session-1' }),
       }),
     );
+  });
+
+  it('does not create an Embody Character session when purpose model preparation fails', async () => {
+    const preparePurposeModels = vi.fn(async () => {
+      throw new Error('Character model selection was cancelled.');
+    });
+    const { assembler, controller, responder, updateTabState, webview } = createHarness({
+      preparePurposeModels,
+    });
+
+    await expect(controller.launch(request)).resolves.toBeNull();
+
+    expect(preparePurposeModels).toHaveBeenCalledTimes(1);
+    expect(assembler.assembleProfile).not.toHaveBeenCalled();
+    expect(updateTabState).not.toHaveBeenCalled();
+    expect(responder).not.toHaveBeenCalled();
+    expect(webview.postMessage).toHaveBeenCalledWith({
+      type: 'globalError',
+      message: 'Character model selection was cancelled.',
+    });
   });
 
   it('routes user messages through the feedback responder and canonical projection', async () => {

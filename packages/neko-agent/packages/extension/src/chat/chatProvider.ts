@@ -104,6 +104,7 @@ import type {
 import type { GenerationJobPort } from '@neko/generation';
 import { updateWebviewKeyboardEditableOwner } from '@neko/shared/vscode/extension';
 import { readAgentWebviewAssetPaths } from './webviewAssetManifest';
+import { VSCodeCharacterPurposeModelConfigurator } from '../ai/vscodeCharacterPurposeModelConfigurator';
 
 const logger = getLogger('ChatProvider');
 const AGENT_KEYBOARD_EDITABLE_CONTEXT = 'neko.agent.keyboardEditable';
@@ -315,6 +316,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   private _editorRegistry?: IEditorRegistry;
   private _platform?: Platform;
   private _productPurposeText?: ICapabilityPurposeTextRuntime;
+  private _characterPurposeModels?: VSCodeCharacterPurposeModelConfigurator;
   private _configBridge?: ConfigBridge;
   private readonly _localResourceAccess: AgentLocalResourceAccess;
   private readonly _generatedAssetIndex: GeneratedAssetIndex | undefined;
@@ -382,6 +384,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
         createCharacterDialoguePurposeResponder(
           requireCharacterPurposeRuntime(this._productPurposeText, 'Character Dialogue'),
         ),
+      preparePurposeModels: () => this._prepareCharacterPurposeModels(),
       evaluateTranscript: ({ artifact }) =>
         evaluateCharacterDialogueWithPurpose(
           requireCharacterPurposeRuntime(this._productPurposeText, 'Character evaluation'),
@@ -419,6 +422,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
         createEmbodyCharacterPurposeResponder(
           requireCharacterPurposeRuntime(this._productPurposeText, 'Embody Character'),
         ),
+      preparePurposeModels: () => this._prepareCharacterPurposeModels(),
       getTabState: () => this._tabState,
       updateTabState: (openTabs, activeTabId) => this._updateTabState(openTabs, activeTabId),
       sendTabState: () => this._sendTabState(),
@@ -453,6 +457,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
       this._productPurposeText = getService(IProductPurposeTextRuntime);
 
       if (this._platform) {
+        this._characterPurposeModels = new VSCodeCharacterPurposeModelConfigurator(
+          this._platform.config,
+        );
         // Inject ConfigManager into SettingsManager (late binding)
         this._settings.setConfigManager(this._platform.config);
 
@@ -1230,6 +1237,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   ): Promise<CharacterDialogueLaunchResult | null> {
     await vscode.commands.executeCommand(NEKO_AI_ASSISTANT_FOCUS_COMMAND);
     return this._characterDialogue.launch(request);
+  }
+
+  private _prepareCharacterPurposeModels(): Promise<void> {
+    const configurator = this._characterPurposeModels;
+    if (!configurator) {
+      throw new Error('Character purpose model configuration is unavailable.');
+    }
+    return configurator.prepare();
   }
 
   public refreshSharedMetadata(): Promise<void> {

@@ -64,6 +64,7 @@ export interface CharacterDialogueControllerDeps {
   readonly createAssembler?: (projectRoot: string) => CharacterProfileAssemblerPort;
   readonly createEvidenceLoader?: (projectRoot: string) => CharacterEvidenceLoader;
   readonly createResponder?: () => CharacterDialogueResponder;
+  readonly preparePurposeModels: () => Promise<void>;
   readonly updateTabState: (openTabs: OpenTab[], activeTabId: string | null) => void;
   readonly getTabState: () => {
     readonly openTabs: readonly OpenTab[];
@@ -251,6 +252,7 @@ export class CharacterDialogueController implements vscode.Disposable {
       this.postGlobalError('Open a workspace before starting a Character Dialogue session.');
       return null;
     }
+    if (!(await this.preparePurposeModelsForLaunch())) return null;
 
     const entityRef = this.normalizeEntityRef(request.entityRef, projectRoot);
     const assembler =
@@ -335,6 +337,7 @@ export class CharacterDialogueController implements vscode.Disposable {
     this.pendingRouteAbortControllers.set(sessionId, routeAbortController);
 
     try {
+      await this.deps.preparePurposeModels();
       const projectRoot =
         this.sessionProjectRoots.get(session.id) ??
         session.entityRef.projectRoot ??
@@ -682,6 +685,16 @@ export class CharacterDialogueController implements vscode.Disposable {
       this.deps.createResponder,
       'Character Dialogue responder',
     )();
+  }
+
+  private async preparePurposeModelsForLaunch(): Promise<boolean> {
+    try {
+      await this.deps.preparePurposeModels();
+      return true;
+    } catch (error) {
+      this.postGlobalError(error instanceof Error ? error.message : String(error));
+      return false;
+    }
   }
 
   private getEvidenceLoader(projectRoot: string): CharacterEvidenceLoader {

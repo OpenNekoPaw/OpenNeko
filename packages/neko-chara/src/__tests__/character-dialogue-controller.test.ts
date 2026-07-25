@@ -136,6 +136,7 @@ function createHarness(
     tabState = { openTabs, activeTabId };
   });
   const projection = { apply: vi.fn() };
+  const preparePurposeModels = vi.fn(async () => {});
   const controller = new CharacterDialogueController({
     getWebview: () => webview as never,
     getConversationProjection: () => projection,
@@ -143,6 +144,7 @@ function createHarness(
     createAssembler: vi.fn(() => assembler),
     createEvidenceLoader: vi.fn(() => evidenceLoader),
     createResponder: vi.fn(() => responder),
+    preparePurposeModels,
     evaluateTranscript: vi.fn(async () => evaluation),
     enrichProfile: (input) =>
       defaultEnrichCharacterProfile({
@@ -166,6 +168,7 @@ function createHarness(
     evidenceLoader,
     inferFacts,
     projection,
+    preparePurposeModels,
     responder,
     tabState: () => tabState,
     updateTabState,
@@ -419,6 +422,24 @@ describe('CharacterDialogueController', () => {
         session: expect.objectContaining({ sessionId: 'npc-session-1' }),
       }),
     );
+  });
+
+  it('does not create a Character Dialogue session when purpose model preparation fails', async () => {
+    const preparePurposeModels = vi.fn(async () => {
+      throw new Error('Character model selection was cancelled.');
+    });
+    const harness = createHarness({ preparePurposeModels });
+
+    await expect(harness.controller.launch({ entityRef })).resolves.toBeNull();
+
+    expect(preparePurposeModels).toHaveBeenCalledTimes(1);
+    expect(harness.assembler.assembleProfile).not.toHaveBeenCalled();
+    expect(harness.updateTabState).not.toHaveBeenCalled();
+    expect(harness.responder).not.toHaveBeenCalled();
+    expect(harness.webview.postMessage).toHaveBeenCalledWith({
+      type: 'globalError',
+      message: 'Character model selection was cancelled.',
+    });
   });
 
   it('reports unresolved entities without creating a session', async () => {
