@@ -109,6 +109,7 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
               }}
               surfaceKind="inline"
               chrome="full-bleed"
+              audioPresentation={mediaType === 'audio' ? 'controls-only' : undefined}
             />
           )}
         </div>

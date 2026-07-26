@@ -156,6 +156,27 @@ describe('PreviewSurface media playback control', () => {
     expect(host.querySelector('[data-preview-surface="visual"]')).not.toBeNull();
   });
 
+  it('renders Canvas audio nodes as playback controls without a waveform or duplicate title', async () => {
+    await act(async () => {
+      root.render(
+        <PreviewSurface
+          source={{
+            id: 'canvas-node:audio-a',
+            role: 'audio-waveform',
+            title: 'Canvas audio',
+          }}
+          surfaceKind="inline"
+          chrome="full-bleed"
+          audioPresentation="controls-only"
+        />,
+      );
+    });
+
+    expect(host.querySelectorAll('[data-preview-surface="audio"] .w-1')).toHaveLength(0);
+    expect(host.querySelector<HTMLButtonElement>('button[title="Play"]')).not.toBeNull();
+    expect(host.textContent).not.toContain('Canvas audio');
+  });
+
   it.each([
     {
       role: 'video-proxy' as const,

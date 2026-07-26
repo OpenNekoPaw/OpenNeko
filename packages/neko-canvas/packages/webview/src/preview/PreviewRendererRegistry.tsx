@@ -22,6 +22,7 @@ export interface PreviewRendererProps {
   surfaceKind?: PlaybackSurfaceKind;
   playbackControl?: PreviewPlaybackControl;
   chrome?: 'contained' | 'full-bleed';
+  audioPresentation?: 'waveform' | 'controls-only';
 }
 
 export type PreviewRenderer = React.ComponentType<PreviewRendererProps>;
@@ -752,6 +753,7 @@ function AudioPreviewRenderer({
   surfaceKind = 'inline',
   playbackControl,
   chrome = 'contained',
+  audioPresentation = 'waveform',
 }: PreviewRendererProps): React.ReactNode {
   const assetPath = source.asset?.path;
   const resourceRef = readPreviewSourceResourceRef(source);
@@ -827,6 +829,7 @@ function AudioPreviewRenderer({
           audioStreamUrl={stream.audioStreamUrl}
           duration={stream.duration}
           startTime={stream.startTime}
+          showWaveform={audioPresentation === 'waveform'}
           onPause={pausePlayback}
           onResume={resumePlayback}
           onSeek={seekPlayback}
@@ -847,16 +850,24 @@ function AudioPreviewRenderer({
       data-preview-surface="audio"
       data-preview-chrome={chrome}
     >
-      <div className="mb-2 flex h-8 items-end gap-0.5">
-        {Array.from({ length: 24 }).map((_, index) => (
-          <div
-            key={index}
-            className="w-1 rounded-sm bg-[var(--node-selected)] opacity-70"
-            style={{ height: `${20 + ((index * 17) % 60)}%` }}
-          />
-        ))}
-      </div>
-      <div className="flex items-center gap-2">
+      {audioPresentation === 'waveform' ? (
+        <div className="mb-2 flex h-8 items-end gap-0.5">
+          {Array.from({ length: 24 }).map((_, index) => (
+            <div
+              key={index}
+              className="w-1 rounded-sm bg-[var(--node-selected)] opacity-70"
+              style={{ height: `${20 + ((index * 17) % 60)}%` }}
+            />
+          ))}
+        </div>
+      ) : null}
+      <div
+        className={
+          audioPresentation === 'controls-only'
+            ? 'flex h-full items-center justify-center'
+            : 'flex items-center gap-2'
+        }
+      >
         <button
           type="button"
           className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--control-border)] bg-[var(--node-selected)] text-xs text-white"
@@ -871,10 +882,12 @@ function AudioPreviewRenderer({
         >
           {probing ? '...' : '▶'}
         </button>
-        <span className="truncate text-xs text-[var(--node-fg-secondary)]">
-          {source.title ?? source.asset?.path ?? source.id}
-        </span>
-        {delegateActions && delegateActions.length > 0 && (
+        {audioPresentation === 'waveform' ? (
+          <span className="truncate text-xs text-[var(--node-fg-secondary)]">
+            {source.title ?? source.asset?.path ?? source.id}
+          </span>
+        ) : null}
+        {audioPresentation === 'waveform' && delegateActions && delegateActions.length > 0 ? (
           <button
             type="button"
             className="ml-auto flex-shrink-0 rounded border border-[var(--node-border)] px-2 py-1 text-xs"
@@ -886,7 +899,7 @@ function AudioPreviewRenderer({
           >
             Open
           </button>
-        )}
+        ) : null}
       </div>
     </div>
   );

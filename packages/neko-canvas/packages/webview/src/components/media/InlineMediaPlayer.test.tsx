@@ -135,6 +135,28 @@ describe('Inline media players', () => {
     expect(onEnded).toHaveBeenCalledWith(2);
   });
 
+  it('can render audio playback controls without waveform bars', async () => {
+    await act(async () => {
+      root.render(
+        <InlineAudioPlayer
+          audioStreamUrl="ws://audio"
+          duration={2}
+          showWaveform={false}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={() => undefined}
+          onStop={() => undefined}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(host.querySelectorAll('[class~="w-1.5"]')).toHaveLength(0);
+    expect(host.querySelector('[data-testid="progress-bar"]')).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('button[title="Pause"]')).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('button[title="Mute"]')).not.toBeNull();
+  });
+
   it('waits for video stream end before completing video playback when audio ends first', async () => {
     const onStop = vi.fn<(currentTime: number) => void>();
     const onEnded = vi.fn<(currentTime: number) => void>();

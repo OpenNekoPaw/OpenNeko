@@ -27,6 +27,7 @@ export interface InlineAudioPlayerProps {
   playbackRequestId?: string;
   playbackStartTime?: number;
   onEnded?: (currentTime: number) => void;
+  showWaveform?: boolean;
 }
 
 export function InlineAudioPlayer({
@@ -42,6 +43,7 @@ export function InlineAudioPlayer({
   playbackRequestId,
   playbackStartTime,
   onEnded,
+  showWaveform = true,
 }: InlineAudioPlayerProps) {
   const audioClientRef = useRef<EngineAvAudioStreamClient | null>(null);
   const lifecycleRef = useRef<EngineAvStreamLifecycle | null>(null);
@@ -269,24 +271,28 @@ export function InlineAudioPlayer({
   const muteLabel = isMuted ? t('media.unmute') : t('media.mute');
 
   return (
-    <div className="flex flex-col gap-2 p-3" onMouseDown={(e) => e.stopPropagation()}>
-      {/* Waveform bars visualization */}
-      <div className="flex h-12 items-end justify-center gap-[2px]">
-        {Array.from({ length: BAR_COUNT }).map((_, index) => {
-          const baseHeight = 20 + ((index * 17 + 7) % 60);
-          return (
-            <div
-              key={index}
-              className={`w-1.5 rounded-sm bg-[var(--node-selected)] ${isPlaying ? 'animate-audio-bar' : ''}`}
-              style={{
-                height: `${baseHeight}%`,
-                opacity: progress > 0 && index / BAR_COUNT <= progress ? 0.9 : 0.3,
-                animationDelay: isPlaying ? `${(index * 120) % 800}ms` : undefined,
-              }}
-            />
-          );
-        })}
-      </div>
+    <div
+      className={`flex flex-col gap-2 p-3 ${showWaveform ? '' : 'h-full justify-center'}`}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {showWaveform ? (
+        <div className="flex h-12 items-end justify-center gap-[2px]">
+          {Array.from({ length: BAR_COUNT }).map((_, index) => {
+            const baseHeight = 20 + ((index * 17 + 7) % 60);
+            return (
+              <div
+                key={index}
+                className={`w-1.5 rounded-sm bg-[var(--node-selected)] ${isPlaying ? 'animate-audio-bar' : ''}`}
+                style={{
+                  height: `${baseHeight}%`,
+                  opacity: progress > 0 && index / BAR_COUNT <= progress ? 0.9 : 0.3,
+                  animationDelay: isPlaying ? `${(index * 120) % 800}ms` : undefined,
+                }}
+              />
+            );
+          })}
+        </div>
+      ) : null}
 
       {/* Progress bar */}
       <ProgressBar
@@ -329,17 +335,18 @@ export function InlineAudioPlayer({
         </button>
       </div>
 
-      {/* CSS animation for waveform bars */}
-      <style>{`
-        @keyframes audio-bar-pulse {
-          0%, 100% { transform: scaleY(1); }
-          50% { transform: scaleY(0.4); }
-        }
-        .animate-audio-bar {
-          animation: audio-bar-pulse 0.8s ease-in-out infinite;
-          transform-origin: bottom;
-        }
-      `}</style>
+      {showWaveform ? (
+        <style>{`
+          @keyframes audio-bar-pulse {
+            0%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(0.4); }
+          }
+          .animate-audio-bar {
+            animation: audio-bar-pulse 0.8s ease-in-out infinite;
+            transform-origin: bottom;
+          }
+        `}</style>
+      ) : null}
     </div>
   );
 }
