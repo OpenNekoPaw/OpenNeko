@@ -84,6 +84,15 @@ function createProviders() {
           capabilities: ['video.generate'],
         };
       }
+      if (modelId === 'music-only') {
+        return {
+          id: 'music-only',
+          providerId: 'runway',
+          type: 'audio',
+          enabled: true,
+          capabilities: ['text_to_music'],
+        };
+      }
       return undefined;
     }),
   };
@@ -320,5 +329,21 @@ describe('resolveAgentLlmConfigForTurn media understanding routing', () => {
       },
     });
     expect(resolved.ok && resolved.purposeModels).not.toHaveProperty('image.edit');
+  });
+
+  it('does not project a music-only category default as generic audio generation', () => {
+    const resolved = resolveAgentLlmConfigForTurn({
+      sessionMode: 'agent',
+      chatModel: { providerId: 'openai', modelId: 'gpt-primary', category: 'llm' },
+      mediaModels: {
+        audio: { providerId: 'runway', modelId: 'music-only', category: 'audio' },
+      },
+      settings: {},
+      providers: createProviders() as never,
+      platform: createPlatform(undefined),
+    });
+
+    expect(resolved).toMatchObject({ ok: true });
+    expect(resolved.ok ? resolved.purposeModels : undefined).toBeUndefined();
   });
 });

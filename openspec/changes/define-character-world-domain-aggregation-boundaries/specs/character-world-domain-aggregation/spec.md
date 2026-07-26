@@ -50,7 +50,7 @@ World MUST reference reusable characters through a published CharacterVersion an
 
 ### Requirement: Character and World reuse one Agent canonical path
 
-Character roleplay, character actions, NPC decisions, and World Agent interactions MUST use the existing `neko-agent`/Pi AgentSession, Tool, Task, Approval, cancellation, transcript, and event path. Implementations MUST NOT add a parallel generic Agent loop, provider adapter, tool protocol, or task runtime.
+Character roleplay, character actions, NPC decisions, and World Agent interactions MUST use the existing `neko-agent`/Pi AgentSession, Tool Call, explicit SubagentRun, Approval, cancellation, transcript, and event path. Implementations MUST NOT add a standalone BackgroundAgentRun, parallel generic Agent loop, provider adapter, tool protocol, or task runtime. CharacterRun/WorldRun and their concrete domain Jobs MUST remain domain-owned rather than becoming generic Agent Tasks.
 
 #### Scenario: A roleplay or world turn needs tools
 

@@ -97,6 +97,29 @@ describe('GroupNode', () => {
     expect(markup).toContain('角色概念探索');
     expect(markup).not.toContain('Agent Task');
   });
+
+  it('localizes generated batch groups from their presentation provenance', () => {
+    setLocale('zh-cn');
+    const group = createGroup('workspace-batch-generated', {
+      provenance: {
+        version: 2,
+        kind: 'generated-batch',
+        deliveryId: 'delivery:generated-batch',
+      },
+    });
+
+    const markup = renderToStaticMarkup(
+      React.createElement(GroupNode, {
+        node: group,
+        allNodes: [group],
+        viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+        isSelected: false,
+      }),
+    );
+
+    expect(markup).toContain('生成素材');
+    expect(markup).not.toContain('处理中');
+  });
 });
 
 function createGroup(id: string, data: GroupCanvasNode['data']): GroupCanvasNode {

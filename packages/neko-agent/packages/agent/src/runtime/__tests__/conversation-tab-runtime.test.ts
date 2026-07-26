@@ -219,6 +219,7 @@ describe('conversation-tab-runtime', () => {
     expect(
       buildChatRestorePlan({
         tabState: { openTabs: [tab], activeTabId: 'tab-1' },
+        tabStateRevision: 7,
         hasWebview: true,
         pluginCommands: [
           {
@@ -237,10 +238,10 @@ describe('conversation-tab-runtime', () => {
           type: 'postTabState',
           message: {
             type: 'tabState',
+            revision: 7,
             tabState: { openTabs: [tab], activeTabId: 'tab-1' },
           },
         },
-        { type: 'sendActiveConversationTasks' },
         { type: 'sendAgentStateSnapshot' },
         {
           type: 'postPluginCommands',
@@ -264,6 +265,7 @@ describe('conversation-tab-runtime', () => {
     expect(
       buildChatRestorePlan({
         tabState: { openTabs: [], activeTabId: null },
+        tabStateRevision: 0,
         hasWebview: false,
       }),
     ).toEqual({

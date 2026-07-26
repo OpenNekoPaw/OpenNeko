@@ -14,6 +14,7 @@ import {
 } from '@neko-canvas/domain';
 import {
   type CanvasCreativeScope,
+  type CanvasImportAssetRequest,
   getPanoramicPreviewRoute,
   type DocumentArchiveResourceRef,
   type CanvasMarkdownCapabilityInput,
@@ -51,7 +52,12 @@ import { CanvasProjectAuthoringService } from './services/canvasProjectAuthoring
 import { WorkspaceBoardProjector } from './services/workspaceBoardProjector';
 import { WorkspaceBoardEditorLeaseOwner } from './services/workspaceBoardEditorLeaseOwner';
 import { registerWorkspaceBoardFunctionalAcceptance } from './debug/workspaceBoardFunctionalAcceptance';
+import type { PurposeGenerationJobPort } from '@neko/generation';
 import { handoffCanvasDraftToCut } from './services/CanvasCutRouteHandoff';
+
+export interface NekoCanvasHostServices {
+  readonly purposeGenerationJobs?: PurposeGenerationJobPort;
+}
 
 // Extension state
 let canvasEditorProvider: CanvasEditorProvider;
@@ -69,7 +75,10 @@ function parseCanvasDocumentUri(documentUri: string | undefined): vscode.Uri | u
 /**
  * Activate the extension
  */
-export async function activate(context: vscode.ExtensionContext): Promise<NekoCanvasAPI> {
+export async function activate(
+  context: vscode.ExtensionContext,
+  _hostServices?: NekoCanvasHostServices,
+): Promise<NekoCanvasAPI> {
   const rootLogger = createVSCodeLogger(
     'Neko Canvas',
     'NekoCanvas',
@@ -277,9 +286,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCa
       list: (type) => canvasEditorProvider.listNodes(type),
       get: (nodeId) => canvasEditorProvider.getNode(nodeId),
       update: (nodeId, data) => canvasEditorProvider.updateNode(nodeId, data),
-      create: async (type, position, data, preset) => {
+      create: async (type, position, data) => {
         const result = await canvasProjectAuthoringService.createNode({
-          node: { type, position, data: data as Record<string, unknown>, preset },
+          node: { type, position, data: data as Record<string, unknown> },
         });
         return result.nodeId;
       },
@@ -395,13 +404,33 @@ function registerCommands(context: vscode.ExtensionContext): void {
           );
           return;
         }
+        const { type: requestedType, ...assetWithoutType } = asset;
+        if (
+          requestedType !== undefined &&
+          requestedType !== 'image' &&
+          requestedType !== 'audio' &&
+          requestedType !== 'video'
+        ) {
+          void handleError(
+            new Error(`neko.canvas.importAsset: unsupported media type ${requestedType}`),
+            {
+              showToUser: true,
+              severity: 'warning',
+            },
+          );
+          return;
+        }
+        const request: CanvasImportAssetRequest = {
+          ...assetWithoutType,
+          ...(requestedType ? { type: requestedType } : {}),
+        };
 
-        const result = await canvasProjectAuthoringService.importAsset({ asset });
+        const result = await canvasProjectAuthoringService.importAsset({ asset: request });
 
         const source =
-          asset.path ??
-          asset.resourceRef?.id ??
-          asset.documentResourceRef?.entryPath ??
+          request.path ??
+          request.resourceRef?.id ??
+          request.documentResourceRef?.entryPath ??
           'linked-resource';
         getRootLogger().info(
           `importAsset: created media node ${result.nodeId} in ${result.documentUri} from ${source} (${result.mediaType})`,
@@ -533,8 +562,10 @@ async function createCanvas(config: CanvasConfig): Promise<string> {
   if (!folders || folders.length === 0) {
     throw new Error('No workspace folder open');
   }
+  const [folder] = folders;
+  if (!folder) throw new Error('No workspace folder open');
 
-  const canvasFile = await createAvailableCanvasFilePath(folders[0].uri.fsPath, config.name);
+  const canvasFile = await createAvailableCanvasFilePath(folder.uri.fsPath, config.name);
   const content = getCanvasTemplate(config.name, {
     creativeScope: config.creativeScope,
     relatedBoards: config.relatedBoards,

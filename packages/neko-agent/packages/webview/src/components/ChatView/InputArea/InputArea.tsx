@@ -3,7 +3,15 @@
  * Codex-style design with inline action buttons
  */
 
-import { useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import {
+  useRef,
+  useState,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  type ReactNode,
+} from 'react';
 import { SendIcon, StopIcon, PlusIcon, EditIcon, CloseIcon } from '@neko/shared/icons';
 import { ModeConfigBar } from './ModeConfigBar';
 import { ModeSelector } from './ModeSelector';
@@ -50,7 +58,6 @@ import { isOptimisticQueuedMessageItem } from '@/presenters/message-queue-presen
 import { projectComposerModeConfig } from '@/presenters/composer-mode-config-presenter';
 import { projectClipboardTextToContextPayload } from '@/presenters/clipboard-context-presenter';
 import type { AgentContextPayload, ChatModelOption } from '@neko/shared';
-import { AgentHostMessages } from '@/messages';
 import type {
   AgentLlmConfig,
   AgentModelSlots,
@@ -58,6 +65,7 @@ import type {
   ConversationKind,
   SessionMode,
 } from '@neko-agent/types';
+import { submitRoleplayEntrySelection } from '../roleplay-entry-action';
 
 interface InputAreaProps {
   inputValue: string;
@@ -250,6 +258,12 @@ export function InputArea({
   } = useInputAreaContext();
   const { t } = useTranslation();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    resizeTextarea(textarea, inputValue);
+  }, [inputValue]);
 
   useEffect(() => {
     if (!focusRequestEnabled || focusRequestTarget !== 'input' || focusRequestRevision <= 0) {
@@ -501,9 +515,7 @@ export function InputArea({
 
     syncMentionMenuFromInput(value);
 
-    // Auto-resize
-    e.target.style.height = 'auto';
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+    resizeTextarea(e.target, value);
   };
 
   // Cycle execution mode: plan → ask → auto → plan
@@ -887,18 +899,7 @@ export function InputArea({
 
   const handleEntryRoleplaySelect = (item: MentionItem) => {
     closeEntryPromptMenu();
-    const projectSearchItemId = item.navigationData?.projectSearchItemId;
-    if (item.navigationData?.candidateId && projectSearchItemId) {
-      AgentHostMessages.confirmRoleplayCandidate({
-        projectSearchItemId,
-        ...(inputValue.trim() ? { initialUserMessage: inputValue.trim() } : {}),
-      });
-      textareaRef.current?.focus();
-      return;
-    }
-    AgentHostMessages.startCharacterDialogueFromSlash(
-      `${formatRoleplaySlashEntity(item)} --roleplay --skip-enrich${formatInitialRoleplayMessage(inputValue)}`,
-    );
+    submitRoleplayEntrySelection(item, inputValue);
     textareaRef.current?.focus();
   };
 
@@ -1187,6 +1188,13 @@ export function InputArea({
       </div>
     </div>
   );
+}
+
+function resizeTextarea(textarea: HTMLTextAreaElement, value: string): void {
+  textarea.style.height = 'auto';
+  if (value.length > 0) {
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+  }
 }
 
 export type { MessageAttachment, ProjectFile, SelectedFileReference };
@@ -1567,50 +1575,6 @@ function replaceTrailingMention(input: string, replacement: string): string {
   return normalizeInputWhitespace(
     `${input.slice(0, range.start)}${replacement}${input.slice(range.end)}`,
   );
-}
-
-function formatRoleplaySlashEntity(item: MentionItem): string {
-  const entityId = getMentionEntityId(item);
-  if (entityId) {
-    return `entity:${entityId}`;
-  }
-  return item.label.includes(' ') ? `entity:${item.label}` : `@${item.label}`;
-}
-
-function formatInitialRoleplayMessage(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return '';
-  if (!trimmed.includes('"')) return ` "${trimmed}"`;
-  if (!trimmed.includes("'")) return ` '${trimmed}'`;
-  return ` ${trimmed.replace(/\s+/g, ' ')}`;
-}
-
-function getMentionEntityId(item: MentionItem): string | undefined {
-  const fromNavigation =
-    item.navigationData?.entityId ??
-    item.navigationData?.characterId ??
-    item.navigationData?.assetId ??
-    item.navigationData?.refId ??
-    item.navigationData?.id;
-  if (fromNavigation) return fromNavigation;
-  const prefixedId = stripKnownMentionIdPrefix(item.id);
-  if (prefixedId) return prefixedId;
-  if (isPlainEntityId(item.id)) return item.id;
-  if (item.contextPayload?.id) return item.contextPayload.id;
-  return undefined;
-}
-
-function stripKnownMentionIdPrefix(value: string): string | undefined {
-  const separatorIndex = value.indexOf(':');
-  if (separatorIndex <= 0 || separatorIndex === value.length - 1) return undefined;
-  const prefix = value.slice(0, separatorIndex);
-  return prefix === 'character' || prefix === 'entity'
-    ? value.slice(separatorIndex + 1)
-    : undefined;
-}
-
-function isPlainEntityId(value: string): boolean {
-  return !value.includes(':') && !value.includes('/') && !value.includes('\\');
 }
 
 /** Small icon indicating media model calls (image/video/audio generation) */

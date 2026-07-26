@@ -6,7 +6,6 @@ import { Text } from 'ink';
 import { cleanup, render } from 'ink-testing-library';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isCanonicalConversationId } from '@neko/agent';
-import type { IService } from '@neko/shared';
 import { DEFAULT_CLI_CONFIG, type CLIConfig } from '../../core/types';
 import { useAgentSession } from '../useAgentSession';
 import { createTestAgentTerminalPresentation } from '../../presentation/testing';
@@ -115,7 +114,6 @@ function ConversationIdProbe(props: {
     config: props.config,
     presentation: createTestAgentTerminalPresentation('zh-cn'),
     promptLocale: 'zh-cn',
-    service: createNoopService(),
     resumeConversationId: props.resumeConversationId,
     createLocalMetadata: createMemoryLocalMetadataBinding,
     localMetadataHome: props.config.workDir,
@@ -132,26 +130,6 @@ function ConversationIdProbe(props: {
   }, [props.onReady, session.getCurrentConversationId, session.isReady]);
 
   return React.createElement(Text, null, 'conversation-id-probe');
-}
-
-function createNoopService(): IService {
-  return {
-    async chat() {
-      return {
-        id: 'noop-response',
-        model: 'noop-model',
-        message: { role: 'assistant', content: '' },
-        finishReason: 'stop',
-        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      };
-    },
-    async *chatStream() {
-      yield { type: 'done' as const };
-    },
-    async embed(texts: string[]) {
-      return { embeddings: texts.map(() => []) };
-    },
-  };
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

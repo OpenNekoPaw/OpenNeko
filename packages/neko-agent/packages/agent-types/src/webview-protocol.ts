@@ -23,11 +23,9 @@ import type {
   NpcTranscriptArtifact,
   SkillSummary,
   StoryboardTable,
-  TaskRunScope,
 } from '@neko/shared';
 import type { StoryboardTextCue, StoryboardVoiceCue } from '@neko/shared';
 import {
-  validateChildRunScope,
   STORYBOARD_TEXT_CUE_KINDS,
   isAgentCapabilityInvocationInput,
   isCanvasMarkdownCapabilityTarget,
@@ -42,7 +40,7 @@ import {
   validateCanonicalStoryboardTable,
 } from '@neko/shared';
 import type { AgentPhase } from './phase';
-import type { AgentFileReference, ContentBlock, Message } from './message';
+import type { AgentFileReference, Message } from './message';
 import type { ConfiguredProvider } from './provider';
 import type {
   ConversationSummary,
@@ -54,14 +52,7 @@ import type {
   TabState,
 } from './ui';
 import type { PluginSlashCommandInvocation } from './plugin-slash-command';
-import type {
-  AgentWorkItem,
-  SubAgentWorkItem,
-  SubAgentWorkItemEvent,
-  TaskWorkItem,
-} from './work-item';
-import type { TaskProjection } from '@neko/shared/types/task-projection';
-import type { AgentArtifactTransferPayload } from './artifact-transfer';
+import type { SubAgentWorkItem, SubAgentWorkItemEvent } from './work-item';
 import type {
   PluginTransferAssetRef,
   PluginTransferCutStoryboardPayload,
@@ -177,7 +168,7 @@ export interface ConfirmToolWebviewMessage {
 }
 
 export interface ConversationOnlyWebviewMessage {
-  type: 'clearHistory' | 'cancelMessage' | 'getTasks' | 'getContextTokenCount' | 'compressContext';
+  type: 'clearHistory' | 'cancelMessage' | 'getContextTokenCount' | 'compressContext';
   conversationId: string;
 }
 
@@ -250,12 +241,6 @@ export interface UpdateTabStateWebviewMessage {
   openTabs: OpenTab[];
   activeTabId: string | null;
   expectedTabStateRevision: number;
-}
-
-export interface TaskActionWebviewMessage {
-  type: 'cancelTask' | 'retryTask' | 'viewTaskResult';
-  taskScope: TaskRunScope;
-  resultRef?: string;
 }
 
 export interface OpenFileWebviewMessage {
@@ -478,7 +463,6 @@ export type WebviewToExtensionMessage =
   | GetConversationSnapshotWebviewMessage
   | UpdateSettingsWebviewMessage
   | UpdateTabStateWebviewMessage
-  | TaskActionWebviewMessage
   | OpenFileWebviewMessage
   | RevealDocumentLocatorWebviewMessage
   | FilePathWebviewMessage
@@ -551,57 +535,14 @@ export interface PluginsAvailable {
   cut?: boolean;
 }
 
-export interface ThinkingMessage {
-  type: 'thinking';
-  conversationId: string;
-}
-
-export interface StreamTextMessage {
-  type: 'streamText';
-  content?: string;
-  conversationId: string;
-  messageId?: string;
-}
-
-export interface AssistantTextReplacementMessage {
-  type: 'assistantTextReplacement';
-  conversationId: string;
-  messageId?: string;
-  reason: 'output-validation-retry';
-  attempt: number;
-}
-
-export interface StreamCompleteMessage {
-  type: 'streamComplete';
-  conversationId: string;
-  messageId?: string;
-  contentBlocks?: readonly ContentBlock[];
-}
-
-export interface StreamThinkingMessage {
-  type: 'streamThinking';
-  content?: string;
-  conversationId: string;
-  messageId?: string;
-}
-
-export interface MessageCancelledMessage {
-  type: 'messageCancelled';
-  conversationId: string;
-}
-
-export type AgentTurnSource =
-  'user' | 'task-result-continuation' | 'subagent-result-continuation' | 'system-continuation';
+export type AgentTurnSource = 'user' | 'subagent-result-continuation' | 'system-continuation';
 
 export type AgentQueuedMessageSource = AgentTurnSource | 'composer';
 
 export type AgentQueuedMessageDisplayKind =
-  'user-message' | 'task-continuation' | 'subagent-continuation' | 'system-continuation';
+  'user-message' | 'subagent-continuation' | 'system-continuation';
 
 export interface AgentContinuationMetadata {
-  readonly observationId?: string;
-  readonly taskId?: string;
-  readonly taskGroupId?: string;
   readonly subagentId?: string;
   readonly parentMessageId?: string;
   readonly parentToolCallId?: string;
@@ -841,78 +782,6 @@ export interface PluginsAvailableMessage {
   plugins?: PluginsAvailable;
 }
 
-export interface ToolCallMessage {
-  type: 'toolCall';
-  conversationId: string;
-  messageId?: string;
-  toolCallId?: string;
-  toolName: string;
-  arguments?: Record<string, unknown>;
-}
-
-export interface ToolResultMessage {
-  type: 'toolResult';
-  conversationId: string;
-  messageId?: string;
-  toolCallId?: string;
-  success: boolean;
-  data?: unknown;
-  error?: string;
-  attachments?: readonly import('@neko/shared').ToolResultAttachment[];
-  perceptionCards?: readonly import('@neko/shared').PerceptionCard[];
-  backfillDiagnostics?: readonly import('@neko/shared').ToolResultBackfillDiagnostic[];
-  artifacts?: readonly AgentArtifactTransferPayload[];
-}
-
-export interface ToolResultBackfillMessage {
-  type: 'toolResultBackfill';
-  conversationId: string;
-  messageId?: string;
-  toolCallId: string;
-  dataPatch: Record<string, unknown>;
-  attachments?: readonly import('@neko/shared').ToolResultAttachment[];
-  perceptionCards?: readonly import('@neko/shared').PerceptionCard[];
-  backfillDiagnostics?: readonly import('@neko/shared').ToolResultBackfillDiagnostic[];
-  artifacts?: readonly AgentArtifactTransferPayload[];
-}
-
-export interface ToolConfirmationMessage {
-  type: 'toolConfirmation';
-  conversationId: string;
-  toolCallId: string;
-  toolName?: string;
-  action?: string;
-  description?: string;
-  details?: Record<string, unknown>;
-}
-
-export interface TasksUpdatedMessage {
-  type: 'tasksUpdated';
-  conversationId: string;
-  workItems: AgentWorkItem[];
-}
-
-export interface TaskCreatedMessage {
-  type: 'taskCreated';
-  conversationId: string;
-  messageId?: string;
-  toolCallId?: string;
-  workItem: AgentWorkItem;
-}
-
-export interface TaskUpdatedMessage {
-  type: 'taskUpdated';
-  conversationId: string;
-  workItem: AgentWorkItem;
-}
-
-export interface TaskRemovedMessage {
-  type: 'taskRemoved';
-  conversationId: string;
-  taskScope: TaskRunScope;
-  taskId: string;
-}
-
 export interface SubAgentEventMessage {
   type: 'subagentEvent';
   conversationId: string;
@@ -1002,30 +871,6 @@ export interface CompressionErrorMessage {
   error?: string;
 }
 
-export interface MediaTaskCreatedMessage {
-  type: 'mediaTaskCreated';
-  conversationId: string;
-  messageId?: string;
-  toolCallId?: string;
-  parentScope?: 'turn';
-  workItem: TaskWorkItem;
-}
-
-export interface MediaTaskProgressMessage {
-  type: 'mediaTaskProgress';
-  conversationId: string;
-  messageId?: string;
-  toolCallId?: string;
-  parentScope?: 'turn';
-  workItem: TaskWorkItem;
-}
-
-export interface TaskDeliveryReplayMessage {
-  type: 'taskDeliveryReplay';
-  conversationId: string;
-  task: TaskProjection;
-}
-
 export interface ExternalMessage {
   type: 'externalMessage';
   message?: string;
@@ -1056,12 +901,6 @@ export interface AmbientCanvasUpdateMessage {
 }
 
 export type ExtensionToWebviewMessage =
-  | ThinkingMessage
-  | StreamTextMessage
-  | AssistantTextReplacementMessage
-  | StreamCompleteMessage
-  | StreamThinkingMessage
-  | MessageCancelledMessage
   | MessageQueuedMessage
   | MessageQueueSnapshotMessage
   | QueuedMessageEditRequestedMessage
@@ -1083,14 +922,6 @@ export type ExtensionToWebviewMessage =
   | ProviderMutationResultMessage
   | PluginCommandsMessage
   | PluginsAvailableMessage
-  | ToolCallMessage
-  | ToolResultMessage
-  | ToolResultBackfillMessage
-  | ToolConfirmationMessage
-  | TasksUpdatedMessage
-  | TaskCreatedMessage
-  | TaskUpdatedMessage
-  | TaskRemovedMessage
   | SubAgentEventMessage
   | TabStateMessage
   | SlashCommandResultMessage
@@ -1104,9 +935,6 @@ export type ExtensionToWebviewMessage =
   | ContextTokenCountMessage
   | CompressionResultMessage
   | CompressionErrorMessage
-  | MediaTaskCreatedMessage
-  | MediaTaskProgressMessage
-  | TaskDeliveryReplayMessage
   | ExternalMessage
   | PrefillInputMessage
   | InjectContextMessage
@@ -1150,7 +978,6 @@ const AGENT_SERVICE_TIERS: readonly AgentServiceTier[] = [
 const CONVERSATION_ONLY_MESSAGE_TYPES: readonly ConversationOnlyWebviewMessage['type'][] = [
   'clearHistory',
   'cancelMessage',
-  'getTasks',
   'getContextTokenCount',
   'compressContext',
 ];
@@ -1166,11 +993,6 @@ const EMPTY_MESSAGE_TYPES: readonly EmptyWebviewMessage['type'][] = [
   'openUserConfigFile',
   'openConfigFile',
   'getTabState',
-];
-const TASK_ACTION_MESSAGE_TYPES: readonly TaskActionWebviewMessage['type'][] = [
-  'cancelTask',
-  'retryTask',
-  'viewTaskResult',
 ];
 const QUEUED_MESSAGE_ACTION_TYPES: readonly QueuedMessageActionWebviewMessage['type'][] = [
   'promoteQueuedMessage',
@@ -1189,7 +1011,6 @@ export const WEBVIEW_TO_EXTENSION_MESSAGE_TYPES = [
   'updateSettings',
   'activateConversation',
   'updateTabState',
-  ...TASK_ACTION_MESSAGE_TYPES,
   'openFile',
   'revealDocumentLocator',
   'revealFile',
@@ -1259,62 +1080,6 @@ export function buildAgentSessionDiagnosticMessage(input: {
   };
 }
 
-export function buildThinkingMessage(conversationId: string): ThinkingMessage {
-  return {
-    type: 'thinking',
-    conversationId: requireBuilderConversationId(conversationId, 'thinking'),
-  };
-}
-
-export function buildStreamTextMessage(input: {
-  readonly conversationId: string;
-  readonly content?: string;
-  readonly messageId?: string;
-}): StreamTextMessage {
-  const conversationId = requireBuilderConversationId(input.conversationId, 'streamText');
-  return {
-    type: 'streamText',
-    conversationId,
-    ...(input.content !== undefined ? { content: input.content } : {}),
-    ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
-  };
-}
-
-export function buildAssistantTextReplacementMessage(input: {
-  readonly conversationId: string;
-  readonly messageId?: string;
-  readonly reason: 'output-validation-retry';
-  readonly attempt: number;
-}): AssistantTextReplacementMessage {
-  const conversationId = requireBuilderConversationId(
-    input.conversationId,
-    'assistantTextReplacement',
-  );
-  return {
-    type: 'assistantTextReplacement',
-    conversationId,
-    reason: input.reason,
-    attempt: input.attempt,
-    ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
-  };
-}
-
-export function buildStreamCompleteMessage(input: {
-  readonly conversationId: string;
-  readonly messageId?: string;
-  readonly contentBlocks?: readonly ContentBlock[];
-}): StreamCompleteMessage {
-  const conversationId = requireBuilderConversationId(input.conversationId, 'streamComplete');
-  return {
-    type: 'streamComplete',
-    conversationId,
-    ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
-    ...(input.contentBlocks && input.contentBlocks.length > 0
-      ? { contentBlocks: input.contentBlocks }
-      : {}),
-  };
-}
-
 export function buildErrorMessage(input: {
   readonly conversationId: string;
   readonly message?: string;
@@ -1330,13 +1095,6 @@ export function buildHistoryClearedMessage(conversationId: string): HistoryClear
   return {
     type: 'historyCleared',
     conversationId: requireBuilderConversationId(conversationId, 'historyCleared'),
-  };
-}
-
-export function buildMessageCancelledMessage(conversationId: string): MessageCancelledMessage {
-  return {
-    type: 'messageCancelled',
-    conversationId: requireBuilderConversationId(conversationId, 'messageCancelled'),
   };
 }
 
@@ -1422,25 +1180,6 @@ export function buildAgentStateSnapshotMessage(
       ...state,
       conversationId: requireBuilderConversationId(state.conversationId, 'agentStateSnapshot'),
     })),
-  };
-}
-
-export function buildToolConfirmationMessage(input: {
-  readonly conversationId: string;
-  readonly toolCallId: string;
-  readonly toolName?: string;
-  readonly action?: string;
-  readonly description?: string;
-  readonly details?: Record<string, unknown>;
-}): ToolConfirmationMessage {
-  return {
-    type: 'toolConfirmation',
-    conversationId: requireBuilderConversationId(input.conversationId, 'toolConfirmation'),
-    toolCallId: input.toolCallId,
-    ...(input.toolName !== undefined ? { toolName: input.toolName } : {}),
-    ...(input.action !== undefined ? { action: input.action } : {}),
-    ...(input.description !== undefined ? { description: input.description } : {}),
-    ...(input.details !== undefined ? { details: input.details } : {}),
   };
 }
 
@@ -1572,105 +1311,6 @@ export function buildTabStateMessage(tabState: TabState, revision: number): TabS
   };
 }
 
-export function buildTasksUpdatedMessage(input: {
-  readonly conversationId: string;
-  readonly workItems: readonly AgentWorkItem[];
-}): TasksUpdatedMessage {
-  return {
-    type: 'tasksUpdated',
-    conversationId: requireBuilderConversationId(input.conversationId, 'tasksUpdated'),
-    workItems: [...input.workItems],
-  };
-}
-
-export function buildTaskCreatedMessage(input: {
-  readonly conversationId: string;
-  readonly workItem: AgentWorkItem;
-  readonly messageId?: string;
-  readonly toolCallId?: string;
-}): TaskCreatedMessage {
-  return {
-    type: 'taskCreated',
-    conversationId: requireBuilderConversationId(input.conversationId, 'taskCreated'),
-    ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
-    ...(input.toolCallId !== undefined ? { toolCallId: input.toolCallId } : {}),
-    workItem: input.workItem,
-  };
-}
-
-export function buildTaskUpdatedMessage(input: {
-  readonly conversationId: string;
-  readonly workItem: AgentWorkItem;
-}): TaskUpdatedMessage {
-  return {
-    type: 'taskUpdated',
-    conversationId: requireBuilderConversationId(input.conversationId, 'taskUpdated'),
-    workItem: input.workItem,
-  };
-}
-
-export function buildTaskRemovedMessage(input: {
-  readonly taskScope: TaskRunScope;
-  readonly taskId: string;
-}): TaskRemovedMessage {
-  if (input.taskScope.childKind !== 'task' || input.taskScope.childRunId !== input.taskId) {
-    throw new Error(
-      `taskRemoved scope mismatch: ${input.taskScope.childKind}:${input.taskScope.childRunId} cannot remove task ${input.taskId}.`,
-    );
-  }
-  return {
-    type: 'taskRemoved',
-    conversationId: requireBuilderConversationId(input.taskScope.conversationId, 'taskRemoved'),
-    taskScope: input.taskScope,
-    taskId: input.taskId,
-  };
-}
-
-export function buildMediaTaskCreatedMessage(input: {
-  readonly conversationId: string;
-  readonly workItem: TaskWorkItem;
-  readonly messageId?: string;
-  readonly toolCallId?: string;
-  readonly parentScope?: 'turn';
-}): MediaTaskCreatedMessage {
-  return {
-    type: 'mediaTaskCreated',
-    conversationId: requireBuilderConversationId(input.conversationId, 'mediaTaskCreated'),
-    ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
-    ...(input.toolCallId !== undefined ? { toolCallId: input.toolCallId } : {}),
-    ...(input.parentScope !== undefined ? { parentScope: input.parentScope } : {}),
-    workItem: input.workItem,
-  };
-}
-
-export function buildMediaTaskProgressMessage(input: {
-  readonly conversationId: string;
-  readonly workItem: TaskWorkItem;
-  readonly messageId?: string;
-  readonly toolCallId?: string;
-  readonly parentScope?: 'turn';
-}): MediaTaskProgressMessage {
-  return {
-    type: 'mediaTaskProgress',
-    conversationId: requireBuilderConversationId(input.conversationId, 'mediaTaskProgress'),
-    ...(input.messageId !== undefined ? { messageId: input.messageId } : {}),
-    ...(input.toolCallId !== undefined ? { toolCallId: input.toolCallId } : {}),
-    ...(input.parentScope !== undefined ? { parentScope: input.parentScope } : {}),
-    workItem: input.workItem,
-  };
-}
-
-export function buildTaskDeliveryReplayMessage(input: {
-  readonly conversationId: string;
-  readonly task: TaskProjection;
-}): TaskDeliveryReplayMessage {
-  return {
-    type: 'taskDeliveryReplay',
-    conversationId: requireBuilderConversationId(input.conversationId, 'taskDeliveryReplay'),
-    task: input.task,
-  };
-}
-
 export function buildSubAgentEventMessage(input: {
   readonly event: SubAgentWorkItemEvent;
   readonly workItem: SubAgentWorkItem;
@@ -1769,10 +1409,6 @@ export function parseWebviewToExtensionMessage(raw: unknown): WebviewToExtension
   if (isQueuedMessageActionType(type)) {
     return parseQueuedMessageActionMessage(type, raw);
   }
-  if (isTaskActionMessageType(type)) {
-    return parseTaskActionMessage(type, raw);
-  }
-
   switch (type) {
     case 'searchProjectFiles':
       return parseSearchProjectFilesMessage(raw);
@@ -2114,22 +1750,6 @@ function parseUpdateTabStateMessage(
     openTabs,
     activeTabId: raw.activeTabId,
     expectedTabStateRevision,
-  };
-}
-
-function parseTaskActionMessage(
-  type: TaskActionWebviewMessage['type'],
-  raw: Record<string, unknown>,
-): TaskActionWebviewMessage | null {
-  const scopeResult = validateChildRunScope(raw.taskScope);
-  if (!scopeResult.ok || scopeResult.scope.childKind !== 'task') {
-    return null;
-  }
-  const resultRef = typeof raw.resultRef === 'string' && raw.resultRef ? raw.resultRef : undefined;
-  return {
-    type,
-    taskScope: scopeResult.scope as TaskRunScope,
-    ...(resultRef ? { resultRef } : {}),
   };
 }
 
@@ -3359,10 +2979,6 @@ function isConversationOnlyMessageType(
 
 function isEmptyMessageType(value: string): value is EmptyWebviewMessage['type'] {
   return includesString(EMPTY_MESSAGE_TYPES, value);
-}
-
-function isTaskActionMessageType(value: string): value is TaskActionWebviewMessage['type'] {
-  return includesString(TASK_ACTION_MESSAGE_TYPES, value);
 }
 
 function isQueuedMessageActionType(

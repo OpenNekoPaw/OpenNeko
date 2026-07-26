@@ -23,6 +23,7 @@ export interface ConversationProjectionStore {
 
 interface MutableTurnProjection {
   readonly turnId: string;
+  readonly runId: string;
   readonly messageId: string;
   readonly items: Map<string, AgentTurnTimelineItem>;
   completion?: AgentTurnTimelineCompletion;
@@ -77,6 +78,7 @@ class DefaultConversationProjectionStore implements ConversationProjectionStore 
       baseProjectionVersion,
       projectionVersion: this._projectionVersion,
       turnId: turn.turnId,
+      runId: turn.runId,
       messageId: turn.messageId,
       operations: update.operations,
       ...(update.completion ? { completion: update.completion } : {}),
@@ -94,6 +96,7 @@ class DefaultConversationProjectionStore implements ConversationProjectionStore 
       projectionVersion: this._projectionVersion,
       turns: Array.from(this.turns.values(), (turn) => ({
         turnId: turn.turnId,
+        runId: turn.runId,
         messageId: turn.messageId,
         items: Array.from(turn.items.values())
           .sort((left, right) => left.sequence - right.sequence)
@@ -126,14 +129,16 @@ class DefaultConversationProjectionStore implements ConversationProjectionStore 
     existing: MutableTurnProjection | undefined,
   ): MutableTurnProjection {
     assertRequiredIdentity('turnId', update.turnId);
+    assertRequiredIdentity('runId', update.runId);
     assertRequiredIdentity('messageId', update.messageId);
-    if (existing && existing.messageId !== update.messageId) {
+    if (existing && (existing.runId !== update.runId || existing.messageId !== update.messageId)) {
       throw new Error(
-        `Conversation projection turn ${update.turnId} is owned by message ${existing.messageId}, received ${update.messageId}.`,
+        `Conversation projection turn ${update.turnId} is owned by ${existing.runId}/${existing.messageId}, received ${update.runId}/${update.messageId}.`,
       );
     }
     return {
       turnId: update.turnId,
+      runId: update.runId,
       messageId: update.messageId,
       items: new Map(
         Array.from(existing?.items ?? [], ([itemId, item]) => [
@@ -167,10 +172,11 @@ function assertOperationOwners(update: ConversationProjectionUpdate): void {
     if (
       item.conversationId !== update.conversationId ||
       item.turnId !== update.turnId ||
+      item.runId !== update.runId ||
       item.messageId !== update.messageId
     ) {
       throw new Error(
-        `Conversation projection operation ${item.itemId} does not belong to ${update.conversationId}/${update.turnId}/${update.messageId}.`,
+        `Conversation projection operation ${item.itemId} does not belong to ${update.conversationId}/${update.turnId}/${update.runId}/${update.messageId}.`,
       );
     }
   }

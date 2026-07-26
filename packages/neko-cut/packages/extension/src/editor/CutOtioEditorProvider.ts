@@ -26,6 +26,7 @@ import { resolvePreviewSelection } from './previewSelection';
 import { executeCutWorkbenchHistory } from './cutHistory';
 import { CutExportTaskRegistry } from './CutExportTaskRegistry';
 import { freezeCutExportRequest, readCutExportSettings } from './cutExportRequest';
+import type { ExportJobStore } from '../services/export-job';
 import { CutWorkspaceMediaImporter } from '../services/CutWorkspaceMediaImporter';
 import { CutWorkspaceMediaPaths } from '../services/CutWorkspaceMediaPaths';
 import { EngineConnection } from '../services/EngineConnection';
@@ -42,6 +43,10 @@ import {
 export interface CutOtioEditorHostEvents {
   readonly onExportTaskUpdate: (task: CutExportTaskSnapshot) => void;
   readonly onDocumentStatusUpdate: (snapshot: CutDocumentStatusSnapshot | undefined) => void;
+}
+
+export interface CutOtioEditorJobOptions {
+  readonly store: ExportJobStore;
 }
 
 interface CutPreviewRecord {
@@ -86,22 +91,34 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly hostEvents: CutOtioEditorHostEvents,
+    jobOptions: CutOtioEditorJobOptions,
   ) {
     this.localResourceAccess = createDefaultLocalResourceAccessService({
       extensionUri: context.extensionUri,
       extensionAssetSegments: ['dist', 'webview'],
     });
-    this.exportTasks = new CutExportTaskRegistry((task) => {
-      hostEvents.onExportTaskUpdate(task);
-      void this.broadcastExportTask(task).catch((error: unknown) => {
-        void handleError(
-          new Error(
-            `Failed to publish Cut export status: ${error instanceof Error ? error.message : String(error)}`,
-          ),
-          { showToUser: false },
-        );
-      });
+    this.exportTasks = new CutExportTaskRegistry({
+      store: jobOptions.store,
+      onUpdate: (task) => {
+        hostEvents.onExportTaskUpdate(task);
+        void this.broadcastExportTask(task).catch((error: unknown) => {
+          void handleError(
+            new Error(
+              `Failed to publish Cut export status: ${error instanceof Error ? error.message : String(error)}`,
+            ),
+            { showToUser: false },
+          );
+        });
+      },
     });
+  }
+
+  recoverExportJobs(): Promise<void> {
+    return this.exportTasks.recover();
+  }
+
+  dispose(): Promise<void> {
+    return this.exportTasks.dispose();
   }
 
   async openCustomDocument(
@@ -433,7 +450,7 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
         if (typeof value['jobId'] !== 'string') {
           throw new Error('Cut export cancellation requires an explicit jobId.');
         }
-        this.exportTasks.cancel(document.session.documentUri, value['jobId']);
+        await this.exportTasks.cancel(document.session.documentUri, value['jobId']);
         return;
       }
       if (value['type'] === 'cut:export-start') {
@@ -467,7 +484,7 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
           .relative(workspace.uri.fsPath, destination.fsPath)
           .split(nodePath.sep)
           .join('/');
-        this.exportTasks.start({
+        await this.exportTasks.start({
           documentUri: frozen.documentUri,
           sessionId: frozen.sessionId,
           sourceRevision: frozen.sourceRevision,

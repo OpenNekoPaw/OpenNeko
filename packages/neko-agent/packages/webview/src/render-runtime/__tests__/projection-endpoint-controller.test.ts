@@ -241,6 +241,8 @@ describe('ProjectionEndpointController', () => {
         baseProjectionVersion: 0,
         projectionVersion: 1,
         turnId: 'turn-a',
+
+        runId: 'run-a',
         messageId: 'message-a',
         operations: [],
       },

@@ -5,12 +5,12 @@
   "caseGroup": "canonical",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Generate one image through the builtin image Skill and observe the real task result.",
-    "canonicalPath": ["builtin image Skill", "GenerateImage", "image_generation task", "task-result observation", "artifact delivery"],
-    "forbiddenFallback": ["text-only generation claim", "mock image task", "unobserved task result", "SubAgent result lookup"],
-    "observables": [{ "ref": "image-facts", "kind": "runtime-fact", "description": "Skill composition, Tool call, task terminal result, continuation, and idle facts.", "required": true }],
-    "expectedResult": "The image Skill calls GenerateImage and the completed task result is observed before finalization.",
-    "expectedFailure": "Missing Skill/Tool/task/result or non-idle delivery fails."
+    "userBehavior": "Generate one image through the builtin image Skill and observe the terminal Tool result.",
+    "canonicalPath": ["builtin image Skill", "GenerateImage Tool call", "terminal Tool result", "artifact delivery"],
+    "forbiddenFallback": ["text-only generation claim", "mock image execution", "generic TaskManager", "TaskRef", "task-result continuation", "SubAgent result lookup"],
+    "observables": [{ "ref": "image-facts", "kind": "runtime-fact", "description": "Skill composition, terminal Tool result, artifact, no-fallback, and idle facts.", "required": true }],
+    "expectedResult": "The image Skill calls GenerateImage and observes its terminal result before finalization.",
+    "expectedFailure": "Missing Skill, terminal Tool result, artifact, no-fallback evidence, or terminal idle fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -24,8 +24,8 @@
     { "id": "tool", "kind": "tool-call", "name": "GenerateImage", "status": "success", "evidenceRef": "image-facts" },
     { "id": "no-subagent-spawn", "kind": "tool-call", "name": "subagent", "status": "absent", "evidenceRef": "image-facts" },
     { "id": "no-subagent-output", "kind": "tool-call", "name": "subagent_output", "status": "absent", "evidenceRef": "image-facts" },
-    { "id": "task", "kind": "task-terminal", "taskType": "image_generation", "status": "completed", "evidenceRef": "image-facts" },
-    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "backgroundTasksIdle", "mediaDeliveryIdle", "taskResultObservationIdle", "continuationQueueIdle"], "evidenceRef": "image-facts" }
+    { "id": "no-generic-task-path", "kind": "no-fallback", "forbiddenRefs": ["generic-task-manager", "TaskRef", "task-result-continuation"], "evidenceRef": "image-facts" },
+    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "continuationQueueIdle"], "evidenceRef": "image-facts" }
   ],
   "artifactChecks": [],
   "budget": { "timeoutMs": 1200000, "repetitions": 1 }

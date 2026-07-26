@@ -10,6 +10,10 @@ const vscodeMocks = vi.hoisted(() => ({
   })),
 }));
 
+const cutEditorMocks = vi.hoisted(() => ({
+  recoverExportJobs: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('vscode', () => ({
   window: { registerCustomEditorProvider: vscodeMocks.registerCustomEditorProvider },
   commands: {
@@ -34,6 +38,7 @@ vi.mock('./base', () => ({
 vi.mock('./editor/CutOtioEditorProvider', () => ({
   CutOtioEditorProvider: class {
     handoffRoute = vi.fn();
+    recoverExportJobs = cutEditorMocks.recoverExportJobs;
   },
   createNewOtioProject: vi.fn(),
 }));
@@ -64,6 +69,7 @@ describe('Cut extension registration', () => {
     const api = await activate(context as vscode.ExtensionContext);
     expect(api.status).toBe('ready');
     expect(api.routes.handoff).toEqual(expect.any(Function));
+    expect(cutEditorMocks.recoverExportJobs).toHaveBeenCalledTimes(1);
     expect(vscodeMocks.registerCustomEditorProvider).toHaveBeenCalledWith(
       'neko.cut.otioEditor',
       expect.anything(),

@@ -258,7 +258,15 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
         }
         switch (message.type) {
           case 'update': {
-            const canvasData = message.data ? (message.data as CanvasData) : defaultCanvasData;
+            if (!isCanvasDocumentPayload(message.data)) {
+              setLoadDiagnostic({
+                code: 'canvas.project.invalid-update',
+                message: 'Canvas update message does not contain a valid document.',
+              });
+              setIsReady(false);
+              break;
+            }
+            const canvasData = message.data;
             setLoadDiagnostic(null);
             setCanvasData(canvasData);
             onCanvasDataLoadedRef.current?.(canvasData);
@@ -619,4 +627,15 @@ export function useVSCodeMessages(options: UseVSCodeMessagesOptions): UseVSCodeM
   }, [vscode, setCanvasData, defaultCanvasData]);
 
   return { isReady, loadDiagnostic, keyboardActionRef };
+}
+
+function isCanvasDocumentPayload(value: unknown): value is CanvasData {
+  return (
+    isRecord(value) &&
+    typeof value.version === 'string' &&
+    typeof value.name === 'string' &&
+    (value.viewport === undefined || isRecord(value.viewport)) &&
+    Array.isArray(value.nodes) &&
+    Array.isArray(value.connections)
+  );
 }

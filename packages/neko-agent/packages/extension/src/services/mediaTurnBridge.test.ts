@@ -1,387 +1,405 @@
 import { describe, expect, it, vi } from 'vitest';
-import * as vscode from 'vscode';
-import { MediaTurnBridge } from './mediaTurnBridge';
-import type { MediaTask } from '@neko/platform';
-import {
-  createGeneratedAssetRevisionRef,
-  type GeneratedAsset,
-  type ResourceRef,
-  type Task,
-} from '@neko/shared';
+import { createConversationProjectionStore } from '@neko/agent/runtime';
+import { createGeneratedAssetRevisionRef, type GeneratedAsset } from '@neko/shared';
+import type {
+  GenerationJobPort,
+  GenerationJobSnapshot,
+  SubmitGenerationJobInput,
+} from '@neko/generation';
 
-vi.mock('vscode', async () => await import('../__mocks__/vscode'));
+import { MediaTurnBridge } from './mediaTurnBridge';
 
 describe('MediaTurnBridge', () => {
-  it('forwards stable 3D reference controls to the selected image request', async () => {
-    const created = createMediaTask({ status: 'pending', progress: 0 });
-    const poseRef = resourceRef('pose');
-    const generateImage = vi.fn().mockResolvedValue(created);
-    const bridge = new MediaTurnBridge({
-      platform: {
-        media: {
-          generateImage,
-          getTask: vi.fn().mockResolvedValue(undefined),
-          onProgress: vi.fn().mockReturnValue(vi.fn()),
-        },
-      } as never,
-      mediaDeliveryHost: {
-        createTaskView: vi.fn(async () => ({
-          id: 'task-1',
-          type: 'image',
-          status: 'pending',
-          progress: 0,
-          providerId: 'fal',
-          modelId: 'flux-control',
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
-          request: { prompt: 'match pose' },
-        })),
-      } as never,
-    });
-
-    await bridge.execute({
-      webview: createWebview(),
-      conversationId: 'conv-1',
-      prompt: 'match pose',
-      mediaModel: { providerId: 'fal', modelId: 'flux-control', category: 'image' },
-      threeReferenceControls: {
-        appearanceReferences: [],
-        controlImage: {
-          imageRef: poseRef,
-          mode: 'pose',
-          identity: { sessionId: 'pose-session', revision: 1 },
-        },
+  it('waits for the terminal generation result, delivers it, and projects one completed turn', async () => {
+    const jobs = createGenerationJobs();
+    const asset = generatedImage();
+    const resolveGenerationResult = vi.fn(() => ({ path: asset.path, asset }));
+    const deliverBatch = vi.fn(async () => [
+      {
+        version: 2 as const,
+        deliveryId: 'generated-output-batch:1',
+        status: 'projected' as const,
+        nodeIds: ['generated-node-1'],
+        diagnostics: [],
       },
+    ]);
+    const projection = createConversationProjectionStore('conv-1');
+    const checkpointExternalTurn = vi.fn(async () => undefined);
+    const projectedItems: Record<string, unknown>[] = [];
+    projection.subscribe((patch) => {
+      for (const operation of patch.operations) {
+        if (operation.operation === 'snapshot' && operation.item.kind === 'tool_call') {
+          const progress = operation.item.payload.progress?.data;
+          if (isGenerationJobProjection(progress)) projectedItems.push(progress);
+        }
+      }
     });
-
-    expect(generateImage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        providerId: 'fal',
-        modelId: 'flux-control',
-        controlImageRef: poseRef,
-        controlMode: 'pose',
-      }),
-    );
-  });
-
-  it('posts stream completion and idle phase after a direct media task reaches a terminal state', async () => {
-    const created = createMediaTask({ status: 'pending', progress: 0 });
-    const completed = createMediaTask({ status: 'completed', progress: 100 });
-    const media = {
-      generateImage: vi.fn().mockResolvedValue(created),
-      getTask: vi.fn().mockResolvedValue(completed),
-      onProgress: vi.fn().mockReturnValue(vi.fn()),
-    };
-    const webview = createWebview();
     const bridge = new MediaTurnBridge({
-      platform: { media } as never,
-      mediaDeliveryHost: {
-        createTaskView: vi.fn(async (_webview: vscode.Webview, task: MediaTask) => ({
-          id: task.id,
-          type: 'image',
-          status: task.status,
-          progress: task.progress,
-          providerId: task.providerId,
-          modelId: task.modelId,
-          createdAt: task.createdAt.toISOString(),
-          updatedAt: task.updatedAt.toISOString(),
-          request: { prompt: task.request.prompt },
-        })),
-      } as never,
-      now: () => 123,
+      generationJobs: jobs,
+      resolveGenerationResult,
+      getConversationProjection: () => projection,
+      workspaceBoardProjection: { deliverBatch },
+      checkpointExternalTurn,
+      now: () => 100,
     });
 
     await bridge.execute({
-      webview,
+      webview: {} as never,
       conversationId: 'conv-1',
       prompt: 'cat',
-      mediaModel: { providerId: 'openai', modelId: 'gpt-image-1', category: 'image' },
+      mediaModel: { providerId: 'image-provider', modelId: 'image-model', category: 'image' },
+      userMessage: { id: 'user-1', content: 'cat', timestamp: 10 },
     });
 
-    const messages = webview.postMessage.mock.calls.map((call) => call[0]);
-    expect(messages).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: 'mediaTaskProgress',
-          conversationId: 'conv-1',
-          workItem: expect.objectContaining({ id: 'task-1', status: 'completed' }),
+    expect(jobs.submitGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'image-provider',
+        modelId: 'image-model',
+        generationType: 'text-to-image',
+        request: expect.objectContaining({
+          prompt: 'cat',
+          providerId: 'image-provider',
+          modelId: 'image-model',
+          metadata: expect.objectContaining({
+            operationId: expect.any(String),
+            source: 'direct-media-webview',
+            conversationId: 'conv-1',
+          }),
         }),
-        { type: 'streamComplete', conversationId: 'conv-1', messageId: 'media-turn:task-1' },
-        { type: 'agentPhase', conversationId: 'conv-1', phase: 'idle', timestamp: 123 },
-      ]),
-    );
-  });
-
-  it('projects direct terminal media tasks to task-result observation coordinator', async () => {
-    const created = createMediaTask({ status: 'pending', progress: 0 });
-    const completed = createMediaTask({ status: 'completed', progress: 100 });
-    const handleTerminalTask = vi.fn(async () => undefined);
-    const media = {
-      generateImage: vi.fn().mockResolvedValue(created),
-      getTask: vi.fn().mockResolvedValue(completed),
-      onProgress: vi.fn().mockReturnValue(vi.fn()),
-    };
-    const webview = createWebview();
-    const bridge = new MediaTurnBridge({
-      platform: { media } as never,
-      mediaDeliveryHost: {
-        createTaskView: vi.fn(async (_webview: vscode.Webview, task: MediaTask) => ({
-          id: task.id,
-          type: 'image',
-          status: task.status,
-          progress: task.progress,
-          providerId: task.providerId,
-          modelId: task.modelId,
-          createdAt: task.createdAt.toISOString(),
-          updatedAt: task.updatedAt.toISOString(),
-          request: { prompt: task.request.prompt },
-        })),
-      } as never,
-      taskResultObservations: { handleTerminalTask },
-    });
-
-    await bridge.execute({
-      webview,
-      conversationId: 'conv-1',
-      prompt: 'cat',
-      mediaModel: { providerId: 'openai', modelId: 'gpt-image-1', category: 'image' },
-    });
-
-    expect(handleTerminalTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'task-1',
-        status: 'completed',
-        lifecycle: expect.objectContaining({ ownerConversationId: 'conv-1' }),
       }),
-      { source: 'media-task' },
     );
+    expect(jobs.observeGeneration).toHaveBeenCalledWith(
+      { kind: 'generation', jobId: 'generation-1' },
+      1,
+    );
+    expect(resolveGenerationResult).toHaveBeenCalledWith(asset.lifecycle?.contentLocator);
+    expect(projectedItems).toMatchObject([
+      { kind: 'generation-job', jobId: 'generation-1', revision: 1, phase: 'pending' },
+      { kind: 'generation-job', jobId: 'generation-1', revision: 2, phase: 'running' },
+      { kind: 'generation-job', jobId: 'generation-1', revision: 3, phase: 'succeeded' },
+    ]);
+    expect(deliverBatch).toHaveBeenCalledOnce();
+    expect(checkpointExternalTurn).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      turnId: 'direct-media:generation-1',
+      terminalState: 'completed',
+      messages: [
+        {
+          role: 'user',
+          content: 'cat',
+          timestamp: 10,
+        },
+        expect.objectContaining({
+          role: 'assistant',
+          content: [
+            {
+              type: 'toolCall',
+              id: 'generation-1',
+              name: 'GenerateImage',
+              arguments: {
+                prompt: 'cat',
+                providerId: 'image-provider',
+                modelId: 'image-model',
+              },
+            },
+          ],
+          stopReason: 'toolUse',
+        }),
+        {
+          role: 'toolResult',
+          toolCallId: 'generation-1',
+          toolName: 'GenerateImage',
+          content: [{ type: 'text', text: 'Image generation completed.' }],
+          details: {
+            generationJob: expect.objectContaining({
+              jobId: 'generation-1',
+              phase: 'succeeded',
+            }),
+            outputs: [
+              {
+                type: 'image',
+                contentLocator: asset.lifecycle?.contentLocator,
+              },
+            ],
+            boardDelivery: {
+              status: 'projected',
+              nodeIds: ['generated-node-1'],
+              diagnostics: [],
+            },
+          },
+          isError: false,
+          timestamp: 100,
+        },
+      ],
+    });
+    expect(projection.snapshot()).toMatchObject({
+      conversationId: 'conv-1',
+      projectionVersion: 3,
+      turns: [
+        {
+          completion: { status: 'completed', completedAt: 100 },
+          items: [
+            {
+              kind: 'tool_call',
+              status: 'succeeded',
+              payload: {
+                displayName: 'Image generation',
+                toolCall: {
+                  name: 'GenerateImage',
+                  arguments: {
+                    prompt: 'cat',
+                    providerId: 'image-provider',
+                    modelId: 'image-model',
+                  },
+                  result: {
+                    success: true,
+                    data: {
+                      generationJob: {
+                        jobId: 'generation-1',
+                        revision: 3,
+                        phase: 'succeeded',
+                        stage: 'completed',
+                        percent: 100,
+                      },
+                      outputs: [
+                        {
+                          type: 'image',
+                          contentLocator: asset.lifecycle?.contentLocator,
+                        },
+                      ],
+                      boardDelivery: {
+                        status: 'projected',
+                        nodeIds: ['generated-node-1'],
+                        diagnostics: [],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
   });
 
-  it('passes saved generated asset resource refs to direct task-result observations', async () => {
-    const created = createMediaTask({ status: 'pending', progress: 0 });
-    const completed = createMediaTask({ status: 'completed', progress: 100 });
-    const localPath = '/workspace/neko/generated/image/asset-1.png';
-    const asset = createGeneratedImageAsset(localPath);
-    const handleTerminalTask = vi.fn(async () => undefined);
-    const media = {
-      generateImage: vi.fn().mockResolvedValue(created),
-      getTask: vi.fn().mockResolvedValue(completed),
-      onProgress: vi.fn().mockReturnValue(vi.fn()),
-    };
-    const webview = createWebview();
+  it('keeps local success visible and reports a blocked Workspace Board delivery', async () => {
+    const asset = generatedImage();
+    const projection = createConversationProjectionStore('conv-1');
     const bridge = new MediaTurnBridge({
-      platform: { media } as never,
-      mediaDeliveryHost: {
-        createTaskView: vi.fn(async (_webview: vscode.Webview, task: MediaTask) => ({
-          id: task.id,
-          type: 'image',
-          status: task.status,
-          progress: task.progress,
-          providerId: task.providerId,
-          modelId: task.modelId,
-          createdAt: task.createdAt.toISOString(),
-          updatedAt: task.updatedAt.toISOString(),
-          request: { prompt: task.request.prompt },
-        })),
-        createTaskViewDelivery: vi.fn(async (_webview: vscode.Webview, task: MediaTask) => ({
-          view: {
-            id: task.id,
-            type: 'image',
-            status: task.status,
-            progress: task.progress,
-            providerId: task.providerId,
-            modelId: task.modelId,
-            createdAt: task.createdAt.toISOString(),
-            updatedAt: task.updatedAt.toISOString(),
-            request: { prompt: task.request.prompt },
+      generationJobs: createGenerationJobs(),
+      resolveGenerationResult: () => ({ path: asset.path, asset }),
+      getConversationProjection: () => projection,
+      workspaceBoardProjection: {
+        deliverBatch: vi.fn(async () => [
+          {
+            version: 2,
+            status: 'blocked',
+            diagnostics: [
+              {
+                code: 'workspace-required',
+                severity: 'error',
+                message: 'Canvas delivery requires one resolved workspace.',
+              },
+            ],
           },
-          deliveryPlan: {
-            resultUrls: ['generated-assets/asset-1.png'],
-            thumbnailUrl: 'generated-assets/asset-1.png',
-            hostOutputPaths: [localPath],
-            generatedAssets: [asset],
-            shouldPersistResultUrls: true,
-            shouldUnsubscribe: true,
-          },
-        })),
-      } as never,
-      taskResultObservations: { handleTerminalTask },
+        ]),
+      },
+      checkpointExternalTurn: vi.fn(async () => undefined),
     });
 
     await bridge.execute({
-      webview,
+      webview: {} as never,
       conversationId: 'conv-1',
       prompt: 'cat',
-      mediaModel: { providerId: 'openai', modelId: 'gpt-image-1', category: 'image' },
+      mediaModel: { providerId: 'image-provider', modelId: 'image-model', category: 'image' },
+      userMessage: { id: 'user-1', content: 'cat', timestamp: 10 },
     });
 
-    const observedTask = handleTerminalTask.mock.calls[0]?.[0] as Task;
-    const data = observedTask.output?.data as {
-      readonly assets?: readonly Array<Record<string, unknown>>;
-      readonly hostOutputPaths?: readonly string[];
-    };
-    expect(data.hostOutputPaths).toEqual([localPath]);
-    expect(data.assets?.[0]).toMatchObject({
-      id: 'asset-1',
-      localPath,
-      resourceRef: {
-        provider: 'generated-asset',
-        kind: 'generated',
-        source: {
-          kind: 'generated-asset',
-          generatedAssetId: 'asset-1',
-          metadata: { contentDigest: 'sha256:image', mimeType: 'image/png' },
+    expect(projection.snapshot().turns[0]?.items[0]).toMatchObject({
+      status: 'succeeded',
+      payload: {
+        toolCall: {
+          result: {
+            success: true,
+            data: {
+              boardDelivery: {
+                status: 'blocked',
+                diagnostics: [
+                  {
+                    code: 'workspace-required',
+                    message: 'Canvas delivery requires one resolved workspace.',
+                  },
+                ],
+              },
+            },
+          },
         },
       },
     });
   });
 
-  it('keeps direct generation independent from legacy Board routing', async () => {
-    const created = createMediaTask({ status: 'pending', progress: 0 });
-    const completed = createMediaTask({ status: 'completed', progress: 100 });
-    const asset = createGeneratedImageAsset('/workspace/neko/generated/image/asset-1.png');
-    const generateImage = vi.fn().mockResolvedValue(created);
+  it('submits generated resources to the Workspace Board after durable delivery', async () => {
+    const asset = generatedImage();
+    const deliverBatch = vi.fn(async () => [
+      {
+        version: 2 as const,
+        deliveryId: 'generated-output-batch:1',
+        status: 'projected' as const,
+        nodeIds: ['generated-node-1'],
+        diagnostics: [],
+      },
+    ]);
     const bridge = new MediaTurnBridge({
-      platform: {
-        media: {
-          generateImage,
-          getTask: vi.fn().mockResolvedValue(completed),
-          onProgress: vi.fn().mockReturnValue(vi.fn()),
-        },
-      } as never,
-      mediaDeliveryHost: {
-        createTaskView: vi.fn(async (_webview: vscode.Webview, task: MediaTask) => ({
-          id: task.id,
-          type: 'image',
-          status: task.status,
-          progress: task.progress,
-          providerId: task.providerId,
-          modelId: task.modelId,
-          createdAt: task.createdAt.toISOString(),
-          updatedAt: task.updatedAt.toISOString(),
-          request: { prompt: task.request.prompt },
-        })),
-        createTaskViewDelivery: vi.fn(async (_webview: vscode.Webview, task: MediaTask) => ({
-          view: {
-            id: task.id,
-            type: 'image',
-            status: task.status,
-            progress: task.progress,
-            providerId: task.providerId,
-            modelId: task.modelId,
-            createdAt: task.createdAt.toISOString(),
-            updatedAt: task.updatedAt.toISOString(),
-            request: { prompt: task.request.prompt },
-          },
-          deliveryPlan: {
-            resultUrls: ['generated-assets/asset-1.png'],
-            hostOutputPaths: [asset.path],
-            generatedAssets: [asset],
-            shouldPersistResultUrls: true,
-            shouldUnsubscribe: true,
-          },
-        })),
-      } as never,
-      generateMessageId: () => 'run:1',
+      generationJobs: createGenerationJobs(),
+      resolveGenerationResult: () => ({ path: asset.path, asset }),
+      getConversationProjection: () => createConversationProjectionStore('conv-1'),
+      workspaceBoardProjection: { deliverBatch },
+      checkpointExternalTurn: vi.fn(async () => undefined),
     });
 
     await bridge.execute({
-      webview: createWebview(),
+      webview: {} as never,
       conversationId: 'conv-1',
-      prompt: 'generate a cat image',
-      mediaModel: { providerId: 'openai', modelId: 'gpt-image-1', category: 'image' },
+      prompt: 'cat',
+      mediaModel: { providerId: 'image-provider', modelId: 'image-model', category: 'image' },
+      userMessage: { id: 'user-1', content: 'cat', timestamp: 10 },
     });
 
-    expect(generateImage).toHaveBeenCalledOnce();
-    expect(JSON.stringify(bridge)).not.toContain('canvasBoardWork');
+    expect(deliverBatch).toHaveBeenCalledOnce();
+  });
+
+  it('fails visibly when the Job, result, or Timeline owner is unavailable', async () => {
+    const bridge = new MediaTurnBridge({
+      workspaceBoardProjection: { deliverBatch: vi.fn() },
+    });
+
+    await expect(
+      bridge.execute({
+        webview: {} as never,
+        conversationId: 'conv-1',
+        prompt: 'cat',
+        mediaModel: { providerId: 'image-provider', modelId: 'image-model', category: 'image' },
+        userMessage: { id: 'user-1', content: 'cat', timestamp: 10 },
+      }),
+    ).rejects.toThrow(
+      'requires Generation Job, result resolver, Timeline projection, and Pi transcript owners',
+    );
+  });
+
+  it('does not report a completed turn when the Pi transcript checkpoint fails', async () => {
+    const asset = generatedImage();
+    const projection = createConversationProjectionStore('conv-1');
+    const bridge = new MediaTurnBridge({
+      generationJobs: createGenerationJobs(),
+      resolveGenerationResult: () => ({ path: asset.path, asset }),
+      getConversationProjection: () => projection,
+      workspaceBoardProjection: {
+        deliverBatch: vi.fn(async () => [
+          {
+            version: 2,
+            status: 'queued',
+            diagnostics: [],
+          },
+        ]),
+      },
+      checkpointExternalTurn: vi.fn(async () => {
+        throw new Error('checkpoint unavailable');
+      }),
+    });
+
+    await expect(
+      bridge.execute({
+        webview: {} as never,
+        conversationId: 'conv-1',
+        prompt: 'cat',
+        mediaModel: { providerId: 'image-provider', modelId: 'image-model', category: 'image' },
+        userMessage: { id: 'user-1', content: 'cat', timestamp: 10 },
+      }),
+    ).rejects.toThrow('checkpoint unavailable');
+
+    expect(projection.snapshot().turns[0]?.completion).toBeUndefined();
   });
 });
 
-function createWebview(): vscode.Webview & {
-  postMessage: ReturnType<typeof vi.fn>;
-} {
-  return {
-    postMessage: vi.fn().mockResolvedValue(true),
-    asWebviewUri: vi.fn((uri: { toString(): string }) => uri),
-  } as unknown as vscode.Webview & { postMessage: ReturnType<typeof vi.fn> };
-}
-
-function createMediaTask(input: {
-  readonly status: MediaTask['status'];
-  readonly progress: number;
-}): MediaTask {
-  const now = new Date('2026-01-01T00:00:00.000Z');
-  return {
-    scope: taskScope('task-1'),
-    id: 'task-1',
-    type: 'text-to-image',
-    status: input.status,
-    progress: input.progress,
-    providerId: 'openai',
-    modelId: 'gpt-image-1',
-    createdAt: now,
-    updatedAt: now,
+function createGenerationJobs(): GenerationJobPort {
+  const ref = { kind: 'generation' as const, jobId: 'generation-1' };
+  const request: SubmitGenerationJobInput = {
+    lifecycleMode: 'linked',
+    generationType: 'text-to-image',
+    providerId: 'image-provider',
+    modelId: 'image-model',
     request: {
       prompt: 'cat',
-      metadata: { conversationId: 'conv-1', runId: 'run-1', runStartedAt: 101 },
+      providerId: 'image-provider',
+      modelId: 'image-model',
     },
-    outputs:
-      input.status === 'completed'
-        ? [{ type: 'image', url: 'https://example.test/image.png', mimeType: 'image/png' }]
-        : [],
+  };
+  const initial: GenerationJobSnapshot = {
+    ref,
+    lifecycleMode: 'linked',
+    phase: 'pending',
+    revision: 1,
+    createdAt: 1,
+    updatedAt: 1,
+    request,
+    progress: { stage: 'queued', percent: 0 },
+  };
+  const running: GenerationJobSnapshot = {
+    ...initial,
+    phase: 'running',
+    revision: 2,
+    updatedAt: 2,
+    progress: { stage: 'waiting-provider', percent: 45 },
+  };
+  const terminal: GenerationJobSnapshot = {
+    ...running,
+    phase: 'succeeded',
+    revision: 3,
+    updatedAt: 3,
+    progress: { stage: 'completed', percent: 100 },
+    resultLocators: [generatedImage().lifecycle!.contentLocator],
+  };
+  return {
+    submitGeneration: vi.fn(async () => initial),
+    describeGeneration: vi.fn(async () => terminal),
+    observeGeneration: vi.fn(async function* () {
+      yield running;
+      yield terminal;
+    }),
+    cancelGeneration: vi.fn(),
+    retryGeneration: vi.fn(),
+    reconcileGeneration: vi.fn(),
   };
 }
 
-function taskScope(childRunId: string) {
+function generatedImage(): GeneratedAsset {
   return {
-    conversationId: 'conv-1',
-    runId: 'run-1',
-    parentRunId: 'run-1',
-    childRunId,
-    childKind: 'task' as const,
-  };
-}
-
-function createGeneratedImageAsset(localPath: string): GeneratedAsset {
-  return {
-    id: 'asset-1',
     type: 'generated-image',
-    path: localPath,
+    id: 'generated-1',
+    path: 'generated-assets/generated-1.png',
     mimeType: 'image/png',
-    generatedAt: '2026-01-01T00:00:00.000Z',
-    prompt: 'cat',
-    model: 'gpt-image-1',
+    generatedAt: '2026-07-24T00:00:00.000Z',
+    lifecycle: createGeneratedAssetRevisionRef({
+      assetId: 'generated-1',
+      contentDigest: 'sha256:generated-1',
+      contentPath: 'generated-assets/generated-1.png',
+      mediaKind: 'image',
+      mimeType: 'image/png',
+      generation: { operationId: 'operation-generated-1' },
+    }),
     width: 1024,
     height: 1024,
     ratio: '1:1',
-    assetRef: {
-      assetId: 'asset-1',
-      uri: 'generated-assets/asset-1.png',
-      mimeType: 'image/png',
-    },
-    lifecycle: createGeneratedAssetRevisionRef({
-      assetId: 'asset-1',
-      contentDigest: 'sha256:image',
-      mediaKind: 'image',
-      mimeType: 'image/png',
-      generation: {
-        taskId: 'task-1',
-        runId: 'run-1',
-        providerId: 'openai',
-        modelId: 'gpt-image-1',
-      },
-    }),
   };
 }
 
-function resourceRef(id: string): ResourceRef {
-  return {
-    id: `preview:${id}`,
-    scope: 'project',
-    provider: 'preview-asset',
-    kind: 'preview',
-    source: { kind: 'preview-asset', previewAssetId: id },
-    locator: { kind: 'preview-asset', assetId: id },
-    fingerprint: { strategy: 'provider', value: `preview:${id}` },
-  };
+function isGenerationJobProjection(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'jobId' in value &&
+    'revision' in value &&
+    'phase' in value
+  );
 }

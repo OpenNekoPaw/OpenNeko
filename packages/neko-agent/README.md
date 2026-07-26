@@ -26,16 +26,14 @@
   └─ Terminal ──→ Ink TUI / headless tools ──────────┤
                                                      │
                                                @neko/agent
-                                          ReAct: Think → Act → Observe
+                                    Pi conversation runtime + transcript
                                                      │
                                     ┌────────────────┼────────────────┐
                                     │                │                │
-                             @neko/platform    ToolRegistry      SkillSystem
-                           (多模型 LLM 路由)   (内置/MCP/扩展)   (技能注入)
+                             model policy    capability tools    Pi SkillHost
+                           (显式用途绑定)      (内置/MCP/扩展)    (快照/调用)
                                     │
-                        ┌───────────┼───────────┐
-                        │           │           │
-                     Claude      OpenAI      Google/Ollama/Generic
+                         Generation Job / domain authoring ports
 ```
 
 ### 包结构
@@ -43,43 +41,33 @@
 ```
 packages/
 ├── agent/      # @neko/agent — Agent 运行时（零 VSCode 依赖，TUI/Extension 复用）
-│   ├── executor/     ReAct 循环引擎（think-phase + act-phase + hook-runner）
-│   ├── session/      Agent 会话生命周期 + 事件转换
-│   ├── skill/        技能系统（SkillService + 3-track 原子注入 + ToolGuard + 显式技能激活）
-│   ├── tools/        工具注册 + 双层注入（always/dynamic）+ 元工具
-│   ├── mcp/          MCP Client（Stdio/HTTP）+ 工具桥接
-│   ├── context/      分层上下文管理 + token 预算 + 对话压缩
-│   ├── permission/   工具权限（plan/ask/auto 三模式）
-│   ├── hooks/        可组合中间件（ExecutorHooks + factory）
-│   ├── hook-loader/  Settings-based hooks（.neko/hooks 仅用于弃用诊断）
-│   ├── prompt/       SystemPromptComposer + Builder（多语言）
-│   ├── runtime/      统一 runtime bootstrap 契约 + helper
-│   ├── plan/         Plan 管理器
+│   ├── pi/           Pi Agent loop、会话权威、JSONL transcript、模型策略、Tool/Skill 投影
+│   ├── runtime/      消息 turn、Timeline 投影、会话队列和宿主无关 helper
+│   ├── tools/        typed tool registry、schema 与 core tools
+│   ├── mcp/          MCP Client（Stdio/HTTP）与工具桥接
+│   ├── permission/   plan/ask/auto 权限策略与工具 trait
+│   ├── approval/     审批状态与决策契约
+│   ├── prompt/       通用系统提示词、AGENTS.md 与 prompt file runtime
 │   ├── input/        InputProcessor（@ 文件引用解析）
-│   ├── subagent/     子 Agent 委托
-│   ├── task/         后台任务管理 + 持久化
-│   ├── validation/   输出验证器（Image/Output/Mermaid/JSON/Length）
-│   ├── memory/       项目记忆（.neko/memory.md）+ recall / extraction
-│   ├── commands/     内置斜杠命令处理（help/status/clear/config/skills/tools/plan 等）
-│   └── errors/       统一错误类型
-├── platform/   # @neko/platform — AI 服务平台
-│   ├── llm/adapter/  7 个 LLM 适配器（Anthropic/OpenAI/Google/Azure/Ollama/Generic + AI-SDK）
-│   ├── config/       ConfigManager（用户配置 + 工作区 MCP 合并）+ 首次运行默认值
-│   ├── media/        媒体生成服务（8 个适配器：Runway/Luma/MiniMax/Suno/Vidu/Midjourney/LibLib/OpenAI-compat）
-│   ├── provider/     ProviderRegistry（适配器路由）+ PlatformError（错误分类）
-│   ├── service/      IService 门面 + ModelSelector + PromptManager + ToolRegistry
-│   └── core/         BaseRegistry + HttpClient + ConcurrencyPool
+│   ├── subagent/     显式 SubagentRun 委托
+│   ├── validation/   输出验证
+│   └── memory/       项目记忆与 recall / extraction
+├── platform/   # @neko/platform — 配置与尚待迁出的 provider/media 适配层
+│   ├── config/       TOML 配置、effective snapshot、purpose/model 绑定与参数投影
+│   ├── media/        Generation 使用的 provider adapter、routing、execution 与 output finalizer
+│   ├── provider/     provider diagnostics
+│   └── core/         基础 registry 与 HTTP client
 ├── extension/  # @neko-agent/extension — VSCode 扩展宿主（纯胶水层）
 │   ├── bootstrap/    服务初始化 + ServiceCollection
 │   ├── chat/         ChatViewProvider + Webview 消息 Router + 专用桥接 Handler
-│   ├── chat/message/ AgentMessageTurnHandler + AgentTurnBridge + AgentStreamProcessor
-│   ├── ai/           AgentRunner（薄包装）+ AgentManager（runtime 多会话池）
-│   ├── services/     ConfigBridge + SkillFileService + HookFileService
+│   ├── chat/message/ AgentMessageTurnHandler + AgentTurnBridge + Pi transcript projection
+│   ├── ai/           VSCodePiRuntimeManager + AgentManager（会话级 runtime/projection）
+│   ├── services/     ContentLocator access、Generation card bridge 与 Workspace Board 投影
 │   ├── editor/       EditorModel + EditorRegistry
 │   └── tools/        扩展工具注册（NekoCut/NekoCanvas 桥接）
 └── webview/    # @neko-agent/webview — React 对话 UI
 │   ├── components/   ChatView + ContentBlocks 时序渲染 + SettingsView
-│   ├── handlers/     消息处理注册（streaming/tool/conversation/config）
+│   ├── handlers/     消息处理注册（projection/conversation/config）
 │   ├── hooks/        Zustand 状态管理（多会话隔离）
 │   ├── messages/     type-safe postMessage 构建器
 │   ├── config/       预设配置
@@ -92,7 +80,7 @@ packages/
 
 Webview/Extension 与 Terminal TUI/headless 是不同本地宿主，功能差异需要保留：Webview 可以拥有 VS Code API、`postMessage`、Webview URI、watcher、memento/recovery 和 Extension command；TUI/headless 可以拥有 Ink 终端交互、进程生命周期、stdout/stderr 报告和真实 API 验证 lane。
 
-共享的是同一工作区的业务逻辑和数据面，而不是 UI 表现。Webview 和 TUI 必须通过共享 runtime/config/catalog/task/cache contract 使用以下输入：`~/.neko/config.toml`、`.neko/config.toml`、workspace-scoped canonical conversation id、`~/.agents/skills`、`~/.neko/commands`、`.agents/skills`、`.neko/commands`、`~/.neko/neko.db` 中按 `workspaceId` 分区的 Task/Run、conversation/catalog 和 ResourceCache metadata、project memory、AGENTS overlays、context settings、授权读根，以及 `.neko/.cache/resources` 下的 project cache artifact bytes。运行时模型/参数选择只影响当前 session，不自动重写 TOML；`skillsDir` 之类非标准 Skill 来源不能让 TUI/headless 单独看到不同 catalog。
+共享的是同一工作区的业务逻辑和数据面，而不是 UI 表现。Webview 和 TUI 必须通过共享 runtime/config/catalog/cache contract 使用以下输入：`~/.neko/config.toml`、`.neko/config.toml`、workspace-scoped canonical conversation id、`~/.agents/skills`、`~/.neko/commands`、`.agents/skills`、`.neko/commands`、conversation/catalog、ResourceCache metadata、project memory、AGENTS overlays、context settings、授权读根，以及 `.neko/.cache/resources` 下的 project cache artifact bytes。前台 AgentRun/ToolCall 保持实例级 live ownership；显式 SubagentRun 和可恢复领域 Job 分别由 parent/supervisor 与 owning domain 持有，不经通用 Task runtime。运行时模型/参数选择只影响当前 session，不自动重写 TOML；`skillsDir` 之类非标准 Skill 来源不能让 TUI/headless 单独看到不同 catalog。
 
 Host-private 能力不互通，也不能伪装为共享成功结果。VS Code handle、Webview URI、Extension-private cache、memento/recovery、TUI process handle、终端键盘状态和 headless 报告路径跨宿主请求时必须返回 host-private 或 unavailable diagnostic，不允许 no-op、转成普通 prompt、读取另一端私有缓存或回退旧实现。旧 `cli-*` conversation id 不作为 TUI resume 兼容输入；共享 command catalog 的 surface scope 使用 `tui` / `extension`。
 
@@ -138,9 +126,22 @@ model_id = "neko-gateway-seedance-lite"
 [default_models.audio]
 provider_id = "neko-gateway"
 model_id = "neko-gateway-tts"
+
+[default_model_purposes.character_dialogue]
+provider_id = "ollama-local"
+model_id = "ollama-local-llama3.2"
+
+[default_model_purposes.character_profile]
+provider_id = "ollama-local"
+model_id = "ollama-local-llama3.2"
 ```
 
 每个配置值显式绑定 `provider_id + model_id`。`default_models` 服务于产品模型选择器和直接媒体入口；Agent turn 会把主模型与 `default_model_purposes` 的显式绑定一次性归一化为扁平、不可变的 purpose snapshot。生成、理解等语义工具不会从 broad type 默认、首个兼容模型或 `agent.main` 推断缺失 purpose；缺少 provider/model/capability/credential 时直接返回可见错误。`ModelConfig.type` 字段（`llm` / `image` / `video` / `audio`）只控制目录分组。`capabilities` 继续描述模型能力，`agent.main`、`image.generate`、`video.generate`、`audio.music.generate` 等则是平铺的产品用途；二者不构成 fallback 层级。
+
+Character Dialogue 与 Embody Character 分别通过 `character.dialogue` 和
+`character.profile` 显式 binding 使用模型，不继承普通 Agent 会话当前模型。首次角色操作
+发现 binding 缺失时，VS Code 会要求用户选择一个兼容 LLM，并只把明确选择写入缺失的
+purpose；取消选择不会创建或继续角色运行。
 
 **配置格式**：`config.toml` 是当前唯一读取的用户配置文件。旧的 `~/.neko/config.json` 不再作为运行时输入、迁移源或冲突诊断来源；如需保留旧配置，请手动迁移为 TOML。
 
@@ -156,13 +157,7 @@ model_id = "neko-gateway-tts"
 
 ### 技能系统
 
-从 `.agents/skills/<name>/SKILL.md` 或 `~/.agents/skills/<name>/SKILL.md` 加载技能（YAML frontmatter + Markdown body），3-track 原子注入/移除：
-
-| Track | 注入内容                                                  |
-| ----- | --------------------------------------------------------- |
-| A     | Skill prompt content section（SystemPromptComposer）      |
-| B     | 权限允许规则（PermissionHooks）                           |
-| C     | 机器可读 tool policy（ToolGuard，运行时 `isToolAllowed`） |
+从 `.agents/skills/<name>/SKILL.md` 或 `~/.agents/skills/<name>/SKILL.md` 发现技能（YAML frontmatter + Markdown body）。Pi SkillHost 为每个 turn 生成不可变 catalog snapshot；显式调用产生独立 lifecycle record，并按 `domainSkill` / `referenceSkill` slot 组合 prompt。权限和工具可用性由运行时 tool registry、capability metadata 与 permission policy 决定，不由 Skill 正文或旧的三轨注入模型维护。
 
 显式输入触发被拆成独立命名空间：
 
@@ -183,11 +178,11 @@ Skill Markdown 正文只描述领域方法、创作语义、输出标准和示�
 
 ### 工具系统
 
-- **所有工具始终可见**（1M context，无需动态注入）
-- **元工具**：`GetContext` / `ActivateSkill` / `DeactivateSkill` — AI 自主发现和激活技能
+- **工具目录**：每个 turn 从 Host capability registry 投影实际可用工具；缺失 purpose/model/capability 时 fail-visible，不补空工具或旧工具别名
+- **Skill 工具**：`GetContext` / `ActivateSkill` / `DeactivateSkill` 用于运行时发现、调用与清理 lifecycle slot
 - **来源**：内置 typed tools、MCP 服务器、扩展工具（NekoCut/NekoCanvas）和受管 External Processor
 - **本地命令边界**：普通创作 Agent 不默认注入任意 `Bash`/shell。图片、视频、音频和脚本类本地工具通过 External Processor manifest、PathAccessPolicy、env allowlist、approval 和 `ResourceRef` 输出进入运行时；Developer Mode 的一次性命令也走同一策略，不生成持久 `Bash(*)` allow。
-- **资源交接**：Agent Webview、Canvas、Cut 和 `neko-composite` 传递图片时使用 `ResourceRef`、`documentResourceRef`、source ref、workspace-relative path 或 `${VAR}/path`。Webview URI、blob/object URL、系统 temp、旧 `cachePath` 和 `.neko/.cache/resources` 下的实体路径只属于 runtime/display，不作为 durable identity。
+- **资源交接**：Generation Job、Agent Tool/Timeline、creator-visible artifact 和 Workspace Board/Canvas 投影统一传递一个校验后的 `ContentLocator`。语义 ID 与 provenance 保持独立；Webview URI、provider URL、base64、绝对路径、系统 temp、旧 `cachePath` 和 `ResourceRef` 不进入这条持久交接路径。未迁移领域与 Host 派生缓存可继续在各自边界内使用 `ResourceRef`。
 
 ### Package Authoring Transfer
 
@@ -260,6 +255,6 @@ pnpm check                  # 代码质量检查
 
 ## 测试
 
-- 61 test files / 1192 tests（Vitest v4）
-- 测试覆盖：executor、skill system、context、permission、validation、tools
-- 已知：extension 3 files / 21 tests 历史失败（非 Vitest v4 引起）
+- Agent、Extension、Webview、Platform 与 Generation 均使用 Vitest v4 聚焦测试。
+- Prompt/Skill/capability routing 变更还需运行脚本化 Agent evaluation；Webview 交互与媒体显示需在产品组合的 Extension Development Host 中验收。
+- 固定测试数量容易漂移，以本仓库 `pnpm test`、`pnpm check` 和相关 OpenSpec 的实际报告为准。

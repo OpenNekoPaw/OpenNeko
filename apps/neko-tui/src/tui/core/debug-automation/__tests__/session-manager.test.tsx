@@ -286,9 +286,6 @@ function createFakePort(): TuiDebugAutomationAppPort {
     async waitForIdle() {
       return {
         turnIdle: { idle: true, terminal: true, status: 'idle' },
-        backgroundTasksIdle: { idle: true, terminal: true, status: 'idle' },
-        mediaDeliveryIdle: { idle: true, terminal: true, status: 'idle' },
-        taskResultObservationIdle: { idle: true, terminal: true, status: 'idle' },
         fullyIdle: true,
       };
     },
@@ -310,10 +307,10 @@ function createFakePort(): TuiDebugAutomationAppPort {
           chat: { providerId: 'nekoapi-chat', modelId: 'gpt-test' },
           modelPurposes: {},
         },
+        timelineProjection: null,
         idle: await this.waitForIdle({ timeoutMs: 1, pollIntervalMs: 1 }),
         turns: [],
         skillReceipts: [],
-        tasks: [],
         messageQueue: null,
         continuations: [],
         promptComposition: [],
@@ -345,13 +342,12 @@ function createFakePort(): TuiDebugAutomationAppPort {
         usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
         timing: { capturedAt: 1 },
         iteration: { current: 0, max: 0 },
-        retries: { taskRetryCount: 0, tasksWithRetries: 0 },
+        retries: { count: 0 },
         evidenceCompleteness: {
           turns: { limit: 512, droppedCount: 0 },
           turnToolCalls: { limit: 256, droppedCount: 0 },
           timelineRows: { limit: 2048, droppedCount: 0 },
           skillReceipts: { limit: 128, droppedCount: 0 },
-          tasks: { limit: 512, droppedCount: 0 },
           continuations: { limit: 512, droppedCount: 0 },
           promptComposition: { limit: 256, droppedCount: 0 },
           artifacts: { limit: 512, droppedCount: 0 },

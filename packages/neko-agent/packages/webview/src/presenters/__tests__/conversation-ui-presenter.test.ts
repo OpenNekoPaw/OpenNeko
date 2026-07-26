@@ -55,12 +55,12 @@ describe('conversation UI presenter', () => {
     });
   });
 
-  it('loads active conversation, creates a tab, and rehydrates work items', () => {
+  it('loads active conversation and creates a tab without inventing work items', () => {
     const projected = projectActiveConversation({
       conversation: {
         id: 'conv-1',
         title: 'Generated assets',
-        messages: [createCompletedBackgroundTaskMessage()],
+        messages: [{ id: 'assistant-1', role: 'assistant', content: 'Done', timestamp: 1 }],
       },
       openTabs: [],
       now: () => Date.parse('2026-01-01T00:00:00.000Z'),
@@ -77,17 +77,7 @@ describe('conversation UI presenter', () => {
       queuedMessageCount: 0,
       queuedMessages: [],
     });
-    expect(projected.workItems).toMatchObject([
-      {
-        id: 'task-1',
-        conversationId: 'conv-1',
-        kind: 'tool-background-task',
-        parentMessageId: 'assistant-1',
-        parentToolCallId: 'tool-1',
-        status: 'completed',
-        result: { urls: ['webview://asset.png'] },
-      },
-    ]);
+    expect(projected.workItems).toEqual([]);
   });
 
   it('updates an existing default tab title from active conversation metadata', () => {
@@ -236,47 +226,6 @@ describe('conversation UI presenter', () => {
   });
 });
 
-function taskScope(childRunId: string) {
-  return {
-    conversationId: 'conv-1',
-    runId: 'run-1',
-    parentRunId: 'run-1',
-    childRunId,
-    childKind: 'task' as const,
-  };
-}
-
-function createCompletedBackgroundTaskMessage(): Message {
-  return {
-    id: 'assistant-1',
-    role: 'assistant',
-    content: '',
-    timestamp: 1,
-    contentBlocks: [
-      {
-        id: 'block-tool-1',
-        type: 'tool_call',
-        timestamp: 1,
-        toolCall: {
-          id: 'tool-1',
-          name: 'generate_image',
-          arguments: { prompt: 'cat' },
-          result: {
-            success: true,
-            data: {
-              backgroundMode: true,
-              status: 'completed',
-              taskId: 'task-1',
-              taskScope: taskScope('task-1'),
-              urls: ['webview://asset.png'],
-            },
-          },
-        },
-      },
-    ],
-  };
-}
-
 function queuedMessage(id: string, conversationId: string): AgentQueuedMessageItem {
   return {
     id,
@@ -306,9 +255,16 @@ function activationProgress(
 
 function workItem(id: string, conversationId: string): AgentWorkItem {
   return {
+    scope: {
+      conversationId,
+      runId: `run:${conversationId}`,
+      parentRunId: `run:${conversationId}`,
+      childRunId: id,
+      childKind: 'subagent',
+    },
     id,
     conversationId,
-    kind: 'tool-background-task',
+    kind: 'subagent',
     parentMessageId: null,
     parentToolCallId: null,
     title: id,
@@ -316,24 +272,8 @@ function workItem(id: string, conversationId: string): AgentWorkItem {
     progress: 0,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
-    task: {
-      scope: {
-        conversationId,
-        runId: `run:${conversationId}`,
-        parentRunId: `run:${conversationId}`,
-        childRunId: id,
-        childKind: 'task',
-      },
-      id,
-      type: 'image',
-      name: id,
-      prompt: id,
-      providerId: 'provider',
-      providerName: 'Provider',
-      status: 'processing',
-      progress: 0,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
+    subAgent: {
+      parentAgentId: `run:${conversationId}`,
     },
   };
 }

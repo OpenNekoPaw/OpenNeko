@@ -320,7 +320,6 @@ const PROCESS_EVENT_SELECTOR_SCHEMA = s.union([
     { status: ID, toolName: EXTERNAL_ID, contentContains: SHORT_TEXT },
   ),
   s.object({ kind: s.literal('tool'), name: EXTERNAL_ID }, { status: ID }),
-  s.object({ kind: s.literal('task'), taskType: ID }, { status: ID }),
   s.object({ kind: s.literal('continuation'), source: ID }, { status: ID }),
 ]);
 const ASSERTION_SCHEMA = s.union([
@@ -395,12 +394,6 @@ const ASSERTION_SCHEMA = s.union([
     },
     { expectedArguments: s.anyJson(), resultIncludes: s.anyJson() },
   ),
-  s.object({
-    ...ASSERTION_COMMON,
-    kind: s.literal('task-terminal'),
-    taskType: ID,
-    status: s.enum(['completed', 'failed', 'cancelled']),
-  }),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -452,28 +445,25 @@ const ASSERTION_SCHEMA = s.union([
     recordSource: s.literal('pi-session'),
     minRestoredMessages: s.integer({ min: 1 }),
   }),
-  s.object(
-    {
-      ...ASSERTION_COMMON,
-      kind: s.literal('retries'),
-      min: s.integer({ min: 0 }),
-    },
-    { max: s.integer({ min: 0 }), taskType: ID },
-  ),
   s.object({
     ...ASSERTION_COMMON,
     kind: s.literal('terminal-idle'),
     concerns: s.array(
       s.enum([
         'turnIdle',
-        'backgroundTasksIdle',
-        'mediaDeliveryIdle',
-        'taskResultObservationIdle',
         'continuationQueueIdle',
       ]),
-      { minLength: 1, maxLength: 5 },
+      { minLength: 1, maxLength: 2 },
     ),
   }),
+  s.object(
+    {
+      ...ASSERTION_COMMON,
+      kind: s.literal('timeline-projection'),
+      terminalStatus: s.enum(['completed', 'cancelled', 'failed']),
+    },
+    { toolName: EXTERNAL_ID },
+  ),
   s.object(
     {
       ...ASSERTION_COMMON,
@@ -493,13 +483,14 @@ const ASSERTION_SCHEMA = s.union([
     kind: s.literal('artifact'),
     artifactRef: EXTERNAL_ID,
     validatorStatus: s.literal('valid'),
-  }),
+  }, { validatorId: ID }),
   s.object(
     {
       ...ASSERTION_COMMON,
       kind: s.literal('artifact'),
       artifactKind: s.enum([
         'file',
+        'content-locator',
         'resource-ref',
         'generated-asset',
         'project-revision',
@@ -507,8 +498,32 @@ const ASSERTION_SCHEMA = s.union([
       ]),
       validatorStatus: s.literal('valid'),
     },
-    { provenanceSource: EXTERNAL_ID },
+    {
+      provenanceSource: EXTERNAL_ID,
+      validatorId: ID,
+      contentLocatorKind: s.enum([
+        'workspace-file',
+        'document-entry',
+        'generated-output',
+        'package-resource',
+      ]),
+    },
   ),
+  s.object({
+    ...ASSERTION_COMMON,
+    kind: s.literal('content-locator-handoff'),
+    producerToolName: EXTERNAL_ID,
+    consumerToolName: EXTERNAL_ID,
+    locatorKind: s.enum([
+      'workspace-file',
+      'document-entry',
+      'generated-output',
+      'package-resource',
+    ]),
+    artifactKind: s.enum(['content-locator', 'generated-asset']),
+    provenanceSource: EXTERNAL_ID,
+    validatorId: ID,
+  }),
   s.object({
     ...ASSERTION_COMMON,
     kind: s.literal('no-fallback'),
@@ -709,7 +724,13 @@ const ARTIFACT_MANIFEST_ENTRY_SCHEMA = s.union([
   }),
   s.object({
     ref: EXTERNAL_ID,
-    kind: s.enum(['resource-ref', 'generated-asset', 'project-revision', 'composite-artifact']),
+    kind: s.enum([
+      'content-locator',
+      'resource-ref',
+      'generated-asset',
+      'project-revision',
+      'composite-artifact',
+    ]),
     stableRef: EXTERNAL_ID,
     digest: HASH,
     provenance: ID,
@@ -845,12 +866,6 @@ const REPEATED_RUN_SCHEMA = s.object({
     failures: s.integer({ min: 0 }),
   }),
   retries: s.object({ count: s.integer({ min: 0 }) }),
-  tasks: s.object({
-    total: s.integer({ min: 0 }),
-    completed: s.integer({ min: 0 }),
-    failed: s.integer({ min: 0 }),
-    cancelled: s.integer({ min: 0 }),
-  }),
 });
 
 const FAILURE_ATTRIBUTION_SCHEMA = s.object({
@@ -903,18 +918,18 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'prompt-composition',
     'model',
     'tool-call',
-    'task-terminal',
     'todo-projection',
     'process-order',
     'queue-state',
     'cancellation',
     'recovery',
     'conversation-persistence',
-    'retries',
     'terminal-idle',
+    'timeline-projection',
     'structured-output',
     'markdown-path',
     'artifact',
+    'content-locator-handoff',
     'workspace-board-projection',
     'no-fallback',
   ]),

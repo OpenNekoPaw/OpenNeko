@@ -6,10 +6,14 @@ import {
   TOOL_NAMES_MEDIA,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
+  getMimeType,
+  validateContentLocator,
+  type ContentLocator,
   type PerceptualAssetRef,
   type Tool,
   type ToolParameters,
   type ToolResult,
+  type ToolResultAttachment,
 } from '@neko/shared';
 import { Type, type TObjectOptions } from 'typebox';
 import type { AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core';
@@ -23,9 +27,16 @@ import type {
 import type { AgentModelPurpose } from './model-policy';
 
 type ToolModelPurpose = Exclude<AgentModelPurpose, 'agent.main'>;
+const DETACHED_GENERATION_MODEL_PURPOSES = Object.freeze([
+  'image.generate',
+  'video.generate',
+  'audio.generate',
+] as const satisfies readonly ToolModelPurpose[]);
 
 export interface ProjectOpenNekoToolOptions {
   readonly modelPurpose?: ToolModelPurpose;
+  readonly modelPurposes?: readonly ToolModelPurpose[];
+  readonly resolveModelPurpose?: (args: unknown) => ToolModelPurpose;
   readonly modelPurposeRequirement?: 'required' | 'optional';
   readonly locale?: string;
   readonly metadata?: Readonly<Record<string, unknown>>;
@@ -85,6 +96,38 @@ export function resolveOpenNekoToolModelPurpose(
   }
 }
 
+export function resolveOpenNekoToolModelPurposes(
+  tool: Pick<Tool, 'name'>,
+): readonly ToolModelPurpose[] {
+  if (tool.name === 'SubmitGenerationJob') {
+    return DETACHED_GENERATION_MODEL_PURPOSES;
+  }
+  const purpose = resolveOpenNekoToolModelPurpose(tool);
+  return purpose === undefined ? [] : [purpose];
+}
+
+export function resolveOpenNekoToolCallModelPurpose(
+  tool: Pick<Tool, 'name'>,
+  args: unknown,
+): ToolModelPurpose | undefined {
+  const staticPurpose = resolveOpenNekoToolModelPurpose(tool);
+  if (staticPurpose !== undefined) return staticPurpose;
+  if (tool.name !== 'SubmitGenerationJob') return undefined;
+  if (typeof args !== 'object' || args === null || Array.isArray(args)) {
+    throw new Error('SubmitGenerationJob requires object arguments.');
+  }
+  switch (Reflect.get(args, 'kind')) {
+    case 'image':
+      return 'image.generate';
+    case 'video':
+      return 'video.generate';
+    case 'audio':
+      return 'audio.generate';
+    default:
+      throw new Error('SubmitGenerationJob requires kind image, video, or audio.');
+  }
+}
+
 export class OpenNekoPiToolExecutionError extends Error {
   constructor(
     readonly toolName: string,
@@ -107,6 +150,12 @@ export function projectOpenNekoTool(
     description: resolveDescription(tool, options.locale),
     parameters,
     ...(options.modelPurpose === undefined ? {} : { modelPurpose: options.modelPurpose }),
+    ...(options.modelPurposes === undefined
+      ? {}
+      : { modelPurposes: Object.freeze([...options.modelPurposes]) }),
+    ...(options.resolveModelPurpose === undefined
+      ? {}
+      : { resolveModelPurpose: options.resolveModelPurpose }),
     ...(options.modelPurposeRequirement === undefined
       ? {}
       : { modelPurposeRequirement: options.modelPurposeRequirement }),
@@ -143,7 +192,7 @@ export function projectOpenNekoTool(
                   content: [{ type: 'text', text: progress.stage }],
                   details: {
                     success: true,
-                    data: progress,
+                    data: progress.data ?? progress,
                   },
                 }),
             }),
@@ -167,25 +216,46 @@ export function projectOpenNekoTools(
   options?: {
     readonly locale?: string;
     readonly metadata?: Readonly<Record<string, unknown>>;
-    readonly purposeForTool?: (tool: Tool) => ToolModelPurpose | undefined;
+    readonly purposesForTool?: (tool: Tool) => readonly ToolModelPurpose[];
+    readonly purposeForToolCall?: (tool: Tool, args: unknown) => ToolModelPurpose | undefined;
     readonly isPurposeOptionalForTool?: (tool: Tool) => boolean;
     readonly assetLoader?: PiToolResultAssetLoader;
   },
 ): readonly PiCapabilityTool<ToolResult>[] {
   return Object.freeze(
-    tools.map((tool) =>
-      projectOpenNekoTool(tool, {
+    tools.map((tool) => {
+      const purposes = options?.purposesForTool?.(tool) ?? [];
+      const purposeForToolCall = options?.purposeForToolCall;
+      if (purposes.length > 1 && purposeForToolCall === undefined) {
+        throw new Error(
+          `OpenNeko tool ${tool.name} declares multiple model purposes without call-time routing.`,
+        );
+      }
+      return projectOpenNekoTool(tool, {
         ...(options?.locale === undefined ? {} : { locale: options.locale }),
         ...(options?.metadata === undefined ? {} : { metadata: options.metadata }),
         ...(options?.assetLoader === undefined ? {} : { assetLoader: options.assetLoader }),
-        ...(options?.purposeForTool?.(tool) === undefined
+        ...(purposes.length === 0
           ? {}
-          : { modelPurpose: options.purposeForTool(tool) }),
+          : purposes.length === 1
+            ? { modelPurpose: purposes[0] }
+            : {
+                modelPurposes: purposes,
+                resolveModelPurpose: (args: unknown) => {
+                  const purpose = purposeForToolCall?.(tool, args);
+                  if (purpose === undefined) {
+                    throw new Error(
+                      `OpenNeko tool ${tool.name} did not resolve a model purpose for this call.`,
+                    );
+                  }
+                  return purpose;
+                },
+              }),
         ...(options?.isPurposeOptionalForTool?.(tool) === true
           ? { modelPurposeRequirement: 'optional' as const }
           : {}),
-      }),
-    ),
+      });
+    }),
   );
 }
 
@@ -269,12 +339,7 @@ async function projectToolResultContent(
       `Pi image Tool result contains ${imageAttachments.length} source images; maximum is ${MAX_PI_TOOL_RESULT_SOURCE_IMAGES}.`,
     );
   }
-  const refs = imageAttachments.map((attachment) => {
-    if (!attachment.assetRef) {
-      throw new Error('Pi image Tool result requires a stable attachment assetRef.');
-    }
-    return attachment.assetRef;
-  });
+  const refs = imageAttachments.map(projectToolResultImageRef);
   const projected = await projectProviderImagePayloads(result, refs, assetLoader);
   if (refs.length > 1) {
     content.push({ type: 'text', text: formatImageBatchManifest(projected, refs) });
@@ -299,6 +364,55 @@ async function projectToolResultContent(
     content.push(parsed.content);
   }
   return content;
+}
+
+function projectToolResultImageRef(attachment: ToolResultAttachment): PerceptualAssetRef {
+  if (!attachment.contentLocator) {
+    if (!attachment.assetRef) {
+      throw new Error(
+        'Pi image Tool result requires a stable contentLocator or perceptual assetRef.',
+      );
+    }
+    return attachment.assetRef;
+  }
+
+  const validation = validateContentLocator(attachment.contentLocator);
+  if (!validation.ok) {
+    throw new Error(
+      `Pi image Tool result contains an invalid contentLocator: ${validation.diagnostics
+        .map((diagnostic) => diagnostic.message)
+        .join('; ')}`,
+    );
+  }
+  const locator = validation.locator;
+  const assetId =
+    locator.kind === 'generated-output' ? locator.outputId : attachment.assetRef?.assetId;
+  if (!assetId) {
+    throw new Error(`Pi ${locator.kind} image Tool result requires a semantic assetRef identity.`);
+  }
+  const uri = contentLocatorPortablePath(locator);
+  return {
+    assetId,
+    uri,
+    mimeType: attachment.mimeType ?? attachment.assetRef?.mimeType ?? getMimeType(uri),
+    contentLocator: locator,
+    ...(attachment.assetRef?.label ? { label: attachment.assetRef.label } : {}),
+    ...(attachment.assetRef?.timestampMs === undefined
+      ? {}
+      : { timestampMs: attachment.assetRef.timestampMs }),
+  };
+}
+
+function contentLocatorPortablePath(locator: ContentLocator): string {
+  switch (locator.kind) {
+    case 'workspace-file':
+    case 'generated-output':
+      return locator.path;
+    case 'document-entry':
+      return `${locator.source.path}#${locator.entryPath}`;
+    case 'package-resource':
+      return `${locator.packageId}/${locator.resourcePath}`;
+  }
 }
 
 async function projectProviderImagePayloads(

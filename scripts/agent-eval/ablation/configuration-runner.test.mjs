@@ -73,7 +73,6 @@ function fakeRun(runtimeProfileId, effectiveDigest, overrides = {}) {
       iterations: { total: 6, mean: 2 },
       tools: { calls: 3, successes: 3, failures: 0 },
       retries: { count: 0 },
-      tasks: { total: 3, completed: 3, failed: 0, cancelled: 0 },
       scoreDistribution: { samples: 3, passRate: 1, mean: qualityMean, variance: 0 },
     },
     ...overrides,

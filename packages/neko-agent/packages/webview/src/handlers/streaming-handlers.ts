@@ -1,8 +1,7 @@
 /**
  * Streaming Message Handlers
  *
- * Handles: thinking, response, streamText, streamComplete, streamThinking,
- *          thinkingComplete, messageCancelled, messageQueued, agentPhase, agentStateSnapshot
+ * Handles queue and Agent state messages. Active turn content is projection-only.
  *
  * Uses updateConversation for unified current/non-current routing.
  */
@@ -10,12 +9,6 @@
 import { defineHandler } from './types';
 import type { MessageHandler, HandlerRegistration } from './types';
 import type {
-  AssistantTextReplacementMessage,
-  ThinkingMessage,
-  StreamTextMessage,
-  StreamCompleteMessage,
-  StreamThinkingMessage,
-  MessageCancelledMessage,
   MessageQueuedMessage,
   MessageQueueErrorMessage,
   MessageQueueSnapshotMessage,
@@ -27,129 +20,15 @@ import type { AgentStateStoreProjection } from '@neko-agent/types';
 import { updateConversation } from './message-updater';
 import type { MessageHandlerContext } from './types';
 import {
-  projectAssistantTextReplacementIntoMessages,
-  projectMessageCancelledIntoMessages,
-  projectStreamingCompleteIntoMessages,
-  projectStreamingTextIntoMessages,
-  projectStreamingThinkingIntoMessages,
-} from '../presenters/message-presenter';
-import {
   hasQueuedUserMessages,
   projectAuthoritativeQueuedMessagesIntoTranscript,
   projectReleasedQueuedMessageIntoTranscript,
-  projectQueuedMessagesCleared,
   projectQueuedMessagesForPendingCount,
 } from '../presenters/message-queue-presenter';
 import {
   projectAgentPhaseToStateStore,
   projectAgentStateSnapshot,
 } from '../presenters/agent-state-presenter';
-
-/**
- * Handle 'thinking' message - AI is processing (indicator only, no content)
- */
-const handleThinking: MessageHandler<'thinking'> = (message: ThinkingMessage, context) => {
-  updateConversation(context, message.conversationId, (msgs) => ({
-    messages: msgs,
-    isThinking: true,
-  }));
-};
-
-/**
- * Handle 'streamText' message - Streaming text chunk
- */
-const handleStreamText: MessageHandler<'streamText'> = (message: StreamTextMessage, context) => {
-  updateConversation(context, message.conversationId, (msgs, streamingId) => {
-    const projection = projectStreamingTextIntoMessages({
-      messages: msgs,
-      streamingMessageId: streamingId,
-      messageId: message.messageId,
-      content: message.content,
-    });
-
-    return {
-      messages: projection.messages,
-      streamingMessageId: projection.streamingMessageId,
-      isThinking: projection.isThinking,
-    };
-  });
-};
-
-const handleAssistantTextReplacement: MessageHandler<'assistantTextReplacement'> = (
-  message: AssistantTextReplacementMessage,
-  context,
-) => {
-  updateConversation(context, message.conversationId, (msgs, streamingId) => {
-    const projection = projectAssistantTextReplacementIntoMessages({
-      messages: msgs,
-      streamingMessageId: streamingId,
-      messageId: message.messageId,
-    });
-
-    return {
-      messages: projection.messages,
-      streamingMessageId: projection.targetMessageId ?? streamingId,
-      isThinking: projection.isThinking,
-    };
-  });
-};
-
-/**
- * Handle 'streamComplete' message - Streaming finished
- */
-const handleStreamComplete: MessageHandler<'streamComplete'> = (
-  message: StreamCompleteMessage,
-  context,
-) => {
-  updateConversation(context, message.conversationId, (msgs, streamingId) => {
-    const previousQueuedMessageCount = getPreviousQueuedMessageCount(
-      context,
-      message.conversationId,
-    );
-    const projection = projectStreamingCompleteIntoMessages({
-      messages: msgs,
-      streamingMessageId: streamingId,
-      messageId: message.messageId,
-      contentBlocks: message.contentBlocks,
-    });
-    const hasOptimisticQueuedMessages = hasQueuedUserMessages(projection.messages);
-    const nextQueuedMessageCount = hasOptimisticQueuedMessages
-      ? Math.max(previousQueuedMessageCount, 1)
-      : 0;
-
-    return {
-      messages: hasOptimisticQueuedMessages
-        ? projection.messages
-        : projectQueuedMessagesCleared(projection.messages),
-      streamingMessageId: projection.streamingMessageId,
-      isThinking: hasOptimisticQueuedMessages ? true : projection.isThinking,
-      queuedMessageCount: nextQueuedMessageCount,
-    };
-  });
-};
-
-/**
- * Handle 'streamThinking' message - Stream AI thinking content
- */
-const handleStreamThinking: MessageHandler<'streamThinking'> = (
-  message: StreamThinkingMessage,
-  context,
-) => {
-  updateConversation(context, message.conversationId, (msgs, streamingId) => {
-    const projection = projectStreamingThinkingIntoMessages({
-      messages: msgs,
-      streamingMessageId: streamingId,
-      messageId: message.messageId,
-      content: message.content,
-    });
-
-    return {
-      messages: projection.messages,
-      streamingMessageId: projection.streamingMessageId,
-      isThinking: projection.isThinking,
-    };
-  });
-};
 
 /**
  * Handle 'messageQueued' message - Message was queued while agent is running
@@ -217,31 +96,20 @@ const handleQueuedMessageEditRequested: MessageHandler<'queuedMessageEditRequest
 };
 
 /**
- * Handle 'messageCancelled' message - User cancelled message generation
- */
-const handleMessageCancelled: MessageHandler<'messageCancelled'> = (
-  message: MessageCancelledMessage,
-  context,
-) => {
-  updateConversation(context, message.conversationId, (msgs, streamingId) => {
-    const projection = projectMessageCancelledIntoMessages({
-      messages: msgs,
-      streamingMessageId: streamingId,
-    });
-
-    return {
-      messages: projectQueuedMessagesCleared(projection.messages),
-      streamingMessageId: projection.streamingMessageId,
-      isThinking: projection.isThinking,
-      queuedMessageCount: 0,
-    };
-  });
-};
-
-/**
  * Handle 'agentPhase' message - Agent execution phase change
  */
 const handleAgentPhase: MessageHandler<'agentPhase'> = (message: AgentPhaseMessage, context) => {
+  if (message.phase === 'idle') {
+    updateConversation(
+      context,
+      message.conversationId,
+      (messages, _streamingMessageId, streaming) => ({
+        messages,
+        streamingMessageId: null,
+        isThinking: (streaming.queuedMessageCount ?? 0) > 0,
+      }),
+    );
+  }
   applyAgentStateProjection(
     context,
     projectAgentPhaseToStateStore({
@@ -264,7 +132,7 @@ function getPreviousQueuedMessageCount(
   }
 
   const cachedCount =
-    context.conversationStreamingRef.current.get(conversationId)?.queuedMessageCount ?? 0;
+    context.conversationRenderCoordinator.read(conversationId)?.streaming.queuedMessageCount ?? 0;
   if (!context.isCurrentConversation(conversationId)) {
     return cachedCount;
   }
@@ -297,8 +165,8 @@ function applyMessageQueueSnapshot(
     isThinking:
       snapshot.items.length > 0 || options.releasedItem
         ? true
-        : (context.conversationStreamingRef.current.get(snapshot.conversationId)?.isThinking ??
-          context.isThinking),
+        : (context.conversationRenderCoordinator.read(snapshot.conversationId)?.streaming
+            .isThinking ?? false),
     queuedMessageCount: snapshot.pendingCount,
     queuedMessages: snapshot.items,
     messageQueueVersion: snapshot.version,
@@ -309,10 +177,8 @@ function isStaleMessageQueueSnapshot(
   snapshot: MessageQueueSnapshotMessage['snapshot'],
   context: MessageHandlerContext,
 ): boolean {
-  const currentVersion = context.isCurrentConversation(snapshot.conversationId)
-    ? (context.conversationStreamingRef.current.get(snapshot.conversationId)?.messageQueueVersion ??
-      undefined)
-    : context.conversationStreamingRef.current.get(snapshot.conversationId)?.messageQueueVersion;
+  const currentVersion = context.conversationRenderCoordinator.read(snapshot.conversationId)
+    ?.streaming.messageQueueVersion;
   return currentVersion !== undefined && snapshot.version < currentVersion;
 }
 
@@ -346,12 +212,6 @@ function applyAgentStateProjection(
  * All streaming handler registrations
  */
 export const streamingHandlers: HandlerRegistration[] = [
-  defineHandler('thinking', handleThinking),
-  defineHandler('streamText', handleStreamText),
-  defineHandler('assistantTextReplacement', handleAssistantTextReplacement),
-  defineHandler('streamComplete', handleStreamComplete),
-  defineHandler('streamThinking', handleStreamThinking),
-  defineHandler('messageCancelled', handleMessageCancelled),
   defineHandler('messageQueued', handleMessageQueued),
   defineHandler('messageQueueSnapshot', handleMessageQueueSnapshot),
   defineHandler('messageQueueError', handleMessageQueueError),

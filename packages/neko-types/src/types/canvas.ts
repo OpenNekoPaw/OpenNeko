@@ -218,6 +218,8 @@ export interface MediaCanvasNode extends CanvasNodeBase {
     documentResourceRef?: DocumentArchiveResourceRef;
     /** Stable unified cache resource identity. Preferred over documentResourceRef for new payloads. */
     resourceRef?: ResourceRef;
+    /** Canonical durable content location for Workspace Board and migrated creator-visible nodes. */
+    contentLocator?: import('./content-locator').ContentLocator;
     /** Runtime-only document cache status. Not persisted. */
     documentResourceStatus?: DocumentResourceStatus;
     /** Runtime-only preview URI/path materialized from documentResourceRef. Not persisted. */
@@ -304,8 +306,12 @@ export interface FileCanvasNode extends CanvasNodeBase {
     mediaType?: string;
     resourceRef?: ResourceRef;
     documentResourceRef?: DocumentArchiveResourceRef;
+    /** Canonical durable content location for Workspace Board and migrated creator-visible nodes. */
+    contentLocator?: import('./content-locator').ContentLocator;
     documentResourceStatus?: DocumentResourceStatus;
     runtimePath?: string;
+    /** Base64 cover thumbnail for portable file projections. */
+    thumbnailData?: string;
     provenance?: CanvasSerializableRecord;
   };
 }

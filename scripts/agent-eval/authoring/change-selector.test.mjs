@@ -44,7 +44,7 @@ function decision(behaviorId, suiteId) {
 }
 
 describe('Agent Evaluation change-to-suite selector', () => {
-  it('maps known Prompt, Skill, Tool, model, session, task, facts, and platform paths', () => {
+  it('maps known Prompt, Skill, Tool, model, session, lifecycle, facts, and platform paths', () => {
     expect(
       selectEvaluationCoverage([
         '.codex/skills/storyboard/SKILL.md',
@@ -54,14 +54,19 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/neko-agent/packages/platform/src/llm/adapter/openai-adapter.ts',
         'packages/neko-agent/packages/agent/src/session/agent-session.ts',
         'packages/neko-agent/packages/agent/src/subagent/task-tool.ts',
-        'packages/neko-agent/packages/agent/src/task/task-runtime.ts',
-        'packages/neko-agent/packages/platform/src/media/media-task-executor.ts',
+        'packages/neko-agent/packages/agent/src/runtime/session/execution-ownership.ts',
+        'packages/neko-agent/packages/platform/src/media/media-generation-executor.ts',
+        'packages/neko-agent/packages/platform/src/media/generated-output-adoption.ts',
         'packages/neko-content/src/document/read-document-tool.ts',
         'packages/neko-content/src/document/read-image-tool.ts',
         'packages/neko-agent/packages/agent/src/pi/event-projector.ts',
+        'packages/neko-agent/packages/agent/src/pi/timeline-projector.ts',
+        'packages/neko-agent/packages/agent/src/runtime/projection/conversation-projection-store.ts',
+        'packages/neko-agent/packages/agent-types/src/conversation-projection.ts',
         'packages/neko-agent/packages/extension/src/chat/message/piAgentStreamProcessor.ts',
+        'packages/neko-agent/packages/webview/src/render-runtime/conversation-projection-replica.ts',
         'apps/neko-tui/src/tui/adapters/pi-event-adapter.ts',
-        'apps/neko-tui/src/tui/core/tui-media-background-tasks.ts',
+        'apps/neko-tui/src/tui/host/node-media-generation-delivery-host.ts',
         'apps/neko-tui/src/tui/core/debug-automation/types.ts',
         'apps/neko-tui/src/tui/markdown/controller.ts',
         'scripts/agent-eval/schemas/contracts.mjs',
@@ -90,9 +95,13 @@ describe('Agent Evaluation change-to-suite selector', () => {
           suiteIds: ['agent-runtime.single-message-tui', 'agent-runtime.workflow-controller'],
         }),
         expect.objectContaining({
-          behaviorId: 'task-recovery',
+          behaviorId: 'tool-call-lifecycle',
           suiteId: 'agent-runtime.workflow-controller',
-          suiteIds: ['agent-runtime.workflow-controller', 'agent-runtime.creative-media-workflow'],
+          suiteIds: [
+            'agent-runtime.workflow-controller',
+            'agent-runtime.stream-delivery',
+            'agent-runtime.creative-media-workflow',
+          ],
         }),
         expect.objectContaining({
           behaviorId: 'creative-media-workflow',
@@ -101,6 +110,11 @@ describe('Agent Evaluation change-to-suite selector', () => {
         }),
         expect.objectContaining({
           behaviorId: 'tool-result-delivery',
+          suiteId: 'agent-runtime.stream-delivery',
+          suiteIds: ['agent-runtime.stream-delivery'],
+        }),
+        expect.objectContaining({
+          behaviorId: 'timeline-projection-authority',
           suiteId: 'agent-runtime.stream-delivery',
           suiteIds: ['agent-runtime.stream-delivery'],
         }),

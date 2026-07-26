@@ -9,8 +9,6 @@ import {
   isRuntimeOnlyCanvasAuthoringResourceIdentityValue,
   validateCanvasAuthoringSemanticPromptDocument,
 } from './canvas-authoring-contracts';
-import type { AgentTaskResultRef } from './agent-task-result-observation';
-import type { TaskProjectionRef } from './task-projection';
 import type {
   StoryboardMediaIdentityClassificationOptions,
   StoryboardMediaRef,
@@ -97,20 +95,12 @@ export interface CanvasStoryboardReferenceMedia {
   readonly diagnostics?: readonly CanvasAuthoringDiagnostic[];
 }
 
-export interface CanvasStoryboardTaskRef extends TaskProjectionRef {
-  readonly taskId?: string;
-  readonly taskKind?: 'image' | 'video' | 'audio' | 'reference-processing' | 'prompt-optimization';
-  readonly conversationId?: string;
-}
-
 export interface CanvasStoryboardResultRef {
-  readonly agentResult?: AgentTaskResultRef;
   readonly canvasRef?: CanvasAuthoringRef;
   readonly mediaRef?: StoryboardMediaRef;
 }
 
 export interface CanvasStoryboardExecutionRefs {
-  readonly taskRefs?: readonly CanvasStoryboardTaskRef[];
   readonly resultRefs?: readonly CanvasStoryboardResultRef[];
   readonly historyRefs?: readonly string[];
 }
@@ -155,7 +145,6 @@ export interface CanvasStoryboardNextCreativeState {
   readonly target: CanvasStoryboardNextCreativeStateTarget;
   readonly nextActionId?: CanvasStoryboardActionIntentId;
   readonly blocker?: string;
-  readonly taskRef?: CanvasStoryboardTaskRef;
   readonly resultRef?: CanvasStoryboardResultRef;
   readonly diagnostics?: readonly CanvasAuthoringDiagnostic[];
 }
@@ -219,7 +208,6 @@ export interface CanvasStoryboardActionIntent {
   readonly referenceMedia?: CanvasStoryboardReferenceMedia;
   readonly generationParams?: CanvasStoryboardGenerationParams;
   readonly expectedNextStateId?: string;
-  readonly taskRef?: CanvasStoryboardTaskRef;
   readonly resultRef?: CanvasStoryboardResultRef;
   readonly createdAt?: number;
 }
@@ -523,7 +511,7 @@ export function validateCanvasStoryboardNextCreativeState(
     );
   }
   if (record['taskRef'] !== undefined) {
-    diagnostics.push(...validateTaskRef(record['taskRef'], 'taskRef'));
+    diagnostics.push(retiredTaskContractDiagnostic('taskRef', record['taskRef']));
   }
   if (record['resultRef'] !== undefined) {
     diagnostics.push(...validateResultRef(record['resultRef'], 'resultRef'));
@@ -589,7 +577,7 @@ export function validateCanvasStoryboardActionIntent(
     diagnostics.push(...validateGenerationParams(record['generationParams'], options));
   }
   if (record['taskRef'] !== undefined) {
-    diagnostics.push(...validateTaskRef(record['taskRef'], 'taskRef'));
+    diagnostics.push(retiredTaskContractDiagnostic('taskRef', record['taskRef']));
   }
   if (record['resultRef'] !== undefined) {
     diagnostics.push(...validateResultRef(record['resultRef'], 'resultRef'));
@@ -1394,19 +1382,6 @@ function validateGenerationParams(
   return diagnostics;
 }
 
-function validateTaskRef(value: unknown, target: string): readonly CanvasAuthoringDiagnostic[] {
-  const record = asRecord(value);
-  if (!record || !isNonEmptyString(record['source']) || !isNonEmptyString(record['sourceTaskId'])) {
-    return [
-      diagnostic('error', 'malformed-storyboard-task-ref', 'Storyboard task ref is malformed.', {
-        target,
-        received: value,
-      }),
-    ];
-  }
-  return [];
-}
-
 function validateResultRef(value: unknown, target: string): readonly CanvasAuthoringDiagnostic[] {
   const record = asRecord(value);
   if (!record) {
@@ -1423,15 +1398,17 @@ function validateResultRef(value: unknown, target: string): readonly CanvasAutho
     ];
   }
 
-  const hasAgent = record['agentResult'] !== undefined;
   const hasCanvas = record['canvasRef'] !== undefined;
   const hasMedia = record['mediaRef'] !== undefined;
-  if (!hasAgent && !hasCanvas && !hasMedia) {
+  if (record['agentResult'] !== undefined) {
+    return [retiredTaskContractDiagnostic(`${target}.agentResult`, record['agentResult'])];
+  }
+  if (!hasCanvas && !hasMedia) {
     return [
       diagnostic(
         'error',
         'malformed-storyboard-result-ref',
-        'Storyboard result ref must contain agentResult, canvasRef, or mediaRef.',
+        'Storyboard result ref must contain canvasRef or mediaRef.',
         { target, received: value },
       ),
     ];
@@ -1486,20 +1463,7 @@ function validateExecutionRefs(
   }
   const diagnostics: CanvasAuthoringDiagnostic[] = [];
   if (record['taskRefs'] !== undefined) {
-    if (!Array.isArray(record['taskRefs'])) {
-      diagnostics.push(
-        diagnostic(
-          'error',
-          'malformed-storyboard-task-ref',
-          'Storyboard taskRefs must be an array.',
-          { target: `${target}.taskRefs`, received: record['taskRefs'] },
-        ),
-      );
-    } else {
-      record['taskRefs'].forEach((item, index) => {
-        diagnostics.push(...validateTaskRef(item, `${target}.taskRefs[${index}]`));
-      });
-    }
+    diagnostics.push(retiredTaskContractDiagnostic(`${target}.taskRefs`, record['taskRefs']));
   }
   if (record['resultRefs'] !== undefined) {
     if (!Array.isArray(record['resultRefs'])) {
@@ -1518,6 +1482,18 @@ function validateExecutionRefs(
     }
   }
   return diagnostics;
+}
+
+function retiredTaskContractDiagnostic(
+  target: string,
+  received: unknown,
+): CanvasAuthoringDiagnostic {
+  return diagnostic(
+    'error',
+    'retired-storyboard-task-contract',
+    'Generic Task references are retired; use Canvas resultRefs with durable canvasRef or mediaRef identity.',
+    { target, received },
+  );
 }
 
 function validateMigrationProvenance(

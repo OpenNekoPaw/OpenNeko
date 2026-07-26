@@ -85,16 +85,6 @@ describe('command result presenter', () => {
     ).toMatchObject([
       { type: 'appendAssistantMessage', message: { content: 'Execution mode changed to plan' } },
     ]);
-
-    expect(
-      projectSlashCommandResultMessage({
-        type: 'slashCommandResult',
-        conversationId: 'conv-1',
-        command: 'tasks',
-        success: true,
-        action: 'showTasks',
-      }).effects,
-    ).toEqual([{ type: 'setActiveTab', activeTab: 'chat' }]);
   });
 
   it('projects resume conversation data to a markdown assistant message', () => {

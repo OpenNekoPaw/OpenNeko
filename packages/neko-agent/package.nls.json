@@ -28,6 +28,7 @@
   "neko.agent.createFromFile.title": "Create Video from This File",
   "neko.agent.retryCreation.title": "Retry Last Creation",
   "neko.agent.addToContext.title": "Add to Neko Agent",
-  "neko.agent.debug.startStreamLifecycleReplay.title": "Start Stream Lifecycle Replay",
-  "neko.agent.debug.continueStreamLifecycleReplay.title": "Continue Stream Lifecycle Replay"
+  "neko.agent.debug.startTimelineProjectionAcceptance.title": "Start Timeline Projection Acceptance",
+  "neko.agent.debug.continueTimelineProjectionAcceptance.title": "Continue Timeline Projection Acceptance",
+  "neko.agent.debug.cancelTimelineProjectionAcceptance.title": "Cancel Timeline Projection Acceptance Turn"
 }

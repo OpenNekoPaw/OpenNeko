@@ -5,7 +5,6 @@
  * following the Single Responsibility Principle.
  */
 
-export { TaskHandler, type TaskHandlerDeps } from './taskHandler';
 export { SkillHandler, type SkillHandlerDeps } from './skillHandler';
 export { FileOperationHandler, type FileOperationHandlerDeps } from './fileOperationHandler';
 export { SettingsHandler, type SettingsHandlerDeps } from './settingsHandler';

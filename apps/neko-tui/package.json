@@ -24,6 +24,7 @@
     "@neko/ai-sdk": "workspace:*",
     "@neko/content": "workspace:*",
     "@neko/entity": "workspace:*",
+    "@neko/generation": "workspace:*",
     "@neko/host": "workspace:*",
     "@neko/markdown": "workspace:*",
     "@neko/platform": "workspace:*",

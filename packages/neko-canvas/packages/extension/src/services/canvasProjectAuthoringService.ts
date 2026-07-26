@@ -71,14 +71,16 @@ const PROJECT_RELATIVE_PATH_PATTERN = /^(?:\.\/)?(?!\/)(?![a-zA-Z]:[\\/])[^:?#]+
 
 export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutationPort {
   private readonly projectFileAdapter = createVSCodeProjectFileIoAdapter({ vscodeApi: vscode });
-  private readonly projectFileStore = new ProjectFileStore({
-    registry: createDefaultProjectFormatCodecRegistry(),
-    fileOps: this.projectFileAdapter.fileOps,
-    resolveAuthorizedWrite: this.options.resolveAuthorizedWrite,
-    logger: this.options.logger,
-  });
+  private readonly projectFileStore: ProjectFileStore;
 
-  constructor(private readonly options: CanvasProjectAuthoringServiceOptions) {}
+  constructor(private readonly options: CanvasProjectAuthoringServiceOptions) {
+    this.projectFileStore = new ProjectFileStore({
+      registry: createDefaultProjectFormatCodecRegistry(),
+      fileOps: this.projectFileAdapter.fileOps,
+      resolveAuthorizedWrite: options.resolveAuthorizedWrite,
+      logger: options.logger,
+    });
+  }
 
   async loadLatest(input: {
     readonly documentUri: string;
@@ -159,7 +161,7 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
     assertNoRuntimeResourceIdentity(input.canvasData, 'canvasData');
     await input.assertWriter?.();
     await this.saveCanvasData(uri, input.canvasData);
-    this.options.canvasEditorProvider.applyHostCanvasData(uri, input.canvasData);
+    await this.options.canvasEditorProvider.applyHostCanvasData(uri, input.canvasData);
     return { revision: createCanvasWorkspaceBoardRevision(input.canvasData) };
   }
 
@@ -444,13 +446,13 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
       readonly canvasData: CanvasData;
       readonly result: TResult;
     },
-  ): Promise<TResult> {
+  ): Promise<TResult & { readonly projectRef: QualityProjectRef }> {
     const loaded = await this.loadTarget(target, fallbackTitle);
     const mutation = mutate(loaded.canvasData);
     assertNoRuntimeResourceIdentity(mutation.canvasData, 'canvasData');
     if (mutation.canvasData !== loaded.canvasData) {
       await this.saveCanvasData(loaded.uri, mutation.canvasData);
-      this.options.canvasEditorProvider.applyHostCanvasData(loaded.uri, mutation.canvasData);
+      await this.options.canvasEditorProvider.applyHostCanvasData(loaded.uri, mutation.canvasData);
     }
     if (loaded.target.reveal) {
       await this.options.canvasEditorProvider.revealCanvasDocument(loaded.uri);
@@ -522,7 +524,7 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
     const canvasData = createEmptyCanvasData(title);
     assertNoRuntimeResourceIdentity(canvasData, 'canvasData');
     await this.saveCanvasData(uri, canvasData);
-    this.options.canvasEditorProvider.applyHostCanvasData(uri, canvasData);
+    await this.options.canvasEditorProvider.applyHostCanvasData(uri, canvasData);
   }
 
   private createImportedAssetNodeData(

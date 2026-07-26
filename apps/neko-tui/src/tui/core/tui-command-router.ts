@@ -2,8 +2,6 @@ import type {
   AgentCapabilityAvailabilityDiagnostic,
   AgentCapabilityProviderAvailabilitySummary,
   ChatModelOption,
-  Task,
-  TaskStatus,
 } from '@neko/shared';
 import {
   buildAgentTerminalHelpSemantic,
@@ -68,10 +66,7 @@ import {
 } from '../presentation/parameter-presentation';
 import {
   presentQueueCommand,
-  presentTaskCommand,
   type QueueCommandSemanticResult,
-  type TaskCommandRow,
-  type TaskCommandSemanticResult,
 } from '../presentation/work-queue-presentation';
 import {
   presentCommandsCommand,
@@ -95,13 +90,6 @@ export type TuiSessionMode = 'agent' | 'image' | 'video' | 'audio';
 const TUI_SESSION_MODES: readonly TuiSessionMode[] = ['agent', 'image', 'video', 'audio'];
 type TuiMediaCategory = 'image' | 'video' | 'audio';
 const TUI_MEDIA_CATEGORIES: readonly TuiMediaCategory[] = ['image', 'video', 'audio'];
-const TUI_TASK_STATUSES = [
-  'pending',
-  'running',
-  'completed',
-  'failed',
-  'cancelled',
-] as const satisfies readonly TaskStatus[];
 type TuiParamPresetKey = 'reasoning' | 'verbosity' | 'creativity';
 const TUI_PARAM_PRESET_KEYS: readonly TuiParamPresetKey[] = [
   'reasoning',
@@ -209,10 +197,6 @@ export interface TuiQueuePorts {
   readonly edit?: (queueItemId: string, content: string) => AgentQueuedMessageItem;
 }
 
-export interface TuiTaskPorts {
-  readonly list: (status?: TaskStatus) => readonly Task[] | Promise<readonly Task[]>;
-}
-
 export type TuiMcpServerSnapshot = TerminalMcpServerSnapshot;
 
 export interface TuiMcpPorts {
@@ -255,7 +239,6 @@ export interface TuiCommandRouterPorts {
   readonly skill?: TuiSkillPorts;
   readonly context?: TuiContextPorts;
   readonly queue?: TuiQueuePorts;
-  readonly task?: TuiTaskPorts;
   readonly mcp?: TuiMcpPorts;
   readonly capability?: TuiCapabilityPorts;
   readonly artifact?: TuiArtifactPorts;
@@ -377,10 +360,6 @@ export async function handleTuiControlCommand(
     case 'queue':
       return handleQueue(commandText, context);
 
-    case 'task':
-    case 'tasks':
-      return handleTasks(commandText, context);
-
     case 'mcp':
       return handleMcp(commandText, context);
 
@@ -470,13 +449,6 @@ function projectQueueResult(
   context: TuiCommandRouterContext,
 ): TuiCommandRouterResult {
   return projectTerminalCommand(presentQueueCommand(result, context.presentation));
-}
-
-function projectTaskResult(
-  result: TaskCommandSemanticResult,
-  context: TuiCommandRouterContext,
-): TuiCommandRouterResult {
-  return projectTerminalCommand(presentTaskCommand(result, context.presentation));
 }
 
 function projectMcpResult(
@@ -1981,68 +1953,6 @@ function handleQueue(input: string, context: TuiCommandRouterContext): TuiComman
   );
 }
 
-async function handleTasks(
-  input: string,
-  context: TuiCommandRouterContext,
-): Promise<TuiCommandRouterResult> {
-  const taskPorts = context.ports.task;
-  if (!taskPorts) {
-    return projectTaskResult({ kind: 'diagnostic', code: 'unavailable' }, context);
-  }
-
-  const args = input.trim().split(/\s+/).slice(1);
-  const subcommand = args[0]?.toLowerCase();
-  const statusArg =
-    subcommand === 'list' || subcommand === 'status' ? args[1]?.toLowerCase() : subcommand;
-
-  if (statusArg && statusArg !== 'all' && !isTuiTaskStatus(statusArg)) {
-    return projectTaskResult({ kind: 'diagnostic', code: 'usage' }, context);
-  }
-
-  const status = isTuiTaskStatus(statusArg) ? statusArg : undefined;
-  const tasks = await taskPorts.list(status);
-  return projectTaskResult(
-    {
-      kind: 'list',
-      status,
-      rows: tasks.map(toTaskCommandRow),
-    },
-    context,
-  );
-}
-
-function isTuiTaskStatus(value: string | undefined): value is TaskStatus {
-  return TUI_TASK_STATUSES.includes(value as TaskStatus);
-}
-
-function toTaskCommandRow(task: Task): TaskCommandRow {
-  const progress = Number.isFinite(task.progress) ? Math.round(task.progress) : 0;
-  return {
-    id: task.id,
-    status: task.status,
-    progress,
-    runMode: task.lifecycle?.runMode ?? task.input.lifecycle?.runMode ?? 'foreground',
-    title: readTaskTitle(task),
-    error: task.error ?? task.output?.error,
-    updatedAt: task.updatedAt,
-  };
-}
-
-function readTaskTitle(task: Task): string {
-  const payload = task.input.payload;
-  for (const key of ['prompt', 'title', 'name', 'description', 'content'] as const) {
-    const value = payload[key];
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return trimTaskTitle(value.trim());
-    }
-  }
-  return task.type;
-}
-
-function trimTaskTitle(value: string): string {
-  return value.length > 80 ? `${value.slice(0, 77)}...` : value;
-}
-
 async function handleMcp(
   input: string,
   context: TuiCommandRouterContext,
@@ -2363,7 +2273,7 @@ function assertResetState(
 }
 
 function toResourceCommandContext(context: TuiCommandRouterContext): CommandContext {
-  const skills = context.ports.skill?.listEnabled().map((skill) => ({
+  const skills = context.ports.skill?.listEnabled?.().map((skill) => ({
     name: skill.name,
     description: skill.description,
     enabled: true,

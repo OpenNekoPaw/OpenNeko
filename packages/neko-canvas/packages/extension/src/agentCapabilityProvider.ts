@@ -95,7 +95,7 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
   readonly version = '1.0.0';
   readonly protocolVersion = '1.0' as const;
   readonly trustLevel = 'core' as const;
-  readonly hostRequirements = ['vscode'] as const;
+  readonly hostRequirements = [{ host: 'vscode' }] as const;
   constructor(private readonly api: NekoCanvasAPI) {}
 
   getArtifactFacets(_context: AgentCapabilityContext): AgentArtifactFacetsContribution {
@@ -408,7 +408,10 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
           properties: {
             nodeId: { type: 'string' },
             path: { type: 'string' },
-            value: {},
+            value: {
+              type: 'string',
+              description: 'New value. Objects must be passed as JSON text.',
+            },
           },
           required: ['nodeId', 'path', 'value'],
         },

@@ -11,7 +11,7 @@ Workspace Board 已经是统一的创作结果落点，但当前自动投递只�
 - 保持 `neko/boards/workspace.nkc` 为默认 Board 和布局权威。SQLite 只保存 pending/claimed/projected/blocked 投递状态；打开 Board 或 Host 启动时消费未完成投递，不从全部 SQLite 历史自动重建、覆盖或复活用户已编辑/删除的 Board 节点。
 - 明确目标策略：没有显式 owning Canvas document 的 Agent typed result 写入 Workspace Board；已显式绑定普通 `.nkc` 的 Canvas authoring 只写该目标，不再镜像到 Workspace Board，也不通过活动/最近编辑器推断目标。
 - 增加多 Agent/多 Host 协调：稳定 `projectionId + revision` 幂等、target-scoped fenced claim、写前重新加载与 revision 校验、原子文件保存、过期 lease 恢复和 fail-visible diagnostics，禁止 last-write-wins、静默重试到其他 Canvas 或旧 `Send to Canvas` fallback。
-- 将 Workspace Board 的视觉模型收敛为平铺的创作内容关系图：素材、分析和产物是顶层普通 Canvas 节点，稳定内容 identity 跨 delivery 去重，已证明的 source dependency 投影为确定性 Canvas connection；Inbox、Task、Run 和 delivery batch 不再创建视觉 Group。
+- 将 Workspace Board 的视觉模型收敛为批次感知的创作内容关系图：素材、分析和单个产物保持普通 Canvas 节点；同一 delivery 新建的多个生成素材进入一个可编辑的展示 Group，组内和顶层新增内容都采用有界多列布局，避免持续堆成单行或单列。稳定内容 identity 仍跨 delivery 去重，已证明的 source dependency 仍投影为确定性 Canvas connection；Inbox、Task 和 Run 不创建视觉 Group，batch Group 也不拥有 Job 或 delivery 状态。
 - Workspace Board 图片节点使用完整内容预览，统一卡片允许留白但不得以 `cover` 默认裁切创作结果；真实宽高和画幅来自既有 portable generation metadata。
 - **BREAKING**：用通用 typed delivery/flush contract 替换 VS Code Extension 私有的 `projectGeneratedAssets()` 成功路径，并迁移媒体生成、Markdown artifact、素材消费和后台结果调用方；当前 typed result 不再显示或依赖通用 `Send to Canvas`。
 

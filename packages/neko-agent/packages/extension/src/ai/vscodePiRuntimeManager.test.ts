@@ -18,6 +18,7 @@ import {
   resolveVSCodePiPurposeModelUse,
   resolveVSCodePiTurnModelPolicy,
 } from './vscodePiRuntimeManager';
+import { projectPiConversationEntries } from '../chat/message/piConversationHistoryProjection';
 
 const configuredProvider: Provider = {
   id: 'configured-newapi',
@@ -178,7 +179,152 @@ describe('VSCodePiRuntimeManager authority ownership', () => {
       await rm(userDataRoot, { recursive: true, force: true });
     }
   });
+
+  it('persists an idempotent external media turn that survives manager restart', async () => {
+    const userDataRoot = await mkdtemp(join(tmpdir(), 'neko-vscode-pi-external-turn-'));
+    const options = {
+      userDataRoot,
+      builtinSkillRoot: join(userDataRoot, 'builtin-skills'),
+      workspaceId: 'workspace-1',
+      hostId: 'vscode-test',
+      credentials: new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence()),
+      tools: { list: () => [] } as never,
+      workspaceTrusted: () => true,
+    };
+    const manager = new VSCodePiRuntimeManager(options);
+    const checkpoint = externalMediaCheckpoint();
+
+    try {
+      await manager.createConversation({ conversationId: checkpoint.conversationId });
+      const first = await manager.checkpointExternalTurn(checkpoint);
+      const duplicate = await manager.checkpointExternalTurn(checkpoint);
+
+      expect(duplicate).toEqual(first);
+      await expect(manager.listConversationPresentationCatalog()).resolves.toEqual([
+        expect.objectContaining({
+          conversationId: checkpoint.conversationId,
+          messageCount: 2,
+        }),
+      ]);
+      const entries = await manager.readConversationEntries(checkpoint.conversationId);
+      expect(entries.filter((entry) => entry.type === 'message')).toHaveLength(3);
+      expect(projectPiConversationEntries(entries)).toMatchObject([
+        { role: 'user', content: 'cat' },
+        {
+          role: 'assistant',
+          contentBlocks: [
+            {
+              type: 'tool_call',
+              toolCall: {
+                id: 'generation-1',
+                name: 'GenerateImage',
+                result: {
+                  success: true,
+                  data: {
+                    generationJob: {
+                      kind: 'generation-job',
+                      jobId: 'generation-1',
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ]);
+    } finally {
+      const disposeSpy = vi.spyOn(NodePiConversationAuthority.prototype, 'dispose');
+      manager.dispose();
+      await vi.waitFor(() => expect(disposeSpy).toHaveBeenCalledOnce());
+      disposeSpy.mockRestore();
+    }
+
+    const reopened = new VSCodePiRuntimeManager({
+      ...options,
+      hostId: 'vscode-reopened',
+      credentials: new OpenNekoCredentialStore(new InMemoryUserCredentialPersistence()),
+    });
+    try {
+      await expect(reopened.listConversationPresentationCatalog()).resolves.toEqual([
+        expect.objectContaining({
+          conversationId: checkpoint.conversationId,
+          messageCount: 2,
+        }),
+      ]);
+      const entries = await reopened.readConversationEntries(checkpoint.conversationId);
+      expect(entries.filter((entry) => entry.type === 'message')).toHaveLength(3);
+    } finally {
+      const disposeSpy = vi.spyOn(NodePiConversationAuthority.prototype, 'dispose');
+      reopened.dispose();
+      await vi.waitFor(() => expect(disposeSpy).toHaveBeenCalledOnce());
+      disposeSpy.mockRestore();
+      await rm(userDataRoot, { recursive: true, force: true });
+    }
+  });
 });
+
+function externalMediaCheckpoint() {
+  return {
+    conversationId: 'conversation-external-media',
+    turnId: 'direct-media:generation-1',
+    terminalState: 'completed' as const,
+    messages: [
+      {
+        role: 'user' as const,
+        content: 'cat',
+        timestamp: 1,
+      },
+      {
+        role: 'assistant' as const,
+        content: [
+          {
+            type: 'toolCall' as const,
+            id: 'generation-1',
+            name: 'GenerateImage',
+            arguments: { prompt: 'cat' },
+          },
+        ],
+        api: 'openai-completions' as const,
+        provider: 'image-provider',
+        model: 'image-model',
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            total: 0,
+          },
+        },
+        stopReason: 'toolUse' as const,
+        timestamp: 2,
+      },
+      {
+        role: 'toolResult' as const,
+        toolCallId: 'generation-1',
+        toolName: 'GenerateImage',
+        content: [{ type: 'text' as const, text: 'Image generation completed.' }],
+        details: {
+          generationJob: {
+            kind: 'generation-job',
+            jobId: 'generation-1',
+            revision: 3,
+            phase: 'succeeded',
+            stage: 'completed',
+            percent: 100,
+          },
+        },
+        isError: false,
+        timestamp: 3,
+      },
+    ],
+  };
+}
 
 describe('VSCodePiRuntimeManager credential projection', () => {
   it('excludes configured purpose models without a registered Agent Tool caller', () => {
@@ -201,6 +347,34 @@ describe('VSCodePiRuntimeManager credential projection', () => {
     expect(filterVSCodePiTurnPurposeModels(input, [])).toMatchObject({
       purposeModels: undefined,
     });
+  });
+
+  it('retains every configured detached-generation purpose and excludes unrelated bindings', () => {
+    const selection = (id: string, capability: string) => ({
+      provider: configuredProvider,
+      model: {
+        id,
+        name: id,
+        providerId: configuredProvider.id,
+        capabilities: [capability],
+        enabled: true,
+      },
+      providerSource: 'explicit-config' as const,
+    });
+    const input = {
+      purposeModels: {
+        'image.generate': selection('image-model', 'image.generate'),
+        'video.generate': selection('video-model', 'video.generate'),
+        'audio.generate': selection('audio-model', 'audio.generate'),
+        'video.understand': selection('video-understanding', 'video.understand'),
+      },
+    } as never;
+
+    const filtered = filterVSCodePiTurnPurposeModels(input, [{ name: 'SubmitGenerationJob' }]);
+    expect(filtered.purposeModels?.['image.generate']?.model.id).toBe('image-model');
+    expect(filtered.purposeModels?.['video.generate']?.model.id).toBe('video-model');
+    expect(filtered.purposeModels?.['audio.generate']?.model.id).toBe('audio-model');
+    expect(filtered.purposeModels).not.toHaveProperty('video.understand');
   });
 
   it('freezes main and bounded understanding as peer purpose entries', async () => {

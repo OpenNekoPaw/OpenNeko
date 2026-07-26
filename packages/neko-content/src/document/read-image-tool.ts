@@ -419,8 +419,10 @@ export async function executeReadImage(
       ...(image.input.aliasScope ? { aliasScope: image.input.aliasScope } : {}),
       ...(image.input.sourceDocumentId ? { sourceDocumentId: image.input.sourceDocumentId } : {}),
       ...(image.input.entryPath ? { entryPath: image.input.entryPath } : {}),
-      portableForTransfer: image.input.portableForTransfer ?? false,
-      ...(image.input.nonPortableReason
+      portableForTransfer: image.input.contentLocator
+        ? true
+        : (image.input.portableForTransfer ?? false),
+      ...(!image.input.contentLocator && image.input.nonPortableReason
         ? { nonPortableReason: image.input.nonPortableReason }
         : {}),
       ...(image.input.label ? { label: image.input.label } : {}),

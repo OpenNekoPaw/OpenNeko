@@ -2,7 +2,7 @@ export * from './media-operation-capabilities';
 /**
  * Media Module - AI media generation
  *
- * Public API: MediaGenerationService + types + createMediaPlatform factory.
+ * Public API: MediaGenerationService and Platform-owned delivery/runtime helpers.
  * Adapter classes, registries, routing, and executors are internal implementation details.
  */
 
@@ -10,23 +10,21 @@ export * from './media-operation-capabilities';
 // Public Types
 // =============================================================================
 
-export type {
-  MediaGenerationType,
-  MediaTaskStatus,
-  MediaOutputType,
-  MediaGenerationRequestBase,
-  ImageGenerationRequest,
-  VideoGenerationRequest,
-  AudioGenerationRequest,
-  MediaOutput,
-  MediaAdapterResult,
-  MediaAdapterError,
-  MediaAdapter,
-  MediaRoutingResult,
-  MediaTask,
-  MediaProgressCallback,
-  MediaTaskManagerDeps,
-} from './types';
+export type { MediaRoutingResult } from './types';
+export {
+  isMediaTaskCanceller,
+  isMediaTaskDescriber,
+  isMediaImageSubmitter,
+  isMediaVideoSubmitter,
+  isMediaAudioSubmitter,
+  requireMediaTaskCanceller,
+  requireMediaTaskDescriber,
+  requireMediaImageSubmitter,
+  requireMediaVideoSubmitter,
+  requireMediaAudioSubmitter,
+  MediaAdapterCapabilityError,
+  type MediaAdapterCapabilityErrorCode,
+} from './media-adapter-capabilities';
 
 // =============================================================================
 // Public Service
@@ -51,93 +49,46 @@ export {
 } from './generated-output-lifecycle';
 
 export {
-  observeMediaTaskProgress,
-  runMediaTurn,
-  submitMediaTurn,
-  type MediaTurnCategory,
-  type MediaTurnDeliveryEvent,
-  type MediaTurnIgnoredTaskEvent,
-  type MediaTurnModelRef,
-  type MediaTurnProgressErrorEvent,
-  type ObserveMediaTaskProgressInput,
-  type RunMediaTurnInput,
-  type RunMediaTurnResult,
-  type SubmitMediaTurnInput,
-} from './media-turn-dispatcher';
-export {
   downloadMediaOutputs,
   detectMediaExtension,
   type DownloadMediaOptions,
 } from './media-file-downloader';
-export type { MediaRequestAssetMaterializer } from './media-request-assets';
+export {
+  createContentReadMediaRequestAssetMaterializer,
+  type ContentReadMediaRequestAssetMaterializerOptions,
+  type MediaRequestAssetMaterializer,
+  type MediaRequestMaterializationOptions,
+} from './media-request-assets';
 export {
   buildGeneratedMediaAssets,
   computeAspectRatioLabel,
   inferGeneratedMediaMimeType,
   toStableGeneratedAssetUri,
   type BuildGeneratedMediaAssetsInput,
-  type GeneratedMediaTaskType,
+  type GeneratedMediaKind,
 } from './media-generated-asset';
 export {
-  createMediaTaskView,
-  createMediaTaskProgressView,
-  getMediaTaskConversationId,
-  matchesMediaTaskConversation,
-  toMediaBackgroundTaskStatus,
-  toMediaBackgroundTaskType,
-  type MediaBackgroundTaskStatus,
-  type MediaBackgroundTaskType,
-  type MediaTaskOutputView,
-  type MediaTaskProgressView,
-  type MediaTaskProgressViewInput,
-  type MediaTaskResultView,
-  type MediaTaskView,
-  type MediaTaskViewOptions,
-} from './media-task-view';
-export {
-  finalizeCompletedMediaTaskOutputs,
-  getMediaTaskPrimaryOutputUrl,
-  type FinalizeCompletedMediaTaskOutputsInput,
-  type FinalizedMediaTaskOutputs,
+  finalizeMediaGenerationOutputs,
+  type FinalizedMediaGenerationOutputs,
+  type FinalizeMediaGenerationOutputsInput,
   type GeneratedAssetSink,
-} from './media-task-result';
+} from './media-generation-output-finalizer';
 export {
-  MEDIA_TASK_SAVE_NOTIFICATION_ACTION,
-  buildMediaTaskProgressDeliveryPlan,
-  isTerminalMediaTaskStatus,
-  type BuildMediaTaskProgressDeliveryPlanInput,
-  type MediaTaskProgressDeliveryPlan,
-  type MediaTaskSaveNotificationPlan,
-} from './media-task-progress-plan';
+  DEFAULT_MEDIA_GENERATION_CONFIGURED_OUTPUT_DIR,
+  DEFAULT_MEDIA_GENERATION_SHOW_SAVE_NOTIFICATION,
+  MEDIA_GENERATION_DELIVERY_CONFIG_SECTION,
+  MEDIA_GENERATION_OUTPUT_DIR_SETTING_KEY,
+  MEDIA_GENERATION_SHOW_SAVE_NOTIFICATION_SETTING_KEY,
+  buildMediaGenerationDeliverySettingsPlan,
+  type MediaGenerationDeliverySettingsInput,
+  type MediaGenerationDeliverySettingsPlan,
+} from './media-generation-delivery-settings';
 export {
-  readMediaTaskResultDeliveryPolicy,
-  toMediaTaskResultObservationTask,
-  type MediaTaskResultObservationAssetData,
-  type MediaTaskResultObservationAssetInput,
-  type MediaTaskResultObservationProjectionInput,
-} from './media-task-result-observation';
-export {
-  buildMediaTaskViewDelivery,
-  buildMediaTaskProgressViewDelivery,
-  type BuildMediaTaskProgressViewDeliveryInput,
-  type MediaTaskProgressViewDelivery,
-  type MediaTaskViewDelivery,
-} from './media-task-progress-view';
-export {
-  DEFAULT_MEDIA_TASK_CONFIGURED_OUTPUT_DIR,
-  DEFAULT_MEDIA_TASK_SHOW_SAVE_NOTIFICATION,
-  MEDIA_TASK_DELIVERY_CONFIG_SECTION,
-  MEDIA_TASK_OUTPUT_DIR_SETTING_KEY,
-  MEDIA_TASK_SHOW_SAVE_NOTIFICATION_SETTING_KEY,
-  buildMediaTaskDeliverySettingsPlan,
-  type MediaTaskDeliverySettingsInput,
-  type MediaTaskDeliverySettingsPlan,
-} from './media-task-delivery-settings';
-export { GeneratedAssetIndex, generateAssetId, type AssetFilter } from './generated-asset-index';
-export {
-  createGeneratedAssetResourceResolver,
-  type GeneratedAssetResourceResolver,
-} from './generated-asset-resource-resolver';
+  GeneratedAssetIndex,
+  generateAssetId,
+  type AssetFilter,
+  type GeneratedAssetCatalog,
+} from './generated-asset-index';
 export {
   DEFAULT_VISION_PREPROCESS_POLICY,
   VISION_IMAGE_OUTPUT_MEDIA_TYPE,
@@ -187,9 +138,8 @@ import { MidjourneyMediaAdapter } from './adapters/midjourney-media-adapter';
 import { FalMediaAdapter } from './adapters/fal-media-adapter';
 import { DashScopeMediaAdapter } from './adapters/dashscope-media-adapter';
 import { MediaRoutingManager } from './routing/media-routing-manager';
-import { MediaTaskExecutor } from './media-task-executor';
+import { MediaGenerationExecutor } from './media-generation-executor';
 import { MediaGenerationService } from './media-generation-service';
-import type { MediaTaskManagerDeps } from './types';
 import type { MediaRequestAssetMaterializer } from './media-request-assets';
 
 /**
@@ -197,7 +147,6 @@ import type { MediaRequestAssetMaterializer } from './media-request-assets';
  */
 export interface MediaPlatformDeps {
   configManager: ConfigManager;
-  taskManager: MediaTaskManagerDeps;
   requestAssetMaterializer?: MediaRequestAssetMaterializer;
 }
 
@@ -207,9 +156,8 @@ export interface MediaPlatformDeps {
 export interface MediaPlatform {
   adapterRegistry: MediaAdapterRegistry;
   routingManager: MediaRoutingManager;
-  taskExecutor: MediaTaskExecutor;
+  executor: MediaGenerationExecutor;
   service: MediaGenerationService;
-  resumeFromRecovery(): Promise<number>;
 }
 
 /**
@@ -242,22 +190,16 @@ export function createMediaPlatform(deps: MediaPlatformDeps): MediaPlatform {
   // Create routing manager
   const routingManager = new MediaRoutingManager(deps.configManager);
 
-  // Create task executor
-  const taskExecutor = new MediaTaskExecutor(deps.configManager, {
+  const executor = new MediaGenerationExecutor(deps.configManager, {
     requestAssetMaterializer: deps.requestAssetMaterializer,
   });
 
-  // Register executor with task manager
-  taskExecutor.registerWith(deps.taskManager);
-
-  // Create service
-  const service = new MediaGenerationService(deps.taskManager, deps.configManager, routingManager);
+  const service = new MediaGenerationService(deps.configManager, routingManager, executor);
 
   return {
     adapterRegistry,
     routingManager,
-    taskExecutor,
+    executor,
     service,
-    resumeFromRecovery: () => taskExecutor.resumeFromRecovery(deps.taskManager),
   };
 }

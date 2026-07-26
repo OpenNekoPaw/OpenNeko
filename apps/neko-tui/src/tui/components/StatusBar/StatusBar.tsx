@@ -21,7 +21,6 @@ import {
   presentExecutionMode,
   presentMediaCategory,
   presentSessionMode,
-  presentTaskStatus,
 } from '../../presentation/terminal-label-presentation';
 import type { AgentTerminalMessageKey } from '../../presentation/terminal-messages';
 import { TokenUsage } from './TokenUsage';
@@ -31,7 +30,6 @@ export function StatusBar(): React.JSX.Element {
   const mode = useAgentStore((s) => s.executionMode);
   const queueSnapshot = useAgentStore((s) => s.messageQueue.snapshot);
   const queuePausedAfterCancel = useAgentStore((s) => s.messageQueue.pausedAfterCancel);
-  const runningTasks = useAgentStore((s) => s.tasks.running);
   const usage = useAgentStore((s) => s.usage);
   const contextTokenCount = useAgentStore((s) => s.contextTokens.count);
   const config = useConfigStore((s) => s.config);
@@ -95,14 +93,6 @@ export function StatusBar(): React.JSX.Element {
         </>
       ) : null}
 
-      {runningTasks.length > 0 ? (
-        <>
-          <Text dimColor> | </Text>
-          <Text color={tokens.info}>{presentation.t('agent.terminal.chrome.task')}:</Text>
-          <Text color={tokens.info}>{formatRunningTasks(runningTasks, presentation)}</Text>
-        </>
-      ) : null}
-
       {/* Spacer */}
       <Box flexGrow={1} />
 
@@ -118,20 +108,6 @@ export function StatusBar(): React.JSX.Element {
       />
     </Box>
   );
-}
-
-function formatRunningTasks(
-  tasks: readonly import('@neko/shared').Task[],
-  presentation: AgentTerminalPresentationContext<AgentTerminalMessageKey>,
-): string {
-  const first = tasks[0];
-  if (!first) {
-    throw new Error('Running task projection requires at least one task.');
-  }
-  const progress = Number.isFinite(first.progress) ? Math.round(first.progress) : 0;
-  const taskId = first.id.length > 28 ? `${first.id.slice(0, 25)}...` : first.id;
-  const suffix = tasks.length > 1 ? ` +${tasks.length - 1}` : '';
-  return `${tasks.length} ${presentTaskStatus(first.status, presentation)} ${taskId} ${progress}%${suffix}`;
 }
 
 function sessionModeColor(mode: string): string {

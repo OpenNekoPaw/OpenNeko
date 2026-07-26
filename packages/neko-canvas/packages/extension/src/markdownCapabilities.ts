@@ -1,7 +1,6 @@
 import type {
   CanvasAgentApplyContentResult,
   CanvasAgentContentPayload,
-  CanvasMarkdownCapabilityInput,
   CanvasMarkdownCapabilityResult,
 } from '@neko/shared';
 import {
@@ -15,14 +14,18 @@ export interface CanvasMarkdownCapabilityOperations {
 }
 
 export async function invokeCanvasMarkdownCapability(
-  input: CanvasMarkdownCapabilityInput,
+  input: unknown,
   operations?: CanvasMarkdownCapabilityOperations,
 ): Promise<CanvasMarkdownCapabilityResult> {
   const diagnostics = validateCanvasMarkdownCapabilityInput(input);
   if (!isCanvasMarkdownCapabilityInput(input)) {
-    if (isCanvasMarkdownCapabilityId(input.capabilityId)) {
+    const capabilityId =
+      typeof input === 'object' && input !== null && !Array.isArray(input)
+        ? Reflect.get(input, 'capabilityId')
+        : undefined;
+    if (isCanvasMarkdownCapabilityId(capabilityId)) {
       return {
-        capabilityId: input.capabilityId,
+        capabilityId,
         status: 'blocked',
         diagnostics,
       };

@@ -8,7 +8,8 @@
  */
 
 import type { MediaModelType } from '@neko/shared';
-import type { MediaGenerationType, MediaRoutingResult } from '../types';
+import type { MediaGenerationType } from '@neko/generation';
+import type { MediaRoutingResult } from '../types';
 import type { ConfigManager } from '../../config/config-manager';
 import { isProviderConfigured } from '../../config/provider-configuration';
 

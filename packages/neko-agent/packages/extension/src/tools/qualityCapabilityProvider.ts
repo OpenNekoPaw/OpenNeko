@@ -1,13 +1,18 @@
 import {
-  createCanonicalQualityCheckTools,
-  createMultimodalPerceptionEvaluator,
   createQualityGateRuntime,
   type MaterializedQualityResource,
-  type MediaQualityLLMService,
   type QualityEvaluator,
   type QualityReviewRequest,
   type QualityTargetMaterializer,
-} from '../capabilities/quality';
+} from '@neko/quality/core';
+import {
+  createMultimodalPerceptionEvaluator,
+  type MediaQualityLLMService,
+} from '@neko/quality/model';
+import {
+  collectProjectQualityEvidence,
+  type ProjectQualityFacadeResolver,
+} from '@neko/quality/project';
 import type {
   AgentCapabilityContext,
   AgentCapabilityProvider,
@@ -17,10 +22,7 @@ import type {
   ToolPurposeModelRuntime,
 } from '@neko/shared';
 import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
-import {
-  collectProjectQualityEvidence,
-  type ProjectQualityFacadeResolver,
-} from './projectQualityOrchestration';
+import { createCanonicalQualityCheckTools } from '../capabilities/quality/canonical-quality-tools';
 
 export interface QualityCapabilityProviderDeps {
   readonly getContentAccessRuntime: () => AgentContentAccessRuntime | undefined;

@@ -22,10 +22,4 @@ export {
 
 export { handleNew, handleResume, handleCompact, handlePlan } from './session-handlers';
 
-export {
-  handleSkills,
-  handleCommands,
-  handleTools,
-  handleTasks,
-  handleMcp,
-} from './resource-handlers';
+export { handleSkills, handleCommands, handleTools, handleMcp } from './resource-handlers';

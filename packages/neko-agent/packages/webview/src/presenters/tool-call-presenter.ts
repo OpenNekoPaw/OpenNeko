@@ -1,6 +1,7 @@
-import type { ToolCall } from '@neko-agent/types';
+import type { ToolCall, ToolCallProgress } from '@neko-agent/types';
 import type {
   ContentLocator,
+  CanvasWorkspaceDeliveryState,
   DocumentArchiveResourceRef,
   DocumentLocator,
   DocumentSourceRef,
@@ -114,14 +115,36 @@ export interface ToolCallDisplayProjection {
   isFailed: boolean;
   needsConfirmation: boolean;
   canvasAuthoringResult: CanvasAuthoringResultProjection | null;
+  generationJob: GenerationJobCardProjection | null;
 }
 
-export function projectToolCallDisplayState(toolCall: ToolCall): ToolCallDisplayProjection {
+export interface GenerationJobCardProjection {
+  readonly jobId: string;
+  readonly revision: number;
+  readonly phase: string;
+  readonly stage: string;
+  readonly percent: number;
+  readonly providerId?: string;
+  readonly modelId?: string;
+  readonly boardDelivery?: {
+    readonly status: Exclude<CanvasWorkspaceDeliveryState, 'discarded'>;
+    readonly nodeIds: readonly string[];
+    readonly diagnostics: readonly {
+      readonly code: string;
+      readonly message: string;
+    }[];
+  };
+}
+
+export function projectToolCallDisplayState(
+  toolCall: ToolCall,
+  progress?: ToolCallProgress,
+): ToolCallDisplayProjection {
   const argsJson = JSON.stringify(toolCall.arguments, null, 2);
   const sanitizedResultData = sanitizeToolResultData(toolCall.result?.data);
   const resultJson =
     sanitizedResultData !== undefined ? JSON.stringify(sanitizedResultData, null, 2) : null;
-  const resultData = asRecord(sanitizedResultData);
+  const resultData = asRecord(toolCall.result?.data);
   const canvasAuthoringResult = projectCanvasAuthoringResult(sanitizedResultData);
   const isBackgroundMode = resultData?.backgroundMode === true;
   const backgroundTaskStatus = readString(resultData, 'status');
@@ -135,6 +158,9 @@ export function projectToolCallDisplayState(toolCall: ToolCall): ToolCallDisplay
     toolCall.result?.perceptionCards,
   );
   const copyText = resultSuccess ? extractToolCopyText(toolCall.name, toolCall.result?.data) : null;
+  const isImageTool = isImageGenerationTool(toolCall.name);
+  const isVideoTool = isVideoGenerationTool(toolCall.name);
+  const isAudioTool = isAudioGenerationTool(toolCall.name);
 
   return {
     argsJson,
@@ -144,15 +170,21 @@ export function projectToolCallDisplayState(toolCall: ToolCall): ToolCallDisplay
     isBackgroundMode,
     backgroundTaskId: isBackgroundMode ? readString(resultData, 'taskId') : undefined,
     shouldShowMediaPreview,
-    isImageTool: isImageGenerationTool(toolCall.name),
+    isImageTool,
     imageUrls:
-      resultSuccess && shouldShowMediaPreview ? extractToolImageUrls(toolCall.result?.data) : [],
-    isVideoTool: isVideoGenerationTool(toolCall.name),
+      resultSuccess && shouldShowMediaPreview && isImageTool
+        ? extractToolImageUrls(resultData)
+        : [],
+    isVideoTool,
     videoUrls:
-      resultSuccess && shouldShowMediaPreview ? extractToolVideoUrls(toolCall.result?.data) : [],
-    isAudioTool: isAudioGenerationTool(toolCall.name),
+      resultSuccess && shouldShowMediaPreview && isVideoTool
+        ? extractToolVideoUrls(resultData)
+        : [],
+    isAudioTool,
     audioUrls:
-      resultSuccess && shouldShowMediaPreview ? extractToolAudioUrls(toolCall.result?.data) : [],
+      resultSuccess && shouldShowMediaPreview && isAudioTool
+        ? extractToolAudioUrls(resultData)
+        : [],
     documentThumbnails,
     copyText,
     isFileTool: isFileTool(toolCall.name),
@@ -163,7 +195,84 @@ export function projectToolCallDisplayState(toolCall: ToolCall): ToolCallDisplay
     isFailed: toolCall.result?.success === false,
     needsConfirmation: toolCall.pendingConfirmation === true,
     canvasAuthoringResult,
+    generationJob: projectGenerationJobCard(toolCall, progress),
   };
+}
+
+function projectGenerationJobCard(
+  toolCall: ToolCall,
+  progress: ToolCallProgress | undefined,
+): GenerationJobCardProjection | null {
+  if (!isGenerationTool(toolCall.name)) return null;
+  const result = asRecord(toolCall.result?.data);
+  const state =
+    asRecord(result?.generationJob) ??
+    asRecord(progress?.data) ??
+    (readString(result, 'jobId') ? result : undefined);
+  if (!state || (state.kind !== undefined && state.kind !== 'generation-job')) return null;
+  const jobId = readString(state, 'jobId');
+  const revision =
+    readNonNegativeInteger(state, 'revision') ?? readNonNegativeInteger(state, 'jobRevision');
+  const resultProgress = asRecord(state.progress);
+  const phase =
+    readString(state, 'phase') ??
+    (readString(state, 'status') === 'completed' ? 'succeeded' : readString(state, 'status'));
+  const stage =
+    readString(state, 'stage') ??
+    readString(resultProgress, 'stage') ??
+    (phase === 'succeeded' ? 'completed' : phase);
+  const percent =
+    readProgressPercent(state, 'percent') ??
+    readProgressPercent(resultProgress, 'percent') ??
+    (phase === 'succeeded' ? 100 : undefined);
+  if (!jobId || revision === undefined || !phase || !stage || percent === undefined) return null;
+
+  const board = asRecord(result?.boardDelivery);
+  const routedTo = asRecord(result?.routedTo);
+  return {
+    jobId,
+    revision,
+    phase,
+    stage,
+    percent,
+    ...((readString(state, 'providerId') ?? readString(routedTo, 'provider'))
+      ? { providerId: readString(state, 'providerId') ?? readString(routedTo, 'provider') }
+      : {}),
+    ...((readString(state, 'modelId') ?? readString(routedTo, 'model'))
+      ? { modelId: readString(state, 'modelId') ?? readString(routedTo, 'model') }
+      : {}),
+    ...(board
+      ? {
+          boardDelivery: {
+            status: requireBoardDeliveryStatus(board),
+            nodeIds: readStringArray(board.nodeIds),
+            diagnostics: readRecordArray(board, 'diagnostics').map((diagnostic, index) => ({
+              code: readString(diagnostic, 'code') ?? `board-delivery-${index + 1}`,
+              message: readString(diagnostic, 'message') ?? 'Workspace Board delivery failed.',
+            })),
+          },
+        }
+      : {}),
+  };
+}
+
+function requireBoardDeliveryStatus(
+  board: Record<string, unknown>,
+): Exclude<CanvasWorkspaceDeliveryState, 'discarded'> {
+  const status = readString(board, 'status');
+  if (
+    status === 'queued' ||
+    status === 'claimed' ||
+    status === 'projected' ||
+    status === 'noop' ||
+    status === 'blocked' ||
+    status === 'conflict'
+  ) {
+    return status;
+  }
+  throw new Error(
+    `Generation result contains invalid Board delivery status ${status ?? '<missing>'}.`,
+  );
 }
 
 function projectCanvasAuthoringResult(data: unknown): CanvasAuthoringResultProjection | null {
@@ -669,15 +778,15 @@ function extractToolFilePath(data: unknown): string | null {
 }
 
 function extractToolImageUrls(data: unknown): string[] {
-  return Array.from(collectUrls(data, 'imageUrl', 'images')).filter(isValidImageUrl);
+  return Array.from(collectMediaUrls(data, 'imageUrl', 'images')).filter(isValidImageUrl);
 }
 
 function extractToolVideoUrls(data: unknown): string[] {
-  return Array.from(collectUrls(data, 'videoUrl', 'videos')).filter(isValidVideoUrl);
+  return Array.from(collectMediaUrls(data, 'videoUrl', 'videos')).filter(isValidVideoUrl);
 }
 
 function extractToolAudioUrls(data: unknown): string[] {
-  return Array.from(collectUrls(data, 'audioUrl', 'audios')).filter(isValidAudioUrl);
+  return Array.from(collectMediaUrls(data, 'audioUrl', 'audios')).filter(isValidAudioUrl);
 }
 
 function extractToolCopyText(toolName: string, data: unknown): string | null {
@@ -686,15 +795,23 @@ function extractToolCopyText(toolName: string, data: unknown): string | null {
 }
 
 function isImageGenerationTool(toolName: string): boolean {
-  return isOneOf(toolName, IMAGE_GENERATION_TOOLS);
+  return isOneOf(toolName.toLowerCase(), IMAGE_GENERATION_TOOLS);
 }
 
 function isVideoGenerationTool(toolName: string): boolean {
-  return isOneOf(toolName, VIDEO_GENERATION_TOOLS);
+  return isOneOf(toolName.toLowerCase(), VIDEO_GENERATION_TOOLS);
 }
 
 function isAudioGenerationTool(toolName: string): boolean {
-  return isOneOf(toolName, AUDIO_GENERATION_TOOLS);
+  return isOneOf(toolName.toLowerCase(), AUDIO_GENERATION_TOOLS);
+}
+
+function isGenerationTool(toolName: string): boolean {
+  return (
+    isImageGenerationTool(toolName) ||
+    isVideoGenerationTool(toolName) ||
+    isAudioGenerationTool(toolName)
+  );
 }
 
 function isFileTool(toolName: string): boolean {
@@ -725,6 +842,39 @@ function collectUrls(data: unknown, urlField: string, arrayField: string): Set<s
     }
   }
   return urlSet;
+}
+
+function collectMediaUrls(data: unknown, urlField: string, arrayField: string): Set<string> {
+  const urls = collectUrls(data, urlField, arrayField);
+  const media = asRecord(asRecord(data)?.media);
+  if (media) {
+    for (const url of collectUrls(media, urlField, arrayField)) urls.add(url);
+  }
+  for (const url of collectNestedStringFields(data, new Set(['renderUri', 'previewUri']))) {
+    urls.add(url);
+  }
+  return urls;
+}
+
+function collectNestedStringFields(
+  value: unknown,
+  keys: ReadonlySet<string>,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): string[] {
+  if (!value || typeof value !== 'object' || visited.has(value)) return [];
+  visited.add(value);
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectNestedStringFields(item, keys, visited));
+  }
+  const result: string[] = [];
+  for (const [key, child] of Object.entries(value)) {
+    if (keys.has(key) && typeof child === 'string' && child.length > 0) {
+      result.push(child);
+    } else {
+      result.push(...collectNestedStringFields(child, keys, visited));
+    }
+  }
+  return result;
 }
 
 function isValidImageUrl(url: string): boolean {
@@ -842,6 +992,24 @@ function readFiniteNumber(
 ): number | undefined {
   const value = obj?.[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function readNonNegativeInteger(
+  obj: Record<string, unknown> | undefined,
+  key: string,
+): number | undefined {
+  const value = obj?.[key];
+  return Number.isSafeInteger(value) && typeof value === 'number' && value >= 0 ? value : undefined;
+}
+
+function readProgressPercent(
+  obj: Record<string, unknown> | undefined,
+  key: string,
+): number | undefined {
+  const value = obj?.[key];
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100
+    ? value
+    : undefined;
 }
 
 function readStringArray(value: unknown): readonly string[] {

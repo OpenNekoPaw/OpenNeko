@@ -5,7 +5,7 @@ import React, { useEffect } from 'react';
 import { Text } from 'ink';
 import { cleanup, render } from 'ink-testing-library';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { AgentCapabilityProvider, IService } from '@neko/shared';
+import type { AgentCapabilityProvider } from '@neko/shared';
 import { isCanonicalConversationId } from '@neko/agent';
 import { DEFAULT_CLI_CONFIG, type CLIConfig } from '../../core/types';
 import { createTuiReferenceSuggestions } from '../../components/Input/reference-suggestions';
@@ -89,7 +89,6 @@ function ReferenceContributorProbe(props: {
     config: props.config,
     presentation: TEST_PRESENTATION,
     promptLocale: 'en',
-    service: createNoopService(),
     capabilityProviders: props.capabilityProviders,
     createLocalMetadata: createMemoryLocalMetadataBinding,
     localMetadataHome: props.config.workDir,
@@ -144,26 +143,6 @@ function createProbeAssetCapabilityProvider(): AgentCapabilityProvider {
         }),
       },
     ],
-  };
-}
-
-function createNoopService(): IService {
-  return {
-    async chat() {
-      return {
-        id: 'noop-response',
-        model: 'noop-model',
-        message: { role: 'assistant', content: '' },
-        finishReason: 'stop',
-        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      };
-    },
-    async *chatStream() {
-      yield { type: 'done' as const };
-    },
-    async embed(texts: string[]) {
-      return { embeddings: texts.map(() => []) };
-    },
   };
 }
 

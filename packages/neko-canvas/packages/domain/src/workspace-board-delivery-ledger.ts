@@ -423,6 +423,11 @@ function parseDeliveryPayload(value: unknown): DeliveryTaskPayload {
     throw new Error('Canvas Board delivery payload has an invalid kind.');
   }
   const request = value['request'];
+  if (requiresContentLocatorMigration(request)) {
+    throw new Error(
+      'canvas-board-delivery-migration-required: Pending Board content must be delivered again with contentLocator.',
+    );
+  }
   const state = value['state'];
   const attempt = value['attempt'];
   const diagnostics = value['diagnostics'];
@@ -459,6 +464,23 @@ function parseDeliveryPayload(value: unknown): DeliveryTaskPayload {
     ...(claim ? { claim } : {}),
     diagnostics,
   };
+}
+
+function requiresContentLocatorMigration(value: unknown): boolean {
+  if (!isRecord(value) || !Array.isArray(value['artifacts'])) return false;
+  return value['artifacts'].some((artifact) => {
+    if (!isRecord(artifact) || artifact['kind'] === 'markdown') return false;
+    return (
+      artifact['contentLocator'] === undefined ||
+      artifact['resourceRef'] !== undefined ||
+      artifact['documentResourceRef'] !== undefined ||
+      artifact['localPath'] !== undefined ||
+      artifact['renderUri'] !== undefined ||
+      artifact['runtimeAssetPath'] !== undefined ||
+      artifact['providerUrl'] !== undefined ||
+      artifact['base64'] !== undefined
+    );
+  });
 }
 
 function parseReceiptPayload(value: unknown): DeliveryReceiptPayload | undefined {

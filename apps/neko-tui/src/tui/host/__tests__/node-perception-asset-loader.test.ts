@@ -10,7 +10,6 @@ import {
   createGeneratedAssetRevisionRef,
   type GeneratedImage,
   type PerceptualAssetRef,
-  type ResourceRef,
 } from '@neko/shared';
 import { GeneratedAssetIndex } from '@neko/platform';
 import {
@@ -58,35 +57,29 @@ describe('createNodePerceptionAssetLoader', () => {
     });
   });
 
-  it('loads generated assets by ResourceRef instead of the display URI', async () => {
+  it('loads generated assets by ContentLocator instead of the display URI', async () => {
     const workDir = createTempDir();
     const generatedPath = path.join(workDir, 'neko/generated/image/asset-1.png');
     const imageBytes = Buffer.from('generated-image-bytes');
     fs.mkdirSync(path.dirname(generatedPath), { recursive: true });
     fs.writeFileSync(generatedPath, imageBytes);
-    const resourceRef = createGeneratedAssetRevisionRef({
+    const lifecycle = createGeneratedAssetRevisionRef({
       assetId: 'asset-1',
-      contentDigest: `sha256:${createHash('sha256').update(imageBytes).digest('hex')}`,
+      contentDigest: sha256(imageBytes),
+      contentPath: 'neko/generated/image/asset-1.png',
       mediaKind: 'image',
       mimeType: 'image/png',
-      generation: { taskId: 'task-1' },
-    }).resourceRef;
+      generation: { operationId: 'generation-job-1' },
+    });
     const loader = createNodePerceptionAssetLoader(
-      createTestContentAccessRuntime(
-        createNodeWorkspaceContentHostAdapter({ workDir }),
-        workDir,
-        async (ref) =>
-          ref.source.generatedAssetId === 'asset-1'
-            ? { path: generatedPath, mimeType: 'image/png' }
-            : undefined,
-      ),
+      createTestContentAccessRuntime(createNodeWorkspaceContentHostAdapter({ workDir }), workDir),
     );
 
     const result = await loader.load({
       assetId: 'asset-1',
       uri: 'generated-assets/non-existent-display-label.png',
       mimeType: 'image/png',
-      resourceRef,
+      contentLocator: lifecycle.contentLocator,
     });
 
     expect(result).toEqual({
@@ -118,10 +111,15 @@ describe('createNodePerceptionAssetLoader', () => {
       },
       lifecycle: createGeneratedAssetRevisionRef({
         assetId: 'asset-1',
-        contentDigest: 'sha256:indexed',
+        contentDigest: sha256(imageBytes),
+        contentPath: 'neko/generated/image/asset-1.png',
         mediaKind: 'image',
         mimeType: 'image/png',
-        generation: { taskId: 'task-1', providerId: 'openai', modelId: 'gpt-image-1' },
+        generation: {
+          operationId: 'operation-asset-1',
+          providerId: 'openai',
+          modelId: 'gpt-image-1',
+        },
       }),
       mimeType: 'image/png',
       generatedAt: new Date('2026-01-01T00:00:00.000Z').toISOString(),
@@ -146,6 +144,36 @@ describe('createNodePerceptionAssetLoader', () => {
       url: `data:image/png;base64,${imageBytes.toString('base64')}`,
       mimeType: 'image/png',
     });
+  });
+
+  it('rejects indexed generated assets without a lifecycle ContentLocator', async () => {
+    const workDir = createTempDir();
+    const assetIndex = new GeneratedAssetIndex({
+      load: async () => [],
+      update: async (operation) => operation([]),
+    });
+    await assetIndex.add({
+      type: 'generated-image',
+      id: 'legacy-asset',
+      path: path.join(workDir, 'outside-canonical-content.png'),
+      mimeType: 'image/png',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      width: 1,
+      height: 1,
+      ratio: '1:1',
+    });
+    const loader = createNodePerceptionAssetLoader(
+      createTestContentAccessRuntime(createNodeWorkspaceContentHostAdapter({ workDir }), workDir),
+      { assetIndex },
+    );
+
+    await expect(
+      loader.load({
+        assetId: 'legacy-asset',
+        uri: 'generated-assets/legacy-asset.png',
+        mimeType: 'image/png',
+      }),
+    ).rejects.toThrow('generated-asset-content-locator-migration-required');
   });
 
   it('preserves audio payload kind for media library audio refs', async () => {
@@ -284,14 +312,10 @@ function directoryLinkType(): 'dir' | 'junction' {
 function createTestContentAccessRuntime(
   host: NekoHostPorts,
   derivedStorageHomedir: string,
-  resolveGeneratedAsset?: (
-    ref: ResourceRef,
-  ) => Promise<{ readonly path: string; readonly mimeType?: string } | undefined>,
 ) {
   const runtime = createNodeContentAccessRuntime({
     host,
     derivedStorageHomedir,
-    ...(resolveGeneratedAsset ? { resolveGeneratedAsset } : {}),
   });
   runtimes.push(runtime);
   return runtime;
@@ -301,6 +325,10 @@ function createTempDir(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'neko-node-perception-asset-'));
   createdPaths.push(dir);
   return dir;
+}
+
+function sha256(bytes: Uint8Array): string {
+  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 }
 
 interface AdmZipConstructor {

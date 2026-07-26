@@ -155,10 +155,16 @@ describe('ConversationMessageHandler', () => {
 
     expect(agentManager.isRunning).toHaveBeenCalledWith('conv-a');
     expect(agentManager.cancel).toHaveBeenCalledWith('conv-a');
-    expect(webview.postMessage).toHaveBeenCalledWith({
-      type: 'messageCancelled',
-      conversationId: 'conv-a',
-    });
+    expect(webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conv-a',
+        phase: 'idle',
+      }),
+    );
+    expect(webview.postMessage.mock.calls.map(([message]) => message.type)).not.toContain(
+      'messageCancelled',
+    );
     expect(conversations.getActiveId).not.toHaveBeenCalled();
   });
 
@@ -176,18 +182,23 @@ describe('ConversationMessageHandler', () => {
     await handler.handleCancelMessage(webview as any, 'conv-a');
 
     expect(agentManager.cancel).toHaveBeenCalledWith('conv-a');
-    expect(webview.postMessage).not.toHaveBeenCalledWith({
-      type: 'messageCancelled',
-      conversationId: 'conv-a',
-    });
+    expect(webview.postMessage.mock.calls.map(([message]) => message.type)).not.toContain(
+      'agentPhase',
+    );
 
     stopListener?.({ conversationId: 'conv-a' });
 
     expect(dispose).toHaveBeenCalledTimes(1);
-    expect(webview.postMessage).toHaveBeenCalledWith({
-      type: 'messageCancelled',
-      conversationId: 'conv-a',
-    });
+    expect(webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conv-a',
+        phase: 'idle',
+      }),
+    );
+    expect(webview.postMessage.mock.calls.map(([message]) => message.type)).not.toContain(
+      'messageCancelled',
+    );
   });
 
   it('does not fall back to the active conversation when cancelMessage has no conversationId', async () => {

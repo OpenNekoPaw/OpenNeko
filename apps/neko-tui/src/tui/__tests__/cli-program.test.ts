@@ -56,6 +56,7 @@ describe('createCliProgram', () => {
     expect(classifyCliCommandRuntime('image')).toBe('direct-media');
     expect(classifyCliCommandRuntime('video')).toBe('direct-media');
     expect(classifyCliCommandRuntime('audio')).toBe('direct-media');
+    expect(classifyCliCommandRuntime('generation')).toBe('direct-media');
     expect(() => classifyCliCommandRuntime('experiment')).toThrow(
       'Unknown CLI command runtime class',
     );
@@ -102,6 +103,7 @@ describe('createCliProgram', () => {
         image [options] <prompt...>                    Generate an image directly without Agent execution
         video [options] <prompt...>                    Generate a video directly without Agent execution
         audio [options] <prompt...>                    Generate audio directly without Agent execution
+        generation                                     Manage persistent Generation Jobs
         resume [options] [id] [prompt...]              Resume a previous interactive session
         completion [options] [shell]                   Generate shell completion scripts
         config                                         Manage configuration
@@ -137,6 +139,7 @@ describe('createCliProgram', () => {
         image [options] <prompt...>                    不经过 Agent 直接生成图像
         video [options] <prompt...>                    不经过 Agent 直接生成视频
         audio [options] <prompt...>                    不经过 Agent 直接生成音频
+        generation                                     管理持久化 Generation Job
         resume [options] [id] [prompt...]              恢复之前的交互会话
         completion [options] [shell]                   生成 shell 补全脚本
         config                                         管理配置

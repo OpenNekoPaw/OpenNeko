@@ -14,6 +14,7 @@ const platformSrc = join(packageRoot, 'platform/src');
 const tuiSrc = join(workspaceRoot, 'apps/neko-tui/src/tui');
 const agentTypesSrc = join(packageRoot, 'agent-types/src');
 const testUtilsSrc = join(repoRoot, 'test-utils/src');
+const sharedTypesSrc = join(workspaceRoot, 'packages/neko-types/src/types');
 
 function hasQuotedIdentity(source: string, identity: string): boolean {
   const escaped = identity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -21,6 +22,26 @@ function hasQuotedIdentity(source: string, identity: string): boolean {
 }
 
 describe('agent architecture boundary guards', () => {
+  it('keeps standalone BackgroundAgentRun contracts and runtime identities absent', () => {
+    const productionRoots = [agentSrc, extensionSrc, webviewSrc, tuiSrc, agentTypesSrc];
+    const violations = productionRoots.flatMap((root) =>
+      listFiles(root)
+        .filter((file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file))
+        .flatMap((file) => {
+          const source = stripTypeScriptComments(readFileSync(file, 'utf-8'));
+          return [
+            /\bBackgroundAgentRun\b/u,
+            /['"]background-agent-run['"]/u,
+            /\ballowCreateBackgroundConversation\b/u,
+          ]
+            .filter((pattern) => pattern.test(source))
+            .map((pattern) => `${relative(repoRoot, file)} matches ${pattern}`);
+        }),
+    );
+
+    expect(violations).toEqual([]);
+  });
+
   it('keeps the replaced Platform chat stack physically absent', () => {
     for (const removedPath of [
       'service/service.ts',
@@ -99,11 +120,7 @@ describe('agent architecture boundary guards', () => {
       'createStateTaskRecoveryStorage',
       'createFileRecoveryStorage',
     ] as const;
-    const publicBarrels = [
-      join(agentSrc, 'index.ts'),
-      join(agentSrc, 'session/index.ts'),
-      join(agentSrc, 'task/index.ts'),
-    ];
+    const publicBarrels = [join(agentSrc, 'index.ts'), join(agentSrc, 'session/index.ts')];
     const hostRuntimeSources = [...listFiles(extensionSrc), ...listFiles(tuiSrc)].filter(
       (file) => (file.endsWith('.ts') || file.endsWith('.tsx')) && !isTestFile(file),
     );
@@ -151,6 +168,7 @@ describe('agent architecture boundary guards', () => {
 
     expect(existsSync(join(agentSrc, 'task/task-storage-migration.ts'))).toBe(false);
     expect(existsSync(join(agentSrc, 'task/sqlite-task-state-migration.ts'))).toBe(false);
+    expect(existsSync(join(agentSrc, 'task/index.ts'))).toBe(false);
 
     expect([...symbolViolations, ...pathViolations, ...identityViolations]).toEqual([]);
   });
@@ -257,20 +275,15 @@ describe('agent architecture boundary guards', () => {
   it('keeps runtime root limited to documented runtime owners', () => {
     const allowedRuntimeRootFiles = new Set([
       'agent-entry-intent-runtime.ts',
-      'agent-observation-recorder.ts',
       'agent-state-runtime.ts',
-      'backfill-coordinator.ts',
       'config-bridge-runtime.ts',
       'conversation-route-runtime.ts',
       'conversation-tab-runtime.ts',
       'document-module-diagnostics.ts',
       'index.ts',
-      'persisted-child-run-ownership.ts',
       'plugin-transfer-runtime.ts',
       'resource-cache-runtime.ts',
       'subagent-event-runtime.ts',
-      'tool-result-backfill.ts',
-      'types.ts',
     ]);
     const runtimeRootFiles = readdirSync(join(agentSrc, 'runtime'), { withFileTypes: true })
       .filter(
@@ -322,9 +335,7 @@ describe('agent architecture boundary guards', () => {
     const allowedRuntimeSubdirectories = new Set([
       '__tests__',
       'capability',
-      'operation-adapters',
       'projection',
-      'runner',
       'session',
       'stream',
       'turn',
@@ -502,7 +513,6 @@ describe('agent architecture boundary guards', () => {
     const coreProjectionFiles = [
       join(agentSrc, 'validation/output-validator.ts'),
       join(agentSrc, 'validation/validation-hooks.ts'),
-      join(agentSrc, 'task/task-view-projector.ts'),
       join(agentTypesSrc, 'work-item.ts'),
       join(agentTypesSrc, 'work-item-projector.ts'),
     ];
@@ -521,12 +531,45 @@ describe('agent architecture boundary guards', () => {
     const forbiddenFiles = [
       join(agentSrc, 'validation/storyboard-output-validator.ts'),
       join(agentSrc, 'task/media-task-creative-entity.ts'),
+      join(agentSrc, 'task/task-view-projector.ts'),
       join(packageRoot, 'platform/src/media/media-task-creative-entity.ts'),
     ]
       .filter((file) => existsSync(file))
       .map((file) => relative(workspaceRoot, file).replace(/\\/g, '/'));
 
     expect([...violations, ...forbiddenFiles]).toEqual([]);
+  });
+
+  it('keeps retired generic TaskManager contracts physically absent', () => {
+    for (const removedPath of [
+      join(sharedTypesSrc, 'task.ts'),
+      join(sharedTypesSrc, 'task-view.ts'),
+      join(sharedTypesSrc, 'task-projection.ts'),
+      join(sharedTypesSrc, 'agent-task-result-observation.ts'),
+      join(sharedTypesSrc, '__tests__/task-lifecycle.test.ts'),
+      join(sharedTypesSrc, '__tests__/task-projection.test.ts'),
+    ]) {
+      expect(existsSync(removedPath)).toBe(false);
+    }
+
+    const sharedTypesIndex = readFileSync(join(sharedTypesSrc, 'index.ts'), 'utf-8');
+    expect(sharedTypesIndex).not.toMatch(
+      /from ['"]\.\/(?:task(?:-view|-projection)?|agent-task-result-observation)['"]/u,
+    );
+    const sharedPackageManifest = readFileSync(
+      join(sharedTypesSrc, '..', '..', 'package.json'),
+      'utf-8',
+    );
+    expect(sharedPackageManifest).not.toMatch(
+      /types\/(?:task(?:-view|-projection)?|agent-task-result-observation)/u,
+    );
+
+    const storyboardContract = stripTypeScriptComments(
+      readFileSync(join(sharedTypesSrc, 'canvas-semantic-storyboard.ts'), 'utf-8'),
+    );
+    expect(storyboardContract).not.toMatch(
+      /\b(?:CanvasStoryboardTaskRef|TaskProjectionRef|AgentTaskResultRef)\b/u,
+    );
   });
 
   it('keeps creative Agent and planner services out of Agent and Platform core', () => {
@@ -581,18 +624,30 @@ describe('agent architecture boundary guards', () => {
     }
   });
 
-  it('keeps Character domain runtime in @neko/entity', () => {
+  it('keeps Character domain runtime in @neko/chara', () => {
     for (const fileName of [
       'character-runtime-policy.ts',
       'character-evidence.ts',
       'character-dialogue-session.ts',
-      'character-dialogue-runtime.ts',
       'embody-character-session.ts',
     ]) {
       expect(existsSync(join(agentSrc, 'runtime', fileName)), fileName).toBe(false);
-      expect(existsSync(join(workspaceRoot, 'packages/neko-entity/src', fileName)), fileName).toBe(
-        true,
-      );
+      expect(
+        existsSync(join(workspaceRoot, 'packages/neko-chara/src/core', fileName)),
+        fileName,
+      ).toBe(true);
+    }
+    expect(
+      existsSync(
+        join(workspaceRoot, 'packages/neko-chara/src/application/character-dialogue-runtime.ts'),
+      ),
+    ).toBe(true);
+    for (const retiredAgentFile of [
+      'chat/characterDialogueController.ts',
+      'chat/embodyCharacterController.ts',
+      'evidence/characterEvidenceLoader.ts',
+    ]) {
+      expect(existsSync(join(extensionSrc, retiredAgentFile)), retiredAgentFile).toBe(false);
     }
   });
 
@@ -720,6 +775,20 @@ describe('agent architecture boundary guards', () => {
       .map((toolName) => `tools/tool-registry.ts contains localization key ${toolName}`);
 
     expect(violations).toEqual([]);
+  });
+
+  it('keeps migrated media tool metadata on locator-only durable fields', () => {
+    const toolRegistrySource = stripTypeScriptComments(
+      readFileSync(join(agentSrc, 'tools/tool-registry.ts'), 'utf-8'),
+    );
+
+    expect(toolRegistrySource).toContain('referenceImageLocator');
+    expect(toolRegistrySource).toContain('startFrameLocator');
+    expect(toolRegistrySource).toContain('endFrameLocator');
+    expect(toolRegistrySource).toContain('referenceVideoLocator');
+    expect(toolRegistrySource).not.toContain('referenceImageUri');
+    expect(toolRegistrySource).not.toContain('startFrameRef');
+    expect(toolRegistrySource).not.toContain('endFrameRef');
   });
 
   it('keeps domain tool permission defaults out of Agent core', () => {
@@ -1134,10 +1203,6 @@ describe('agent architecture boundary guards', () => {
         new Set(removedCreativeSkillNames),
       ],
       [
-        'packages/neko-agent/packages/extension/src/capabilities/quality/__tests__/quality-review-validation.test.ts',
-        new Set(removedQualityToolNames),
-      ],
-      [
         'packages/neko-cut/packages/extension/src/services/cutAgentSkillInvocation.test.ts',
         new Set(['ai-generate']),
       ],
@@ -1226,11 +1291,9 @@ describe('agent architecture boundary guards', () => {
       }));
 
     const allowedShimFiles = new Set([
-      'packages/agent/src/runtime/stream/agent-stream-state.ts',
       'packages/agent/src/runtime/backfill-coordinator.ts',
       'packages/agent/src/session/context-host-message.ts',
       'packages/agent/src/runtime/index.ts',
-      'packages/neko-agent/packages/agent/src/runtime/stream/agent-stream-state.ts',
       'packages/neko-agent/packages/agent/src/runtime/backfill-coordinator.ts',
       'packages/neko-agent/packages/agent/src/session/context-host-message.ts',
       'packages/neko-agent/packages/agent/src/runtime/index.ts',

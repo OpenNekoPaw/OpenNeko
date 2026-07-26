@@ -1,4 +1,3 @@
-import type { MutableRefObject } from 'react';
 import type { AgentQueuedMessageItem, Message } from '@neko-agent/types';
 import type {
   ConversationRenderSnapshot,
@@ -34,33 +33,6 @@ export function ingestConversationRenderSnapshot(input: {
   });
 }
 
-export function commitConversationSnapshotProjection(input: {
-  readonly snapshot: ConversationRenderSnapshot;
-  readonly conversationMessagesRef: MutableRefObject<Map<string, Message[]>>;
-  readonly conversationStreamingRef: MutableRefObject<
-    Map<string, ConversationRenderStreamingState>
-  >;
-}): void {
-  input.conversationMessagesRef.current.set(input.snapshot.conversationId, [
-    ...input.snapshot.messages,
-  ]);
-  input.conversationStreamingRef.current.set(
-    input.snapshot.conversationId,
-    toConversationRenderStreamingState(input.snapshot.streaming),
-  );
-}
-
-export function discardConversationSnapshotProjection(input: {
-  readonly conversationId: string;
-  readonly conversationMessagesRef: MutableRefObject<Map<string, Message[]>>;
-  readonly conversationStreamingRef: MutableRefObject<
-    Map<string, ConversationRenderStreamingState>
-  >;
-}): void {
-  input.conversationMessagesRef.current.delete(input.conversationId);
-  input.conversationStreamingRef.current.delete(input.conversationId);
-}
-
 function toConversationStreamingSnapshot(
   streaming: ConversationRenderStreamingState,
 ): ConversationStreamingSnapshot {
@@ -69,20 +41,6 @@ function toConversationStreamingSnapshot(
     isThinking: streaming.isThinking,
     queuedMessageCount: streaming.queuedMessageCount ?? 0,
     queuedMessages: streaming.queuedMessages ?? [],
-    ...(streaming.messageQueueVersion !== undefined
-      ? { messageQueueVersion: streaming.messageQueueVersion }
-      : {}),
-  };
-}
-
-function toConversationRenderStreamingState(
-  streaming: ConversationStreamingSnapshot,
-): ConversationRenderStreamingState {
-  return {
-    streamingMessageId: streaming.streamingMessageId,
-    isThinking: streaming.isThinking,
-    queuedMessageCount: streaming.queuedMessageCount,
-    queuedMessages: streaming.queuedMessages,
     ...(streaming.messageQueueVersion !== undefined
       ? { messageQueueVersion: streaming.messageQueueVersion }
       : {}),

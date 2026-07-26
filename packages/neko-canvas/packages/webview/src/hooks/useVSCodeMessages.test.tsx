@@ -121,6 +121,34 @@ describe('useVSCodeMessages keyboard action guards', () => {
     expect(vscode.postMessage).toHaveBeenCalledWith({ type: 'canvasDataReady' });
   });
 
+  it('keeps the current Canvas when an update message has no valid document payload', () => {
+    const vscode = createVSCodeApi();
+    const setCanvasData = vi.fn();
+
+    act(() => {
+      root.render(
+        <VSCodeMessageHarness
+          action={action}
+          isComposingRef={isComposingRef}
+          options={{
+            vscode,
+            setCanvasData,
+          }}
+        />,
+      );
+    });
+
+    act(() => {
+      postHostMessage({ type: 'update' });
+    });
+
+    expect(setCanvasData).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-testid="load-diagnostic"]')?.textContent).toBe(
+      'canvas.project.invalid-update:Canvas update message does not contain a valid document.',
+    );
+    expect(vscode.postMessage).not.toHaveBeenCalledWith({ type: 'canvasDataReady' });
+  });
+
   it('projects a typed load diagnostic without acknowledging canvas readiness', () => {
     const vscode = createVSCodeApi();
 

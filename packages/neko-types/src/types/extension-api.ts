@@ -40,6 +40,7 @@ import type {
 import type { CanvasCutDraftPayload } from './canvas-cut-draft';
 import type { CanvasPlaybackPlan, CanvasPlaybackRouteCandidate } from './canvas-playback';
 import type { DocumentArchiveResourceRef } from './document-reading';
+import type { GeneratedOutputContentLocator } from './content-locator';
 import type { SkillCatalogMeta } from './skill';
 import type { ResourceRef, ResourceVariantRequest } from './resource-cache';
 
@@ -411,7 +412,7 @@ export type NekoAgentGeneratedOutputResolution =
       readonly contentDigest: string;
       readonly mediaKind: import('./generated-asset').GeneratedAssetMediaKind;
       readonly mimeType: string;
-      readonly taskId: string;
+      readonly operationId: string;
       readonly runId?: string;
       /** Extension-host path. This value must never be projected to a Webview or persisted. */
       readonly sourcePath: string;
@@ -425,7 +426,9 @@ export type NekoAgentGeneratedOutputResolution =
 export interface NekoAgentAPI {
   /** Pi Skill catalog owned by the Agent runtime. */
   getSkills(): readonly SkillDef[];
-  resolveGeneratedOutput(resourceRef: ResourceRef): Promise<NekoAgentGeneratedOutputResolution>;
+  resolveGeneratedOutput(
+    contentLocator: GeneratedOutputContentLocator,
+  ): Promise<NekoAgentGeneratedOutputResolution>;
 }
 
 // =============================================================================

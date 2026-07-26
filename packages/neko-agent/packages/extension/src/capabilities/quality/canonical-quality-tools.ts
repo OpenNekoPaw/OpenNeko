@@ -21,7 +21,7 @@ import {
   rejectLegacyMediaPathRequest,
   type QualityProfileId,
   type QualityReviewRequest,
-} from './quality-gate-runtime';
+} from '@neko/quality/core';
 
 export interface CanonicalQualityCheckToolsDeps {
   review(request: QualityReviewRequest, options?: ToolExecuteOptions): Promise<unknown>;

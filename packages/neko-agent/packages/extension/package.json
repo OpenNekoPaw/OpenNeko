@@ -16,10 +16,13 @@
     "@neko-agent/types": "workspace:*",
     "@neko/agent": "workspace:*",
     "@neko/ai-sdk": "workspace:*",
+    "@neko/chara": "workspace:*",
     "@neko/content": "workspace:*",
     "@neko/entity": "workspace:*",
+    "@neko/generation": "workspace:*",
     "@neko/neko-client": "workspace:*",
     "@neko/platform": "workspace:*",
+    "@neko/quality": "workspace:*",
     "@neko/search": "workspace:*",
     "@neko/shared": "workspace:*",
     "sharp": "^0.35.3"

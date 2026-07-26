@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import { registerWorkspaceBoardFunctionalAcceptance } from './workspaceBoardFunctionalAcceptance';
+
+type AcceptanceOptions = Parameters<typeof registerWorkspaceBoardFunctionalAcceptance>[0];
+type AcceptanceProject = AcceptanceOptions['projector']['project'];
+type AcceptanceEnqueue = AcceptanceOptions['competingHostCoordinator']['enqueue'];
+type AcceptanceAcquire = AcceptanceOptions['editorOwnerCoordinator']['acquireWriterOwnership'];
+type AcceptanceFlush = AcceptanceOptions['editorOwnerCoordinator']['flush'];
 
 const vscodeMockState = vi.hoisted(() => {
   class MockUri {
@@ -40,7 +46,7 @@ vi.mock('vscode', () => ({
 }));
 
 const COMMAND = 'neko.canvas.debug.exerciseWorkspaceBoardDelivery';
-const ACTIVE_DOCUMENT = vscodeMockState.MockUri.file('/workspace/neko/boards/workspace.nkc');
+const ACTIVE_DOCUMENT = vscode.Uri.file('/workspace/neko/boards/workspace.nkc');
 
 describe('Workspace Board functional acceptance', () => {
   beforeEach(() => {
@@ -50,8 +56,8 @@ describe('Workspace Board functional acceptance', () => {
 
   it('uses a competing canonical coordinator for pending work and the editor owner to drain it', async () => {
     const whenEditorOwnerIdle = vi.fn(async () => undefined);
-    const editorAcquire = vi.fn(async () => true);
-    const competingEnqueue = vi.fn(async (request) => [
+    const editorAcquire = vi.fn<AcceptanceAcquire>(async () => true);
+    const competingEnqueue = vi.fn<AcceptanceEnqueue>(async (request) => [
       {
         version: 2 as const,
         deliveryId: request.process.deliveryId,
@@ -59,7 +65,7 @@ describe('Workspace Board functional acceptance', () => {
         diagnostics: [],
       },
     ]);
-    const editorFlush = vi.fn(async () => [
+    const editorFlush = vi.fn<AcceptanceFlush>(async () => [
       {
         version: 2 as const,
         deliveryId: 'generated-output-batch:11p72lc',
@@ -81,7 +87,7 @@ describe('Workspace Board functional acceptance', () => {
     expect(competingEnqueue).toHaveBeenCalledOnce();
     expect(editorAcquire).toHaveBeenCalledOnce();
     expect(competingEnqueue.mock.calls[0]?.[0]).toMatchObject({
-      process: { sourceHost: 'tui', taskId: 'functional-workspace-board-task' },
+      process: { sourceHost: 'tui', operationId: 'functional-workspace-board-operation' },
       target: { workspaceId: 'workspace-id', workspaceUri: 'file:///workspace' },
     });
 
@@ -102,7 +108,7 @@ describe('Workspace Board functional acceptance', () => {
   });
 
   it('returns the editor-owner conflict diagnostic without hiding it', async () => {
-    const project = vi.fn(async (request) => ({
+    const project = vi.fn<AcceptanceProject>(async (request) => ({
       version: 2 as const,
       deliveryId: request.process.deliveryId,
       status: 'conflict' as const,
@@ -121,7 +127,7 @@ describe('Workspace Board functional acceptance', () => {
         action: 'project-editor-owner',
         sourceHost: 'vscode',
         assetId: 'functional-conflict-image',
-        taskId: 'functional-conflict-task',
+        operationId: 'functional-conflict-operation',
       }),
     ).resolves.toMatchObject({
       status: 'conflict',
@@ -131,7 +137,7 @@ describe('Workspace Board functional acceptance', () => {
   });
 
   it('can exercise a flat creative source relation in the real development Host', async () => {
-    const project = vi.fn(async (request) => ({
+    const project = vi.fn<AcceptanceProject>(async (request) => ({
       version: 2 as const,
       deliveryId: request.process.deliveryId,
       status: 'projected' as const,
@@ -147,6 +153,7 @@ describe('Workspace Board functional acceptance', () => {
 
     expect(project).toHaveBeenCalledOnce();
     const request = project.mock.calls[0]?.[0];
+    if (!request) throw new Error('Canvas project request was not captured');
     expect(request.process.deliveryId).toMatch(/^functional-creative-batch:/u);
     expect(request.artifacts).toHaveLength(2);
     expect(request.artifacts[0]).toMatchObject({
@@ -159,8 +166,8 @@ describe('Workspace Board functional acceptance', () => {
     ]);
   });
 
-  it('can submit fallback and hashed observations of one fixture file', async () => {
-    const project = vi.fn(async (request) => ({
+  it('can submit unversioned and fingerprinted locators for one fixture file', async () => {
+    const project = vi.fn<AcceptanceProject>(async (request) => ({
       version: 2 as const,
       deliveryId: request.process.deliveryId,
       status: 'projected' as const,
@@ -175,19 +182,21 @@ describe('Workspace Board functional acceptance', () => {
     });
 
     const request = project.mock.calls[0]?.[0];
+    if (!request) throw new Error('Canvas project request was not captured');
     expect(request.artifacts.slice(0, 2)).toMatchObject([
       {
         kind: 'file-reference',
-        resourceRef: {
-          locator: { kind: 'file', path: 'neko/materials/source.epub' },
-          fingerprint: { strategy: 'none', value: 'neko/materials/source.epub' },
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/materials/source.epub',
         },
       },
       {
         kind: 'file-reference',
-        resourceRef: {
-          locator: { kind: 'file', path: 'neko/materials/source.epub' },
-          fingerprint: { strategy: 'hash', value: expect.stringMatching(/^sha256:/u) },
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/materials/source.epub',
+          fingerprint: { strategy: 'sha256', value: expect.stringMatching(/^sha256:/u) },
         },
       },
     ]);
@@ -196,20 +205,25 @@ describe('Workspace Board functional acceptance', () => {
 
 function createOptions(
   overrides: {
-    readonly project?: ReturnType<typeof vi.fn>;
-    readonly competingEnqueue?: ReturnType<typeof vi.fn>;
-    readonly editorFlush?: ReturnType<typeof vi.fn>;
-    readonly editorAcquire?: ReturnType<typeof vi.fn>;
-    readonly whenEditorOwnerIdle?: ReturnType<typeof vi.fn>;
+    readonly project?: AcceptanceProject;
+    readonly competingEnqueue?: AcceptanceEnqueue;
+    readonly editorFlush?: AcceptanceFlush;
+    readonly editorAcquire?: AcceptanceAcquire;
+    readonly whenEditorOwnerIdle?: () => Promise<void>;
   } = {},
-) {
+): AcceptanceOptions {
   const subscriptions: vscode.Disposable[] = [];
   return {
     context: { subscriptions },
     projector: {
       project:
         overrides.project ??
-        vi.fn(async () => ({ version: 2, status: 'projected', diagnostics: [] })),
+        (async (request) => ({
+          version: 2,
+          deliveryId: request.process.deliveryId,
+          status: 'projected',
+          diagnostics: [],
+        })),
     },
     competingHostCoordinator: {
       enqueue: overrides.competingEnqueue ?? vi.fn(async () => []),
@@ -230,7 +244,7 @@ async function invoke(
     readonly action: string;
     readonly sourceHost: string;
     readonly assetId: string;
-    readonly taskId: string;
+    readonly operationId: string;
     readonly sourceTitle: string;
     readonly duplicateSourceFileRelativePath: string;
   }> = {},
@@ -244,7 +258,7 @@ async function invoke(
     relativePath: 'neko/generated/image/station.svg',
     title: 'Station concept',
     mimeType: 'image/svg+xml',
-    taskId: 'functional-workspace-board-task',
+    operationId: 'functional-workspace-board-operation',
     generatedAt: '2026-07-15T00:00:00.000Z',
     width: 320,
     height: 180,

@@ -52,8 +52,7 @@ export type ExtensionCommandHostEffect =
   | { type: 'clearAgentHistory'; conversationId: string }
   | { type: 'postHistoryCleared'; conversationId: string }
   | { type: 'refreshConversationList' }
-  | { type: 'refreshActiveConversation' }
-  | { type: 'sendTasks'; conversationId: string };
+  | { type: 'refreshActiveConversation' };
 
 export interface ExtensionCommandHostEffectPlan {
   beforeResult: ExtensionCommandHostEffect[];
@@ -71,7 +70,6 @@ const OUTPUT_SUPPRESSED_ACTIONS = new Set([
   'showModelSelector',
   'showSettings',
   'showPermissions',
-  'showTasks',
   'showMCPServers',
   'resumeConversation',
   'initProject',
@@ -142,13 +140,6 @@ export function buildExtensionCommandHostEffectPlan(
 
   if (input.result.action === 'newConversation') {
     beforeResult.push({ type: 'refreshConversationList' }, { type: 'refreshActiveConversation' });
-  }
-
-  if (input.result.action === 'showTasks' && input.activeConversationId) {
-    beforeResult.push({
-      type: 'sendTasks',
-      conversationId: input.activeConversationId,
-    });
   }
 
   return { beforeResult, afterResult };

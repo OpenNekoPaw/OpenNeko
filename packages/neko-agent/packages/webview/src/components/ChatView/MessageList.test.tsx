@@ -1,8 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '@neko-agent/types';
 import { MessageActionsProvider } from '@/components/ChatView/MessageActionsContext';
-import { MessageList } from './MessageList';
+import { MessageList as MessageListComponent } from './MessageList';
+import type { MessageIdentityMap } from './message-identity';
 import { registerDefaultRenderers } from '@/components/ChatView/RichContent';
 import { I18nProvider } from '@/i18n/I18nContext';
 import { chat as enChat } from '@/i18n/locales/en/chat';
@@ -18,6 +20,15 @@ const getOffsetForIndexMock =
     (index: number, alignment: 'auto' | 'center' | 'end' | 'start') => readonly [number, string]
   >();
 let virtualItems: Array<{ index: number; key: string; start: number }> = [];
+
+const testIdentities: MessageIdentityMap = {
+  user: { displayName: 'You', avatarLabel: 'You', title: 'You' },
+  assistant: { displayName: 'Assistant', avatarLabel: 'AI', title: 'Assistant' },
+};
+
+function MessageList(props: Omit<ComponentProps<typeof MessageListComponent>, 'identities'>) {
+  return <MessageListComponent {...props} identities={testIdentities} />;
+}
 
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: () => ({

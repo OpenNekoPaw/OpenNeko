@@ -1,5 +1,5 @@
 import { getDefaultPersonalPath } from './system-prompt-builder';
-import type { AgentsLoadResult, ISystemPromptBuilder } from './system-prompt-builder-types';
+import type { AgentsLoadResult } from './system-prompt-builder-types';
 
 export interface SystemPromptAgentsFileRuntimeInput {
   workspacePath?: string | null;
@@ -7,7 +7,9 @@ export interface SystemPromptAgentsFileRuntimeInput {
 }
 
 export interface SystemPromptAgentsFileRuntimeDeps {
-  builder: Pick<ISystemPromptBuilder, 'loadAgentsFile'>;
+  builder: {
+    loadAgentsFile(projectPath?: string, personalPath?: string): Promise<AgentsLoadResult | null>;
+  };
 }
 
 export async function runSystemPromptAgentsFileLoadRuntime(

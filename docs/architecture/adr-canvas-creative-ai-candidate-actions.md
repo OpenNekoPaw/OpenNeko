@@ -105,9 +105,9 @@ Agent 负责：
 
 Canvas 不直接调用 provider SDK，不传 provider runtime handle，不复制 Agent 模型能力逻辑，也不把自然语言提示词当作参数校验替代品。
 
-### 6. 后台 Agent 会话可见，但执行权威是 run/workItem
+### 6. 直接创作动作可见，但执行权威属于领域
 
-Canvas 创作 AI 动作应投影到完整独立的后台 Agent 创作会话，用户可以从 Agent 会话列表打开查看。这一会话展示 run/workItem、进度、诊断、candidate、judge 结果、重试和继续创作入口。
+Canvas 直接创作动作由 Canvas operation 与具体 GenerationJob 拥有，并通过 versioned projection 展示进度、诊断、candidate、结果和重试入口。开放式委派推理使用 SubagentRun；不得为直接动作创建独立后台 Agent 会话。
 
 但 conversation 不是执行、并发、成本、幂等或写回权威。权威身份仍是 document/run/workItem/target/ref/revision。Project Memory 晋升必须显式发生，不从后台会话或 run 自动写入。
 

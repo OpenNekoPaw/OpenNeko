@@ -136,9 +136,9 @@
 ## 16. Restore the audited core/basic Webview capability set
 
 - [x] 16.1 Re-audit the previous Webview, Extension provider, save path, media services, export panel/service and tests; record the P0/P1/delete matrix in `legacy-webview-capability-audit.md`.
-- [ ] 16.2 Add failing behavior/path tests for edit-dirty-save-reopen, cross-Clip preview, time placement, trim/duration/speed/audio persistence, Explorer/file drop, context-menu dispatch and export task restore/cancel.
+- [ ] 16.2 Add failing behavior/path tests for edit-dirty-save-reopen, cross-Clip preview, time placement, trim/duration/speed/audio persistence, Explorer/file drop, context-menu dispatch and ExportJob restore/cancel.
 - [ ] 16.3 Adapt the old basic components, keyboard shortcuts and interaction lifecycle to revisioned `TimelineView` and typed intents; do not maintain a parallel minimal implementation or restore writable project Store ownership; leave primary+S to VS Code save.
-- [x] 16.4 Replace synchronous foreground export with a document/session/job-scoped Extension Host registry, adapt the old config/progress panel to query, background, cancel and resume it, and project explicit task state into a native VS Code status item that navigates to the owning `.otio`.
+- [x] 16.4 Replace synchronous foreground export with the document/session/job-scoped `ExportJobCoordinator`, adapt the old config/progress panel to query, background, cancel and resume it, and project explicit versioned Job state into a native VS Code status item that navigates to the owning `.otio`; delete the parallel registry and generic Task compatibility path.
 - [ ] 16.5 Restore P1 selection/clipboard/shortcut/Track productivity only after the P0 edit-save-preview-export paths pass their tests.
 - [ ] 16.6 Run Core/Extension/Webview behavior tests and builds, strict OpenSpec, dependency/legacy/unused gates and isolated Extension Development Host scenarios; keep the change incomplete until all applicable gates pass.
 - [ ] 16.7 Restore the canonical `PreviewPanel`, `PreviewControls`, `Timeline`/timeline hooks, `PropertyPanel` and Export subview boundaries; remove parallel `Basic*` replacements and prove shared i18n/theme/error/logger/UI infrastructure remains the only runtime.

@@ -4,17 +4,14 @@
  * Uses shared HttpClient for HTTP operations.
  */
 
-import type { Model, Provider } from '../../types/provider';
+import type { Provider } from '../../types/provider';
 import type {
   MediaAdapter,
   MediaGenerationType,
-  MediaTaskStatus,
+  MediaOperationStatus,
   MediaAdapterResult,
   MediaAdapterError,
-  ImageGenerationRequest,
-  VideoGenerationRequest,
-  AudioGenerationRequest,
-} from '../types';
+} from '@neko/generation';
 import { HttpClient, getHttpClient, type HttpResult } from '../../core/http-client';
 
 /**
@@ -39,49 +36,6 @@ export abstract class BaseMediaAdapter implements MediaAdapter {
   }
 
   /**
-   * Generate image - must be implemented by subclasses that support it
-   */
-  async generateImage(
-    _request: ImageGenerationRequest,
-    _model: Model,
-    _provider: Provider,
-  ): Promise<MediaAdapterResult> {
-    return this.notSupportedResult('text-to-image');
-  }
-
-  /**
-   * Generate video - must be implemented by subclasses that support it
-   */
-  async generateVideo(
-    _request: VideoGenerationRequest,
-    _model: Model,
-    _provider: Provider,
-  ): Promise<MediaAdapterResult> {
-    return this.notSupportedResult('text-to-video');
-  }
-
-  /**
-   * Generate audio - must be implemented by subclasses that support it
-   */
-  async generateAudio(
-    _request: AudioGenerationRequest,
-    _model: Model,
-    _provider: Provider,
-  ): Promise<MediaAdapterResult> {
-    return this.notSupportedResult('text-to-audio');
-  }
-
-  /**
-   * Get task status - must be implemented for async polling
-   */
-  abstract getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult>;
-
-  /**
-   * Cancel a running task
-   */
-  abstract cancelTask(externalTaskId: string, provider: Provider): Promise<void>;
-
-  /**
    * Create error result
    */
   protected createErrorResult(
@@ -99,16 +53,6 @@ export abstract class BaseMediaAdapter implements MediaAdapter {
         retryAfterMs,
       },
     };
-  }
-
-  /**
-   * Create not supported result
-   */
-  protected notSupportedResult(type: MediaGenerationType): MediaAdapterResult {
-    return this.createErrorResult(
-      'NOT_SUPPORTED',
-      `${type} is not supported by ${this.type} adapter`,
-    );
   }
 
   /**
@@ -206,12 +150,12 @@ export abstract class BaseMediaAdapter implements MediaAdapter {
   // ==========================================================================
 
   /**
-   * Map platform-specific status string/number to standard MediaTaskStatus
+   * Map platform-specific status string/number to a standard media operation status.
    */
   protected mapStatusFrom(
     rawStatus: string | number | undefined,
-    statusMap: Record<string | number, MediaTaskStatus>,
-  ): MediaTaskStatus {
+    statusMap: Record<string | number, MediaOperationStatus>,
+  ): MediaOperationStatus {
     if (rawStatus === undefined) return 'pending';
     return statusMap[rawStatus] ?? 'pending';
   }
@@ -273,6 +217,6 @@ export abstract class BaseMediaAdapter implements MediaAdapter {
     provider: Provider,
     method: 'POST' | 'DELETE' = 'POST',
   ): Promise<void> {
-    await this.request(url, { method }, provider);
+    await this.requestSimple<unknown>(url, method, provider);
   }
 }

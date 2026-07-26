@@ -16,3 +16,4 @@
 - [`2026-07-18-text-entity-extraction-gap.md`](2026-07-18-text-entity-extraction-gap.md)：统一实体文本抽取、动态工作区/素材库发现、SQLite 候选边界与第一阶段 Gap。
 - [`2026-07-22-desktop-host-adapter-reuse-gap.md`](2026-07-22-desktop-host-adapter-reuse-gap.md)：Desktop 对 VS Code 子包、Agent、Canvas、Cut、Preview、Assets、Host ports 和 Engine 的复用成熟度与 adapter 缺口。
 - [`2026-07-25-neko-types-residual-contract-audit.md`](2026-07-25-neko-types-residual-contract-audit.md)：功能裁剪、Canvas/Cut 简化和 Pi runtime 迁移后的共享类型、NKV、operation、领域契约与公共导出残留审计。
+- [`2026-07-25-3d-reference-shot-staging-gap.md`](2026-07-25-3d-reference-shot-staging-gap.md)：3D Reference 当前可用、未验收与不可用能力，以及相对轻量 Shot Staging/Seedance 控制目标的缺口。

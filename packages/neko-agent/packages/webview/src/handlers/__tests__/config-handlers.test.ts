@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExtensionToWebviewMessage } from '@neko-agent/types';
 import { configHandlers } from '../config-handlers';
 import type { MessageHandlerContext } from '../types';
+import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
 
 const messageMocks = vi.hoisted(() => ({
   updateSettingsMessage: vi.fn(),
@@ -274,8 +275,7 @@ function createContext(): MessageHandlerContext {
     streamingMessageIdRef: { current: null },
     activeConversationId: null,
     activeConversationIdRef: { current: null },
-    conversationMessagesRef: { current: new Map() },
-    conversationStreamingRef: { current: new Map() },
+    conversationRenderCoordinator: new ConversationRenderCoordinator(),
     openTabs: [],
     activeTabId: null,
     isTablessConversationViewRef: { current: false },

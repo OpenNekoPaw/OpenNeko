@@ -98,11 +98,15 @@ function projectionSnapshot(conversationId: string, messageId: string) {
     turns: [
       {
         turnId: `turn-${messageId}`,
+
+        runId: 'run-a',
         messageId,
         items: [
           {
             conversationId,
             turnId: `turn-${messageId}`,
+
+            runId: 'run-a',
             messageId,
             itemId: 'text-1',
             sequence: 1,

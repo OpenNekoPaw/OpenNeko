@@ -50,7 +50,7 @@ describe('adoptWorkspaceGeneratedOutputs', () => {
       lifecycle: expect.objectContaining({
         contentDigest: expect.stringMatching(/^sha256:/),
         generation: expect.objectContaining({
-          taskId: `legacy-adoption:neko/generated/image/legacy.png`,
+          operationId: `legacy-adoption:neko/generated/image/legacy.png`,
         }),
       }),
     });
@@ -109,7 +109,7 @@ describe('retainLegacyGeneratedOutput', () => {
         lifecycle: expect.objectContaining({
           assetId: 'legacy-image',
           contentDigest: expect.stringMatching(/^sha256:/),
-          generation: { taskId: 'legacy-retain:legacy-image' },
+          generation: { operationId: 'legacy-retain:legacy-image' },
         }),
       },
       diagnostics: [],

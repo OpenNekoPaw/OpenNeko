@@ -317,6 +317,7 @@ export interface StoryboardMediaRef {
   readonly refId: string;
   readonly role: StoryboardMediaRole;
   readonly locator: StoryboardMediaLocator;
+  readonly contentLocator?: import('./content-locator').ContentLocator;
   readonly label?: string;
   readonly mimeType?: string;
   readonly documentResourceRef?: DocumentArchiveResourceRef;

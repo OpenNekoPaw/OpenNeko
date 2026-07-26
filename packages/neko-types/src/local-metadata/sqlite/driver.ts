@@ -1,20 +1,19 @@
-import type { LocalMetadataOpenOptions } from '../contracts';
+import type {
+  LocalMetadataOpenOptions,
+  LocalMetadataSqlBindingValue,
+  LocalMetadataSqlExecutor,
+  LocalMetadataSqlRow,
+  LocalMetadataSqlRunResult,
+} from '../contracts';
 
-export type SqliteBindingValue = string | number | bigint | Uint8Array | null;
+export type SqliteBindingValue = LocalMetadataSqlBindingValue;
 
-export interface SqliteRunResult {
-  readonly changes: number;
-  readonly lastInsertRowid: number | bigint;
-}
+export interface SqliteRunResult extends LocalMetadataSqlRunResult {}
 
-export interface SqliteRow {
-  readonly [column: string]: unknown;
-}
+export interface SqliteRow extends LocalMetadataSqlRow {}
 
-export interface SqliteConnection {
+export interface SqliteConnection extends LocalMetadataSqlExecutor {
   exec(sql: string): Promise<void>;
-  run(sql: string, parameters?: readonly SqliteBindingValue[]): Promise<SqliteRunResult>;
-  all(sql: string, parameters?: readonly SqliteBindingValue[]): Promise<readonly SqliteRow[]>;
   backup(destinationPath: string): Promise<void>;
   close(): Promise<void>;
 }

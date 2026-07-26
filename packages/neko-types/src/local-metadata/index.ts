@@ -6,3 +6,4 @@ export * from './resource-cache-manifest-store';
 export * from './maintenance-report';
 export * from './migration-planner';
 export * from './user-diagnostic';
+export * from './secret-boundary';

@@ -75,17 +75,15 @@ function pilotFacts(identity) {
       },
     ],
     promptComposition: [],
-    tasks: [],
     continuations: [],
     artifacts: [],
     usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
-    retries: { taskRetryCount: 0, tasksWithRetries: 0 },
+    retries: { count: 0 },
     evidenceCompleteness: {
       runtimeErrors: { limit: 256, droppedCount: 0 },
       turns: { limit: 512, droppedCount: 0 },
       turnToolCalls: { limit: 256, droppedCount: 0 },
       skillReceipts: { limit: 128, droppedCount: 0 },
-      tasks: { limit: 512, droppedCount: 0 },
       continuations: { limit: 512, droppedCount: 0 },
       promptComposition: { limit: 256, droppedCount: 0 },
       artifacts: { limit: 512, droppedCount: 0 },
@@ -129,22 +127,9 @@ describe('v2 Skill and artifact pilot', () => {
       },
     ],
     [
-      'task result observation',
-      (selected, facts) => {
-        selected.scenario.assertions.push({
-          id: 'task-terminal-test',
-          kind: 'task-terminal',
-          taskType: 'skill-authoring',
-          status: 'completed',
-          evidenceRef: 'tool-facts',
-        });
-        facts.tasks.push({
-          id: 'task-1',
-          type: 'skill-authoring',
-          status: 'completed',
-          resultObservation: { status: 'missing', observationIds: [] },
-          diagnostics: [],
-        });
+      'Tool result observation',
+      (_selected, facts) => {
+        facts.turns[1].toolCalls[0].resultObservation = 'missing';
       },
     ],
     [

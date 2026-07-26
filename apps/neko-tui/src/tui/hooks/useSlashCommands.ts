@@ -73,7 +73,6 @@ interface SlashCommandSessionActions {
   editQueuedMessage?: NonNullable<
     import('./useAgentSession').AgentSessionHandle['editQueuedMessage']
   >;
-  listTasks?: import('./useAgentSession').AgentSessionHandle['listTasks'];
   refreshSharedMetadataAtBoundary?: import('./useAgentSession').AgentSessionHandle['refreshSharedMetadataAtBoundary'];
   executeSkill?: (name: string, args?: string) => boolean | Promise<boolean>;
   listSkills?: () => readonly TuiSkillOption[];
@@ -189,8 +188,6 @@ function isAllowedRunningCommand(input: string): boolean {
   const commandName = input.trim().split(/\s+/)[0]?.slice(1).toLowerCase();
   if (
     commandName === 'queue' ||
-    commandName === 'task' ||
-    commandName === 'tasks' ||
     commandName === 'status' ||
     commandName === 's'
   ) {
@@ -392,11 +389,6 @@ function createInkRouterContext(
             ...(sessionActions.editQueuedMessage ? { edit: sessionActions.editQueuedMessage } : {}),
           }
         : undefined,
-      task: sessionActions.listTasks
-        ? {
-            list: sessionActions.listTasks,
-          }
-        : undefined,
       mcp: sessionActions.listMcpServers
         ? {
             listServers: sessionActions.listMcpServers,
@@ -433,9 +425,6 @@ function createInkRouterContext(
             ...(agentState.messageQueue.snapshot === null
               ? {}
               : { messageQueue: agentState.messageQueue.snapshot }),
-            ...(agentState.tasks.running[0] === undefined
-              ? {}
-              : { runningTask: agentState.tasks.running[0] }),
             userConfigPath: sessionActions.userConfigPath,
           };
         },

@@ -421,7 +421,7 @@ export function ChatWorkspace({
     isThinking,
     isCharacterRoleSession,
     selectedModel,
-    availableModels,
+    availableModels: settings.chatModelOptions,
     sessionMode,
     mediaProviderId: activeMediaModel?.providerId,
     mediaModelId: activeMediaModel?.modelId,
@@ -448,6 +448,13 @@ export function ChatWorkspace({
   useEffect(() => {
     if (!pendingSendRequest || !sessionMutationConversationId || !isModelConfigurationReady) return;
     if (consumedPendingSendRequestIdRef.current === pendingSendRequest.id) return;
+    if (
+      pendingSendRequest.input.sessionMode &&
+      pendingSendRequest.input.sessionMode !== sessionMode
+    ) {
+      setVisibleSessionMode(pendingSendRequest.input.sessionMode);
+      return;
+    }
 
     consumedPendingSendRequestIdRef.current = pendingSendRequest.id;
     handleSend(pendingSendRequest.input);
@@ -457,7 +464,9 @@ export function ChatWorkspace({
     isModelConfigurationReady,
     onPendingSendRequestConsumed,
     pendingSendRequest,
+    sessionMode,
     sessionMutationConversationId,
+    setVisibleSessionMode,
   ]);
 
   useEffect(() => {
@@ -802,21 +811,6 @@ export function ChatWorkspace({
         pluginsAvailable={pluginsAvailable}
         contextChips={contextChips}
         ambientNodes={ambientNodes}
-        onCancelTask={(taskScope) => {
-          if (!isCharacterRoleSession && sessionMutationConversationId) {
-            AgentHostMessages.cancelTask(taskScope);
-          }
-        }}
-        onRetryTask={(taskScope) => {
-          if (!isCharacterRoleSession && sessionMutationConversationId) {
-            AgentHostMessages.retryTask(taskScope);
-          }
-        }}
-        onViewTaskResult={(taskScope, resultRef) => {
-          if (!isCharacterRoleSession && sessionMutationConversationId) {
-            AgentHostMessages.viewTaskResult(taskScope, resultRef);
-          }
-        }}
         onInputChange={setInputValue}
         onSend={handleSend}
         onCancel={handleCancelMessage}

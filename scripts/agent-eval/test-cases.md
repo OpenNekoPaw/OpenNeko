@@ -57,9 +57,9 @@ blocked by missing observability；不要把弱文本匹配改写成通过。
 | 输入规范        | 空值、边界、歧义、locale、多轮顺序、非法配置是否明确处理                       | schema、diagnostic、workflow trace   |
 | 输出规范        | 格式、字段、表格、引用、locale、禁止字段是否满足                               | structured-output hard gate          |
 | Skill 激活      | 正向、改写、邻近负向请求是否触发正确 Host identity                             | Skill trigger/injection facts        |
-| Tool/capability | 正确 Tool、参数/结果状态、错误路径、无 fallback                                | Tool facts、task facts、no-fallback  |
+| Tool/capability | 正确 Tool、参数/结果状态、错误路径、无 fallback                                | Tool facts、no-fallback              |
 | 模型与开关      | requested profile 是否等于 effective provider/model/runtime config             | configuration digest、model facts    |
-| 流程进度        | queue、turn、task、continuation、cancel/resume/recovery 是否有序并最终 idle    | workflow/process assertions          |
+| 流程进度        | queue、turn、Tool、continuation、cancel/resume/recovery 是否有序并最终 idle    | workflow/process assertions          |
 | 产物规范        | 稳定 identity、格式、digest/revision、provenance、delivery、validator 是否成立 | artifact facts、contained post-check |
 | 输出质量        | 相关性、完整性、具体性、一致性、恢复建议是否达到领域要求                       | hard gates 后的领域 rubric/Judge     |
 | 产物质量        | Canvas/Storyboard/图片/视频等真实文件是否通过 owning validator                 | domain QualityEvidence               |
@@ -105,7 +105,7 @@ Ablation plan 使用严格 `neko.agent-eval.ablation-plan.v1`，默认只允许�
 执行入口为 `node scripts/agent-eval/ablation/run.mjs --plan <id>`；`--dry-run` 只验证
 authoring 与 selection，不是行为验收。每个 sample 继续生成标准报告，matrix 只增加
 `variant-delta.json`，汇总 pass/hard gates、tokens/cost、p50/p95 latency、iterations、
-Tool/retry/task 和适用的真实输出内容 quality，不得用效率收益覆盖 correctness failure，
+Tool/retry 和适用的真实输出内容 quality，不得用效率收益覆盖 correctness failure，
 也不得把 hard-gate/格式通过映射成 content quality。
 
 ## 4. Case group 选择
@@ -116,7 +116,7 @@ Tool/retry/task 和适用的真实输出内容 quality，不得用效率收益�
 | `paraphrase` | 同一意图的不同表达仍稳定触发                          |
 | `boundary`   | 相邻但不应触发，或输入/配置边界                       |
 | `failure`    | 缺依赖、拒绝、非法、provider/Tool 失败时 fail-visible |
-| `workflow`   | 多轮、queue、feedback、task、cancel/resume/recovery   |
+| `workflow`   | 多轮、queue、feedback、Tool、cancel/resume/recovery   |
 | `artifact`   | durable artifact 与 owning validator                  |
 | `quality`    | hard gates 通过后的领域质量或审美                     |
 | `regression` | 已知缺陷、旧路径或错误路由不得回归                    |
@@ -152,7 +152,7 @@ closed-loop `feedback` 和 terminal `resize`。活跃 turn 中的新用户输入
 
 当前 hard gates 覆盖 runtime error、fully idle、canonical turn、final answer、
 Skill identity/status、prompt composition、Markdown path、model/no-fallback、Tool call、
-task terminal、process order、queue state、cancellation、recovery、retry、terminal
+process order、queue state、cancellation、recovery、retry、terminal
 concerns、structured output、artifact 和 forbidden refs。新增 assertion kind 前必须先
 实现 evaluator 与 key-free 失败测试；metadata-only 字段会被 strict validation 拒绝。
 
@@ -173,8 +173,8 @@ evidence refs、评分理由与 uncertainty。Judge 不可用或响应非法属�
 failure；高分不能覆盖 path、权限、schema、任务终态、产物或 no-fallback 失败。
 
 重复采样保留全部 sample，并汇总 pass rate、hard gates、score distribution/variance、
-token、cost availability、mean/p50/p95 latency、iterations、Tool calls/success、retries 和
-task terminal metrics。禁止选择最好的一次作为结论。
+token、cost availability、mean/p50/p95 latency、iterations、Tool calls/success 和 retries。
+禁止选择最好的一次作为结论。
 
 Approved baseline 只能使用脱敏证据，并绑定 target identity/fingerprint、repository
 revision、fixture digest、runtime/model profile、sampling/budget、validator/Judge
@@ -235,7 +235,7 @@ owner 时逐 suite 运行；稳定性或质量结论使用 repeated run，而不
 1. outcome 和 failure classification；
 2. requested/effective model 与 configuration identity；
 3. assertion-level status、evidence refs 与 dropped counts；
-4. forbidden fallback、artifact validator 和 terminal task/process evidence；
+4. forbidden fallback、artifact validator 和 terminal Tool/process evidence；
 5. Judge/aggregate/baseline comparability；
 6. skipped stages、cost availability 与 residual risk。
 

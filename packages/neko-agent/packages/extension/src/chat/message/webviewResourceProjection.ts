@@ -10,6 +10,8 @@ import {
   contentLocatorKey,
   validateContentLocator,
   type DocumentArchiveResourceRef,
+  type GeneratedAsset,
+  type GeneratedOutputContentLocator,
   type ResourceRef,
   type ResourceVariantRequest,
 } from '@neko/shared';
@@ -28,6 +30,10 @@ export interface WebviewResourceProjectionOptions {
   readonly localMediaCaller: string;
   readonly documentResourceCaller: string;
   readonly resolveDocumentResourceScope?: () => ResourceRef['scope'];
+  readonly resolveGenerationResult?: (locator: GeneratedOutputContentLocator) => {
+    readonly path: string;
+    readonly asset: GeneratedAsset;
+  };
 }
 
 interface AsyncResourceProjector {
@@ -46,7 +52,9 @@ export async function projectMessagesForWebviewResourceDisplay(
   const projected = projectMessagesForResourceDisplay(messages, {
     resolveLocalMediaPath: projector.resolveLocalMediaPath,
   });
-  const webviewReadyInput = stripDocumentResourceRuntimeFields(projected);
+  const webviewReadyInput = stripDocumentResourceRuntimeFields(
+    projectGeneratedResourcesForWebview(projected, options),
+  );
   const withDocumentResources = await projectDocumentResourceRefsInValue(webviewReadyInput, {
     project: (ref, variant) => projector.projectDocumentResourceRef(ref, variant),
     onMissingProjection: appendResourceProjectionDiagnostic,
@@ -81,7 +89,7 @@ export async function projectConversationProjectionAttachmentFrameForWebview(
   return frame;
 }
 
-export async function projectValueForWebviewResourceDisplay(
+async function projectValueForWebviewResourceDisplay(
   value: unknown,
   options: WebviewResourceProjectionOptions,
 ): Promise<unknown> {
@@ -90,13 +98,81 @@ export async function projectValueForWebviewResourceDisplay(
     resolveLocalMediaPath: projector.resolveLocalMediaPath,
   });
   const withDocumentResources = await projectDocumentResourceRefsInValue(
-    stripDocumentResourceRuntimeFields(projected),
+    stripDocumentResourceRuntimeFields(projectGeneratedResourcesForWebview(projected, options)),
     {
       project: (ref, variant) => projector.projectDocumentResourceRef(ref, variant),
       onMissingProjection: appendResourceProjectionDiagnostic,
     },
   );
   return projectPerceptualAssetPreviewsInValue(withDocumentResources, options.contentAccessRuntime);
+}
+
+function projectGeneratedResourcesForWebview(
+  value: unknown,
+  options: WebviewResourceProjectionOptions,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): unknown {
+  if (!isObject(value)) return value;
+  if (visited.has(value)) return value;
+  visited.add(value);
+  if (Array.isArray(value)) {
+    return value.map((item) => projectGeneratedResourcesForWebview(item, options, visited));
+  }
+  if (!isRecord(value)) return value;
+
+  const projected = Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [
+      key,
+      projectGeneratedResourcesForWebview(child, options, visited),
+    ]),
+  );
+  const locatorResult = validateContentLocator(value['contentLocator']);
+  if (
+    !locatorResult.ok ||
+    locatorResult.locator.kind !== 'generated-output' ||
+    !options.resolveGenerationResult
+  ) {
+    return projected;
+  }
+  try {
+    const resolved = options.resolveGenerationResult(locatorResult.locator);
+    const renderUri = options.localResourceAccess?.toWebviewUri(
+      options.webview,
+      resolved.path,
+      options.localMediaCaller,
+    );
+    if (!renderUri) {
+      return {
+        ...projected,
+        resourceProjectionDiagnostics: [
+          {
+            code: 'resource-projection-denied',
+            severity: 'error',
+            field: 'contentLocator',
+            message: 'Generated media could not be projected into the Agent Webview.',
+          },
+        ],
+      };
+    }
+    return {
+      ...projected,
+      renderUri,
+      mimeType: resolved.asset.mimeType,
+    };
+  } catch (error) {
+    logger.warn('Failed to resolve generated media for Agent Webview display', { error });
+    return {
+      ...projected,
+      resourceProjectionDiagnostics: [
+        {
+          code: 'resource-projection-denied',
+          severity: 'error',
+          field: 'contentLocator',
+          message: 'Generated media ContentLocator could not be resolved.',
+        },
+      ],
+    };
+  }
 }
 
 async function projectPerceptualAssetPreviewsInValue(

@@ -142,6 +142,80 @@ describe('PiConversationRuntime', () => {
     runtime.dispose();
   });
 
+  it('checkpoints an external terminal turn and refreshes the open runtime context', async () => {
+    const lease = authority.acquireLease('conversation-external');
+    await authority.createConversation({
+      lease,
+      conversationId: 'conversation-external',
+      branchId: 'branch-main',
+    });
+    const modelPolicy = policy();
+    const runtime = await PiConversationRuntime.open({
+      authority,
+      lease,
+      conversationId: 'conversation-external',
+      branchId: 'branch-main',
+      models: createFixtureModels(() => completedStream(assistant('stop', 'unused'))),
+      initialModelPolicy: modelPolicy,
+      baseSystemPrompt: 'OpenNeko fixture',
+    });
+    const messages = [
+      { role: 'user' as const, content: 'cat', timestamp: 1 },
+      assistantContent('toolUse', [
+        {
+          type: 'toolCall',
+          id: 'generation-1',
+          name: 'GenerateImage',
+          arguments: { prompt: 'cat' },
+        },
+      ]),
+      {
+        role: 'toolResult' as const,
+        toolCallId: 'generation-1',
+        toolName: 'GenerateImage',
+        content: [{ type: 'text' as const, text: 'Image generation completed.' }],
+        details: {
+          generationJob: {
+            kind: 'generation-job',
+            jobId: 'generation-1',
+            revision: 3,
+            phase: 'succeeded',
+          },
+        },
+        isError: false,
+        timestamp: 3,
+      },
+    ];
+
+    const first = await runtime.checkpointExternalTurn({
+      turnId: 'direct-media:generation-1',
+      terminalState: 'completed',
+      messages,
+    });
+    const duplicate = await runtime.checkpointExternalTurn({
+      turnId: 'direct-media:generation-1',
+      terminalState: 'completed',
+      messages,
+    });
+
+    expect(duplicate).toEqual(first);
+    expect(runtime.messages).toMatchObject([
+      { role: 'user', content: 'cat' },
+      { role: 'assistant', content: [{ type: 'toolCall', id: 'generation-1' }] },
+      {
+        role: 'toolResult',
+        toolCallId: 'generation-1',
+        details: {
+          generationJob: { kind: 'generation-job', jobId: 'generation-1' },
+        },
+      },
+    ]);
+    expect(await authority.readBranchEntries('conversation-external', 'branch-main')).toHaveLength(
+      3,
+    );
+    runtime.dispose();
+  });
+
   it('rejects an incomplete ReadDocument chapter locator before capability execution', async () => {
     const lease = authority.acquireLease('conversation-1');
     await authority.createConversation({

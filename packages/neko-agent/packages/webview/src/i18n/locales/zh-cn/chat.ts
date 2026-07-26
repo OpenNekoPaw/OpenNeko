@@ -558,7 +558,6 @@ export const chat = {
   'chat.commands.skills': '列出和管理可用技能',
   'chat.commands.tools': '列出和搜索可用工具',
   'chat.commands.todos': '列出当前待办事项',
-  'chat.commands.tasks': '列出和管理后台任务',
   'chat.commands.plan': '进入计划模式',
   'chat.commands.mcp': '管理 MCP 服务器连接',
   'chat.commands.sections.agent': 'Agent',
@@ -578,7 +577,7 @@ export const chat = {
   'chat.commands.help.availableSkills': '可用技能',
 
   'chat.helpMessage':
-    '**可用命令：**\n- `/clear` - 清除对话历史\n- `/new` - 开始新对话\n- `/resume` - 恢复之前的对话\n- `/help` - 显示帮助信息\n- `/compact` - 压缩对话以节省上下文\n- `/status` - 显示状态信息\n- `/model` - 选择 AI 模型\n- `/plan` - 进入计划模式\n- `/mcp` - 管理 MCP 服务器\n- `/tasks` - 管理后台任务\n- `/settings` - 打开设置\n\n**技能：**\n- 使用 `$skill-name` 显式激活 Skill 生命周期记录\n- 活跃记录会显示槽位、归属方、是否可清除、锁定原因和过期信息\n- 使用 `/skills` 列出或查看技能；清除动作只会移除策略允许清理的记录\n\n**提示：**\n- 使用 `@` 引用文件\n- 点击 📎 按钮添加附件\n- 按 Enter 发送，Shift+Enter 换行',
+    '**可用命令：**\n- `/clear` - 清除对话历史\n- `/new` - 开始新对话\n- `/resume` - 恢复之前的对话\n- `/help` - 显示帮助信息\n- `/compact` - 压缩对话以节省上下文\n- `/status` - 显示状态信息\n- `/model` - 选择 AI 模型\n- `/plan` - 进入计划模式\n- `/mcp` - 管理 MCP 服务器\n- `/settings` - 打开设置\n\n**技能：**\n- 使用 `$skill-name` 显式激活 Skill 生命周期记录\n- 活跃记录会显示槽位、归属方、是否可清除、锁定原因和过期信息\n- 使用 `/skills` 列出或查看技能；清除动作只会移除策略允许清理的记录\n\n**提示：**\n- 使用 `@` 引用文件\n- 点击 📎 按钮添加附件\n- 按 Enter 发送，Shift+Enter 换行',
   'chat.conversation.loading': '正在加载会话历史…',
   'chat.attachFile': '添加附件',
   'chat.referenceFile': '使用 @ 引用文件',

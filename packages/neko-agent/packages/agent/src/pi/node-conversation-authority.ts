@@ -116,6 +116,13 @@ export interface CheckpointPiTurnInput {
   readonly messages?: readonly AgentMessage[];
 }
 
+export interface CheckpointPiExternalTurnInput {
+  readonly conversationId: string;
+  readonly turnId: string;
+  readonly terminalState: PiTurnCheckpointRecord['terminalState'];
+  readonly messages: readonly AgentMessage[];
+}
+
 export interface AppendPiCompactionInput {
   readonly lease: ConversationExecutionLease;
   readonly conversationId: string;

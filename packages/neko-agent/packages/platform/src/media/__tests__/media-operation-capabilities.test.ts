@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IMAGE_OPERATION_IDS, type ResourceRef } from '@neko/shared';
+import { IMAGE_OPERATION_IDS } from '@neko/shared';
 import {
   AUDITED_IMAGE_CAPABILITY_MATRIX,
   getProviderVideoOperationSupport,
@@ -7,16 +7,12 @@ import {
   validateProviderImageRequest,
   validateProviderVideoRequest,
 } from '../media-operation-capabilities';
-import type { ImageGenerationRequest, VideoGenerationRequest } from '../types';
+import type { ImageGenerationRequest, VideoGenerationRequest } from '@neko/generation';
 
-function resourceRef(id: string): ResourceRef {
+function contentLocator(id: string) {
   return {
-    id,
-    scope: 'project',
-    provider: 'workspace',
-    kind: 'media',
-    source: { kind: 'file', projectRelativePath: `assets/${id.replaceAll(':', '-')}` },
-    fingerprint: { strategy: 'hash', value: `sha256:${id}` },
+    kind: 'workspace-file' as const,
+    path: `assets/${id.replaceAll(':', '-')}`,
   };
 }
 
@@ -36,8 +32,8 @@ describe('media provider capability negotiation', () => {
       errorCodes(
         videoRequest({
           operation: 'generate-from-keyframes',
-          startFrameRef: resourceRef('asset:image:first.png'),
-          endFrameRef: resourceRef('asset:image:last.png'),
+          startFrameLocator: contentLocator('asset:image:first.png'),
+          endFrameLocator: contentLocator('asset:image:last.png'),
         }),
         'runway',
       ),
@@ -49,8 +45,8 @@ describe('media provider capability negotiation', () => {
       errorCodes(
         videoRequest({
           operation: 'generate-from-keyframes',
-          startFrameRef: resourceRef('asset:image:first.png'),
-          endFrameRef: resourceRef('asset:image:last.png'),
+          startFrameLocator: contentLocator('asset:image:first.png'),
+          endFrameLocator: contentLocator('asset:image:last.png'),
           cameraMovement: 'dolly-in',
           duration: 5,
           aspectRatio: '16:9',
@@ -61,22 +57,22 @@ describe('media provider capability negotiation', () => {
   });
 
   it('does not infer transform, extend, or enhance support from a prompt', () => {
-    const source = resourceRef('asset:video:source.mp4');
+    const source = contentLocator('asset:video:source.mp4');
     expect(
       errorCodes(
         videoRequest({
           operation: 'transform',
-          referenceVideoRef: source,
+          referenceVideoLocator: source,
           editInstruction: 'turn this into watercolor',
         }),
         'runway',
       ),
     ).toContain('operation-unsupported');
     expect(
-      errorCodes(videoRequest({ operation: 'extend', referenceVideoRef: source }), 'openai'),
+      errorCodes(videoRequest({ operation: 'extend', referenceVideoLocator: source }), 'openai'),
     ).toContain('operation-unsupported');
     expect(
-      errorCodes(videoRequest({ operation: 'enhance', referenceVideoRef: source }), 'openai'),
+      errorCodes(videoRequest({ operation: 'enhance', referenceVideoLocator: source }), 'openai'),
     ).toContain('operation-unsupported');
   });
 
@@ -85,8 +81,8 @@ describe('media provider capability negotiation', () => {
       errorCodes(
         videoRequest({
           operation: 'generate-from-keyframes',
-          startFrameRef: resourceRef('asset:image:first.png'),
-          endFrameRef: resourceRef('asset:image:last.png'),
+          startFrameLocator: contentLocator('asset:image:first.png'),
+          endFrameLocator: contentLocator('asset:image:last.png'),
           motionStrength: 0.5,
           cameraMovement: 'pan-left',
           cameraAngle: 'low-angle',
@@ -100,18 +96,18 @@ describe('media provider capability negotiation', () => {
     ).toEqual([]);
   });
 
-  it('uses stable refs when resolving canonical video operations', () => {
+  it('uses stable locators when resolving canonical video operations', () => {
     expect(
       resolveCanonicalVideoOperation(
         videoRequest({
-          startFrameRef: resourceRef('asset:image:first.png'),
-          endFrameRef: resourceRef('asset:image:last.png'),
+          startFrameLocator: contentLocator('asset:image:first.png'),
+          endFrameLocator: contentLocator('asset:image:last.png'),
         }),
       ),
     ).toBe('generate-from-keyframes');
     expect(
       resolveCanonicalVideoOperation(
-        videoRequest({ referenceVideoRef: resourceRef('asset:video:source.mp4') }),
+        videoRequest({ referenceVideoLocator: contentLocator('asset:video:source.mp4') }),
       ),
     ).toBe('restyle');
   });
@@ -120,7 +116,7 @@ describe('media provider capability negotiation', () => {
     const request: ImageGenerationRequest = {
       prompt: 'extend the canvas',
       operation: 'outpaint',
-      referenceImageBase64: 'base64-image',
+      referenceImageLocator: contentLocator('source:image'),
       outpaintExpansion: { left: 64, right: 64, top: 0, bottom: 128, fillMode: 'generative' },
     };
     expect(validateProviderImageRequest('openai', request)).toEqual([
@@ -131,7 +127,7 @@ describe('media provider capability negotiation', () => {
   it('requires both audited adapter mapping and precise selected-model capabilities', () => {
     const request: ImageGenerationRequest = {
       prompt: 'match the pose',
-      controlImageRef: resourceRef('preview:pose'),
+      controlImageLocator: contentLocator('preview:pose'),
       controlMode: 'pose',
     };
 
@@ -153,7 +149,7 @@ describe('media provider capability negotiation', () => {
   it('rejects runtimes that ignore or prompt-project precise controls', () => {
     const request: ImageGenerationRequest = {
       prompt: 'match the pose',
-      controlImageRef: resourceRef('preview:pose'),
+      controlImageLocator: contentLocator('preview:pose'),
       controlMode: 'pose',
     };
 
@@ -194,7 +190,7 @@ describe('media provider capability negotiation', () => {
         identity: { sessionId: 'camera-session', revision: 1 },
       },
       panoramaReference: {
-        imageRef: resourceRef('preview:panorama'),
+        imageLocator: contentLocator('preview:panorama'),
         orientation: { yawDeg: 0, pitchDeg: 0, fieldOfViewDeg: 70 },
         identity: { sessionId: 'panorama-session', revision: 1 },
       },
@@ -211,7 +207,10 @@ describe('media provider capability negotiation', () => {
   });
 
   it('accepts one audited stable appearance reference and rejects silent truncation', () => {
-    const appearance = (id: string) => ({ imageRef: resourceRef(id), mode: 'subject' as const });
+    const appearance = (id: string) => ({
+      imageLocator: contentLocator(id),
+      mode: 'subject' as const,
+    });
     expect(
       validateProviderImageRequest(
         'fal',
@@ -229,38 +228,13 @@ describe('media provider capability negotiation', () => {
         ['image.reference.ip-adapter'],
       ),
     ).toEqual([expect.objectContaining({ code: 'operation-limit-exceeded', severity: 'error' })]);
-    expect(
-      validateProviderImageRequest(
-        'fal',
-        {
-          prompt: 'mixed character references',
-          ipAdapterRefs: [
-            { imageBase64: 'legacy-reference', mode: 'subject' },
-            appearance('appearance:1'),
-          ],
-        },
-        ['image.reference.ip-adapter'],
-      ),
-    ).toEqual([expect.objectContaining({ code: 'operation-limit-exceeded', severity: 'error' })]);
   });
 
-  it('rejects ambiguous stable control identities before execution', () => {
+  it('rejects control inputs without an exact role before execution', () => {
     expect(
       validateProviderImageRequest(
         'dashscope',
-        {
-          prompt: 'ambiguous pose',
-          controlImageRef: resourceRef('preview:pose'),
-          controlImageBase64: 'legacy-control',
-          controlMode: 'pose',
-        },
-        ['image.control.pose'],
-      ),
-    ).toEqual([expect.objectContaining({ code: 'invalid-operation-request', severity: 'error' })]);
-    expect(
-      validateProviderImageRequest(
-        'dashscope',
-        { prompt: 'missing role', controlImageRef: resourceRef('preview:control') },
+        { prompt: 'missing role', controlImageLocator: contentLocator('preview:control') },
         ['image.control.pose'],
       ),
     ).toEqual([

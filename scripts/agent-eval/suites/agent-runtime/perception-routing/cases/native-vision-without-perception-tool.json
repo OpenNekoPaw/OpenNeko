@@ -6,11 +6,11 @@
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "Generate and analyze an image through matching native chat vision without the external perception Tool.",
-    "canonicalPath": ["explicit native-vision chat model", "GenerateImage", "task result", "native multimodal context"],
+    "canonicalPath": ["explicit native-vision chat model", "terminal GenerateImage Tool result", "native multimodal context"],
     "forbiddenFallback": ["perception.image.understand", "perception.perceive", "different chat model", "prompt-only analysis"],
-    "observables": [{ "ref": "perception-facts", "kind": "runtime-fact", "description": "Actual model, task result, absence of external perception Tool, and final analysis.", "required": true }],
+    "observables": [{ "ref": "perception-facts", "kind": "runtime-fact", "description": "Actual model, terminal GenerateImage Tool result, absence of external perception Tool, and final analysis.", "required": true }],
     "expectedResult": "Matching native vision analyzes the delivered image without an external perception Tool.",
-    "expectedFailure": "Model fallback, missing task result, external perception call, or empty analysis fails."
+    "expectedFailure": "Model fallback, missing terminal GenerateImage Tool result, external perception call, or empty analysis fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -21,9 +21,10 @@
   ],
   "assertions": [
     { "id": "model", "kind": "model", "profileId": "native-vision", "noFallback": true, "evidenceRef": "perception-facts" },
-    { "id": "task", "kind": "task-terminal", "taskType": "image_generation", "status": "completed", "evidenceRef": "perception-facts" },
+    { "id": "generate-image", "kind": "tool-call", "name": "GenerateImage", "status": "success", "evidenceRef": "perception-facts" },
     { "id": "no-external-perception", "kind": "tool-call", "name": "perception.image.understand", "status": "absent", "evidenceRef": "perception-facts" },
-    { "id": "answer", "kind": "final-answer", "mode": "contains", "text": ["猫", "画面"], "evidenceRef": "perception-facts" }
+    { "id": "answer", "kind": "final-answer", "mode": "contains", "text": ["猫", "画面"], "evidenceRef": "perception-facts" },
+    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "continuationQueueIdle"], "evidenceRef": "perception-facts" }
   ],
   "artifactChecks": [],
   "budget": { "timeoutMs": 600000, "repetitions": 1 }

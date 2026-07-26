@@ -208,7 +208,12 @@ export function loadConfig(
 
     const defaultMediaModels = effectiveConfig.defaultMediaModels;
     const perceptionModels = buildDefaultPerceptionModelRefs(cm);
-    const purposeModels = buildDefaultPurposeModelConfigs(cm, overrides, providerId);
+    const purposeModels = buildDefaultPurposeModelConfigs(
+      cm,
+      overrides,
+      providerId,
+      defaultMediaModels,
+    );
     const maxTokens = effectiveConfig.maxTokens;
     const temperature = effectiveConfig.temperature;
     const thinkingBudget =
@@ -276,6 +281,13 @@ const TUI_TOOL_MODEL_PURPOSES = [
   'audio.understand',
   'audio.music.generate',
 ] as const satisfies readonly TuiToolModelPurpose[];
+const GENERATION_PURPOSE_MEDIA_TYPES: Readonly<
+  Partial<Record<TuiToolModelPurpose, 'image' | 'video' | 'audio'>>
+> = {
+  'image.generate': 'image',
+  'video.generate': 'video',
+  'audio.generate': 'audio',
+};
 
 export interface CliConfigLoadOverrides extends Partial<CLIConfig> {
   /** Flat session-scoped purpose refs; each ref is resolved through the normal product catalog. */
@@ -286,10 +298,13 @@ function buildDefaultPurposeModelConfigs(
   cm: ConfigManager,
   overrides: CliConfigLoadOverrides,
   mainProviderId: string,
+  defaultMediaModels: CLIConfig['defaultMediaModels'],
 ): CLIConfig['purposeModels'] {
   const projected: Partial<Record<TuiToolModelPurpose, TuiPurposeModelConfig>> = {};
   for (const purpose of TUI_TOOL_MODEL_PURPOSES) {
-    const ref = overrides.defaultModelPurposes?.[purpose] ?? cm.getDefaultModelPurposeRef(purpose);
+    const explicitRef =
+      overrides.defaultModelPurposes?.[purpose] ?? cm.getDefaultModelPurposeRef(purpose);
+    const ref = explicitRef ?? resolveGenerationDefaultModelRef(cm, defaultMediaModels, purpose);
     if (!ref) continue;
     const provider = cm.getProvider(ref.providerId);
     const model = cm.getModel(ref.modelId);
@@ -302,6 +317,7 @@ function buildDefaultPurposeModelConfigs(
       );
     }
     if (!modelSupportsPurpose(model, purpose)) {
+      if (explicitRef === undefined) continue;
       throw new Error(
         `Purpose ${purpose} model ${ref.providerId}/${ref.modelId} lacks the required capability.`,
       );
@@ -346,6 +362,24 @@ function buildDefaultPurposeModelConfigs(
     };
   }
   return Object.keys(projected).length === 0 ? undefined : projected;
+}
+
+function resolveGenerationDefaultModelRef(
+  cm: ConfigManager,
+  defaultMediaModels: CLIConfig['defaultMediaModels'],
+  purpose: TuiToolModelPurpose,
+): TuiPurposeModelRef | undefined {
+  const mediaType = GENERATION_PURPOSE_MEDIA_TYPES[purpose];
+  if (mediaType === undefined) return undefined;
+  const optionId = defaultMediaModels?.[mediaType];
+  if (!optionId) return undefined;
+  const model = cm
+    .getEnabledModels()
+    .find((candidate) => `${candidate.providerId}:${candidate.id}` === optionId);
+  if (!model) {
+    throw new Error(`Purpose ${purpose} references unavailable model option ${optionId}.`);
+  }
+  return { providerId: model.providerId, modelId: model.id };
 }
 
 function projectProviderAuth(provider: {

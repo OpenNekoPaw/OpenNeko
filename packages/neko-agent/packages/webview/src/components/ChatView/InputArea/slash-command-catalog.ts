@@ -61,7 +61,6 @@ const BUILTIN_COMMAND_ICONS: Record<BuiltinSlashCommandName, string> = {
   skills: '🧠',
   commands: '⌨️',
   tools: '🛠️',
-  tasks: '📋',
   mcp: '🔌',
 };
 

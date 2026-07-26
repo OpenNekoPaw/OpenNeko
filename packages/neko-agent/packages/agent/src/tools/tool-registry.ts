@@ -584,10 +584,10 @@ const ZH_TOOL_DEFINITION_LOCALIZATIONS: Readonly<Record<string, ToolDefinitionLo
   },
   GenerateImage: {
     description:
-      '提交生成式异步图片 Task，只产出 generated 草稿；等待稳定结果并观察实际图片和 Quality 证据后再接受或修复，不代表项目或交付完成。',
+      '提交异步图片 Generation Job，只产出 generated 草稿；等待稳定结果并观察实际图片和 Quality 证据后再接受或修复，不代表项目或交付完成。',
     parameters: {
       prompt: '图片生成提示词。',
-      referenceImageUri: '可选宿主已解析的参考图片。',
+      referenceImageLocator: '可选参考图片 ContentLocator；宿主会在 provider 边界物化。',
       providerId: '可选当前媒体 Provider ID。',
       modelId: '可选当前图片模型 ID；必须与 Provider 成对提供。',
       size: '输出图片尺寸。',
@@ -595,12 +595,12 @@ const ZH_TOOL_DEFINITION_LOCALIZATIONS: Readonly<Record<string, ToolDefinitionLo
   },
   GenerateVideo: {
     description:
-      '提交生成式异步单片段视频 Task；仅在当前 Provider/model 支持所需控制且该技术适合镜头时使用，结果不是时间线、成片或交付证明。',
+      '提交异步单片段视频 Generation Job；仅在当前 Provider/model 支持所需控制且该技术适合镜头时使用，结果不是时间线、成片或交付证明。',
     parameters: {
       prompt: '视频生成提示词。',
-      referenceImageUri: '可选宿主已解析的参考图或首帧。',
-      startFrameRef: '稳定首帧 ResourceRef。',
-      endFrameRef: '稳定尾帧 ResourceRef。',
+      startFrameLocator: '可选首帧 ContentLocator；宿主会在 provider 边界物化。',
+      endFrameLocator: '可选尾帧 ContentLocator；宿主会在 provider 边界物化。',
+      referenceVideoLocator: '可选参考视频 ContentLocator；宿主会在 provider 边界物化。',
       duration: '视频时长，单位秒。',
       fps: '帧率。',
       aspectRatio: '画幅比例。',

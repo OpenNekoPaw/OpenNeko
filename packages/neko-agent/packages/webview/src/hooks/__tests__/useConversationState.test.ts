@@ -37,7 +37,7 @@ describe('useConversationState', () => {
       }));
     });
 
-    expect(result.current.conversationMessagesRef.current.get('conversation-b')).toEqual([
+    expect(result.current.conversationRenderCoordinator.read('conversation-b')?.messages).toEqual([
       messageB,
     ]);
     expect(result.current.messages).toEqual([messageA]);
@@ -68,7 +68,7 @@ describe('useConversationState', () => {
     });
 
     expect(result.current.messages).toEqual([first, second]);
-    expect(result.current.conversationMessagesRef.current.get('conversation-a')).toEqual([
+    expect(result.current.conversationRenderCoordinator.read('conversation-a')?.messages).toEqual([
       first,
       second,
     ]);
@@ -104,7 +104,9 @@ describe('useConversationState', () => {
     expect(result.current.streamingMessageIdRef.current).toBeNull();
     expect(result.current.isThinking).toBe(false);
     expect(result.current.queuedMessageCount).toBe(0);
-    expect(result.current.conversationMessagesRef.current.get('conversation-a')).toEqual([]);
+    expect(result.current.conversationRenderCoordinator.read('conversation-a')?.messages).toEqual(
+      [],
+    );
     expect(result.current.conversationRenderCoordinator.read('conversation-a')?.revision).toBe(2);
   });
 
@@ -130,7 +132,7 @@ describe('useConversationState', () => {
     expect(result.current.activeConversationIdRef.current).toBeNull();
     expect(result.current.messages).toEqual([]);
     expect(result.current.isThinking).toBe(false);
-    expect(result.current.conversationMessagesRef.current.get('conversation-a')).toEqual([
+    expect(result.current.conversationRenderCoordinator.read('conversation-a')?.messages).toEqual([
       retained,
     ]);
     expect(result.current.conversationRenderCoordinator.read('conversation-a')?.revision).toBe(1);

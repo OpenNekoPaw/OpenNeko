@@ -1,23 +1,14 @@
-import type {
-  AgentTurnTimelineItem,
-  AgentWorkItem,
-  ContentBlock,
-  Message,
-  ToolCall,
-} from '@neko-agent/types';
+import type { AgentTurnTimelineItem, ContentBlock, Message } from '@neko-agent/types';
 
 export interface TimelineTurnRenderInput {
   readonly messageId: string;
   readonly items: readonly AgentTurnTimelineItem[];
   readonly completed: boolean;
-  readonly finalContentBlocks?: readonly ContentBlock[];
 }
 
 export function projectTimelineTurnToMessage(input: TimelineTurnRenderInput): Message {
   const timelineContentBlocks = projectTimelineItemsToContentBlocks(input.items);
-  const contentBlocks = input.completed
-    ? mergeFinalContentBlocksIntoTimelineOrder(timelineContentBlocks, input.finalContentBlocks)
-    : timelineContentBlocks;
+  const contentBlocks = timelineContentBlocks;
   const workItemIds = projectTimelineWorkItemIds(input.items);
   return {
     id: input.messageId,
@@ -33,18 +24,9 @@ export function projectTimelineTurnToMessage(input: TimelineTurnRenderInput): Me
   };
 }
 
-export function projectTimelineItemsToWorkItems(
-  items: readonly AgentTurnTimelineItem[],
-): AgentWorkItem[] {
-  return items.flatMap((item) =>
-    item.kind === 'task' || item.kind === 'media' ? [item.payload.workItem] : [],
-  );
-}
-
 function projectTimelineItemsToContentBlocks(
   items: readonly AgentTurnTimelineItem[],
 ): ContentBlock[] {
-  const workItemIdsByToolCallId = projectWorkItemIdsByToolCallId(items);
   return items.flatMap((item): ContentBlock[] => {
     switch (item.kind) {
       case 'assistant_text':
@@ -65,10 +47,8 @@ function projectTimelineItemsToContentBlocks(
             id: item.itemId,
             type: 'tool_call',
             timestamp: item.createdAt,
-            toolCall: mergeToolCallWithTimelineChildren(
-              item.payload.toolCall,
-              workItemIdsByToolCallId.get(item.payload.toolCall.id) ?? [],
-            ),
+            toolCall: item.payload.toolCall,
+            ...(item.payload.progress ? { toolProgress: item.payload.progress } : {}),
           },
         ];
       case 'composite':
@@ -90,9 +70,6 @@ function projectTimelineItemsToContentBlocks(
             isStreaming: false,
           },
         ];
-      case 'task':
-      case 'media':
-        return [];
     }
   });
 }
@@ -111,87 +88,7 @@ function projectAssistantTextItemToContentBlocks(
   ];
 }
 
-function mergeToolCallWithTimelineChildren(
-  toolCall: ToolCall,
-  workItemIds: readonly string[],
-): ToolCall {
-  if (workItemIds.length === 0) return toolCall;
-
-  const existingResult = toolCall.result;
-  const existingResultData =
-    existingResult && isRecord(existingResult.data) ? existingResult.data : {};
-  const nextData = {
-    ...existingResultData,
-    backgroundMode: true,
-    taskId: readString(existingResultData.taskId) ?? workItemIds[0],
-    taskIds: dedupeStrings([...readStringArray(existingResultData.taskIds), ...workItemIds]),
-  };
-  return {
-    ...toolCall,
-    ...(existingResult ? { result: { ...existingResult, data: nextData } } : {}),
-  };
-}
-
-function projectWorkItemIdsByToolCallId(
-  items: readonly AgentTurnTimelineItem[],
-): Map<string, string[]> {
-  const byTool = new Map<string, string[]>();
-  for (const item of items) {
-    if (item.kind !== 'task' && item.kind !== 'media') continue;
-    const toolCallId = item.parentToolCallId;
-    if (!toolCallId) continue;
-    const workItemId = item.payload.workItem.id;
-    byTool.set(toolCallId, dedupeStrings([...(byTool.get(toolCallId) ?? []), workItemId]));
-  }
-  return byTool;
-}
-
 function projectTimelineWorkItemIds(items: readonly AgentTurnTimelineItem[]): string[] {
-  return dedupeStrings(
-    items.flatMap((item) =>
-      item.kind === 'task' || item.kind === 'media' ? [item.payload.workItem.id] : [],
-    ),
-  );
-}
-
-function mergeFinalContentBlocksIntoTimelineOrder(
-  timelineBlocks: readonly ContentBlock[],
-  finalBlocks: readonly ContentBlock[] | undefined,
-): ContentBlock[] {
-  if (!finalBlocks || finalBlocks.length === 0) return [...timelineBlocks];
-
-  const finalById = new Map(finalBlocks.map((block) => [block.id, block]));
-  const finalByToolCallId = new Map(
-    finalBlocks.flatMap((block) =>
-      block.type === 'tool_call' && block.toolCall?.id ? [[block.toolCall.id, block]] : [],
-    ),
-  );
-
-  return timelineBlocks.map((block) => {
-    if (block.type === 'text' || block.type === 'thinking') return block;
-    const replacement =
-      finalById.get(block.id) ??
-      (block.type === 'tool_call' && block.toolCall?.id
-        ? finalByToolCallId.get(block.toolCall.id)
-        : undefined);
-    return replacement ?? block;
-  });
-}
-
-function readStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
-    : [];
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function dedupeStrings(values: readonly string[]): string[] {
-  return Array.from(new Set(values.filter((value) => value.length > 0)));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  void items;
+  return [];
 }

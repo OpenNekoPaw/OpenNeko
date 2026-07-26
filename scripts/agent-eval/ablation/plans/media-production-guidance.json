@@ -20,9 +20,7 @@
       "iterations",
       "tool-calls",
       "tool-success",
-      "retries",
-      "task-count",
-      "task-success"
+      "retries"
     ],
     "quality": {
       "kind": "hard-gates-only",

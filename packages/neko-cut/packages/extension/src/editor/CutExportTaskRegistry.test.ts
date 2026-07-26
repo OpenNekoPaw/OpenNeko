@@ -1,13 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { CutExportTaskSnapshot } from '@neko-cut/domain';
 import { CutExportTaskRegistry } from './CutExportTaskRegistry';
+import { createInMemoryExportJobStore } from '../services/export-job';
 
 describe('CutExportTaskRegistry', () => {
   it('owns an export after the Webview request returns and publishes terminal state', async () => {
     let finish: (() => void) | undefined;
     const updates = vi.fn();
-    const registry = new CutExportTaskRegistry(updates, () => 'job-1');
+    const registry = createRegistry(updates);
 
-    const task = registry.start({
+    const task = await registry.start({
       documentUri: 'file:///workspace/demo.otio',
       sessionId: 'session-1',
       sourceRevision: 4,
@@ -28,6 +30,7 @@ describe('CutExportTaskRegistry', () => {
 
     expect(task.status).toBe('running');
     expect(registry.list('file:///workspace/demo.otio')).toHaveLength(1);
+    await vi.waitFor(() => expect(finish).toBeDefined());
     finish?.();
     await vi.waitFor(() => expect(registry.get('job-1')?.status).toBe('completed'));
     expect(updates).toHaveBeenLastCalledWith(
@@ -36,12 +39,9 @@ describe('CutExportTaskRegistry', () => {
   });
 
   it('cancels only the explicit job owned by the requested document', async () => {
-    const registry = new CutExportTaskRegistry(
-      () => undefined,
-      () => 'job-1',
-    );
+    const registry = createRegistry(() => undefined);
     let signal: AbortSignal | undefined;
-    registry.start({
+    await registry.start({
       documentUri: 'file:///workspace/demo.otio',
       sessionId: 'session-1',
       sourceRevision: 1,
@@ -63,20 +63,18 @@ describe('CutExportTaskRegistry', () => {
       },
     });
 
-    expect(() => registry.cancel('file:///workspace/other.otio', 'job-1')).toThrow(
+    await expect(registry.cancel('file:///workspace/other.otio', 'job-1')).rejects.toThrow(
       'does not belong',
     );
-    registry.cancel('file:///workspace/demo.otio', 'job-1');
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    await registry.cancel('file:///workspace/demo.otio', 'job-1');
     expect(signal?.aborted).toBe(true);
     expect(registry.get('job-1')?.status).toBe('cancelled');
   });
 
   it('publishes a structured failure diagnostic without exposing the raw provider message', async () => {
-    const registry = new CutExportTaskRegistry(
-      () => undefined,
-      () => 'job-1',
-    );
-    registry.start({
+    const registry = createRegistry(() => undefined);
+    await registry.start({
       documentUri: 'file:///workspace/demo.otio',
       sessionId: 'session-1',
       sourceRevision: 1,
@@ -104,3 +102,12 @@ describe('CutExportTaskRegistry', () => {
     expect(registry.get('job-1')).not.toHaveProperty('error');
   });
 });
+
+function createRegistry(onUpdate: (task: CutExportTaskSnapshot) => void): CutExportTaskRegistry {
+  return new CutExportTaskRegistry({
+    store: createInMemoryExportJobStore(),
+    onUpdate,
+    createJobId: () => 'job-1',
+    pollIntervalMs: 1,
+  });
+}

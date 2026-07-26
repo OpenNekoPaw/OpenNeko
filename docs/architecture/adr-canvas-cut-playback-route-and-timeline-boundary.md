@@ -4,7 +4,7 @@
 日期：2026-06-24
 范围：`neko-canvas`、`neko-cut`、`neko-preview`、`neko-agent`、共享类型契约、`.nkc` / `.nkv` 项目文件关系。
 
-部分取代说明（2026-07-22）：本文只保留 Canvas 播放路线、Canvas 权威和 Canvas → Cut 单次快照原则。本文后续出现的 Cut `.nkv` 权威、专业多轨能力、`CanvasCutDraftPayload` 字段、`TimelineSync`、active/recent Cut 目标、持续同步和 Agent Cut 操作均已由 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 取代，不得作为新实现依据。新 v1 交接只允许有序 media/gap draft，并要求“创建新 `.otio`”或显式指定 `.otio` URI/revision。
+部分取代说明（2026-07-22）：本文只保留 Canvas 播放路线、Canvas 权威和 Canvas → Cut 单次快照原则。本文后续出现的 Cut `.nkv` 权威、专业多轨能力、`CanvasCutDraftPayload` 字段、`TimelineSync`、active/recent Cut 目标、持续同步和 Agent Cut 操作均已由 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 取代，不得作为新实现依据。新 v1 交接只允许有序 media/gap draft，并要求“创建新 `.otio`”或显式指定 `.otio` URI/revision。Desktop 的后续媒体目标另由 [`adr-cut-otio-vscode-desktop-media-runtime-boundary.md`](adr-cut-otio-vscode-desktop-media-runtime-boundary.md) 约束。
 
 部分取代说明（2026-07-25）：Canvas 当前只从 Markdown、Media 和 Group 的显式
 顺序生成通用 Preview，不再提供 Route Storyboard Matrix、Scene/Shot 或 Narrative

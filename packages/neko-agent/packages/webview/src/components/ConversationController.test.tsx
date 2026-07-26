@@ -32,10 +32,11 @@ const vscodeMocks = vi.hoisted(() => ({
   activateConversation: vi.fn(),
   deleteConversation: vi.fn(),
   searchProjectFiles: vi.fn(),
+  startCharacterDialogueFromSlash: vi.fn(),
+  confirmRoleplayCandidate: vi.fn(),
   getSettings: vi.fn(),
   getConversationSnapshot: vi.fn(),
   getContextTokenCount: vi.fn(),
-  getTasks: vi.fn(),
   getMessageQueue: vi.fn(),
 }));
 
@@ -139,6 +140,7 @@ vi.mock('@/components/ChatWorkspace', () => ({
     contextTokenCount?: number;
     workItems?: readonly AgentWorkItem[];
     handleMessage?: (event: MessageEvent) => void;
+    onUserMessageSent?: (event: { conversationId: string; message: Message }) => void;
     pendingSendRequest?: {
       id: number;
       input: { messageText?: string; contextPayloads?: AgentContextPayload[] };
@@ -264,6 +266,21 @@ vi.mock('@/components/ChatWorkspace', () => ({
         <span data-testid={testId('workspace-work-items')}>
           {props.workItems?.map((item) => item.title).join('|') ?? ''}
         </span>
+        <button
+          type="button"
+          data-testid={testId('emit-user-message-sent')}
+          onClick={() =>
+            props.onUserMessageSent?.({
+              conversationId: tabRenderSnapshot.snapshot.conversationId,
+              message: {
+                id: `user-${tabRenderSnapshot.snapshot.tabId}`,
+                role: 'user',
+                content: 'generate image',
+                timestamp: 1,
+              },
+            })
+          }
+        />
         <span data-testid={testId('workspace-viewport')}>
           {tabRenderSnapshot.snapshot.state.viewport.followMode}:
           {tabRenderSnapshot.snapshot.state.viewport.anchorMessageId ?? 'none'}:
@@ -489,6 +506,73 @@ describe('ConversationController entry state', () => {
     });
     expect(screen.getByRole('heading', { name: 'OpenNeko Creative Assistant' })).toBeTruthy();
     expect(screen.getByTestId('entry-page-menu').textContent).toBe('roleplay');
+  });
+
+  it('starts a confirmed role session from the Header without creating an ordinary conversation', () => {
+    vi.clearAllMocks();
+    const setMentionItems = vi.fn();
+    render(
+      <ConversationController
+        {...createProps({
+          mentionItems: [
+            {
+              id: 'entity:char-xiaoju',
+              kind: 'entity',
+              label: 'Xiaoju',
+              entityType: 'character',
+            },
+          ],
+        })}
+        setMentionItems={setMentionItems}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Role Sessions' }));
+
+    expect(setMentionItems).toHaveBeenCalledWith([]);
+    expect(vscodeMocks.searchProjectFiles).toHaveBeenCalledWith('', undefined, {
+      purpose: 'roleplay',
+    });
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Role Xiaoju' }));
+
+    expect(vscodeMocks.startCharacterDialogueFromSlash).toHaveBeenCalledWith(
+      'entity:char-xiaoju --roleplay --skip-enrich',
+    );
+    expect(vscodeMocks.confirmRoleplayCandidate).not.toHaveBeenCalled();
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+  });
+
+  it('confirms an exact roleplay Candidate from the Header without optimistic session creation', () => {
+    vi.clearAllMocks();
+    render(
+      <ConversationController
+        {...createProps({
+          mentionItems: [
+            {
+              id: 'entity:entity-projection:semantic-ling',
+              kind: 'entity',
+              label: 'Ling',
+              entityType: 'character',
+              navigationData: {
+                candidateId: 'candidate:auto:character:Ling',
+                projectSearchItemId: 'entity-projection:semantic-ling',
+              },
+            },
+          ],
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start Role Ling' }));
+
+    expect(vscodeMocks.confirmRoleplayCandidate).toHaveBeenCalledWith({
+      projectSearchItemId: 'entity-projection:semantic-ling',
+    });
+    expect(vscodeMocks.startCharacterDialogueFromSlash).not.toHaveBeenCalled();
+    expect(vscodeMocks.newConversation).not.toHaveBeenCalled();
+    expect(screen.getByTestId('tab-count').textContent).toBe('0');
   });
 
   it('does not create a chat tab when the asset generation picker is closed without a selection', () => {
@@ -1267,7 +1351,53 @@ describe('ConversationController entry state', () => {
     expect(screen.getByTestId('workspace-agent-state').textContent).toBe('acting:1000:ReadFile');
   });
 
-  it('disposes only the deleted background conversation render resources', () => {
+  it('clears direct-media Tab running status when the Host publishes terminal idle', () => {
+    render(<ConversationController {...createProps()} />);
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'tabState',
+            tabState: {
+              openTabs: [{ id: 'tab-a', title: 'Image', conversationId: 'conv-a' }],
+              activeTabId: 'tab-a',
+            },
+          },
+        }),
+      );
+    });
+
+    fireEvent.click(screen.getByTestId('emit-user-message-sent'));
+    expect(screen.getByTestId('tab-status-tab-a').textContent).toBe('running');
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'agentPhase',
+            conversationId: 'conv-a',
+            phase: 'thinking',
+            timestamp: 1_000,
+          },
+        }),
+      );
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'agentPhase',
+            conversationId: 'conv-a',
+            phase: 'idle',
+            timestamp: 2_000,
+          },
+        }),
+      );
+    });
+
+    expect(screen.getByTestId('tab-status-tab-a').textContent).toBe('completed');
+  });
+
+  it('disposes only the deleted non-visible conversation render resources', () => {
     vi.clearAllMocks();
     render(
       <ConversationController
@@ -1783,6 +1913,7 @@ interface CreatePropsOptions {
   readonly workItemsByConversation?: Map<string, Map<string, AgentWorkItem>>;
   readonly settings?: SettingsState;
   readonly hasConfigSnapshot?: boolean;
+  readonly mentionItems?: readonly import('@/components/ChatView/InputArea/types').MentionItem[];
 }
 
 function createProps(
@@ -1794,7 +1925,7 @@ function createProps(
     setSettings: vi.fn(),
     setHasConfigSnapshot: vi.fn(),
     setProjectFiles: vi.fn(),
-    mentionItems: [],
+    mentionItems: [...(options.mentionItems ?? [])],
     setMentionItems: vi.fn(),
     mentionSearchFilter: '',
     setMentionSearchFilter: vi.fn(),
@@ -1811,6 +1942,14 @@ function createProps(
         <button type="button" onClick={props.onNewChat}>
           New
         </button>
+        <button type="button" onClick={props.onRequestRoleplayItems}>
+          Open Role Sessions
+        </button>
+        {props.roleplayItems.map((item) => (
+          <button key={item.id} type="button" onClick={() => props.onSelectRoleplayItem(item)}>
+            Start Role {item.label}
+          </button>
+        ))}
         {props.tabs.map((tab) => (
           <div key={tab.id}>
             <button type="button" onClick={() => props.onSwitchTab(tab.id)}>
@@ -1857,11 +1996,15 @@ function projectionSnapshot(conversationId: string, messageId: string, content: 
     turns: [
       {
         turnId: `turn-${conversationId}`,
+
+        runId: 'run-a',
         messageId,
         items: [
           {
             conversationId,
             turnId: `turn-${conversationId}`,
+
+            runId: 'run-a',
             messageId,
             itemId: 'text-1',
             sequence: 1,

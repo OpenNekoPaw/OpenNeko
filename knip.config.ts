@@ -65,6 +65,7 @@ const config: KnipConfig = {
         'scripts/proto-gen-ts.mjs',
         'scripts/smoke-vscode-targets.mjs',
         'scripts/smoke-webview-builds.mjs',
+        'scripts/stage-openneko-dev-extension.mjs',
         'scripts/test-orchestration/fixtures/*.ts',
         'scripts/test-orchestration/vscode-debug-config.local.mjs',
       ],
@@ -101,6 +102,17 @@ const config: KnipConfig = {
       entry: ['src/index.ts', 'src/document/index.ts'],
     },
     'packages/neko-client': {},
+    'packages/neko-chara': {
+      entry: [
+        'src/index.ts',
+        'src/application/index.ts',
+        'src/core/index.ts',
+        'src/host-vscode/index.ts',
+        'src/testing/index.ts',
+      ],
+    },
+    'packages/neko-generation': {},
+    'packages/neko-quality': {},
     'packages/neko-entity': {
       entry: [
         'src/index.ts',

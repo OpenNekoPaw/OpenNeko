@@ -1,4 +1,5 @@
 export const IMAGE_GENERATION_TOOLS = [
+  'generateimage',
   'generate_image',
   'image_generation',
   'create_image',
@@ -6,6 +7,7 @@ export const IMAGE_GENERATION_TOOLS = [
 ] as const;
 
 export const VIDEO_GENERATION_TOOLS = [
+  'generatevideo',
   'generate_video',
   'video_generation',
   'create_video',
@@ -13,6 +15,9 @@ export const VIDEO_GENERATION_TOOLS = [
 ] as const;
 
 export const AUDIO_GENERATION_TOOLS = [
+  'generateaudio',
+  'generatemusic',
+  'generatetts',
   'generate_audio',
   'audio_generation',
   'create_audio',

@@ -9,8 +9,7 @@
     "canonicalPath": [
       "explicit non-vision chat model",
       "Pi agent.main turn snapshot",
-      "GenerateImage",
-      "task result",
+      "terminal GenerateImage Tool result",
       "stable ResourceRef",
       "perception.image.understand",
       "image.understand purpose snapshot"
@@ -18,7 +17,7 @@
     "forbiddenFallback": [
       "guess from generation prompt",
       "native vision assumption",
-      "unobserved task result",
+      "unobserved terminal Tool result",
       "perception.perceive",
       "model-authored provider or model id",
       "absolute or cache path"
@@ -32,7 +31,7 @@
       }
     ],
     "expectedResult": "The non-vision main model routes the stable delivered image reference through perception.image.understand using the exact image.understand purpose snapshot before analysis.",
-    "expectedFailure": "Model fallback, missing task result, absent perception call, or guessed output fails."
+    "expectedFailure": "Model fallback, missing terminal GenerateImage Tool result, absent perception call, or guessed output fails."
   },
   "fixtureRefs": ["empty-workspace"],
   "runtimeProfileId": "canonical-default",
@@ -66,10 +65,10 @@
       "evidenceRef": "perception-facts"
     },
     {
-      "id": "task",
-      "kind": "task-terminal",
-      "taskType": "image_generation",
-      "status": "completed",
+      "id": "generate-image",
+      "kind": "tool-call",
+      "name": "GenerateImage",
+      "status": "success",
       "evidenceRef": "perception-facts"
     },
     {
@@ -84,6 +83,12 @@
       "kind": "final-answer",
       "mode": "contains",
       "text": ["猫", "画面"],
+      "evidenceRef": "perception-facts"
+    },
+    {
+      "id": "terminal",
+      "kind": "terminal-idle",
+      "concerns": ["turnIdle", "continuationQueueIdle"],
       "evidenceRef": "perception-facts"
     }
   ],

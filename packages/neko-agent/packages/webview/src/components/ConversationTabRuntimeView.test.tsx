@@ -139,6 +139,8 @@ describe('ConversationTabRuntimeView', () => {
           baseProjectionVersion: 1,
           projectionVersion: 2,
           turnId: 'turn-1',
+
+          runId: 'run-a',
           messageId,
           operations: [
             {
@@ -146,6 +148,8 @@ describe('ConversationTabRuntimeView', () => {
               item: {
                 conversationId: 'conv-a',
                 turnId: 'turn-1',
+
+                runId: 'run-a',
                 messageId,
                 itemId: 'text-1',
                 sequence: 1,
@@ -209,6 +213,8 @@ describe('ConversationTabRuntimeView', () => {
           turns: [
             {
               turnId: 'turn-1',
+
+              runId: 'run-a',
               messageId: 'message-1',
               items: [projectionTextItem('tab-owned answer')],
             },
@@ -228,6 +234,15 @@ describe('ConversationTabRuntimeView', () => {
         tabRenderStore: runtime.store,
       }),
     );
+    expect(view.container.querySelector('[data-agent-tab-runtime="tab-a"]')).toMatchObject({
+      dataset: expect.objectContaining({
+        agentProjectionAttachment: 'attachment-a',
+        agentProjectionEndpoint: 'endpoint-1',
+        agentProjectionPhase: 'live',
+        agentProjectionSequence: '0',
+        agentProjectionVersion: '1',
+      }),
+    });
 
     view.rerender(<ConversationTabRuntimeView {...props} visible={false} />);
 
@@ -340,6 +355,8 @@ function projectionSnapshot(content: string) {
     turns: [
       {
         turnId: 'turn-1',
+
+        runId: 'run-a',
         messageId: 'message-1',
         items: [projectionTextItem(content)],
       },
@@ -351,6 +368,8 @@ function projectionTextItem(content: string) {
   return {
     conversationId: 'conv-a',
     turnId: 'turn-1',
+
+    runId: 'run-a',
     messageId: 'message-1',
     itemId: 'text-1',
     sequence: 1,

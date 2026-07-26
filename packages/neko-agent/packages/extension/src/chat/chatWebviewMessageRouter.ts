@@ -5,7 +5,6 @@ import { tryHandleMessageRoute } from './router/messageRoutes';
 import { tryHandleProjectionRoute } from './router/projectionRoutes';
 import { tryHandleSettingsRoute } from './router/settingsRoutes';
 import { tryHandleSkillContextRoute } from './router/skillContextRoutes';
-import { tryHandleTaskRoute } from './router/taskRoutes';
 import type { ChatWebviewMessageRouterDeps } from './router/types';
 import type { CONFIG_BRIDGE_MESSAGE_TYPES } from '../services/configBridge';
 
@@ -41,10 +40,6 @@ export const CHAT_WEBVIEW_MESSAGE_ROUTER_TYPES = [
   'updateSettings',
   'getTabState',
   'updateTabState',
-  'getTasks',
-  'cancelTask',
-  'retryTask',
-  'viewTaskResult',
   'openFile',
   'revealDocumentLocator',
   'revealFile',
@@ -87,7 +82,6 @@ const routeHandlers = [
   tryHandleMessageRoute,
   tryHandleConversationRoute,
   tryHandleSettingsRoute,
-  tryHandleTaskRoute,
   tryHandleFileAndPluginRoute,
   tryHandleSkillContextRoute,
 ] as const;

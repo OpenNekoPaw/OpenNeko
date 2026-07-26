@@ -2,9 +2,7 @@
  * AI Assistant View Provider
  * Main entry point - orchestrates all components
  *
- * Refactored to use specialized handlers for different domains:
- * - TaskHandler: Task management
- * - TemplateHandler: Template execution
+ * Refactored to use specialized handlers for different domains.
  */
 
 import * as vscode from 'vscode';
@@ -16,7 +14,6 @@ import type { IAgentManager } from '../ai/agentManager';
 import { IEditorRegistry } from '../editor/common/editorRegistry';
 import {
   IPlatform,
-  ITaskManager,
   IAgentManager as IAgentManagerId,
   IPiAgentRuntimeManager,
   IProductPurposeTextRuntime,
@@ -25,11 +22,14 @@ import { SettingsManager } from './settingsManager';
 import { ProviderManager } from './providerManager';
 import { ConversationBridge, type ConversationBridgeOptions } from './conversationBridge';
 import { AgentMessageTurnHandler } from './agentMessageTurnHandler';
-import { SystemPromptManager } from './systemPromptManager';
+import {
+  createSystemPromptBuilder,
+  runSystemPromptAgentsFileLoadRuntime,
+  type SystemPromptBuilder,
+} from '@neko/agent';
 import { ConfigBridge } from '../services/configBridge';
 import { DragDropBroker } from '../services/DragDropBroker';
 import {
-  TaskHandler,
   SkillHandler,
   FileOperationHandler,
   SettingsHandler,
@@ -48,28 +48,27 @@ import {
   requireActiveConversationTabBinding,
   updateTabStateRuntime,
 } from '@neko/agent/runtime';
-import type { IRuntimeTaskManager } from '@neko/agent';
 import { setActiveCanvasAmbientScope } from '../services/canvasAmbientContext';
 import { postPluginsAvailable } from '../services/pluginTransferBridge';
-import { AgentWorkItemProjectionSource } from '../services/workItemProjectionSource';
 import {
   CharacterDialogueController,
   defaultEnrichCharacterProfile,
-} from './characterDialogueController';
-import { EmbodyCharacterController } from './embodyCharacterController';
+  EmbodyCharacterController,
+  type CharacterDialogueExitResult,
+  type CharacterDialogueLaunchResult,
+} from '@neko/chara/host-vscode';
 import {
   createCharacterDialoguePurposeResponder,
   createEmbodyCharacterPurposeResponder,
   evaluateCharacterDialogueWithPurpose,
   inferCharacterProfileFactsWithPurpose,
   requireCharacterPurposeRuntime,
-} from '@neko/entity';
+} from '@neko/chara/application';
 import {
   createAgentLocalResourceAccess,
   type AgentLocalResourceAccess,
 } from '../services/localResourceAccess';
-import type { GeneratedAssetIndex } from '@neko/platform/media/generated-asset-index';
-import { StateTaskDeliveryCursorStorage, TaskDeliveryBridge } from '../services/taskDeliveryBridge';
+import type { GeneratedAssetCatalog } from '@neko/platform/media/generated-asset-index';
 import { handleChatWebviewMessage } from './chatWebviewMessageRouter';
 import {
   createConversationProjectionAttachmentServer,
@@ -92,13 +91,12 @@ import {
   type ProjectionAttachmentKey,
   type TabState,
 } from '@neko-agent/types';
-import type {
-  AgentTaskResultFollowUpRequest,
-  ICapabilityPurposeTextRuntime,
-  NpcAgentWorkflowRequest,
-} from '@neko/shared';
+import type { ICapabilityPurposeTextRuntime, NpcAgentWorkflowRequest } from '@neko/shared';
+import type { GeneratedAsset, GeneratedOutputContentLocator } from '@neko/shared';
+import type { GenerationJobPort } from '@neko/generation';
 import { updateWebviewKeyboardEditableOwner } from '@neko/shared/vscode/extension';
 import { readAgentWebviewAssetPaths } from './webviewAssetManifest';
+import { VSCodeCharacterPurposeModelConfigurator } from '../ai/vscodeCharacterPurposeModelConfigurator';
 
 const logger = getLogger('ChatProvider');
 const AGENT_KEYBOARD_EDITABLE_CONTEXT = 'neko.agent.keyboardEditable';
@@ -115,10 +113,6 @@ const SESSION_SCOPED_WEBVIEW_MESSAGE_TYPES = new Set([
   'promoteQueuedMessage',
   'cancelQueuedMessage',
   'editQueuedMessage',
-  'getTasks',
-  'cancelTask',
-  'retryTask',
-  'viewTaskResult',
   'getContextTokenCount',
   'compressContext',
   'invokeSlashCommand',
@@ -228,6 +222,7 @@ function resolvePiConversationOptions(
       deleteConversation: (conversationId) => requireAuthority().deleteConversation(conversationId),
       readConversationEntries: (conversationId) =>
         requireAuthority().readConversationEntries(conversationId),
+      checkpointExternalTurn: (input) => requireAuthority().checkpointExternalTurn(input),
     },
   };
 }
@@ -241,7 +236,12 @@ export function createChatLocalResourceAccess(
 
 export interface ChatViewProviderOptions {
   readonly localResourceAccess?: AgentLocalResourceAccess;
-  readonly generatedAssetIndex?: GeneratedAssetIndex;
+  readonly generatedAssetCatalog?: GeneratedAssetCatalog;
+  readonly generationJobs?: GenerationJobPort;
+  readonly resolveGenerationResult?: (locator: GeneratedOutputContentLocator) => {
+    readonly path: string;
+    readonly asset: GeneratedAsset;
+  };
   readonly piConversations?: ConversationBridgeOptions;
   readonly localMetadata?: {
     readonly workspaceId: string;
@@ -261,7 +261,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 
   // Managers
   private readonly _settings: SettingsManager;
-  private readonly _systemPrompt: SystemPromptManager;
+  private readonly _systemPromptBuilder: SystemPromptBuilder;
   private readonly _conversations: ConversationBridge;
   private _providers?: ProviderManager;
   private _messages?: AgentMessageTurnHandler;
@@ -272,7 +272,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   private _tabStateRevision = 0;
 
   // Handlers
-  private readonly _taskHandler: TaskHandler;
   private readonly _skillHandler: SkillHandler;
   private readonly _fileOperationHandler: FileOperationHandler;
   private readonly _settingsHandler: SettingsHandler;
@@ -305,12 +304,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   private _editorRegistry?: IEditorRegistry;
   private _platform?: Platform;
   private _productPurposeText?: ICapabilityPurposeTextRuntime;
-  private _taskManager?: IRuntimeTaskManager;
+  private _characterPurposeModels?: VSCodeCharacterPurposeModelConfigurator;
   private _configBridge?: ConfigBridge;
   private readonly _localResourceAccess: AgentLocalResourceAccess;
-  private readonly _generatedAssetIndex: GeneratedAssetIndex | undefined;
-  private readonly _workItemProjections = new AgentWorkItemProjectionSource();
-  private readonly _taskDeliveryBridge: TaskDeliveryBridge;
+  private readonly _generatedAssetCatalog: GeneratedAssetCatalog | undefined;
   // Note: _routerAskBroker and _workflowPlanHandler were removed alongside
   // the workflow/orchestrator layer. Pipeline intents now flow through the
   // Agent + Skill stack; no separate plan handler is needed.
@@ -338,27 +335,25 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   ) {
     // Initialize managers
     this._settings = new SettingsManager(undefined, _context.workspaceState);
-    this._systemPrompt = new SystemPromptManager();
-    this._systemPrompt.setLocale(vscode.env.language);
+    this._systemPromptBuilder = createSystemPromptBuilder({ locale: vscode.env.language });
     this._localResourceAccess =
       this._options.localResourceAccess ?? createChatLocalResourceAccess(_extensionUri, _context);
-    this._generatedAssetIndex = this._options.generatedAssetIndex;
+    this._generatedAssetCatalog = this._options.generatedAssetCatalog;
     this._conversations = new ConversationBridge(
       getCurrentWorkspaceRoot,
       this._localResourceAccess,
       () => getCapabilityRuntimeBindings().contentAccessRuntime,
-      resolvePiConversationOptions(this._options.piConversations),
+      {
+        ...resolvePiConversationOptions(this._options.piConversations),
+        onConversationTitleChanged: (conversationId, title) =>
+          this._synchronizeConversationTabTitle(conversationId, title),
+        ...(this._options.resolveGenerationResult
+          ? { resolveGenerationResult: this._options.resolveGenerationResult }
+          : {}),
+      },
     );
 
-    this._taskDeliveryBridge = new TaskDeliveryBridge({
-      projectionSource: this._workItemProjections.projectionSource,
-      cursorStorage: new StateTaskDeliveryCursorStorage(
-        'neko.agent.taskDeliveryCursors',
-        this._context.globalState,
-      ),
-    });
     // Initialize handlers with empty deps (will be updated after service init)
-    this._taskHandler = new TaskHandler({});
     this._skillHandler = new SkillHandler({});
     this._fileOperationHandler = new FileOperationHandler({});
     this._settingsHandler = new SettingsHandler({});
@@ -373,11 +368,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     });
     this._characterDialogue = new CharacterDialogueController({
       getWebview: () => this._view?.webview,
+      getConversationProjection: (conversationId) => {
+        if (!this._agentManager) {
+          throw new Error('AgentManager is required for Character Dialogue projection.');
+        }
+        return this._agentManager.getOrCreateProjection(conversationId);
+      },
       getProjectRoot: () => getCurrentWorkspaceRoot(),
       createResponder: () =>
         createCharacterDialoguePurposeResponder(
           requireCharacterPurposeRuntime(this._productPurposeText, 'Character Dialogue'),
         ),
+      preparePurposeModels: () => this._prepareCharacterPurposeModels(),
       evaluateTranscript: ({ artifact }) =>
         evaluateCharacterDialogueWithPurpose(
           requireCharacterPurposeRuntime(this._productPurposeText, 'Character evaluation'),
@@ -404,11 +406,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     });
     this._embodyCharacter = new EmbodyCharacterController({
       getWebview: () => this._view?.webview,
+      getConversationProjection: (conversationId) => {
+        if (!this._agentManager) {
+          throw new Error('AgentManager is required for Embody Character projection.');
+        }
+        return this._agentManager.getOrCreateProjection(conversationId);
+      },
       getProjectRoot: () => getCurrentWorkspaceRoot(),
       createResponder: () =>
         createEmbodyCharacterPurposeResponder(
           requireCharacterPurposeRuntime(this._productPurposeText, 'Embody Character'),
         ),
+      preparePurposeModels: () => this._prepareCharacterPurposeModels(),
       getTabState: () => this._tabState,
       updateTabState: (openTabs, activeTabId) => this._updateTabState(openTabs, activeTabId),
       sendTabState: () => this._sendTabState(),
@@ -418,12 +427,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     // restore filtering checks whether persisted role-session tabs are live.
     this._loadTabState();
 
-    this._context.subscriptions.push(this._workItemProjections);
     this._slashCommandHandler = new SlashCommandHandler({
       conversations: this._conversations,
       settings: this._settings,
       skillHandler: this._skillHandler,
-      taskHandler: this._taskHandler,
       contextHandler: this._contextHandler,
       settingsHandler: this._settingsHandler,
       characterDialogue: this._characterDialogue,
@@ -443,17 +450,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
       this._editorRegistry = getService(IEditorRegistry);
       this._platform = getService(IPlatform);
       this._productPurposeText = getService(IProductPurposeTextRuntime);
-      this._taskManager = getService(ITaskManager);
 
       if (this._platform) {
+        this._characterPurposeModels = new VSCodeCharacterPurposeModelConfigurator(
+          this._platform.config,
+        );
         // Inject ConfigManager into SettingsManager (late binding)
         this._settings.setConfigManager(this._platform.config);
 
-        // Inject Platform into SystemPromptManager
-        this._systemPrompt.setPlatform(this._platform);
-
-        // Load AGENTS.md content
-        this._systemPrompt.loadAgentsFile().catch((err) => {
+        runSystemPromptAgentsFileLoadRuntime(
+          { workspacePath: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath },
+          { builder: this._systemPromptBuilder },
+        ).catch((err) => {
           logger.error('Failed to load AGENTS.md:', err);
         });
 
@@ -467,15 +475,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
           this._conversations,
           this._agentManager,
           this._editorRegistry,
-          (_conversationId, executionMode) => this._systemPrompt.getPrompt(executionMode),
+          (_conversationId, executionMode) =>
+            this._systemPromptBuilder.buildForExecutionMode(executionMode),
           this._platform,
-          this._taskManager,
           undefined,
-          this._workItemProjections,
           this._localResourceAccess,
           {
-            generatedAssetIndex: this._generatedAssetIndex,
             workspaceId: this._options.localMetadata?.workspaceId,
+            generationJobs: this._options.generationJobs,
+            resolveGenerationResult: this._options.resolveGenerationResult,
           },
         );
         const piRuntime = getService(IPiAgentRuntimeManager);
@@ -488,21 +496,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
           listSkills: () => piRuntime.listSkillCatalog(),
           invoke: (webview, request) => this._messages!.handleUserMessage(webview, request),
         });
-        this._workItemProjections.updateDeps({
-          platform: this._platform,
-          taskManager: this._taskManager,
-        });
-
         // Update handler dependencies via type-safe updateDeps()
-        this._taskHandler.updateDeps({
-          taskManager: this._taskManager,
-          workItemProjections: this._workItemProjections,
-          localResourceAccess: this._localResourceAccess,
-          generatedAssetLookup: this._generatedAssetIndex,
-        });
         this._fileOperationHandler.updateDeps({
           platform: this._platform,
-          generatedAssetLookup: this._generatedAssetIndex,
+          generatedAssetLookup: this._generatedAssetCatalog,
         });
         this._settingsHandler.updateDeps({
           platform: this._platform,
@@ -555,14 +552,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
       webviewView.onDidChangeVisibility(() => {
         if (webviewView.visible) {
           this._restoreState();
-          this._replayUndeliveredTasks();
         } else {
           void this._setKeyboardFocused(false);
         }
       }),
     );
-
-    this._replayUndeliveredTasks();
   }
 
   /**
@@ -660,44 +654,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     }
   }
 
-  private async _requestTaskResultContinuation(
-    request: AgentTaskResultFollowUpRequest,
-  ): Promise<void> {
-    const continueLabel = vscode.l10n.t('Continue');
-    const selected = await vscode.window.showInformationMessage(
-      vscode.l10n.t('Agent task {0} finished and is ready to continue.', request.taskId),
-      continueLabel,
-    );
-    if (selected !== continueLabel) {
-      return;
-    }
-    await this._dispatchTaskResultContinuation(request);
-  }
-
-  private async _dispatchTaskResultContinuation(
-    request: AgentTaskResultFollowUpRequest,
-  ): Promise<void> {
-    if (!this._messages) {
-      throw new Error('Cannot dispatch task-result continuation before message handler is ready');
-    }
-    if (!this._conversations.get(request.conversationId)) {
-      throw new Error(
-        `Cannot dispatch task-result continuation for unknown conversation: ${request.conversationId}`,
-      );
-    }
-
-    await vscode.commands.executeCommand(NEKO_AI_ASSISTANT_FOCUS_COMMAND);
-    const webview = this._view?.webview;
-    if (!webview) {
-      throw new Error('Cannot dispatch task-result continuation without an assistant webview');
-    }
-
-    this._conversations.switchTo(request.conversationId);
-    this._syncCanvasAmbientScopeFromActiveConversation();
-    void this._conversationMessageHandler.sendActiveConversation();
-    await this._messages.handleTaskResultContinuation(webview, request);
-  }
-
   /**
    * Push the current plugin slash command list to the webview.
    * Called on initial load and whenever the SlashCommandRegistry changes.
@@ -747,7 +703,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
       webview,
       endpointEpoch,
     );
-
     // Register webview for broadcasts (skills, commands, etc.)
     const postMessageFn = (msg: unknown) => webview.postMessage(msg);
     if (this._configBridge) {
@@ -803,7 +758,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
           messages: this._messages,
           characterDialogue: this._characterDialogue,
           embodyCharacter: this._embodyCharacter,
-          taskHandler: this._taskHandler,
           skillHandler: this._skillHandler,
           fileOperationHandler: this._fileOperationHandler,
           settingsHandler: this._settingsHandler,
@@ -849,6 +803,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
           contentAccessRuntime: getCapabilityRuntimeBindings().contentAccessRuntime,
           localMediaCaller: 'neko-agent.projection-attachment',
           documentResourceCaller: 'neko-agent.projection-document-resource',
+          ...(this._options.resolveGenerationResult
+            ? { resolveGenerationResult: this._options.resolveGenerationResult }
+            : {}),
         });
         return Boolean(await webview.postMessage(projectedFrame));
       },
@@ -908,7 +865,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     if (this._webviewReady) return;
     this._webviewReady = true;
     this._flushPendingMessages();
-    this._replayUndeliveredTasks();
   }
 
   private _refreshConfigSnapshot(
@@ -954,14 +910,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
           break;
         case 'postTabState':
           webview?.postMessage(action.message);
-          break;
-        case 'sendActiveConversationTasks':
-          if (webview) {
-            const conversationId = this._conversations.getActiveId();
-            if (conversationId) {
-              this._taskHandler.sendTasks(webview, conversationId);
-            }
-          }
           break;
         case 'sendAgentStateSnapshot':
           if (webview) {
@@ -1049,6 +997,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     this._view.webview.postMessage(
       buildChatTabStateMessage(this._tabState, this._tabStateRevision),
     );
+  }
+
+  private _synchronizeConversationTabTitle(conversationId: string, title: string): void {
+    let changed = false;
+    const openTabs = this._tabState.openTabs.map((tab) => {
+      const isOrdinaryTab = tab.kind === undefined || tab.kind === 'chat';
+      if (!isOrdinaryTab || tab.conversationId !== conversationId || tab.title === title) {
+        return tab;
+      }
+      changed = true;
+      return { ...tab, title };
+    });
+    if (!changed) return;
+
+    this._tabState = { ...this._tabState, openTabs };
+    this._saveTabState();
+    this._sendTabState();
   }
 
   private _bindCreatedConversationToForegroundTab(conversationId: string): void {
@@ -1273,9 +1238,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 
   public async startCharacterDialogue(
     request: import('@neko/shared').NpcTestBenchLaunchRequest,
-  ): Promise<import('./characterDialogueController').CharacterDialogueLaunchResult | null> {
+  ): Promise<CharacterDialogueLaunchResult | null> {
     await vscode.commands.executeCommand(NEKO_AI_ASSISTANT_FOCUS_COMMAND);
     return this._characterDialogue.launch(request);
+  }
+
+  private _prepareCharacterPurposeModels(): Promise<void> {
+    const configurator = this._characterPurposeModels;
+    if (!configurator) {
+      throw new Error('Character purpose model configuration is unavailable.');
+    }
+    return configurator.prepare();
   }
 
   public refreshSharedMetadata(): Promise<void> {
@@ -1288,19 +1261,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
 
   private async _refreshSharedMetadata(): Promise<void> {
     const pollRevisions = this._options.localMetadata?.pollRevisions;
-    const result = pollRevisions ? await pollRevisions() : { changedDomains: [] };
-    const changedDomains = new Set(result.changedDomains);
+    await pollRevisions?.();
     const reconciled = await this._conversations.refreshFromPiAuthority();
     if (reconciled.upsertedIds.length > 0 || reconciled.removedIds.length > 0) {
       this._conversationMessageHandler.sendConversationList();
-    }
-    if (changedDomains.has('tasks') && this._taskManager) {
-      await this._taskManager.initialize();
-      const webview = this._view?.webview;
-      const conversationId = this._conversations.getActiveId();
-      if (webview && conversationId) {
-        await this._taskHandler.sendTasks(webview, conversationId);
-      }
     }
   }
 
@@ -1312,9 +1276,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     });
   }
 
-  public exitCharacterDialogue(
-    sessionId?: string,
-  ): Promise<import('./characterDialogueController').CharacterDialogueExitResult | null> {
+  public exitCharacterDialogue(sessionId?: string): Promise<CharacterDialogueExitResult | null> {
     return sessionId
       ? this._characterDialogue.exit(sessionId)
       : this._characterDialogue.exitActive();
@@ -1388,7 +1350,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
       this._conversations.dispose();
     }
     this._localResourceAccess.dispose();
-    this._generatedAssetIndex?.dispose();
     this._configBridge?.dispose();
     this._configBridge = undefined;
 
@@ -1421,18 +1382,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
       this._pendingExternalMessage = null;
       webview.postMessage(buildChatExternalInputMessage({ message, autoSend }));
     }
-  }
-
-  private _replayUndeliveredTasks(): void {
-    const webview = this._view?.webview;
-    const conversationId = this._conversations.getActiveId();
-    if (!webview || !conversationId) {
-      return;
-    }
-
-    this._taskDeliveryBridge.replayConversation(conversationId, webview).catch((error) => {
-      logger.warn('Failed to replay undelivered task results', error);
-    });
   }
 
   private _disposeWebviewBindings(): void {

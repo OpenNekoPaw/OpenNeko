@@ -32,7 +32,7 @@ const currentRenderLifecycleOwners: readonly RenderLifecycleOwnerInventoryItem[]
   },
   {
     concern: 'conversation-cache',
-    currentOwner: 'ConversationRenderCoordinator with state projection adapter',
+    currentOwner: 'ConversationRenderCoordinator revisioned snapshot',
     lifecycleScope: 'conversation',
     writableFromBackground: true,
   },
@@ -86,14 +86,14 @@ describe('current conversation render lifecycle ownership', () => {
     ).toEqual(['conversation-cache', 'projection-attachment', 'markdown-registry']);
   });
 
-  it('keeps migrated conversation projections writable only through the state adapter', () => {
+  it('forbids transitional conversation projection Map mutation', () => {
     const directProjectionMutation =
       /conversation(?:Messages|Streaming)Ref\.current\.(?:set|delete|clear)\(/;
     const mutationOwners = collectProductionSourceFiles(srcRoot).filter((relativePath) =>
       directProjectionMutation.test(readFileSync(join(srcRoot, relativePath), 'utf8')),
     );
 
-    expect(mutationOwners).toEqual([stateProjectionAdapterPath]);
+    expect(mutationOwners).toEqual([]);
   });
 
   it('removes foreground activation adapters from the canonical render path', () => {

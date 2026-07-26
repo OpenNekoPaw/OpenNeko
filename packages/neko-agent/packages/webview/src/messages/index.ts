@@ -25,7 +25,7 @@ import type {
   SendMessageWebviewMessage,
   WebviewToExtensionMessage,
 } from '@neko-agent/types';
-import type { DocumentLocator, DocumentSourceRef, TaskRunScope } from '@neko/shared';
+import type { DocumentLocator, DocumentSourceRef } from '@neko/shared';
 import type { AgentContextType } from '@neko/shared';
 
 export type { AgentHostRuntimeAdapter, AgentHostRuntimeSubscription, VSCodeAPI };
@@ -257,34 +257,9 @@ export const AgentHostMessages = {
     postWebviewMessage({ type: 'exitEmbodyCharacterSession', sessionId });
   },
 
-  /** Request the list of background tasks */
-  getTasks: (conversationId: string) => {
-    postConversationMessage({ type: 'getTasks', conversationId });
-  },
-
   /** Request current agent states snapshot */
   getAgentStates: () => {
     postWebviewMessage({ type: 'getAgentStates' });
-  },
-
-  /**
-   * Cancel a running task
-   * @param taskId - The task ID to cancel
-   */
-  cancelTask: (taskScope: TaskRunScope) => {
-    postWebviewMessage({ type: 'cancelTask', taskScope });
-  },
-
-  /**
-   * View a task's result
-   * @param taskId - The task ID
-   */
-  viewTaskResult: (taskScope: TaskRunScope, resultRef?: string) => {
-    postWebviewMessage({
-      type: 'viewTaskResult',
-      taskScope,
-      ...(resultRef ? { resultRef } : {}),
-    });
   },
 
   /** Request full configuration from extension */
@@ -491,11 +466,6 @@ export const AgentHostMessages = {
     payload: Omit<RequestCanvasAuthoringHandoffWebviewMessage, 'type'>,
   ) => {
     postConversationMessage({ type: 'requestCanvasAuthoringHandoff', ...payload });
-  },
-
-  /** Retry a failed background task */
-  retryTask: (taskScope: TaskRunScope) => {
-    postWebviewMessage({ type: 'retryTask', taskScope });
   },
 
   /** Download a Mermaid diagram as SVG file */

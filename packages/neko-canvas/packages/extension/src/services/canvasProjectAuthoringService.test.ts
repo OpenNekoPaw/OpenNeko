@@ -6,7 +6,6 @@ import {
   planCanvasWorkspaceBoardProjection,
   saveNkc,
   type CanvasWorkspaceProjectionRequest,
-  type ResourceRef,
 } from '@neko/shared';
 import { CanvasProjectAuthoringService } from './canvasProjectAuthoringService';
 import { createCanvasWorkspaceBoardRevision } from '@neko-canvas/domain';
@@ -126,23 +125,17 @@ function createProvider(activeUri?: vscode.Uri) {
         | { readonly canvasData: ReturnType<typeof createEmptyCanvasData>; readonly dirty: boolean }
         | undefined
     >(() => undefined),
-    applyHostCanvasData: vi.fn(),
+    applyHostCanvasData: vi.fn<() => Promise<void>>(async () => undefined),
     revealCanvasDocument: vi.fn(),
   };
 }
 
-const generatedRef: ResourceRef = {
-  id: 'generated-output:shot-1',
-  scope: 'project',
-  provider: 'generated-output',
-  kind: 'generated',
-  source: {
-    kind: 'generated-asset',
-    generatedAssetId: 'shot-1',
-    projectRelativePath: 'neko/generated/image/shot-1.png',
-  },
-  locator: { kind: 'generated-asset', assetId: 'shot-1' },
-  fingerprint: { strategy: 'hash', value: 'sha256:shot-1' },
+const generatedContentLocator = {
+  kind: 'generated-output' as const,
+  outputId: 'shot-1',
+  revision: 'generated:sha256:shot-1',
+  digest: 'sha256:shot-1',
+  path: 'neko/generated/image/shot-1.png',
 };
 
 function workspaceProjectionRequest(): CanvasWorkspaceProjectionRequest {
@@ -161,7 +154,7 @@ function workspaceProjectionRequest(): CanvasWorkspaceProjectionRequest {
         kind: 'image',
         title: 'Shot 1',
         mimeType: 'image/png',
-        resourceRef: generatedRef,
+        contentLocator: generatedContentLocator,
         provenance: {
           version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
           deliveryId: 'delivery:shot-1',
@@ -259,6 +252,46 @@ describe('CanvasProjectAuthoringService', () => {
       expect.objectContaining({ fsPath: '/workspace/project/neko/boards/workspace.nkc' }),
       planned.canvasData,
     );
+  });
+
+  it('waits for the opened Canvas display projection after the durable Board save', async () => {
+    const documentUri = 'file:///workspace/project/neko/boards/workspace.nkc';
+    const provider = createProvider();
+    let finishDisplayProjection: (() => void) | undefined;
+    provider.applyHostCanvasData.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishDisplayProjection = resolve;
+        }),
+    );
+    const service = new CanvasProjectAuthoringService({
+      context: { subscriptions: [] } as never,
+      canvasEditorProvider: provider,
+    });
+    const loaded = await service.loadLatest({ documentUri, createIfMissing: true });
+    const planned = planCanvasWorkspaceBoardProjection(
+      loaded.canvasData,
+      workspaceProjectionRequest(),
+    );
+
+    let completed = false;
+    const save = service
+      .saveAtomic({
+        documentUri,
+        expectedRevision: loaded.revision,
+        canvasData: planned.canvasData,
+      })
+      .then(() => {
+        completed = true;
+      });
+
+    await vi.waitFor(() => expect(provider.applyHostCanvasData).toHaveBeenCalledOnce());
+    await Promise.resolve();
+    expect(completed).toBe(false);
+
+    finishDisplayProjection?.();
+    await save;
+    expect(completed).toBe(true);
   });
 
   it('keeps unsaved opened Workspace Board edits untouched', async () => {

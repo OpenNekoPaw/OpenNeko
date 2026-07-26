@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PiConversationTranscriptEntry } from '@neko/agent/pi';
+import { createGeneratedAssetRevisionRef, type GeneratedAsset } from '@neko/shared';
 
 import {
   ConversationBridge,
+  type ConversationBridgeOptions,
   type PiConversationPresentationAuthority,
   type PiConversationPresentationCatalogItem,
 } from '../conversationBridge';
@@ -15,6 +17,60 @@ describe('ConversationBridge Pi presentation boundary', () => {
   beforeEach(() => {
     authority = createAuthority();
     bridge = createBridge(authority);
+  });
+
+  it('commits the first user-input title and reports the committed projection', async () => {
+    const onConversationTitleChanged = vi.fn();
+    bridge = createBridge(authority, [], undefined, undefined, onConversationTitleChanged);
+    const conversationId = await bridge.create();
+
+    await expect(
+      bridge.initializeTitleFromUserInput(
+        conversationId,
+        'Generate a cinematic harbor image with dramatic evening light',
+      ),
+    ).resolves.toBe('Generate a cinematic harbor image with dramatic...');
+
+    expect(authority.updateConversationTitle).toHaveBeenCalledWith(
+      conversationId,
+      'Generate a cinematic harbor image with dramatic...',
+    );
+    expect(bridge.get(conversationId)?.title).toBe(
+      'Generate a cinematic harbor image with dramatic...',
+    );
+    expect(onConversationTitleChanged).toHaveBeenCalledWith(
+      conversationId,
+      'Generate a cinematic harbor image with dramatic...',
+    );
+  });
+
+  it('preserves an existing conversation title without emitting a Tab title change', async () => {
+    const existing = catalog('conv-existing', 1, 'Existing title');
+    authority.catalog.set(existing.conversationId, existing);
+    const onConversationTitleChanged = vi.fn();
+    bridge = createBridge(authority, [existing], undefined, undefined, onConversationTitleChanged);
+
+    await expect(
+      bridge.initializeTitleFromUserInput('conv-existing', 'Replacement title'),
+    ).resolves.toBeUndefined();
+
+    expect(authority.updateConversationTitle).not.toHaveBeenCalled();
+    expect(onConversationTitleChanged).not.toHaveBeenCalled();
+    expect(bridge.get('conv-existing')?.title).toBe('Existing title');
+  });
+
+  it('does not project a title when authority persistence fails', async () => {
+    const onConversationTitleChanged = vi.fn();
+    bridge = createBridge(authority, [], undefined, undefined, onConversationTitleChanged);
+    const conversationId = await bridge.create();
+    authority.updateConversationTitle.mockRejectedValueOnce(new Error('metadata unavailable'));
+
+    await expect(
+      bridge.initializeTitleFromUserInput(conversationId, 'Generate a harbor image'),
+    ).rejects.toThrow('metadata unavailable');
+
+    expect(bridge.get(conversationId)?.title).toBe('New conversation');
+    expect(onConversationTitleChanged).not.toHaveBeenCalled();
   });
 
   it('uses Pi catalog fields for listings and lazily projects Pi Session history', async () => {
@@ -120,6 +176,42 @@ describe('ConversationBridge Pi presentation boundary', () => {
     expect(authority.readConversationEntries).not.toHaveBeenCalled();
   });
 
+  it('reconciles the durable message count after an external media checkpoint', async () => {
+    const conversationId = await bridge.ensureActive();
+    bridge.addMessageToConversation(conversationId, {
+      id: 'user-1',
+      role: 'user',
+      content: 'cat',
+      timestamp: 1,
+    });
+    authority.checkpointExternalTurn.mockImplementationOnce(async (input) => {
+      authority.catalog.set(conversationId, catalog(conversationId, 2, 'New conversation'));
+      return {
+        conversationId,
+        turnId: input.turnId,
+        branchId: 'main',
+        piSessionId: 'pi-session-1',
+        leafId: 'entry-tool-result',
+        writerEpoch: 1,
+        terminalState: input.terminalState,
+        committedAt: '2026-07-17T00:00:02.000Z',
+      };
+    });
+
+    await bridge.checkpointExternalTurn({
+      conversationId,
+      turnId: 'direct-media:generation-1',
+      terminalState: 'completed',
+      messages: [],
+    });
+
+    expect(bridge.get(conversationId)).toMatchObject({
+      messageCount: 2,
+      messages: [expect.objectContaining({ id: 'user-1' })],
+      messagesLoaded: true,
+    });
+  });
+
   it('reprojects document resources for Webview without mutating the Pi-derived view', async () => {
     const contentAccessRuntime = {
       loadProviderAsset: vi.fn().mockResolvedValue({
@@ -179,6 +271,110 @@ describe('ConversationBridge Pi presentation boundary', () => {
     expect(JSON.stringify(bridge.get(conversationId)?.messages)).not.toContain('renderUri');
   });
 
+  it('hydrates generated outputs restored from Pi history for the Webview', async () => {
+    const conversationId = 'conversation-generation-history';
+    const lifecycle = createGeneratedAssetRevisionRef({
+      assetId: 'generated-1',
+      contentDigest: 'sha256:generated-1',
+      contentPath: 'neko/generated/image/generated-1.png',
+      mediaKind: 'image',
+      mimeType: 'image/png',
+      generation: { operationId: 'generation-1' },
+    });
+    const asset: GeneratedAsset = {
+      type: 'generated-image',
+      id: 'generated-1',
+      path: '/workspace/neko/generated/image/generated-1.png',
+      mimeType: 'image/png',
+      generatedAt: '2026-07-26T00:00:00.000Z',
+      lifecycle,
+      width: 1024,
+      height: 1024,
+      ratio: '1:1',
+    };
+    authority.catalog.set(conversationId, catalog(conversationId, 2, 'Generated image'));
+    authority.entries.set(conversationId, [
+      messageEntry('entry-user', null, {
+        role: 'user',
+        content: '生成一张蓝色陶瓷杯图片',
+        timestamp: 10,
+      }),
+      messageEntry('entry-assistant', 'entry-user', {
+        ...assistantMessage('', 20),
+        content: [
+          {
+            type: 'toolCall',
+            id: 'generation-1',
+            name: 'GenerateImage',
+            arguments: { prompt: '生成一张蓝色陶瓷杯图片' },
+          },
+        ],
+        stopReason: 'toolUse',
+      }),
+      messageEntry('entry-tool-result', 'entry-assistant', {
+        role: 'toolResult',
+        toolCallId: 'generation-1',
+        toolName: 'GenerateImage',
+        content: [{ type: 'text', text: 'Image generation completed.' }],
+        details: {
+          generationJob: {
+            kind: 'generation-job',
+            jobId: 'generation-1',
+            revision: 5,
+            phase: 'succeeded',
+            stage: 'completed',
+            percent: 100,
+          },
+          outputs: [
+            {
+              type: 'image',
+              contentLocator: lifecycle.contentLocator,
+            },
+          ],
+          boardDelivery: {
+            status: 'projected',
+            nodeIds: ['node-1'],
+            diagnostics: [],
+          },
+        },
+        isError: false,
+        timestamp: 30,
+      }),
+    ]);
+    const localResourceAccess = {
+      toWebviewUri: vi.fn(() => 'vscode-webview://generated/generated-1.png'),
+    };
+    const resolveGenerationResult = vi.fn(() => ({ path: asset.path, asset }));
+    bridge = createBridge(
+      authority,
+      [...authority.catalog.values()],
+      localResourceAccess,
+      undefined,
+      undefined,
+      resolveGenerationResult,
+    );
+    expect(bridge.switchTo(conversationId)).toBe(true);
+    const webview = createMockWebview();
+
+    await bridge.sendActiveConversation(webview as never);
+
+    const posted = vi.mocked(webview.postMessage).mock.calls[0]?.[0] as {
+      conversation: {
+        messages: Array<{
+          contentBlocks?: Array<{
+            toolCall?: { result?: { data?: { outputs?: Array<{ renderUri?: string }> } } };
+          }>;
+        }>;
+      };
+    };
+    expect(
+      posted.conversation.messages[1]?.contentBlocks?.[0]?.toolCall?.result?.data?.outputs?.[0]
+        ?.renderUri,
+    ).toBe('vscode-webview://generated/generated-1.png');
+    expect(resolveGenerationResult).toHaveBeenCalledWith(lifecycle.contentLocator);
+    expect(JSON.stringify(bridge.get(conversationId)?.messages)).not.toContain('renderUri');
+  });
+
   it('reports deleted and unknown snapshots with distinct diagnostics', async () => {
     const conversationId = await bridge.create();
     await bridge.delete(conversationId);
@@ -204,12 +400,19 @@ function createBridge(
   initialCatalog: readonly PiConversationPresentationCatalogItem[] = [],
   localResourceAccess?: unknown,
   contentAccessRuntime?: unknown,
+  onConversationTitleChanged?: (conversationId: string, title: string) => void,
+  resolveGenerationResult?: ConversationBridgeOptions['resolveGenerationResult'],
 ): ConversationBridge {
   return new ConversationBridge(
     '/workspace',
     localResourceAccess as never,
     contentAccessRuntime ? () => contentAccessRuntime as never : undefined,
-    { authority, initialCatalog },
+    {
+      authority,
+      initialCatalog,
+      onConversationTitleChanged,
+      resolveGenerationResult,
+    },
   );
 }
 
@@ -220,8 +423,10 @@ function createAuthority() {
     readonly catalog: typeof catalogRecords;
     readonly entries: typeof entries;
     readonly createConversation: ReturnType<typeof vi.fn>;
+    readonly updateConversationTitle: ReturnType<typeof vi.fn>;
     readonly deleteConversation: ReturnType<typeof vi.fn>;
     readonly readConversationEntries: ReturnType<typeof vi.fn>;
+    readonly checkpointExternalTurn: ReturnType<typeof vi.fn>;
   } = {
     catalog: catalogRecords,
     entries,
@@ -242,6 +447,16 @@ function createAuthority() {
       return catalogRecords.delete(conversationId);
     }),
     readConversationEntries: vi.fn(async (conversationId) => entries.get(conversationId) ?? []),
+    checkpointExternalTurn: vi.fn(async (input) => ({
+      conversationId: input.conversationId,
+      turnId: input.turnId,
+      branchId: 'main',
+      piSessionId: 'pi-session-1',
+      leafId: null,
+      writerEpoch: 1,
+      terminalState: input.terminalState,
+      committedAt: '2026-07-17T00:00:00.000Z',
+    })),
   };
   return authority;
 }

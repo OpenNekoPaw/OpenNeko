@@ -79,7 +79,7 @@ function presentList(references: readonly TuiArtifactReference[], context: Conte
     .join('\n');
 }
 
-export function presentArtifactReference(
+function presentArtifactReference(
   reference: TuiArtifactReference,
   context: Context,
 ): string {

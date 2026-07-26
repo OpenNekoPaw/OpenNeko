@@ -23,13 +23,6 @@ export {
 } from './entityAssetMetadataProjection';
 
 export {
-  NpcProfileAssembler,
-  type AssembleNpcProfileInput,
-  type NpcProfileAssemblerReaders,
-  type NpcProfileRepresentationMetadata,
-  type NpcProfileAssemblyResult,
-} from './npcProfileAssembler';
-export {
   extractLineBasedScriptCharacters,
   extractScriptCharacterCandidates,
   scriptCharacterCandidateToProjectSearchItem,
@@ -81,7 +74,8 @@ class EntitySearchAdapter implements ProjectSearchAdapter {
       this.options.service.listCandidates('open'),
       this.loadAutomaticCandidates(),
     ]);
-    const text = query.text.trim().toLocaleLowerCase();
+    const exactItemId = query.text.trim();
+    const text = exactItemId.toLocaleLowerCase();
     const candidatesById = new Map<string, CandidateSearchProjection>();
     for (const candidate of projectedCandidates) {
       candidatesById.set(candidate.candidate.id, candidate);
@@ -98,7 +92,10 @@ class EntitySearchAdapter implements ProjectSearchAdapter {
     const allowedKinds = query.kinds ? new Set(query.kinds) : undefined;
     return items
       .filter((item) => !allowedKinds || allowedKinds.has(item.kind))
-      .filter((item) => !text || item.searchText.toLocaleLowerCase().includes(text))
+      .filter(
+        (item) =>
+          !text || item.id === exactItemId || item.searchText.toLocaleLowerCase().includes(text),
+      )
       .slice(0, query.limit ?? items.length);
   }
 

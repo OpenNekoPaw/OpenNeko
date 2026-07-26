@@ -85,6 +85,136 @@ describe('ToolCallDisplay Tool confirmation', () => {
   });
 });
 
+describe('ToolCallDisplay Generation Job card', () => {
+  it('renders revisioned progress for direct image generation', () => {
+    render(
+      <MessageActionsProvider>
+        <ToolCallDisplay
+          conversationId="conv-1"
+          toolCall={{
+            id: 'generation-1',
+            name: 'GenerateImage',
+            arguments: {
+              prompt: '雨中的霓虹街道',
+              providerId: 'image-provider',
+              modelId: 'image-model',
+            },
+          }}
+          progress={{
+            summary: 'waiting-provider 45%',
+            data: {
+              kind: 'generation-job',
+              jobId: 'generation-1',
+              revision: 2,
+              phase: 'running',
+              stage: 'waiting-provider',
+              percent: 45,
+              providerId: 'image-provider',
+              modelId: 'image-model',
+            },
+          }}
+        />
+      </MessageActionsProvider>,
+    );
+
+    expect(screen.getByTestId('generation-job-card')).toBeTruthy();
+    expect(screen.getByText('toolCalls.generation.title')).toBeTruthy();
+    expect(screen.getByText('image-provider/image-model')).toBeTruthy();
+    expect(screen.getByText('generation-1 · r2')).toBeTruthy();
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('45');
+  });
+
+  it('renders the committed image and Board delivery status in the same card', () => {
+    render(
+      <MessageActionsProvider>
+        <ToolCallDisplay
+          conversationId="conv-1"
+          toolCall={{
+            id: 'generation-1',
+            name: 'GenerateImage',
+            arguments: { prompt: '雨中的霓虹街道' },
+            result: {
+              success: true,
+              data: {
+                generationJob: {
+                  kind: 'generation-job',
+                  jobId: 'generation-1',
+                  revision: 3,
+                  phase: 'succeeded',
+                  stage: 'completed',
+                  percent: 100,
+                  providerId: 'image-provider',
+                  modelId: 'image-model',
+                },
+                outputs: [
+                  {
+                    type: 'image',
+                    contentLocator: {
+                      kind: 'generated-output',
+                      outputId: 'generated-1',
+                      revision: 'revision-generated-1',
+                      digest: 'sha256:generated-1',
+                      path: 'neko/generated/images/generated-1.png',
+                    },
+                    renderUri: 'webview://generated/image.png',
+                  },
+                ],
+                boardDelivery: {
+                  status: 'projected',
+                  nodeIds: ['node-1'],
+                  diagnostics: [],
+                },
+              },
+            },
+          }}
+        />
+      </MessageActionsProvider>,
+    );
+
+    expect(screen.getByRole('img', { name: 'toolCalls.generation.result' })).toBeTruthy();
+    expect(document.querySelectorAll('video')).toHaveLength(0);
+    expect(document.querySelectorAll('audio')).toHaveLength(0);
+    expect(screen.getByText('toolCalls.generation.boardSaved')).toBeTruthy();
+  });
+
+  it('does not report queued Board delivery as completed', () => {
+    render(
+      <MessageActionsProvider>
+        <ToolCallDisplay
+          conversationId="conv-1"
+          toolCall={{
+            id: 'generation-queued',
+            name: 'GenerateImage',
+            arguments: { prompt: '雨中的霓虹街道' },
+            result: {
+              success: true,
+              data: {
+                generationJob: {
+                  kind: 'generation-job',
+                  jobId: 'generation-queued',
+                  revision: 3,
+                  phase: 'succeeded',
+                  stage: 'completed',
+                  percent: 100,
+                },
+                boardDelivery: {
+                  status: 'queued',
+                  nodeIds: [],
+                  diagnostics: [],
+                },
+              },
+            },
+          }}
+        />
+      </MessageActionsProvider>,
+    );
+
+    expect(screen.getByText('toolCalls.generation.boardPending')).toBeTruthy();
+    expect(screen.queryByText('toolCalls.generation.boardSaved')).toBeNull();
+    expect(screen.queryByText('toolCalls.generation.boardBlocked')).toBeNull();
+  });
+});
+
 function createCanvasAuthoringToolCall(): ToolCall {
   return {
     id: 'tool-canvas-1',

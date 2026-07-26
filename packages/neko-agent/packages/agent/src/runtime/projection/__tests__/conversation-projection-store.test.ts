@@ -5,6 +5,7 @@ import { createConversationProjectionStore } from '../conversation-projection-st
 function appendText(input: {
   readonly conversationId?: string;
   readonly turnId?: string;
+  readonly runId?: string;
   readonly messageId?: string;
   readonly itemId?: string;
   readonly content: string;
@@ -18,6 +19,7 @@ function appendText(input: {
     item: {
       conversationId: input.conversationId ?? 'conversation-a',
       turnId: input.turnId ?? 'turn-a',
+      runId: input.runId ?? 'run-a',
       messageId: input.messageId ?? 'message-a',
       itemId: input.itemId ?? 'text-1',
       sequence: input.sequence ?? 1,
@@ -38,15 +40,6 @@ function completion(): AgentTurnTimelineCompletion {
   return {
     status: 'completed',
     completedAt: 10,
-    finalContentBlocks: [
-      {
-        id: 'final-text',
-        type: 'text',
-        timestamp: 10,
-        content: 'final',
-        isStreaming: false,
-      },
-    ],
   };
 }
 
@@ -59,6 +52,7 @@ describe('ConversationProjectionStore', () => {
       type: 'agentTurnTimelineUpdate',
       conversationId: 'conversation-a',
       turnId: 'turn-a',
+      runId: 'run-a',
       messageId: 'message-a',
       operations: [appendText({ content: 'A', itemRevision: 1 })],
     });
@@ -66,11 +60,13 @@ describe('ConversationProjectionStore', () => {
       type: 'agentTurnTimelineUpdate',
       conversationId: 'conversation-b',
       turnId: 'turn-b',
+      runId: 'run-b',
       messageId: 'message-b',
       operations: [
         appendText({
           conversationId: 'conversation-b',
           turnId: 'turn-b',
+          runId: 'run-b',
           messageId: 'message-b',
           content: 'B',
           itemRevision: 1,
@@ -103,6 +99,7 @@ describe('ConversationProjectionStore', () => {
         type: 'agentTurnTimelineUpdate',
         conversationId: 'conversation-a',
         turnId: 'turn-a',
+        runId: 'run-a',
         messageId: 'message-a',
         operations: [appendText({ content, itemRevision: index + 1 })],
       });
@@ -122,6 +119,7 @@ describe('ConversationProjectionStore', () => {
       type: 'agentTurnTimelineUpdate',
       conversationId: 'conversation-a',
       turnId: 'turn-a',
+      runId: 'run-a',
       messageId: 'message-a',
       operations: [appendText({ content: 'first', itemRevision: 1 })],
     });
@@ -131,6 +129,7 @@ describe('ConversationProjectionStore', () => {
       type: 'agentTurnTimelineUpdate',
       conversationId: 'conversation-a',
       turnId: 'turn-a',
+      runId: 'run-a',
       messageId: 'message-a',
       operations: [appendText({ content: '-second', itemRevision: 2 })],
     });
@@ -151,6 +150,7 @@ describe('ConversationProjectionStore', () => {
       type: 'agentTurnTimelineUpdate',
       conversationId: 'conversation-a',
       turnId: 'turn-a',
+      runId: 'run-a',
       messageId: 'message-a',
       operations: [appendText({ content: 'answer', itemRevision: 1 })],
     });
@@ -158,6 +158,7 @@ describe('ConversationProjectionStore', () => {
       type: 'agentTurnTimelineUpdate',
       conversationId: 'conversation-a',
       turnId: 'turn-a',
+      runId: 'run-a',
       messageId: 'message-a',
       operations: [
         {
@@ -188,6 +189,7 @@ describe('ConversationProjectionStore', () => {
       type: 'agentTurnTimelineUpdate',
       conversationId: 'conversation-a',
       turnId: 'turn-a',
+      runId: 'run-a',
       messageId: 'message-a',
       operations: [appendText({ content: 'first', itemRevision: 1 })],
     });
@@ -197,6 +199,7 @@ describe('ConversationProjectionStore', () => {
         type: 'agentTurnTimelineUpdate',
         conversationId: 'conversation-a',
         turnId: 'turn-a',
+        runId: 'run-a',
         messageId: 'message-a',
         operations: [
           appendText({ content: '-partial', itemRevision: 2 }),
@@ -225,36 +228,62 @@ describe('ConversationProjectionStore', () => {
         type: 'agentTurnTimelineUpdate',
         conversationId: 'conversation-b',
         turnId: 'turn-a',
+        runId: 'run-a',
         messageId: 'message-a',
         operations: [appendText({ content: 'wrong owner', itemRevision: 1 })],
       }),
     ).toThrow(/projection owner mismatch/i);
 
-    store.apply({
-      type: 'agentTurnTimelineUpdate',
-      conversationId: 'conversation-a',
-      turnId: 'turn-a',
-      messageId: 'message-a',
-      operations: [appendText({ content: 'done', itemRevision: 1 })],
-      completion: completion(),
-    });
     expect(() =>
       store.apply({
         type: 'agentTurnTimelineUpdate',
         conversationId: 'conversation-a',
         turnId: 'turn-a',
+        runId: 'run-b',
+        messageId: 'message-a',
+        operations: [appendText({ runId: 'run-b', content: 'wrong run', itemRevision: 1 })],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      store.apply({
+        type: 'agentTurnTimelineUpdate',
+        conversationId: 'conversation-a',
+        turnId: 'turn-a',
+        runId: 'run-c',
+        messageId: 'message-a',
+        operations: [appendText({ runId: 'run-c', content: 'changed run', itemRevision: 2 })],
+      }),
+    ).toThrow(/owned by run-b\/message-a/i);
+
+    const terminalStore = createConversationProjectionStore('conversation-a');
+    terminalStore.apply({
+      type: 'agentTurnTimelineUpdate',
+      conversationId: 'conversation-a',
+      turnId: 'turn-a',
+      runId: 'run-a',
+      messageId: 'message-a',
+      operations: [appendText({ content: 'done', itemRevision: 1 })],
+      completion: completion(),
+    });
+    expect(() =>
+      terminalStore.apply({
+        type: 'agentTurnTimelineUpdate',
+        conversationId: 'conversation-a',
+        turnId: 'turn-a',
+        runId: 'run-a',
         messageId: 'message-a',
         operations: [appendText({ content: 'late', itemRevision: 2 })],
       }),
     ).toThrow(/completed turn/i);
 
-    store.dispose();
-    expect(() => store.snapshot()).toThrow(/disposed/i);
+    terminalStore.dispose();
+    expect(() => terminalStore.snapshot()).toThrow(/disposed/i);
     expect(() =>
-      store.apply({
+      terminalStore.apply({
         type: 'agentTurnTimelineUpdate',
         conversationId: 'conversation-a',
         turnId: 'turn-b',
+        runId: 'run-b',
         messageId: 'message-b',
         operations: [appendText({ content: 'late', itemRevision: 1 })],
       }),

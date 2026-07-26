@@ -1,13 +1,4 @@
-/**
- * Prompt Module - Prompt template management for agents
- *
- * Provides:
- * - PromptManager: Template registration and rendering
- * - SystemPromptBuilder: Unified system prompt construction
- */
-
-export { PromptManager, createPromptManager } from './prompt-manager';
-// System Prompt Builder
+/** Canonical base prompt construction and Host-owned prompt file support. */
 export {
   SystemPromptBuilder,
   createSystemPromptBuilder,
@@ -22,7 +13,6 @@ export type {
 } from './system-prompt-agents-file-runtime';
 
 export type {
-  ISystemPromptBuilder,
   SystemPromptBuilderConfig,
   PromptExecutionMode,
   PromptLocale,
@@ -39,40 +29,8 @@ export {
   type BuiltinPromptKey,
 } from './builtin-prompts';
 
-// System Prompt Composer
-export type {
-  ISystemPromptComposer,
-  PromptLayer,
-  PromptSection,
-  PromptSectionInput,
-  PromptLayerBudget,
-  LayerUsage,
-  SystemPromptComposerOptions,
-  ComposedPromptSection,
-  ComposedPromptResult,
-  PromptDumpInfo,
-  PromptCompositionFragmentProjection,
-} from './system-prompt-composer-types';
+export type { PromptCompositionFragmentProjection } from './prompt-composition-projection';
 
-// Prompt Module Framework (Stage A)
-export type {
-  PromptContext,
-  PromptContextProvider,
-  PromptContextSources,
-  ArtifactIssue,
-} from './context';
-
-export type {
-  PromptModule,
-  PromptModuleManifest,
-  PromptModuleSection,
-} from './registry/module-manifest';
-
-// Content-projection modules (PR2 Stage C)
-// AGENTS.md overlay module (PR3b)
-// Schema-layer modules (PR3c)
-
-// Sub-package prompt fragments module (PR3e)
 // Prompt file host-neutral projection
 export {
   DEFAULT_AGENTS_FILE_CONTENT,
@@ -110,12 +68,3 @@ export {
   type PromptFileSaveResult,
   type SavePromptFileInput,
 } from './prompt-file-runtime';
-
-// Re-export types from @neko/shared for convenience
-export type {
-  Prompt,
-  PromptVariable,
-  PromptCategory,
-  RenderedPrompt,
-  IPromptManager,
-} from '@neko/shared';

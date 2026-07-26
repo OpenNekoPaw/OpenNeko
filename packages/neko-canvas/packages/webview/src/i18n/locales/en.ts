@@ -169,6 +169,7 @@ export const en = {
   'workspaceBoard.task': 'Task · {id}',
   'workspaceBoard.run': 'Run · {id}',
   'workspaceBoard.processing': 'Processing',
+  'workspaceBoard.generatedBatch': 'Generated assets',
   'preset.group.label': 'Name',
   'panel.properties': 'Properties',
   'panel.noSelection': 'Select a node to view properties',

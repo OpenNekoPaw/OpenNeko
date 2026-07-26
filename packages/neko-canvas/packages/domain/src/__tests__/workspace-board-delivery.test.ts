@@ -64,6 +64,36 @@ describe('Workspace Board delivery coordinator', () => {
     expect(mutation.canvasData.nodes.every((node) => node.parentId === undefined)).toBe(true);
   });
 
+  it('persists one grouped grid for generated outputs from the same delivery', async () => {
+    const store = await createStore();
+    const mutation = new MemoryMutationPort();
+    const coordinator = createCoordinator(store, mutation, 'host-a');
+    const request = generatedBatchDelivery('delivery:generated-batch', 5);
+
+    await expect(coordinator.enqueue(request)).resolves.toMatchObject([
+      {
+        status: 'projected',
+        nodeIds: expect.arrayContaining([
+          expect.stringMatching(/^workspace-content-/u),
+          expect.stringMatching(/^workspace-content-/u),
+        ]),
+      },
+    ]);
+
+    const group = mutation.canvasData.nodes.find((node) => node.type === 'group');
+    expect(group).toMatchObject({
+      container: { layout: { mode: 'grid', columns: 3 } },
+      data: {
+        provenance: {
+          kind: 'generated-batch',
+          deliveryId: request.process.deliveryId,
+        },
+      },
+    });
+    expect(mutation.canvasData.nodes.filter((node) => node.parentId === group?.id)).toHaveLength(5);
+    expect(mutation.saveCount).toBe(1);
+  });
+
   it('keeps another Host pending while an editor owner retains the writer lease', async () => {
     const store = await createStore();
     const mutation = new MemoryMutationPort();
@@ -311,5 +341,45 @@ function delivery(deliveryId: string): CanvasWorkspaceProjectionRequest {
         },
       },
     ],
+  };
+}
+
+function generatedBatchDelivery(
+  deliveryId: string,
+  count: number,
+): CanvasWorkspaceProjectionRequest {
+  return {
+    version: 2,
+    target: { workspaceId: WORKSPACE_ID, workspaceUri: 'file:///workspace/project/' },
+    process: {
+      deliveryId,
+      sourceHost: 'headless',
+      createdAt: '2026-07-15T00:00:00.000Z',
+    },
+    artifacts: Array.from({ length: count }, (_, index) => {
+      const outputId = `generated-${index + 1}`;
+      const digest = `sha256:${outputId}`;
+      return {
+        kind: 'image' as const,
+        title: `Generated ${index + 1}`,
+        contentLocator: {
+          kind: 'generated-output' as const,
+          outputId,
+          revision: `revision:${outputId}`,
+          digest,
+          path: `neko/generated/image/${outputId}.png`,
+        },
+        provenance: {
+          version: 2 as const,
+          deliveryId,
+          artifactId: outputId,
+          revision: digest,
+          kind: 'image' as const,
+          role: 'output' as const,
+          sourceId: `artifact:${outputId}`,
+          createdAt: '2026-07-15T00:00:00.000Z',
+        },
+      };
+    }),
   };
 }

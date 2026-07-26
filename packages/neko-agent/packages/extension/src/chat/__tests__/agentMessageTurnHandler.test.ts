@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const agentStreamProcessorInstances = vi.hoisted(
-  () => [] as Array<{ deps: Record<string, unknown> }>,
-);
+const piStreamSessionOptions = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+const loggerWarn = vi.hoisted(() => vi.fn());
 
 vi.mock('vscode', () => {
   class EventEmitter<T> {
@@ -114,7 +113,7 @@ vi.mock('@neko/platform', async (importOriginal) => {
 vi.mock('../base', () => ({
   getLogger: vi.fn(() => ({
     info: vi.fn(),
-    warn: vi.fn(),
+    warn: loggerWarn,
     error: vi.fn(),
     debug: vi.fn(),
   })),
@@ -134,25 +133,15 @@ vi.mock('../message/attachmentProcessor', () => {
   };
 });
 
-vi.mock('../message/agentStreamProcessor', () => {
+vi.mock('../message/piAgentStreamProcessor', () => {
   return {
-    AgentStreamProcessor: class {
-      constructor(public readonly deps: Record<string, unknown>) {
-        agentStreamProcessorInstances.push(this);
-      }
-
-      processStream = vi.fn().mockResolvedValue({
-        accumulatedResponse: 'mock response',
-        accumulatedThinking: '',
-        collectedToolCalls: [],
-        contentBlocks: [],
-        hasError: false,
-        terminalStatus: 'completed',
-      });
-      createPiStream = vi.fn(() => ({
+    createPiAgentStreamSession: vi.fn((options: Record<string, unknown>) => {
+      piStreamSessionOptions.push(options);
+      return {
         events: { emit: vi.fn().mockResolvedValue(undefined) },
         result: () => ({
           messageId: 'message-pi',
+          identity: { turnId: 'turn-pi', runId: 'run-pi' },
           accumulatedResponse: 'mock response',
           accumulatedThinking: '',
           collectedToolCalls: [],
@@ -161,10 +150,8 @@ vi.mock('../message/agentStreamProcessor', () => {
           terminalStatus: 'completed' as const,
         }),
         dispose: vi.fn(),
-      }));
-      clearConversation = vi.fn();
-      dispose = vi.fn();
-    },
+      };
+    }),
   };
 });
 
@@ -386,6 +373,7 @@ function createMockConversations() {
   const msgs: unknown[] = [];
   return {
     ensureActive: vi.fn().mockReturnValue('conv-1'),
+    initializeTitleFromUserInput: vi.fn().mockResolvedValue(undefined),
     addMessageToConversation: vi.fn((_id: string, msg: unknown) => msgs.push(msg)),
     removeMessageFromConversation: vi.fn((_id: string, messageId: string) => {
       const index = msgs.findIndex((item) => (item as { id?: string }).id === messageId);
@@ -437,7 +425,7 @@ function createMockAgentRunner() {
     conversationId: string;
     content: string;
     createdAt: number;
-    source: 'composer' | 'task-result-continuation';
+    source: 'composer' | 'system-continuation' | 'subagent-result-continuation';
   }> = [];
   return {
     getHistory: vi.fn().mockReturnValue([]),
@@ -450,7 +438,7 @@ function createMockAgentRunner() {
         conversationId: string;
         content: string;
         now?: number;
-        source?: 'composer' | 'task-result-continuation';
+        source?: 'composer' | 'system-continuation' | 'subagent-result-continuation';
       }) => {
         const item = {
           id: `queue-${pendingMessages.length + 1}`,
@@ -491,7 +479,7 @@ function createMockAgentManager(agentRunner = createMockAgentRunner()) {
     conversationId: string;
     content: string;
     createdAt: number;
-    source: 'composer' | 'task-result-continuation';
+    source: 'composer' | 'system-continuation' | 'subagent-result-continuation';
   }> = [];
   return {
     executePiTurn: vi.fn().mockResolvedValue({
@@ -506,7 +494,10 @@ function createMockAgentManager(agentRunner = createMockAgentRunner()) {
     enqueuePendingMessage: vi.fn(
       (
         conversationId: string,
-        input: { content: string; source?: 'composer' | 'task-result-continuation' },
+        input: {
+          content: string;
+          source?: 'composer' | 'system-continuation' | 'subagent-result-continuation';
+        },
       ) => {
         const item = {
           id: `queue-${pendingMessages.length + 1}`,
@@ -582,8 +573,6 @@ function buildHandler(
     () => 'mock system prompt',
     platform as any,
     undefined,
-    undefined,
-    undefined,
     overrides.localResourceAccess as any,
     {},
   );
@@ -596,9 +585,10 @@ function buildHandler(
 describe('AgentMessageTurnHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    agentStreamProcessorInstances.length = 0;
+    piStreamSessionOptions.length = 0;
     (vscode.env as any).language = 'en';
     (vscode.workspace as any).workspaceFolders = undefined;
+    (vscode.window as any).activeTextEditor = undefined;
     vi.mocked(vscode.extensions.getExtension).mockReturnValue(undefined);
     vi.mocked(vscode.workspace.fs.readFile).mockRejectedValue(new Error('missing fixture'));
     vi.mocked(vscode.workspace.findFiles).mockResolvedValue([]);
@@ -637,19 +627,51 @@ describe('AgentMessageTurnHandler', () => {
   });
 
   describe('local resource access wiring', () => {
-    it('passes local resource access into the stream processor for tool-result thumbnails', () => {
+    it('keeps Host resource materialization out of the canonical stream processor', async () => {
       const localResourceAccess = {
         toWebviewUri: vi.fn(),
       };
+      const webview = createMockWebview();
+      const handler = buildHandler({
+        localResourceAccess,
+        agentManager: createMockAgentManager(),
+        providers: createMockProviders(true),
+      });
 
-      buildHandler({ localResourceAccess });
+      await handler.handleUserMessage(
+        webview as any,
+        createChatModelRequest('inspect projection input', { conversationId: 'conv-1' }),
+      );
 
-      expect(agentStreamProcessorInstances).toHaveLength(1);
-      expect(agentStreamProcessorInstances[0]!.deps.localResourceAccess).toBe(localResourceAccess);
+      expect(piStreamSessionOptions).toHaveLength(1);
+      expect(piStreamSessionOptions[0]).not.toHaveProperty('localResourceAccess');
     });
   });
 
   describe('Agent-first Skill activation boundary', () => {
+    it('commits the first-input title before persisting and dispatching the turn', async () => {
+      const conversations = createMockConversations();
+      const agentManager = createMockAgentManager();
+      const handler = buildHandler({ conversations, agentManager });
+
+      await handler.handleUserMessage(
+        createMockWebview() as any,
+        createChatModelRequest('Generate a harbor image', { conversationId: 'conv-1' }),
+      );
+
+      expect(conversations.initializeTitleFromUserInput).toHaveBeenCalledWith(
+        'conv-1',
+        'Generate a harbor image',
+      );
+      expect(conversations.initializeTitleFromUserInput.mock.invocationCallOrder[0]).toBeLessThan(
+        conversations.addMessageToConversation.mock.invocationCallOrder[0] ??
+          Number.MAX_SAFE_INTEGER,
+      );
+      expect(conversations.initializeTitleFromUserInput.mock.invocationCallOrder[0]).toBeLessThan(
+        agentManager.executePiTurn.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+      );
+    });
+
     it('routes the explicit provider and model through Pi without AgentRunner', async () => {
       const webview = createMockWebview();
       const agentManager = createMockAgentManager();
@@ -1042,7 +1064,8 @@ describe('AgentMessageTurnHandler', () => {
       expect(providers.getProvider).not.toHaveBeenCalledWith('nekoapi-chat');
       expect(webview.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'globalError',
+          type: 'error',
+          conversationId: 'conv-1',
           message: expect.stringContaining('No Agent primary model is selected'),
         }),
       );
@@ -1067,7 +1090,8 @@ describe('AgentMessageTurnHandler', () => {
       expect(providers.getProvider).not.toHaveBeenCalledWith('deepseek-chat');
       expect(webview.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'globalError',
+          type: 'error',
+          conversationId: 'conv-1',
           message: expect.stringContaining('selection is incomplete'),
         }),
       );
@@ -1126,7 +1150,8 @@ describe('AgentMessageTurnHandler', () => {
       expect(agentManager.getOrCreate).not.toHaveBeenCalled();
       expect(webview.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'globalError',
+          type: 'error',
+          conversationId: 'conv-1',
           message: expect.stringContaining('supports only the primary slot'),
         }),
       );
@@ -1153,7 +1178,8 @@ describe('AgentMessageTurnHandler', () => {
       expect(agentManager.getOrCreate).not.toHaveBeenCalled();
       expect(webview.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'globalError',
+          type: 'error',
+          conversationId: 'conv-1',
           message: expect.stringContaining('conflicts with the chat model selection'),
         }),
       );
@@ -1197,11 +1223,11 @@ describe('AgentMessageTurnHandler', () => {
   });
 
   // -------------------------------------------------------------------------
-  // handleUserMessage — thinking indicator
+  // handleUserMessage — thinking phase
   // -------------------------------------------------------------------------
 
-  describe('handleUserMessage() — thinking indicator', () => {
-    it('posts a thinking message before executing', async () => {
+  describe('handleUserMessage() — thinking phase', () => {
+    it('posts a thinking phase before executing', async () => {
       const webview = createMockWebview();
       const handler = buildHandler();
 
@@ -1209,8 +1235,11 @@ describe('AgentMessageTurnHandler', () => {
 
       const calls = webview.postMessage.mock.calls.map((c: unknown[]) => c[0]) as Array<{
         type: string;
+        phase?: string;
       }>;
-      const hasThinking = calls.some((msg) => msg.type === 'thinking');
+      const hasThinking = calls.some(
+        (msg) => msg.type === 'agentPhase' && msg.phase === 'thinking',
+      );
       expect(hasThinking).toBe(true);
     });
 
@@ -1223,7 +1252,7 @@ describe('AgentMessageTurnHandler', () => {
       const calls = webview.postMessage.mock.calls.map((c: unknown[]) => c[0]) as Array<{
         type: string;
       }>;
-      expect(calls[0]?.type).toBe('thinking');
+      expect(calls[0]).toMatchObject({ type: 'agentPhase', phase: 'thinking' });
     });
   });
 
@@ -1262,7 +1291,7 @@ describe('AgentMessageTurnHandler', () => {
       );
     });
 
-    it('thinking message includes the correct conversationId', async () => {
+    it('thinking phase includes the correct conversationId', async () => {
       const webview = createMockWebview();
       const handler = buildHandler();
 
@@ -1274,8 +1303,11 @@ describe('AgentMessageTurnHandler', () => {
       const calls = webview.postMessage.mock.calls.map((c: unknown[]) => c[0]) as Array<{
         type: string;
         conversationId?: string;
+        phase?: string;
       }>;
-      const thinkingMsg = calls.find((msg) => msg.type === 'thinking');
+      const thinkingMsg = calls.find(
+        (msg) => msg.type === 'agentPhase' && msg.phase === 'thinking',
+      );
       expect(thinkingMsg?.conversationId).toBe('my-conv');
     });
   });
@@ -1320,7 +1352,7 @@ describe('AgentMessageTurnHandler', () => {
   // -------------------------------------------------------------------------
 
   describe('handleUserMessage() — fallback when no configured provider', () => {
-    it('returns a visible boundary diagnostic when no primary model can be resolved', async () => {
+    it('terminates the conversation when no primary model can be resolved', async () => {
       const webview = createMockWebview();
       const conversations = createMockConversations();
       // providers returns undefined (not configured)
@@ -1330,14 +1362,17 @@ describe('AgentMessageTurnHandler', () => {
 
       const calls = webview.postMessage.mock.calls.map((c: unknown[]) => c[0]) as Array<{
         type: string;
+        conversationId?: string;
         message?: string;
       }>;
       expect(calls).toContainEqual(
         expect.objectContaining({
-          type: 'globalError',
+          type: 'error',
+          conversationId: 'conv-1',
           message: expect.stringContaining('No Agent primary model is selected'),
         }),
       );
+      expect(calls).not.toContainEqual(expect.objectContaining({ type: 'globalError' }));
       expect(conversations.addMessageToConversation).not.toHaveBeenCalled();
     });
   });
@@ -1371,45 +1406,6 @@ describe('AgentMessageTurnHandler', () => {
 
       expect(agentManager.executePiTurn).toHaveBeenCalledOnce();
       expect(conversations.persistConversationTerminal).not.toHaveBeenCalled();
-    });
-
-    it('dispatches task-result continuations without storing user transcript messages', async () => {
-      const webview = createMockWebview();
-      const conversations = createMockConversations();
-      const agentManager = createMockAgentManager();
-      const settings = createMockSettings();
-      settings.selectedProviderId = 'anthropic';
-      settings.selectedModelId = 'claude-3';
-      const handler = buildHandler({
-        conversations,
-        agentManager,
-        settings,
-      });
-
-      await handler.handleTaskResultContinuation(webview as any, {
-        id: 'followup-1',
-        conversationId: 'conv-1',
-        runId: 'run-1',
-        observationId: 'observation-1',
-        taskId: 'task-1',
-        policy: { kind: 'auto-resume-agent', prompt: 'Continue' },
-        prompt: 'Continue from the completed async task result.',
-        createdAt: 123,
-      });
-
-      expect(conversations.addMessageToConversation).not.toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          role: 'user',
-          content: 'Continue from the completed async task result.',
-        }),
-      );
-      expect(agentManager.executePiTurn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          conversationId: 'conv-1',
-          prompt: 'Continue from the completed async task result.',
-        }),
-      );
     });
   });
 
@@ -1726,10 +1722,12 @@ describe('AgentMessageTurnHandler', () => {
       ];
       (vscode.window as any).activeTextEditor = {
         document: {
+          fileName: `${targetProjectRoot}/config.toml`,
           uri: {
             fsPath: `${targetProjectRoot}/config.toml`,
             toString: () => `file://${targetProjectRoot}/config.toml`,
           },
+          getText: () => '',
         },
       };
       vi.mocked(vscode.commands.executeCommand).mockResolvedValue({
@@ -1751,6 +1749,7 @@ describe('AgentMessageTurnHandler', () => {
           projectRoot: targetProjectRoot,
         }),
       );
+      expect(loggerWarn).not.toHaveBeenCalled();
     });
   });
 });

@@ -57,7 +57,9 @@ import {
 } from './presentation/cli-process-presentation';
 import {
   DirectMediaCommandError,
+  executeDirectGenerationJobCommand,
   executeDirectMediaCommand,
+  type DirectGenerationJobAction,
   type DirectMediaKind,
 } from './core/direct-media-command';
 import { createDirectMediaRuntime } from './core/direct-media-runtime';
@@ -77,6 +79,7 @@ export function classifyCliCommandRuntime(commandName: string | undefined): CliC
     case 'image':
     case 'video':
     case 'audio':
+    case 'generation':
       return 'direct-media';
     case 'completion':
     case 'config':
@@ -204,6 +207,7 @@ export function createCliProgram(
   for (const kind of ['image', 'video', 'audio'] as const) {
     registerDirectMediaCommand(program, kind, terminal, dependencies);
   }
+  registerGenerationJobCommands(program, terminal, dependencies);
 
   addLocaleOptions(
     addInteractiveOptions(
@@ -302,6 +306,10 @@ function registerDirectMediaCommand(
           '-m, --model <model>',
           terminal.presentation.t('agent.terminal.commander.option.mediaModel'),
         )
+        .option(
+          '--detach',
+          terminal.presentation.t('agent.terminal.commander.option.mediaDetach'),
+        )
         .option('--json', terminal.presentation.t('agent.terminal.commander.option.json')),
       terminal,
     ),
@@ -321,6 +329,7 @@ function registerDirectMediaCommand(
             config: directConfig.config,
             modelOptions: directConfig.modelOptions,
             ...(typeof opts['model'] === 'string' ? { model: opts['model'] } : {}),
+            ...(opts['detach'] === true ? { detached: true } : {}),
           },
           binding.runtime,
         );
@@ -336,6 +345,82 @@ function registerDirectMediaCommand(
       }
     }, terminal);
   });
+}
+
+function registerGenerationJobCommands(
+  program: Command,
+  terminal: AgentTerminalInvocationContext,
+  dependencies: CliProgramDependencies,
+): void {
+  const generation = program
+    .command('generation')
+    .description(terminal.presentation.t('agent.terminal.commander.command.generation'));
+  for (const action of ['describe', 'cancel', 'retry', 'reconcile'] as const) {
+    const command = addLocaleOptions(
+      addWorkDirOptions(
+        generation
+          .command(action)
+          .description(
+            terminal.presentation.t(`agent.terminal.commander.command.generation.${action}`),
+          )
+          .argument(
+            '<jobId>',
+            terminal.presentation.t('agent.terminal.commander.argument.generationJobId'),
+          ),
+        terminal,
+      ),
+      terminal,
+    );
+    if (action !== 'describe') {
+      command.argument(
+        '<expectedRevision>',
+        terminal.presentation.t('agent.terminal.commander.argument.expectedRevision'),
+      );
+    }
+    command.action(
+      async (
+        jobId: string,
+        expectedRevisionOrOptions: string | Record<string, unknown>,
+        maybeOptions?: Record<string, unknown>,
+      ) => {
+        const opts =
+          action === 'describe'
+            ? (expectedRevisionOrOptions as Record<string, unknown>)
+            : (maybeOptions ?? {});
+        const expectedRevision =
+          action === 'describe'
+            ? undefined
+            : parseExpectedRevision(expectedRevisionOrOptions as string, action);
+        await runCliAction(async () => {
+          const workDir = resolveCliWorkDir(withGlobalOptions(program, opts));
+          const binding = await (
+            dependencies.createDirectMediaRuntime ?? createDirectMediaRuntime
+          )({ workDir });
+          try {
+            const snapshot = await executeDirectGenerationJobCommand(
+              {
+                action,
+                jobId,
+                ...(expectedRevision === undefined ? {} : { expectedRevision }),
+              },
+              binding.runtime,
+            );
+            console.log(JSON.stringify(snapshot));
+          } finally {
+            await binding.dispose();
+          }
+        }, terminal);
+      },
+    );
+  }
+}
+
+function parseExpectedRevision(value: string, action: DirectGenerationJobAction): number {
+  const revision = Number(value);
+  if (!Number.isSafeInteger(revision) || revision <= 0) {
+    throw new Error(`${action} expectedRevision must be a positive integer.`);
+  }
+  return revision;
 }
 
 function registerConfigCommands(program: Command, terminal: AgentTerminalInvocationContext): void {

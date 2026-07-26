@@ -2,7 +2,12 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createRef, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentContextPayload } from '@neko/shared';
-import type { AgentLlmConfig, Message, SettingsState } from '@neko-agent/types';
+import {
+  parseSendMessageWebviewMessage,
+  type AgentLlmConfig,
+  type Message,
+  type SettingsState,
+} from '@neko-agent/types';
 import type { ChatWorkspaceProps } from './ChatWorkspace';
 import { ChatWorkspace } from './ChatWorkspace';
 import type { ComposerMenuState } from '@/components/ChatView/InputArea/types';
@@ -13,14 +18,10 @@ const vscodeMocks = vi.hoisted(() => ({
   refreshConfigSnapshot: vi.fn(),
   searchProjectFiles: vi.fn(),
   getContextTokenCount: vi.fn(),
-  getTasks: vi.fn(),
   getMessageQueue: vi.fn(),
   clearHistory: vi.fn(),
   compressContext: vi.fn(),
   cancelMessage: vi.fn(),
-  cancelTask: vi.fn(),
-  retryTask: vi.fn(),
-  viewTaskResult: vi.fn(),
   promoteQueuedMessage: vi.fn(),
   cancelQueuedMessage: vi.fn(),
   editQueuedMessage: vi.fn(),
@@ -150,21 +151,6 @@ vi.mock('@/components/ChatView', () => ({
         type="button"
         data-testid="clear-active-skill"
         onClick={() => props.onClearActiveSkill?.('record-1')}
-      />
-      <button
-        type="button"
-        data-testid="cancel-task"
-        onClick={() => props.onCancelTask?.('task-1')}
-      />
-      <button
-        type="button"
-        data-testid="retry-task"
-        onClick={() => props.onRetryTask?.('task-1')}
-      />
-      <button
-        type="button"
-        data-testid="view-task-result"
-        onClick={() => props.onViewTaskResult?.('task-1', 'result-1')}
       />
       <button
         type="button"
@@ -354,6 +340,113 @@ describe('ChatWorkspace pending send', () => {
     );
 
     expect(vscodeMocks.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('replays a pending image entry send with the selected direct media model', () => {
+    const runtime = createTabRenderRuntime({ tabId: 'tab-image', conversationId: 'conv-image' });
+    const settings = createSettingsWithAgentMediaModels();
+
+    render(
+      <ChatWorkspace
+        {...createProps({
+          tabRenderStore: runtime.store,
+          settings,
+          pendingSendRequest: {
+            id: 2,
+            input: {
+              messageText: 'generate a red circle',
+              displayMessageText: 'generate a red circle',
+              sessionMode: 'image',
+            },
+          },
+        })}
+      />,
+    );
+
+    act(() => {
+      runtime.store.updateState({
+        modelConfigurationInitialized: true,
+        selectedModel: 'test-model',
+        mediaModelSelection: {
+          image: 'image-provider:image-model',
+          video: 'video-provider:video-model',
+          audio: 'audio-provider:audio-model',
+        },
+      });
+    });
+
+    const payload = { type: 'sendMessage', ...vscodeMocks.sendMessage.mock.calls[0]?.[0] };
+    expect(payload).toEqual(
+      expect.objectContaining({
+        conversationId: 'conv-image',
+        sessionMode: 'image',
+        mediaModel: {
+          providerId: 'image-provider',
+          modelId: 'image-model',
+          category: 'image',
+        },
+      }),
+    );
+    expect(parseSendMessageWebviewMessage(payload)).not.toBeNull();
+  });
+
+  it('projects hydrated Agent media defaults into the pending send turn policy', () => {
+    const runtime = createTabRenderRuntime({ tabId: 'tab-new', conversationId: 'conv-new' });
+    const settings = createSettingsWithAgentMediaModels();
+
+    render(
+      <ChatWorkspace
+        {...createProps({
+          tabRenderStore: runtime.store,
+          settings,
+          pendingSendRequest: {
+            id: 2,
+            input: {
+              messageText: 'submit one detached image generation',
+              displayMessageText: 'submit one detached image generation',
+            },
+          },
+        })}
+      />,
+    );
+
+    expect(vscodeMocks.sendMessage).not.toHaveBeenCalled();
+
+    act(() => {
+      runtime.store.updateState({
+        modelConfigurationInitialized: true,
+        selectedModel: 'test-model',
+        mediaModelSelection: {
+          image: 'image-provider:image-model',
+          video: 'video-provider:video-model',
+          audio: 'audio-provider:audio-model',
+        },
+      });
+    });
+
+    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-new',
+        sessionMode: 'agent',
+        purposeModels: {
+          'image.generate': {
+            providerId: 'image-provider',
+            modelId: 'image-model',
+            category: 'image',
+          },
+          'video.generate': {
+            providerId: 'video-provider',
+            modelId: 'video-model',
+            category: 'video',
+          },
+          'audio.generate': {
+            providerId: 'audio-provider',
+            modelId: 'audio-model',
+            category: 'audio',
+          },
+        },
+      }),
+    );
   });
 
   it('keeps running-turn queued sends out of transcript messages', () => {
@@ -721,9 +814,6 @@ describe('ChatWorkspace pending send', () => {
     fireEvent.click(target.getByTestId('promote-queued'));
     fireEvent.click(target.getByTestId('cancel-queued'));
     fireEvent.click(target.getByTestId('edit-queued'));
-    fireEvent.click(target.getByTestId('cancel-task'));
-    fireEvent.click(target.getByTestId('retry-task'));
-    fireEvent.click(target.getByTestId('view-task-result'));
 
     runRegisteredShortcut('clearConversation');
 
@@ -735,9 +825,6 @@ describe('ChatWorkspace pending send', () => {
     expect(vscodeMocks.promoteQueuedMessage).toHaveBeenCalledWith('conv-b', 'queued-1');
     expect(vscodeMocks.cancelQueuedMessage).toHaveBeenCalledWith('conv-b', 'queued-1');
     expect(vscodeMocks.editQueuedMessage).toHaveBeenCalledWith('tab-b', 'conv-b', 'queued-1');
-    expect(vscodeMocks.cancelTask).toHaveBeenCalledWith('task-1');
-    expect(vscodeMocks.retryTask).toHaveBeenCalledWith('task-1');
-    expect(vscodeMocks.viewTaskResult).toHaveBeenCalledWith('task-1', 'result-1');
     expect(clearMessages).toHaveBeenCalledTimes(1);
     expect(setAmbientNodes).toHaveBeenCalledWith([
       { nodeId: 'node-b', type: 'group', summary: 'Tab B group' },
@@ -856,7 +943,7 @@ function createProps(overrides: Partial<ChatWorkspaceProps> = {}): ChatWorkspace
     pluginCommands: [],
     workItems: [],
     pluginsAvailable: {},
-    setActiveTab: noop as React.Dispatch<React.SetStateAction<'chat'>>,
+    setActiveTab: noop as React.Dispatch<React.SetStateAction<import('@neko-agent/types').TabType>>,
     conversationCompressingRef: createRefWithCurrent(new Map()),
     contextTokenCount: 0,
     isCompressing: false,
@@ -911,6 +998,46 @@ function createSettingsWithImageModel(): SettingsState {
         modelId: 'image-model',
         label: 'Image Model',
         category: 'image',
+        capabilities: ['text_to_image'],
+      },
+    ],
+  };
+}
+
+function createSettingsWithAgentMediaModels(): SettingsState {
+  const settings = createSettings();
+  return {
+    ...settings,
+    defaultMediaModels: {
+      image: 'image-provider:image-model',
+      video: 'video-provider:video-model',
+      audio: 'audio-provider:audio-model',
+    },
+    chatModelOptions: [
+      ...settings.chatModelOptions,
+      {
+        id: 'image-provider:image-model',
+        providerId: 'image-provider',
+        modelId: 'image-model',
+        label: 'Image Model',
+        category: 'image',
+        capabilities: ['text_to_image'],
+      },
+      {
+        id: 'video-provider:video-model',
+        providerId: 'video-provider',
+        modelId: 'video-model',
+        label: 'Video Model',
+        category: 'video',
+        capabilities: ['text_to_video'],
+      },
+      {
+        id: 'audio-provider:audio-model',
+        providerId: 'audio-provider',
+        modelId: 'audio-model',
+        label: 'Audio Model',
+        category: 'audio',
+        capabilities: ['text_to_audio'],
       },
     ],
   };

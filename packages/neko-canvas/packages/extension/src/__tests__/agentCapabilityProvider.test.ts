@@ -19,8 +19,8 @@ function createPlaybackPlan(): CanvasPlaybackPlan {
       {
         id: 'markdown-1',
         sourceNodeId: 'markdown-1',
-        kind: 'markdown',
-        renderMode: 'markdown',
+        kind: 'node',
+        renderMode: 'select-node',
         label: 'Draft',
       },
     ],
@@ -115,9 +115,9 @@ describe('canonical Canvas Agent capability provider', () => {
       connections: CANVAS_CONNECTION_TYPES.map((type) => expect.objectContaining({ type })),
       containers: [expect.objectContaining({ id: 'group', layoutModes: ['manual'] })],
     });
-    expect(result.data.presets).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ nodeType: 'job' })]),
-    );
+    expect(result.data).not.toMatchObject({
+      presets: expect.arrayContaining([expect.objectContaining({ nodeType: 'job' })]),
+    });
     expect(result.data).not.toHaveProperty('fieldProfiles');
     expect(result.data).not.toHaveProperty('semanticPrompts');
   });
@@ -149,9 +149,9 @@ describe('canonical Canvas Agent capability provider', () => {
 
   it('registers only canonical approval-gated Markdown lifecycle capabilities', () => {
     const provider = createNekoCanvasCapabilityProvider(createApi());
-    const lifecycleCapabilities = provider.getArtifactFacets({
-      extensionContext: {},
-    }).lifecycleCapabilities;
+    const facets = provider.getArtifactFacets?.({ extensionContext: {} });
+    if (!facets) throw new Error('Canvas artifact facets are unavailable');
+    const lifecycleCapabilities = facets.lifecycleCapabilities;
 
     expect(lifecycleCapabilities).toEqual([
       expect.objectContaining({

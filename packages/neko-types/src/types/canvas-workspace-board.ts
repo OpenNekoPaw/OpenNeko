@@ -1,8 +1,7 @@
-import { isDocumentArchiveResourceRef, type DocumentArchiveResourceRef } from './document-reading';
-import { validateDurableResourceRef } from './durable-resource-ref';
+import { validateContentLocator, type ContentLocator } from './content-locator';
 import type { GeneratedAsset, GeneratedAssetMediaKind } from './generated-asset';
-import { hashStableValue, type ResourceRef } from './resource-cache';
 import { isCanvasMaterialGenerationContext, type CanvasMaterialGenerationContext } from './canvas';
+import { hashStableValue } from './stable-value';
 
 export const CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION = 2 as const;
 export const CANVAS_WORKSPACE_BOARD_PATH = 'neko/boards/workspace.nkc' as const;
@@ -26,6 +25,7 @@ export interface CanvasWorkspaceDeliveryProcess {
   readonly sourceHost: CanvasWorkspaceDeliveryHost;
   readonly createdAt: string;
   readonly taskId?: string;
+  readonly operationId?: string;
   readonly runId?: string;
 }
 
@@ -39,6 +39,7 @@ export interface CanvasWorkspaceProjectionProvenance {
   readonly sourceId: string;
   readonly sourceArtifactIds?: readonly string[];
   readonly taskId?: string;
+  readonly operationId?: string;
   readonly runId?: string;
   readonly createdAt: string;
 }
@@ -63,8 +64,7 @@ export type CanvasWorkspaceProjectionArtifact = CanvasWorkspaceProjectionArtifac
         readonly kind: Exclude<CanvasWorkspaceProjectionKind, 'markdown'>;
         readonly title: string;
         readonly mimeType?: string;
-        readonly resourceRef?: ResourceRef;
-        readonly documentResourceRef?: DocumentArchiveResourceRef;
+        readonly contentLocator: ContentLocator;
         readonly generationContext?: CanvasMaterialGenerationContext;
         /** Portable intrinsic pixel dimensions used to size newly projected image nodes. */
         readonly intrinsicDimensions?: CanvasWorkspaceArtifactDimensions;
@@ -97,7 +97,8 @@ export type CanvasWorkspaceProjectionDiagnosticCode =
   | 'duplicate-artifact-identity'
   | 'invalid-artifact-relation'
   | 'unsupported-projection-kind'
-  | 'invalid-resource-ref'
+  | 'invalid-content-locator'
+  | 'content-locator-migration-required'
   | 'runtime-value-forbidden'
   | 'legacy-routing-forbidden'
   | 'delivery-ledger-unavailable'
@@ -128,8 +129,10 @@ export function createSafeCanvasWorkspaceProjectionDiagnostic(
       'Workspace Board delivery contains an invalid creative-content relation.',
     'unsupported-projection-kind':
       'Workspace Board delivery contains an unsupported artifact kind.',
-    'invalid-resource-ref':
-      'Workspace Board delivery contains an invalid durable resource reference.',
+    'invalid-content-locator':
+      'Workspace Board delivery contains an invalid durable content locator.',
+    'content-locator-migration-required':
+      'Workspace Board delivery uses a removed content reference and must be delivered again.',
     'runtime-value-forbidden': 'Workspace Board delivery contains a forbidden runtime-only value.',
     'legacy-routing-forbidden': 'Workspace Board delivery contains a removed routing field.',
     'delivery-ledger-unavailable': 'Workspace Board delivery state is unavailable.',
@@ -223,8 +226,8 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
     revision: requireGeneratedAssetLifecycle(asset).revision,
   }));
   const deliveryId = `generated-output-batch:${hashGeneratedAssetIdentities(identities)}`;
-  const taskId = sharedString(
-    assets.map((asset) => requireGeneratedAssetLifecycle(asset).generation.taskId),
+  const operationId = sharedString(
+    assets.map((asset) => requireGeneratedAssetLifecycle(asset).generation.operationId),
   );
   const runId = sharedString(
     assets.map((asset) => requireGeneratedAssetLifecycle(asset).generation.runId),
@@ -237,7 +240,7 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
     process: {
       deliveryId,
       sourceHost,
-      ...(taskId ? { taskId } : {}),
+      ...(operationId ? { operationId } : {}),
       ...(runId ? { runId } : {}),
       createdAt,
     },
@@ -248,7 +251,7 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
         kind: lifecycle.mediaKind,
         title: asset.prompt?.trim() || `Generated ${lifecycle.mediaKind}`,
         mimeType: asset.mimeType,
-        resourceRef: lifecycle.resourceRef,
+        contentLocator: lifecycle.contentLocator,
         ...(generationContext ? { generationContext } : {}),
         provenance: {
           version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
@@ -257,8 +260,8 @@ export function createGeneratedAssetsWorkspaceDeliveryBatch(
           revision: lifecycle.revision,
           kind: lifecycle.mediaKind,
           role: 'output' as const,
-          sourceId: lifecycle.resourceRef.id,
-          taskId: lifecycle.generation.taskId,
+          sourceId: lifecycle.contentLocator.outputId,
+          operationId: lifecycle.generation.operationId,
           ...(lifecycle.generation.runId ? { runId: lifecycle.generation.runId } : {}),
           createdAt: asset.generatedAt,
         },
@@ -357,9 +360,13 @@ const LEGACY_ROUTING_KEYS = new Set([
 
 const RUNTIME_KEYS = new Set([
   'assetMembership',
+  'base64',
   'cachePath',
   'canvasData',
+  'dataUrl',
+  'localPath',
   'processHandle',
+  'providerUrl',
   'rawCanvas',
   'renderUri',
   'token',
@@ -413,6 +420,12 @@ export function isCanvasWorkspaceProjectionRequest(
     return (
       typeof artifact['kind'] === 'string' &&
       typeof artifact['title'] === 'string' &&
+      (artifact['kind'] === 'markdown'
+        ? typeof artifact['markdown'] === 'string'
+        : validateContentLocator(artifact['contentLocator']).ok &&
+          artifact['resourceRef'] === undefined &&
+          artifact['documentResourceRef'] === undefined &&
+          artifact['localPath'] === undefined) &&
       typeof provenance['deliveryId'] === 'string' &&
       typeof provenance['artifactId'] === 'string' &&
       typeof provenance['revision'] === 'string' &&
@@ -770,34 +783,33 @@ function validateArtifact(
         ),
       );
     }
-  } else if (artifact['resourceRef']) {
-    const validation = validateDurableResourceRef(artifact['resourceRef'], [
-      ...path,
-      'resourceRef',
-    ]);
-    diagnostics.push(
-      ...validation.diagnostics.map((entry) =>
-        diagnostic('invalid-resource-ref', entry.message, entry.path),
-      ),
-    );
   } else if (
-    artifact['documentResourceRef'] &&
-    !isDocumentArchiveResourceRef(artifact['documentResourceRef'])
+    artifact['resourceRef'] !== undefined ||
+    artifact['documentResourceRef'] !== undefined ||
+    artifact['localPath'] !== undefined
   ) {
     diagnostics.push(
-      diagnostic('invalid-resource-ref', 'Canvas document reference is malformed.', [
-        ...path,
-        'documentResourceRef',
-      ]),
-    );
-  } else if (!artifact['documentResourceRef']) {
-    diagnostics.push(
       diagnostic(
-        'invalid-resource-ref',
-        'File and media projection requires a stable resource reference.',
+        'content-locator-migration-required',
+        'Canvas file and media artifacts must be delivered again with contentLocator.',
         path,
       ),
     );
+  } else {
+    const locator = validateContentLocator(artifact['contentLocator']);
+    if (!locator.ok) {
+      diagnostics.push(
+        diagnostic(
+          artifact['contentLocator'] === undefined
+            ? 'content-locator-migration-required'
+            : 'invalid-content-locator',
+          artifact['contentLocator'] === undefined
+            ? 'File and media projection requires exactly one contentLocator.'
+            : locator.diagnostics.map((entry) => entry.message).join('; '),
+          [...path, 'contentLocator'],
+        ),
+      );
+    }
   }
 }
 

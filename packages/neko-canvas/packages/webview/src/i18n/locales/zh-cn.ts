@@ -167,6 +167,7 @@ export const zhCN = {
   'workspaceBoard.task': '任务 · {id}',
   'workspaceBoard.run': '运行 · {id}',
   'workspaceBoard.processing': '处理中',
+  'workspaceBoard.generatedBatch': '生成素材',
   'preset.group.label': '名称',
   'panel.properties': '属性',
   'panel.noSelection': '选择节点查看属性',

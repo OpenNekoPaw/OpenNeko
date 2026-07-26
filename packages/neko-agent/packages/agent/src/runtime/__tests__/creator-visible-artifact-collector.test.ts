@@ -1,21 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { createGeneratedAssetRevisionRef } from '@neko/shared';
+import {
+  contentLocatorKey,
+  createGeneratedAssetRevisionRef,
+  hashStableValue,
+  type ContentLocator,
+} from '@neko/shared';
 import {
   collectCreatorVisibleArtifacts,
   type CreatorVisibleToolResult,
 } from '../turn/creator-visible-artifact-collector';
 
-const sourceRef = {
-  id: 'source:document-1',
-  scope: 'project' as const,
-  provider: 'document',
-  kind: 'document' as const,
-  source: {
-    kind: 'file' as const,
-    projectRelativePath: 'materials/brief.md',
-  },
-  locator: { kind: 'file' as const, path: 'materials/brief.md' },
-  fingerprint: { strategy: 'hash' as const, value: 'sha256:source-1' },
+const sourceLocator = {
+  kind: 'workspace-file' as const,
+  path: 'materials/brief.png',
+  fingerprint: { strategy: 'sha256' as const, value: 'sha256:source-1' },
 };
 
 describe('collectCreatorVisibleArtifacts', () => {
@@ -31,7 +29,7 @@ describe('collectCreatorVisibleArtifacts', () => {
               assetId: 'brief-image',
               uri: 'materials/brief.png',
               mimeType: 'image/png',
-              resourceRef: sourceRef,
+              contentLocator: sourceLocator,
             },
           },
           {
@@ -41,7 +39,10 @@ describe('collectCreatorVisibleArtifacts', () => {
               assetId: 'unselected-image',
               uri: 'materials/unselected.png',
               mimeType: 'image/png',
-              resourceRef: { ...sourceRef, id: 'source:unselected' },
+              contentLocator: {
+                kind: 'workspace-file',
+                path: 'materials/unselected.png',
+              },
             },
           },
         ],
@@ -61,17 +62,19 @@ describe('collectCreatorVisibleArtifacts', () => {
       },
       { success: false, attachments: [{ type: 'image', path: 'failed.png' }] },
     ];
+    const sourceId = contentSourceId(sourceLocator);
 
     const collected = collectCreatorVisibleArtifacts({
       toolResults,
-      consumedResourceIds: new Set(['source:document-1']),
+      consumedContentSourceIds: new Set([sourceId]),
       generatedLifecycles: [
         createGeneratedAssetRevisionRef({
           assetId: 'generated-1',
           contentDigest: 'sha256:generated-1',
+          contentPath: 'neko/generated/image/generated-1.png',
           mediaKind: 'image',
           mimeType: 'image/png',
-          generation: { taskId: 'task-1' },
+          generation: { operationId: 'operation-generated-1' },
         }),
       ],
     });
@@ -80,7 +83,8 @@ describe('collectCreatorVisibleArtifacts', () => {
       expect.objectContaining({
         artifactId: 'brief-image',
         role: 'source',
-        sourceId: 'source:document-1',
+        sourceId,
+        contentLocator: sourceLocator,
       }),
       expect.objectContaining({
         artifactId: 'analysis-1',
@@ -105,12 +109,12 @@ describe('collectCreatorVisibleArtifacts', () => {
       {
         name: 'ReadDocument',
         success: true,
-        data: { resourceRef: sourceRef },
+        data: { contentLocator: sourceLocator },
       },
     ];
 
     expect(collectCreatorVisibleArtifacts({ toolResults, assistantMarkdown })).toEqual([
-      expect.objectContaining({ role: 'source', resourceRef: sourceRef }),
+      expect.objectContaining({ role: 'source', contentLocator: sourceLocator }),
       expect.objectContaining({
         artifactId: 'material-analysis',
         role: 'analysis',
@@ -126,11 +130,10 @@ describe('collectCreatorVisibleArtifacts', () => {
   });
 
   it('keeps ReadImage intrinsic dimensions with a document-entry attachment', () => {
-    const documentResourceRef = {
+    const documentLocator = {
       kind: 'document-entry' as const,
-      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      source: { kind: 'workspace-file' as const, path: 'books/Blame.epub' },
       entryPath: 'OEBPS/images/cover.jpg',
-      versionPolicy: 'read-only-source' as const,
     };
 
     const collected = collectCreatorVisibleArtifacts({
@@ -140,7 +143,7 @@ describe('collectCreatorVisibleArtifacts', () => {
           success: true,
           data: {
             mode: 'metadata',
-            images: [{ resourceRef: documentResourceRef, width: 1024, height: 1536 }],
+            images: [{ contentLocator: documentLocator, width: 1024, height: 1536 }],
           },
           attachments: [
             {
@@ -150,7 +153,7 @@ describe('collectCreatorVisibleArtifacts', () => {
                 assetId: 'cover-image',
                 uri: 'document-entry://cover',
                 mimeType: 'image/jpeg',
-                documentResourceRef,
+                contentLocator: documentLocator,
               },
             },
           ],
@@ -168,14 +171,13 @@ describe('collectCreatorVisibleArtifacts', () => {
   });
 
   it('finalizes explicitly requested native image analysis with its source images', () => {
-    const firstPageRef = {
+    const firstPageLocator = {
       kind: 'document-entry' as const,
-      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      source: { kind: 'workspace-file' as const, path: 'books/Blame.epub' },
       entryPath: 'OEBPS/images/page-01.jpg',
-      versionPolicy: 'read-only-source' as const,
     };
-    const secondPageRef = {
-      ...firstPageRef,
+    const secondPageLocator = {
+      ...firstPageLocator,
       entryPath: 'OEBPS/images/page-02.jpg',
     };
 
@@ -188,8 +190,8 @@ describe('collectCreatorVisibleArtifacts', () => {
             mode: 'metadata',
             analysis: 'storyboard',
             images: [
-              { resourceRef: firstPageRef, width: 1200, height: 1800 },
-              { resourceRef: secondPageRef, width: 1200, height: 1800 },
+              { contentLocator: firstPageLocator, width: 1200, height: 1800 },
+              { contentLocator: secondPageLocator, width: 1200, height: 1800 },
             ],
           },
           attachments: [
@@ -200,7 +202,7 @@ describe('collectCreatorVisibleArtifacts', () => {
                 assetId: 'page-01',
                 uri: 'document-entry://page-01',
                 mimeType: 'image/jpeg',
-                documentResourceRef: firstPageRef,
+                contentLocator: firstPageLocator,
               },
             },
             {
@@ -210,7 +212,7 @@ describe('collectCreatorVisibleArtifacts', () => {
                 assetId: 'page-02',
                 uri: 'document-entry://page-02',
                 mimeType: 'image/jpeg',
-                documentResourceRef: secondPageRef,
+                contentLocator: secondPageLocator,
               },
             },
           ],
@@ -233,11 +235,10 @@ describe('collectCreatorVisibleArtifacts', () => {
   });
 
   it('does not promote ordinary ReadImage replies without an explicit analysis declaration', () => {
-    const documentResourceRef = {
+    const documentLocator = {
       kind: 'document-entry' as const,
-      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      source: { kind: 'workspace-file' as const, path: 'books/Blame.epub' },
       entryPath: 'OEBPS/images/cover.jpg',
-      versionPolicy: 'read-only-source' as const,
     };
 
     const collected = collectCreatorVisibleArtifacts({
@@ -247,7 +248,7 @@ describe('collectCreatorVisibleArtifacts', () => {
           success: true,
           data: {
             mode: 'metadata',
-            images: [{ resourceRef: documentResourceRef, width: 1024, height: 1536 }],
+            images: [{ contentLocator: documentLocator, width: 1024, height: 1536 }],
           },
           attachments: [
             {
@@ -257,7 +258,7 @@ describe('collectCreatorVisibleArtifacts', () => {
                 assetId: 'cover-image',
                 uri: 'document-entry://cover',
                 mimeType: 'image/jpeg',
-                documentResourceRef,
+                contentLocator: documentLocator,
               },
             },
           ],
@@ -309,45 +310,85 @@ describe('collectCreatorVisibleArtifacts', () => {
     expect(collected[0]).toMatchObject({ artifactId: 'declared-storyboard-analysis' });
   });
 
-  it('coalesces weak and hashed observations of one portable source file', () => {
-    const portablePath = '${A}/epub/animation/Blame/volume-01.epub';
-    const weakRef = {
-      ...sourceRef,
-      id: 'res_weak',
-      source: { kind: 'file' as const, projectRelativePath: portablePath },
-      locator: { kind: 'file' as const, path: portablePath },
-      fingerprint: { strategy: 'none' as const, value: portablePath },
+  it('keeps unversioned and fingerprinted locators as explicit source revisions', () => {
+    const portablePath = 'epub/animation/Blame/volume-01.epub';
+    const unversionedLocator = {
+      kind: 'workspace-file' as const,
+      path: portablePath,
     };
-    const hashedRef = {
-      ...weakRef,
-      id: 'res_hashed',
-      fingerprint: { strategy: 'hash' as const, value: 'sha256:volume-01' },
+    const fingerprintedLocator = {
+      ...unversionedLocator,
+      fingerprint: { strategy: 'sha256' as const, value: 'sha256:volume-01' },
     };
 
     const collected = collectCreatorVisibleArtifacts({
       toolResults: [
-        { name: 'ReadDocument', success: true, data: { resourceRef: weakRef } },
-        { name: 'ReadDocument', success: true, data: { resourceRef: hashedRef } },
+        {
+          name: 'ReadDocument',
+          success: true,
+          data: { contentLocator: unversionedLocator },
+        },
+        {
+          name: 'ReadDocument',
+          success: true,
+          data: { contentLocator: fingerprintedLocator },
+        },
       ],
       assistantMarkdown: `~~~NEKO\n${JSON.stringify({
         schemaVersion: 1,
         kind: 'composite-artifact',
         artifactId: 'analysis-1',
         title: 'Material Analysis',
-        provenance: { sourceArtifactIds: ['res_weak'] },
         blocks: [{ blockId: 'findings', kind: 'text', text: 'Findings.' }],
       })}\n~~~`,
     });
 
     expect(collected.filter((candidate) => candidate.role === 'source')).toEqual([
+      expect.objectContaining({ contentLocator: unversionedLocator }),
       expect.objectContaining({
-        artifactId: 'res_hashed',
         revision: 'sha256:volume-01',
-        resourceRef: hashedRef,
+        contentLocator: fingerprintedLocator,
       }),
     ]);
-    expect(collected.find((candidate) => candidate.role === 'analysis')).toMatchObject({
-      sourceArtifactIds: ['res_hashed'],
-    });
+  });
+
+  it('fails visibly when a creator-visible Tool result only exposes legacy references', () => {
+    expect(() =>
+      collectCreatorVisibleArtifacts({
+        toolResults: [
+          {
+            success: true,
+            attachments: [
+              {
+                type: 'image',
+                path: 'materials/legacy.png',
+                assetRef: {
+                  assetId: 'legacy-image',
+                  uri: 'materials/legacy.png',
+                  mimeType: 'image/png',
+                  resourceRef: { id: 'legacy-resource' },
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrowError(/creator-visible-artifact-migration-required/u);
+
+    expect(() =>
+      collectCreatorVisibleArtifacts({
+        toolResults: [
+          {
+            name: 'ReadDocument',
+            success: true,
+            data: { resourceRef: { id: 'legacy-document' } },
+          },
+        ],
+      }),
+    ).toThrowError(/creator-visible-artifact-migration-required/u);
   });
 });
+
+function contentSourceId(locator: ContentLocator): string {
+  return `content:${hashStableValue(contentLocatorKey(locator))}`;
+}

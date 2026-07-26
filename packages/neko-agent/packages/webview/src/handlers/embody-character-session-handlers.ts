@@ -2,7 +2,6 @@
  * Embody Character session projection handlers.
  */
 
-import { discardConversationSnapshotProjection } from '@/render-lifecycle/conversation-render-state-adapter';
 import { defineHandler } from './types';
 import type { HandlerRegistration, MessageHandler } from './types';
 import type {
@@ -15,11 +14,6 @@ const handleEmbodyCharacterSessionStarted: MessageHandler<'embodyCharacterSessio
   message: EmbodyCharacterSessionStartedMessage,
   context,
 ) => {
-  discardConversationSnapshotProjection({
-    conversationId: message.session.sessionId,
-    conversationMessagesRef: context.conversationMessagesRef,
-    conversationStreamingRef: context.conversationStreamingRef,
-  });
   openConversationTabBinding(context, {
     ...message.tab,
     kind: 'embody-character',

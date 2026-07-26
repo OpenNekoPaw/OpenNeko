@@ -83,7 +83,6 @@ export type ChatRestorePlanAction =
   | { type: 'sendConversationList' }
   | { type: 'sendSettings'; conversationId: string }
   | { type: 'postTabState'; message: TabStateMessage }
-  | { type: 'sendActiveConversationTasks' }
   | { type: 'sendAgentStateSnapshot' }
   | { type: 'postPluginCommands'; message: PluginCommandsMessage };
 
@@ -257,7 +256,7 @@ export function buildChatRestorePlan(input: BuildChatRestorePlanInput): ChatRest
     message: buildTabStateMessage(input.tabState, input.tabStateRevision),
   });
 
-  actions.push({ type: 'sendActiveConversationTasks' }, { type: 'sendAgentStateSnapshot' });
+  actions.push({ type: 'sendAgentStateSnapshot' });
 
   if (input.pluginCommands) {
     actions.push({

@@ -26,6 +26,12 @@ describe('CLI process presentation', () => {
         presentation,
       ),
     ).toBe('未为提供方“provider-原文”配置模型。');
+    expect(
+      presentConfigLoadDiagnostic(
+        { code: 'provider-protocol-not-configured', providerId: 'provider-原文' },
+        presentation,
+      ),
+    ).toBe('提供方“provider-原文”未配置协议 profile。');
   });
 
   it('localizes typed working-directory diagnostics without changing paths or option names', () => {

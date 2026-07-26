@@ -9,7 +9,6 @@ import type {
 
 const CHAT_ONLY_ACTIONS = new Set([
   'showSettings',
-  'showTasks',
   'showModelSelector',
   'showMCPServers',
   'showPermissions',

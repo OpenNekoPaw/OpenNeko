@@ -51,6 +51,14 @@ describe('i18n module', () => {
       expect(enCancel).toBe('Cancel');
       expect(zhCancel).toBe('取消');
     });
+
+    it('should translate Character Role labels', () => {
+      setLocale('zh-cn');
+
+      expect(t('characterRole.dialogue.mode.roleplay')).toBe('角色扮演');
+      expect(t('characterRole.fact.scene')).toBe('出现场景');
+      expect(t('characterRole.action.exit')).toBe('退出');
+    });
   });
 
   describe('detectLocale()', () => {

@@ -105,6 +105,53 @@ module.exports = {
         path: '^packages/(?!neko-preview/)[^/]+/packages/extension/',
       },
     },
+
+    // ── Rule 6: Character domain ownership ────────────
+    {
+      name: 'chara-no-agent-runtime-implementation',
+      comment:
+        'neko-chara may consume Agent contracts, but must not depend on Agent runtime, platform, Extension, Webview, or provider implementations',
+      severity: 'error',
+      from: { path: '^packages/neko-chara/' },
+      to: {
+        path: '^packages/neko-agent/packages/(?!agent-types/)',
+      },
+    },
+    {
+      name: 'agent-runtime-no-chara-domain',
+      comment:
+        'Generic Agent runtime packages remain domain-neutral; only the host composition package may depend on neko-chara',
+      severity: 'error',
+      from: {
+        path: '^packages/neko-agent/packages/(agent|ai-sdk|platform|webview|agent-types)/',
+      },
+      to: {
+        path: '^packages/neko-chara/',
+      },
+    },
+    {
+      name: 'quality-domain-only-shared-contracts',
+      comment:
+        'neko-quality is host-neutral and may depend only on Layer 0 shared contracts',
+      severity: 'error',
+      from: { path: '^packages/neko-quality/' },
+      to: {
+        path: '^packages/',
+        pathNot: ['^packages/neko-quality/', '^packages/neko-types/'],
+      },
+    },
+    {
+      name: 'agent-runtime-no-quality-domain',
+      comment:
+        'Generic Agent runtime packages remain Quality-neutral; only host composition may depend on neko-quality',
+      severity: 'error',
+      from: {
+        path: '^packages/neko-agent/packages/(agent|ai-sdk|platform|webview|agent-types)/',
+      },
+      to: {
+        path: '^packages/neko-quality/',
+      },
+    },
   ],
 
   options: {

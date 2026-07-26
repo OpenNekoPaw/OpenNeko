@@ -2,7 +2,7 @@
  * RichContent — Registry-driven content block rendering (ADR-6 §6.2)
  *
  * Type definitions for the renderer registry pattern that replaces
- * hard-coded if/switch dispatching in TaskCard and ToolCallDisplay.
+ * hard-coded if/switch dispatching in Tool result surfaces.
  */
 
 import type { ComponentType } from 'react';
@@ -32,7 +32,7 @@ export interface RichContentProps<T = unknown> {
   data: T;
   conversationId?: string | null;
   className?: string;
-  /** Compact mode — no header/chrome, used inside TaskCard inline results */
+  /** Compact mode: no header/chrome, used for inline Tool results. */
   inline?: boolean;
   /** Whether clicking the rendered media should request the host to open it. */
   openOnClick?: boolean;

@@ -1,34 +1,39 @@
-import type { Webview } from 'vscode';
+import {
+  createPiTimelineProjector,
+  type PiProductAgentEvent,
+  type PiProductEventSink,
+} from '@neko/agent/pi';
+import type { ConversationProjectionStore } from '@neko/agent/runtime';
+import type { AgentPhase, AgentTurnTimelineItem, ContentBlock, ToolCall } from '@neko-agent/types';
 
-import type { PiProductAgentEvent, PiProductEventSink } from '@neko/agent/pi';
-import { buildAgentAssistantMessageFromStream } from '@neko/agent/runtime';
-import type {
-  AgentEventStreamRuntimeMessage,
-  ConversationProjectionStore,
-} from '@neko/agent/runtime';
-import type {
-  AgentPhase,
-  AgentTurnTimelineItem,
-  AgentTurnTimelineOperation,
-  ContentBlock,
-  ToolCall,
-} from '@neko-agent/types';
-import type { ToolResultArtifactTransfer, ToolResultAttachment } from '@neko/shared';
+export interface CollectedToolCall {
+  readonly id: string;
+  readonly name: string;
+  readonly arguments: Record<string, unknown>;
+  readonly result?: ToolCall['result'];
+}
 
-import type { ConversationBridge } from '../conversationBridge';
-import type { StreamProcessingResult } from './agentStreamProcessor';
+/** Frozen terminal history derived from the canonical conversation projection. */
+export interface StreamProcessingResult {
+  readonly messageId: string;
+  readonly identity: {
+    readonly turnId: string;
+    readonly runId: string;
+  };
+  readonly accumulatedResponse: string;
+  readonly accumulatedThinking: string;
+  readonly hasError: boolean;
+  readonly errorMessage?: string;
+  readonly terminalStatus: 'completed' | 'cancelled' | 'failed';
+  readonly collectedToolCalls: readonly CollectedToolCall[];
+  readonly contentBlocks: readonly ContentBlock[];
+}
 
 export interface PiAgentStreamProcessorOptions {
-  readonly webview: Webview;
   readonly conversationId: string;
   readonly messageId: string;
   readonly projection: ConversationProjectionStore;
-  readonly conversations?: ConversationBridge;
   readonly onPhaseChange: (phase: AgentPhase, toolName?: string) => void;
-  readonly projectMessage: (
-    message: AgentEventStreamRuntimeMessage,
-  ) => Promise<AgentEventStreamRuntimeMessage>;
-  readonly isActive: () => boolean;
 }
 
 export interface PiAgentStreamSession {
@@ -37,483 +42,46 @@ export interface PiAgentStreamSession {
   dispose(): void;
 }
 
-type TimelineToolItem = Extract<AgentTurnTimelineItem, { readonly kind: 'tool_call' }>;
-type TimelineTextItem = Extract<AgentTurnTimelineItem, { readonly kind: 'assistant_text' }>;
-type TimelineThinkingItem = Extract<AgentTurnTimelineItem, { readonly kind: 'thinking' }>;
-
 export function createPiAgentStreamSession(
   options: PiAgentStreamProcessorOptions,
 ): PiAgentStreamSession {
-  if (options.projection.conversationId !== options.conversationId) {
-    throw new Error(
-      `Pi stream projection owner mismatch: expected ${options.conversationId}, received ${options.projection.conversationId}.`,
-    );
-  }
-  let turnId: string | undefined;
-  let runId: string | undefined;
-  let sequence = 0;
-  let accumulatedResponse = '';
-  let accumulatedThinking = '';
-  let terminalStatus: StreamProcessingResult['terminalStatus'] | undefined;
-  let errorMessage: string | undefined;
+  const projector = createPiTimelineProjector({
+    conversationId: options.conversationId,
+    messageId: options.messageId,
+    projection: options.projection,
+  });
   let disposed = false;
-  let activeText: TimelineTextItem | undefined;
-  let activeThinking: TimelineThinkingItem | undefined;
-  const toolItems = new Map<string, TimelineToolItem>();
-  const collectedToolCalls = new Map<string, ToolCall>();
-  const contentBlocks: ContentBlock[] = [];
-
-  const nextSequence = (): number => {
-    sequence += 1;
-    return sequence;
-  };
-
-  const requireTurnId = (event: PiProductAgentEvent): string => {
-    turnId ??= event.identity.turnId;
-    runId ??= event.identity.runId;
-    if (
-      turnId !== event.identity.turnId ||
-      runId !== event.identity.runId ||
-      event.identity.conversationId !== options.conversationId
-    ) {
-      throw new Error(
-        `Pi stream identity mismatch for ${event.identity.conversationId}/${event.identity.turnId}.`,
-      );
-    }
-    return turnId;
-  };
-
-  const applyProjection = (input: {
-    readonly operations: readonly AgentTurnTimelineOperation[];
-    readonly completion?: {
-      readonly status: StreamProcessingResult['terminalStatus'];
-      readonly completedAt: number;
-      readonly finalContentBlocks?: readonly ContentBlock[];
-    };
-  }): void => {
-    if (!turnId || !options.isActive()) return;
-    options.projection.apply({
-      type: 'agentTurnTimelineUpdate',
-      conversationId: options.conversationId,
-      turnId,
-      messageId: options.messageId,
-      operations: input.operations,
-      ...(input.completion === undefined ? {} : { completion: input.completion }),
-    });
-  };
-
-  const post = async (message: AgentEventStreamRuntimeMessage) => {
-    if (!options.isActive()) return;
-    const projected = await options.projectMessage(message);
-    await options.webview.postMessage(projected);
-  };
-
-  const completeOpenTextItems = (timestamp: number): AgentTurnTimelineOperation[] => {
-    const operations: AgentTurnTimelineOperation[] = [];
-    if (activeText) {
-      operations.push({
-        operation: 'complete',
-        itemId: activeText.itemId,
-        itemRevision: activeText.itemRevision + 1,
-        kind: 'assistant_text',
-        sourceGeneration: activeText.payload.sourceGeneration,
-        status: 'complete',
-        updatedAt: timestamp,
-      });
-      activeText = undefined;
-    }
-    if (activeThinking) {
-      operations.push({
-        operation: 'complete',
-        itemId: activeThinking.itemId,
-        itemRevision: activeThinking.itemRevision + 1,
-        kind: 'thinking',
-        sourceGeneration: activeThinking.payload.sourceGeneration,
-        status: 'complete',
-        updatedAt: timestamp,
-      });
-      activeThinking = undefined;
-    }
-    for (const block of contentBlocks) {
-      if (block.type === 'text') block.isStreaming = false;
-      if (block.type === 'thinking') block.isThinkingComplete = true;
-    }
-    return operations;
-  };
-
-  const upsertAssistantMessage = (isStreaming: boolean): void => {
-    if (!options.isActive()) return;
-    const message = buildAgentAssistantMessageFromStream({
-      id: options.messageId,
-      timestamp: Date.now(),
-      stream: {
-        accumulatedResponse,
-        accumulatedThinking,
-        hasError: terminalStatus === 'failed',
-        terminalStatus: terminalStatus ?? 'completed',
-        ...(errorMessage === undefined ? {} : { errorMessage }),
-        collectedToolCalls: [...collectedToolCalls.values()],
-        contentBlocks,
-      },
-    });
-    if (message) {
-      options.conversations?.upsertMessageToConversation(options.conversationId, {
-        ...message,
-        isStreaming,
-        contentBlocks: message.contentBlocks?.map((block) => ({ ...block })),
-      });
-    }
-  };
-
-  const finalize = async (
-    status: StreamProcessingResult['terminalStatus'],
-    timestamp: number,
-  ): Promise<void> => {
-    if (terminalStatus !== undefined) {
-      throw new Error(`Pi stream received duplicate terminal state ${status}.`);
-    }
-    terminalStatus = status;
-    options.onPhaseChange('idle');
-    applyProjection({
-      operations: completeOpenTextItems(timestamp),
-      completion: {
-        status,
-        completedAt: timestamp,
-        ...(contentBlocks.length === 0
-          ? {}
-          : { finalContentBlocks: contentBlocks.map((block) => ({ ...block })) }),
-      },
-    });
-    upsertAssistantMessage(false);
-    await post({
-      type: 'streamComplete',
-      conversationId: options.conversationId,
-      messageId: options.messageId,
-      ...(contentBlocks.length === 0
-        ? {}
-        : { contentBlocks: contentBlocks.map((block) => ({ ...block })) }),
-    });
-  };
 
   const events: PiProductEventSink = {
-    emit: async (event) => {
+    emit(event): void {
       if (disposed) throw new Error('Pi stream session is disposed.');
-      const currentTurnId = requireTurnId(event);
-      switch (event.type) {
-        case 'turn.started':
-          options.onPhaseChange('thinking');
-          return;
-        case 'assistant.thinking.delta': {
-          options.onPhaseChange('thinking');
-          accumulatedThinking += event.delta;
-          const block = contentBlocks.find(
-            (candidate) => candidate.id === activeThinking?.payload.sourceBlockId,
-          );
-          if (block?.type === 'thinking') block.thinking = `${block.thinking ?? ''}${event.delta}`;
-          if (activeThinking) {
-            activeThinking = {
-              ...activeThinking,
-              itemRevision: activeThinking.itemRevision + 1,
-              payload: {
-                ...activeThinking.payload,
-                content: `${activeThinking.payload.content}${event.delta}`,
-              },
-              updatedAt: event.timestamp,
-            };
-          } else {
-            const sourceBlockId = `block-thinking-${currentTurnId}-${nextSequence()}`;
-            contentBlocks.push({
-              id: sourceBlockId,
-              type: 'thinking',
-              timestamp: event.timestamp,
-              thinking: event.delta,
-              isThinkingComplete: false,
-            });
-            activeThinking = {
-              conversationId: options.conversationId,
-              turnId: currentTurnId,
-              messageId: options.messageId,
-              itemId: `thinking-${sequence}`,
-              sequence,
-              itemRevision: 1,
-              kind: 'thinking',
-              status: 'streaming',
-              payload: { content: event.delta, sourceBlockId, sourceGeneration: 1 },
-              createdAt: event.timestamp,
-              updatedAt: event.timestamp,
-            };
-          }
-          applyProjection({
-            operations: [
-              {
-                operation: 'append',
-                item: {
-                  ...activeThinking,
-                  payload: { ...activeThinking.payload, content: event.delta },
-                },
-              },
-            ],
-          });
-          await post({
-            type: 'streamThinking',
-            conversationId: options.conversationId,
-            messageId: options.messageId,
-            content: event.delta,
-          });
-          upsertAssistantMessage(true);
-          return;
-        }
-        case 'assistant.text.delta': {
-          options.onPhaseChange('streaming');
-          const priorThinking = activeThinking;
-          if (priorThinking) {
-            const thinkingBlock = contentBlocks.find(
-              (candidate) => candidate.id === priorThinking.payload.sourceBlockId,
-            );
-            if (thinkingBlock?.type === 'thinking') thinkingBlock.isThinkingComplete = true;
-          }
-          const priorCompletion: AgentTurnTimelineOperation[] = priorThinking
-            ? [
-                {
-                  operation: 'complete',
-                  itemId: priorThinking.itemId,
-                  itemRevision: priorThinking.itemRevision + 1,
-                  kind: 'thinking',
-                  sourceGeneration: priorThinking.payload.sourceGeneration,
-                  status: 'complete',
-                  updatedAt: event.timestamp,
-                },
-              ]
-            : [];
-          activeThinking = undefined;
-          accumulatedResponse += event.delta;
-          const block = contentBlocks.find(
-            (candidate) => candidate.id === activeText?.payload.sourceBlockId,
-          );
-          if (block?.type === 'text') block.content = `${block.content ?? ''}${event.delta}`;
-          if (activeText) {
-            activeText = {
-              ...activeText,
-              itemRevision: activeText.itemRevision + 1,
-              payload: {
-                ...activeText.payload,
-                content: `${activeText.payload.content}${event.delta}`,
-              },
-              updatedAt: event.timestamp,
-            };
-          } else {
-            const sourceBlockId = `block-text-${currentTurnId}-${nextSequence()}`;
-            contentBlocks.push({
-              id: sourceBlockId,
-              type: 'text',
-              timestamp: event.timestamp,
-              content: event.delta,
-              isStreaming: true,
-            });
-            activeText = {
-              conversationId: options.conversationId,
-              turnId: currentTurnId,
-              messageId: options.messageId,
-              itemId: `text-${sequence}`,
-              sequence,
-              itemRevision: 1,
-              kind: 'assistant_text',
-              status: 'streaming',
-              payload: {
-                content: event.delta,
-                format: 'markdown',
-                sourceBlockId,
-                sourceGeneration: 1,
-              },
-              createdAt: event.timestamp,
-              updatedAt: event.timestamp,
-            };
-          }
-          applyProjection({
-            operations: [
-              ...priorCompletion,
-              {
-                operation: 'append',
-                item: { ...activeText, payload: { ...activeText.payload, content: event.delta } },
-              },
-            ],
-          });
-          await post({
-            type: 'streamText',
-            conversationId: options.conversationId,
-            messageId: options.messageId,
-            content: event.delta,
-          });
-          upsertAssistantMessage(true);
-          return;
-        }
-        case 'tool.started': {
-          options.onPhaseChange('acting', event.toolName);
-          const operations = completeOpenTextItems(event.timestamp);
-          const toolCall: ToolCall = {
-            id: event.toolCallId,
-            name: event.toolName,
-            arguments: toRecord(event.args),
-          };
-          const item: TimelineToolItem = {
-            conversationId: options.conversationId,
-            turnId: currentTurnId,
-            messageId: options.messageId,
-            itemId: `tool-${event.toolCallId}`,
-            sequence: nextSequence(),
-            itemRevision: 1,
-            kind: 'tool_call',
-            status: 'pending',
-            payload: { toolCall },
-            createdAt: event.timestamp,
-            updatedAt: event.timestamp,
-          };
-          toolItems.set(event.toolCallId, item);
-          collectedToolCalls.set(event.toolCallId, toolCall);
-          contentBlocks.push({
-            id: `block-tool-${event.toolCallId}`,
-            type: 'tool_call',
-            timestamp: event.timestamp,
-            toolCall,
-          });
-          applyProjection({ operations: [...operations, { operation: 'upsert', item }] });
-          await post({
-            type: 'toolCall',
-            conversationId: options.conversationId,
-            messageId: options.messageId,
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            arguments: toolCall.arguments,
-          });
-          upsertAssistantMessage(true);
-          return;
-        }
-        case 'tool.updated':
-          return;
-        case 'tool.completed': {
-          const existing = toolItems.get(event.toolCallId);
-          if (!existing) throw new Error(`Pi completed unknown tool call ${event.toolCallId}.`);
-          const projectedResult = readToolResult(event.result, event.isError);
-          const toolCall: ToolCall = {
-            id: existing.payload.toolCall.id,
-            name: existing.payload.toolCall.name,
-            arguments: existing.payload.toolCall.arguments,
-            result: projectedResult,
-          };
-          const item: TimelineToolItem = {
-            ...existing,
-            itemRevision: existing.itemRevision + 1,
-            status: projectedResult.success ? 'succeeded' : 'failed',
-            payload: { toolCall },
-            updatedAt: event.timestamp,
-          };
-          toolItems.set(event.toolCallId, item);
-          collectedToolCalls.set(event.toolCallId, toolCall);
-          const block = contentBlocks.find(
-            (candidate) =>
-              candidate.type === 'tool_call' && candidate.toolCall?.id === event.toolCallId,
-          );
-          if (block) block.toolCall = toolCall;
-          applyProjection({ operations: [{ operation: 'upsert', item }] });
-          await post({
-            type: 'toolResult',
-            conversationId: options.conversationId,
-            messageId: options.messageId,
-            toolCallId: event.toolCallId,
-            success: projectedResult.success,
-            data: projectedResult.data,
-          });
-          upsertAssistantMessage(true);
-          return;
-        }
-        case 'confirmation.required': {
-          const existing = toolItems.get(event.toolCallId);
-          if (!existing) {
-            throw new Error(`Pi requested confirmation for unknown tool call ${event.toolCallId}.`);
-          }
-          const toolCall: ToolCall = {
-            ...existing.payload.toolCall,
-            pendingConfirmation: true,
-            confirmation: {
-              action: event.toolName,
-              description: event.summary,
-              details: { confirmationId: event.confirmationId },
-            },
-          };
-          const item: TimelineToolItem = {
-            ...existing,
-            itemRevision: existing.itemRevision + 1,
-            status: 'pending',
-            payload: { toolCall },
-            updatedAt: event.timestamp,
-          };
-          toolItems.set(event.toolCallId, item);
-          collectedToolCalls.set(event.toolCallId, toolCall);
-          const block = contentBlocks.find(
-            (candidate) =>
-              candidate.type === 'tool_call' && candidate.toolCall?.id === event.toolCallId,
-          );
-          if (block) block.toolCall = toolCall;
-          applyProjection({ operations: [{ operation: 'upsert', item }] });
-          upsertAssistantMessage(true);
-          return;
-        }
-        case 'turn.failed': {
-          errorMessage = event.error;
-          const item: AgentTurnTimelineItem = {
-            conversationId: options.conversationId,
-            turnId: currentTurnId,
-            messageId: options.messageId,
-            itemId: `error-${nextSequence()}`,
-            sequence,
-            itemRevision: 1,
-            kind: 'error',
-            status: 'failed',
-            payload: { message: event.error, code: 'pi-turn-failed' },
-            createdAt: event.timestamp,
-            updatedAt: event.timestamp,
-          };
-          applyProjection({ operations: [{ operation: 'upsert', item }] });
-          await post({
-            type: 'error',
-            conversationId: options.conversationId,
-            message: event.error,
-          });
-          await finalize('failed', event.timestamp);
-          return;
-        }
-        case 'turn.cancelled':
-          await finalize('cancelled', event.timestamp);
-          return;
-        case 'turn.completed':
-          await finalize('completed', event.timestamp);
-          return;
-        case 'assistant.message.completed':
-        case 'usage':
-        case 'task.observed':
-        case 'turn.persistence':
-          return;
-      }
+      projector.emit(event);
+      projectPhase(options.onPhaseChange, event);
     },
   };
 
   return {
     events,
     result: () => {
-      if (terminalStatus === undefined) {
+      if (!projector.terminal) {
         throw new Error('Pi stream completed without a terminal turn event.');
       }
-      return {
-        messageId: options.messageId,
-        ...(turnId && runId ? { identity: { turnId, runId } } : {}),
-        accumulatedResponse,
-        accumulatedThinking,
-        hasError: terminalStatus === 'failed',
-        ...(errorMessage === undefined ? {} : { errorMessage }),
-        terminalStatus,
-        collectedToolCalls: [...collectedToolCalls.values()],
-        contentBlocks: contentBlocks.map((block) => ({ ...block })),
-      };
+      const identity = projector.identity;
+      if (!identity) throw new Error('Pi stream completed without an established identity.');
+      const turn = options.projection
+        .snapshot()
+        .turns.find(
+          (candidate) =>
+            candidate.turnId === identity.turnId &&
+            candidate.runId === identity.runId &&
+            candidate.messageId === options.messageId,
+        );
+      if (!turn?.completion) {
+        throw new Error(
+          `Pi stream terminal projection is missing for ${identity.turnId}/${identity.runId}/${options.messageId}.`,
+        );
+      }
+      return projectTerminalResult(options.messageId, identity, turn.items, turn.completion.status);
     },
     dispose: () => {
       disposed = true;
@@ -521,69 +89,117 @@ export function createPiAgentStreamSession(
   };
 }
 
-function toRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? { ...value } : {};
-}
-
-function readToolResult(value: unknown, isError: boolean): NonNullable<ToolCall['result']> {
-  const details = isRecord(value) && isRecord(value.details) ? value.details : undefined;
-  if (details && typeof details.success === 'boolean') {
-    return {
-      success: details.success,
-      data: details.data,
-      ...(typeof details.error === 'string' ? { error: details.error } : {}),
-      ...readToolResultCollections(details),
-    };
+function projectPhase(
+  onPhaseChange: (phase: AgentPhase, toolName?: string) => void,
+  event: PiProductAgentEvent,
+): void {
+  switch (event.type) {
+    case 'turn.started':
+    case 'assistant.thinking.delta':
+      onPhaseChange('thinking');
+      return;
+    case 'assistant.text.delta':
+      onPhaseChange('streaming');
+      return;
+    case 'tool.started':
+      onPhaseChange('acting', event.toolName);
+      return;
+    case 'turn.completed':
+    case 'turn.cancelled':
+    case 'turn.failed':
+      onPhaseChange('idle');
+      return;
+    case 'assistant.message.completed':
+    case 'tool.updated':
+    case 'tool.completed':
+    case 'usage':
+    case 'confirmation.required':
+    case 'confirmation.resolved':
+    case 'turn.persistence':
+      return;
   }
+}
+
+function projectTerminalResult(
+  messageId: string,
+  identity: { readonly turnId: string; readonly runId: string },
+  items: readonly AgentTurnTimelineItem[],
+  terminalStatus: StreamProcessingResult['terminalStatus'],
+): StreamProcessingResult {
+  const textItems = items.filter(
+    (item): item is Extract<AgentTurnTimelineItem, { readonly kind: 'assistant_text' }> =>
+      item.kind === 'assistant_text',
+  );
+  const thinkingItems = items.filter(
+    (item): item is Extract<AgentTurnTimelineItem, { readonly kind: 'thinking' }> =>
+      item.kind === 'thinking',
+  );
+  const toolItems = items.filter(
+    (item): item is Extract<AgentTurnTimelineItem, { readonly kind: 'tool_call' }> =>
+      item.kind === 'tool_call',
+  );
+  const errorItems = items.filter(
+    (item): item is Extract<AgentTurnTimelineItem, { readonly kind: 'error' }> =>
+      item.kind === 'error',
+  );
+  const errorMessage = errorItems
+    .map((item) => item.payload.message)
+    .find((message): message is string => message !== undefined);
+
   return {
-    success: !isError,
-    data:
-      details && 'data' in details
-        ? details.data
-        : isRecord(value) && 'details' in value
-          ? value.details
-          : value,
-    ...(isError ? { error: 'Pi tool execution failed.' } : {}),
-    ...readToolResultCollections(details ?? value),
+    messageId,
+    identity,
+    accumulatedResponse: textItems.map((item) => item.payload.content).join(''),
+    accumulatedThinking: thinkingItems.map((item) => item.payload.content).join(''),
+    hasError: terminalStatus === 'failed',
+    ...(errorMessage === undefined ? {} : { errorMessage }),
+    terminalStatus,
+    collectedToolCalls: toolItems.map((item) => structuredClone(item.payload.toolCall)),
+    contentBlocks: items.flatMap(projectTerminalContentBlock),
   };
 }
 
-function readToolResultCollections(value: unknown): {
-  readonly attachments?: readonly ToolResultAttachment[];
-  readonly artifacts?: readonly ToolResultArtifactTransfer[];
-} {
-  if (!isRecord(value)) return {};
-  const attachments = value['attachments'];
-  const artifacts = value['artifacts'];
-  return {
-    ...(Array.isArray(attachments)
-      ? { attachments: attachments.filter(isToolResultAttachment) }
-      : {}),
-    ...(Array.isArray(artifacts)
-      ? { artifacts: artifacts.filter(isToolResultArtifactTransfer) }
-      : {}),
-  };
-}
-
-function isToolResultAttachment(value: unknown): value is ToolResultAttachment {
-  if (!isRecord(value)) return false;
-  const type = value['type'];
-  return (
-    (type === 'image' || type === 'audio' || type === 'video') && typeof value['path'] === 'string'
-  );
-}
-
-function isToolResultArtifactTransfer(value: unknown): value is ToolResultArtifactTransfer {
-  if (!isRecord(value)) return false;
-  const type = value['type'];
-  return (
-    type === 'artifactSnapshot' ||
-    type === 'artifactBackfill' ||
-    type === 'artifactBlockPage' ||
-    type === 'artifactExecutionSummary'
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+function projectTerminalContentBlock(item: AgentTurnTimelineItem): ContentBlock[] {
+  switch (item.kind) {
+    case 'assistant_text':
+      return [
+        {
+          id: item.itemId,
+          type: 'text',
+          timestamp: item.createdAt,
+          content: item.payload.content,
+          isStreaming: false,
+        },
+      ];
+    case 'thinking':
+      return [
+        {
+          id: item.itemId,
+          type: 'thinking',
+          timestamp: item.createdAt,
+          thinking: item.payload.content,
+          isThinkingComplete: true,
+        },
+      ];
+    case 'tool_call':
+      return [
+        {
+          id: item.itemId,
+          type: 'tool_call',
+          timestamp: item.createdAt,
+          toolCall: structuredClone(item.payload.toolCall) as ToolCall,
+        },
+      ];
+    case 'composite':
+      return [
+        {
+          id: item.itemId,
+          type: 'composite',
+          timestamp: item.createdAt,
+          composite: structuredClone(item.payload.composite),
+        },
+      ];
+    case 'error':
+      return [];
+  }
 }

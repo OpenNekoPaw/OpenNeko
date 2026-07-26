@@ -1,48 +1,93 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ToolRegistry } from '@neko/agent';
-import type { ResourceRef } from '@neko/shared';
-import type { MediaTask } from '../types';
+import type { ContentLocator, GeneratedOutputContentLocator } from '@neko/shared';
+import type { GenerationJobSnapshot, SubmitGenerationJobInput } from '@neko/generation';
 import { registerMediaAgentTools } from '../media-agent-tools';
 
 function createMediaMock() {
+  const terminals = new Map<string, GenerationJobSnapshot>();
+  const generateImage = vi.fn(async (request: SubmitGenerationJobInput['request']) =>
+    createResult('text-to-image', request),
+  );
+  const generateVideo = vi.fn(async (request: SubmitGenerationJobInput['request']) =>
+    createResult('text-to-video', request),
+  );
+  const generateAudio = vi.fn(async (request: SubmitGenerationJobInput['request']) =>
+    createResult('text-to-audio', request),
+  );
+  let sequence = 0;
+  const submitGeneration = vi.fn(async (input: SubmitGenerationJobInput) => {
+    const result = input.generationType.includes('video')
+      ? await generateVideo(input.request)
+      : input.generationType.includes('image')
+        ? await generateImage(input.request)
+        : await generateAudio(input.request);
+    const jobId = `generation-job-${++sequence}`;
+    const ref = { kind: 'generation' as const, jobId };
+    const initial: GenerationJobSnapshot = {
+      ref,
+      lifecycleMode: input.lifecycleMode,
+      phase: 'pending',
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      request: input,
+      progress: { stage: 'queued', percent: 0 },
+    };
+    terminals.set(jobId, {
+      ...initial,
+      phase: 'succeeded',
+      revision: 3,
+      updatedAt: 3,
+      progress: { stage: 'completed', percent: 100 },
+      resultLocators: result.outputs.map((output, index) =>
+        createGeneratedContentLocator(`${jobId}:${output.type}:${index}`),
+      ),
+    });
+    return initial;
+  });
+  const observeGeneration = vi.fn(async function* (ref: { readonly jobId: string }) {
+    const terminal = terminals.get(ref.jobId);
+    if (!terminal) throw new Error(`Unknown Generation Job ${ref.jobId}`);
+    yield {
+      ...terminal,
+      phase: 'running' as const,
+      revision: 2,
+      updatedAt: 2,
+      progress: { stage: 'waiting-provider' as const, percent: 45 },
+      resultLocators: undefined,
+    };
+    yield terminal;
+  });
   return {
-    generateImage: vi.fn(async (request: Record<string, unknown>) =>
-      createTask('image-task', 'text-to-image', request),
-    ),
-    generateVideo: vi.fn(async (request: Record<string, unknown>) =>
-      createTask('video-task', 'text-to-video', request),
-    ),
-    generateAudio: vi.fn(async (request: Record<string, unknown>) =>
-      createTask('audio-task', 'text-to-audio', request),
-    ),
+    generateImage,
+    generateVideo,
+    generateAudio,
+    submitGeneration,
+    describeGeneration: vi.fn(async (ref: { readonly jobId: string }) => {
+      const terminal = terminals.get(ref.jobId);
+      if (!terminal) throw new Error(`Unknown Generation Job ${ref.jobId}`);
+      return terminal;
+    }),
+    observeGeneration,
+    cancelGeneration: vi.fn(),
+    retryGeneration: vi.fn(),
+    reconcileGeneration: vi.fn(),
   };
 }
 
-function createTask(
-  id: string,
-  type: MediaTask['type'],
-  request: Record<string, unknown>,
-): MediaTask {
-  const metadata = request.metadata as Record<string, unknown> | undefined;
-  const conversationId = (metadata?.conversationId as string | undefined) ?? 'conv-1';
-  const runId = (metadata?.runId as string | undefined) ?? 'run-1';
+function createResult(
+  type: 'text-to-image' | 'text-to-video' | 'text-to-audio',
+  request: SubmitGenerationJobInput['request'],
+) {
+  const outputType =
+    type === 'text-to-image' ? 'image' : type === 'text-to-video' ? 'video' : 'audio';
   return {
-    scope: {
-      conversationId,
-      runId,
-      parentRunId: runId,
-      childRunId: id,
-      childKind: 'task',
-    },
-    id,
     type,
-    status: 'pending',
-    progress: 0,
     providerId: (request.providerId as string | undefined) ?? 'default-provider',
     modelId: (request.modelId as string | undefined) ?? 'default-model',
-    createdAt: new Date(0),
-    updatedAt: new Date(0),
-    request: request as never,
+    outputs: [{ type: outputType, url: `https://example.test/result.${outputType}` }],
+    request,
   };
 }
 
@@ -77,6 +122,8 @@ function executeAgentTool(
     ...options,
     metadata: {
       ...options.metadata,
+      turnId: options.metadata?.turnId ?? 'turn-1',
+      toolCallId: options.metadata?.toolCallId ?? `${name}-call-1`,
       ...(purpose && canonicalProviderId && canonicalModelId
         ? {
             modelPurpose: purpose,
@@ -111,6 +158,165 @@ function mediaPurposeForTool(name: string): string | undefined {
 }
 
 describe('registerMediaAgentTools', () => {
+  it('registers exact Generation Job management tools on the owning domain port', async () => {
+    const registry = new ToolRegistry();
+    const jobs = createMediaMock();
+    registerMediaAgentTools(registry, jobs as never);
+
+    const names = registry.toToolDefinitions().map((tool) => tool.function.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'SubmitGenerationJob',
+        'DescribeGenerationJob',
+        'ObserveGenerationJob',
+        'CancelGenerationJob',
+        'RetryGenerationJob',
+        'ReconcileGenerationJob',
+      ]),
+    );
+
+    await jobs.submitGeneration({
+      lifecycleMode: 'linked',
+      generationType: 'text-to-image',
+      providerId: 'image-provider',
+      modelId: 'image-model',
+      request: { prompt: 'cat' },
+    });
+    const ref = { kind: 'generation' as const, jobId: 'generation-job-1' };
+    const terminal = await jobs.describeGeneration(ref);
+    jobs.cancelGeneration.mockResolvedValue({ ...terminal, phase: 'cancelled' });
+    jobs.retryGeneration.mockResolvedValue({
+      ...terminal,
+      ref: { kind: 'generation', jobId: 'generation-job-2' },
+      phase: 'pending',
+      revision: 1,
+    });
+    jobs.reconcileGeneration.mockResolvedValue(terminal);
+
+    await expect(
+      executeAgentTool(registry, 'DescribeGenerationJob', { jobId: ref.jobId }),
+    ).resolves.toMatchObject({
+      success: true,
+      data: { jobId: ref.jobId, phase: 'succeeded', revision: 3 },
+    });
+    await expect(
+      executeAgentTool(registry, 'ObserveGenerationJob', {
+        jobId: ref.jobId,
+        afterRevision: 1,
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      data: { jobId: ref.jobId, phase: 'running', revision: 2 },
+    });
+    await executeAgentTool(registry, 'CancelGenerationJob', {
+      jobId: ref.jobId,
+      expectedRevision: 3,
+    });
+    await executeAgentTool(registry, 'RetryGenerationJob', {
+      jobId: ref.jobId,
+      expectedRevision: 3,
+    });
+    await executeAgentTool(registry, 'ReconcileGenerationJob', {
+      jobId: ref.jobId,
+      expectedRevision: 3,
+    });
+
+    expect(jobs.observeGeneration).toHaveBeenCalledWith(ref, 1);
+    expect(jobs.cancelGeneration).toHaveBeenCalledWith({ ref, expectedRevision: 3 });
+    expect(jobs.retryGeneration).toHaveBeenCalledWith({ ref, expectedRevision: 3 });
+    expect(jobs.reconcileGeneration).toHaveBeenCalledWith({ ref, expectedRevision: 3 });
+  });
+
+  it('submits one detached Generation Job through the Host-bound purpose target', async () => {
+    const registry = new ToolRegistry();
+    const jobs = createMediaMock();
+    registerMediaAgentTools(registry, jobs as never);
+
+    const result = await registry.execute(
+      'SubmitGenerationJob',
+      { kind: 'image', prompt: '  a red paper kite  ' },
+      {
+        metadata: {
+          turnId: 'turn-detached',
+          toolCallId: 'submit-generation-call',
+          modelPurpose: 'image.generate',
+          modelProviderId: 'host-image-provider',
+          modelId: 'host-image-model',
+        },
+        trace: {
+          conversationId: 'conversation-detached',
+          runId: 'run-detached',
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        jobKind: 'generation',
+        jobId: 'generation-job-1',
+        phase: 'pending',
+        revision: 1,
+        progress: { stage: 'queued', percent: 0 },
+      },
+    });
+    expect(jobs.submitGeneration).toHaveBeenCalledTimes(1);
+    expect(jobs.submitGeneration).toHaveBeenCalledWith({
+      lifecycleMode: 'detached',
+      generationType: 'text-to-image',
+      providerId: 'host-image-provider',
+      modelId: 'host-image-model',
+      request: {
+        prompt: 'a red paper kite',
+        providerId: 'host-image-provider',
+        modelId: 'host-image-model',
+        metadata: {
+          detached: true,
+          source: 'agent-generation-job-tool',
+          conversationId: 'conversation-detached',
+          runId: 'run-detached',
+          turnId: 'turn-detached',
+          toolCallId: 'submit-generation-call',
+        },
+      },
+    });
+    expect(jobs.observeGeneration).not.toHaveBeenCalled();
+    expect(jobs.describeGeneration).not.toHaveBeenCalled();
+    expect(jobs.generateImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects model-authored routing for detached Generation Job submission', async () => {
+    const registry = new ToolRegistry();
+    const jobs = createMediaMock();
+    registerMediaAgentTools(registry, jobs as never);
+
+    await expect(
+      registry.execute(
+        'SubmitGenerationJob',
+        {
+          kind: 'image',
+          prompt: 'a red paper kite',
+          providerId: 'model-authored-provider',
+          modelId: 'model-authored-model',
+        },
+        {
+          metadata: {
+            turnId: 'turn-detached',
+            toolCallId: 'submit-generation-call',
+          },
+          trace: {
+            conversationId: 'conversation-detached',
+            runId: 'run-detached',
+          },
+        },
+      ),
+    ).resolves.toMatchObject({
+      success: false,
+      error: expect.stringContaining('rejects model-authored providerId/modelId'),
+    });
+    expect(jobs.submitGeneration).not.toHaveBeenCalled();
+  });
+
   it('exposes numeric fps enum values in the GenerateVideo tool schema', () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
@@ -132,6 +338,48 @@ describe('registerMediaAgentTools', () => {
     expect(parameters?.properties).not.toHaveProperty('modelId');
   });
 
+  it('exposes only locator-backed media inputs and poisons legacy materialized fields', async () => {
+    const registry = new ToolRegistry();
+    const media = createMediaMock();
+    registerMediaAgentTools(registry, media as never);
+
+    const definitions = new Map(
+      registry
+        .toToolDefinitions()
+        .map((tool) => [tool.function.name, tool.function.parameters.properties]),
+    );
+    expect(definitions.get('GenerateImage')).toHaveProperty('referenceImageLocator');
+    expect(definitions.get('GenerateImage')).not.toHaveProperty('referenceImageBase64');
+    expect(definitions.get('TransformImage')).toHaveProperty('sourceImageLocator');
+    expect(definitions.get('TransformImage')).not.toHaveProperty('sourceImageUri');
+    expect(definitions.get('GenerateVideo')).toHaveProperty('startFrameLocator');
+    expect(definitions.get('GenerateVideo')).not.toHaveProperty('startFrameRef');
+
+    const image = await executeAgentTool(registry, 'GenerateImage', {
+      prompt: 'legacy input',
+      referenceImageBase64: 'runtime-bytes',
+      providerId: 'image-provider',
+      modelId: 'image-model',
+    });
+    expect(image).toMatchObject({
+      success: false,
+      error: expect.stringContaining('referenceImageBase64'),
+    });
+
+    const video = await executeAgentTool(registry, 'GenerateVideo', {
+      prompt: 'legacy input',
+      startFrameRef: { id: 'legacy-resource' },
+      providerId: 'video-provider',
+      modelId: 'video-model',
+    });
+    expect(video).toMatchObject({
+      success: false,
+      error: expect.stringContaining('startFrameRef'),
+    });
+    expect(media.generateImage).not.toHaveBeenCalled();
+    expect(media.generateVideo).not.toHaveBeenCalled();
+  });
+
   it('projects Chinese media tool schema text for model-facing definitions', () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
@@ -145,36 +393,29 @@ describe('registerMediaAgentTools', () => {
     const music = byName.get('GenerateMusic');
     const tts = byName.get('GenerateTTS');
 
-    expect(image?.description).toContain('异步图像生成 Task');
+    expect(image?.description).toContain('Tool Call 返回终态结果');
     expect(image?.description).toContain('generated 草稿');
     expect(image?.description).toContain('Quality');
-    expect(image?.description).toContain('不是 SubAgent ID');
-    expect(image?.description).toContain('禁止传给 subagent 或 subagent_output');
-    expect(image?.description).toContain('Task observation/continuation');
     expect(getPropertyDescription(image, 'prompt')).toBe('图像生成或编辑提示词。');
-    expect(getPropertyDescription(image, 'referenceImageUri')).toContain('宿主已解析');
+    expect(getPropertyDescription(image, 'referenceImageLocator')).toContain('ContentLocator');
     expect(getPropertyDescription(image, 'editInstruction')).toContain('编辑指令');
     expect(getPropertyDescription(image, 'prompt')).not.toContain('Text description');
 
-    expect(transform?.description).toContain('异步图像编辑任务');
+    expect(transform?.description).toContain('Tool Call 返回终态结果');
     expect(transform?.description).toContain('不是确定性裁切');
-    expect(getPropertyDescription(transform, 'sourceImageUri')).toContain('源图像');
+    expect(getPropertyDescription(transform, 'sourceImageLocator')).toContain('源图像');
     expect(getPropertyDescription(transform, 'operationPlan')).toContain('可审阅');
 
-    expect(video?.description).toContain('异步视频生成 Task');
-    expect(video?.description).toContain('不要因为目标是“动画”');
+    expect(video?.description).toContain('Tool Call 返回终态结果');
     expect(video?.description).toContain('generated clip 草稿');
-    expect(video?.description).toContain('禁止传给 subagent 或 subagent_output');
     expect(getPropertyDescription(video, 'prompt')).toBe('视频生成或编辑提示词。');
-    expect(getPropertyDescription(video, 'referenceImageUri')).toContain('图生视频');
+    expect(getPropertyDescription(video, 'startFrameLocator')).toContain('ContentLocator');
     expect(getPropertyDescription(video, 'editInstruction')).toContain('视频编辑');
 
-    expect(music?.description).toContain('异步音乐生成 Task');
-    expect(music?.description).toContain('禁止传给 subagent 或 subagent_output');
+    expect(music?.description).toContain('Tool Call 返回终态音频结果');
     expect(getPropertyDescription(music, 'mood')).toContain('音乐情绪');
 
-    expect(tts?.description).toContain('异步文本转语音 Task');
-    expect(tts?.description).toContain('禁止传给 subagent 或 subagent_output');
+    expect(tts?.description).toContain('Tool Call 返回终态音频结果');
     expect(getPropertyDescription(tts, 'text')).toBe('要朗读的文本。');
     expect(getPropertyDescription(tts, 'sourceCueId')).toContain('对白 cue ID');
   });
@@ -189,7 +430,7 @@ describe('registerMediaAgentTools', () => {
 
     expect(image).toMatchObject({
       safetyKind: 'non-destructive-mutation',
-      requirements: { mediaService: true },
+      requirements: { generationJob: true },
       traits: { cost: 'moderate', reversible: true, locality: 'network', impactLevel: 'low' },
     });
     expect(image?.description).toContain('generated draft');
@@ -198,21 +439,21 @@ describe('registerMediaAgentTools', () => {
 
     expect(transform).toMatchObject({
       safetyKind: 'non-destructive-mutation',
-      requirements: { mediaService: true, contentAccess: true },
+      requirements: { generationJob: true, contentAccess: true },
       traits: { cost: 'moderate', reversible: true, locality: 'network', impactLevel: 'low' },
     });
     expect(transform?.description).toContain('not deterministic crop');
 
     expect(video).toMatchObject({
       safetyKind: 'non-destructive-mutation',
-      requirements: { mediaService: true, contentAccess: true },
+      requirements: { generationJob: true, contentAccess: true },
       traits: { cost: 'expensive', reversible: true, locality: 'network', impactLevel: 'low' },
     });
-    expect(video?.description).toContain('animation goal alone');
+    expect(video?.description).toContain('terminal result');
     expect(video?.description).toContain('generated clip draft');
   });
 
-  it('keeps media Task IDs out of the SubAgent result path in English definitions', () => {
+  it('describes linked terminal execution without Task continuation in English definitions', () => {
     const registry = new ToolRegistry();
     registerMediaAgentTools(registry, createMediaMock() as never);
 
@@ -220,9 +461,9 @@ describe('registerMediaAgentTools', () => {
       const definition = registry
         .toToolDefinitions()
         .find((tool) => tool.function.name === name)?.function;
-      expect(definition?.description).toContain('not a SubAgent ID');
-      expect(definition?.description).toContain('never pass it to subagent or subagent_output');
-      expect(definition?.description).toContain('Host Task observation/continuation');
+      expect(definition?.description).toContain('linked Tool Call');
+      expect(definition?.description).not.toContain('taskId');
+      expect(definition?.description).not.toContain('Task observation/continuation');
     }
   });
 
@@ -239,7 +480,7 @@ describe('registerMediaAgentTools', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(media.generateImage).toHaveBeenCalledWith(
+    expect(media.generateImage.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         prompt: 'A lighthouse at dusk',
         providerId: 'openai-provider',
@@ -256,7 +497,9 @@ describe('registerMediaAgentTools', () => {
     );
     expect(result.data).toEqual(
       expect.objectContaining({
-        taskRef: { source: 'media-task', sourceTaskId: 'image-task' },
+        status: 'completed',
+        toolCallId: 'GenerateImage-call-1',
+        outputs: [expect.objectContaining({ type: 'image' })],
         routedTo: expect.objectContaining({
           provider: 'openai-provider',
           model: 'dalle-model',
@@ -268,6 +511,72 @@ describe('registerMediaAgentTools', () => {
         }),
       }),
     );
+  });
+
+  it('waits for terminal media, forwards progress, and returns outputs under one toolCallId', async () => {
+    const registry = new ToolRegistry();
+    const media = createMediaMock();
+    const controller = new AbortController();
+    const progress = vi.fn();
+    registerMediaAgentTools(registry, media as never);
+
+    const result = await executeAgentTool(
+      registry,
+      'GenerateImage',
+      {
+        prompt: 'A lighthouse at dusk',
+        providerId: 'openai-provider',
+        modelId: 'dalle-model',
+      },
+      {
+        signal: controller.signal,
+        onProgress: progress,
+        metadata: { turnId: 'turn-linked', toolCallId: 'tool-linked' },
+      },
+    );
+
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        percent: 45,
+        stage: 'waiting-provider',
+        data: expect.objectContaining({
+          kind: 'generation-job',
+          jobId: 'generation-job-1',
+          revision: expect.any(Number),
+          phase: 'running',
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      data: {
+        turnId: 'turn-linked',
+        toolCallId: 'tool-linked',
+        status: 'completed',
+        jobId: 'generation-job-1',
+        outputs: [
+          {
+            type: 'image',
+            contentLocator: expect.objectContaining({
+              kind: 'generated-output',
+              outputId: 'generation-job-1:image:0',
+            }),
+          },
+        ],
+      },
+      attachments: [
+        expect.objectContaining({
+          type: 'image',
+          contentLocator: expect.objectContaining({
+            kind: 'generated-output',
+            outputId: 'generation-job-1:image:0',
+          }),
+        }),
+      ],
+    });
+    expect(result.data).not.toHaveProperty('backgroundMode');
+    expect(result.data).not.toHaveProperty('taskId');
+    expect(result.data).not.toHaveProperty('taskRef');
   });
 
   it('preserves the runtime conversation id in GenerateImage request metadata', async () => {
@@ -293,12 +602,13 @@ describe('registerMediaAgentTools', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(media.generateImage).toHaveBeenCalledWith(
+    expect(media.generateImage.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         metadata: expect.objectContaining({
           conversationId: 'conv-1',
           runId: 'run-1',
-          resultDeliveryPolicy: { kind: 'auto-resume-agent' },
+          turnId: 'turn-1',
+          toolCallId: 'GenerateImage-call-1',
         }),
       }),
     );
@@ -327,7 +637,7 @@ describe('registerMediaAgentTools', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(media.generateImage).toHaveBeenCalledWith(
+    expect(media.generateImage.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         metadata: expect.objectContaining({
           understandingModels: {
@@ -410,7 +720,7 @@ describe('registerMediaAgentTools', () => {
     );
   });
 
-  it('marks Agent-submitted audio media tasks for auto-resume when the runtime trace has a conversation id', async () => {
+  it('binds Agent audio execution to the exact Tool Call without continuation metadata', async () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
     registerMediaAgentTools(registry, media as never);
@@ -433,12 +743,13 @@ describe('registerMediaAgentTools', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(media.generateAudio).toHaveBeenCalledWith(
+    expect(media.generateAudio.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         metadata: expect.objectContaining({
           conversationId: 'conv-1',
           runId: 'run-1',
-          resultDeliveryPolicy: { kind: 'auto-resume-agent' },
+          turnId: 'turn-1',
+          toolCallId: 'GenerateMusic-call-1',
         }),
       }),
     );
@@ -476,7 +787,7 @@ describe('registerMediaAgentTools', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(media.generateVideo).toHaveBeenCalledWith(
+    expect(media.generateVideo.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         prompt:
           'cat detective walking through a neon rainy alley, anime, cyberpunk, slow tracking shot, avoid blurry',
@@ -523,7 +834,7 @@ describe('registerMediaAgentTools', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(media.generateImage).toHaveBeenCalledWith(
+    expect(media.generateImage.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         prompt: 'A quiet forest shrine',
         metadata: expect.objectContaining({
@@ -565,7 +876,7 @@ describe('registerMediaAgentTools', () => {
 
     expect(result.success).toBe(true);
     expect(result.data).not.toHaveProperty('semanticPrompt');
-    const request = media.generateImage.mock.calls[0]?.[0] as Record<string, unknown>;
+    const request = media.generateImage.mock.calls[0]?.[0];
     expect(request).not.toHaveProperty('semanticPrompt');
   });
 
@@ -577,9 +888,9 @@ describe('registerMediaAgentTools', () => {
     const result = await executeAgentTool(registry, 'GenerateImage', {
       prompt: 'Clean the panel',
       negativePrompt: 'speech bubbles',
-      referenceImageUri: '${PROJECT}/refs/panel.png',
-      maskUri: '${PROJECT}/masks/speech-bubble.png',
-      controlImageUri: '${PROJECT}/controls/lineart.png',
+      referenceImageLocator: createWorkspaceLocator('refs/panel.png'),
+      maskLocator: createWorkspaceLocator('masks/speech-bubble.png'),
+      controlImageLocator: createWorkspaceLocator('controls/lineart.png'),
       controlMode: 'lineart',
       controlStrength: 0.7,
       inpaintStrength: 0.8,
@@ -590,13 +901,13 @@ describe('registerMediaAgentTools', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(media.generateImage).toHaveBeenCalledWith(
+    expect(media.generateImage.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         prompt: 'Clean the panel',
         negativePrompt: 'speech bubbles',
-        referenceImageUri: '${PROJECT}/refs/panel.png',
-        maskUri: '${PROJECT}/masks/speech-bubble.png',
-        controlImageUri: '${PROJECT}/controls/lineart.png',
+        referenceImageLocator: createWorkspaceLocator('refs/panel.png'),
+        maskLocator: createWorkspaceLocator('masks/speech-bubble.png'),
+        controlImageLocator: createWorkspaceLocator('controls/lineart.png'),
         controlMode: 'lineart',
         controlStrength: 0.7,
         inpaintStrength: 0.8,
@@ -606,7 +917,7 @@ describe('registerMediaAgentTools', () => {
     );
   });
 
-  it('blocks TransformImage when only stable refs are provided without host-resolved input', async () => {
+  it('blocks TransformImage when its source locator is missing', async () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
     registerMediaAgentTools(registry, media as never);
@@ -615,15 +926,10 @@ describe('registerMediaAgentTools', () => {
       editInstruction: 'Remove dialogue bubbles.',
       providerId: 'edit-provider',
       modelId: 'edit-model',
-      sourceImageRef: {
-        refId: 'source-panel-1',
-        role: 'source',
-        locator: { type: 'tool-result', toolCallId: 'read-comic', assetIndex: 0 },
-      },
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('host-resolved');
+    expect(result.error).toContain('sourceImageLocator');
     expect(media.generateImage).not.toHaveBeenCalled();
   });
 
@@ -633,11 +939,11 @@ describe('registerMediaAgentTools', () => {
     registerMediaAgentTools(registry, media as never);
 
     const transformTool = registry.get('TransformImage');
-    expect(transformTool?.parameters.properties.sourceImageRef).toEqual(
+    expect(transformTool?.parameters.properties.sourceImageLocator).toEqual(
       expect.objectContaining({ type: 'object' }),
     );
-    expect(transformTool?.parameters.properties.maskRefs).toEqual(
-      expect.objectContaining({ type: 'array' }),
+    expect(transformTool?.parameters.properties.maskLocator).toEqual(
+      expect.objectContaining({ type: 'object' }),
     );
 
     const result = await executeAgentTool(registry, 'TransformImage', {
@@ -645,13 +951,8 @@ describe('registerMediaAgentTools', () => {
       sceneId: 'scene-1',
       shotId: 'shot-1',
       editInstruction: 'Remove dialogue bubbles and fill the wall.',
-      sourceImageRef: {
-        refId: 'source-panel-1',
-        role: 'source',
-        locator: { type: 'tool-result', toolCallId: 'read-comic', assetIndex: 0 },
-      },
-      sourceImageUri: '${PROJECT}/resolved/source-panel-1.png',
-      maskUri: '${PROJECT}/resolved/speech-mask.png',
+      sourceImageLocator: createWorkspaceLocator('resolved/source-panel-1.png'),
+      maskLocator: createWorkspaceLocator('resolved/speech-mask.png'),
       operationPlan: ['crop-panel', 'remove-text', 'inpaint'],
       targetAspectRatio: '16:9',
       targetStyle: 'natural',
@@ -660,13 +961,13 @@ describe('registerMediaAgentTools', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(media.generateImage).toHaveBeenCalledWith(
+    expect(media.generateImage.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         prompt: 'Remove dialogue bubbles and fill the wall.',
         providerId: 'edit-provider',
         modelId: 'edit-model',
-        referenceImageUri: '${PROJECT}/resolved/source-panel-1.png',
-        maskUri: '${PROJECT}/resolved/speech-mask.png',
+        referenceImageLocator: createWorkspaceLocator('resolved/source-panel-1.png'),
+        maskLocator: createWorkspaceLocator('resolved/speech-mask.png'),
         aspectRatio: '16:9',
         style: 'natural',
         editInstruction: 'Remove dialogue bubbles and fill the wall.',
@@ -700,7 +1001,7 @@ describe('registerMediaAgentTools', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(media.generateVideo).toHaveBeenCalledWith(
+    expect(media.generateVideo.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         prompt: 'A spaceship launch',
         providerId: 'runway-provider',
@@ -716,7 +1017,7 @@ describe('registerMediaAgentTools', () => {
 
     const result = await executeAgentTool(registry, 'GenerateVideo', {
       prompt: 'Animate the prepared comic keyframe',
-      referenceImageUri: '${PROJECT}/resolved/keyframe-1.png',
+      startFrameLocator: createWorkspaceLocator('resolved/keyframe-1.png'),
       aspectRatio: '16:9',
       motionStrength: 0.4,
       cameraMovement: 'zoom-in',
@@ -731,10 +1032,10 @@ describe('registerMediaAgentTools', () => {
     });
 
     expect(result.success).toBe(true);
-    expect(media.generateVideo).toHaveBeenCalledWith(
+    expect(media.generateVideo.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         prompt: 'Animate the prepared comic keyframe',
-        referenceImageUri: '${PROJECT}/resolved/keyframe-1.png',
+        startFrameLocator: createWorkspaceLocator('resolved/keyframe-1.png'),
         aspectRatio: '16:9',
         motionStrength: 0.4,
         cameraMovement: 'zoom-in',
@@ -748,33 +1049,33 @@ describe('registerMediaAgentTools', () => {
     );
   });
 
-  it('passes canonical keyframe operation and stable ResourceRefs to GenerateVideo', async () => {
+  it('passes canonical keyframe operation and stable ContentLocators to GenerateVideo', async () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
     registerMediaAgentTools(registry, media as never);
-    const startFrameRef = createResourceRef('asset:image:first-frame');
-    const endFrameRef = createResourceRef('asset:image:end-frame');
+    const startFrameLocator = createWorkspaceLocator('assets/first-frame.png');
+    const endFrameLocator = createWorkspaceLocator('assets/end-frame.png');
 
     const result = await executeAgentTool(registry, 'GenerateVideo', {
       prompt: 'Animate between the approved keyframes',
       operation: 'generate-from-keyframes',
-      startFrameRef,
-      endFrameRef,
+      startFrameLocator,
+      endFrameLocator,
       providerId: 'dashscope-provider',
       modelId: 'wan-keyframe-model',
     });
 
     expect(result.success).toBe(true);
-    expect(media.generateVideo).toHaveBeenCalledWith(
+    expect(media.generateVideo.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         operation: 'generate-from-keyframes',
-        startFrameRef,
-        endFrameRef,
+        startFrameLocator,
+        endFrameLocator,
       }),
     );
   });
 
-  it('fails visibly for malformed stable video refs instead of dropping them', async () => {
+  it('fails visibly for malformed stable video locators instead of dropping them', async () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
     registerMediaAgentTools(registry, media as never);
@@ -782,14 +1083,14 @@ describe('registerMediaAgentTools', () => {
     const result = await executeAgentTool(registry, 'GenerateVideo', {
       prompt: 'Animate the shot',
       operation: 'generate-from-keyframes',
-      startFrameRef: { id: 'canvas-node-runtime-handle' },
-      endFrameRef: createResourceRef('asset:image:end-frame'),
+      startFrameLocator: { kind: 'workspace-file', path: '/tmp/runtime-frame.png' },
+      endFrameLocator: createWorkspaceLocator('assets/end-frame.png'),
       providerId: 'dashscope-provider',
       modelId: 'wan-keyframe-model',
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('startFrameRef must be a structurally valid ResourceRef');
+    expect(result.error).toContain('startFrameLocator must be a structurally valid ContentLocator');
     expect(media.generateVideo).not.toHaveBeenCalled();
   });
 
@@ -812,7 +1113,7 @@ describe('registerMediaAgentTools', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(media.generateImage).toHaveBeenCalledWith(
+    expect(media.generateImage.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         providerId: 'flux-provider',
         modelId: 'flux-model',
@@ -854,7 +1155,7 @@ describe('registerMediaAgentTools', () => {
     );
 
     expect(result.success).toBe(true);
-    expect(media.generateAudio).toHaveBeenCalledWith(
+    expect(media.generateAudio.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         providerId: 'tts-provider',
         modelId: 'tts-model',
@@ -863,14 +1164,20 @@ describe('registerMediaAgentTools', () => {
   });
 });
 
-function createResourceRef(id: string): ResourceRef {
+function createWorkspaceLocator(path: string): ContentLocator {
   return {
-    id,
-    scope: 'project',
-    provider: 'workspace',
-    kind: 'media',
-    source: { kind: 'file', projectRelativePath: `assets/${id.replaceAll(':', '-')}.png` },
-    fingerprint: { strategy: 'hash', value: `sha256:${id}` },
+    kind: 'workspace-file',
+    path,
+  };
+}
+
+function createGeneratedContentLocator(id: string): GeneratedOutputContentLocator {
+  return {
+    kind: 'generated-output',
+    outputId: id,
+    revision: `${id}:revision`,
+    digest: 'a'.repeat(64),
+    path: `neko/generated/${id.replaceAll(':', '-')}.png`,
   };
 }
 

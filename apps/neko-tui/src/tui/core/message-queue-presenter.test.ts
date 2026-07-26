@@ -33,7 +33,6 @@ describe('presentTuiMessageQueue', () => {
   it('keeps continuation kinds distinct and marks their priority', () => {
     const presentation = presentTuiMessageQueue(
       snapshot([
-        item({ id: 'task-queue', content: 'continue task', source: 'task-result-continuation' }),
         item({
           id: 'subagent-queue',
           content: 'continue subagent',
@@ -46,7 +45,6 @@ describe('presentTuiMessageQueue', () => {
 
     expect(presentation.hasPriorityContinuation).toBe(true);
     expect(presentation.rows.map((row) => [row.kind, row.canEdit, row.canCancel])).toEqual([
-      ['task-continuation', false, false],
       ['subagent-continuation', false, false],
       ['system-continuation', false, false],
     ]);

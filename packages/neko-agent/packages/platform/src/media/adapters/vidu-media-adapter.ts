@@ -7,12 +7,10 @@
 
 import type { Model, Provider } from '../../types/provider';
 import type {
-  ImageGenerationRequest,
-  VideoGenerationRequest,
-  AudioGenerationRequest,
   MediaAdapterResult,
   MediaGenerationType,
-} from '../types';
+  MaterializedVideoGenerationRequest,
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 /**
@@ -42,23 +40,8 @@ export class ViduMediaAdapter extends BaseMediaAdapter {
     return ['text-to-video', 'image-to-video'];
   }
 
-  override async generateImage(
-    _request: ImageGenerationRequest,
-    _model: Model,
-    _provider: Provider,
-  ): Promise<MediaAdapterResult> {
-    return {
-      status: 'failed',
-      error: {
-        code: 'NOT_SUPPORTED',
-        message: 'Vidu does not support image generation',
-        retryable: false,
-      },
-    };
-  }
-
-  override async generateVideo(
-    request: VideoGenerationRequest,
+  async generateVideo(
+    request: MaterializedVideoGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -106,25 +89,7 @@ export class ViduMediaAdapter extends BaseMediaAdapter {
     };
   }
 
-  override async generateAudio(
-    _request: AudioGenerationRequest,
-    _model: Model,
-    _provider: Provider,
-  ): Promise<MediaAdapterResult> {
-    return {
-      status: 'failed',
-      error: {
-        code: 'NOT_SUPPORTED',
-        message: 'Vidu does not support audio generation',
-        retryable: false,
-      },
-    };
-  }
-
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const baseUrl = provider.apiUrl || 'https://api.vidu.com/v1';
     const endpoint = `${baseUrl}/tasks/${externalTaskId}`;
 
@@ -181,10 +146,10 @@ export class ViduMediaAdapter extends BaseMediaAdapter {
     }
   }
 
-  override async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
+  async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
     const baseUrl = provider.apiUrl || 'https://api.vidu.com/v1';
     const endpoint = `${baseUrl}/tasks/${externalTaskId}/cancel`;
 
-    await this.request(endpoint, { method: 'POST' }, provider);
+    await this.requestSimple<unknown>(endpoint, 'POST', provider);
   }
 }

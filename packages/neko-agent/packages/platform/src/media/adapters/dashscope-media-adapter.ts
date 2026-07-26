@@ -17,11 +17,11 @@ import type { Model, Provider } from '../../types/provider';
 import type {
   MediaGenerationType,
   MediaAdapterResult,
-  MediaTaskStatus,
-  ImageGenerationRequest,
-  VideoGenerationRequest,
+  MediaOperationStatus,
+  MaterializedImageGenerationRequest,
+  MaterializedVideoGenerationRequest,
   MediaOutput,
-} from '../types';
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 // =============================================================================
@@ -87,7 +87,7 @@ const CAMERA_MOVEMENT_MAP: Record<string, string> = {
 export class DashScopeMediaAdapter extends BaseMediaAdapter {
   readonly type = 'dashscope';
 
-  private static readonly STATUS_MAP: Record<string, MediaTaskStatus> = {
+  private static readonly STATUS_MAP: Record<string, MediaOperationStatus> = {
     PENDING: 'pending',
     RUNNING: 'processing',
     SUCCEEDED: 'completed',
@@ -123,8 +123,8 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   // Image Generation (Qwen-Image 2.0)
   // ===========================================================================
 
-  override async generateImage(
-    request: ImageGenerationRequest,
+  async generateImage(
+    request: MaterializedImageGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -157,8 +157,8 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   // Video Generation (Wan 2.7)
   // ===========================================================================
 
-  override async generateVideo(
-    request: VideoGenerationRequest,
+  async generateVideo(
+    request: MaterializedVideoGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -191,10 +191,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   // Task Status (shared for image and video)
   // ===========================================================================
 
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const url = `${provider.apiUrl}/tasks/${externalTaskId}`;
 
     const { data, error } = await this.request<DashScopeTaskResponse>(
@@ -256,21 +253,13 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   }
 
   // ===========================================================================
-  // Cancel (DashScope does not support cancellation)
-  // ===========================================================================
-
-  override async cancelTask(_externalTaskId: string, _provider: Provider): Promise<void> {
-    // DashScope API does not provide a cancel endpoint
-  }
-
-  // ===========================================================================
   // Private Helpers — Qwen-Image
   // ===========================================================================
 
   /**
    * Determine the DashScope image service endpoint based on request.
    */
-  private resolveImageService(request: ImageGenerationRequest): string {
+  private resolveImageService(request: MaterializedImageGenerationRequest): string {
     if (request.editInstruction || request.controlImageBase64) {
       return 'text2image/image-editing';
     }
@@ -284,7 +273,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
    * Build request body for Qwen-Image 2.0.
    */
   private buildQwenImageBody(
-    request: ImageGenerationRequest,
+    request: MaterializedImageGenerationRequest,
     model: Model,
   ): Record<string, unknown> {
     const input: Record<string, unknown> = {
@@ -353,7 +342,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   /**
    * Determine the DashScope video service endpoint.
    */
-  private resolveVideoService(request: VideoGenerationRequest): string {
+  private resolveVideoService(request: MaterializedVideoGenerationRequest): string {
     if (request.sourceVideoUrl || request.editInstruction) {
       return 'text2video/video-editing';
     }
@@ -367,7 +356,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
    * Build request body for Wan 2.7 video generation.
    */
   private buildWanVideoBody(
-    request: VideoGenerationRequest,
+    request: MaterializedVideoGenerationRequest,
     model: Model,
   ): Record<string, unknown> {
     const input: Record<string, unknown> = {

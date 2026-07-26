@@ -1,0 +1,25 @@
+{
+  "name": "@neko/generation",
+  "description": "Host-neutral generation contracts and recoverable domain Job lifecycle for OpenNeko",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./job": "./src/job/index.ts"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest --run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neko/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}

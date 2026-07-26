@@ -201,6 +201,122 @@ describe('chatProvider', () => {
     provider.dispose();
   });
 
+  it('projects a committed first-input title into the open conversation Tab', async () => {
+    const context = createMockContext();
+    const webview = vscode.createMockWebview();
+    const provider = new ChatViewProvider(vscode.Uri.file('/ext/neko-agent'), context, {
+      localResourceAccess: createImmediateLocalResourceAccess(),
+      piConversations: createPiConversationOptions([]),
+    });
+
+    provider.resolveWebviewView(
+      {
+        webview,
+        visible: true,
+        onDidChangeVisibility: vi.fn(() => ({ dispose: vi.fn() })),
+      } as never,
+      {} as never,
+      {} as never,
+    );
+    await flushWebviewAsyncWork();
+    const receiveMessage = vi.mocked(webview.onDidReceiveMessage).mock.calls[0]?.[0] as
+      ((message: unknown) => void | Promise<void>) | undefined;
+    await receiveMessage?.({ type: 'newConversation' });
+    await flushWebviewAsyncWork();
+    const createdTabState = vi
+      .mocked(context.workspaceState.update)
+      .mock.calls.findLast(([key]) => key === 'neko.tabState')?.[1] as
+      | {
+          readonly openTabs: readonly {
+            readonly id: string;
+            readonly title: string;
+            readonly conversationId: string;
+          }[];
+          readonly activeTabId: string | null;
+        }
+      | undefined;
+    const createdTab = createdTabState?.openTabs[0];
+    expect(createdTab).toBeDefined();
+    (
+      provider as unknown as {
+        _tabState: {
+          openTabs: Array<{
+            id: string;
+            title: string;
+            conversationId: string;
+            kind?: 'chat' | 'character-dialogue';
+          }>;
+          activeTabId: string | null;
+        };
+      }
+    )._tabState = {
+      openTabs: [
+        createdTab!,
+        {
+          id: 'tab-conv-new-secondary',
+          title: 'New conversation',
+          conversationId: createdTab!.conversationId,
+          kind: 'chat',
+        },
+        {
+          id: 'tab-role-owned',
+          title: 'Character Dialogue: Neko',
+          conversationId: createdTab!.conversationId,
+          kind: 'character-dialogue',
+        },
+      ],
+      activeTabId: createdTab!.id,
+    };
+    vi.mocked(webview.postMessage).mockClear();
+    vi.mocked(context.workspaceState.update).mockClear();
+
+    const conversations = (
+      provider as unknown as {
+        readonly _conversations: {
+          initializeTitleFromUserInput(
+            conversationId: string,
+            userInput: string,
+          ): Promise<string | undefined>;
+        };
+      }
+    )._conversations;
+    await conversations.initializeTitleFromUserInput(
+      createdTab!.conversationId,
+      'Generate a cinematic harbor image',
+    );
+
+    const tabState = {
+      openTabs: [
+        {
+          id: createdTab!.id,
+          title: 'Generate a cinematic harbor image',
+          conversationId: createdTab!.conversationId,
+        },
+        {
+          id: 'tab-conv-new-secondary',
+          title: 'Generate a cinematic harbor image',
+          conversationId: createdTab!.conversationId,
+          kind: 'chat',
+        },
+        {
+          id: 'tab-role-owned',
+          title: 'Character Dialogue: Neko',
+          conversationId: createdTab!.conversationId,
+          kind: 'character-dialogue',
+        },
+      ],
+      activeTabId: createdTab!.id,
+    };
+    expect(context.workspaceState.update).toHaveBeenCalledWith('neko.tabState', tabState);
+    expect(webview.postMessage).toHaveBeenCalledWith({
+      type: 'tabState',
+      revision: expect.any(Number),
+      tabState,
+    });
+
+    provider.dispose();
+  });
+
   it('creates and binds an empty foreground conversation before injecting external context', async () => {
     const context = createMockContext();
     const provider = new ChatViewProvider(vscode.Uri.file('/ext/neko-agent'), context, {

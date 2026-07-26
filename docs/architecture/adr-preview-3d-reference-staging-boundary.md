@@ -3,11 +3,44 @@
 - 状态：Accepted
 - 日期：2026-07-19
 - 范围：`neko-preview`、`neko-agent`、`neko-canvas`、Agent media platform、共享参考契约、VS Code Webview、Three.js、内置 3D/全景预设。
-- 实施状态：架构决策已接受；具体实现与验收由 [`add-3d-reference-staging`](../../openspec/changes/add-3d-reference-staging/) 约束。
+- 实施状态：架构决策已接受，不代表目标能力均已可用；具体实现与验收由 [`add-3d-reference-staging`](../../openspec/changes/add-3d-reference-staging/) 约束，日期化完成度见 [`2026-07-25-3d-reference-shot-staging-gap.md`](../status/2026-07-25-3d-reference-shot-staging-gap.md)。
 
 本文记录 OpenNeko 对 3D Preview 产品定位、四类参考用途、无模型引导会话、内置模型、角色隔离和下游路由的稳定决策。它补充 [`package-boundaries.md`](package-boundaries.md)、[`webview-media-security.md`](webview-media-security.md)、[`adr-ui-domain-panels-and-shared-primitives.md`](adr-ui-domain-panels-and-shared-primitives.md) 和 [`adr-agent-driven-avatar-preview-runtime-boundary.md`](adr-agent-driven-avatar-preview-runtime-boundary.md)。
 
-已归档的 [`add-standard-3d-model-preview`](../../openspec/changes/archive/2026-07-18-add-standard-3d-model-preview/) 只实现真实标准模型的只读检查、临时 camera/light/transform 和通用截图上下文；本文不把尚未实施的内置素体、姿势编辑或全景环境描述成现有能力。
+已归档的 [`add-standard-3d-model-preview`](../../openspec/changes/archive/2026-07-18-add-standard-3d-model-preview/) 只实现真实标准模型的只读检查、临时 camera/light/transform 和通用截图上下文。后续 change 已加入部分内置素体、姿势、机位、灯光、全景和用途化输出代码，但本 ADR 不以代码存在、单元测试通过或 contract 可表达代替真实宿主验收、provider 支持和用户端可用性。
+
+## 能力判定与产品定位
+
+本 ADR 中的“3D 参考布置”严格指 **单主体、静态、临时、用途化的参考会话**，不等于轻量 Scene Editor、Shot Staging、动画预演或视频模型控制面。
+
+必须区分以下状态：
+
+| 状态            | 含义                                                                     |
+| --------------- | ------------------------------------------------------------------------ |
+| 架构已定义      | owner、contract、依赖方向和失败语义已经确定                              |
+| 代码已实现      | 生产代码和聚焦自动化测试中存在对应路径                                   |
+| 运行态已验收    | Extension Development Host 中的真实用户路径、资源、CSP、交互和释放均通过 |
+| Provider 可消费 | 目标 provider/model 有经过审计的精确参数映射，并通过真实请求验证         |
+| 用户可用        | 从入口到可消费结果的 canonical path 完整，不依赖未完成任务或手工拼接     |
+
+只有满足适用的后四项，功能才可以描述为当前可用。UI 控件可见、payload 可序列化、PNG 已生成或下游 contract 有字段，均不能单独证明制片能力完成。
+
+当前稳定定位是：
+
+```text
+Model Preview / 3D Reference
+  = 单个 primary subject
+  + 单个 environment
+  + 临时 camera / directional lights
+  + 静态 pose / composition capture
+  + purpose-aware Agent context
+
+不等于
+  多角色/多道具场面调度
+  + 动作或摄影机时间线
+  + 参考视频导出
+  + Seedance 等视频模型控制
+```
 
 ## 背景
 
@@ -18,7 +51,7 @@
 3. 相机机位、景别和构图参考；
 4. 720° 全景环境的场景参考。
 
-这四类参考可能同时来自一个布置，也可能来自不同输入。真实角色 GLB 可以同时贡献形象和动作；预制中性素体只应贡献动作和机位；全景图贡献环境与方向；相机状态贡献结构化机位。
+这四类参考可能来自同一个单主体会话，也可能来自多个独立会话。真实角色 GLB 只有在明确 humanoid/pose adapter 声明稳定骨骼语义后，才可能同时贡献形象和动作；普通真实模型当前主要贡献形象和节点变换。预制中性素体只应贡献动作和机位；全景图贡献环境与方向；相机状态贡献结构化机位。
 
 若继续把整个 3D 视口截图当作普通视觉参考，会产生两个错误：
 
@@ -40,6 +73,27 @@ OpenNeko 将用户可见的 3D Preview 定位提升为 **3D 参考布置台（3D
 
 四类用途是独立集合，不是互斥模式。当前 subject/environment 声明可用能力，用户选择本次输出子集。未选择或不允许的用途不得进入 payload。
 
+该用途集合只描述一个 reference 的角色，不描述多个 actor/prop 的场景成员关系，也不提供时间维度。多个独立 `appearance` context 可以在下游按顺序累计，不表示这些主体曾在同一个 3D 空间中完成站位、遮挡或交互验证。
+
+## 轻量 Shot Staging 的最小边界
+
+面向 Seedance 等参考视频生成模型的轻量控制，不需要复制 Blender 的建模、材质、绑定和高级动画系统，但至少需要以下稳定语义：
+
+| 能力层       | 最小能力                                                              | 当前 3D Reference                 |
+| ------------ | --------------------------------------------------------------------- | --------------------------------- |
+| 场景成员     | 多个 actor/prop、稳定 identity、增删/复制/隐藏/锁定                   | 不具备；只有一个 primary subject  |
+| 空间关系     | 每个成员的 transform、地面接触、look-at、手持/父子 attachment         | 仅有单一模型节点 transform        |
+| 姿态         | 每个 actor 的 pose、起止状态、明确骨骼语义                            | 仅内置单素体静态 pose             |
+| 摄影机       | position、target、FOV、aspect、镜头起止状态                           | 具备静态机位；无时间状态          |
+| 环境与灯光   | 单个环境、构图用方向光、捕获排除 editor chrome                        | 部分具备                          |
+| 时间         | 简单动作片段、起止关键状态、动作/镜头节拍                             | 不具备                            |
+| 输出         | RGB、depth、pose、per-entity ID mask、首尾帧、低清参考视频            | 仅部分静态 PNG 和结构化 reference |
+| 视频模型投影 | 角色明确的 image/video/audio reference pack 与 capability negotiation | 不具备视频请求路径                |
+
+因此，当前 Model Preview 对模型检查、单角色静态姿势、单物品构图和图像生成参考可以是合适入口，但不得被描述为已经足以完成多角色镜头、人物与道具互动、连续动作、跨镜头空间一致性或 Seedance R2V 控制。
+
+增加多主体、可保存 Shot、时间状态或参考视频导出会改变本 ADR 的单主体、非持久 Preview 边界，必须通过独立 OpenSpec 定义 owning responsibility、数据契约、生命周期、迁移和运行态验收。目标设计应继续复用 Preview 的唯一 Three.js/resource/GPU owner；不得在 Canvas 复制第二套 renderer。持久 Shot 事实应由拥有 Storyboard/Canvas 创作事实的领域 owner 保存，Preview 只消费和投影明确的 staging snapshot。
+
 ## Preview 是 3D 参考会话 owner
 
 `neko-preview` 继续拥有该能力，因为它已经承担：
@@ -52,7 +106,7 @@ OpenNeko 将用户可见的 3D Preview 定位提升为 **3D 参考布置台（3D
 
 Canvas 与 Agent 是用途化参考结果的消费者，不拥有 Preview renderer，也不得直接导入 Preview 内部实现。Canvas 继续拥有创作工作台和生成控制 UI；Agent 继续拥有意图理解、provider/model capability negotiation 和媒体任务决策。
 
-将素体能力直接搬进 Canvas 会创建第二套 Three.js、模型授权、全景加载、GPU 生命周期和 capture owner，因此不采用。只有未来出现持久 3D scene、可保存 pose、动画 timeline 或项目文件时，才需要重新定义 durable authoring owner；这不属于 Preview。
+将素体能力直接搬进 Canvas 会创建第二套 Three.js、模型授权、全景加载、GPU 生命周期和 capture owner，因此不采用。只有未来出现多主体 Shot、持久 3D scene、可保存 pose、动画 timeline 或项目文件时，才需要重新定义 durable authoring owner；这不属于当前 Preview。
 
 ## 显式 session subject，不使用失败 fallback
 
@@ -153,7 +207,7 @@ Live Preview 可以从当前 source/preset/staging 重建 context；不迁移用
   -> Preview 构建 3d-reference context
   -> Agent/Canvas 保留 output role
   -> media capability negotiation 校验 provider/model
-  -> 支持时构造 reference/control/semantic request
+  -> 仅在目标媒体类别和 provider/model 均有精确实现时构造 request
   -> 不支持时在提交前 fail-visible
 ```
 
@@ -164,6 +218,7 @@ Live Preview 可以从当前 source/preset/staging 重建 context；不迁移用
 - pose/depth PNG -> ordinary reference collection；
 - camera/panorama -> 仅靠 prompt 文本或截图猜测；
 - unsupported control -> drop、prompt-only、other-provider 或 ordinary-image fallback；
+- 3D Reference -> 未实现的视频生成控制或伪造成功的参考视频；
 - Preview 直接选择 provider/model 或提交 media task；
 - Webview 读取 raw local path、Extension path、cache manifest 或网络 preset；
 - Agent/Canvas import Preview 内部实现；
@@ -205,13 +260,15 @@ Agent 负责理解 reference purposes 和目标生成任务。Canvas 负责 Canv
 
 Provider 不支持 pose、depth、camera 或 panorama control 时，操作必须在提交前返回 typed unsupported diagnostic。系统不得删除控制继续生成、转成普通图片、切换其他 provider、仅追加 prompt 文本或把 no-op 描述成成功。用户可以在看到限制后显式改变用途或 provider；这属于新的用户意图。
 
+当前 `3d-reference` media projection 只接入图像生成请求；视频生成必须拒绝这些控制。静态 camera/panorama contract 可表达也不代表现有 provider adapter 能消费。未来接入视频模型时，必须新增角色明确的多模态 reference pack、视频 operation capability 和真实 provider 请求验收，不能把现有图像控制字段直接复用为视频成功。
+
 ## 后果
 
 正面后果：
 
 - 3D Preview 的四类产品用途得到统一而不含糊的 contract；
 - 无外部模型时可以用中性素体和 blockout 进行动作/机位布置；
-- 真实模型、guide、camera 和 panorama 可以在一个临时场景组合；
+- 一个真实模型或一个 guide primary subject 可以与 camera、directional lights 和一个 panorama 在临时会话中组合；
 - control image 与 appearance reference 从 UI 到 provider 全程隔离；
 - Preview 保持唯一 renderer/resource/lifecycle owner，Canvas/Agent 不复制 3D runtime；
 - 不需要新项目格式、Engine Model/Scene API 或大型内置素材系统。
@@ -223,6 +280,7 @@ Provider 不支持 pose、depth、camera 或 panorama control 时，操作必须
 - 需要真实 VS Code Webview、provider capability 和 Agent behavior 证据，不能只靠 jsdom；
 - 任意用户模型的 pose 能力将长期受真实骨骼语义限制，不能承诺自动 rig/retarget；
 - 形象模型与 guide 模型的目录治理、包体和授权需要持续审查。
+- 单主体静态参考无法承担多角色场面调度和参考视频生成；扩展为 Shot Staging 需要新的领域契约和 OpenSpec。
 
 ## 实施与验收约束
 

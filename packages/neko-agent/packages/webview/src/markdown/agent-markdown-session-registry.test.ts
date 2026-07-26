@@ -171,6 +171,8 @@ function projectionPatch(
     projectionVersion,
     baseProjectionVersion: projectionVersion - 1,
     turnId: 'turn-1',
+
+    runId: 'run-a',
     messageId: 'message-1',
     operations: [appendOperation(content, itemRevision, conversationId)],
   };
@@ -194,6 +196,8 @@ function projectionSnapshot(
     turns: [
       {
         turnId: 'turn-1',
+
+        runId: 'run-a',
         messageId: 'message-1',
         items: [textItem(content, itemRevision, conversationId)],
       },
@@ -209,6 +213,8 @@ function textItem(
   return {
     conversationId,
     turnId: 'turn-1',
+
+    runId: 'run-a',
     messageId: 'message-1',
     itemId: 'text-1',
     sequence: 1,
