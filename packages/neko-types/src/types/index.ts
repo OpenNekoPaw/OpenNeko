@@ -100,7 +100,6 @@ export * from './mcp';
 export * from './platform';
 
 // Agent interface types
-export * from './agent';
 export * from './agent-autoheal';
 export * from './agent-capability-activation';
 export * from './agent-capability-diagnostics';
@@ -189,7 +188,6 @@ export * from './canvas-agent-operations';
 export * from './canvas-authoring-contracts';
 export * from './canvas-headless-authoring';
 export * from './canvas-semantic-storyboard';
-export * from './canvas-creative-ai-actions';
 export * from './canvas-markdown-capabilities';
 export * from './canvas-drop';
 export * from './canvas-projection';

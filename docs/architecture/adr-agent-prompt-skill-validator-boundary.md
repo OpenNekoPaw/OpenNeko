@@ -78,13 +78,15 @@ Skill 提示词可以包含领域字段和示例，但示例必须能被对应 v
 
 Validator 是通用运行时加 profile 规则的组合：
 
-- 通用运行时：`OutputValidator`、`ValidationHooks`、artifact validator 注册、诊断回调、fail-visible 行为。
+- 通用运行时：独立 `OutputValidator`、artifact validator 注册、诊断回调和 fail-visible
+  行为；不得恢复依赖旧 Executor lifecycle 的 `ValidationHooks`。
 - 通用输入校验：图片大小、格式、Mermaid、JSON schema、长度等。
 - Profile validator：`creative-table.storyboard` 这类领域规则，校验特定表格字段、禁止旧表头、资源引用和三层创作信息。
 
 因此，“validator 是否通用”的答案是：
 
-- **运行时通用。** 同一套 hook 和结果信封可以承载不同 Skill/Profile 的校验。
+- **运行时通用。** 同一套 validator contract 和结果信封可以承载不同 Skill/Profile
+  的校验。
 - **规则不应伪装通用。** 分镜表字段、审批/计划/执行层、图片引用等是 profile-specific，需要按 profile 注册。
 - **未知 validator id 不能被当作已校验。** Skill authoring validator 遇到未知 requirement 必须 fail-visible；runtime output validator 只执行已注册的 enforceable 规则，未注册 id 不能作为通过依据。
 

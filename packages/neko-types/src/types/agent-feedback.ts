@@ -1,4 +1,3 @@
-import type { ExecutorHooks } from './agent';
 import type { AgentObservation, PerceptionEvidence } from './agent-observation';
 import type { DecisionRationale } from './decision-rationale';
 import type { ChatMessage } from './platform';
@@ -293,7 +292,6 @@ export interface AgentFeedbackArbiter {
 }
 
 export interface AgentFeedbackCoordinator {
-  getBeforeThinkHooks(): readonly ExecutorHooks[];
   observe(signal: AgentFeedbackSignal): void;
   evaluatePending(context?: AgentFeedbackEvaluationContext): AgentFeedbackCycle | null;
   getSignalHistory(): readonly AgentFeedbackSignal[];

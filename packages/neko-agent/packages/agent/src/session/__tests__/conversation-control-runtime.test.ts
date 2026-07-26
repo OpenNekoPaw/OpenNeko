@@ -11,24 +11,44 @@ import {
 
 describe('conversation control runtime', () => {
   let effects: ConversationControlRuntimeEffects;
-  let postMessage: ReturnType<typeof vi.fn>;
-  let refreshConversationList: ReturnType<typeof vi.fn>;
-  let refreshActiveConversation: ReturnType<typeof vi.fn>;
-  let removeAgent: ReturnType<typeof vi.fn>;
-  let clearAgentState: ReturnType<typeof vi.fn>;
-  let clearAgentHistory: ReturnType<typeof vi.fn>;
-  let cancelAgent: ReturnType<typeof vi.fn>;
-  let updateConversationMessages: ReturnType<typeof vi.fn>;
+  let postMessage: ReturnType<
+    typeof vi.fn<NonNullable<ConversationControlRuntimeEffects['postMessage']>>
+  >;
+  let refreshConversationList: ReturnType<
+    typeof vi.fn<NonNullable<ConversationControlRuntimeEffects['refreshConversationList']>>
+  >;
+  let refreshActiveConversation: ReturnType<
+    typeof vi.fn<NonNullable<ConversationControlRuntimeEffects['refreshActiveConversation']>>
+  >;
+  let removeAgent: ReturnType<
+    typeof vi.fn<NonNullable<ConversationControlRuntimeEffects['removeAgent']>>
+  >;
+  let clearAgentState: ReturnType<
+    typeof vi.fn<NonNullable<ConversationControlRuntimeEffects['clearAgentState']>>
+  >;
+  let clearAgentHistory: ReturnType<
+    typeof vi.fn<NonNullable<ConversationControlRuntimeEffects['clearAgentHistory']>>
+  >;
+  let cancelAgent: ReturnType<
+    typeof vi.fn<NonNullable<ConversationControlRuntimeEffects['cancelAgent']>>
+  >;
+  let updateConversationMessages: ReturnType<
+    typeof vi.fn<NonNullable<ConversationControlRuntimeEffects['updateConversationMessages']>>
+  >;
 
   beforeEach(() => {
-    postMessage = vi.fn();
-    refreshConversationList = vi.fn();
-    refreshActiveConversation = vi.fn();
-    removeAgent = vi.fn();
-    clearAgentState = vi.fn();
-    clearAgentHistory = vi.fn();
-    cancelAgent = vi.fn();
-    updateConversationMessages = vi.fn();
+    postMessage = vi.fn<NonNullable<ConversationControlRuntimeEffects['postMessage']>>();
+    refreshConversationList =
+      vi.fn<NonNullable<ConversationControlRuntimeEffects['refreshConversationList']>>();
+    refreshActiveConversation =
+      vi.fn<NonNullable<ConversationControlRuntimeEffects['refreshActiveConversation']>>();
+    removeAgent = vi.fn<NonNullable<ConversationControlRuntimeEffects['removeAgent']>>();
+    clearAgentState = vi.fn<NonNullable<ConversationControlRuntimeEffects['clearAgentState']>>();
+    clearAgentHistory =
+      vi.fn<NonNullable<ConversationControlRuntimeEffects['clearAgentHistory']>>();
+    cancelAgent = vi.fn<NonNullable<ConversationControlRuntimeEffects['cancelAgent']>>();
+    updateConversationMessages =
+      vi.fn<NonNullable<ConversationControlRuntimeEffects['updateConversationMessages']>>();
     effects = {
       postMessage,
       refreshConversationList,

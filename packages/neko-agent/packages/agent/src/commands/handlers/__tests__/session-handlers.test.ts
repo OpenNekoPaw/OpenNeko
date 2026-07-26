@@ -10,7 +10,7 @@ function createContext(overrides: Partial<CommandContext> = {}): CommandContext 
         { id: 'conv-2', title: 'Second' },
       ],
       getActiveId: () => 'conv-1',
-      create: vi.fn(() => 'conv-new'),
+      create: vi.fn(async () => 'conv-new'),
       clearCurrent: vi.fn(),
     },
     config: { executionMode: 'ask' },
@@ -55,7 +55,7 @@ describe('session command handlers', () => {
       conversations: {
         list: () => conversations,
         getActiveId: () => 'conv-0',
-        create: () => 'conv-new',
+        create: async () => 'conv-new',
         clearCurrent: () => undefined,
       },
     });

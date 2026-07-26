@@ -31,6 +31,7 @@ import { createMCPClient } from '../mcp-client';
 
 function createMockClient(connected = true): IMCPClient {
   return {
+    serverId: 'test-server',
     connect: vi.fn().mockResolvedValue(undefined),
     disconnect: vi.fn().mockResolvedValue(undefined),
     isConnected: vi.fn().mockReturnValue(connected),
@@ -39,6 +40,10 @@ function createMockClient(connected = true): IMCPClient {
       isError: false,
       content: [{ type: 'text', text: 'success' }],
     }),
+    listResources: vi.fn().mockResolvedValue([]),
+    readResource: vi.fn().mockResolvedValue('resource'),
+    listPrompts: vi.fn().mockResolvedValue([]),
+    getPrompt: vi.fn().mockResolvedValue({ messages: [] }),
   };
 }
 
@@ -46,7 +51,9 @@ function createServerConfig(overrides: Partial<MCPServerConfig> = {}): MCPServer
   return {
     id: 'test-server',
     name: 'Test Server',
-    type: 'stdio',
+    description: 'Test server',
+    category: 'development',
+    transport: 'stdio',
     enabled: true,
     ...overrides,
   };

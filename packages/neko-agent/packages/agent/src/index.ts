@@ -1,35 +1,12 @@
 /**
  * @neko/agent - Agent Application Package
  *
- * This package provides the agent runtime for AI-powered task execution.
- * It can run standalone (without platform) or integrated with platform.
- *
- * Standalone mode:
- * - Uses built-in LLM client
- * - Full MCP support
- * - Skill system
- *
- * Integrated mode:
- * - Uses platform's LLM routing
- * - Media generation via platform
- * - Workflow execution via platform
+ * Host-neutral Pi conversation runtime and OpenNeko product-boundary integrations.
  */
 
 // Re-export shared types for convenience
 export type {
-  // Agent types
-  AgentState,
-  AgentConfig,
-  AgentContext,
-  AgentStep,
-  AgentResult,
-  AgentCheckpoint,
-  IAgentRuntime,
-  // Hook types
-  ExecutorHooks,
   ToolCallInfo,
-  ToolResultWithMeta,
-  ThinkContext,
   // MCP types
   IMCPManager,
   IMCPClient,
@@ -44,15 +21,7 @@ export type {
   ToolResult,
   ToolCategory,
   ToolCallRequest,
-  // Platform types (for integration)
-  IPlatform,
-  IService,
   ChatMessage,
-  ServiceResponse,
-  StreamChunk,
-  ServiceOptions,
-  ToolDefinition,
-  LLMProviderConfig,
 } from '@neko/shared';
 
 export {
@@ -174,7 +143,6 @@ export {
   // Types
   type ImageConstraints,
   type OutputConstraints,
-  type ValidationHooksOptions,
   type ValidationError,
   type ValidationWarning,
   type ValidationResult,
@@ -196,9 +164,6 @@ export {
   // Output Validator
   OutputValidator,
   createOutputValidator,
-  // Validation Hooks
-  ValidationHooks,
-  createValidationHooks,
   // Extractors
   MermaidExtractor,
   JsonExtractor,
@@ -227,7 +192,6 @@ export {
   type ToolConfirmationRequest,
   type ToolConfirmationResponse,
   type ConfirmToolCallback,
-  type PermissionHooksOptions,
   // Constants
   DEFAULT_READ_ONLY_TOOLS,
   READ_ONLY_MCP_PREFIXES,
@@ -241,9 +205,6 @@ export {
   isInPatternList,
   isReadOnlyTool,
   isPlanMarkdownWrite,
-  // Permission Hooks
-  PermissionHooks,
-  createPermissionHooks,
   ToolTraitsRegistry,
   DEFAULT_CREATIVE_TOOL_TRAITS,
 } from './permission';

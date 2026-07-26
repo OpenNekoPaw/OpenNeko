@@ -1,28 +1,15 @@
 /**
  * Validation Module
  *
- * Provides input/output validation for LLM interactions
+ * Provides standalone input/output validators for owning runtime boundaries.
  *
  * @example
  * ```typescript
  * import {
- *   createValidationHooks,
  *   createImageValidator,
  *   createOutputValidator,
  * } from '@neko/agent';
  *
- * // Create validation hooks for agent executor
- * const hooks = createValidationHooks({
- *   imageConstraints: {
- *     maxSizeBytes: 5 * 1024 * 1024,
- *     allowedFormats: ['image/jpeg', 'image/png'],
- *   },
- *   outputConstraints: {
- *     mermaidPreValidate: true,
- *   },
- * });
- *
- * // Or use validators directly
  * const imageValidator = createImageValidator();
  * const outputValidator = createOutputValidator({ mermaidPreValidate: true });
  * ```
@@ -32,7 +19,6 @@
 export type {
   ImageConstraints,
   OutputConstraints,
-  ValidationHooksOptions,
   ValidationError,
   ValidationWarning,
   ValidationResult,
@@ -54,9 +40,6 @@ export { ImageValidator, ImageValidationError, createImageValidator } from './im
 
 // Output Validator
 export { OutputValidator, createOutputValidator } from './output-validator';
-
-// Validation Hooks
-export { ValidationHooks, createValidationHooks } from './validation-hooks';
 
 // Re-export specialized components for advanced usage
 export {

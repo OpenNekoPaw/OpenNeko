@@ -1,7 +1,7 @@
 /**
  * Validation Types
  *
- * Type definitions for ValidationHooks and validators
+ * Type definitions for standalone validators
  */
 
 /**
@@ -40,22 +40,6 @@ export interface OutputConstraints {
    * - 'retry': Append error feedback to output, let LLM regenerate
    */
   onValidationFail: 'warn' | 'error' | 'silent' | 'retry';
-}
-
-/**
- * ValidationHooks configuration options
- */
-export interface ValidationHooksOptions {
-  /** Image constraints */
-  imageConstraints?: Partial<ImageConstraints>;
-  /** Output constraints */
-  outputConstraints?: Partial<OutputConstraints>;
-  /** Domain validators contributed by owning Skill/capability packages. */
-  outputValidationAdapters?: readonly import('@neko/shared').AgentOutputValidationAdapter[];
-  /** Callback on validation error */
-  onValidationError?: (error: ValidationError) => void;
-  /** Callback on validation warning */
-  onValidationWarning?: (warning: ValidationWarning) => void;
 }
 
 /**

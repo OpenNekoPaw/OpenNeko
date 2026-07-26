@@ -16,7 +16,8 @@
   },
   "scripts": {
     "test": "vitest",
-    "test:run": "vitest --run"
+    "test:run": "vitest --run",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "^0.80.7",

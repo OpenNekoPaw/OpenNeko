@@ -93,7 +93,7 @@ describe('resolveAgentModelPolicy', () => {
     } as const;
 
     const policy = resolveAgentModelPolicy({ catalog: [source], userBindings });
-    source.model.name = 'mutated after turn start';
+    expect(Reflect.set(source.model, 'name', 'mutated after turn start')).toBe(true);
 
     expect(policy['agent.main'].model.name).toBe('gpt-compatible');
     expect(policy['agent.main'].parameters).toEqual({

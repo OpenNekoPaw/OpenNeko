@@ -23,7 +23,7 @@ describe('panoramic preview package contributions', () => {
   it('contributes an explicit no-source 3D Reference guide command', () => {
     const commands = packageJson.contributes.commands.map((command) => command.command);
     expect(commands).toContain('neko.preview.openThreeReferenceGuide');
-    expect(packageJson.activationEvents).toContain(
+    expect(packageJson.activationEvents).not.toContain(
       'onCommand:neko.preview.openThreeReferenceGuide',
     );
   });

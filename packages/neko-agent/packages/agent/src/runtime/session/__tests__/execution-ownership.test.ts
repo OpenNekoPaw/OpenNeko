@@ -21,8 +21,8 @@ function execution(executionRef: ExecutionRef): OwnedExecution & {
 } {
   return {
     ref: executionRef,
-    cancel: vi.fn(),
-    release: vi.fn(),
+    cancel: vi.fn<(reason: Error) => void>(),
+    release: vi.fn<() => void>(),
   };
 }
 

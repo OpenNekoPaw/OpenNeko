@@ -257,6 +257,7 @@ describe('OpenNeko tool projection to Pi', () => {
         ...context,
         modelUse: {
           purpose: 'image.understand',
+          execution: 'pi',
           model: {
             id: 'vision-model',
             name: 'Vision',

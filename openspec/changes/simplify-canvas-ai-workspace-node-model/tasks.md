@@ -11,6 +11,8 @@
 - [x] 2.2 Replace Shot/Scene generation inputs with Job and generic content refs
 - [x] 2.3 Update Workspace Board planning to emit Markdown, Media, File, and derived-from connections only
 - [x] 2.4 Delete or poison Storyboard/Narrative/Behavior/Entity/Memory authoring and Extension command paths
+- [x] 2.5 Delete the unconsumed `canvas-creative-ai-actions` public DTO/validator surface and guard
+      it from returning as a parallel authoring contract
 
 ## 3. Webview
 

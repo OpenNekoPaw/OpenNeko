@@ -5,7 +5,6 @@
  * Aligned with AgentEvent from @neko/agent session types.
  */
 
-import type { AgentResult } from '@neko/agent';
 import type {
   AgentContinuationMetadata,
   AgentMessageQueueSnapshot,
@@ -189,6 +188,5 @@ export interface TUIResult {
   readonly success: boolean;
   readonly output?: string;
   readonly error?: string;
-  readonly agentResult?: AgentResult;
   readonly duration: number;
 }

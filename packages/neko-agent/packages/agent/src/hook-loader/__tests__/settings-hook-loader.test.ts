@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SettingsHookLoader, type ISettingsFileSystem } from '../settings-hook-loader';
+import {
+  SettingsHookLoader,
+  type ISettingsFileSystem,
+  type IShellExecutor,
+} from '../settings-hook-loader';
 
 function createFs(files: Record<string, string>): ISettingsFileSystem {
   return {
@@ -44,7 +48,7 @@ describe('SettingsHookLoader', () => {
   });
 
   it('executes matching settings hooks with JSON stdin and parses block decisions', async () => {
-    const execute = vi.fn(async () => ({
+    const execute = vi.fn<IShellExecutor['execute']>(async () => ({
       exitCode: 0,
       stdout: JSON.stringify({ decision: 'block', reason: 'policy' }),
       stderr: '',
