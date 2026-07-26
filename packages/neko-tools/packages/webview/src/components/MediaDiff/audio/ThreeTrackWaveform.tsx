@@ -9,14 +9,14 @@ import { WaveformCanvas } from './WaveformCanvas';
 import { DiffRegionOverlay } from './OverlayWaveform';
 
 interface ThreeTrackWaveformProps {
-  currentWaveform: number[];
-  previousWaveform: number[];
+  currentWaveform: readonly number[];
+  previousWaveform: readonly number[];
   currentTime: number;
   duration: number;
-  diffRegions?: Array<{ start: number; end: number }>;
+  diffRegions?: readonly { start: number; end: number }[];
   silenceRegions?: {
-    current: Array<{ start: number; end: number }>;
-    previous: Array<{ start: number; end: number }>;
+    readonly current: readonly { start: number; end: number }[];
+    readonly previous: readonly { start: number; end: number }[];
   };
   zoom: number;
   scrollOffset: number;

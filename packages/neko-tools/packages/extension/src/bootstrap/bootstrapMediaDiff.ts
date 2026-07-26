@@ -6,14 +6,9 @@ import type { IWorkspaceIO } from '../contracts/IWorkspaceIO';
 import {
   initializeMediaDiff,
   MediaDiffService,
-  AnalyzerRegistry,
   MediaDiffEditorSessionFactory,
   MediaDiffEditorProvider,
 } from '../media-diff';
-import { AudioDiffAnalyzer } from '../media-diff/services/analyzers/AudioDiffAnalyzer';
-import { ImageDiffAnalyzer } from '../media-diff/services/analyzers/ImageDiffAnalyzer';
-import { TimelineDiffAnalyzer } from '../media-diff/services/analyzers/TimelineDiffAnalyzer';
-import { VideoDiffAnalyzer } from '../media-diff/services/analyzers/VideoDiffAnalyzer';
 import type { ServiceCollection } from '../base/serviceCollection';
 import { IMediaDiffService as IMediaDiffServiceId } from './serviceIds';
 
@@ -25,19 +20,19 @@ export function bootstrapMediaDiff(
   scheduler: IScheduler,
   tempFileService: ITempFileService,
 ): MediaDiffEditorProvider {
-  const registry = new AnalyzerRegistry();
-  const diffService = new MediaDiffService(undefined, registry, workspaceIO, scheduler);
+  const diffService = new MediaDiffService(
+    undefined,
+    mediaRuntimeService,
+    workspaceIO,
+    scheduler,
+    tempFileService,
+  );
   const sessionFactory = new MediaDiffEditorSessionFactory(
     diffService,
     mediaRuntimeService,
     scheduler,
     tempFileService,
   );
-
-  diffService.registerAnalyzer(new ImageDiffAnalyzer(mediaRuntimeService, tempFileService));
-  diffService.registerAnalyzer(new VideoDiffAnalyzer(mediaRuntimeService, tempFileService));
-  diffService.registerAnalyzer(new AudioDiffAnalyzer(mediaRuntimeService, tempFileService));
-  diffService.registerAnalyzer(new TimelineDiffAnalyzer(mediaRuntimeService, tempFileService));
 
   services.set(IMediaDiffServiceId, diffService);
 

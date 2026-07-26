@@ -1,6 +1,5 @@
 import type {
   IArtifactProfileRegistry,
-  IOperationToolAdapterRegistry,
   IProviderCardRegistry,
   IProviderExpressionProfileRegistry,
 } from '@neko/shared';
@@ -13,7 +12,6 @@ const CAPABILITY_RUNTIME_BINDING_KEYS = [
   'providerCardRegistry',
   'artifactProfileRegistry',
   'providerExpressionProfileRegistry',
-  'operationToolAdapterRegistry',
   'externalProcessorRuntime',
   'contentAccessRuntime',
 ] as const;
@@ -23,7 +21,6 @@ export interface CapabilityRuntimeBindings {
   providerCardRegistry?: IProviderCardRegistry;
   artifactProfileRegistry?: IArtifactProfileRegistry;
   providerExpressionProfileRegistry?: IProviderExpressionProfileRegistry;
-  operationToolAdapterRegistry?: IOperationToolAdapterRegistry;
   externalProcessorRuntime?: AgentExternalProcessorRuntime;
   contentAccessRuntime?: AgentContentAccessRuntime;
 }

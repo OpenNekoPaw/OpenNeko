@@ -55,7 +55,7 @@ describe('PluginTransferBridge', () => {
           mediaType: 'image',
           name: 'shot.png',
         },
-        target: { kind: 'file', documentUri: 'file:///workspace/edit.nkv' },
+        target: { kind: 'file', documentUri: 'file:///workspace/edit.otio' },
       },
       createDeps({
         persist: async (input) => {
@@ -106,7 +106,7 @@ describe('PluginTransferBridge', () => {
         },
         target: {
           kind: 'file',
-          documentUri: 'file:///workspace/edit.nkv',
+          documentUri: 'file:///workspace/edit.otio',
           expectedProjectRevision: 'revision-1',
         },
       },

@@ -6,7 +6,6 @@ import { describe, it, expect } from 'vitest';
 import {
   AI_ACTIONS,
   getActionsForElementType,
-  mapElementTypeToAIType,
   type AIQuickAction,
   type AIActionElementType,
 } from '../types/aiAction';
@@ -145,32 +144,6 @@ describe('getActionsForElementType', () => {
 
     // Single select should include all actions for the type
     expect(singleSelectActions.length).toBeGreaterThanOrEqual(multiSelectActions.length);
-  });
-});
-
-describe('mapElementTypeToAIType', () => {
-  it('should map media type to video by default', () => {
-    expect(mapElementTypeToAIType('media')).toBe('video');
-  });
-
-  it('should map media type with video mediaType to video', () => {
-    expect(mapElementTypeToAIType('media', 'video')).toBe('video');
-  });
-
-  it('should map media type with image mediaType to image', () => {
-    expect(mapElementTypeToAIType('media', 'image')).toBe('image');
-  });
-
-  it('should map text type to text', () => {
-    expect(mapElementTypeToAIType('text')).toBe('text');
-  });
-
-  it('should map audio type to audio', () => {
-    expect(mapElementTypeToAIType('audio')).toBe('audio');
-  });
-
-  it('should map shape type to shape', () => {
-    expect(mapElementTypeToAIType('shape')).toBe('shape');
   });
 });
 

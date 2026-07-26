@@ -12,8 +12,8 @@ import { collectProjectQualityEvidence } from '../project/index';
 
 const project: QualityProjectRef = {
   domain: 'cut',
-  documentUri: 'file:///workspace/edit.nkv',
-  projectRevision: 'nkv:digest',
+  documentUri: 'file:///workspace/edit.otio',
+  projectRevision: 'otio:digest',
   contentDigest: 'digest',
 };
 const target: QualityTarget = {

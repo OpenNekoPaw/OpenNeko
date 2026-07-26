@@ -10,14 +10,12 @@ import type {
   VideoDiffDetails,
   AudioDiffDetails,
   ImageDiffDetails,
-  TimelineDiffDetails,
-} from '@neko/shared';
+} from '@neko-tools/contracts';
 import type { MediaDiffViewerProps } from './types';
 import { DiffControls } from './DiffControls';
 import { ImageDiffViewer } from './ImageDiffViewer';
 import { VideoDiffViewer } from './VideoDiffViewer';
 import { AudioDiffViewer } from './audio';
-import { TimelineDiffViewer } from './TimelineDiffViewer';
 
 // =============================================================================
 // Header Component
@@ -38,8 +36,6 @@ const DiffHeader = memo(function DiffHeader({ filePath, gitRef, mediaType }: Dif
         return '🎬';
       case 'audio':
         return '🎵';
-      case 'timeline':
-        return '🎞️';
       default:
         return '📄';
     }
@@ -66,12 +62,10 @@ export const MediaDiffViewer = memo(function MediaDiffViewer({
   diffResult,
   currentSrc,
   previousSrc,
-  heatmapSrc,
   currentFrameSrc,
   previousFrameSrc,
   currentWaveform,
   previousWaveform,
-  elementThumbnails,
   isLoading,
   error,
   gitRef,
@@ -79,7 +73,6 @@ export const MediaDiffViewer = memo(function MediaDiffViewer({
   streamConfig,
   isFetchingPrevious,
   onTimeChange,
-  onInspectElement,
   onStreamControl,
   audioStreamConfig,
   onAudioStreamControl,
@@ -149,7 +142,6 @@ export const MediaDiffViewer = memo(function MediaDiffViewer({
             currentSrc={currentSrc}
             previousSrc={previousSrc}
             details={diffResult?.details as ImageDiffDetails | undefined}
-            heatmapSrc={heatmapSrc}
             sliderPosition={sliderPosition}
             onSliderChange={setSliderPosition}
             overlayOpacity={overlayOpacity}
@@ -200,15 +192,6 @@ export const MediaDiffViewer = memo(function MediaDiffViewer({
             onAudioStreamControl={onAudioStreamControl}
             isLoading={isLoading}
             error={error}
-          />
-        );
-
-      case 'timeline':
-        return (
-          <TimelineDiffViewer
-            details={diffResult?.details as TimelineDiffDetails | undefined}
-            onInspectElement={onInspectElement}
-            elementThumbnails={elementThumbnails}
           />
         );
 

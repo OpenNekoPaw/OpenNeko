@@ -18,6 +18,7 @@ import {
 export interface IMediaDiffEditorMessageHandlerFactoryOptions {
   webview: vscode.Webview;
   documentUri: vscode.Uri;
+  sessionId: string;
   diffService: IMediaDiffService;
   mediaRuntime: IToolsMediaRuntime;
   scheduler: IScheduler;
@@ -45,6 +46,7 @@ export class MediaDiffEditorSessionFactory implements IMediaDiffEditorSessionFac
         options.mediaRuntime,
         options.scheduler,
         options.tempFileService,
+        options.sessionId,
         options.previousUri,
       ),
   ) {}
@@ -57,6 +59,7 @@ export class MediaDiffEditorSessionFactory implements IMediaDiffEditorSessionFac
       messageHandler = this.createMessageHandler({
         webview: options.webviewPanel.webview,
         documentUri: options.documentUri,
+        sessionId: options.sessionId,
         diffService: this.diffService,
         mediaRuntime: this.mediaRuntimeService.runtime,
         scheduler: this.scheduler,
@@ -64,7 +67,7 @@ export class MediaDiffEditorSessionFactory implements IMediaDiffEditorSessionFac
         previousUri: options.previousUri,
       });
 
-      return new MediaDiffEditorSession(options.webviewPanel, messageHandler);
+      return new MediaDiffEditorSession(options.webviewPanel, messageHandler, options.sessionId);
     } catch (error) {
       if (messageHandler) {
         await messageHandler.disposeAsync();

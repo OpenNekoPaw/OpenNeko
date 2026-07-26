@@ -135,23 +135,6 @@ jobs:
           path: packages/**/coverage/
           retention-days: 14
 
-  proto-check:
-    name: Proto Types Sync
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm check:proto-sync
-
   code-quality:
     name: Code Quality
     runs-on: ubuntu-latest
@@ -253,7 +236,6 @@ jobs:
       - build
       - local-metadata-runtime
       - test-ts
-      - proto-check
       - code-quality
       - openspec-check
       - package-openneko-vsix
@@ -274,7 +256,6 @@ jobs:
           build
           local-metadata-runtime
           test-ts
-          proto-check
           code-quality
           openspec-check
           package-openneko-vsix
@@ -287,7 +268,6 @@ jobs:
       - build
       - local-metadata-runtime
       - test-ts
-      - proto-check
       - code-quality
       - openspec-check
       - package-openneko-vsix
@@ -310,7 +290,6 @@ jobs:
           build
           local-metadata-runtime
           test-ts
-          proto-check
           code-quality
           openspec-check
           package-openneko-vsix

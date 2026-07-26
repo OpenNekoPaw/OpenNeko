@@ -311,7 +311,7 @@ function createCommitter(): ExportJobResultCommitter & {
 
 function createInput() {
   return {
-    documentUri: 'file:///workspace/project.nkv',
+    documentUri: 'file:///workspace/project.otio',
     config: {
       outputPath: '/workspace/output/final.mp4',
       format: 'mp4' as const,

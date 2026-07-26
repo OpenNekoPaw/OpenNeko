@@ -1,13 +1,5 @@
-import type { MediaType } from '@neko/shared';
 import type { ImmutableInitialState, InitialState } from '../components/MediaDiff/types';
 import type { IWebviewBridge } from './bridge';
-
-const DEFAULT_INITIAL_STATE: ImmutableInitialState = Object.freeze({
-  mediaType: 'image' as MediaType,
-  fileName: '',
-  isLocalComparison: false,
-  fileUri: '',
-});
 
 declare global {
   interface Window {
@@ -18,10 +10,19 @@ declare global {
 export function getMediaDiffInitialState(bridge: IWebviewBridge): ImmutableInitialState {
   const persistedState = bridge.getState<Partial<InitialState>>();
   const injectedState = window.initialState;
+  if (!injectedState) {
+    throw new Error('Media diff initial state was not injected by the extension host.');
+  }
 
-  return Object.freeze({
-    ...DEFAULT_INITIAL_STATE,
+  const state: InitialState = {
     ...persistedState,
     ...injectedState,
-  });
+  };
+  if (!state.sessionId || !state.fileUri || !state.fileName) {
+    throw new Error('Media diff initial state is missing required identity or file fields.');
+  }
+  if (state.mediaType !== 'image' && state.mediaType !== 'audio' && state.mediaType !== 'video') {
+    throw new Error(`Unsupported media diff initial type: ${String(state.mediaType)}`);
+  }
+  return Object.freeze(state);
 }

@@ -20,7 +20,7 @@ import {
   type GitChangeStatus,
   type GitCommitInfo,
   getMediaType,
-} from '@neko/shared';
+} from '@neko-tools/contracts';
 import { getLogger } from '../../utils/logger';
 import { GitCliGateway, type GitCliTarget, type IGitCliGateway } from './GitCliGateway';
 
@@ -275,11 +275,8 @@ export class GitMediaService implements IGitMediaService {
     }
 
     return {
-      current: current.buffer.slice(current.byteOffset, current.byteOffset + current.byteLength),
-      previous: previous.buffer.slice(
-        previous.byteOffset,
-        previous.byteOffset + previous.byteLength,
-      ),
+      current: Uint8Array.from(current).buffer,
+      previous: Uint8Array.from(previous).buffer,
       currentPath: uri.fsPath,
       previousPath: isNewFile ? '(new file)' : `${uri.fsPath}@${ref}`,
       mediaType,

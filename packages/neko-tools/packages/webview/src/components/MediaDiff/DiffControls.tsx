@@ -5,7 +5,7 @@
 
 import { memo, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { DiffViewMode } from '@neko/shared';
+import type { DiffViewMode } from '@neko-tools/contracts';
 import { formatMediaTimeWithFraction } from '@neko/media';
 import { Badge, Button, Slider } from '@neko/ui/primitives';
 import { LayersIcon, SettingsIcon, toCodiconClassName } from '@neko/ui/icons';

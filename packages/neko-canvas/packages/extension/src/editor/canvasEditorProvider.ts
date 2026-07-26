@@ -45,7 +45,7 @@ import {
   isCanvasNodeType,
   isProjectedCanvasData,
   isProjectedCanvasSource,
-  createDefaultProjectFormatCodecRegistry,
+  createNkcProjectFormatCodecRegistry,
   storeProjectSourceAddRequest,
   nkcSourcePathPolicy,
   ProjectFileStore,
@@ -836,7 +836,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   private readonly focusedWebviews: IFocusedWebviewRegistry;
   private readonly projectFileAdapter = createVSCodeProjectFileIoAdapter({ vscodeApi: vscode });
   private readonly projectFileStore = new ProjectFileStore({
-    registry: createDefaultProjectFormatCodecRegistry(),
+    registry: createNkcProjectFormatCodecRegistry(),
     fileOps: this.projectFileAdapter.fileOps,
     resolveAuthorizedWrite: (filePath) => ({
       writer: new NodeAuthorizedWorkspaceWriter({ workspaceRoot: path.dirname(filePath) }),
@@ -2660,7 +2660,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         break;
 
       case 'operationApplied':
-        // EditOperation sync from webview — fire dirty event
+        // CanvasEditOperation sync from webview — fire dirty event
         this.dirtyCanvasDocumentUris.add(document.uri.toString());
         this._onDidChangeDocumentLifecycle.fire({
           type: 'dirty',

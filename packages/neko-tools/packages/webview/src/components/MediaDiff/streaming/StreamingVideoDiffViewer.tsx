@@ -9,7 +9,7 @@
 
 import { useRef, useCallback, useImperativeHandle, forwardRef, memo } from 'react';
 import type { DiffMode } from './DiffRenderer';
-import type { StreamConfig } from '@neko/shared';
+import type { StreamConfig } from '@neko-tools/contracts';
 import { useVideoDiffStreaming } from '../../../hooks/useVideoDiffStreaming';
 
 // ─── Types ───────────────────────────────────────────────────────────────────

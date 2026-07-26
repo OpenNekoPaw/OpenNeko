@@ -45,13 +45,13 @@ describe('createVSCodeProjectFileIoAdapter', () => {
       vscodeApi: vscodeApi as never,
       pathVariables: new Map([['MEDIA', '/Volumes/media']]),
     });
-    await adapter.fileOps.writeFile('/workspace/project/edit.nkv', new TextEncoder().encode('ok'));
-    const read = await adapter.fileOps.readFile('/workspace/project/edit.nkv');
+    await adapter.fileOps.writeFile('/workspace/project/edit.otio', new TextEncoder().encode('ok'));
+    const read = await adapter.fileOps.readFile('/workspace/project/edit.otio');
     const context = adapter.createWorkspaceMediaPathContext({
       documentUri: {
-        fsPath: '/workspace/project/edit.nkv',
+        fsPath: '/workspace/project/edit.otio',
         scheme: 'file',
-        toString: () => 'file:///workspace/project/edit.nkv',
+        toString: () => 'file:///workspace/project/edit.otio',
       } as never,
     });
 
@@ -111,7 +111,7 @@ describe('ProjectFileSaveSession', () => {
   it('writes project document saves in-place by default to avoid visible delete/add churn', async () => {
     const save = vi.fn(async (request: unknown): Promise<ProjectFileSaveResponse> => ({
       ok: true,
-      filePath: '/workspace/project/edit.nkv',
+      filePath: '/workspace/project/edit.otio',
       document: (request as { document: { title: string } }).document,
       diagnostics: [],
       written: true,
@@ -122,7 +122,7 @@ describe('ProjectFileSaveSession', () => {
     });
 
     await session.save({
-      targetUri: createUri('/workspace/project/edit.nkv'),
+      targetUri: createUri('/workspace/project/edit.otio'),
       document: { title: 'Cut' },
       saveReason: 'external-sync',
       defaultMessage: 'Failed to save NKV',
@@ -175,7 +175,7 @@ describe('ProjectFileSaveSession', () => {
   it('allows callers to override the default atomic write policy', async () => {
     const save = vi.fn(async (request: unknown): Promise<ProjectFileSaveResponse> => ({
       ok: true,
-      filePath: '/workspace/project/edit.nkv',
+      filePath: '/workspace/project/edit.otio',
       document: (request as { document: { title: string } }).document,
       diagnostics: [],
       written: true,
@@ -186,7 +186,7 @@ describe('ProjectFileSaveSession', () => {
     });
 
     await session.save({
-      targetUri: createUri('/workspace/project/edit.nkv'),
+      targetUri: createUri('/workspace/project/edit.otio'),
       document: { title: 'Audio' },
       saveReason: 'vscode-save',
       atomic: true,
@@ -236,7 +236,7 @@ describe('ProjectFileSaveSession', () => {
   it('throws formatted diagnostics when the store blocks save', async () => {
     const save = vi.fn(async (): Promise<ProjectFileSaveResponse> => ({
       ok: false,
-      filePath: '/workspace/project/edit.nkv',
+      filePath: '/workspace/project/edit.otio',
       diagnostics: [
         createProjectFileDiagnostic({
           code: 'non-portable-path',
@@ -252,11 +252,11 @@ describe('ProjectFileSaveSession', () => {
 
     await expect(
       session.save({
-        targetUri: createUri('/workspace/project/edit.nkv'),
+        targetUri: createUri('/workspace/project/edit.otio'),
         document: { title: 'Cut' },
-        defaultMessage: 'Failed to save NKV',
+        defaultMessage: 'Failed to save OTIO',
       }),
-    ).rejects.toThrow('Failed to save NKV: Source clip.src is an absolute local path.');
+    ).rejects.toThrow('Failed to save OTIO: Source clip.src is an absolute local path.');
   });
 
   it('formats empty diagnostics with the fallback message', () => {

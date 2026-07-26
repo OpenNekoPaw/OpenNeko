@@ -211,8 +211,8 @@ describe('creative media shared contracts', () => {
       validateProjectQualityPreview({
         project: {
           domain: 'cut',
-          documentUri: 'file:///workspace/edit.nkv',
-          projectRevision: 'nkv:edit-v1',
+          documentUri: 'file:///workspace/edit.otio',
+          projectRevision: 'otio:edit-v1',
         },
         previewRef: invalidPreviewRef,
         sessionRenderUri: 'file:///workspace/render.png',

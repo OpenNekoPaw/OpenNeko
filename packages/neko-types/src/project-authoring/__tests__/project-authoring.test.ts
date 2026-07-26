@@ -18,20 +18,20 @@ describe('project authoring contracts', () => {
   it('models successful durable authoring results with document identity', () => {
     const result = createNekoProjectAuthoringResult({
       ok: true,
-      documentUri: 'file:///workspace/story.nkv',
+      documentUri: 'file:///workspace/story.otio',
       created: true,
       revealed: false,
       target: {
         kind: 'new',
-        documentUri: 'file:///workspace/story.nkv',
+        documentUri: 'file:///workspace/story.otio',
         created: true,
         reveal: false,
       },
       diagnostics: [],
       projectRef: {
         domain: 'cut',
-        documentUri: 'file:///workspace/story.nkv',
-        projectRevision: 'nkv:digest-1',
+        documentUri: 'file:///workspace/story.otio',
+        projectRevision: 'otio:digest-1',
         contentDigest: 'digest-1',
       },
       data: { clipIds: ['clip-1'] },
@@ -44,11 +44,11 @@ describe('project authoring contracts', () => {
   it('rejects malformed or mismatched returned project revisions', () => {
     const malformed = createNekoProjectAuthoringResult({
       ok: true,
-      documentUri: 'file:///workspace/story.nkv',
+      documentUri: 'file:///workspace/story.otio',
       diagnostics: [],
       projectRef: {
         domain: 'cut',
-        documentUri: 'file:///workspace/story.nkv',
+        documentUri: 'file:///workspace/story.otio',
         projectRevision: '   ',
       },
     });
@@ -61,12 +61,12 @@ describe('project authoring contracts', () => {
 
     const mismatched = createNekoProjectAuthoringResult({
       ok: true,
-      documentUri: 'file:///workspace/story.nkv',
+      documentUri: 'file:///workspace/story.otio',
       diagnostics: [],
       projectRef: {
         domain: 'cut',
-        documentUri: 'file:///workspace/other.nkv',
-        projectRevision: 'nkv:digest-2',
+        documentUri: 'file:///workspace/other.otio',
+        projectRevision: 'otio:digest-2',
       },
     });
     expect(validateNekoProjectAuthoringResult(mismatched)).toEqual({

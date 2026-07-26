@@ -11,7 +11,7 @@
 export type { IHandlerContext } from './types';
 export { initializeDiff, initializeLocalDiff, cancelCurrentAnalysis } from './AnalysisPipeline';
 
-export { handleSeek, handleGetFrame, handleInspectElement } from './FrameOperations';
+export { handleSeek, handleGetFrame } from './FrameOperations';
 
 export {
   handleStartStreaming,

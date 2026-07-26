@@ -5,7 +5,6 @@ import {
   createToolProducedMultimodalEvidenceFeedback,
   createCanvasSelectionContextPacket,
   createMediaAttachmentContextPacket,
-  createTimelineSelectionContextPacket,
   filterToolsByModalityAvailability,
   loadPacketMediaPayloads,
   projectGeneratedArtifactReference,
@@ -13,19 +12,7 @@ import {
 } from '../turn/multimodal-context-packet';
 
 describe('multimodal-context-packet runtime', () => {
-  it('builds one packet from image attachments, timeline, canvas, and audio/video metadata', () => {
-    const timeline = createTimelineSelectionContextPacket(
-      [
-        {
-          elementId: 'clip-1',
-          trackId: 'v1',
-          sourceUri: '${WORKSPACE}/media/clip.mp4',
-          mediaType: 'video',
-          durationMs: 4000,
-        },
-      ],
-      { createdAt: 10, playheadMs: 1200 },
-    );
+  it('builds one packet from image attachments, canvas, and audio/video metadata', () => {
     const canvas = createCanvasSelectionContextPacket(
       [
         {
@@ -67,7 +54,6 @@ describe('multimodal-context-packet runtime', () => {
           },
         },
       ],
-      timelineContextPacket: timeline,
       canvasContextPacket: canvas,
       createdAt: 20,
     });
@@ -86,12 +72,10 @@ describe('multimodal-context-packet runtime', () => {
       'audio',
       'video',
       'image',
-      'image',
     ]);
     expect(packet?.artifactRefs.map((artifact) => artifact.kind)).toEqual([
       'image',
       'audio',
-      'video',
       'video',
       'image',
     ]);

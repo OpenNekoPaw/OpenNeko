@@ -169,7 +169,7 @@ function snapshot(): ExportJobSnapshot {
     createdAt: 1,
     updatedAt: 1,
     request: {
-      documentUri: 'file:///workspace/project.nkv',
+      documentUri: 'file:///workspace/project.otio',
       config: {
         outputPath: '/workspace/output/final.mp4',
         format: 'mp4',

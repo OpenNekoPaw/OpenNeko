@@ -1,5 +1,6 @@
-import type { EngineDiffResult } from '@neko/shared';
+import type { DiffOptions, DiffResult, MediaType } from '@neko-tools/contracts';
 import type {
+  HtmlVideoPreparationOptions,
   HtmlVideoDescriptor,
   MediaProbe,
   PcmStreamDescriptor,
@@ -18,22 +19,6 @@ export interface MediaProbeResult {
   readonly audioCodec?: string;
   readonly audioSampleRate?: number;
   readonly audioChannels?: number;
-}
-
-export interface SilenceRegion {
-  readonly start: number;
-  readonly end: number;
-  readonly duration: number;
-}
-
-export interface SilenceAnalysis {
-  readonly totalDuration: number;
-  readonly silenceDuration: number;
-  readonly silenceRatio: number;
-  readonly regionCount: number;
-  readonly regions: readonly SilenceRegion[];
-  readonly thresholdDbfs: number;
-  readonly minDuration: number;
 }
 
 export interface PreparedVideo {
@@ -59,7 +44,11 @@ export interface IToolsMediaRuntime {
     options?: { readonly peaksPerSecond?: number },
     signal?: AbortSignal,
   ): Promise<WaveformResult>;
-  prepareVideo(sourcePath: string, signal?: AbortSignal): Promise<PreparedVideo>;
+  prepareVideo(
+    sourcePath: string,
+    options?: HtmlVideoPreparationOptions,
+    signal?: AbortSignal,
+  ): Promise<PreparedVideo>;
   startPcm(
     sourcePath: string,
     options: {
@@ -75,16 +64,12 @@ export interface IToolsMediaRuntime {
 
 export interface IMediaRuntimeService {
   readonly runtime: IToolsMediaRuntime;
-  diff(
-    group: string,
-    sourceA: string,
-    sourceB: string,
-    options?: Record<string, unknown>,
-  ): Promise<EngineDiffResult>;
-  detectSilence(
-    source: string,
-    thresholdDbfs?: number,
-    minDuration?: number,
-  ): Promise<SilenceAnalysis>;
-  probe(group: 'videos' | 'audios', source: string): Promise<MediaProbeResult>;
+  compare(
+    mediaType: MediaType,
+    currentPath: string,
+    previousPath: string,
+    options: DiffOptions,
+    signal: AbortSignal,
+  ): Promise<DiffResult>;
+  probe(source: string, signal?: AbortSignal): Promise<MediaProbeResult>;
 }

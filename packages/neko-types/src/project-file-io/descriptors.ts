@@ -1,18 +1,9 @@
 import type { CanvasData } from '../types/canvas';
-import type { ProjectData } from '../types/project';
-import type { TimelineElement, AudioElement, MediaElement } from '../types/element';
 import type {
   PortableSourcePathPolicy,
   ProjectSourceDescriptor,
   ProjectSourceReplacement,
 } from './source-policy';
-
-type SourceBearingTimelineElement = MediaElement | AudioElement;
-
-export const nkvSourcePathPolicy: PortableSourcePathPolicy<ProjectData> = {
-  listSources: listTimelineProjectSources,
-  replaceSources: replaceTimelineProjectSources,
-};
 
 export const nkcSourcePathPolicy: PortableSourcePathPolicy<CanvasData> = {
   listSources(document) {
@@ -22,59 +13,6 @@ export const nkcSourcePathPolicy: PortableSourcePathPolicy<CanvasData> = {
     return replaceCanvasProjectSources(document, replacements);
   },
 };
-
-export function listTimelineProjectSources(
-  document: Pick<ProjectData, 'tracks'>,
-): readonly ProjectSourceDescriptor[] {
-  return document.tracks.flatMap((track, trackIndex) =>
-    track.elements.flatMap((element, elementIndex) => {
-      if (!isSourceBearingTimelineElement(element) || !element.src) return [];
-      return [
-        {
-          id: `${track.id}.${element.id}.src`,
-          role: element.type,
-          path: element.src,
-          fieldPath: ['tracks', trackIndex, 'elements', elementIndex, 'src'],
-          allowRemote: element.type === 'media' || element.type === 'audio',
-        },
-      ];
-    }),
-  );
-}
-
-export function replaceTimelineProjectSources(
-  document: ProjectData,
-  replacements: readonly ProjectSourceReplacement[],
-): ProjectData {
-  return {
-    ...document,
-    tracks: replaceTimelineTracks(document.tracks, replacements),
-  };
-}
-
-function replaceTimelineTracks<TTrack extends Pick<ProjectData['tracks'][number], 'elements'>>(
-  tracks: readonly TTrack[],
-  replacements: readonly ProjectSourceReplacement[],
-): TTrack[] {
-  const replacementById = new Map(
-    replacements.map((replacement) => [replacement.descriptor.id, replacement.path]),
-  );
-  return tracks.map((track) => ({
-    ...track,
-    elements: track.elements.map((element) => {
-      if (!isSourceBearingTimelineElement(element)) return element;
-      const keySuffix = `.${element.id}.src`;
-      const replacement = [...replacementById.entries()].find(([id]) => id.endsWith(keySuffix));
-      return replacement ? { ...element, src: replacement[1] } : element;
-    }),
-  }));
-}
-
-function isSourceBearingTimelineElement(
-  element: TimelineElement,
-): element is SourceBearingTimelineElement {
-  return element.type === 'media' || element.type === 'audio';
-}
 
 function listCanvasProjectSources(document: CanvasData): readonly ProjectSourceDescriptor[] {
   const descriptors: ProjectSourceDescriptor[] = [];

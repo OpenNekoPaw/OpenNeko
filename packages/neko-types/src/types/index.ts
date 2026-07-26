@@ -2,69 +2,13 @@
 // Types Index - Re-export all types from submodules
 // =============================================================================
 
-// Generated engine types (from packages/neko-proto/*.proto)
-export * from '../generated/timeline.engine';
-export * from '../generated/diff.engine';
-export type { EngineResolution } from '../generated/timeline.engine';
-
-// Track types
-export * from './track';
-
-// Easing types
-export * from './easing';
-
-// Blend modes
-export * from './blendMode';
-
-// Transform
-export * from './transform';
-
-// Color correction
-export * from './colorCorrection';
-
-// Geometry primitives
-export * from './geometry';
-
-// Masks
-export * from './mask';
-
-// Transitions
-export * from './transition';
-
-// Effects
-export * from './effects';
-
-// Keyframes
-export * from './keyframe';
-
-// Audio
-export * from './audio';
+// Audio contracts retained outside the retired Timeline project model
 export * from './audioAutomation';
 export * from './audioEffectParams';
 export * from './audioMix';
 export * from './audioTempo';
 export * from './media-stream';
-
-// Speed
-export * from './speed';
-
-// Shapes
-export * from './shape';
-
-// Timeline elements
-export * from './element';
-
-// Subtitle
-export * from './subtitle';
-
-// Timeline tracks
-export * from './timelineTrack';
-
-// Project
-export * from './project';
-
-// Messages
-export * from './message';
+export * from './message-attachment';
 
 // Configuration
 export * from './config';
@@ -140,12 +84,6 @@ export * from './tool-injection';
 export * from './hook';
 
 // Media protocol types (Extension ↔ Webview media processing IPC)
-
-// Export protocol types (Extension ↔ Webview export IPC)
-export * from './exportProtocol';
-
-// Media diff protocol types (Extension ↔ Webview media diff IPC)
-export * from './mediaDiffProtocol';
 
 // Media Library file metadata and package manifests
 export * from './media-file';
@@ -277,7 +215,6 @@ export * from './multimodal-context';
 export * from './decision-rationale';
 export * from './recovery-guidance';
 export * from './subagent-reviewer';
-export * from './operation-tool-adapter';
 
 // Prompt fragment (PR3e: sub-package prompt contribution)
 export * from './prompt-fragment';
