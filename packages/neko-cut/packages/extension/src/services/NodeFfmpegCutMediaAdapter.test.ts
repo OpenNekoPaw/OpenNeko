@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -243,10 +243,46 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     expect((await fetch(segment.url)).status).toBe(404);
   });
 
-  it('explicitly transcodes unqualified VP8 to the H.264 preview profile', async () => {
+  it('uses a VideoToolbox-only H.264 profile for unqualified VP8', async () => {
+    const ffmpegArgs: string[][] = [];
+    const process: FfmpegProcessPort = {
+      run: async (executable, args) => {
+        if (executable === 'ffprobe') {
+          return {
+            stdout: Buffer.from(
+              JSON.stringify({
+                streams: [
+                  {
+                    index: 0,
+                    codec_type: 'video',
+                    codec_name: 'vp8',
+                    pix_fmt: 'yuv420p',
+                    width: 160,
+                    height: 90,
+                    r_frame_rate: '24/1',
+                  },
+                ],
+                format: { duration: '1' },
+              }),
+            ),
+            stderr: '',
+          };
+        }
+        ffmpegArgs.push([...args]);
+        const outputPath = args.at(-1);
+        if (!outputPath) throw new Error('Expected Cut preview output path.');
+        await writeFile(outputPath, Buffer.from('prepared preview'));
+        return { stdout: Buffer.alloc(0), stderr: '' };
+      },
+      streamFfmpeg: () => {
+        throw new Error('Unexpected streaming FFmpeg process.');
+      },
+    };
     const adapter = new NodeFfmpegCutMediaAdapter(root, {
       cacheRoot,
+      process,
       vp8WebmDirectQualified: false,
+      hardwareVideoBackend: 'videotoolbox',
     });
     adapters.push(adapter);
 
@@ -262,10 +298,26 @@ describe('NodeFfmpegCutMediaAdapter', () => {
 
     expect(session.video.preparationProfile).toBe('h264-sdr-transcode');
     expect(session.video.mimeType).toContain('avc1');
+    expect(ffmpegArgs).toHaveLength(1);
+    expect(ffmpegArgs[0]).toEqual(
+      expect.arrayContaining([
+        '-xerror',
+        '-hwaccel',
+        'videotoolbox',
+        '-hwaccel_output_format',
+        'videotoolbox_vld',
+        '-c:v',
+        'h264_videotoolbox',
+        '-allow_sw',
+        '0',
+      ]),
+    );
+    expect(ffmpegArgs[0]).not.toContain('libx264');
+    expect(ffmpegArgs[0]).not.toContain('-pix_fmt');
     await adapter.stopPreview(session.sessionId);
   });
 
-  it('rejects HDR preparation as a runtime capability failure before transcoding without zscale', async () => {
+  it('reports VideoToolbox AV1 decoder rejection without CPU fallback', async () => {
     const run = vi.fn(
       async (
         executable: 'ffmpeg' | 'ffprobe',
@@ -296,25 +348,17 @@ describe('NodeFfmpegCutMediaAdapter', () => {
             stderr: '',
           };
         }
-        if (args.includes('-decoders')) {
-          return {
-            stdout: Buffer.from(' V..... av1 Alliance for Open Media AV1\\n'),
-            stderr: '',
-          };
-        }
-        if (args.includes('-encoders')) {
-          return {
-            stdout: Buffer.from(' V....D libx264 H.264 encoder\\n'),
-            stderr: '',
-          };
-        }
-        if (args.includes('-filters')) {
-          return {
-            stdout: Buffer.from(' .. format V->V\\n .S tonemap V->V\\n'),
-            stderr: '',
-          };
-        }
-        throw new Error('HDR transcode started before runtime capability qualification.');
+        throw new FfmpegCommandError(
+          'ffmpeg',
+          args,
+          1,
+          null,
+          [
+            '[vist#0:0/av1 @ 0x1] [dec:av1 @ 0x2] Task finished with error code: -78 (Function not implemented)',
+            '[vist#0:0/av1 @ 0x1] [dec:av1 @ 0x2] Terminating thread with return code -78 (Function not implemented)',
+            '[vost#0:0/h264_videotoolbox @ 0x3] [enc:h264_videotoolbox @ 0x4] Could not open encoder before EOF',
+          ].join('\n'),
+        );
       },
     );
     const process: FfmpegProcessPort = {
@@ -323,7 +367,11 @@ describe('NodeFfmpegCutMediaAdapter', () => {
         throw new Error('Unexpected streaming FFmpeg process.');
       },
     };
-    const adapter = new NodeFfmpegCutMediaAdapter(root, { cacheRoot, process });
+    const adapter = new NodeFfmpegCutMediaAdapter(root, {
+      cacheRoot,
+      process,
+      hardwareVideoBackend: 'videotoolbox',
+    });
     adapters.push(adapter);
 
     await expect(
@@ -338,12 +386,14 @@ describe('NodeFfmpegCutMediaAdapter', () => {
       ),
     ).rejects.toMatchObject<CutMediaRuntimeUnavailableError>({
       name: 'CutMediaRuntimeUnavailableError',
-      capability: 'HDR preview filter zscale',
+      capability: 'AV1 VideoToolbox decoder',
     });
-    expect(run).toHaveBeenCalledTimes(4);
+    expect(run).toHaveBeenCalledTimes(2);
+    const transcodeCall = run.mock.calls[1];
+    expect(transcodeCall?.[1]).not.toContain('libx264');
   });
 
-  it('downscales HDR in the first linear zscale stage for bounded preview cost', () => {
+  it('keeps Cut preview scaling and color conversion on VideoToolbox frames', () => {
     const filter = buildCutPreviewVideoFilter(
       {
         streamIndex: 0,
@@ -362,9 +412,10 @@ describe('NodeFfmpegCutMediaAdapter', () => {
       720,
     );
 
-    expect(filter).toMatch(/^zscale=w=1280:h=720:t=linear/u);
-    expect(filter).toContain('tonemap=hable');
-    expect(filter).toContain('sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA');
+    expect(filter).toBe(
+      'scale_vt=w=1280:h=720:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709',
+    );
+    expect(filter).not.toMatch(/(?:zscale|tonemap|scale=)/u);
   });
 
   it('uses the qualified VP8 WebM direct profile for the VS Code baseline', async () => {

@@ -30,6 +30,7 @@ export interface NodeFfmpegCutMediaAdapterOptions {
   readonly process?: FfmpegProcessPort;
   readonly server?: NodeMediaLoopbackServer;
   readonly vp8WebmDirectQualified?: boolean;
+  readonly hardwareVideoBackend?: 'videotoolbox' | 'unavailable';
 }
 
 interface PreviewSessionRecord {
@@ -82,12 +83,6 @@ interface ExportInput {
   readonly hasAudio: boolean;
 }
 
-interface CutFfmpegQualification {
-  readonly decoders: ReadonlySet<string>;
-  readonly encoders: ReadonlySet<string>;
-  readonly filters: ReadonlySet<string>;
-}
-
 const PCM_SAMPLE_RATE = 48_000;
 const PCM_CHANNELS = 2;
 
@@ -97,8 +92,8 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   private readonly cacheRoot: string;
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly vp8WebmDirectQualified: boolean;
+  private readonly hardwareVideoBackend: 'videotoolbox' | 'unavailable';
   private adapterRootPromise: Promise<string> | undefined;
-  private qualificationPromise: Promise<CutFfmpegQualification> | undefined;
   private nextSessionId = 0;
   private disposed = false;
 
@@ -110,6 +105,9 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     this.server = options.server ?? new NodeMediaLoopbackServer();
     this.cacheRoot = options.cacheRoot ?? nodePath.join(nodeOs.tmpdir(), 'openneko-cut-media');
     this.vp8WebmDirectQualified = options.vp8WebmDirectQualified ?? true;
+    this.hardwareVideoBackend =
+      options.hardwareVideoBackend ??
+      (process.platform === 'darwin' ? 'videotoolbox' : 'unavailable');
   }
 
   async probe(source: CutRuntimeMediaSource, signal?: AbortSignal): Promise<CutMediaProbe> {
@@ -169,9 +167,9 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     const video = probe.video;
     if (!video) throw new Error('Frame source contains no video stream.');
     if (isHdrVideo(video)) {
-      await this.assertPreviewRuntimeCapabilities(video, 'h264-sdr-transcode', signal);
+      throw new CutMediaRuntimeUnavailableError('hardware-only HDR frame capture');
     }
-    const filters = [buildCutPreviewVideoFilter(video, options.width, options.height)];
+    const filters = [buildCutFrameFilter(video, options.width, options.height)];
     let result;
     try {
       result = await this.process.run(
@@ -306,7 +304,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     const probe = await this.probe(source, signal);
     if (!probe.video) throw new Error('Preview source contains no video stream.');
     const profile = this.selectPreparationProfile(sourcePath, probe.video);
-    await this.assertPreviewRuntimeCapabilities(probe.video, profile, signal);
+    this.assertPreviewRuntimeCapabilities(profile, signal);
     const sessionId = this.newSessionId('preview');
     const directory = await nodeFs.mkdtemp(
       nodePath.join(await this.adapterRoot(), `${sessionId}-`),
@@ -325,6 +323,9 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
           signal,
         );
       } catch (error) {
+        if (profile === 'h264-sdr-transcode') {
+          throw classifyVideoToolboxCommandError(error, probe.video.codecName);
+        }
         throw classifyMediaCommandError(error, 'interval', 'prepare preview interval');
       }
       const registration = await this.server.registerFile(
@@ -763,43 +764,15 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     if (this.disposed) throw new Error('Node/FFmpeg Cut media adapter is disposed.');
   }
 
-  private async assertPreviewRuntimeCapabilities(
-    video: CutMediaVideoStream,
+  private assertPreviewRuntimeCapabilities(
     profile: CutPreviewPreparationProfile,
     signal?: AbortSignal,
-  ): Promise<void> {
-    if (profile !== 'h264-sdr-transcode' || !isHdrVideo(video)) return;
+  ): void {
+    if (profile !== 'h264-sdr-transcode') return;
     if (signal?.aborted) throw signal.reason;
-    this.qualificationPromise ??= this.qualifyFfmpeg();
-    const qualification = await this.qualificationPromise;
-    if (!qualification.decoders.has(video.codecName)) {
-      throw new CutMediaRuntimeUnavailableError(`${video.codecName} decoder`);
+    if (this.hardwareVideoBackend !== 'videotoolbox') {
+      throw new CutMediaRuntimeUnavailableError('hardware video preview backend');
     }
-    if (!qualification.encoders.has('libx264') && !qualification.encoders.has('h264')) {
-      throw new CutMediaRuntimeUnavailableError('H.264 preview encoder');
-    }
-    for (const required of ['zscale', 'tonemap', 'sidedata']) {
-      if (!qualification.filters.has(required)) {
-        throw new CutMediaRuntimeUnavailableError(`HDR preview filter ${required}`);
-      }
-    }
-  }
-
-  private async qualifyFfmpeg(): Promise<CutFfmpegQualification> {
-    const [decoders, encoders, filters] = await Promise.all([
-      this.process.run('ffmpeg', ['-hide_banner', '-decoders']),
-      this.process.run('ffmpeg', ['-hide_banner', '-encoders']),
-      this.process.run('ffmpeg', ['-hide_banner', '-filters']),
-    ]);
-    return {
-      decoders: parseFfmpegCapabilityNames(
-        `${decoders.stdout.toString('utf8')}\n${decoders.stderr}`,
-      ),
-      encoders: parseFfmpegCapabilityNames(
-        `${encoders.stdout.toString('utf8')}\n${encoders.stderr}`,
-      ),
-      filters: parseFfmpegCapabilityNames(`${filters.stdout.toString('utf8')}\n${filters.stderr}`),
-    };
   }
 }
 
@@ -814,6 +787,9 @@ function buildPreviewArgs(
     '-y',
     '-v',
     'error',
+    ...(profile === 'h264-sdr-transcode'
+      ? ['-xerror', '-hwaccel', 'videotoolbox', '-hwaccel_output_format', 'videotoolbox_vld']
+      : []),
     '-ss',
     decimal(interval.startTimeSeconds),
     '-t',
@@ -850,9 +826,15 @@ function buildPreviewArgs(
     '-vf',
     buildCutPreviewVideoFilter(video),
     '-c:v',
-    'libx264',
-    '-preset',
-    'ultrafast',
+    'h264_videotoolbox',
+    '-allow_sw',
+    '0',
+    '-realtime',
+    '1',
+    '-prio_speed',
+    '1',
+    '-b:v',
+    '8M',
     '-profile:v',
     'high',
     '-level:v',
@@ -877,19 +859,21 @@ export function buildCutPreviewVideoFilter(
   maxHeight = 720,
 ): string {
   const size = fitVideoWithin(video.width, video.height, maxWidth, maxHeight);
-  if (!isHdrVideo(video)) {
-    return `scale=${size.width}:${size.height}:flags=lanczos,format=yuv420p`;
-  }
   return [
-    `zscale=w=${size.width}:h=${size.height}:t=linear:npl=100`,
-    'format=gbrpf32le',
-    'zscale=p=bt709',
-    'tonemap=hable:desat=0',
-    'zscale=t=bt709:m=bt709:r=tv',
-    'sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA',
-    'sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL',
-    'format=yuv420p',
-  ].join(',');
+    `scale_vt=w=${size.width}:h=${size.height}`,
+    'color_matrix=bt709',
+    'color_primaries=bt709',
+    'color_transfer=bt709',
+  ].join(':');
+}
+
+function buildCutFrameFilter(
+  video: CutMediaVideoStream,
+  maxWidth: number,
+  maxHeight: number,
+): string {
+  const size = fitVideoWithin(video.width, video.height, maxWidth, maxHeight);
+  return `scale=${size.width}:${size.height}:flags=lanczos,format=yuv420p`;
 }
 
 function fitVideoWithin(
@@ -917,17 +901,6 @@ function isHdrVideo(video: CutMediaVideoStream): boolean {
   );
 }
 
-function parseFfmpegCapabilityNames(output: string): ReadonlySet<string> {
-  const names = new Set<string>();
-  for (const line of output.split(/\r?\n/u)) {
-    const fields = line.trim().split(/\s+/u);
-    const flags = fields[0];
-    const name = fields[1];
-    if (flags && name && /^[A-Z.]{1,6}$/u.test(flags)) names.add(name);
-  }
-  return names;
-}
-
 function classifyMediaCommandError(
   error: unknown,
   scope: 'source' | 'stream' | 'interval',
@@ -937,6 +910,33 @@ function classifyMediaCommandError(
     return new CutMediaCorruptionError(scope, operation, compactFfmpegDiagnostic(error.stderr));
   }
   return error instanceof Error ? error : new Error(String(error));
+}
+
+function classifyVideoToolboxCommandError(error: unknown, codecName: string): Error {
+  if (error instanceof CutMediaRuntimeUnavailableError) return error;
+  if (error instanceof FfmpegCommandError) {
+    if (
+      /(?:videotoolbox decoder .* not found|doesn't support hardware accelerated .* decoding|failed setup for format videotoolbox|no device available for decoder|\[dec:[^\]]+\][^\n]*function not implemented)/iu.test(
+        error.stderr,
+      )
+    ) {
+      return new CutMediaRuntimeUnavailableError(`${codecName.toUpperCase()} VideoToolbox decoder`);
+    }
+    if (/(?:unknown encoder|encoder .* not found).*h264_videotoolbox/iu.test(error.stderr)) {
+      return new CutMediaRuntimeUnavailableError('H.264 VideoToolbox encoder');
+    }
+    if (/(?:no such filter|filter not found).*scale_vt/iu.test(error.stderr)) {
+      return new CutMediaRuntimeUnavailableError('VideoToolbox scale_vt filter');
+    }
+    if (
+      /(?:parsed_scale_vt|error reinitializing filters|\[vf[^\]]*\][^\n]*function not implemented)/iu.test(
+        error.stderr,
+      )
+    ) {
+      return new CutMediaRuntimeUnavailableError('VideoToolbox video processing pipeline');
+    }
+  }
+  return classifyMediaCommandError(error, 'interval', 'prepare hardware preview interval');
 }
 
 function isMediaCorruptionDiagnostic(stderr: string): boolean {
