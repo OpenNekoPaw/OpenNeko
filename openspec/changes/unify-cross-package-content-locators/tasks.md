@@ -33,6 +33,7 @@
 - [x] 5.2 Update affected Agent, Generation, Canvas, and architecture documentation
 - [x] 5.3 Cross-reference this locator contract from the active Generation Job and Workspace Board OpenSpecs
 - [x] 5.4 Isolate rejected rebuildable generated-output projection rows behind one Host-owned catalog during embedded activation while preserving diagnostics, metadata, and generated files
+- [x] 5.5 Apply the same preserve-and-report startup isolation to the standalone Agent Host binding and surface aggregated diagnostics without deleting rejected rows or generated files
 
 ## 6. Verification
 
@@ -41,3 +42,4 @@
 - [x] 6.3 Run focused Agent evaluation for real generated-output locator handoff
 - [x] 6.4 Run Extension Development Host scenarios for Agent generation card/result and Board save/reopen rendering
 - [x] 6.5 Record commands, sanitized evidence, blockers, and residual risk in verification.md
+- [x] 6.6 Add standalone Host regression coverage proving rejected rows are excluded and reported while canonical rows continue loading and activation does not fail
