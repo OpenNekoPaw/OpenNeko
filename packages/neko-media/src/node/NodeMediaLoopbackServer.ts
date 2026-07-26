@@ -122,6 +122,7 @@ export class NodeMediaLoopbackServer {
   private start(): Promise<number> {
     const server = createServer((request, response) => {
       void this.handleRequest(request, response).catch((error: unknown) => {
+        if (isClientResponseCancellation(error, request, response)) return;
         this.logger.error('Media loopback request failed.', error);
         if (response.headersSent) {
           response.destroy(asError(error));
@@ -241,7 +242,10 @@ export class NodeMediaLoopbackServer {
       return;
     }
     const process = registration.createStream(registration.abortController.signal);
-    const close = (): void => process.terminate();
+    const close = (): void => {
+      if (response.writableEnded) return;
+      registration.abortController.abort(new Error('Media PCM consumer disconnected.'));
+    };
     response.once('close', close);
     try {
       await pipeline(process.stdout, response);
@@ -366,4 +370,16 @@ interface Deferred<T> {
 
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
+}
+
+function isClientResponseCancellation(
+  error: unknown,
+  request: IncomingMessage,
+  response: ServerResponse,
+): boolean {
+  return (
+    error instanceof Error &&
+    Reflect.get(error, 'code') === 'ERR_STREAM_PREMATURE_CLOSE' &&
+    (response.destroyed || request.socket.destroyed)
+  );
 }
