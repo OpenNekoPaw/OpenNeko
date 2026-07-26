@@ -203,15 +203,15 @@ interface CanvasPlaybackWorkspaceRevealRequest {
   readonly unitId?: string;
 }
 
-function isCanvasEditorLevelKeyboardAction(action: string): boolean {
+export function isCanvasEditorLevelKeyboardAction(action: string): boolean {
   return CANVAS_EDITOR_LEVEL_KEYBOARD_ACTIONS.has(action);
 }
 
-function readPlaybackMediaType(value: unknown): PlaybackMediaType {
+export function readPlaybackMediaType(value: unknown): PlaybackMediaType {
   return value === 'video' || value === 'audio' ? value : 'auto';
 }
 
-function isWorkspaceScopedVariablePath(value: string): boolean {
+export function isWorkspaceScopedVariablePath(value: string): boolean {
   return (
     value === '${WORKSPACE}' ||
     value.startsWith('${WORKSPACE}/') ||
@@ -239,22 +239,29 @@ function requestCanvasProjectSnapshot(
   });
 }
 
-function assertCanvasNodeType(type: CanvasNodeType | undefined): void {
+export function assertCanvasNodeType(type: CanvasNodeType | undefined): void {
   if (type !== undefined && !isCanvasNodeType(type)) {
     throw new Error(`Unsupported Canvas node type "${type}"`);
   }
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
-function requireCanvasSerializableValue(value: unknown, label: string): CanvasSerializableValue {
+export function requireCanvasSerializableValue(
+  value: unknown,
+  label: string,
+): CanvasSerializableValue {
   if (isCanvasSerializableValue(value)) return value;
   throw new Error(`${label} is not Canvas-serializable.`);
 }
 
-function isCanvasSerializableValue(value: unknown): value is CanvasSerializableValue {
+export function isCanvasSerializableValue(value: unknown): value is CanvasSerializableValue {
   if (
     value === null ||
     typeof value === 'string' ||
@@ -267,7 +274,7 @@ function isCanvasSerializableValue(value: unknown): value is CanvasSerializableV
   return isPlainRecord(value) && Object.values(value).every(isCanvasSerializableValue);
 }
 
-function isCanvasDataSnapshot(value: unknown): value is CanvasData {
+export function isCanvasDataSnapshot(value: unknown): value is CanvasData {
   if (!isPlainRecord(value)) return false;
   return (
     typeof value['version'] === 'string' &&
@@ -315,13 +322,13 @@ function isCanonicalCanvasConnectionSnapshot(value: unknown): boolean {
   );
 }
 
-function isStringArray(value: unknown): value is string[] {
+export function isStringArray(value: unknown): value is string[] {
   return (
     Array.isArray(value) && value.every((entry) => typeof entry === 'string' && entry.length > 0)
   );
 }
 
-function normalizeCanvasAssetPreviewBindings(value: unknown, bindingPath: string): void {
+export function normalizeCanvasAssetPreviewBindings(value: unknown, bindingPath: string): void {
   if (Array.isArray(value)) {
     value.forEach((item) => normalizeCanvasAssetPreviewBindings(item, bindingPath));
     return;
@@ -345,7 +352,9 @@ function normalizeCanvasAssetPreviewBindings(value: unknown, bindingPath: string
   }
 }
 
-function createCanvasPreviewSemanticFingerprint(canvasData: Record<string, unknown>): string {
+export function createCanvasPreviewSemanticFingerprint(
+  canvasData: Record<string, unknown>,
+): string {
   const previewState: Record<string, unknown> = {};
   for (const key of CANVAS_PREVIEW_SEMANTIC_FINGERPRINT_KEYS) {
     previewState[key] = canvasData[key];
@@ -353,7 +362,7 @@ function createCanvasPreviewSemanticFingerprint(canvasData: Record<string, unkno
   return stableCanvasPreviewStringify(previewState);
 }
 
-function stableCanvasPreviewStringify(value: unknown): string {
+export function stableCanvasPreviewStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value) ?? 'undefined';
   }
@@ -368,7 +377,7 @@ function stableCanvasPreviewStringify(value: unknown): string {
     .join(',')}}`;
 }
 
-function resolveCanvasPreviewVariantRole(
+export function resolveCanvasPreviewVariantRole(
   resourceRef: ResourceRef,
   preferredRole: ResourceVariantRole | undefined,
 ): ResourceVariantRole {
@@ -404,7 +413,7 @@ function resolveCanvasPreviewVariantRole(
   return preferredRole ?? 'thumbnail';
 }
 
-function createCanvasRepresentationSpec(
+export function createCanvasRepresentationSpec(
   role: ResourceVariantRole,
 ): ContentRepresentationSpec | undefined {
   switch (role) {
@@ -431,13 +440,13 @@ function createCanvasRepresentationSpec(
   }
 }
 
-function inferCanvasRepresentationMimeType(spec: ContentRepresentationSpec): string {
+export function inferCanvasRepresentationMimeType(spec: ContentRepresentationSpec): string {
   if (spec.kind === 'proxy') return 'application/octet-stream';
   const format = 'format' in spec ? spec.format : undefined;
   return format === 'png' ? 'image/png' : format === 'webp' ? 'image/webp' : 'image/jpeg';
 }
 
-function readCanvasPreviewVariantLocalPath(value: string | undefined): string | undefined {
+export function readCanvasPreviewVariantLocalPath(value: string | undefined): string | undefined {
   if (!value || /^(?:https?|data|blob):/iu.test(value)) return undefined;
   if (!value.startsWith('file://')) return value;
   try {
@@ -447,7 +456,9 @@ function readCanvasPreviewVariantLocalPath(value: string | undefined): string | 
   }
 }
 
-function readCanvasProjectionSummary(canvasData: Record<string, unknown>): string | undefined {
+export function readCanvasProjectionSummary(
+  canvasData: Record<string, unknown>,
+): string | undefined {
   const projectionStatus = canvasData.projectionStatus;
   if (
     !projectionStatus ||
@@ -466,7 +477,7 @@ function readCanvasProjectionSummary(canvasData: Record<string, unknown>): strin
     : `Projected: ${status.state}`;
 }
 
-function readCanonicalCanvasNodePresentation(node: CanvasNode): {
+export function readCanonicalCanvasNodePresentation(node: CanvasNode): {
   readonly label: string;
   readonly summary: string;
 } {
@@ -504,7 +515,7 @@ function readCanonicalCanvasNodePresentation(node: CanvasNode): {
   }
 }
 
-function isCanvasCreativeScopeLike(value: unknown): boolean {
+export function isCanvasCreativeScopeLike(value: unknown): boolean {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -513,7 +524,7 @@ function isCanvasCreativeScopeLike(value: unknown): boolean {
   );
 }
 
-function readCanvasBoardRef(value: unknown): CanvasBoardRef | undefined {
+export function readCanvasBoardRef(value: unknown): CanvasBoardRef | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
   switch (record['kind']) {
@@ -540,7 +551,7 @@ function readCanvasBoardRef(value: unknown): CanvasBoardRef | undefined {
   }
 }
 
-function isUnsafeCanvasBoardUri(value: string): boolean {
+export function isUnsafeCanvasBoardUri(value: string): boolean {
   const trimmed = value.trim();
   return (
     trimmed.length === 0 ||
@@ -551,7 +562,7 @@ function isUnsafeCanvasBoardUri(value: string): boolean {
   );
 }
 
-function findOpenCanvasDocumentUriByProjectRef(
+export function findOpenCanvasDocumentUriByProjectRef(
   ref: Extract<CanvasBoardRef, { kind: 'project' }>,
   snapshots: ReadonlyMap<string, Record<string, unknown>>,
 ): vscode.Uri | undefined {
@@ -570,11 +581,11 @@ function findOpenCanvasDocumentUriByProjectRef(
   return undefined;
 }
 
-function createProjectionSourceKey(source: ProjectedCanvasSource): string {
+export function createProjectionSourceKey(source: ProjectedCanvasSource): string {
   return `${source.kind}:${source.uri}`;
 }
 
-function hashProjectionSource(value: string): string {
+export function hashProjectionSource(value: string): string {
   let hash = 5381;
   for (let index = 0; index < value.length; index += 1) {
     hash = (hash * 33) ^ value.charCodeAt(index);
@@ -582,7 +593,7 @@ function hashProjectionSource(value: string): string {
   return (hash >>> 0).toString(16);
 }
 
-function readCanvasNodeContainerChildIds(node: Record<string, unknown>): string[] {
+export function readCanvasNodeContainerChildIds(node: Record<string, unknown>): string[] {
   const container = node.container;
   if (typeof container !== 'object' || container === null || Array.isArray(container)) {
     return [];
@@ -594,7 +605,7 @@ function readCanvasNodeContainerChildIds(node: Record<string, unknown>): string[
     : [];
 }
 
-function mapOperationToCanvasChangeEvent(operation: {
+export function mapOperationToCanvasChangeEvent(operation: {
   type?: string;
   payload?: Record<string, unknown>;
 }): CanvasChangeEvent {
@@ -659,7 +670,7 @@ interface NekoPreviewVariantAPI {
   unregisterPreviewAsset(assetIdOrToken: string): Promise<void>;
 }
 
-function isPreviewVariantAPI(api: unknown): api is NekoPreviewVariantAPI {
+export function isPreviewVariantAPI(api: unknown): api is NekoPreviewVariantAPI {
   const candidate = api as Partial<NekoPreviewVariantAPI> | null;
   return (
     typeof candidate?.registerPreviewAsset === 'function' &&
