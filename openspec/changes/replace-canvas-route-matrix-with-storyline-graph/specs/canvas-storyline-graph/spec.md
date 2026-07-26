@@ -1,0 +1,166 @@
+## ADDED Requirements
+
+### Requirement: Canvas exposes one unified playback Overlay
+
+The Canvas Webview SHALL render Storyline as the only route presentation inside one unified playback Overlay component. The component SHALL own Storyline, the single playback control presentation, collapsible Preview and footer as one visual surface. These elements MUST NOT be split across sibling persistent/transient panels or separately visible Storyline and Preview components. Canvas MUST NOT expose Matrix, route-comparison mode, grid projection, hidden compatibility path, or fallback renderer.
+
+#### Scenario: Playback Overlay opens
+
+- **WHEN** the user reveals the Canvas playback workspace
+- **THEN** one Overlay displays Storyline followed by the playback controls
+- **AND** the same Overlay component owns the collapsed Preview region
+- **AND** no persistent Storyline or Preview panel remains outside the Overlay
+- **AND** no Matrix projection or Matrix runtime state is created
+
+### Requirement: Playback state controls Preview expansion
+
+The unified Overlay SHALL keep Storyline at the top and playback controls directly below it. Preview media content SHALL be collapsed whenever playback is not active and SHALL expand below the controls while playback is active. While playback is not active, the Overlay SHALL be a top-docked, non-modal strip without a dimming backdrop and Canvas SHALL remain interactive outside the strip. While playback is active, the same Overlay SHALL become a centered modal presentation with a dimming backdrop. The Overlay SHALL also support Webview-full-bleed presentation.
+
+#### Scenario: User opens the Overlay while not playing
+
+- **WHEN** the Overlay opens with playback state idle, paused or stale
+- **THEN** Storyline and exactly one playback control presentation are visible
+- **AND** Preview media content is not mounted
+- **AND** the Overlay is docked at the top without a dimming backdrop or modal semantics
+- **AND** Canvas remains interactive outside the Overlay strip
+- **AND** the Overlay title, full-bleed action and close action remain available
+
+#### Scenario: Playback starts
+
+- **WHEN** the user starts playback from the collapsed Overlay
+- **THEN** the same Overlay expands without opening another surface
+- **AND** Preview media content appears below Storyline and controls
+- **AND** the Overlay becomes centered and modal with a dimming backdrop
+- **AND** Storyline, controls and Preview consume the same playback session
+
+#### Scenario: Playback stops
+
+- **WHEN** active playback pauses, ends or becomes stale
+- **THEN** Preview media content is removed
+- **AND** Storyline and playback controls remain in the same Overlay
+- **AND** the Overlay returns to its top-docked non-modal presentation
+
+#### Scenario: User toggles Preview full-bleed presentation
+
+- **WHEN** the Overlay is open and the user activates its fullscreen action
+- **THEN** the same Overlay expands to fill the Canvas Webview content area
+- **AND** playback state and current media are preserved
+- **AND** activating the action again restores the centered Overlay
+- **AND** the implementation does not invoke the browser Fullscreen API
+
+#### Scenario: User closes the Overlay
+
+- **WHEN** the user closes the Overlay or presses Escape
+- **THEN** Storyline, Preview and the control presentation are removed together
+- **AND** active playback is paused
+- **AND** Canvas remains available
+
+### Requirement: Storyline presents ordered story nodes
+
+Storyline SHALL project valid `CanvasPlaybackRouteCandidate` values as an ordered horizontal branch graph. Node position and width MUST express sequence rather than duration, and Storyline MUST NOT render a timeline ruler or display inferred fallback duration as authoritative metadata.
+
+#### Scenario: A route contains multiple playback units
+
+- **WHEN** Storyline renders the selected route
+- **THEN** each valid route unit is displayed once in route order
+- **AND** the nodes use stable structural spacing independent of `durationMs`
+- **AND** the active node and sequence connections are visually identifiable
+- **AND** each node visibly contains only its compact index and short label
+
+#### Scenario: Routes branch and merge
+
+- **WHEN** multiple routes share stable source-node identities before or after distinct units
+- **THEN** Storyline renders distinct horizontal lane segments with visible branch and merge connectors
+- **AND** shared nodes are rendered once at their stable graph position
+- **AND** non-selected route paths remain visible with secondary emphasis
+
+#### Scenario: A playback unit lacks authoritative duration
+
+- **WHEN** a Storyline node has no valid `durationMs`
+- **THEN** Storyline does not display an invented duration for that node
+- **AND** playback may continue using the controller's existing advance policy
+
+### Requirement: Storyline nodes reveal their source Canvas nodes
+
+Each Storyline node SHALL retain the selected route id, playback unit id and `CanvasPlaybackUnit.sourceNodeId`. Activating a Storyline node MUST select and reveal that exact source Canvas node while updating the existing Preview and playback session.
+
+#### Scenario: User activates a Storyline node
+
+- **WHEN** the user clicks or keyboard-activates a valid Storyline node
+- **THEN** the corresponding route and playback unit become current
+- **AND** the Canvas node identified by `sourceNodeId` becomes selected
+- **AND** the Canvas viewport reveals the node inside the unobscured Canvas pane
+- **AND** Preview updates through the existing playback path
+
+#### Scenario: Source identity is unavailable
+
+- **WHEN** the current PlaybackPlan references a missing unit or source Canvas node
+- **THEN** Storyline exposes an explicit diagnostic or stale state
+- **AND** it does not select a different node or continue through a fallback mapping
+
+### Requirement: Storyline preserves multiple route selection
+
+Storyline SHALL preserve valid multiple `CanvasPlaybackRouteCandidate` values without introducing a separate comparison surface. Route/lane controls MUST allow the user to choose a route, and shared or merged nodes MUST only be represented when stable source identity proves that the routes reference the same story node.
+
+#### Scenario: User chooses another route
+
+- **WHEN** more than one valid route exists and the user selects another route
+- **THEN** Storyline emphasizes that route's nodes and connectors without hiding other branches
+- **AND** the first valid node in that route becomes current
+- **AND** Matrix or another route surface is not opened
+
+#### Scenario: Routes contain similarly named but distinct nodes
+
+- **WHEN** two routes contain nodes with the same label but different stable source identities
+- **THEN** Storyline keeps those nodes distinct
+- **AND** it does not infer a branch merge from their labels
+
+### Requirement: Storyline owns route diagnostics and accessibility
+
+Storyline SHALL expose route diagnostics, playback-unit media state and current selection without relying on Matrix. All routes and story nodes MUST remain keyboard reachable and MUST have accessible labels that identify their route/node state.
+
+#### Scenario: A route contains a missing-media diagnostic
+
+- **WHEN** Storyline renders a playback unit whose media source is missing
+- **THEN** the corresponding node exposes the missing-media state visibly and accessibly
+- **AND** the route-level diagnostic remains available in Storyline
+
+#### Scenario: User navigates Storyline with a keyboard
+
+- **WHEN** keyboard focus enters Storyline
+- **THEN** the user can traverse and activate story nodes in route order
+- **AND** focus does not depend on Matrix row, column or cell state
+
+### Requirement: Canvas Toolbar identifies the Storyline surface
+
+The Canvas Toolbar SHALL use a dedicated Storyline branch icon for the action that opens or closes the unified playback Overlay. The action MUST NOT use the generic play triangle because opening the Overlay does not immediately start playback.
+
+#### Scenario: User finds the Storyline action
+
+- **WHEN** the Canvas Toolbar renders the unified playback Overlay action
+- **THEN** the action displays the Storyline branch icon
+- **AND** its accessible label identifies opening or closing the Storyline playback Overlay
+- **AND** the action does not display the generic play triangle
+
+### Requirement: Storyline playback reuses the existing runtime
+
+Storyline SHALL use the single existing Canvas playback controller and on-demand Preview surface. Removing Matrix MUST NOT create another timer, request owner, media surface or persisted route model.
+
+#### Scenario: Playback starts from Storyline
+
+- **WHEN** the user opens the unified Overlay and starts playback
+- **THEN** the existing Preview surface renders the selected unit inside the Overlay
+- **AND** only one playback controller owns timers and media requests
+- **AND** current route, unit and playback progress remain synchronized
+
+### Requirement: Playback controls are centered and omit time labels
+
+The unified Overlay SHALL center the previous, play/pause and next transport controls independently of route-position metadata. It SHALL NOT display current-time, total-duration or time-formatted Seek tooltip text. The controller MAY retain an unlabeled Seek progress bar and route-position count.
+
+#### Scenario: Playback controls render
+
+- **WHEN** the unified Overlay is collapsed or expanded
+- **THEN** the previous, play/pause and next buttons are horizontally centered
+- **AND** no current-time or total-duration text is visible
+- **AND** the Seek bar does not reveal a formatted time tooltip
+- **AND** playback timing remains available internally for seeking and media synchronization
