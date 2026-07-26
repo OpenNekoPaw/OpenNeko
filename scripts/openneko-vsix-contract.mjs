@@ -1,7 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
 export const OPENNEKO_FEATURE_PACKAGES = Object.freeze([
-  'neko-engine',
   'neko-tools',
   'neko-preview',
   'neko-assets',

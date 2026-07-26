@@ -10,17 +10,17 @@ For a Pull Request targeting `main`, the source branch must be `dev`.
 
 - [ ] L0 docs/copy/low-risk single-file fix
 - [ ] L1 local component/hook/service/state logic
-- [ ] L2 cross-layer contract, shared package, EngineClient, Webview/Extension message
-- [ ] L3 Rust engine, Proto, media stream, rendering, project format, AI workflow, packaging
+- [ ] L2 cross-layer contract, shared package, Webview/Extension message
+- [ ] L3 Node/FFmpeg media runtime, Proto, media stream, rendering, project format, AI workflow, packaging
 - [ ] L4 release, install/packaging, major UX, core creative workflow
 
 ## Impact Areas
 
 - [ ] Webview / React
 - [ ] VSCode Extension Host
-- [ ] Rust engine
+- [ ] Node/FFmpeg media runtime
 - [ ] Proto / generated types
-- [ ] `@neko/shared` / `@neko/neko-client`
+- [ ] `@neko/shared` / `@neko/media`
 - [ ] Agent / AI workflow
 - [ ] Assets / Market / Preview / Tools
 - [ ] Docs / config / packaging

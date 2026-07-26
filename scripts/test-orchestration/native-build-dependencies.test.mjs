@@ -4,29 +4,29 @@ import { test } from 'node:test';
 
 import { parse } from 'yaml';
 
-test('the workflow and prepared act image share the native build dependency list', async () => {
+test('the workflow and prepared act image share the media runtime dependency list', async () => {
   const [workflowSource, packageList, dockerfile] = await Promise.all([
     readFile('.github/workflows/ci.yml', 'utf8'),
-    readFile('scripts/act/native-build-packages.txt', 'utf8'),
+    readFile('scripts/act/media-runtime-packages.txt', 'utf8'),
     readFile('scripts/act/Dockerfile', 'utf8'),
   ]);
   const workflow = parse(workflowSource);
-  const nativeDependenciesStep = workflow.jobs.build.steps.find(
-    (step) => step.name === 'Install native build dependencies',
+  const mediaRuntimeDependencyStep = workflow.jobs.build.steps.find(
+    (step) => step.name === 'Install media runtime dependency',
   );
-  const nativePackages = packageList.split(/\s+/u).filter(Boolean);
+  const mediaRuntimePackages = packageList.split(/\s+/u).filter(Boolean);
 
-  assert.ok(nativeDependenciesStep, 'expected the build job to install native dependencies');
   assert.ok(
-    nativePackages.includes('libavdevice-dev'),
-    'ffmpeg-sys-next enables the avdevice feature, so Linux builds require libavdevice-dev',
+    mediaRuntimeDependencyStep,
+    'expected the build job to install the media runtime dependency',
   );
-  assert.match(nativeDependenciesStep.run, /scripts\/act\/native-build-packages\.txt/u);
+  assert.deepEqual(mediaRuntimePackages, ['ffmpeg']);
+  assert.match(mediaRuntimeDependencyStep.run, /scripts\/act\/media-runtime-packages\.txt/u);
   assert.equal(
-    nativeDependenciesStep.if,
+    mediaRuntimeDependencyStep.if,
     "${{ env.ACT != 'true' || env.ACT_NATIVE_DEPS_READY != 'true' }}",
   );
-  assert.match(dockerfile, /COPY native-build-packages\.txt/u);
+  assert.match(dockerfile, /COPY media-runtime-packages\.txt/u);
   assert.match(dockerfile, /xargs apt-get install -y/u);
 });
 

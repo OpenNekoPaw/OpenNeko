@@ -7,8 +7,6 @@ const SHARED_GATE_JOBS = Object.freeze([
   'build',
   'local-metadata-runtime',
   'test-ts',
-  'test-rust',
-  'cargo-deny',
   'proto-check',
   'code-quality',
   'openspec-check',

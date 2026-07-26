@@ -2,7 +2,7 @@
 
 # Local GitHub Actions smoke runner powered by act.
 # This is an optional workflow-shape check; GitHub-hosted runners remain the
-# authoritative CI environment, especially for macOS Rust/Metal jobs.
+# authoritative CI environment and release packaging.
 
 set -euo pipefail
 
@@ -15,8 +15,8 @@ DEFAULT_EVENT="workflow_dispatch"
 DEFAULT_CONTAINER_ARCHITECTURE="${ACT_CONTAINER_ARCHITECTURE:-linux/arm64/v8}"
 DEFAULT_BASE_IMAGE="${ACT_BASE_IMAGE:-catthehacker/ubuntu:act-latest}"
 
-DEFAULT_JOBS=(build test-ts code-quality cargo-deny)
-SUPPORTED_JOBS=(build test-ts code-quality cargo-deny proto-check)
+DEFAULT_JOBS=(build test-ts code-quality)
+SUPPORTED_JOBS=(build test-ts code-quality proto-check)
 
 EVENT="$DEFAULT_EVENT"
 RUN_ALL=0
@@ -39,13 +39,11 @@ Options:
   --help, -h          Show this help.
 
 Default jobs:
-  build, test-ts, code-quality, cargo-deny
+  build, test-ts, code-quality
 
 Notes:
-  - This intentionally excludes test-rust because CI runs it on macos-15 (Apple Silicon).
-    Use `pnpm ci:local:rust` for Rust checks and GitHub Actions for the final
-    macOS runner signal.
-  - The default prepared image caches Linux FFmpeg and native build packages.
+  - The default prepared image installs the Linux FFmpeg executable used by
+    Node media runtime qualification.
     Override it with ACT_PLATFORM, for example:
       ACT_PLATFORM='ubuntu-latest=ghcr.io/catthehacker/ubuntu:act-22.04' pnpm ci:act
     Custom platforms install native packages inside the workflow as usual.
@@ -94,7 +92,6 @@ list_jobs() {
   printf '  %s\n' "${DEFAULT_JOBS[@]}"
   echo ""
   echo "Excluded by design:"
-  echo "  test-rust       macos-15 (Apple Silicon); use pnpm ci:local:rust locally"
   echo "  dependency-review  Pull Request-only GitHub check"
   echo "  package-*          Full supported-platform packaging stays on GitHub runners"
 }
@@ -126,19 +123,13 @@ configure_local_runtime() {
   CACHE_MOUNTS=(
     "$CACHE_DIR/pnpm-store:/root/.local/share/pnpm/store"
     "$CACHE_DIR/corepack:/root/.cache/node/corepack"
-    "$CACHE_DIR/cargo-home:/root/.cargo"
-    "$CACHE_DIR/rustup:/root/.rustup"
     "$CACHE_DIR/turbo:$ROOT_DIR/.turbo"
-    "$CACHE_DIR/cargo-target:$ROOT_DIR/packages/neko-engine/target"
   )
 
   mkdir -p \
     "$CACHE_DIR/pnpm-store" \
     "$CACHE_DIR/corepack" \
-    "$CACHE_DIR/cargo-home" \
-    "$CACHE_DIR/rustup" \
-    "$CACHE_DIR/turbo" \
-    "$CACHE_DIR/cargo-target"
+    "$CACHE_DIR/turbo"
 
   CONTAINER_OPTIONS=""
   local mount_spec escaped_mount
@@ -154,7 +145,7 @@ configure_local_runtime() {
     return 0
   fi
 
-  runner_revision="$({ cd "$ACT_DOCKER_CONTEXT"; cksum Dockerfile native-build-packages.txt; } | cksum | awk '{print $1}')"
+  runner_revision="$({ cd "$ACT_DOCKER_CONTEXT"; cksum Dockerfile media-runtime-packages.txt; } | cksum | awk '{print $1}')"
   RUNNER_IMAGE="${ACT_RUNNER_IMAGE:-openneko-act:${ARCH_CACHE_KEY}-${runner_revision}}"
   PLATFORM="ubuntu-latest=$RUNNER_IMAGE"
 }

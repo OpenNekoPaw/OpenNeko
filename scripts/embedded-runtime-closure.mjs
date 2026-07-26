@@ -6,7 +6,7 @@ import { OPENNEKO_FEATURE_PACKAGES, OPENNEKO_PLATFORM_TARGETS } from './openneko
 
 const RUNTIME_CLOSURE_SCHEMA = 'openneko.embedded-runtime-closure.v1';
 const INTERNAL_BARE_IMPORT_PATTERN =
-  /\b(?:require|import)\(\s*['"](@(?:neko|neko-agent|neko-engine)\/[^'"]+)['"]\s*\)/gu;
+  /\b(?:require|import)\(\s*['"](@(?:neko|neko-agent)\/[^'"]+)['"]\s*\)/gu;
 const VARIABLE_PACKAGE_IMPORT_PATTERN = /\bimport\(packageName\)/u;
 
 export function assertEmbeddedRuntimeClosure(stageRoot, target) {

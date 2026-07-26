@@ -3,9 +3,9 @@ FROM ${ACT_BASE_IMAGE}
 
 USER root
 
-COPY native-build-packages.txt /tmp/openneko-native-build-packages.txt
+COPY media-runtime-packages.txt /tmp/openneko-media-runtime-packages.txt
 
 RUN apt-get update \
-    && xargs apt-get install -y < /tmp/openneko-native-build-packages.txt \
-    && rm -f /tmp/openneko-native-build-packages.txt \
+    && xargs apt-get install -y < /tmp/openneko-media-runtime-packages.txt \
+    && rm -f /tmp/openneko-media-runtime-packages.txt \
     && rm -rf /var/lib/apt/lists/*

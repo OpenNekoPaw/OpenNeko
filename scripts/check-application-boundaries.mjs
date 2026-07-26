@@ -31,10 +31,6 @@ const removedProductContractRules = [
     tokens: ["layer: 'market'", 'marketRegistration', 'readonly market:'],
   },
   {
-    file: 'packages/neko-client/src/index.ts',
-    tokens: ['PuppetCommandAck', 'PuppetCommandEnvelope'],
-  },
-  {
     file: 'packages/neko-tools/package.json',
     tokens: [
       'neko-audio-file',
@@ -105,10 +101,6 @@ const removedProductContractRules = [
     tokens: ['MarketInstallationRepository', 'MarketInstallationRecord', 'marketInstallations'],
   },
   {
-    file: 'packages/neko-engine/packages/host-cli/src/runner.rs',
-    tokens: ['NkaLoader', 'run_nka_mix_export'],
-  },
-  {
     file: 'packages/neko-types/src/types/extension-api.ts',
     tokens: [
       'NekoAudioAPI',
@@ -155,14 +147,6 @@ const removedProductContractRules = [
       'packages/neko-live',
     ],
   },
-  {
-    file: 'packages/neko-engine/README.md',
-    tokens: ['runtime-scene', 'runtime-puppet', 'runtime-device', 'runtime-ml'],
-  },
-  {
-    file: 'packages/neko-engine/ARCHITECTURE.md',
-    tokens: ['runtime-scene', 'runtime-puppet', 'runtime-device', 'runtime-ml'],
-  },
 ];
 const removedProductContractFiles = [
   'packages/neko-types/src/types/recording-artifact.ts',
@@ -198,7 +182,6 @@ const removedProductContractFiles = [
   'packages/neko-types/src/nka/index.ts',
   'packages/neko-types/src/nks/index.ts',
   'packages/neko-types/src/vscode/extension/templates/glb-template.ts',
-  'packages/neko-engine/packages/host-cli/src/nka_loader.rs',
   'packages/neko-entity/src/providers/story.ts',
   'packages/neko-ui/src/viewport/index.ts',
   'packages/neko-assets/src/market/VoicePackInstallTarget.ts',
@@ -573,7 +556,7 @@ function runSelfTest() {
     removedFeaturePackages: ['packages/neko-model'],
     removedProductContracts: [
       {
-        file: 'packages/neko-client/src/index.ts',
+        file: 'packages/neko-proto/scene.proto',
         token: 'PuppetCommandEnvelope',
       },
     ],

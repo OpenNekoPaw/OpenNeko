@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import {
-  assertEmbeddedNativeClosure,
+  assertOpenNekoPayloadClosure,
   createComposedManifest,
   parseOpenNekoPackageArgs,
   resolveHostTarget,
@@ -16,15 +16,9 @@ const nekoCutManifest = JSON.parse(
 describe('OpenNeko platform assembler', () => {
   it('parses explicit platform payload arguments', () => {
     assert.deepEqual(
-      parseOpenNekoPackageArgs([
-        '--target',
-        'linux-x64',
-        '--engine-vsix',
-        'packages/neko-engine/engine.vsix',
-      ]),
+      parseOpenNekoPackageArgs(['--target', 'linux-x64']),
       {
         target: 'linux-x64',
-        engineVsix: 'packages/neko-engine/engine.vsix',
       },
     );
     assert.equal(resolveHostTarget('darwin', 'arm64'), 'darwin-arm64');
@@ -47,61 +41,23 @@ describe('OpenNeko platform assembler', () => {
     assert.ok(manifest.contributes.commands.length > 50);
   });
 
-  it('accepts only one target binding plus FFmpeg runtime libraries', () => {
+  it('rejects retired Engine and build-input files from the product payload', () => {
     assert.deepEqual(
-      assertEmbeddedNativeClosure(
-        [
-          '/payload/neko-engine.darwin-arm64.node',
-          '/payload/libavcodec.dylib',
-          '/payload/libavformat.dylib',
-        ],
-        'darwin-arm64',
-      ),
-      {
-        nativeFile: '/payload/neko-engine.darwin-arm64.node',
-        runtimeLibraryCount: 2,
-      },
-    );
-    assert.deepEqual(
-      assertEmbeddedNativeClosure(
-        [
-          '/payload/neko-engine.linux-x64-gnu.node',
-          '/payload/libavcodec.so.62',
-          '/payload/libavformat.so.62',
-        ],
-        'linux-x64',
-      ),
-      {
-        nativeFile: '/payload/neko-engine.linux-x64-gnu.node',
-        runtimeLibraryCount: 2,
-      },
+      assertOpenNekoPayloadClosure(['/payload/dist/extension.js'], 'darwin-arm64'),
+      { fileCount: 1 },
     );
     assert.throws(
       () =>
-        assertEmbeddedNativeClosure(
-          [
-            '/payload/neko-engine.darwin-arm64.node',
-            '/payload/neko-engine.linux-x64.node',
-            '/payload/libavcodec.dylib',
-          ],
+        assertOpenNekoPayloadClosure(
+          ['/payload/dist/features/neko-engine/extension.js'],
           'darwin-arm64',
         ),
-      /native closure must contain only/u,
+      /retired Engine files/u,
     );
     assert.throws(
       () =>
-        assertEmbeddedNativeClosure(
-          ['/payload/neko-engine.linux-x64.node', '/payload/libavcodec.so.62'],
-          'linux-x64',
-        ),
-      /neko-engine\.linux-x64-gnu\.node/u,
-    );
-    assert.throws(
-      () =>
-        assertEmbeddedNativeClosure(
+        assertOpenNekoPayloadClosure(
           [
-            '/payload/packages/host-napi/neko-engine.linux-x64-gnu.node',
-            '/payload/packages/host-napi/libavcodec.so.62',
             '/payload/deps/ffmpeg/lib/libavcodec.so.62',
           ],
           'linux-x64',

@@ -18,13 +18,13 @@ module.exports = {
     {
       name: 'layer0-no-internal-deps',
       comment:
-        'Foundation packages (@neko/shared, @neko/host, @neko/neko-client, @neko/proto) must not depend on other workspace packages',
+        'Foundation packages (@neko/shared, @neko/host, @neko/media, @neko/proto) must not depend on feature packages',
       severity: 'error',
       from: {
         path: [
           '^packages/neko-types/',
           '^packages/neko-host/',
-          '^packages/neko-client/',
+          '^packages/neko-media/',
           '^packages/neko-proto/',
         ],
       },
@@ -34,7 +34,7 @@ module.exports = {
           // Allow self-references and Layer 0 peers
           '^packages/neko-types/',
           '^packages/neko-host/',
-          '^packages/neko-client/',
+          '^packages/neko-media/',
           '^packages/neko-proto/',
         ],
       },
@@ -160,11 +160,6 @@ module.exports = {
     },
     exclude: {
       path: [
-        // Rust packages (not TS)
-        'packages/neko-engine/packages/engine-',
-        'packages/neko-engine/packages/host-napi',
-        'packages/neko-engine/packages/host-cli',
-        'packages/neko-engine/packages/runtime-',
         // Test files
         '\\.(test|spec)\\.(ts|tsx)$',
         '__mocks__',

@@ -1,65 +1,35 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { describe, it } from 'node:test';
 import { parse } from 'yaml';
-
-const require = createRequire(import.meta.url);
-const {
-  SUPPORTED_TARGET_NAMES,
-} = require('../../packages/neko-engine/packages/host-napi/native-binding-loader');
 
 const EXPECTED_TARGETS = ['darwin-arm64', 'linux-x64'];
 const EXPECTED_MATRIX = [
   {
     target: 'darwin-arm64',
     os: 'macos-15',
-    rustTarget: 'aarch64-apple-darwin',
   },
   {
     target: 'linux-x64',
     os: 'ubuntu-latest',
-    rustTarget: 'x86_64-unknown-linux-gnu',
   },
 ];
 
 describe('supported release platform orchestration', () => {
-  it('keeps Engine packaging and N-API metadata on the exact canonical target set', async () => {
-    const [packageConfig, hostManifest, runtimeMatrix] = await Promise.all([
-      readFile('packages/neko-engine/scripts/package-config.json', 'utf8').then(JSON.parse),
-      readFile('packages/neko-engine/packages/host-napi/package.json', 'utf8').then(JSON.parse),
-      readFile('quality/local-metadata-runtime-matrix.json', 'utf8').then(JSON.parse),
-    ]);
-
-    assert.deepEqual(Object.keys(packageConfig.targets), EXPECTED_TARGETS);
-    assert.deepEqual(SUPPORTED_TARGET_NAMES, EXPECTED_TARGETS);
-    assert.equal(hostManifest.main, 'loader.js');
-    assert.doesNotMatch(hostManifest.files.join('\n'), /^index\.js$/mu);
-    assert.deepEqual(
-      hostManifest.napi.triples.additional,
-      EXPECTED_MATRIX.map((entry) => entry.rustTarget),
-    );
-    assert.equal(hostManifest.scripts.universal, undefined);
-    assert.deepEqual(
-      runtimeMatrix.targets.map(({ host, os, arch }) => `${host}:${os}-${arch}`),
-      ['vscode-extension', 'node-cli', 'bun-tui'].flatMap((host) =>
-        EXPECTED_TARGETS.map((target) => `${host}:${target}`),
-      ),
-    );
-  });
-
   it('keeps CI and Release packaging matrices identical and architecture-specific', async () => {
     const [ciWorkflow, releaseWorkflow] = await Promise.all([
       readFile('.github/workflows/ci.yml', 'utf8').then(parse),
       readFile('.github/workflows/release.yml', 'utf8').then(parse),
     ]);
 
-    const ciEngineJob = ciWorkflow.jobs['package-openneko-vsix'];
-    const releaseEngineJob = releaseWorkflow.jobs['release-openneko'];
+    const ciPackageJob = ciWorkflow.jobs['package-openneko-vsix'];
+    const releasePackageJob = releaseWorkflow.jobs['release-openneko'];
 
-    assert.deepEqual(projectMatrix(ciEngineJob), EXPECTED_MATRIX);
-    assert.deepEqual(projectMatrix(releaseEngineJob), EXPECTED_MATRIX);
-    assert.equal(ciWorkflow.jobs['test-rust']['runs-on'], 'macos-15');
+    assert.deepEqual(projectMatrix(ciPackageJob), EXPECTED_MATRIX);
+    assert.deepEqual(projectMatrix(releasePackageJob), EXPECTED_MATRIX);
+    assert.equal(ciWorkflow.jobs['test-rust'], undefined);
+    assert.equal(ciWorkflow.jobs['cargo-deny'], undefined);
+    assert.deepEqual(ciPackageJob.needs, ['build', 'test-ts']);
     assert.deepEqual(ciWorkflow.jobs['local-metadata-runtime'].strategy.matrix.os, [
       'ubuntu-latest',
       'macos-15',
@@ -70,7 +40,7 @@ describe('supported release platform orchestration', () => {
     assert.equal(releaseWorkflow.jobs['release-engine'], undefined);
   });
 
-  it('builds native release payloads against the configured FFmpeg SDK', async () => {
+  it('keeps the retired Engine outside product packaging jobs', async () => {
     const [ciWorkflow, releaseWorkflow] = await Promise.all([
       readFile('.github/workflows/ci.yml', 'utf8').then(parse),
       readFile('.github/workflows/release.yml', 'utf8').then(parse),
@@ -80,27 +50,16 @@ describe('supported release platform orchestration', () => {
       ciWorkflow.jobs['package-openneko-vsix'],
       releaseWorkflow.jobs['release-openneko'],
     ]) {
-      const prepareIndex = job.steps.findIndex(
-        (step) => step.name === 'Prepare configured FFmpeg build SDK',
-      );
-      const buildIndex = job.steps.findIndex((step) => step.name === 'Build host-napi');
-      assert.ok(prepareIndex >= 0, 'missing configured FFmpeg SDK preparation');
-      assert.ok(prepareIndex < buildIndex, 'FFmpeg SDK must be prepared before host-napi');
-
-      const prepareStep = job.steps[prepareIndex];
-      const buildStep = job.steps[buildIndex];
-      assert.match(prepareStep.run, /download-ffmpeg\.js --platform \$\{\{ matrix\.target \}\}/u);
-      assert.equal(
-        buildStep.env.FFMPEG_DIR,
-        '${{ github.workspace }}/packages/neko-engine/deps/ffmpeg',
-      );
+      const source = JSON.stringify(job);
+      assert.doesNotMatch(source, /neko-engine|host-napi|engine-vsix/u);
+      assert.match(source, /check:engine-retirement-boundary/u);
     }
   });
 
-  it('keeps the native Engine out of TypeScript-only VSIX packaging', async () => {
+  it('keeps the retired Engine out of every product package group', async () => {
     const packageGroups = JSON.parse(await readFile('scripts/package-groups.json', 'utf8'));
 
-    assert.ok(packageGroups.packages.buildRelease.includes('neko-engine'));
+    assert.ok(!packageGroups.packages.buildRelease.includes('neko-engine'));
     assert.ok(!packageGroups.packages.tsExtensions.includes('neko-engine'));
   });
 
@@ -124,6 +83,5 @@ function projectMatrix(job) {
   return job.strategy.matrix.include.map((entry) => ({
     target: entry.target,
     os: entry.os,
-    rustTarget: entry['rust-target'],
   }));
 }

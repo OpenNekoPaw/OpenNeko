@@ -16,9 +16,9 @@ describe('GitHub tag release version projection', () => {
         },
       ],
       [
-        'packages/neko-engine',
+        'packages/neko-cut',
         {
-          name: 'neko-engine',
+          name: 'neko-cut',
           version: '0.0.1',
           engines: { vscode: '^1.128.0' },
         },
@@ -44,8 +44,8 @@ describe('GitHub tag release version projection', () => {
       ...manifests.get('apps/neko-vscode'),
       version: '0.1.0',
     });
-    assert.deepEqual(writes.get('packages/neko-engine'), {
-      ...manifests.get('packages/neko-engine'),
+    assert.deepEqual(writes.get('packages/neko-cut'), {
+      ...manifests.get('packages/neko-cut'),
       version: '0.1.0',
     });
   });
@@ -67,7 +67,7 @@ describe('GitHub tag release version projection', () => {
   it('rejects an invalid manifest before writing any projection', () => {
     const manifests = new Map([
       ['apps/neko-vscode', { name: 'neko-suite', version: '0.0.1' }],
-      ['packages/neko-engine', { name: 'neko-engine' }],
+      ['packages/neko-cut', { name: 'neko-cut' }],
     ]);
     const writes = [];
 
@@ -79,7 +79,7 @@ describe('GitHub tag release version projection', () => {
           readManifest: (path) => manifests.get(path),
           writeManifest: (path) => writes.push(path),
         }),
-      /packages\/neko-engine\/package\.json declares an invalid numeric version/u,
+      /packages\/neko-cut\/package\.json declares an invalid numeric version/u,
     );
     assert.deepEqual(writes, []);
   });

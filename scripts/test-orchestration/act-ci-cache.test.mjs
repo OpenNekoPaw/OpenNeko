@@ -84,7 +84,7 @@ fi
   };
 }
 
-test('act CI defaults to a prepared ARM64 runner with architecture-isolated mounts', async (testContext) => {
+test('act CI defaults to a prepared ARM64 Node runner with architecture-isolated mounts', async (testContext) => {
   const harness = await createHarness(testContext);
   const output = harness.run();
   const [actLog, dockerLog] = await Promise.all([
@@ -99,25 +99,17 @@ test('act CI defaults to a prepared ARM64 runner with architecture-isolated moun
   assert.match(actLog, /ARG:--platform\nARG:ubuntu-latest=openneko-act:linux-arm64-v8-[0-9]+/u);
   assert.match(actLog, /ARG:--pull=false/u);
   assert.match(actLog, /ARG:--env\nARG:ACT_NATIVE_DEPS_READY=true/u);
-  assert.match(
-    actLog,
-    /ARG:--env\nARG:npm_config_store_dir=\/root\/\.local\/share\/pnpm\/store/u,
-  );
+  assert.match(actLog, /ARG:--env\nARG:npm_config_store_dir=\/root\/\.local\/share\/pnpm\/store/u);
 
-  for (const cacheName of [
-    'pnpm-store',
-    'corepack',
-    'cargo-home',
-    'rustup',
-    'turbo',
-    'cargo-target',
-  ]) {
-    assert.match(actLog, new RegExp(`${escapeRegularExpression(path.join(architectureCache, cacheName))}:`, 'u'));
+  for (const cacheName of ['pnpm-store', 'corepack', 'turbo']) {
+    assert.match(
+      actLog,
+      new RegExp(`${escapeRegularExpression(path.join(architectureCache, cacheName))}:`, 'u'),
+    );
   }
   assert.match(actLog, /pnpm-store:\/root\/\.local\/share\/pnpm\/store/u);
   assert.match(actLog, /corepack:\/root\/\.cache\/node\/corepack/u);
-  assert.match(actLog, /cargo-home:\/root\/\.cargo/u);
-  assert.match(actLog, /rustup:\/root\/\.rustup/u);
+  assert.doesNotMatch(actLog, /cargo-home|cargo-target|rustup/u);
   assert.match(dockerLog, /ARG:image\nARG:inspect/u);
   assert.match(dockerLog, /ARG:build/u);
   assert.match(dockerLog, /ARG:--platform\nARG:linux\/arm64/u);
@@ -136,7 +128,10 @@ test('act CI isolates AMD64 caches and reuses an existing prepared image', async
   ]);
 
   assert.match(actLog, /ARG:--container-architecture\nARG:linux\/amd64/u);
-  assert.match(actLog, new RegExp(`${escapeRegularExpression(path.join(harness.cacheRoot, 'linux-amd64'))}/`, 'u'));
+  assert.match(
+    actLog,
+    new RegExp(`${escapeRegularExpression(path.join(harness.cacheRoot, 'linux-amd64'))}/`, 'u'),
+  );
   assert.doesNotMatch(actLog, /linux-arm64-v8/u);
   assert.match(dockerLog, /ARG:image\nARG:inspect/u);
   assert.doesNotMatch(dockerLog, /ARG:build/u);

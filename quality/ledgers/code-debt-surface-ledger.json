@@ -872,38 +872,6 @@
       }
     },
     {
-      "id": "LCDR-013",
-      "package": "@neko-client",
-      "surface": "EngineClient and SceneControlSocket fallback reader naming",
-      "semanticClass": "runtime-resilience",
-      "action": "rename",
-      "status": "removed",
-      "owner": "neko-client",
-      "paths": [
-        "packages/neko-client/src/EngineClient.ts",
-        "packages/neko-client/src/SceneControlSocket.ts"
-      ],
-      "replacement": "defaultValue/defaultVec/defaultStates/defaultKind boundary parser naming; current engine connection, socket, and capability failure handling remain owned by @neko/app-tuient.",
-      "removeCondition": "Removed after call-chain review confirmed these were boundary parser defaults rather than old protocol compatibility branches.",
-      "removedAt": "2026-06-13",
-      "validation": {
-        "commands": [
-          "rg -n \"\\bfallback\\b|\\blegacy\\b|\\bdeprecated\\b\" packages/neko-client/src/EngineClient.ts packages/neko-client/src/SceneControlSocket.ts",
-          "pnpm --filter @neko/app-tuient test"
-        ]
-      },
-      "stalePatterns": [
-        {
-          "pattern": "\\bfallback\\b|\\blegacy\\b|\\bdeprecated\\b",
-          "paths": [
-            "packages/neko-client/src/EngineClient.ts",
-            "packages/neko-client/src/SceneControlSocket.ts"
-          ]
-        }
-      ],
-      "notes": "Only the misleading fallback wording was removed. Runtime failure handling and boundary default parsing behavior were preserved and covered by @neko/app-tuient tests."
-    },
-    {
       "id": "LCDR-028",
       "package": "@neko/asset",
       "surface": "@neko/asset PathResolver compatibility re-export and duplicate shim test",

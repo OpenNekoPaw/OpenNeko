@@ -48,8 +48,6 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
-      - uses: dtolnay/rust-toolchain@stable
-
       - uses: actions/cache@v5
         if: ${{ env.ACT != 'true' }}
         with:
@@ -61,11 +59,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Install native build dependencies
+      - name: Install media runtime dependency
         if: ${{ env.ACT != 'true' || env.ACT_NATIVE_DEPS_READY != 'true' }}
         run: |
           sudo apt-get update
-          xargs sudo apt-get install -y < scripts/act/native-build-packages.txt
+          xargs sudo apt-get install -y < scripts/act/media-runtime-packages.txt
 
       - run: pnpm check:build
 
@@ -108,8 +106,6 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
 
-      - uses: dtolnay/rust-toolchain@stable
-
       - name: Enable Corepack
         run: corepack enable
 
@@ -138,55 +134,6 @@ jobs:
           name: coverage-reports
           path: packages/**/coverage/
           retention-days: 14
-
-  test-rust:
-    name: Rust Tests
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/neko-engine
-
-      - name: Cache Homebrew packages
-        uses: actions/cache@v5
-        with:
-          path: ~/Library/Caches/Homebrew
-          key: homebrew-ffmpeg-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: homebrew-ffmpeg-${{ runner.os }}-
-
-      - name: Install FFmpeg (macOS)
-        run: brew install ffmpeg pkg-config
-
-      - name: Remove vendor source override
-        run: rm -f packages/neko-engine/.cargo/config.toml
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-        working-directory: packages/neko-engine
-
-      - name: Clippy lint
-        run: cargo clippy --workspace -- -D warnings
-        working-directory: packages/neko-engine
-
-      - name: Run tests
-        run: cargo test --workspace
-        working-directory: packages/neko-engine
-
-  cargo-deny:
-    name: Cargo Deny
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - run: rm -f packages/neko-engine/.cargo/config.toml
-      - uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          manifest-path: packages/neko-engine/Cargo.toml
 
   proto-check:
     name: Proto Types Sync
@@ -263,19 +210,15 @@ jobs:
 
   package-openneko-vsix:
     name: Package OpenNeko VSIX (${{ matrix.target }})
-    needs: [build, test-ts, test-rust]
+    needs: [build, test-ts]
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: darwin-arm64
             os: macos-15
-            rust-target: aarch64-apple-darwin
-            ffmpeg-install: brew untap aws/tap >/dev/null 2>&1 || true; brew install ffmpeg pkg-config
           - target: linux-x64
             os: ubuntu-latest
-            rust-target: x86_64-unknown-linux-gnu
-            ffmpeg-install: sudo apt-get update && sudo apt-get install -y clang libclang-dev libasound2-dev libavcodec-dev libavdevice-dev libavfilter-dev libavformat-dev libavutil-dev libssl-dev libswresample-dev libswscale-dev libudev-dev libva-dev libvulkan-dev libwayland-dev libx11-dev libxcursor-dev libxfixes-dev libxi-dev libxkbcommon-dev libxrandr-dev patchelf pkg-config
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -288,37 +231,10 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.rust-target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/neko-engine
-          key: ${{ matrix.target }}
-
-      - name: Install FFmpeg
-        run: ${{ matrix.ffmpeg-install }}
-        shell: bash
-
-      - name: Prepare configured FFmpeg build SDK
-        run: node packages/neko-engine/scripts/download-ffmpeg.js --platform ${{ matrix.target }}
-
       - run: pnpm install --frozen-lockfile
 
-      - name: Remove vendor source override
-        run: rm -f packages/neko-engine/.cargo/config.toml
-        shell: bash
-
-      - name: Build host-napi
-        working-directory: packages/neko-engine/packages/host-napi
-        env:
-          FFMPEG_DIR: ${{ github.workspace }}/packages/neko-engine/deps/ffmpeg
-        run: pnpm run build:napi -- --target ${{ matrix.rust-target }}
-
-      - name: Package Engine payload
-        working-directory: packages/neko-engine
-        run: bash scripts/package-platform.sh ${{ matrix.target }}
+      - name: Verify retired media runtime is absent from product composition
+        run: pnpm check:engine-retirement-boundary
 
       - name: Assemble OpenNeko platform VSIX
         run: node scripts/package-openneko-platform.mjs --target ${{ matrix.target }}
@@ -337,8 +253,6 @@ jobs:
       - build
       - local-metadata-runtime
       - test-ts
-      - test-rust
-      - cargo-deny
       - proto-check
       - code-quality
       - openspec-check
@@ -360,8 +274,6 @@ jobs:
           build
           local-metadata-runtime
           test-ts
-          test-rust
-          cargo-deny
           proto-check
           code-quality
           openspec-check
@@ -375,8 +287,6 @@ jobs:
       - build
       - local-metadata-runtime
       - test-ts
-      - test-rust
-      - cargo-deny
       - proto-check
       - code-quality
       - openspec-check
@@ -400,8 +310,6 @@ jobs:
           build
           local-metadata-runtime
           test-ts
-          test-rust
-          cargo-deny
           proto-check
           code-quality
           openspec-check

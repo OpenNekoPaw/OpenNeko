@@ -2,7 +2,7 @@
 
 OpenNeko for VSCode is the single installable OpenNeko application extension.
 Each supported platform receives one complete VSIX containing every retained
-feature and the platform-specific Engine runtime.
+feature plus the shared Node/FFmpeg media adapter.
 
 - Product identity: `neko.neko-suite`
 - Product build/package root and Extension Host composition: `apps/neko-vscode`

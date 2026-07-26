@@ -25,9 +25,10 @@ Use the `computer-use` skill for direct VS Code UI actions. It operates through
 macOS Accessibility and does not require VS Code to expose a remote debugging
 port.
 
-1. Use an isolated Extension Development Host and the repository's synthetic
-   `neko-test` workspace. Do not capture the user's normal workspace, settings,
-   credentials, or unrelated files.
+1. Use an isolated Extension Development Host and the generated synthetic
+   `.tmp/vscode-test-workspaces/media-runtime` workspace. Generate it with
+   `pnpm prepare:vscode-media-fixture`; do not use `neko-test` or capture the
+   user's normal workspace, settings, credentials, or unrelated files.
 2. Select the repository launch configuration `Debug Dev (All)` and start the
    debug session through the visible VS Code UI. The configuration owns the
    extension development paths and its `build:dev` prelaunch task.
