@@ -33,9 +33,8 @@ describe('Domain Job lifecycle kernel', () => {
   it('observes the current snapshot and later revisions in order', async () => {
     const store = createInMemoryVersionedJobStore<GenerationJobSnapshot>();
     await store.create(snapshot());
-    const iterator = store
-      .observe({ kind: 'generation', jobId: 'job-1' }, 0)
-      [Symbol.asyncIterator]();
+    const observation = store.observe({ kind: 'generation', jobId: 'job-1' }, 0);
+    const iterator = observation[Symbol.asyncIterator]();
 
     await expect(iterator.next()).resolves.toEqual({
       done: false,

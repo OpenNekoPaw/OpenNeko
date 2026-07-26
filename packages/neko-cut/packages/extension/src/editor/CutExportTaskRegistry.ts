@@ -136,9 +136,8 @@ export class CutExportTaskRegistry {
     this.options.onUpdate(task);
     if (isTerminalJobPhase(snapshot.phase) || this.observers.has(snapshot.ref.jobId)) return;
 
-    const iterator = this.coordinator
-      .observeExport(snapshot.ref, snapshot.revision)
-      [Symbol.asyncIterator]();
+    const observation = this.coordinator.observeExport(snapshot.ref, snapshot.revision);
+    const iterator = observation[Symbol.asyncIterator]();
     this.observers.set(snapshot.ref.jobId, iterator);
     void this.consume(snapshot.ref.jobId, iterator);
   }

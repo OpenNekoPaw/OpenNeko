@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const piStreamSessionOptions = vi.hoisted(() => [] as Array<Record<string, unknown>>);
+const loggerWarn = vi.hoisted(() => vi.fn());
 
 vi.mock('vscode', () => {
   class EventEmitter<T> {
@@ -112,7 +113,7 @@ vi.mock('@neko/platform', async (importOriginal) => {
 vi.mock('../base', () => ({
   getLogger: vi.fn(() => ({
     info: vi.fn(),
-    warn: vi.fn(),
+    warn: loggerWarn,
     error: vi.fn(),
     debug: vi.fn(),
   })),
@@ -587,6 +588,7 @@ describe('AgentMessageTurnHandler', () => {
     piStreamSessionOptions.length = 0;
     (vscode.env as any).language = 'en';
     (vscode.workspace as any).workspaceFolders = undefined;
+    (vscode.window as any).activeTextEditor = undefined;
     vi.mocked(vscode.extensions.getExtension).mockReturnValue(undefined);
     vi.mocked(vscode.workspace.fs.readFile).mockRejectedValue(new Error('missing fixture'));
     vi.mocked(vscode.workspace.findFiles).mockResolvedValue([]);
@@ -1720,10 +1722,12 @@ describe('AgentMessageTurnHandler', () => {
       ];
       (vscode.window as any).activeTextEditor = {
         document: {
+          fileName: `${targetProjectRoot}/config.toml`,
           uri: {
             fsPath: `${targetProjectRoot}/config.toml`,
             toString: () => `file://${targetProjectRoot}/config.toml`,
           },
+          getText: () => '',
         },
       };
       vi.mocked(vscode.commands.executeCommand).mockResolvedValue({
@@ -1745,6 +1749,7 @@ describe('AgentMessageTurnHandler', () => {
           projectRoot: targetProjectRoot,
         }),
       );
+      expect(loggerWarn).not.toHaveBeenCalled();
     });
   });
 });
