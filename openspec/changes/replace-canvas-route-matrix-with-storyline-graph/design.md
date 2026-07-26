@@ -28,6 +28,7 @@
 - 播放 transport 按钮居中，不展示当前时间/总时长文字；保留不带时间 tooltip 的 Seek 进度反馈。
 - 删除重复的 Storyline 标题行和常驻路线 Tab；单路线不显示路线选择控件，多路线只显示一个紧凑 selector。
 - 保持上一节点、播放/暂停、下一节点为唯一主 transport，不增加路线前后切换按钮；受控 Preview 不再提供第二个未启动播放入口。
+- Storyline 视口只占约 2～3 条 lane 的高度，超出部分继续使用同一滚动视口；折叠 Preview 时提供一次性的“显示预览”动作。
 - 点击剧情节点、切换路线或使用上一/下一节点时一次性定位其真实 Canvas source node，并同步 Preview session；不得选中 Canvas 节点或保持播放高亮。
 - 保留播放、stale、媒体缺失与诊断的可观察性。
 - 结构布局不再伪装成精确时间线。
@@ -120,6 +121,12 @@ Overlay 的 Storyline 区域不再渲染“故事线 + 当前路线”标题行�
 主 transport 只保留上一节点、播放/暂停、下一节点，并继续显示当前节点计数。路线选择不复制为“上一路线/下一路线”按钮，因为路线切换是结构选择而非时间 transport；把两类导航混在同一按钮组会让按钮语义和禁用状态变得不稳定。
 
 当 `PreviewSurface` 收到 `playbackControl` 时，表示播放生命周期由 Storyline controller 拥有。此时未启动的视频 poster 或音频空态只作为不可独立启动的媒体舞台，不再渲染自己的播放按钮；唯一启动入口是 Overlay 主 transport。媒体流启动后仍可保留 owning media surface 的 Seek、音量等媒体专属操作，但不得创建第二个播放 session 或独立请求 owner。未提供 `playbackControl` 的普通 Canvas 节点和独立 Preview 继续保留原有直接播放入口。
+
+### 9. Storyline 高度有界，Preview 使用显式揭示动作
+
+Storyline 的垂直尺寸按 lane 几何而不是视口比例无限增长。默认和 full-bleed presentation 都使用约 2～3 条 lane 的高度范围；第三条之后的路线继续由既有 `overflow: auto` 视口浏览。Preview 展开不得改变 Storyline 高度。小尺寸 Webview 也不得通过响应式规则把 Storyline 恢复为 230px 以上的高区域。
+
+Preview 默认折叠时，footer actions 在 full-bleed 与 close 之前提供一个带 accessible label 的“显示预览”按钮。它只调用 `StorylinePlaybackOverlay` 已有的本地 `previewRevealed` latch，不写入 playback store、不开启播放、不创建新的 surface。点击后 Preview 在同一 Overlay 内展开，按钮随即消失；暂停、播放结束或退出 full-bleed 后 Preview 继续保持展开。full-bleed presentation 中 Preview 必须可见，因此不显示“隐藏预览”或任何独立折叠动作。关闭并重开整个 Overlay 仍是恢复默认折叠状态的唯一方式。
 
 ## Risks / Trade-offs
 

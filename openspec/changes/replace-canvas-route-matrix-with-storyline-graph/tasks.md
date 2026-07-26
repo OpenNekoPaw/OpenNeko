@@ -117,3 +117,10 @@
 - [x] 17.2 Delete the persistent route Tab row and render one compact selector only when multiple routes exist
 - [x] 17.3 Keep node transport separate from route selection and suppress the controlled Preview idle play button
 - [x] 17.4 Run focused/full Canvas tests, build, quality checks, OpenSpec validation and isolated Extension Host verification; update evidence
+
+## 18. Compact Storyline and explicit Preview reveal
+
+- [x] 18.1 Add regression coverage for the two-to-three-lane Storyline height and collapsed-only show-Preview action
+- [x] 18.2 Reduce default, full-bleed and narrow-Webview Storyline height without removing viewport scrolling
+- [x] 18.3 Reveal Preview through the existing Overlay-local latch without adding a hide action or playback-store state
+- [x] 18.4 Run focused/full Canvas tests, build, quality checks, OpenSpec validation and isolated Extension Host verification; update evidence

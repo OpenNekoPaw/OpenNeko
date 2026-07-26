@@ -232,6 +232,56 @@ packages; neither warning class failed a changed package.
   `local-network-access` warning; no Neko CSP, resource, media or runtime error
   was observed. Escape closed the entire verification Overlay.
 
+### Compact Storyline and explicit Preview reveal follow-up
+
+- Risk: L1 Webview layout and local interaction change. The playback plan,
+  route/session store, Extension messages, media lifecycle and persisted Canvas
+  contract were unchanged.
+- Architecture review:
+  - Responsibility: `StorylinePlaybackOverlay` continues to own the temporary
+    Preview-revealed latch for one mounted Overlay lifecycle.
+  - Dependency: the change remains inside the Canvas Webview and reuses
+    `@neko/ui` `IconButton`, the shared `EyeIcon`, existing theme tokens and
+    localization runtime.
+  - Interface: no store field, Webview message, public component contract or
+    Engine/Proto contract was added.
+  - Extension: height remains one CSS invariant across top-docked, full-bleed
+    and narrow layouts; additional lanes continue through the existing
+    scrollable viewport.
+  - Testing: component behavior, static layout boundaries, production build,
+    repository quality gates and the real Extension Host path were all
+    exercised.
+- Regression tests were red before implementation for the missing reveal
+  action and old 204–240px Storyline height. After implementation,
+  `pnpm exec vitest run src/components/playback/PlaybackWorkspace.test.tsx src/CanvasApp.layout.test.ts`
+  passed 2 files / 43 tests.
+- `pnpm exec vitest run` in
+  `packages/neko-canvas/packages/webview` passed 56 files / 324 tests.
+- `pnpm --filter @neko-canvas/webview build`,
+  `pnpm --dir packages/neko-canvas compile`,
+  `pnpm check:legacy-debt`, `pnpm check:unused`,
+  `pnpm check:canvas-playback-boundary`,
+  `pnpm check:webview-boundaries`, strict OpenSpec validation, scoped Prettier
+  and `git diff --check` passed. `check:unused` reported existing
+  configuration hints only.
+- Runtime host: isolated `[扩展开发宿主] Untitled.nkc — neko-test`; only this
+  host was reloaded. CDP page target
+  `21F0F967C6D4E434EBF088345CF4175C`, Canvas iframe target
+  `A83B5B544543743C66DEBBA663BD70C9`.
+- Collapsed Overlay measured `storylineHeight=168`,
+  `viewportOverflowY=auto`, `expanded=false`, Preview absent and one localized
+  `显示预览` action. Clicking that action changed the same Overlay to
+  `expanded=true` and mounted the current Preview while the main transport
+  remained `播放`; no hide-Preview action appeared.
+- Full-bleed kept `storylineHeight=168`, Preview mounted and both reveal/hide
+  actions absent. Restoring did not collapse Preview. Closing and reopening the
+  Overlay returned to `expanded=false` with `显示预览` present.
+- Canvas iframe console contained only VS Code's known
+  `local-network-access` warning.
+- Evidence screenshot:
+  `reports/webview-functional/replace-canvas-route-matrix-with-storyline-graph/compact-storyline-collapsed.png`
+  (gitignored raw runtime evidence).
+
 ## Remaining risk
 
 - Root test health remains red because of the unrelated `neko-assets` activation

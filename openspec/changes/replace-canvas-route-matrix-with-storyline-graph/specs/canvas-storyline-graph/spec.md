@@ -14,7 +14,7 @@ The Canvas Webview SHALL render Storyline as the only route presentation inside 
 
 ### Requirement: Overlay lifecycle controls Preview expansion
 
-The unified Overlay SHALL keep Storyline at the top and playback controls directly below it. Preview media content SHALL start collapsed each time the Storyline Overlay is shown. Starting playback or entering Webview-full-bleed presentation SHALL reveal Preview below the controls for the remainder of that Overlay component lifetime. Pausing, ending playback, becoming stale, or restoring from full-bleed MUST NOT automatically hide Preview. Closing and subsequently showing the Storyline Overlay SHALL create a new collapsed lifecycle. In all states, the Overlay SHALL retain the same top dock, width, shell, Storyline geometry and non-modal semantics without a dimming backdrop. Canvas SHALL remain interactive outside the Overlay.
+The unified Overlay SHALL keep Storyline at the top and playback controls directly below it. Preview media content SHALL start collapsed each time the Storyline Overlay is shown. Starting playback, activating the explicit show-Preview action, or entering Webview-full-bleed presentation SHALL reveal Preview below the controls for the remainder of that Overlay component lifetime. Pausing, ending playback, becoming stale, or restoring from full-bleed MUST NOT automatically hide Preview. Closing and subsequently showing the Storyline Overlay SHALL create a new collapsed lifecycle. In all states, the Overlay SHALL retain the same top dock, width, shell, Storyline geometry and non-modal semantics without a dimming backdrop. Canvas SHALL remain interactive outside the Overlay.
 
 #### Scenario: User opens the Overlay while not playing
 
@@ -23,7 +23,15 @@ The unified Overlay SHALL keep Storyline at the top and playback controls direct
 - **AND** Preview media content is not mounted
 - **AND** the Overlay is docked at the top without a dimming backdrop or modal semantics
 - **AND** Canvas remains interactive outside the Overlay strip
-- **AND** the Overlay title, full-bleed action and close action remain available
+- **AND** the Overlay title, show-Preview, full-bleed and close actions remain available
+
+#### Scenario: User explicitly reveals Preview
+
+- **WHEN** Preview is collapsed and the user activates the show-Preview action
+- **THEN** Preview appears below the controls without starting playback
+- **AND** the same Overlay, playback session and current unit are preserved
+- **AND** the show-Preview action is removed after Preview becomes visible
+- **AND** no hide-Preview action replaces it
 
 #### Scenario: Playback starts
 
@@ -73,7 +81,7 @@ The unified Overlay SHALL keep Storyline at the top and playback controls direct
 
 ### Requirement: Storyline presents ordered story nodes
 
-Storyline SHALL project valid `CanvasPlaybackRouteCandidate` values as an ordered horizontal branch graph. Node position and width MUST express sequence rather than duration, and Storyline MUST NOT render a timeline ruler or display inferred fallback duration as authoritative metadata.
+Storyline SHALL project valid `CanvasPlaybackRouteCandidate` values as an ordered horizontal branch graph. Node position and width MUST express sequence rather than duration, and Storyline MUST NOT render a timeline ruler or display inferred fallback duration as authoritative metadata. Its viewport SHALL remain within a compact height that exposes approximately two to three route lanes in both top-docked and full-bleed presentations. Additional lanes SHALL remain reachable through the same scrollable viewport.
 
 #### Scenario: A route contains multiple playback units
 
@@ -89,6 +97,13 @@ Storyline SHALL project valid `CanvasPlaybackRouteCandidate` values as an ordere
 - **THEN** Storyline renders distinct horizontal lane segments with visible branch and merge connectors
 - **AND** shared nodes are rendered once at their stable graph position
 - **AND** non-selected route paths remain visible with secondary emphasis
+
+#### Scenario: Storyline contains more than three lanes
+
+- **WHEN** the graph requires more vertical lanes than the compact viewport exposes
+- **THEN** Storyline keeps the compact two-to-three-lane height
+- **AND** the user can scroll the existing Storyline viewport to reach the remaining lanes
+- **AND** expanding Preview or entering full-bleed does not increase Storyline height
 
 #### Scenario: A playback unit lacks authoritative duration
 
