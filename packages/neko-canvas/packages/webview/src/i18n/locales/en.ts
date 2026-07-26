@@ -57,7 +57,6 @@ export const en = {
   'playback.metadata.previewMediaType': 'Preview media type',
   'playback.metadata.sourceCanvasName': 'Source canvas',
   'playback.route.title': 'Preview Route',
-  'playback.storyline.title': 'Storyline',
   'playback.storyline.routes': 'Story routes',
   'playback.storyline.nodes': '{route} story nodes',
   'playback.storyline.nodeLabel': 'Story node {index} of {count}: {label}. {state}',

@@ -502,14 +502,6 @@ function StorylinePlaybackOverlay({
         })}
       >
         <div className="canvas-playback-overlay-storyline">
-          <header className="canvas-playback-overlay-storyline-header">
-            <span>{t('playback.storyline.title')}</span>
-            <strong>
-              {selectedRoute
-                ? formatPlaybackDisplayLabel(selectedRoute.title)
-                : t('playback.route.title')}
-            </strong>
-          </header>
           {renderStorylineGraph({
             graph: storylineGraph,
             routes,
@@ -661,27 +653,29 @@ function renderStorylineGraph({
       onFocus={onFocus}
     >
       {routes.length > 1 ? (
-        <div
-          className="canvas-playback-storyline-routes"
+        <select
+          className="canvas-playback-storyline-route-selector"
+          data-testid="canvas-playback-route-selector"
+          value={selectedRoute?.id ?? ''}
           aria-label={t('playback.storyline.routes')}
-          role="tablist"
+          title={t('playback.storyline.routes')}
+          onMouseDown={(event) => event.stopPropagation()}
+          onChange={(event) => {
+            const route = routes.find((candidate) => candidate.id === event.currentTarget.value);
+            if (!route) {
+              throw new Error(
+                `Storyline route selector referenced missing route "${event.currentTarget.value}".`,
+              );
+            }
+            onSelectRoute(route);
+          }}
         >
           {routes.map((route) => (
-            <button
-              key={route.id}
-              type="button"
-              className="canvas-playback-storyline-route"
-              data-active={route.id === selectedRoute?.id ? 'true' : 'false'}
-              title={`${formatPlaybackDisplayLabel(route.title)} · ${route.unitIds.length}`}
-              role="tab"
-              aria-selected={route.id === selectedRoute?.id}
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={() => onSelectRoute(route)}
-            >
+            <option key={route.id} value={route.id}>
               {formatPlaybackDisplayLabel(route.title)}
-            </button>
+            </option>
           ))}
-        </div>
+        </select>
       ) : null}
 
       <div className="canvas-playback-storyline-viewport">

@@ -153,7 +153,8 @@ describe('PlaybackWorkspace', () => {
     expect(host.querySelectorAll('[data-testid="canvas-playback-controller"]')).toHaveLength(1);
     expect(host.querySelector('.canvas-playback-workspace-header')).toBeNull();
     expect(host.querySelector('.canvas-playback-route-pane-toolbar')).toBeNull();
-    expect(host.textContent).toContain('Storyline');
+    expect(overlay?.querySelector('.canvas-playback-overlay-storyline-header')).toBeNull();
+    expect(overlay?.querySelector('[data-testid="canvas-playback-route-selector"]')).toBeNull();
     expect(host.textContent).toContain('Media 1');
     expect(host.textContent).toContain('Media 2');
   });
@@ -230,7 +231,7 @@ describe('PlaybackWorkspace', () => {
     expect(host.textContent).not.toContain('playback.overlay.title');
   });
 
-  it('localizes the unified Storyline panel without translating persisted titles', () => {
+  it('renders the unified Storyline without a redundant heading or single-route selector', () => {
     setLocale('zh-cn');
 
     act(() => {
@@ -239,7 +240,8 @@ describe('PlaybackWorkspace', () => {
     });
 
     const panel = host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]');
-    expect(panel?.textContent).toContain('故事线');
+    expect(panel?.querySelector('.canvas-playback-overlay-storyline-header')).toBeNull();
+    expect(panel?.querySelector('[data-testid="canvas-playback-route-selector"]')).toBeNull();
     expect(panel?.textContent).not.toContain('路线比较');
     expect(panel?.textContent).toContain('Media 1');
     expect(panel?.querySelector('[data-playback-action="open-preview"]')).toBeNull();
@@ -666,13 +668,18 @@ describe('PlaybackWorkspace', () => {
       await Promise.resolve();
     });
 
-    const alternateRoute = Array.from(
-      host.querySelectorAll<HTMLButtonElement>('.canvas-playback-storyline-route'),
-    ).find((button) => button.textContent === 'Alternate Route');
-    if (!alternateRoute) throw new Error('alternate Storyline route was not rendered');
+    const routeSelector = host.querySelector<HTMLSelectElement>(
+      '[data-testid="canvas-playback-route-selector"]',
+    );
+    if (!routeSelector) throw new Error('multiple-route Storyline selector was not rendered');
+    expect(routeSelector.getAttribute('aria-label')).toBe('Story routes');
+    expect(routeSelector.options).toHaveLength(2);
+    expect(host.querySelector('.canvas-playback-storyline-routes')).toBeNull();
+    expect(host.querySelector('.canvas-playback-storyline-route')).toBeNull();
 
     act(() => {
-      alternateRoute.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      routeSelector.value = 'route-alternate';
+      routeSelector.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
     expect(usePlaybackStore.getState().playbackSession).toMatchObject({
@@ -686,6 +693,8 @@ describe('PlaybackWorkspace', () => {
         .querySelector('[data-testid="canvas-playback-storyline-branch-graph"]')
         ?.getAttribute('data-lane-count'),
     ).toBe('2');
+    const transport = host.querySelector('[data-testid="canvas-playback-controller"]');
+    expect(transport?.querySelectorAll('button')).toHaveLength(3);
     expect(host.querySelector('[role="grid"]')).toBeNull();
   });
 

@@ -193,6 +193,48 @@ describe('PreviewSurface media playback control', () => {
     expect(host.textContent).not.toContain('Canvas audio');
   });
 
+  it.each([
+    {
+      role: 'video-proxy' as const,
+      mediaType: 'video' as const,
+      assetPath: 'clips/controlled.mp4',
+    },
+    {
+      role: 'audio-waveform' as const,
+      mediaType: 'audio' as const,
+      assetPath: 'audio/controlled.aac',
+    },
+  ])(
+    'does not render a second idle play action for a Storyline-controlled $mediaType Preview',
+    async ({ role, mediaType, assetPath }) => {
+      await act(async () => {
+        root.render(
+          <PreviewSurface
+            source={{
+              id: `controlled-${mediaType}`,
+              role,
+              title: assetPath,
+              asset: {
+                kind: 'asset-identity',
+                path: assetPath,
+                mediaType,
+              },
+            }}
+            surfaceKind="overlay"
+            playbackControl={{
+              requestId: 'controlled-preview-idle',
+              state: 'paused',
+              startTimeSeconds: 0,
+            }}
+          />,
+        );
+      });
+
+      expect(host.querySelector('[data-preview-controlled-idle="true"]')).not.toBeNull();
+      expect(host.querySelector('button')).toBeNull();
+    },
+  );
+
   it('renders the explicit Canvas node audio layout with a waveform silhouette', async () => {
     await act(async () => {
       root.render(

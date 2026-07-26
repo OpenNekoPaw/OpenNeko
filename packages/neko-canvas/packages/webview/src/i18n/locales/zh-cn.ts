@@ -56,7 +56,6 @@ export const zhCN = {
   'playback.metadata.previewMediaType': '预览媒体类型',
   'playback.metadata.sourceCanvasName': '来源画布',
   'playback.route.title': '预览路线',
-  'playback.storyline.title': '故事线',
   'playback.storyline.routes': '故事路线',
   'playback.storyline.nodes': '{route}的剧情节点',
   'playback.storyline.nodeLabel': '第 {index}/{count} 个剧情节点：{label}。{state}',

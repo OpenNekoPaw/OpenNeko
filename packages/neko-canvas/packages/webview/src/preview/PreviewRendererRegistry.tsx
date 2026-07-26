@@ -721,6 +721,7 @@ function VideoPreviewRenderer({
       className={getMediaPreviewFrameClassName(chrome, 'bg-black/30')}
       data-preview-surface="video"
       data-preview-chrome={chrome}
+      data-preview-controlled-idle={playbackControl ? 'true' : undefined}
     >
       {posterUrl ? (
         <img
@@ -729,20 +730,22 @@ function VideoPreviewRenderer({
           className="h-full w-full object-cover"
         />
       ) : null}
-      <button
-        type="button"
-        className="absolute inset-0 flex items-center justify-center text-white/80 hover:text-white"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          startPlayback();
-        }}
-        disabled={probing || !canStartPlayback}
-        aria-label={t('toolbar.playbackPlay')}
-        title={t('toolbar.playbackPlay')}
-      >
-        {probing ? '...' : '▶'}
-      </button>
+      {playbackControl ? null : (
+        <button
+          type="button"
+          className="absolute inset-0 flex items-center justify-center text-white/80 hover:text-white"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            startPlayback();
+          }}
+          disabled={probing || !canStartPlayback}
+          aria-label={t('toolbar.playbackPlay')}
+          title={t('toolbar.playbackPlay')}
+        >
+          {probing ? '...' : '▶'}
+        </button>
+      )}
     </div>
   );
 }
@@ -852,20 +855,23 @@ function AudioPreviewRenderer({
       className={getAudioPreviewFrameClassName(chrome)}
       data-preview-surface="audio"
       data-preview-chrome={chrome}
+      data-preview-controlled-idle={playbackControl ? 'true' : undefined}
     >
-      <AudioPlayerSurface
-        layout={audioLayout}
-        currentTime={0}
-        duration={0}
-        isPlaying={false}
-        disabled={probing || !canStartPlayback}
-        onTogglePlay={(event) => {
-          event?.stopPropagation();
-          startPlayback();
-        }}
-        playbackLabel={t('toolbar.playbackPlay')}
-        muteLabel={t('media.mute')}
-      />
+      {playbackControl ? null : (
+        <AudioPlayerSurface
+          layout={audioLayout}
+          currentTime={0}
+          duration={0}
+          isPlaying={false}
+          disabled={probing || !canStartPlayback}
+          onTogglePlay={(event) => {
+            event?.stopPropagation();
+            startPlayback();
+          }}
+          playbackLabel={t('toolbar.playbackPlay')}
+          muteLabel={t('media.mute')}
+        />
+      )}
     </div>
   );
 }

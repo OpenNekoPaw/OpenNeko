@@ -330,18 +330,6 @@ body,
   min-height: 204px;
 }
 
-.canvas-playback-overlay-storyline-header {
-  display: flex;
-  min-height: 38px;
-  flex: 0 0 auto;
-  align-items: baseline;
-  gap: 8px;
-  border-bottom: 1px solid var(--toolbar-border);
-  padding: 7px 10px;
-}
-
-.canvas-playback-overlay-storyline-header span,
-.canvas-playback-overlay-storyline-header strong,
 .canvas-playback-overlay-footer strong {
   min-width: 0;
   overflow: hidden;
@@ -349,15 +337,6 @@ body,
   white-space: nowrap;
 }
 
-.canvas-playback-overlay-storyline-header span {
-  flex: 0 0 auto;
-  color: var(--toolbar-fg-secondary);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.canvas-playback-overlay-storyline-header strong,
 .canvas-playback-overlay-footer strong {
   color: var(--toolbar-fg);
   font-size: 12px;
@@ -792,6 +771,7 @@ body,
 }
 
 .canvas-playback-storyline {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
@@ -801,40 +781,26 @@ body,
   color: var(--toolbar-fg);
 }
 
-.canvas-playback-storyline-routes {
-  display: flex;
-  min-height: 34px;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 6px;
-  overflow-x: auto;
-  border-bottom: 1px solid color-mix(in srgb, var(--toolbar-border) 72%, transparent);
-  padding: 5px 10px;
-  scrollbar-gutter: stable;
-}
-
-.canvas-playback-storyline-route {
-  max-width: 180px;
-  flex: 0 0 auto;
-  overflow: hidden;
+.canvas-playback-storyline-route-selector {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  right: 10px;
+  width: min(180px, 34%);
+  height: 28px;
   cursor: pointer;
   border: 1px solid var(--control-border);
   border-radius: var(--radius-sm);
   background: var(--control-bg);
   color: var(--control-fg);
-  padding: 4px 9px;
+  padding: 3px 26px 3px 8px;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 11px;
 }
 
-.canvas-playback-storyline-route:hover {
+.canvas-playback-storyline-route-selector:hover {
   background: var(--control-hover);
-}
-
-.canvas-playback-storyline-route[data-active='true'] {
-  border-color: color-mix(in srgb, var(--node-selected) 72%, var(--control-border));
-  background: var(--control-active);
 }
 
 .canvas-playback-storyline-viewport {
@@ -928,7 +894,7 @@ body,
   content: '';
 }
 
-.canvas-playback-storyline-route:focus-visible,
+.canvas-playback-storyline-route-selector:focus-visible,
 .canvas-playback-storyline-node:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--node-selected) 78%, transparent);
   outline-offset: 2px;
