@@ -52,6 +52,8 @@ An embedded feature MUST load its packaged native module through a path derived 
 
 A feature that retains external runtime packages MUST stage only the packages for the current supported target and MUST emit a versioned closure manifest containing exact module specifiers and target identity.
 
+Sharp MUST remain external to CommonJS Extension Host bundles. Every owning payload MUST stage `sharp`, `@img/colour`, `detect-libc`, `semver`, and the current target's Sharp binding/libvips pair beside its bundle.
+
 #### Scenario: Package Agent for macOS
 
 - **WHEN** Agent is packaged for `darwin-arm64`
@@ -67,9 +69,14 @@ A feature that retains external runtime packages MUST stage only the packages fo
 - **WHEN** the package manager has not installed a required target package
 - **THEN** Agent prepublish fails before creating a VSIX and names the missing package
 
+#### Scenario: CommonJS Extension Host executes Sharp
+
+- **WHEN** Agent or the unified host loads Sharp from its compiled CommonJS bundle
+- **THEN** Node resolves the external staged package, Sharp receives a valid module URL, and image decode, resize, and contact-sheet composition complete without `createRequire(undefined)`
+
 ### Requirement: Final assembly validates offline runtime closure
 
-The OpenNeko assembler MUST reject an embedded payload containing an internal bare runtime import, a prohibited variable package import, an invalid closure manifest, a cross-target package, a missing declared module, or a module that resolves outside its owning feature root.
+The OpenNeko assembler MUST reject the unified host or an embedded payload containing an internal bare runtime import, a prohibited variable package import, an invalid closure manifest, a cross-target package, a missing declared module, or a module that resolves outside its owning payload root.
 
 #### Scenario: Repository dependency masks a missing payload file
 

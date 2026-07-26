@@ -17,6 +17,7 @@
     "build:ui": "turbo run build --filter=@neko/webview --filter=@neko-tools/webview --filter=@neko/preview-webview --filter=@neko-agent/webview --filter=@neko-canvas/webview",
     "build:release": "pnpm compile:ts-vsix",
     "build:dev": "turbo run compile --filter='neko-*'",
+    "build:vscode:dev": "node scripts/stage-openneko-dev-extension.mjs --build",
     "build:neko-engine": "turbo run compile --filter=neko-engine",
     "build:neko-preview": "turbo run compile --filter=neko-preview",
     "build:neko-cut": "turbo run compile --filter=neko-cut",

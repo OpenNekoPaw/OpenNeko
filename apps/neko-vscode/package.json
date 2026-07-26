@@ -32,7 +32,7 @@
   ],
   "scripts": {
     "vscode:prepublish": "pnpm run compile && node scripts/validate-manifest.mjs",
-    "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "compile": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:sharp --format=cjs --platform=node && node ../../scripts/stage-sharp-runtime.mjs --output-root dist",
     "test": "node scripts/run-tests.mjs",
     "package": "node ../../scripts/package-openneko-platform.mjs"
   },

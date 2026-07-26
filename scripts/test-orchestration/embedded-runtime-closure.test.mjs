@@ -30,6 +30,20 @@ describe('embedded runtime closure validator', () => {
     );
   });
 
+  it('accepts and reports the unified application runtime closure', async () => {
+    const { stageRoot } = await createStage();
+    await writeRuntimeModule(stageRoot, 'fixture-runtime');
+    await writeManifest(stageRoot, 'darwin-arm64', [
+      { packageName: 'fixture-runtime', specifier: 'fixture-runtime/module.js' },
+    ]);
+
+    const summaries = assertEmbeddedRuntimeClosure(stageRoot, 'darwin-arm64');
+    assert.equal(
+      summaries.find(({ packageName }) => packageName === 'neko-suite')?.runtimeModuleCount,
+      1,
+    );
+  });
+
   it('rejects target mismatch and cross-target modules', async () => {
     const mismatch = await createStage();
     await writeManifest(mismatch.agentRoot, 'linux-x64', [
@@ -70,7 +84,7 @@ describe('embedded runtime closure validator', () => {
     ]);
     assert.throws(
       () => assertEmbeddedRuntimeClosure(escaped.stageRoot, 'darwin-arm64'),
-      /resolved outside feature/u,
+      /resolved outside payload/u,
     );
   });
 
@@ -100,6 +114,8 @@ async function createStage() {
   const root = await mkdtemp(join(tmpdir(), 'openneko-runtime-closure-'));
   temporaryRoots.push(root);
   const stageRoot = join(root, 'stage');
+  await mkdir(join(stageRoot, 'dist'), { recursive: true });
+  await writeFile(join(stageRoot, 'dist', 'extension.js'), 'module.exports = {};');
   for (const packageName of OPENNEKO_FEATURE_PACKAGES) {
     const bundleRoot = join(stageRoot, 'dist', 'features', packageName, 'dist');
     await mkdir(bundleRoot, { recursive: true });
