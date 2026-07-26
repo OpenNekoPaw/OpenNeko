@@ -13,3 +13,11 @@ test('embedded Agent reuses the Host-owned generated asset catalog', () => {
   );
   expect(chatProviderSource).not.toMatch(/_generatedAssetCatalog\?\.dispose\(\)/u);
 });
+
+test('standalone Agent reports rejected generated output projections without blocking activation', () => {
+  expect(extensionSource).toMatch(
+    /reportRejectedGeneratedOutputProjections\(generatedAssetIndexBinding\.rejectedProjections\)/u,
+  );
+  expect(extensionSource).toMatch(/void vscode\.window\.showWarningMessage\(message\)/u);
+  expect(extensionSource).toMatch(/The generated files were preserved/u);
+});
