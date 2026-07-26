@@ -20,6 +20,7 @@
     "build:vscode:dev": "node scripts/stage-openneko-dev-extension.mjs --build",
     "prepare:vscode-media-fixture": "node scripts/prepare-vscode-media-fixture.mjs",
     "validate:media-matrix": "tsx scripts/validate-node-media-matrix.mts",
+    "validate:media-waveform": "tsx scripts/validate-node-media-waveform.mts",
     "build:neko-preview": "turbo run compile --filter=neko-preview",
     "build:neko-cut": "turbo run compile --filter=neko-cut",
     "build:neko-agent": "turbo run compile --filter=neko-agent",

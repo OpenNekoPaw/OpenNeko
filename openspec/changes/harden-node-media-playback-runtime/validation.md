@@ -74,6 +74,32 @@ pnpm smoke:webview:targets -- --expect-extension-id neko.neko-suite \
 no violations across 1,341 modules, the Engine retirement boundary retained all
 three poisoned commands, and strict OpenSpec validation passed all 57 items.
 
+## Streaming waveform validation
+
+Commands:
+
+```text
+NEKO_FFMPEG_PATH=<qualified-dev-ffmpeg> \
+NEKO_FFPROBE_PATH=<qualified-dev-ffprobe> \
+pnpm validate:media-waveform ~/Assets/Media/test.mp3 100
+
+NEKO_FFMPEG_PATH=<qualified-dev-ffmpeg> \
+NEKO_FFPROBE_PATH=<qualified-dev-ffprobe> \
+pnpm validate:media-waveform ~/Assets/Media/1080P.mp4 100
+```
+
+- The complete 226.813-second MP3 produced 22,682 peaks in 301 ms. Node peak
+  RSS increased by 26,542,080 bytes and peak ArrayBuffer usage increased by
+  13,668,855 bytes; the implementation did not retain the approximately
+  43.5 MB complete decoded PCM stream.
+- The damaged MP4 advertised 1,795.284 seconds but produced only 139.319 seconds
+  of valid audio and 13,932 peaks before AAC corruption. The result retained
+  those peaks as `partial/stream`; Node peak RSS increased by 22,872,064 bytes
+  and peak ArrayBuffer usage increased by 8,353,100 bytes.
+- Unit tests feed samples across non-aligned stream chunks, reject buffered
+  FFmpeg execution, preserve a valid prefix after decoder failure, and prove
+  cancellation is not converted into partial success.
+
 ## Residual release blocker
 
 The explicit development FFmpeg build qualifies the exercised AV1/HDR/AAC

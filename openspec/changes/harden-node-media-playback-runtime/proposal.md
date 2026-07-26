@@ -1,12 +1,14 @@
 ## Why
 
 The Node/FFmpeg media path has replaced Neko Engine, but real media validation
-still exposes four correctness gaps: HDR proxy generation depends on an
+still exposes several correctness gaps: HDR proxy generation depends on an
 unqualified host FFmpeg build, browser PCM can schedule an unbounded amount of
 decoded audio, concurrent PCM tracks do not share an exact start barrier, and
-Cut preview/export apply gain and clipping policy differently. Partially
-damaged files also need interval diagnostics that distinguish a valid prefix
-from a wholly unreadable source.
+Cut preview/export apply gain and clipping policy differently. Waveform
+generation also buffers the complete decoded float32 stream in Node memory, so
+memory grows by roughly 691 MB per hour before peaks are calculated. Partially
+damaged files need interval diagnostics that distinguish a valid prefix from a
+wholly unreadable source.
 
 ## What Changes
 
@@ -19,6 +21,9 @@ from a wholly unreadable source.
 - Replace eager PCM scheduling with a bounded browser buffer, explicit
   prepare/start phases, a shared multi-track start barrier, and deterministic
   disposal of scheduled sources.
+- Replace whole-stream waveform buffering with incremental peak aggregation
+  over FFmpeg stdout, preserving completed peaks and bounded trailing samples
+  when a damaged source fails after a valid prefix.
 - Route Cut PCM tracks through one preview mix bus, preserve the domain's
   `-60..+24 dB` gain range, apply live fades, and protect preview/export output
   with the same explicit peak-limiting policy.
@@ -35,6 +40,8 @@ from a wholly unreadable source.
 
 - `bounded-synchronized-pcm-playback`: Defines bounded browser PCM buffering,
   shared multi-track start, mix-bus ownership, and disposal.
+- `streaming-media-waveform`: Defines incremental waveform aggregation,
+  cancellation, and partial-prefix behavior without retaining decoded PCM.
 - `qualified-hdr-media-runtime`: Defines reproducible FFmpeg qualification and
   explicit HDR-to-SDR proxy behavior.
 

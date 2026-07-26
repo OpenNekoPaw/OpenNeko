@@ -240,50 +240,59 @@ export class NodeMediaRuntime {
     const audio = probe.audioStreams[0];
     if (!audio) throw new Error('Waveform source contains no audio stream.');
     const samplesPerPeak = Math.max(1, Math.round(PCM_SAMPLE_RATE / options.peaksPerSecond));
-    let bytes: Buffer;
-    let partialMessage: string | undefined;
+    const process = this.process.streamFfmpeg(
+      [
+        '-v',
+        'error',
+        '-i',
+        sourcePath,
+        '-map',
+        `0:${audio.streamIndex}`,
+        '-ac',
+        '1',
+        '-ar',
+        String(PCM_SAMPLE_RATE),
+        '-f',
+        'f32le',
+        'pipe:1',
+      ],
+      signal,
+    );
+    const aggregator = new WaveformPeakAggregator(samplesPerPeak);
+    let processError: unknown;
     try {
-      const output = await this.process.run(
-        'ffmpeg',
-        [
-          '-v',
-          'error',
-          '-i',
-          sourcePath,
-          '-map',
-          `0:${audio.streamIndex}`,
-          '-ac',
-          '1',
-          '-ar',
-          String(PCM_SAMPLE_RATE),
-          '-f',
-          'f32le',
-          'pipe:1',
-        ],
-        signal,
-      );
-      bytes = output.stdout;
+      for await (const chunk of process.stdout) {
+        aggregator.push(readableChunkBuffer(chunk));
+      }
     } catch (error) {
-      if (!(error instanceof FfmpegCommandError) || error.stdout.byteLength === 0) {
-        throw classifyCommandError(error, 'stream', 'generate waveform');
-      }
-      bytes = error.stdout;
-      partialMessage = compactDiagnostic(error.stderr);
+      processError = error;
+      process.terminate();
     }
-    const samples = float32(bytes);
-    const peaks: number[] = [];
-    for (let offset = 0; offset < samples.length; offset += samplesPerPeak) {
-      let peak = 0;
-      for (
-        let index = offset;
-        index < Math.min(samples.length, offset + samplesPerPeak);
-        index += 1
-      ) {
-        peak = Math.max(peak, Math.abs(samples[index] ?? 0));
-      }
-      peaks.push(Math.min(1, peak));
+    try {
+      await process.completion;
+    } catch (error) {
+      processError ??= error;
     }
-    const availableDurationSeconds = samples.length / PCM_SAMPLE_RATE;
+    if (signal?.aborted) {
+      throw signal.reason instanceof Error
+        ? signal.reason
+        : new Error('Waveform generation was cancelled.');
+    }
+    let partialMessage: string | undefined;
+    if (processError !== undefined) {
+      if (!(processError instanceof FfmpegCommandError) || aggregator.sampleCount === 0) {
+        throw classifyCommandError(processError, 'stream', 'generate waveform');
+      }
+      partialMessage = compactDiagnostic(processError.stderr);
+    } else if (aggregator.incompleteByteCount > 0) {
+      throw new MediaCorruptionError(
+        'stream',
+        'generate waveform',
+        'FFmpeg returned an incomplete float32 sample.',
+      );
+    }
+    const peaks = aggregator.finish();
+    const availableDurationSeconds = aggregator.sampleCount / PCM_SAMPLE_RATE;
     return {
       peaks,
       durationSeconds: probe.durationSeconds,
@@ -814,13 +823,66 @@ function parseRate(value: string | undefined): number {
     : 0;
 }
 
-function float32(buffer: Buffer): Float32Array {
-  const length = Math.floor(buffer.byteLength / Float32Array.BYTES_PER_ELEMENT);
-  const bytes = buffer.buffer.slice(
-    buffer.byteOffset,
-    buffer.byteOffset + length * Float32Array.BYTES_PER_ELEMENT,
-  );
-  return new Float32Array(bytes);
+class WaveformPeakAggregator {
+  private readonly peaks: number[] = [];
+  private incompleteBytes: Buffer = Buffer.alloc(0);
+  private samplesInCurrentPeak = 0;
+  private currentPeak = 0;
+  private finished = false;
+  sampleCount = 0;
+
+  constructor(private readonly samplesPerPeak: number) {}
+
+  get incompleteByteCount(): number {
+    return this.incompleteBytes.byteLength;
+  }
+
+  push(chunk: Buffer): void {
+    if (this.finished) throw new Error('Waveform peak aggregation is already finished.');
+    const bytes =
+      this.incompleteBytes.byteLength === 0 ? chunk : Buffer.concat([this.incompleteBytes, chunk]);
+    const completeByteCount =
+      bytes.byteLength - (bytes.byteLength % Float32Array.BYTES_PER_ELEMENT);
+    for (let offset = 0; offset < completeByteCount; offset += Float32Array.BYTES_PER_ELEMENT) {
+      const sample = bytes.readFloatLE(offset);
+      if (!Number.isFinite(sample)) {
+        throw new MediaCorruptionError(
+          'stream',
+          'generate waveform',
+          'FFmpeg returned a non-finite PCM sample.',
+        );
+      }
+      this.currentPeak = Math.max(this.currentPeak, Math.abs(sample));
+      this.samplesInCurrentPeak += 1;
+      this.sampleCount += 1;
+      if (this.samplesInCurrentPeak === this.samplesPerPeak) this.flushPeak();
+    }
+    this.incompleteBytes =
+      completeByteCount === bytes.byteLength
+        ? Buffer.alloc(0)
+        : Buffer.from(bytes.subarray(completeByteCount));
+  }
+
+  finish(): readonly number[] {
+    if (this.finished) throw new Error('Waveform peak aggregation is already finished.');
+    this.finished = true;
+    if (this.samplesInCurrentPeak > 0) this.flushPeak();
+    return this.peaks;
+  }
+
+  private flushPeak(): void {
+    this.peaks.push(Math.min(1, this.currentPeak));
+    this.samplesInCurrentPeak = 0;
+    this.currentPeak = 0;
+  }
+}
+
+function readableChunkBuffer(chunk: unknown): Buffer {
+  if (Buffer.isBuffer(chunk)) return chunk;
+  if (chunk instanceof Uint8Array) {
+    return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+  }
+  throw new Error('FFmpeg waveform stream returned a non-binary chunk.');
 }
 
 function atempo(rate: number): string | undefined {

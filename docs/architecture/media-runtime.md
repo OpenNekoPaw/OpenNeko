@@ -55,6 +55,13 @@ bus 和显式 peak limiter。FFmpeg 导出使用同一 gain/fade 事实，在
 `amix=normalize=0` 后使用 `alimiter`。这只提供峰值保护，不宣称 LUFS
 响度母带处理。
 
+波形生成使用同一个 FFmpeg 解码事实，但不缓存完整 PCM：Node 直接消费
+`f32le` stdout，以一个 peak window 聚合并丢弃已处理样本，只保留不足一个
+Float32 样本的字节后缀、当前窗口和返回的 peaks。工作内存不随素材时长线性
+增长；返回的 peak 数组仍按 `duration * peaksPerSecond` 增长。FFmpeg 在产生
+有效 PCM 后失败时返回 `partial/stream` 与可用时长；取消或首个样本前失败则
+继续 fail-visible。
+
 本地 PATH 只用于开发发现；发布闭包必须提供或明确要求经资格验证的 FFmpeg/
 ffprobe，并单独审计 codec license。`NEKO_FFMPEG_PATH` 和
 `NEKO_FFPROBE_PATH` 是测试/打包注入点，不是运行时 fallback 链。

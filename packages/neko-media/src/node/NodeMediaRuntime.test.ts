@@ -1,4 +1,4 @@
-import { PassThrough } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FfmpegProcessPort, FfmpegRunResult, RunningProcess } from './NodeFfmpegProcess';
 import { FfmpegCommandError } from './NodeFfmpegProcess';
@@ -100,6 +100,55 @@ describe('NodeMediaRuntime', () => {
       operation: 'capture frame',
     });
   });
+
+  it('aggregates waveform peaks from streaming PCM without buffered FFmpeg output', async () => {
+    const runtime = new NodeMediaRuntime({ process: new StreamingWaveformProcess() });
+    runtimes.push(runtime);
+
+    await expect(
+      runtime.generateWaveform('/fixture/long-audio.aac', { peaksPerSecond: 24_000 }),
+    ).resolves.toEqual({
+      peaks: [0.5, 1, 0.10000000149011612],
+      durationSeconds: 6,
+      sampleRate: 48_000,
+    });
+  });
+
+  it('returns completed waveform peaks when streaming decode fails after valid PCM', async () => {
+    const runtime = new NodeMediaRuntime({ process: new PartialStreamingWaveformProcess() });
+    runtimes.push(runtime);
+
+    await expect(
+      runtime.generateWaveform('/fixture/damaged-audio.aac', { peaksPerSecond: 24_000 }),
+    ).resolves.toEqual({
+      peaks: [0.6000000238418579, 0.4000000059604645],
+      durationSeconds: 6,
+      sampleRate: 48_000,
+      partial: {
+        availableDurationSeconds: 3 / 48_000,
+        failureScope: 'stream',
+        message: 'Invalid data found when processing input',
+      },
+    });
+  });
+
+  it('propagates waveform cancellation instead of returning a partial result', async () => {
+    const process = new CancelledStreamingWaveformProcess();
+    const runtime = new NodeMediaRuntime({ process });
+    runtimes.push(runtime);
+    const controller = new AbortController();
+    const waveform = runtime.generateWaveform(
+      '/fixture/long-audio.aac',
+      { peaksPerSecond: 24_000 },
+      controller.signal,
+    );
+    await process.started;
+
+    const cancellation = new Error('Waveform generation was cancelled.');
+    controller.abort(cancellation);
+
+    await expect(waveform).rejects.toBe(cancellation);
+  });
 });
 
 class AbortablePcmProcess implements FfmpegProcessPort {
@@ -190,4 +239,104 @@ class EmptyFrameProcess implements FfmpegProcessPort {
   streamFfmpeg(): RunningProcess {
     throw new Error('Unexpected streaming command.');
   }
+}
+
+class StreamingWaveformProcess implements FfmpegProcessPort {
+  async run(executable: 'ffmpeg' | 'ffprobe', _args: readonly string[]): Promise<FfmpegRunResult> {
+    if (executable !== 'ffprobe') {
+      throw new Error('Waveform must not use buffered FFmpeg execution.');
+    }
+    return { stdout: AUDIO_PROBE, stderr: '' };
+  }
+
+  streamFfmpeg(): RunningProcess {
+    const pcm = float32Buffer([0.25, -0.5, 0.75, -1, 0.1]);
+    return {
+      stdout: Readable.from([pcm.subarray(0, 3), pcm.subarray(3, 11), pcm.subarray(11)]),
+      completion: Promise.resolve(),
+      terminate: () => undefined,
+    };
+  }
+}
+
+class PartialStreamingWaveformProcess implements FfmpegProcessPort {
+  async run(executable: 'ffmpeg' | 'ffprobe', _args: readonly string[]): Promise<FfmpegRunResult> {
+    if (executable !== 'ffprobe') {
+      throw new Error('Waveform must not use buffered FFmpeg execution.');
+    }
+    return { stdout: AUDIO_PROBE, stderr: '' };
+  }
+
+  streamFfmpeg(args: readonly string[]): RunningProcess {
+    const error = new FfmpegCommandError(
+      'ffmpeg',
+      args,
+      1,
+      null,
+      'Invalid data found when processing input',
+    );
+    const stdout = new PassThrough();
+    const completion = new Promise<void>((_resolve, reject) => {
+      queueMicrotask(() => {
+        stdout.end(float32Buffer([0.2, -0.6, 0.4]));
+        setImmediate(() => reject(error));
+      });
+    });
+    void completion.catch(() => undefined);
+    return { stdout, completion, terminate: () => stdout.destroy() };
+  }
+}
+
+class CancelledStreamingWaveformProcess implements FfmpegProcessPort {
+  private resolveStarted: (() => void) | undefined;
+  readonly started = new Promise<void>((resolve) => {
+    this.resolveStarted = resolve;
+  });
+
+  async run(
+    executable: 'ffmpeg' | 'ffprobe',
+    _args: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<FfmpegRunResult> {
+    if (executable === 'ffprobe') return { stdout: AUDIO_PROBE, stderr: '' };
+    this.resolveStarted?.();
+    return new Promise<FfmpegRunResult>((_resolve, reject) => {
+      signal?.addEventListener(
+        'abort',
+        () =>
+          reject(
+            signal.reason instanceof Error ? signal.reason : new Error('Waveform was cancelled.'),
+          ),
+        { once: true },
+      );
+    });
+  }
+
+  streamFfmpeg(_args: readonly string[], signal?: AbortSignal): RunningProcess {
+    const stdout = new PassThrough();
+    const completion = new Promise<void>((_resolve, reject) => {
+      signal?.addEventListener(
+        'abort',
+        () => {
+          const reason =
+            signal.reason instanceof Error ? signal.reason : new Error('Waveform was cancelled.');
+          stdout.destroy(reason);
+          reject(reason);
+        },
+        { once: true },
+      );
+      queueMicrotask(() => {
+        stdout.write(float32Buffer([0.25, -0.5]));
+        this.resolveStarted?.();
+      });
+    });
+    void completion.catch(() => undefined);
+    return { stdout, completion, terminate: () => stdout.destroy() };
+  }
+}
+
+function float32Buffer(samples: readonly number[]): Buffer {
+  const buffer = Buffer.alloc(samples.length * Float32Array.BYTES_PER_ELEMENT);
+  samples.forEach((sample, index) => buffer.writeFloatLE(sample, index * 4));
+  return buffer;
 }

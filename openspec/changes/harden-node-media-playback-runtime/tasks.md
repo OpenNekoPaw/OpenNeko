@@ -8,6 +8,9 @@
       export limiter placement.
 - [x] 1.4 Add red-capable media tests for HDR qualification and bounded no-frame
       interval corruption.
+- [x] 1.5 Add red-capable media tests proving waveform generation consumes a
+      stream incrementally, handles split float32 samples, preserves a valid
+      prefix after decoder failure, and propagates cancellation.
 
 ## 2. Browser PCM and Cut Synchronization
 
@@ -26,6 +29,8 @@
       streams.
 - [x] 3.3 Classify bounded no-frame/early-EOF outcomes as interval corruption
       without downgrading successful prefix operations.
+- [x] 3.4 Replace whole-output waveform buffering with bounded incremental peak
+      aggregation over the cancellable FFmpeg stream.
 
 ## 4. Runtime Closure
 
@@ -46,3 +51,6 @@
       and OpenSpec gates.
 - [x] 5.4 Validate Preview, Canvas, and Cut in the generated isolated Extension
       Development Host using both visible host and Webview/CDP evidence.
+- [x] 5.5 Re-run the focused media suite and read-only waveform validation
+      against a long file under `~/Assets/Media`, recording peak count,
+      available duration, and process memory.

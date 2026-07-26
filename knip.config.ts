@@ -68,6 +68,7 @@ const config: KnipConfig = {
         'scripts/test-orchestration/fixtures/*.ts',
         'scripts/test-orchestration/vscode-debug-config.local.mjs',
         'scripts/validate-node-media-matrix.mts',
+        'scripts/validate-node-media-waveform.mts',
       ],
     },
     // ── Layer 0: Library packages ──────────────────────

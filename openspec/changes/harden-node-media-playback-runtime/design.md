@@ -18,8 +18,10 @@ Five-layer analysis:
   packages do not discover or fall back to Neko Engine.
 - **Interface:** PCM connection becomes `prepare -> shared startAt -> consume`
   while the existing `connect` convenience remains the single-track canonical
-  composition. Cut preview messages carry the envelope facts needed for live
-  playback. Runtime qualification reports exact required capabilities.
+  composition. Waveform results keep their current contract while their
+  implementation consumes the FFmpeg `Readable` incrementally. Cut preview
+  messages carry the envelope facts needed for live playback. Runtime
+  qualification reports exact required capabilities.
 - **Extension:** New codecs continue through probe plus declared proxy profiles;
   new mix policy belongs in the Cut mix bus/export builder, not in generic PCM
   transport. Packaged targets add one verified runtime descriptor, not another
@@ -34,6 +36,8 @@ Five-layer analysis:
 
 - Keep scheduled PCM lead bounded to a small constant independent of source
   duration.
+- Keep waveform working memory bounded by one aggregation window independent of
+  source duration, excluding the intentionally returned peak array.
 - Start every Cut PCM input at one `AudioContext` time after all first packets
   are ready.
 - Preserve positive gain and live fades while preventing uncontrolled output
@@ -91,6 +95,30 @@ levels while preventing final full-scale overflow. LUFS normalization remains
 a separate mastering feature because it changes program loudness rather than
 only protecting peaks.
 
+### Waveform peaks are aggregated directly from the decode stream
+
+`generateWaveform()` uses the existing cancellable `streamFfmpeg()` process
+port instead of `run()`. It keeps only an incomplete float32 byte suffix, the
+current peak window, and the returned numeric peaks. Complete float32 samples
+are consumed once and discarded; chunk boundaries may split a sample without
+changing the result.
+
+FFmpeg completion is awaited after stdout ends. If the decoder fails after at
+least one complete sample, the result is explicitly partial and retains the
+completed prefix. Failure before any sample remains a stream corruption error.
+Cancellation keeps the existing abort contract and does not manufacture a
+partial success. The runtime does not add a PCM passthrough decoder or a second
+waveform implementation.
+
+Alternatives rejected:
+
+- Reading the complete raw output before peak calculation retains memory
+  proportional to media duration.
+- Using `AudioContext.decodeAudioData()` requires browser codec support and
+  whole-resource buffering, and moves file/decode ownership into the Webview.
+- A temporary PCM file changes RAM pressure into unbounded disk IO and adds
+  cleanup state without improving the single-pass aggregation.
+
 ### HDR is an explicit qualified proxy
 
 HDR10/PQ and HLG sources are never direct-play inputs. The proxy graph converts
@@ -117,6 +145,8 @@ selected stream cannot produce any valid prefix.
 
 - A one-second PCM high-water mark adds bounded latency/memory but prevents
   duration-scaled allocation.
+- Waveform output still contains `duration * peaksPerSecond` numbers by
+  contract; only decoded PCM working memory becomes duration-independent.
 - A dynamics compressor is not a broadcast loudness workflow; it is explicit
   peak protection until LUFS mastering is designed.
 - Tone-mapped SDR preview does not preserve HDR display output. Source metadata
