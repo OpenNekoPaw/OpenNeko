@@ -3,12 +3,16 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  createGeneratedAssetRevisionRef,
   PathResolver,
   type GeneratedAsset,
   type ResourceCacheManifest,
   type ResourceCacheManifestStore,
 } from '@neko/shared';
-import { LocalMetadataGeneratedOutputProjectionStore } from '@neko/shared/local-metadata/node';
+import {
+  LocalMetadataGeneratedOutputProjectionStore,
+  type GeneratedOutputProjectionRejection,
+} from '@neko/shared/local-metadata/node';
 import {
   GeneratedAssetIndex,
   generateAssetId,
@@ -73,6 +77,209 @@ describe('GeneratedAssetIndex', () => {
     const restored = new GeneratedAssetIndex(store);
     await restored.load();
     expect(restored.get(asset.id)).toEqual(asset);
+  });
+
+  it('rejects legacy generated lifecycle fields before updating the index store', async () => {
+    const workspaceRoot = await createTempDir();
+    const manifest = createManifestStore();
+    const index = new GeneratedAssetIndex(
+      new LocalMetadataGeneratedOutputProjectionStore({
+        manifestStore: manifest.store,
+        workspaceRoot,
+        pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
+      }),
+    );
+    const lifecycle = createGeneratedAssetRevisionRef({
+      assetId: 'asset-1',
+      contentDigest: 'sha256:asset-1',
+      contentPath: 'neko/generated/image/a.png',
+      mediaKind: 'image',
+      mimeType: 'image/png',
+      generation: { operationId: 'operation-1' },
+    });
+    const legacyAsset = imageAsset({
+      path: path.join(workspaceRoot, 'neko', 'generated', 'image', 'a.png'),
+      lifecycle: {
+        ...lifecycle,
+        // @ts-expect-error Runtime poison fixture for the removed lifecycle field.
+        resourceRef: { id: 'legacy-resource' },
+      },
+    });
+
+    await expect(index.add(legacyAsset)).rejects.toThrow(
+      'generated-asset-index-migration-required',
+    );
+    expect(manifest.current().entries).toEqual({});
+  });
+
+  it('fails visibly when persisted projection lifecycle contains a legacy field', async () => {
+    const workspaceRoot = await createTempDir();
+    const manifest = createManifestStore();
+    const store = new LocalMetadataGeneratedOutputProjectionStore({
+      manifestStore: manifest.store,
+      workspaceRoot,
+      pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
+    });
+    const lifecycle = createGeneratedAssetRevisionRef({
+      assetId: 'asset-1',
+      contentDigest: 'sha256:asset-1',
+      contentPath: 'neko/generated/image/a.png',
+      mediaKind: 'image',
+      mimeType: 'image/png',
+      generation: { operationId: 'operation-1' },
+    });
+    await store.update(() => [
+      imageAsset({
+        path: path.join(workspaceRoot, 'neko', 'generated', 'image', 'a.png'),
+        lifecycle,
+      }),
+    ]);
+    const entry = Object.values(manifest.current().entries)[0];
+    const projection = entry?.providerMetadata?.['generatedOutputProjection'];
+    const projectedAsset =
+      typeof projection === 'object' && projection !== null
+        ? Reflect.get(projection, 'asset')
+        : undefined;
+    const persistedLifecycle =
+      typeof projectedAsset === 'object' && projectedAsset !== null
+        ? Reflect.get(projectedAsset, 'lifecycle')
+        : undefined;
+    if (typeof persistedLifecycle !== 'object' || persistedLifecycle === null) {
+      throw new Error('Expected persisted generated asset lifecycle fixture.');
+    }
+    Reflect.set(persistedLifecycle, 'resourceRef', { id: 'legacy-resource' });
+
+    await expect(store.load()).rejects.toThrow('generated-output-projection-migration-required');
+  });
+
+  it('preserves and reports rejected projections when the Host explicitly isolates them', async () => {
+    const workspaceRoot = await createTempDir();
+    const manifest = createManifestStore();
+    const canonicalStore = new LocalMetadataGeneratedOutputProjectionStore({
+      manifestStore: manifest.store,
+      workspaceRoot,
+      pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
+    });
+    const first = imageAsset({
+      id: 'asset-1',
+      path: path.join(workspaceRoot, 'neko', 'generated', 'image', 'a.png'),
+      lifecycle: createGeneratedAssetRevisionRef({
+        assetId: 'asset-1',
+        contentDigest: 'sha256:asset-1',
+        contentPath: 'neko/generated/image/a.png',
+        mediaKind: 'image',
+        mimeType: 'image/png',
+        generation: { operationId: 'operation-1' },
+      }),
+    });
+    const second = imageAsset({
+      id: 'asset-2',
+      path: path.join(workspaceRoot, 'neko', 'generated', 'image', 'b.png'),
+    });
+    await canonicalStore.update(() => [first, second]);
+    const rejectedEntry = manifest.current().entries['generated-output:asset-1'];
+    const projection = rejectedEntry?.providerMetadata?.['generatedOutputProjection'];
+    const projectedAsset =
+      typeof projection === 'object' && projection !== null
+        ? Reflect.get(projection, 'asset')
+        : undefined;
+    const persistedLifecycle =
+      typeof projectedAsset === 'object' && projectedAsset !== null
+        ? Reflect.get(projectedAsset, 'lifecycle')
+        : undefined;
+    if (!rejectedEntry || typeof persistedLifecycle !== 'object' || persistedLifecycle === null) {
+      throw new Error('Expected persisted generated output projection fixture.');
+    }
+    Reflect.set(persistedLifecycle, 'resourceRef', { id: 'legacy-resource' });
+    const rejectedSnapshot = structuredClone(rejectedEntry);
+    Reflect.deleteProperty(manifest.current().entries, 'generated-output:asset-1');
+    Reflect.set(manifest.current().entries, 'projection-storage-key', rejectedEntry);
+    const rejections: GeneratedOutputProjectionRejection[] = [];
+    const isolatedStore = new LocalMetadataGeneratedOutputProjectionStore({
+      manifestStore: manifest.store,
+      workspaceRoot,
+      pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
+      rejectedProjectionPolicy: {
+        mode: 'preserve-and-report',
+        report: (rejection) => rejections.push(rejection),
+      },
+    });
+
+    await expect(isolatedStore.load()).resolves.toEqual([second]);
+    expect(rejections).toEqual([
+      {
+        code: 'generated-output-projection-migration-required',
+        resourceId: 'generated-output:asset-1',
+        message: expect.stringContaining('invalid or legacy projection'),
+      },
+    ]);
+
+    await isolatedStore.update((assets) => assets);
+    expect(manifest.current().entries['projection-storage-key']).toEqual(rejectedSnapshot);
+    expect(manifest.current().entries['generated-output:asset-2']).toBeDefined();
+  });
+
+  it('allows a canonical projection to deliberately replace a rejected row with the same id', async () => {
+    const workspaceRoot = await createTempDir();
+    const manifest = createManifestStore();
+    const canonicalStore = new LocalMetadataGeneratedOutputProjectionStore({
+      manifestStore: manifest.store,
+      workspaceRoot,
+      pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
+    });
+    const asset = imageAsset({
+      path: path.join(workspaceRoot, 'neko', 'generated', 'image', 'a.png'),
+    });
+    await canonicalStore.update(() => [asset]);
+    const rejectedEntry = manifest.current().entries['generated-output:asset-1'];
+    const projection = rejectedEntry?.providerMetadata?.['generatedOutputProjection'];
+    if (!rejectedEntry || typeof projection !== 'object' || projection === null) {
+      throw new Error('Expected persisted generated output projection fixture.');
+    }
+    Reflect.set(projection, 'version', 0);
+    const rejections: GeneratedOutputProjectionRejection[] = [];
+    const isolatedStore = new LocalMetadataGeneratedOutputProjectionStore({
+      manifestStore: manifest.store,
+      workspaceRoot,
+      pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
+      rejectedProjectionPolicy: {
+        mode: 'preserve-and-report',
+        report: (rejection) => rejections.push(rejection),
+      },
+    });
+
+    await isolatedStore.update(() => [asset]);
+
+    await expect(canonicalStore.load()).resolves.toEqual([asset]);
+    expect(rejections).toHaveLength(1);
+  });
+
+  it('rejects a lifecycle locator that points at a different workspace file', async () => {
+    const workspaceRoot = await createTempDir();
+    const manifest = createManifestStore();
+    const store = new LocalMetadataGeneratedOutputProjectionStore({
+      manifestStore: manifest.store,
+      workspaceRoot,
+      pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
+    });
+    const lifecycle = createGeneratedAssetRevisionRef({
+      assetId: 'asset-1',
+      contentDigest: 'sha256:asset-1',
+      contentPath: 'neko/generated/image/other.png',
+      mediaKind: 'image',
+      mimeType: 'image/png',
+      generation: { operationId: 'operation-1' },
+    });
+
+    await expect(
+      store.update(() => [
+        imageAsset({
+          path: path.join(workspaceRoot, 'neko', 'generated', 'image', 'a.png'),
+          lifecycle,
+        }),
+      ]),
+    ).rejects.toThrow('lifecycle locator does not match its workspace projection path');
+    expect(manifest.current().entries).toEqual({});
   });
 
   it('fails visibly instead of loading the removed generated-draft projection path', async () => {

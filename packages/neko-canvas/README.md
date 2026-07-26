@@ -83,9 +83,9 @@ Webview 端通过 `canvasOperationStore` 作为运行时桥接层生成 `EditOpe
 
 外部 `neko.canvas.importAsset` / `NekoCanvasAPI.importAsset()` 不再要求 Canvas Webview 已打开；它通过 `CanvasProjectAuthoringService` 创建 media 节点，只持久化 `${VAR}/path`、workspace-relative path、`ResourceRef` 或 `DocumentArchiveResourceRef`。Webview URI、blob、cache path 和 temp path 不能作为 `.nkc` 身份写入。
 
-`NekoCanvasAPI.boards.project()` 是唯一公共 Workspace Board 投影入口。未指定显式 `.nkc` 时，Canvas 确定性写入 `neko/boards/workspace.nkc`；显式目标只接受调用方给出的普通 `.nkc` identity。它不扫描目录选择“最近/匹配”画布，也不读取会话绑定或活动编辑器。Markdown 使用普通 Text/Markdown 内容；文件引用使用支持稳定 `ResourceRef` 的 DocumentNode；图片、音频和视频使用普通 MediaNode。所有重放按 provenance/artifact identity 幂等。
+`NekoCanvasAPI.boards.project()` 是唯一公共 Workspace Board 投影入口。未指定显式 `.nkc` 时，Canvas 确定性写入 `neko/boards/workspace.nkc`；显式目标只接受调用方给出的普通 `.nkc` identity。它不扫描目录选择“最近/匹配”画布，也不读取会话绑定或活动编辑器。Markdown 使用普通 Text/Markdown 内容；非 Markdown artifact 只携带一个 `ContentLocator`，并投影为普通 DocumentNode/MediaNode。顶层新增内容采用有界多列空位布局；同一 delivery 新建两个以上生成 output 时，这些节点进入一个接近平方网格的普通 Group。所有重放按 provenance/artifact identity 幂等。
 
-Creator-visible generated output 在投影前已由 owning service 持久化到 `neko/generated/<kind>/`。Canvas 将其稳定 generated-output identity 写成普通持久 Inbox Group/Media/Document 节点，不要求 catalog membership，也不创建 runtime-only review Group。复制到 Media Library 或绑定 Creative Entity 是独立显式动作；`.nkc` 不保存 cache path、render URI、Webview URI 或 runtime Group ID。
+Creator-visible generated output 在投影前已由 owning service 持久化到 `neko/generated/<kind>/`。单素材 delivery 写成普通顶层 Media/Document 节点；同批多素材 Group 只是 `.nkc` 持久化的可编辑展示容器，不拥有 Job、delivery 状态或资源生命周期，也不创建 Inbox/Task/Run Group。复制到 Media Library 或绑定 Creative Entity 是独立显式动作；`.nkc` 不保存 cache path、render URI、Webview URI 或 runtime Group ID。
 
 选中引用或生成媒体时，Canvas 通过统一表示解析器提供预览、复制到 Media Library 和全屏等操作；Webview 只发送带节点与稳定 locator 的动作消息，文件读取、资源解析和授权写入均由 Extension Host 执行。已移除或不可用的能力不会显示，也不会以空操作或运行时路径兜底。
 
@@ -112,5 +112,5 @@ Shot overlay 中的“优化提示词 / 生成图片 / 编辑图片 / 生成视�
 - Webview 只发送 `canvasCreativeAiAction` / `canvasCreativeAiCandidateAction` typed message，并显示本地可判断的参数诊断、Canvas 执行状态和候选卡片。
 - Extension Host 负责解析 `.nkc` 文档身份、shot/scene prompt document、source media、creative 参数、target/candidate refs、revision 和 idempotency，并调用 Canvas-owned executor；不经过 Agent creative run 或 Agent command。
 - Canvas executor 只通过语义化 purpose port 请求 prompt/judge/媒体能力，不接收 Pi、provider/model、credential、token、temperature 等 LLM 细节。结果先写入 `node.data.creativeAiCandidates`；正式字段只有在用户接受或 judge 通过且 revision re-check 成功后才会更新。
-- 候选卡片只展示 `ResourceRef`、generated asset id、workspace-relative path 或 `${VAR}/path` 等稳定身份摘要。Webview URI、blob/object URL、cache path、temp path 和 `dataUrl` 不能作为 durable result identity。
+- 候选卡片只展示 generated asset id 与 `ContentLocator` 的可移植摘要。Canvas 持久化 locator；Extension Host 在打开 Webview 时临时派生 panel-scoped URI，并在保存前清除。Webview URI、blob/object URL、provider URL、cache path、temp path、绝对路径和 `dataUrl` 不能作为 durable result identity。
 - GenerationPromptPanel、Shot overlay 与批量入口统一进入 typed creative action 和 Canvas candidate apply；不存在 `neko-agent.generateForNode`、Agent creative run 或旧面板 fallback。

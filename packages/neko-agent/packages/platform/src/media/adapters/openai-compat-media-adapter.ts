@@ -9,8 +9,8 @@ import type {
   MediaGenerationType,
   MediaAdapterResult,
   MediaOperationStatus,
-  ImageGenerationRequest,
-  VideoGenerationRequest,
+  MaterializedImageGenerationRequest,
+  MaterializedVideoGenerationRequest,
   MediaOutput,
 } from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
@@ -115,7 +115,7 @@ export class OpenAICompatMediaAdapter extends BaseMediaAdapter {
    * Generate image using OpenAI DALL-E compatible API
    */
   async generateImage(
-    request: ImageGenerationRequest,
+    request: MaterializedImageGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -165,7 +165,7 @@ export class OpenAICompatMediaAdapter extends BaseMediaAdapter {
    * Generate video using Sora-like API
    */
   async generateVideo(
-    request: VideoGenerationRequest,
+    request: MaterializedVideoGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {

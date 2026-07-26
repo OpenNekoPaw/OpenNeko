@@ -9,9 +9,9 @@
 import {
   createTool,
   requireToolExecutionRunScope,
-  isResourceRef,
+  isContentLocator,
   isVideoOperationId,
-  type ResourceRef,
+  type ContentLocator,
 } from '@neko/shared';
 import type {
   GenerationIntent,
@@ -27,6 +27,7 @@ import type {
   GenerationJobRequest,
   GenerationJobSnapshot,
   ImageGenerationRequest,
+  VideoGenerationRequest,
 } from '@neko/generation';
 import { resolveImageGenerationType, resolveVideoGenerationType } from './media-generation-kind';
 
@@ -229,10 +230,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function readOptionalRecord(value: unknown): Record<string, unknown> | undefined {
-  return isRecord(value) ? value : undefined;
-}
-
 function resolveToolMediaTarget(
   args: Record<string, unknown>,
   options: ToolExecuteOptions | undefined,
@@ -421,7 +418,7 @@ interface LinkedGenerationJobResult {
   readonly modelId: string;
   readonly outputs: readonly {
     readonly type: 'image' | 'video' | 'audio';
-    readonly resourceRef: ResourceRef;
+    readonly contentLocator: ContentLocator;
   }[];
 }
 
@@ -439,10 +436,10 @@ async function executeLinkedGenerationJob(
         `Generation Job ${terminal.ref.jobId} ended in phase ${terminal.phase}.`,
     );
   }
-  const resultRefs = terminal.resultRefs ?? [];
-  if (resultRefs.length === 0) {
+  const resultLocators = terminal.resultLocators ?? [];
+  if (resultLocators.length === 0) {
     throw new Error(
-      `Generation Job ${terminal.ref.jobId} succeeded without stable ResourceRef results.`,
+      `Generation Job ${terminal.ref.jobId} succeeded without stable ContentLocator results.`,
     );
   }
   return {
@@ -452,7 +449,7 @@ async function executeLinkedGenerationJob(
     jobLifecycleOwner: 'generation-job-coordinator',
     providerId: terminal.request.providerId,
     modelId: terminal.request.modelId,
-    outputs: resultRefs.map((resourceRef) => ({ type: outputType, resourceRef })),
+    outputs: resultLocators.map((contentLocator) => ({ type: outputType, contentLocator })),
   };
 }
 
@@ -476,6 +473,7 @@ async function waitForGenerationJobTerminal(
       options?.onProgress?.({
         percent: latest.progress.percent,
         stage: latest.progress.stage,
+        data: projectGenerationJobProgress(latest),
       });
       if (isGenerationJobTerminal(latest)) return latest;
     }
@@ -486,6 +484,19 @@ async function waitForGenerationJobTerminal(
   } finally {
     await iterator.return?.();
   }
+}
+
+function projectGenerationJobProgress(snapshot: GenerationJobSnapshot) {
+  return {
+    kind: 'generation-job' as const,
+    jobId: snapshot.ref.jobId,
+    revision: snapshot.revision,
+    phase: snapshot.phase,
+    stage: snapshot.progress.stage,
+    percent: snapshot.progress.percent,
+    providerId: snapshot.request.providerId,
+    modelId: snapshot.request.modelId,
+  };
 }
 
 async function nextGenerationJobUpdate(
@@ -543,53 +554,47 @@ function createMediaToolAttachments(
 ): ToolResultAttachment[] {
   return outputs.map((output) => ({
     type: output.type,
-    path: output.resourceRef.id,
-    assetRef: {
-      assetId: output.resourceRef.id,
-      uri: output.resourceRef.id,
-      mimeType: 'application/octet-stream',
-      resourceRef: output.resourceRef,
-    },
+    contentLocator: output.contentLocator,
   }));
 }
 
-function readImageReferenceInputs(args: Record<string, unknown>): Record<string, unknown> {
+function readImageReferenceInputs(args: Record<string, unknown>): Partial<ImageGenerationRequest> {
+  rejectLegacyMediaInputFields(args, [
+    'referenceImageUrl',
+    'referenceImageUri',
+    'referenceImageBase64',
+    'maskUri',
+    'maskBase64',
+  ]);
+  const referenceImageLocator = readOptionalContentLocator(
+    args.referenceImageLocator,
+    'referenceImageLocator',
+  );
+  const maskLocator = readOptionalContentLocator(args.maskLocator, 'maskLocator');
+  const ipAdapterRefs = readIpAdapterRefs(args.ipAdapterRefs);
   return {
-    ...(readOptionalString(args.referenceImageUrl)
-      ? { referenceImageUrl: readOptionalString(args.referenceImageUrl) }
-      : {}),
-    ...(readOptionalString(args.referenceImageUri)
-      ? { referenceImageUri: readOptionalString(args.referenceImageUri) }
-      : {}),
-    ...(readOptionalString(args.referenceImageBase64)
-      ? { referenceImageBase64: readOptionalString(args.referenceImageBase64) }
-      : {}),
-    ...(readOptionalString(args.maskUri) ? { maskUri: readOptionalString(args.maskUri) } : {}),
-    ...(readOptionalString(args.maskBase64)
-      ? { maskBase64: readOptionalString(args.maskBase64) }
-      : {}),
+    ...(referenceImageLocator ? { referenceImageLocator } : {}),
+    ...(maskLocator ? { maskLocator } : {}),
     ...(readOptionalNumber(args.inpaintStrength) !== undefined
       ? { inpaintStrength: readOptionalNumber(args.inpaintStrength) }
       : {}),
-    ...(readIpAdapterRefs(args.ipAdapterRefs)
-      ? { ipAdapterRefs: readIpAdapterRefs(args.ipAdapterRefs) }
-      : {}),
+    ...(ipAdapterRefs ? { ipAdapterRefs } : {}),
     ...(readOptionalString(args.editInstruction)
       ? { editInstruction: readOptionalString(args.editInstruction) }
       : {}),
   };
 }
 
-function readImageControlInputs(args: Record<string, unknown>): Record<string, unknown> {
+function readImageControlInputs(args: Record<string, unknown>): Partial<ImageGenerationRequest> {
+  rejectLegacyMediaInputFields(args, ['controlImageUri', 'controlImageBase64']);
+  const controlImageLocator = readOptionalContentLocator(
+    args.controlImageLocator,
+    'controlImageLocator',
+  );
   return {
-    ...(readOptionalString(args.controlImageUri)
-      ? { controlImageUri: readOptionalString(args.controlImageUri) }
-      : {}),
-    ...(readOptionalString(args.controlImageBase64)
-      ? { controlImageBase64: readOptionalString(args.controlImageBase64) }
-      : {}),
-    ...(readOptionalString(args.controlMode)
-      ? { controlMode: readOptionalString(args.controlMode) }
+    ...(controlImageLocator ? { controlImageLocator } : {}),
+    ...(readOptionalControlMode(args.controlMode)
+      ? { controlMode: readOptionalControlMode(args.controlMode) }
       : {}),
     ...(readOptionalNumber(args.controlStrength) !== undefined
       ? { controlStrength: readOptionalNumber(args.controlStrength) }
@@ -597,34 +602,32 @@ function readImageControlInputs(args: Record<string, unknown>): Record<string, u
   };
 }
 
-function readVideoReferenceInputs(args: Record<string, unknown>): Record<string, unknown> {
+function readVideoReferenceInputs(args: Record<string, unknown>): Partial<VideoGenerationRequest> {
+  rejectLegacyMediaInputFields(args, [
+    'startFrameRef',
+    'endFrameRef',
+    'referenceVideoRef',
+    'referenceImageUrl',
+    'referenceImageUri',
+    'referenceImageBase64',
+    'referenceVideoUrl',
+    'startFrameImageBase64',
+    'endFrameImageBase64',
+  ]);
   const operation = readOptionalVideoOperation(args.operation);
-  const startFrameRef = readOptionalResourceRef(args.startFrameRef, 'startFrameRef');
-  const endFrameRef = readOptionalResourceRef(args.endFrameRef, 'endFrameRef');
-  const referenceVideoRef = readOptionalResourceRef(args.referenceVideoRef, 'referenceVideoRef');
+  const startFrameLocator = readOptionalContentLocator(args.startFrameLocator, 'startFrameLocator');
+  const endFrameLocator = readOptionalContentLocator(args.endFrameLocator, 'endFrameLocator');
+  const referenceVideoLocator = readOptionalContentLocator(
+    args.referenceVideoLocator,
+    'referenceVideoLocator',
+  );
+  const referenceImages = readIpAdapterRefs(args.referenceImages);
   return {
     ...(operation ? { operation } : {}),
-    ...(startFrameRef ? { startFrameRef } : {}),
-    ...(endFrameRef ? { endFrameRef } : {}),
-    ...(referenceVideoRef ? { referenceVideoRef } : {}),
-    ...(readOptionalString(args.referenceImageUrl)
-      ? { referenceImageUrl: readOptionalString(args.referenceImageUrl) }
-      : {}),
-    ...(readOptionalString(args.referenceImageUri)
-      ? { referenceImageUri: readOptionalString(args.referenceImageUri) }
-      : {}),
-    ...(readOptionalString(args.referenceImageBase64)
-      ? { referenceImageBase64: readOptionalString(args.referenceImageBase64) }
-      : {}),
-    ...(readOptionalString(args.referenceVideoUrl)
-      ? { referenceVideoUrl: readOptionalString(args.referenceVideoUrl) }
-      : {}),
-    ...(readOptionalString(args.startFrameImageBase64)
-      ? { startFrameImageBase64: readOptionalString(args.startFrameImageBase64) }
-      : {}),
-    ...(readOptionalString(args.endFrameImageBase64)
-      ? { endFrameImageBase64: readOptionalString(args.endFrameImageBase64) }
-      : {}),
+    ...(startFrameLocator ? { startFrameLocator } : {}),
+    ...(endFrameLocator ? { endFrameLocator } : {}),
+    ...(referenceVideoLocator ? { referenceVideoLocator } : {}),
+    ...(referenceImages ? { referenceImages } : {}),
     ...(readOptionalNumber(args.motionStrength) !== undefined
       ? { motionStrength: readOptionalNumber(args.motionStrength) }
       : {}),
@@ -654,29 +657,40 @@ function readOptionalVideoOperation(value: unknown) {
   return value;
 }
 
-function readOptionalResourceRef(value: unknown, fieldName: string): ResourceRef | undefined {
+function readOptionalControlMode(
+  value: unknown,
+): ImageGenerationRequest['controlMode'] | undefined {
   if (value === undefined) return undefined;
-  if (!isResourceRef(value)) {
-    throw new Error(`GenerateVideo ${fieldName} must be a structurally valid ResourceRef.`);
+  if (
+    value !== 'canny' &&
+    value !== 'depth' &&
+    value !== 'pose' &&
+    value !== 'normal' &&
+    value !== 'segment' &&
+    value !== 'lineart' &&
+    value !== 'softedge' &&
+    value !== 'scribble'
+  ) {
+    throw new Error(`GenerateImage received unsupported controlMode: ${String(value)}`);
+  }
+  return value;
+}
+
+function readOptionalContentLocator(value: unknown, fieldName: string): ContentLocator | undefined {
+  if (value === undefined) return undefined;
+  if (!isContentLocator(value)) {
+    throw new Error(`${fieldName} must be a structurally valid ContentLocator.`);
   }
   return value;
 }
 
 function readTransformImageReferenceArgs(args: Record<string, unknown>): Record<string, unknown> {
-  const sourceImageRef = readOptionalRecord(args.sourceImageRef);
-  const referenceBundle = readOptionalRecord(args.referenceBundle);
   const operationPlan = Array.isArray(args.operationPlan)
     ? args.operationPlan.filter((entry): entry is string => typeof entry === 'string')
     : undefined;
-  const maskRefs = Array.isArray(args.maskRefs)
-    ? args.maskRefs.filter((entry): entry is Record<string, unknown> => isRecord(entry))
-    : undefined;
 
   return {
-    ...(sourceImageRef ? { sourceImageRef } : {}),
-    ...(referenceBundle ? { referenceBundle } : {}),
     ...(operationPlan && operationPlan.length > 0 ? { operationPlan } : {}),
-    ...(maskRefs && maskRefs.length > 0 ? { maskRefs } : {}),
     ...(readOptionalString(args.planId) ? { planId: readOptionalString(args.planId) } : {}),
     ...(readOptionalString(args.sceneId) ? { sceneId: readOptionalString(args.sceneId) } : {}),
     ...(readOptionalString(args.shotId) ? { shotId: readOptionalString(args.shotId) } : {}),
@@ -693,17 +707,22 @@ function readTransformImageReferenceArgs(args: Record<string, unknown>): Record<
 }
 
 function readIpAdapterRefs(value: unknown): ImageGenerationRequest['ipAdapterRefs'] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const refs = value.flatMap((item): NonNullable<ImageGenerationRequest['ipAdapterRefs']> =>
-    isIpAdapterRef(item) ? [item] : [],
-  );
-  return refs.length > 0 ? refs : undefined;
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new Error('Media image references must be an array of locator-backed inputs.');
+  }
+  if (!value.every(isIpAdapterRef)) {
+    throw new Error(
+      'Media image references require a valid imageLocator and supported optional controls.',
+    );
+  }
+  return value.length > 0 ? value : undefined;
 }
 
 function isIpAdapterRef(
   value: unknown,
 ): value is NonNullable<ImageGenerationRequest['ipAdapterRefs']>[number] {
-  if (!isRecord(value) || typeof value['imageBase64'] !== 'string') return false;
+  if (!isRecord(value) || !isContentLocator(value['imageLocator'])) return false;
   return (
     (value['mimeType'] === undefined || typeof value['mimeType'] === 'string') &&
     (value['strength'] === undefined ||
@@ -716,12 +735,24 @@ function isIpAdapterRef(
 }
 
 function hasResolvedTransformSource(args: Record<string, unknown>): boolean {
-  return Boolean(
-    readOptionalString(args.sourceImageUri) ||
-    readOptionalString(args.referenceImageUri) ||
-    readOptionalString(args.referenceImageUrl) ||
-    readOptionalString(args.referenceImageBase64),
+  return (
+    readOptionalContentLocator(
+      args.referenceImageLocator ?? args.sourceImageLocator,
+      'sourceImageLocator',
+    ) !== undefined
   );
+}
+
+function rejectLegacyMediaInputFields(
+  args: Record<string, unknown>,
+  fields: readonly string[],
+): void {
+  const legacyField = fields.find((field) => Object.hasOwn(args, field));
+  if (legacyField) {
+    throw new Error(
+      `${legacyField} is a runtime-only or legacy media field; pass a ContentLocator instead.`,
+    );
+  }
 }
 
 function readRuntimeMediaModel(
@@ -876,19 +907,15 @@ const MEDIA_TOOL_LOCALIZATION = {
         quality: '图像质量，默认 standard。',
         style: '图像风格，默认 vivid。',
         aspectRatio: '可选目标画幅比例，例如 16:9、9:16 或 1:1。',
-        referenceImageUrl: '可选远程参考图 URL，用于 image-to-image 生成。',
-        referenceImageUri: '可选宿主已解析的本地参考图 URI/path。',
-        referenceImageBase64: '可选参考图 base64 字节，不包含 data: 前缀。',
-        maskUri: '可选宿主已解析的 inpaint mask URI/path。',
-        maskBase64: '可选 inpaint mask base64 字节，不包含 data: 前缀。',
+        referenceImageLocator: '可选参考图 ContentLocator，用于 image-to-image 生成。',
+        maskLocator: '可选 inpaint mask ContentLocator。',
         inpaintStrength: '可选 inpaint 强度，范围 0.0 到 1.0。',
-        ipAdapterRefs: '可选宿主已解析的 IP-Adapter 参考图，用于主体或风格一致性。',
-        imageBase64: '参考图 base64 字节，不包含 data: 前缀。',
+        ipAdapterRefs: '可选 IP-Adapter 参考图 locator，用于主体或风格一致性。',
+        imageLocator: '参考图 ContentLocator。',
         mimeType: '参考图 MIME type。',
         strength: '参考影响强度，范围 0.0 到 1.0。',
         mode: '参考图引导 style、subject 或 both。',
-        controlImageUri: '可选宿主已解析的 ControlNet 图像 URI/path。',
-        controlImageBase64: '可选 ControlNet 图像 base64 字节，不包含 data: 前缀。',
+        controlImageLocator: '可选 ControlNet 图像 ContentLocator。',
         controlMode: '可选 ControlNet conditioning mode。',
         controlStrength: '可选 ControlNet conditioning 强度，范围 0.0 到 1.0。',
         editInstruction: '可选自然语言编辑指令，供支持编辑的图像 provider 使用。',
@@ -904,23 +931,15 @@ const MEDIA_TOOL_LOCALIZATION = {
         prompt: '可选提示词；未提供时使用 editInstruction。',
         editInstruction: '针对源图像的自然语言编辑指令。',
         negativePrompt: '可选反向提示词，描述要避免的内容。',
-        sourceImageRef: '用于 lineage/review 的稳定源图像引用；宿主必须先解析为 URI/base64。',
-        sourceImageUri: '宿主已解析的源图像 URI/path，用作 provider 参考输入。',
-        referenceImageUri: '宿主已解析的参考图 URI/path，用作 provider 参考输入。',
-        referenceImageUrl: '可选远程参考图 URL。',
-        referenceImageBase64: '可选源图像/参考图 base64 字节，不包含 data: 前缀。',
-        maskRefs: '用于 lineage/review 的稳定 mask 引用；宿主必须先解析再执行。',
-        maskUri: '宿主已解析的 inpaint mask URI/path。',
-        maskBase64: '可选 inpaint mask base64 字节，不包含 data: 前缀。',
+        sourceImageLocator: '必填源图像 ContentLocator。',
+        maskLocator: '可选 inpaint mask ContentLocator。',
         inpaintStrength: '可选 inpaint 强度，范围 0.0 到 1.0。',
-        ipAdapterRefs: '可选宿主已解析的 IP-Adapter 参考图，用于主体或风格一致性。',
-        imageBase64: '参考图 base64 字节，不包含 data: 前缀。',
+        ipAdapterRefs: '可选 IP-Adapter 参考图 locator，用于主体或风格一致性。',
+        imageLocator: '参考图 ContentLocator。',
         mimeType: '参考图 MIME type。',
         strength: '参考影响强度，范围 0.0 到 1.0。',
         mode: '参考图引导 style、subject 或 both。',
-        referenceBundle: '用于 lineage/review 的稳定角色、场景或风格参考 bundle。',
-        controlImageUri: '可选宿主已解析的 ControlNet 图像 URI/path。',
-        controlImageBase64: '可选 ControlNet 图像 base64 字节，不包含 data: 前缀。',
+        controlImageLocator: '可选 ControlNet 图像 ContentLocator。',
         controlMode: '可选 ControlNet conditioning mode。',
         controlStrength: '可选 ControlNet conditioning 强度，范围 0.0 到 1.0。',
         targetAspectRatio: '可选目标画幅比例，例如 16:9、9:16 或 1:1。',
@@ -953,15 +972,11 @@ const MEDIA_TOOL_LOCALIZATION = {
         resolution: '视频分辨率，默认 720p。',
         fps: '帧率，默认 24。',
         aspectRatio: '可选目标画幅比例，例如 16:9、9:16 或 1:1。',
-        referenceImageUrl: '可选远程参考图 URL，用于图生视频。',
-        referenceImageUri: '可选宿主已解析的本地参考图 URI/path，用于图生视频。',
-        referenceImageBase64: '可选参考图 base64 字节，不包含 data: 前缀。',
-        startFrameRef: '稳定首帧 ResourceRef，由宿主为 provider 授权物化。',
-        endFrameRef: '稳定尾帧 ResourceRef，由宿主为 provider 授权物化。',
-        referenceVideoRef: '稳定源/参考视频 ResourceRef，由宿主为 provider 授权物化。',
-        referenceVideoUrl: '可选远程参考视频 URL，用于 video-to-video 生成。',
-        startFrameImageBase64: '可选首帧图像 base64 字节，不包含 data: 前缀。',
-        endFrameImageBase64: '可选尾帧图像 base64 字节，不包含 data: 前缀。',
+        startFrameLocator: '可选首帧 ContentLocator，由宿主在 provider 边界物化。',
+        endFrameLocator: '可选尾帧 ContentLocator，由宿主在 provider 边界物化。',
+        referenceVideoLocator: '可选源/参考视频 ContentLocator，由宿主在 provider 边界物化。',
+        referenceImages: '可选主体一致性参考图 locator。',
+        imageLocator: '参考图 ContentLocator。',
         motionStrength: '可选运动强度，范围 0.0 到 1.0。',
         cameraMovement: '可选镜头运动指令，例如 static、pan 或 zoom-in。',
         cameraAngle: '可选机位角度指令，例如 eye-level 或 low-angle。',
@@ -1077,25 +1092,13 @@ export function registerMediaAgentTools(
             type: 'string',
             description: 'Optional target aspect ratio such as 16:9, 9:16, or 1:1',
           },
-          referenceImageUrl: {
-            type: 'string',
-            description: 'Optional remote reference image URL for image-to-image generation',
+          referenceImageLocator: {
+            type: 'object',
+            description: 'Optional validated ContentLocator for the image-to-image reference input',
           },
-          referenceImageUri: {
-            type: 'string',
-            description: 'Optional host-resolved local reference image URI/path',
-          },
-          referenceImageBase64: {
-            type: 'string',
-            description: 'Optional reference image bytes as base64 without a data: prefix',
-          },
-          maskUri: {
-            type: 'string',
-            description: 'Optional host-resolved inpaint mask URI/path',
-          },
-          maskBase64: {
-            type: 'string',
-            description: 'Optional inpaint mask bytes as base64 without a data: prefix',
+          maskLocator: {
+            type: 'object',
+            description: 'Optional validated ContentLocator for the inpaint mask',
           },
           inpaintStrength: {
             type: 'number',
@@ -1103,14 +1106,13 @@ export function registerMediaAgentTools(
           },
           ipAdapterRefs: {
             type: 'array',
-            description:
-              'Optional host-resolved IP-Adapter image references for subject or style consistency',
+            description: 'Optional locator-backed IP-Adapter image references',
             items: {
               type: 'object',
               properties: {
-                imageBase64: {
-                  type: 'string',
-                  description: 'Reference image bytes as base64 without a data: prefix',
+                imageLocator: {
+                  type: 'object',
+                  description: 'Validated ContentLocator for the reference image',
                 },
                 mimeType: {
                   type: 'string',
@@ -1128,13 +1130,9 @@ export function registerMediaAgentTools(
               },
             },
           },
-          controlImageUri: {
-            type: 'string',
-            description: 'Optional host-resolved ControlNet image URI/path',
-          },
-          controlImageBase64: {
-            type: 'string',
-            description: 'Optional ControlNet image bytes as base64 without a data: prefix',
+          controlImageLocator: {
+            type: 'object',
+            description: 'Optional validated ContentLocator for the ControlNet image',
           },
           controlMode: {
             type: 'string',
@@ -1272,40 +1270,13 @@ export function registerMediaAgentTools(
             type: 'string',
             description: 'Optional negative prompt describing what to avoid',
           },
-          sourceImageRef: {
+          sourceImageLocator: {
             type: 'object',
-            description:
-              'Stable source image ref for lineage/review. Host must resolve it to URI/base64 before provider execution.',
+            description: 'Validated ContentLocator for the source image',
           },
-          sourceImageUri: {
-            type: 'string',
-            description: 'Host-resolved source image URI/path used as provider reference input',
-          },
-          referenceImageUri: {
-            type: 'string',
-            description: 'Host-resolved reference image URI/path used as provider reference input',
-          },
-          referenceImageUrl: {
-            type: 'string',
-            description: 'Optional remote reference image URL',
-          },
-          referenceImageBase64: {
-            type: 'string',
-            description: 'Optional source/reference image bytes as base64 without a data: prefix',
-          },
-          maskRefs: {
-            type: 'array',
-            description:
-              'Stable mask refs for lineage/review; host must resolve them before provider execution',
-            items: { type: 'object' },
-          },
-          maskUri: {
-            type: 'string',
-            description: 'Host-resolved inpaint mask URI/path',
-          },
-          maskBase64: {
-            type: 'string',
-            description: 'Optional inpaint mask bytes as base64 without a data: prefix',
+          maskLocator: {
+            type: 'object',
+            description: 'Optional validated ContentLocator for the inpaint mask',
           },
           inpaintStrength: {
             type: 'number',
@@ -1313,14 +1284,13 @@ export function registerMediaAgentTools(
           },
           ipAdapterRefs: {
             type: 'array',
-            description:
-              'Optional host-resolved IP-Adapter image references for subject or style consistency',
+            description: 'Optional locator-backed IP-Adapter image references',
             items: {
               type: 'object',
               properties: {
-                imageBase64: {
-                  type: 'string',
-                  description: 'Reference image bytes as base64 without a data: prefix',
+                imageLocator: {
+                  type: 'object',
+                  description: 'Validated ContentLocator for the reference image',
                 },
                 mimeType: {
                   type: 'string',
@@ -1338,17 +1308,9 @@ export function registerMediaAgentTools(
               },
             },
           },
-          referenceBundle: {
+          controlImageLocator: {
             type: 'object',
-            description: 'Stable character/scene/style reference bundle for lineage/review',
-          },
-          controlImageUri: {
-            type: 'string',
-            description: 'Optional host-resolved ControlNet image URI/path',
-          },
-          controlImageBase64: {
-            type: 'string',
-            description: 'Optional ControlNet image bytes as base64 without a data: prefix',
+            description: 'Optional validated ContentLocator for the ControlNet image',
           },
           controlMode: {
             type: 'string',
@@ -1431,11 +1393,29 @@ export function registerMediaAgentTools(
             error: 'TransformImage requires prompt or editInstruction.',
           };
         }
+        try {
+          rejectLegacyMediaInputFields(args, [
+            'sourceImageRef',
+            'sourceImageUri',
+            'referenceImageRef',
+            'referenceImageUri',
+            'referenceImageUrl',
+            'referenceImageBase64',
+            'maskRefs',
+            'maskUri',
+            'maskBase64',
+            'referenceBundle',
+          ]);
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Invalid image transform input',
+          };
+        }
         if (!hasResolvedTransformSource(args)) {
           return {
             success: false,
-            error:
-              'TransformImage requires a host-resolved sourceImageUri, referenceImageUri, referenceImageUrl, or referenceImageBase64. Stable sourceImageRef is metadata only until host IO resolves it.',
+            error: 'TransformImage requires a structurally valid sourceImageLocator.',
           };
         }
 
@@ -1452,9 +1432,10 @@ export function registerMediaAgentTools(
             args: {
               size: '1024x1024',
               ...args,
-              referenceImageUri:
-                readOptionalString(args.referenceImageUri) ??
-                readOptionalString(args.sourceImageUri),
+              referenceImageLocator: readOptionalContentLocator(
+                args.sourceImageLocator,
+                'sourceImageLocator',
+              ),
               aspectRatio:
                 readOptionalString(args.targetAspectRatio) ?? readOptionalString(args.aspectRatio),
               style: readOptionalString(args.style) ?? readOptionalString(args.targetStyle),
@@ -1598,44 +1579,43 @@ export function registerMediaAgentTools(
             type: 'string',
             description: 'Optional target aspect ratio such as 16:9, 9:16, or 1:1',
           },
-          referenceImageUrl: {
-            type: 'string',
-            description: 'Optional remote reference image URL for image-to-video generation',
-          },
-          referenceImageUri: {
-            type: 'string',
-            description: 'Optional host-resolved local reference image URI/path',
-          },
-          referenceImageBase64: {
-            type: 'string',
-            description: 'Optional reference image bytes as base64 without a data: prefix',
-          },
-          startFrameRef: {
+          startFrameLocator: {
             type: 'object',
-            description:
-              'Stable ResourceRef for the first frame; the host materializes it for the provider.',
+            description: 'Optional validated ContentLocator for the first frame',
           },
-          endFrameRef: {
+          endFrameLocator: {
             type: 'object',
-            description:
-              'Stable ResourceRef for the last frame; the host materializes it for the provider.',
+            description: 'Optional validated ContentLocator for the last frame',
           },
-          referenceVideoRef: {
+          referenceVideoLocator: {
             type: 'object',
-            description:
-              'Stable ResourceRef for a source/reference video; the host materializes it for the provider.',
+            description: 'Optional validated ContentLocator for a source/reference video',
           },
-          referenceVideoUrl: {
-            type: 'string',
-            description: 'Optional remote reference video URL for video-to-video generation',
-          },
-          startFrameImageBase64: {
-            type: 'string',
-            description: 'Optional first frame image bytes as base64 without a data: prefix',
-          },
-          endFrameImageBase64: {
-            type: 'string',
-            description: 'Optional last frame image bytes as base64 without a data: prefix',
+          referenceImages: {
+            type: 'array',
+            description: 'Optional locator-backed reference images for subject consistency',
+            items: {
+              type: 'object',
+              properties: {
+                imageLocator: {
+                  type: 'object',
+                  description: 'Validated ContentLocator for the reference image',
+                },
+                mimeType: {
+                  type: 'string',
+                  description: 'Reference image MIME type',
+                },
+                strength: {
+                  type: 'number',
+                  description: 'Influence strength from 0.0 to 1.0',
+                },
+                mode: {
+                  type: 'string',
+                  enum: ['style', 'subject', 'both'],
+                  description: 'Whether the reference should guide style, subject, or both',
+                },
+              },
+            },
           },
           motionStrength: {
             type: 'number',
@@ -2220,7 +2200,7 @@ function summarizeGenerationJob(snapshot: GenerationJobSnapshot) {
     progress: snapshot.progress,
     providerId: snapshot.request.providerId,
     modelId: snapshot.request.modelId,
-    ...(snapshot.resultRefs ? { resultRefs: snapshot.resultRefs } : {}),
+    ...(snapshot.resultLocators ? { resultLocators: snapshot.resultLocators } : {}),
     ...(snapshot.failure ? { failure: snapshot.failure } : {}),
   };
 }

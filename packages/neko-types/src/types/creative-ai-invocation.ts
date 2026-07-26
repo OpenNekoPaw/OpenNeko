@@ -1,14 +1,4 @@
-import {
-  isCacheOrRuntimeOnlyContentRef,
-  isContentSourceRef,
-  type ContentSourceRef,
-} from './content-access';
-import {
-  isResourceRef,
-  isResourceVariantRef,
-  type ResourceRef,
-  type ResourceVariantRef,
-} from './resource-cache';
+import { isContentLocator, type ContentLocator } from './content-locator';
 
 export const CREATIVE_AI_INVOCATION_SCHEMA_VERSION = 1 as const;
 
@@ -185,9 +175,7 @@ export interface CreativeAiRefBase {
   readonly documentRef?: CreativeAiDocumentRef;
   readonly entityId?: string;
   readonly fieldPath?: string;
-  readonly resourceRef?: ResourceRef;
-  readonly resourceVariantRef?: ResourceVariantRef;
-  readonly contentRef?: ContentSourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly label?: string;
   readonly revision?: CreativeAiRevision;
   readonly metadata?: Readonly<Record<string, unknown>>;
@@ -349,9 +337,7 @@ export interface ConversationLifecycleCommand {
 export interface CreativeAiOutputRef {
   readonly kind: CreativeAiOutputRefKind;
   readonly id: string;
-  readonly resourceRef?: ResourceRef;
-  readonly resourceVariantRef?: ResourceVariantRef;
-  readonly contentRef?: ContentSourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly generatedAssetId?: string;
   readonly mimeType?: string;
   readonly label?: string;
@@ -1081,13 +1067,7 @@ function validateCreativeAiRefBase(
   validateOptionalDocumentRef(value['documentRef'], `${targetLabel}.documentRef`, diagnostics);
   validateOptionalStableString(value['entityId'], `${targetLabel}.entityId`, diagnostics);
   validateOptionalStableString(value['fieldPath'], `${targetLabel}.fieldPath`, diagnostics);
-  validateOptionalResourceRef(value['resourceRef'], `${targetLabel}.resourceRef`, diagnostics);
-  validateOptionalResourceVariantRef(
-    value['resourceVariantRef'],
-    `${targetLabel}.resourceVariantRef`,
-    diagnostics,
-  );
-  validateOptionalContentRef(value['contentRef'], `${targetLabel}.contentRef`, diagnostics);
+  validateCreativeAiRefLocator(value, targetLabel, diagnostics);
   validateOptionalStableString(value['label'], `${targetLabel}.label`, diagnostics);
   validateOptionalRevision(value['revision'], `${targetLabel}.revision`, diagnostics);
   validateOptionalRecord(value['metadata'], `${targetLabel}.metadata`, diagnostics);
@@ -1662,13 +1642,7 @@ function validateOutputRef(
     );
   }
   requireStableString(value['id'], `${target}.id`, diagnostics);
-  validateOptionalResourceRef(value['resourceRef'], `${target}.resourceRef`, diagnostics);
-  validateOptionalResourceVariantRef(
-    value['resourceVariantRef'],
-    `${target}.resourceVariantRef`,
-    diagnostics,
-  );
-  validateOptionalContentRef(value['contentRef'], `${target}.contentRef`, diagnostics);
+  validateCreativeAiOutputLocator(value, target, diagnostics);
   validateOptionalStableString(
     value['generatedAssetId'],
     `${target}.generatedAssetId`,
@@ -1683,7 +1657,7 @@ function validateOutputRef(
       diagnostic(
         'error',
         'creative-ai-missing-output-identity',
-        'Creative AI output ref must include stable resourceRef, resourceVariantRef, contentRef, generatedAssetId, text id, or structured-data id.',
+        'Creative AI output ref must include a stable contentLocator, text id, or structured-data id.',
         target,
       ),
     );
@@ -1691,67 +1665,78 @@ function validateOutputRef(
 }
 
 function hasOutputIdentity(value: Readonly<Record<string, unknown>>): boolean {
-  if (isResourceRef(value['resourceRef']))
-    return !isCacheOrRuntimeOnlyContentRef(value['resourceRef']);
-  if (isResourceVariantRef(value['resourceVariantRef'])) {
-    return !isCacheOrRuntimeOnlyContentRef(value['resourceVariantRef'].resource);
-  }
-  if (isContentSourceRef(value['contentRef'])) {
-    return !isCacheOrRuntimeOnlyContentRef(value['contentRef']);
-  }
-  if (isStableString(value['generatedAssetId'])) return true;
+  if (isContentLocator(value['contentLocator'])) return true;
   return value['kind'] === 'text' || value['kind'] === 'structured-data';
 }
 
-function validateOptionalResourceRef(
-  value: unknown,
+function validateCreativeAiOutputLocator(
+  value: Readonly<Record<string, unknown>>,
   target: string,
   diagnostics: CreativeAiDiagnostic[],
 ): void {
-  if (value === undefined) return;
-  if (!isResourceRef(value) || isCacheOrRuntimeOnlyContentRef(value)) {
+  for (const field of ['resourceRef', 'resourceVariantRef', 'contentRef'] as const) {
+    if (value[field] === undefined) continue;
     diagnostics.push(
       diagnostic(
         'error',
-        'creative-ai-runtime-only-identity',
-        'Creative AI resourceRef must be a durable resource identity.',
-        target,
+        'creative-ai-output-locator-migration-required',
+        `Creative AI output ${field} is no longer accepted; deliver contentLocator.`,
+        `${target}.${field}`,
+      ),
+    );
+  }
+
+  const contentLocator = value['contentLocator'];
+  if (contentLocator !== undefined && !isContentLocator(contentLocator)) {
+    diagnostics.push(
+      diagnostic(
+        'error',
+        'creative-ai-invalid-content-locator',
+        'Creative AI output contentLocator is invalid.',
+        `${target}.contentLocator`,
+      ),
+    );
+  }
+
+  if (
+    value['kind'] !== 'text' &&
+    value['kind'] !== 'structured-data' &&
+    !isContentLocator(contentLocator)
+  ) {
+    diagnostics.push(
+      diagnostic(
+        'error',
+        'creative-ai-missing-content-locator',
+        'Creative AI media output requires contentLocator.',
+        `${target}.contentLocator`,
       ),
     );
   }
 }
 
-function validateOptionalResourceVariantRef(
-  value: unknown,
-  target: string,
+function validateCreativeAiRefLocator(
+  value: Readonly<Record<string, unknown>>,
+  targetLabel: string,
   diagnostics: CreativeAiDiagnostic[],
 ): void {
-  if (value === undefined) return;
-  if (!isResourceVariantRef(value) || isCacheOrRuntimeOnlyContentRef(value.resource)) {
+  for (const field of ['resourceRef', 'resourceVariantRef', 'contentRef'] as const) {
+    if (value[field] === undefined) continue;
     diagnostics.push(
       diagnostic(
         'error',
-        'creative-ai-runtime-only-identity',
-        'Creative AI resourceVariantRef must be a durable resource identity.',
-        target,
+        'creative-ai-ref-locator-migration-required',
+        `Creative AI ${targetLabel} ${field} is no longer accepted; deliver contentLocator.`,
+        `${targetLabel}.${field}`,
       ),
     );
   }
-}
-
-function validateOptionalContentRef(
-  value: unknown,
-  target: string,
-  diagnostics: CreativeAiDiagnostic[],
-): void {
-  if (value === undefined) return;
-  if (!isContentSourceRef(value) || isCacheOrRuntimeOnlyContentRef(value)) {
+  if (value['contentLocator'] !== undefined && !isContentLocator(value['contentLocator'])) {
     diagnostics.push(
       diagnostic(
         'error',
-        'creative-ai-runtime-only-identity',
-        'Creative AI contentRef must be a durable content identity.',
-        target,
+        'creative-ai-invalid-content-locator',
+        `Creative AI ${targetLabel} contentLocator is invalid.`,
+        `${targetLabel}.contentLocator`,
       ),
     );
   }

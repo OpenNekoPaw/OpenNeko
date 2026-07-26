@@ -4,12 +4,14 @@ import {
   createCreativeAiDiagnostic,
   isCanvasCreativeAiActionId,
   isCanvasCreativeAiActionRequest,
+  isContentLocator,
   type CanvasCreativeAiActionId,
   type CanvasCreativeAiActionRequest,
   type CreativeAiApplyRequest,
   type CreativeAiDiagnostic,
   type ExternalCreativeAiInvocation,
   type CreativeAiOutputRef,
+  type ContentLocator,
   type ICapabilityPurposeTextRuntime,
   type StoryboardMediaRef,
 } from '@neko/shared';
@@ -181,7 +183,7 @@ async function generateMedia(
 
   try {
     const generation = request.creativeParameters?.generation;
-    const referenceImageUri = resolveFirstReferenceMediaUri(
+    const referenceImageLocator = resolveFirstReferenceMediaLocator(
       request.creativeParameters?.referenceMedia?.imageRefs,
     );
     const metadata = {
@@ -198,8 +200,8 @@ async function generateMedia(
       buildCanvasGenerationJobInput(actionId, {
         prompt,
         generation,
-        referenceImageUri,
-        referenceVideoUri: resolveFirstReferenceMediaUri(
+        referenceImageLocator,
+        referenceVideoLocator: resolveFirstReferenceMediaLocator(
           request.creativeParameters?.referenceMedia?.videoRefs,
         ),
         metadata,
@@ -216,29 +218,25 @@ async function generateMedia(
         ),
       );
     }
-    const resultRefs = completed.resultRefs ?? [];
-    if (resultRefs.length === 0) {
+    const resultLocators = completed.resultLocators ?? [];
+    if (resultLocators.length === 0) {
       return failedOutput(
         diagnostic(
           'canvas-media-generation-failed',
-          'Canvas media generation completed without a stable ResourceRef.',
+          'Canvas media generation completed without a generated-output ContentLocator.',
           'generationJob',
         ),
       );
     }
     return {
       ok: true,
-      outputRefs: resultRefs.map((resourceRef, index) => {
-        const generatedAssetId =
-          resourceRef.source.kind === 'generated-asset'
-            ? resourceRef.source.generatedAssetId
-            : resourceRef.id;
+      outputRefs: resultLocators.map((contentLocator, index) => {
         return {
           kind: 'generated-asset',
-          id: resourceRef.id,
-          generatedAssetId,
+          id: contentLocator.outputId,
+          generatedAssetId: contentLocator.outputId,
           label: `${actionId} output ${index + 1}`,
-          resourceRef,
+          contentLocator,
           metadata: {
             workItemId: input.workItemId,
             outputIndex: index,
@@ -266,15 +264,14 @@ function buildCanvasGenerationJobInput(
     readonly generation: NonNullable<
       CanvasCreativeAiActionRequest['creativeParameters']
     >['generation'];
-    readonly referenceImageUri?: string;
-    readonly referenceVideoUri?: string;
+    readonly referenceImageLocator?: ContentLocator;
+    readonly referenceVideoLocator?: ContentLocator;
     readonly metadata: Record<string, unknown>;
   },
 ): SubmitPurposeGenerationJobInput {
   const common = {
     prompt: input.prompt,
     ...(input.generation?.aspectRatio ? { aspectRatio: input.generation.aspectRatio } : {}),
-    ...(input.referenceImageUri ? { referenceImageUri: input.referenceImageUri } : {}),
     metadata: input.metadata,
   };
   switch (actionId) {
@@ -282,23 +279,38 @@ function buildCanvasGenerationJobInput(
       return {
         lifecycleMode: 'detached',
         purpose: 'image.generate',
-        generationType: input.referenceImageUri ? 'image-to-image' : 'text-to-image',
-        request: common,
+        generationType: input.referenceImageLocator ? 'image-to-image' : 'text-to-image',
+        request: {
+          ...common,
+          ...(input.referenceImageLocator
+            ? { referenceImageLocator: input.referenceImageLocator }
+            : {}),
+        },
       };
     case 'edit-image':
       return {
         lifecycleMode: 'detached',
         purpose: 'image.edit',
         generationType: 'image-edit',
-        request: { ...common, operation: 'edit', editInstruction: input.prompt },
+        request: {
+          ...common,
+          operation: 'edit',
+          editInstruction: input.prompt,
+          ...(input.referenceImageLocator
+            ? { referenceImageLocator: input.referenceImageLocator }
+            : {}),
+        },
       };
     case 'generate-video':
       return {
         lifecycleMode: 'detached',
         purpose: 'video.generate',
-        generationType: input.referenceImageUri ? 'image-to-video' : 'text-to-video',
+        generationType: input.referenceImageLocator ? 'image-to-video' : 'text-to-video',
         request: {
           ...common,
+          ...(input.referenceImageLocator
+            ? { startFrameLocator: input.referenceImageLocator }
+            : {}),
           ...(typeof input.generation?.duration === 'number'
             ? { duration: input.generation.duration }
             : {}),
@@ -313,7 +325,9 @@ function buildCanvasGenerationJobInput(
           ...common,
           operation: 'transform',
           editInstruction: input.prompt,
-          ...(input.referenceVideoUri ? { sourceVideoUrl: input.referenceVideoUri } : {}),
+          ...(input.referenceVideoLocator
+            ? { referenceVideoLocator: input.referenceVideoLocator }
+            : {}),
           ...(typeof input.generation?.duration === 'number'
             ? { duration: input.generation.duration }
             : {}),
@@ -532,24 +546,15 @@ function readPrompt(
   return typeof text === 'string' && text.trim() ? text.trim() : undefined;
 }
 
-function resolveFirstReferenceMediaUri(
+function resolveFirstReferenceMediaLocator(
   refs: readonly StoryboardMediaRef[] | undefined,
-): string | undefined {
+): ContentLocator | undefined {
   if (!refs) return undefined;
   for (const ref of refs) {
-    const resourcePath =
-      ref.resourceRef?.source?.projectRelativePath ??
-      ref.resourceRef?.source?.uri ??
-      (ref.resourceRef?.locator?.kind === 'file' ? ref.resourceRef.locator.path : undefined);
-    if (resourcePath) return resourcePath;
-    if (isRecord(ref.locator)) {
-      if (ref.locator['type'] === 'workspace-path' && typeof ref.locator['path'] === 'string') {
-        return ref.locator['path'];
-      }
-      if (ref.locator['type'] === 'asset' && typeof ref.locator['uri'] === 'string') {
-        return ref.locator['uri'];
-      }
-    }
+    if (isContentLocator(ref.contentLocator)) return ref.contentLocator;
+    throw new Error(
+      `canvas-reference-media-content-locator-migration-required: Storyboard media ref ${ref.refId} requires contentLocator.`,
+    );
   }
   return undefined;
 }

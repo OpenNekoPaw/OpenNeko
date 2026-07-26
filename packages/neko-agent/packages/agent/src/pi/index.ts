@@ -47,6 +47,7 @@ export {
 export {
   NodePiConversationAuthority,
   PiConversationAuthorityError,
+  type CheckpointPiExternalTurnInput,
   type CheckpointPiTurnInput,
   type AppendPiCompactionInput,
   type ConversationExecutionLease,

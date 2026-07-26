@@ -99,6 +99,17 @@ const handleQueuedMessageEditRequested: MessageHandler<'queuedMessageEditRequest
  * Handle 'agentPhase' message - Agent execution phase change
  */
 const handleAgentPhase: MessageHandler<'agentPhase'> = (message: AgentPhaseMessage, context) => {
+  if (message.phase === 'idle') {
+    updateConversation(
+      context,
+      message.conversationId,
+      (messages, _streamingMessageId, streaming) => ({
+        messages,
+        streamingMessageId: null,
+        isThinking: (streaming.queuedMessageCount ?? 0) > 0,
+      }),
+    );
+  }
   applyAgentStateProjection(
     context,
     projectAgentPhaseToStateStore({

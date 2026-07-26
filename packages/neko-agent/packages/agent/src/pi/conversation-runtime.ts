@@ -29,9 +29,11 @@ import { PiEventProjector, type PiProductEventSink } from './event-projector';
 import type { AgentModelPolicy, AgentModelParameters } from './model-policy';
 import { composeAgentModelPayloadProjector } from './model-payload';
 import {
+  type CheckpointPiExternalTurnInput,
   type ConversationExecutionLease,
   NodePiConversationAuthority,
   PiConversationAuthorityError,
+  type PiTurnCheckpointRecord,
 } from './node-conversation-authority';
 import type {
   PiSkillHostSnapshot,
@@ -98,6 +100,7 @@ interface LeaseRenewal {
 
 export class PiConversationRuntime {
   private activeTurn: ActiveTurn | undefined;
+  private externalCheckpointInProgress = false;
   private disposed = false;
   private lease: ConversationExecutionLease;
   private readonly leaseRenewal: LeaseRenewal;
@@ -245,6 +248,39 @@ export class PiConversationRuntime {
     });
   }
 
+  async checkpointExternalTurn(
+    input: Omit<CheckpointPiExternalTurnInput, 'conversationId'>,
+  ): Promise<PiTurnCheckpointRecord> {
+    this.assertReady();
+    const existing = this.options.authority.readCheckpoint(
+      this.options.conversationId,
+      input.turnId,
+    );
+    if (existing) return existing;
+
+    this.externalCheckpointInProgress = true;
+    try {
+      this.lease = this.options.authority.renewLease(this.lease);
+      this.options.authority.startTurnDurability(this.options.conversationId, input.turnId);
+      const checkpoint = await this.options.authority.checkpointTurn({
+        lease: this.lease,
+        conversationId: this.options.conversationId,
+        branchId: this.options.branchId,
+        turnId: input.turnId,
+        terminalState: input.terminalState,
+        messages: input.messages,
+      });
+      const context = await this.options.authority.buildContext(
+        this.options.conversationId,
+        this.options.branchId,
+      );
+      this.agent.state.messages = [...context.messages];
+      return checkpoint;
+    } finally {
+      this.externalCheckpointInProgress = false;
+    }
+  }
+
   updateConversationTitle(title: string): void {
     this.assertReady();
     this.lease = this.options.authority.renewLease(this.lease);
@@ -360,7 +396,11 @@ export class PiConversationRuntime {
     if (this.disposed) throw new Error('Pi conversation runtime is disposed.');
     const renewalError = this.leaseRenewal.error();
     if (renewalError !== undefined) throw renewalError;
-    if (this.activeTurn !== undefined || this.agent.state.isStreaming) {
+    if (
+      this.activeTurn !== undefined ||
+      this.externalCheckpointInProgress ||
+      this.agent.state.isStreaming
+    ) {
       throw new Error('Pi conversation runtime already has an active turn.');
     }
   }

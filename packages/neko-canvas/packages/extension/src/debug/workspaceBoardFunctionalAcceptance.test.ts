@@ -159,7 +159,7 @@ describe('Workspace Board functional acceptance', () => {
     ]);
   });
 
-  it('can submit fallback and hashed observations of one fixture file', async () => {
+  it('can submit unversioned and fingerprinted locators for one fixture file', async () => {
     const project = vi.fn(async (request) => ({
       version: 2 as const,
       deliveryId: request.process.deliveryId,
@@ -178,16 +178,17 @@ describe('Workspace Board functional acceptance', () => {
     expect(request.artifacts.slice(0, 2)).toMatchObject([
       {
         kind: 'file-reference',
-        resourceRef: {
-          locator: { kind: 'file', path: 'neko/materials/source.epub' },
-          fingerprint: { strategy: 'none', value: 'neko/materials/source.epub' },
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/materials/source.epub',
         },
       },
       {
         kind: 'file-reference',
-        resourceRef: {
-          locator: { kind: 'file', path: 'neko/materials/source.epub' },
-          fingerprint: { strategy: 'hash', value: expect.stringMatching(/^sha256:/u) },
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/materials/source.epub',
+          fingerprint: { strategy: 'sha256', value: expect.stringMatching(/^sha256:/u) },
         },
       },
     ]);

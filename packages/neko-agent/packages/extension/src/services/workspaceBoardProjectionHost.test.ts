@@ -91,7 +91,7 @@ describe('WorkspaceBoardProjectionHost', () => {
         artifacts: [
           expect.objectContaining({
             kind: 'image',
-            resourceRef: expect.objectContaining({ kind: 'generated' }),
+            contentLocator: expect.objectContaining({ kind: 'generated-output' }),
             provenance: expect.objectContaining({
               artifactId: 'generated-1',
               role: 'output',
@@ -132,7 +132,7 @@ describe('WorkspaceBoardProjectionHost', () => {
           title: 'Portrait',
           sourceId: 'source:image-1',
           intrinsicDimensions: { width: 1024, height: 1536 },
-          resourceRef: generatedRefForCandidate(),
+          contentLocator: generatedLocatorForCandidate(),
         },
       ],
     });
@@ -207,6 +207,7 @@ function generatedImage(): GeneratedImage {
   const lifecycle = createGeneratedAssetRevisionRef({
     assetId: 'generated-1',
     contentDigest: 'sha256:generated-1',
+    contentPath: 'neko/generated/image/generated-1.png',
     mediaKind: 'image',
     mimeType: 'image/png',
     generation: { operationId: 'operation-generated-1', runId: 'run-1' },
@@ -225,12 +226,13 @@ function generatedImage(): GeneratedImage {
   };
 }
 
-function generatedRefForCandidate() {
+function generatedLocatorForCandidate() {
   return createGeneratedAssetRevisionRef({
     assetId: 'image-1',
     contentDigest: 'sha256:image-1',
+    contentPath: 'neko/generated/image/image-1.png',
     mediaKind: 'image',
     mimeType: 'image/png',
     generation: { operationId: 'operation-image-1' },
-  }).resourceRef;
+  }).contentLocator;
 }

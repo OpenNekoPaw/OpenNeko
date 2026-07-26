@@ -319,6 +319,7 @@ export const zhCN = {
   'workspaceBoard.task': '任务 · {id}',
   'workspaceBoard.run': '运行 · {id}',
   'workspaceBoard.processing': '处理中',
+  'workspaceBoard.generatedBatch': '生成素材',
   'gallery.openItemDetail': '打开画廊条目详情',
   'gallery.viewCountCompact': '{count} 视图',
   'gallery.viewMode': '画廊视图',

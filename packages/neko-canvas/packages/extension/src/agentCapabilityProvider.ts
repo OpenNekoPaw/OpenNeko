@@ -91,7 +91,7 @@ import {
 } from '@neko/shared';
 import { resolveCharacterBindingsForNames } from '@neko/shared/vscode/extension';
 import { getRootLogger } from './utils/logger';
-import { toCanvasStableMediaResourceRef } from './canvasMediaResourceAdapter';
+import { toCanvasStableMediaContentLocator } from './canvasMediaContentLocator';
 import {
   executeCanvasCreativeAi,
   waitForTerminalGeneration,
@@ -4423,11 +4423,11 @@ function createVideoKeyframeTool(
           };
         }
 
-        let startFrameRef;
-        let endFrameRef;
+        let startFrameLocator;
+        let endFrameLocator;
         try {
-          startFrameRef = toCanvasStableMediaResourceRef(firstFrameMediaRef);
-          endFrameRef = toCanvasStableMediaResourceRef(lastFrameMediaRef);
+          startFrameLocator = toCanvasStableMediaContentLocator(firstFrameMediaRef);
+          endFrameLocator = toCanvasStableMediaContentLocator(lastFrameMediaRef);
         } catch (error) {
           return {
             success: false,
@@ -4460,8 +4460,8 @@ function createVideoKeyframeTool(
             request: {
               prompt,
               operation: 'generate-from-keyframes',
-              startFrameRef,
-              endFrameRef,
+              startFrameLocator,
+              endFrameLocator,
               aspectRatio,
               duration,
               metadata: withToolExecutionRunMetadata(options, metadata),
@@ -4489,24 +4489,20 @@ function createVideoKeyframeTool(
               `Video Generation Job ended in phase ${completed.phase}.`,
           };
         }
-        const output = completed.resultRefs?.[0];
+        const output = completed.resultLocators?.[0];
         if (!output) {
           await api.nodes.update(nodeId, { generationStatus: 'error' });
           return {
             success: false,
-            error: 'Video Generation Job completed without a stable ResourceRef.',
+            error: 'Video Generation Job completed without a generated-output ContentLocator.',
           };
         }
-        const generatedAssetId =
-          output.source.kind === 'generated-asset' ? output.source.generatedAssetId : output.id;
-        const generatedPath =
-          output.source.projectRelativePath ?? `generated-assets/${generatedAssetId}`;
         await api.nodes.update(nodeId, {
           generatedVideoAsset: {
-            id: generatedAssetId,
-            path: generatedPath,
+            type: 'generated-video',
+            id: output.outputId,
             kind: 'generated-asset',
-            resourceRef: output,
+            contentLocator: output,
           },
           generationStatus: 'done',
         });
@@ -4517,7 +4513,7 @@ function createVideoKeyframeTool(
           data: {
             message: `Video generated for shot "${nodeId}"`,
             generationJobId: completed.ref.jobId,
-            resourceRef: output,
+            contentLocator: output,
             duration,
             aspectRatio,
           },

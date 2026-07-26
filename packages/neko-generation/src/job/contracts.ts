@@ -1,5 +1,5 @@
 import type { JobRef, JobSnapshotBase, VersionedJobStore } from '@neko/shared/job-lifecycle';
-import type { ResourceRef } from '@neko/shared';
+import type { GeneratedOutputContentLocator } from '@neko/shared';
 import type {
   AudioGenerationRequest,
   ImageGenerationRequest,
@@ -53,7 +53,7 @@ export interface GenerationJobSnapshot extends JobSnapshotBase<typeof GENERATION
   readonly request: GenerationJobRequest;
   readonly progress: GenerationJobProgress;
   readonly providerTask?: GenerationProviderTaskRef;
-  readonly resultRefs?: readonly ResourceRef[];
+  readonly resultLocators?: readonly GeneratedOutputContentLocator[];
 }
 
 export interface GenerationJobStore extends VersionedJobStore<GenerationJobSnapshot> {
@@ -84,7 +84,7 @@ export interface GenerationJobResultCommitter {
   commit(input: {
     readonly ref: GenerationJobRef;
     readonly generation: MediaGenerationResult;
-  }): Promise<readonly ResourceRef[]>;
+  }): Promise<readonly GeneratedOutputContentLocator[]>;
 }
 
 export interface GenerationJobPort {
@@ -119,6 +119,7 @@ export type GenerationJobErrorCode =
   | 'generation-job-cancel-unsupported'
   | 'generation-job-reconcile-unavailable'
   | 'generation-job-retry-unavailable'
+  | 'generation-job-migration-required'
   | 'generation-job-persistence-invalid';
 
 export class GenerationJobError extends Error {

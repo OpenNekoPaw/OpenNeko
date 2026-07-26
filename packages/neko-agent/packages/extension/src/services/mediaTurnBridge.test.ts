@@ -14,13 +14,32 @@ describe('MediaTurnBridge', () => {
     const jobs = createGenerationJobs();
     const asset = generatedImage();
     const resolveGenerationResult = vi.fn(() => ({ path: asset.path, asset }));
-    const toWebviewMediaUri = vi.fn(() => 'webview://generated/image.png');
+    const deliverBatch = vi.fn(async () => [
+      {
+        version: 2 as const,
+        deliveryId: 'generated-output-batch:1',
+        status: 'projected' as const,
+        nodeIds: ['generated-node-1'],
+        diagnostics: [],
+      },
+    ]);
     const projection = createConversationProjectionStore('conv-1');
+    const checkpointExternalTurn = vi.fn(async () => undefined);
+    const projectedItems: Record<string, unknown>[] = [];
+    projection.subscribe((patch) => {
+      for (const operation of patch.operations) {
+        if (operation.operation === 'snapshot' && operation.item.kind === 'tool_call') {
+          const progress = operation.item.payload.progress?.data;
+          if (isGenerationJobProjection(progress)) projectedItems.push(progress);
+        }
+      }
+    });
     const bridge = new MediaTurnBridge({
       generationJobs: jobs,
       resolveGenerationResult,
-      mediaDeliveryHost: { toWebviewMediaUri },
       getConversationProjection: () => projection,
+      workspaceBoardProjection: { deliverBatch },
+      checkpointExternalTurn,
       now: () => 100,
     });
 
@@ -29,6 +48,7 @@ describe('MediaTurnBridge', () => {
       conversationId: 'conv-1',
       prompt: 'cat',
       mediaModel: { providerId: 'image-provider', modelId: 'image-model', category: 'image' },
+      userMessage: { id: 'user-1', content: 'cat', timestamp: 10 },
     });
 
     expect(jobs.submitGeneration).toHaveBeenCalledWith(
@@ -52,8 +72,66 @@ describe('MediaTurnBridge', () => {
       { kind: 'generation', jobId: 'generation-1' },
       1,
     );
-    expect(resolveGenerationResult).toHaveBeenCalledWith(asset.lifecycle?.resourceRef);
-    expect(toWebviewMediaUri).toHaveBeenCalledWith({}, asset.path);
+    expect(resolveGenerationResult).toHaveBeenCalledWith(asset.lifecycle?.contentLocator);
+    expect(projectedItems).toMatchObject([
+      { kind: 'generation-job', jobId: 'generation-1', revision: 1, phase: 'pending' },
+      { kind: 'generation-job', jobId: 'generation-1', revision: 2, phase: 'running' },
+      { kind: 'generation-job', jobId: 'generation-1', revision: 3, phase: 'succeeded' },
+    ]);
+    expect(deliverBatch).toHaveBeenCalledOnce();
+    expect(checkpointExternalTurn).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      turnId: 'direct-media:generation-1',
+      terminalState: 'completed',
+      messages: [
+        {
+          role: 'user',
+          content: 'cat',
+          timestamp: 10,
+        },
+        expect.objectContaining({
+          role: 'assistant',
+          content: [
+            {
+              type: 'toolCall',
+              id: 'generation-1',
+              name: 'GenerateImage',
+              arguments: {
+                prompt: 'cat',
+                providerId: 'image-provider',
+                modelId: 'image-model',
+              },
+            },
+          ],
+          stopReason: 'toolUse',
+        }),
+        {
+          role: 'toolResult',
+          toolCallId: 'generation-1',
+          toolName: 'GenerateImage',
+          content: [{ type: 'text', text: 'Image generation completed.' }],
+          details: {
+            generationJob: expect.objectContaining({
+              jobId: 'generation-1',
+              phase: 'succeeded',
+            }),
+            outputs: [
+              {
+                type: 'image',
+                contentLocator: asset.lifecycle?.contentLocator,
+              },
+            ],
+            boardDelivery: {
+              status: 'projected',
+              nodeIds: ['generated-node-1'],
+              diagnostics: [],
+            },
+          },
+          isError: false,
+          timestamp: 100,
+        },
+      ],
+    });
     expect(projection.snapshot()).toMatchObject({
       conversationId: 'conv-1',
       projectionVersion: 3,
@@ -62,11 +140,41 @@ describe('MediaTurnBridge', () => {
           completion: { status: 'completed', completedAt: 100 },
           items: [
             {
-              kind: 'assistant_text',
-              status: 'complete',
+              kind: 'tool_call',
+              status: 'succeeded',
               payload: {
-                content: '[Generated image](webview://generated/image.png)',
-                format: 'markdown',
+                displayName: 'Image generation',
+                toolCall: {
+                  name: 'GenerateImage',
+                  arguments: {
+                    prompt: 'cat',
+                    providerId: 'image-provider',
+                    modelId: 'image-model',
+                  },
+                  result: {
+                    success: true,
+                    data: {
+                      generationJob: {
+                        jobId: 'generation-1',
+                        revision: 3,
+                        phase: 'succeeded',
+                        stage: 'completed',
+                        percent: 100,
+                      },
+                      outputs: [
+                        {
+                          type: 'image',
+                          contentLocator: asset.lifecycle?.contentLocator,
+                        },
+                      ],
+                      boardDelivery: {
+                        status: 'projected',
+                        nodeIds: ['generated-node-1'],
+                        diagnostics: [],
+                      },
+                    },
+                  },
+                },
               },
             },
           ],
@@ -75,17 +183,29 @@ describe('MediaTurnBridge', () => {
     });
   });
 
-  it('submits generated resources to the Workspace Board after durable delivery', async () => {
+  it('keeps local success visible and reports a blocked Workspace Board delivery', async () => {
     const asset = generatedImage();
-    const deliverBatch = vi.fn(async () => []);
+    const projection = createConversationProjectionStore('conv-1');
     const bridge = new MediaTurnBridge({
       generationJobs: createGenerationJobs(),
       resolveGenerationResult: () => ({ path: asset.path, asset }),
-      mediaDeliveryHost: {
-        toWebviewMediaUri: () => 'generated-assets/generated-1.png',
+      getConversationProjection: () => projection,
+      workspaceBoardProjection: {
+        deliverBatch: vi.fn(async () => [
+          {
+            version: 2,
+            status: 'blocked',
+            diagnostics: [
+              {
+                code: 'workspace-required',
+                severity: 'error',
+                message: 'Canvas delivery requires one resolved workspace.',
+              },
+            ],
+          },
+        ]),
       },
-      getConversationProjection: () => createConversationProjectionStore('conv-1'),
-      workspaceBoardProjection: { deliverBatch },
+      checkpointExternalTurn: vi.fn(async () => undefined),
     });
 
     await bridge.execute({
@@ -93,6 +213,57 @@ describe('MediaTurnBridge', () => {
       conversationId: 'conv-1',
       prompt: 'cat',
       mediaModel: { providerId: 'image-provider', modelId: 'image-model', category: 'image' },
+      userMessage: { id: 'user-1', content: 'cat', timestamp: 10 },
+    });
+
+    expect(projection.snapshot().turns[0]?.items[0]).toMatchObject({
+      status: 'succeeded',
+      payload: {
+        toolCall: {
+          result: {
+            success: true,
+            data: {
+              boardDelivery: {
+                status: 'blocked',
+                diagnostics: [
+                  {
+                    code: 'workspace-required',
+                    message: 'Canvas delivery requires one resolved workspace.',
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('submits generated resources to the Workspace Board after durable delivery', async () => {
+    const asset = generatedImage();
+    const deliverBatch = vi.fn(async () => [
+      {
+        version: 2 as const,
+        deliveryId: 'generated-output-batch:1',
+        status: 'projected' as const,
+        nodeIds: ['generated-node-1'],
+        diagnostics: [],
+      },
+    ]);
+    const bridge = new MediaTurnBridge({
+      generationJobs: createGenerationJobs(),
+      resolveGenerationResult: () => ({ path: asset.path, asset }),
+      getConversationProjection: () => createConversationProjectionStore('conv-1'),
+      workspaceBoardProjection: { deliverBatch },
+      checkpointExternalTurn: vi.fn(async () => undefined),
+    });
+
+    await bridge.execute({
+      webview: {} as never,
+      conversationId: 'conv-1',
+      prompt: 'cat',
+      mediaModel: { providerId: 'image-provider', modelId: 'image-model', category: 'image' },
+      userMessage: { id: 'user-1', content: 'cat', timestamp: 10 },
     });
 
     expect(deliverBatch).toHaveBeenCalledOnce();
@@ -100,7 +271,7 @@ describe('MediaTurnBridge', () => {
 
   it('fails visibly when the Job, result, or Timeline owner is unavailable', async () => {
     const bridge = new MediaTurnBridge({
-      mediaDeliveryHost: { toWebviewMediaUri: vi.fn() },
+      workspaceBoardProjection: { deliverBatch: vi.fn() },
     });
 
     await expect(
@@ -109,8 +280,45 @@ describe('MediaTurnBridge', () => {
         conversationId: 'conv-1',
         prompt: 'cat',
         mediaModel: { providerId: 'image-provider', modelId: 'image-model', category: 'image' },
+        userMessage: { id: 'user-1', content: 'cat', timestamp: 10 },
       }),
-    ).rejects.toThrow('requires Generation Job, result resolver, and Timeline projection owners');
+    ).rejects.toThrow(
+      'requires Generation Job, result resolver, Timeline projection, and Pi transcript owners',
+    );
+  });
+
+  it('does not report a completed turn when the Pi transcript checkpoint fails', async () => {
+    const asset = generatedImage();
+    const projection = createConversationProjectionStore('conv-1');
+    const bridge = new MediaTurnBridge({
+      generationJobs: createGenerationJobs(),
+      resolveGenerationResult: () => ({ path: asset.path, asset }),
+      getConversationProjection: () => projection,
+      workspaceBoardProjection: {
+        deliverBatch: vi.fn(async () => [
+          {
+            version: 2,
+            status: 'queued',
+            diagnostics: [],
+          },
+        ]),
+      },
+      checkpointExternalTurn: vi.fn(async () => {
+        throw new Error('checkpoint unavailable');
+      }),
+    });
+
+    await expect(
+      bridge.execute({
+        webview: {} as never,
+        conversationId: 'conv-1',
+        prompt: 'cat',
+        mediaModel: { providerId: 'image-provider', modelId: 'image-model', category: 'image' },
+        userMessage: { id: 'user-1', content: 'cat', timestamp: 10 },
+      }),
+    ).rejects.toThrow('checkpoint unavailable');
+
+    expect(projection.snapshot().turns[0]?.completion).toBeUndefined();
   });
 });
 
@@ -150,7 +358,7 @@ function createGenerationJobs(): GenerationJobPort {
     revision: 3,
     updatedAt: 3,
     progress: { stage: 'completed', percent: 100 },
-    resultRefs: [generatedImage().lifecycle!.resourceRef],
+    resultLocators: [generatedImage().lifecycle!.contentLocator],
   };
   return {
     submitGeneration: vi.fn(async () => initial),
@@ -175,6 +383,7 @@ function generatedImage(): GeneratedAsset {
     lifecycle: createGeneratedAssetRevisionRef({
       assetId: 'generated-1',
       contentDigest: 'sha256:generated-1',
+      contentPath: 'generated-assets/generated-1.png',
       mediaKind: 'image',
       mimeType: 'image/png',
       generation: { operationId: 'operation-generated-1' },
@@ -183,4 +392,14 @@ function generatedImage(): GeneratedAsset {
     height: 1024,
     ratio: '1:1',
   };
+}
+
+function isGenerationJobProjection(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'jobId' in value &&
+    'revision' in value &&
+    'phase' in value
+  );
 }

@@ -12,7 +12,6 @@
     ".": "./src/index.ts",
     "./path": "./src/path/index.ts",
     "./job-lifecycle": "./src/job-lifecycle/index.ts",
-    "./domain-activity": "./src/domain-activity/index.ts",
     "./local-metadata": "./src/local-metadata/index.ts",
     "./local-metadata/node": "./src/local-metadata/node.ts",
     "./local-metadata/sqlite": "./src/local-metadata/sqlite/index.ts",

@@ -276,6 +276,7 @@ function renderBlockContent(
         <div className="w-full">
           <ToolCallDisplay
             toolCall={projection.toolCall}
+            progress={projection.toolProgress}
             conversationId={conversationId}
             workItemIds={workItemIds}
           />

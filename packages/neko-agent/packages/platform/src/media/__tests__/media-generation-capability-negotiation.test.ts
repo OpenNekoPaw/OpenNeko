@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ResourceRef } from '@neko/shared';
+import type { ContentLocator } from '@neko/shared';
 import { ConfigManager } from '../../config/config-manager';
 import type { IUserConfigManager, UserConfig } from '../../config/user-config';
 import type { Model, Provider } from '../../types/provider';
@@ -113,20 +113,16 @@ function keyframeRequest(provider: Provider) {
   return {
     operation: 'generate-from-keyframes' as const,
     prompt: 'Move from dawn to dusk',
-    startFrameRef: resourceRef('first-frame'),
-    endFrameRef: resourceRef('last-frame'),
+    startFrameLocator: workspaceLocator('assets/first-frame.png'),
+    endFrameLocator: workspaceLocator('assets/last-frame.png'),
     providerId: provider.id,
     modelId: `${provider.id}-video`,
   };
 }
 
-function resourceRef(id: string): ResourceRef {
+function workspaceLocator(path: string): ContentLocator {
   return {
-    id,
-    scope: 'project',
-    provider: 'workspace',
-    kind: 'media',
-    source: { kind: 'file', projectRelativePath: `assets/${id}.png` },
-    fingerprint: { strategy: 'hash', value: `sha256:${id}` },
+    kind: 'workspace-file',
+    path,
   };
 }

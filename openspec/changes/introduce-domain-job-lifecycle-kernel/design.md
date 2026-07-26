@@ -1,5 +1,9 @@
 ## Context
 
+> Generation Job 的持久输入、终态结果和跨包资源位置由
+> [`unify-cross-package-content-locators`](../unify-cross-package-content-locators/)
+> 统一约束；本变更只拥有 Job lifecycle、revision、observation 与领域执行边界。
+
 现有 accepted ADR 已确定三类执行：
 
 ```text
@@ -22,7 +26,7 @@ no-op/null，不能作为公共 Job contract。
 - 只提取两个以上真实领域共享的 lifecycle、revision、observation 和 ownership 机械能力。
 - 保持 Job snapshot 为事实权威，事件只作为 commit 后通知。
 - 让 Agent、direct command 和领域 package 通过同一个领域 port 创建和管理 Job。
-- 让 Webview 只消费 versioned Activity projection，不拥有后台生命周期。
+- 让 Agent、Canvas 和 Cut 只维护各自的 caller-owned projection，不拥有后台生命周期。
 - 让 identity mismatch、stale revision、非法 transition 和缺失 capability fail-visible。
 - 用 Generation 与 Cut 两个不同执行后端证明共享抽象没有吞并领域语义。
 
@@ -38,11 +42,11 @@ no-op/null，不能作为公共 Job contract。
 
 | Layer          | Decision                                                                                                                                                                                                          |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Responsibility | Shared kernel owns lifecycle mechanics; each domain owns commands, detailed state, external identity, reconciliation and atomic result commit; Host owns Activity projection and command routing.                 |
-| Dependency     | Domain coordinators depend on `@neko/shared/job-lifecycle`; shared never imports Agent, Platform, Cut, VS Code, React, provider SDK or Engine client. Webview depends only on projection contracts.               |
-| Interface      | Shared exposes narrow typed refs/snapshots/store/transition helpers. Each domain exposes its own port. Agent Tools and UI commands adapt to domain ports instead of a generic manager.                            |
-| Extension      | New domains reuse the kernel only after they have a concrete managed lifecycle. Provider push/poll/cancel are capability ports; read-only Activity sources can be aggregated without registering executors.      |
-| Testing        | Kernel transition/CAS tests, per-domain path tests, provider capability tests, Host projection tests, no-Task/no-generic-manager poison, real Agent Evaluation and Extension Development Host Webview acceptance. |
+| Responsibility | Shared kernel owns lifecycle mechanics; each domain owns commands, detailed state, external identity, reconciliation, persistence and atomic result commit; each caller owns only its target association and UI projection. |
+| Dependency     | Domain coordinators depend on `@neko/shared/job-lifecycle`; shared never imports Agent, Platform, Cut, VS Code, React, provider SDK or Engine client. Callers depend on concrete domain ports.                           |
+| Interface      | Shared exposes narrow typed refs/snapshots/store/transition helpers. Each domain exposes its own port. Agent Tools and domain UI adapt directly to those ports instead of a generic manager or Activity protocol.         |
+| Extension      | New domains reuse the kernel only after they have a concrete managed lifecycle. Provider push/poll/cancel are capability ports; callers add domain-specific projections only where users operate that domain.             |
+| Testing        | Kernel transition/CAS tests, per-domain path and projection tests, provider capability tests, no-Task/no-generic-manager/no-global-Activity poison, real Agent Evaluation and owning Webview acceptance.                    |
 
 ## Decisions
 
@@ -147,8 +151,8 @@ ExportJobCoordinator
 Coordinator 是领域内唯一 command/state transition owner。应用 composition 可以持有并 dispose
 多个 coordinator，但不得通过 `kind -> handler` registry 提供泛化业务执行。
 
-跨领域 Activity 使用只读 `DomainActivitySource`，只暴露 summary snapshot/observe/open target；
-它不暴露 submit/cancel/retry handler，也不持有领域 snapshot。
+应用 composition 只注入具体领域 port。不得增加跨领域 `DomainActivitySource`、聚合 projector、
+`kind -> command` router 或统一 Job 页面；这些结构会重新形成一个弱类型的中央 Task surface。
 
 ### 5. Provider and Engine adapters
 
@@ -216,37 +220,83 @@ Agent Evaluation disposition:
 - real evidence: configured media provider case proves stable job identity, progress observation,
   terminal `ResourceRef` and no generic Task path.
 
-### 7. Webview projection
+### 7. Caller-owned projection and Generation records
 
-Linked Tool progress remains in the existing conversation Timeline Tool item.
+Linked Agent progress remains in the existing conversation Timeline Tool item. A detached Tool returns a
+stable `GenerationJobRef`; later describe/observe/cancel/retry operations are new Tool Calls and therefore
+new exact Timeline items. Agent Webview does not subscribe to all workspace Jobs.
 
-Independent Job activity uses a separate Host-owned attachment:
+Direct image/video/audio mode remains a direct invocation of the explicitly selected generation model; it
+does not insert a conversational LLM planning turn. Direct invocation still enters the same GenerationJob
+coordinator and projects a synthetic caller-owned Tool Timeline item so direct and Agent-selected generation
+share one `GenerationJobCard` presentation contract. The card consumes only committed snapshot revisions,
+shows exact binding/progress/status, and renders terminal Webview-safe media from committed ResourceRefs.
+It must not use assistant Markdown links as a media or progress protocol.
+
+The live direct-media Timeline projection is process-local presentation state, not conversation history
+authority. After a direct-media Job reaches a terminal phase, Host checkpoints one immutable external turn
+through the Pi conversation authority using the original user content/timestamp and the same turn, Tool Call
+and result identities that were projected live. Pi Session JSONL remains the only durable conversation
+transcript. Extension restart or conversation reopen rebuilds the Generation card through the normal Pi
+transcript projector and derives fresh Webview URIs from the stored ContentLocators at the Webview boundary.
+This change does not persist mutable Timeline state, add a Generation transcript table or introduce a second
+history projection.
+
+The Agent Webview owns the React card and its ephemeral expansion/selection state. Generation owns the
+snapshot and result identity. Canvas and Cut keep their own domain-specific projections instead of importing
+the Agent card. This preserves the runtime boundary while allowing both Agent entry modes to reuse one
+presentation component.
+
+Generation result commit first persists the generated binary and local generated-output index, then the
+Agent caller delivers the same stable assets through the Workspace Board contract. The terminal card records
+the exact Board projection outcome. `queued` and `claimed` mean the local asset is committed while Board
+delivery is still pending; `projected` and `noop` are the only successful Board outcomes; `blocked` and
+`conflict` mean local commit succeeded but Board delivery did not. A non-successful Board projection does not
+roll back a valid paid generation or local asset commit, but it must remain visible and must not be described
+as Board success.
+
+Canvas stores the exact document/action target, target revision, idempotency identity and `GenerationJobRef`
+association. It observes through the purpose-bound Generation port and replaces the pending candidate with
+the committed `ResourceRef`. Cut keeps `ExportJobRef` and progress in its editor/status-bar projection.
+Neither caller reads provider/Engine state or writes the Job store.
 
 ```text
-Domain Job stores
-  -> DomainActivityProjector
-  -> immutable snapshot + acknowledged ordered patches
-  -> Webview DomainActivity replica
+GenerationJobStore -> Generation port -> Agent Tool Timeline
+                                    -> Canvas action projection
+
+ExportJobStore     -> Cut port       -> Cut editor/status bar
 ```
 
-Activity summary carries concrete `jobKind`, `jobId`, phase, revision, label, progress summary and
-stable result refs. It does not copy provider external id, prompt, output path, credentials or detailed
-domain snapshot.
+There is no cross-domain Activity projector, Host command router, shared summary DTO or permanent Activity
+page. Exact identity and expected revision remain mandatory at each concrete domain port; unknown,
+stale or unsupported commands fail visibly without active/latest fallback.
 
-Webview sends an exact command intent:
+Generation persists the minimal snapshot required for restart recovery, provider reconciliation,
+revision/CAS, retry provenance and atomic result commit. This operational ledger is not a user-visible
+generation history and does not own the generated binary after a stable `ResourceRef` is committed.
+Terminal rows remain immutable and are retained in the current phase because no durable caller-consumption
+acknowledgement exists yet. A later retention policy may remove terminal rows only after protecting
+`ResourceRef` provenance, retry lineage and all durable caller bindings; it must be a separate migration,
+not opportunistic cleanup in this change.
 
-```ts
-{
-  type: 'domainJob.command',
-  jobKind: 'generation',
-  jobId: '...',
-  expectedRevision: 12,
-  command: 'cancel'
-}
-```
+Extension Development Host acceptance MUST load the `apps/neko-vscode` product composition root,
+because that Host owns the shared Generation coordinator and caller port injection. Launching the feature
+packages as independent development extensions is package-local diagnostics only and cannot prove the
+product-composed Generation path.
 
-Extension routes explicit supported combinations to the owning port. Unknown kind/command, stale
-revision and unsupported operation fail visibly. No active/latest Job fallback is allowed.
+The repository provides one generated, gitignored development staging root for the composed product
+manifest, application entry and compiled feature payloads. The staging command reuses the release manifest
+composition contract and links the current checkout's compiled feature roots; it MUST NOT maintain a
+second handwritten contribution manifest or package copied feature implementations. The canonical
+`Debug Dev (All)` launch targets this staging root and the isolated `neko-test` workspace. A separately
+named feature-package launch may remain for package-local diagnostics, but its evidence is not product
+composition acceptance.
+
+Legacy category-level media defaults are projected into a Generation purpose only when the configured
+model actually satisfies that purpose's capability contract. In particular, a music-only model with
+`text_to_music` MUST NOT be projected as generic `audio.generate`; an explicit
+`audio.music.generate` purpose binding remains the canonical way to expose that model. Explicit purpose
+bindings and unavailable model references continue to fail visibly through the normal validator.
 
 ### 8. Ownership and shutdown
 
@@ -280,16 +330,18 @@ cancelled. A later Host instance resumes from the persisted snapshot.
 
 - [Kernel becomes another TaskManager] -> shared API has no submit/dispatch/payload/result/retry policy;
   architecture tests reject a central handler registry and generic manager exports.
-- [Common phase hides domain state] -> domain snapshots keep typed stage/progress; common phase only
-  supports Activity and invariant checks.
+- [Common phase hides domain state] -> domain snapshots keep typed stage/progress; the common phase is
+  used only for lifecycle invariants.
 - [One shared table couples migrations] -> each domain owns persistence schema and recoverable scan.
 - [Retry duplicates paid work] -> outcome-unknown never auto-retries; retry is domain command creating
   a new Job with provenance.
 - [Push events are lost] -> snapshot is authoritative; restart and reconnect always call reconciliation/get.
 - [Cut and Generation semantics diverge] -> extraction stops at lifecycle mechanics; neither domain imports
   the other's coordinator or adapter.
-- [Webview duplicates Timeline] -> linked Tool stays only in Timeline; Activity contains independent Job
-  summaries and stable result refs, not active Tool state.
+- [Caller projections drift] -> each projection retains the exact JobRef/revision and reloads through the
+  concrete domain port; no global projection or active/latest fallback repairs missing identity.
+- [Operational rows become product history] -> no Generation history UI or history API is introduced;
+  long-term generated asset browsing remains owned by Assets/Canvas and stable ResourceRefs.
 
 ## Migration Plan
 
@@ -297,10 +349,12 @@ cancelled. A later Host instance resumes from the persisted snapshot.
 2. Add Generation provider capability interfaces and remove silent cancel no-op from the migrated provider set.
 3. Make GenerationJob coordinator/store the only generation execution path and remove linked direct execution.
 4. Extract Cut's host-neutral ExportJob coordinator and replace latest-job/no-op behavior with exact identity.
-5. Add read-only Domain Activity projection and exact Extension command routing.
-6. Add concrete Webview cards/commands; retain linked progress in ToolExecutionCard.
+5. Keep Agent progress in Tool Timeline, Canvas progress in its action projection and Cut progress in its
+   editor/status bar; remove the superseded cross-domain Activity projection.
+6. Keep commands on concrete domain ports with exact JobRef and expected revision.
 7. Add Agent Tools and direct-domain adapters over the same concrete Job ports.
-8. Poison generic manager/task aliases and complete deterministic, Agent and Webview runtime verification.
+8. Poison generic manager/task/global-Activity aliases and complete deterministic, Agent and owning-Webview
+   runtime verification.
 
 Migration is vertical by concrete Job kind. A stage cannot claim completion while its old path can still
 return success for migrated requests.

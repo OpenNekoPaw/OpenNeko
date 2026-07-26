@@ -25,6 +25,7 @@ describe('finalizeMediaGenerationOutputs', () => {
     const assetId = createStableGeneratedOutputId('operation-1', 0, 'sha256:image');
 
     const result = await finalizeMediaGenerationOutputs({
+      workspaceRoot: root,
       operationId: 'operation-1',
       generationType: 'text-to-image',
       mediaKind: 'image',
@@ -55,6 +56,7 @@ describe('finalizeMediaGenerationOutputs', () => {
   it('fails visibly for missing operation identity or terminal outputs', async () => {
     const assetIndex = { add: vi.fn(), remove: vi.fn() };
     const base = {
+      workspaceRoot: '/tmp',
       operationId: 'operation-1',
       generationType: 'text-to-image',
       mediaKind: 'image' as const,

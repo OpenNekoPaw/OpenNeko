@@ -99,7 +99,7 @@ export class NodeMediaGenerationDeliveryHost {
     readonly result: MediaGenerationResult;
   }): Promise<{
     readonly resultUrls: readonly string[];
-    readonly resourceRefs: readonly import('@neko/shared').ResourceRef[];
+    readonly resultLocators: readonly import('@neko/shared').GeneratedOutputContentLocator[];
   }> {
     const mediaKind = toGeneratedMediaKind(input.result.type);
     const settingsPlan = buildMediaGenerationDeliverySettingsPlan({
@@ -112,6 +112,7 @@ export class NodeMediaGenerationDeliveryHost {
       throw new Error('TUI media generation delivery requires a workspace output directory.');
     }
     const finalized = await finalizeMediaGenerationOutputs({
+      workspaceRoot: this.deps.workspaceRoot,
       operationId: input.operationId,
       generationType: input.result.type,
       mediaKind,
@@ -125,11 +126,11 @@ export class NodeMediaGenerationDeliveryHost {
     await this.deliverGeneratedOutputBatch(finalized.generatedAssets);
     return {
       resultUrls: finalized.resultUrls,
-      resourceRefs: finalized.generatedAssets.map((asset) => {
+      resultLocators: finalized.generatedAssets.map((asset) => {
         if (!asset.lifecycle) {
           throw new Error(`Generated asset ${asset.id} is missing its durable lifecycle.`);
         }
-        return asset.lifecycle.resourceRef;
+        return asset.lifecycle.contentLocator;
       }),
     };
   }
@@ -218,11 +219,15 @@ function toProjectionArtifact(
       provenance,
     };
   }
+  if (!artifact.contentLocator) {
+    throw new Error(
+      `creator-visible-artifact-migration-required: Artifact ${artifact.artifactId} requires contentLocator.`,
+    );
+  }
   return {
     kind: artifact.kind,
     title: artifact.title,
-    ...(artifact.resourceRef ? { resourceRef: artifact.resourceRef } : {}),
-    ...(artifact.documentResourceRef ? { documentResourceRef: artifact.documentResourceRef } : {}),
+    contentLocator: artifact.contentLocator,
     ...(artifact.intrinsicDimensions ? { intrinsicDimensions: artifact.intrinsicDimensions } : {}),
     provenance,
   };

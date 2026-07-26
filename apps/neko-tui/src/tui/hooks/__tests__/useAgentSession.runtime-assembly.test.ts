@@ -338,11 +338,10 @@ describe('useAgentSession Pi runtime assembly', () => {
 
   it('submits native ReadImage analysis through the TUI terminal delivery path', async () => {
     const analysisMarkdown = '# 分镜分析\n\n第 1 页建立场景。';
-    const documentResourceRef = {
+    const documentLocator = {
       kind: 'document-entry' as const,
-      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      source: { kind: 'workspace-file' as const, path: 'books/Blame.epub' },
       entryPath: 'OEBPS/images/page-01.jpg',
-      versionPolicy: 'read-only-source' as const,
     };
     piMocks.execute.mockImplementationOnce(async (input: PiExecuteInput) => {
       piMocks.busy = true;
@@ -366,7 +365,7 @@ describe('useAgentSession Pi runtime assembly', () => {
             data: {
               mode: 'metadata',
               analysis: 'storyboard',
-              images: [{ resourceRef: documentResourceRef, width: 1200, height: 1800 }],
+              images: [{ contentLocator: documentLocator, width: 1200, height: 1800 }],
             },
             attachments: [
               {
@@ -376,7 +375,7 @@ describe('useAgentSession Pi runtime assembly', () => {
                   assetId: 'page-01',
                   uri: 'document-entry://page-01',
                   mimeType: 'image/jpeg',
-                  documentResourceRef,
+                  contentLocator: documentLocator,
                 },
               },
             ],

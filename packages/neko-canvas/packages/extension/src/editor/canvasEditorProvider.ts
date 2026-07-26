@@ -179,6 +179,14 @@ import {
   type CanvasCreativeAiHostInvocationResult,
   type CanvasCreativeAiDocumentIdentity,
 } from '../creativeAiCanvasAdapter';
+import {
+  applyCanvasContentNodeDelta,
+  assertCanvasDocumentSnapshotBoundary,
+} from './canvasDocumentSnapshotBoundary';
+import {
+  projectCanvasContentLocatorRuntimeState,
+  stripCanvasContentLocatorRuntimeState,
+} from './canvasContentLocatorBoundary';
 
 const logger = getLogger('CanvasEditorProvider');
 const CANVAS_KEYBOARD_OWNER_PREFIX = 'neko.canvasEditor:';
@@ -297,6 +305,12 @@ function isCanvasDataSnapshot(value: Record<string, unknown>): value is CanvasDa
     typeof value['name'] === 'string' &&
     Array.isArray(value['nodes']) &&
     Array.isArray(value['connections'])
+  );
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === 'string' && entry.length > 0)
   );
 }
 
@@ -729,6 +743,8 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   private readonly webviewPanelsByDocumentUri = new Map<string, vscode.WebviewPanel>();
   private readonly documentsByDocumentUri = new Map<string, vscode.CustomDocument>();
   private readonly canvasSnapshotsByDocumentUri = new Map<string, Record<string, unknown>>();
+  private readonly authoritativeCanvasSnapshotsByDocumentUri = new Map<string, CanvasData>();
+  private readonly confirmedRemovedNodeIdsByDocumentUri = new Map<string, Set<string>>();
   private readonly canvasRevisionsByDocumentUri = new Map<string, number>();
   private readonly dirtyCanvasDocumentUris = new Set<string>();
   private readonly canvasPreviewFingerprintsByDocumentUri = new Map<string, string>();
@@ -1085,19 +1101,28 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     return this.activeDocument?.uri;
   }
 
-  applyHostCanvasData(uri: vscode.Uri, canvasData: CanvasData): void {
+  async applyHostCanvasData(uri: vscode.Uri, canvasData: CanvasData): Promise<void> {
     const documentUri = uri.toString();
     const canvasRecord = canvasData as unknown as Record<string, unknown>;
     this.updateRememberedCanvasSnapshot(documentUri, canvasRecord);
+    this.setAuthoritativeCanvasSnapshot(documentUri, canvasData);
     this.dirtyCanvasDocumentUris.delete(documentUri);
     const panel = this.webviewPanelsByDocumentUri.get(documentUri);
-    const message: CanvasHostAppliedDocumentMessage = {
-      type: 'canvas.hostAppliedDocument',
-      documentUri,
-      data: canvasData,
-      reason: 'headless-authoring',
-    };
-    panel?.webview.postMessage(message);
+    if (panel) {
+      const displayData = await this.projectCanvasDataForDisplay(canvasData, uri, panel.webview);
+      const message: CanvasHostAppliedDocumentMessage = {
+        type: 'canvas.hostAppliedDocument',
+        documentUri,
+        data: displayData,
+        reason: 'headless-authoring',
+      };
+      const delivered = await panel.webview.postMessage(message);
+      if (!delivered) {
+        logger.warn('Canvas Host-applied display snapshot was not delivered', {
+          documentUri,
+        });
+      }
+    }
     if (this.activeDocument?.uri.toString() === documentUri) {
       this.syncOutline(documentUri, canvasRecord);
       this.syncStatusBar(canvasRecord);
@@ -1121,8 +1146,8 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   getOpenCanvasDocumentSnapshot(
     documentUri: string,
   ): { readonly canvasData: CanvasData; readonly dirty: boolean } | undefined {
-    const snapshot = this.canvasSnapshotsByDocumentUri.get(documentUri);
-    if (!snapshot || !isCanvasDataSnapshot(snapshot)) return undefined;
+    const snapshot = this.authoritativeCanvasSnapshotsByDocumentUri.get(documentUri);
+    if (!snapshot) return undefined;
     return {
       canvasData: snapshot,
       dirty: this.dirtyCanvasDocumentUris.has(documentUri),
@@ -1365,6 +1390,48 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     ) {
       this.refreshNarrativePreview(documentUri);
     }
+  }
+
+  private setAuthoritativeCanvasSnapshot(documentUri: string, canvasData: CanvasData): void {
+    this.authoritativeCanvasSnapshotsByDocumentUri.set(documentUri, canvasData);
+    this.confirmedRemovedNodeIdsByDocumentUri.delete(documentUri);
+  }
+
+  private applyConfirmedCanvasContentNodeDelta(
+    documentUri: string,
+    removedNodeIds: readonly string[],
+    restoredNodeIds: readonly string[],
+  ): void {
+    const confirmed = applyCanvasContentNodeDelta(
+      this.confirmedRemovedNodeIdsByDocumentUri.get(documentUri) ?? [],
+      { removedNodeIds, restoredNodeIds },
+    );
+    if (confirmed.size === 0) {
+      this.confirmedRemovedNodeIdsByDocumentUri.delete(documentUri);
+      return;
+    }
+    this.confirmedRemovedNodeIdsByDocumentUri.set(documentUri, new Set(confirmed));
+  }
+
+  private assertCanvasSnapshotCanBeSaved(documentUri: vscode.Uri, candidate: CanvasData): void {
+    const key = documentUri.toString();
+    const authoritative = this.authoritativeCanvasSnapshotsByDocumentUri.get(key);
+    if (!authoritative) {
+      throw new Error(
+        'missing-authoritative-canvas-snapshot: Canvas document must finish loading before save.',
+      );
+    }
+    const confirmedRemovedNodeIds = this.confirmedRemovedNodeIdsByDocumentUri.get(key) ?? [];
+    logger.debug('canvas.save.snapshotBoundary', {
+      authoritativeNodeCount: authoritative.nodes.length,
+      candidateNodeCount: candidate.nodes.length,
+      confirmedRemovalCount: Array.from(confirmedRemovedNodeIds).length,
+    });
+    assertCanvasDocumentSnapshotBoundary({
+      authoritative,
+      candidate,
+      confirmedRemovedNodeIds,
+    });
   }
 
   private getCanvasRevision(documentUri: string): number {
@@ -1725,6 +1792,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     const documentUri = document.uri.toString();
     this.webviewPanelsByDocumentUri.set(documentUri, webviewPanel);
     this.documentsByDocumentUri.set(documentUri, document);
+    this.confirmedRemovedNodeIdsByDocumentUri.delete(documentUri);
     this.canvasDataReadyDocumentUris.delete(documentUri);
     this._onDidChangeDocumentLifecycle.fire({ type: 'opened', documentUri });
     const focusedRegistration = this.focusedWebviews.register({
@@ -1783,6 +1851,8 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       this.webviewPanelsByDocumentUri.delete(documentUri);
       this.documentsByDocumentUri.delete(documentUri);
       this.canvasSnapshotsByDocumentUri.delete(documentUri);
+      this.authoritativeCanvasSnapshotsByDocumentUri.delete(documentUri);
+      this.confirmedRemovedNodeIdsByDocumentUri.delete(documentUri);
       this.canvasRevisionsByDocumentUri.delete(documentUri);
       this.dirtyCanvasDocumentUris.delete(documentUri);
       this.canvasPreviewFingerprintsByDocumentUri.delete(documentUri);
@@ -1805,10 +1875,9 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   ): Promise<void> {
     const webviewPanel = this.getWebviewPanelForDocument(document);
     if (!webviewPanel) return;
-    const snapshot = await this.normalizeCanvasSnapshotForSave(
-      await requestCanvasProjectSnapshot(webviewPanel.webview, 'vscode-save'),
-      document.uri,
-    );
+    const candidate = await requestCanvasProjectSnapshot(webviewPanel.webview, 'vscode-save');
+    this.assertCanvasSnapshotCanBeSaved(document.uri, candidate);
+    const snapshot = await this.normalizeCanvasSnapshotForSave(candidate, document.uri);
     const result = await this.projectFileSession.save({
       targetUri: document.uri,
       sourceUri: document.uri,
@@ -1827,10 +1896,9 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   ): Promise<void> {
     const webviewPanel = this.getWebviewPanelForDocument(document);
     if (!webviewPanel) return;
-    const snapshot = await this.normalizeCanvasSnapshotForSave(
-      await requestCanvasProjectSnapshot(webviewPanel.webview, 'save-as'),
-      document.uri,
-    );
+    const candidate = await requestCanvasProjectSnapshot(webviewPanel.webview, 'save-as');
+    this.assertCanvasSnapshotCanBeSaved(document.uri, candidate);
+    const snapshot = await this.normalizeCanvasSnapshotForSave(candidate, document.uri);
     const result = await this.projectFileSession.save({
       targetUri: destination,
       sourceUri: document.uri,
@@ -1849,6 +1917,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   ): Promise<void> {
     const documentUri = document.uri.toString();
     this.dirtyCanvasDocumentUris.delete(documentUri);
+    this.confirmedRemovedNodeIdsByDocumentUri.delete(documentUri);
     this._onDidChangeDocumentLifecycle.fire({ type: 'reverted', documentUri });
     this.getWebviewPanelForDocument(document)?.webview.postMessage({ type: 'revert' });
   }
@@ -2603,9 +2672,13 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     canvasData: CanvasData | Record<string, unknown> | null,
   ): void {
     if (!canvasData) return;
-    this.dirtyCanvasDocumentUris.delete(document.uri.toString());
     const data = canvasData as unknown as Record<string, unknown>;
+    if (!isCanvasDataSnapshot(data)) {
+      throw new Error('Saved Canvas document does not satisfy the Canvas data contract.');
+    }
+    this.dirtyCanvasDocumentUris.delete(document.uri.toString());
     this.rememberCanvasSnapshot(document, data);
+    this.setAuthoritativeCanvasSnapshot(document.uri.toString(), data);
     this._onDidChangeDocumentLifecycle.fire({
       type: 'saved',
       documentUri: document.uri.toString(),
@@ -2655,12 +2728,17 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             break;
           }
           const canvasRecord = data as unknown as Record<string, unknown>;
-          await this.normalizeCanvasPathsForLoad(canvasRecord, document.uri, webviewPanel.webview);
-          if (isProjectedCanvasData(data)) {
-            await this.tryRegenerateProjectedCanvas(data, webviewPanel.webview, document);
-          }
-          webviewPanel.webview.postMessage({ type: 'update', data });
           this.rememberCanvasSnapshot(document, canvasRecord);
+          this.setAuthoritativeCanvasSnapshot(document.uri.toString(), data);
+          const displayData = await this.projectCanvasDataForDisplay(
+            data,
+            document.uri,
+            webviewPanel.webview,
+          );
+          if (isProjectedCanvasData(displayData)) {
+            await this.tryRegenerateProjectedCanvas(displayData, webviewPanel.webview, document);
+          }
+          webviewPanel.webview.postMessage({ type: 'update', data: displayData });
           this._onDidChangeDocumentLifecycle.fire({
             type: 'ready',
             documentUri: document.uri.toString(),
@@ -2798,6 +2876,27 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           this.syncStatusBar(data);
           this.syncOutline(document.uri.toString(), data);
         }
+        break;
+      }
+      case 'canvasContentNodeDeltaApplied': {
+        const removedNodeIds = message.removedNodeIds;
+        const restoredNodeIds = message.restoredNodeIds;
+        if (
+          !isStringArray(removedNodeIds) ||
+          !isStringArray(restoredNodeIds) ||
+          (removedNodeIds.length === 0 && restoredNodeIds.length === 0)
+        ) {
+          throw new Error('Invalid Canvas content node delta evidence.');
+        }
+        const restoredNodeIdSet = new Set(restoredNodeIds);
+        if (removedNodeIds.some((nodeId) => restoredNodeIdSet.has(nodeId))) {
+          throw new Error('Canvas content node delta cannot remove and restore the same node.');
+        }
+        this.applyConfirmedCanvasContentNodeDelta(
+          document.uri.toString(),
+          removedNodeIds,
+          restoredNodeIds,
+        );
         break;
       }
       case 'projection.writeBack': {
@@ -4211,6 +4310,20 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   }
 
   /** Convert stored asset paths to webview URIs so the webview can display them */
+  private async projectCanvasDataForDisplay(
+    canvasData: CanvasData,
+    documentUri: vscode.Uri,
+    webview: vscode.Webview,
+  ): Promise<CanvasData> {
+    const displayData = structuredClone(canvasData);
+    await this.normalizeCanvasPathsForLoad(
+      displayData as unknown as Record<string, unknown>,
+      documentUri,
+      webview,
+    );
+    return displayData;
+  }
+
   private async normalizeCanvasPathsForLoad(
     data: Record<string, unknown>,
     documentUri: vscode.Uri,
@@ -4222,6 +4335,27 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     for (const node of nodes) {
       const nodeData = node['data'] as Record<string, unknown> | undefined;
       if (!nodeData) continue;
+
+      const projectionFailures = await projectCanvasContentLocatorRuntimeState(
+        node,
+        async (locator, slot) =>
+          this.projectCanvasContentLocator(
+            webview,
+            locator,
+            documentUri,
+            slot === 'node-content'
+              ? 'neko-canvas.load-node-content'
+              : 'neko-canvas.load-generated-content',
+          ),
+      );
+      if (projectionFailures.length > 0) {
+        if (node['type'] === 'shot') {
+          throw new Error(
+            `Canvas ${projectionFailures[0]?.slot ?? 'generated content'} projection failed.`,
+          );
+        }
+        this.markDocumentResourceUnavailable(nodeData, 'projection-failed');
+      }
 
       if (node['type'] === 'shot') {
         await this.materializeShotReferencePreview(nodeData, webview, documentUri);
@@ -4252,6 +4386,53 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       }
       await this.materializeDocumentResourcePreview(nodeData, webview, documentUri);
     }
+  }
+
+  private async projectCanvasContentLocator(
+    webview: vscode.Webview,
+    locator: ContentLocator,
+    documentUri: vscode.Uri,
+    caller: string,
+  ): Promise<string | undefined> {
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspaceRoot) return undefined;
+    const projection = new HostWebviewContentProjectionPort({
+      contentRead: this.contentRead,
+      resolver: {
+        resolve: async (resolvedLocator) => {
+          if (
+            resolvedLocator.kind === 'document-entry' ||
+            resolvedLocator.kind === 'package-resource'
+          ) {
+            const loaded = await this.contentRead.read(resolvedLocator, {
+              maxBytes: 64 * 1024 * 1024,
+            });
+            return loaded.status === 'ready'
+              ? `data:${loaded.mimeType ?? 'application/octet-stream'};base64,${Buffer.from(
+                  loaded.bytes,
+                ).toString('base64')}`
+              : undefined;
+          }
+          const sourcePath = this.resolveContentLocatorLocalPath(resolvedLocator, workspaceRoot);
+          const projected = await this.localResourceAccess.toWebviewUri(webview, sourcePath, {
+            caller,
+            extraRoots: [
+              ...(webview.options.localResourceRoots ?? []),
+              ...this.getCanvasLocalResourceRoots(documentUri),
+            ],
+          });
+          return projected.ok ? projected.uri : undefined;
+        },
+      },
+    });
+    const result = await projection.project(locator);
+    if (result.status === 'ready') return result.uri;
+    logger.warn('Canvas content locator projection failed', {
+      caller,
+      locatorKind: locator.kind,
+      diagnostic: result.diagnostic.code,
+    });
+    return undefined;
   }
 
   private async projectCanvasMediaLocalFile(
@@ -5886,7 +6067,9 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       message:
         reason === 'cache-missing'
           ? 'Document cache expired. Reopen the source document to regenerate the preview.'
-          : 'Document cache is outside the allowed project or VS Code cache roots.',
+          : reason === 'unauthorized-cache-root'
+            ? 'Document cache is outside the allowed project or VS Code cache roots.'
+            : 'Canvas content could not be projected for this view.',
     };
   }
 
@@ -5901,6 +6084,8 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     for (const node of nodes) {
       const nodeData = node['data'] as Record<string, unknown> | undefined;
       if (!nodeData) continue;
+
+      stripCanvasContentLocatorRuntimeState(node);
 
       if (node['type'] === 'shot') {
         delete nodeData['runtimeReferenceImagePath'];

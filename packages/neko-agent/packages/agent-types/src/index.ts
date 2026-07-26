@@ -49,19 +49,6 @@ export {
   cloneAgentTurnProjectionItem,
   cloneConversationProjectionSnapshot,
 } from './conversation-projection';
-export type {
-  DomainActivityAcknowledgement,
-  DomainActivityAttachmentKey,
-  DomainActivityAttachRequest,
-  DomainActivityDetachRequest,
-  DomainActivityDiagnosticFrame,
-  DomainActivityHostMessage,
-  DomainActivityPatchFrame,
-  DomainActivitySnapshotFrame,
-  DomainActivityWebviewMessage,
-  DomainJobCommandRequest,
-  DomainJobCommandResult,
-} from './domain-activity-protocol';
 
 // Message protocol
 export type {
@@ -71,6 +58,7 @@ export type {
   AgentFileReferenceMediaType,
   AgentFileReferenceSource,
   ToolCall,
+  ToolCallProgress,
   ContentBlock,
   ContentBlockType,
   CodeDiff,

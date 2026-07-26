@@ -733,6 +733,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
 
     useCanvasOperationStore.getState().recordNodeRemove(id, removedNode, removedConnections);
+    useCanvasOperationStore.getState().recordContentNodeDelta([...removedNodeIds]);
   },
 
   moveNodeEnd: (id, position) => {
@@ -1065,6 +1066,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         connections: nextConnections,
       },
     });
+    if (policyName === 'gallery') {
+      useCanvasOperationStore.getState().recordContentNodeDelta([childId]);
+    }
     recordCanvasDirty('Remove child from container');
   },
 
@@ -1092,6 +1096,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       selection: { nodeIds: childIds, connectionIds: [] },
     });
 
+    useCanvasOperationStore.getState().recordContentNodeDelta([groupId]);
     useCanvasOperationStore.getState().recordNodeUngroup(groupId, groupNode, childIds);
   },
 
@@ -1598,6 +1603,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       selection: { nodeIds: [], connectionIds: [] },
       expandedNodeId: null,
     });
+    useCanvasOperationStore.getState().recordContentNodeDelta([...deletion.removedNodeIds]);
     recordCanvasDirty('Delete selection');
   },
 
@@ -1626,6 +1632,12 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         canvasData: previousState,
         selection: { nodeIds: [], connectionIds: [] },
       });
+      useCanvasOperationStore
+        .getState()
+        .recordContentNodeDelta(
+          findRemovedCanvasNodeIds(canvasData, previousState),
+          findRemovedCanvasNodeIds(previousState, canvasData),
+        );
       recordCanvasDirty('Undo canvas edit');
     }
   },
@@ -1640,7 +1652,18 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         canvasData: nextState,
         selection: { nodeIds: [], connectionIds: [] },
       });
+      useCanvasOperationStore
+        .getState()
+        .recordContentNodeDelta(
+          findRemovedCanvasNodeIds(canvasData, nextState),
+          findRemovedCanvasNodeIds(nextState, canvasData),
+        );
       recordCanvasDirty('Redo canvas edit');
     }
   },
 }));
+
+function findRemovedCanvasNodeIds(previous: CanvasData, next: CanvasData): readonly string[] {
+  const nextNodeIds = new Set(next.nodes.map((node) => node.id));
+  return previous.nodes.map((node) => node.id).filter((nodeId) => !nextNodeIds.has(nodeId));
+}

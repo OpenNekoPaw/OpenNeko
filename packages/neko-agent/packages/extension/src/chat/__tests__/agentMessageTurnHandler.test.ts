@@ -372,6 +372,7 @@ function createMockConversations() {
   const msgs: unknown[] = [];
   return {
     ensureActive: vi.fn().mockReturnValue('conv-1'),
+    initializeTitleFromUserInput: vi.fn().mockResolvedValue(undefined),
     addMessageToConversation: vi.fn((_id: string, msg: unknown) => msgs.push(msg)),
     removeMessageFromConversation: vi.fn((_id: string, messageId: string) => {
       const index = msgs.findIndex((item) => (item as { id?: string }).id === messageId);
@@ -646,6 +647,29 @@ describe('AgentMessageTurnHandler', () => {
   });
 
   describe('Agent-first Skill activation boundary', () => {
+    it('commits the first-input title before persisting and dispatching the turn', async () => {
+      const conversations = createMockConversations();
+      const agentManager = createMockAgentManager();
+      const handler = buildHandler({ conversations, agentManager });
+
+      await handler.handleUserMessage(
+        createMockWebview() as any,
+        createChatModelRequest('Generate a harbor image', { conversationId: 'conv-1' }),
+      );
+
+      expect(conversations.initializeTitleFromUserInput).toHaveBeenCalledWith(
+        'conv-1',
+        'Generate a harbor image',
+      );
+      expect(conversations.initializeTitleFromUserInput.mock.invocationCallOrder[0]).toBeLessThan(
+        conversations.addMessageToConversation.mock.invocationCallOrder[0] ??
+          Number.MAX_SAFE_INTEGER,
+      );
+      expect(conversations.initializeTitleFromUserInput.mock.invocationCallOrder[0]).toBeLessThan(
+        agentManager.executePiTurn.mock.invocationCallOrder[0] ?? Number.MAX_SAFE_INTEGER,
+      );
+    });
+
     it('routes the explicit provider and model through Pi without AgentRunner', async () => {
       const webview = createMockWebview();
       const agentManager = createMockAgentManager();
@@ -1038,7 +1062,8 @@ describe('AgentMessageTurnHandler', () => {
       expect(providers.getProvider).not.toHaveBeenCalledWith('nekoapi-chat');
       expect(webview.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'globalError',
+          type: 'error',
+          conversationId: 'conv-1',
           message: expect.stringContaining('No Agent primary model is selected'),
         }),
       );
@@ -1063,7 +1088,8 @@ describe('AgentMessageTurnHandler', () => {
       expect(providers.getProvider).not.toHaveBeenCalledWith('deepseek-chat');
       expect(webview.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'globalError',
+          type: 'error',
+          conversationId: 'conv-1',
           message: expect.stringContaining('selection is incomplete'),
         }),
       );
@@ -1122,7 +1148,8 @@ describe('AgentMessageTurnHandler', () => {
       expect(agentManager.getOrCreate).not.toHaveBeenCalled();
       expect(webview.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'globalError',
+          type: 'error',
+          conversationId: 'conv-1',
           message: expect.stringContaining('supports only the primary slot'),
         }),
       );
@@ -1149,7 +1176,8 @@ describe('AgentMessageTurnHandler', () => {
       expect(agentManager.getOrCreate).not.toHaveBeenCalled();
       expect(webview.postMessage).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: 'globalError',
+          type: 'error',
+          conversationId: 'conv-1',
           message: expect.stringContaining('conflicts with the chat model selection'),
         }),
       );
@@ -1322,7 +1350,7 @@ describe('AgentMessageTurnHandler', () => {
   // -------------------------------------------------------------------------
 
   describe('handleUserMessage() — fallback when no configured provider', () => {
-    it('returns a visible boundary diagnostic when no primary model can be resolved', async () => {
+    it('terminates the conversation when no primary model can be resolved', async () => {
       const webview = createMockWebview();
       const conversations = createMockConversations();
       // providers returns undefined (not configured)
@@ -1332,14 +1360,17 @@ describe('AgentMessageTurnHandler', () => {
 
       const calls = webview.postMessage.mock.calls.map((c: unknown[]) => c[0]) as Array<{
         type: string;
+        conversationId?: string;
         message?: string;
       }>;
       expect(calls).toContainEqual(
         expect.objectContaining({
-          type: 'globalError',
+          type: 'error',
+          conversationId: 'conv-1',
           message: expect.stringContaining('No Agent primary model is selected'),
         }),
       );
+      expect(calls).not.toContainEqual(expect.objectContaining({ type: 'globalError' }));
       expect(conversations.addMessageToConversation).not.toHaveBeenCalled();
     });
   });

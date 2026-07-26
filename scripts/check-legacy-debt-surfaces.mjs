@@ -28,6 +28,37 @@ const retiredAssetCatalogBoundaryPathPatterns = [
   'packages/neko-types/src/types/asset/workspace-linked-media-library.ts',
   'packages/neko-types/src/types/content-locator.ts',
 ];
+// Match both the owning boundary and its rejection marker so unrelated debt in the same file fails.
+const explicitBoundaryRejectionRules = [
+  {
+    path: 'packages/neko-canvas/packages/extension/src/canvasmediacontentlocator.ts',
+    markers: ['legacy semantic projections'],
+  },
+  {
+    path: 'packages/neko-generation/src/job/codec.ts',
+    markers: [
+      'assertnolegacygenerationpayload',
+      'containslegacygenerationfield',
+      'legacy_materialized_request_keys',
+    ],
+  },
+  {
+    path: 'packages/neko-quality/src/core/index.ts',
+    markers: ['rejectlegacymediapathrequest'],
+  },
+  {
+    path: 'packages/neko-quality/src/index.ts',
+    markers: ['rejectlegacymediapathrequest'],
+  },
+  {
+    path: 'packages/neko-quality/src/internal/quality-gate-runtime.ts',
+    markers: ['rejectlegacymediapathrequest', 'legacy-path-target-rejected'],
+  },
+  {
+    path: 'packages/neko-types/src/local-metadata/node-generated-output-projection-binding.ts',
+    markers: ['invalid or legacy projection'],
+  },
+];
 const retiredAssetCatalogRules = [
   { id: 'catalog-type', pattern: /\b(?:AssetEntity|AssetVariant|AssetFile|AssetSource)\b/g },
   { id: 'catalog-api', pattern: /\b(?:ListAssets|GetAsset|ImportAsset)\b/g },
@@ -528,6 +559,9 @@ function classifySurface(file, line, term) {
   ) {
     return 'false-positive-word';
   }
+  if (isExplicitBoundaryRejectionSurface(lowerFile, lowerLine)) {
+    return 'boundary-canonicalizer';
+  }
   if (isExplicitRejectionDiagnostic(lowerLine)) {
     return 'boundary-canonicalizer';
   }
@@ -847,6 +881,12 @@ function isExplicitRejectionDiagnostic(lowerLine) {
     'path-only legacy requests are rejected',
     'legacy resourcecache manifest paths are retired',
   ]);
+}
+
+function isExplicitBoundaryRejectionSurface(lowerFile, lowerLine) {
+  return explicitBoundaryRejectionRules.some(
+    (rule) => lowerFile === rule.path && containsAny(lowerLine, rule.markers),
+  );
 }
 
 function containsAny(value, needles) {
@@ -1427,6 +1467,30 @@ function runSelfTest() {
         'legacy',
       ),
       expected: 'migrate-now',
+    },
+    {
+      value: classifySurface(
+        'packages/neko-generation/src/job/codec.ts',
+        'assertNoLegacyGenerationPayload(snapshot);',
+        'legacy',
+      ),
+      expected: 'boundary-canonicalizer',
+    },
+    {
+      value: classifySurface(
+        'packages/neko-quality/src/internal/quality-gate-runtime.ts',
+        'export function rejectLegacyMediaPathRequest(value: unknown): never {',
+        'legacy',
+      ),
+      expected: 'boundary-canonicalizer',
+    },
+    {
+      value: classifySurface(
+        'packages/neko-types/src/local-metadata/node-generated-output-projection-binding.ts',
+        'Resource contains an invalid or legacy projection.',
+        'legacy',
+      ),
+      expected: 'boundary-canonicalizer',
     },
     {
       value: retiredAssetCatalogAllowlist('packages/neko-types/src/types/content-locator.ts'),

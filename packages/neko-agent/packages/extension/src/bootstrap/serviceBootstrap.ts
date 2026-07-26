@@ -8,7 +8,12 @@
 import * as vscode from 'vscode';
 import * as nodeOs from 'node:os';
 import { join } from 'node:path';
-import { Platform, createPlatform, FileUserConfigManager } from '@neko/platform';
+import {
+  Platform,
+  createContentReadMediaRequestAssetMaterializer,
+  createPlatform,
+  FileUserConfigManager,
+} from '@neko/platform';
 import { MCPManager, ToolRegistry, connectMCPServersRuntime } from '@neko/agent';
 import type {
   AuthInteraction,
@@ -16,6 +21,7 @@ import type {
   PiProviderAuthController,
 } from '@neko/agent/pi';
 import type { ICapabilityPurposeTextRuntime } from '@neko/shared';
+import { createNodeHostContentReadService } from '@neko/shared/content-access';
 import { ServiceCollection, createServiceId, getLogger } from '../base';
 
 const logger = getLogger('ServiceBootstrap');
@@ -112,6 +118,14 @@ export async function bootstrapCoreServices(
       workspacePath,
       toolRegistry,
       userConfigManager: createOwnedUserConfigManager(context),
+      ...(workspacePath
+        ? {
+            requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
+              contentRead: createNodeHostContentReadService({ workspaceRoot: workspacePath }),
+              encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
+            }),
+          }
+        : {}),
     });
   services.set(IPlatform, platform);
 

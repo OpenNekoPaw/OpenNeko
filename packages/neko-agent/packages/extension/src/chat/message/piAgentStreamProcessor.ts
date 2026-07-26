@@ -114,6 +114,7 @@ function projectPhase(
     case 'tool.completed':
     case 'usage':
     case 'confirmation.required':
+    case 'confirmation.resolved':
     case 'turn.persistence':
       return;
   }

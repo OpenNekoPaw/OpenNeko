@@ -483,13 +483,14 @@ const ASSERTION_SCHEMA = s.union([
     kind: s.literal('artifact'),
     artifactRef: EXTERNAL_ID,
     validatorStatus: s.literal('valid'),
-  }),
+  }, { validatorId: ID }),
   s.object(
     {
       ...ASSERTION_COMMON,
       kind: s.literal('artifact'),
       artifactKind: s.enum([
         'file',
+        'content-locator',
         'resource-ref',
         'generated-asset',
         'project-revision',
@@ -497,8 +498,32 @@ const ASSERTION_SCHEMA = s.union([
       ]),
       validatorStatus: s.literal('valid'),
     },
-    { provenanceSource: EXTERNAL_ID },
+    {
+      provenanceSource: EXTERNAL_ID,
+      validatorId: ID,
+      contentLocatorKind: s.enum([
+        'workspace-file',
+        'document-entry',
+        'generated-output',
+        'package-resource',
+      ]),
+    },
   ),
+  s.object({
+    ...ASSERTION_COMMON,
+    kind: s.literal('content-locator-handoff'),
+    producerToolName: EXTERNAL_ID,
+    consumerToolName: EXTERNAL_ID,
+    locatorKind: s.enum([
+      'workspace-file',
+      'document-entry',
+      'generated-output',
+      'package-resource',
+    ]),
+    artifactKind: s.enum(['content-locator', 'generated-asset']),
+    provenanceSource: EXTERNAL_ID,
+    validatorId: ID,
+  }),
   s.object({
     ...ASSERTION_COMMON,
     kind: s.literal('no-fallback'),
@@ -699,7 +724,13 @@ const ARTIFACT_MANIFEST_ENTRY_SCHEMA = s.union([
   }),
   s.object({
     ref: EXTERNAL_ID,
-    kind: s.enum(['resource-ref', 'generated-asset', 'project-revision', 'composite-artifact']),
+    kind: s.enum([
+      'content-locator',
+      'resource-ref',
+      'generated-asset',
+      'project-revision',
+      'composite-artifact',
+    ]),
     stableRef: EXTERNAL_ID,
     digest: HASH,
     provenance: ID,
@@ -898,6 +929,7 @@ const DEFAULT_EXECUTION_SUPPORT = Object.freeze({
     'structured-output',
     'markdown-path',
     'artifact',
+    'content-locator-handoff',
     'workspace-board-projection',
     'no-fallback',
   ]),

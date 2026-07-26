@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { isResourceRef } from '@neko/shared';
+import { validateContentLocator } from '@neko/shared';
 import {
   isTerminalJobPhase,
   JobLifecycleError,
@@ -292,18 +292,18 @@ export class GenerationJobCoordinator implements GenerationJobPort {
       });
       if (isTerminalJobPhase(committing.phase)) return;
 
-      const resultRefs = await this.options.resultCommitter.commit({
+      const resultLocators = await this.options.resultCommitter.commit({
         ref: initial.ref,
         generation: result,
       });
-      assertResultRefs(resultRefs);
+      assertResultLocators(resultLocators);
       await this.enqueue(initial.ref, async () => {
         const current = await this.options.store.get(initial.ref);
         if (isTerminalJobPhase(current.phase)) return current;
         return this.commit(current, {
           phase: 'succeeded',
           progress: { stage: 'completed', percent: 100 },
-          resultRefs: Object.freeze([...resultRefs]),
+          resultLocators: Object.freeze([...resultLocators]),
         });
       });
     } catch (error) {
@@ -439,7 +439,7 @@ export class GenerationJobCoordinator implements GenerationJobPort {
             phase: 'running',
             progress: { stage: 'committing-result', percent: 100 },
           });
-          const resultRefs = await this.options.resultCommitter.commit({
+          const resultLocators = await this.options.resultCommitter.commit({
             ref: current.ref,
             generation: {
               type: current.request.generationType,
@@ -450,11 +450,11 @@ export class GenerationJobCoordinator implements GenerationJobPort {
               request: current.request.request,
             },
           });
-          assertResultRefs(resultRefs);
+          assertResultLocators(resultLocators);
           return this.commit(committing, {
             phase: 'succeeded',
             progress: { stage: 'completed', percent: 100 },
-            resultRefs: Object.freeze([...resultRefs]),
+            resultLocators: Object.freeze([...resultLocators]),
           });
         }
     }
@@ -476,7 +476,7 @@ export class GenerationJobCoordinator implements GenerationJobPort {
   private commit(
     current: GenerationJobSnapshot,
     changes: Pick<GenerationJobSnapshot, 'phase' | 'progress'> &
-      Partial<Pick<GenerationJobSnapshot, 'providerTask' | 'resultRefs' | 'failure'>>,
+      Partial<Pick<GenerationJobSnapshot, 'providerTask' | 'resultLocators' | 'failure'>>,
   ): Promise<GenerationJobSnapshot> {
     const next: GenerationJobSnapshot = {
       ...current,
@@ -602,11 +602,19 @@ function normalizeProgress(progress: number): number {
   return progress;
 }
 
-function assertResultRefs(resultRefs: readonly import('@neko/shared').ResourceRef[]): void {
-  if (resultRefs.length === 0 || resultRefs.some((ref) => !isResourceRef(ref))) {
+function assertResultLocators(
+  resultLocators: readonly import('@neko/shared').GeneratedOutputContentLocator[],
+): void {
+  if (
+    resultLocators.length === 0 ||
+    resultLocators.some((locator) => {
+      const result = validateContentLocator(locator);
+      return !result.ok || result.locator.kind !== 'generated-output';
+    })
+  ) {
     throw new GenerationJobError(
       'generation-job-result-unavailable',
-      'Generation completed without valid durable ResourceRef results.',
+      'Generation completed without valid generated-output ContentLocator results.',
     );
   }
 }

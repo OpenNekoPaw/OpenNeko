@@ -11,12 +11,20 @@ import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 
 import { createConversationId } from '@neko/agent';
-import type { PiConversationCatalogRecord, PiConversationTranscriptEntry } from '@neko/agent/pi';
+import type {
+  CheckpointPiExternalTurnInput,
+  PiConversationCatalogRecord,
+  PiConversationTranscriptEntry,
+  PiTurnCheckpointRecord,
+} from '@neko/agent/pi';
 import { buildAgentSessionDiagnosticMessage, type Message } from '@neko-agent/types';
 import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
 
 import type { AgentLocalResourceAccess } from '../services/localResourceAccess';
-import { projectMessagesForWebviewResourceDisplay } from './message/webviewResourceProjection';
+import {
+  projectMessagesForWebviewResourceDisplay,
+  type WebviewResourceProjectionOptions,
+} from './message/webviewResourceProjection';
 import { projectPiConversationEntries } from './message/piConversationHistoryProjection';
 export interface PiConversationPresentationCatalogItem extends PiConversationCatalogRecord {
   readonly messageCount: number;
@@ -33,11 +41,14 @@ export interface PiConversationPresentationAuthority {
   readConversationEntries(
     conversationId: string,
   ): Promise<readonly PiConversationTranscriptEntry[]>;
+  checkpointExternalTurn(input: CheckpointPiExternalTurnInput): Promise<PiTurnCheckpointRecord>;
 }
 
 export interface ConversationBridgeOptions {
   readonly authority: PiConversationPresentationAuthority;
   readonly initialCatalog: readonly PiConversationPresentationCatalogItem[];
+  readonly onConversationTitleChanged?: (conversationId: string, title: string) => void;
+  readonly resolveGenerationResult?: WebviewResourceProjectionOptions['resolveGenerationResult'];
 }
 
 export interface ConversationPresentation {
@@ -104,6 +115,46 @@ export class ConversationBridge {
     return this.conversations.get(conversationId)?.messageCount;
   }
 
+  async checkpointExternalTurn(
+    input: CheckpointPiExternalTurnInput,
+  ): Promise<PiTurnCheckpointRecord> {
+    const checkpoint = await this.options.authority.checkpointExternalTurn(input);
+    const record = (await this.options.authority.listConversationPresentationCatalog()).find(
+      (candidate) => candidate.conversationId === input.conversationId,
+    );
+    if (!record) {
+      throw new Error(
+        `Pi conversation ${input.conversationId} disappeared after external turn checkpoint.`,
+      );
+    }
+    const conversation = this.conversations.get(input.conversationId);
+    if (conversation) {
+      conversation.messageCount = record.messageCount;
+      conversation.updatedAt = parseCatalogTimestamp(record.updatedAt, 'updatedAt');
+    }
+    return checkpoint;
+  }
+
+  async initializeTitleFromUserInput(
+    conversationId: string,
+    userInput: string,
+  ): Promise<string | undefined> {
+    const conversation = this.conversations.get(conversationId);
+    if (!conversation) {
+      throw new Error(`Cannot initialize the title of missing conversation ${conversationId}.`);
+    }
+    if (conversation.title !== 'New conversation') return undefined;
+
+    const title = conversationTitle(userInput);
+    if (title === conversation.title) return undefined;
+
+    await this.options.authority.updateConversationTitle(conversationId, title);
+    conversation.title = title;
+    conversation.updatedAt = Date.now();
+    this.options.onConversationTitleChanged?.(conversationId, title);
+    return title;
+  }
+
   switchTo(conversationId: string): boolean {
     if (!this.conversations.has(conversationId)) return false;
     this.activeId = conversationId;
@@ -161,9 +212,13 @@ export class ConversationBridge {
         current.updatedAt !== updatedAt ||
         (!current.messagesLoaded && current.messageCount !== record.messageCount)
       ) {
+        const previousTitle = current.title;
         current.title = record.title;
         current.updatedAt = updatedAt;
         if (!current.messagesLoaded) current.messageCount = record.messageCount;
+        if (previousTitle !== record.title) {
+          this.options.onConversationTitleChanged?.(record.conversationId, record.title);
+        }
         upsertedIds.push(record.conversationId);
       }
     }
@@ -190,9 +245,6 @@ export class ConversationBridge {
     conversation.messagesLoaded = true;
     conversation.messageCount = conversation.messages.length;
     conversation.updatedAt = Date.now();
-    if (conversation.title === 'New conversation' && message.role === 'user') {
-      conversation.title = conversationTitle(message.content);
-    }
   }
 
   removeMessageFromConversation(conversationId: string, messageId: string): void {
@@ -353,6 +405,9 @@ export class ConversationBridge {
       contentAccessRuntime: this.getContentAccessRuntime?.(),
       localMediaCaller: 'neko-agent.conversation',
       documentResourceCaller: 'neko-agent.document-resource',
+      ...(this.options.resolveGenerationResult
+        ? { resolveGenerationResult: this.options.resolveGenerationResult }
+        : {}),
     });
   }
 }

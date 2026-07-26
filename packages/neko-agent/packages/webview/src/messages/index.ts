@@ -113,33 +113,6 @@ function postConversationMessage<
  * Each method constructs and sends a properly typed message.
  */
 export const AgentHostMessages = {
-  attachDomainActivity: (attachmentId: string) => {
-    postWebviewMessage({ type: 'domainActivityAttach', key: { attachmentId } });
-  },
-
-  acknowledgeDomainActivity: (
-    attachmentId: string,
-    sequence: number,
-    projectionVersion: number,
-  ) => {
-    postWebviewMessage({
-      type: 'domainActivityAck',
-      key: { attachmentId },
-      sequence,
-      projectionVersion,
-    });
-  },
-
-  detachDomainActivity: (attachmentId: string) => {
-    postWebviewMessage({ type: 'domainActivityDetach', key: { attachmentId } });
-  },
-
-  commandDomainJob: (
-    request: Omit<import('@neko-agent/types').DomainJobCommandRequest, 'type'>,
-  ) => {
-    postWebviewMessage({ type: 'domainJobCommand', ...request });
-  },
-
   /**
    * Send a chat message to the AI assistant.
    * conversationId and model refs are explicit to avoid multi-tab leakage.

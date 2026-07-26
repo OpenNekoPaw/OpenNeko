@@ -11,20 +11,14 @@ import {
 } from '../canvas-workspace-board';
 import type { GeneratedImage } from '../generated-asset';
 import { createGeneratedAssetRevisionRef } from '../generated-asset-lifecycle';
-import type { ResourceRef } from '../resource-cache';
+import type { GeneratedOutputContentLocator } from '../content-locator';
 
-const generatedRef: ResourceRef = {
-  id: 'generated-output:shot-1',
-  scope: 'project',
-  provider: 'generated-output',
-  kind: 'generated',
-  source: {
-    kind: 'generated-asset',
-    generatedAssetId: 'shot-1',
-    projectRelativePath: 'neko/generated/image/shot-1.png',
-  },
-  locator: { kind: 'generated-asset', assetId: 'shot-1' },
-  fingerprint: { strategy: 'hash', value: 'sha256:shot-1' },
+const generatedLocator: GeneratedOutputContentLocator = {
+  kind: 'generated-output',
+  outputId: 'shot-1',
+  revision: 'rev-shot-1',
+  digest: 'sha256:shot-1',
+  path: 'neko/generated/image/shot-1.png',
 };
 
 describe('Canvas Workspace Board delivery contract', () => {
@@ -204,6 +198,10 @@ describe('Canvas Workspace Board delivery contract', () => {
       artifacts: [
         {
           kind: 'image',
+          contentLocator: expect.objectContaining({
+            kind: 'generated-output',
+            outputId: 'shot-1',
+          }),
           generationContext: {
             prompt: 'A silent megastructure under hard light',
             model: 'image-model-v2',
@@ -231,27 +229,21 @@ describe('Canvas Workspace Board delivery contract', () => {
       renderUri: 'vscode-webview://preview/shot-1',
       cachePath: '.neko/.cache/generated/shot-1.png',
     } as unknown as CanvasWorkspaceProjectionRequest;
-    const malformedRef = request({
+    const legacyRef = request({
       artifacts: [
         {
           ...outputArtifact(),
-          resourceRef: {
-            ...generatedRef,
-            source: {
-              ...generatedRef.source,
-              projectRelativePath: '.neko/.cache/generated/unsafe.png',
-            },
-          },
+          resourceRef: { kind: 'generated' },
         },
       ],
-    });
+    } as never);
 
     const invalidCodes = validateCanvasWorkspaceProjectionRequest(invalid).map(({ code }) => code);
     expect(invalidCodes.filter((code) => code === 'legacy-routing-forbidden')).toHaveLength(4);
     expect(invalidCodes.filter((code) => code === 'runtime-value-forbidden')).toHaveLength(3);
-    expect(
-      validateCanvasWorkspaceProjectionRequest(malformedRef).map(({ code }) => code),
-    ).toContain('invalid-resource-ref');
+    expect(validateCanvasWorkspaceProjectionRequest(legacyRef).map(({ code }) => code)).toContain(
+      'content-locator-migration-required',
+    );
   });
 
   it('keeps blocked and conflict results target-free', () => {
@@ -300,7 +292,7 @@ function sourceArtifact(): CanvasWorkspaceProjectionArtifact {
   return {
     kind: 'file-reference',
     title: 'Source image',
-    resourceRef: generatedRef,
+    contentLocator: generatedLocator,
     provenance: provenance('source-1', 'source:sha256:shot-1', 'file-reference', 'source'),
   };
 }
@@ -319,7 +311,7 @@ function outputArtifact(): CanvasWorkspaceProjectionArtifact {
     kind: 'image',
     title: 'Shot 1',
     mimeType: 'image/png',
-    resourceRef: generatedRef,
+    contentLocator: generatedLocator,
     provenance: provenance('shot-1', 'generated:sha256:shot-1', 'image', 'output'),
   };
 }
@@ -360,6 +352,7 @@ function generatedImage(): GeneratedImage {
     lifecycle: createGeneratedAssetRevisionRef({
       assetId: 'shot-1',
       contentDigest: 'sha256:shot-1',
+      contentPath: 'neko/generated/image/shot-1.png',
       mediaKind: 'image',
       mimeType: 'image/png',
       generation: {

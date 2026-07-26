@@ -1,17 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { CutExportSettings, CutExportTaskSnapshot, CutUserDiagnostic } from '@neko-cut/domain';
-import {
-  createDomainActivityTracker,
-  type DomainActivityPublisher,
-  type DomainActivityTracker,
-} from '@neko/shared/domain-activity';
 import { isTerminalJobPhase } from '@neko/shared/job-lifecycle';
 import {
   ExportJobCoordinator,
-  projectExportJobActivity,
   type ExportEnginePort,
   type ExportEngineProgress,
-  type ExportJobCommandInput,
   type ExportJobResultCommitter,
   type ExportJobSnapshot,
   type ExportJobStore,
@@ -42,14 +35,12 @@ interface ActiveExecution {
 export interface CutExportTaskRegistryOptions {
   readonly store: ExportJobStore;
   readonly onUpdate: (task: CutExportTaskSnapshot) => void;
-  readonly activityPublisher?: DomainActivityPublisher;
   readonly createJobId?: () => string;
   readonly pollIntervalMs?: number;
 }
 
 export class CutExportTaskRegistry {
   private readonly coordinator: ExportJobCoordinator;
-  private readonly activity: DomainActivityTracker<ExportJobSnapshot> | undefined;
   private readonly snapshots = new Map<string, ExportJobSnapshot>();
   private readonly tasks = new Map<string, CutExportTaskSnapshot>();
   private readonly observers = new Map<string, AsyncIterator<ExportJobSnapshot>>();
@@ -70,14 +61,6 @@ export class CutExportTaskRegistry {
       ...(options.createJobId ? { createJobId: options.createJobId } : {}),
       ...(options.pollIntervalMs ? { pollIntervalMs: options.pollIntervalMs } : {}),
     });
-    this.activity = options.activityPublisher
-      ? createDomainActivityTracker({
-          observe: (ref, afterRevision) => this.coordinator.observeExport(ref, afterRevision),
-          project: projectExportJobActivity,
-          publisher: options.activityPublisher,
-          reportError: () => undefined,
-        })
-      : undefined;
   }
 
   async start(input: StartCutExportTask): Promise<CutExportTaskSnapshot> {
@@ -122,21 +105,6 @@ export class CutExportTaskRegistry {
     return this.requireTask(jobId);
   }
 
-  async executeCommand(
-    input: ExportJobCommandInput & {
-      readonly command: 'cancel' | 'retry' | 'reconcile';
-    },
-  ): Promise<ExportJobSnapshot> {
-    const snapshot =
-      input.command === 'cancel'
-        ? await this.coordinator.cancelExport(input)
-        : input.command === 'retry'
-          ? await this.coordinator.retryExport(input)
-          : await this.coordinator.reconcileExport(input);
-    this.install(snapshot);
-    return snapshot;
-  }
-
   get(jobId: string): CutExportTaskSnapshot | undefined {
     return this.tasks.get(jobId);
   }
@@ -156,7 +124,6 @@ export class CutExportTaskRegistry {
     const observers = [...this.observers.values()];
     this.observers.clear();
     await Promise.allSettled(observers.map(async (observer) => observer.return?.()));
-    await this.activity?.dispose();
     await this.coordinator.dispose();
   }
 
@@ -167,7 +134,6 @@ export class CutExportTaskRegistry {
     const task = projectTask(snapshot);
     this.tasks.set(snapshot.ref.jobId, task);
     this.options.onUpdate(task);
-    this.activity?.install(snapshot);
     if (isTerminalJobPhase(snapshot.phase) || this.observers.has(snapshot.ref.jobId)) return;
 
     const iterator = this.coordinator

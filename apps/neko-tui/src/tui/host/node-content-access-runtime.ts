@@ -12,17 +12,14 @@ import {
   PathResolver,
   normalizeWorkspaceContentPath,
   type ContentLocator,
-  type GeneratedOutputContentLocator,
-  type ResourceRef,
+  type ContentSourceRef,
   type WorkspaceFileContentLocator,
 } from '@neko/shared';
 import {
   createHostDerivedContentRuntime,
   createNodeHostContentReadService,
-  resolveGeneratedAssetResourceRef,
   type HostDerivedContentRuntime,
 } from '@neko/shared/content-access';
-import type { GeneratedAssetResourceResolver } from '@neko/platform';
 import {
   createHostAgentContentAccessRuntime,
   createAgentDocumentReaderModuleUnavailableError,
@@ -40,7 +37,6 @@ const DEFAULT_PROVIDER_ASSET_RANGE_BYTES = 20 * 1024 * 1024;
 export interface CreateNodeContentAccessRuntimeOptions {
   readonly host: NekoHostPorts;
   readonly maxProviderAssetBytes?: number;
-  readonly resolveGeneratedAsset?: GeneratedAssetResourceResolver;
   readonly derivedStorageHomedir?: string;
 }
 
@@ -71,6 +67,10 @@ class LazyNodeContentAccessRuntime implements AgentContentAccessRuntime {
   private servicesPromise: Promise<NodeContentAccessRuntimeServices> | undefined;
 
   constructor(private readonly options: CreateNodeContentAccessRuntimeOptions) {}
+
+  resolveContentLocator(source: ContentSourceRef): Promise<ContentLocator | undefined> {
+    return this.runtime().then((runtime) => runtime.resolveContentLocator(source));
+  }
 
   resolveImageMetadata(input: AgentImageMetadataInput): Promise<AgentImageMetadataResult> {
     return this.runtime().then((runtime) => runtime.resolveImageMetadata(input));
@@ -125,10 +125,6 @@ class NodeContentAccessRuntimeBuilder {
       throw new Error('TUI content access requires a workspace root.');
     }
 
-    const pathResolver = new PathResolver(new Map(contentPolicy.pathVariables));
-    const resolveGeneratedAsset = async (ref: ResourceRef) =>
-      (await this.options.resolveGeneratedAsset?.(ref)) ??
-      resolveGeneratedAssetResourceRef(ref, pathResolver, workspaceRoot);
     const derivedRuntime = await createHostDerivedContentRuntime({
       target: {
         kind: 'workspace',
@@ -153,10 +149,6 @@ class NodeContentAccessRuntimeBuilder {
       contentRead,
       documentAccess,
       resolveWorkspaceFileLocator: createWorkspaceFileLocatorResolver(workspaceRoot),
-      resolveGeneratedOutputLocator: createGeneratedOutputLocatorResolver(
-        workspaceRoot,
-        resolveGeneratedAsset,
-      ),
       resolveDocumentHostFilePath: (source) => path.join(workspaceRoot, ...source.path.split('/')),
     });
 
@@ -259,34 +251,6 @@ function createWorkspaceFileLocatorResolver(
       ? { kind: 'workspace-file', path: normalized }
       : undefined;
   };
-}
-
-function createGeneratedOutputLocatorResolver(
-  workspaceRoot: string,
-  resolveGeneratedAsset: GeneratedAssetResourceResolver,
-): (ref: ResourceRef) => Promise<GeneratedOutputContentLocator | undefined> {
-  const resolveWorkspaceFile = createWorkspaceFileLocatorResolver(workspaceRoot);
-  return async (ref) => {
-    if (ref.source.kind !== 'generated-asset') return undefined;
-    const resolved = await resolveGeneratedAsset(ref);
-    const workspaceFile = resolved?.path ? resolveWorkspaceFile(resolved.path) : undefined;
-    const revision = readNonEmptyString(ref.source.metadata?.['revision']);
-    const digest = readNonEmptyString(ref.source.metadata?.['contentDigest']);
-    const outputId = readNonEmptyString(ref.source.generatedAssetId);
-    return workspaceFile && revision && digest && outputId
-      ? {
-          kind: 'generated-output',
-          outputId,
-          revision,
-          digest,
-          path: workspaceFile.path,
-        }
-      : undefined;
-  };
-}
-
-function readNonEmptyString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
 interface AdmZipEntry {

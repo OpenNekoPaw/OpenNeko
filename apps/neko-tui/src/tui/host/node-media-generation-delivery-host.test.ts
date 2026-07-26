@@ -50,10 +50,10 @@ describe('NodeMediaGenerationDeliveryHost Workspace Board delivery', () => {
       }),
     ).resolves.toMatchObject({
       resultUrls: [expect.stringMatching(/^generated-assets\/generated-[a-f0-9]{24}\.png$/)],
-      resourceRefs: [
+      resultLocators: [
         expect.objectContaining({
-          provider: 'generated-asset',
-          kind: 'generated',
+          kind: 'generated-output',
+          path: expect.stringMatching(/^neko\/generated\/image\//u),
         }),
       ],
     });
@@ -209,14 +209,10 @@ function creatorVisibleArtifacts(): readonly CreatorVisibleArtifactCandidate[] {
       kind: 'file-reference',
       title: 'Selected brief',
       sourceId: 'source:brief',
-      resourceRef: {
-        id: 'source:brief',
-        scope: 'project',
-        provider: 'document',
-        kind: 'document',
-        source: { kind: 'file', projectRelativePath: 'materials/brief.md' },
-        locator: { kind: 'file', path: 'materials/brief.md' },
-        fingerprint: { strategy: 'hash', value: 'sha256:brief' },
+      contentLocator: {
+        kind: 'workspace-file',
+        path: 'materials/brief.md',
+        fingerprint: { strategy: 'sha256', value: 'sha256:brief' },
       },
     },
     {
@@ -241,18 +237,12 @@ function portraitImageArtifact(): CreatorVisibleArtifactCandidate {
     title: 'Portrait image',
     sourceId: 'source:portrait-image',
     intrinsicDimensions: { width: 1024, height: 1536 },
-    resourceRef: {
-      id: 'source:portrait-image',
-      scope: 'project',
-      provider: 'generated-output',
-      kind: 'generated',
-      source: {
-        kind: 'generated-asset',
-        generatedAssetId: 'portrait-image',
-        projectRelativePath: 'neko/generated/image/portrait-image.png',
-      },
-      locator: { kind: 'generated-asset', assetId: 'portrait-image' },
-      fingerprint: { strategy: 'hash', value: 'sha256:portrait-image' },
+    contentLocator: {
+      kind: 'generated-output',
+      outputId: 'portrait-image',
+      revision: 'rev-portrait-image',
+      digest: 'sha256:portrait-image',
+      path: 'neko/generated/image/portrait-image.png',
     },
   };
 }

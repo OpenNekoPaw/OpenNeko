@@ -23,19 +23,21 @@ import {
 import {
   formatLocalMetadataUserDiagnostic,
   LogLevel,
+  contentLocatorsEqual,
   projectLocalMetadataUserDiagnostic,
   type NekoAgentAPI,
   type GeneratedAsset,
-  type ResourceRef,
+  type GeneratedOutputContentLocator,
   type SkillDef,
   type ProjectQualityFacade,
   type QualityProjectRef,
 } from '@neko/shared';
 import { bootstrapCoreServices, logServicesStatus } from './bootstrap';
 import {
-  createGeneratedAssetResourceResolver,
   registerMediaAgentTools,
   setPlatformRootLogger,
+  type GeneratedAssetCatalog,
+  type GeneratedAssetIndex,
 } from '@neko/platform';
 import {
   createPersistentGenerationJobStore,
@@ -97,14 +99,13 @@ import {
 } from './debug/timelineProjectionAcceptance';
 import type { Platform } from '@neko/platform';
 import type { ToolRegistry } from '@neko/agent';
-import type { DomainActivityHost } from '@neko/shared/domain-activity';
 
 export interface NekoAgentHostServices {
   readonly platform: Platform;
   readonly toolRegistry: ToolRegistry;
   readonly generationJobs?: GenerationJobPort;
-  readonly domainActivity?: DomainActivityHost;
-  readonly resolveGenerationResult?: (ref: ResourceRef) => {
+  readonly generatedAssets?: GeneratedAssetCatalog;
+  readonly resolveGenerationResult?: (locator: GeneratedOutputContentLocator) => {
     readonly path: string;
     readonly asset: GeneratedAsset;
   };
@@ -239,14 +240,15 @@ export async function activate(
   // without depending on @neko/platform directly.
   const capabilityRegistries = createAgentCapabilityRuntimeRegistries();
   const generatedAssetIndexBinding =
-    localMetadata && workspaceRoot
+    !hostServices?.generatedAssets && localMetadata && workspaceRoot
       ? await createWorkspaceGeneratedAssetIndex({
           workspaceRoot,
           homedir: nodeOs.homedir(),
           logger,
         })
       : undefined;
-  const generatedAssetIndex = generatedAssetIndexBinding?.index;
+  const standaloneGeneratedAssetIndex = generatedAssetIndexBinding?.index;
+  const generatedAssetCatalog = hostServices?.generatedAssets ?? standaloneGeneratedAssetIndex;
   if (generatedAssetIndexBinding) {
     context.subscriptions.push({
       dispose: () => {
@@ -256,10 +258,10 @@ export async function activate(
       },
     });
   }
-  if (!hostServices?.generationJobs && localMetadata && generatedAssetIndex) {
+  if (!hostServices?.generationJobs && localMetadata && standaloneGeneratedAssetIndex) {
     await localMetadata.metadataStore.migrateNamespace(GENERATION_JOB_MIGRATIONS);
     const generationDelivery = new MediaGenerationDeliveryHost({
-      assetIndex: generatedAssetIndex,
+      assetIndex: standaloneGeneratedAssetIndex,
     });
     const coordinator = new GenerationJobCoordinator({
       store: createPersistentGenerationJobStore({
@@ -279,7 +281,7 @@ export async function activate(
                 `Generated asset ${asset.id} is missing its durable ResourceRef lifecycle.`,
               );
             }
-            return asset.lifecycle.resourceRef;
+            return asset.lifecycle.contentLocator;
           });
         },
       },
@@ -299,9 +301,6 @@ export async function activate(
   const agentContentAccess = await createExtensionAgentContentAccessRuntime({
     context,
     workspaceRoot,
-    ...(generatedAssetIndex
-      ? { resolveGeneratedAsset: createGeneratedAssetResourceResolver(generatedAssetIndex) }
-      : {}),
     pathResolver: await createHostContentPathResolver({
       workspaceRoot,
       getExtension: vscode.extensions.getExtension,
@@ -389,7 +388,7 @@ export async function activate(
       initialCatalog: initialPiConversationCatalog,
     },
     ...(localMetadata ? { localMetadata } : {}),
-    ...(generatedAssetIndex ? { generatedAssetIndex } : {}),
+    ...(generatedAssetCatalog ? { generatedAssetCatalog } : {}),
     ...((hostServices?.generationJobs ?? generationJobCoordinator)
       ? {
           generationJobs: hostServices?.generationJobs ?? generationJobCoordinator,
@@ -397,20 +396,12 @@ export async function activate(
       : {}),
     ...(hostServices?.resolveGenerationResult
       ? { resolveGenerationResult: hostServices.resolveGenerationResult }
-      : generatedAssetIndex
+      : generatedAssetCatalog
         ? {
-            resolveGenerationResult: (ref: ResourceRef) =>
-              resolveGeneratedAssetResult(generatedAssetIndex, ref),
+            resolveGenerationResult: (locator: GeneratedOutputContentLocator) =>
+              resolveGeneratedAssetResult(generatedAssetCatalog, locator),
           }
         : {}),
-    ...(hostServices?.domainActivity
-      ? {
-          domainActivity: {
-            source: hostServices.domainActivity.source,
-            commands: hostServices.domainActivity,
-          },
-        }
-      : {}),
   });
   if (localMetadata) {
     const refreshSharedMetadata = (): void => {
@@ -457,7 +448,9 @@ export async function activate(
     logger: projectSearchLogger,
     adapters: createAgentProjectSearchAdapters({
       logger: projectSearchLogger,
-      ...(generatedAssetIndex ? { queryGeneratedAssets: () => generatedAssetIndex.list() } : {}),
+      ...(generatedAssetCatalog
+        ? { queryGeneratedAssets: () => generatedAssetCatalog.list() }
+        : {}),
       ...(localMetadata
         ? {
             searchProjection: {
@@ -539,18 +532,14 @@ export async function activate(
     getSkills() {
       return skillCatalog;
     },
-    async resolveGeneratedOutput(resourceRef) {
-      if (
-        resourceRef.kind !== 'generated' ||
-        resourceRef.source.kind !== 'generated-asset' ||
-        !resourceRef.source.generatedAssetId
-      ) {
+    async resolveGeneratedOutput(contentLocator) {
+      if (contentLocator.kind !== 'generated-output') {
         return {
           status: 'unavailable',
-          diagnostic: 'Generated output resolution requires generated-output ResourceRef identity.',
+          diagnostic: 'Generated output resolution requires a generated-output ContentLocator.',
         };
       }
-      const asset = generatedAssetIndex?.get(resourceRef.source.generatedAssetId);
+      const asset = generatedAssetCatalog?.get(contentLocator.outputId);
       const lifecycle = asset?.lifecycle;
       if (!asset || !lifecycle) {
         return {
@@ -558,13 +547,10 @@ export async function activate(
           diagnostic: 'Generated output lifecycle metadata is unavailable.',
         };
       }
-      if (
-        lifecycle.resourceRef.id !== resourceRef.id ||
-        lifecycle.contentDigest !== resourceRef.fingerprint.value
-      ) {
+      if (!contentLocatorsEqual(lifecycle.contentLocator, contentLocator)) {
         return {
           status: 'unavailable',
-          diagnostic: 'Generated output ResourceRef no longer matches its lifecycle revision.',
+          diagnostic: 'Generated output ContentLocator no longer matches its lifecycle revision.',
         };
       }
       return {
@@ -594,19 +580,14 @@ export async function deactivate(): Promise<void> {
 }
 
 function resolveGeneratedAssetResult(
-  index: NonNullable<Parameters<typeof createGeneratedAssetResourceResolver>[0]>,
-  ref: ResourceRef,
+  index: Pick<GeneratedAssetIndex, 'get'>,
+  locator: GeneratedOutputContentLocator,
 ): { readonly path: string; readonly asset: GeneratedAsset } {
-  if (ref.provider !== 'generated-asset' || ref.source.kind !== 'generated-asset') {
-    throw new Error(`Generation result ${ref.id} is not a generated-asset ResourceRef.`);
-  }
-  const generatedAssetId = ref.source.generatedAssetId;
-  if (typeof generatedAssetId !== 'string' || generatedAssetId.length === 0) {
-    throw new Error(`Generation result ${ref.id} is missing its generated asset identity.`);
-  }
-  const asset = index.get(generatedAssetId);
-  if (!asset?.lifecycle || asset.lifecycle.resourceRef.id !== ref.id) {
-    throw new Error(`Generation result ${ref.id} does not match the generated asset index.`);
+  const asset = index.get(locator.outputId);
+  if (!asset?.lifecycle || !contentLocatorsEqual(asset.lifecycle.contentLocator, locator)) {
+    throw new Error(
+      `Generation result ${locator.outputId}/${locator.revision} does not match the generated asset index.`,
+    );
   }
   return { path: asset.path, asset };
 }

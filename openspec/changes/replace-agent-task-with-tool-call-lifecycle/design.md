@@ -150,9 +150,10 @@ UI 投影收敛为：
 | Plan Progress | Agent 的计划/checklist | 展开、查看、更新计划 |
 | Tool Execution | 当前/历史 Tool Call | approve/cancel/view result |
 | Agent Activity | 前台 Agent Run、SubagentRun | open/interrupt |
-| Domain Activity | GenerationJob、ExportJob、ImportJob 等 | owning-domain cancel/retry/open result |
+| Caller-owned domain projection | Agent Tool Timeline、Canvas action、Cut editor/status | owning-domain cancel/retry/open result |
 
 `TaskCard` 应替换为 `ToolExecutionCard`、`AgentRunCard` 或领域卡片；`AgentTaskQueue` 应改为 `PlanProgress`。不得提供一个不知道实际 owner 的 `cancelTask` 或 `retryTask`。
+不得为了集中显示领域 Job 再建立跨领域 Activity authority、summary DTO 或 command router。
 
 ### 8. 流式输出以同一 Tool Call Timeline item 为权威
 

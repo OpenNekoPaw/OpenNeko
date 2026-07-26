@@ -254,6 +254,7 @@ export interface AgentMessageTurnMediaExecutionInput {
   readonly conversationId: string;
   readonly prompt: string;
   readonly mediaModel: ModelRef<MediaModelCategory>;
+  readonly userMessage: Pick<Message, 'id' | 'content' | 'timestamp'>;
   readonly threeReferenceControls?: ThreeReferenceMediaControls;
   readonly selectedFileReferences?: readonly AgentFileReference[];
 }
@@ -1042,15 +1043,30 @@ export async function runAgentMessageTurnRuntime(
     const threeReferenceControls = projectAgentThreeReferenceMediaControls(
       input.request.contextPayloads,
     );
-    await input.executeMediaTurn({
-      conversationId,
-      prompt: prepared.enhancedMessage,
-      mediaModel: prepared.route.mediaModel,
-      ...(threeReferenceControls ? { threeReferenceControls } : {}),
-      ...(input.request.fileReferences
-        ? { selectedFileReferences: input.request.fileReferences }
-        : {}),
-    });
+    try {
+      await input.executeMediaTurn({
+        conversationId,
+        prompt: prepared.enhancedMessage,
+        mediaModel: prepared.route.mediaModel,
+        userMessage: {
+          id: prepared.userMessage.id,
+          content: prepared.userMessage.content,
+          timestamp: prepared.userMessage.timestamp,
+        },
+        ...(threeReferenceControls ? { threeReferenceControls } : {}),
+        ...(input.request.fileReferences
+          ? { selectedFileReferences: input.request.fileReferences }
+          : {}),
+      });
+    } finally {
+      input.postMessage(
+        buildAgentPhaseMessage({
+          conversationId,
+          phase: 'idle',
+          timestamp: input.now?.() ?? Date.now(),
+        }),
+      );
+    }
     return { status: 'media-dispatched' };
   }
 

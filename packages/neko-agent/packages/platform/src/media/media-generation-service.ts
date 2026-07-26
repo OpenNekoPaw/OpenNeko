@@ -29,7 +29,7 @@ function hasThreeReferenceImageControls(
   request: ImageGenerationRequest | VideoGenerationRequest | AudioGenerationRequest,
 ): request is ImageGenerationRequest {
   if (!(
-    'controlImageRef' in request ||
+    'controlImageLocator' in request ||
     'ipAdapterRefs' in request ||
     'cameraReference' in request ||
     'panoramaReference' in request
@@ -37,8 +37,8 @@ function hasThreeReferenceImageControls(
     return false;
   }
   return Boolean(
-    request.controlImageRef ||
-    request.ipAdapterRefs?.some((reference) => reference.imageRef) ||
+    request.controlImageLocator ||
+    request.ipAdapterRefs?.some((reference) => reference.imageLocator) ||
     request.cameraReference ||
     request.panoramaReference,
   );

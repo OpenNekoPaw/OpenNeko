@@ -12,7 +12,6 @@ import type {
   EmbodyCharacterController,
 } from '@neko/chara/host-vscode';
 import type { ConversationProjectionAttachmentServer } from '../projection/conversationProjectionAttachmentServer';
-import type { DomainActivityAttachmentServer } from '../activity/domainActivityAttachmentServer';
 import type {
   ContextHandler,
   ConversationMessageHandler,
@@ -25,7 +24,6 @@ import type {
 export interface ChatWebviewMessageRouterDeps {
   readonly webview: vscode.Webview;
   readonly projectionAttachments: ConversationProjectionAttachmentServer;
-  readonly domainActivity?: DomainActivityAttachmentServer;
   readonly announceProjectionEndpoint: (protocolVersion: number, realmId: string) => void;
   readonly reportProjectionProtocolError: (error: Error, key: ProjectionAttachmentKey) => void;
   readonly messages?: AgentMessageTurnHandler;

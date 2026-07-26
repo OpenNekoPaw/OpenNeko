@@ -10,7 +10,7 @@ import type {
   AgentMessageExecutionOverrides,
 } from '@neko/agent/runtime';
 import { collectCreatorVisibleArtifacts } from '@neko/agent/runtime';
-import { buildGlobalErrorMessage } from '@neko-agent/types';
+import { buildAgentPhaseMessage, buildGlobalErrorMessage } from '@neko-agent/types';
 
 import type { IAgentManager } from '../../ai/agentManager';
 import type { ExecuteVSCodePiTurnInput } from '../../ai/vscodePiRuntimeManager';
@@ -116,12 +116,7 @@ export class AgentTurnBridge {
       const executionMode = input.executionOverrides?.executionMode ?? input.settings.executionMode;
       const messageId = this.deps.generateMessageId();
       const stream = this.deps.createPiStream(input.conversationId, messageId, (phase, toolName) =>
-        this.deps.onPhaseChange({
-          conversationId: input.conversationId,
-          phase,
-          ...(toolName === undefined ? {} : { toolName }),
-          timestamp: Date.now(),
-        }),
+        this.publishPhaseChange(input, phase, toolName),
       );
       try {
         const runtimeOptions = resolvePiTurnRuntimeOptions(input);
@@ -215,6 +210,21 @@ export class AgentTurnBridge {
       artifacts,
       runId: stream.identity.runId,
     });
+  }
+
+  private publishPhaseChange(
+    input: ExecuteAgentTurnForWebviewInput,
+    phase: AgentPhase,
+    toolName?: string,
+  ): void {
+    const event = {
+      conversationId: input.conversationId,
+      phase,
+      ...(toolName === undefined ? {} : { toolName }),
+      timestamp: Date.now(),
+    };
+    this.deps.onPhaseChange(event);
+    void input.webview.postMessage(buildAgentPhaseMessage(event));
   }
 
   private resolveModelSelection(modelRef: ModelRef | undefined): {

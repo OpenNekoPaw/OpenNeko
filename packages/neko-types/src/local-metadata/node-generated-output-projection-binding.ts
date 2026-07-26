@@ -4,6 +4,7 @@ import {
   type GeneratedAsset,
   type PathlessGeneratedAsset,
 } from '../types/generated-asset';
+import { isGeneratedAssetRevisionRef } from '../types/generated-asset-lifecycle';
 import type { ResourceCacheEntry, ResourceCacheManifestStore } from '../types/resource-cache';
 import { PathResolver } from '../path/resolver';
 import { createNodeWorkspaceResourceCacheMetadataBinding } from './node-workspace-resource-cache-binding';
@@ -20,6 +21,20 @@ export interface NodeGeneratedOutputProjectionBinding {
   dispose(): Promise<void>;
 }
 
+export type GeneratedOutputProjectionRejectionCode =
+  'generated-output-projection-migration-required' | 'retired-generated-draft-projection';
+
+export interface GeneratedOutputProjectionRejection {
+  readonly code: GeneratedOutputProjectionRejectionCode;
+  readonly resourceId: string;
+  readonly message: string;
+}
+
+export interface PreserveAndReportGeneratedOutputProjectionRejectionPolicy {
+  readonly mode: 'preserve-and-report';
+  report(rejection: GeneratedOutputProjectionRejection): void;
+}
+
 interface GeneratedOutputProjectionPayload {
   readonly version: 1;
   readonly asset: PathlessGeneratedAsset;
@@ -32,6 +47,7 @@ export interface LocalMetadataGeneratedOutputProjectionStoreOptions {
   readonly workspaceRoot: string;
   readonly pathResolver: PathResolver;
   readonly now?: () => string;
+  readonly rejectedProjectionPolicy?: PreserveAndReportGeneratedOutputProjectionRejectionPolicy;
 }
 
 const GENERATED_OUTPUT_INDEX_PROVIDER = 'generated-output-index';
@@ -61,13 +77,17 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
   ): Promise<readonly GeneratedAsset[]> {
     let updatedAssets: readonly GeneratedAsset[] = [];
     await this.options.manifestStore.update((manifest) => {
-      const currentAssets = Object.values(manifest.entries).flatMap((entry) => {
-        const asset = this.decodeEntry(entry);
+      const rejectedResourceIds = new Set<string>();
+      const currentAssets = Object.entries(manifest.entries).flatMap(([storageKey, entry]) => {
+        const asset = this.decodeEntry(entry, rejectedResourceIds, storageKey);
         return asset ? [asset] : [];
       });
       updatedAssets = operation(currentAssets);
       const retainedEntries = Object.fromEntries(
-        Object.entries(manifest.entries).filter(([, entry]) => !this.isProjectionEntry(entry)),
+        Object.entries(manifest.entries).filter(
+          ([resourceId, entry]) =>
+            !this.isProjectionEntry(entry) || rejectedResourceIds.has(resourceId),
+        ),
       );
       const projectionEntries = Object.fromEntries(
         updatedAssets.map((asset) => {
@@ -86,6 +106,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
 
   private encodeEntry(asset: GeneratedAsset): ResourceCacheEntry {
     const pathKey = this.toPortablePathKey(asset.path);
+    assertLifecycleMatchesProjectionPath(asset, pathKey);
     const projection: GeneratedOutputProjectionPayload = {
       version: 1,
       asset: stripGeneratedAssetPath(asset),
@@ -124,16 +145,45 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
     };
   }
 
-  private decodeEntry(entry: ResourceCacheEntry): GeneratedAsset | null {
+  private decodeEntry(
+    entry: ResourceCacheEntry,
+    rejectedResourceIds?: Set<string>,
+    rejectedStorageKey?: string,
+  ): GeneratedAsset | null {
+    try {
+      return this.decodeEntryStrict(entry);
+    } catch (error) {
+      if (
+        !(error instanceof GeneratedOutputProjectionRejectionError) ||
+        this.options.rejectedProjectionPolicy?.mode !== 'preserve-and-report'
+      ) {
+        throw error;
+      }
+      rejectedResourceIds?.add(rejectedStorageKey ?? error.rejection.resourceId);
+      this.options.rejectedProjectionPolicy.report(error.rejection);
+      return null;
+    }
+  }
+
+  private decodeEntryStrict(entry: ResourceCacheEntry): GeneratedAsset | null {
     if (isRetiredGeneratedDraftProjection(entry)) {
-      throw new Error(
-        `retired-generated-draft-projection: Resource ${entry.resource.id} must be rebuilt through the generated output index.`,
+      throw createProjectionRejection(
+        'retired-generated-draft-projection',
+        entry.resource.id,
+        `Resource ${entry.resource.id} must be rebuilt through the generated output index.`,
       );
     }
     if (!this.isProjectionEntry(entry)) return null;
     const projection = readGeneratedOutputProjection(entry);
-    if (!projection) return null;
-    const assetPath = this.resolvePathKey(projection.pathKey);
+    if (!projection) {
+      throw createProjectionRejection(
+        'generated-output-projection-migration-required',
+        entry.resource.id,
+        `Resource ${entry.resource.id} contains an invalid or legacy projection.`,
+      );
+    }
+    assertLifecycleMatchesProjectionPath(projection.asset, projection.pathKey, entry.resource.id);
+    const assetPath = this.resolvePathKey(projection.pathKey, entry.resource.id);
     switch (projection.asset.type) {
       case 'generated-image':
       case 'generated-audio':
@@ -141,14 +191,22 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
         return { ...projection.asset, path: assetPath };
       case 'generated-storyboard': {
         const shotPathKeys = projection.storyboardShotPathKeys;
-        if (!shotPathKeys || shotPathKeys.length !== projection.asset.scenes.length) return null;
+        if (!shotPathKeys || shotPathKeys.length !== projection.asset.scenes.length) {
+          throw createProjectionRejection(
+            'generated-output-projection-migration-required',
+            entry.resource.id,
+            `Generated storyboard ${projection.asset.id} has invalid shot paths.`,
+          );
+        }
         return {
           ...projection.asset,
           path: assetPath,
           scenes: projection.asset.scenes.map((scene, sceneIndex) => {
             const scenePathKeys = shotPathKeys[sceneIndex];
             if (!scenePathKeys || scenePathKeys.length !== scene.shots.length) {
-              throw new Error(
+              throw createProjectionRejection(
+                'generated-output-projection-migration-required',
+                entry.resource.id,
                 `Generated storyboard ${projection.asset.id} has invalid shot paths.`,
               );
             }
@@ -157,11 +215,16 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
               shots: scene.shots.map((shot, shotIndex) => {
                 const shotPathKey = scenePathKeys[shotIndex];
                 if (!shotPathKey) {
-                  throw new Error(
+                  throw createProjectionRejection(
+                    'generated-output-projection-migration-required',
+                    entry.resource.id,
                     `Generated storyboard ${projection.asset.id} is missing shot path ${shotIndex}.`,
                   );
                 }
-                return { ...shot, path: this.resolvePathKey(shotPathKey) };
+                return {
+                  ...shot,
+                  path: this.resolvePathKey(shotPathKey, entry.resource.id),
+                };
               }),
             };
           }),
@@ -173,8 +236,7 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
   private isProjectionEntry(entry: ResourceCacheEntry): boolean {
     return (
       entry.resource.kind === 'generated' &&
-      entry.resource.provider === GENERATED_OUTPUT_INDEX_PROVIDER &&
-      entry.providerMetadata?.[GENERATED_OUTPUT_PROJECTION_FIELD] !== undefined
+      entry.resource.provider === GENERATED_OUTPUT_INDEX_PROVIDER
     );
   }
 
@@ -186,13 +248,19 @@ export class LocalMetadataGeneratedOutputProjectionStore implements GeneratedOut
     return pathKey;
   }
 
-  private resolvePathKey(pathKey: string): string {
+  private resolvePathKey(pathKey: string, resourceId?: string): string {
     if (!isPortablePathKey(pathKey)) {
-      throw new Error(`Generated asset projection path is not portable: ${pathKey}`);
+      throwProjectionPathError(
+        `Generated asset projection path is not portable: ${pathKey}`,
+        resourceId,
+      );
     }
     const resolved = this.options.pathResolver.resolve(pathKey);
     if (resolved.includes('${')) {
-      throw new Error(`Generated asset projection path variable is unresolved: ${pathKey}`);
+      throwProjectionPathError(
+        `Generated asset projection path variable is unresolved: ${pathKey}`,
+        resourceId,
+      );
     }
     return path.isAbsolute(resolved)
       ? resolved
@@ -277,6 +345,9 @@ function isPathlessGeneratedAsset(value: unknown): value is PathlessGeneratedAss
   ) {
     return false;
   }
+  if (value['lifecycle'] !== undefined && !isGeneratedAssetRevisionRef(value['lifecycle'])) {
+    return false;
+  }
   switch (value['type']) {
     case 'generated-image':
       return isGeneratedImageShape(value);
@@ -332,6 +403,55 @@ function isPortablePathKey(value: unknown): value is string {
     !normalized.startsWith('../') &&
     !normalized.includes('/../')
   );
+}
+
+function assertLifecycleMatchesProjectionPath(
+  asset: PathlessGeneratedAsset | GeneratedAsset,
+  pathKey: string,
+  resourceId?: string,
+): void {
+  if (!asset.lifecycle) return;
+  const workspacePrefix = '${WORKSPACE}/';
+  const contentPath = pathKey.startsWith(workspacePrefix)
+    ? pathKey.slice(workspacePrefix.length)
+    : undefined;
+  if (contentPath !== asset.lifecycle.contentLocator.path) {
+    const message = `Generated asset ${asset.id} lifecycle locator does not match its workspace projection path.`;
+    if (resourceId) {
+      throw createProjectionRejection(
+        'generated-output-projection-migration-required',
+        resourceId,
+        message,
+      );
+    }
+    throw new Error(`generated-output-projection-migration-required: ${message}`);
+  }
+}
+
+class GeneratedOutputProjectionRejectionError extends Error {
+  constructor(readonly rejection: GeneratedOutputProjectionRejection) {
+    super(`${rejection.code}: ${rejection.message}`);
+    this.name = 'GeneratedOutputProjectionRejectionError';
+  }
+}
+
+function createProjectionRejection(
+  code: GeneratedOutputProjectionRejectionCode,
+  resourceId: string,
+  message: string,
+): GeneratedOutputProjectionRejectionError {
+  return new GeneratedOutputProjectionRejectionError({ code, resourceId, message });
+}
+
+function throwProjectionPathError(message: string, resourceId?: string): never {
+  if (resourceId) {
+    throw createProjectionRejection(
+      'generated-output-projection-migration-required',
+      resourceId,
+      message,
+    );
+  }
+  throw new Error(message);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

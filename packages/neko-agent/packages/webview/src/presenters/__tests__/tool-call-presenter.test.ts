@@ -2,6 +2,103 @@ import { describe, expect, it } from 'vitest';
 import { projectToolCallDisplayState } from '../tool-call-presenter';
 
 describe('tool-call-presenter', () => {
+  it('recognizes canonical Generation Tool names and projects committed media', () => {
+    const projection = projectToolCallDisplayState({
+      id: 'generation-1',
+      name: 'GenerateImage',
+      arguments: {
+        prompt: '雨中的霓虹街道',
+        providerId: 'image-provider',
+        modelId: 'image-model',
+      },
+      result: {
+        success: true,
+        data: {
+          generationJob: {
+            kind: 'generation-job',
+            jobId: 'generation-1',
+            revision: 3,
+            phase: 'succeeded',
+            stage: 'completed',
+            percent: 100,
+          },
+          outputs: [
+            {
+              type: 'image',
+              contentLocator: generatedOutputLocator('generated-1'),
+              renderUri: 'webview://generated/image.png',
+            },
+          ],
+          boardDelivery: {
+            status: 'projected',
+            nodeIds: ['node-1'],
+            diagnostics: [],
+          },
+        },
+      },
+    });
+
+    expect(projection).toMatchObject({
+      isImageTool: true,
+      imageUrls: ['webview://generated/image.png'],
+      videoUrls: [],
+      audioUrls: [],
+      isSuccess: true,
+      generationJob: {
+        jobId: 'generation-1',
+        revision: 3,
+        phase: 'succeeded',
+        stage: 'completed',
+        percent: 100,
+        boardDelivery: {
+          status: 'projected',
+          nodeIds: ['node-1'],
+          diagnostics: [],
+        },
+      },
+    });
+  });
+
+  it('projects Agent GenerateImage ContentLocator hydration through the same card model', () => {
+    const projection = projectToolCallDisplayState({
+      id: 'tool-generation-1',
+      name: 'GenerateImage',
+      arguments: { prompt: '雨中的霓虹街道' },
+      result: {
+        success: true,
+        data: {
+          status: 'completed',
+          jobId: 'generation-1',
+          jobRevision: 4,
+          routedTo: { provider: 'image-provider', model: 'image-model' },
+          outputs: [
+            {
+              type: 'image',
+              contentLocator: generatedOutputLocator('generated-1'),
+              renderUri: 'webview://generated/generated-1.png',
+            },
+          ],
+        },
+      },
+    });
+
+    expect(projection).toMatchObject({
+      imageUrls: ['webview://generated/generated-1.png'],
+      videoUrls: [],
+      audioUrls: [],
+      generationJob: {
+        jobId: 'generation-1',
+        revision: 4,
+        phase: 'succeeded',
+        stage: 'completed',
+        percent: 100,
+        providerId: 'image-provider',
+        modelId: 'image-model',
+      },
+    });
+    expect(projection.resultJson).not.toContain('renderUri');
+  });
+
   it('projects Canvas authoring feedback for follow-up turns', () => {
     const projection = projectToolCallDisplayState({
       id: 'tool-canvas-1',
@@ -553,3 +650,13 @@ describe('tool-call-presenter', () => {
     );
   });
 });
+
+function generatedOutputLocator(outputId: string) {
+  return {
+    kind: 'generated-output' as const,
+    outputId,
+    revision: `revision-${outputId}`,
+    digest: `sha256:${outputId}`,
+    path: `neko/generated/images/${outputId}.png`,
+  };
+}

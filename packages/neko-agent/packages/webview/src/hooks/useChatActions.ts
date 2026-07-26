@@ -434,7 +434,10 @@ interface AgentModelSendProjectionInput {
 function projectAgentModelSendProjection(
   input: AgentModelSendProjectionInput,
 ): MessageModelProjection {
-  if (input.sessionMode !== 'agent' || !input.agentModels?.primary) {
+  if (input.sessionMode !== 'agent') {
+    return input.modelProjection.mediaModel ? { mediaModel: input.modelProjection.mediaModel } : {};
+  }
+  if (!input.agentModels?.primary) {
     return input.modelProjection;
   }
 

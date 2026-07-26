@@ -26,6 +26,33 @@ test('does not create or register a Generation Job runtime without a workspace',
   assert.match(hostRuntimeSource, /platform\.config\.resolveModelRefForPurpose\(purpose\)/u);
 });
 
+test('composes the generated output index from the Host-owned metadata binding', () => {
+  assert.doesNotMatch(hostRuntimeSource, /createResourceCacheGeneratedAssetIndex/u);
+  assert.equal(count(hostRuntimeSource, 'createNodeWorkspaceResourceCacheMetadataBinding({'), 1);
+  assert.match(
+    hostRuntimeSource,
+    /new LocalMetadataGeneratedOutputProjectionStore\(\{\s*manifestStore: metadata\.manifestStore,/u,
+  );
+  assert.match(hostRuntimeSource, /new GeneratedAssetIndex\(generatedAssetStore\)/u);
+  assert.doesNotMatch(hostRuntimeSource, /generatedAssetStore\.update\(\(assets\) => assets\)/u);
+});
+
+test('isolates rejected generated output projections without blocking Host activation', () => {
+  assert.match(
+    hostRuntimeSource,
+    /rejectedProjectionPolicy:\s*\{\s*mode:\s*'preserve-and-report',\s*report:/u,
+  );
+  assert.match(hostRuntimeSource, /vscode\.window\.showWarningMessage\(/u);
+  assert.match(hostRuntimeSource, /generated files? (?:was|were) preserved/iu);
+  assert.match(hostRuntimeSource, /rejected\.slice\(0,\s*3\)/u);
+  assert.match(hostRuntimeSource, /and \$\{hiddenCount\} more/u);
+});
+
+test('shares the Host-owned generated asset catalog with embedded features', () => {
+  assert.match(hostRuntimeSource, /readonly generatedAssets\?: GeneratedAssetCatalog;/u);
+  assert.match(hostRuntimeSource, /generatedAssets:\s*generatedAssetIndex,/u);
+});
+
 function count(source: string, value: string): number {
   return source.split(value).length - 1;
 }

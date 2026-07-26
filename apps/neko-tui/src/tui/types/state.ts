@@ -12,6 +12,7 @@ import type {
   AgentQueuedMessageDisplayKind,
   AgentTurnSource,
 } from '@neko-agent/types';
+import type { ContentLocator } from '@neko/shared';
 
 export type TerminalTimelineRowKind =
   'assistant_text' | 'thinking' | 'tool' | 'error' | 'diagnostic';
@@ -62,7 +63,13 @@ export interface TerminalTimelineRow {
 export interface TerminalArtifactFact {
   readonly ref: string;
   readonly kind:
-    'file' | 'resource-ref' | 'generated-asset' | 'project-revision' | 'composite-artifact';
+    'file'
+    | 'content-locator'
+    | 'resource-ref'
+    | 'generated-asset'
+    | 'project-revision'
+    | 'composite-artifact';
+  readonly contentLocator?: ContentLocator;
   readonly relativePath?: string;
   readonly digest?: string;
   readonly revision?: string;

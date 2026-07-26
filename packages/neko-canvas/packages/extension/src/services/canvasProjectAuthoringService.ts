@@ -162,7 +162,7 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
     assertNoRuntimeResourceIdentity(input.canvasData, 'canvasData');
     await input.assertWriter?.();
     await this.saveCanvasData(uri, input.canvasData);
-    this.options.canvasEditorProvider.applyHostCanvasData(uri, input.canvasData);
+    await this.options.canvasEditorProvider.applyHostCanvasData(uri, input.canvasData);
     return { revision: createCanvasWorkspaceBoardRevision(input.canvasData) };
   }
 
@@ -481,7 +481,7 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
     assertNoRuntimeResourceIdentity(mutation.canvasData, 'canvasData');
     if (mutation.canvasData !== loaded.canvasData) {
       await this.saveCanvasData(loaded.uri, mutation.canvasData);
-      this.options.canvasEditorProvider.applyHostCanvasData(loaded.uri, mutation.canvasData);
+      await this.options.canvasEditorProvider.applyHostCanvasData(loaded.uri, mutation.canvasData);
     }
     if (loaded.target.reveal) {
       await this.options.canvasEditorProvider.revealCanvasDocument(loaded.uri);
@@ -553,7 +553,7 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
     const canvasData = createEmptyCanvasData(title);
     assertNoRuntimeResourceIdentity(canvasData, 'canvasData');
     await this.saveCanvasData(uri, canvasData);
-    this.options.canvasEditorProvider.applyHostCanvasData(uri, canvasData);
+    await this.options.canvasEditorProvider.applyHostCanvasData(uri, canvasData);
   }
 
   private createImportedAssetNodeData(

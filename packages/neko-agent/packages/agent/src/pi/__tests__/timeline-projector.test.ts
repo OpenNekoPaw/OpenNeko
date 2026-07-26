@@ -100,7 +100,19 @@ describe('Pi Timeline projector', () => {
           details: {
             success: true,
             data: { text: 'document' },
-            attachments: [{ type: 'image', path: 'preview.png' }],
+            attachments: [
+              { type: 'image', path: 'preview.png' },
+              {
+                type: 'image',
+                contentLocator: {
+                  kind: 'generated-output',
+                  outputId: 'generated-image',
+                  revision: 'revision-1',
+                  digest: 'a'.repeat(64),
+                  path: 'neko/generated/image/generated-image.png',
+                },
+              },
+            ],
           },
         },
         isError: false,
@@ -132,7 +144,19 @@ describe('Pi Timeline projector', () => {
           result: {
             success: true,
             data: { text: 'document' },
-            attachments: [{ type: 'image', path: 'preview.png' }],
+            attachments: [
+              { type: 'image', path: 'preview.png' },
+              {
+                type: 'image',
+                contentLocator: {
+                  kind: 'generated-output',
+                  outputId: 'generated-image',
+                  revision: 'revision-1',
+                  digest: 'a'.repeat(64),
+                  path: 'neko/generated/image/generated-image.png',
+                },
+              },
+            ],
           },
           pendingConfirmation: false,
         },

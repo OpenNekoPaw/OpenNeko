@@ -18,6 +18,7 @@ export interface FinalizedMediaGenerationOutputs {
 }
 
 export interface FinalizeMediaGenerationOutputsInput {
+  readonly workspaceRoot: string;
   readonly operationId: string;
   readonly generationType: string;
   readonly mediaKind: GeneratedMediaKind;
@@ -60,6 +61,7 @@ export async function finalizeMediaGenerationOutputs(
     const computeContentDigest = input.computeContentDigest ?? computeFileContentDigest;
     const contentDigests = await Promise.all(hostOutputPaths.map(computeContentDigest));
     const generatedAssets = buildGeneratedMediaAssets({
+      workspaceRoot: input.workspaceRoot,
       hostOutputPaths,
       contentDigests,
       operationId: input.operationId,

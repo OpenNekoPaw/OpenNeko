@@ -9,7 +9,7 @@ import type { Model, Provider } from '../../types/provider';
 import type {
   MediaAdapterResult,
   MediaGenerationType,
-  VideoGenerationRequest,
+  MaterializedVideoGenerationRequest,
 } from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
@@ -41,7 +41,7 @@ export class ViduMediaAdapter extends BaseMediaAdapter {
   }
 
   async generateVideo(
-    request: VideoGenerationRequest,
+    request: MaterializedVideoGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {

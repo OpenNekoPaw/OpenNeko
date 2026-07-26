@@ -324,18 +324,33 @@ describe('M2 typed path hard gates', () => {
   });
 
   it('selects a dynamic generated artifact by kind and provenance', () => {
+    const facts = m2Facts();
+    facts.artifacts[0] = {
+      ...facts.artifacts[0],
+      contentLocator: {
+        kind: 'generated-output',
+        outputId: 'scene-1',
+        revision: HASH,
+        digest: HASH_B,
+        path: 'neko/generated/image/scene-1.png',
+      },
+      provenance: { source: 'generated-output', toolCallId: 'tool-1' },
+      validator: { id: 'content-locator', status: 'valid' },
+    };
     const [result] = evaluateHardGates(
       [
         {
           id: 'generated-output',
           kind: 'artifact',
           artifactKind: 'generated-asset',
-          provenanceSource: 'generated-asset',
+          provenanceSource: 'generated-output',
+          validatorId: 'content-locator',
+          contentLocatorKind: 'generated-output',
           validatorStatus: 'valid',
           evidenceRef: 'artifact-facts',
         },
       ],
-      m2Facts(),
+      facts,
     );
 
     expect(result).toMatchObject({
@@ -345,6 +360,87 @@ describe('M2 typed path hard gates', () => {
         kind: 'generated-asset',
         validatorStatus: 'valid',
       },
+    });
+  });
+
+  it('proves one generated-output locator is passed unchanged between Tools and artifact facts', () => {
+    const locator = {
+      kind: 'generated-output',
+      outputId: 'scene-1',
+      revision: HASH,
+      digest: HASH_B,
+      path: 'neko/generated/image/scene-1.png',
+    };
+    const facts = m2Facts();
+    facts.turns[1].toolCalls = [
+      {
+        id: 'generate-1',
+        name: 'GenerateImage',
+        status: 'success',
+        arguments: { prompt: 'scene' },
+        result: {
+          attachments: [
+            {
+              contentLocator: locator,
+              assetRef: { assetId: 'scene-1', contentLocator: locator },
+            },
+          ],
+        },
+        resultObservation: 'available',
+        diagnostics: [],
+      },
+      {
+        id: 'read-1',
+        name: 'ReadImage',
+        status: 'success',
+        arguments: { images: [{ contentLocator: locator }] },
+        result: { analysis: 'visible' },
+        resultObservation: 'available',
+        diagnostics: [],
+      },
+    ];
+    facts.artifacts = [
+      {
+        ref: 'scene-1',
+        kind: 'generated-asset',
+        contentLocator: locator,
+        digest: HASH_B,
+        revision: HASH,
+        provenance: { source: 'generated-output', toolCallId: 'generate-1' },
+        deliveryStatus: 'delivered',
+        validator: { id: 'content-locator', status: 'valid' },
+        diagnostics: [],
+      },
+    ];
+    const assertion = {
+      id: 'locator-handoff',
+      kind: 'content-locator-handoff',
+      producerToolName: 'GenerateImage',
+      consumerToolName: 'ReadImage',
+      locatorKind: 'generated-output',
+      artifactKind: 'generated-asset',
+      provenanceSource: 'generated-output',
+      validatorId: 'content-locator',
+      evidenceRef: 'artifact-facts',
+    };
+
+    expect(evaluateHardGates([assertion], facts)[0]).toMatchObject({
+      status: 'pass',
+      details: {
+        producerToolCallId: 'generate-1',
+        consumerToolCallId: 'read-1',
+        artifactRef: 'scene-1',
+        locatorKind: 'generated-output',
+      },
+    });
+
+    facts.turns[1].toolCalls[1].arguments.images[0].contentLocator = {
+      ...locator,
+      revision: HASH_B,
+    };
+    expect(evaluateHardGates([assertion], facts)[0]).toMatchObject({
+      status: 'fail',
+      message: expect.stringContaining('did not consume the exact locator'),
     });
   });
 

@@ -59,6 +59,8 @@ function buildConfigTemplateHeader(): string {
     '# Default model bindings use provider_id + model_id under [default_models.llm/image/video/audio].',
     '# Purpose-specific bindings use [default_model_purposes.image_understand/audio_understand/video_understand];',
     '# these are for native media analysis and do not replace image/video/audio generation defaults.',
+    '# Character roleplay uses independent [default_model_purposes.character_dialogue] and',
+    '# [default_model_purposes.character_profile] bindings; VS Code prompts before first use when missing.',
     '# Unsupported values fail visibly with a config diagnostic instead of falling back silently.',
     '',
   ].join('\n');

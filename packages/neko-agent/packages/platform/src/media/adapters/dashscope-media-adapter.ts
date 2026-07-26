@@ -18,8 +18,8 @@ import type {
   MediaGenerationType,
   MediaAdapterResult,
   MediaOperationStatus,
-  ImageGenerationRequest,
-  VideoGenerationRequest,
+  MaterializedImageGenerationRequest,
+  MaterializedVideoGenerationRequest,
   MediaOutput,
 } from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
@@ -124,7 +124,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   // ===========================================================================
 
   async generateImage(
-    request: ImageGenerationRequest,
+    request: MaterializedImageGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -158,7 +158,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   // ===========================================================================
 
   async generateVideo(
-    request: VideoGenerationRequest,
+    request: MaterializedVideoGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -259,7 +259,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   /**
    * Determine the DashScope image service endpoint based on request.
    */
-  private resolveImageService(request: ImageGenerationRequest): string {
+  private resolveImageService(request: MaterializedImageGenerationRequest): string {
     if (request.editInstruction || request.controlImageBase64) {
       return 'text2image/image-editing';
     }
@@ -273,7 +273,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
    * Build request body for Qwen-Image 2.0.
    */
   private buildQwenImageBody(
-    request: ImageGenerationRequest,
+    request: MaterializedImageGenerationRequest,
     model: Model,
   ): Record<string, unknown> {
     const input: Record<string, unknown> = {
@@ -342,7 +342,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
   /**
    * Determine the DashScope video service endpoint.
    */
-  private resolveVideoService(request: VideoGenerationRequest): string {
+  private resolveVideoService(request: MaterializedVideoGenerationRequest): string {
     if (request.sourceVideoUrl || request.editInstruction) {
       return 'text2video/video-editing';
     }
@@ -356,7 +356,7 @@ export class DashScopeMediaAdapter extends BaseMediaAdapter {
    * Build request body for Wan 2.7 video generation.
    */
   private buildWanVideoBody(
-    request: VideoGenerationRequest,
+    request: MaterializedVideoGenerationRequest,
     model: Model,
   ): Record<string, unknown> {
     const input: Record<string, unknown> = {

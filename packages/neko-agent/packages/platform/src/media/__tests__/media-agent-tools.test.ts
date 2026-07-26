@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ToolRegistry } from '@neko/agent';
-import type { ResourceRef } from '@neko/shared';
+import type { ContentLocator, GeneratedOutputContentLocator } from '@neko/shared';
 import type { GenerationJobSnapshot, SubmitGenerationJobInput } from '@neko/generation';
 import { registerMediaAgentTools } from '../media-agent-tools';
 
@@ -40,8 +40,8 @@ function createMediaMock() {
       revision: 3,
       updatedAt: 3,
       progress: { stage: 'completed', percent: 100 },
-      resultRefs: result.outputs.map((output, index) =>
-        createGeneratedResourceRef(`${jobId}:${output.type}:${index}`),
+      resultLocators: result.outputs.map((output, index) =>
+        createGeneratedContentLocator(`${jobId}:${output.type}:${index}`),
       ),
     });
     return initial;
@@ -55,7 +55,7 @@ function createMediaMock() {
       revision: 2,
       updatedAt: 2,
       progress: { stage: 'waiting-provider' as const, percent: 45 },
-      resultRefs: undefined,
+      resultLocators: undefined,
     };
     yield terminal;
   });
@@ -338,6 +338,48 @@ describe('registerMediaAgentTools', () => {
     expect(parameters?.properties).not.toHaveProperty('modelId');
   });
 
+  it('exposes only locator-backed media inputs and poisons legacy materialized fields', async () => {
+    const registry = new ToolRegistry();
+    const media = createMediaMock();
+    registerMediaAgentTools(registry, media as never);
+
+    const definitions = new Map(
+      registry
+        .toToolDefinitions()
+        .map((tool) => [tool.function.name, tool.function.parameters.properties]),
+    );
+    expect(definitions.get('GenerateImage')).toHaveProperty('referenceImageLocator');
+    expect(definitions.get('GenerateImage')).not.toHaveProperty('referenceImageBase64');
+    expect(definitions.get('TransformImage')).toHaveProperty('sourceImageLocator');
+    expect(definitions.get('TransformImage')).not.toHaveProperty('sourceImageUri');
+    expect(definitions.get('GenerateVideo')).toHaveProperty('startFrameLocator');
+    expect(definitions.get('GenerateVideo')).not.toHaveProperty('startFrameRef');
+
+    const image = await executeAgentTool(registry, 'GenerateImage', {
+      prompt: 'legacy input',
+      referenceImageBase64: 'runtime-bytes',
+      providerId: 'image-provider',
+      modelId: 'image-model',
+    });
+    expect(image).toMatchObject({
+      success: false,
+      error: expect.stringContaining('referenceImageBase64'),
+    });
+
+    const video = await executeAgentTool(registry, 'GenerateVideo', {
+      prompt: 'legacy input',
+      startFrameRef: { id: 'legacy-resource' },
+      providerId: 'video-provider',
+      modelId: 'video-model',
+    });
+    expect(video).toMatchObject({
+      success: false,
+      error: expect.stringContaining('startFrameRef'),
+    });
+    expect(media.generateImage).not.toHaveBeenCalled();
+    expect(media.generateVideo).not.toHaveBeenCalled();
+  });
+
   it('projects Chinese media tool schema text for model-facing definitions', () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
@@ -355,19 +397,19 @@ describe('registerMediaAgentTools', () => {
     expect(image?.description).toContain('generated 草稿');
     expect(image?.description).toContain('Quality');
     expect(getPropertyDescription(image, 'prompt')).toBe('图像生成或编辑提示词。');
-    expect(getPropertyDescription(image, 'referenceImageUri')).toContain('宿主已解析');
+    expect(getPropertyDescription(image, 'referenceImageLocator')).toContain('ContentLocator');
     expect(getPropertyDescription(image, 'editInstruction')).toContain('编辑指令');
     expect(getPropertyDescription(image, 'prompt')).not.toContain('Text description');
 
     expect(transform?.description).toContain('Tool Call 返回终态结果');
     expect(transform?.description).toContain('不是确定性裁切');
-    expect(getPropertyDescription(transform, 'sourceImageUri')).toContain('源图像');
+    expect(getPropertyDescription(transform, 'sourceImageLocator')).toContain('源图像');
     expect(getPropertyDescription(transform, 'operationPlan')).toContain('可审阅');
 
     expect(video?.description).toContain('Tool Call 返回终态结果');
     expect(video?.description).toContain('generated clip 草稿');
     expect(getPropertyDescription(video, 'prompt')).toBe('视频生成或编辑提示词。');
-    expect(getPropertyDescription(video, 'referenceImageUri')).toContain('图生视频');
+    expect(getPropertyDescription(video, 'startFrameLocator')).toContain('ContentLocator');
     expect(getPropertyDescription(video, 'editInstruction')).toContain('视频编辑');
 
     expect(music?.description).toContain('Tool Call 返回终态音频结果');
@@ -493,10 +535,18 @@ describe('registerMediaAgentTools', () => {
       },
     );
 
-    expect(progress).toHaveBeenCalledWith({
-      percent: 45,
-      stage: 'waiting-provider',
-    });
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        percent: 45,
+        stage: 'waiting-provider',
+        data: expect.objectContaining({
+          kind: 'generation-job',
+          jobId: 'generation-job-1',
+          revision: expect.any(Number),
+          phase: 'running',
+        }),
+      }),
+    );
     expect(result).toMatchObject({
       success: true,
       data: {
@@ -507,16 +557,19 @@ describe('registerMediaAgentTools', () => {
         outputs: [
           {
             type: 'image',
-            resourceRef: expect.objectContaining({ id: 'generation-job-1:image:0' }),
+            contentLocator: expect.objectContaining({
+              kind: 'generated-output',
+              outputId: 'generation-job-1:image:0',
+            }),
           },
         ],
       },
       attachments: [
         expect.objectContaining({
           type: 'image',
-          path: 'generation-job-1:image:0',
-          assetRef: expect.objectContaining({
-            resourceRef: expect.objectContaining({ id: 'generation-job-1:image:0' }),
+          contentLocator: expect.objectContaining({
+            kind: 'generated-output',
+            outputId: 'generation-job-1:image:0',
           }),
         }),
       ],
@@ -835,9 +888,9 @@ describe('registerMediaAgentTools', () => {
     const result = await executeAgentTool(registry, 'GenerateImage', {
       prompt: 'Clean the panel',
       negativePrompt: 'speech bubbles',
-      referenceImageUri: '${PROJECT}/refs/panel.png',
-      maskUri: '${PROJECT}/masks/speech-bubble.png',
-      controlImageUri: '${PROJECT}/controls/lineart.png',
+      referenceImageLocator: createWorkspaceLocator('refs/panel.png'),
+      maskLocator: createWorkspaceLocator('masks/speech-bubble.png'),
+      controlImageLocator: createWorkspaceLocator('controls/lineart.png'),
       controlMode: 'lineart',
       controlStrength: 0.7,
       inpaintStrength: 0.8,
@@ -852,9 +905,9 @@ describe('registerMediaAgentTools', () => {
       expect.objectContaining({
         prompt: 'Clean the panel',
         negativePrompt: 'speech bubbles',
-        referenceImageUri: '${PROJECT}/refs/panel.png',
-        maskUri: '${PROJECT}/masks/speech-bubble.png',
-        controlImageUri: '${PROJECT}/controls/lineart.png',
+        referenceImageLocator: createWorkspaceLocator('refs/panel.png'),
+        maskLocator: createWorkspaceLocator('masks/speech-bubble.png'),
+        controlImageLocator: createWorkspaceLocator('controls/lineart.png'),
         controlMode: 'lineart',
         controlStrength: 0.7,
         inpaintStrength: 0.8,
@@ -864,7 +917,7 @@ describe('registerMediaAgentTools', () => {
     );
   });
 
-  it('blocks TransformImage when only stable refs are provided without host-resolved input', async () => {
+  it('blocks TransformImage when its source locator is missing', async () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
     registerMediaAgentTools(registry, media as never);
@@ -873,15 +926,10 @@ describe('registerMediaAgentTools', () => {
       editInstruction: 'Remove dialogue bubbles.',
       providerId: 'edit-provider',
       modelId: 'edit-model',
-      sourceImageRef: {
-        refId: 'source-panel-1',
-        role: 'source',
-        locator: { type: 'tool-result', toolCallId: 'read-comic', assetIndex: 0 },
-      },
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('host-resolved');
+    expect(result.error).toContain('sourceImageLocator');
     expect(media.generateImage).not.toHaveBeenCalled();
   });
 
@@ -891,11 +939,11 @@ describe('registerMediaAgentTools', () => {
     registerMediaAgentTools(registry, media as never);
 
     const transformTool = registry.get('TransformImage');
-    expect(transformTool?.parameters.properties.sourceImageRef).toEqual(
+    expect(transformTool?.parameters.properties.sourceImageLocator).toEqual(
       expect.objectContaining({ type: 'object' }),
     );
-    expect(transformTool?.parameters.properties.maskRefs).toEqual(
-      expect.objectContaining({ type: 'array' }),
+    expect(transformTool?.parameters.properties.maskLocator).toEqual(
+      expect.objectContaining({ type: 'object' }),
     );
 
     const result = await executeAgentTool(registry, 'TransformImage', {
@@ -903,13 +951,8 @@ describe('registerMediaAgentTools', () => {
       sceneId: 'scene-1',
       shotId: 'shot-1',
       editInstruction: 'Remove dialogue bubbles and fill the wall.',
-      sourceImageRef: {
-        refId: 'source-panel-1',
-        role: 'source',
-        locator: { type: 'tool-result', toolCallId: 'read-comic', assetIndex: 0 },
-      },
-      sourceImageUri: '${PROJECT}/resolved/source-panel-1.png',
-      maskUri: '${PROJECT}/resolved/speech-mask.png',
+      sourceImageLocator: createWorkspaceLocator('resolved/source-panel-1.png'),
+      maskLocator: createWorkspaceLocator('resolved/speech-mask.png'),
       operationPlan: ['crop-panel', 'remove-text', 'inpaint'],
       targetAspectRatio: '16:9',
       targetStyle: 'natural',
@@ -923,8 +966,8 @@ describe('registerMediaAgentTools', () => {
         prompt: 'Remove dialogue bubbles and fill the wall.',
         providerId: 'edit-provider',
         modelId: 'edit-model',
-        referenceImageUri: '${PROJECT}/resolved/source-panel-1.png',
-        maskUri: '${PROJECT}/resolved/speech-mask.png',
+        referenceImageLocator: createWorkspaceLocator('resolved/source-panel-1.png'),
+        maskLocator: createWorkspaceLocator('resolved/speech-mask.png'),
         aspectRatio: '16:9',
         style: 'natural',
         editInstruction: 'Remove dialogue bubbles and fill the wall.',
@@ -974,7 +1017,7 @@ describe('registerMediaAgentTools', () => {
 
     const result = await executeAgentTool(registry, 'GenerateVideo', {
       prompt: 'Animate the prepared comic keyframe',
-      referenceImageUri: '${PROJECT}/resolved/keyframe-1.png',
+      startFrameLocator: createWorkspaceLocator('resolved/keyframe-1.png'),
       aspectRatio: '16:9',
       motionStrength: 0.4,
       cameraMovement: 'zoom-in',
@@ -992,7 +1035,7 @@ describe('registerMediaAgentTools', () => {
     expect(media.generateVideo.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         prompt: 'Animate the prepared comic keyframe',
-        referenceImageUri: '${PROJECT}/resolved/keyframe-1.png',
+        startFrameLocator: createWorkspaceLocator('resolved/keyframe-1.png'),
         aspectRatio: '16:9',
         motionStrength: 0.4,
         cameraMovement: 'zoom-in',
@@ -1006,18 +1049,18 @@ describe('registerMediaAgentTools', () => {
     );
   });
 
-  it('passes canonical keyframe operation and stable ResourceRefs to GenerateVideo', async () => {
+  it('passes canonical keyframe operation and stable ContentLocators to GenerateVideo', async () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
     registerMediaAgentTools(registry, media as never);
-    const startFrameRef = createResourceRef('asset:image:first-frame');
-    const endFrameRef = createResourceRef('asset:image:end-frame');
+    const startFrameLocator = createWorkspaceLocator('assets/first-frame.png');
+    const endFrameLocator = createWorkspaceLocator('assets/end-frame.png');
 
     const result = await executeAgentTool(registry, 'GenerateVideo', {
       prompt: 'Animate between the approved keyframes',
       operation: 'generate-from-keyframes',
-      startFrameRef,
-      endFrameRef,
+      startFrameLocator,
+      endFrameLocator,
       providerId: 'dashscope-provider',
       modelId: 'wan-keyframe-model',
     });
@@ -1026,13 +1069,13 @@ describe('registerMediaAgentTools', () => {
     expect(media.generateVideo.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         operation: 'generate-from-keyframes',
-        startFrameRef,
-        endFrameRef,
+        startFrameLocator,
+        endFrameLocator,
       }),
     );
   });
 
-  it('fails visibly for malformed stable video refs instead of dropping them', async () => {
+  it('fails visibly for malformed stable video locators instead of dropping them', async () => {
     const registry = new ToolRegistry();
     const media = createMediaMock();
     registerMediaAgentTools(registry, media as never);
@@ -1040,14 +1083,14 @@ describe('registerMediaAgentTools', () => {
     const result = await executeAgentTool(registry, 'GenerateVideo', {
       prompt: 'Animate the shot',
       operation: 'generate-from-keyframes',
-      startFrameRef: { id: 'canvas-node-runtime-handle' },
-      endFrameRef: createResourceRef('asset:image:end-frame'),
+      startFrameLocator: { kind: 'workspace-file', path: '/tmp/runtime-frame.png' },
+      endFrameLocator: createWorkspaceLocator('assets/end-frame.png'),
       providerId: 'dashscope-provider',
       modelId: 'wan-keyframe-model',
     });
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain('startFrameRef must be a structurally valid ResourceRef');
+    expect(result.error).toContain('startFrameLocator must be a structurally valid ContentLocator');
     expect(media.generateVideo).not.toHaveBeenCalled();
   });
 
@@ -1121,25 +1164,20 @@ describe('registerMediaAgentTools', () => {
   });
 });
 
-function createResourceRef(id: string): ResourceRef {
+function createWorkspaceLocator(path: string): ContentLocator {
   return {
-    id,
-    scope: 'project',
-    provider: 'workspace',
-    kind: 'media',
-    source: { kind: 'file', projectRelativePath: `assets/${id.replaceAll(':', '-')}.png` },
-    fingerprint: { strategy: 'hash', value: `sha256:${id}` },
+    kind: 'workspace-file',
+    path,
   };
 }
 
-function createGeneratedResourceRef(id: string): ResourceRef {
+function createGeneratedContentLocator(id: string): GeneratedOutputContentLocator {
   return {
-    id,
-    scope: 'project',
-    provider: 'generated-asset',
-    kind: 'generated',
-    source: { kind: 'generated-asset', generatedAssetId: id },
-    fingerprint: { strategy: 'hash', value: `sha256:${id}` },
+    kind: 'generated-output',
+    outputId: id,
+    revision: `${id}:revision`,
+    digest: 'a'.repeat(64),
+    path: `neko/generated/${id.replaceAll(':', '-')}.png`,
   };
 }
 

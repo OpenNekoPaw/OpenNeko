@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, memo, type ReactNode } from 'react';
-import { ToolCall } from '@neko-agent/types';
+import type { ToolCall, ToolCallProgress } from '@neko-agent/types';
 import { useTranslation } from '@/i18n/I18nContext';
 import { RichContentRenderer } from '@/components/ChatView/RichContent';
 import { AgentHostMessages } from '@/messages';
@@ -32,16 +32,23 @@ import {
   ToolLoadingSpinner,
 } from './icons';
 import { DocumentImageThumbnails } from './DocumentImageThumbnails';
+import { GenerationJobCard } from './GenerationJobCard';
 
 const logger = getLogger('ToolCallDisplay');
 
 interface ToolCallDisplayProps {
   toolCall: ToolCall;
+  progress?: ToolCallProgress;
   conversationId: string | null;
   workItemIds?: string[];
 }
 
-function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: ToolCallDisplayProps) {
+function ToolCallDisplayComponent({
+  toolCall,
+  progress,
+  conversationId,
+  workItemIds,
+}: ToolCallDisplayProps) {
   const { t } = useTranslation();
   const { workItems } = useMessageActions();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -75,7 +82,7 @@ function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: Too
     [toolCall.id, toolCall.name, conversationId],
   );
 
-  const projection = projectToolCallDisplayState(toolCall);
+  const projection = projectToolCallDisplayState(toolCall, progress);
   const {
     argsJson,
     resultJson,
@@ -96,6 +103,7 @@ function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: Too
     isFailed,
     needsConfirmation,
     canvasAuthoringResult,
+    generationJob,
   } = projection;
   const relatedSubAgents = selectRelatedSubAgentWorkItems({
     toolCallId: toolCall.id,
@@ -181,6 +189,21 @@ function ToolCallDisplayComponent({ toolCall, conversationId, workItemIds }: Too
           </div>
         </div>
       </div>
+    );
+  }
+
+  if (generationJob) {
+    return (
+      <GenerationJobCard
+        toolCall={toolCall}
+        job={generationJob}
+        imageUrls={imageUrls}
+        videoUrls={videoUrls}
+        audioUrls={audioUrls}
+        isPending={isPending}
+        isSuccess={isSuccess}
+        isFailed={isFailed}
+      />
     );
   }
 

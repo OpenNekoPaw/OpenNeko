@@ -23,6 +23,7 @@ describe('media generated asset helpers', () => {
     const assetId = createStableGeneratedOutputId('operation-1', 0, 'sha256:image');
     expect(
       buildGeneratedMediaAssets({
+        workspaceRoot: '/tmp',
         hostOutputPaths: ['/tmp/image.png'],
         contentDigests: ['sha256:image'],
         operationId: 'operation-1',
@@ -83,6 +84,7 @@ describe('media generated asset helpers', () => {
   it('builds generated video and audio assets with safe defaults', () => {
     expect(
       buildGeneratedMediaAssets({
+        workspaceRoot: '/tmp',
         hostOutputPaths: ['/tmp/video.mp4'],
         contentDigests: ['sha256:video'],
         operationId: 'operation-video',
@@ -102,6 +104,7 @@ describe('media generated asset helpers', () => {
 
     expect(
       buildGeneratedMediaAssets({
+        workspaceRoot: '/tmp',
         hostOutputPaths: ['/tmp/audio.mp3'],
         contentDigests: ['sha256:audio'],
         operationId: 'operation-audio',

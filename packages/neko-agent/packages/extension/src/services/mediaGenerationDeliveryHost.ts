@@ -68,13 +68,15 @@ export class MediaGenerationDeliveryHost {
     readonly result: MediaGenerationResult;
   }) {
     const mediaKind = toGeneratedMediaKind(input.result.type);
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     const settingsPlan = this.resolveDeliverySettings(mediaKind);
-    if (!settingsPlan.outputDir || !this.assetIndex) {
+    if (!workspaceFolder || !settingsPlan.outputDir || !this.assetIndex) {
       throw new Error(
         'Creator-visible media completion requires a workspace and generated asset index.',
       );
     }
     return finalizeMediaGenerationOutputs({
+      workspaceRoot: workspaceFolder.uri.fsPath,
       operationId: input.operationId,
       generationType: input.result.type,
       mediaKind,

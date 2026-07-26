@@ -251,7 +251,8 @@ Character 不直接写 World store；跨域 mutation 必须通过显式 world ru
 
 ## 路径、缓存与用户数据
 
-- 持久事实保存 workspace-relative path、保留用途的 `${VAR}/path`、stable `ContentLocator`/`ResourceRef`、entity ID 和 provenance。
+- Generation Job、Agent creator-visible artifact、Workspace Board 与其 Canvas 投影只使用 stable `ContentLocator` 传递内容位置；entity/artifact/job/output ID 与 provenance 保持独立。不得并列保存 raw path、`ResourceRef`、provider URL、base64 或 Webview URI。
+- 其他尚未迁移的领域可继续使用其已接受的 workspace-relative path、保留用途的 `${VAR}/path` 或 `ResourceRef`；Host 派生缓存也可保留内部 `ResourceRef`，但不得反向进入上述 creator-visible canonical path。
 - 本机绝对路径只允许存在于本机设置、临时运行时状态或明确 host adapter 内。
 - Cache 是可重建派生数据，不能替代项目、Entity、Media Library locator、generated/package owner 或 Agent 事实。
 - 用户 secret 不写入项目文件、日志、Webview state、prompt 或 Skill。

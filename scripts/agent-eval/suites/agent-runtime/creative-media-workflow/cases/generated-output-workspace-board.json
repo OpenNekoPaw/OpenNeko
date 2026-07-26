@@ -5,12 +5,12 @@
   "caseGroup": "workflow",
   "visibility": "public",
   "evidenceContract": {
-    "userBehavior": "Generate one image and observe it as a durable workspace file, a stable generated-output resource, and an ordinary node on the canonical Workspace Board.",
+    "userBehavior": "Generate one image and observe it as a durable workspace file, a stable generated-output ContentLocator, and an ordinary node on the canonical Workspace Board.",
     "canonicalPath": [
       "TUI App session owner",
       "terminal GenerateImage Tool call",
       "neko/generated/image workspace file",
-      "generated-output ResourceRef",
+      "generated-output ContentLocator",
       "Node Workspace Board projection",
       "neko/boards/workspace.nkc"
     ],
@@ -18,13 +18,14 @@
       "AssetLibrary identity or import",
       "multi-Board resolver or active Board selection",
       "runtime generated-draft projection",
-      "direct Agent turn runner"
+      "direct Agent turn runner",
+      "ResourceRef, localPath, provider URL, data URL, or base64 handoff"
     ],
     "observables": [
       {
         "ref": "workflow-facts",
         "kind": "runtime-fact",
-        "description": "Terminal Tool result, stable generated resource, Workspace Board projection, no-fallback, and terminal idle facts from the canonical TUI owner.",
+        "description": "Terminal Tool result, generated-output ContentLocator identity/revision/digest/path, Workspace Board projection, no-fallback, and terminal idle facts from the canonical TUI owner.",
         "required": true
       },
       {
@@ -34,7 +35,7 @@
         "required": true
       }
     ],
-    "expectedResult": "The GenerateImage Tool materializes a file under neko/generated/image, publishes a valid stable generated-output ResourceRef, and projects ordinary nodes into the Workspace Board.",
+    "expectedResult": "The GenerateImage Tool materializes a file under neko/generated/image, publishes a valid generated-output ContentLocator, and projects an ordinary locator-backed node into the Workspace Board.",
     "expectedFailure": "Missing file, invalid resource identity, blocked or missing Workspace Board projection, incomplete facts, Asset participation, multi-Board routing, runtime draft participation, or non-idle delivery fails visibly."
   },
   "fixtureRefs": ["empty-workspace"],
@@ -44,7 +45,7 @@
     {
       "id": "submit",
       "kind": "submit",
-      "prompt": "$image Generate one image of a small red paper kite resting on a clean white studio table. Wait for the real result and report the delivered generated-output reference. Do not import it into the Asset library, select another Canvas, or create a runtime draft."
+      "prompt": "$image Generate one image of a small red paper kite resting on a clean white studio table. Wait for the real result and report the delivered generated-output ContentLocator. Do not use ResourceRef, localPath, provider URL, data URL, base64, import it into the Asset library, select another Canvas, or create a runtime draft."
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 300000 }
   ],
@@ -61,7 +62,9 @@
       "id": "resource",
       "kind": "artifact",
       "artifactKind": "generated-asset",
-      "provenanceSource": "generated-asset",
+      "provenanceSource": "generated-output",
+      "validatorId": "content-locator",
+      "contentLocatorKind": "generated-output",
       "validatorStatus": "valid",
       "evidenceRef": "workflow-facts"
     },

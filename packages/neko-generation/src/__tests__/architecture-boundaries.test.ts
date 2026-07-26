@@ -84,6 +84,56 @@ describe('@neko/generation architecture boundaries', () => {
     expect(violations).toEqual([]);
   });
 
+  it('keeps the retired cross-domain Activity authority physically absent', () => {
+    const retiredPaths = [
+      'apps/neko-vscode/src/domain-activity-host.ts',
+      'packages/neko-types/src/domain-activity/contracts.ts',
+      'packages/neko-types/src/domain-activity/index.ts',
+      'packages/neko-types/src/domain-activity/projector.ts',
+      'packages/neko-generation/src/job/activity.ts',
+      'packages/neko-generation/src/job/activity-port.ts',
+      'packages/neko-agent/packages/agent-types/src/domain-activity-protocol.ts',
+      'packages/neko-agent/packages/extension/src/chat/activity/domainActivityAttachmentServer.ts',
+      'packages/neko-agent/packages/extension/src/chat/router/domainActivityRoutes.ts',
+      'packages/neko-agent/packages/webview/src/components/DomainActivityView.tsx',
+      'packages/neko-agent/packages/webview/src/hooks/useDomainActivity.ts',
+    ];
+    expect(retiredPaths.filter((file) => existsSync(resolve(workspaceRoot, file)))).toEqual([]);
+
+    const productionRoots = [
+      'apps/neko-vscode/src',
+      'packages/neko-types/src/domain-activity',
+      'packages/neko-generation/src',
+      'packages/neko-agent/packages/agent-types/src',
+      'packages/neko-agent/packages/extension/src',
+      'packages/neko-agent/packages/webview/src',
+      'packages/neko-cut/packages/extension/src',
+    ];
+    const forbidden = [
+      /@neko\/shared\/domain-activity/u,
+      /\bDomainActivity(?:Source|Summary|Projector|Publisher|Tracker|Snapshot|Patch|Command)?\b/u,
+      /['"]domainJob\.command['"]/u,
+      /\b(?:attach|acknowledge|detach)DomainActivity\b/u,
+      /\bdomainActivity(?:Routes|Attachment|Host|Projector)\b/iu,
+    ];
+    const violations = productionRoots.flatMap((root) =>
+      sourceFiles(resolve(workspaceRoot, root))
+        .filter(
+          (file) =>
+            !file.includes('/__tests__/') &&
+            !file.endsWith('.test.ts') &&
+            !file.endsWith('.test.tsx'),
+        )
+        .flatMap((file) => {
+          const source = readFileSync(file, 'utf8');
+          return forbidden
+            .filter((pattern) => pattern.test(source))
+            .map((pattern) => `${relative(workspaceRoot, file)} matches ${pattern}`);
+        }),
+    );
+    expect(violations).toEqual([]);
+  });
+
   it('keeps Agent and domain entry points on the canonical GenerationJob path', () => {
     const sources = new Map(
       [
@@ -93,6 +143,7 @@ describe('@neko/generation architecture boundaries', () => {
         'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
         'packages/neko-canvas/packages/extension/src/agentCapabilityProvider.ts',
         'packages/neko-cut/packages/extension/src/extension.ts',
+        'packages/neko-cut/packages/extension/src/editor/CutExportTaskRegistry.ts',
       ].map((file) => [file, readFileSync(resolve(workspaceRoot, file), 'utf8')]),
     );
     const allEntrySource = [...sources.values()].join('\n');
@@ -103,6 +154,12 @@ describe('@neko/generation architecture boundaries', () => {
       'packages/neko-canvas/packages/domain/src/canvas-generation-runtime.ts',
     );
     const cutSource = sources.get('packages/neko-cut/packages/extension/src/extension.ts');
+    const canvasExecutorSource = sources.get(
+      'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
+    );
+    const cutExportRegistrySource = sources.get(
+      'packages/neko-cut/packages/extension/src/editor/CutExportTaskRegistry.ts',
+    );
 
     expect(agentToolSource).toContain('jobs.submitGeneration');
     expect(agentToolSource).toContain('jobs.observeGeneration');
@@ -123,14 +180,42 @@ describe('@neko/generation architecture boundaries', () => {
     expect(
       sources.get('packages/neko-canvas/packages/extension/src/agentCapabilityProvider.ts'),
     ).not.toMatch(/\bensureProjectModel\b|neko\.project\.models\./u);
+    expect(canvasExecutorSource).toContain('jobs.submitGeneration');
+    expect(canvasExecutorSource).toContain('jobs.observeGeneration');
     expect(cutSource).not.toMatch(/sendCutSkillIntentToAgent\(\s*['"]video['"]/u);
+    expect(cutExportRegistrySource).toContain('this.coordinator.cancelExport(commandFor(current))');
+    expect(cutExportRegistrySource).not.toMatch(/\b(?:active|latest)Job\b/iu);
     expect(allEntrySource).not.toContain('purposeMediaService');
     expect(allEntrySource).not.toContain('ICapabilityMediaService');
     expect(allEntrySource).not.toContain('allowCreateBackgroundConversation');
   });
+
+  it('keeps migrated creator-visible contracts independent from Resource Cache types', () => {
+    const migratedFiles = [
+      'packages/neko-generation/src/contracts.ts',
+      'packages/neko-generation/src/job/contracts.ts',
+      'packages/neko-types/src/types/canvas-workspace-board.ts',
+      'packages/neko-types/src/utils/canvasWorkspaceBoardProjection.ts',
+      'packages/neko-types/src/types/creative-ai-invocation.ts',
+      'packages/neko-agent/packages/agent/src/runtime/turn/creator-visible-artifact-collector.ts',
+    ];
+    const forbiddenImports = [
+      /from ['"][^'"]*resource-cache['"]/u,
+      /from ['"]@neko\/shared\/resource-cache['"]/u,
+    ];
+    const violations = migratedFiles.flatMap((file) => {
+      const source = readFileSync(resolve(workspaceRoot, file), 'utf8');
+      return forbiddenImports
+        .filter((pattern) => pattern.test(source))
+        .map((pattern) => `${file} matches ${pattern}`);
+    });
+
+    expect(violations).toEqual([]);
+  });
 });
 
 function sourceFiles(root: string): string[] {
+  if (!existsSync(root)) return [];
   return readdirSync(root).flatMap((entry) => {
     const absolute = resolve(root, entry);
     if (statSync(absolute).isDirectory()) return sourceFiles(absolute);

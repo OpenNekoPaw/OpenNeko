@@ -48,18 +48,9 @@ describe('cleanupLegacyCanvasBoardMetadata', () => {
             kind: 'image',
             title: 'Existing output',
             mimeType: 'image/png',
-            resourceRef: {
-              id: 'generated-output:artifact-1',
-              scope: 'project',
-              provider: 'generated-output',
-              kind: 'generated',
-              source: {
-                kind: 'generated-asset',
-                generatedAssetId: 'artifact-1',
-                projectRelativePath: 'neko/generated/image/artifact-1.png',
-              },
-              locator: { kind: 'generated-asset', assetId: 'artifact-1' },
-              fingerprint: { strategy: 'hash', value: 'sha256:artifact-1' },
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'neko/generated/image/artifact-1.png',
             },
             provenance: {
               version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,

@@ -59,6 +59,49 @@ describe('Pi Agent projection-only stream session', () => {
     });
   });
 
+  it('clears approval controls as soon as the exact confirmation is resolved', async () => {
+    const projection = createConversationProjectionStore('conversation-1');
+    const session = createPiAgentStreamSession({
+      conversationId: 'conversation-1',
+      messageId: 'message-1',
+      projection,
+      onPhaseChange: vi.fn(),
+    });
+
+    await emit(session.events, { type: 'turn.started' });
+    await emit(session.events, {
+      type: 'tool.started',
+      toolCallId: 'tool-1',
+      toolName: 'GenerateImage',
+      args: { prompt: 'cat' },
+    });
+    await emit(session.events, {
+      type: 'confirmation.required',
+      confirmationId: 'confirmation:tool-1',
+      toolCallId: 'tool-1',
+      toolName: 'GenerateImage',
+      summary: 'Run GenerateImage with prompt',
+    });
+    await emit(session.events, {
+      type: 'confirmation.resolved',
+      confirmationId: 'confirmation:tool-1',
+      toolCallId: 'tool-1',
+      toolName: 'GenerateImage',
+      approved: true,
+    });
+
+    expect(projection.snapshot().turns[0]?.items[0]).toMatchObject({
+      kind: 'tool_call',
+      status: 'pending',
+      payload: {
+        toolCall: {
+          id: 'tool-1',
+          pendingConfirmation: false,
+        },
+      },
+    });
+  });
+
   it('derives terminal history and artifact inputs from the frozen Timeline', async () => {
     const projection = createConversationProjectionStore('conversation-1');
     const phases: unknown[] = [];

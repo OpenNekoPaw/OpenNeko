@@ -75,6 +75,7 @@ export interface AgentImageMetadataResult extends AgentContentAccessOperationRes
 }
 
 export interface AgentDocumentContentResult extends AgentContentAccessOperationResult {
+  readonly contentLocator?: ContentLocator;
   readonly text?: string;
   readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly resourceRef?: ResourceRef;
@@ -99,6 +100,7 @@ export interface AgentProviderAssetResult extends AgentContentAccessOperationRes
 }
 
 export interface AgentContentAccessRuntime {
+  resolveContentLocator(source: ContentSourceRef): Promise<ContentLocator | undefined>;
   resolveImageMetadata(input: AgentImageMetadataInput): Promise<AgentImageMetadataResult>;
   resolveDocumentContent(input: AgentDocumentContentInput): Promise<AgentDocumentContentResult>;
   loadRepresentationAsset?(input: {

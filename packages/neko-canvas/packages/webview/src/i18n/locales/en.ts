@@ -322,6 +322,7 @@ export const en = {
   'workspaceBoard.task': 'Task · {id}',
   'workspaceBoard.run': 'Run · {id}',
   'workspaceBoard.processing': 'Processing',
+  'workspaceBoard.generatedBatch': 'Generated assets',
   'gallery.openItemDetail': 'Open gallery item detail',
   'gallery.viewCountCompact': '{count} views',
   'gallery.viewMode': 'Gallery view',

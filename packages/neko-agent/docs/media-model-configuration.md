@@ -62,6 +62,14 @@ model_id = "neko-gateway-seedance-lite"
 provider_id = "neko-gateway"
 model_id = "neko-gateway-tts"
 
+[default_model_purposes.character_dialogue]
+provider_id = "ollama-local"
+model_id = "ollama-local-llama3.2"
+
+[default_model_purposes.character_profile]
+provider_id = "ollama-local"
+model_id = "ollama-local-llama3.2"
+
 [[providers]]
 id = "neko-gateway"
 name = "neko-gateway"
@@ -164,6 +172,12 @@ enabled = true
 ### `default_model_purposes`
 
 `default_model_purposes` 用于按产品用途绑定模型。TOML key 使用下划线形式，运行时会映射到点号 purpose，例如 `[default_model_purposes.video_understand]` 对应 `video.understand`，`[default_model_purposes.video_generate]` 对应 `video.generate`。这些 purpose 是产品用途名，不是模型 `capabilities` 字段名；所有 purpose 都处于同一层级。
+
+`character.dialogue` 用于 Character Dialogue 与 Embody Character 的角色回复；
+`character.profile` 用于角色档案补全和对话评估。两者是独立 purpose，不继承普通 Agent
+会话当前模型、`agent.main` 或 `[default_models.llm]`。任一 binding 缺失时，VS Code
+角色会话会在创建或继续运行前显示一次兼容 LLM 选择，并把用户明确选择只写入缺失的
+purpose；取消选择会终止本次角色操作，不会 fallback。
 
 `image.understand` 表示原生图片/静帧分析模型，适合审美、构图、影视化画面感、图片质量等理解任务。
 

@@ -42,6 +42,20 @@ import type {
 import { t } from '../i18n';
 
 const AGENT_MEDIA_CATEGORIES: readonly AgentMediaModelCategory[] = ['image', 'video', 'audio'];
+const AGENT_GENERATION_PURPOSE_CAPABILITIES = {
+  'image.generate': ['image.generate', 'text_to_image', 'image_generation'],
+  'video.generate': ['video.generate', 'text_to_video', 'video_generation'],
+  'audio.generate': ['audio.generate', 'text_to_audio', 'audio'],
+  'audio.music.generate': ['audio.music.generate', 'text_to_music', 'music_generation'],
+} as const satisfies Readonly<
+  Record<
+    Extract<
+      keyof NonNullable<MessageModelProjection['purposeModels']>,
+      'image.generate' | 'video.generate' | 'audio.generate' | 'audio.music.generate'
+    >,
+    readonly string[]
+  >
+>;
 const MEDIA_UNDERSTANDING_PURPOSES = {
   image: 'image.understand',
   audio: 'audio.understand',
@@ -145,19 +159,80 @@ export function projectMessageModelSelection(
     ...(chatModel ? { chatModel } : {}),
     ...(mediaModel ? { mediaModel } : {}),
     ...(input.agentMediaModels
-      ? { purposeModels: projectAgentGenerationPurposeModels(input.agentMediaModels) }
+      ? {
+          purposeModels: projectAgentGenerationPurposeModels(
+            input.agentMediaModels,
+            input.chatModelOptions ?? [],
+          ),
+        }
       : {}),
   };
 }
 
 function projectAgentGenerationPurposeModels(
   selections: AgentMediaModelSelections,
+  modelOptions: readonly ChatModelOption[],
 ): NonNullable<MessageModelProjection['purposeModels']> {
   return {
-    ...(selections.image ? { 'image.generate': selections.image } : {}),
-    ...(selections.video ? { 'video.generate': selections.video } : {}),
-    ...(selections.audio ? { 'audio.generate': selections.audio } : {}),
+    ...(selections.image &&
+    selectionSupportsGenerationPurpose(
+      selections.image,
+      modelOptions,
+      'image.generate',
+      'image.generate',
+    )
+      ? { 'image.generate': selections.image }
+      : {}),
+    ...(selections.video &&
+    selectionSupportsGenerationPurpose(
+      selections.video,
+      modelOptions,
+      'video.generate',
+      'video.generate',
+    )
+      ? { 'video.generate': selections.video }
+      : {}),
+    ...(selections.audio &&
+    selectionSupportsGenerationPurpose(
+      selections.audio,
+      modelOptions,
+      'audio.generate',
+      'audio.generate',
+    )
+      ? { 'audio.generate': selections.audio }
+      : {}),
+    ...(selections.audio &&
+    selectionSupportsGenerationPurpose(
+      selections.audio,
+      modelOptions,
+      'audio.music.generate',
+      'audio.generate',
+    )
+      ? { 'audio.music.generate': selections.audio }
+      : {}),
   };
+}
+
+function selectionSupportsGenerationPurpose(
+  selection: ModelRef<AgentMediaModelCategory>,
+  modelOptions: readonly ChatModelOption[],
+  purpose: keyof typeof AGENT_GENERATION_PURPOSE_CAPABILITIES,
+  fallbackPurpose: keyof typeof AGENT_GENERATION_PURPOSE_CAPABILITIES,
+): boolean {
+  const model = modelOptions.find(
+    (option) =>
+      option.providerId === selection.providerId &&
+      option.modelId === selection.modelId &&
+      option.category === selection.category,
+  );
+  if (!model) {
+    return purpose === fallbackPurpose;
+  }
+
+  const capabilities = new Set(model.capabilities ?? []);
+  return AGENT_GENERATION_PURPOSE_CAPABILITIES[purpose].some((capability) =>
+    capabilities.has(capability),
+  );
 }
 
 export function projectChatWorkspaceModelState(

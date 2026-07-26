@@ -48,6 +48,7 @@ function projectTimelineItemsToContentBlocks(
             type: 'tool_call',
             timestamp: item.createdAt,
             toolCall: item.payload.toolCall,
+            ...(item.payload.progress ? { toolProgress: item.payload.progress } : {}),
           },
         ];
       case 'composite':

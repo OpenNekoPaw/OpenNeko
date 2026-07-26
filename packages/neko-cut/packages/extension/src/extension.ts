@@ -6,7 +6,6 @@ import {
   watchLogLevel,
 } from '@neko/shared/vscode/extension';
 import type { LocalMetadataStore, NekoCutAPI } from '@neko/shared';
-import type { DomainActivityHost, DomainActivityItem } from '@neko/shared/domain-activity';
 import { getRootLogger, setErrorHandler, setRootLogger } from './base';
 import { CutOtioEditorProvider, createNewOtioProject } from './editor/CutOtioEditorProvider';
 import { OPEN_CUT_DOCUMENT_STATUS_COMMAND, OPEN_CUT_EXPORT_TASK_COMMAND, StatusBar } from './views';
@@ -14,7 +13,6 @@ import {
   createInMemoryExportJobStore,
   createPersistentExportJobStore,
   EXPORT_JOB_MIGRATIONS,
-  projectExportJobActivity,
   type ExportJobStore,
 } from './services/export-job';
 
@@ -23,7 +21,6 @@ export interface NekoCutHostServices {
     readonly metadataStore: LocalMetadataStore;
     readonly workspaceId: string;
   };
-  readonly domainActivity?: DomainActivityHost;
 }
 
 let activeEditorProvider: CutOtioEditorProvider | undefined;
@@ -52,30 +49,10 @@ export async function activate(
     },
     {
       store: exportJobStore,
-      ...(hostServices?.domainActivity
-        ? { activityPublisher: hostServices.domainActivity.publisher }
-        : {}),
     },
   );
   activeEditorProvider = editorProvider;
   await editorProvider.recoverExportJobs();
-  if (hostServices?.domainActivity) {
-    context.subscriptions.push(
-      hostServices.domainActivity.installExportCommandExecutor({
-        async execute(input): Promise<DomainActivityItem> {
-          if (input.jobKind !== 'export') {
-            throw new Error(`Cut Export command executor rejects Job kind ${input.jobKind}.`);
-          }
-          const snapshot = await editorProvider.executeExportCommand({
-            ref: { kind: 'export', jobId: input.jobId },
-            expectedRevision: input.expectedRevision,
-            command: input.command,
-          });
-          return projectExportJobActivity(snapshot);
-        },
-      }),
-    );
-  }
   context.subscriptions.push(
     exportStatusBar,
     { dispose: () => void editorProvider.dispose() },

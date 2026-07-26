@@ -92,3 +92,18 @@
 - [x] 12.2 Finalize explicitly declared native image analysis as one stable named Markdown artifact with source image roles and deterministic `sourceArtifactIds`, while keeping unrelated final answers excluded.
 - [x] 12.3 Cover Agent collector plus TUI and VS Code terminal-turn consumers, and update the owning real Agent Evaluation case with no-fallback evidence.
 - [x] 12.4 Run focused tests/typechecks, key-free Evaluation gates, the focused real TUI case, and Extension Development Host Board acceptance; record blockers and residual risk.
+
+## 13. Authoritative Canvas Save Boundary
+
+- [x] 13.1 Use Extension Host logs and the synthetic `~/Git/neko-test` workspace to distinguish Generation delivery failure from a later Canvas save overwrite; record only timestamps, counts, delivery state, and safe diagnostics.
+- [x] 13.2 Add a red path-level regression proving that a non-empty authoritative Board cannot be replaced by a Webview snapshot with unconfirmed missing nodes, while an explicitly evidenced user clear remains valid.
+- [x] 13.3 Track per-document node-removal evidence across single delete, batch delete, undo, and redo; clear it at save/revert/Host apply/reload/close boundaries.
+- [x] 13.4 Remove the Webview `update` message fallback to the default empty Canvas and fail visibly on an invalid payload.
+- [ ] 13.5 Run focused Canvas Extension/Webview tests and typecheck/build, then verify save and subsequent Generation delivery in `~/Git/neko-test` through Extension Development Host plus Webview CDP when port `9222` is available.
+
+## 14. Batch-aware Board Layout
+
+- [x] 14.1 Replace the flat-only visual decision with a batch-aware contract: one-item deliveries remain ordinary content, while at least two newly created generated output media nodes share one deterministic presentation Group that owns no Job or delivery state.
+- [x] 14.2 Add red planner and Webview presentation regressions for bounded multi-column top-level placement, near-square batch child layout, deterministic Group identity, one-item no-Group behavior, and creator-layout preservation.
+- [x] 14.3 Implement the single shared planner path for top-level grid placement and batch Group creation without changing Agent callers, content identity, ledger fencing, atomic save, or existing-node layout.
+- [x] 14.4 Update Canvas documentation and Evaluation expectations, run focused producer/consumer/typecheck/build gates, and validate the grouped batch in Extension Development Host when the required runtime endpoint is available.

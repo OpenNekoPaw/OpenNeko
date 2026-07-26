@@ -91,6 +91,8 @@ function runGate(assertion, facts, context) {
       return assertMarkdownPath(assertion, facts);
     case 'artifact':
       return assertArtifact(assertion, facts);
+    case 'content-locator-handoff':
+      return assertContentLocatorHandoff(assertion, facts);
     case 'workspace-board-projection':
       return assertWorkspaceBoardProjection(assertion, facts);
     case 'no-fallback':
@@ -895,6 +897,11 @@ function assertArtifact(assertion, facts) {
       `artifact ${assertion.artifactRef} validator status is ${artifact.validator?.status ?? 'unavailable'}; expected ${assertion.validatorStatus}`,
     );
   }
+  if (assertion.validatorId && artifact.validator?.id !== assertion.validatorId) {
+    throw new Error(
+      `artifact ${assertion.artifactRef} validator is ${artifact.validator?.id ?? 'unavailable'}; expected ${assertion.validatorId}`,
+    );
+  }
   if (artifact.deliveryStatus !== 'delivered') {
     throw new Error(
       `artifact ${assertion.artifactRef} was not durably delivered: ${artifact.deliveryStatus ?? 'unavailable'}`,
@@ -905,6 +912,9 @@ function assertArtifact(assertion, facts) {
   }
   if (!artifact.provenance?.source) {
     throw new Error(`artifact ${assertion.artifactRef} has no provenance evidence`);
+  }
+  if (assertion.contentLocatorKind) {
+    assertContentLocatorEvidence(artifact.contentLocator, assertion.contentLocatorKind);
   }
   if (artifact.kind === 'file' && !artifact.relativePath) {
     throw new Error(`file artifact ${assertion.artifactRef} has no durable relative path`);
@@ -919,7 +929,118 @@ function assertArtifact(assertion, facts) {
     deliveryStatus: artifact.deliveryStatus,
     validatorId: artifact.validator.id,
     validatorStatus: artifact.validator.status,
+    ...(assertion.contentLocatorKind
+      ? { contentLocatorKind: artifact.contentLocator.kind }
+      : {}),
   };
+}
+
+function assertContentLocatorHandoff(assertion, facts) {
+  assertCompleteEvidence(facts, ['turns', 'turnToolCalls', 'artifacts']);
+  const calls = arrayOrEmpty(facts?.turns).flatMap((turn) => arrayOrEmpty(turn?.toolCalls));
+  const producer = requireSuccessfulToolCall(calls, assertion.producerToolName);
+  const consumer = requireSuccessfulToolCall(calls, assertion.consumerToolName);
+  const producerLocators = collectContentLocators(producer.result, assertion.locatorKind);
+  const consumerLocators = collectContentLocators(consumer.arguments, assertion.locatorKind);
+  if (producerLocators.length !== 1) {
+    throw new Error(
+      `${assertion.producerToolName} exposed ${producerLocators.length} distinct ${assertion.locatorKind} locator(s); expected exactly one`,
+    );
+  }
+  if (consumerLocators.length !== 1) {
+    throw new Error(
+      `${assertion.consumerToolName} consumed ${consumerLocators.length} distinct ${assertion.locatorKind} locator(s); expected exactly one`,
+    );
+  }
+  const producerLocator = producerLocators[0];
+  const consumerLocator = consumerLocators[0];
+  assertContentLocatorEvidence(producerLocator, assertion.locatorKind);
+  assertContentLocatorEvidence(consumerLocator, assertion.locatorKind);
+  if (stableStringify(producerLocator) !== stableStringify(consumerLocator)) {
+    throw new Error(
+      `${assertion.consumerToolName} did not consume the exact locator returned by ${assertion.producerToolName}`,
+    );
+  }
+  const matchingArtifacts = arrayOrEmpty(facts?.artifacts).filter(
+    (artifact) =>
+      artifact?.kind === assertion.artifactKind &&
+      artifact?.provenance?.source === assertion.provenanceSource &&
+      artifact?.validator?.id === assertion.validatorId &&
+      artifact?.validator?.status === 'valid' &&
+      artifact?.deliveryStatus === 'delivered' &&
+      stableStringify(artifact?.contentLocator) === stableStringify(producerLocator),
+  );
+  if (matchingArtifacts.length !== 1) {
+    throw new Error(
+      `expected exactly one delivered artifact carrying the handed-off locator; observed ${matchingArtifacts.length}`,
+    );
+  }
+  return {
+    producerToolCallId: producer.id,
+    consumerToolCallId: consumer.id,
+    artifactRef: matchingArtifacts[0].ref,
+    locatorKind: assertion.locatorKind,
+  };
+}
+
+function requireSuccessfulToolCall(calls, name) {
+  const matching = calls.filter(
+    (call) =>
+      call?.name === name &&
+      matchesToolStatus(call?.status, 'success') &&
+      call?.resultObservation === 'available',
+  );
+  if (matching.length !== 1) {
+    throw new Error(`expected exactly one successful ${name} Tool Call; observed ${matching.length}`);
+  }
+  return matching[0];
+}
+
+function collectContentLocators(value, kind) {
+  const locators = new Map();
+  visit(value);
+  return [...locators.values()];
+
+  function visit(candidate) {
+    if (Array.isArray(candidate)) {
+      candidate.forEach(visit);
+      return;
+    }
+    if (!candidate || typeof candidate !== 'object') return;
+    if (candidate.kind === kind) {
+      locators.set(stableStringify(candidate), candidate);
+      return;
+    }
+    Object.values(candidate).forEach(visit);
+  }
+}
+
+function assertContentLocatorEvidence(locator, expectedKind) {
+  if (!locator || typeof locator !== 'object' || locator.kind !== expectedKind) {
+    throw new Error(`artifact has no ${expectedKind} content locator evidence`);
+  }
+  if (expectedKind === 'generated-output') {
+    for (const field of ['outputId', 'revision', 'digest', 'path']) {
+      if (!nonEmpty(locator[field])) {
+        throw new Error(`generated-output content locator is missing ${field}`);
+      }
+    }
+    if (!isPortableWorkspacePath(locator.path)) {
+      throw new Error('generated-output content locator path is not portable and workspace-relative');
+    }
+  }
+}
+
+function isPortableWorkspacePath(value) {
+  if (!nonEmpty(value) || value.includes('\\') || value.includes('${') || value.includes('\0')) {
+    return false;
+  }
+  if (value.startsWith('/') || /^[A-Za-z]:(?:\/|$)/u.test(value)) return false;
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/u.test(value)) return false;
+  const segments = value.split('/');
+  return !segments.some(
+    (segment) => segment.length === 0 || segment === '.' || segment === '..' || segment.includes(':'),
+  );
 }
 
 function assertNoFallback(assertion, facts) {

@@ -106,11 +106,15 @@ function toProjectionArtifact(
       provenance,
     };
   }
+  if (!artifact.contentLocator) {
+    throw new Error(
+      `Creator-visible artifact ${artifact.artifactId} requires a durable contentLocator.`,
+    );
+  }
   return {
     kind: artifact.kind,
     title: artifact.title,
-    ...(artifact.resourceRef ? { resourceRef: artifact.resourceRef } : {}),
-    ...(artifact.documentResourceRef ? { documentResourceRef: artifact.documentResourceRef } : {}),
+    contentLocator: artifact.contentLocator,
     ...(artifact.intrinsicDimensions ? { intrinsicDimensions: artifact.intrinsicDimensions } : {}),
     provenance,
   };

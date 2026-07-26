@@ -65,6 +65,7 @@ async function loadPerceptionAsset(
   contentAccessRuntime: AgentContentAccessRuntime,
   options: { readonly assetIndex?: GeneratedAssetIndex },
 ): Promise<ProviderReadyAssetPayload> {
+  assertNoGeneratedResourceRefFallback(ref);
   const resolvedRef = await resolveGeneratedAssetPerceptualRef(ref, options.assetIndex);
   const mimeType = ref.mimeType || getMimeType(ref.uri);
   const hasStableResourceRef = hasStableProviderResourceRef(resolvedRef);
@@ -116,6 +117,7 @@ async function loadImageBytes(
   ref: PerceptualAssetRef,
   contentAccessRuntime: AgentContentAccessRuntime,
 ): Promise<{ readonly bytes: Uint8Array; readonly mimeType: string }> {
+  assertNoGeneratedResourceRefFallback(ref);
   const inline = /^data:(image\/[^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/u.exec(ref.uri);
   if (!hasStableProviderResourceRef(ref) && !ref.contentLocator && inline) {
     return { bytes: Buffer.from(inline[2]!, 'base64'), mimeType: inline[1]! };
@@ -172,7 +174,8 @@ async function resolveGeneratedAssetPerceptualRef(
   ref: PerceptualAssetRef,
   assetIndex: GeneratedAssetIndex | undefined,
 ): Promise<PerceptualAssetRef> {
-  if (hasStableProviderResourceRef(ref) || !assetIndex) {
+  assertNoGeneratedResourceRefFallback(ref);
+  if (ref.contentLocator || hasStableProviderResourceRef(ref) || !assetIndex) {
     return ref;
   }
 
@@ -184,20 +187,30 @@ async function resolveGeneratedAssetPerceptualRef(
   if (!asset) {
     return ref;
   }
+  if (!asset.lifecycle?.contentLocator) {
+    throw new Error(
+      `generated-asset-content-locator-migration-required: ${ref.assetId} must be re-indexed with lifecycle.contentLocator.`,
+    );
+  }
 
   return {
     ...ref,
-    uri: asset.path || asset.assetRef?.uri || ref.uri,
+    uri: asset.assetRef?.uri || ref.uri,
     mimeType: asset.assetRef?.mimeType ?? asset.mimeType ?? ref.mimeType,
-    ...(asset.assetRef?.resourceRef ? { resourceRef: asset.assetRef.resourceRef } : {}),
-    ...(asset.assetRef?.documentResourceRef
-      ? { documentResourceRef: asset.assetRef.documentResourceRef }
-      : {}),
+    contentLocator: asset.lifecycle.contentLocator,
   };
 }
 
 function hasStableProviderResourceRef(ref: PerceptualAssetRef): boolean {
   return ref.resourceRef !== undefined || ref.documentResourceRef !== undefined;
+}
+
+function assertNoGeneratedResourceRefFallback(ref: PerceptualAssetRef): void {
+  if (ref.resourceRef?.source.kind === 'generated-asset') {
+    throw new Error(
+      'generated-asset-content-locator-migration-required: Perception requires contentLocator.',
+    );
+  }
 }
 
 function createPerceptionAssetSource(ref: PerceptualAssetRef): ContentSourceRef {

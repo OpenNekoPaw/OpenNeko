@@ -105,6 +105,38 @@ state. A detached Tool Call MUST return the committed JobRef and MUST NOT remain
 - **AND** progress remains in the original Tool Timeline item until the Job returns a terminal ResourceRef
 - **AND** no direct provider execution, generic Task, TaskRef or continuation is created
 
+#### Scenario: Direct media mode invokes the selected generation model
+
+- **WHEN** the user submits a prompt from image, video or audio generation mode
+- **THEN** Host submits one linked GenerationJob directly to the selected generation model without a
+  conversational LLM deciding whether to call a Tool
+- **AND** the Agent Timeline projects one caller-owned Generation card from the initial snapshot and
+  subsequent committed revisions
+- **AND** the card displays the exact model binding, prompt summary, Job identity, stage, progress and
+  terminal status without projecting assistant Markdown as a substitute
+
+#### Scenario: Linked generation completes with creator-visible media
+
+- **WHEN** a linked Agent or direct-media GenerationJob commits terminal ResourceRefs
+- **THEN** the originating Generation card replaces its progress body with Webview-safe media previews
+- **AND** the same durable generated assets are delivered to the local generated-output index and the
+  Workspace Board before the caller reports delivery status
+- **AND** `queued` or `claimed` Board delivery is displayed as pending, `projected` or `noop` is displayed
+  as complete, and `blocked` or `conflict` is displayed as incomplete with diagnostics
+- **AND** no non-terminal or failed Board delivery state is reported as successful Board persistence
+
+#### Scenario: Direct media terminal turn survives Extension restart
+
+- **WHEN** a direct image, video or audio GenerationJob reaches a terminal phase
+- **THEN** Host checkpoints one immutable external turn through the Pi conversation authority using the
+  original user content/timestamp and the exact turn, Tool Call and terminal result identities projected by
+  the live caller
+- **AND** Pi Session JSONL remains the sole durable conversation transcript without persisting mutable
+  Timeline state or adding a Generation history database
+- **AND** after Extension restart or conversation reopen, the normal Pi transcript projector rebuilds the
+  same Generation card and the Webview boundary derives fresh display URIs from stored ContentLocators
+- **AND** a checkpoint failure is fail-visible and the direct-media turn is not reported as durably complete
+
 #### Scenario: A Tool Call has already returned a JobRef
 
 - **WHEN** the Agent needs a later observation, cancellation or retry
@@ -142,21 +174,49 @@ Agent MAY invoke the same ports through Tools but MUST NOT be a required forward
   revision, idempotency and JobRef association
 - **AND** no Agent chat message, background Agent or Agent-owned media forwarding service participates
 
-### Requirement: Webview consumes Host-owned concrete Job activity
+### Requirement: Callers own concrete Job projections
 
-Extension Host SHALL project independent Domain Jobs into a versioned read-only Activity snapshot/patch
-contract. Webview MUST render concrete Job kinds and send exact identity plus expected revision for
-supported commands. Webview MUST NOT own Job lifecycle, subscribe to providers/Engine or use active/latest
-Job fallback.
+Each caller SHALL keep only its exact target association, JobRef, observed revision and presentation
+state. Agent SHALL project Generation progress through Tool Timeline items, Canvas SHALL project direct
+generation through its document/action state, and Cut SHALL project ExportJob through its editor and
+status bar. Callers MUST use the concrete owning-domain port and MUST NOT own Job lifecycle, subscribe to
+providers/Engine, write the Job store or use active/latest fallback. The product MUST NOT introduce a
+cross-domain Activity authority or permanent Job page.
 
-#### Scenario: Webview displays a detached generation
+#### Scenario: Agent observes detached generation
 
-- **WHEN** a detached GenerationJob advances
-- **THEN** Host publishes one Generation activity item with monotonically increasing revision and stable refs
-- **AND** the linked Tool Timeline remains a separate projection without duplicating Job authority
+- **WHEN** Agent needs the state of a detached GenerationJob after the submit Tool Call returned
+- **THEN** it invokes a new describe/observe Tool Call with the exact GenerationJobRef
+- **AND** the resulting Tool Timeline item displays the authoritative snapshot without a second Activity projection
 
-#### Scenario: Webview cancels an export
+#### Scenario: Caller restores a Generation card
 
-- **WHEN** the user cancels an identified ExportJob from Activity
-- **THEN** Webview sends job kind, jobId and expected revision and Extension invokes the explicit Cut port
-- **AND** an unknown kind, stale revision or unsupported command fails visibly without selecting another Job
+- **WHEN** an Agent Webview reconnects while a projected GenerationJob is non-terminal
+- **THEN** the Agent caller installs the exact snapshot for its stored JobRef and continues observing only
+  revisions newer than its stored revision
+- **AND** Webview-local progress state does not become Job authority or trigger provider polling
+
+#### Scenario: Cut displays an export
+
+- **WHEN** an ExportJob advances
+- **THEN** Cut updates its exact editor/status-bar projection from the Cut-owned coordinator
+- **AND** cancel or retry uses the ExportJobRef plus expected revision without a cross-domain command router
+
+### Requirement: Generation persistence is an operational ledger
+
+Generation SHALL persist the minimal versioned snapshot required for restart recovery, provider
+reconciliation, retry provenance and atomic result commit. This persistence MUST NOT be presented as a
+user-visible generation history or become the long-term owner of generated binaries. Generated results
+MUST be handed off as stable ResourceRefs to their owning caller or asset domain.
+
+#### Scenario: A generation succeeds
+
+- **WHEN** Generation atomically commits valid terminal ResourceRefs
+- **THEN** the terminal Job snapshot remains immutable and the caller durably stores the relevant ResourceRef
+- **AND** Assets or Canvas, rather than a Generation history page, owns subsequent browsing and editing
+
+#### Scenario: Terminal retention has no consumption acknowledgement
+
+- **WHEN** no durable contract proves every caller has consumed the terminal result and retry provenance
+- **THEN** terminal Job rows remain protected local state
+- **AND** cleanup is deferred to an explicit retention migration instead of deleting records opportunistically

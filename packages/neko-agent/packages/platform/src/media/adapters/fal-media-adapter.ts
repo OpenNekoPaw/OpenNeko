@@ -17,7 +17,7 @@ import type {
   MediaGenerationType,
   MediaAdapterResult,
   MediaOperationStatus,
-  ImageGenerationRequest,
+  MaterializedImageGenerationRequest,
   MediaOutput,
 } from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
@@ -105,7 +105,7 @@ export class FalMediaAdapter extends BaseMediaAdapter {
   // ===========================================================================
 
   async generateImage(
-    request: ImageGenerationRequest,
+    request: MaterializedImageGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -214,7 +214,7 @@ export class FalMediaAdapter extends BaseMediaAdapter {
    * Select the fal.ai model endpoint based on request fields.
    * Priority: controlMode → ipAdapter → img2img → default model.
    */
-  private resolveModelId(request: ImageGenerationRequest, model: Model): string {
+  private resolveModelId(request: MaterializedImageGenerationRequest, model: Model): string {
     // ControlNet mode takes highest priority
     if (request.controlImageBase64 && request.controlMode) {
       return CONTROLNET_MODEL_MAP[request.controlMode] ?? 'fal-ai/flux-general/controlnet';
@@ -237,7 +237,7 @@ export class FalMediaAdapter extends BaseMediaAdapter {
   /**
    * Build the request body for fal.ai image generation.
    */
-  private buildImageBody(request: ImageGenerationRequest): Record<string, unknown> {
+  private buildImageBody(request: MaterializedImageGenerationRequest): Record<string, unknown> {
     const input: Record<string, unknown> = {
       prompt: request.prompt,
     };

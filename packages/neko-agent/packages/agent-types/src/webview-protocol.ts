@@ -72,10 +72,6 @@ import type {
   ConversationProjectionPatch,
   ConversationProjectionSnapshot,
 } from './conversation-projection';
-import type {
-  DomainActivityHostMessage,
-  DomainActivityWebviewMessage,
-} from './domain-activity-protocol';
 export { NEKO_AGENT_HOST_MESSAGE_EVENT } from './host-message-event';
 
 export type ProtocolModelCategory = ModelType;
@@ -488,8 +484,7 @@ export type WebviewToExtensionMessage =
   | ProjectionEndpointDiscoverRequest
   | ProjectionAttachRequest
   | ProjectionSnapshotAcknowledgement
-  | ProjectionDetachMessage
-  | DomainActivityWebviewMessage;
+  | ProjectionDetachMessage;
 
 export interface ProjectFileMentionInfo {
   path: string;
@@ -937,8 +932,7 @@ export type ExtensionToWebviewMessage =
   | InjectContextMessage
   | AmbientCanvasUpdateMessage
   | ProjectionEndpointReadyMessage
-  | ConversationProjectionAttachmentHostFrame
-  | DomainActivityHostMessage;
+  | ConversationProjectionAttachmentHostFrame;
 
 export type MessageOfType<T extends ExtensionToWebviewMessage['type']> = Extract<
   ExtensionToWebviewMessage,
@@ -1033,10 +1027,6 @@ export const WEBVIEW_TO_EXTENSION_MESSAGE_TYPES = [
   'projectionAttach',
   'projectionSnapshotAck',
   'projectionDetach',
-  'domainActivityAttach',
-  'domainActivityAck',
-  'domainActivityDetach',
-  'domainJobCommand',
 ] as const satisfies readonly WebviewToExtensionMessage['type'][];
 
 const DRAG_MEDIA_TYPES: ReadonlyArray<DragStartWebviewMessage['asset']['mediaType']> = [
@@ -1349,41 +1339,6 @@ export function parseWebviewToExtensionMessage(raw: unknown): WebviewToExtension
     const key = parseProjectionAttachmentKey(raw.key);
     if (!key || !isProjectionDetachReason(raw.reason)) return null;
     return { type, key, reason: raw.reason };
-  }
-  if (type === 'domainActivityAttach' || type === 'domainActivityDetach') {
-    const key = parseDomainActivityAttachmentKey(raw.key);
-    return key ? { type, key } : null;
-  }
-  if (type === 'domainActivityAck') {
-    const key = parseDomainActivityAttachmentKey(raw.key);
-    const sequence = nonNegativeInteger(raw.sequence);
-    const projectionVersion = nonNegativeInteger(raw.projectionVersion);
-    return key && sequence !== null && projectionVersion !== null
-      ? { type, key, sequence, projectionVersion }
-      : null;
-  }
-  if (type === 'domainJobCommand') {
-    const requestId = requiredString(raw.requestId);
-    const jobId = requiredString(raw.jobId);
-    const expectedRevision = nonNegativeInteger(raw.expectedRevision);
-    if (
-      !requestId ||
-      !jobId ||
-      expectedRevision === null ||
-      expectedRevision === 0 ||
-      (raw.jobKind !== 'generation' && raw.jobKind !== 'export') ||
-      (raw.command !== 'cancel' && raw.command !== 'retry' && raw.command !== 'reconcile')
-    ) {
-      return null;
-    }
-    return {
-      type,
-      requestId,
-      jobKind: raw.jobKind,
-      jobId,
-      expectedRevision,
-      command: raw.command,
-    };
   }
   if (type === 'sendMessage') {
     return parseSendMessageWebviewMessage(raw);
@@ -3113,14 +3068,6 @@ function parseProjectionAttachmentKey(value: unknown): ProjectionAttachmentKey |
   const conversationId = requiredString(value.conversationId);
   if (!endpointEpoch || !attachmentId || !tabId || !conversationId) return null;
   return { endpointEpoch, attachmentId, tabId, conversationId };
-}
-
-function parseDomainActivityAttachmentKey(
-  value: unknown,
-): { readonly attachmentId: string } | null {
-  if (!isRecord(value)) return null;
-  const attachmentId = requiredString(value.attachmentId);
-  return attachmentId ? { attachmentId } : null;
 }
 
 function isProjectionDetachReason(value: unknown): value is ProjectionDetachMessage['reason'] {

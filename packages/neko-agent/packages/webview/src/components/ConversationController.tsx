@@ -99,8 +99,7 @@ import { useTabRenderRuntimeRegistry } from '@/render-runtime/useTabRenderRuntim
 import { useProjectionEndpoint } from '@/render-runtime/useProjectionEndpoint';
 import type { AgentContextPayload } from '@neko/shared';
 import type { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
-import { useDomainActivity } from '@/hooks/useDomainActivity';
-import { DomainActivityView } from './DomainActivityView';
+import { submitRoleplayEntrySelection } from '@/components/ChatView/roleplay-entry-action';
 
 // =============================================================================
 // Props
@@ -112,10 +111,12 @@ interface HeaderRenderProps {
   activeView: TabType;
   historyConversations: HistoryConversationItem[];
   activeConversationId: string | null;
+  roleplayItems: readonly MentionItem[];
   onSwitchTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;
   onNewChat: () => void;
-  onShowActivity: () => void;
+  onRequestRoleplayItems: () => void;
+  onSelectRoleplayItem: (item: MentionItem) => void;
   onOpenConversation: (conversationId: string, title: string) => void;
   onDeleteConversation: (conversationId: string) => void;
   onClearClosedConversations: () => void;
@@ -219,7 +220,6 @@ export function ConversationController({
 
   // ---- UI state for active tab ----
   const [activeTab, setActiveTab] = useState<TabType>('chat');
-  const domainActivity = useDomainActivity();
   const activeTabConversationId = activeTabId
     ? (openTabs.find((tab) => tab.id === activeTabId)?.conversationId ?? null)
     : null;
@@ -857,6 +857,16 @@ export function ConversationController({
     startNewForegroundConversation();
   }, [startNewForegroundConversation]);
 
+  const handleRequestRoleplayItems = useCallback(() => {
+    setMentionItems([]);
+    updateMentionSearchFilter('');
+    AgentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
+  }, [setMentionItems, updateMentionSearchFilter]);
+
+  const handleSelectRoleplayItem = useCallback((item: MentionItem) => {
+    submitRoleplayEntrySelection(item);
+  }, []);
+
   const startNewForegroundConversationWithGenerationMode = useCallback(
     (mode: Extract<SessionMode, GenCategory>, messageText?: string) => {
       const sessionModeRequestId = nextInitialSessionModeRequestIdRef.current + 1;
@@ -901,12 +911,11 @@ export function ConversationController({
           setInitialInputRequest(null);
           setInitialSessionModeRequest(null);
           setEntryPromptMenu('roleplay');
-          updateMentionSearchFilter('');
-          AgentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
+          handleRequestRoleplayItems();
           return;
       }
     },
-    [startNewForegroundConversation, updateEntryInputValue, updateMentionSearchFilter],
+    [handleRequestRoleplayItems, startNewForegroundConversation, updateEntryInputValue],
   );
 
   const handleSendWithoutConversation = useCallback(
@@ -954,8 +963,7 @@ export function ConversationController({
           setInitialInputRequest(null);
           setInitialSessionModeRequest(null);
           setEntryPromptMenu('roleplay');
-          updateMentionSearchFilter('');
-          AgentHostMessages.searchProjectFiles('', undefined, { purpose: 'roleplay' });
+          handleRequestRoleplayItems();
           return;
       }
     },
@@ -965,8 +973,8 @@ export function ConversationController({
       entryInputValue,
       entrySessionMode,
       handleSendWithoutConversation,
+      handleRequestRoleplayItems,
       updateEntryInputValue,
-      updateMentionSearchFilter,
     ],
   );
 
@@ -1276,20 +1284,18 @@ export function ConversationController({
         activeView: activeTab,
         historyConversations,
         activeConversationId: visibleConversationId,
+        roleplayItems: mentionItems,
         onSwitchTab: handleSwitchTab,
         onCloseTab: handleCloseTab,
         onNewChat: handleNewChat,
-        onShowActivity: () => setActiveTab('activity'),
+        onRequestRoleplayItems: handleRequestRoleplayItems,
+        onSelectRoleplayItem: handleSelectRoleplayItem,
         onOpenConversation: handleOpenTab,
         onDeleteConversation: handleDeleteConversation,
         onClearClosedConversations: handleClearClosedConversations,
         clearableConversationCount: historyCleanup.deletableConversationIds.length,
         protectedConversationCount: historyCleanup.protectedConversationCount,
       })}
-
-      {activeTab === 'activity' ? (
-        <DomainActivityView state={domainActivity.state} onCommand={domainActivity.execute} />
-      ) : null}
 
       {activeTab === 'chat' ? (
         openTabs.length === 0 ? (

@@ -14,9 +14,7 @@ import {
 } from '@neko/content/document';
 import type {
   ContentReadService,
-  GeneratedOutputContentLocator,
   ContentRepresentationService,
-  ResourceRef,
   PathResolver,
   WorkspaceFileContentLocator,
 } from '@neko/shared';
@@ -24,7 +22,6 @@ import { normalizeWorkspaceContentPath } from '@neko/shared';
 import {
   createHostDerivedContentRuntime,
   createNodeHostContentReadService,
-  type GeneratedAssetResourceResolverResult,
   type HostDerivedContentRuntime,
   type LocalResourceAccessService,
 } from '@neko/shared/vscode/extension';
@@ -37,9 +34,6 @@ import { getLogger } from '../base';
 import { createSharpGeneratedImageRepresentationGenerator } from './visionImageProcessor';
 
 const logger = getLogger('AgentContentAccessRuntime');
-type GeneratedAssetResourceResolver = (
-  ref: ResourceRef,
-) => Promise<GeneratedAssetResourceResolverResult | undefined>;
 
 export interface AgentContentAccessRuntimeServices {
   readonly contentRepresentation: ContentRepresentationService;
@@ -51,7 +45,6 @@ export interface CreateExtensionAgentContentAccessRuntimeOptions {
   readonly localResourceAccess?: LocalResourceAccessService;
   readonly workspaceRoot?: string;
   readonly pathResolver?: PathResolver;
-  readonly resolveGeneratedAsset?: GeneratedAssetResourceResolver;
   /** Test/alternate Host root; production uses the operating-system home directory. */
   readonly derivedStorageHomedir?: string;
 }
@@ -116,14 +109,6 @@ export async function createExtensionAgentContentAccessRuntime(
       contentRead: contentRead ?? createUnavailableContentReadService(),
       documentAccess,
       resolveWorkspaceFileLocator: createWorkspaceFileLocatorResolver(workspaceRoot),
-      ...(options.resolveGeneratedAsset && workspaceRoot
-        ? {
-            resolveGeneratedOutputLocator: createGeneratedOutputLocatorResolver(
-              workspaceRoot,
-              options.resolveGeneratedAsset,
-            ),
-          }
-        : {}),
       resolveDocumentHostFilePath: (source) =>
         workspaceRoot ? path.join(workspaceRoot, ...source.path.split('/')) : undefined,
       contentRepresentation: sharedRuntime.contentRepresentation,
@@ -150,34 +135,6 @@ function createWorkspaceFileLocatorResolver(
       ? { kind: 'workspace-file', path: normalized }
       : undefined;
   };
-}
-
-function createGeneratedOutputLocatorResolver(
-  workspaceRoot: string,
-  resolveGeneratedAsset: GeneratedAssetResourceResolver,
-): (ref: ResourceRef) => Promise<GeneratedOutputContentLocator | undefined> {
-  const resolveWorkspaceFile = createWorkspaceFileLocatorResolver(workspaceRoot);
-  return async (ref) => {
-    if (ref.source.kind !== 'generated-asset') return undefined;
-    const resolved = await resolveGeneratedAsset(ref);
-    const workspaceFile = resolved?.path ? resolveWorkspaceFile(resolved.path) : undefined;
-    const revision = readNonEmptyString(ref.source.metadata?.['revision']);
-    const digest = readNonEmptyString(ref.source.metadata?.['contentDigest']);
-    const outputId = readNonEmptyString(ref.source.generatedAssetId);
-    return workspaceFile && revision && digest && outputId
-      ? {
-          kind: 'generated-output',
-          outputId,
-          revision,
-          digest,
-          path: workspaceFile.path,
-        }
-      : undefined;
-  };
-}
-
-function readNonEmptyString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
 function createUnavailableContentReadService(): ContentReadService {

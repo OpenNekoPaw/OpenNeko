@@ -68,17 +68,13 @@ import {
   createAgentLocalResourceAccess,
   type AgentLocalResourceAccess,
 } from '../services/localResourceAccess';
-import type { GeneratedAssetIndex } from '@neko/platform/media/generated-asset-index';
+import type { GeneratedAssetCatalog } from '@neko/platform/media/generated-asset-index';
 import { handleChatWebviewMessage } from './chatWebviewMessageRouter';
 import {
   createConversationProjectionAttachmentServer,
   ProjectionAttachmentProtocolError,
   type ConversationProjectionAttachmentServer,
 } from './projection/conversationProjectionAttachmentServer';
-import {
-  createDomainActivityAttachmentServer,
-  type DomainActivityAttachmentServer,
-} from './activity/domainActivityAttachmentServer';
 import { projectConversationProjectionAttachmentFrameForWebview } from './message/webviewResourceProjection';
 import {
   getCapabilityDiscoveryService,
@@ -96,11 +92,7 @@ import {
   type TabState,
 } from '@neko-agent/types';
 import type { ICapabilityPurposeTextRuntime, NpcAgentWorkflowRequest } from '@neko/shared';
-import type { GeneratedAsset, ResourceRef } from '@neko/shared';
-import type {
-  DomainActivityCommandExecutor,
-  DomainActivitySource,
-} from '@neko/shared/domain-activity';
+import type { GeneratedAsset, GeneratedOutputContentLocator } from '@neko/shared';
 import type { GenerationJobPort } from '@neko/generation';
 import { updateWebviewKeyboardEditableOwner } from '@neko/shared/vscode/extension';
 import { readAgentWebviewAssetPaths } from './webviewAssetManifest';
@@ -230,6 +222,7 @@ function resolvePiConversationOptions(
       deleteConversation: (conversationId) => requireAuthority().deleteConversation(conversationId),
       readConversationEntries: (conversationId) =>
         requireAuthority().readConversationEntries(conversationId),
+      checkpointExternalTurn: (input) => requireAuthority().checkpointExternalTurn(input),
     },
   };
 }
@@ -243,13 +236,9 @@ export function createChatLocalResourceAccess(
 
 export interface ChatViewProviderOptions {
   readonly localResourceAccess?: AgentLocalResourceAccess;
-  readonly generatedAssetIndex?: GeneratedAssetIndex;
+  readonly generatedAssetCatalog?: GeneratedAssetCatalog;
   readonly generationJobs?: GenerationJobPort;
-  readonly domainActivity?: {
-    readonly source: DomainActivitySource;
-    readonly commands: DomainActivityCommandExecutor;
-  };
-  readonly resolveGenerationResult?: (ref: ResourceRef) => {
+  readonly resolveGenerationResult?: (locator: GeneratedOutputContentLocator) => {
     readonly path: string;
     readonly asset: GeneratedAsset;
   };
@@ -297,7 +286,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   private readonly _webviewDisposables: vscode.Disposable[] = [];
   private _webviewBindingGeneration = 0;
   private _projectionAttachmentServer?: ConversationProjectionAttachmentServer;
-  private _domainActivityAttachmentServer?: DomainActivityAttachmentServer;
   private _projectionEndpointEpoch?: string;
   private _projectionEndpointRealmId?: string;
   private readonly _reportedProjectionErrors = new WeakSet<Error>();
@@ -319,7 +307,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   private _characterPurposeModels?: VSCodeCharacterPurposeModelConfigurator;
   private _configBridge?: ConfigBridge;
   private readonly _localResourceAccess: AgentLocalResourceAccess;
-  private readonly _generatedAssetIndex: GeneratedAssetIndex | undefined;
+  private readonly _generatedAssetCatalog: GeneratedAssetCatalog | undefined;
   // Note: _routerAskBroker and _workflowPlanHandler were removed alongside
   // the workflow/orchestrator layer. Pipeline intents now flow through the
   // Agent + Skill stack; no separate plan handler is needed.
@@ -350,12 +338,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     this._systemPromptBuilder = createSystemPromptBuilder({ locale: vscode.env.language });
     this._localResourceAccess =
       this._options.localResourceAccess ?? createChatLocalResourceAccess(_extensionUri, _context);
-    this._generatedAssetIndex = this._options.generatedAssetIndex;
+    this._generatedAssetCatalog = this._options.generatedAssetCatalog;
     this._conversations = new ConversationBridge(
       getCurrentWorkspaceRoot,
       this._localResourceAccess,
       () => getCapabilityRuntimeBindings().contentAccessRuntime,
-      resolvePiConversationOptions(this._options.piConversations),
+      {
+        ...resolvePiConversationOptions(this._options.piConversations),
+        onConversationTitleChanged: (conversationId, title) =>
+          this._synchronizeConversationTabTitle(conversationId, title),
+        ...(this._options.resolveGenerationResult
+          ? { resolveGenerationResult: this._options.resolveGenerationResult }
+          : {}),
+      },
     );
 
     // Initialize handlers with empty deps (will be updated after service init)
@@ -486,7 +481,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
           undefined,
           this._localResourceAccess,
           {
-            generatedAssetIndex: this._generatedAssetIndex,
             workspaceId: this._options.localMetadata?.workspaceId,
             generationJobs: this._options.generationJobs,
             resolveGenerationResult: this._options.resolveGenerationResult,
@@ -505,7 +499,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
         // Update handler dependencies via type-safe updateDeps()
         this._fileOperationHandler.updateDeps({
           platform: this._platform,
-          generatedAssetLookup: this._generatedAssetIndex,
+          generatedAssetLookup: this._generatedAssetCatalog,
         });
         this._settingsHandler.updateDeps({
           platform: this._platform,
@@ -709,15 +703,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
       webview,
       endpointEpoch,
     );
-    if (this._options.domainActivity) {
-      this._domainActivityAttachmentServer = createDomainActivityAttachmentServer({
-        source: this._options.domainActivity.source,
-        commands: this._options.domainActivity.commands,
-        postMessage: async (message) => Boolean(await webview.postMessage(message)),
-        reportError: (error) => logger.error('Domain Activity protocol failed', error),
-      });
-    }
-
     // Register webview for broadcasts (skills, commands, etc.)
     const postMessageFn = (msg: unknown) => webview.postMessage(msg);
     if (this._configBridge) {
@@ -766,7 +751,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
         handleChatWebviewMessage(message, {
           webview,
           projectionAttachments,
-          domainActivity: this._domainActivityAttachmentServer,
           announceProjectionEndpoint: (protocolVersion, realmId) =>
             this._announceProjectionEndpoint(webview, protocolVersion, realmId),
           reportProjectionProtocolError: (error, key) =>
@@ -819,6 +803,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
           contentAccessRuntime: getCapabilityRuntimeBindings().contentAccessRuntime,
           localMediaCaller: 'neko-agent.projection-attachment',
           documentResourceCaller: 'neko-agent.projection-document-resource',
+          ...(this._options.resolveGenerationResult
+            ? { resolveGenerationResult: this._options.resolveGenerationResult }
+            : {}),
         });
         return Boolean(await webview.postMessage(projectedFrame));
       },
@@ -1010,6 +997,23 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     this._view.webview.postMessage(
       buildChatTabStateMessage(this._tabState, this._tabStateRevision),
     );
+  }
+
+  private _synchronizeConversationTabTitle(conversationId: string, title: string): void {
+    let changed = false;
+    const openTabs = this._tabState.openTabs.map((tab) => {
+      const isOrdinaryTab = tab.kind === undefined || tab.kind === 'chat';
+      if (!isOrdinaryTab || tab.conversationId !== conversationId || tab.title === title) {
+        return tab;
+      }
+      changed = true;
+      return { ...tab, title };
+    });
+    if (!changed) return;
+
+    this._tabState = { ...this._tabState, openTabs };
+    this._saveTabState();
+    this._sendTabState();
   }
 
   private _bindCreatedConversationToForegroundTab(conversationId: string): void {
@@ -1346,7 +1350,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
       this._conversations.dispose();
     }
     this._localResourceAccess.dispose();
-    this._generatedAssetIndex?.dispose();
     this._configBridge?.dispose();
     this._configBridge = undefined;
 
@@ -1391,13 +1394,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     if (projectionAttachmentServer) {
       void projectionAttachmentServer.dispose().catch((error: unknown) => {
         logger.error('Failed to dispose projection attachment endpoint', error);
-      });
-    }
-    const domainActivityAttachmentServer = this._domainActivityAttachmentServer;
-    this._domainActivityAttachmentServer = undefined;
-    if (domainActivityAttachmentServer) {
-      void domainActivityAttachmentServer.dispose().catch((error: unknown) => {
-        logger.error('Failed to dispose Domain Activity attachment endpoint', error);
       });
     }
     void this._setKeyboardFocused(false);

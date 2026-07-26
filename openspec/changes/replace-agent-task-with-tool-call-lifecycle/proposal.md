@@ -15,7 +15,8 @@
 - 需要跨 Agent、跨页面或跨进程独立存活、恢复或直接 UI 操作的执行，必须由 owning domain 通过独立变更定义具体 Job/Session。当前没有 detached/recoverable media producer，因此本变更不创建推测性的 `GenerationJob`；既有 Cut `ExportJob` 继续由 Cut 拥有。
 - 引入最小、host-neutral 的 `ExecutionOwnershipRegistry` 管理临时 owner-child 关系、级联取消和释放；它不保存领域进度、结果、恢复状态或 provider identity。
 - Tool Call 被取消后不能恢复同一个 `toolCallId`。若底层领域 Job 支持恢复，新 Agent Run 必须通过新的 Tool Call 和稳定 `jobId` 重新观察或接管。
-- 将 UI 中泛化的 Task 名称收敛为 Plan Progress、Tool Execution、前台 Agent/Subagent 和 Domain Activity，操作必须指向精确 owner。
+- 将 UI 中泛化的 Task 名称收敛为 Plan Progress、Tool Execution、前台 Agent/Subagent 和
+  caller-owned domain projection；操作必须指向精确 owner，不建立跨领域 Activity 页面。
 - 明确页面关闭策略：Tab/Window/Webview 创建的前台 Agent Run 及其 Tool Calls 被取消；
   Subagent 与领域 detached Job 按各自 owner policy 继续或取消，直到完成或被精确中断。
 
@@ -33,7 +34,7 @@
 
 - Agent runtime：`packages/neko-agent/packages/agent` 的 Tool bridge、Pi event projection、取消和 subagent/background-agent supervision。
 - Agent platform：媒体 Tool、media executor、TaskManager、TaskRef、continuation 和恢复路径。
-- Hosts/UI：TUI、VS Code、拟议 Desktop 的页面关闭、Activity、Tool/Agent Run 投影和显式中断操作。
+- Hosts/UI：TUI、VS Code、拟议 Desktop 的页面关闭、caller-owned Job、Tool/Agent Run 投影和显式中断操作。
 - 创作领域：Canvas 直接 AI 动作、Cut `ExportJobPort`、Assets import/index 以及未来 Character/World run。
 - 共享契约：删除泛化 Task 身份，新增精确 ToolCall/AgentRun/DomainJob owner identity；不把领域 Job DTO 提升为一个新的通用 Task DTO。
 - 用户数据：现有预发布 Task 记录不迁移为新通用格式；实施变更必须明确删除、忽略或由具体领域重建，且不得静默损坏已生成资源。

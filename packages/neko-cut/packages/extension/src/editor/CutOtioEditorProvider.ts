@@ -26,12 +26,7 @@ import { resolvePreviewSelection } from './previewSelection';
 import { executeCutWorkbenchHistory } from './cutHistory';
 import { CutExportTaskRegistry } from './CutExportTaskRegistry';
 import { freezeCutExportRequest, readCutExportSettings } from './cutExportRequest';
-import type { DomainActivityPublisher } from '@neko/shared/domain-activity';
-import type {
-  ExportJobCommandInput,
-  ExportJobSnapshot,
-  ExportJobStore,
-} from '../services/export-job';
+import type { ExportJobStore } from '../services/export-job';
 import { CutWorkspaceMediaImporter } from '../services/CutWorkspaceMediaImporter';
 import { CutWorkspaceMediaPaths } from '../services/CutWorkspaceMediaPaths';
 import { EngineConnection } from '../services/EngineConnection';
@@ -52,7 +47,6 @@ export interface CutOtioEditorHostEvents {
 
 export interface CutOtioEditorJobOptions {
   readonly store: ExportJobStore;
-  readonly activityPublisher?: DomainActivityPublisher;
 }
 
 interface CutPreviewRecord {
@@ -105,7 +99,6 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     });
     this.exportTasks = new CutExportTaskRegistry({
       store: jobOptions.store,
-      ...(jobOptions.activityPublisher ? { activityPublisher: jobOptions.activityPublisher } : {}),
       onUpdate: (task) => {
         hostEvents.onExportTaskUpdate(task);
         void this.broadcastExportTask(task).catch((error: unknown) => {
@@ -122,14 +115,6 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
 
   recoverExportJobs(): Promise<void> {
     return this.exportTasks.recover();
-  }
-
-  executeExportCommand(
-    input: ExportJobCommandInput & {
-      readonly command: 'cancel' | 'retry' | 'reconcile';
-    },
-  ): Promise<ExportJobSnapshot> {
-    return this.exportTasks.executeCommand(input);
   }
 
   dispose(): Promise<void> {

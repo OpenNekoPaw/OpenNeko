@@ -22,7 +22,9 @@ export function presentDirectMediaCommandResult(
       revision: result.jobRevision,
     },
   );
-  return result.assetRefs.length > 0 ? [summary, ...result.assetRefs].join('\n') : summary;
+  return result.resultLocators.length > 0
+    ? [summary, ...result.resultLocators.map((locator) => locator.path)].join('\n')
+    : summary;
 }
 
 export function presentDirectMediaCommandError(

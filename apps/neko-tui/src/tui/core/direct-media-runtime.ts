@@ -68,7 +68,7 @@ export async function createDirectMediaRuntime(input: {
             result: generation,
             operationId: ref.jobId,
           });
-          return delivery.resourceRefs;
+          return delivery.resultLocators;
         },
       },
     });

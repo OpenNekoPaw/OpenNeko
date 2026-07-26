@@ -1,5 +1,9 @@
 ## Context
 
+> Workspace Board 非 Markdown artifact 的资源位置、Canvas 持久化和 Webview 最终投影由
+> [`unify-cross-package-content-locators`](../unify-cross-package-content-locators/)
+> 统一约束；本变更继续拥有 delivery ledger、writer lease、幂等投影和 `.nkc` mutation。
+
 Workspace Board 已具备共享 `CanvasWorkspaceProjectionRequest`、纯 `planCanvasWorkspaceBoardProjection()` 和 VS Code `NekoCanvasAPI.boards.project()`，但当前运行时存在两套直接 writer：VS Code Agent 通过 Extension API 调用 `CanvasProjectAuthoringService`，TUI 的 `NodeWorkspaceBoardProjector` 则独立执行 Node `fs` load-plan-save。两者只接收单个 generated asset，请求期间没有跨 Host ledger、target writer lease 或共同 revision transaction；多个 Agent、TUI 与已打开的 Canvas 同时修改 `workspace.nkc` 时会形成典型 read-modify-write 覆盖窗口。
 
 共享契约已经声明 `markdown`、`file-reference` 和生成媒体 kind，Canvas 计划也能创建普通 Text/Document/Media 节点，但 Agent Host 只在 media delivery 中调用 generated-asset helper。实际读取的素材、reviewable Markdown artifact、后台/纯 Host 结果尚未进入同一 typed delivery。与此同时，Agent/Canvas 架构已经要求：Agent core 不拥有目标，未显式绑定 `.nkc` 的结果进入固定 Workspace Board，`.nkc` 是布局权威，历史/外部内容才走显式 authoring handoff。
@@ -24,14 +28,14 @@ Workspace Board 已具备共享 `CanvasWorkspaceProjectionRequest`、纯 `planCa
 
 ### Existing owner and reuse audit
 
-| Concern                     | Reused canonical owner                                                                           | Decision                                                                                                                           |
-| --------------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Concern                     | Reused canonical owner                                                                           | Decision                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Agent artifacts             | Tool-result `attachments` / `artifacts`, CompositeArtifact snapshots, generated-output lifecycle | Collector only consumes successful stable evidence. A successful `ReadImage` result with explicit `analysis` is a bounded terminal artifact declaration: its current-turn final Markdown becomes the named analysis artifact and its perceptual attachments become sources. The collector does not promote any other final answer, attachment, search candidate, or open file. |
-| Stable material identity    | `ResourceRef`, `DocumentArchiveResourceRef`, `validateDurableResourceRef`                        | No package-local path/ref DTO or cache identity is introduced.                                                                     |
-| Canvas schema and file IO   | `CanvasData`, `ProjectFileStore`, NKC codec, `createVSCodeProjectFileIoAdapter`                  | Canvas domain owns planning/coordinator; Host adapters only load and atomically save.                                              |
-| Local structured state      | User-level `LocalMetadataStore` `tasks` / `task_checkpoints` repositories                        | Reserved `system:canvas-board-*` rows reuse existing transactions and stay outside Agent task UI/recovery cleanup.                 |
-| Generated output durability | generated-output index and revision lifecycle                                                    | Board failure never deletes or invalidates the generated file.                                                                     |
-| Diagnostics                 | `CanvasWorkspaceProjectionResult` and existing TUI/VS Code result projection                     | Stable codes/messages only; DB path/table, SQL error, holder id and Markdown body remain private.                                  |
+| Stable material identity    | `ContentLocator`                                                                                  | 非 Markdown creator-visible artifact 只携带一个 locator；不引入 package-local path/ref DTO，也不把 Host cache identity 写入 Board。                                                                                                                                                                                                                                             |
+| Canvas schema and file IO   | `CanvasData`, `ProjectFileStore`, NKC codec, `createVSCodeProjectFileIoAdapter`                  | Canvas domain owns planning/coordinator; Host adapters only load and atomically save.                                                                                                                                                                                                                                                                                          |
+| Local structured state      | User-level `LocalMetadataStore` `tasks` / `task_checkpoints` repositories                        | Reserved `system:canvas-board-*` rows reuse existing transactions and stay outside Agent task UI/recovery cleanup.                                                                                                                                                                                                                                                             |
+| Generated output durability | generated-output index and revision lifecycle                                                    | Board failure never deletes or invalidates the generated file.                                                                                                                                                                                                                                                                                                                 |
+| Diagnostics                 | `CanvasWorkspaceProjectionResult` and existing TUI/VS Code result projection                     | Stable codes/messages only; DB path/table, SQL error, holder id and Markdown body remain private.                                                                                                                                                                                                                                                                              |
 
 `WorkspaceBoardDeliveryCoordinator.retry()` / `discard()` is the single owning command surface. Presentation adapters may expose affordances only by invoking these methods for the original `deliveryId`; Agent TaskManager, Webview stores, TUI command handlers and Canvas nodes must not implement parallel retry/discard state transitions.
 
@@ -75,7 +79,7 @@ relations[]: optional source artifact ids for provenance only
 
 `deliveryId` 是一次 terminal creator-visible batch 的稳定 identity；artifact identity/revision 仍由 owning artifact/result service 提供。同步分析在 turn artifact finalization 后提交，异步生成在 terminal task result materialization 后提交。系统不扫描普通聊天文本，也不把任意 final answer 自动升级为 artifact；Markdown 只有在 runtime/tool 已声明为命名、reviewable artifact 时才进入 batch。`ReadImage.analysis` 是一个明确且有界的声明：工具已成功把稳定图片作为本轮原生多模态证据送入模型时，terminal collector 使用分析 kind、source identities 与正文 digest 生成稳定 artifact identity/title，把最终 Markdown 提升为 analysis，并以实际 perception attachments 建立 `sourceArtifactIds`。如果工具失败、没有 `analysis`、没有稳定 source 或 final Markdown 为空，则不得合成 artifact。
 
-选择 batch 而不是继续逐 asset 调用，是因为一次 terminal result 仍需原子表达 source → analysis → output，并且不应在 Board 中留下半组节点或半条关系。batch 是 transport、ledger 和 transaction 边界，不是 Canvas 视觉容器；逐项扩展 `projectGeneratedAssets()` 会继续把 delivery policy、目标和错误处理散落到媒体、研究、artifact 和 Host 入口。
+选择 batch 而不是继续逐 asset 调用，是因为一次 terminal result 仍需原子表达 source → analysis → output，并且不应在 Board 中留下半组节点或半条关系。batch 首先是 transport、ledger 和 transaction 边界；当一个 batch 同时创建多个生成素材时，Canvas projector 还可以用同一 `deliveryId` 派生一个展示 Group，但该 Group 不反向成为 delivery 或 Job authority。逐项扩展 `projectGeneratedAssets()` 会继续把 delivery policy、目标和错误处理散落到媒体、研究、artifact 和 Host 入口。
 
 ### 2. Used materials come from evidence, not attachment or active context inference
 
@@ -168,9 +172,9 @@ persist validated delivery
 
 当 VS Code 正打开 Workspace Board 时，VS Code Canvas document owner 优先持有/续租 writer lease，其他 Host 只 enqueue；Extension drain 后更新 editor state。没有活跃 owner或 lease 过期时，TUI/headless 可接管并直接原子写文件。该锁只保护真实共享 `.nkc` 资源，不进入 Agent instance state。
 
-### 7. Project one flat, deduplicated creative content graph
+### 7. Project one batch-aware, deduplicated creative content graph
 
-Workspace Board document 本身就是自动投递落点，不再创建固定 Inbox、Task、Run 或 processing Group。每个 artifact 投影为顶层普通 Text、Document 或 Media 节点；delivery/run/task 仅作为不可见 provenance 和 ledger identity，不参与视觉层级、节点 identity 或布局。batch mutation 仍保持原子，因此删除视觉 Group 不会放松 crash recovery、receipt ordering 或 whole-batch validation。
+Workspace Board document 本身就是自动投递落点，不再创建固定 Inbox、Task、Run 或 processing Group。每个 artifact 仍投影为普通 Text、Document 或 Media 节点；delivery/run/task 继续作为 provenance 和 ledger identity，不参与内容节点 identity。唯一可见的 delivery 派生容器是“同批生成素材 Group”：当一次投递至少创建两个新的 output image/audio/video 节点时，planner 以 `deliveryId` 派生一个确定性 Group，只把这些本次新建的生成节点设为其 children。单素材 batch、source、analysis、已存在或已被用户重新组织的节点不进入该 Group。
 
 节点 identity 由内容事实决定，而不是由观察该内容的 Agent 执行决定：
 
@@ -179,11 +183,11 @@ Workspace Board document 本身就是自动投递落点，不再创建固定 Inb
 - named Markdown 使用 artifact identity 与 content revision；
 - 没有 durable resource identity 的其他产物使用 owning artifact identity 与 revision。
 
-`deliveryId` 不得进入节点 ID。同一内容 revision 在多个 Run、Task 或 Host delivery 中只能对应一个 Canvas 节点；重复投递复用节点且不得覆盖用户标题、位置、尺寸、分组或批注。历史节点只有 `none` 弱 fingerprint 时，首次强观察允许原位升级其 `resourceRef` 身份元数据，以防后续不同强 fingerprint 被弱身份错误合并；该升级不得改变其他 node data 或任何用户布局事实。新 revision 保留为新内容节点，除非 owning domain 提供显式 supersedes 语义。本次 prelaunch 替换不自动删除或拆解旧版本已经写入的 Inbox/processing Group，避免损坏用户布局；新 canonical path 不再创建这些 Group，并可按 canonical content identity 复用其中已有 artifact 节点。
+`deliveryId` 不得进入内容节点 ID；只允许进入 batch Group ID 和 provenance，因为该容器表达的正是一次投递的展示边界。同一内容 revision 在多个 Run、Task 或 Host delivery 中只能对应一个 Canvas 内容节点；重复投递复用节点且不得覆盖用户标题、位置、尺寸、分组或批注。历史节点只有 `none` 弱 fingerprint 时，首次强观察允许原位升级其 `resourceRef` 身份元数据，以防后续不同强 fingerprint 被弱身份错误合并；该升级不得改变其他 node data 或任何用户布局事实。新 revision 保留为新内容节点，除非 owning domain 提供显式 supersedes 语义。本次 prelaunch 替换不自动删除或拆解旧版本已经写入的 Inbox/processing Group，避免损坏用户布局。
 
 artifact provenance 的 `sourceArtifactIds` 是已证明的创作依赖。planner 将 batch 内可解析的依赖投影为普通 `derived-from` Canvas connection，连接方向为 source → derived artifact，ID 由 source content node、target content node 和 relation type 决定；相同关系跨 delivery 只存在一次。缺失、自引用或无法解析的 dependency 属于 contract error，不静默忽略。Run/Task 不生成节点或连接。
 
-初始布局按 source、analysis、output 的关系方向从左到右放置新节点，并根据现有全部节点矩形寻找空位。已存在节点保持用户位置与尺寸；新增节点不得触发已有节点自动重排。Media/Text/Document 节点已有 creator-facing `title` 时优先显示该标题，ResourceRef 和 node id 只作为无 authored title 时的可诊断 fallback。
+初始布局按 source、analysis、output 的关系方向放置新节点，并根据现有全部顶层矩形寻找空位。顶层布局在一个有界列数内按行填充；同批生成素材 Group 的 children 使用接近平方的列数 `ceil(sqrt(count))`，并根据每行实际最大高度计算下一行位置和 Group 外框。这样 3 个以上素材不会被固定成单行或单列，节点画幅差异也不会造成重叠。已存在节点保持用户位置、尺寸和 parent；新增节点不得触发已有节点自动重排。Media/Text/Document 节点已有 creator-facing `title` 时优先显示该标题，ResourceRef 和 node id 只作为无 authored title 时的可诊断 fallback。
 
 Workspace Board 的图片卡片是创作审阅表面，必须完整展示图片；Canvas inline preview 使用 `contain`，不得用 `cover` 裁切。新投影图片节点的尺寸比例必须来自 portable intrinsic dimensions：生成图片优先使用 owning generated asset 的宽高，`ReadImage` 引用图片由 tool result 按稳定 ResourceRef/DocumentArchiveResourceRef 关联并把宽高传入同一共享契约；仅缺少固有宽高时才使用 `generationContext.aspectRatio`。planner 以该比例确定新节点尺寸并同时满足 Webview 最小尺寸，不新增 Webview runtime 探测作为 durable identity。重放或后续观察不得重置已存在节点的用户尺寸。
 
@@ -199,11 +203,19 @@ Batch mutation 必须原子。若任一 artifact invalid、canonical content ide
 
 Board 失败不删除 artifact；artifact 成功也不能冒充 Board 成功。当前 typed result presentation 移除通用 `Send to Canvas`，改为只读 delivery 状态与 retry/discard affordance。历史/外部内容仍走 `requestCanvasAuthoringHandoff`，专业 authoring 仍走 owning Canvas tools/approval。
 
+### 8.1 Fence Webview snapshots against the authoritative Canvas document
+
+VS Code custom editor 保存不得把 Webview 返回的整份快照直接当成持久项目事实。Extension Host 维护最近一次成功加载、Host authoring 或保存后的 authoritative Canvas snapshot；Webview mutation 只提交可验证的变更证据。候选快照相对 authoritative snapshot 缺少节点时，每个缺失节点都必须对应本轮明确的 node-removal evidence，未知或未确认的节点消失直接以 diagnostic 拒绝保存，不得覆盖 `.nkc`。
+
+删除证据只属于当前 document/save epoch，保存、revert、Host authoring、document reload 或 close 后立即清除。正常的单节点删除、批量删除和 undo/redo 必须报告实际移除的 node IDs，因此用户明确清空 Board 仍可保存；Webview 初始化、reload、malformed `update`、stale snapshot 或 store reset 产生的空文档没有删除证据，必须 fail-visible。Webview `update` message 缺少合法 Canvas data 时不得回退到默认空 Canvas。
+
+诊断只记录 document URI 之外可脱敏的 revision/count 信息；不得记录节点正文、ResourceRef locator、绝对路径或用户内容。该保护不重放 projected receipt，也不从 generation history 重建 Board，`.nkc` 继续是内容与用户删除事实的唯一权威。
+
 ### 9. Evaluation disposition
 
 本变更影响 TUI artifact delivery、background task recovery、跨 Host result projection 和 runtime facts，必须运行真实 Agent Evaluation。
 
-- `update` `agent-runtime.creative-media-workflow/generated-output-workspace-board`：增加 LocalMetadata delivery task、canonical Canvas domain coordinator、writer epoch、projected receipt、flat content node 和旧 Node/VS Code direct-writer poison evidence。
+- `update` `agent-runtime.creative-media-workflow/generated-output-workspace-board`：增加 LocalMetadata delivery task、canonical Canvas domain coordinator、writer epoch、projected receipt、canonical content node 和旧 Node/VS Code direct-writer poison evidence。Evaluation receipt 继续只观察内容 node IDs；`workspace-inbox`/`workspace-process-*` 保持禁止，确定性的 `workspace-batch-*` 只作为 Canvas 展示结构验收。
 - `create` `agent-runtime.creative-media-workflow/workspace-board-material-analysis`：TUI 读取 fixture 素材并生成命名 Markdown artifact；断言实际消费 source ref、Markdown node、content dedup、`derived-from` connection、unselected fixture omission、无 generic Send to Canvas/active Canvas fallback。
 - `create` 或在 owning suite中 `update` `agent-runtime.workflow-controller/workspace-board-delivery-resume`：在 enqueue 后终止 Host，再由新 TUI owner恢复同一 delivery；断言同一 identity、fenced takeover、单次 `.nkc` effect 和 terminal idle。
 - 更新 coverage index/change selector，为新的 Agent/TUI workspace-board delivery paths 建立明确 owner；Canvas planner、SQLite state machine、explicit-target no-mirror 与双 Host并发使用 deterministic integration tests，不用 Judge。
@@ -231,7 +243,7 @@ Board 失败不删除 artifact；artifact 成功也不能冒充 Board 成功。�
 6. 删除 legacy generated-asset-only writer、重复 Node projector、当前 typed result通用 Send to Canvas 和所有 active/recent Board fallback；测试 poison 被删除路径。
 7. 更新 Agent/Canvas architecture、SQLite ADR使用说明、Evaluation suites和真实 Extension Development Host/TUI验证。
 
-回滚只允许回退未接入的 Host adapter或暂停自动 enqueue；不得恢复两套直接 writer、活动 Canvas fallback或绕过 ledger。旧版本已写入 `.nkc` 的 Inbox/processing Group 与子节点保持可读且不自动删除；新投递只使用 flat content graph canonical path。pending ledger rows可由同版本 coordinator继续处理或显式 discard。
+回滚只允许回退未接入的 Host adapter或暂停自动 enqueue；不得恢复两套直接 writer、活动 Canvas fallback或绕过 ledger。旧版本已写入 `.nkc` 的 Inbox/processing Group 与子节点保持可读且不自动删除；新投递只使用 canonical content graph，并仅在同一 delivery 新建多个生成素材时增加确定性的 batch 展示 Group。pending ledger rows可由同版本 coordinator继续处理或显式 discard。
 
 ## Open Questions
 

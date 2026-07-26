@@ -3,9 +3,9 @@
 ## Evaluation Scope
 
 - Change/feature: introduce a minimal shared Domain Job lifecycle kernel, concrete Generation/Export
-  coordinators and Host-owned Domain Activity projection.
+  coordinators and caller-owned Agent/Canvas/Cut projections.
 - Decision and owning suite: `update` `agent-runtime.workflow-controller`; Extension Development Host
-  functional coverage is additionally required for Webview Activity.
+  functional coverage is additionally required for Agent Tool Timeline.
 - Why real Evaluation is required: the change affects Tool routing, asynchronous execution, cancellation,
   retry/recovery, artifact delivery and TUI/Agent runtime evidence.
 - Canonical Agent path: canonical TUI input -> Pi Agent Run -> new Tool Call -> exact domain Job Tool
@@ -33,17 +33,18 @@
 
 - Shared transition, revision/CAS, terminal immutability and observer ordering.
 - Generation/Cut exact coordinator and adapter path.
-- Snapshot-first reconnect and revision-gap replacement.
-- Activity summary excludes provider credentials, external handles and Host-private paths.
+- Snapshot-first reconnect and revision-gap replacement at each concrete caller.
+- Caller projections exclude provider credentials, external handles and Host-private paths.
 - Source absence for generic manager/payload/result and retired Task fallback.
+- Source absence for cross-domain Activity contracts, projectors, Host command routing and Webview pages.
 
 ### Extension Development Host coverage
 
-- Linked media progress updates one Tool Timeline item.
-- Detached Generation/Export Job appears once in Domain Activity with concrete kind and identity.
-- Hiding/reopening Webview installs a fresh Activity snapshot and resumes ordered patches.
-- Exact cancel/retry command reaches the owning domain port.
-- Stale command fails visibly; no latest/active Job is selected.
+- Linked media progress and terminal phase update one Tool Timeline item.
+- A detached Generation Job is queried through a new exact Tool Call without a workspace-wide Webview subscription.
+- Cut ExportJob remains visible through its editor/status-bar projection.
+- The Agent header has no global Activity entry and the Webview protocol has no Activity attachment or generic domain command route.
+- Exact caller commands reach the owning domain port; stale commands fail visibly with no latest/active Job selection.
 
 ## Evidence and Observability
 
@@ -216,30 +217,122 @@ Key-free dry-runs, mocks or a final Agent answer will not be reported as real Jo
   49 dry-runs; `pnpm check:agent-boundaries`; `pnpm check:openspec`; focused dynamic-purpose and config
   projection tests; `pnpm check:deps`; `git diff --check`. A fresh repository `pnpm test` passed all
   28/28 Turborepo tasks in 5m8.075s.
-- Extension Development Host re-acceptance remains blocked. Port 9222 now exposes a real workbench and
-  Agent Webview in an isolated synthetic workspace, but Extension Host inspection proves that the active
-  Neko extensions were loaded from a separate checkout rather than this change's worktree. That runtime
-  is not comparable evidence for the changed build and was not reported as acceptance or replaced with a
-  browser/synthetic Webview authority. Activity snapshot/patch/command runtime acceptance therefore
-  remains open under task 7.4.
+- The original Extension Development Host attempt loaded a separate checkout and was not comparable
+  evidence. A generated product-composition staging root now loads the changed build in an isolated
+  synthetic workspace. Final acceptance must prove Tool Timeline result/terminal phase and the absence
+  of the superseded Activity page/protocol; ordinary browser or synthetic Webview evidence is invalid.
+
+### Phase 5 product-composed direct image and Webview terminal acceptance
+
+- The canonical `Debug Dev (All)` composition now builds and stages one generated development extension
+  root from `apps/neko-vscode` plus the seven current feature payloads. The staging manifest reuses the
+  product composition contract and contains no second handwritten contribution catalog.
+- Selecting image mode originally sent Agent-only `chatModel` and `purposeModels` fields in a direct media
+  `sendMessage`, which the strict Webview protocol correctly rejected. The Webview now installs the
+  selected session mode before replaying a pending send and emits only the direct media model field
+  accepted by that route. The complete payload passes the production parser.
+- A second defect left direct media turns in `agentPhase: thinking` after the Generation Job completed.
+  The runtime now publishes terminal `agentPhase: idle` from a `finally` boundary, preserving provider
+  failures. The Webview consumes that Host terminal state through its canonical conversation render
+  mutation port, clearing the optimistic run state while preserving an authoritative pending queue.
+- A product-composed Extension Development Host run in the isolated synthetic workspace submitted one
+  configured direct image Generation Job through `nekoapi-media/gpt-image-2`. Job
+  `e6ce140a-1692-41c4-845b-17fcfd60589f` reached `succeeded`, revision 5, stage `completed`, 100 percent,
+  with one stable generated ResourceRef using a `generated-asset` locator. No retry or fallback occurred.
+- The Webview first displayed one `Generated image 0%` Timeline item with the Tab and run status active.
+  At terminal revision it displayed the generated image link, changed the Tab to completed, removed the
+  run status and Stop control, restored an editable empty composer, and retained a live projection
+  attachment at sequence/version 5.
+- CDP console evidence contained only VS Code's known `local-network-access` container warning. No
+  `invalid-webview-message`, Neko CSP/resource diagnostic or projection protocol failure appeared.
+- Focused red/green verification passed: direct-media runtime success/failure terminal phase tests,
+  Controller-level optimistic-running-to-idle Tab regression, strict full `sendMessage` parser coverage,
+  Generation caller/source-absence architecture checks, `pnpm build:vscode:dev`, and
+  `pnpm smoke:webview:targets`.
+- A later product-composed direct image sample submitted Job
+  `ffbd8174-d826-4181-9c8e-998e7b2cfbd5` to `nekoapi-media/gpt-image-2`. The caller-owned card advanced
+  from revision 2 at 0 percent to revision 5 `succeeded`, rendered the committed blue-cup image, and
+  reported the exact successful Board outcome. The Workspace Board advanced from eight to nine nodes and
+  rendered the same committed asset.
+- Host reload followed by normal history reopen rebuilt the same card from the Pi Session transcript:
+  the user message, Job id, revision, binding, prompt, Board state and generated image preview all
+  remained visible. The history catalog reported two durable messages and the Board remained at nine
+  nodes. A regression test now drives Pi transcript projection through `ConversationBridge` and proves
+  that a stored generated-output `ContentLocator` is resolved and converted to a Webview URI only at the
+  send boundary without mutating the Pi-derived message.
+- The current VS Code process did not expose a CDP endpoint on port 9222. The post-fix reload/reopen check
+  is therefore Host UI black-box evidence; the focused projection test supplies path-level URI evidence,
+  but a fresh post-fix CDP DOM/console run remains unavailable.
+
+### Phase 6 independent configured-provider Agent evidence
+
+- One new independent `agent-runtime.workflow-controller/media-tool-terminal-result` sample,
+  `run-ms11ksk5`, passed without retries. This is not a retry of the retained failing detached sample.
+- The configured Agent used `nekoapi-chat/gpt-5.6-luna`, invoked `GenerateImage`, and routed Job
+  `0d86218c-a322-4542-a513-614cdd6968ff` through
+  `generation-job-coordinator` to `nekoapi-media/gpt-image-2`. The Job reached revision 5 and returned one
+  stable generated-output locator.
+- The Agent passed that exact locator unchanged to `ReadImage`. All runtime, Pi runtime, GenerateImage,
+  locator handoff, order, terminal, no-generic-Task, no-Asset lookup and final-answer hard gates passed.
+  The generated asset and image-analysis artifact validators both passed, runtime errors were empty, and
+  the Workspace Board projection was `projected`.
+- Report: `reports/agent-eval/agent-runtime.workflow-controller/media-tool-terminal-result/run-ms11ksk5/`.
+  Latency was 97,698 ms, retries were zero, and output-content judging was not configured; the report is
+  path and artifact evidence rather than a subjective image-quality claim.
+
+### Phase 7 product-composed Agent Tool Timeline acceptance
+
+- The isolated product-composed Extension Development Host loaded `neko.neko-suite` from the generated
+  `apps/neko-vscode` development staging root and used the synthetic workspace. No `.vscode` setting or
+  launch file was changed.
+- In `ask` mode, one Agent request invoked `GenerateImage` through
+  `nekoapi-chat/gpt-5.6-luna`. One approval changed the same Tool Timeline item from waiting for
+  confirmation to Generation Job `ed795d0d-a2ee-4e4c-b36f-ada6b6b5d3a6` at revision 2 and zero
+  percent. No second approval appeared.
+- That Job reached revision 5 and `succeeded`; the same Tool item rendered a generated green-bottle image
+  with real pixels before the Agent emitted its short terminal response. The Tab changed to completed,
+  the Stop control disappeared and the composer accepted and cleared a new draft.
+- This run exposed a caller-delivery defect after Generation had already committed the local image:
+  `GenerateImage` returned a canonical locator-only Tool attachment, but the Pi Timeline attachment guard
+  still required a legacy `path` string and silently removed it. The terminal artifact collector therefore
+  had no generated output to send to the Workspace Board.
+- The guard now accepts a valid attachment or asset-ref `ContentLocator`. Focused Timeline and Agent turn
+  tests prove that the locator survives projection and enters the single terminal Board batch; no
+  Generation- or Canvas-local delivery path was added.
+- After rebuilding and reloading the same product composition, a second independent Agent request created
+  Job `b80e8fcc-deb7-49d3-9d4e-050db4cbc29f`. One approval advanced the same item from revision 2 to
+  revision 5 `succeeded`, rendered the red-bottle output, completed the Agent turn and restored the
+  composer. The open Workspace Board advanced from nine to ten nodes and rendered the same durable
+  generated-output locator; its project file revision changed at the terminal turn timestamp.
+- The Agent header contained new conversation, role session, history and model controls only. No global
+  Activity entry appeared. Deterministic source-absence checks remain the protocol-level evidence because
+  Host UI inspection cannot prove Webview message schema absence.
+- Focused verification passed: Pi Timeline 1 file / 3 tests, Agent turn bridge 1 / 10, and
+  `pnpm build:vscode:dev` with all seven feature payloads plus Sharp runtime staging.
+- The running VS Code process still did not expose CDP on port 9222. This phase is product Host UI
+  black-box evidence; post-fix Webview DOM, console and CSP inspection remains unavailable.
 
 ## Residual Risk
 
-- The configured provider path now proves submit, versioned failure observation and durable Job state, but
-  successful terminal artifact validation remains open because the configured image model is rejected by
-  its endpoint as unknown. The separate Agent case remains blocked by the main chat timeout before Tool
-  selection.
+- The configured direct image path now proves submit, progress, terminal artifact validation, durable
+  Generation Job state and Webview terminal recovery. An independent configured Agent case now also
+  proves linked GenerateImage terminal execution and generated-output locator handoff in the TUI owner;
+  the product-composed Host now additionally proves approval, Timeline terminal media, composer recovery
+  and Workspace Board delivery.
 - Direct TUI progress and restart state are represented by persistent versioned snapshots, but the
   one-shot CLI currently prints only its terminal result and exposes no cancel/retry command.
 - Agent Job management Tools are implemented and deterministically covered. A real detached
-  submit/observe/cancel/retry Agent case and Webview Domain Activity progress/cancel/retry remain
-  unaccepted, so this slice does not claim those runtime surfaces.
+  submit/observe/cancel/retry Agent case remains unaccepted, so this slice does not claim that runtime
+  surface.
 - The retained real detached sample predates the TUI category-default projection fix and failed before a
-  Generation Job was submitted. Per Evaluation policy it was not rerun into success; a future independent
-  sample must prove submit/describe/observe and terminal or recoverable provider behavior.
-- The available Extension Development Host currently loads a different checkout. Tool Timeline and
-  Domain Activity runtime behavior for this exact worktree remains unverified until the changed build is
-  launched through the repository's Extension Development Host configuration.
+  Generation Job was submitted. Per Evaluation policy it was not rerun into success. The new independent
+  linked case proves terminal Generation execution, but detached submit/describe/observe/cancel/retry
+  still needs its own independent sample.
+- Product-composed direct media and Agent-linked Tool Timeline terminal behavior are accepted. Detached
+  observe/cancel/retry and stale-revision runtime commands remain unaccepted in the product-composed
+  Extension Development Host.
+- Post-fix Host UI evidence proves that the restored image has rendered pixels. CDP was unavailable on
+  port 9222, so post-fix Webview DOM, console and CSP inspection remains unaccepted.
 - Cut restart reconciliation requires an Engine-backed fixture and cannot be inferred from in-memory tests.
 - Shared extraction is invalid if only one production coordinator consumes it after migration; in that case
   implementation must remain domain-local and this change must be revised rather than preserving an empty

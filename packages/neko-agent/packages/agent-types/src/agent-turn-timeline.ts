@@ -1,4 +1,4 @@
-import type { CompositeBlockData, ToolCall } from './message';
+import type { CompositeBlockData, ToolCall, ToolCallProgress } from './message';
 
 export const AGENT_TURN_TIMELINE_ITEM_KINDS = [
   'assistant_text',
@@ -76,10 +76,7 @@ export interface AgentTurnTimelineThinkingPayload {
 export interface AgentTurnTimelineToolCallPayload {
   readonly toolCall: ToolCall;
   readonly displayName?: string;
-  readonly progress?: {
-    readonly summary: string;
-    readonly data?: unknown;
-  };
+  readonly progress?: ToolCallProgress;
 }
 
 export interface AgentTurnTimelineCompositePayload {

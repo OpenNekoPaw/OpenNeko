@@ -55,6 +55,7 @@ import type {
   CanvasStoryboardExecutionSummaryRequest,
 } from './storyboard-readiness';
 import type { DocumentArchiveResourceRef } from './document-reading';
+import type { GeneratedOutputContentLocator } from './content-locator';
 import type { SkillCatalogMeta } from './skill';
 import type { ResourceRef, ResourceVariantRequest } from './resource-cache';
 
@@ -477,7 +478,9 @@ export type NekoAgentGeneratedOutputResolution =
 export interface NekoAgentAPI {
   /** Pi Skill catalog owned by the Agent runtime. */
   getSkills(): readonly SkillDef[];
-  resolveGeneratedOutput(resourceRef: ResourceRef): Promise<NekoAgentGeneratedOutputResolution>;
+  resolveGeneratedOutput(
+    contentLocator: GeneratedOutputContentLocator,
+  ): Promise<NekoAgentGeneratedOutputResolution>;
 }
 
 // =============================================================================

@@ -30,6 +30,8 @@ import {
   type PiConversationCatalogProjector,
   type PiConversationCatalogRecord,
   type PiConversationTranscriptEntry,
+  type CheckpointPiExternalTurnInput,
+  type PiTurnCheckpointRecord,
   type PiSkillHostSnapshot,
   type PiToolPermissionPolicy,
   type PiToolResultAssetLoader,
@@ -219,6 +221,39 @@ export class VSCodePiRuntimeManager {
     const conversation = authority.readConversation(conversationId);
     if (!conversation) throw new Error(`Pi conversation ${conversationId} does not exist.`);
     return authority.readBranchEntries(conversationId, conversation.activeBranchId);
+  }
+
+  async checkpointExternalTurn(
+    input: CheckpointPiExternalTurnInput,
+  ): Promise<PiTurnCheckpointRecord> {
+    this.assertNotDisposed();
+    const pendingOwner = this.opening.get(input.conversationId);
+    const owner = this.conversations.get(input.conversationId) ?? (await pendingOwner);
+    if (owner) {
+      return owner.checkpointExternalTurn(input);
+    }
+
+    const authority = await this.getAuthority();
+    const existing = authority.readCheckpoint(input.conversationId, input.turnId);
+    if (existing) return existing;
+    const conversation = authority.readConversation(input.conversationId);
+    if (!conversation) {
+      throw new Error(`Pi conversation ${input.conversationId} does not exist.`);
+    }
+    const lease = authority.acquireLease(input.conversationId);
+    try {
+      authority.startTurnDurability(input.conversationId, input.turnId);
+      return await authority.checkpointTurn({
+        lease,
+        conversationId: input.conversationId,
+        branchId: conversation.activeBranchId,
+        turnId: input.turnId,
+        terminalState: input.terminalState,
+        messages: input.messages,
+      });
+    } finally {
+      authority.releaseLease(lease);
+    }
   }
 
   async projectConversationCatalog(projector: PiConversationCatalogProjector): Promise<void> {
@@ -616,6 +651,15 @@ class VSCodePiConversationOwner {
     });
   }
 
+  checkpointExternalTurn(input: CheckpointPiExternalTurnInput): Promise<PiTurnCheckpointRecord> {
+    this.assertReady();
+    return this.runtime.checkpointExternalTurn({
+      turnId: input.turnId,
+      terminalState: input.terminalState,
+      messages: input.messages,
+    });
+  }
+
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
@@ -642,6 +686,7 @@ class VSCodePiConversationOwner {
         if (action === 'allow') {
           return { allowed: true };
         }
+        const confirmationId = `confirmation:${toolIdentity.toolCallId}`;
         const allowed = await this.confirmations.request(
           toolIdentity.toolCallId,
           () =>
@@ -649,13 +694,22 @@ class VSCodePiConversationOwner {
               type: 'confirmation.required',
               identity: toolIdentity,
               timestamp: Date.now(),
-              confirmationId: `confirmation:${toolIdentity.toolCallId}`,
+              confirmationId,
               toolCallId: toolIdentity.toolCallId,
               toolName: tool.name,
               summary: summarizeToolConfirmation(tool.name, args),
             }),
           signal,
         );
+        await events.emit({
+          type: 'confirmation.resolved',
+          identity: toolIdentity,
+          timestamp: Date.now(),
+          confirmationId,
+          toolCallId: toolIdentity.toolCallId,
+          toolName: tool.name,
+          approved: allowed,
+        });
         return allowed
           ? { allowed: true }
           : { allowed: false, reason: `User denied tool ${tool.name}.` };

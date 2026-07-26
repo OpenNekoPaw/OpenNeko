@@ -13,6 +13,7 @@ import type { MediaGenerationRequestBase, MediaOutput } from '@neko/generation';
 export type GeneratedMediaKind = 'image' | 'video' | 'audio';
 
 export interface BuildGeneratedMediaAssetsInput {
+  workspaceRoot: string;
   hostOutputPaths: readonly string[];
   outputs: readonly MediaOutput[];
   contentDigests: readonly string[];
@@ -42,9 +43,11 @@ export function buildGeneratedMediaAssets(input: BuildGeneratedMediaAssetsInput)
     }
     const assetId = createStableGeneratedOutputId(input.operationId, i, contentDigest);
     const mimeType = output?.mimeType ?? inferGeneratedMediaMimeType(hostOutputPath);
+    const contentPath = toWorkspaceContentPath(input.workspaceRoot, hostOutputPath);
     const lifecycle = createGeneratedAssetRevisionRef({
       assetId,
       contentDigest,
+      contentPath,
       mediaKind: input.mediaKind,
       mimeType,
       generation,
@@ -109,6 +112,19 @@ export function buildGeneratedMediaAssets(input: BuildGeneratedMediaAssetsInput)
   }
 
   return assets;
+}
+
+function toWorkspaceContentPath(workspaceRoot: string, hostOutputPath: string): string {
+  const relativePath = path.relative(workspaceRoot, hostOutputPath).replace(/\\/gu, '/');
+  if (
+    !relativePath ||
+    relativePath.startsWith('../') ||
+    relativePath === '..' ||
+    path.isAbsolute(relativePath)
+  ) {
+    throw new Error(`Generated output is outside the workspace: ${hostOutputPath}`);
+  }
+  return relativePath;
 }
 
 export function createStableGeneratedOutputId(

@@ -6,11 +6,7 @@ export function resolveImageGenerationType(
   if (request.operation && request.operation !== 'generate') {
     return 'image-edit';
   }
-  return request.referenceImageUrl ||
-    request.referenceImageBase64 ||
-    request.referenceImageUri ||
-    request.controlImageBase64 ||
-    request.controlImageUri
+  return request.referenceImageLocator || request.controlImageLocator
     ? 'image-to-image'
     : 'text-to-image';
 }
@@ -26,16 +22,10 @@ export function resolveVideoGenerationType(
   ) {
     return 'video-edit';
   }
-  if (request.referenceVideoRef || request.referenceVideoUrl || request.sourceVideoUrl) {
+  if (request.referenceVideoLocator) {
     return 'video-to-video';
   }
-  if (
-    request.startFrameRef ||
-    request.referenceImageUrl ||
-    request.referenceImageBase64 ||
-    request.referenceImageUri ||
-    request.startFrameImageBase64
-  ) {
+  if (request.startFrameLocator) {
     return 'image-to-video';
   }
   return 'text-to-video';

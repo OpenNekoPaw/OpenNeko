@@ -240,7 +240,12 @@ export {
   detectMediaExtension,
   type DownloadMediaOptions,
 } from './media/media-file-downloader';
-export type { MediaRequestAssetMaterializer } from './media/media-request-assets';
+export {
+  createContentReadMediaRequestAssetMaterializer,
+  type ContentReadMediaRequestAssetMaterializerOptions,
+  type MediaRequestAssetMaterializer,
+  type MediaRequestMaterializationOptions,
+} from './media/media-request-assets';
 export {
   finalizeMediaGenerationOutputs,
   type FinalizeMediaGenerationOutputsInput,
@@ -261,13 +266,10 @@ export {
   generateAssetId,
   migrateLegacyGeneratedAssetIndex,
   type AssetFilter,
+  type GeneratedAssetCatalog,
   type GeneratedAssetIndexMigrationReport,
   type GeneratedAssetIndexStore,
 } from './media/generated-asset-index';
-export {
-  createGeneratedAssetResourceResolver,
-  type GeneratedAssetResourceResolver,
-} from './media/generated-asset-resource-resolver';
 export type { MediaRoutingResult } from './media/types';
 export {
   isMediaTaskCanceller,

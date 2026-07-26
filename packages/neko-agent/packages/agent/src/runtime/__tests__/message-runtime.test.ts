@@ -820,6 +820,7 @@ describe('message runtime helpers', () => {
   it('dispatches non-agent media turns when a media runtime is available', async () => {
     const executeMediaTurn = vi.fn(async () => undefined);
     const executeAgentTurn = vi.fn(async () => undefined);
+    const postMessage = vi.fn();
 
     await expect(
       runAgentMessageTurnRuntime({
@@ -831,7 +832,7 @@ describe('message runtime helpers', () => {
         },
         processAttachments: async () => ({ textContent: '', imageAttachments: [] }),
         persistUserMessage: vi.fn(),
-        postMessage: vi.fn(),
+        postMessage,
         executeMediaTurn,
         executeAgentTurn,
         generateMessageId: () => 'user-1',
@@ -842,8 +843,61 @@ describe('message runtime helpers', () => {
       conversationId: 'conv-1',
       prompt: 'render image',
       mediaModel: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
+      userMessage: {
+        id: 'user-1',
+        content: 'render image',
+        timestamp: expect.any(Number),
+      },
     });
     expect(executeAgentTurn).not.toHaveBeenCalled();
+    expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conv-1',
+        phase: 'thinking',
+      }),
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conv-1',
+        phase: 'idle',
+      }),
+    ]);
+  });
+
+  it('releases the direct media phase when generation fails', async () => {
+    const failure = new Error('provider failed');
+    const postMessage = vi.fn();
+
+    await expect(
+      runAgentMessageTurnRuntime({
+        request: {
+          conversationId: 'conv-1',
+          messageText: 'render image',
+          sessionMode: 'image',
+          mediaModel: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
+        },
+        processAttachments: async () => ({ textContent: '', imageAttachments: [] }),
+        persistUserMessage: vi.fn(),
+        postMessage,
+        executeMediaTurn: vi.fn(async () => {
+          throw failure;
+        }),
+        generateMessageId: () => 'user-1',
+      }),
+    ).rejects.toBe(failure);
+
+    expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conv-1',
+        phase: 'thinking',
+      }),
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conv-1',
+        phase: 'idle',
+      }),
+    ]);
   });
 
   it('projects 3D reference roles into direct image media controls', async () => {

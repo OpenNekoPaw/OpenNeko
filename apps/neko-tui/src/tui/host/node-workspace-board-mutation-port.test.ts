@@ -99,15 +99,7 @@ describe('NodeWorkspaceBoardMutationPort', () => {
         {
           kind: 'file-reference',
           title: 'Selected brief',
-          resourceRef: {
-            id: 'source:brief',
-            scope: 'project',
-            provider: 'document',
-            kind: 'document',
-            source: { kind: 'file', projectRelativePath: 'materials/brief.md' },
-            locator: { kind: 'file', path: 'materials/brief.md' },
-            fingerprint: { strategy: 'hash', value: 'sha256:brief' },
-          },
+          contentLocator: { kind: 'workspace-file', path: 'materials/brief.md' },
           provenance: {
             version: 2,
             deliveryId: 'agent-turn:material-analysis',
@@ -159,6 +151,7 @@ function generatedImage(root: string): GeneratedImage {
     lifecycle: createGeneratedAssetRevisionRef({
       assetId: 'generated-1',
       contentDigest: 'sha256:generated-1',
+      contentPath: 'neko/generated/image/generated-1.png',
       mediaKind: 'image',
       mimeType: 'image/png',
       generation: { operationId: 'operation-generated-1' },

@@ -1,12 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  createResourceFingerprint,
-  createResourceRef,
-  resolveGlobalStorageLayout,
-  type LocalMetadataStore,
-} from '@neko/shared';
+import { resolveGlobalStorageLayout, type LocalMetadataStore } from '@neko/shared';
 import { createNodeSqliteLocalMetadataStore } from '@neko/shared/local-metadata/node-sqlite-local-metadata-store';
 import { M1_LOCAL_METADATA_MIGRATIONS } from '@neko/shared/local-metadata/sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -118,7 +113,7 @@ describe('persistent GenerationJobStore', () => {
         revision: 2,
         updatedAt: 2,
         progress: { stage: 'completed', percent: 100 },
-        resultRefs: [resultRef()],
+        resultLocators: [resultLocator()],
       },
     });
 
@@ -228,16 +223,12 @@ function snapshot(): GenerationJobSnapshot {
   };
 }
 
-function resultRef() {
-  return createResourceRef({
-    id: 'generated-1',
-    scope: 'project',
-    provider: 'generated-asset',
-    kind: 'generated',
-    source: { kind: 'generated-asset', generatedAssetId: 'generated-1' },
-    fingerprint: createResourceFingerprint({
-      strategy: 'hash',
-      value: 'sha256:generated-1',
-    }),
-  });
+function resultLocator() {
+  return {
+    kind: 'generated-output' as const,
+    outputId: 'generated-1',
+    revision: 'revision-generated-1',
+    digest: 'sha256:generated-1',
+    path: 'neko/generated/image/generated-1.png',
+  };
 }

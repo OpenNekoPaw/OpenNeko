@@ -32,8 +32,12 @@ domain 负责。
   定义调用关系和取消传播，不再选择第二条无 Job 的执行路径。
 - Agent 仅通过 Tool Call 调用领域 port。一个仍在执行的 linked Tool Call 可以消费 Job 事件并
   更新同一 Timeline item；Tool Call 一旦返回，后续观察或命令必须使用新的 Tool Call。
-- Extension Host 将多个领域的只读 Activity summary 投影成 versioned snapshot/patch；
-  Webview 只消费该投影并以 exact `jobKind + jobId + expectedRevision` 发送命令。
+- 调用方只保存自己的 `JobRef`、目标关联和展示投影：Agent 使用 Tool Timeline，Canvas 使用
+  document/action 状态，Cut 使用 editor/status bar。调用方通过具体领域 port 查询、观察和命令
+  Job，不建立跨领域 Activity authority 或常驻 Job 页面。
+- Generation 持久化记录是恢复、provider reconciliation、revision/CAS 和结果提交所需的运行账本，
+  不是用户可浏览的“生成历史”；生成产物与长期素材浏览继续由 `ResourceRef`、Canvas 和 Assets
+  等 owning domain 负责。
 - `FinishJob`、`FailedJob` 和 provider observation 只作为领域内部 transition/event，不作为
   Agent Tool 或 Webview command。
 - **BREAKING**：禁止绕过 owning-domain Job coordinator 直接执行生成、中央
@@ -48,8 +52,6 @@ domain 负责。
   ownership primitive，不拥有任何领域执行或结果。
 - `generation-domain-job`: 可恢复媒体生成的领域 Job，拥有 provider reconciliation、产物验证
   和原子 `ResourceRef` 提交。
-- `domain-job-activity-projection`: Host 聚合具体领域 Job 的只读摘要并向 Webview 提供严格
-  versioned snapshot/patch。
 
 ### Modified Capabilities
 
@@ -67,8 +69,8 @@ domain 负责。
   ExportJob coordinator/store 边界。
 - Agent: 领域 Job Tool contribution、linked/detached Tool Call adapter、path facts 和
   no-direct-execution/no-Task fallback 验证。
-- Extension/Webview: Domain Activity projection attachment、具体 Job card 和 exact command
-  routing。
+- Extension/Webview: 删除跨领域 Activity attachment、聚合 Host 和常驻页面；Agent 仅保留
+  conversation-scoped Tool Timeline 投影。
 - TUI: 直接生成始终提交 GenerationJob，可选择等待终态或 detached 返回，并消费同一
   versioned snapshot。
 - Evaluation: 更新 `agent-runtime.workflow-controller` 的 Job create/observe/cancel/retry

@@ -15,7 +15,7 @@
 
 Agent 通用 TaskManager/TaskRef 已从当前 canonical Agent 路径删除。Generation 已实现最小
 versioned lifecycle kernel、具体 coordinator、持久 store、重启恢复、Agent 领域 Job Tools、
-TUI direct consumer 和 VS Code Host composition；Cut ExportJob 与 Webview Domain Activity 仍在
+TUI direct consumer 和 VS Code Host composition；Cut ExportJob 与 caller-owned projections 仍在
 [`introduce-domain-job-lifecycle-kernel`](../../openspec/changes/introduce-domain-job-lifecycle-kernel/)
 中实施。实现和 UI 不得把尚未接入的 VS Code 重启恢复或 Webview 管理误报为已经完成。
 
@@ -174,15 +174,19 @@ ToolCall B -> observe GenerationJob(jobId) -> terminal result
 
 UI 使用精确投影：
 
-| UI              | 权威语义                               |
-| --------------- | -------------------------------------- |
-| Message Queue   | 尚未执行的用户输入                     |
-| Plan Progress   | Agent 计划/checklist，不是执行任务     |
-| Tool Execution  | 当前或历史 Tool Call                   |
-| Agent Activity  | 前台 Agent Run、SubagentRun            |
-| Domain Activity | GenerationJob、ExportJob、ImportJob 等 |
+| UI                 | 权威语义                                                   |
+| ------------------ | ---------------------------------------------------------- |
+| Message Queue      | 尚未执行的用户输入                                         |
+| Plan Progress      | Agent 计划/checklist，不是执行任务                         |
+| Tool Execution     | 当前或历史 Tool Call，包括 Agent 发起的 GenerationJob 投影 |
+| Agent Activity     | 前台 Agent Run、SubagentRun                                |
+| Canvas action      | Canvas 直接生成的 JobRef、目标 revision 和 candidate 状态  |
+| Cut editor/status  | Cut ExportJob 的进度、取消和结果                           |
 
 `TaskCard` 应替换为 `ToolExecutionCard`、`AgentRunCard` 或领域卡片；`AgentTaskQueue` 应改为 `PlanProgress`。取消、重试、打开结果和恢复操作必须指向精确 owner，不提供语义不明的 `cancelTask`/`retryTask`。
+
+产品不建立跨领域 Domain Activity authority、统一 Job command router 或常驻 Job 页面。调用方只
+持有 JobRef、expected revision、目标关联和展示状态；领域 coordinator/store 仍是唯一生命周期权威。
 
 ### 8. Tool 流式输出只有一个 Timeline 权威
 
@@ -235,7 +239,7 @@ Cut 已有明确 `ExportJobPort`，导出进度、取消、输入 revision、输
 5. 保留 Cut `ExportJobPort`，其他领域只在满足独立生命周期条件时增加具体 Job。
 6. 删除独立 BackgroundAgentRun；真实 Subagent producer 出现时由明确 parent/supervisor 维护。
 7. 先将 Canvas Board delivery 等非 Agent 使用者迁入 owning-domain ledger，再删除 TaskManager、TaskRef、task continuation、通用 task handler/storage/card/export 和 fallback。
-8. 更新 TUI、VS Code、Desktop 的 Activity、流式渲染和关闭生命周期。
+8. 更新 TUI、VS Code 的 caller-owned projection、流式渲染和关闭生命周期。
 
 迁移期间禁止 Tool + Task 双发、task/job 双写、新路径失败回退 TaskManager，或用兼容 adapter 让旧 TaskRef 继续成功。
 
@@ -246,11 +250,12 @@ Cut 已有明确 `ExportJobPort`，导出进度、取消、输入 revision、输
 - 领域 Job：linked/detached cancel、以新 Tool Call 重新附着、provider reconciliation、原子产物提交。
 - Host：Tab/Window close 取消前台 Agent/Tool，Subagent 按 owner policy 处理并可显式中断。
 - Agent Evaluation：真实 TUI/Agent 路径证明没有 TaskRef、task continuation 或旧 TaskManager fallback。
-- Webview：Extension Development Host 验证 Tool streaming、Activity、关闭竞态和资源释放；普通浏览器不能替代。
+- Webview：Extension Development Host 验证 Tool streaming/terminal phase、全局 Activity
+  页面与协议不存在、关闭竞态和资源释放；普通浏览器不能替代。
 
 已实现路径的确定性验证与剩余运行态验收记录在
 [`introduce-domain-job-lifecycle-kernel`](../../openspec/changes/introduce-domain-job-lifecycle-kernel/)；
-真实 Agent provider case 和 Extension Development Host Webview Activity 尚未通过，因此不能
+真实 Agent provider case 和 Extension Development Host Tool Timeline 尚未通过，因此不能
 把单元测试或 key-free harness 描述为完整产品验收。
 
 ## 后果

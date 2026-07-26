@@ -11,8 +11,6 @@ import {
   type ContentRepresentationLocator,
   type ContentRepresentationService,
   type ContentSourceRef,
-  type GeneratedOutputContentLocator,
-  type ResourceRef,
   type WorkspaceFileContentLocator,
 } from '@neko/shared';
 import {
@@ -33,9 +31,6 @@ export interface CreateHostAgentContentAccessRuntimeOptions {
   readonly contentRead: ContentReadService;
   readonly documentAccess: IDocumentAccessService;
   readonly resolveWorkspaceFileLocator: (path: string) => WorkspaceFileContentLocator | undefined;
-  readonly resolveGeneratedOutputLocator?: (
-    ref: ResourceRef,
-  ) => Promise<GeneratedOutputContentLocator | undefined>;
   readonly resolveDocumentHostFilePath: (
     source: WorkspaceFileContentLocator,
   ) => Promise<string | undefined> | string | undefined;
@@ -121,6 +116,7 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
       return {
         status: 'ready',
         source: { kind: 'file', path: result.source.path },
+        contentLocator: result.source,
         diagnostics: computedImages.diagnostics,
         ...(result.text !== undefined ? { text: result.text } : {}),
         ...(result.manifest ? { manifest: result.manifest } : {}),
@@ -321,12 +317,10 @@ class HostAgentContentAccessRuntime implements AgentContentAccessRuntime {
     };
   }
 
-  private async resolveContentLocator(
-    source: ContentSourceRef,
-  ): Promise<ContentLocator | undefined> {
+  async resolveContentLocator(source: ContentSourceRef): Promise<ContentLocator | undefined> {
     if (isResourceRef(source)) {
       if (source.source.kind === 'generated-asset') {
-        return this.services.resolveGeneratedOutputLocator?.(source);
+        return undefined;
       }
       if (source.locator?.kind === 'document' && source.locator.entryPath) {
         const sourcePath =

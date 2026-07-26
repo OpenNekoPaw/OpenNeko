@@ -245,6 +245,7 @@ export * from './project-cache-search';
 
 // Resource cache contracts (stable refs, variants, manifests, quota)
 export * from './resource-cache';
+export * from './stable-value';
 
 // Intent-aware content access and ingest contracts
 export * from './content-access';
@@ -270,6 +271,7 @@ export * from './loading-tier';
 // Generated asset types (cross-plugin asset reference schema, ADR-4)
 export * from './generated-asset';
 export * from './generated-asset-lifecycle';
+export * from './generated-asset-quality-adapter';
 
 // Character registry types (git-tracked project identity source)
 export * from './character-registry';

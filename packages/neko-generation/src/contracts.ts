@@ -4,9 +4,10 @@ import type {
   ImageSplitProfileOptions,
   ModelConfig,
   ProviderConfig,
-  ResourceRef,
+  ContentLocator,
   ThreeReferenceCameraMediaReference,
-  ThreeReferencePanoramaMediaReference,
+  ThreeReferenceMediaOutputIdentity,
+  ThreeReferencePanoramaOrientation,
   VideoOperationId,
 } from '@neko/shared';
 
@@ -53,16 +54,20 @@ export type ControlMode =
  * IP-Adapter reference for style/subject transfer
  */
 export interface IPAdapterReference {
-  /** Reference image as base64-encoded bytes (no data: prefix) */
-  imageBase64?: string;
-  /** Stable appearance image identity, materialized by the authorized host before execution. */
-  imageRef?: ResourceRef;
-  /** MIME type of `imageBase64` (e.g. `image/jpeg`, `image/webp`); defaults to `image/png` when omitted */
+  /** Stable appearance image location, materialized by the authorized host before execution. */
+  imageLocator: ContentLocator;
+  /** Optional MIME type precondition/hint for provider materialization. */
   mimeType?: string;
   /** Influence strength 0.0–1.0 */
   strength?: number;
   /** Focus on style vs subject */
   mode?: 'style' | 'subject' | 'both';
+}
+
+export interface GenerationPanoramaReference {
+  readonly imageLocator: ContentLocator;
+  readonly orientation: ThreeReferencePanoramaOrientation;
+  readonly identity: ThreeReferenceMediaOutputIdentity;
 }
 
 // =============================================================================
@@ -99,28 +104,18 @@ export interface ImageGenerationRequest extends MediaGenerationRequestBase {
   aspectRatio?: string;
   /** Number of images to generate */
   count?: number;
-  /** Reference image URL for image-to-image */
-  referenceImageUrl?: string;
-  /** Reference image as base64-encoded PNG (alternative to URL, used for inpaint/style-transfer) */
-  referenceImageBase64?: string;
-  /** Reference image local URI/path (materialized to base64 before provider execution) */
-  referenceImageUri?: string;
-  /** Inpaint mask as base64-encoded grayscale PNG (white = repaint, black = keep) */
-  maskBase64?: string;
-  /** Inpaint mask local URI/path (materialized to base64 before provider execution) */
-  maskUri?: string;
-  /** Inpaint strength 0.0–1.0 (only meaningful when maskBase64 is set) */
+  /** Stable reference image location for image-to-image/edit operations. */
+  referenceImageLocator?: ContentLocator;
+  /** Stable inpaint mask location. */
+  maskLocator?: ContentLocator;
+  /** Inpaint strength 0.0–1.0 (only meaningful when maskLocator is set) */
   inpaintStrength?: number;
   /** Image quality setting */
   quality?: 'standard' | 'hd';
   /** Style preset */
   style?: string;
-  /** ControlNet conditioning image as base64-encoded PNG */
-  controlImageBase64?: string;
-  /** Stable ControlNet conditioning image identity, materialized before provider execution. */
-  controlImageRef?: ResourceRef;
-  /** ControlNet conditioning image local URI/path (materialized to base64 before provider execution) */
-  controlImageUri?: string;
+  /** Stable ControlNet conditioning image location, materialized before provider execution. */
+  controlImageLocator?: ContentLocator;
   /** ControlNet mode (canny, depth, pose, etc.) */
   controlMode?: ControlMode;
   /** ControlNet conditioning strength 0.0–1.0 */
@@ -130,7 +125,7 @@ export interface ImageGenerationRequest extends MediaGenerationRequestBase {
   /** Structured 3D camera reference; never flattened into prompt text. */
   cameraReference?: ThreeReferenceCameraMediaReference;
   /** Structured panoramic-scene reference; never flattened into prompt text. */
-  panoramaReference?: ThreeReferencePanoramaMediaReference;
+  panoramaReference?: GenerationPanoramaReference;
   /** Natural language instruction for edit (e.g., "make it night time") */
   editInstruction?: string;
   /** Explicit outpaint canvas expansion; required for the canonical outpaint operation. */
@@ -153,20 +148,12 @@ export interface VideoGenerationRequest extends MediaGenerationRequestBase {
   fps?: number;
   /** Aspect ratio (e.g., "16:9") */
   aspectRatio?: string;
-  /** Reference image URL for image-to-video */
-  referenceImageUrl?: string;
-  /** Reference image as base64-encoded bytes for image-to-video */
-  referenceImageBase64?: string;
-  /** Reference image local URI/path for image-to-video; host materialization may convert it to base64 */
-  referenceImageUri?: string;
-  /** Stable start frame identity, materialized by the host before provider execution. */
-  startFrameRef?: ResourceRef;
-  /** Stable end frame identity, materialized by the host before provider execution. */
-  endFrameRef?: ResourceRef;
-  /** Stable reference video identity, materialized by the host before provider execution. */
-  referenceVideoRef?: ResourceRef;
-  /** Reference video URL for video-to-video */
-  referenceVideoUrl?: string;
+  /** Stable start frame location, materialized by the host before provider execution. */
+  startFrameLocator?: ContentLocator;
+  /** Stable end frame location, materialized by the host before provider execution. */
+  endFrameLocator?: ContentLocator;
+  /** Stable reference video location, materialized by the host before provider execution. */
+  referenceVideoLocator?: ContentLocator;
   /** Motion strength (0-1) */
   motionStrength?: number;
   /** Camera movement directive (matches @neko/shared CameraMovement values) */
@@ -175,16 +162,51 @@ export interface VideoGenerationRequest extends MediaGenerationRequestBase {
   cameraAngle?: string;
   /** Shot scale (matches @neko/shared ShotScale values) */
   shotScale?: string;
-  /** Start frame image for video generation (base64 PNG) */
-  startFrameImageBase64?: string;
-  /** End frame image for video generation (base64 PNG) */
-  endFrameImageBase64?: string;
-  /** Source video URL for video-to-video editing */
-  sourceVideoUrl?: string;
   /** Reference images for subject consistency (IP-Adapter) */
   referenceImages?: IPAdapterReference[];
   /** Natural language edit instruction */
   editInstruction?: string;
+}
+
+export interface MaterializedIPAdapterReference extends Omit<IPAdapterReference, 'imageLocator'> {
+  /** Provider-ready base64 bytes without a data URI prefix. */
+  imageBase64: string;
+}
+
+export interface MaterializedGenerationPanoramaReference extends Omit<
+  GenerationPanoramaReference,
+  'imageLocator'
+> {
+  readonly imageBase64: string;
+}
+
+export interface MaterializedImageGenerationRequest extends Omit<
+  ImageGenerationRequest,
+  | 'referenceImageLocator'
+  | 'maskLocator'
+  | 'controlImageLocator'
+  | 'ipAdapterRefs'
+  | 'panoramaReference'
+> {
+  readonly referenceImageBase64?: string;
+  readonly referenceImageUrl?: string;
+  readonly maskBase64?: string;
+  readonly controlImageBase64?: string;
+  readonly ipAdapterRefs?: readonly MaterializedIPAdapterReference[];
+  readonly panoramaReference?: MaterializedGenerationPanoramaReference;
+}
+
+export interface MaterializedVideoGenerationRequest extends Omit<
+  VideoGenerationRequest,
+  'startFrameLocator' | 'endFrameLocator' | 'referenceVideoLocator' | 'referenceImages'
+> {
+  readonly referenceImageBase64?: string;
+  readonly referenceImageUrl?: string;
+  readonly startFrameImageBase64?: string;
+  readonly endFrameImageBase64?: string;
+  readonly referenceVideoUrl?: string;
+  readonly sourceVideoUrl?: string;
+  readonly referenceImages?: readonly MaterializedIPAdapterReference[];
 }
 
 /**
@@ -281,7 +303,7 @@ export interface MediaAdapter {
 
 export interface MediaImageSubmitter {
   generateImage(
-    request: ImageGenerationRequest,
+    request: MaterializedImageGenerationRequest,
     model: ModelConfig,
     provider: ProviderConfig,
   ): Promise<MediaAdapterResult>;
@@ -289,7 +311,7 @@ export interface MediaImageSubmitter {
 
 export interface MediaVideoSubmitter {
   generateVideo(
-    request: VideoGenerationRequest,
+    request: MaterializedVideoGenerationRequest,
     model: ModelConfig,
     provider: ProviderConfig,
   ): Promise<MediaAdapterResult>;

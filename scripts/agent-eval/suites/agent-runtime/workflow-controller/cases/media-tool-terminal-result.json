@@ -11,8 +11,9 @@
       "PiConversationRuntime",
       "flat image.generate domain-model snapshot",
       "GenerateImage Tool call",
+      "Tool confirmation",
       "terminal Tool result",
-      "generated-output ResourceRef",
+      "generated-output ContentLocator",
       "ReadImage Tool call"
     ],
     "forbiddenFallback": [
@@ -31,7 +32,7 @@
       {
         "ref": "tool-result-facts",
         "kind": "runtime-fact",
-        "description": "GenerateImage and ReadImage Tool identities and terminal results, generated ResourceRef artifact digest/provenance/validator, forbidden legacy references, ordering, and terminal idle facts.",
+        "description": "GenerateImage and ReadImage Tool identities and terminal results, generated-output ContentLocator artifact digest/provenance/validator, forbidden legacy references, ordering, and terminal idle facts.",
         "required": true
       }
     ],
@@ -45,7 +46,15 @@
     {
       "id": "generate",
       "kind": "submit",
-      "prompt": "Generate one image of a cat playing with a red ball. Wait for the terminal GenerateImage Tool result, then inspect the delivered generated-output ResourceRef with ReadImage before summarizing it. Do not call GetAsset unless an explicit add-to-AssetLibrary operation has returned a separate AssetEntity id."
+      "prompt": "Generate one image of a cat playing with a red ball. Wait for the terminal GenerateImage Tool result, then pass its delivered generated-output ContentLocator unchanged to ReadImage before summarizing it. Do not use resourceRef, provider URL, localPath, data URL, base64, or GetAsset unless an explicit add-to-AssetLibrary operation has returned a separate AssetEntity id."
+    },
+    {
+      "id": "confirm-generate-image",
+      "kind": "confirm",
+      "afterStepId": "generate",
+      "toolName": "GenerateImage",
+      "approved": true,
+      "timeoutMs": 180000
     },
     { "id": "idle", "kind": "wait-for-idle", "timeoutMs": 300000 }
   ],
@@ -68,11 +77,8 @@
       "name": "GenerateImage",
       "status": "success",
       "resultIncludes": {
-        "success": true,
-        "data": {
-          "jobKind": "generation",
-          "jobLifecycleOwner": "generation-job-coordinator"
-        }
+        "jobKind": "generation",
+        "jobLifecycleOwner": "generation-job-coordinator"
       },
       "evidenceRef": "tool-result-facts"
     },
@@ -119,8 +125,21 @@
       "id": "generated-output",
       "kind": "artifact",
       "artifactKind": "generated-asset",
-      "provenanceSource": "generated-asset",
+      "provenanceSource": "generated-output",
+      "validatorId": "content-locator",
+      "contentLocatorKind": "generated-output",
       "validatorStatus": "valid",
+      "evidenceRef": "tool-result-facts"
+    },
+    {
+      "id": "generated-output-locator-handoff",
+      "kind": "content-locator-handoff",
+      "producerToolName": "GenerateImage",
+      "consumerToolName": "ReadImage",
+      "locatorKind": "generated-output",
+      "artifactKind": "generated-asset",
+      "provenanceSource": "generated-output",
+      "validatorId": "content-locator",
       "evidenceRef": "tool-result-facts"
     },
     {
@@ -128,6 +147,11 @@
       "kind": "process-order",
       "events": [
         { "kind": "workflow-step", "stepId": "generate", "method": "message.submit" },
+        {
+          "kind": "workflow-step",
+          "stepId": "confirm-generate-image",
+          "method": "tool.confirm"
+        },
         { "kind": "tool", "name": "GenerateImage", "status": "success" },
         { "kind": "tool", "name": "ReadImage", "status": "success" }
       ],

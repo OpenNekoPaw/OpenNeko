@@ -2,7 +2,12 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { createRef, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentContextPayload } from '@neko/shared';
-import type { AgentLlmConfig, Message, SettingsState } from '@neko-agent/types';
+import {
+  parseSendMessageWebviewMessage,
+  type AgentLlmConfig,
+  type Message,
+  type SettingsState,
+} from '@neko-agent/types';
 import type { ChatWorkspaceProps } from './ChatWorkspace';
 import { ChatWorkspace } from './ChatWorkspace';
 import type { ComposerMenuState } from '@/components/ChatView/InputArea/types';
@@ -335,6 +340,54 @@ describe('ChatWorkspace pending send', () => {
     );
 
     expect(vscodeMocks.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('replays a pending image entry send with the selected direct media model', () => {
+    const runtime = createTabRenderRuntime({ tabId: 'tab-image', conversationId: 'conv-image' });
+    const settings = createSettingsWithAgentMediaModels();
+
+    render(
+      <ChatWorkspace
+        {...createProps({
+          tabRenderStore: runtime.store,
+          settings,
+          pendingSendRequest: {
+            id: 2,
+            input: {
+              messageText: 'generate a red circle',
+              displayMessageText: 'generate a red circle',
+              sessionMode: 'image',
+            },
+          },
+        })}
+      />,
+    );
+
+    act(() => {
+      runtime.store.updateState({
+        modelConfigurationInitialized: true,
+        selectedModel: 'test-model',
+        mediaModelSelection: {
+          image: 'image-provider:image-model',
+          video: 'video-provider:video-model',
+          audio: 'audio-provider:audio-model',
+        },
+      });
+    });
+
+    const payload = { type: 'sendMessage', ...vscodeMocks.sendMessage.mock.calls[0]?.[0] };
+    expect(payload).toEqual(
+      expect.objectContaining({
+        conversationId: 'conv-image',
+        sessionMode: 'image',
+        mediaModel: {
+          providerId: 'image-provider',
+          modelId: 'image-model',
+          category: 'image',
+        },
+      }),
+    );
+    expect(parseSendMessageWebviewMessage(payload)).not.toBeNull();
   });
 
   it('projects hydrated Agent media defaults into the pending send turn policy', () => {
@@ -945,6 +998,7 @@ function createSettingsWithImageModel(): SettingsState {
         modelId: 'image-model',
         label: 'Image Model',
         category: 'image',
+        capabilities: ['text_to_image'],
       },
     ],
   };
@@ -967,6 +1021,7 @@ function createSettingsWithAgentMediaModels(): SettingsState {
         modelId: 'image-model',
         label: 'Image Model',
         category: 'image',
+        capabilities: ['text_to_image'],
       },
       {
         id: 'video-provider:video-model',
@@ -974,6 +1029,7 @@ function createSettingsWithAgentMediaModels(): SettingsState {
         modelId: 'video-model',
         label: 'Video Model',
         category: 'video',
+        capabilities: ['text_to_video'],
       },
       {
         id: 'audio-provider:audio-model',
@@ -981,6 +1037,7 @@ function createSettingsWithAgentMediaModels(): SettingsState {
         modelId: 'audio-model',
         label: 'Audio Model',
         category: 'audio',
+        capabilities: ['text_to_audio'],
       },
     ],
   };

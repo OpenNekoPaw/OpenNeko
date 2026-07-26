@@ -626,14 +626,10 @@ describe('createTuiAutomationAppPort', () => {
             kind: 'file-reference',
             title: 'screenplay.fountain',
             sourceId: 'source-screenplay',
-            resourceRef: {
-              id: 'source-screenplay',
-              scope: 'project',
-              provider: 'source-file-content-access',
-              kind: 'document',
-              source: { kind: 'file', projectRelativePath: 'screenplay.fountain' },
-              locator: { kind: 'file', path: 'screenplay.fountain' },
-              fingerprint: { strategy: 'hash', value: `sha256:${'a'.repeat(64)}` },
+            contentLocator: {
+              kind: 'workspace-file',
+              path: 'screenplay.fountain',
+              fingerprint: { strategy: 'sha256', value: `sha256:${'a'.repeat(64)}` },
             },
           },
           {
@@ -695,8 +691,13 @@ describe('createTuiAutomationAppPort', () => {
       expect.arrayContaining([
         expect.objectContaining({
           ref: 'source-screenplay',
-          kind: 'resource-ref',
+          kind: 'content-locator',
+          contentLocator: expect.objectContaining({
+            kind: 'workspace-file',
+            path: 'screenplay.fountain',
+          }),
           provenance: expect.objectContaining({ source: 'source-file' }),
+          validator: { id: 'content-locator', status: 'valid' },
         }),
         expect.objectContaining({
           ref: 'material-analysis',

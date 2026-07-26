@@ -15,6 +15,8 @@ import type {
   MediaOutput,
   MediaAdapterResult,
   MediaTaskDescriber,
+  MaterializedImageGenerationRequest,
+  MaterializedVideoGenerationRequest,
 } from '@neko/generation';
 import { getMediaAdapterRegistry } from './adapters/media-adapter-registry';
 import {
@@ -249,6 +251,7 @@ export class MediaGenerationExecutor {
         const imgReq = await materializeImageRequestFileUris(
           request as ImageGenerationRequest,
           this.requestAssetMaterializer,
+          { ...(context?.signal ? { signal: context.signal } : {}) },
         );
         const size =
           imgReq.width && imgReq.height ? (`${imgReq.width}x${imgReq.height}` as const) : undefined;
@@ -333,6 +336,7 @@ export class MediaGenerationExecutor {
         const vidReq = await materializeVideoRequestFileUris(
           request as VideoGenerationRequest,
           this.requestAssetMaterializer,
+          { ...(context?.signal ? { signal: context.signal } : {}) },
         );
         const resolution = vidReq.resolution
           ? this.parseResolutionToSize(vidReq.resolution)
@@ -466,6 +470,7 @@ export class MediaGenerationExecutor {
           ? await materializeImageRequestFileUris(
               request as ImageGenerationRequest,
               this.requestAssetMaterializer,
+              { ...(context?.signal ? { signal: context.signal } : {}) },
             )
           : generationType === 'text-to-video' ||
               generationType === 'image-to-video' ||
@@ -473,6 +478,7 @@ export class MediaGenerationExecutor {
             ? await materializeVideoRequestFileUris(
                 request as VideoGenerationRequest,
                 this.requestAssetMaterializer,
+                { ...(context?.signal ? { signal: context.signal } : {}) },
               )
             : request;
       const timeoutMs =
@@ -494,7 +500,7 @@ export class MediaGenerationExecutor {
         run: async () => {
           if (generationType === 'text-to-image' || generationType === 'image-to-image') {
             return requireMediaImageSubmitter(adapter).generateImage(
-              preparedRequest as ImageGenerationRequest,
+              preparedRequest as MaterializedImageGenerationRequest,
               model,
               provider,
             );
@@ -505,7 +511,7 @@ export class MediaGenerationExecutor {
             generationType === 'video-to-video'
           ) {
             return requireMediaVideoSubmitter(adapter).generateVideo(
-              preparedRequest as VideoGenerationRequest,
+              preparedRequest as MaterializedVideoGenerationRequest,
               model,
               provider,
             );
@@ -633,14 +639,14 @@ export class MediaGenerationExecutor {
   }
 
   private buildVideoPrompt(
-    request: VideoGenerationRequest,
+    request: MaterializedVideoGenerationRequest,
   ): string | { image: string; text?: string } {
     const image = request.referenceImageUrl ?? request.referenceImageBase64;
     return image ? { image, text: request.prompt } : request.prompt;
   }
 
   private buildVideoProviderOptions(
-    request: VideoGenerationRequest,
+    request: MaterializedVideoGenerationRequest,
   ): Record<string, string | number> {
     const options: Record<string, string | number> = {};
     if (request.referenceVideoUrl !== undefined) {

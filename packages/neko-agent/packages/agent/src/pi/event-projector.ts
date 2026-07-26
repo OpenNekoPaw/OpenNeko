@@ -58,6 +58,13 @@ export type PiProductEventPayload =
       readonly summary: string;
     }
   | {
+      readonly type: 'confirmation.resolved';
+      readonly confirmationId: string;
+      readonly toolCallId: string;
+      readonly toolName: string;
+      readonly approved: boolean;
+    }
+  | {
       readonly type: 'turn.persistence';
       readonly state: PiTurnDurabilityState;
       readonly diagnostic?: string;

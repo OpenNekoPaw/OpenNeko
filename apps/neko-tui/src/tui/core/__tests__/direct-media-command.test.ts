@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createResourceFingerprint, createResourceRef } from '@neko/shared';
 import type { GenerationJobSnapshot } from '@neko/generation';
 import {
   DirectMediaCommandError,
@@ -27,7 +26,7 @@ describe('executeDirectMediaCommand', () => {
       status: 'submitted',
       operationId: 'job-image',
       jobRevision: 1,
-      assetRefs: [],
+      resultLocators: [],
     });
     expect(runtime.observeGeneration).not.toHaveBeenCalled();
     expect(runtime.submitGeneration).toHaveBeenCalledWith(
@@ -59,7 +58,9 @@ describe('executeDirectMediaCommand', () => {
         kind,
         status: 'completed',
         operationId: terminal.ref.jobId,
-        assetRefs: [`resource-${kind}`],
+        resultLocators: [
+          expect.objectContaining({ kind: 'generated-output', outputId: `asset-${kind}` }),
+        ],
       });
     });
   }
@@ -207,7 +208,9 @@ function createSnapshot(
           },
         }
       : {}),
-    ...(withResult && phase === 'succeeded' ? { resultRefs: [createResultRef(kind)] } : {}),
+    ...(withResult && phase === 'succeeded'
+      ? { resultLocators: [createResultLocator(kind)] }
+      : {}),
   };
 }
 
@@ -234,13 +237,12 @@ async function* asyncSnapshots(snapshots: readonly GenerationJobSnapshot[]) {
   yield* snapshots;
 }
 
-function createResultRef(kind: DirectMediaKind) {
-  return createResourceRef({
-    id: `resource-${kind}`,
-    scope: 'project',
-    provider: 'generated-asset',
-    kind: 'generated',
-    source: { kind: 'generated-asset', generatedAssetId: `asset-${kind}` },
-    fingerprint: createResourceFingerprint({ strategy: 'hash', value: `sha256:${kind}` }),
-  });
+function createResultLocator(kind: DirectMediaKind) {
+  return {
+    kind: 'generated-output' as const,
+    outputId: `asset-${kind}`,
+    revision: `revision-${kind}`,
+    digest: `sha256:${kind}`,
+    path: `neko/generated/${kind}/asset-${kind}`,
+  };
 }

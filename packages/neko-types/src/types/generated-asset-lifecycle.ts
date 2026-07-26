@@ -1,18 +1,11 @@
 import type { GeneratedAssetMediaKind } from './generated-asset';
 import {
-  MEDIA_QUALITY_CONTRACT_VERSION,
-  qualityTargetsMatch,
-  type QualityEvidence,
-  type QualityEvidenceLineage,
-  type QualityTarget,
-  type QualityTargetKind,
-} from './media-quality';
-import {
-  createResourceFingerprint,
-  createResourceRef,
-  hashStableValue,
-  type ResourceRef,
-} from './resource-cache';
+  normalizeWorkspaceContentPath,
+  validateContentLocator,
+  type GeneratedOutputContentLocator,
+} from './content-locator';
+import type { QualityEvidence, QualityEvidenceLineage } from './media-quality';
+import { hashStableValue } from './stable-value';
 
 export const GENERATED_ASSET_LIFECYCLE_VERSION = 1 as const;
 export const GENERATED_ASSET_RESOURCE_PROVIDER_ID = 'generated-asset';
@@ -29,7 +22,6 @@ export interface GeneratedAssetGenerationLineage {
   readonly providerId?: string;
   readonly modelId?: string;
   readonly workflowStage?: GeneratedAssetWorkflowStageRef;
-  readonly sourceRefs?: readonly ResourceRef[];
 }
 
 /**
@@ -43,13 +35,14 @@ export interface GeneratedAssetRevisionRef {
   readonly contentDigest: string;
   readonly mediaKind: GeneratedAssetMediaKind;
   readonly mimeType: string;
-  readonly resourceRef: ResourceRef;
+  readonly contentLocator: GeneratedOutputContentLocator;
   readonly generation: GeneratedAssetGenerationLineage;
 }
 
 export interface CreateGeneratedAssetRevisionRefInput {
   readonly assetId: string;
   readonly contentDigest: string;
+  readonly contentPath: string;
   readonly mediaKind: GeneratedAssetMediaKind;
   readonly mimeType: string;
   readonly generation: GeneratedAssetGenerationLineage;
@@ -78,41 +71,39 @@ export type GeneratedAssetEvidenceTransferResult =
       readonly staleEvidence: QualityEvidence;
     };
 
+export type GeneratedAssetRevisionRefValidationResult =
+  | {
+      readonly ok: true;
+      readonly lifecycle: GeneratedAssetRevisionRef;
+    }
+  | {
+      readonly ok: false;
+      readonly diagnostic: string;
+    };
+
 export function createGeneratedAssetRevisionRef(
   input: CreateGeneratedAssetRevisionRefInput,
 ): GeneratedAssetRevisionRef {
   assertNonEmpty(input.assetId, 'assetId');
   assertNonEmpty(input.contentDigest, 'contentDigest');
+  assertNonEmpty(input.contentPath, 'contentPath');
   assertNonEmpty(input.mimeType, 'mimeType');
   assertNonEmpty(input.generation.operationId, 'generation.operationId');
 
-  const revision = `rev_${hashStableValue({
-    assetId: input.assetId,
-    contentDigest: input.contentDigest,
-  })}`;
-  const resourceRef = createResourceRef({
-    scope: 'project',
-    provider: GENERATED_ASSET_RESOURCE_PROVIDER_ID,
-    kind: 'generated',
-    source: {
-      kind: 'generated-asset',
-      generatedAssetId: input.assetId,
-      metadata: {
-        revision,
-        contentDigest: input.contentDigest,
-        mimeType: input.mimeType,
-      },
-    },
-    locator: {
-      kind: 'generated-asset',
-      assetId: input.assetId,
-    },
-    fingerprint: createResourceFingerprint({
-      strategy: 'hash',
-      value: input.contentDigest,
-    }),
-  });
-
+  const revision = createGeneratedAssetRevision(input.assetId, input.contentDigest);
+  const contentPath = normalizeWorkspaceContentPath(input.contentPath);
+  if (!contentPath || contentPath !== input.contentPath) {
+    throw new Error(
+      'Generated asset lifecycle requires a normalized workspace-relative contentPath.',
+    );
+  }
+  const contentLocator: GeneratedOutputContentLocator = {
+    kind: 'generated-output',
+    outputId: input.assetId,
+    revision,
+    digest: input.contentDigest,
+    path: contentPath,
+  };
   return {
     version: GENERATED_ASSET_LIFECYCLE_VERSION,
     assetId: input.assetId,
@@ -120,114 +111,64 @@ export function createGeneratedAssetRevisionRef(
     contentDigest: input.contentDigest,
     mediaKind: input.mediaKind,
     mimeType: input.mimeType,
-    resourceRef,
+    contentLocator,
     generation: input.generation,
   };
 }
 
-export function createGeneratedAssetQualityTarget(
-  lifecycle: GeneratedAssetRevisionRef,
-): QualityTarget {
+export function validateGeneratedAssetRevisionRef(
+  value: unknown,
+): GeneratedAssetRevisionRefValidationResult {
+  if (!isRecord(value) || !hasOnlyKeys(value, LIFECYCLE_KEYS)) {
+    return invalidLifecycle('Generated asset lifecycle contains unsupported or legacy fields.');
+  }
+  const assetId = readNonEmptyString(value['assetId']);
+  const revision = readNonEmptyString(value['revision']);
+  const contentDigest = readNonEmptyString(value['contentDigest']);
+  const mimeType = readNonEmptyString(value['mimeType']);
+  const mediaKind = readGeneratedAssetMediaKind(value['mediaKind']);
+  const generation = readGenerationLineage(value['generation']);
+  const contentLocator = validateContentLocator(value['contentLocator']);
+  if (
+    value['version'] !== GENERATED_ASSET_LIFECYCLE_VERSION ||
+    !assetId ||
+    !revision ||
+    !contentDigest ||
+    !mimeType ||
+    !mediaKind ||
+    !generation ||
+    !contentLocator.ok ||
+    contentLocator.locator.kind !== 'generated-output'
+  ) {
+    return invalidLifecycle('Generated asset lifecycle structure is invalid.');
+  }
+  if (
+    revision !== createGeneratedAssetRevision(assetId, contentDigest) ||
+    contentLocator.locator.outputId !== assetId ||
+    contentLocator.locator.revision !== revision ||
+    contentLocator.locator.digest !== contentDigest
+  ) {
+    return invalidLifecycle(
+      'Generated asset lifecycle identity does not match its generated-output content locator.',
+    );
+  }
   return {
-    version: MEDIA_QUALITY_CONTRACT_VERSION,
-    targetId: lifecycle.assetId,
-    kind: toQualityTargetKind(lifecycle.mediaKind),
-    resourceRef: lifecycle.resourceRef,
-    revision: lifecycle.revision,
-    contentDigest: lifecycle.contentDigest,
-    ...(lifecycle.generation.sourceRefs && lifecycle.generation.sourceRefs.length > 0
-      ? {
-          lineage: lifecycle.generation.sourceRefs.map((resourceRef) => ({
-            relation: 'generated-from' as const,
-            resourceRef,
-          })),
-        }
-      : {}),
-  };
-}
-
-export function transferGeneratedAssetEvidenceOnPromotion(input: {
-  readonly draft: GeneratedAssetRevisionRef;
-  readonly promoted: GeneratedAssetRevisionRef;
-  readonly evidence: QualityEvidence;
-  readonly promotionId: string;
-  readonly promotedAt: string;
-  readonly transferredEvidenceId: string;
-}): GeneratedAssetEvidenceTransferResult {
-  const draftTarget = createGeneratedAssetQualityTarget(input.draft);
-  if (!qualityTargetsMatch(input.evidence.target, draftTarget)) {
-    throw new Error('Generated asset promotion evidence is not bound to the draft revision.');
-  }
-  if (input.evidence.state !== 'current') {
-    throw new Error('Stale generated asset evidence cannot be transferred during promotion.');
-  }
-
-  const contentPreserved = input.draft.contentDigest === input.promoted.contentDigest;
-  const promotion: GeneratedAssetPromotionRecord = {
-    promotionId: requiredValue(input.promotionId, 'promotionId'),
-    draft: input.draft,
-    promoted: input.promoted,
-    promotedAt: requiredValue(input.promotedAt, 'promotedAt'),
-    contentPreserved,
-    sourceEvidenceIds: [input.evidence.evidenceId],
-  };
-
-  if (!contentPreserved) {
-    return {
-      status: 'content-changed',
-      promotion,
-      staleEvidence: {
-        ...input.evidence,
-        state: 'stale',
-      },
-    };
-  }
-
-  return {
-    status: 'transferred',
-    promotion,
-    evidence: {
-      ...input.evidence,
-      evidenceId: requiredValue(input.transferredEvidenceId, 'transferredEvidenceId'),
-      target: {
-        ...createGeneratedAssetQualityTarget(input.promoted),
-        lineage: [
-          ...(createGeneratedAssetQualityTarget(input.promoted).lineage ?? []),
-          {
-            relation: 'derived-from',
-            resourceRef: input.draft.resourceRef,
-            revision: input.draft.revision,
-          },
-        ],
-      },
-      createdAt: input.promotedAt,
-      evidenceLineage: {
-        relation: 'content-identical-promotion',
-        sourceEvidenceId: input.evidence.evidenceId,
-        promotionId: input.promotionId,
-      },
+    ok: true,
+    lifecycle: {
+      version: GENERATED_ASSET_LIFECYCLE_VERSION,
+      assetId,
+      revision,
+      contentDigest,
+      mediaKind,
+      mimeType,
+      contentLocator: contentLocator.locator,
+      generation,
     },
   };
 }
 
-function toQualityTargetKind(mediaKind: GeneratedAssetMediaKind): QualityTargetKind {
-  switch (mediaKind) {
-    case 'image':
-      return 'image';
-    case 'video':
-      return 'video-clip';
-    case 'audio':
-      return 'audio';
-    case 'storyboard':
-      return 'storyboard';
-    case 'file':
-      return 'project-artifact';
-  }
-}
-
-function requiredValue(value: string, field: string): string {
-  assertNonEmpty(value, field);
-  return value;
+export function isGeneratedAssetRevisionRef(value: unknown): value is GeneratedAssetRevisionRef {
+  return validateGeneratedAssetRevisionRef(value).ok;
 }
 
 function assertNonEmpty(value: string, field: string): void {
@@ -235,3 +176,92 @@ function assertNonEmpty(value: string, field: string): void {
     throw new Error(`Generated asset lifecycle requires non-empty ${field}.`);
   }
 }
+
+function createGeneratedAssetRevision(assetId: string, contentDigest: string): string {
+  return `rev_${hashStableValue({ assetId, contentDigest })}`;
+}
+
+function readGenerationLineage(value: unknown): GeneratedAssetGenerationLineage | undefined {
+  if (!isRecord(value) || !hasOnlyKeys(value, GENERATION_KEYS)) return undefined;
+  const operationId = readNonEmptyString(value['operationId']);
+  const runId = readOptionalNonEmptyString(value['runId']);
+  const providerId = readOptionalNonEmptyString(value['providerId']);
+  const modelId = readOptionalNonEmptyString(value['modelId']);
+  const workflowStage = readWorkflowStage(value['workflowStage']);
+  if (
+    !operationId ||
+    runId === null ||
+    providerId === null ||
+    modelId === null ||
+    workflowStage === null
+  ) {
+    return undefined;
+  }
+  return {
+    operationId,
+    ...(runId ? { runId } : {}),
+    ...(providerId ? { providerId } : {}),
+    ...(modelId ? { modelId } : {}),
+    ...(workflowStage ? { workflowStage } : {}),
+  };
+}
+
+function readWorkflowStage(value: unknown): GeneratedAssetWorkflowStageRef | undefined | null {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || !hasOnlyKeys(value, WORKFLOW_STAGE_KEYS)) return null;
+  const stageId = readNonEmptyString(value['stageId']);
+  const workflowId = readOptionalNonEmptyString(value['workflowId']);
+  const stageRevision = readOptionalNonEmptyString(value['stageRevision']);
+  if (!stageId || workflowId === null || stageRevision === null) return null;
+  return {
+    stageId,
+    ...(workflowId ? { workflowId } : {}),
+    ...(stageRevision ? { stageRevision } : {}),
+  };
+}
+
+function readGeneratedAssetMediaKind(value: unknown): GeneratedAssetMediaKind | undefined {
+  switch (value) {
+    case 'image':
+    case 'audio':
+    case 'video':
+    case 'storyboard':
+    case 'file':
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function readOptionalNonEmptyString(value: unknown): string | undefined | null {
+  return value === undefined ? undefined : (readNonEmptyString(value) ?? null);
+}
+
+function invalidLifecycle(diagnostic: string): GeneratedAssetRevisionRefValidationResult {
+  return { ok: false, diagnostic };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: ReadonlySet<string>): boolean {
+  return Object.keys(value).every((key) => keys.has(key));
+}
+
+const LIFECYCLE_KEYS = new Set([
+  'version',
+  'assetId',
+  'revision',
+  'contentDigest',
+  'mediaKind',
+  'mimeType',
+  'contentLocator',
+  'generation',
+]);
+const GENERATION_KEYS = new Set(['operationId', 'runId', 'providerId', 'modelId', 'workflowStage']);
+const WORKFLOW_STAGE_KEYS = new Set(['stageId', 'workflowId', 'stageRevision']);

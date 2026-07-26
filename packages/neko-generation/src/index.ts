@@ -10,12 +10,15 @@ export type {
   MediaGenerationRequestBase,
   MediaGenerationType,
   MediaImageSubmitter,
+  MaterializedImageGenerationRequest,
+  MaterializedIPAdapterReference,
   MediaOperationStatus,
   MediaOutput,
   MediaOutputType,
   MediaTaskCanceller,
   MediaTaskDescriber,
   MediaVideoSubmitter,
+  MaterializedVideoGenerationRequest,
   VideoGenerationRequest,
 } from './contracts';
 export type {

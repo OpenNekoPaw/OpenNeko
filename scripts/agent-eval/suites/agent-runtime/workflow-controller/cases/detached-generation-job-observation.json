@@ -63,13 +63,10 @@
       "name": "SubmitGenerationJob",
       "status": "success",
       "resultIncludes": {
-        "success": true,
-        "data": {
-          "jobKind": "generation",
-          "jobLifecycleOwner": "generation-job-coordinator",
-          "phase": "pending",
-          "revision": 1
-        }
+        "jobKind": "generation",
+        "jobLifecycleOwner": "generation-job-coordinator",
+        "phase": "pending",
+        "revision": 1
       },
       "evidenceRef": "detached-generation-facts"
     },
@@ -79,11 +76,8 @@
       "name": "DescribeGenerationJob",
       "status": "success",
       "resultIncludes": {
-        "success": true,
-        "data": {
-          "jobKind": "generation",
-          "jobLifecycleOwner": "generation-job-coordinator"
-        }
+        "jobKind": "generation",
+        "jobLifecycleOwner": "generation-job-coordinator"
       },
       "evidenceRef": "detached-generation-facts"
     },
@@ -93,11 +87,8 @@
       "name": "ObserveGenerationJob",
       "status": "success",
       "resultIncludes": {
-        "success": true,
-        "data": {
-          "jobKind": "generation",
-          "jobLifecycleOwner": "generation-job-coordinator"
-        }
+        "jobKind": "generation",
+        "jobLifecycleOwner": "generation-job-coordinator"
       },
       "evidenceRef": "detached-generation-facts"
     },

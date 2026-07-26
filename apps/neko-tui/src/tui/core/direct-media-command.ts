@@ -1,4 +1,4 @@
-import type { ChatModelOption } from '@neko/shared';
+import type { ChatModelOption, GeneratedOutputContentLocator } from '@neko/shared';
 import type {
   GenerationJobRef,
   GenerationJobSnapshot,
@@ -86,7 +86,7 @@ export interface DirectMediaCommandResult {
   readonly modelId: string;
   readonly operationId: string;
   readonly jobRevision: number;
-  readonly assetRefs: readonly string[];
+  readonly resultLocators: readonly GeneratedOutputContentLocator[];
 }
 
 export type DirectMediaCommandDiagnosticCode =
@@ -147,7 +147,7 @@ export async function executeDirectMediaCommand(
       modelId: submitted.request.modelId,
       operationId: submitted.ref.jobId,
       jobRevision: submitted.revision,
-      assetRefs: [],
+      resultLocators: [],
     };
   }
   const terminal = await waitForTerminalGeneration(runtime, submitted);
@@ -160,8 +160,8 @@ export async function executeDirectMediaCommand(
       terminal.ref.jobId,
     );
   }
-  const assetRefs = terminal.resultRefs?.map((ref) => ref.id) ?? [];
-  if (assetRefs.length === 0) {
+  const resultLocators = terminal.resultLocators ?? [];
+  if (resultLocators.length === 0) {
     throw new DirectMediaCommandError(
       'direct-media-result-unavailable',
       `${input.kind} generation completed without a stable generated asset reference.`,
@@ -175,7 +175,7 @@ export async function executeDirectMediaCommand(
     modelId: terminal.request.modelId,
     operationId: terminal.ref.jobId,
     jobRevision: terminal.revision,
-    assetRefs,
+    resultLocators,
   };
 }
 

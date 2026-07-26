@@ -53,7 +53,12 @@ export {
   detectMediaExtension,
   type DownloadMediaOptions,
 } from './media-file-downloader';
-export type { MediaRequestAssetMaterializer } from './media-request-assets';
+export {
+  createContentReadMediaRequestAssetMaterializer,
+  type ContentReadMediaRequestAssetMaterializerOptions,
+  type MediaRequestAssetMaterializer,
+  type MediaRequestMaterializationOptions,
+} from './media-request-assets';
 export {
   buildGeneratedMediaAssets,
   computeAspectRatioLabel,
@@ -78,11 +83,12 @@ export {
   type MediaGenerationDeliverySettingsInput,
   type MediaGenerationDeliverySettingsPlan,
 } from './media-generation-delivery-settings';
-export { GeneratedAssetIndex, generateAssetId, type AssetFilter } from './generated-asset-index';
 export {
-  createGeneratedAssetResourceResolver,
-  type GeneratedAssetResourceResolver,
-} from './generated-asset-resource-resolver';
+  GeneratedAssetIndex,
+  generateAssetId,
+  type AssetFilter,
+  type GeneratedAssetCatalog,
+} from './generated-asset-index';
 export {
   DEFAULT_VISION_PREPROCESS_POLICY,
   VISION_IMAGE_OUTPUT_MEDIA_TYPE,

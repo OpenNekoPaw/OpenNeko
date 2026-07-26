@@ -1,6 +1,5 @@
 import type { WebviewToExtensionMessage } from '@neko-agent/types';
 import { tryHandleConversationRoute } from './router/conversationRoutes';
-import { tryHandleDomainActivityRoute } from './router/domainActivityRoutes';
 import { tryHandleFileAndPluginRoute } from './router/fileAndPluginRoutes';
 import { tryHandleMessageRoute } from './router/messageRoutes';
 import { tryHandleProjectionRoute } from './router/projectionRoutes';
@@ -17,10 +16,6 @@ export const CHAT_WEBVIEW_MESSAGE_ROUTER_TYPES = [
   'projectionAttach',
   'projectionSnapshotAck',
   'projectionDetach',
-  'domainActivityAttach',
-  'domainActivityAck',
-  'domainActivityDetach',
-  'domainJobCommand',
   'searchProjectFiles',
   'startCharacterDialogueFromSlash',
   'confirmRoleplayCandidate',
@@ -83,7 +78,6 @@ type _AllWebviewMessagesRouted = AssertNever<UnroutedWebviewMessageType>;
 type _NoBridgeMessageOverlap = AssertNever<DuplicateBridgeMessageType>;
 
 const routeHandlers = [
-  tryHandleDomainActivityRoute,
   tryHandleProjectionRoute,
   tryHandleMessageRoute,
   tryHandleConversationRoute,

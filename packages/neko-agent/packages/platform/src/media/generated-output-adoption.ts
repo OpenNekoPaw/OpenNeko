@@ -100,6 +100,7 @@ export async function adoptWorkspaceGeneratedOutputs(options: {
         const contentDigest = await computeDigest(filePath);
         const relativePath = path.relative(options.workspaceRoot, filePath).replace(/\\/gu, '/');
         const [asset] = buildGeneratedMediaAssets({
+          workspaceRoot: options.workspaceRoot,
           hostOutputPaths: [filePath],
           outputs: [{ type: kind, url: filePath }],
           contentDigests: [contentDigest],
@@ -192,6 +193,7 @@ export async function retainLegacyGeneratedOutput(options: {
     createGeneratedAssetRevisionRef({
       assetId: asset.id,
       contentDigest,
+      contentPath: path.relative(options.workspaceRoot, canonicalPath).replace(/\\/gu, '/'),
       mediaKind,
       mimeType: asset.mimeType,
       generation: { operationId: `legacy-retain:${asset.id}` },

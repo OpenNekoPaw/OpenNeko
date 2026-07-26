@@ -1,4 +1,4 @@
-import { isResourceRef, serializeLocalMetadataJson } from '@neko/shared';
+import { isContentLocator, serializeLocalMetadataJson, validateContentLocator } from '@neko/shared';
 import type { JobFailureSummary, JobPhase } from '@neko/shared/job-lifecycle';
 import {
   GENERATION_JOB_KIND,
@@ -43,6 +43,7 @@ const VIDEO_GENERATION_TYPES: ReadonlySet<string> = new Set([
 const AUDIO_GENERATION_TYPES: ReadonlySet<string> = new Set(['text-to-audio', 'text-to-music']);
 
 export function encodeGenerationJobSnapshot(snapshot: GenerationJobSnapshot): string {
+  assertNoLegacyGenerationPayload(snapshot);
   if (!isGenerationJobSnapshot(snapshot)) {
     throw invalidPersistence('Generation Job is not a valid snapshot.');
   }
@@ -56,6 +57,7 @@ export function decodeGenerationJobSnapshot(serialized: string): GenerationJobSn
   } catch (error) {
     throw invalidPersistence('Persisted Generation Job snapshot is not valid JSON.', error);
   }
+  assertNoLegacyGenerationPayload(value);
   if (!isGenerationJobSnapshot(value)) {
     throw invalidPersistence('Persisted Generation Job snapshot violates schema version 2.');
   }
@@ -71,7 +73,7 @@ function isGenerationJobSnapshot(value: unknown): value is GenerationJobSnapshot
   const failure = value['failure'];
   const progress = value['progress'];
   const providerTask = value['providerTask'];
-  const resultRefs = value['resultRefs'];
+  const resultLocators = value['resultLocators'];
   if (
     !isGenerationRef(ref) ||
     (value['lifecycleMode'] !== 'linked' && value['lifecycleMode'] !== 'detached') ||
@@ -84,8 +86,13 @@ function isGenerationJobSnapshot(value: unknown): value is GenerationJobSnapshot
     !isGenerationJobRequest(value['request']) ||
     !isGenerationProgress(progress) ||
     (providerTask !== undefined && !isProviderTask(providerTask)) ||
-    (resultRefs !== undefined &&
-      (!Array.isArray(resultRefs) || !resultRefs.every(isResourceRef))) ||
+    'resultRefs' in value ||
+    (resultLocators !== undefined &&
+      (!Array.isArray(resultLocators) ||
+        !resultLocators.every((locator) => {
+          const result = validateContentLocator(locator);
+          return result.ok && result.locator.kind === 'generated-output';
+        }))) ||
     (failure !== undefined && !isFailure(failure))
   ) {
     return false;
@@ -99,7 +106,7 @@ function isGenerationJobSnapshot(value: unknown): value is GenerationJobSnapshot
   ) {
     return false;
   }
-  return phase !== 'succeeded' || (Array.isArray(resultRefs) && resultRefs.length > 0);
+  return phase !== 'succeeded' || (Array.isArray(resultLocators) && resultLocators.length > 0);
 }
 
 function isGenerationJobRequest(value: unknown): value is GenerationJobRequest {
@@ -122,26 +129,62 @@ function isGenerationJobRequest(value: unknown): value is GenerationJobRequest {
 function isImageRequest(value: unknown): value is ImageGenerationRequest {
   return (
     isMediaRequestBase(value) &&
+    hasOnlyKeys(value, IMAGE_REQUEST_KEYS) &&
     optionalNumbersAreFinite(value, [
       'width',
       'height',
       'count',
       'inpaintStrength',
       'controlStrength',
-    ])
+    ]) &&
+    optionalContentLocators(value, [
+      'referenceImageLocator',
+      'maskLocator',
+      'controlImageLocator',
+    ]) &&
+    (value['panoramaReference'] === undefined ||
+      isGenerationPanoramaReference(value['panoramaReference'])) &&
+    (value['ipAdapterRefs'] === undefined ||
+      (Array.isArray(value['ipAdapterRefs']) && value['ipAdapterRefs'].every(isIpAdapterReference)))
+  );
+}
+
+function isGenerationPanoramaReference(value: unknown): boolean {
+  if (!isRecord(value) || !isContentLocator(value['imageLocator'])) return false;
+  const orientation = value['orientation'];
+  const identity = value['identity'];
+  return (
+    isRecord(orientation) &&
+    optionalNumbersAreFinite(orientation, ['yawDeg', 'pitchDeg', 'fieldOfViewDeg']) &&
+    typeof orientation['yawDeg'] === 'number' &&
+    typeof orientation['pitchDeg'] === 'number' &&
+    typeof orientation['fieldOfViewDeg'] === 'number' &&
+    isRecord(identity) &&
+    isNonEmptyString(identity['sessionId']) &&
+    isPositiveInteger(identity['revision'])
   );
 }
 
 function isVideoRequest(value: unknown): value is VideoGenerationRequest {
   return (
     isMediaRequestBase(value) &&
-    optionalNumbersAreFinite(value, ['duration', 'fps', 'motionStrength'])
+    hasOnlyKeys(value, VIDEO_REQUEST_KEYS) &&
+    optionalNumbersAreFinite(value, ['duration', 'fps', 'motionStrength']) &&
+    optionalContentLocators(value, [
+      'startFrameLocator',
+      'endFrameLocator',
+      'referenceVideoLocator',
+    ]) &&
+    (value['referenceImages'] === undefined ||
+      (Array.isArray(value['referenceImages']) &&
+        value['referenceImages'].every(isIpAdapterReference)))
   );
 }
 
 function isAudioRequest(value: unknown): value is AudioGenerationRequest {
   return (
     isMediaRequestBase(value) &&
+    hasOnlyKeys(value, AUDIO_REQUEST_KEYS) &&
     optionalNumbersAreFinite(value, ['duration']) &&
     (value['isMusic'] === undefined || typeof value['isMusic'] === 'boolean')
   );
@@ -157,30 +200,61 @@ function isMediaRequestBase(value: unknown): value is Record<string, unknown> & 
       'modelId',
       'operation',
       'aspectRatio',
-      'referenceImageUrl',
-      'referenceImageBase64',
-      'referenceImageUri',
-      'maskBase64',
-      'maskUri',
       'quality',
       'style',
-      'controlImageBase64',
-      'controlImageUri',
       'controlMode',
       'editInstruction',
       'resolution',
-      'referenceVideoUrl',
       'cameraMovement',
       'cameraAngle',
       'shotScale',
-      'startFrameImageBase64',
-      'endFrameImageBase64',
-      'sourceVideoUrl',
       'genre',
       'format',
     ]) &&
     (value['metadata'] === undefined || isRecord(value['metadata']))
   );
+}
+
+function isIpAdapterReference(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, IP_ADAPTER_REFERENCE_KEYS) &&
+    isContentLocator(value['imageLocator']) &&
+    optionalStrings(value, ['mimeType', 'mode']) &&
+    optionalNumbersAreFinite(value, ['strength'])
+  );
+}
+
+function optionalContentLocators(value: Record<string, unknown>, keys: readonly string[]): boolean {
+  return keys.every((key) => value[key] === undefined || isContentLocator(value[key]));
+}
+
+function assertNoLegacyGenerationPayload(value: unknown): void {
+  if (!isRecord(value)) return;
+  const requestEnvelope = value['request'];
+  const request =
+    isRecord(requestEnvelope) && isRecord(requestEnvelope['request'])
+      ? requestEnvelope['request']
+      : undefined;
+  if ('resultRefs' in value || (request !== undefined && containsLegacyGenerationField(request))) {
+    throw new GenerationJobError(
+      'generation-job-migration-required',
+      'Persisted Generation Job uses retired ResourceRef or materialized media fields and must be resubmitted.',
+    );
+  }
+}
+
+function containsLegacyGenerationField(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(containsLegacyGenerationField);
+  if (!isRecord(value)) return false;
+  return Object.entries(value).some(
+    ([key, nested]) =>
+      LEGACY_MATERIALIZED_REQUEST_KEYS.has(key) || containsLegacyGenerationField(nested),
+  );
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, keys: ReadonlySet<string>): boolean {
+  return Object.keys(value).every((key) => keys.has(key));
 }
 
 function isGenerationProgress(value: unknown): value is {
@@ -269,3 +343,79 @@ function deepFreeze(value: unknown, visited: WeakSet<object>): void {
   for (const nested of Object.values(value)) deepFreeze(nested, visited);
   Object.freeze(value);
 }
+
+const BASE_REQUEST_KEYS = [
+  'prompt',
+  'negativePrompt',
+  'providerId',
+  'modelId',
+  'metadata',
+] as const;
+const IMAGE_REQUEST_KEYS = new Set([
+  ...BASE_REQUEST_KEYS,
+  'operation',
+  'width',
+  'height',
+  'aspectRatio',
+  'count',
+  'referenceImageLocator',
+  'maskLocator',
+  'inpaintStrength',
+  'quality',
+  'style',
+  'controlImageLocator',
+  'controlMode',
+  'controlStrength',
+  'ipAdapterRefs',
+  'cameraReference',
+  'panoramaReference',
+  'editInstruction',
+  'outpaintExpansion',
+  'splitOptions',
+]);
+const VIDEO_REQUEST_KEYS = new Set([
+  ...BASE_REQUEST_KEYS,
+  'operation',
+  'duration',
+  'resolution',
+  'fps',
+  'aspectRatio',
+  'startFrameLocator',
+  'endFrameLocator',
+  'referenceVideoLocator',
+  'motionStrength',
+  'cameraMovement',
+  'cameraAngle',
+  'shotScale',
+  'referenceImages',
+  'editInstruction',
+]);
+const AUDIO_REQUEST_KEYS = new Set([
+  ...BASE_REQUEST_KEYS,
+  'duration',
+  'isMusic',
+  'genre',
+  'format',
+]);
+const IP_ADAPTER_REFERENCE_KEYS = new Set(['imageLocator', 'mimeType', 'strength', 'mode']);
+const LEGACY_MATERIALIZED_REQUEST_KEYS: ReadonlySet<string> = new Set([
+  'referenceImageUrl',
+  'referenceImageBase64',
+  'referenceImageUri',
+  'maskBase64',
+  'maskUri',
+  'controlImageBase64',
+  'controlImageRef',
+  'controlImageUri',
+  'startFrameRef',
+  'endFrameRef',
+  'referenceVideoRef',
+  'referenceVideoUrl',
+  'startFrameImageBase64',
+  'endFrameImageBase64',
+  'sourceVideoUrl',
+  'imageBase64',
+  'imageRef',
+  'resourceRef',
+  'sourceImageRef',
+]);

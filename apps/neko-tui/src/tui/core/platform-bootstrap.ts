@@ -7,12 +7,14 @@
  */
 
 import {
+  createContentReadMediaRequestAssetMaterializer,
   createPlatform,
   FileUserConfigManager,
   type Platform,
 } from '@neko/platform';
 import type { IToolRegistry } from '@neko/shared';
 import { getEnvKeyMap } from '@neko/shared';
+import { createNodeHostContentReadService } from '@neko/shared/content-access';
 
 // Shared env var mapping from @neko/shared/config/credential-resolver
 const ENV_KEY_MAP = getEnvKeyMap();
@@ -59,6 +61,16 @@ export function createCLIPlatform(options: CLIPlatformOptions): CLIPlatformResul
     userConfigManager,
     workspacePath: options.workspacePath,
     toolRegistry: options.toolRegistry,
+    ...(options.workspacePath
+      ? {
+          requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
+            contentRead: createNodeHostContentReadService({
+              workspaceRoot: options.workspacePath,
+            }),
+            encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
+          }),
+        }
+      : {}),
   });
 
   // Inject env var API keys at runtime (not persisted)

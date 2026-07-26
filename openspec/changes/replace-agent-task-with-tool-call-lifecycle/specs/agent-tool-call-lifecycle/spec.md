@@ -76,11 +76,11 @@ The product MUST distinguish message queue, plan progress, Tool execution, Agent
 - **THEN** the Host projects those states into one Timeline item identified by the same toolCallId
 - **AND** it does not append a generic TaskCard or a second assistant message as another authority
 
-#### Scenario: The Activity view lists ongoing work
+#### Scenario: Domain callers display their own work
 
 - **WHEN** foreground Tools, Subagents, GenerationJobs, or ExportJobs are active
-- **THEN** the Activity view labels each by its concrete kind and exposes only operations supported by that owner
-- **AND** it does not synthesize a generic cancelTask or retryTask operation
+- **THEN** Agent Timeline, Canvas action state and Cut editor/status display only the work owned by that caller
+- **AND** the product does not synthesize a global Activity authority, cancelTask or retryTask operation
 
 ## MODIFIED Requirements
 

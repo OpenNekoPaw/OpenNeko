@@ -3,7 +3,6 @@ import path from 'node:path';
 import * as vscode from 'vscode';
 import { ToolRegistry } from '@neko/agent';
 import {
-  createGenerationJobActivityPort,
   createPersistentGenerationJobStore,
   createPurposeGenerationJobPort,
   GENERATION_JOB_MIGRATIONS,
@@ -14,41 +13,50 @@ import {
 } from '@neko/generation';
 import {
   buildMediaGenerationDeliverySettingsPlan,
+  createContentReadMediaRequestAssetMaterializer,
   createPlatform,
-  createResourceCacheGeneratedAssetIndex,
   DEFAULT_MEDIA_GENERATION_CONFIGURED_OUTPUT_DIR,
   FileUserConfigManager,
   finalizeMediaGenerationOutputs,
+  GeneratedAssetIndex,
   MEDIA_GENERATION_DELIVERY_CONFIG_SECTION,
   MEDIA_GENERATION_OUTPUT_DIR_SETTING_KEY,
+  migrateLegacyGeneratedAssetIndex,
   registerMediaAgentTools,
+  type GeneratedAssetCatalog,
   type Platform,
 } from '@neko/platform';
 import type { GeneratedMediaKind } from '@neko/platform/media/media-generated-asset';
 import {
+  PathResolver,
+  contentLocatorsEqual,
   resolveWorkspaceGeneratedAssetRelativeDirectory,
+  type GeneratedOutputContentLocator,
   type GeneratedAsset,
   type LocalMetadataStore,
-  type ResourceRef,
 } from '@neko/shared';
-import { createNodeWorkspaceResourceCacheMetadataBinding } from '@neko/shared/local-metadata/node';
-import type { DomainActivityHost } from '@neko/shared/domain-activity';
-import { OpenNekoDomainActivityHost } from './domain-activity-host';
+import { createNodeHostContentReadService } from '@neko/shared/content-access';
+import {
+  createNodeWorkspaceResourceCacheMetadataBinding,
+  LocalMetadataGeneratedOutputProjectionStore,
+  type GeneratedOutputProjectionRejection,
+} from '@neko/shared/local-metadata/node';
 
 export interface OpenNekoAiHostServices {
   readonly platform: Platform;
   readonly toolRegistry: ToolRegistry;
   readonly generationJobs?: GenerationJobPort;
   readonly purposeGenerationJobs?: PurposeGenerationJobPort;
-  readonly resolveGenerationResult?: (
-    ref: ResourceRef,
-  ) => { readonly path: string; readonly asset: GeneratedAsset };
-  readonly resolveGenerationResultPath?: (ref: ResourceRef) => string;
+  readonly generatedAssets?: GeneratedAssetCatalog;
+  readonly resolveGenerationResult?: (locator: GeneratedOutputContentLocator) => {
+    readonly path: string;
+    readonly asset: GeneratedAsset;
+  };
+  readonly resolveGenerationResultPath?: (locator: GeneratedOutputContentLocator) => string;
   readonly localMetadata?: {
     readonly metadataStore: LocalMetadataStore;
     readonly workspaceId: string;
   };
-  readonly domainActivity: DomainActivityHost;
 }
 
 export interface OpenNekoAiHostRuntime {
@@ -63,13 +71,19 @@ export async function createOpenNekoAiHostRuntime(): Promise<OpenNekoAiHostRunti
     toolRegistry,
     userConfigManager: new FileUserConfigManager(),
     ...(workspaceRoot ? { workspacePath: workspaceRoot } : {}),
+    ...(workspaceRoot
+      ? {
+          requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
+            contentRead: createNodeHostContentReadService({ workspaceRoot }),
+            encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
+          }),
+        }
+      : {}),
   });
   if (!workspaceRoot) {
-    const domainActivity = new OpenNekoDomainActivityHost();
     return {
-      services: { platform, toolRegistry, domainActivity },
+      services: { platform, toolRegistry },
       dispose: async () => {
-        domainActivity.dispose();
         platform.dispose();
       },
     };
@@ -81,16 +95,38 @@ export async function createOpenNekoAiHostRuntime(): Promise<OpenNekoAiHostRunti
   });
   try {
     await metadata.metadataStore.migrateNamespace(GENERATION_JOB_MIGRATIONS);
-    const generatedAssets = await createResourceCacheGeneratedAssetIndex({
+    const rejectedGeneratedOutputProjections = new Map<
+      string,
+      GeneratedOutputProjectionRejection
+    >();
+    const generatedAssetStore = new LocalMetadataGeneratedOutputProjectionStore({
       manifestStore: metadata.manifestStore,
       workspaceRoot,
-      homedir: os.homedir(),
+      pathResolver: new PathResolver(
+        new Map([
+          ['WORKSPACE', workspaceRoot],
+          ['HOME', os.homedir()],
+        ]),
+      ),
+      rejectedProjectionPolicy: {
+        mode: 'preserve-and-report',
+        report: (rejection) => {
+          rejectedGeneratedOutputProjections.set(rejection.resourceId, rejection);
+        },
+      },
     });
-    if (generatedAssets.migrationReport.sourceStatus === 'quarantined') {
+    const generatedAssetMigration = await migrateLegacyGeneratedAssetIndex({
+      indexPath: path.join(workspaceRoot, 'neko', 'generated', 'index.json'),
+      store: generatedAssetStore,
+    });
+    if (generatedAssetMigration.sourceStatus === 'quarantined') {
       throw new Error(
-        `Generated asset index was quarantined: ${generatedAssets.migrationReport.sourceDiagnostic ?? 'invalid index'}`,
+        `Generated asset index was quarantined: ${generatedAssetMigration.sourceDiagnostic ?? 'invalid index'}`,
       );
     }
+    const generatedAssetIndex = new GeneratedAssetIndex(generatedAssetStore);
+    await generatedAssetIndex.load();
+    reportRejectedGeneratedOutputProjections(rejectedGeneratedOutputProjections.values());
     const coordinator = new GenerationJobCoordinator({
       store: createPersistentGenerationJobStore({
         metadataStore: metadata.metadataStore,
@@ -103,44 +139,24 @@ export async function createOpenNekoAiHostRuntime(): Promise<OpenNekoAiHostRunti
             operationId: ref.jobId,
             generation,
             workspaceRoot,
-            assetIndex: generatedAssets.index,
+            assetIndex: generatedAssetIndex,
           }),
       },
     });
-    let generationJobs: ReturnType<typeof createGenerationJobActivityPort> | undefined;
-    const domainActivity = new OpenNekoDomainActivityHost(() => generationJobs);
-    generationJobs = createGenerationJobActivityPort({
-      jobs: coordinator,
-      publisher: domainActivity.publisher,
-      reportError: (error, ref) => {
-        void vscode.window.showErrorMessage(
-          `Generation Job ${ref.jobId} activity tracking failed: ${error.message}`,
-        );
-      },
-    });
-    const recovered = await coordinator.recoverPersistedGenerationJobs();
-    for (const snapshot of recovered) generationJobs.installActivity(snapshot);
+    const generationJobs: GenerationJobPort = coordinator;
+    await coordinator.recoverPersistedGenerationJobs();
     registerMediaAgentTools(toolRegistry, generationJobs);
     const purposeGenerationJobs = createPurposeGenerationJobPort({
       jobs: generationJobs,
       bindings: {
-        resolveGenerationBinding: (purpose) =>
-          platform.config.resolveModelRefForPurpose(purpose),
+        resolveGenerationBinding: (purpose) => platform.config.resolveModelRefForPurpose(purpose),
       },
     });
-    const resolveGenerationResult = (ref: ResourceRef) => {
-      if (
-        ref.source.kind !== 'generated-asset' ||
-        ref.provider !== 'generated-asset'
-      ) {
+    const resolveGenerationResult = (locator: GeneratedOutputContentLocator) => {
+      const asset = generatedAssetIndex.get(locator.outputId);
+      if (!asset?.lifecycle || !contentLocatorsEqual(asset.lifecycle.contentLocator, locator)) {
         throw new Error(
-          `Generation result ${ref.id} is not a generated-asset ResourceRef.`,
-        );
-      }
-      const asset = generatedAssets.index.get(ref.source.generatedAssetId);
-      if (!asset?.lifecycle || asset.lifecycle.resourceRef.id !== ref.id) {
-        throw new Error(
-          `Generation result ${ref.id} does not match the generated asset index.`,
+          `Generation result ${locator.outputId}/${locator.revision} does not match the generated asset index.`,
         );
       }
       return { path: asset.path, asset };
@@ -151,21 +167,16 @@ export async function createOpenNekoAiHostRuntime(): Promise<OpenNekoAiHostRunti
         toolRegistry,
         generationJobs,
         purposeGenerationJobs,
+        generatedAssets: generatedAssetIndex,
         resolveGenerationResult,
         resolveGenerationResultPath: (ref) => resolveGenerationResult(ref).path,
         localMetadata: {
           metadataStore: metadata.metadataStore,
           workspaceId: metadata.workspaceId,
         },
-        domainActivity,
       },
       dispose: async () => {
         const failures: unknown[] = [];
-        try {
-          await generationJobs.disposeActivity();
-        } catch (error) {
-          failures.push(error);
-        }
         try {
           await coordinator.dispose();
         } catch (error) {
@@ -176,7 +187,6 @@ export async function createOpenNekoAiHostRuntime(): Promise<OpenNekoAiHostRunti
         } catch (error) {
           failures.push(error);
         }
-        domainActivity.dispose();
         platform.dispose();
         if (failures.length > 0) {
           throw new AggregateError(failures, 'OpenNeko AI Host disposal failed.');
@@ -190,14 +200,30 @@ export async function createOpenNekoAiHostRuntime(): Promise<OpenNekoAiHostRunti
   }
 }
 
+function reportRejectedGeneratedOutputProjections(
+  rejections: Iterable<GeneratedOutputProjectionRejection>,
+): void {
+  const rejected = [...rejections];
+  if (rejected.length === 0) return;
+  const count = rejected.length;
+  const visibleResourceIds = rejected.slice(0, 3).map(({ resourceId }) => resourceId);
+  const hiddenCount = count - visibleResourceIds.length;
+  const resourceSummary =
+    visibleResourceIds.join(', ') + (hiddenCount > 0 ? `, and ${hiddenCount} more` : '');
+  const message =
+    `OpenNeko skipped ${count} generated-output index ${count === 1 ? 'record' : 'records'} ` +
+    `that require migration (${resourceSummary}). The generated files were preserved, but these ` +
+    'outputs are unavailable until they are regenerated or sent through the current path.';
+  // User dismissal must not block activation of unrelated embedded features.
+  void vscode.window.showWarningMessage(message);
+}
+
 async function commitGenerationResult(input: {
   readonly operationId: string;
   readonly generation: MediaGenerationResult;
   readonly workspaceRoot: string;
-  readonly assetIndex: Awaited<
-    ReturnType<typeof createResourceCacheGeneratedAssetIndex>
-  >['index'];
-}): Promise<readonly ResourceRef[]> {
+  readonly assetIndex: GeneratedAssetIndex;
+}): Promise<readonly import('@neko/shared').GeneratedOutputContentLocator[]> {
   const mediaKind = toGeneratedMediaKind(input.generation.type);
   const configuredOutputDir = vscode.workspace
     .getConfiguration(MEDIA_GENERATION_DELIVERY_CONFIG_SECTION)
@@ -224,6 +250,7 @@ async function commitGenerationResult(input: {
     throw new Error('Generation result commit requires a workspace output directory.');
   }
   const finalized = await finalizeMediaGenerationOutputs({
+    workspaceRoot: input.workspaceRoot,
     operationId: input.operationId,
     generationType: input.generation.type,
     mediaKind,
@@ -238,7 +265,7 @@ async function commitGenerationResult(input: {
     if (!asset.lifecycle) {
       throw new Error(`Generated asset ${asset.id} has no durable lifecycle.`);
     }
-    return asset.lifecycle.resourceRef;
+    return asset.lifecycle.contentLocator;
   });
 }
 

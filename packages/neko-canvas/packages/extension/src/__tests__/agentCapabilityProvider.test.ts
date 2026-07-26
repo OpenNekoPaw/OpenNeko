@@ -184,11 +184,13 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
   });
 
   it('routes first/end frames through canonical stable keyframe identity', () => {
-    expect(providerSource).toContain('toCanvasStableMediaResourceRef(firstFrameMediaRef)');
-    expect(providerSource).toContain('toCanvasStableMediaResourceRef(lastFrameMediaRef)');
+    expect(providerSource).toContain('toCanvasStableMediaContentLocator(firstFrameMediaRef)');
+    expect(providerSource).toContain('toCanvasStableMediaContentLocator(lastFrameMediaRef)');
     expect(providerSource).toContain("operation: 'generate-from-keyframes'");
-    expect(providerSource).toContain('startFrameRef');
-    expect(providerSource).toContain('endFrameRef');
+    expect(providerSource).toContain('startFrameLocator');
+    expect(providerSource).toContain('endFrameLocator');
+    expect(providerSource).not.toContain('startFrameRef');
+    expect(providerSource).not.toContain('endFrameRef');
     expect(providerSource).not.toContain('referenceImageUrl: firstFrameData');
     expect(providerSource).not.toContain("metadata['lastFrameUrl']");
     expect(providerSource).not.toContain("metadata['referenceDescriptors'] = referenceDescriptors");

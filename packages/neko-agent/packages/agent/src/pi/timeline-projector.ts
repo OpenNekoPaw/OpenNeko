@@ -7,7 +7,11 @@ import type {
   ConversationProjectionUpdate,
   ToolCall,
 } from '@neko-agent/types';
-import type { ToolResultArtifactTransfer, ToolResultAttachment } from '@neko/shared';
+import {
+  isContentLocator,
+  type ToolResultArtifactTransfer,
+  type ToolResultAttachment,
+} from '@neko/shared';
 
 import type { PiProductAgentEvent, PiProductEventSink } from './event-projector';
 import type { PiToolRunIdentity } from './capability-tool-bridge';
@@ -122,6 +126,8 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
         return this.projectToolUpdated(state, event);
       case 'confirmation.required':
         return this.projectConfirmation(state, event);
+      case 'confirmation.resolved':
+        return this.projectConfirmationResolved(state, event);
       case 'tool.completed':
         return this.projectToolCompleted(state, event);
       case 'turn.failed':
@@ -350,6 +356,36 @@ class DefaultPiTimelineProjector implements PiTimelineProjector {
         toolCall: {
           ...current.payload.toolCall,
           result,
+          pendingConfirmation: false,
+        },
+      },
+      updatedAt: event.timestamp,
+    };
+    state.toolItems.set(event.toolCallId, item);
+    return buildUpdate(state, this.options.messageId, [{ operation: 'upsert', item }]);
+  }
+
+  private projectConfirmationResolved(
+    state: PiTimelineProjectorState,
+    event: Extract<PiProductAgentEvent, { readonly type: 'confirmation.resolved' }>,
+  ): ConversationProjectionUpdate {
+    const current = requireToolItem(state, event.toolCallId, 'confirmation resolution');
+    const toolCall = current.payload.toolCall;
+    if (
+      !toolCall.pendingConfirmation ||
+      toolCall.confirmation?.details['confirmationId'] !== event.confirmationId
+    ) {
+      throw new Error(
+        `Pi Timeline confirmation ${event.confirmationId} does not match pending Tool Call ${event.toolCallId}.`,
+      );
+    }
+    const item: AgentTurnTimelineToolCallItem = {
+      ...current,
+      itemRevision: current.itemRevision + 1,
+      payload: {
+        ...current.payload,
+        toolCall: {
+          ...toolCall,
           pendingConfirmation: false,
         },
       },
@@ -730,9 +766,12 @@ function readToolResultCollections(value: unknown): {
 function isToolResultAttachment(value: unknown): value is ToolResultAttachment {
   const record = asRecord(value);
   const type = record?.['type'];
+  const assetRef = asRecord(record?.['assetRef']);
   return (
     (type === 'image' || type === 'audio' || type === 'video') &&
-    typeof record?.['path'] === 'string'
+    (isContentLocator(record?.['contentLocator']) ||
+      isContentLocator(assetRef?.['contentLocator']) ||
+      typeof record?.['path'] === 'string')
   );
 }
 

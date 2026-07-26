@@ -6,10 +6,14 @@ import {
   TOOL_NAMES_MEDIA,
   TOOL_NAMES_PERCEPTION,
   TOOL_NAMES_QUALITY,
+  getMimeType,
+  validateContentLocator,
+  type ContentLocator,
   type PerceptualAssetRef,
   type Tool,
   type ToolParameters,
   type ToolResult,
+  type ToolResultAttachment,
 } from '@neko/shared';
 import { Type, type TObjectOptions } from 'typebox';
 import type { AgentToolResult, AgentToolUpdateCallback } from '@earendil-works/pi-agent-core';
@@ -188,7 +192,7 @@ export function projectOpenNekoTool(
                   content: [{ type: 'text', text: progress.stage }],
                   details: {
                     success: true,
-                    data: progress,
+                    data: progress.data ?? progress,
                   },
                 }),
             }),
@@ -335,12 +339,7 @@ async function projectToolResultContent(
       `Pi image Tool result contains ${imageAttachments.length} source images; maximum is ${MAX_PI_TOOL_RESULT_SOURCE_IMAGES}.`,
     );
   }
-  const refs = imageAttachments.map((attachment) => {
-    if (!attachment.assetRef) {
-      throw new Error('Pi image Tool result requires a stable attachment assetRef.');
-    }
-    return attachment.assetRef;
-  });
+  const refs = imageAttachments.map(projectToolResultImageRef);
   const projected = await projectProviderImagePayloads(result, refs, assetLoader);
   if (refs.length > 1) {
     content.push({ type: 'text', text: formatImageBatchManifest(projected, refs) });
@@ -365,6 +364,55 @@ async function projectToolResultContent(
     content.push(parsed.content);
   }
   return content;
+}
+
+function projectToolResultImageRef(attachment: ToolResultAttachment): PerceptualAssetRef {
+  if (!attachment.contentLocator) {
+    if (!attachment.assetRef) {
+      throw new Error(
+        'Pi image Tool result requires a stable contentLocator or perceptual assetRef.',
+      );
+    }
+    return attachment.assetRef;
+  }
+
+  const validation = validateContentLocator(attachment.contentLocator);
+  if (!validation.ok) {
+    throw new Error(
+      `Pi image Tool result contains an invalid contentLocator: ${validation.diagnostics
+        .map((diagnostic) => diagnostic.message)
+        .join('; ')}`,
+    );
+  }
+  const locator = validation.locator;
+  const assetId =
+    locator.kind === 'generated-output' ? locator.outputId : attachment.assetRef?.assetId;
+  if (!assetId) {
+    throw new Error(`Pi ${locator.kind} image Tool result requires a semantic assetRef identity.`);
+  }
+  const uri = contentLocatorPortablePath(locator);
+  return {
+    assetId,
+    uri,
+    mimeType: attachment.mimeType ?? attachment.assetRef?.mimeType ?? getMimeType(uri),
+    contentLocator: locator,
+    ...(attachment.assetRef?.label ? { label: attachment.assetRef.label } : {}),
+    ...(attachment.assetRef?.timestampMs === undefined
+      ? {}
+      : { timestampMs: attachment.assetRef.timestampMs }),
+  };
+}
+
+function contentLocatorPortablePath(locator: ContentLocator): string {
+  switch (locator.kind) {
+    case 'workspace-file':
+    case 'generated-output':
+      return locator.path;
+    case 'document-entry':
+      return `${locator.source.path}#${locator.entryPath}`;
+    case 'package-resource':
+      return `${locator.packageId}/${locator.resourcePath}`;
+  }
 }
 
 async function projectProviderImagePayloads(

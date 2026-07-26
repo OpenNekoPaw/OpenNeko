@@ -497,7 +497,6 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
         });
         const defaultCapabilityRuntime = createTuiDefaultCapabilityRuntime({
           workDir: config.workDir,
-          generatedAssetIndex,
           derivedStorageHomedir: localMetadataHome,
         });
         defaultCapabilityRuntimeRef.current = defaultCapabilityRuntime;
@@ -549,7 +548,7 @@ export function useAgentSession(options: UseAgentSessionOptions): AgentSessionHa
                 operationId: ref.jobId,
                 result: generation,
               });
-              return delivery.resourceRefs;
+              return delivery.resultLocators;
             },
           },
         });

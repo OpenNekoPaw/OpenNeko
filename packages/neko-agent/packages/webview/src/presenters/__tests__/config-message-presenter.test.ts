@@ -438,6 +438,48 @@ describe('config message presenter', () => {
     });
   });
 
+  it('projects a music-only audio model to its canonical purpose', () => {
+    expect(
+      projectMessageModelSelection({
+        selectedModel: 'openai:gpt-4.1',
+        sessionMode: 'agent',
+        chatModelOptions: [
+          {
+            id: 'openai:gpt-4.1',
+            label: 'OpenAI / GPT 4.1',
+            providerId: 'openai',
+            modelId: 'gpt-4.1',
+            category: 'llm',
+          },
+          {
+            id: 'nekoapi-media:suno_music',
+            label: 'NekoAPI / Suno Music',
+            providerId: 'nekoapi-media',
+            modelId: 'suno_music',
+            category: 'audio',
+            capabilities: ['text_to_music'],
+          },
+        ],
+        agentMediaModels: {
+          audio: {
+            providerId: 'nekoapi-media',
+            modelId: 'suno_music',
+            category: 'audio',
+          },
+        },
+      }),
+    ).toEqual({
+      chatModel: { providerId: 'openai', modelId: 'gpt-4.1', category: 'llm' },
+      purposeModels: {
+        'audio.music.generate': {
+          providerId: 'nekoapi-media',
+          modelId: 'suno_music',
+          category: 'audio',
+        },
+      },
+    });
+  });
+
   it('projects chat workspace model lists and agent media selections', () => {
     const projection = projectChatWorkspaceModelState({
       chatModelOptions: [

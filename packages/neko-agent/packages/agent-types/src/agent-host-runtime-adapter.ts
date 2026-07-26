@@ -83,10 +83,6 @@ export const AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES = [
   'projectionAttach',
   'projectionSnapshotAck',
   'projectionDetach',
-  'domainActivityAttach',
-  'domainActivityAck',
-  'domainActivityDetach',
-  'domainJobCommand',
 ] as const satisfies readonly WebviewToExtensionMessage['type'][];
 
 export type AgentWebviewToHostMessageType = (typeof AGENT_WEBVIEW_TO_HOST_MESSAGE_TYPES)[number];

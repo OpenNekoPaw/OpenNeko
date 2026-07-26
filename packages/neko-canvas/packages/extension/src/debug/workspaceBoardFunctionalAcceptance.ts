@@ -49,6 +49,7 @@ export function registerWorkspaceBoardFunctionalAcceptance(options: {
         const lifecycle = createGeneratedAssetRevisionRef({
           assetId: input.assetId,
           contentDigest,
+          contentPath: input.relativePath,
           mediaKind: 'image',
           mimeType: input.mimeType,
           generation: { operationId: input.operationId },
@@ -157,26 +158,20 @@ async function withDuplicateSourceFileObservations(
     .digest('hex')
     .slice(0, 12)}`;
   const createSourceArtifact = (
-    suffix: 'weak' | 'hashed',
-    fingerprint:
-      | { readonly strategy: 'none'; readonly value: string }
-      | { readonly strategy: 'hash'; readonly value: string },
+    suffix: 'unversioned' | 'fingerprinted',
+    fingerprint?: { readonly strategy: 'sha256'; readonly value: string },
   ) => ({
     kind: 'file-reference' as const,
     title: path.basename(normalizedPath),
-    resourceRef: {
-      id: `${baseArtifactId}:${suffix}`,
-      scope: 'project' as const,
-      provider: 'source-file-content-access',
-      kind: 'document' as const,
-      source: { kind: 'file' as const, projectRelativePath: normalizedPath },
-      locator: { kind: 'file' as const, path: normalizedPath },
-      fingerprint,
+    contentLocator: {
+      kind: 'workspace-file' as const,
+      path: normalizedPath,
+      ...(fingerprint ? { fingerprint } : {}),
     },
     provenance: {
       ...output.provenance,
       artifactId: `${baseArtifactId}:${suffix}`,
-      revision: fingerprint.value,
+      revision: fingerprint?.value ?? `locator:${baseArtifactId}`,
       kind: 'file-reference' as const,
       role: 'source' as const,
       sourceId: `functional-source:${baseArtifactId}:${suffix}`,
@@ -186,8 +181,8 @@ async function withDuplicateSourceFileObservations(
   return {
     ...request,
     artifacts: [
-      createSourceArtifact('weak', { strategy: 'none', value: normalizedPath }),
-      createSourceArtifact('hashed', { strategy: 'hash', value: sourceDigest }),
+      createSourceArtifact('unversioned'),
+      createSourceArtifact('fingerprinted', { strategy: 'sha256', value: sourceDigest }),
       ...request.artifacts,
     ],
   };

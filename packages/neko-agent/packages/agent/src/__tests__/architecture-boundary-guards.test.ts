@@ -791,6 +791,20 @@ describe('agent architecture boundary guards', () => {
     expect(violations).toEqual([]);
   });
 
+  it('keeps migrated media tool metadata on locator-only durable fields', () => {
+    const toolRegistrySource = stripTypeScriptComments(
+      readFileSync(join(agentSrc, 'tools/tool-registry.ts'), 'utf-8'),
+    );
+
+    expect(toolRegistrySource).toContain('referenceImageLocator');
+    expect(toolRegistrySource).toContain('startFrameLocator');
+    expect(toolRegistrySource).toContain('endFrameLocator');
+    expect(toolRegistrySource).toContain('referenceVideoLocator');
+    expect(toolRegistrySource).not.toContain('referenceImageUri');
+    expect(toolRegistrySource).not.toContain('startFrameRef');
+    expect(toolRegistrySource).not.toContain('endFrameRef');
+  });
+
   it('keeps domain tool permission defaults out of Agent core', () => {
     const permissionSource = [
       'permission/tool-traits-registry.ts',

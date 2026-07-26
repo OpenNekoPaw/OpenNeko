@@ -12,7 +12,6 @@ import {
   createResourceFingerprint,
   createResourceRef,
 } from '@neko/shared';
-import { createGeneratedAssetResourceResolver } from '@neko/platform';
 import type { HostDerivedContentRuntime } from '@neko/shared/vscode/extension';
 import { createExtensionAgentContentAccessRuntime } from '../agentContentAccessRuntime';
 import { createLocalPerceptionAssetLoader } from '../perceptionAssetLoader';
@@ -148,7 +147,7 @@ describe('createExtensionAgentContentAccessRuntime', () => {
     });
   });
 
-  it('loads pathless generated ResourceRefs for ReadImage and perception', async () => {
+  it('loads generated outputs by ContentLocator and rejects generated ResourceRef fallback', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-agent-generated-access-'));
     tempDirs.push(tempDir);
     const workspaceRoot = path.join(tempDir, 'workspace');
@@ -165,44 +164,47 @@ describe('createExtensionAgentContentAccessRuntime', () => {
     const lifecycle = createGeneratedAssetRevisionRef({
       assetId: 'asset-1',
       contentDigest: sha256(PNG_1X1),
+      contentPath: 'neko/generated/image/asset-1.png',
       mediaKind: 'image',
       mimeType: 'image/png',
       generation: { operationId: 'operation-asset-1' },
-    });
-    const getGeneratedAsset = vi.fn(() => ({
-      type: 'generated-image' as const,
-      id: 'asset-1',
-      path: generatedPath,
-      lifecycle,
-      mimeType: 'image/png',
-      generatedAt: '2026-07-14T00:00:00.000Z',
-      width: 1,
-      height: 1,
-      ratio: '1:1',
-    }));
-    const resolveGeneratedAsset = createGeneratedAssetResourceResolver({
-      get: getGeneratedAsset,
     });
     const { runtime, derivedRuntime } = await createExtensionAgentContentAccessRuntime({
       context,
       workspaceRoot,
       derivedStorageHomedir: await createDerivedStorageHomedir(tempDirs),
       pathResolver: new PathResolver(new Map([['WORKSPACE', workspaceRoot]])),
-      resolveGeneratedAsset,
     });
     derivedRuntimes.push(derivedRuntime);
-    const ref = lifecycle.resourceRef;
-
-    expect(ref.source).not.toHaveProperty('filePath');
-    expect(ref.source.metadata).not.toHaveProperty('path');
+    const legacyRef = createResourceRef({
+      scope: 'project',
+      provider: 'generated-asset',
+      kind: 'generated',
+      source: {
+        kind: 'generated-asset',
+        generatedAssetId: lifecycle.assetId,
+        metadata: {
+          revision: lifecycle.revision,
+          contentDigest: lifecycle.contentDigest,
+        },
+      },
+      fingerprint: createResourceFingerprint({
+        strategy: 'hash',
+        value: lifecycle.contentDigest,
+      }),
+    });
+    await expect(runtime.loadProviderAsset({ source: legacyRef })).resolves.toMatchObject({
+      status: 'unsupported-source',
+      diagnostics: [expect.objectContaining({ code: 'unsupported-source' })],
+    });
 
     const readImageResult = await createReadImageTool({ contentAccessRuntime: runtime }).execute({
-      images: [{ resourceRef: ref }],
+      images: [{ contentLocator: lifecycle.contentLocator }],
     });
 
     expect(readImageResult.success).toBe(true);
     expect(readImageResult.data).toMatchObject({
-      images: [{ portableForTransfer: true, resourceRef: ref }],
+      images: [{ portableForTransfer: true, contentLocator: lifecycle.contentLocator }],
     });
     const perceptualRef = readImageResult.perceptionCards?.[0]?.perceptual.thumbnailRef;
     if (!perceptualRef) throw new Error('ReadImage did not return a perceptual resource ref.');
@@ -212,7 +214,6 @@ describe('createExtensionAgentContentAccessRuntime', () => {
       url: `data:image/png;base64,${Buffer.from(PNG_1X1).toString('base64')}`,
       mimeType: 'image/png',
     });
-    expect(getGeneratedAsset).toHaveBeenCalledWith('asset-1');
   });
 
   it('loads document entries through Node host access without Engine archive APIs', async () => {

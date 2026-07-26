@@ -9,7 +9,7 @@ import type {
   MediaGenerationType,
   MediaAdapterResult,
   MediaOperationStatus,
-  VideoGenerationRequest,
+  MaterializedVideoGenerationRequest,
   MediaOutput,
 } from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
@@ -62,7 +62,7 @@ export class LumaMediaAdapter extends BaseMediaAdapter {
    * Generate video using Luma API
    */
   async generateVideo(
-    request: VideoGenerationRequest,
+    request: MaterializedVideoGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {

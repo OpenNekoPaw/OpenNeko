@@ -19,8 +19,6 @@ export {
 } from './contracts';
 export { GenerationJobCoordinator, type GenerationJobCoordinatorOptions } from './coordinator';
 export { createPurposeGenerationJobPort } from './purpose-port';
-export { projectGenerationJobActivity } from './activity';
-export { createGenerationJobActivityPort, type GenerationJobActivityPort } from './activity-port';
 export {
   GENERATION_JOB_MIGRATIONS,
   createInMemoryGenerationJobStore,

@@ -1,4 +1,3 @@
-import { createResourceFingerprint, createResourceRef } from '@neko/shared';
 import { describe, expect, it, vi } from 'vitest';
 import type { MediaGenerationResult } from '../../execution';
 import { GenerationJobCoordinator } from '../coordinator';
@@ -11,7 +10,7 @@ describe('GenerationJobCoordinator', () => {
     const coordinator = new GenerationJobCoordinator({
       store,
       execution,
-      resultCommitter: { commit: vi.fn(async () => [createResultRef('generated-1')]) },
+      resultCommitter: { commit: vi.fn(async () => [createResultLocator('generated-1')]) },
     });
 
     await expect(
@@ -33,7 +32,7 @@ describe('GenerationJobCoordinator', () => {
       modelId: 'different-model',
     });
     const resultCommitter = {
-      commit: vi.fn(async () => [createResultRef('generated-1')]),
+      commit: vi.fn(async () => [createResultLocator('generated-1')]),
     };
     const coordinator = createCoordinator(execution, resultCommitter);
 
@@ -64,8 +63,8 @@ describe('GenerationJobCoordinator', () => {
           options?.onProgress?.(35);
         }),
     );
-    const resultRef = createResultRef('generated-1');
-    const committer = { commit: vi.fn(async () => [resultRef]) };
+    const resultLocator = createResultLocator('generated-1');
+    const committer = { commit: vi.fn(async () => [resultLocator]) };
     const coordinator = createCoordinator(execution, committer);
 
     const initial = await coordinator.submitGeneration(createInput());
@@ -88,7 +87,7 @@ describe('GenerationJobCoordinator', () => {
     expect(terminal).toMatchObject({
       phase: 'succeeded',
       progress: { stage: 'completed', percent: 100 },
-      resultRefs: [resultRef],
+      resultLocators: [resultLocator],
     });
   });
 
@@ -96,7 +95,7 @@ describe('GenerationJobCoordinator', () => {
     const execution = createExecution();
     execution.generateImage.mockImplementation(() => new Promise(() => undefined));
     const coordinator = createCoordinator(execution, {
-      commit: vi.fn(async () => [createResultRef('generated-1')]),
+      commit: vi.fn(async () => [createResultLocator('generated-1')]),
     });
     const initial = await coordinator.submitGeneration(createInput());
     const running = await waitForRevision(coordinator, initial.ref, 2);
@@ -128,7 +127,7 @@ describe('GenerationJobCoordinator', () => {
         }),
     );
     const coordinator = createCoordinator(execution, {
-      commit: vi.fn(async () => [createResultRef('generated-1')]),
+      commit: vi.fn(async () => [createResultLocator('generated-1')]),
     });
     const initial = await coordinator.submitGeneration(createInput());
     await waitForRevision(coordinator, initial.ref, 3);
@@ -152,7 +151,7 @@ describe('GenerationJobCoordinator', () => {
     const execution = createExecution();
     execution.generateImage.mockRejectedValue(new Error('provider rejected request'));
     const coordinator = createCoordinator(execution, {
-      commit: vi.fn(async () => [createResultRef('generated-1')]),
+      commit: vi.fn(async () => [createResultLocator('generated-1')]),
     });
     const original = await coordinator.submitGeneration({
       ...createInput(),
@@ -177,7 +176,7 @@ describe('GenerationJobCoordinator', () => {
       rejectOnAbort(options?.signal),
     );
     const linked = createCoordinator(linkedExecution, {
-      commit: vi.fn(async () => [createResultRef('generated-linked')]),
+      commit: vi.fn(async () => [createResultLocator('generated-linked')]),
     });
     const linkedInitial = await linked.submitGeneration(createInput());
     await waitForRevision(linked, linkedInitial.ref, 2);
@@ -194,7 +193,7 @@ describe('GenerationJobCoordinator', () => {
       rejectOnAbort(options?.signal),
     );
     const detached = createCoordinator(detachedExecution, {
-      commit: vi.fn(async () => [createResultRef('generated-detached')]),
+      commit: vi.fn(async () => [createResultLocator('generated-detached')]),
     });
     const detachedInitial = await detached.submitGeneration({
       ...createInput(),
@@ -224,7 +223,7 @@ describe('GenerationJobCoordinator', () => {
       }),
     );
     const coordinator = createCoordinator(execution, {
-      commit: vi.fn(async () => [createResultRef('generated-1')]),
+      commit: vi.fn(async () => [createResultLocator('generated-1')]),
     });
     const initial = await coordinator.submitGeneration(createInput());
     const running = await waitForRevision(coordinator, initial.ref, 3);
@@ -264,7 +263,7 @@ describe('GenerationJobCoordinator', () => {
     const coordinator = new GenerationJobCoordinator({
       store,
       execution,
-      resultCommitter: { commit: vi.fn(async () => [createResultRef('generated-1')]) },
+      resultCommitter: { commit: vi.fn(async () => [createResultLocator('generated-1')]) },
       now: incrementingClock(102),
       waitForRecoveryPoll: async () => undefined,
     });
@@ -295,7 +294,7 @@ describe('GenerationJobCoordinator', () => {
     const coordinator = new GenerationJobCoordinator({
       store,
       execution,
-      resultCommitter: { commit: vi.fn(async () => [createResultRef('generated-1')]) },
+      resultCommitter: { commit: vi.fn(async () => [createResultLocator('generated-1')]) },
       now: incrementingClock(102),
     });
 
@@ -320,7 +319,7 @@ describe('GenerationJobCoordinator', () => {
     const coordinator = new GenerationJobCoordinator({
       store,
       execution,
-      resultCommitter: { commit: vi.fn(async () => [createResultRef('generated-1')]) },
+      resultCommitter: { commit: vi.fn(async () => [createResultLocator('generated-1')]) },
       now: incrementingClock(101),
     });
 
@@ -335,7 +334,9 @@ describe('GenerationJobCoordinator', () => {
 function createCoordinator(
   execution: ReturnType<typeof createExecution>,
   resultCommitter: {
-    commit: (input: unknown) => Promise<readonly import('@neko/shared').ResourceRef[]>;
+    commit: (
+      input: unknown,
+    ) => Promise<readonly import('@neko/shared').GeneratedOutputContentLocator[]>;
   },
 ) {
   let id = 0;
@@ -410,15 +411,14 @@ function generationResult(): MediaGenerationResult {
   };
 }
 
-function createResultRef(id: string) {
-  return createResourceRef({
-    id,
-    scope: 'project',
-    provider: 'generated-asset',
-    kind: 'generated',
-    source: { kind: 'generated-asset', generatedAssetId: id },
-    fingerprint: createResourceFingerprint({ strategy: 'hash', value: `sha256:${id}` }),
-  });
+function createResultLocator(id: string) {
+  return {
+    kind: 'generated-output' as const,
+    outputId: id,
+    revision: `revision-${id}`,
+    digest: `sha256:${id}`,
+    path: `neko/generated/image/${id}.png`,
+  };
 }
 
 function rejectOnAbort(signal: AbortSignal | undefined): Promise<never> {

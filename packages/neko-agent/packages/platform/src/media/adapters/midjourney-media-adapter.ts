@@ -7,7 +7,7 @@
 
 import type { Model, Provider } from '../../types/provider';
 import type {
-  ImageGenerationRequest,
+  MaterializedImageGenerationRequest,
   MediaAdapterResult,
   MediaGenerationType,
 } from '@neko/generation';
@@ -42,7 +42,7 @@ export class MidjourneyMediaAdapter extends BaseMediaAdapter {
   }
 
   async generateImage(
-    request: ImageGenerationRequest,
+    request: MaterializedImageGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {

@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createResourceFingerprint, createResourceRef } from '@neko/shared';
 import type { GenerationJobSnapshot } from '@neko/generation';
 import type { CLIConfig } from '../core/types';
 import type { DirectMediaCommandRuntime } from '../core/direct-media-command';
@@ -90,7 +89,9 @@ describe('direct media CLI actions', () => {
       expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
         kind,
         status: 'completed',
-        assetRefs: [`resource-${kind}`],
+        resultLocators: [
+          expect.objectContaining({ kind: 'generated-output', outputId: `asset-${kind}` }),
+        ],
       });
     }, 120_000);
   }
@@ -125,7 +126,7 @@ describe('direct media CLI actions', () => {
       status: 'submitted',
       operationId: 'job-image',
       jobRevision: 1,
-      assetRefs: [],
+      resultLocators: [],
     });
     expect(dispose).toHaveBeenCalledOnce();
   });
@@ -191,16 +192,17 @@ function createSnapshot(kind: 'image' | 'video' | 'audio'): GenerationJobSnapsho
       request: { prompt: `${kind} prompt` },
     },
     progress: { stage: 'completed', percent: 100 },
-    resultRefs: [
-      createResourceRef({
-        id: `resource-${kind}`,
-        scope: 'project',
-        provider: 'generated-asset',
-        kind: 'generated',
-        source: { kind: 'generated-asset', generatedAssetId: `asset-${kind}` },
-        fingerprint: createResourceFingerprint({ strategy: 'hash', value: `sha256:${kind}` }),
-      }),
-    ],
+    resultLocators: [createResultLocator(kind)],
+  };
+}
+
+function createResultLocator(kind: 'image' | 'video' | 'audio') {
+  return {
+    kind: 'generated-output' as const,
+    outputId: `asset-${kind}`,
+    revision: `revision-${kind}`,
+    digest: `sha256:${kind}`,
+    path: `neko/generated/${kind}/asset-${kind}`,
   };
 }
 

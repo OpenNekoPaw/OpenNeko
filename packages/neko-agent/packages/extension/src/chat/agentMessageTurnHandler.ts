@@ -21,10 +21,10 @@ import {
   type AgentContextPayload,
   type CreativeEntityKind,
   type GeneratedAsset,
-  type ResourceRef,
+  type GeneratedOutputContentLocator,
 } from '@neko/shared';
 import type { GenerationJobPort } from '@neko/generation';
-import { buildGlobalErrorMessage } from '@neko-agent/types';
+import { buildErrorMessage, buildGlobalErrorMessage } from '@neko-agent/types';
 import type { IAgentManager } from '../ai/agentManager';
 import { getCanvasSelection } from '../services/canvasAmbientContext';
 import type { IEditorRegistry } from '../editor/common/editorRegistry';
@@ -52,11 +52,9 @@ import {
   getEngineClientProvider,
   type IEngineClientProvider,
 } from '../services/engineClientProvider';
-import { MediaGenerationDeliveryHost } from '../services/mediaGenerationDeliveryHost';
 import { MediaTurnBridge } from '../services/mediaTurnBridge';
 import { WorkspaceBoardProjectionHost } from '../services/workspaceBoardProjectionHost';
 import type { AgentLocalResourceAccess } from '../services/localResourceAccess';
-import type { GeneratedAssetIndex } from '@neko/platform/media/generated-asset-index';
 import { createVSCodeWorkspaceFileReader } from '../services/workspaceFileReader';
 import { searchVSCodeProjectFiles } from '../services/workspaceProjectSearch';
 import { searchProjectMentionCandidates } from '../services/projectMentionSearch';
@@ -70,10 +68,9 @@ import { getCapabilityRuntimeBindings } from '../bootstrap/capabilityBootstrap';
 const logger = getLogger('AgentMessageTurnHandler');
 
 export interface AgentMessageTurnHandlerOptions {
-  readonly generatedAssetIndex?: GeneratedAssetIndex;
   readonly workspaceId?: string;
   readonly generationJobs?: GenerationJobPort;
-  readonly resolveGenerationResult?: (ref: ResourceRef) => {
+  readonly resolveGenerationResult?: (locator: GeneratedOutputContentLocator) => {
     readonly path: string;
     readonly asset: GeneratedAsset;
   };
@@ -90,7 +87,6 @@ export class AgentMessageTurnHandler {
         }),
     });
   private readonly _attachmentProcessor: AttachmentProcessor;
-  private readonly _mediaDeliveryHost: MediaGenerationDeliveryHost;
   private readonly _mediaTurnBridge: MediaTurnBridge;
   private readonly _workspaceBoardProjection: WorkspaceBoardProjectionHost;
   private readonly _agentTurnBridge: AgentTurnBridge;
@@ -119,16 +115,10 @@ export class AgentMessageTurnHandler {
       contentAccessRuntime: getCapabilityRuntimeBindings().contentAccessRuntime,
     });
 
-    this._mediaDeliveryHost = new MediaGenerationDeliveryHost({
-      assetIndex: this._options.generatedAssetIndex,
-      transcodeFile: (inputPath, outputPath, mediaType) =>
-        this._engineClientProvider.transcodeFile(inputPath, outputPath, mediaType),
-      localResourceAccess: this._localResourceAccess,
-    });
     this._mediaTurnBridge = new MediaTurnBridge({
       generationJobs: this._options.generationJobs,
+      contentAccessRuntime: getCapabilityRuntimeBindings().contentAccessRuntime,
       resolveGenerationResult: this._options.resolveGenerationResult,
-      mediaDeliveryHost: this._mediaDeliveryHost,
       getConversationProjection: (conversationId) => {
         if (!this._agentManager) {
           throw new Error('Direct media Timeline projection requires AgentManager.');
@@ -136,6 +126,7 @@ export class AgentMessageTurnHandler {
         return this._agentManager.getOrCreateProjection(conversationId);
       },
       workspaceBoardProjection: this._workspaceBoardProjection,
+      checkpointExternalTurn: (input) => this._conversations.checkpointExternalTurn(input),
       now: () => Date.now(),
     });
 
@@ -206,6 +197,9 @@ export class AgentMessageTurnHandler {
     }
     await runAgentMessageTurnRuntime({
       request: resolvedRequest,
+      beforePrepareAgentTurn: async ({ conversationId, userInput }) => {
+        await this._conversations.initializeTitleFromUserInput(conversationId, userInput);
+      },
       inputProcessor: this._getInputProcessor(),
       processAttachments: (attachments, options) =>
         this._attachmentProcessor.processAttachments(
@@ -251,6 +245,7 @@ export class AgentMessageTurnHandler {
               conversationId,
               prompt,
               mediaModel,
+              userMessage,
               threeReferenceControls,
               selectedFileReferences,
             }) =>
@@ -259,6 +254,7 @@ export class AgentMessageTurnHandler {
                 conversationId,
                 prompt,
                 mediaModel,
+                userMessage,
                 ...(threeReferenceControls ? { threeReferenceControls } : {}),
                 ...(selectedFileReferences ? { selectedFileReferences } : {}),
               })
@@ -337,7 +333,14 @@ export class AgentMessageTurnHandler {
         conversationId: request.conversationId,
         diagnostics: resolved.diagnostics,
       });
-      void webview.postMessage(buildGlobalErrorMessage(message));
+      void webview.postMessage(
+        request.conversationId
+          ? buildErrorMessage({
+              conversationId: request.conversationId,
+              message,
+            })
+          : buildGlobalErrorMessage(message),
+      );
       return null;
     }
 

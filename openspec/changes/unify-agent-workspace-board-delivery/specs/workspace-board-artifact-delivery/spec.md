@@ -110,14 +110,25 @@ Each accepted delivery SHALL be recorded in the existing user-level `LocalMetada
 - **WHEN** the canonical Board file does not exist but valid pending deliveries remain
 - **THEN** the Canvas-owned service MAY create a new empty Board and apply only those pending deliveries, while historical recovery of previously projected content SHALL require an explicit recovery operation
 
-### Requirement: A delivered batch forms a flat deduplicated creative content graph
+### Requirement: A delivered batch forms a batch-aware deduplicated creative content graph
 
-The Canvas-owned projector SHALL atomically create or reuse top-level ordinary Document, Text, and Media nodes for creator-visible content and ordinary Canvas connections for proven creative dependencies. The Workspace Board document itself SHALL be the delivery surface; Inbox, Task, Run, and delivery identities SHALL remain non-visual provenance and SHALL NOT create Canvas Group nodes.
+The Canvas-owned projector SHALL atomically create or reuse ordinary Document, Text, and Media nodes for creator-visible content and ordinary Canvas connections for proven creative dependencies. Inbox, Task, and Run identities SHALL remain non-visual provenance. When one delivery creates multiple new generated output media nodes, the projector SHALL place those nodes in one batch-scoped Canvas Group used only for editable presentation and layout; that Group SHALL NOT own Job state, delivery state, content identity, or resource lifetime.
 
 #### Scenario: Complete source-analysis-output batch is projected
 
 - **WHEN** a valid delivery contains source references, one Markdown analysis, and generated outputs
-- **THEN** the projector SHALL create or reuse ordinary top-level Document/Media/Text nodes and deterministic source-to-derived connections atomically with stable roles and provenance
+- **THEN** the projector SHALL create or reuse ordinary Document/Media/Text nodes and deterministic source-to-derived connections atomically with stable roles and provenance
+
+#### Scenario: One delivery creates multiple generated outputs
+
+- **WHEN** one valid delivery creates at least two new image, audio, or video artifacts with output role
+- **THEN** the projector SHALL create one deterministic batch Group and place exactly those newly created output nodes inside it
+- **AND** the Group SHALL use a bounded near-square grid with at least two rows and two columns whenever the artifact count permits, rather than forcing every batch into one horizontal row or one vertical column
+
+#### Scenario: A delivery creates one generated output
+
+- **WHEN** one valid delivery creates only one generated output node
+- **THEN** the projector SHALL keep that node as ordinary top-level content and SHALL NOT create a one-item batch Group
 
 #### Scenario: The same reference appears in multiple deliveries
 
@@ -145,10 +156,15 @@ The Canvas-owned projector SHALL atomically create or reuse top-level ordinary D
 - **WHEN** `sourceArtifactIds` contains an empty, self-referential, duplicate, or batch-unknown artifact identity
 - **THEN** validation SHALL block the whole batch before Canvas mutation rather than silently omitting the relationship
 
-#### Scenario: New flat content is placed beside an edited graph
+#### Scenario: New content is placed beside an edited graph
 
 - **WHEN** a delivery introduces nodes beside existing user-positioned content
-- **THEN** the projector SHALL choose deterministic free positions that follow source-to-analysis-to-output direction and SHALL NOT move or resize existing nodes
+- **THEN** the projector SHALL choose deterministic free positions through a bounded multi-column top-level layout that follows source-to-analysis-to-output direction and SHALL NOT move or resize existing nodes
+
+#### Scenario: A later delivery reuses creator-edited content
+
+- **WHEN** an equivalent artifact is delivered after its existing node was moved, resized, regrouped, ungrouped, renamed, or annotated
+- **THEN** the projector SHALL reuse that node without moving it into a new batch Group or replacing any creator-owned layout
 
 #### Scenario: A delivered artifact has a creator-facing title and a ResourceRef
 
@@ -231,3 +247,27 @@ Board delivery status SHALL distinguish queued, claimed, projected, no-op, block
 
 - **WHEN** a blocked or expired-claim delivery remains valid and the owning Host explicitly resumes it
 - **THEN** the retry SHALL reuse the original delivery identity and SHALL either project once or return a current typed diagnostic without creating a parallel identity
+
+### Requirement: Canvas custom editor saves preserve authoritative Board content
+
+The VS Code Canvas custom editor SHALL validate Webview save snapshots against the most recently loaded or Host-authored authoritative document. A candidate snapshot SHALL NOT remove an authoritative node unless the Webview reported explicit removal evidence for that node in the current document save epoch.
+
+#### Scenario: Webview state resets after a non-empty Board was loaded
+
+- **WHEN** the authoritative Workspace Board contains nodes and the Webview returns an empty or partial snapshot without matching node-removal evidence
+- **THEN** the Extension SHALL reject the save visibly and SHALL leave the `.nkc` bytes unchanged
+
+#### Scenario: User explicitly clears the Board
+
+- **WHEN** the user deletes all nodes and the Webview reports the exact removed node identities before saving
+- **THEN** the Extension SHALL accept the empty candidate snapshot and persist the intentional deletion
+
+#### Scenario: Host sends an invalid Canvas update
+
+- **WHEN** a Webview receives an `update` message without a valid Canvas document payload
+- **THEN** it SHALL surface a contract error and SHALL NOT replace the current document with a default empty Canvas
+
+#### Scenario: A projected receipt exists after Board content was intentionally deleted
+
+- **WHEN** a creator intentionally deletes projected nodes from the authoritative `.nkc`
+- **THEN** the delivery ledger SHALL NOT replay completed receipts or reconstruct those nodes automatically

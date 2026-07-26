@@ -231,8 +231,12 @@ describe('createLocalPerceptionAssetLoader', () => {
     });
   });
 
-  it('keeps generated ResourceRef identity through ReadImage and native asset loading', async () => {
-    const bytes = Buffer.from('generated-image-bytes');
+  it('keeps generated-output ContentLocator identity and rejects generated ResourceRef fallback', async () => {
+    const bytes = await sharp({
+      create: { width: 16, height: 16, channels: 3, background: '#336699' },
+    })
+      .png()
+      .toBuffer();
     const runtime = createContentAccessRuntime(bytes, 'image/png');
     vi.mocked(runtime.resolveImageMetadata).mockResolvedValueOnce({
       status: 'ready',
@@ -242,6 +246,13 @@ describe('createLocalPerceptionAssetLoader', () => {
       height: 1024,
       sizeBytes: bytes.byteLength,
     });
+    const contentLocator = {
+      kind: 'generated-output' as const,
+      outputId: 'generated-1',
+      revision: 'revision-1',
+      digest: 'sha256:generated-1',
+      path: 'neko/generated/image/task_1_0.png',
+    };
     const generatedResourceRef = createResourceRef({
       id: 'res-generated-1',
       scope: 'project',
@@ -264,30 +275,38 @@ describe('createLocalPerceptionAssetLoader', () => {
       images: [
         {
           label: 'generated-assets/non-existent-display-label.png',
-          resourceRef: generatedResourceRef,
+          contentLocator,
         },
       ],
     });
 
     expect(readResult.success).toBe(true);
     expect(readResult.data).toMatchObject({
-      images: [{ portableForTransfer: true, resourceRef: generatedResourceRef }],
+      images: [{ portableForTransfer: true, contentLocator }],
     });
     const assetRef = readResult.perceptionCards?.[0]?.perceptual?.thumbnailRef;
-    expect(assetRef).toMatchObject({ resourceRef: generatedResourceRef });
+    expect(assetRef).toMatchObject({ contentLocator });
     if (!assetRef) throw new Error('ReadImage did not return a thumbnail asset ref.');
 
     const loaded = await createLocalPerceptionAssetLoader(runtime).load(assetRef);
 
-    expect(runtime.loadProviderAsset).toHaveBeenLastCalledWith({
-      source: generatedResourceRef,
-      mimeTypeHint: 'image/png',
+    expect(runtime.loadContentAsset).toHaveBeenLastCalledWith({
+      locator: contentLocator,
+      maxBytes: 20 * 1024 * 1024,
     });
     expect(loaded).toEqual({
       kind: 'image',
       url: `data:image/png;base64,${bytes.toString('base64')}`,
       mimeType: 'image/png',
     });
+    await expect(
+      createLocalPerceptionAssetLoader(runtime).load({
+        assetId: 'generated-1',
+        uri: 'generated-assets/non-existent-display-label.png',
+        mimeType: 'image/png',
+        resourceRef: generatedResourceRef,
+      }),
+    ).rejects.toThrow('generated-asset-content-locator-migration-required');
   });
 
   it('fails visibly when local asset runtime is unavailable', async () => {
