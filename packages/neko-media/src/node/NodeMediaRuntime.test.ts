@@ -1,4 +1,7 @@
 import { PassThrough, Readable } from 'node:stream';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FfmpegProcessPort, FfmpegRunResult, RunningProcess } from './NodeFfmpegProcess';
 import { FfmpegCommandError } from './NodeFfmpegProcess';
@@ -37,9 +40,13 @@ const VIDEO_PROBE = Buffer.from(
 
 describe('NodeMediaRuntime', () => {
   const runtimes: NodeMediaRuntime[] = [];
+  const temporaryDirectories: string[] = [];
 
   afterEach(async () => {
     await Promise.all(runtimes.splice(0).map((runtime) => runtime.dispose()));
+    await Promise.all(
+      temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true })),
+    );
   });
 
   it('stops an active PCM stream without leaking the FFmpeg abort error', async () => {
@@ -68,10 +75,103 @@ describe('NodeMediaRuntime', () => {
     await expect(runtime.qualify()).resolves.toEqual({
       ffmpegVersion: 'ffmpeg version qualified',
       ffprobeVersion: 'ffprobe version qualified',
-      decoders: { h264: true, hevc: true, av1: true, vp8: true },
+      decoders: { h264: true, hevc: true, av1: true, vp8: true, vp9: true },
       encoders: { h264: true, aac: true },
       filters: { zscale: false, tonemap: true, sidedata: false, alimiter: false },
     });
+  });
+
+  it('publishes qualified AV1 MP4 without invoking an HDR proxy', async () => {
+    const fixture = await createVideoFixture('av1', '.mp4', temporaryDirectories);
+    const process = new ProfilePreparationProcess(AV1_HDR_PROBE);
+    const runtime = new NodeMediaRuntime({ process });
+    runtimes.push(runtime);
+
+    const prepared = await runtime.prepareVideo(fixture, {
+      nativeCapabilities: { version: 1, av1Mp4: true, vp9Mp4: false },
+    });
+
+    expect(prepared.video.preparationProfile).toBe('av1-mp4-direct');
+    expect(prepared.video.mimeType).toBe('video/mp4');
+    expect(process.ffmpegRuns).toEqual([]);
+  });
+
+  it('remuxes qualified VP9 WebM into MP4 without re-encoding', async () => {
+    const fixture = await createVideoFixture('vp9', '.webm', temporaryDirectories);
+    const process = new ProfilePreparationProcess(VP9_HDR_PROBE);
+    const runtime = new NodeMediaRuntime({ process });
+    runtimes.push(runtime);
+
+    const prepared = await runtime.prepareVideo(fixture, {
+      nativeCapabilities: { version: 1, av1Mp4: false, vp9Mp4: true },
+    });
+
+    expect(prepared.video.preparationProfile).toBe('vp9-mp4-remux');
+    expect(prepared.video.mimeType).toBe('video/mp4');
+    expect(process.ffmpegRuns).toHaveLength(1);
+    expect(process.ffmpegRuns[0]).toContain('-c:v');
+    expect(process.ffmpegRuns[0]).toContain('copy');
+    expect(process.ffmpegRuns[0]).not.toContain('libx264');
+  });
+
+  it('uses one VideoToolbox-only closure for an unqualified AV1 source', async () => {
+    const fixture = await createVideoFixture('av1', '.mp4', temporaryDirectories);
+    const process = new ProfilePreparationProcess(AV1_HDR_PROBE);
+    const runtime = new NodeMediaRuntime({
+      process,
+      hardwareVideoBackend: 'videotoolbox',
+    });
+    runtimes.push(runtime);
+
+    const prepared = await runtime.prepareVideo(fixture, {
+      nativeCapabilities: { version: 1, av1Mp4: false, vp9Mp4: false },
+    });
+
+    expect(prepared.video.preparationProfile).toBe('h264-sdr-transcode');
+    expect(process.ffmpegRuns).toHaveLength(1);
+    const args = process.ffmpegRuns[0] ?? [];
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-xerror',
+        '-hwaccel',
+        'videotoolbox',
+        '-hwaccel_output_format',
+        'videotoolbox_vld',
+        '-c:v',
+        'h264_videotoolbox',
+        '-allow_sw',
+        '0',
+      ]),
+    );
+    expect(args.join(' ')).toContain(
+      'scale_vt=w=1280:h=720:color_matrix=bt709:color_primaries=bt709:color_transfer=bt709',
+    );
+    expect(args).not.toContain('libx264');
+    expect(args).not.toContain('-pix_fmt');
+    expect(args.join(' ')).not.toMatch(/(?:^|[,\s])(?:zscale|tonemap|scale=)/u);
+  });
+
+  it('reports VideoToolbox AV1 decoder rejection without a CPU fallback', async () => {
+    const fixture = await createVideoFixture('av1', '.mp4', temporaryDirectories);
+    const process = new HardwareDecoderUnavailableProcess(AV1_HDR_PROBE);
+    const runtime = new NodeMediaRuntime({
+      process,
+      hardwareVideoBackend: 'videotoolbox',
+    });
+    runtimes.push(runtime);
+
+    await expect(
+      runtime.prepareVideo(fixture, {
+        nativeCapabilities: { version: 1, av1Mp4: false, vp9Mp4: false },
+      }),
+    ).rejects.toMatchObject({
+      name: 'MediaRuntimeUnavailableError',
+      capability: 'AV1 VideoToolbox decoder',
+      message: 'Media runtime is unavailable for AV1 VideoToolbox decoder.',
+    });
+
+    expect(process.ffmpegRuns).toHaveLength(1);
+    expect(process.ffmpegRuns[0]).not.toContain('libx264');
   });
 
   it('preserves valid captures when one bounded frame is corrupt', async () => {
@@ -192,7 +292,10 @@ class QualificationProcess implements FfmpegProcessPort {
       return { stdout: Buffer.from(`${executable} version qualified\n`), stderr: '' };
     }
     if (command === '-decoders') {
-      return { stdout: Buffer.from(' V h264\n V hevc\n V av1\n V vp8\n'), stderr: '' };
+      return {
+        stdout: Buffer.from(' V h264\n V hevc\n V av1\n V vp8\n V vp9\n'),
+        stderr: '',
+      };
     }
     if (command === '-encoders') {
       return { stdout: Buffer.from(' V libx264\n A aac\n'), stderr: '' };
@@ -205,6 +308,87 @@ class QualificationProcess implements FfmpegProcessPort {
 
   streamFfmpeg(): RunningProcess {
     throw new Error('Unexpected streaming command.');
+  }
+}
+
+const AV1_HDR_PROBE = Buffer.from(
+  JSON.stringify({
+    streams: [
+      {
+        index: 0,
+        codec_type: 'video',
+        codec_name: 'av1',
+        pix_fmt: 'yuv420p10le',
+        width: 3840,
+        height: 2160,
+        avg_frame_rate: '24/1',
+        color_primaries: 'bt2020',
+        color_transfer: 'smpte2084',
+        color_space: 'bt2020nc',
+      },
+    ],
+    format: { duration: '100', format_name: 'mov,mp4,m4a,3gp,3g2,mj2' },
+  }),
+);
+
+const VP9_HDR_PROBE = Buffer.from(
+  JSON.stringify({
+    streams: [
+      {
+        index: 0,
+        codec_type: 'video',
+        codec_name: 'vp9',
+        profile: 'Profile 2',
+        pix_fmt: 'yuv420p10le',
+        width: 3840,
+        height: 2160,
+        avg_frame_rate: '60/1',
+        color_primaries: 'bt2020',
+        color_transfer: 'smpte2084',
+        color_space: 'bt2020nc',
+      },
+    ],
+    format: { duration: '580', format_name: 'matroska,webm' },
+  }),
+);
+
+class ProfilePreparationProcess implements FfmpegProcessPort {
+  readonly ffmpegRuns: string[][] = [];
+
+  constructor(private readonly probe: Buffer) {}
+
+  async run(executable: 'ffmpeg' | 'ffprobe', args: readonly string[]): Promise<FfmpegRunResult> {
+    if (executable === 'ffprobe') return { stdout: this.probe, stderr: '' };
+    this.ffmpegRuns.push([...args]);
+    const outputPath = args.at(-1);
+    if (!outputPath) throw new Error('Expected a prepared media output path.');
+    await writeFile(outputPath, Buffer.from('prepared media'));
+    return { stdout: Buffer.alloc(0), stderr: '' };
+  }
+
+  streamFfmpeg(): RunningProcess {
+    throw new Error('Unexpected streaming command.');
+  }
+}
+
+class HardwareDecoderUnavailableProcess extends ProfilePreparationProcess {
+  override async run(
+    executable: 'ffmpeg' | 'ffprobe',
+    args: readonly string[],
+  ): Promise<FfmpegRunResult> {
+    if (executable === 'ffprobe') return { stdout: AV1_HDR_PROBE, stderr: '' };
+    this.ffmpegRuns.push([...args]);
+    throw new FfmpegCommandError(
+      'ffmpeg',
+      args,
+      1,
+      null,
+      [
+        '[vist#0:0/av1 @ 0x1] [dec:av1 @ 0x2] Task finished with error code: -78 (Function not implemented)',
+        '[vist#0:0/av1 @ 0x1] [dec:av1 @ 0x2] Terminating thread with return code -78 (Function not implemented)',
+        '[vost#0:0/h264_videotoolbox @ 0x3] [enc:h264_videotoolbox @ 0x4] Could not open encoder before EOF',
+      ].join('\n'),
+    );
   }
 }
 
@@ -339,4 +523,16 @@ function float32Buffer(samples: readonly number[]): Buffer {
   const buffer = Buffer.alloc(samples.length * Float32Array.BYTES_PER_ELEMENT);
   samples.forEach((sample, index) => buffer.writeFloatLE(sample, index * 4));
   return buffer;
+}
+
+async function createVideoFixture(
+  name: string,
+  extension: string,
+  directories: string[],
+): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), 'openneko-media-profile-test-'));
+  directories.push(directory);
+  const source = join(directory, `${name}${extension}`);
+  await writeFile(source, Buffer.from('source media'));
+  return source;
 }

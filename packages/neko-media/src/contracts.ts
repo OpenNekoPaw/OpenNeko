@@ -72,7 +72,22 @@ export interface PcmStreamDescriptor {
 }
 
 export type HtmlVideoPreparationProfile =
-  'h264-mp4-direct' | 'vp8-webm-direct' | 'h264-mp4-remux' | 'h264-sdr-transcode';
+  | 'h264-mp4-direct'
+  | 'av1-mp4-direct'
+  | 'vp8-webm-direct'
+  | 'h264-mp4-remux'
+  | 'vp9-mp4-remux'
+  | 'h264-sdr-transcode';
+
+export interface HtmlVideoNativeCapabilities {
+  readonly version: 1;
+  readonly av1Mp4: boolean;
+  readonly vp9Mp4: boolean;
+}
+
+export interface HtmlVideoPreparationOptions {
+  readonly nativeCapabilities?: HtmlVideoNativeCapabilities;
+}
 
 export interface HtmlVideoDescriptor {
   readonly version: 1;
@@ -102,6 +117,7 @@ export interface MediaRuntimeQualification {
     readonly hevc: boolean;
     readonly av1: boolean;
     readonly vp8: boolean;
+    readonly vp9: boolean;
   };
   readonly encoders: {
     readonly h264: boolean;

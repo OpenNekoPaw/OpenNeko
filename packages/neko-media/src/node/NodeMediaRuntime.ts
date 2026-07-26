@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type {
   HtmlVideoDescriptor,
+  HtmlVideoPreparationOptions,
   HtmlVideoPreparationProfile,
   FrameCaptureResult,
   MediaAudioStream,
@@ -27,6 +28,7 @@ export interface NodeMediaRuntimeOptions {
   readonly process?: FfmpegProcessPort;
   readonly server?: NodeMediaLoopbackServer;
   readonly vp8WebmDirectQualified?: boolean;
+  readonly hardwareVideoBackend?: 'videotoolbox' | 'unavailable';
 }
 
 interface FileSession {
@@ -81,6 +83,7 @@ export class NodeMediaRuntime {
   private readonly server: NodeMediaLoopbackServer;
   private readonly cacheRoot: string;
   private readonly vp8WebmDirectQualified: boolean;
+  private readonly hardwareVideoBackend: 'videotoolbox' | 'unavailable';
   private readonly sessions = new Map<string, Session>();
   private rootPromise: Promise<string> | undefined;
   private qualificationPromise: Promise<MediaRuntimeQualification> | undefined;
@@ -91,6 +94,9 @@ export class NodeMediaRuntime {
     this.server = options.server ?? new NodeMediaLoopbackServer();
     this.cacheRoot = options.cacheRoot ?? path.join(os.tmpdir(), 'openneko-media');
     this.vp8WebmDirectQualified = options.vp8WebmDirectQualified ?? true;
+    this.hardwareVideoBackend =
+      options.hardwareVideoBackend ??
+      (process.platform === 'darwin' ? 'videotoolbox' : 'unavailable');
   }
 
   async qualify(signal?: AbortSignal): Promise<MediaRuntimeQualification> {
@@ -116,6 +122,7 @@ export class NodeMediaRuntime {
             hevc: hasListedCapability(decoderText, 'hevc'),
             av1: hasListedCapability(decoderText, 'av1'),
             vp8: hasListedCapability(decoderText, 'vp8'),
+            vp9: hasListedCapability(decoderText, 'vp9'),
           },
           encoders: {
             h264:
@@ -163,7 +170,12 @@ export class NodeMediaRuntime {
     const probe = await this.probe(sourcePath, signal);
     const video = probe.video;
     if (!video) throw new Error('Frame source contains no video stream.');
-    if (isHdr(video)) await this.assertHdrFilterCapabilities(signal);
+    if (isHdr(video)) {
+      throw new MediaRuntimeUnavailableError(
+        'hardware-only HDR frame capture',
+        'HDR frame capture would require a CPU video-filter/readback path and is disabled.',
+      );
+    }
     const filters: string[] = [
       videoFilter(video, options.width ?? video.width, options.height ?? video.height),
     ];
@@ -311,6 +323,7 @@ export class NodeMediaRuntime {
 
   async prepareVideo(
     sourcePath: string,
+    options: HtmlVideoPreparationOptions = {},
     signal?: AbortSignal,
   ): Promise<{
     readonly sessionId: string;
@@ -320,15 +333,19 @@ export class NodeMediaRuntime {
     const probe = await this.probe(sourcePath, signal);
     const video = probe.video;
     if (!video) throw new Error('Video source contains no video stream.');
-    const profile = this.selectVideoProfile(sourcePath, probe);
+    const profile = this.selectVideoProfile(sourcePath, probe, options);
     let preparedPath = sourcePath;
     let directory: string | undefined;
-    if (profile === 'h264-mp4-remux' || profile === 'h264-sdr-transcode') {
+    if (
+      profile === 'h264-mp4-remux' ||
+      profile === 'vp9-mp4-remux' ||
+      profile === 'h264-sdr-transcode'
+    ) {
       directory = await fs.mkdtemp(path.join(await this.runtimeRoot(), 'preview-'));
       preparedPath = path.join(directory, 'preview.mp4');
       try {
         if (profile === 'h264-sdr-transcode') {
-          await this.assertVideoTranscodeCapabilities(video, signal);
+          this.assertHardwareVideoBackend();
         }
         await this.process.run(
           'ffmpeg',
@@ -336,25 +353,23 @@ export class NodeMediaRuntime {
             '-y',
             '-v',
             'error',
+            ...(profile === 'h264-sdr-transcode'
+              ? [
+                  '-xerror',
+                  '-hwaccel',
+                  'videotoolbox',
+                  '-hwaccel_output_format',
+                  'videotoolbox_vld',
+                ]
+              : []),
             '-i',
             sourcePath,
             '-map',
             '0:v:0',
             '-an',
-            ...(profile === 'h264-mp4-remux'
+            ...(profile === 'h264-mp4-remux' || profile === 'vp9-mp4-remux'
               ? ['-c:v', 'copy']
-              : [
-                  '-vf',
-                  videoFilter(video),
-                  '-c:v',
-                  'libx264',
-                  '-preset',
-                  'ultrafast',
-                  '-crf',
-                  '23',
-                  '-pix_fmt',
-                  'yuv420p',
-                ]),
+              : videoToolboxTranscodeArgs(video)),
             '-movflags',
             '+faststart',
             preparedPath,
@@ -363,6 +378,9 @@ export class NodeMediaRuntime {
         );
       } catch (error) {
         await fs.rm(directory, { recursive: true, force: true });
+        if (profile === 'h264-sdr-transcode') {
+          throw classifyVideoToolboxCommandError(error, video.codecName);
+        }
         throw classifyCommandError(error, 'stream', 'prepare video');
       }
     }
@@ -572,13 +590,27 @@ export class NodeMediaRuntime {
     return { stdout: framed, completion, terminate: () => raw.terminate() };
   }
 
-  private selectVideoProfile(sourcePath: string, probe: MediaProbe): HtmlVideoPreparationProfile {
+  private selectVideoProfile(
+    sourcePath: string,
+    probe: MediaProbe,
+    options: HtmlVideoPreparationOptions,
+  ): HtmlVideoPreparationProfile {
     const video = probe.video;
     if (!video) throw new Error('Video source contains no video stream.');
     const extension = path.extname(sourcePath).toLowerCase();
     const mp4 = extension === '.mp4' || extension === '.m4v';
     if (video.codecName === 'h264' && (video.bitDepth ?? 8) <= 8 && !isHdr(video)) {
       return mp4 ? 'h264-mp4-direct' : 'h264-mp4-remux';
+    }
+    if (video.codecName === 'av1' && mp4 && options.nativeCapabilities?.av1Mp4 === true) {
+      return 'av1-mp4-direct';
+    }
+    if (
+      video.codecName === 'vp9' &&
+      extension === '.webm' &&
+      options.nativeCapabilities?.vp9Mp4 === true
+    ) {
+      return 'vp9-mp4-remux';
     }
     if (
       this.vp8WebmDirectQualified &&
@@ -592,33 +624,12 @@ export class NodeMediaRuntime {
     return 'h264-sdr-transcode';
   }
 
-  private async assertVideoTranscodeCapabilities(
-    video: MediaVideoStream,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    const qualification = await this.qualify(signal);
-    if (!qualification.encoders.h264) {
-      throw new MediaRuntimeUnavailableError('H.264 preview encoder');
-    }
-    const decoder = decoderQualificationKey(video.codecName);
-    if (decoder && !qualification.decoders[decoder]) {
-      throw new MediaRuntimeUnavailableError(`${video.codecName} decoder`);
-    }
-    if (isHdr(video)) {
-      for (const required of ['zscale', 'tonemap', 'sidedata'] as const) {
-        if (!qualification.filters[required]) {
-          throw new MediaRuntimeUnavailableError(`HDR preview filter ${required}`);
-        }
-      }
-    }
-  }
-
-  private async assertHdrFilterCapabilities(signal?: AbortSignal): Promise<void> {
-    const qualification = await this.qualify(signal);
-    for (const required of ['zscale', 'tonemap', 'sidedata'] as const) {
-      if (!qualification.filters[required]) {
-        throw new MediaRuntimeUnavailableError(`HDR frame filter ${required}`);
-      }
+  private assertHardwareVideoBackend(): void {
+    if (this.hardwareVideoBackend !== 'videotoolbox') {
+      throw new MediaRuntimeUnavailableError(
+        'hardware video preview backend',
+        'Video preview requires an all-hardware backend; CPU transcoding is disabled.',
+      );
     }
   }
 
@@ -715,6 +726,33 @@ function classifyCommandError(
   return error instanceof Error ? error : new Error(String(error));
 }
 
+function classifyVideoToolboxCommandError(error: unknown, codecName: string): Error {
+  if (error instanceof MediaRuntimeUnavailableError) return error;
+  if (error instanceof FfmpegCommandError) {
+    if (
+      /(?:videotoolbox decoder .* not found|doesn't support hardware accelerated .* decoding|failed setup for format videotoolbox|no device available for decoder|\[dec:[^\]]+\][^\n]*function not implemented)/iu.test(
+        error.stderr,
+      )
+    ) {
+      return new MediaRuntimeUnavailableError(`${codecName.toUpperCase()} VideoToolbox decoder`);
+    }
+    if (/(?:unknown encoder|encoder .* not found).*h264_videotoolbox/iu.test(error.stderr)) {
+      return new MediaRuntimeUnavailableError('H.264 VideoToolbox encoder');
+    }
+    if (/(?:no such filter|filter not found).*scale_vt/iu.test(error.stderr)) {
+      return new MediaRuntimeUnavailableError('VideoToolbox scale_vt filter');
+    }
+    if (
+      /(?:parsed_scale_vt|error reinitializing filters|\[vf[^\]]*\][^\n]*function not implemented)/iu.test(
+        error.stderr,
+      )
+    ) {
+      return new MediaRuntimeUnavailableError('VideoToolbox video processing pipeline');
+    }
+  }
+  return classifyCommandError(error, 'stream', 'prepare hardware video');
+}
+
 function classifyRuntimeCapabilityError(error: unknown, capability: string): Error {
   if (error instanceof MediaRuntimeUnavailableError) return error;
   if (error instanceof Error) {
@@ -762,6 +800,29 @@ function videoFilter(video: MediaVideoStream, maxWidth = 1280, maxHeight = 720):
   ].join(',');
 }
 
+function videoToolboxTranscodeArgs(video: MediaVideoStream): readonly string[] {
+  const size = fitVideoWithin(video.width, video.height, 1280, 720);
+  return [
+    '-vf',
+    [
+      `scale_vt=w=${size.width}:h=${size.height}`,
+      'color_matrix=bt709',
+      'color_primaries=bt709',
+      'color_transfer=bt709',
+    ].join(':'),
+    '-c:v',
+    'h264_videotoolbox',
+    '-allow_sw',
+    '0',
+    '-realtime',
+    '1',
+    '-prio_speed',
+    '1',
+    '-b:v',
+    '8M',
+  ];
+}
+
 function fitVideoWithin(
   width: number,
   height: number,
@@ -781,15 +842,6 @@ function isHdr(video: MediaVideoStream): boolean {
     video.color.transfer === 'arib-std-b67' ||
     video.color.primaries === 'bt2020'
   );
-}
-
-function decoderQualificationKey(
-  codecName: string,
-): keyof MediaRuntimeQualification['decoders'] | undefined {
-  if (codecName === 'h264' || codecName === 'hevc' || codecName === 'av1' || codecName === 'vp8') {
-    return codecName;
-  }
-  return undefined;
 }
 
 function hasListedCapability(output: string, name: string): boolean {

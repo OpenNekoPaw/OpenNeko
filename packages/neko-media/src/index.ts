@@ -8,6 +8,8 @@ export type {
   MediaVideoStream,
   FrameCaptureResult,
   HtmlVideoDescriptor,
+  HtmlVideoNativeCapabilities,
+  HtmlVideoPreparationOptions,
   HtmlVideoPreparationProfile,
   MseVideoDescriptor,
   MseVideoSegment,
