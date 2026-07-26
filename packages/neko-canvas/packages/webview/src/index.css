@@ -318,16 +318,16 @@ body,
 
 .canvas-playback-overlay-storyline {
   display: flex;
-  height: clamp(108px, 16vh, 148px);
-  min-height: 108px;
+  height: clamp(204px, 28vh, 240px);
+  min-height: 204px;
   flex: 0 0 auto;
   flex-direction: column;
   overflow: hidden;
 }
 
 .canvas-playback-overlay[data-presentation='fullscreen'] .canvas-playback-overlay-storyline {
-  height: clamp(160px, 24vh, 260px);
-  min-height: 140px;
+  height: clamp(204px, 28vh, 280px);
+  min-height: 204px;
 }
 
 .canvas-playback-overlay-storyline-header {

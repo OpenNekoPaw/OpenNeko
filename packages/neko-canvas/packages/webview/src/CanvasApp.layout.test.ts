@@ -244,6 +244,12 @@ describe('Canvas creative workbench layout boundary', () => {
       /\.canvas-playback-overlay\[data-expanded='true'\][^{]*canvas-playback-overlay-storyline/,
     );
     expect(cssSource).toMatch(
+      /\.canvas-playback-overlay-storyline\s*\{[\s\S]*?height:\s*clamp\(204px,\s*28vh,\s*240px\);[\s\S]*?min-height:\s*204px;/,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-playback-storyline-viewport\s*\{[\s\S]*?flex:\s*1 1 auto;[\s\S]*?overflow:\s*auto;/,
+    );
+    expect(cssSource).toMatch(
       /\.canvas-playback-controller-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto\s+minmax\(0,\s*1fr\);/,
     );
     expect(cssSource).toMatch(
