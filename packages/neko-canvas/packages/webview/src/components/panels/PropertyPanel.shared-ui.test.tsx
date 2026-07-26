@@ -67,37 +67,17 @@ describe('Canvas PropertyPanel shared UI migration', () => {
     expect(onDeleteNode).toHaveBeenCalledWith('node-1');
   });
 
-  it('renders lightweight reference summaries without raw descriptor JSON', () => {
+  it('renders canonical Markdown content without legacy reference projections', () => {
     act(() => {
       root.render(
         <PropertyPanel
           selectedNodes={[
             createNode({
-              id: 'shot-1',
-              type: 'shot',
+              id: 'markdown-1',
+              type: 'markdown',
               data: {
-                shotNumber: 1,
-                duration: 3,
-                visualDescription: 'A close-up panel',
-                characters: [],
-                shotScale: 'MS',
-                characterAction: '',
-                emotion: [],
-                sceneTags: [],
-                generationStatus: 'idle',
-                generationHistory: [],
-                referenceRefs: ['gallery-1'],
-                generatedAsset: {
-                  id: 'asset-generated-1',
-                  type: 'generated-image',
-                  path: '${PROJECT}/generated/asset-generated-1.png',
-                  mimeType: 'image/png',
-                  generatedAt: '2026-06-09T00:00:00.000Z',
-                  width: 1024,
-                  height: 576,
-                  ratio: '16:9',
-                },
-                runtimeReferenceImagePath: 'vscode-resource://runtime/panel.png',
+                title: 'Opening',
+                content: '# Opening',
               },
             }),
           ]}
@@ -109,24 +89,24 @@ describe('Canvas PropertyPanel shared UI migration', () => {
       );
     });
 
-    expect(host.textContent).toContain('References');
-    expect(host.textContent).toContain('Reference');
-    expect(host.textContent).toContain('Output');
-    expect(host.textContent).toContain('runtime projection');
-    expect(host.textContent).not.toContain('reference-descriptor');
+    expect(
+      host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Markdown content"]')?.value,
+    ).toBe('# Opening');
+    expect(host.textContent).not.toContain('References');
+    expect(host.textContent).not.toContain('runtime projection');
   });
 });
 
 function createNode(overrides: Partial<CanvasNode> = {}): CanvasNode {
   return {
     id: 'node-1',
-    type: 'annotation',
+    type: 'markdown',
     position: { x: 10, y: 20 },
     size: { width: 120, height: 80 },
     zIndex: 4,
     rotation: 15,
     locked: true,
-    data: { content: 'Note' },
+    data: { title: 'Note', content: 'Note' },
     ...overrides,
   } as CanvasNode;
 }

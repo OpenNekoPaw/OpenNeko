@@ -353,6 +353,33 @@ describe('agent architecture boundary guards', () => {
     }
   });
 
+  it('keeps retired Executor contracts and Canvas creative-action DTOs physically absent', () => {
+    const retiredFiles = [
+      join(sharedTypesSrc, 'agent.ts'),
+      join(sharedTypesSrc, 'canvas-creative-ai-actions.ts'),
+      join(agentSrc, 'permission/permission-hooks.ts'),
+      join(agentSrc, 'permission/permission-manager-types.ts'),
+      join(agentSrc, 'validation/validation-hooks.ts'),
+    ];
+    expect(retiredFiles.filter((file) => existsSync(file))).toEqual([]);
+
+    const publicSources = [
+      readFileSync(join(sharedTypesSrc, 'index.ts'), 'utf-8'),
+      readFileSync(join(agentSrc, 'index.ts'), 'utf-8'),
+    ].join('\n');
+    for (const retiredSymbol of [
+      'AgentExecutor',
+      'IAgentExecutor',
+      'IAgentRuntime',
+      'ExecutorHooks',
+      'ValidationHooks',
+      'PermissionHooks',
+      'CanvasCreativeAIAction',
+    ]) {
+      expect(publicSources).not.toContain(retiredSymbol);
+    }
+  });
+
   it('keeps presenters, projectors, services, and stores out of runtime root', () => {
     const forbiddenRootFilePatterns = [
       /(?:^|-)presenter\.tsx?$/,
@@ -512,7 +539,6 @@ describe('agent architecture boundary guards', () => {
   it('keeps domain validators and task-result projectors out of Agent core', () => {
     const coreProjectionFiles = [
       join(agentSrc, 'validation/output-validator.ts'),
-      join(agentSrc, 'validation/validation-hooks.ts'),
       join(agentTypesSrc, 'work-item.ts'),
       join(agentTypesSrc, 'work-item-projector.ts'),
     ];
@@ -596,6 +622,10 @@ describe('agent architecture boundary guards', () => {
       join(agentSrc, 'runtime/storyboard-action-task-runtime.ts'),
       join(extensionSrc, 'services/creativeAiConversationRoutingService.ts'),
       join(extensionSrc, 'services/creativeAiConversationLifecycleService.ts'),
+      join(
+        workspaceRoot,
+        'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
+      ),
     ];
     const existingFiles = forbiddenRuntimeFiles
       .filter((file) => existsSync(file))
@@ -617,24 +647,6 @@ describe('agent architecture boundary guards', () => {
       'buildCanvasStoryboardActionIntentPrompt',
     ]) {
       expect(agentProductionSource).not.toContain(forbiddenIdentity);
-    }
-
-    const canvasExecutorSource = readFileSync(
-      join(
-        workspaceRoot,
-        'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
-      ),
-      'utf-8',
-    );
-    for (const forbiddenLlmDetail of [
-      'modelId',
-      'credential',
-      'maxTokens',
-      'temperature',
-      'thinkingBudget',
-      'PiAgent',
-    ]) {
-      expect(canvasExecutorSource).not.toContain(forbiddenLlmDetail);
     }
   });
 

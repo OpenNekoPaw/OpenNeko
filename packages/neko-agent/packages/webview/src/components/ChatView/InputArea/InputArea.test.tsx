@@ -43,14 +43,14 @@ const translations: Record<string, string> = {
   'chat.input.canvasContext.kicker': '画布选中上下文',
   'chat.input.canvasContext.multiTitle': '已选 {count} 个画布节点',
   'chat.input.canvasContext.counts': '画布选中统计',
-  'chat.input.canvasContext.count.shots': '{count} 个镜头',
-  'chat.input.canvasContext.count.scenes': '{count} 个场景',
+  'chat.input.canvasContext.count.markdown': '{count} 个 Markdown',
+  'chat.input.canvasContext.count.media': '{count} 个媒体',
+  'chat.input.canvasContext.count.groups': '{count} 个分组',
   'chat.input.canvasContext.more': '+{count} 个',
-  'chat.input.canvasContext.action.batchGenerate': '批量生成',
-  'chat.input.canvasContext.action.optimize': '优化节点',
+  'chat.input.canvasContext.action.createJob': '创建 JobCard',
   'chat.input.canvasContext.action.understand': '询问 Agent',
-  'chat.input.canvasContext.prompt.batchGenerate': '为选中的画布镜头批量生成图片。',
-  'chat.input.canvasContext.prompt.optimize': '优化选中的画布节点，让分镜结构和视觉提示词更清晰。',
+  'chat.input.canvasContext.prompt.createJob':
+    '为选中的画布节点创建 JobCard，并将这些节点作为显式输入引用。',
   'chat.input.canvasContext.prompt.understand': '分析选中的画布节点，并建议下一步可执行动作。',
   'chat.entryPrompt.generateAssets.hint':
     '选择素材生成模式，然后在输入框描述要生成的画面、视频或声音。',
@@ -1398,14 +1398,14 @@ describe('InputArea composer controls', () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it('projects selected canvas nodes into a lightweight reference row and recommended actions', () => {
+  it('projects canonical canvas nodes into a lightweight reference row and JobCard action', () => {
     const onInputChange = vi.fn();
     render(
       <Harness
         ambientNodes={[
-          { nodeId: 'shot-1', type: 'shot', summary: '#1 wide shot' },
-          { nodeId: 'shot-2', type: 'shot', summary: '#2 close-up' },
-          { nodeId: 'scene-1', type: 'scene', summary: 'Scene 1: Gate' },
+          { nodeId: 'markdown-1', type: 'markdown', summary: 'Creative brief' },
+          { nodeId: 'media-1', type: 'media', summary: 'image: keyframe.png' },
+          { nodeId: 'group-1', type: 'group', summary: 'Act one (2)' },
         ]}
       >
         <InputArea
@@ -1424,12 +1424,14 @@ describe('InputArea composer controls', () => {
     expect(token?.getAttribute('data-reference-variant')).toBe('ambient');
     expect(token?.getAttribute('data-reference-kind')).toBe('canvas');
     expect(document.querySelector('.agent-composer-shell [data-agent-canvas-context]')).toBeNull();
-    expect(screen.getByText('#1 wide shot')).toBeTruthy();
+    expect(screen.getByText('Creative brief')).toBeTruthy();
     expect(screen.getByText('+2 个')).toBeTruthy();
-    expect(screen.getByText('2 个镜头')).toBeTruthy();
+    expect(screen.getByText('1 个 Markdown')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: '批量生成' }));
-    expect(onInputChange).toHaveBeenCalledWith('为选中的画布镜头批量生成图片。');
+    fireEvent.click(screen.getByRole('button', { name: '创建 JobCard' }));
+    expect(onInputChange).toHaveBeenCalledWith(
+      '为选中的画布节点创建 JobCard，并将这些节点作为显式输入引用。',
+    );
   });
 
   it('renders attached context and files with the shared reference token presentation', () => {
@@ -2116,7 +2118,7 @@ function Harness({
   isBusy = false,
   children,
 }: {
-  readonly ambientNodes?: Array<{ nodeId: string; type: string; summary: string }>;
+  readonly ambientNodes?: import('@neko-agent/types').AmbientCanvasNode[];
   readonly contextChips?: AgentContextPayload[];
   readonly conversationKind?: ConversationKind;
   readonly onRemoveContextChip?: (id: string) => void;

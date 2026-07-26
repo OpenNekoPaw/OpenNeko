@@ -542,11 +542,10 @@ function readVoiceCues(value: CanvasSerializableValue | undefined): readonly Sto
 
 function readSourceMapping(
   metadata: CanvasSerializableRecord | undefined,
-  unit: Pick<CanvasPlaybackUnit, 'kind' | 'sourceNodeId'>,
+  _unit: Pick<CanvasPlaybackUnit, 'kind' | 'sourceNodeId'>,
 ): Pick<CanvasCutDraftUnitSourceMapping, 'sceneId' | 'shotId'> {
   const sceneId = readString(metadata?.['sceneId']);
-  const shotId =
-    readString(metadata?.['shotId']) ?? (unit.kind === 'shot' ? unit.sourceNodeId : undefined);
+  const shotId = readString(metadata?.['shotId']);
   return {
     ...(sceneId ? { sceneId } : {}),
     ...(shotId ? { shotId } : {}),

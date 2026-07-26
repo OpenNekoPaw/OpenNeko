@@ -276,20 +276,21 @@ describe('conversation-tab-runtime', () => {
   it('projects chat provider webview messages at the runtime boundary', () => {
     const tab = { id: 'tab-1', title: 'Chat', conversationId: 'conv-1' };
     const payload = {
-      source: 'canvas' as const,
-      kind: 'selection' as const,
-      title: 'Selected node',
-      metadata: { nodeId: 'node-1' },
+      type: 'canvas-node' as const,
+      id: 'node-1',
+      label: 'Selected node',
+      summary: 'Selected Canvas node',
+      data: { nodeId: 'node-1' },
     };
 
     expect(
       buildChatAmbientCanvasUpdateMessage({
-        nodes: [{ id: 'node-1', label: 'Node 1', kind: 'image' }],
+        nodes: [{ nodeId: 'node-1', type: 'media', summary: 'Node 1' }],
         conversationId: 'conv-1',
       }),
     ).toEqual({
       type: 'ambientCanvasUpdate',
-      nodes: [{ id: 'node-1', label: 'Node 1', kind: 'image' }],
+      nodes: [{ nodeId: 'node-1', type: 'media', summary: 'Node 1' }],
       conversationId: 'conv-1',
     });
     expect(
@@ -328,9 +329,10 @@ describe('conversation-tab-runtime', () => {
         },
       ],
     });
-    expect(buildChatTabStateMessage({ openTabs: [tab], activeTabId: 'tab-1' })).toEqual({
+    expect(buildChatTabStateMessage({ openTabs: [tab], activeTabId: 'tab-1' }, 1)).toEqual({
       type: 'tabState',
       tabState: { openTabs: [tab], activeTabId: 'tab-1' },
+      revision: 1,
     });
     expect(buildInvalidWebviewPayloadMessage({ type: 'removedMessage', value: 1 })).toEqual({
       type: 'sessionDiagnostic',

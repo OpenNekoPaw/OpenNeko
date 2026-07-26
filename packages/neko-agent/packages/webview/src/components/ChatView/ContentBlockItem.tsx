@@ -443,33 +443,11 @@ function CanvasLifecycleResultCard({
 
 function CanvasLifecycleDataBadge({
   result,
-  t,
 }: {
   result: CanvasMarkdownCapabilityResult | null;
   t: ChatTranslation;
 }) {
-  if (!result) return null;
-  if (result.displayFallback) {
-    return (
-      <span className="rounded border border-[var(--vscode-editorWarning-foreground)] px-1.5 py-0.5 text-[10px] text-[var(--vscode-editorWarning-foreground)]">
-        {t('chat.canvasLifecycle.badge.displayFallback')}
-      </span>
-    );
-  }
-  if (result.resolvedKind === 'generic-table') {
-    return (
-      <span className="rounded border border-[var(--agent-divider)] px-1.5 py-0.5 text-[10px] text-[var(--vscode-descriptionForeground)]">
-        {t('chat.canvasLifecycle.badge.genericTable')}
-      </span>
-    );
-  }
-  if (result.resolvedKind === 'creative-table') {
-    return (
-      <span className="rounded border border-[var(--agent-divider)] px-1.5 py-0.5 text-[10px] text-[var(--vscode-descriptionForeground)]">
-        {t('chat.canvasLifecycle.badge.creativeTable')}
-      </span>
-    );
-  }
+  void result;
   return null;
 }
 

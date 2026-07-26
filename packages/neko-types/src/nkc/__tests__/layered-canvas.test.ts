@@ -1,9 +1,37 @@
 import { describe, expect, it } from 'vitest';
 import { loadNkc, migrateNkc, validateNkcLayered } from '../index';
 import { getContainerChildIds, getNodeParentId } from '../../utils/canvasLayered';
-import type { CanvasData, SceneGroupCanvasNode, ShotCanvasNode } from '../../types/canvas';
+import type { CanvasData } from '../../types/canvas';
 
-const sceneNode: SceneGroupCanvasNode = {
+interface LegacyCanvasNode {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  zIndex: number;
+  parentId?: string;
+  container?: {
+    policy: string;
+    childIds: string[];
+  };
+  data: Record<string, unknown>;
+}
+
+interface LegacyCanvasData {
+  version: string;
+  name: string;
+  viewport: { pan: { x: number; y: number }; zoom: number };
+  nodes: LegacyCanvasNode[];
+  connections: Array<{
+    id: string;
+    sourceId: string;
+    targetId: string;
+    sourceEndpoint: { nodeId: string; scope: 'node' };
+    targetEndpoint: { nodeId: string; scope: 'node' };
+  }>;
+}
+
+const sceneNode: LegacyCanvasNode = {
   id: 'scene-1',
   type: 'scene',
   position: { x: 0, y: 0 },
@@ -16,7 +44,7 @@ const sceneNode: SceneGroupCanvasNode = {
   },
 };
 
-const shotOne: ShotCanvasNode = {
+const shotOne: LegacyCanvasNode = {
   id: 'shot-1',
   type: 'shot',
   position: { x: 40, y: 80 },
@@ -37,7 +65,7 @@ const shotOne: ShotCanvasNode = {
   },
 };
 
-const shotTwo: ShotCanvasNode = {
+const shotTwo: LegacyCanvasNode = {
   ...shotOne,
   id: 'shot-2',
   position: { x: 320, y: 80 },
@@ -48,7 +76,7 @@ const shotTwo: ShotCanvasNode = {
   },
 };
 
-const validV1Canvas: CanvasData = {
+const validV1Canvas: LegacyCanvasData = {
   version: '1.0',
   name: 'Layered Canvas',
   viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
@@ -69,14 +97,14 @@ describe('NKC layered migration', () => {
     const migration = migrateNkc(validV1Canvas);
 
     expect(migration.migrated).toBe(true);
-    expect(migration.data.version).toBe('2.1');
+    expect(migration.data.version).toBe('3.0');
 
     const migratedScene = migration.data.nodes.find((node) => node.id === 'scene-1');
     const migratedShot = migration.data.nodes.find((node) => node.id === 'shot-1');
 
     expect(migratedScene?.container).toEqual(
       expect.objectContaining({
-        policy: 'scene',
+        policy: 'group',
         childIds: ['shot-1', 'shot-2'],
       }),
     );
@@ -96,7 +124,7 @@ describe('NKC layered migration', () => {
 
     expect(result.validation.valid).toBe(true);
     expect(result.migration?.migrated).toBe(true);
-    expect(result.data.version).toBe('2.1');
+    expect(result.data.version).toBe('3.0');
   });
 
   it('keeps canonical group containment while migrating the document version', () => {
@@ -111,7 +139,7 @@ describe('NKC layered migration', () => {
         label: 'References',
       },
     };
-    const canvas: CanvasData = {
+    const canvas: LegacyCanvasData = {
       ...validV1Canvas,
       nodes: [group, { ...shotOne, parentId: 'group-1' }],
     };
@@ -174,13 +202,33 @@ describe('NKC layered validator', () => {
   });
 
   it('reports container cycles', () => {
-    const migration = migrateNkc(validV1Canvas);
-    const shot = migration.data.nodes.find((node) => node.id === 'shot-1');
-    if (shot) {
-      shot.container = { policy: 'group', childIds: ['scene-1'] };
-    }
-
-    const result = validateNkcLayered(migration.data);
+    const groupA: CanvasData['nodes'][number] = {
+      id: 'group-a',
+      type: 'group',
+      position: { x: 0, y: 0 },
+      size: { width: 400, height: 300 },
+      zIndex: 1,
+      parentId: 'group-b',
+      container: { policy: 'group', childIds: ['group-b'] },
+      data: { label: 'Group A' },
+    };
+    const groupB: CanvasData['nodes'][number] = {
+      id: 'group-b',
+      type: 'group',
+      position: { x: 440, y: 0 },
+      size: { width: 400, height: 300 },
+      zIndex: 2,
+      parentId: 'group-a',
+      container: { policy: 'group', childIds: ['group-a'] },
+      data: { label: 'Group B' },
+    };
+    const result = validateNkcLayered({
+      version: '3.0',
+      name: 'Cyclic groups',
+      viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+      nodes: [groupA, groupB],
+      connections: [],
+    });
 
     expect(result.valid).toBe(false);
     expect(result.errors).toContainEqual(

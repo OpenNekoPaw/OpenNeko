@@ -7,6 +7,7 @@ import {
   LockIcon,
   RightPanelIcon,
   RightPanelOffIcon,
+  StorylineIcon,
   UnlockIcon,
 } from './editor';
 
@@ -21,5 +22,13 @@ describe('editor icons', () => {
     expect(renderToStaticMarkup(<EyeOffIcon />)).toContain('M3 3l18 18');
     expect(renderToStaticMarkup(<LockIcon />)).toContain('M8 10V7a4 4 0 0 1 8 0v3');
     expect(renderToStaticMarkup(<UnlockIcon />)).toContain('M8 10V7a4 4 0 0 1 7.5-2');
+  });
+
+  it('exports a dedicated Storyline branch icon', () => {
+    const markup = renderToStaticMarkup(<StorylineIcon />);
+
+    expect(markup.match(/<circle/g)).toHaveLength(4);
+    expect(markup).toContain('M6 6h4');
+    expect(markup).toContain('M12 8v8');
   });
 });

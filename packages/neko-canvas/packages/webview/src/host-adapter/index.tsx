@@ -41,7 +41,7 @@ export function CanvasHostAdapterSurface({
             {document.name}
           </div>
           <div className="canvas-host-adapter__node canvas-host-adapter__node--generate">
-            {t('gallery.column.prompt')}
+            {t('node.jobCard')}
           </div>
           <div className="canvas-host-adapter__node canvas-host-adapter__node--preview">
             {t('preset.media.preview')}

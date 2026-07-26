@@ -87,10 +87,10 @@ describe('WebviewKeyboardContextService', () => {
       'neko.canvas.selectAll',
       'neko.canvas.undo',
       'neko.canvas.redo',
-      'neko.canvas.generateSelected',
     ]) {
       expect(hasCommand(canvasManifest, commandId)).toBe(true);
     }
+    expect(hasCommand(canvasManifest, 'neko.canvas.generateSelected')).toBe(false);
   });
 });
 

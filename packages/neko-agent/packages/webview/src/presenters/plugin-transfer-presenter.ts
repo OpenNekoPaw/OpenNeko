@@ -1,18 +1,15 @@
 import type {
   NekoPluginKey,
+  AmbientCanvasNode,
   PluginTransferMediaType,
   PluginTransferTarget,
   PluginTransferTargetMode,
   PluginTransferTargetRef,
   PluginsAvailable,
 } from '@neko-agent/types';
-import type { AgentContextPayload } from '@neko/shared';
+import { isCanvasNodeType, type AgentContextPayload } from '@neko/shared';
 
-export interface AmbientCanvasNodeProjection {
-  readonly nodeId: string;
-  readonly type: string;
-  readonly summary: string;
-}
+export type AmbientCanvasNodeProjection = AmbientCanvasNode;
 
 export interface PluginTransferTargetProjection {
   id: PluginTransferTarget;
@@ -93,29 +90,25 @@ function resolveSingleCanvasNode(
   if (!chip) {
     return null;
   }
+  const nodeType = readCanvasContextNodeType(chip.data);
+  if (!nodeType) {
+    return null;
+  }
   return {
     nodeId: chip.id,
-    type: readCanvasContextNodeType(chip.data) ?? '',
+    type: nodeType,
     summary: chip.summary,
   };
 }
 
-function readCanvasContextNodeType(data: unknown): string | undefined {
+function readCanvasContextNodeType(data: unknown): AmbientCanvasNode['type'] | undefined {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) {
     return undefined;
   }
   const type = (data as { readonly type?: unknown }).type;
-  return typeof type === 'string' ? type : undefined;
+  return isCanvasNodeType(type) ? type : undefined;
 }
 
-function isContainerNodeType(type: string): boolean {
-  return (
-    type === 'scene' ||
-    type === 'group' ||
-    type === 'artboard' ||
-    type === 'gallery' ||
-    type === 'storyboard' ||
-    type === 'table' ||
-    type === 'project'
-  );
+function isContainerNodeType(type: AmbientCanvasNode['type']): boolean {
+  return type === 'group';
 }

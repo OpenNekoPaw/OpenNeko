@@ -30,6 +30,8 @@ import {
   type EmbodyCharacterSessionProjection,
   type AgentQueuedMessageItem,
   type AgentLlmConfig,
+  type AmbientCanvasNode,
+  parseAmbientCanvasUpdateNodes,
 } from '@neko-agent/types';
 import type {
   MediaUnderstandingModelSelections,
@@ -112,12 +114,10 @@ export interface ChatWorkspaceProps {
   skills: SkillSummary[];
   activationProgress?: readonly ActivationProgressTimeline[];
   // Context chips
-  ambientNodes: Array<{ nodeId: string; type: string; summary: string }>;
+  ambientNodes: AmbientCanvasNode[];
   // Agent state
   agentState: AgentState | null;
-  setAmbientNodes: React.Dispatch<
-    React.SetStateAction<Array<{ nodeId: string; type: string; summary: string }>>
-  >;
+  setAmbientNodes: React.Dispatch<React.SetStateAction<AmbientCanvasNode[]>>;
   onNewChat: () => void;
   onUserMessageSent?: (event: { conversationId: string; message: Message }) => void;
   onSendWithoutConversation?: (input: PendingSendInput) => void;
@@ -541,7 +541,7 @@ export function ChatWorkspace({
         message?: string;
         payload?: AgentContextPayload;
         conversationId?: string | null;
-        nodes?: Array<{ nodeId: string; type: string; summary: string }>;
+        nodes?: unknown;
       };
       if (!msg?.type) return;
       switch (msg.type) {
@@ -572,7 +572,7 @@ export function ChatWorkspace({
           if (!ambientConversationId || ambientConversationId !== sessionMutationConversationId) {
             break;
           }
-          setAmbientNodes(msg.nodes ?? []);
+          setAmbientNodes(parseAmbientCanvasUpdateNodes(msg.nodes));
           break;
         default:
           break;

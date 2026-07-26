@@ -44,20 +44,14 @@ function createCanvasLifecycleDescriptor(capabilityId: string): AgentCapabilityL
     providerId: 'neko-canvas',
     displayName: capabilityId,
     description: `${capabilityId} descriptor`,
-    phases:
-      capabilityId === 'canvas.createStoryboardFromMarkdown'
-        ? ['validate', 'review', 'apply']
-        : ['review'],
+    phases: ['apply'],
     inputSchema: { id: 'canvas.markdown.input', version: 1 },
     resultSchema: { id: 'agent.capability.lifecycle.result', version: 1 },
-    accepts: ['Markdown', 'GfmTable'],
+    accepts: ['Markdown'],
     produces: ['canvas-node-ref'],
     risk: 'medium',
-    requiresApproval: capabilityId === 'canvas.createStoryboardFromMarkdown',
-    safetyKind:
-      capabilityId === 'canvas.createStoryboardFromMarkdown'
-        ? 'confirmation-gated'
-        : 'read-only-query',
+    requiresApproval: true,
+    safetyKind: 'confirmation-gated',
   };
 }
 
@@ -76,6 +70,7 @@ function mockCanvasExtension(invoke: ReturnType<typeof vi.fn>): void {
         getRoutes: vi.fn(),
         revealWorkspace: vi.fn(),
         createCutDraftFromRoute: vi.fn(),
+        sendRouteToCut: vi.fn(),
         reorderUnits: vi.fn(),
       },
       nodes: {
@@ -691,9 +686,8 @@ describe('handleChatWebviewMessage', () => {
     );
     const routedRequest = (deps.messages?.handleUserMessage as any).mock.calls[0]?.[1];
     expect(routedRequest.messageText).toContain('Canvas authoring handoff intent');
-    expect(routedRequest.messageText).toContain('普通 Storyboard Markdown 文档交接');
-    expect(routedRequest.messageText).toContain('不创建专用 storyboard/table/scene/shot 节点');
-    expect(routedRequest.messageText).toContain('只有用户明确要求创建结构化生产节点时才升级');
+    expect(routedRequest.messageText).toContain('Markdown 内容只创建或更新 Markdown 节点');
+    expect(routedRequest.messageText).toContain('稳定资源应显式创建为 Media/File 节点');
     expect(routedRequest.messageText).not.toContain('canvas.createStoryboardFromMarkdown');
     expect(routedRequest.messageText).not.toContain('mode=create-nodes');
     expect(routedRequest.messageText).not.toContain('scene.basic + shot.basic');
@@ -773,9 +767,13 @@ describe('handleChatWebviewMessage', () => {
         }),
       }),
     );
-    expect(routedRequest.messageText).toContain('canonicalStoryboard 原样传给');
-    expect(routedRequest.messageText).toContain('不得压平为 asset batch');
-    expect(routedRequest.messageText).toContain('scene 容器与其所属 shot 子节点');
+    expect(routedRequest.messageText).toContain(
+      'Canvas 只允许创建 Markdown、Media、Group、Job、File 和 CanvasEmbed 节点',
+    );
+    expect(routedRequest.messageText).toContain(
+      '用 sequence、reference 或 derived-from 连接表达关系',
+    );
+    expect(routedRequest.messageText).toContain('不得创建 Storyboard、Scene、Shot');
     expect(JSON.stringify(handoffData)).not.toContain('assetBatch');
     expect(JSON.stringify(handoffData)).not.toContain('capabilityId');
     expect(JSON.stringify(handoffData)).not.toContain('toolName');
@@ -808,8 +806,8 @@ describe('handleChatWebviewMessage', () => {
     await flushAsyncWork();
 
     const routedRequest = (deps.messages?.handleUserMessage as any).mock.calls[0]?.[1];
-    expect(routedRequest.messageText).toContain('普通 Storyboard Markdown 文档交接');
-    expect(routedRequest.messageText).toContain('只有用户明确要求创建结构化生产节点时才升级');
+    expect(routedRequest.messageText).toContain('Markdown 内容只创建或更新 Markdown 节点');
+    expect(routedRequest.messageText).toContain('稳定资源应显式创建为 Media/File 节点');
     expect(routedRequest.messageText).not.toContain('canvas.createStoryboardFromMarkdown');
     expect(routedRequest.messageText).not.toContain('canvas.ingestMarkdown');
     expect(routedRequest.messageText).not.toContain('scene.basic + shot.basic');
@@ -1089,7 +1087,7 @@ describe('handleChatWebviewMessage', () => {
     );
   });
 
-  it('blocks unapproved Markdown production apply before Canvas API mutation', async () => {
+  it('blocks unapproved canonical Markdown apply before Canvas API mutation', async () => {
     const deps = createDeps();
     const invoke = vi.fn();
     mockCanvasExtension(invoke);
@@ -1100,13 +1098,12 @@ describe('handleChatWebviewMessage', () => {
         requestId: 'req-apply',
         conversationId: 'conv-1',
         invocation: {
-          capabilityId: 'canvas.createStoryboardFromMarkdown',
+          capabilityId: 'canvas.createMarkdownNote',
           phase: 'apply',
           payload: {
-            capabilityId: 'canvas.createStoryboardFromMarkdown',
-            markdown: '| visual |\\n| --- |\\n| open |',
-            sourceFormat: 'gfm-table',
-            mode: 'create-nodes',
+            capabilityId: 'canvas.createMarkdownNote',
+            markdown: '# Creative brief\\n\\nOpening image.',
+            sourceFormat: 'markdown',
           },
           provenance: { source: 'webview' },
         },
@@ -1124,7 +1121,7 @@ describe('handleChatWebviewMessage', () => {
         conversationId: 'conv-1',
         success: false,
         lifecycleResult: expect.objectContaining({
-          capabilityId: 'canvas.createStoryboardFromMarkdown',
+          capabilityId: 'canvas.createMarkdownNote',
           phase: 'apply',
           status: 'waiting-approval',
           diagnostics: [
@@ -1152,12 +1149,12 @@ describe('handleChatWebviewMessage', () => {
         requestId: 'req-no-descriptor',
         conversationId: 'conv-1',
         invocation: {
-          capabilityId: 'canvas.ingestMarkdown',
-          phase: 'review',
+          capabilityId: 'canvas.createMarkdownNote',
+          phase: 'apply',
           payload: {
-            capabilityId: 'canvas.ingestMarkdown',
-            markdown: '| visual |\\n| --- |\\n| open |',
-            sourceFormat: 'gfm-table',
+            capabilityId: 'canvas.createMarkdownNote',
+            markdown: '# Creative brief\\n\\nOpening image.',
+            sourceFormat: 'markdown',
           },
         },
       },
@@ -1173,8 +1170,8 @@ describe('handleChatWebviewMessage', () => {
         requestId: 'req-no-descriptor',
         success: false,
         lifecycleResult: expect.objectContaining({
-          capabilityId: 'canvas.ingestMarkdown',
-          phase: 'review',
+          capabilityId: 'canvas.createMarkdownNote',
+          phase: 'apply',
           status: 'blocked',
           diagnostics: [
             expect.objectContaining({
@@ -1198,13 +1195,14 @@ describe('handleChatWebviewMessage', () => {
         requestId: 'req-invalid-canvas-result',
         conversationId: 'conv-1',
         invocation: {
-          capabilityId: 'canvas.ingestMarkdown',
-          phase: 'review',
+          capabilityId: 'canvas.createMarkdownNote',
+          phase: 'apply',
           payload: {
-            capabilityId: 'canvas.ingestMarkdown',
-            markdown: '| visual |\\n| --- |\\n| open |',
-            sourceFormat: 'gfm-table',
+            capabilityId: 'canvas.createMarkdownNote',
+            markdown: '# Creative brief\\n\\nOpening image.',
+            sourceFormat: 'markdown',
           },
+          approval: { source: 'user-confirmation', approvedAt: 100 },
           provenance: { source: 'webview' },
         },
       },
@@ -1221,8 +1219,8 @@ describe('handleChatWebviewMessage', () => {
         conversationId: 'conv-1',
         success: false,
         lifecycleResult: expect.objectContaining({
-          capabilityId: 'canvas.ingestMarkdown',
-          phase: 'review',
+          capabilityId: 'canvas.createMarkdownNote',
+          phase: 'apply',
           status: 'blocked',
           diagnostics: [
             expect.objectContaining({
@@ -1238,7 +1236,7 @@ describe('handleChatWebviewMessage', () => {
   it('fails visibly when Canvas Markdown lifecycle mutation returns no Canvas refs', async () => {
     const deps = createDeps();
     const invoke = vi.fn().mockResolvedValue({
-      capabilityId: 'canvas.ingestMarkdown',
+      capabilityId: 'canvas.createMarkdownNote',
       status: 'created',
       diagnostics: [],
     });
@@ -1250,16 +1248,14 @@ describe('handleChatWebviewMessage', () => {
         requestId: 'req-missing-canvas-refs',
         conversationId: 'conv-1',
         invocation: {
-          capabilityId: 'canvas.ingestMarkdown',
-          phase: 'review',
+          capabilityId: 'canvas.createMarkdownNote',
+          phase: 'apply',
           payload: {
-            capabilityId: 'canvas.ingestMarkdown',
-            markdown:
-              '| scene | shot | source | imagePrompt |\\n| --- | --- | --- | --- |\\n| S1 | 1 | P1 | prep |',
-            sourceFormat: 'gfm-table',
-            intentHint: 'creative-table',
-            profileHint: 'storyboard',
+            capabilityId: 'canvas.createMarkdownNote',
+            markdown: '# Creative brief\\n\\nOpening image.',
+            sourceFormat: 'markdown',
           },
+          approval: { source: 'user-confirmation', approvedAt: 101 },
           provenance: { source: 'webview' },
         },
       },
@@ -1276,8 +1272,8 @@ describe('handleChatWebviewMessage', () => {
         conversationId: 'conv-1',
         success: false,
         lifecycleResult: expect.objectContaining({
-          capabilityId: 'canvas.ingestMarkdown',
-          phase: 'review',
+          capabilityId: 'canvas.createMarkdownNote',
+          phase: 'apply',
           status: 'blocked',
           diagnostics: [
             expect.objectContaining({
@@ -1290,13 +1286,13 @@ describe('handleChatWebviewMessage', () => {
     );
   });
 
-  it('routes approved Markdown production apply through Canvas lifecycle backend', async () => {
+  it('routes approved canonical Markdown apply through Canvas lifecycle backend', async () => {
     const deps = createDeps();
     const invoke = vi.fn().mockResolvedValue({
-      capabilityId: 'canvas.createStoryboardFromMarkdown',
+      capabilityId: 'canvas.createMarkdownNote',
       status: 'created',
       diagnostics: [],
-      nodeIds: ['scene-1', 'shot-1'],
+      nodeIds: ['markdown-1'],
     });
     mockCanvasExtension(invoke);
 
@@ -1306,13 +1302,12 @@ describe('handleChatWebviewMessage', () => {
         requestId: 'req-apply-approved',
         conversationId: 'conv-1',
         invocation: {
-          capabilityId: 'canvas.createStoryboardFromMarkdown',
+          capabilityId: 'canvas.createMarkdownNote',
           phase: 'apply',
           payload: {
-            capabilityId: 'canvas.createStoryboardFromMarkdown',
-            markdown: '| visual |\\n| --- |\\n| open |',
-            sourceFormat: 'gfm-table',
-            mode: 'create-nodes',
+            capabilityId: 'canvas.createMarkdownNote',
+            markdown: '# Creative brief\\n\\nOpening image.',
+            sourceFormat: 'markdown',
           },
           approval: { source: 'user-confirmation', approvedAt: 123 },
           provenance: { source: 'webview' },
@@ -1324,11 +1319,9 @@ describe('handleChatWebviewMessage', () => {
     await flushAsyncWork();
 
     expect(invoke).toHaveBeenCalledWith({
-      capabilityId: 'canvas.createStoryboardFromMarkdown',
-      markdown: '| visual |\\n| --- |\\n| open |',
-      sourceFormat: 'gfm-table',
-      mode: 'create-nodes',
-      approval: { source: 'user-confirmation', approvedAt: 123 },
+      capabilityId: 'canvas.createMarkdownNote',
+      markdown: '# Creative brief\\n\\nOpening image.',
+      sourceFormat: 'markdown',
     });
     expect(invoke).toHaveBeenCalledTimes(1);
     expect(sendGeneratedAssetToPlugin).not.toHaveBeenCalled();
@@ -1340,96 +1333,26 @@ describe('handleChatWebviewMessage', () => {
         conversationId: 'conv-1',
         success: true,
         lifecycleResult: expect.objectContaining({
-          capabilityId: 'canvas.createStoryboardFromMarkdown',
+          capabilityId: 'canvas.createMarkdownNote',
           phase: 'apply',
           status: 'applied',
           changedRefs: [
-            expect.objectContaining({ kind: 'node', id: 'scene-1', packageId: 'neko-canvas' }),
-            expect.objectContaining({ kind: 'node', id: 'shot-1', packageId: 'neko-canvas' }),
+            expect.objectContaining({ kind: 'node', id: 'markdown-1', packageId: 'neko-canvas' }),
           ],
         }),
       }),
     );
   });
 
-  it('projects Canvas review actions to runnable lifecycle payloads', async () => {
+  it('rejects retired Storyboard lifecycle payloads without calling Canvas', async () => {
     const deps = createDeps();
-    const invoke = vi.fn().mockResolvedValue({
-      capabilityId: 'canvas.ingestMarkdown',
-      status: 'needs-review',
-      resolvedKind: 'creative-table',
-      profileId: 'storyboard',
-      diagnostics: [],
-      tableNodeId: 'table-1',
-      actions: [
-        {
-          actionId: 'create-storyboard-nodes',
-          label: 'Create storyboard nodes',
-          capabilityId: 'canvas.createStoryboardFromMarkdown',
-        },
-      ],
-    });
+    const invoke = vi.fn();
     mockCanvasExtension(invoke);
 
     handleChatWebviewMessage(
       {
         type: 'invokeAgentCapabilityLifecycle',
-        requestId: 'req-review',
-        conversationId: 'conv-1',
-        invocation: {
-          capabilityId: 'canvas.ingestMarkdown',
-          phase: 'review',
-          payload: {
-            capabilityId: 'canvas.ingestMarkdown',
-            markdown: '| visual |\\n| --- |\\n| open |',
-            sourceFormat: 'gfm-table',
-            profileHint: 'storyboard',
-          },
-          provenance: { source: 'webview' },
-        },
-      },
-      deps,
-    );
-
-    await flushAsyncWork();
-
-    expect(deps.webview.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: 'agentCapabilityLifecycleResult',
-        requestId: 'req-review',
-        lifecycleResult: expect.objectContaining({
-          actions: [
-            expect.objectContaining({
-              actionId: 'create-storyboard-nodes',
-              capabilityId: 'canvas.createStoryboardFromMarkdown',
-              payload: expect.objectContaining({
-                capabilityId: 'canvas.createStoryboardFromMarkdown',
-                markdown: '| visual |\\n| --- |\\n| open |',
-                sourceFormat: 'gfm-table',
-                profileHint: 'storyboard',
-                mode: 'create-nodes',
-              }),
-            }),
-          ],
-        }),
-      }),
-    );
-  });
-
-  it('routes approved follow-up actions through Agent capability lifecycle backend', async () => {
-    const deps = createDeps();
-    const invoke = vi.fn().mockResolvedValue({
-      capabilityId: 'canvas.createStoryboardFromMarkdown',
-      status: 'created',
-      diagnostics: [],
-      nodeIds: ['scene-1'],
-    });
-    mockCanvasExtension(invoke);
-
-    handleChatWebviewMessage(
-      {
-        type: 'invokeAgentCapabilityLifecycle',
-        requestId: 'follow-up-approved',
+        requestId: 'req-retired-storyboard',
         conversationId: 'conv-1',
         invocation: {
           capabilityId: 'canvas.createStoryboardFromMarkdown',
@@ -1439,6 +1362,59 @@ describe('handleChatWebviewMessage', () => {
             markdown: '| visual |\\n| --- |\\n| open |',
             sourceFormat: 'gfm-table',
             mode: 'create-nodes',
+          },
+          approval: { source: 'user-confirmation', approvedAt: 200 },
+          provenance: { source: 'webview' },
+        },
+      },
+      deps,
+    );
+
+    await flushAsyncWork();
+
+    expect(invoke).not.toHaveBeenCalled();
+    expect(deps.webview.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'agentCapabilityLifecycleResult',
+        requestId: 'req-retired-storyboard',
+        success: false,
+        lifecycleResult: expect.objectContaining({
+          capabilityId: 'canvas.createStoryboardFromMarkdown',
+          phase: 'apply',
+          status: 'blocked',
+          diagnostics: [
+            expect.objectContaining({
+              code: 'agent-capability-lifecycle-unknown-capability',
+              fieldKey: 'capabilityId',
+            }),
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('routes approved Markdown ingestion through the same canonical lifecycle backend', async () => {
+    const deps = createDeps();
+    const invoke = vi.fn().mockResolvedValue({
+      capabilityId: 'canvas.ingestMarkdown',
+      status: 'created',
+      diagnostics: [],
+      nodeIds: ['markdown-2'],
+    });
+    mockCanvasExtension(invoke);
+
+    handleChatWebviewMessage(
+      {
+        type: 'invokeAgentCapabilityLifecycle',
+        requestId: 'follow-up-approved',
+        conversationId: 'conv-1',
+        invocation: {
+          capabilityId: 'canvas.ingestMarkdown',
+          phase: 'apply',
+          payload: {
+            capabilityId: 'canvas.ingestMarkdown',
+            markdown: '# Imported notes\\n\\nOpening image.',
+            sourceFormat: 'markdown',
           },
           approval: { source: 'user-confirmation', approvedAt: 456 },
           provenance: { source: 'webview' },
@@ -1450,11 +1426,9 @@ describe('handleChatWebviewMessage', () => {
     await flushAsyncWork();
 
     expect(invoke).toHaveBeenCalledWith({
-      capabilityId: 'canvas.createStoryboardFromMarkdown',
-      markdown: '| visual |\\n| --- |\\n| open |',
-      sourceFormat: 'gfm-table',
-      mode: 'create-nodes',
-      approval: { source: 'user-confirmation', approvedAt: 456 },
+      capabilityId: 'canvas.ingestMarkdown',
+      markdown: '# Imported notes\\n\\nOpening image.',
+      sourceFormat: 'markdown',
     });
     expect(sendGeneratedAssetToPlugin).not.toHaveBeenCalled();
     expect(deps.messages?.handleUserMessage).not.toHaveBeenCalled();
@@ -1465,7 +1439,7 @@ describe('handleChatWebviewMessage', () => {
         conversationId: 'conv-1',
         success: true,
         lifecycleResult: expect.objectContaining({
-          capabilityId: 'canvas.createStoryboardFromMarkdown',
+          capabilityId: 'canvas.ingestMarkdown',
           phase: 'apply',
           status: 'applied',
         }),

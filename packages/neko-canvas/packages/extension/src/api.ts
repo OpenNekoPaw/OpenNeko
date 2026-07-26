@@ -3,7 +3,6 @@
  */
 import * as vscode from 'vscode';
 import type {
-  ApplyCanvasStoryboardOptions,
   CanvasAgentActiveContextRequest,
   CanvasAgentActiveContextResult,
   CanvasAgentApplyContentResult,
@@ -36,13 +35,9 @@ import type {
   CanvasPlaybackReorderUnitsResult,
   CanvasPlaybackRouteCandidate,
   CutRouteHandoffResult,
-  CanvasStoryboardExecutionSummary,
-  CanvasStoryboardExecutionSummaryRequest,
-  CanvasStoryboardPayload,
   CanvasRelatedBoardRef,
   CanvasUpdateBlockRequest,
   CanvasUpdateBlockResult,
-  CreatedCanvasStoryboard,
   ProjectionAdapter,
   ProjectionDisposable,
   ProjectionWriteBack,
@@ -119,26 +114,6 @@ export interface NekoCanvasAPI {
   };
 
   /**
-   * Storyboard operations — scene/shot structure import sink for story/agent.
-   */
-  storyboard: {
-    /**
-     * Import a storyboard payload into the active canvas.
-     */
-    import(
-      payload: CanvasStoryboardPayload,
-      options?: ApplyCanvasStoryboardOptions,
-    ): Promise<CreatedCanvasStoryboard>;
-
-    /**
-     * Read-only scene/shot execution summary for Story and Agent consumers.
-     */
-    getExecutionSummary(
-      request?: CanvasStoryboardExecutionSummaryRequest,
-    ): Promise<CanvasStoryboardExecutionSummary>;
-  };
-
-  /**
    * Markdown capability operations — Canvas owns validation, resource binding,
    * and node creation for Markdown authoring requests.
    */
@@ -173,12 +148,7 @@ export interface NekoCanvasAPI {
     /** Update a node's data fields */
     update(nodeId: string, data: Record<string, unknown>): Promise<void>;
     /** Create a new node; returns the new node's ID */
-    create(
-      type: CanvasNodeType,
-      position: { x: number; y: number },
-      data: object,
-      preset?: string,
-    ): Promise<string>;
+    create(type: CanvasNodeType, position: { x: number; y: number }, data: object): Promise<string>;
     /** Derive a successor node through registered preset rules */
     derive(request: CanvasDeriveNodeRequest): Promise<CanvasDeriveNodeResult>;
     /** Create a directed connection between existing Canvas nodes */
@@ -197,10 +167,6 @@ export interface NekoCanvasAPI {
     ): Promise<CanvasAgentActiveContextResult>;
     /** Apply Agent-generated text, prompt, or structured content to a validated Canvas target */
     applyAgentContent(payload: CanvasAgentContentPayload): Promise<CanvasAgentApplyContentResult>;
-    /** Trigger image generation for a ShotNode or a gallery child node */
-    generateImage(nodeId: string, childNodeId?: string): Promise<void>;
-    /** Trigger batch image generation for multiple nodes */
-    generateBatch(nodeIds: string[]): Promise<void>;
     /** Fired whenever the canvas selection changes */
     onSelectionChange: vscode.Event<CanvasNode[]>;
   };

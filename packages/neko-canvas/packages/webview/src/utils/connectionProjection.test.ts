@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { CanvasConnection, CanvasNode } from '@neko/shared';
 import {
-  createBranchPrioritySyncPatches,
   createSequenceEdgeSyncPlan,
   createsDisallowedConnectionCycle,
-  deriveSequenceConnectionsFromContainerOrder,
   getDefaultConnectionOrderSyncMode,
   projectCanvasConnectionView,
 } from './connectionProjection';
@@ -16,7 +14,7 @@ function node(
 ): CanvasNode {
   return {
     id,
-    type: options.type ?? 'annotation',
+    type: options.type ?? 'markdown',
     position: options.position ?? { x: 0, y: 0 },
     size: options.size ?? { width: 120, height: 80 },
     zIndex: options.zIndex ?? 1,
@@ -39,7 +37,7 @@ function connection(
   id: string,
   sourceId: string,
   targetId: string,
-  type: CanvasConnection['type'] = 'default',
+  type: CanvasConnection['type'] = 'reference',
 ): CanvasConnection {
   return {
     id,
@@ -220,38 +218,9 @@ describe('connectionProjection', () => {
   });
 
   it('exposes default connection order sync modes', () => {
-    expect(getDefaultConnectionOrderSyncMode('scene')).toBe('derive-from-container');
-    expect(getDefaultConnectionOrderSyncMode('gallery')).toBe('none');
-    expect(getDefaultConnectionOrderSyncMode('narrative')).toBe('sync-branch-priority');
+    expect(getDefaultConnectionOrderSyncMode('group')).toBe('none');
     expect(getDefaultConnectionOrderSyncMode('sequence')).toBe('sync-sequence-edges');
     expect(getDefaultConnectionOrderSyncMode('custom')).toBe('none');
-  });
-
-  it('derives non-mutating scene sequence hints from container order', () => {
-    const scene = node('scene-1', {
-      type: 'scene',
-      container: { policy: 'scene', childIds: ['shot-1', 'shot-2', 'shot-3'] },
-      data: { sceneTitle: 'Scene', sceneNumber: 1 },
-    });
-
-    expect(deriveSequenceConnectionsFromContainerOrder([scene])).toEqual([
-      {
-        kind: 'derived-sequence',
-        id: 'derived-sequence-scene-1-shot-1-shot-2',
-        containerId: 'scene-1',
-        sourceId: 'shot-1',
-        targetId: 'shot-2',
-        order: 0,
-      },
-      {
-        kind: 'derived-sequence',
-        id: 'derived-sequence-scene-1-shot-2-shot-3',
-        containerId: 'scene-1',
-        sourceId: 'shot-2',
-        targetId: 'shot-3',
-        order: 1,
-      },
-    ]);
   });
 
   it('creates explicit sequence edge sync plans without mutating connections', () => {
@@ -266,20 +235,6 @@ describe('connectionProjection', () => {
       missingEdges: [{ sourceId: 'shot-2', targetId: 'shot-3', order: 1 }],
       staleConnectionIds: ['shot-3-shot-1'],
     });
-  });
-
-  it('creates branch priority patches without retargeting endpoints', () => {
-    const existing = [
-      connection('a-b', 'choice-a', 'target-b', 'choice'),
-      connection('a-c', 'choice-a', 'target-c', 'choice'),
-    ];
-
-    expect(createBranchPrioritySyncPatches(existing, 'choice-a', ['target-c', 'target-b'])).toEqual(
-      [
-        { connectionId: 'a-c', updates: { priority: 0 } },
-        { connectionId: 'a-b', updates: { priority: 1 } },
-      ],
-    );
   });
 
   it('detects disallowed cycles for strict sequence-like connections', () => {
@@ -298,7 +253,7 @@ describe('connectionProjection', () => {
       createsDisallowedConnectionCycle([a, b], existing, {
         sourceId: 'a',
         targetId: 'b',
-        type: 'choice',
+        type: 'reference',
       }),
     ).toBe(false);
   });

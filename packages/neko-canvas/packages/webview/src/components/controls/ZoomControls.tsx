@@ -5,6 +5,7 @@
 
 import { useCallback } from 'react';
 import { MIN_ZOOM, MAX_ZOOM } from '../../hooks/useViewportTransform';
+import { t } from '../../i18n';
 
 // =============================================================================
 // Types
@@ -64,7 +65,8 @@ export function ZoomControls({
         style={{ color: 'var(--control-fg)' }}
         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--control-hover)')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-        title="Zoom out (Ctrl+-)"
+        aria-label={t('zoom.out')}
+        title={t('zoom.out')}
       >
         <svg
           width="14"
@@ -84,7 +86,8 @@ export function ZoomControls({
         onChange={handlePresetSelect}
         className="w-16 h-7 bg-transparent text-center text-xs border-none outline-none cursor-pointer rounded"
         style={{ color: 'var(--control-fg)' }}
-        title="Select zoom level"
+        aria-label={t('zoom.selectLevel')}
+        title={t('zoom.selectLevel')}
       >
         {ZOOM_PRESETS.map((preset) => (
           <option key={preset} value={preset} style={{ backgroundColor: 'var(--control-bg)' }}>
@@ -107,7 +110,8 @@ export function ZoomControls({
         style={{ color: 'var(--control-fg)' }}
         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--control-hover)')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-        title="Zoom in (Ctrl++)"
+        aria-label={t('zoom.in')}
+        title={t('zoom.in')}
       >
         <svg
           width="14"
@@ -132,7 +136,8 @@ export function ZoomControls({
         style={{ color: 'var(--control-fg)' }}
         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--control-hover)')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-        title="Fit content"
+        aria-label={t('zoom.fitContent')}
+        title={t('zoom.fitContent')}
       >
         <svg
           width="14"
@@ -154,7 +159,8 @@ export function ZoomControls({
         style={{ color: 'var(--control-fg)' }}
         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--control-hover)')}
         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-        title="Reset viewport (100%)"
+        aria-label={t('zoom.resetViewport')}
+        title={t('zoom.resetViewport')}
       >
         <svg
           width="14"

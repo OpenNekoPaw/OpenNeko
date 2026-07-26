@@ -20,7 +20,7 @@ describe('reference resolution contracts', () => {
     const descriptor = makeDescriptor();
 
     expect(validateReferenceDescriptor(descriptor)).toEqual({ ok: true, diagnostics: [] });
-    expect(getReferenceDescriptorKey(descriptor)).toContain('canvas-node|shot-1');
+    expect(getReferenceDescriptorKey(descriptor)).toContain('canvas-node|media-1');
   });
 
   it('rejects runtime handles inside descriptor payloads', () => {
@@ -66,17 +66,17 @@ describe('reference resolution contracts', () => {
 
   it('uses one ReferenceSourceKind type for manifests and collection inputs', () => {
     const manifest: ReferenceContributorManifest = {
-      contributorId: 'neko-canvas:shot',
+      contributorId: 'neko-canvas:media',
       packageName: 'neko-canvas',
       sourceKinds: ['canvas-node'],
-      nodeTypes: ['shot'],
+      nodeTypes: ['media'],
       producedRoles: ['source', 'keyframe'],
       supportedModalities: ['image'],
     };
 
     const input: ReferenceCollectionInput = {
       sourceKind: manifest.sourceKinds[0],
-      sourceId: 'shot-1',
+      sourceId: 'media-1',
       source: {},
       context: { purpose: 'collection' },
     };
@@ -84,50 +84,38 @@ describe('reference resolution contracts', () => {
     expect(input.sourceKind).toBe('canvas-node');
   });
 
-  it('projects Canvas node reference fields without materializing runtime inputs', () => {
+  it('projects canonical Media reference fields without materializing runtime inputs', () => {
     const result = collectReferencesFromCanvasNode({
-      id: 'shot-1',
-      type: 'shot',
+      id: 'media-1',
+      type: 'media',
       data: {
-        referenceImageResourceRef: {
+        resourceRef: {
           kind: 'document-entry',
           source: { filePath: '${PROJECT}/comic.cbz', format: 'cbz' },
           entryPath: 'page-01.png',
         },
-        referenceImagePath: 'assets/panel.png',
-        runtimeReferenceImagePath: 'vscode-resource://runtime/panel.png',
-        referenceRefs: ['gallery-1'],
-        generatedAsset: { id: 'asset-generated-1' },
+        assetPath: 'assets/panel.png',
+        runtimeAssetPath: 'vscode-resource://runtime/panel.png',
+        mediaType: 'image',
       },
     });
 
-    expect(result.descriptors.map((descriptor) => descriptor.referenceId)).toEqual(
-      expect.arrayContaining([
-        'shot-1:referenceImageResourceRef',
-        'shot-1:referenceImagePath',
-        'shot-1:referenceRefs:0',
-        'shot-1:generatedAsset',
-      ]),
-    );
+    expect(result.descriptors.map((descriptor) => descriptor.referenceId)).toEqual([
+      'media-1:resourceRef',
+      'media-1:assetPath',
+    ]);
     expect(result.descriptors.map((descriptor) => descriptor.referenceId)).not.toContain(
-      'shot-1:runtimeReferenceImagePath',
+      'media-1:runtimeAssetPath',
     );
-    expect(result.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'reference-unsafe-runtime-handle',
-          path: ['data', 'runtimeReferenceImagePath'],
-        }),
-      ]),
-    );
+    expect(result.diagnostics).toEqual([]);
   });
 
-  it('projects gallery container placements as Canvas node references', () => {
+  it('does not project Group membership as a semantic reference', () => {
     const result = collectReferencesFromCanvasNode({
-      id: 'gallery-1',
-      type: 'gallery',
+      id: 'group-1',
+      type: 'group',
       container: {
-        policy: 'gallery',
+        policy: 'group',
         childIds: ['front'],
         childPlacements: {
           front: {
@@ -136,60 +124,34 @@ describe('reference resolution contracts', () => {
           },
         },
       },
-      data: {
-        preset: 'custom',
-        rows: 1,
-        cols: 1,
-      },
+      data: { label: 'Views' },
     });
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.descriptors).toHaveLength(1);
-    expect(result.descriptors[0]).toMatchObject({
-      referenceId: 'gallery-1:childPlacements:front',
-      role: 'reference',
-      modality: 'image',
-      payload: {
-        type: 'canvas-node',
-        nodeId: 'front',
-      },
-      metadata: {
-        field: 'container.childPlacements',
-        placementId: 'front',
-        label: 'Front',
-      },
-    });
+    expect(result.descriptors).toEqual([]);
   });
 
   it('summarizes Canvas references by role and diagnostic severity', () => {
     const summary = summarizeReferencesFromCanvasNode({
-      id: 'shot-1',
-      type: 'shot',
+      id: 'file-1',
+      type: 'file',
       data: {
-        referenceImageResourceRef: {
-          kind: 'document-entry',
-          source: { filePath: '${PROJECT}/comic.cbz', format: 'cbz' },
-          entryPath: 'page-01.png',
-        },
-        runtimeReferenceImagePath: 'vscode-resource://runtime/panel.png',
-        referenceRefs: ['gallery-1'],
-        generatedAsset: { id: 'asset-generated-1' },
+        path: 'docs/brief.pdf',
+        title: 'Brief',
+        mediaType: 'application/pdf',
       },
     });
 
     expect(summary).toMatchObject({
       sourceKind: 'canvas-node',
-      sourceId: 'shot-1',
-      total: 3,
-      blockedCount: 1,
+      sourceId: 'file-1',
+      total: 1,
+      blockedCount: 0,
       groups: expect.arrayContaining([
-        expect.objectContaining({ role: 'reference', modality: 'image', count: 2 }),
-        expect.objectContaining({ role: 'output', modality: 'image', count: 1 }),
+        expect.objectContaining({ role: 'source', modality: 'document', count: 1 }),
       ]),
     });
-    expect(summary.diagnostics).toEqual([
-      expect.objectContaining({ code: 'reference-unsafe-runtime-handle' }),
-    ]);
+    expect(summary.diagnostics).toEqual([]);
   });
 
   it('projects shot image prep refs into source, mask, subject, layout, style, and output roles', () => {
@@ -291,22 +253,22 @@ describe('reference resolution contracts', () => {
 
   it('keeps contributors pure and returns fallback diagnostics for unregistered sources', () => {
     const source = {
-      id: 'shot-1',
-      type: 'shot',
-      data: { referenceRefs: ['gallery-1'] },
+      id: 'media-1',
+      type: 'media',
+      data: { assetPath: 'assets/keyframe.png', mediaType: 'image' },
     };
     const collected = collectReferencesWithContributors({
       sourceKind: 'canvas-node',
-      sourceId: 'shot-1',
+      sourceId: 'media-1',
       source,
       context: { purpose: 'collection' },
     });
 
     expect(collected.diagnostics).toEqual([]);
     expect(collected.descriptors).toHaveLength(1);
-    expect(collected.descriptors[0]?.payload).toEqual({
-      type: 'canvas-node',
-      nodeId: 'gallery-1',
+    expect(collected.descriptors[0]?.payload).toMatchObject({
+      type: 'path',
+      path: 'assets/keyframe.png',
     });
 
     const fallback = collectReferencesWithContributors({
@@ -424,9 +386,9 @@ function makeDescriptor(overrides: Partial<ReferenceDescriptor> = {}): Reference
   return {
     schemaVersion: 1,
     kind: 'reference-descriptor',
-    referenceId: 'ref-shot-1-source',
+    referenceId: 'ref-media-1-source',
     sourceKind: 'canvas-node',
-    sourceId: 'shot-1',
+    sourceId: 'media-1',
     referenceKind: 'resource',
     role: 'source',
     modality: 'image',

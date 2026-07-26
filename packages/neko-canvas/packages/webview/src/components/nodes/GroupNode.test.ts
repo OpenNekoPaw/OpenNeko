@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AnnotationCanvasNode, GroupCanvasNode } from '@neko/shared';
+import type { GroupCanvasNode, MarkdownCanvasNode } from '@neko/shared';
 import { setLocale } from '../../i18n';
 import { GroupNode } from './GroupNode';
 
@@ -18,9 +18,9 @@ describe('GroupNode', () => {
       container: { policy: 'group', childIds: ['child'] },
       data: { label: 'References' },
     };
-    const child: AnnotationCanvasNode = {
+    const child: MarkdownCanvasNode = {
       id: 'child',
-      type: 'annotation',
+      type: 'markdown',
       parentId: 'group',
       position: { x: 40, y: 100 },
       size: { width: 120, height: 80 },

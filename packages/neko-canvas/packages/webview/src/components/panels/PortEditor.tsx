@@ -23,24 +23,24 @@ export interface PortEditorProps {
 // Constants
 // =============================================================================
 
-const PORT_DIRECTIONS: Array<{ value: 'input' | 'output'; label: string }> = [
-  { value: 'input', label: 'Input' },
-  { value: 'output', label: 'Output' },
+const PORT_DIRECTIONS: Array<{ value: 'input' | 'output'; labelKey: string }> = [
+  { value: 'input', labelKey: 'port.direction.input' },
+  { value: 'output', labelKey: 'port.direction.output' },
 ];
 
-const PORT_POSITIONS: Array<{ value: ConnectionAnchor; label: string }> = [
-  { value: 'top', label: 'Top' },
-  { value: 'right', label: 'Right' },
-  { value: 'bottom', label: 'Bottom' },
-  { value: 'left', label: 'Left' },
+const PORT_POSITIONS: Array<{ value: ConnectionAnchor; labelKey: string }> = [
+  { value: 'top', labelKey: 'port.position.top' },
+  { value: 'right', labelKey: 'port.position.right' },
+  { value: 'bottom', labelKey: 'port.position.bottom' },
+  { value: 'left', labelKey: 'port.position.left' },
 ];
 
-const PORT_DATA_TYPES: Array<{ value: PortDataType; label: string; color: string }> = [
-  { value: 'any', label: 'Any', color: '#6b7280' },
-  { value: 'image', label: 'Image', color: '#f59e0b' },
-  { value: 'video', label: 'Video', color: '#8b5cf6' },
-  { value: 'audio', label: 'Audio', color: '#ec4899' },
-  { value: 'text', label: 'Text', color: '#06b6d4' },
+const PORT_DATA_TYPES: Array<{ value: PortDataType; labelKey: string; color: string }> = [
+  { value: 'any', labelKey: 'port.dataType.any', color: '#6b7280' },
+  { value: 'image', labelKey: 'port.dataType.image', color: '#f59e0b' },
+  { value: 'video', labelKey: 'port.dataType.video', color: '#8b5cf6' },
+  { value: 'audio', labelKey: 'port.dataType.audio', color: '#ec4899' },
+  { value: 'text', labelKey: 'port.dataType.text', color: '#06b6d4' },
 ];
 
 // =============================================================================
@@ -129,7 +129,7 @@ export function PortEditor({ node, onUpdatePorts }: PortEditorProps) {
                   border: '1px solid var(--control-border)',
                 }}
                 onClick={handleResetToDefault}
-                title="Reset to default ports"
+                title={t('port.reset')}
               >
                 ↺
               </button>
@@ -149,7 +149,7 @@ export function PortEditor({ node, onUpdatePorts }: PortEditorProps) {
       <div className="space-y-1.5">
         {activePorts.length === 0 ? (
           <div className="text-[10px] italic" style={{ color: 'var(--panel-fg-secondary)' }}>
-            No ports
+            {t('port.empty')}
           </div>
         ) : (
           activePorts.map((port) => (
@@ -207,7 +207,7 @@ function PortItem({
           border: port.type === 'input' ? '2px solid var(--control-bg)' : 'none',
           boxShadow: port.type === 'input' ? `inset 0 0 0 1px ${color}` : 'none',
         }}
-        title={port.type}
+        title={t(port.type === 'input' ? 'port.direction.input' : 'port.direction.output')}
       />
 
       {/* Label / ID */}
@@ -246,13 +246,13 @@ function PortItem({
         >
           {PORT_DATA_TYPES.map((dt) => (
             <option key={dt.value} value={dt.value}>
-              {dt.label}
+              {t(dt.labelKey)}
             </option>
           ))}
         </select>
       ) : (
         <span style={{ color }} className="flex-shrink-0">
-          {dataTypeInfo?.label ?? 'Any'}
+          {t(dataTypeInfo?.labelKey ?? 'port.dataType.any')}
         </span>
       )}
 
@@ -269,7 +269,7 @@ function PortItem({
         >
           {PORT_POSITIONS.map((pos) => (
             <option key={pos.value} value={pos.value}>
-              {pos.label[0]}
+              {t(pos.labelKey)[0]}
             </option>
           ))}
         </select>
@@ -343,7 +343,7 @@ function AddPortForm({
             borderColor: isIdValid || id.length === 0 ? 'var(--control-border)' : '#f48771',
             color: 'var(--panel-fg)',
           }}
-          placeholder="Port ID"
+          placeholder={t('port.idPlaceholder')}
           value={id}
           onChange={(e) => setId(e.target.value.replace(/\s/g, '_'))}
           autoFocus
@@ -363,7 +363,7 @@ function AddPortForm({
         >
           {PORT_DIRECTIONS.map((d) => (
             <option key={d.value} value={d.value}>
-              {d.label}
+              {t(d.labelKey)}
             </option>
           ))}
         </select>
@@ -380,7 +380,7 @@ function AddPortForm({
         >
           {PORT_DATA_TYPES.map((dt) => (
             <option key={dt.value} value={dt.value}>
-              {dt.label}
+              {t(dt.labelKey)}
             </option>
           ))}
         </select>
@@ -397,7 +397,7 @@ function AddPortForm({
         >
           {PORT_POSITIONS.map((pos) => (
             <option key={pos.value} value={pos.value}>
-              {pos.label}
+              {t(pos.labelKey)}
             </option>
           ))}
         </select>
@@ -413,7 +413,7 @@ function AddPortForm({
           }}
           onClick={onCancel}
         >
-          Cancel
+          {t('port.cancel')}
         </button>
         <button
           className="text-[10px] px-2 py-0.5 rounded transition-colors"

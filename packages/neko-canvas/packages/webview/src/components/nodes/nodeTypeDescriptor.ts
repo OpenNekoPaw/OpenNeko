@@ -25,7 +25,7 @@ export interface NodeDefaultSize {
 export type NodePresentation = 'foundational' | 'spatial-container' | 'structured';
 
 export type NodeFullscreenPresentation =
-  'image-viewer' | 'visual-stage' | 'text-document' | 'workbench' | 'shot-workbench';
+  'image-viewer' | 'visual-stage' | 'text-document' | 'workbench';
 
 export type NodeFullscreenPresentationResolver = (
   node: CanvasNode,
@@ -72,12 +72,4 @@ export function getNodeLabel(
 ): string {
   const descriptor = registry[type];
   return descriptor ? t(descriptor.labelKey) : type;
-}
-
-export function resolveNodeFullscreenPresentation(
-  descriptor: NodeTypeDescriptor | undefined,
-  node: CanvasNode,
-): NodeFullscreenPresentation | undefined {
-  const declaration = descriptor?.fullscreenPresentation;
-  return typeof declaration === 'function' ? declaration(node) : declaration;
 }

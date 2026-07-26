@@ -4,7 +4,7 @@
  * Implements Claude Code compatible permission model:
  * - deny/allow/ask rules with pattern matching
  * - plan/ask/auto execution modes
- * - Integration with AgentExecutor via hooks
+ * - reusable deny/allow/ask rule matching
  */
 
 // Types
@@ -40,13 +40,3 @@ export {
   isReadOnlyTool,
   isPlanMarkdownWrite,
 } from './rule-matcher';
-
-// Permission Manager Interface
-export type { IPermissionManager } from './permission-manager-types';
-
-// Permission Hooks
-export {
-  PermissionHooks,
-  createPermissionHooks,
-  type PermissionHooksOptions,
-} from './permission-hooks';

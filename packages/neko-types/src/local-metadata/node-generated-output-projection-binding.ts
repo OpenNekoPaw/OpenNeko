@@ -277,6 +277,7 @@ export async function createNodeGeneratedOutputProjectionBinding(options: {
   readonly workspaceRoot: string;
   readonly homedir: string;
   readonly now?: () => string;
+  readonly rejectedProjectionPolicy?: PreserveAndReportGeneratedOutputProjectionRejectionPolicy;
 }): Promise<NodeGeneratedOutputProjectionBinding> {
   const metadataBinding = await createNodeWorkspaceResourceCacheMetadataBinding({
     homedir: options.homedir,
@@ -295,6 +296,9 @@ export async function createNodeGeneratedOutputProjectionBinding(options: {
       workspaceRoot: options.workspaceRoot,
       pathResolver,
       ...(options.now ? { now: options.now } : {}),
+      ...(options.rejectedProjectionPolicy
+        ? { rejectedProjectionPolicy: options.rejectedProjectionPolicy }
+        : {}),
     }),
     dispose: () => metadataBinding.dispose(),
   };

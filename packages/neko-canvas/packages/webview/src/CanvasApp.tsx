@@ -6,49 +6,25 @@ import {
   useReportWebviewKeyboardFocus,
 } from '@neko/ui/keyboard';
 import { CreativeWorkbenchShell } from '@neko/ui/workbench';
-import {
-  isCanvasStoryboardPromptState,
-  isCanvasCreativeAiActionId,
-  CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION,
-  CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
-  projectCanvasShotPrompt,
-  validateCanvasBoardRef,
-} from '@neko/shared';
+import { CANVAS_VERSION, validateCanvasBoardRef } from '@neko/shared';
 import type {
-  CanvasCreativeAiActionId,
   CanvasBoardNavigationDiagnostic,
   CanvasBoardRef,
+  CanvasConnection,
   CanvasData,
   CanvasDroppedAsset,
-  CanvasNode,
-  CanvasNodeType,
-  CanvasStoryboardPromptBlockKind,
-  CanvasStoryboardPromptState,
-  CanvasSubsystemId,
-  CanvasTextDocumentType,
   CanvasViewport,
-  GeneratedImageVersion,
   ProjectedCanvasStatus,
-  CreativeAiDiagnostic,
 } from '@neko/shared';
 import { createCanvasAgentActiveContext } from './utils/canvasAgentOperations';
 import { useCanvasStore } from './stores/canvasStore';
-import { usePlaybackStore, type PlaybackWorkspacePane } from './stores/playbackStore';
+import { usePlaybackStore } from './stores/playbackStore';
 import { useRuntimeViewportStore } from './stores/runtimeViewportStore';
 import { InfiniteCanvas, ZoomControls, MiniMap } from './components';
 import { ContextMenu } from './components/common/ContextMenu';
-import {
-  GenerationPromptPanel,
-  type GenerationPanelTarget,
-  type GenerationParams,
-} from './components/panels/GenerationPromptPanel';
-import { ContentOverlay } from './components/panels/ContentOverlay';
 import { CanvasToolbar } from './components/toolbar/CanvasToolbar';
 import { PlaybackWorkspace } from './components/playback/PlaybackWorkspace';
-import { NodeLibraryPanel } from './components/panels/NodeLibraryPanel';
-import { FloatingPanelHost } from './components/panels/FloatingPanelHost';
 import { MIN_ZOOM, MAX_ZOOM } from './hooks';
-import { useNodeExpand } from './hooks/useNodeExpand';
 import { useVSCodeMessages } from './hooks/useVSCodeMessages';
 import { useNodeHelpers } from './hooks/useNodeHelpers';
 import { useClipboard } from './hooks/useClipboard';
@@ -69,21 +45,8 @@ import { useContextMenu } from './hooks/useContextMenu';
 import { useThrottledCanvasViewport } from './hooks/useThrottledCanvasViewport';
 import type { VSCodeAPI } from './hooks/useVSCodeMessages';
 import { buildCanvasNode } from './utils/nodeFactory';
-import {
-  isNodeLibraryDirectCreateType,
-  requiresNodeLibrarySourceAdd,
-} from './utils/nodeLibraryPolicy';
-import { appendSelectedGenerationCandidate } from './utils/generationHistory';
+import { getCanvasAddAction, type CanvasAddActionId } from './utils/canvasAddActions';
 import { getGlobalVSCodeApi } from './utils/vscode';
-import { createBuiltInWebviewSubsystemRegistry } from './subsystems';
-import { createStoryboardNodeTypeDescriptors } from './subsystems/storyboard/descriptors';
-import { createBasicNodeLibraryDescriptors } from './subsystems/basicNodeLibraryCatalog';
-import type { FloatingPanelDefinition } from './subsystems';
-import type { NodeTypeDescriptorRegistry } from './components/nodes/nodeTypeDescriptor';
-import type {
-  ScriptIndexRuntimeState,
-  TextDocumentRuntimeProjection,
-} from './components/nodes/nodeRendererTypes';
 import { DEFAULT_RUNTIME_VIEWPORT } from './stores/runtimeViewportStore';
 import {
   screenToCanvas as screenToCanvasMath,
@@ -101,229 +64,21 @@ import {
 import { resolveCanvasRenderRefreshDecision } from './utils/renderRefreshTiering';
 import { t } from './i18n';
 import { getLogger } from './utils/logger';
-import { applyTextDocumentReadResult } from './utils/textDocumentRuntime';
+import type { CanvasConnectionMutationResult } from './utils/canvasConnectionAuthoring';
 
 // =============================================================================
 // Constants & VSCode API
 // =============================================================================
 
 const DEFAULT_CANVAS_DATA: CanvasData = {
-  version: '1.0',
+  version: CANVAS_VERSION,
   name: 'Untitled Canvas',
   viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
   nodes: [],
   connections: [],
 };
 
-const WEBVIEW_SUBSYSTEM_REGISTRY = createBuiltInWebviewSubsystemRegistry();
 const logger = getLogger('CanvasApp');
-type CanvasRightDockMode = 'basic' | 'professional';
-
-interface CanvasCreativeAiActionStatusState {
-  readonly status: 'pending' | 'accepted' | 'failed';
-  readonly actionId: CanvasCreativeAiActionId;
-  readonly diagnostics: readonly CreativeAiDiagnostic[];
-}
-
-function normalizeCreativeAiDiagnostics(
-  value: readonly unknown[] | undefined,
-): CreativeAiDiagnostic[] {
-  if (!value) return [];
-  return value.filter(isCreativeAiDiagnosticLike);
-}
-
-function isCreativeAiDiagnosticLike(value: unknown): value is CreativeAiDiagnostic {
-  if (!isRecord(value)) return false;
-  return (
-    (value.severity === 'info' || value.severity === 'warning' || value.severity === 'error') &&
-    typeof value.code === 'string' &&
-    typeof value.message === 'string'
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function readRecordValue(value: unknown, key: string): unknown {
-  return isRecord(value) ? value[key] : undefined;
-}
-
-function resolveGenerationPanelPromptContext(
-  node: CanvasData['nodes'][number] | undefined,
-  preferredBlockKind: CanvasStoryboardPromptBlockKind,
-): Pick<GenerationPanelTarget, 'initialPrompt' | 'semanticPromptDocument' | 'actionContext'> {
-  if (!node) {
-    return {
-      initialPrompt: '',
-      actionContext: {
-        actionId: preferredBlockKind === 'video' ? 'generate-video' : 'generate-image',
-        promptSource: 'empty',
-      },
-    };
-  }
-  const projection = projectCanvasShotPrompt(node, { preferredBlockKind });
-  const semanticPromptDocument =
-    projection?.source === 'semantic-prompt-document' && projection.promptBlockKind
-      ? readGenerationPanelSemanticPromptDocument(node, projection.promptBlockKind)
-      : undefined;
-  return {
-    initialPrompt: semanticPromptDocument?.text ?? projection?.prompt ?? '',
-    ...(semanticPromptDocument ? { semanticPromptDocument } : {}),
-    actionContext: {
-      actionId: preferredBlockKind === 'video' ? 'generate-video' : 'generate-image',
-      promptSource: projection?.source ?? 'empty',
-      ...(projection?.legacyMigrationPrompt
-        ? { legacyMigrationPrompt: projection.legacyMigrationPrompt }
-        : {}),
-    },
-  };
-}
-
-function readGenerationPanelSemanticPromptDocument(
-  node: CanvasData['nodes'][number],
-  blockKind: CanvasStoryboardPromptBlockKind,
-): GenerationPanelTarget['semanticPromptDocument'] {
-  if (node.type !== 'shot') return undefined;
-  const state = node.data.storyboardPrompt;
-  if (!isCanvasStoryboardPromptState(state)) return undefined;
-  const document =
-    blockKind === 'image'
-      ? state.promptBlocks?.imagePromptDocument
-      : blockKind === 'video'
-        ? state.promptBlocks?.videoPromptDocument
-        : state.promptBlocks?.voicePromptDocument;
-  return document
-    ? {
-        blockKind: document.blockKind,
-        documentId: document.documentId,
-        version: document.version,
-        text: document.text,
-      }
-    : undefined;
-}
-
-function buildGenerationPanelPromptState(
-  node: CanvasNode,
-  params: GenerationParams,
-): CanvasStoryboardPromptState {
-  const storyboardPrompt = readRecordValue(node.data, 'storyboardPrompt');
-  const current = isCanvasStoryboardPromptState(storyboardPrompt) ? storyboardPrompt : undefined;
-  const blockKind: CanvasStoryboardPromptBlockKind = params.generateVideo ? 'video' : 'image';
-  const existingDocument =
-    blockKind === 'video'
-      ? current?.promptBlocks?.videoPromptDocument
-      : current?.promptBlocks?.imagePromptDocument;
-  const document = {
-    version: CANVAS_STORYBOARD_PROMPT_DOCUMENT_VERSION,
-    documentId: existingDocument?.documentId ?? `${node.id}:${blockKind}:prompt`,
-    blockKind,
-    text: params.prompt.trim(),
-    profileId: existingDocument?.profileId ?? 'canvas.storyboard.semantic-prompt',
-    userOverride: true,
-    fieldProjections: [
-      {
-        fieldId: blockKind === 'video' ? 'videoPrompt' : 'imagePrompt',
-        value: params.prompt.trim(),
-        alignmentState: 'prompt-overridden' as const,
-        userOverride: true,
-      },
-    ],
-  };
-  const promptBlocks =
-    blockKind === 'video'
-      ? { ...current?.promptBlocks, videoPromptDocument: document }
-      : { ...current?.promptBlocks, imagePromptDocument: document };
-  return {
-    ...current,
-    version: CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
-    promptBlocks,
-    generationParams: {
-      ...current?.generationParams,
-      ...(params.ratio ? { aspectRatio: params.ratio } : {}),
-      ...(params.generateVideo && typeof params.videoDuration === 'number'
-        ? { duration: params.videoDuration }
-        : {}),
-    },
-  };
-}
-
-function updateGalleryChildGeneration(
-  galleryId: string,
-  childNodeId: string,
-  update: {
-    status?: string;
-    imageData?: string;
-    historyIdPrefix: string;
-  },
-): void {
-  const state = useCanvasStore.getState();
-  const canvasData = state.canvasData;
-  if (!canvasData) return;
-
-  const gallery = canvasData.nodes.find((node) => node.id === galleryId);
-  const child = canvasData.nodes.find((node) => node.id === childNodeId);
-  if (gallery?.type !== 'gallery' || child?.type !== 'media') return;
-
-  const previousMetadata = gallery.container?.childPlacements?.[childNodeId]?.metadata ?? {};
-  const previousHistory: GeneratedImageVersion[] = Array.isArray(
-    previousMetadata['generationHistory'],
-  )
-    ? previousMetadata['generationHistory'].filter(
-        (entry): entry is GeneratedImageVersion =>
-          typeof entry === 'object' && entry !== null && !Array.isArray(entry),
-      )
-    : [];
-  const generationHistory = update.imageData
-    ? appendSelectedGenerationCandidate(previousHistory, {
-        id: `${update.historyIdPrefix}-${childNodeId}-${Date.now()}`,
-        dataUrl: update.imageData,
-        prompt: '',
-        timestamp: Date.now(),
-        selected: true,
-      })
-    : previousHistory;
-
-  const nextNodes = canvasData.nodes.map((node): CanvasNode => {
-    if (node.id === childNodeId && node.type === 'media' && update.imageData) {
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          assetPath: update.imageData,
-          mediaType: 'image',
-        },
-      };
-    }
-
-    if (node.id === galleryId && node.type === 'gallery') {
-      return {
-        ...node,
-        container: {
-          policy: 'gallery',
-          childIds: [],
-          ...(node.container ?? {}),
-          childPlacements: {
-            ...(node.container?.childPlacements ?? {}),
-            [childNodeId]: {
-              childId: childNodeId,
-              ...(node.container?.childPlacements?.[childNodeId] ?? {}),
-              metadata: {
-                ...previousMetadata,
-                ...(update.status ? { generationStatus: update.status } : {}),
-                ...(update.imageData ? { generationHistory } : {}),
-              },
-            },
-          },
-        },
-      };
-    }
-
-    return node;
-  });
-
-  state.updateCanvasData({ nodes: nextNodes });
-}
 
 const vscode: VSCodeAPI = getGlobalVSCodeApi();
 
@@ -342,27 +97,13 @@ export function CanvasApp() {
   // Interaction tool: select/marquee by default, hand tool pans on drag.
   const [interactionTool, setInteractionTool] = useState<'select' | 'pan'>('select');
   const [isSpacePanActive, setIsSpacePanActive] = useState(false);
-  const [isRightNodeTreeVisible, setIsRightNodeTreeVisible] = useState(false);
-  const [rightDockMode, setRightDockMode] = useState<CanvasRightDockMode>('basic');
-  const [creativeAiActionResults, setCreativeAiActionResults] = useState<
-    Record<string, CanvasCreativeAiActionStatusState>
-  >({});
-  const [scriptIndexStates, setScriptIndexStates] = useState<
-    Record<string, ScriptIndexRuntimeState>
-  >({});
-  const [documentTextProjections, setDocumentTextProjections] = useState<
-    Record<string, TextDocumentRuntimeProjection>
-  >({});
-  const textDocumentRequestSequenceRef = useRef(0);
+  const [isConnecting, setIsConnecting] = useState(false);
   const isHudVisible = true;
   const isGridVisible = true;
   // Minimap width tracks ZoomControls width for alignment
   const zoomControlsRef = useRef<HTMLDivElement | null>(null);
   const [zoomControlsElement, setZoomControlsElement] = useState<HTMLDivElement | null>(null);
   const [miniMapWidth, setMiniMapWidth] = useState(200);
-  const [subsystemNodeTypeDescriptors, setSubsystemNodeTypeDescriptors] =
-    useState<NodeTypeDescriptorRegistry>({});
-  const [floatingPanels, setFloatingPanels] = useState<readonly FloatingPanelDefinition[]>([]);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const { isKeyboardFocused, isKeyboardFocusedRef, setKeyboardFocused } = useFocusedWebviewRoot(
@@ -374,43 +115,26 @@ export function CanvasApp() {
 
   const canvasData = useCanvasStore((state) => state.canvasData);
   const selection = useCanvasStore((state) => state.selection);
-  const isConnecting = useCanvasStore((state) => state.isConnecting);
-  const generationPanelState = useCanvasStore((state) => state.generationPanelState);
-  const contentOverlayState = useCanvasStore((state) => state.contentOverlayState);
   const setCanvasData = useCanvasStore((state) => state.setCanvasData);
   const selectNode = useCanvasStore((state) => state.selectNode);
   const selectConnection = useCanvasStore((state) => state.selectConnection);
   const clearSelection = useCanvasStore((state) => state.clearSelection);
   const addNode = useCanvasStore((state) => state.addNode);
-  const createComposite = useCanvasStore((state) => state.createComposite);
-  const updateNode = useCanvasStore((state) => state.updateNode);
   const updateConnection = useCanvasStore((state) => state.updateConnection);
   const deleteSelected = useCanvasStore((state) => state.deleteSelected);
   const setPlaybackEntry = useCanvasStore((state) => state.setPlaybackEntry);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
-  const startConnection = useCanvasStore((state) => state.startConnection);
-  const completeConnection = useCanvasStore((state) => state.completeConnection);
-  const cancelConnection = useCanvasStore((state) => state.cancelConnection);
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
   const moveNodeEnd = useCanvasStore((state) => state.moveNodeEnd);
   const resizeNodeEnd = useCanvasStore((state) => state.resizeNodeEnd);
   const rotateNodeEnd = useCanvasStore((state) => state.rotateNodeEnd);
-  const removeChildFromContainer = useCanvasStore((state) => state.removeChildFromContainer);
   const selectNodes = useCanvasStore((state) => state.selectNodes);
   const groupNodes = useCanvasStore((state) => state.groupNodes);
   const ungroupNodes = useCanvasStore((state) => state.ungroupNodes);
-  const openGenerationPanel = useCanvasStore((state) => state.openGenerationPanel);
-  const closeGenerationPanel = useCanvasStore((state) => state.closeGenerationPanel);
-  const closeContentOverlay = useCanvasStore((state) => state.closeContentOverlay);
   const playbackWorkspaceVisible = usePlaybackStore((state) => state.playbackSession.visible);
-  const playbackPaneState = usePlaybackStore((state) => state.playbackSession.panes);
   const revealPlaybackWorkspace = usePlaybackStore((state) => state.revealPlaybackWorkspace);
   const hidePlaybackWorkspace = usePlaybackStore((state) => state.hidePlaybackWorkspace);
-  const setPlaybackPaneVisible = usePlaybackStore((state) => state.setPlaybackPaneVisible);
-  const setPlaybackWorkspaceFocusOwner = usePlaybackStore(
-    (state) => state.setPlaybackWorkspaceFocusOwner,
-  );
   const viewport = useRuntimeViewportStore((state) => state.viewport);
   const setViewport = useRuntimeViewportStore((state) => state.setViewport);
   const zoomCanvas = useRuntimeViewportStore((state) => state.zoomCanvas);
@@ -426,21 +150,7 @@ export function CanvasApp() {
   const connections = canvasData?.connections ?? [];
   const selectedNodeIds = selection.nodeIds;
   const selectedConnectionIds = selection.connectionIds;
-  const { expandedNodeId } = useNodeExpand();
-  const activeSubsystemIds = useMemo(
-    () => WEBVIEW_SUBSYSTEM_REGISTRY.getActiveSubsystems({ nodes }),
-    [nodes],
-  );
-  const activeSubsystemKey = activeSubsystemIds.join('|');
   const isPanMode = interactionTool === 'pan';
-  const workspaceSurfaceState = useMemo(
-    () => ({
-      canvas: !playbackWorkspaceVisible || playbackPaneState.canvas,
-      stage: playbackWorkspaceVisible && playbackPaneState.stage,
-      route: playbackWorkspaceVisible && playbackPaneState.route,
-    }),
-    [playbackPaneState, playbackWorkspaceVisible],
-  );
   const setCanvasContainerRef = useCallback((element: HTMLDivElement | null) => {
     canvasContainerRef.current = element;
     setCanvasContainerElement(element);
@@ -455,54 +165,13 @@ export function CanvasApp() {
   );
   const selectInteractionTool = useCallback(() => setInteractionTool('select'), []);
   const nodeTypeSummary = useMemo(
-    () => WEBVIEW_SUBSYSTEM_REGISTRY.getNodeTypeSummary({ nodes }),
+    () =>
+      nodes.reduce<Record<string, number>>((summary, node) => {
+        summary[node.type] = (summary[node.type] ?? 0) + 1;
+        return summary;
+      }, {}),
     [nodes],
   );
-  const coreNodeTypeDescriptors = useMemo(
-    () => WEBVIEW_SUBSYSTEM_REGISTRY.getCoreNodeTypeDescriptors(),
-    [],
-  );
-  const basicNodeLibraryDescriptors = useMemo(
-    () =>
-      createBasicNodeLibraryDescriptors(
-        coreNodeTypeDescriptors,
-        createStoryboardNodeTypeDescriptors(),
-      ),
-    [coreNodeTypeDescriptors],
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    const requestedSubsystemIds = new Set(activeSubsystemKey.split('|').filter(Boolean));
-    const subsystemIds = WEBVIEW_SUBSYSTEM_REGISTRY.manifests
-      .map((manifest) => manifest.id)
-      .filter((id) => requestedSubsystemIds.has(id));
-
-    Promise.all(subsystemIds.map((id) => WEBVIEW_SUBSYSTEM_REGISTRY.load(id)))
-      .then((registrations) => {
-        if (cancelled) return;
-        setSubsystemNodeTypeDescriptors(
-          Object.assign(
-            {},
-            ...registrations.map((registration) => registration.nodeTypeDescriptors),
-          ),
-        );
-        setFloatingPanels(
-          registrations.flatMap((registration) => registration.floatingPanels ?? []),
-        );
-      })
-      .catch((error: unknown) => {
-        logger.warn('Failed to load active Canvas subsystems', error);
-        if (!cancelled) {
-          setSubsystemNodeTypeDescriptors({});
-          setFloatingPanels([]);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeSubsystemKey]);
 
   // =========================================================================
   // Container size tracking  (moved after useVSCodeMessages — see below)
@@ -582,22 +251,14 @@ export function CanvasApp() {
   // =========================================================================
 
   const {
-    addTextAt,
-    addImportedTextAt,
+    addMarkdownAt,
+    addImportedMarkdownAt,
     addMediaAt,
-    addShotAt,
-    addSceneGroupAt,
-    addGalleryAt,
-    addTableAt,
-    addScriptAt,
-    addDocumentAt,
-    addModelAt,
+    addGroupAt,
+    addFileAt,
     addCanvasEmbedAt,
-    addProjectAt,
   } = useNodeHelpers({
     addNode,
-    createComposite,
-    updateNode,
     nodeCount: nodes.length,
     reportAction,
   });
@@ -626,37 +287,19 @@ export function CanvasApp() {
             });
             break;
           case 'text':
-            addImportedTextAt(dropPos, asset);
+            addImportedMarkdownAt(dropPos, asset);
             break;
-          case 'script':
-            addScriptAt(dropPos, asset.path, asset.title);
-            break;
-          case 'document':
-            addDocumentAt(dropPos, asset.path, asset.title, asset.docType);
-            break;
-          case 'model':
-            addModelAt(dropPos, asset.path, asset.modelName, asset.modelType, asset.role);
+          case 'file':
+            addFileAt(dropPos, asset.path, asset.title);
             break;
           case 'canvas':
             addCanvasEmbedAt(dropPos, asset.path, asset.title);
-            break;
-          case 'project':
-            addProjectAt(dropPos, asset.path, asset.title, asset.projectType);
             break;
         }
       });
       dropPositionRef.current = null;
     },
-    [
-      addCanvasEmbedAt,
-      addDocumentAt,
-      addImportedTextAt,
-      addMediaAt,
-      addModelAt,
-      addProjectAt,
-      addScriptAt,
-      getViewportCenter,
-    ],
+    [addCanvasEmbedAt, addFileAt, addImportedMarkdownAt, addMediaAt, getViewportCenter],
   );
 
   const getCanvasProjectSourceAddClient = useCallback(() => {
@@ -669,17 +312,33 @@ export function CanvasApp() {
   }, []);
 
   const requestCanvasFilePickerSource = useCallback(
-    (type: CanvasNodeType | undefined, position: { x: number; y: number }) => {
+    (actionId: CanvasAddActionId, position: { x: number; y: number }) => {
       const client = getCanvasProjectSourceAddClient();
       if (!client) return;
+      const action = getCanvasAddAction(actionId);
+      if (action.mode !== 'source') {
+        throw new Error(`Canvas add action "${actionId}" does not bind a source`);
+      }
+      const nodeType = action.nodeType;
+      const mediaType = action.mediaType;
 
       void client
-        .addSource(createCanvasFilePickerAddSourceInput(type, position))
+        .addSource(createCanvasFilePickerAddSourceInput(nodeType, position, mediaType))
         .then((result) => {
+          if (result.ok && result.durablePath && action.nodeType === 'file') {
+            const title = result.durablePath.split('/').pop() || t('node.file');
+            addFileAt(position, result.durablePath, title);
+            return;
+          }
+          if (result.ok && result.durablePath && action.nodeType === 'canvas-embed') {
+            const title = result.durablePath.split('/').pop() || t('node.subcanvas');
+            addCanvasEmbedAt(position, result.durablePath, title);
+            return;
+          }
           applyCanvasAddSourceResult({
             result,
-            sourceNameHint: getCanvasFilePickerDefaultName(type),
-            mediaTypeHint: type === 'media' ? 'video' : undefined,
+            sourceNameHint: getCanvasFilePickerDefaultName(nodeType, mediaType),
+            mediaTypeHint: mediaType,
             dropPosition: position,
             addMediaAt,
             onDropAssets: handleDropAssets,
@@ -689,70 +348,36 @@ export function CanvasApp() {
           logger.warn('Canvas file-picker add-source failed', error);
         });
     },
-    [addMediaAt, getCanvasProjectSourceAddClient, handleDropAssets],
+    [addCanvasEmbedAt, addFileAt, addMediaAt, getCanvasProjectSourceAddClient, handleDropAssets],
   );
 
-  const handleImportFile = useCallback(() => {
-    requestCanvasFilePickerSource(undefined, getViewportCenter());
-  }, [getViewportCenter, requestCanvasFilePickerSource]);
-
-  const handlePickLibraryNodeSource = useCallback(
-    (type: CanvasNodeType) => {
-      requestCanvasFilePickerSource(type, getViewportCenter());
-    },
-    [getViewportCenter, requestCanvasFilePickerSource],
-  );
-
-  const createLibraryNodeAt = useCallback(
-    (type: CanvasNodeType, position: { x: number; y: number }) => {
-      if (!isNodeLibraryDirectCreateType(type)) {
-        if (requiresNodeLibrarySourceAdd(type)) {
-          requestCanvasFilePickerSource(type, position);
-        }
+  const addActionAt = useCallback(
+    (actionId: CanvasAddActionId, position: { x: number; y: number }) => {
+      const action = getCanvasAddAction(actionId);
+      if (action.mode === 'source') {
+        requestCanvasFilePickerSource(actionId, position);
         return;
       }
-      const currentNodes = useCanvasStore.getState().canvasData?.nodes ?? [];
-      const node = buildCanvasNode({
-        type,
-        position,
-        data: {},
-        zIndex: currentNodes.length,
-      });
-      const id = addNode(node);
-      if (id) {
-        selectNode(id);
-        reportAction('node.create', type);
+      switch (action.nodeType) {
+        case 'markdown':
+          addMarkdownAt(position);
+          return;
+        case 'group':
+          addGroupAt(position);
+          return;
+        default:
+          throw new Error(`Direct creation is not supported for Canvas node "${action.nodeType}"`);
       }
     },
-    [addNode, reportAction, requestCanvasFilePickerSource, selectNode],
+    [addGroupAt, addMarkdownAt, requestCanvasFilePickerSource],
   );
 
-  const handleCreateLibraryNode = useCallback(
-    (type: CanvasNodeType) => {
-      createLibraryNodeAt(type, getViewportCenter());
+  const handleSelectAddAction = useCallback(
+    (actionId: CanvasAddActionId) => {
+      addActionAt(actionId, getViewportCenter());
     },
-    [createLibraryNodeAt, getViewportCenter],
+    [addActionAt, getViewportCenter],
   );
-
-  const handleDropLibraryNode = useCallback(
-    (type: CanvasNodeType, position: { x: number; y: number }) => {
-      createLibraryNodeAt(type, position);
-    },
-    [createLibraryNodeAt],
-  );
-
-  const handleLoadSubsystem = useCallback((subsystemId: CanvasSubsystemId) => {
-    void WEBVIEW_SUBSYSTEM_REGISTRY.load(subsystemId)
-      .then((registration) => {
-        setSubsystemNodeTypeDescriptors((current) => ({
-          ...current,
-          ...(registration.nodeTypeDescriptors ?? {}),
-        }));
-      })
-      .catch((error: unknown) => {
-        logger.warn(`Failed to load Canvas subsystem "${subsystemId}"`, error);
-      });
-  }, []);
 
   // =========================================================================
   // Drag & Drop
@@ -767,10 +392,8 @@ export function CanvasApp() {
     handleDrop,
   } = useDragDrop({
     vscode,
-    canvasContainerRef,
     screenToCanvas,
     addMediaAt,
-    onDropNodeType: handleDropLibraryNode,
     onDropAssets: handleDropAssets,
     addSourceClient: getCanvasProjectSourceAddClient() ?? undefined,
   });
@@ -784,7 +407,11 @@ export function CanvasApp() {
     defaultCanvasData: DEFAULT_CANVAS_DATA,
     setCanvasData,
     onRevealPlaybackWorkspace: ({ routeId, currentUnitId }) => {
-      revealPlaybackWorkspace({ routeId, currentUnitId, focusOwner: 'stage' });
+      revealPlaybackWorkspace({
+        routeId,
+        currentUnitId,
+        focusOwner: 'preview',
+      });
     },
     onCanvasDataLoaded: (data) => {
       const documentKey = createCanvasViewportSnapshotKey(data);
@@ -824,64 +451,6 @@ export function CanvasApp() {
         { dirty: false },
       );
     },
-    onGenerationProgress: ({ nodeId, childNodeId, status, dataUrl }) => {
-      const node = useCanvasStore.getState().canvasData?.nodes.find((n) => n.id === nodeId);
-      if (!node) return;
-
-      if (node.type === 'shot') {
-        if (status === 'done' && dataUrl) {
-          const shotNode = node as import('@neko/shared').ShotCanvasNode;
-          const history = appendSelectedGenerationCandidate(shotNode.data.generationHistory ?? [], {
-            id: `v-${Date.now()}`,
-            dataUrl,
-            prompt: '',
-            timestamp: Date.now(),
-            selected: true,
-          });
-          updateNodeData(nodeId, {
-            generationStatus: 'done',
-            generatedImage: dataUrl,
-            generationHistory: history,
-          });
-        } else {
-          updateNodeData(nodeId, { generationStatus: status });
-        }
-      } else if (node.type === 'gallery' && childNodeId) {
-        updateGalleryChildGeneration(nodeId, childNodeId, {
-          status,
-          imageData: status === 'done' ? dataUrl : undefined,
-          historyIdPrefix: 'gallery',
-        });
-      }
-    },
-    onCanvasCreativeAiActionResult: ({ nodeId, actionId, ok, diagnostics }) => {
-      if (!isCanvasCreativeAiActionId(actionId)) return;
-      setCreativeAiActionResults((current) => ({
-        ...current,
-        [nodeId]: {
-          status: ok ? 'accepted' : 'failed',
-          actionId,
-          diagnostics: normalizeCreativeAiDiagnostics(diagnostics),
-        },
-      }));
-    },
-    onScriptIndexResult: (nodeId, scenes, error) => {
-      if (error) {
-        setScriptIndexStates((current) => ({
-          ...current,
-          [nodeId]: { status: 'error', error },
-        }));
-        return;
-      }
-      setScriptIndexStates((current) => ({
-        ...current,
-        [nodeId]: { status: scenes.length > 0 ? 'ready' : 'empty' },
-      }));
-      updateNodeData(nodeId, { scenes });
-    },
-    onTextDocumentReadResult: (result) => {
-      setDocumentTextProjections((current) => applyTextDocumentReadResult(current, result));
-    },
     onKeyboardFocusChange: setKeyboardFocused,
     isKeyboardFocusedRef,
     isComposingRef,
@@ -898,7 +467,6 @@ export function CanvasApp() {
         position: nodeSpec.position,
         data: nodeSpec.data,
         zIndex: currentNodes.length,
-        preset: nodeSpec.preset,
       });
       return useCanvasStore.getState().addNode(node);
     },
@@ -907,38 +475,26 @@ export function CanvasApp() {
       if (!request.sourceId || !request.targetId) {
         throw new Error('Connection sourceId and targetId are required');
       }
-      const connectionId = useCanvasStore.getState().addConnection({
+      const result = useCanvasStore.getState().addConnection({
         sourceId: request.sourceId,
         targetId: request.targetId,
-        ...(request.type ? { type: request.type } : {}),
+        type: request.type ?? 'reference',
         ...(request.label ? { label: request.label } : {}),
-        ...(request.priority !== undefined ? { priority: request.priority } : {}),
-        ...(request.extension ? { extension: request.extension } : {}),
         sourceEndpoint: request.sourceEndpoint ?? { nodeId: request.sourceId, scope: 'node' },
         targetEndpoint: request.targetEndpoint ?? { nodeId: request.targetId, scope: 'node' },
       });
+      if (!result.ok) {
+        throw new Error(`Canvas connection rejected: ${result.reason}`);
+      }
+      const connectionId = result.connectionId;
       const connection = useCanvasStore
         .getState()
         .canvasData?.connections.find((item) => item.id === connectionId);
       return { connectionId, connection };
     },
     createComposite: (request) => useCanvasStore.getState().createComposite(request),
-    reorderSceneShots: (request) => {
-      if (!request.sceneId || request.shotIds.length === 0) {
-        throw new Error('Scene shot reorder requires sceneId and shotIds');
-      }
-      useCanvasStore
-        .getState()
-        .reorderSceneShots(request.sceneId, [...request.shotIds], request.autoLayout);
-      const scene = useCanvasStore
-        .getState()
-        .canvasData?.nodes.find((node) => node.id === request.sceneId);
-      return {
-        changed: true,
-        sceneId: request.sceneId,
-        shotIds: scene?.container?.childIds ?? request.shotIds,
-      };
-    },
+    reorderGroupChildren: (groupId, childIds, autoLayout) =>
+      useCanvasStore.getState().reorderGroupChildren(groupId, childIds, autoLayout),
     updateBlock: (request) => useCanvasStore.getState().updateBlock(request),
     extractStructuredContent: (request) =>
       useCanvasStore.getState().extractStructuredContent(request),
@@ -952,10 +508,6 @@ export function CanvasApp() {
               name: state.canvasData.name,
               creativeScope: state.canvasData.creativeScope,
               relatedBoards: state.canvasData.relatedBoards,
-              narrative: state.canvasData.narrative,
-              behavior: state.canvasData.behavior,
-              entityGraph: state.canvasData.entityGraph,
-              memoryGraph: state.canvasData.memoryGraph,
             }
           : undefined,
         selectedNodeIds: state.selection.nodeIds,
@@ -965,8 +517,6 @@ export function CanvasApp() {
       });
     },
     applyAgentContent: (payload) => useCanvasStore.getState().applyAgentContent(payload),
-    upsertNarrativeProductionBinding: (request) =>
-      useCanvasStore.getState().upsertNarrativeProductionBinding(request),
   });
 
   // =========================================================================
@@ -1017,227 +567,21 @@ export function CanvasApp() {
   });
 
   // =========================================================================
-  // AI generation / agent handlers
+  // Agent handlers
   // =========================================================================
 
-  /** Open GenerationPromptPanel for the selected ShotNode */
-  const handleGenerateSelected = useCallback(() => {
-    const nodeId = selectedNodeIds[0];
-    if (!nodeId) return;
-    const node = nodes.find((n) => n.id === nodeId);
-    openGenerationPanel(
-      nodeId,
-      undefined,
-      resolveGenerationPanelPromptContext(node, 'image').initialPrompt,
-    );
-  }, [selectedNodeIds, nodes, openGenerationPanel]);
-
-  /** Batch-generate selected ShotNodes through the Canvas-owned action path. */
-  const handleBatchGenerate = useCallback(() => {
-    vscode?.postMessage({ type: 'sendToAgent', nodeIds: selectedNodeIds, action: 'batch' });
-  }, [selectedNodeIds]);
-
   /** Send selected nodes as context to the Agent panel */
-  const handleSendToAgent = useCallback(
-    (intent?: string) => {
-      vscode?.postMessage({
-        type: 'sendToAgent',
-        nodeIds: selectedNodeIds,
-        action: 'context',
-        intent,
-      });
-    },
-    [selectedNodeIds],
-  );
-
-  const postCanvasCreativeAiAction = useCallback(
-    (nodeId: string, actionId: CanvasCreativeAiActionId) => {
-      setCreativeAiActionResults((current) => ({
-        ...current,
-        [nodeId]: {
-          status: 'pending',
-          actionId,
-          diagnostics: [],
-        },
-      }));
-      vscode?.postMessage({
-        type: 'canvasCreativeAiAction',
-        nodeId,
-        actionId,
-      });
-    },
-    [vscode],
-  );
-
-  const handleOverlayOptimizePrompt = useCallback(
-    (nodeId: string) => {
-      postCanvasCreativeAiAction(nodeId, 'optimize-video-prompt');
-    },
-    [postCanvasCreativeAiAction],
-  );
-
-  const handleOverlayGenerateImage = useCallback(
-    (nodeId: string) => {
-      postCanvasCreativeAiAction(nodeId, 'generate-image');
-    },
-    [postCanvasCreativeAiAction],
-  );
-
-  const handleOverlayEditImage = useCallback(
-    (nodeId: string) => {
-      postCanvasCreativeAiAction(nodeId, 'edit-image');
-    },
-    [postCanvasCreativeAiAction],
-  );
-
-  const handleOverlayGenerateVideo = useCallback(
-    (nodeId: string) => {
-      postCanvasCreativeAiAction(nodeId, 'generate-video');
-    },
-    [postCanvasCreativeAiAction],
-  );
-
-  const handleOverlayEditVideo = useCallback(
-    (nodeId: string) => {
-      postCanvasCreativeAiAction(nodeId, 'edit-video');
-    },
-    [postCanvasCreativeAiAction],
-  );
-
-  const postCanvasCreativeAiCandidateAction = useCallback(
-    (
-      nodeId: string,
-      candidateId: string,
-      candidateAction: 'accept' | 'reject' | 'delete' | 'inspect',
-      actionId?: CanvasCreativeAiActionId,
-    ) => {
-      vscode?.postMessage({
-        type: 'canvasCreativeAiCandidateAction',
-        nodeId,
-        candidateId,
-        candidateAction,
-        actionId,
-      });
-    },
-    [],
-  );
-
-  const handleOverlayCandidateAccept = useCallback(
-    (nodeId: string, candidateId: string, actionId?: CanvasCreativeAiActionId) => {
-      postCanvasCreativeAiCandidateAction(nodeId, candidateId, 'accept', actionId);
-    },
-    [postCanvasCreativeAiCandidateAction],
-  );
-
-  const handleOverlayCandidateReject = useCallback(
-    (nodeId: string, candidateId: string, actionId?: CanvasCreativeAiActionId) => {
-      postCanvasCreativeAiCandidateAction(nodeId, candidateId, 'reject', actionId);
-    },
-    [postCanvasCreativeAiCandidateAction],
-  );
-
-  const handleOverlayCandidateRetry = useCallback(
-    (nodeId: string, candidateId: string, actionId: CanvasCreativeAiActionId) => {
-      void candidateId;
-      postCanvasCreativeAiAction(nodeId, actionId);
-    },
-    [postCanvasCreativeAiAction],
-  );
-
-  const handleOverlayCandidateDelete = useCallback(
-    (nodeId: string, candidateId: string, actionId?: CanvasCreativeAiActionId) => {
-      postCanvasCreativeAiCandidateAction(nodeId, candidateId, 'delete', actionId);
-    },
-    [postCanvasCreativeAiCandidateAction],
-  );
-
-  const handleOverlayCandidateInspect = useCallback(
-    (nodeId: string, candidateId: string, actionId?: CanvasCreativeAiActionId) => {
-      postCanvasCreativeAiCandidateAction(nodeId, candidateId, 'inspect', actionId);
-    },
-    [postCanvasCreativeAiCandidateAction],
-  );
-
-  /** Open GenerationPromptPanel in video mode for the selected ShotNode */
-  const handleGenerateVideo = useCallback(() => {
-    const nodeId = selectedNodeIds[0];
-    if (!nodeId) return;
-    const node = nodes.find((n) => n.id === nodeId);
-    openGenerationPanel(
-      nodeId,
-      undefined,
-      resolveGenerationPanelPromptContext(node, 'video').initialPrompt,
-      {
-        generateVideo: true,
-      },
-    );
-  }, [selectedNodeIds, nodes, openGenerationPanel]);
-
-  /** Open GenerationPromptPanel with ControlNet pre-selected */
-  const handleEditWithControlNet = useCallback(() => {
-    const nodeId = selectedNodeIds[0];
-    if (!nodeId) return;
-    const node = nodes.find((n) => n.id === nodeId);
-    openGenerationPanel(
-      nodeId,
-      undefined,
-      resolveGenerationPanelPromptContext(node, 'image').initialPrompt,
-      {
-        controlMode: 'depth',
-      },
-    );
-  }, [selectedNodeIds, nodes, openGenerationPanel]);
-
-  const handleScriptLoadScenes = useCallback((nodeId: string, scriptPath: string) => {
-    setScriptIndexStates((current) => ({
-      ...current,
-      [nodeId]: { status: 'loading' },
-    }));
-    vscode?.postMessage({ type: 'getScriptIndex', nodeId, scriptPath });
-  }, []);
-
-  const handleScriptOpen = useCallback((scriptPath: string) => {
-    vscode?.postMessage({ type: 'openDocument', docPath: scriptPath });
-  }, []);
-
-  const handleScriptNavigateToScene = useCallback(
-    (linkedSceneGroupId: string) => {
-      // Scroll the canvas viewport to center on the linked SceneGroupNode
-      const target = nodes.find((n) => n.id === linkedSceneGroupId);
-      if (!target) return;
-      const cx = target.position.x + target.size.width / 2;
-      const cy = target.position.y + target.size.height / 2;
-      setViewport({
-        pan: {
-          x: containerSize.width / 2 - cx * viewport.zoom,
-          y: containerSize.height / 2 - cy * viewport.zoom,
-        },
-      });
-    },
-    [nodes, viewport.zoom, containerSize, setViewport],
-  );
+  const handleSendToAgent = useCallback(() => {
+    vscode?.postMessage({
+      type: 'sendToAgent',
+      nodeIds: selectedNodeIds,
+      action: 'context',
+    });
+  }, [selectedNodeIds]);
 
   const handleDocumentOpen = useCallback((docPath: string) => {
     vscode?.postMessage({ type: 'openDocument', docPath });
   }, []);
-
-  const handleDocumentLoadText = useCallback(
-    (nodeId: string, docPath: string, docType: CanvasTextDocumentType) => {
-      const requestId = `canvas-text:${nodeId}:${++textDocumentRequestSequenceRef.current}`;
-      setDocumentTextProjections((current) => ({
-        ...current,
-        [nodeId]: { status: 'loading', requestId, docPath, docType },
-      }));
-      vscode?.postMessage({
-        type: 'textDocument:read',
-        requestId,
-        nodeId,
-        docPath,
-        docType,
-      });
-    },
-    [],
-  );
 
   const handleCanvasEmbedOpen = useCallback((canvasPath: string) => {
     vscode?.postMessage({ type: 'openDocument', docPath: canvasPath });
@@ -1246,59 +590,6 @@ export function CanvasApp() {
   const handleCanvasBoardRefOpen = useCallback((ref: CanvasBoardRef) => {
     vscode?.postMessage({ type: 'openCanvasBoardRef', ref });
   }, []);
-
-  const handleRemoveContainerChild = useCallback(
-    (containerId: string, childId: string) => {
-      removeChildFromContainer(containerId, childId);
-    },
-    [removeChildFromContainer],
-  );
-
-  // =========================================================================
-  // Generation panel
-  // =========================================================================
-
-  const generationPanelPromptContext = useMemo(() => {
-    if (!generationPanelState.nodeId) {
-      return resolveGenerationPanelPromptContext(undefined, 'image');
-    }
-    const node = nodes.find((candidate) => candidate.id === generationPanelState.nodeId);
-    return resolveGenerationPanelPromptContext(
-      node,
-      generationPanelState.initialGenerateVideo ? 'video' : 'image',
-    );
-  }, [generationPanelState.initialGenerateVideo, generationPanelState.nodeId, nodes]);
-
-  const generationPanelTarget: GenerationPanelTarget | null =
-    generationPanelState.visible && generationPanelState.nodeId
-      ? {
-          nodeId: generationPanelState.nodeId,
-          childNodeId: generationPanelState.childNodeId ?? undefined,
-          initialPrompt:
-            generationPanelPromptContext.initialPrompt || generationPanelState.initialPrompt,
-          semanticPromptDocument: generationPanelPromptContext.semanticPromptDocument,
-          actionContext: generationPanelPromptContext.actionContext,
-          initialControlMode: generationPanelState.initialControlMode,
-          initialGenerateVideo: generationPanelState.initialGenerateVideo,
-        }
-      : null;
-
-  const handlePanelGenerate = useCallback(
-    (target: GenerationPanelTarget, params: GenerationParams) => {
-      const node = nodes.find((candidate) => candidate.id === target.nodeId);
-      if (!node) return;
-      const storyboardPrompt = buildGenerationPanelPromptState(node, params);
-      updateNodeData(node.id, { storyboardPrompt });
-      vscode?.postMessage({
-        type: 'canvasCreativeAiAction',
-        nodeId: target.nodeId,
-        actionId: params.generateVideo ? 'generate-video' : 'generate-image',
-        storyboardPrompt,
-      });
-      closeGenerationPanel();
-    },
-    [closeGenerationPanel, nodes, updateNodeData],
-  );
 
   // =========================================================================
   // Context menu
@@ -1320,12 +611,7 @@ export function CanvasApp() {
     selectedNodeIds,
     nodes,
     screenToCanvas,
-    addTextAt,
-    addSceneGroupAt,
-    addShotAt,
-    addGalleryAt,
-    addTableAt,
-    handleImportFile,
+    addActionAt,
     deleteSelected,
     handleFitContent,
     handleResetViewport,
@@ -1338,30 +624,9 @@ export function CanvasApp() {
     handleUngroup,
     undo,
     redo,
-    onGenerateSelected: handleGenerateSelected,
-    onBatchGenerate: handleBatchGenerate,
     onSendToAgent: handleSendToAgent,
-    onGenerateVideo: handleGenerateVideo,
-    onEditWithControlNet: handleEditWithControlNet,
     onSetPlaybackEntry: setPlaybackEntry,
   });
-
-  const closeTransientKeyboardSurface = useCallback(() => {
-    if (generationPanelState.visible) {
-      closeGenerationPanel();
-      return true;
-    }
-    if (contentOverlayState.visible) {
-      closeContentOverlay();
-      return true;
-    }
-    return false;
-  }, [
-    closeContentOverlay,
-    closeGenerationPanel,
-    contentOverlayState.visible,
-    generationPanelState.visible,
-  ]);
 
   // =========================================================================
   // Keyboard actions
@@ -1372,13 +637,11 @@ export function CanvasApp() {
     selectedNodeIds,
     selectedConnectionIds,
     nodes,
-    isConnecting,
     contextMenu,
     setContextMenu: () => setContextMenu(null),
     selectNode,
     selectConnection,
     deleteSelected,
-    cancelConnection,
     clearSelection,
     resetViewport,
     undo,
@@ -1388,8 +651,6 @@ export function CanvasApp() {
     handlePaste,
     handlePasteInPlace,
     handleDuplicate,
-    onGenerateSelected: handleGenerateSelected,
-    closeTransientSurface: closeTransientKeyboardSurface,
     reportAction,
     isKeyboardFocusedRef,
     isComposingRef,
@@ -1398,7 +659,6 @@ export function CanvasApp() {
   const keyboardState = useMemo<CanvasKeyboardState>(
     () => ({
       canDeleteSelection: selectedNodeIds.length > 0 || selectedConnectionIds.length > 0,
-      canGenerateSelection: selectedNodeIds.length > 0,
       hasNodes: nodes.length > 0,
       isKeyboardFocused,
     }),
@@ -1417,7 +677,6 @@ export function CanvasApp() {
     onPaste: () => handleKeyboardAction('paste'),
     onPasteInPlace: () => handleKeyboardAction('pasteInPlace'),
     onDuplicate: () => handleKeyboardAction('duplicate'),
-    onGenerateSelected: () => handleKeyboardAction('generateSelected'),
     onSpacePanStart: () => setIsSpacePanActive(true),
     onSpacePanEnd: () => setIsSpacePanActive(false),
     onTogglePanMode: togglePanMode,
@@ -1485,13 +744,12 @@ export function CanvasApp() {
     if (!vscode || !canvasData) return;
     const projectionStatus = (canvasData as { projectionStatus?: ProjectedCanvasStatus })
       .projectionStatus;
-    const narrativeSnapshotFingerprint = JSON.stringify({
+    const canvasSnapshotFingerprint = JSON.stringify({
       name: canvasData.name,
       nodes: canvasData.nodes,
       connections: canvasData.connections,
-      narrative: canvasData.narrative,
     });
-    const fingerprint = `${narrativeSnapshotFingerprint}:${selectedNodeIds.join(',')}:${activeSubsystemKey}:${projectionStatus?.state ?? 'none'}:${projectionStatus?.message ?? ''}`;
+    const fingerprint = `${canvasSnapshotFingerprint}:${selectedNodeIds.join(',')}:${projectionStatus?.state ?? 'none'}:${projectionStatus?.message ?? ''}`;
     if (fingerprint === lastSyncRef.current) return;
     lastSyncRef.current = fingerprint;
     vscode.postMessage({
@@ -1502,24 +760,12 @@ export function CanvasApp() {
         nodes: canvasData.nodes,
         connections: canvasData.connections,
         viewport,
-        narrative: canvasData.narrative,
         _selection: { nodeIds: selectedNodeIds },
-        _subsystemStatus: {
-          activeSubsystems: activeSubsystemIds,
-          nodeTypeSummary,
-        },
+        nodeTypeSummary,
         projectionStatus,
       },
     });
-  }, [
-    nodes.length,
-    connections.length,
-    selectedNodeIds,
-    canvasData,
-    activeSubsystemIds,
-    activeSubsystemKey,
-    nodeTypeSummary,
-  ]);
+  }, [nodes.length, connections.length, selectedNodeIds, canvasData, nodeTypeSummary]);
 
   const projectionHealthKey = canvasData?.projected
     ? JSON.stringify((canvasData as { projectionSource?: unknown }).projectionSource ?? null)
@@ -1579,9 +825,8 @@ export function CanvasApp() {
   );
   const handleCanvasClick = useCallback(() => {
     setContextMenu(null);
-    if (isConnecting) cancelConnection();
-    else clearSelection();
-  }, [isConnecting, cancelConnection, clearSelection, setContextMenu]);
+    clearSelection();
+  }, [clearSelection, setContextMenu]);
   const handleNodeMove = useCallback(
     (nodeId: string, position: { x: number; y: number }) => moveNodeEnd(nodeId, position),
     [moveNodeEnd],
@@ -1603,23 +848,11 @@ export function CanvasApp() {
     (nodeId: string, data: Record<string, unknown>) => updateNodeData(nodeId, data),
     [updateNodeData],
   );
-  const handleConnectionStart = useCallback(
-    (nodeId: string, handleId: string) => startConnection(nodeId, handleId),
-    [startConnection],
-  );
   const handleConnectionComplete = useCallback(
-    (
-      sourceNodeId: string,
-      sourceHandleId: string,
-      targetNodeId: string,
-      targetHandleId: string,
-    ) => {
-      startConnection(sourceNodeId, sourceHandleId);
-      completeConnection(targetNodeId, targetHandleId);
-    },
-    [startConnection, completeConnection],
+    (connection: Omit<CanvasConnection, 'id'>): CanvasConnectionMutationResult =>
+      useCanvasStore.getState().addConnection(connection),
+    [],
   );
-  const handleConnectionCancel = useCallback(() => cancelConnection(), [cancelConnection]);
   const handleMarqueeSelect = useCallback(
     (nodeIds: string[], additive: boolean) => {
       if (additive) {
@@ -1683,49 +916,14 @@ export function CanvasApp() {
     resetViewport();
   }
 
-  const handleToggleWorkspaceSurface = useCallback(
-    (pane: PlaybackWorkspacePane) => {
-      const session = usePlaybackStore.getState().playbackSession;
-      if (pane === 'canvas' && !session.visible) {
-        setPlaybackWorkspaceFocusOwner('canvas');
-        reportAction('toggleWorkspaceSurface', pane);
-        return;
-      }
-
-      if (!session.visible) {
-        revealPlaybackWorkspace({
-          focusOwner: pane,
-          panes: {
-            canvas: true,
-            stage: pane === 'stage',
-            route: pane === 'route',
-          },
-        });
-      } else {
-        const nextVisible = !session.panes[pane];
-        const nextPanes = {
-          ...session.panes,
-          [pane]: nextVisible,
-        };
-        if (!nextPanes.stage && !nextPanes.route) {
-          hidePlaybackWorkspace();
-        } else {
-          setPlaybackPaneVisible(pane, nextVisible);
-          if (nextVisible) {
-            setPlaybackWorkspaceFocusOwner(pane);
-          }
-        }
-      }
-      reportAction('toggleWorkspaceSurface', pane);
-    },
-    [
-      hidePlaybackWorkspace,
-      reportAction,
-      revealPlaybackWorkspace,
-      setPlaybackPaneVisible,
-      setPlaybackWorkspaceFocusOwner,
-    ],
-  );
+  const handleTogglePlaybackWorkspace = useCallback(() => {
+    if (usePlaybackStore.getState().playbackSession.visible) {
+      hidePlaybackWorkspace();
+    } else {
+      revealPlaybackWorkspace({ focusOwner: 'route' });
+    }
+    reportAction('togglePlaybackWorkspace', 'overlay');
+  }, [hidePlaybackWorkspace, reportAction, revealPlaybackWorkspace]);
 
   // =========================================================================
   // Render
@@ -1812,22 +1010,13 @@ export function CanvasApp() {
                   onNodeRotateEnd={handleNodeRotateEnd}
                   onNodeUpdateData={handleNodeUpdateData}
                   onConnectionSelect={handleConnectionSelect}
-                  onConnectionStart={handleConnectionStart}
                   onConnectionComplete={handleConnectionComplete}
-                  onConnectionCancel={handleConnectionCancel}
+                  onConnectionStateChange={setIsConnecting}
                   onCanvasClick={handleCanvasClick}
                   onMarqueeSelect={handleMarqueeSelect}
-                  onScriptLoadScenes={handleScriptLoadScenes}
-                  scriptIndexStates={scriptIndexStates}
-                  onScriptOpen={handleScriptOpen}
-                  onScriptNavigateToScene={handleScriptNavigateToScene}
                   onDocumentOpen={handleDocumentOpen}
-                  onDocumentLoadText={handleDocumentLoadText}
-                  documentTextProjections={documentTextProjections}
                   onCanvasEmbedOpen={handleCanvasEmbedOpen}
-                  onRemoveContainerChild={handleRemoveContainerChild}
                   onConnectionUpdate={updateConnection}
-                  expandedNodeId={expandedNodeId}
                   isPanMode={isPanMode}
                   isSpacePanActive={isSpacePanActive}
                   isGridVisible={isGridVisible}
@@ -1839,10 +1028,9 @@ export function CanvasApp() {
                     onRedo={redo}
                     isSelectMode={interactionTool === 'select'}
                     onSelectTool={selectInteractionTool}
-                    isNodeLibraryVisible={isRightNodeTreeVisible}
-                    onToggleNodeLibrary={() => setIsRightNodeTreeVisible((visible) => !visible)}
-                    workspaceSurfaceState={workspaceSurfaceState}
-                    onToggleWorkspaceSurface={handleToggleWorkspaceSurface}
+                    onSelectAddAction={handleSelectAddAction}
+                    playbackWorkspaceVisible={playbackWorkspaceVisible}
+                    onTogglePlaybackWorkspace={handleTogglePlaybackWorkspace}
                     onOpenExport={() => {
                       reportAction('openExport', t('toolbar.export'));
                     }}
@@ -1913,33 +1101,6 @@ export function CanvasApp() {
                   />
                 )}
 
-                <FloatingPanelHost panels={floatingPanels} />
-
-                <GenerationPromptPanel
-                  visible={generationPanelState.visible}
-                  target={generationPanelTarget}
-                  onGenerate={handlePanelGenerate}
-                  onClose={closeGenerationPanel}
-                />
-
-                {contentOverlayState.visible && contentOverlayState.nodeId && (
-                  <ContentOverlay
-                    nodeId={contentOverlayState.nodeId}
-                    onClose={closeContentOverlay}
-                    creativeAiStatus={creativeAiActionResults[contentOverlayState.nodeId]}
-                    onOptimizePrompt={handleOverlayOptimizePrompt}
-                    onGenerateImage={handleOverlayGenerateImage}
-                    onEditImage={handleOverlayEditImage}
-                    onGenerateVideo={handleOverlayGenerateVideo}
-                    onEditVideo={handleOverlayEditVideo}
-                    onCandidateAccept={handleOverlayCandidateAccept}
-                    onCandidateReject={handleOverlayCandidateReject}
-                    onCandidateRetry={handleOverlayCandidateRetry}
-                    onCandidateDelete={handleOverlayCandidateDelete}
-                    onCandidateInspect={handleOverlayCandidateInspect}
-                  />
-                )}
-
                 {isDragOver && (
                   <div
                     className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none"
@@ -1979,83 +1140,9 @@ export function CanvasApp() {
             }
           />
         }
-        rightDock={
-          isRightNodeTreeVisible
-            ? {
-                id: 'canvas-right-node-tree-panel',
-                panelId: 'canvas.nodeLibraryDock',
-                defaultSize: 280,
-                minSize: 220,
-                maxSize: 420,
-                label: t('library.title'),
-                className: 'canvas-right-node-tree-panel',
-                contentClassName: 'canvas-right-node-tree-panel-content',
-                resizeHandleClassName: 'canvas-right-node-tree-resize-handle',
-                resizePersistence: { api: vscode },
-                groups: {
-                  label: t('rightDock.mode.label'),
-                  activeId: rightDockMode,
-                  onActiveIdChange: (id) => setRightDockMode(toCanvasRightDockMode(id)),
-                  items: [
-                    {
-                      id: 'basic',
-                      label: t('rightDock.mode.basic'),
-                      description: t('rightDock.mode.basic.description'),
-                    },
-                    {
-                      id: 'professional',
-                      label: t('rightDock.mode.professional'),
-                      description: t('rightDock.mode.professional.description'),
-                    },
-                  ],
-                },
-                containerProps: {
-                  'data-canvas-right-node-tree': 'true',
-                  ...getKeyboardBoundaryMetadata({
-                    scope: 'property-panel',
-                    ownerId: 'canvas-node-library',
-                    priority: 10,
-                    ownedKeys: [
-                      'Enter',
-                      'Escape',
-                      'Space',
-                      'Tab',
-                      'ArrowUp',
-                      'ArrowDown',
-                      'ArrowLeft',
-                      'ArrowRight',
-                    ],
-                  }),
-                },
-                children: (
-                  <NodeLibraryPanel
-                    coreDescriptors={
-                      rightDockMode === 'professional'
-                        ? coreNodeTypeDescriptors
-                        : basicNodeLibraryDescriptors
-                    }
-                    subsystemManifests={
-                      rightDockMode === 'professional' ? WEBVIEW_SUBSYSTEM_REGISTRY.manifests : []
-                    }
-                    nodeTypeDescriptors={
-                      rightDockMode === 'professional' ? subsystemNodeTypeDescriptors : {}
-                    }
-                    activeSubsystemIds={rightDockMode === 'professional' ? activeSubsystemIds : []}
-                    onCreateNode={handleCreateLibraryNode}
-                    onPickNodeSource={handlePickLibraryNodeSource}
-                    onLoadSubsystem={handleLoadSubsystem}
-                  />
-                ),
-              }
-            : undefined
-        }
       />
     </div>
   );
-}
-
-function toCanvasRightDockMode(id: string): CanvasRightDockMode {
-  return id === 'professional' ? 'professional' : 'basic';
 }
 
 function CanvasBoardNavigationBar({
@@ -2077,7 +1164,7 @@ function CanvasBoardNavigationBar({
   if (relatedBoards.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute left-3 right-3 top-3 z-20 flex min-w-0 flex-wrap items-center gap-2">
+    <div className="canvas-board-navigation-bar pointer-events-none absolute left-3 right-3 z-20 flex min-w-0 flex-wrap items-center gap-2">
       {relatedBoards.slice(0, 6).map((board, index) => {
         const boardDiagnostics = validateCanvasBoardRef(board.ref);
         const disabled = boardDiagnostics.some((diagnostic) => diagnostic.severity === 'error');

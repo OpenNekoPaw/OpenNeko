@@ -22,7 +22,7 @@ function createCanvasDataWithNode(nodeId: string, x = 0, y = 0): CanvasData {
     nodes: [
       {
         id: nodeId,
-        type: 'annotation',
+        type: 'markdown',
         position: { x, y },
         size: { width: 100, height: 80 },
         zIndex: 0,
@@ -152,7 +152,7 @@ describe('historyStore', () => {
       nodes: [
         {
           id: 'n1',
-          type: 'annotation',
+          type: 'markdown',
           position: { x: 0, y: 0 },
           size: { width: 100, height: 80 },
           zIndex: 0,
@@ -166,7 +166,7 @@ describe('historyStore', () => {
       nodes: [
         {
           id: 'n2',
-          type: 'annotation',
+          type: 'markdown',
           position: { x: 50, y: 50 },
           size: { width: 100, height: 80 },
           zIndex: 0,

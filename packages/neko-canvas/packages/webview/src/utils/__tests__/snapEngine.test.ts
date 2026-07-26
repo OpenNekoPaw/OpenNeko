@@ -9,7 +9,7 @@ import type { CanvasNode } from '@neko/shared';
 function createNode(id: string, x: number, y: number, width = 100, height = 80): CanvasNode {
   return {
     id,
-    type: 'annotation',
+    type: 'markdown',
     position: { x, y },
     size: { width, height },
     zIndex: 0,

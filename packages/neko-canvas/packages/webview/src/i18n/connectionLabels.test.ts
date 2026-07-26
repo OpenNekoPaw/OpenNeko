@@ -24,9 +24,11 @@ describe('connectionLabels', () => {
   it('localizes connection direction and aggregate labels', () => {
     setLocale('zh-cn');
 
-    expect(resolveConnectionDirectionLabel(node('shot'), node('scene'))).toBe('镜头 → 场景');
-    expect(resolveConnectionTitle({ type: 'reference' }, node('shot'), node('scene'))).toBe(
-      '引用：镜头 → 场景',
+    expect(resolveConnectionDirectionLabel(node('markdown'), node('media'))).toBe(
+      'Markdown → 媒体',
+    );
+    expect(resolveConnectionTitle({ type: 'reference' }, node('markdown'), node('media'))).toBe(
+      '引用：Markdown → 媒体',
     );
     expect(resolveAggregateConnectionCountLabel(3)).toBe('3 条连接');
   });

@@ -4,7 +4,7 @@ import { createResourceRef, type CanvasNode, type GroupCanvasNode } from '@neko/
 import { SelectionContextToolbar } from './SelectionContextToolbar';
 
 describe('SelectionContextToolbar', () => {
-  it('keeps retained material actions primary and dangerous deletion in overflow', () => {
+  it('keeps canonical media preview primary and dangerous deletion in overflow', () => {
     const node: CanvasNode = {
       id: 'media',
       type: 'media',
@@ -36,21 +36,22 @@ describe('SelectionContextToolbar', () => {
 
     expect(markup).toContain('data-selection-overflow="true"');
     expect(markup).not.toContain('data-selection-action="node:edit-media"');
+    expect(markup).toContain('data-selection-action="selection:quick-generate"');
     expect(markup).toContain('data-selection-action="node:open-media-preview"');
     expect(markup).toContain('data-selection-action="node:duplicate"');
-    expect(markup).toContain('data-selection-action="node:copy-to-media-library"');
-    expect(markup).toContain('data-selection-action="node:open-content-overlay"');
+    expect(markup).not.toContain('data-selection-action="node:copy-to-media-library"');
+    expect(markup).not.toContain('data-selection-action="node:open-content-overlay"');
     expect(markup).toContain('data-selection-overflow-actions="delete-selection"');
   });
 
-  it('does not expose a no-op fullscreen action for externally owned document nodes', () => {
+  it('does not expose a content overlay for canonical file nodes', () => {
     const node = {
-      id: 'document',
-      type: 'document',
+      id: 'file',
+      type: 'file',
       position: { x: 0, y: 0 },
       size: { width: 220, height: 280 },
       zIndex: 1,
-      data: { title: 'External document' },
+      data: { title: 'External document', path: 'notes.md' },
     } as CanvasNode;
 
     const markup = renderToStaticMarkup(
@@ -81,7 +82,7 @@ describe('SelectionContextToolbar', () => {
           node,
           {
             id: 'child',
-            type: 'annotation',
+            type: 'markdown',
             parentId: node.id,
             position: { x: 920, y: 20 },
             size: { width: 80, height: 60 },
@@ -97,12 +98,9 @@ describe('SelectionContextToolbar', () => {
 
     expect(markup).toContain('data-selection-context-toolbar="true"');
     expect(markup).toContain('data-selection-count="1"');
-    expect(markup).toContain('data-selection-action="container:arrange-stable"');
-    expect(markup).toContain('data-selection-action="container:fit-to-content"');
-    expect(markup).toContain('data-selection-action="container:collapse-group"');
+    expect(markup).toContain('data-selection-action="group:fit"');
+    expect(markup).toContain('data-selection-action="group:toggle"');
     expect(markup).toContain('data-selection-overflow="true"');
     expect(markup).toContain('top:10px');
-    expect(markup).toContain('Auto-arrange');
-    expect(markup).toContain('Fit to content');
   });
 });

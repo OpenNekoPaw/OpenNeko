@@ -31,7 +31,6 @@
     "neko.neko-preview"
   ],
   "activationEvents": [
-    "onView:neko.entityInspector",
     "onCommand:neko.assets.queryMediaLibrary",
     "onCommand:neko.entity.inspectEntity",
     "onCommand:neko.entityInspector.follow",

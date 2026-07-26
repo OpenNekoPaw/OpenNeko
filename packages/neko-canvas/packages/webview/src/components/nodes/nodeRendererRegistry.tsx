@@ -1,6 +1,5 @@
 import React from 'react';
 import { UnsupportedNode } from './UnsupportedNode';
-import { NodeContentDispatcher } from '../content/NodeContentDispatcher';
 import type { NodeRendererContext, NodeRendererRegistry } from './nodeRendererTypes';
 
 export function renderCanvasNode(
@@ -9,16 +8,5 @@ export function renderCanvasNode(
 ): React.ReactNode {
   const renderer = registry[context.node.type];
 
-  return (
-    <NodeContentDispatcher
-      context={context}
-      renderDefaultNode={(defaultContext) =>
-        renderer ? (
-          renderer(defaultContext)
-        ) : (
-          <UnsupportedNode key={context.node.id} {...defaultContext} />
-        )
-      }
-    />
-  );
+  return renderer ? renderer(context) : <UnsupportedNode key={context.node.id} {...context} />;
 }

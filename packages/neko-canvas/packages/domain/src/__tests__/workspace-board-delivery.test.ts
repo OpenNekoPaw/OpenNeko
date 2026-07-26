@@ -60,7 +60,7 @@ describe('Workspace Board delivery coordinator', () => {
 
     expect(mutation.saveCount).toBe(2);
     expect(mutation.canvasData.nodes).toHaveLength(2);
-    expect(mutation.canvasData.nodes.every((node) => node.type === 'text')).toBe(true);
+    expect(mutation.canvasData.nodes.every((node) => node.type === 'markdown')).toBe(true);
     expect(mutation.canvasData.nodes.every((node) => node.parentId === undefined)).toBe(true);
   });
 
@@ -210,7 +210,7 @@ describe('Workspace Board delivery coordinator', () => {
         ...mutation.canvasData.nodes,
         {
           id: occupiedId,
-          type: 'text',
+          type: 'markdown',
           position: { x: 0, y: 0 },
           size: { width: 320, height: 180 },
           zIndex: 1,
@@ -263,7 +263,7 @@ class MemoryMutationPort implements CanvasWorkspaceBoardMutationPort {
           ...this.canvasData.nodes,
           {
             id: 'user-edit',
-            type: 'text',
+            type: 'markdown',
             position: { x: 8, y: 8 },
             size: { width: 320, height: 180 },
             zIndex: 1,

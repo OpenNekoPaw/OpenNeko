@@ -4,7 +4,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MenuAction } from '@neko/ui/primitives';
-import { buildNodeMenuItems, ContextMenu } from './ContextMenu';
+import { buildCanvasMenuItems, buildNodeMenuItems, ContextMenu } from './ContextMenu';
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -50,8 +50,7 @@ describe('Canvas ContextMenu builders', () => {
       selectedCount: 1,
       contextNodeId: 'scene-1',
       onSetPlaybackEntry,
-      onAddText: vi.fn(),
-      onAddScene: vi.fn(),
+      onAddAction: vi.fn(),
       onDelete: vi.fn(),
       onSelectAll: vi.fn(),
       onFitContent: vi.fn(),
@@ -69,5 +68,44 @@ describe('Canvas ContextMenu builders', () => {
     playbackEntry?.onClick?.();
 
     expect(onSetPlaybackEntry).toHaveBeenCalledWith('scene-1');
+  });
+
+  it('projects the canonical add catalog without an empty Job action', () => {
+    const onAddAction = vi.fn();
+    const canvasPosition = { x: 18, y: 42 };
+    const items = buildCanvasMenuItems({
+      canvasPosition,
+      hasSelection: false,
+      selectedCount: 0,
+      onAddAction,
+      onDelete: vi.fn(),
+      onSelectAll: vi.fn(),
+      onFitContent: vi.fn(),
+      onResetView: vi.fn(),
+    });
+    const groups = items.filter(
+      (item): item is MenuAction => !('separator' in item) && item.submenu !== undefined,
+    );
+
+    expect(groups.slice(0, 3).map((group) => group.label)).toEqual([
+      'Create',
+      'Import',
+      'Reference',
+    ]);
+    const actions = groups.flatMap(
+      (group) => group.submenu?.filter((item): item is MenuAction => !('separator' in item)) ?? [],
+    );
+    expect(actions.map((action) => action.label)).toEqual([
+      'Markdown',
+      'Group',
+      'Image',
+      'Audio',
+      'Video',
+      'File',
+      'Subcanvas',
+    ]);
+
+    actions.find((action) => action.label === 'Image')?.onClick?.();
+    expect(onAddAction).toHaveBeenCalledWith('image', canvasPosition);
   });
 });

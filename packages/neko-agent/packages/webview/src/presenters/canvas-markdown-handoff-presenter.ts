@@ -26,8 +26,6 @@ export interface CanvasMarkdownHandoffRequest {
   readonly target?: CanvasMarkdownCapabilityTarget;
   readonly provenance?: PluginTransferProvenance;
   readonly userIntent?: string;
-  readonly declaredIntentHint?: 'auto' | 'note' | 'table' | 'creative-table';
-  readonly declaredProfileHint?: string;
 }
 
 export interface ProjectCanvasMarkdownHandoffRequestOptions {
@@ -37,8 +35,6 @@ export interface ProjectCanvasMarkdownHandoffRequestOptions {
   readonly provenance?: PluginTransferProvenance;
   readonly title?: string;
   readonly userIntent?: string;
-  readonly declaredIntentHint?: CanvasMarkdownHandoffRequest['declaredIntentHint'];
-  readonly declaredProfileHint?: string;
 }
 
 export function projectCanvasMarkdownHandoffRequest(
@@ -47,8 +43,7 @@ export function projectCanvasMarkdownHandoffRequest(
   const markdown = options.markdown.trim();
   if (!markdown) return null;
 
-  const handoffKind = inferCanvasMarkdownHandoffKind(markdown);
-  if (!handoffKind) return null;
+  if (!containsReviewableMarkdownTable(markdown)) return null;
 
   const resources = projectCanvasMarkdownResources(options.markdownResources);
   const stableRefs = projectCanvasMarkdownStableRefs(options.markdownResources);
@@ -56,16 +51,11 @@ export function projectCanvasMarkdownHandoffRequest(
   const promptSpans = projectCanvasMarkdownPromptSpans(options.markdownResources);
   const target = projectCanvasMarkdownTarget(options.target);
   const provenance = projectCanvasMarkdownProvenance(options.provenance);
-  const declaredIntentHint = options.declaredIntentHint ?? handoffKind.declaredIntentHint;
-  const declaredProfileHint = options.declaredProfileHint ?? handoffKind.declaredProfileHint;
-
   return {
     markdown,
     sourceFormat: 'gfm-table',
     ...(options.title ? { title: options.title } : {}),
     ...(options.userIntent ? { userIntent: options.userIntent } : {}),
-    ...(declaredIntentHint ? { declaredIntentHint } : {}),
-    ...(declaredProfileHint ? { declaredProfileHint } : {}),
     ...(resources.length > 0 ? { resources } : {}),
     ...(stableRefs.length > 0 ? { stableRefs } : {}),
     ...(diagnostics.length > 0 ? { diagnostics } : {}),
@@ -153,18 +143,12 @@ function isSafeCanvasMarkdownHandoffResource(resource: CanvasMarkdownResourceRef
   return true;
 }
 
-interface CanvasMarkdownHandoffKind {
-  readonly declaredIntentHint?: CanvasMarkdownHandoffRequest['declaredIntentHint'];
-  readonly declaredProfileHint?: string;
-}
-
-function inferCanvasMarkdownHandoffKind(markdown: string): CanvasMarkdownHandoffKind | null {
+function containsReviewableMarkdownTable(markdown: string): boolean {
   const tables = extractGfmTables(markdown);
   const handoffTables = tables.filter(
     (table) => table.rowCount > 0 && !isResourceMetadataInventoryTable(table.headers),
   );
-  if (handoffTables.length === 0) return null;
-  return {};
+  return handoffTables.length > 0;
 }
 
 interface GfmTableSummary {
@@ -206,8 +190,6 @@ function extractGfmTables(markdown: string): readonly GfmTableSummary[] {
 
 function isResourceMetadataInventoryTable(headers: readonly string[]): boolean {
   const normalizedHeaders = headers.map(normalizeTableHeader);
-  if (hasStoryboardCreativeAnchors(normalizedHeaders)) return false;
-
   const hasPage = normalizedHeaders.some((header) =>
     ['page', 'pageno', 'pagenumber', 'sourcepage', '页', '页码', '页面', '来源页'].includes(header),
   );
@@ -236,12 +218,6 @@ function isResourceMetadataInventoryTable(headers: readonly string[]): boolean {
   );
 
   return (hasPage && hasAsset && hasSize) || (hasAsset && hasSize && hasType);
-}
-
-function hasStoryboardCreativeAnchors(normalizedHeaders: readonly string[]): boolean {
-  const hasScene = normalizedHeaders.some((header) => header === 'scene' || header === '场景');
-  const hasShot = normalizedHeaders.some((header) => header === 'shot' || header === '镜头');
-  return hasScene && hasShot;
 }
 
 function normalizeTableHeader(header: string): string {

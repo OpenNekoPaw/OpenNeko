@@ -133,9 +133,9 @@ describe('NodeWorkspaceBoardMutationPort', () => {
     const board = loadNkc(
       await fs.readFile(path.join(root, 'neko', 'boards', 'workspace.nkc'), 'utf8'),
     );
-    expect(board.data.nodes.filter((node) => node.type === 'document')).toHaveLength(1);
-    expect(board.data.nodes.filter((node) => node.type === 'text')).toHaveLength(1);
-    expect(board.data.nodes.find((node) => node.type === 'text')).toMatchObject({
+    expect(board.data.nodes.filter((node) => node.type === 'file')).toHaveLength(1);
+    expect(board.data.nodes.filter((node) => node.type === 'markdown')).toHaveLength(1);
+    expect(board.data.nodes.find((node) => node.type === 'markdown')).toMatchObject({
       data: { title: 'Material Analysis', content: expect.stringContaining('selected brief') },
     });
   });

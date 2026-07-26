@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isResourceRef, type DelegateAction, type ResourceRef } from '@neko/shared';
+import { formatTime } from '@neko/neko-client';
 import { dispatchPreviewDelegate } from './previewDelegates';
 import { isImagePreviewUrl, isSafeWebviewUrl, WebviewPreviewResolver } from './previewResolver';
 import { PreviewRuntime } from './previewRuntime';
@@ -9,7 +10,11 @@ import type {
   RuntimePreviewVariant,
 } from './types';
 import { InlineVideoPlayer } from '../components/media/InlineVideoPlayer';
-import { InlineAudioPlayer } from '../components/media/InlineAudioPlayer';
+import {
+  AudioPlayerSurface,
+  InlineAudioPlayer,
+  type AudioPlayerLayout,
+} from '../components/media/InlineAudioPlayer';
 import { usePlaybackStore } from '../stores/playbackStore';
 import type { PlaybackSurfaceKind } from '../stores/playbackStore';
 import { getGlobalVSCodeApi } from '../utils/vscode';
@@ -22,6 +27,7 @@ export interface PreviewRendererProps {
   surfaceKind?: PlaybackSurfaceKind;
   playbackControl?: PreviewPlaybackControl;
   chrome?: 'contained' | 'full-bleed';
+  audioLayout?: AudioPlayerLayout;
 }
 
 export type PreviewRenderer = React.ComponentType<PreviewRendererProps>;
@@ -37,10 +43,7 @@ function createPreviewRendererRegistry(): PreviewRendererRegistry {
     'video-poster': VisualPreviewRenderer,
     'video-proxy': VideoPreviewRenderer,
     'audio-waveform': AudioPreviewRenderer,
-    'model-screenshot': VisualPreviewRenderer,
-    'model-turntable': VisualPreviewRenderer,
     'generation-candidate': VisualPreviewRenderer,
-    'project-thumbnail': ProjectPreviewRenderer,
     unavailable: FallbackPreviewRenderer,
   };
 }
@@ -132,6 +135,14 @@ interface MediaStreamState {
   startTime: number;
 }
 
+interface MediaDescription {
+  readonly duration: number;
+  readonly width?: number;
+  readonly height?: number;
+  readonly fps?: number;
+  readonly hasAudio?: boolean;
+}
+
 const PLAYBACK_PROGRESS_SYNC_INTERVAL_MS = 250;
 const PLAYBACK_PROGRESS_SYNC_DELTA_SECONDS = 0.25;
 
@@ -151,12 +162,18 @@ function useMediaStream(
   mediaType: 'video' | 'audio',
   surfaceKind: PlaybackSurfaceKind,
   resourceRef: ResourceRef | undefined,
+  knownDuration: number,
 ) {
   const [surfaceId] = useState(() => createPlaybackSurfaceId(mediaType));
   const [stream, setStream] = useState<MediaStreamState | null>(null);
+  const [mediaDescription, setMediaDescription] = useState<MediaDescription>(() => ({
+    duration: knownDuration,
+  }));
   const [probing, setProbing] = useState(false);
   const isPausedRef = useRef(false);
-  const listenerRef = useRef<((e: MessageEvent) => void) | null>(null);
+  const mediaInfoRef = useRef<Record<string, unknown> | null>(null);
+  const pendingPlaybackStartRef = useRef<number | null>(null);
+  const requestProbeRef = useRef<() => void>(() => undefined);
   const streamDurationRef = useRef(0);
   const stoppedPlaybackRef = useRef(true);
 
@@ -175,6 +192,127 @@ function useMediaStream(
     currentTime: savedStartTime,
     updatedAtMs: 0,
   });
+
+  const postPlaybackRequest = useCallback(
+    (mediaInfo: Record<string, unknown>, startTime: number) => {
+      const vscode = getGlobalVSCodeApi();
+      if (!vscode) return;
+      vscode.postMessage({
+        type: 'media:play',
+        nodeId: surfaceId,
+        ...(assetPath ? { assetPath } : {}),
+        ...(resourceRef ? { resourceRef } : {}),
+        mediaInfo,
+        mediaType,
+        startTime,
+        speed: 1.0,
+      });
+    },
+    [assetPath, mediaType, resourceRef, surfaceId],
+  );
+
+  useEffect(() => {
+    const vscode = getGlobalVSCodeApi();
+    const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
+    if (!vscode || !sourceKey) {
+      setProbing(false);
+      return;
+    }
+
+    mediaInfoRef.current = null;
+    pendingPlaybackStartRef.current = null;
+    streamDurationRef.current = knownDuration;
+    setMediaDescription({ duration: knownDuration });
+    let probeRequested = false;
+    const requestProbe = () => {
+      if (probeRequested) return;
+      probeRequested = true;
+      setProbing(true);
+      vscode.postMessage({
+        type: 'media:probe',
+        nodeId: surfaceId,
+        ...(assetPath ? { assetPath } : {}),
+        ...(resourceRef ? { resourceRef } : {}),
+        mediaType,
+      });
+    };
+    requestProbeRef.current = requestProbe;
+
+    const handleMessage = (event: MessageEvent) => {
+      const msg = event.data as Record<string, unknown>;
+      if (msg.type === 'media:probeResult' && msg.nodeId === surfaceId) {
+        setProbing(false);
+        if (msg.error) {
+          probeRequested = false;
+          pendingPlaybackStartRef.current = null;
+          return;
+        }
+        if (!isRecord(msg.mediaInfo)) {
+          throw new Error(`Media probe for "${sourceKey}" returned invalid mediaInfo.`);
+        }
+        const mediaInfo = msg.mediaInfo;
+        const description = readMediaDescription(mediaInfo, knownDuration);
+        mediaInfoRef.current = mediaInfo;
+        streamDurationRef.current = description.duration;
+        setMediaDescription(description);
+
+        const pendingStartTime = pendingPlaybackStartRef.current;
+        if (pendingStartTime !== null) {
+          pendingPlaybackStartRef.current = null;
+          postPlaybackRequest(mediaInfo, pendingStartTime);
+        }
+      }
+      if (msg.type === 'media:streamReady' && msg.nodeId === surfaceId) {
+        setProbing(false);
+        if (msg.error) return;
+        if (!isRecord(msg.mediaInfo)) {
+          throw new Error(`Media stream for "${sourceKey}" returned invalid mediaInfo.`);
+        }
+        const description = readMediaDescription(msg.mediaInfo, knownDuration);
+        const startTime = currentTimeRef.current;
+        streamDurationRef.current = description.duration;
+        setMediaDescription(description);
+        usePlaybackStore.getState().startActivePlayback({
+          sourceKey,
+          ...(assetPath ? { assetPath } : {}),
+          mediaType,
+          surfaceId,
+          surfaceKind,
+          currentTime: startTime,
+          duration: description.duration,
+        });
+        lastProgressSyncRef.current = {
+          currentTime: startTime,
+          updatedAtMs: getMonotonicTimeMs(),
+        };
+        setStream({
+          videoStreamUrl: (msg.videoStreamUrl as string) ?? null,
+          audioStreamUrl: (msg.audioStreamUrl as string) ?? null,
+          width: description.width ?? 640,
+          height: description.height ?? 360,
+          fps: description.fps ?? 30,
+          duration: description.duration,
+          startTime,
+        });
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    requestProbe();
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      requestProbeRef.current = () => undefined;
+    };
+  }, [
+    assetPath,
+    knownDuration,
+    mediaType,
+    postPlaybackRequest,
+    resourceRef,
+    surfaceId,
+    surfaceKind,
+  ]);
 
   const startPlayback = useCallback(
     (resumeFromTime?: number) => {
@@ -196,7 +334,6 @@ function useMediaStream(
         return;
       }
 
-      setProbing(true);
       isPausedRef.current = false;
       stoppedPlaybackRef.current = false;
 
@@ -206,69 +343,24 @@ function useMediaStream(
         sourceHandoff?.startTime ??
         playbackStore.getPlayback(sourceKey)?.currentTime ??
         savedStartTime;
-
-      const handleMessage = (event: MessageEvent) => {
-        const msg = event.data as Record<string, unknown>;
-        if (msg.type === 'media:probeResult' && msg.nodeId === surfaceId) {
-          if (msg.error) {
-            setProbing(false);
-            return;
-          }
-          const mediaInfo = msg.mediaInfo as Record<string, unknown>;
-          vscode.postMessage({
-            type: 'media:play',
-            nodeId: surfaceId,
-            ...(assetPath ? { assetPath } : {}),
-            ...(resourceRef ? { resourceRef } : {}),
-            mediaInfo,
-            mediaType,
-            startTime,
-            speed: 1.0,
-          });
-        }
-        if (msg.type === 'media:streamReady' && msg.nodeId === surfaceId) {
-          setProbing(false);
-          if (msg.error) return;
-          const mediaInfo = msg.mediaInfo as Record<string, unknown>;
-          const dur = (mediaInfo?.duration as number) ?? 0;
-          streamDurationRef.current = dur;
-          usePlaybackStore.getState().startActivePlayback({
-            sourceKey,
-            ...(assetPath ? { assetPath } : {}),
-            mediaType,
-            surfaceId,
-            surfaceKind,
-            currentTime: startTime,
-            duration: dur,
-          });
-          currentTimeRef.current = startTime;
-          lastProgressSyncRef.current = {
-            currentTime: startTime,
-            updatedAtMs: getMonotonicTimeMs(),
-          };
-          setStream({
-            videoStreamUrl: (msg.videoStreamUrl as string) ?? null,
-            audioStreamUrl: (msg.audioStreamUrl as string) ?? null,
-            width: (mediaInfo?.width as number) ?? 640,
-            height: (mediaInfo?.height as number) ?? 360,
-            fps: (mediaInfo?.fps as number) ?? 30,
-            duration: dur,
-            startTime,
-          });
-        }
-      };
-
-      listenerRef.current = handleMessage;
-      window.addEventListener('message', handleMessage);
-      vscode.postMessage({
-        type: 'media:probe',
-        nodeId: surfaceId,
-        ...(assetPath ? { assetPath } : {}),
-        ...(resourceRef ? { resourceRef } : {}),
-        mediaType,
-      });
+      currentTimeRef.current = startTime;
+      const mediaInfo = mediaInfoRef.current;
+      if (mediaInfo) {
+        postPlaybackRequest(mediaInfo, startTime);
+        return;
+      }
+      pendingPlaybackStartRef.current = startTime;
+      requestProbeRef.current();
     },
-    [assetPath, mediaType, resourceRef, savedStartTime, surfaceId, surfaceKind],
+    [
+      assetPath,
+      mediaType,
+      postPlaybackRequest,
+      resourceRef,
+      savedStartTime,
+      surfaceId,
+      surfaceKind,
+    ],
   );
 
   const pausePlayback = useCallback(
@@ -349,10 +441,6 @@ function useMediaStream(
     (currentTime: number) => {
       if (stoppedPlaybackRef.current) return;
       stoppedPlaybackRef.current = true;
-      if (listenerRef.current) {
-        window.removeEventListener('message', listenerRef.current);
-        listenerRef.current = null;
-      }
       const vscode = getGlobalVSCodeApi();
       if (vscode && createMediaPlaybackSourceKey(assetPath, resourceRef)) {
         vscode.postMessage({ type: 'media:stop', nodeId: surfaceId });
@@ -390,16 +478,9 @@ function useMediaStream(
     stopPlayback,
   });
 
-  useEffect(() => {
-    return () => {
-      if (listenerRef.current) {
-        window.removeEventListener('message', listenerRef.current);
-      }
-    };
-  }, []);
-
   return {
     stream,
+    mediaDescription,
     probing,
     isPaused: isPausedRef.current,
     surfaceId,
@@ -410,6 +491,34 @@ function useMediaStream(
     updatePlaybackProgress,
     stopPlayback,
   };
+}
+
+function readMediaDescription(
+  mediaInfo: Record<string, unknown>,
+  knownDuration: number,
+): MediaDescription {
+  const duration = readPositiveFiniteNumber(mediaInfo['duration']) ?? knownDuration;
+  return {
+    duration,
+    ...(readPositiveFiniteNumber(mediaInfo['width']) !== undefined
+      ? { width: readPositiveFiniteNumber(mediaInfo['width']) }
+      : {}),
+    ...(readPositiveFiniteNumber(mediaInfo['height']) !== undefined
+      ? { height: readPositiveFiniteNumber(mediaInfo['height']) }
+      : {}),
+    ...(readPositiveFiniteNumber(mediaInfo['fps']) !== undefined
+      ? { fps: readPositiveFiniteNumber(mediaInfo['fps']) }
+      : {}),
+    ...(typeof mediaInfo['hasAudio'] === 'boolean' ? { hasAudio: mediaInfo['hasAudio'] } : {}),
+  };
+}
+
+function readPositiveFiniteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function createMediaPlaybackSourceKey(
@@ -621,6 +730,7 @@ function VideoPreviewRenderer({
     readImagePreviewUrl(variant?.runtimeUrl) ?? readImagePreviewUrl(getStableSafeUrl(source));
   const assetPath = source.asset?.path;
   const resourceRef = readPreviewSourceResourceRef(source);
+  const knownDuration = readPreviewSourceDuration(source);
   const capturedFrame = useCaptureFrame(assetPath, source.id, resourceRef);
   const canStartPlayback = Boolean(assetPath || resourceRef);
   const {
@@ -632,10 +742,13 @@ function VideoPreviewRenderer({
     seekPlayback,
     updatePlaybackProgress,
     stopPlayback,
-  } = useMediaStream(assetPath, 'video', surfaceKind, resourceRef);
+    mediaDescription,
+  } = useMediaStream(assetPath, 'video', surfaceKind, resourceRef, knownDuration);
 
   const posterUrl = capturedFrame ?? thumbnailUrl;
   const consumedPlaybackRequestRef = useRef<string | undefined>();
+  const onPlaybackTimeUpdate = playbackControl?.onTimeUpdate;
+  const onPlaybackEnded = playbackControl?.onEnded;
 
   useEffect(() => {
     if (
@@ -664,25 +777,25 @@ function VideoPreviewRenderer({
     (currentTime: number) => {
       const synced = updatePlaybackProgress(currentTime);
       if (!synced || !stream) return;
-      playbackControl?.onTimeUpdate?.({
+      onPlaybackTimeUpdate?.({
         sourceId: source.id,
         currentTime,
         duration: stream.duration,
       });
     },
-    [playbackControl?.onTimeUpdate, source.id, stream, updatePlaybackProgress],
+    [onPlaybackTimeUpdate, source.id, stream, updatePlaybackProgress],
   );
 
   const handleEnded = useCallback(
     (currentTime: number) => {
-      playbackControl?.onEnded?.({
+      onPlaybackEnded?.({
         sourceId: source.id,
         mediaType: 'video',
         currentTime,
         duration: stream?.duration ?? currentTime,
       });
     },
-    [playbackControl?.onEnded, source.id, stream?.duration],
+    [onPlaybackEnded, source.id, stream?.duration],
   );
 
   if (stream) {
@@ -691,6 +804,7 @@ function VideoPreviewRenderer({
         className={getMediaPreviewFrameClassName(chrome, 'bg-black')}
         data-preview-surface="video"
         data-preview-chrome={chrome}
+        data-media-duration={String(stream.duration)}
       >
         <InlineVideoPlayer
           videoStreamUrl={stream.videoStreamUrl}
@@ -719,6 +833,10 @@ function VideoPreviewRenderer({
       className={getMediaPreviewFrameClassName(chrome, 'bg-black/30')}
       data-preview-surface="video"
       data-preview-chrome={chrome}
+      data-media-duration={
+        mediaDescription.duration > 0 ? String(mediaDescription.duration) : undefined
+      }
+      data-preview-controlled-idle={playbackControl ? 'true' : undefined}
     >
       {posterUrl ? (
         <img
@@ -727,18 +845,27 @@ function VideoPreviewRenderer({
           className="h-full w-full object-cover"
         />
       ) : null}
-      <button
-        type="button"
-        className="absolute inset-0 flex items-center justify-center text-white/80 hover:text-white"
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          startPlayback();
-        }}
-        disabled={probing || !canStartPlayback}
-      >
-        {probing ? '...' : '▶'}
-      </button>
+      {mediaDescription.duration > 0 ? (
+        <span className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
+          {formatTime(mediaDescription.duration)}
+        </span>
+      ) : null}
+      {playbackControl ? null : (
+        <button
+          type="button"
+          className="absolute inset-0 flex items-center justify-center text-white/80 hover:text-white"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            startPlayback();
+          }}
+          disabled={probing || !canStartPlayback}
+          aria-label={t('toolbar.playbackPlay')}
+          title={t('toolbar.playbackPlay')}
+        >
+          {probing ? '...' : '▶'}
+        </button>
+      )}
     </div>
   );
 }
@@ -749,13 +876,14 @@ function readImagePreviewUrl(url: string | undefined): string | undefined {
 
 function AudioPreviewRenderer({
   source,
-  delegateActions,
   surfaceKind = 'inline',
   playbackControl,
   chrome = 'contained',
+  audioLayout = 'transport',
 }: PreviewRendererProps): React.ReactNode {
   const assetPath = source.asset?.path;
   const resourceRef = readPreviewSourceResourceRef(source);
+  const knownDuration = readPreviewSourceDuration(source);
   const canStartPlayback = Boolean(assetPath || resourceRef);
   const {
     stream,
@@ -766,8 +894,11 @@ function AudioPreviewRenderer({
     seekPlayback,
     updatePlaybackProgress,
     stopPlayback,
-  } = useMediaStream(assetPath, 'audio', surfaceKind, resourceRef);
+    mediaDescription,
+  } = useMediaStream(assetPath, 'audio', surfaceKind, resourceRef, knownDuration);
   const consumedPlaybackRequestRef = useRef<string | undefined>();
+  const onPlaybackTimeUpdate = playbackControl?.onTimeUpdate;
+  const onPlaybackEnded = playbackControl?.onEnded;
 
   useEffect(() => {
     if (
@@ -796,25 +927,25 @@ function AudioPreviewRenderer({
     (currentTime: number) => {
       const synced = updatePlaybackProgress(currentTime);
       if (!synced || !stream) return;
-      playbackControl?.onTimeUpdate?.({
+      onPlaybackTimeUpdate?.({
         sourceId: source.id,
         currentTime,
         duration: stream.duration,
       });
     },
-    [playbackControl?.onTimeUpdate, source.id, stream, updatePlaybackProgress],
+    [onPlaybackTimeUpdate, source.id, stream, updatePlaybackProgress],
   );
 
   const handleEnded = useCallback(
     (currentTime: number) => {
-      playbackControl?.onEnded?.({
+      onPlaybackEnded?.({
         sourceId: source.id,
         mediaType: 'audio',
         currentTime,
         duration: stream?.duration ?? currentTime,
       });
     },
-    [playbackControl?.onEnded, source.id, stream?.duration],
+    [onPlaybackEnded, source.id, stream?.duration],
   );
 
   if (stream && stream.audioStreamUrl) {
@@ -823,10 +954,12 @@ function AudioPreviewRenderer({
         className={getAudioPreviewFrameClassName(chrome)}
         data-preview-surface="audio"
         data-preview-chrome={chrome}
+        data-media-duration={String(stream.duration)}
       >
         <InlineAudioPlayer
           audioStreamUrl={stream.audioStreamUrl}
           duration={stream.duration}
+          audioLayout={audioLayout}
           startTime={stream.startTime}
           onPause={pausePlayback}
           onResume={resumePlayback}
@@ -847,46 +980,25 @@ function AudioPreviewRenderer({
       className={getAudioPreviewFrameClassName(chrome)}
       data-preview-surface="audio"
       data-preview-chrome={chrome}
+      data-media-duration={
+        mediaDescription.duration > 0 ? String(mediaDescription.duration) : undefined
+      }
+      data-preview-controlled-idle={playbackControl ? 'true' : undefined}
     >
-      <div className="mb-2 flex h-8 items-end gap-0.5">
-        {Array.from({ length: 24 }).map((_, index) => (
-          <div
-            key={index}
-            className="w-1 rounded-sm bg-[var(--node-selected)] opacity-70"
-            style={{ height: `${20 + ((index * 17) % 60)}%` }}
-          />
-        ))}
-      </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--control-border)] bg-[var(--node-selected)] text-xs text-white"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            startPlayback();
-          }}
-          disabled={probing || !canStartPlayback}
-        >
-          {probing ? '...' : '▶'}
-        </button>
-        <span className="truncate text-xs text-[var(--node-fg-secondary)]">
-          {source.title ?? source.asset?.path ?? source.id}
-        </span>
-        {delegateActions && delegateActions.length > 0 && (
-          <button
-            type="button"
-            className="ml-auto flex-shrink-0 rounded border border-[var(--node-border)] px-2 py-1 text-xs"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              dispatchPreviewDelegate({ action: delegateActions[0]!, asset: source.asset });
-            }}
-          >
-            Open
-          </button>
-        )}
-      </div>
+      <AudioPlayerSurface
+        layout={audioLayout}
+        currentTime={playbackControl?.startTimeSeconds ?? 0}
+        duration={mediaDescription.duration}
+        isPlaying={false}
+        disabled={probing || !canStartPlayback}
+        showPlaybackButton={!playbackControl}
+        onTogglePlay={(event) => {
+          event?.stopPropagation();
+          startPlayback();
+        }}
+        playbackLabel={t('toolbar.playbackPlay')}
+        muteLabel={t('media.mute')}
+      />
     </div>
   );
 }
@@ -905,9 +1017,7 @@ function getMediaPreviewFrameClassName(
 function getAudioPreviewFrameClassName(
   chrome: NonNullable<PreviewRendererProps['chrome']>,
 ): string {
-  return chrome === 'full-bleed'
-    ? 'h-full min-h-0 w-full bg-black/20 p-2'
-    : 'rounded-[var(--radius-sm)] border border-[var(--control-border)] bg-black/20 p-2';
+  return chrome === 'full-bleed' ? 'h-full min-h-0 w-full' : 'h-full min-h-[90px] w-full';
 }
 
 function readPreviewSourceResourceRef(source: PreviewSourceDescriptor): ResourceRef | undefined {
@@ -915,95 +1025,8 @@ function readPreviewSourceResourceRef(source: PreviewSourceDescriptor): Resource
   return isResourceRef(ref) ? ref : undefined;
 }
 
-function useProjectThumbnail(assetPath: string | undefined, nodeId: string): string | null {
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
-  const requestedRef = useRef(false);
-
-  useEffect(() => {
-    if (!assetPath || requestedRef.current) return;
-    const vscode = getGlobalVSCodeApi();
-    if (!vscode) return;
-
-    const ext = assetPath.split('.').pop()?.toLowerCase() ?? '';
-    requestedRef.current = true;
-
-    const handleMessage = (event: MessageEvent) => {
-      const msg = event.data as Record<string, unknown>;
-      if (msg.type === 'project:thumbnailResult' && msg.nodeId === nodeId) {
-        if (typeof msg.dataUrl === 'string') {
-          setThumbnailUrl(msg.dataUrl);
-        }
-        window.removeEventListener('message', handleMessage);
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    vscode.postMessage({
-      type: 'project:resolveThumbnail',
-      nodeId,
-      projectPath: assetPath,
-      projectType: ext,
-    });
-
-    return () => window.removeEventListener('message', handleMessage);
-  }, [assetPath, nodeId]);
-
-  return thumbnailUrl;
-}
-
-function ProjectPreviewRenderer({
-  source,
-  delegateActions,
-}: PreviewRendererProps): React.ReactNode {
-  const assetPath = source.asset?.path;
-  const ext = assetPath?.split('.').pop()?.toLowerCase() ?? '';
-  const thumbnailUrl = useProjectThumbnail(assetPath, source.id);
-  const typeLabel = resolveProjectTypeLabel(source.metadata?.['projectType'], ext);
-
-  return (
-    <div className="relative flex min-h-[80px] flex-col overflow-hidden rounded border border-[var(--node-border)] bg-black/20">
-      {thumbnailUrl ? (
-        <div className="flex flex-1 items-center justify-center overflow-hidden">
-          <img
-            src={thumbnailUrl}
-            alt={source.title ?? source.id}
-            className="h-full w-full object-cover"
-          />
-        </div>
-      ) : (
-        <div className="flex flex-1 items-center justify-center p-4 text-[var(--node-fg-secondary)]">
-          <span className="text-sm font-medium uppercase opacity-40">{ext || 'nk'}</span>
-        </div>
-      )}
-      <div className="flex items-center justify-between gap-2 border-t border-[var(--node-border)] px-2 py-1.5">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs text-[var(--node-fg)]">
-            {source.title ?? source.asset?.path ?? source.id}
-          </div>
-          <div className="text-[10px] text-[var(--node-fg-secondary)]">{typeLabel}</div>
-        </div>
-        {delegateActions && delegateActions.length > 0 && (
-          <button
-            type="button"
-            className="flex-shrink-0 rounded border border-[var(--node-border)] px-2 py-1 text-xs"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              dispatchPreviewDelegate({ action: delegateActions[0]!, asset: source.asset });
-            }}
-          >
-            {t('preview.open')}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function resolveProjectTypeLabel(value: unknown, defaultExt: string): string {
-  void value;
-  void defaultExt;
-  return t('node.project');
+function readPreviewSourceDuration(source: PreviewSourceDescriptor): number {
+  return readPositiveFiniteNumber(source.metadata?.['duration']) ?? 0;
 }
 
 function getStableSafeUrl(source: PreviewSourceDescriptor): string | undefined {

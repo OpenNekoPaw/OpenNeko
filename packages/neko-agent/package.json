@@ -33,8 +33,6 @@
     "neko.neko-preview"
   ],
   "activationEvents": [
-    "onView:neko.aiAssistant",
-    "onCommand:neko.agent.showLogs",
     "onCommand:neko.agent.characterDialogue",
     "onCommand:neko.agent.embodyCharacter",
     "onCommand:neko.agent.registerCapabilities",

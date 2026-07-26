@@ -42,7 +42,7 @@ describe('CanvasStatusBar', () => {
     ]);
   });
 
-  it('merges selection, subsystem, and projection status in the context item', () => {
+  it('merges selection and projection status in the context item', () => {
     const statusBar = new CanvasStatusBar();
     statusBar.show();
     statusBar.update({
@@ -50,7 +50,6 @@ describe('CanvasStatusBar', () => {
       connectionCount: 2,
       zoom: 1.25,
       selectedCount: 1,
-      subsystemSummary: 'storyboard',
       projectionSummary: 'Projected: source-changed',
     });
 
@@ -59,10 +58,10 @@ describe('CanvasStatusBar', () => {
     );
     expect(mocks.statusItems.get('neko.canvas.zoom')?.text).toBe('$(zoom-in) 125%');
     expect(mocks.statusItems.get('neko.canvas.context')?.text).toBe(
-      '$(symbol-namespace) 1 selected · storyboard · Projected: source-changed',
+      '$(symbol-namespace) 1 selected · Projected: source-changed',
     );
     expect(mocks.statusItems.get('neko.canvas.context')?.tooltip).toBe(
-      '1 selected · storyboard · Projected: source-changed',
+      '1 selected · Projected: source-changed',
     );
     expect(mocks.statusItems.get('neko.canvas.context')?.show).toHaveBeenCalled();
   });
@@ -75,17 +74,16 @@ describe('CanvasStatusBar', () => {
       connectionCount: 2,
       zoom: 1,
       selectedCount: 3,
-      subsystemSummary: 'Storyboard subsystem with multi-layer compositing and constraints',
       projectionSummary: 'Equirectangular projection waiting for source synchronization',
     });
 
     const context = mocks.statusItems.get('neko.canvas.context');
     expect(context?.text.length).toBeLessThanOrEqual(92);
     expect(context?.text).toBe(
-      '$(symbol-namespace) 3 selected · Storyboard subsystem with multi-layer compositing and...',
+      '$(symbol-namespace) 3 selected · Equirectangular projection waiting for source...',
     );
     expect(context?.tooltip).toBe(
-      '3 selected · Storyboard subsystem with multi-layer compositing and constraints · Equirectangular projection waiting for source synchronization',
+      '3 selected · Equirectangular projection waiting for source synchronization',
     );
   });
 });

@@ -366,7 +366,6 @@ describe('collectCreatorVisibleArtifacts', () => {
                   assetId: 'legacy-image',
                   uri: 'materials/legacy.png',
                   mimeType: 'image/png',
-                  resourceRef: { id: 'legacy-resource' },
                 },
               },
             ],

@@ -23,12 +23,6 @@ describe('runtime viewport store', () => {
     useCanvasStore.setState({
       canvasData: createCanvasData(),
       selection: { nodeIds: [], connectionIds: [] },
-      isConnecting: false,
-      pendingConnectionSource: null,
-      activePlayingNodeId: null,
-      expandedNodeId: null,
-      generationPanelState: { visible: false, nodeId: null },
-      contentOverlayState: { visible: false, nodeId: null },
     });
     useRuntimeViewportStore.setState({
       viewport: DEFAULT_RUNTIME_VIEWPORT,

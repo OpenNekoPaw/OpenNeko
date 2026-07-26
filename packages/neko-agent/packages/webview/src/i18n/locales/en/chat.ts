@@ -129,14 +129,10 @@ export const chat = {
   'chat.canvasLifecycle.status.applied': 'applied',
   'chat.canvasLifecycle.status.executed': 'executed',
   'chat.canvasLifecycle.status.blocked': 'blocked',
-  'chat.canvasLifecycle.badge.displayFallback': 'display-only fallback',
-  'chat.canvasLifecycle.badge.genericTable': 'generic table',
-  'chat.canvasLifecycle.badge.creativeTable': 'creative table',
   'chat.canvasLifecycle.blocked': 'blocked',
   'chat.canvasLifecycle.reviewArtifact': 'Review artifact: {artifact}',
   'chat.canvasLifecycle.changedRefs': 'Changed refs: {refs}',
   'chat.canvasLifecycle.approvalRequired': 'approve',
-  'chat.canvasLifecycle.action.createStoryboardNodes': 'Create storyboard nodes',
   'chat.canvasLifecycle.disabled.conversationUnavailable': 'Conversation unavailable',
   'chat.canvasLifecycle.disabled.unsupportedActionPayload': 'Unsupported action payload',
   'chat.canvasLifecycle.capabilityStatus.created': 'created',
@@ -199,18 +195,6 @@ export const chat = {
     'The Markdown resource path is a runtime temporary address and cannot be written to Canvas.',
   'chat.canvasLifecycle.diagnostic.canvasMarkdownRuntimeResourceToken':
     'The Markdown resource token points to a runtime temporary address and cannot be written to Canvas.',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardCreateApprovalRequired':
-    'Creating production storyboard nodes requires lifecycle approval context.',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardCreateNotConfirmed':
-    'Creating production storyboard nodes requires an explicit creation mode.',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardNextActionMissing':
-    'The storyboard table is missing a next action.',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardNoProductionRows':
-    'The storyboard table has no production-ready rows.',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardVisualColumnRequired':
-    'The storyboard table requires a visual or prompt column.',
-  'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardVisualOrPromptMissing':
-    'A storyboard row is missing visual description or prompt text.',
   'chat.canvasLifecycle.diagnostic.canvasMarkdownTableEmpty':
     'Markdown table must contain at least one data row.',
   'chat.canvasLifecycle.diagnostic.canvasMarkdownTableMissing':
@@ -305,23 +289,18 @@ export const chat = {
   'chat.input.canvasContext.singleTitle': 'Selected: {summary}',
   'chat.input.canvasContext.multiTitle': '{count} canvas nodes selected',
   'chat.input.canvasContext.counts': 'Canvas selection counts',
-  'chat.input.canvasContext.count.shots': '{count} shots',
-  'chat.input.canvasContext.count.scenes': '{count} scenes',
+  'chat.input.canvasContext.count.markdown': '{count} Markdown',
   'chat.input.canvasContext.count.media': '{count} media',
-  'chat.input.canvasContext.count.galleries': '{count} galleries',
-  'chat.input.canvasContext.count.notes': '{count} notes',
+  'chat.input.canvasContext.count.groups': '{count} groups',
+  'chat.input.canvasContext.count.jobs': '{count} jobs',
+  'chat.input.canvasContext.count.files': '{count} files',
+  'chat.input.canvasContext.count.canvases': '{count} subcanvases',
   'chat.input.canvasContext.count.generic': '{count} {type}',
   'chat.input.canvasContext.more': '+{count} more',
-  'chat.input.canvasContext.action.generateImage': 'Generate image',
-  'chat.input.canvasContext.action.batchGenerate': 'Batch generate',
-  'chat.input.canvasContext.action.optimize': 'Optimize nodes',
+  'chat.input.canvasContext.action.createJob': 'Create JobCard',
   'chat.input.canvasContext.action.understand': 'Ask Agent',
-  'chat.input.canvasContext.prompt.generateImage':
-    'Generate an image for the selected canvas shot.',
-  'chat.input.canvasContext.prompt.batchGenerate':
-    'Batch generate images for the selected canvas shots.',
-  'chat.input.canvasContext.prompt.optimize':
-    'Optimize the selected canvas nodes for clearer storyboard structure and visual prompts.',
+  'chat.input.canvasContext.prompt.createJob':
+    'Create a JobCard for the selected canvas nodes and use them as explicit input references.',
   'chat.input.canvasContext.prompt.understand':
     'Analyze the selected canvas nodes and suggest the next useful action.',
   'chat.entryPrompt.generateAssets.hint':

@@ -65,6 +65,7 @@ const config: KnipConfig = {
         'scripts/proto-gen-ts.mjs',
         'scripts/smoke-vscode-targets.mjs',
         'scripts/smoke-webview-builds.mjs',
+        'scripts/stage-openneko-dev-extension.mjs',
         'scripts/test-orchestration/fixtures/*.ts',
         'scripts/test-orchestration/vscode-debug-config.local.mjs',
       ],
@@ -81,7 +82,6 @@ const config: KnipConfig = {
         'src/i18n/react.tsx',
         'src/i18n/webview.ts',
         'src/icons/index.ts',
-        'src/icons/editor.test.tsx',
         'src/local-metadata/index.ts',
         'src/local-metadata/node.ts',
         'src/local-metadata/node-workspace-identity.ts',
@@ -203,10 +203,9 @@ const config: KnipConfig = {
     'packages/neko-agent/test-utils': {},
     'packages/neko-canvas/packages/extension': {},
     'packages/neko-canvas/packages/webview': {
-      entry: ['src/host-adapter/index.tsx', 'src/preview/narrativePreviewMediaRuntime.ts'],
+      entry: ['src/host-adapter/index.tsx'],
       ignore: [
         // Barrel exports
-        'src/types/index.ts',
         'src/utils/index.ts',
         // Used via barrel exports in panels/
         'src/components/panels/PortEditor.tsx',

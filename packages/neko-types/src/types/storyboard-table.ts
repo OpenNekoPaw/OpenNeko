@@ -1,4 +1,4 @@
-import type { CameraAngle, CameraMovement, ShotScale } from './canvas';
+import type { CameraAngle, CameraMovement, ShotScale } from './storyboard-cinematography';
 import {
   isRepresentationKind,
   type CreativeEntityRef,

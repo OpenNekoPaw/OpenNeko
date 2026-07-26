@@ -56,22 +56,7 @@ export function isContainerNode(node: CanvasNode): boolean {
 }
 
 export function getContainerPolicyName(node: CanvasNode): ContainerPolicyName | undefined {
-  if (node.container?.policy) {
-    return node.container.policy;
-  }
-
-  switch (node.type) {
-    case 'scene':
-      return 'scene';
-    case 'group':
-      return 'group';
-    case 'artboard':
-      return 'artboard';
-    case 'table':
-      return 'table';
-    default:
-      return undefined;
-  }
+  return node.type === 'group' ? 'group' : undefined;
 }
 
 function uniqueStrings(values: string[]): string[] {

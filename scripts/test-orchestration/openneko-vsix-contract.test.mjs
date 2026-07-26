@@ -42,6 +42,14 @@ describe('single OpenNeko VSIX contract', () => {
         await readJson(`packages/${packageName}/package.json`),
       ]),
     );
+    const redundantActivationEvents = featureManifests.flatMap(([packageName, manifest]) =>
+      findRedundantActivationEvents(manifest).map(
+        (activationEvent) => `${packageName}: ${activationEvent}`,
+      ),
+    );
+
+    assert.deepEqual(redundantActivationEvents, []);
+
     const manifest = composeOpenNekoManifest({ appManifest, featureManifests });
 
     assert.equal(manifest.main, './dist/extension.js');
@@ -124,4 +132,21 @@ describe('single OpenNeko VSIX contract', () => {
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'));
+}
+
+function findRedundantActivationEvents(manifest) {
+  const contributes = manifest.contributes ?? {};
+  const inferredActivationEvents = new Set([
+    ...(contributes.commands ?? []).map(({ command }) => `onCommand:${command}`),
+    ...(contributes.authentication ?? []).map(({ id }) => `onAuthenticationRequest:${id}`),
+    ...(contributes.languages ?? []).map(({ id }) => `onLanguage:${id}`),
+    ...(contributes.customEditors ?? []).map(({ viewType }) => `onCustomEditor:${viewType}`),
+    ...Object.values(contributes.views ?? {})
+      .flat()
+      .map(({ id }) => `onView:${id}`),
+  ]);
+
+  return (manifest.activationEvents ?? []).filter((activationEvent) =>
+    inferredActivationEvents.has(activationEvent),
+  );
 }

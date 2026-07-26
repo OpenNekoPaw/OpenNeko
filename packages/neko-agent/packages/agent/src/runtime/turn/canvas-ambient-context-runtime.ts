@@ -1,10 +1,10 @@
-import type { CanvasNode, GenerationModelConfig } from '@neko/shared';
+import type { CanvasNode, CanvasNodeType, GenerationModelConfig } from '@neko/shared';
 
 export const DEFAULT_CANVAS_AMBIENT_SCOPE_ID = 'default';
 
 export interface SelectedNodeSummary {
   readonly nodeId: string;
-  readonly type: string;
+  readonly type: CanvasNodeType;
   readonly summary: string;
   readonly assetUri?: string;
   readonly assetKind?: 'image' | 'video' | 'audio' | 'metadata' | 'unknown';
@@ -176,40 +176,45 @@ export function summarizeCanvasNode(node: CanvasNode): SelectedNodeSummary {
   const data: Readonly<Record<string, unknown>> = isRecord(node.data) ? node.data : {};
 
   switch (node.type) {
-    case 'shot': {
-      const shotNum = data['shotNumber'] ?? '?';
-      const scale = data['shotScale'] ?? '';
-      const desc =
-        typeof data['visualDescription'] === 'string' ? data['visualDescription'].slice(0, 60) : '';
-      summary = `#${String(shotNum)} ${String(scale)}${desc ? ` - ${desc}` : ''}`.trim();
-      break;
-    }
-    case 'scene': {
-      const title = typeof data['sceneTitle'] === 'string' ? data['sceneTitle'] : 'Scene';
-      const num = data['sceneNumber'] ?? '';
-      summary = `Scene ${String(num)}: ${title}`.trim();
-      break;
-    }
-    case 'gallery': {
-      const name = typeof data['characterName'] === 'string' ? data['characterName'] : '';
-      const preset = typeof data['preset'] === 'string' ? data['preset'] : '';
-      summary = name ? `Gallery: ${name} (${preset})` : `Gallery (${preset})`;
-      break;
-    }
-    case 'annotation': {
-      const content = typeof data['content'] === 'string' ? data['content'].slice(0, 60) : '';
-      summary = content ? `Note: ${content}` : 'Annotation';
+    case 'markdown': {
+      const title = readNonEmptyString(data['title']);
+      const content = readNonEmptyString(data['content']);
+      summary = title ?? truncateSummary(content) ?? 'Markdown';
       break;
     }
     case 'media': {
       const mediaType = data['mediaType'] ?? 'media';
-      const assetPath =
-        typeof data['assetPath'] === 'string' ? (data['assetPath'].split('/').pop() ?? '') : '';
-      summary = assetPath ? `${String(mediaType)}: ${assetPath}` : String(mediaType);
+      const title = readNonEmptyString(data['title']);
+      const assetPath = readNonEmptyString(data['assetPath']);
+      const fileName = assetPath?.split('/').pop();
+      summary = title ?? (fileName ? `${String(mediaType)}: ${fileName}` : String(mediaType));
       break;
     }
-    default:
+    case 'group': {
+      const label = readNonEmptyString(data['label']) ?? 'Group';
+      const childCount = node.container?.childIds.length ?? 0;
+      summary = `${label} (${childCount})`;
       break;
+    }
+    case 'job': {
+      const title = readNonEmptyString(data['title']) ?? 'JobCard';
+      const status = readNonEmptyString(data['status']);
+      const objective = truncateSummary(readNonEmptyString(data['objective']));
+      summary = [title, status ? `[${status}]` : undefined, objective].filter(Boolean).join(' ');
+      break;
+    }
+    case 'file': {
+      const title = readNonEmptyString(data['title']);
+      const filePath = readNonEmptyString(data['path']);
+      summary = title ?? filePath?.split('/').pop() ?? 'File';
+      break;
+    }
+    case 'canvas-embed': {
+      const title = readNonEmptyString(data['canvasTitle']);
+      const canvasPath = readNonEmptyString(data['canvasPath']);
+      summary = title ?? canvasPath?.split('/').pop() ?? 'Subcanvas';
+      break;
+    }
   }
 
   const assetUri = readCanvasNodeAssetUri(node);
@@ -235,15 +240,6 @@ export function readCanvasNodeAssetUri(node: CanvasNode): string | undefined {
   if (node.type === 'media' && typeof data['assetPath'] === 'string') {
     return data['assetPath'];
   }
-  if (node.type === 'shot') {
-    const generatedAsset = data['generatedAsset'];
-    if (isRecord(generatedAsset) && typeof generatedAsset['path'] === 'string') {
-      return generatedAsset['path'];
-    }
-    if (typeof data['generatedImage'] === 'string') {
-      return data['generatedImage'];
-    }
-  }
   return undefined;
 }
 
@@ -258,10 +254,15 @@ export function readCanvasNodeAssetKind(
     }
     return 'unknown';
   }
-  if (node.type === 'shot' && readCanvasNodeAssetUri(node)) {
-    return 'image';
-  }
   return undefined;
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function truncateSummary(value: string | undefined): string | undefined {
+  return value ? value.slice(0, 60) : undefined;
 }
 
 function normalizeCanvasChangeType(value: unknown): CanvasChangeSummary['changeType'] | null {

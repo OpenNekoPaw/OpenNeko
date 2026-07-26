@@ -6,9 +6,12 @@ import {
 } from '../canvas';
 
 describe('canvas contracts', () => {
-  it('registers narrative start and ending node types', () => {
-    expect(isCanvasNodeType('narrative-start')).toBe(true);
-    expect(isCanvasNodeType('narrative-ending')).toBe(true);
+  it('registers only canonical Canvas node types', () => {
+    for (const type of ['markdown', 'media', 'group', 'job', 'file', 'canvas-embed']) {
+      expect(isCanvasNodeType(type)).toBe(true);
+    }
+    expect(isCanvasNodeType('shot')).toBe(false);
+    expect(isCanvasNodeType('narrative-start')).toBe(false);
   });
 
   it('normalizes document resource status reasons', () => {

@@ -11,7 +11,5 @@
   "neko.canvas.selectNodeFromOutline.title": "Select Node",
   "neko.canvas.selectConnectionFromOutline.title": "Select Connection",
   "neko.canvas.resetZoom.title": "Reset Zoom",
-  "neko.canvas.generateSelected.title": "Generate Selected Shots",
-  "neko.canvas.detachShotFromScene.title": "Remove Shot from Scene",
   "neko.canvas.deleteNodeFromOutline.title": "Delete Node"
 }

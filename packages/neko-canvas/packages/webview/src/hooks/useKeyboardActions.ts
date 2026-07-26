@@ -22,13 +22,11 @@ export interface UseKeyboardActionsOptions {
   selectedNodeIds: string[];
   selectedConnectionIds: string[];
   nodes: CanvasNode[];
-  isConnecting: boolean;
   contextMenu: unknown | null;
   setContextMenu: (menu: null) => void;
   selectNode: (id: string, multi?: boolean) => void;
   selectConnection: (id: string, multi?: boolean) => void;
   deleteSelected: () => void;
-  cancelConnection: () => void;
   clearSelection: () => void;
   resetViewport: () => void;
   undo: () => void;
@@ -38,7 +36,6 @@ export interface UseKeyboardActionsOptions {
   handlePaste: () => void;
   handlePasteInPlace: () => void;
   handleDuplicate: () => void;
-  onGenerateSelected?: () => void;
   closeTransientSurface?: () => boolean;
   reportAction: (action: string, label: string, detail?: string) => void;
   isKeyboardFocusedRef?: React.MutableRefObject<boolean>;
@@ -58,13 +55,11 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
     selectedNodeIds,
     selectedConnectionIds,
     nodes,
-    isConnecting,
     contextMenu,
     setContextMenu,
     selectNode,
     selectConnection,
     deleteSelected,
-    cancelConnection,
     clearSelection,
     resetViewport,
     undo,
@@ -74,7 +69,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
     handlePaste,
     handlePasteInPlace,
     handleDuplicate,
-    onGenerateSelected,
     closeTransientSurface,
     reportAction,
     isKeyboardFocusedRef,
@@ -104,16 +98,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
         selectConnection(connId);
         return;
       }
-      if (action.startsWith('detachShot:')) {
-        const parts = action.slice('detachShot:'.length).split(':');
-        const shotId = parts[0];
-        const sceneId = parts[1];
-        if (shotId && sceneId) {
-          useCanvasStore.getState().detachShotFromScene(sceneId, shotId);
-          reportAction('detachShot', `Detached shot from scene`);
-        }
-        return;
-      }
       if (action.startsWith('deleteNode:')) {
         const nodeId = action.slice('deleteNode:'.length);
         if (nodeId) {
@@ -135,8 +119,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
             setContextMenu(null);
           } else if (closeTransientSurface?.()) {
             return;
-          } else if (isConnecting) {
-            cancelConnection();
           } else {
             clearSelection();
           }
@@ -177,9 +159,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
         case 'resetZoom':
           resetViewport();
           break;
-        case 'generateSelected':
-          onGenerateSelected?.();
-          break;
       }
     },
     [
@@ -188,8 +167,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
       selectedNodeIds,
       selectedConnectionIds,
       deleteSelected,
-      isConnecting,
-      cancelConnection,
       clearSelection,
       nodes,
       contextMenu,
@@ -200,7 +177,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
       handlePaste,
       handlePasteInPlace,
       handleDuplicate,
-      onGenerateSelected,
       closeTransientSurface,
       selectNode,
       selectConnection,

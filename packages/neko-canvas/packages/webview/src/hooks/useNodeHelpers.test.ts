@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createImportedTextNodeData } from './useNodeHelpers';
+import { createImportedMarkdownNodeData } from './useNodeHelpers';
 
-describe('createImportedTextNodeData', () => {
+describe('createImportedMarkdownNodeData', () => {
   it('creates an editable Markdown snapshot with portable provenance', () => {
     expect(
-      createImportedTextNodeData({
+      createImportedMarkdownNodeData({
         kind: 'text',
         path: 'assets/notes.md',
         name: 'notes.md',
@@ -14,7 +14,6 @@ describe('createImportedTextNodeData', () => {
       }),
     ).toEqual({
       content: '# Notes',
-      format: 'markdown',
       title: 'notes',
       provenance: {
         importMode: 'snapshot',
@@ -25,7 +24,7 @@ describe('createImportedTextNodeData', () => {
   });
 
   it('keeps Fountain literal instead of creating Script metadata', () => {
-    const data = createImportedTextNodeData({
+    const data = createImportedMarkdownNodeData({
       kind: 'text',
       path: 'assets/pilot.fountain',
       name: 'pilot.fountain',
@@ -34,7 +33,8 @@ describe('createImportedTextNodeData', () => {
       format: 'plain',
     });
 
-    expect(data).toMatchObject({ content: 'INT. ROOM - DAY', format: 'plain', title: 'pilot' });
+    expect(data).toMatchObject({ content: 'INT. ROOM - DAY', title: 'pilot' });
+    expect(data).not.toHaveProperty('format');
     expect(data).not.toHaveProperty('scriptPath');
     expect(data).not.toHaveProperty('docPath');
   });

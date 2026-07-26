@@ -56,8 +56,11 @@ export {
   RedoIcon,
   ScissorsIcon,
   LayersIcon,
+  StorylineIcon,
   RightPanelIcon,
   RightPanelOffIcon,
+  FullscreenIcon,
+  RestoreIcon,
   SettingsIcon,
 } from './editor';
 

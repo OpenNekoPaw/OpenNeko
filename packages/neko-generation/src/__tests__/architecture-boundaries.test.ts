@@ -135,13 +135,20 @@ describe('@neko/generation architecture boundaries', () => {
   });
 
   it('keeps Agent and domain entry points on the canonical GenerationJob path', () => {
+    const retiredCanvasGenerationPaths = [
+      'packages/neko-canvas/packages/domain/src/canvas-generation-runtime.ts',
+      'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
+    ];
+    expect(
+      retiredCanvasGenerationPaths.filter((file) => existsSync(resolve(workspaceRoot, file))),
+    ).toEqual([]);
+
     const sources = new Map(
       [
         'packages/neko-agent/packages/platform/src/media/media-agent-tools.ts',
         'packages/neko-agent/packages/extension/src/services/mediaTurnBridge.ts',
-        'packages/neko-canvas/packages/domain/src/canvas-generation-runtime.ts',
-        'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
         'packages/neko-canvas/packages/extension/src/agentCapabilityProvider.ts',
+        'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
         'packages/neko-cut/packages/extension/src/extension.ts',
         'packages/neko-cut/packages/extension/src/editor/CutExportTaskRegistry.ts',
       ].map((file) => [file, readFileSync(resolve(workspaceRoot, file), 'utf8')]),
@@ -150,12 +157,9 @@ describe('@neko/generation architecture boundaries', () => {
     const agentToolSource = sources.get(
       'packages/neko-agent/packages/platform/src/media/media-agent-tools.ts',
     );
-    const canvasDomainSource = sources.get(
-      'packages/neko-canvas/packages/domain/src/canvas-generation-runtime.ts',
-    );
     const cutSource = sources.get('packages/neko-cut/packages/extension/src/extension.ts');
-    const canvasExecutorSource = sources.get(
-      'packages/neko-canvas/packages/extension/src/canvasCreativeAiExecutor.ts',
+    const canvasEditorSource = sources.get(
+      'packages/neko-canvas/packages/extension/src/editor/canvasEditorProvider.ts',
     );
     const cutExportRegistrySource = sources.get(
       'packages/neko-cut/packages/extension/src/editor/CutExportTaskRegistry.ts',
@@ -175,13 +179,16 @@ describe('@neko/generation architecture boundaries', () => {
         ),
       ),
     ).toBe(false);
-    expect(canvasDomainSource).not.toContain('CanvasMediaService');
-    expect(canvasDomainSource).not.toMatch(/\.generateImage\s*\(/u);
     expect(
       sources.get('packages/neko-canvas/packages/extension/src/agentCapabilityProvider.ts'),
     ).not.toMatch(/\bensureProjectModel\b|neko\.project\.models\./u);
-    expect(canvasExecutorSource).toContain('jobs.submitGeneration');
-    expect(canvasExecutorSource).toContain('jobs.observeGeneration');
+    expect(canvasEditorSource).toContain("requestedAction: 'create-job'");
+    expect(canvasEditorSource).toContain("'neko.agent.sendContext'");
+    expect(canvasEditorSource).toContain("'neko.ai.sendMessage'");
+    expect(canvasEditorSource).not.toMatch(
+      /\b(?:jobs\.submitGeneration|executeCanvasCreativeAi|CanvasMediaService)\b/u,
+    );
+    expect(canvasEditorSource).not.toMatch(/\.generateImage\s*\(/u);
     expect(cutSource).not.toMatch(/sendCutSkillIntentToAgent\(\s*['"]video['"]/u);
     expect(cutExportRegistrySource).toContain('this.coordinator.cancelExport(commandFor(current))');
     expect(cutExportRegistrySource).not.toMatch(/\b(?:active|latest)Job\b/iu);

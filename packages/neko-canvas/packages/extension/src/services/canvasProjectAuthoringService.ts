@@ -12,7 +12,6 @@ import {
   planCanvasCompositeCreation,
   planCanvasConnectionCreation,
   planCanvasNodeCreation,
-  planCanvasStoryboardSceneShotCreation,
   ProjectFileStore,
   type ProjectFileStoreOptions,
   type CanvasCreateCompositeRequest,
@@ -35,8 +34,6 @@ import {
   type CanvasHeadlessCreateCompositeAuthoringResult,
   type CanvasHeadlessCreateConnectionResult,
   type CanvasHeadlessCreateNodeResult,
-  type CanvasHeadlessCreateStoryboardAuthoringRequest,
-  type CanvasHeadlessCreateStoryboardAuthoringResult,
   type CanvasHeadlessUpdateBlockAuthoringResult,
   type CanvasNodeCreateSpec,
   type CanvasUpdateBlockRequest,
@@ -74,14 +71,16 @@ const PROJECT_RELATIVE_PATH_PATTERN = /^(?:\.\/)?(?!\/)(?![a-zA-Z]:[\\/])[^:?#]+
 
 export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutationPort {
   private readonly projectFileAdapter = createVSCodeProjectFileIoAdapter({ vscodeApi: vscode });
-  private readonly projectFileStore = new ProjectFileStore({
-    registry: createDefaultProjectFormatCodecRegistry(),
-    fileOps: this.projectFileAdapter.fileOps,
-    resolveAuthorizedWrite: this.options.resolveAuthorizedWrite,
-    logger: this.options.logger,
-  });
+  private readonly projectFileStore: ProjectFileStore;
 
-  constructor(private readonly options: CanvasProjectAuthoringServiceOptions) {}
+  constructor(private readonly options: CanvasProjectAuthoringServiceOptions) {
+    this.projectFileStore = new ProjectFileStore({
+      registry: createDefaultProjectFormatCodecRegistry(),
+      fileOps: this.projectFileAdapter.fileOps,
+      resolveAuthorizedWrite: options.resolveAuthorizedWrite,
+      logger: options.logger,
+    });
+  }
 
   async loadLatest(input: {
     readonly documentUri: string;
@@ -293,7 +292,6 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
       fallbackTitle: input.fallbackTitle ?? createImportedAssetCanvasTitle(input.asset),
       node: {
         type: 'media',
-        preset: 'media.basic',
         position: input.asset.position,
         data: this.createImportedAssetNodeData(input.asset, mediaType),
       },
@@ -441,33 +439,6 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
     });
   }
 
-  async createStoryboardFromPayload(
-    request: CanvasHeadlessCreateStoryboardAuthoringRequest,
-  ): Promise<CanvasHeadlessCreateStoryboardAuthoringResult> {
-    const fallbackTitle = request.target?.title ?? createStoryboardCanvasTitle(request.payload);
-    return this.withMutation(request.target, fallbackTitle, (canvasData) => {
-      const plan = planCanvasStoryboardSceneShotCreation({ canvasData }, request.payload, {
-        startX: request.startX,
-        startY: request.startY,
-        workflowPlanId: request.workflowPlanId,
-      });
-      return {
-        canvasData: plan.canvasData,
-        result: {
-          version: 1,
-          status: 'success',
-          documentUri: '',
-          target: emptyResolvedTarget(),
-          diagnostics: [],
-          batch: plan.batch,
-          createdNodes: plan.batch.createdNodes,
-          createdConnections: plan.batch.createdConnections,
-          storyboard: plan.result,
-        },
-      };
-    });
-  }
-
   private async withMutation<TResult extends CanvasHeadlessAuthoringResultBase>(
     target: CanvasHeadlessAuthoringTarget | undefined,
     fallbackTitle: string | undefined,
@@ -475,7 +446,7 @@ export class CanvasProjectAuthoringService implements CanvasWorkspaceBoardMutati
       readonly canvasData: CanvasData;
       readonly result: TResult;
     },
-  ): Promise<TResult> {
+  ): Promise<TResult & { readonly projectRef: QualityProjectRef }> {
     const loaded = await this.loadTarget(target, fallbackTitle);
     const mutation = mutate(loaded.canvasData);
     assertNoRuntimeResourceIdentity(mutation.canvasData, 'canvasData');
@@ -698,18 +669,6 @@ function isFileNotFound(error: unknown): boolean {
     error !== null &&
     (Reflect.get(error, 'code') === 'FileNotFound' || Reflect.get(error, 'code') === 'ENOENT')
   );
-}
-
-function createStoryboardCanvasTitle(payload: {
-  readonly creativeScope?: { readonly title?: string };
-  readonly sourceScriptUri?: string;
-}): string {
-  const scopeTitle = payload.creativeScope?.title?.trim();
-  if (scopeTitle) return sanitizeCanvasFileName(scopeTitle).slice(0, 80);
-  if (payload.sourceScriptUri) {
-    return sanitizeCanvasFileName(path.parse(payload.sourceScriptUri).name).slice(0, 80);
-  }
-  return 'Agent Storyboard';
 }
 
 function createImportedAssetCanvasTitle(asset: CanvasImportAssetRequest): string {

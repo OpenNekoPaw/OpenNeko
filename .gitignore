@@ -5,7 +5,8 @@
 .claude/
 
 # 编辑器与 IDE
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 .codex/
 # 仓库级 Agent evaluation Skill 需要进入版本控制；其余本地 Codex 状态继续忽略

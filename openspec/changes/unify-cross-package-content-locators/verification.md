@@ -222,8 +222,64 @@ Focused results:
 - Real Generation card/result DOM, React projection, media load, and iframe console assertions:
   passed.
 
+### Standalone Agent projection activation isolation
+
+- Date: 2026-07-26.
+- The standalone `neko.neko-agent` Host previously created the Node generated-output projection
+  binding without a rejection policy. A legacy row therefore propagated
+  `generated-output-projection-migration-required` and aborted extension activation.
+- The standalone Host now explicitly selects `preserve-and-report`, excludes rejected rows from its
+  in-memory catalog, preserves their LocalMetadata rows and generated files, logs the aggregated
+  diagnostics, and displays a non-blocking warning.
+- The decoder remains strict by default. The fix does not decode legacy fields, infer a locator,
+  delete metadata, or introduce a compatibility fallback.
+- The focused regression reproduced the exact activation exception before the fix and passed after
+  the Host supplied the explicit policy. The projection-store regression also proves that a
+  canonical row continues loading and an identity update does not delete the rejected row.
+
+Commands:
+
+```bash
+pnpm exec vitest run \
+  packages/neko-agent/packages/extension/src/services/generatedAssetOpenResolver.test.ts \
+  packages/neko-agent/packages/extension/src/host-generated-asset-catalog.test.ts
+pnpm exec vitest run \
+  packages/neko-agent/packages/platform/src/media/__tests__/generated-asset-index.test.ts
+pnpm --filter @neko-agent/extension test:run
+pnpm --filter @neko/shared test -- --run
+pnpm check:strict-extensions
+pnpm check:application-boundaries
+pnpm check:agent-boundaries
+pnpm check:local-metadata-runtimes
+pnpm check:legacy-debt
+pnpm build
+pnpm test
+pnpm check
+```
+
+Focused results:
+
+- Standalone Host activation composition: 3 passed.
+- Generated-output projection store: 12 passed.
+- Agent Extension package: 465 passed.
+- Shared package: 1412 passed.
+- Strict Extension typecheck and architecture/local-metadata boundaries: passed.
+- Legacy-debt gate: passed with zero blocking findings.
+- Repository build: passed, including the Agent Extension/Webview and Rust Engine release builds.
+- Repository static gate: passed with zero dependency violations.
+- Root `pnpm ci:local` passed: format, lint, build, 28/28 full-repository test tasks,
+  repository quality, 85/85 test-orchestration checks, 58/58 strict OpenSpec validations, and
+  4/4 local VS Code configuration checks completed successfully.
+- A live standalone Host restart was attempted after rebuilding the extension, but VS Code vetoed
+  the restart because an unsaved `Untitled.nkc` custom editor was open. The editor was preserved
+  unchanged; post-fix standalone runtime activation remains to be rerun after that document is saved
+  or closed.
+
 ### Residual risk
 
+- The focused regression, package suites, shared projection-store tests, full build, and static gates
+  cover the fixed path, but a fresh standalone Extension Development Host observation is still
+  pending because of the unsaved custom editor restart veto described above.
 - Direct image-mode history entries show `0 messages` after an Extension Host restart and therefore
   cannot replay the completed card. This is a separate conversation-persistence gap; it does not
   invalidate the live locator projection or Task 6.4 and requires its own owner/change.

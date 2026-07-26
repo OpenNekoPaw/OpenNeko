@@ -23,7 +23,9 @@ type InlineVideoPlayerMockProps = {
   readonly onEnded?: (currentTime: number) => void;
 };
 
-type InlineAudioPlayerMockProps = InlineVideoPlayerMockProps;
+type InlineAudioPlayerMockProps = InlineVideoPlayerMockProps & {
+  readonly audioLayout?: 'transport' | 'node-card';
+};
 
 vi.mock('../components/media/InlineVideoPlayer', async () => {
   const ReactModule = await vi.importActual<typeof import('react')>('react');
@@ -47,12 +49,43 @@ vi.mock('../components/media/InlineVideoPlayer', async () => {
 vi.mock('../components/media/InlineAudioPlayer', async () => {
   const ReactModule = await vi.importActual<typeof import('react')>('react');
   return {
-    InlineAudioPlayer: ({ duration, onStop, onEnded }: InlineAudioPlayerMockProps) =>
+    AudioPlayerSurface: ({
+      layout,
+      duration,
+      showPlaybackButton = true,
+    }: {
+      readonly layout?: 'transport' | 'node-card';
+      readonly duration: number;
+      readonly showPlaybackButton?: boolean;
+    }) =>
+      layout === 'node-card'
+        ? ReactModule.createElement(
+            'div',
+            {
+              'data-testid': 'canvas-audio-waveform',
+              'data-duration': duration,
+            },
+            ReactModule.createElement('div', {
+              'data-testid': 'canvas-audio-node-controls',
+            }),
+          )
+        : ReactModule.createElement(
+            'div',
+            {
+              className: 'canvas-audio-transport',
+              'data-duration': duration,
+            },
+            showPlaybackButton
+              ? ReactModule.createElement('button', { type: 'button', title: 'Play' }, 'Play')
+              : ReactModule.createElement('span', null, `0:00 / ${duration.toFixed(0)}`),
+          ),
+    InlineAudioPlayer: ({ duration, onStop, onEnded, audioLayout }: InlineAudioPlayerMockProps) =>
       ReactModule.createElement(
         'button',
         {
           type: 'button',
           'data-testid': 'inline-audio-ended',
+          'data-audio-layout': audioLayout ?? 'transport',
           onClick: () => {
             onStop(duration);
             onEnded?.(duration);
@@ -156,6 +189,152 @@ describe('PreviewSurface media playback control', () => {
     expect(host.querySelector('[data-preview-surface="visual"]')).not.toBeNull();
   });
 
+  it('keeps the default Storyline audio Preview as a compact transport', async () => {
+    await act(async () => {
+      root.render(
+        <PreviewSurface
+          source={{
+            id: 'canvas-node:audio-a',
+            role: 'audio-waveform',
+            title: 'Canvas audio',
+          }}
+          surfaceKind="inline"
+          chrome="full-bleed"
+        />,
+      );
+    });
+
+    expect(host.querySelectorAll('[data-preview-surface="audio"] .w-1')).toHaveLength(0);
+    expect(host.querySelector<HTMLButtonElement>('button[title="Play"]')).not.toBeNull();
+    expect(host.textContent).not.toContain('Canvas audio');
+  });
+
+  it.each([
+    {
+      role: 'video-proxy' as const,
+      mediaType: 'video' as const,
+      assetPath: 'clips/controlled.mp4',
+    },
+    {
+      role: 'audio-waveform' as const,
+      mediaType: 'audio' as const,
+      assetPath: 'audio/controlled.aac',
+    },
+  ])(
+    'does not render a second idle play action for a Storyline-controlled $mediaType Preview',
+    async ({ role, mediaType, assetPath }) => {
+      await act(async () => {
+        root.render(
+          <PreviewSurface
+            source={{
+              id: `controlled-${mediaType}`,
+              role,
+              title: assetPath,
+              asset: {
+                kind: 'asset-identity',
+                path: assetPath,
+                mediaType,
+              },
+            }}
+            surfaceKind="overlay"
+            playbackControl={{
+              requestId: 'controlled-preview-idle',
+              state: 'paused',
+              startTimeSeconds: 0,
+            }}
+          />,
+        );
+      });
+
+      expect(host.querySelector('[data-preview-controlled-idle="true"]')).not.toBeNull();
+      expect(host.querySelector('button')).toBeNull();
+    },
+  );
+
+  it.each([
+    {
+      role: 'video-proxy' as const,
+      mediaType: 'video' as const,
+      assetPath: 'clips/idle.mp4',
+    },
+    {
+      role: 'audio-waveform' as const,
+      mediaType: 'audio' as const,
+      assetPath: 'audio/idle.aac',
+    },
+  ])(
+    'probes idle $mediaType metadata without starting playback and keeps the controlled Preview populated',
+    async ({ role, mediaType, assetPath }) => {
+      await act(async () => {
+        root.render(
+          <PreviewSurface
+            source={{
+              id: `idle-${mediaType}`,
+              role,
+              title: assetPath,
+              asset: {
+                kind: 'asset-identity',
+                path: assetPath,
+                mediaType,
+              },
+            }}
+            surfaceKind="overlay"
+            playbackControl={{
+              requestId: `idle-${mediaType}-request`,
+              state: 'paused',
+              startTimeSeconds: 0,
+            }}
+          />,
+        );
+      });
+
+      const probe = latestMessageOfType('media:probe');
+      const nodeId = readString(probe['nodeId']);
+      if (!nodeId) throw new Error('idle media probe did not include a node id');
+      expect(probe).toMatchObject({
+        type: 'media:probe',
+        assetPath,
+        mediaType,
+      });
+      expect(messagesOfType('media:play')).toHaveLength(0);
+
+      await act(async () => {
+        mockWindow.dispatchMessage({
+          type: 'media:probeResult',
+          nodeId,
+          mediaInfo: mediaInfoFor(mediaType),
+        });
+      });
+
+      const idleSurface = host.querySelector<HTMLElement>(`[data-preview-surface="${mediaType}"]`);
+      expect(idleSurface?.dataset.mediaDuration).toBe('2');
+      expect(idleSurface?.querySelector('button')).toBeNull();
+      expect(idleSurface?.childElementCount).toBeGreaterThan(0);
+      expect(messagesOfType('media:play')).toHaveLength(0);
+    },
+  );
+
+  it('renders the explicit Canvas node audio layout with a waveform silhouette', async () => {
+    await act(async () => {
+      root.render(
+        <PreviewSurface
+          source={{
+            id: 'canvas-node:audio-b',
+            role: 'audio-waveform',
+            title: 'Canvas audio',
+          }}
+          surfaceKind="inline"
+          chrome="full-bleed"
+          audioLayout="node-card"
+        />,
+      );
+    });
+
+    expect(host.querySelector('[data-testid="canvas-audio-waveform"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="canvas-audio-node-controls"]')).not.toBeNull();
+    expect(host.querySelector('.canvas-audio-transport')).toBeNull();
+  });
+
   it.each([
     {
       role: 'video-proxy' as const,
@@ -238,6 +417,10 @@ describe('PreviewSurface media playback control', () => {
         `[data-testid="${caseData.endedTestId}"]`,
       );
       if (!endedButton) throw new Error('inline media player was not rendered');
+      expect(
+        host.querySelector<HTMLElement>(`[data-preview-surface="${caseData.mediaType}"]`)?.dataset
+          .mediaDuration,
+      ).toBe('2');
 
       await act(async () => {
         endedButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));

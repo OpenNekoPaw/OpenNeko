@@ -1,6 +1,9 @@
 import * as path from 'node:path';
 import type { GeneratedAsset } from '@neko/shared';
-import { createNodeGeneratedOutputProjectionBinding } from '@neko/shared/local-metadata/node';
+import {
+  createNodeGeneratedOutputProjectionBinding,
+  type GeneratedOutputProjectionRejection,
+} from '@neko/shared/local-metadata/node';
 import {
   GeneratedAssetIndex,
   migrateLegacyGeneratedAssetIndex,
@@ -26,6 +29,7 @@ export function resolveGeneratedAssetOpenPath(
 
 export interface WorkspaceGeneratedAssetIndexBinding {
   readonly index: GeneratedAssetIndex;
+  readonly rejectedProjections: readonly GeneratedOutputProjectionRejection[];
   dispose(): Promise<void>;
 }
 
@@ -36,7 +40,17 @@ export async function createWorkspaceGeneratedAssetIndex(options: {
     warn(message: string, details?: unknown): void;
   };
 }): Promise<WorkspaceGeneratedAssetIndexBinding> {
-  const projectionBinding = await createNodeGeneratedOutputProjectionBinding(options);
+  const rejectedProjections = new Map<string, GeneratedOutputProjectionRejection>();
+  const projectionBinding = await createNodeGeneratedOutputProjectionBinding({
+    workspaceRoot: options.workspaceRoot,
+    homedir: options.homedir,
+    rejectedProjectionPolicy: {
+      mode: 'preserve-and-report',
+      report: (rejection) => {
+        rejectedProjections.set(rejection.resourceId, rejection);
+      },
+    },
+  });
   try {
     const migrationReport = await migrateLegacyGeneratedAssetIndex({
       indexPath: path.join(options.workspaceRoot, 'neko', 'generated', 'index.json'),
@@ -53,7 +67,17 @@ export async function createWorkspaceGeneratedAssetIndex(options: {
     await projectionBinding.store.update((assets) => assets);
     const index = new GeneratedAssetIndex(projectionBinding.store);
     await index.load();
-    return { index, dispose: () => projectionBinding.dispose() };
+    const reportedRejections = [...rejectedProjections.values()];
+    if (reportedRejections.length > 0) {
+      options.logger?.warn('Generated output projections were skipped during activation', {
+        rejections: reportedRejections,
+      });
+    }
+    return {
+      index,
+      rejectedProjections: reportedRejections,
+      dispose: () => projectionBinding.dispose(),
+    };
   } catch (error) {
     await projectionBinding.dispose();
     throw error;

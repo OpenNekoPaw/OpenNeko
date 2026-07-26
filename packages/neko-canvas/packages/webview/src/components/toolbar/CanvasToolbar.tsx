@@ -3,7 +3,7 @@
  *
  * Provides quick access to:
  * - Select / Hand tools
- * - Right node tree/library panel toggle
+ * - Contextual Canvas add actions
  * - Undo / Redo
  * - Playback workspace surfaces
  *
@@ -12,22 +12,12 @@
 
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { ToolbarButton, ToolbarSeparator, VerticalToolbar } from '@neko/ui/primitives';
+import { StorylineIcon } from '@neko/shared/icons';
 import { useHistoryStore } from '../../stores/historyStore';
 import { t } from '../../i18n';
-import {
-  DownloadIcon,
-  PlayIcon,
-  UndoIcon,
-  RedoIcon,
-  LayersIcon,
-  PackageIcon,
-  PointerIcon,
-  RightPanelIcon,
-  RightPanelOffIcon,
-} from '@neko/ui/icons';
-import type { PlaybackWorkspacePane } from '../../stores/playbackStore';
-
-type PlaybackToolbarSurfacePane = Exclude<PlaybackWorkspacePane, 'canvas'>;
+import { DownloadIcon, UndoIcon, RedoIcon, PackageIcon, PointerIcon } from '@neko/ui/icons';
+import type { CanvasAddActionId } from '../../utils/canvasAddActions';
+import { CanvasAddActionPopover } from './CanvasAddActionPopover';
 
 // =============================================================================
 // Types
@@ -39,12 +29,11 @@ export interface CanvasToolbarProps {
   /** Select tool mode */
   isSelectMode?: boolean;
   onSelectTool?: () => void;
-  /** Node tree/library panel visibility */
-  isNodeLibraryVisible?: boolean;
-  onToggleNodeLibrary?: () => void;
-  /** Playback workspace surface visibility, controlled from the floating toolbar. */
-  workspaceSurfaceState?: Readonly<Record<PlaybackToolbarSurfacePane, boolean>>;
-  onToggleWorkspaceSurface?: (pane: PlaybackToolbarSurfacePane) => void;
+  /** Creates or binds one user-authorable Canvas action. */
+  onSelectAddAction?: (actionId: CanvasAddActionId) => void;
+  /** Unified Storyline Overlay visibility, controlled from the floating toolbar. */
+  playbackWorkspaceVisible?: boolean;
+  onTogglePlaybackWorkspace?: () => void;
   /** Opens the Extension Host-owned rendered export picker */
   onOpenExport?: () => void;
   /** Opens the Extension Host-owned no-engine project package flow */
@@ -63,10 +52,9 @@ export function CanvasToolbar({
   onRedo,
   isSelectMode = true,
   onSelectTool,
-  isNodeLibraryVisible = true,
-  onToggleNodeLibrary,
-  workspaceSurfaceState,
-  onToggleWorkspaceSurface,
+  onSelectAddAction,
+  playbackWorkspaceVisible,
+  onTogglePlaybackWorkspace,
   onOpenExport,
   onOpenPackage,
   isPanMode = false,
@@ -74,11 +62,8 @@ export function CanvasToolbar({
 }: CanvasToolbarProps) {
   const canUndo = useHistoryStore((s) => s.canUndo());
   const canRedo = useHistoryStore((s) => s.canRedo());
-  const nodeLibraryTitle = isNodeLibraryVisible
-    ? t('toolbar.hideRightNodeTree')
-    : t('toolbar.showRightNodeTree');
-  const canControlPlaybackPanes =
-    workspaceSurfaceState !== undefined && onToggleWorkspaceSurface !== undefined;
+  const canControlPlaybackWorkspace =
+    playbackWorkspaceVisible !== undefined && onTogglePlaybackWorkspace !== undefined;
 
   return (
     <VerticalToolbar
@@ -119,22 +104,10 @@ export function CanvasToolbar({
         />
       </div>
 
-      {onToggleNodeLibrary && (
+      {onSelectAddAction && (
         <>
           <ToolbarSeparator />
-          <ToolbarButton
-            aria-controls="canvas-right-node-tree-panel"
-            aria-expanded={isNodeLibraryVisible}
-            data-canvas-toolbar-action="toggle-right-node-tree"
-            data-canvas-toolbar-kind="visibility-toggle"
-            data-canvas-toolbar-target="right-panel"
-            icon={
-              isNodeLibraryVisible ? <RightPanelIcon size={18} /> : <RightPanelOffIcon size={18} />
-            }
-            title={nodeLibraryTitle}
-            active={isNodeLibraryVisible}
-            onClick={onToggleNodeLibrary}
-          />
+          <CanvasAddActionPopover onSelectAction={onSelectAddAction} />
         </>
       )}
 
@@ -158,39 +131,24 @@ export function CanvasToolbar({
         disabled={!canRedo}
       />
 
-      {canControlPlaybackPanes ? (
+      {canControlPlaybackWorkspace ? (
         <>
           <ToolbarSeparator />
 
           <ToolbarButton
-            aria-controls="canvas-playback-stage-pane"
-            aria-expanded={workspaceSurfaceState.stage}
-            data-canvas-toolbar-action="toggle-playback-stage-pane"
+            aria-controls="canvas-playback-overlay"
+            aria-expanded={playbackWorkspaceVisible}
+            data-canvas-toolbar-action="toggle-playback-panel"
             data-canvas-toolbar-kind="visibility-toggle"
-            data-canvas-toolbar-target="playback-stage"
-            icon={<PlayIcon size={18} />}
+            data-canvas-toolbar-target="overlay"
+            icon={<StorylineIcon size={18} />}
             title={
-              workspaceSurfaceState.stage
-                ? t('playback.workspace.hideStage')
-                : t('playback.workspace.showStage')
+              playbackWorkspaceVisible
+                ? t('playback.workspace.hidePanel')
+                : t('playback.workspace.showPanel')
             }
-            active={workspaceSurfaceState.stage}
-            onClick={() => onToggleWorkspaceSurface('stage')}
-          />
-          <ToolbarButton
-            aria-controls="canvas-playback-route-pane"
-            aria-expanded={workspaceSurfaceState.route}
-            data-canvas-toolbar-action="toggle-playback-route-pane"
-            data-canvas-toolbar-kind="visibility-toggle"
-            data-canvas-toolbar-target="playback-route"
-            icon={<LayersIcon size={18} />}
-            title={
-              workspaceSurfaceState.route
-                ? t('playback.workspace.hideRoute')
-                : t('playback.workspace.showRoute')
-            }
-            active={workspaceSurfaceState.route}
-            onClick={() => onToggleWorkspaceSurface('route')}
+            active={playbackWorkspaceVisible}
+            onClick={onTogglePlaybackWorkspace}
           />
         </>
       ) : null}

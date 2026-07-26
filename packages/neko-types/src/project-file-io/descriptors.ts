@@ -76,55 +76,6 @@ function isSourceBearingTimelineElement(
   return element.type === 'media' || element.type === 'audio';
 }
 
-const CANVAS_SOURCE_FIELD_KEYS = new Set([
-  'assetPath',
-  'assetUri',
-  'docPath',
-  'documentPath',
-  'filePath',
-  'imagePath',
-  'imageUri',
-  'linkedProject',
-  'mediaPath',
-  'modelPath',
-  'path',
-  'projectPath',
-  'referenceImagePath',
-  'sourcePath',
-  'sourceUri',
-  'src',
-  'thumbnailPath',
-  'uri',
-]);
-
-const CANVAS_RUNTIME_FIELD_KEYS = new Set([
-  'assetBinding',
-  'binding',
-  'cachePath',
-  'cacheUri',
-  'documentResourceStatus',
-  'projection',
-  'sourceBinding',
-  'runtimeAssetPath',
-  'runtimeReferenceImagePath',
-  'runtimeThumbnailPath',
-  'thumbnailData',
-]);
-
-const RUNTIME_OR_INLINE_FIELD_KEYS = new Set([
-  'base64',
-  'cachePath',
-  'cacheUri',
-  'dataUrl',
-  'fragmentRef',
-  'html',
-  'prompt',
-  'text',
-  'thumbnailData',
-  'url',
-  'webviewUri',
-]);
-
 function listCanvasProjectSources(document: CanvasData): readonly ProjectSourceDescriptor[] {
   const descriptors: ProjectSourceDescriptor[] = [];
 
@@ -157,28 +108,12 @@ function listCanvasProjectSources(document: CanvasData): readonly ProjectSourceD
           fieldPath: [...dataPath, 'thumbnailPath'],
         });
         break;
-      case 'script':
+      case 'file':
         pushCanvasSource(descriptors, {
-          id: `canvas.nodes.${nodeIndex}.data.scriptPath`,
+          id: `canvas.nodes.${nodeIndex}.data.path`,
           role: 'document',
-          path: readString(data['scriptPath']),
-          fieldPath: [...dataPath, 'scriptPath'],
-        });
-        break;
-      case 'document':
-        pushCanvasSource(descriptors, {
-          id: `canvas.nodes.${nodeIndex}.data.docPath`,
-          role: 'document',
-          path: readString(data['docPath']),
-          fieldPath: [...dataPath, 'docPath'],
-        });
-        break;
-      case 'model':
-        pushCanvasSource(descriptors, {
-          id: `canvas.nodes.${nodeIndex}.data.modelPath`,
-          role: 'model',
-          path: readString(data['modelPath']),
-          fieldPath: [...dataPath, 'modelPath'],
+          path: readString(data['path']),
+          fieldPath: [...dataPath, 'path'],
         });
         break;
       case 'canvas-embed':
@@ -189,53 +124,21 @@ function listCanvasProjectSources(document: CanvasData): readonly ProjectSourceD
           fieldPath: [...dataPath, 'canvasPath'],
         });
         break;
-      case 'project':
-        pushCanvasSource(descriptors, {
-          id: `canvas.nodes.${nodeIndex}.data.projectPath`,
-          role: 'project',
-          path: readString(data['projectPath']),
-          fieldPath: [...dataPath, 'projectPath'],
-        });
-        break;
-      case 'shot':
-        pushCanvasSource(descriptors, {
-          id: `canvas.nodes.${nodeIndex}.data.referenceImagePath`,
-          role: 'image',
-          path: readString(data['referenceImagePath']),
-          fieldPath: [...dataPath, 'referenceImagePath'],
-        });
-        pushCanvasStoryboardMediaRefs(
+      case 'job':
+        pushCanvasJobFileRefs(
           descriptors,
-          readArray(data['sourceMediaRefs']),
-          `canvas.nodes.${nodeIndex}.data.sourceMediaRefs`,
-          [...dataPath, 'sourceMediaRefs'],
+          readArray(data['inputRefs']),
+          `canvas.nodes.${nodeIndex}.data.inputRefs`,
+          [...dataPath, 'inputRefs'],
         );
-        pushCanvasStoryboardMediaRefs(
+        pushCanvasJobFileRefs(
           descriptors,
-          readArray(data['generatedMediaRefs']),
-          `canvas.nodes.${nodeIndex}.data.generatedMediaRefs`,
-          [...dataPath, 'generatedMediaRefs'],
-        );
-        pushCanvasStoryboardMediaRefs(
-          descriptors,
-          readArray(data['mediaRefs']),
-          `canvas.nodes.${nodeIndex}.data.mediaRefs`,
-          [...dataPath, 'mediaRefs'],
-        );
-        pushCanvasShotImagePrepSources(
-          descriptors,
-          data['shotImagePrepPlan'],
-          `canvas.nodes.${nodeIndex}.data.shotImagePrepPlan`,
-          [...dataPath, 'shotImagePrepPlan'],
+          readArray(data['outputRefs']),
+          `canvas.nodes.${nodeIndex}.data.outputRefs`,
+          [...dataPath, 'outputRefs'],
         );
         break;
       default:
-        pushRegisteredCanvasDataSources(
-          descriptors,
-          data,
-          `canvas.nodes.${nodeIndex}.data`,
-          dataPath,
-        );
         break;
     }
   });
@@ -285,81 +188,21 @@ function pushCanvasSource(
   descriptors.push({ ...descriptor, path: descriptor.path });
 }
 
-function pushRegisteredCanvasDataSources(
-  descriptors: ProjectSourceDescriptor[],
-  value: unknown,
-  id: string,
-  fieldPath: readonly (string | number)[],
-): void {
-  if (Array.isArray(value)) {
-    value.forEach((item, index) =>
-      pushRegisteredCanvasDataSources(descriptors, item, `${id}.${index}`, [...fieldPath, index]),
-    );
-    return;
-  }
-  if (!isPlainRecord(value)) return;
-
-  for (const [key, child] of Object.entries(value)) {
-    if (CANVAS_RUNTIME_FIELD_KEYS.has(key) || RUNTIME_OR_INLINE_FIELD_KEYS.has(key)) continue;
-    const childPath = [...fieldPath, key];
-    const childId = `${id}.${key}`;
-    if (
-      typeof child === 'string' &&
-      CANVAS_SOURCE_FIELD_KEYS.has(key) &&
-      !isObjectPathBindingPointer(value, key, child) &&
-      isSourceLikeValue(child)
-    ) {
-      descriptors.push({
-        id: childId,
-        role: inferSourceRole(key, child),
-        path: child,
-        fieldPath: childPath,
-        allowRemote: key.toLowerCase().includes('uri') || key.toLowerCase().includes('url'),
-      });
-      continue;
-    }
-    pushRegisteredCanvasDataSources(descriptors, child, childId, childPath);
-  }
-}
-
-function pushCanvasStoryboardMediaRefs(
+function pushCanvasJobFileRefs(
   descriptors: ProjectSourceDescriptor[],
   refs: readonly unknown[] | undefined,
   id: string,
   fieldPath: readonly (string | number)[],
 ): void {
   refs?.forEach((ref, refIndex) => {
-    if (!isPlainRecord(ref)) return;
-    const locator = ref['locator'];
-    if (!isPlainRecord(locator) || locator['type'] !== 'workspace-path') return;
+    if (!isPlainRecord(ref) || ref['kind'] !== 'file') return;
     pushCanvasSource(descriptors, {
-      id: `${id}.${refIndex}.locator.path`,
-      role: inferSourceRole('path', readString(locator['path']) ?? ''),
-      path: readString(locator['path']),
-      fieldPath: [...fieldPath, refIndex, 'locator', 'path'],
+      id: `${id}.${refIndex}.path`,
+      role: 'document',
+      path: readString(ref['path']),
+      fieldPath: [...fieldPath, refIndex, 'path'],
     });
   });
-}
-
-function pushCanvasShotImagePrepSources(
-  descriptors: ProjectSourceDescriptor[],
-  value: unknown,
-  id: string,
-  fieldPath: readonly (string | number)[],
-): void {
-  if (!isPlainRecord(value)) return;
-  pushCanvasStoryboardMediaRefs(
-    descriptors,
-    readArray(value['sourceMediaRefs']),
-    `${id}.sourceMediaRefs`,
-    [...fieldPath, 'sourceMediaRefs'],
-  );
-  pushCanvasStoryboardMediaRefs(
-    descriptors,
-    readArray(value['generatedMediaRefs']),
-    `${id}.generatedMediaRefs`,
-    [...fieldPath, 'generatedMediaRefs'],
-  );
 }
 
 function readCanvasMediaSourceRole(data: Record<string, unknown>): ProjectSourceDescriptor['role'] {
@@ -386,29 +229,6 @@ function replaceObjectPathSources<TDocument>(
     next = replaceAtFieldPath(next, replacement.descriptor.fieldPath, replacement.path);
   }
   return next as TDocument;
-}
-
-function isObjectPathBindingPointer(
-  parent: Record<string, unknown>,
-  key: string,
-  value: string,
-): boolean {
-  return key === 'path' && isJsonPointerPath(value) && isFieldBindingRecord(parent);
-}
-
-function isFieldBindingRecord(value: Record<string, unknown>): boolean {
-  if (!Object.prototype.hasOwnProperty.call(value, 'path')) return false;
-  return (
-    Object.prototype.hasOwnProperty.call(value, 'valueType') ||
-    Object.prototype.hasOwnProperty.call(value, 'mode') ||
-    Object.prototype.hasOwnProperty.call(value, 'required') ||
-    Object.prototype.hasOwnProperty.call(value, 'defaultValue') ||
-    Object.prototype.hasOwnProperty.call(value, 'label')
-  );
-}
-
-function isJsonPointerPath(value: string): boolean {
-  return value === '' || value.startsWith('/');
 }
 
 function replaceAtFieldPath(
@@ -446,16 +266,6 @@ function isSourceLikeValue(value: string): boolean {
     /^https?:\/\//i.test(trimmed) ||
     /\.[A-Za-z0-9]{2,16}(?:[?#].*)?$/.test(trimmed)
   );
-}
-
-function inferSourceRole(key: string, value: string): ProjectSourceDescriptor['role'] {
-  const lower = `${key} ${value}`.toLowerCase();
-  if (lower.includes('audio') || /\.(wav|mp3|flac|ogg|m4a|aac)$/i.test(value)) return 'audio';
-  if (lower.includes('model') || /\.(glb|gltf|vrm|fbx|obj)$/i.test(value)) return 'model';
-  if (lower.includes('project') || /\.(nkv|nkc|nks|nkp|nkm|nka)$/i.test(value)) return 'project';
-  if (lower.includes('document') || lower.includes('docpath')) return 'document';
-  if (/\.(png|jpe?g|webp|gif|bmp|svg|hdr|exr)$/i.test(value)) return 'image';
-  return 'media';
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

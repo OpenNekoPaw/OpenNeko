@@ -1,7 +1,6 @@
 import { isContentLocator, type ContentLocator } from '@neko/shared';
 
-export type CanvasContentLocatorProjectionSlot =
-  'node-content' | 'generated-asset' | 'generated-video-asset';
+export type CanvasContentLocatorProjectionSlot = 'node-content';
 
 export interface CanvasContentLocatorProjectionFailure {
   readonly slot: CanvasContentLocatorProjectionSlot;
@@ -9,7 +8,7 @@ export interface CanvasContentLocatorProjectionFailure {
 }
 
 export async function projectCanvasContentLocatorRuntimeState(
-  node: Record<string, unknown>,
+  node: unknown,
   project: (
     locator: ContentLocator,
     slot: CanvasContentLocatorProjectionSlot,
@@ -19,18 +18,6 @@ export async function projectCanvasContentLocatorRuntimeState(
   if (!data) return [];
 
   const failures: CanvasContentLocatorProjectionFailure[] = [];
-  if (node['type'] === 'shot') {
-    await projectGeneratedAsset(data, 'generatedAsset', 'generated-asset', project, failures);
-    await projectGeneratedAsset(
-      data,
-      'generatedVideoAsset',
-      'generated-video-asset',
-      project,
-      failures,
-    );
-    return failures;
-  }
-
   const locator = readMigratedLocator(data, 'node-content');
   if (!locator) return failures;
   assertNoRuntimeProjectionFields(data, 'node-content', [
@@ -51,15 +38,9 @@ export async function projectCanvasContentLocatorRuntimeState(
   return failures;
 }
 
-export function stripCanvasContentLocatorRuntimeState(node: Record<string, unknown>): void {
+export function stripCanvasContentLocatorRuntimeState(node: unknown): void {
   const data = readNodeData(node);
   if (!data) return;
-
-  if (node['type'] === 'shot') {
-    stripGeneratedAsset(data, 'generatedAsset', 'generated-asset');
-    stripGeneratedAsset(data, 'generatedVideoAsset', 'generated-video-asset');
-    return;
-  }
 
   if (!readMigratedLocator(data, 'node-content')) return;
   delete data['runtimeAssetPath'];
@@ -69,51 +50,6 @@ export function stripCanvasContentLocatorRuntimeState(node: Record<string, unkno
   delete data['providerUrl'];
   delete data['base64'];
   delete data['dataUrl'];
-}
-
-async function projectGeneratedAsset(
-  data: Record<string, unknown>,
-  field: 'generatedAsset' | 'generatedVideoAsset',
-  slot: CanvasContentLocatorProjectionSlot,
-  project: (
-    locator: ContentLocator,
-    slot: CanvasContentLocatorProjectionSlot,
-  ) => Promise<string | undefined>,
-  failures: CanvasContentLocatorProjectionFailure[],
-): Promise<void> {
-  const asset = data[field];
-  if (!isRecord(asset)) return;
-  const locator = readMigratedLocator(asset, slot);
-  if (!locator) return;
-  assertNoRuntimeProjectionFields(asset, slot, [
-    'path',
-    'runtimeAssetPath',
-    'renderUri',
-    'providerUrl',
-    'base64',
-    'dataUrl',
-  ]);
-  const renderUri = await project(locator, slot);
-  if (renderUri) {
-    asset['path'] = renderUri;
-  } else {
-    failures.push({ slot, locator });
-  }
-}
-
-function stripGeneratedAsset(
-  data: Record<string, unknown>,
-  field: 'generatedAsset' | 'generatedVideoAsset',
-  slot: CanvasContentLocatorProjectionSlot,
-): void {
-  const asset = data[field];
-  if (!isRecord(asset) || !readMigratedLocator(asset, slot)) return;
-  delete asset['path'];
-  delete asset['renderUri'];
-  delete asset['runtimeAssetPath'];
-  delete asset['providerUrl'];
-  delete asset['base64'];
-  delete asset['dataUrl'];
 }
 
 function readMigratedLocator(
@@ -160,8 +96,8 @@ function assertNoRuntimeProjectionFields(
   );
 }
 
-function readNodeData(node: Record<string, unknown>): Record<string, unknown> | undefined {
-  return isRecord(node['data']) ? node['data'] : undefined;
+function readNodeData(node: unknown): Record<string, unknown> | undefined {
+  return isRecord(node) && isRecord(node['data']) ? node['data'] : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

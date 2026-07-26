@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import type { CanvasNode, CanvasViewport } from '@neko/shared';
 import { Button } from '@neko/ui/primitives';
 import { RefreshIcon } from '@neko/shared/icons';
-import { useCanvasStore } from '../../stores/canvasStore';
+import { getGlobalVSCodeApi } from '../../utils/vscode';
 import { t } from '../../i18n';
 import {
   resolveCanvasMaterialPresentation,
@@ -63,16 +63,18 @@ export function SelectionMaterialGenerationBar({
       </div>
       {generationTargetNodeId && (
         <Button
-          data-material-generation-action="open-generation-panel"
+          data-material-generation-action="generate-again"
           size="xs"
           variant="default"
           leadingIcon={<RefreshIcon size={14} />}
           onClick={() =>
-            useCanvasStore
-              .getState()
-              .openGenerationPanel(generationTargetNodeId, undefined, generation.prompt, {
-                generateVideo: material.mediaType === 'video',
-              })
+            getGlobalVSCodeApi()?.postMessage({
+              type: 'sendToAgent',
+              nodeIds: [generationTargetNodeId],
+              action: 'generate',
+              ...(generation.prompt ? { prompt: generation.prompt } : {}),
+              ...(material.mediaType ? { mediaType: material.mediaType } : {}),
+            })
           }
         >
           {t('material.generateAgain')}
