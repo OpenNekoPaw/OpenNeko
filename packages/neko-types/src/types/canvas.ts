@@ -561,10 +561,11 @@ export function isFileNode(node: CanvasNode): node is FileCanvasNode {
 // Port Helpers
 // =============================================================================
 
-/** Default ports for media nodes */
-export const MEDIA_NODE_PORTS: PortDefinition[] = [
-  { id: 'out', type: 'output', position: 'right', dataType: 'any', label: 'Output' },
-];
+/** Default ports for Markdown nodes. */
+export const MARKDOWN_NODE_PORTS: PortDefinition[] = createPlayableNodePorts();
+
+/** Default ports for media nodes. */
+export const MEDIA_NODE_PORTS: PortDefinition[] = createPlayableNodePorts();
 
 /** Default ports for group nodes */
 export const GROUP_NODE_PORTS: PortDefinition[] = [
@@ -578,6 +579,8 @@ export const GROUP_NODE_PORTS: PortDefinition[] = [
  */
 export function getDefaultPorts(nodeType: CanvasNodeType): PortDefinition[] {
   switch (nodeType) {
+    case 'markdown':
+      return MARKDOWN_NODE_PORTS;
     case 'media':
       return MEDIA_NODE_PORTS;
     case 'group':
@@ -585,6 +588,13 @@ export function getDefaultPorts(nodeType: CanvasNodeType): PortDefinition[] {
     default:
       return [];
   }
+}
+
+function createPlayableNodePorts(): PortDefinition[] {
+  return [
+    { id: 'in', type: 'input', position: 'left', dataType: 'any', label: 'Input' },
+    { id: 'out', type: 'output', position: 'right', dataType: 'any', label: 'Output' },
+  ];
 }
 
 /**
