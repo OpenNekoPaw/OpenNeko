@@ -124,3 +124,11 @@
 - [x] 18.2 Reduce default, full-bleed and narrow-Webview Storyline height without removing viewport scrolling
 - [x] 18.3 Reveal Preview through the existing Overlay-local latch without adding a hide action or playback-store state
 - [x] 18.4 Run focused/full Canvas tests, build, quality checks, OpenSpec validation and isolated Extension Host verification; update evidence
+
+## 19. Stable media facts and presentation-preserving playback
+
+- [x] 19.1 Add red regression coverage for idle metadata readiness, controlled Storyline Preview content and full-bleed playback-state preservation
+- [x] 19.2 Separate Engine probe metadata from explicit stream start and keep one canonical media description path across Canvas and Storyline surfaces
+- [x] 19.3 Keep Storyline Preview control ownership stable before and after playback without adding a second play action
+- [x] 19.4 Prove Overlay/full-bleed toggles preserve the mounted Preview, active request, playback state and current unit
+- [x] 19.5 Run focused/full Canvas tests, builds, quality checks, strict OpenSpec validation and isolated Extension Host verification; update evidence

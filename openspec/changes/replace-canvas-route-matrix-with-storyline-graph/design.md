@@ -128,6 +128,28 @@ Storyline 的垂直尺寸按 lane 几何而不是视口比例无限增长。默�
 
 Preview 默认折叠时，footer actions 在 full-bleed 与 close 之前提供一个带 accessible label 的“显示预览”按钮。它只调用 `StorylinePlaybackOverlay` 已有的本地 `previewRevealed` latch，不写入 playback store、不开启播放、不创建新的 surface。点击后 Preview 在同一 Overlay 内展开，按钮随即消失；暂停、播放结束或退出 full-bleed 后 Preview 继续保持展开。full-bleed presentation 中 Preview 必须可见，因此不显示“隐藏预览”或任何独立折叠动作。关闭并重开整个 Overlay 仍是恢复默认折叠状态的唯一方式。
 
+### 10. 媒体描述与播放 session 分离，presentation 不拥有播放状态
+
+Canvas 媒体节点、Storyline Overlay 和 full-bleed 不是三套播放器。Canvas 节点与 Overlay 是两个可以发生播放所有权交接的 surface；full-bleed 只是同一个已挂载 Overlay 的 presentation。三者消费同一 source identity 和 Engine probe 事实，只有当前 playback owner 可以拥有流、播放头和播放状态。
+
+媒体生命周期拆成两个明确阶段：
+
+```text
+source identity
+  -> media probe
+  -> ready media description (duration / dimensions / hasAudio / poster)
+  -> explicit playback request
+  -> stream session (owner / state / currentTime)
+```
+
+`media:probeResult` SHALL first update renderer-local ready media description and MUST NOT depend on a play action. Explicit播放才使用已经就绪的 probe result 发送 `media:play`；同一 source 已完成 probe 后不得因为暂停、Overlay/full-bleed 切换或受控 idle presentation 重新退回 `--:--`。Engine 继续是 metadata 权威来源，Webview 不推测 codec、时长或音轨。
+
+已知的 `MediaCanvasNode.data.duration` 或 `CanvasPlaybackUnit.durationMs` 可以作为 source descriptor 的即时授权提示，避免首次 paint 显示未知值；Engine probe result 到达后成为该已挂载 surface 的运行时事实。缺失授权值时显示明确 probing/unknown 状态，不能伪造默认时长。
+
+Storyline 主 transport 始终拥有 Overlay Preview 的启动动作。Preview 即使尚未创建 stream，也应渲染媒体内容与就绪信息，但不得因为是否已经存在 `playbackRequest` 而改变按钮所有权或返回空白。Canvas 独立节点继续拥有自己的直接播放动作。
+
+Overlay 与 full-bleed 之间只修改 `presentation` 属性和 CSS。切换时 `StorylinePlaybackOverlay`、`PreviewSurface`、current unit、active stream 和播放头必须保持挂载与身份稳定；不得通过 key、条件分支或第二个 Preview 组件重新创建 session。Canvas inline 与 Overlay 之间的 handoff 可以按既有协议迁移播放 owner，但 metadata-ready 状态必须独立于 stream teardown，避免交接时退回未知信息。
+
 ## Risks / Trade-offs
 
 - [失去跨路线逐列审计] → 当前没有明确用户任务依赖该能力；未来若出现专业审阅需求，以独立 inspector 重新设计，不复活隐藏 Matrix。

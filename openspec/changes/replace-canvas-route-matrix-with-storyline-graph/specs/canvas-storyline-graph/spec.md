@@ -257,3 +257,36 @@ Canvas audio nodes and the Storyline Preview SHALL use the same audio stream, cl
 - **AND** it does not render the Canvas node title row or waveform silhouette
 - **AND** the Overlay footer owns the source title
 - **AND** it uses the same playback lifecycle as the Canvas node
+
+### Requirement: Media facts remain stable across Canvas and Storyline presentations
+
+Canvas media nodes and the Storyline Preview SHALL obtain duration, dimensions, audio presence and poster facts from the same source identity and Engine probe contract. Media description readiness MUST be independent from stream playback readiness. A surface MUST NOT require playback to start before displaying known media facts, and it MUST NOT replace known facts with unknown placeholders when playback pauses, ends, hands off, or changes Overlay presentation.
+
+#### Scenario: Canvas media node is idle
+
+- **WHEN** an audio or video node has a valid media source but playback has not started
+- **THEN** the node probes the source without starting a stream
+- **AND** it displays authoritative media facts after the probe completes
+- **AND** it retains its independent direct-play action
+
+#### Scenario: Storyline Preview is revealed before playback
+
+- **WHEN** the user reveals an audio or video Preview while the Storyline transport is idle
+- **THEN** the Preview probes and displays the same authoritative media facts
+- **AND** the Storyline transport remains the only playback start action
+- **AND** the Preview does not render an empty controlled-idle surface
+- **AND** no `media:play` request is sent until the user explicitly starts playback
+
+#### Scenario: User toggles Overlay and full-bleed while playing
+
+- **WHEN** an active Storyline Preview changes between top-docked Overlay and full-bleed presentation
+- **THEN** the same Preview component and stream session remain mounted
+- **AND** the current unit, playback state, playback head and media facts are preserved
+- **AND** no replacement playback request or stream is created solely because presentation changed
+
+#### Scenario: Playback owner hands off between Canvas and Storyline
+
+- **WHEN** the same media source transfers playback ownership between its Canvas node and Storyline Preview
+- **THEN** the stream owner may change through the existing handoff protocol
+- **AND** known media facts remain available independently of the outgoing stream teardown
+- **AND** the incoming surface does not infer or invent missing metadata

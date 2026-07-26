@@ -282,6 +282,59 @@ packages; neither warning class failed a changed package.
   `reports/webview-functional/replace-canvas-route-matrix-with-storyline-graph/compact-storyline-collapsed.png`
   (gitignored raw runtime evidence).
 
+### Stable media facts and presentation-preserving playback follow-up
+
+- Risk: L3 Canvas Webview media lifecycle and playback-state correction within
+  the existing L4 Storyline change. Engine/Proto messages, persisted Canvas
+  data and Extension ownership were unchanged.
+- Architecture review:
+  - Responsibility: Engine probe results own media facts; the mounted
+    `PreviewSurface` owns the presentation-local description; the playback
+    session owns playing/paused state and current playhead; Overlay/full-bleed
+    presentation owns none of those facts.
+  - Dependency: Canvas and Storyline surfaces reuse the existing
+    `media:probe` / `media:play` path and the same audio/video renderer hooks.
+    No second metadata cache, media client or playback component was added.
+  - Interface: the only new component option suppresses the duplicate
+    controlled Preview play action. No cross-package or host message contract
+    changed.
+  - Extension: audio and video share idle probing, controlled state, duration
+    projection and pause-intent semantics. Presentation changes remain a CSS
+    state change around one mounted Preview instance.
+  - Testing: regressions cover idle metadata, controlled media state,
+    paused-stream closure, playhead preservation and Preview identity.
+- Regression evidence was red before implementation:
+  - idle audio/video cases failed because no `media:probe` was sent;
+  - the Storyline resume case reset `0.75s` to `0`;
+  - paused audio/video stream-end cases incorrectly invoked completion.
+    After implementation,
+    `pnpm exec vitest run src/components/media/InlineMediaPlayer.test.tsx src/components/playback/PlaybackWorkspace.test.tsx src/preview/PreviewRendererRegistry.test.tsx`
+    passed 3 files / 45 tests.
+- `pnpm test` in the Canvas Webview passed 56 files / 334 tests.
+  `pnpm test` in `packages/neko-canvas` passed 19 files / 102 tests.
+  `pnpm compile` in `packages/neko-canvas` passed and rebuilt the Extension
+  and Webview assets.
+- `pnpm lint` in `packages/neko-canvas` passed with 0 errors and 27 existing
+  warnings. `pnpm check:legacy-debt`, `pnpm check:unused`,
+  `pnpm check:canvas-playback-boundary`, `pnpm check:webview-boundaries`,
+  strict OpenSpec validation and `git diff --check` passed.
+  `check:unused` reported existing configuration hints only.
+- Runtime host: isolated `[扩展开发宿主] Untitled.nkc — neko-test`; only this
+  host was reloaded. CDP page target
+  `21F0F967C6D4E434EBF088345CF4175C`; final Canvas iframe target
+  `3D34501A8F5EDE203CE67F5381DE4458`.
+- Before playback, Canvas video and audio nodes independently exposed probed
+  durations `26.3s` and `185.96589s` without sending `media:play`. The
+  Storyline controlled audio Preview showed `0:00 / 3:05` with only the main
+  Storyline transport as a start action.
+- Audio runtime verification played in full-bleed, paused at `0:08 / 3:05`,
+  restored the Overlay and retained the same Preview DOM node, duration,
+  paused state and playhead.
+- Video runtime verification played in full-bleed, paused at `0:12 / 0:26`,
+  retained the live Preview rather than falling back to the poster, then
+  restored the Overlay with the same Preview DOM node, `26.3s` duration,
+  paused state and playhead.
+
 ## Remaining risk
 
 - Root test health remains red because of the unrelated `neko-assets` activation
