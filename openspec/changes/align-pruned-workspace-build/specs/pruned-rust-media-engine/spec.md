@@ -1,3 +1,7 @@
+> **Superseded (2026-07-26):** this entire capability was retired by
+> `retire-neko-engine-before-node-media-rebuild`. It remains only as historical
+> context and must not be used to restore an Engine runtime or client.
+
 ## ADDED Requirements
 
 ### Requirement: Engine retains one Rust media implementation

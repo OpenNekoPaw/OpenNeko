@@ -32,7 +32,7 @@ OpenNeko 采用“架构优先、契约优先、风险分级、证据驱动”�
 | ---- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | L0   | 文档、文案、低风险单文件修复                                            | 聚焦检查、文档 review 或截图。                                               |
 | L1   | 局部组件、hook、service、state 逻辑                                     | 聚焦单元测试和相关包 build/typecheck。                                       |
-| L2   | Webview/Extension message、共享包、公共类型、EngineClient、跨包契约     | 契约测试、message/schema 测试、依赖边界检查和相关包 build。                  |
+| L2   | Webview/Extension message、共享包、公共类型、媒体 port、跨包契约       | 契约测试、message/schema 测试、依赖边界检查和相关包 build。                  |
 | L3   | Rust Engine、Proto、媒体流、渲染、项目格式、AI workflow、打包、资源访问 | 架构 review、单元/契约/集成测试、smoke 或 fixture 验证，必要时性能/UX 证据。 |
 | L4   | release、安装、重大 UX、核心创作工作流                                  | 完整本地/CI 门禁、安装或运行 smoke、UX 证据和明确残余风险。                  |
 
@@ -48,7 +48,7 @@ OpenNeko 采用“架构优先、契约优先、风险分级、证据驱动”�
 - TypeScript 不重复 Rust Engine 已拥有的权威计算。
 - Protobuf 和共享契约仍是跨层类型单一事实来源。
 - 持久项目数据使用相对路径、`${VAR}/path`、stable refs、asset/entity ID 或 document locator，不保存 Webview URI、blob URL、stream ID、preview token 或 engine token。
-- 文件、文档、媒体、模型、缩略图、preview/proxy、导入、导出或跨包传递必须经过 `ContentReadService`、`ContentRepresentationService`、capability-scoped runtime projection、authorized writer、EngineClient 或项目文件服务中对应的 owning boundary；功能包只实现 storage-neutral generator/adapter 和领域语义，不重新实现 cache manager、path resolver、Webview URI 投影或 Engine file-token policy。
+- 文件、文档、媒体、模型、缩略图、preview/proxy、导入、导出或跨包传递必须经过 `ContentReadService`、`ContentRepresentationService`、capability-scoped runtime projection、authorized writer、领域媒体 port 或项目文件服务中对应的 owning boundary；功能包只实现 storage-neutral generator/adapter 和领域语义，不重新实现 cache manager、path resolver、Webview URI 投影或 loopback token/Range policy。
 - 缓存是透明、可重建的派生状态；业务逻辑、Agent 工具、Webview、Canvas 节点、Storyboard、Composite artifact 和跨插件 payload 不得把 `.neko/.cache` 目录结构、cache manifest、materialized path、`cachePath`、`runtimePath`、`cacheResourceRef`、Webview URI、blob/object URL、Engine token、preview token 或 scratch path 当作 durable identity。
 - Webview 可访问 URI 只能由 Host 注入的 `WebviewContentProjectionPort` 在授权后生成；`LocalResourceAccessService` 只存在于该 Host adapter 内。投影失败必须返回明确 diagnostic 或 fail closed，不能回退为 raw local/cache/source path。
 - 异步流程处理错误、取消、超时、资源释放和竞态边界。
@@ -166,7 +166,7 @@ L3/L4 变更在大规模实现前必须先证明关键路径可行：可以通�
 
 ## Engine 与 Webview 专项约束
 
-Engine 变更涉及 Rust action、stream、file access、runtime state、native packaging 或 EngineClient contract 时，应单独记录 Rust/Proto/client/fixture/smoke 验证。Webview 变更涉及 runtime behavior、Extension/Webview message、layout、keyboard/focus、i18n、VSCode lifecycle、CSP、媒体 codec 兼容或 Range/seek 读取时，应单独记录 message contract、focused build/test、CSP/HTML helper 测试、Engine file-access 测试，以及通过本地 Extension Development Host 与 `vscode-extension-debugger` 执行的真实功能场景。UI 运行态测试不得进入 CI。
+Node 媒体运行时变更涉及 FFmpeg job、stream、file access、runtime state、发布闭包或媒体 port contract 时，应单独记录 adapter/browser/fixture/smoke 验证。Webview 变更涉及 runtime behavior、Extension/Webview message、layout、keyboard/focus、i18n、VSCode lifecycle、CSP、媒体 codec 兼容或 Range/seek 读取时，应单独记录 message contract、focused build/test、CSP/HTML helper 测试、loopback file-access 测试，以及通过本地 Extension Development Host 与 `vscode-extension-debugger` 执行的真实功能场景。UI 运行态测试不得进入 CI。
 
 普通浏览器、Chrome、Browser 插件、Playwright 或 Vite/localhost 只能作为热重载和显式浏览器兼容性辅助；它们不经过 VS Code Webview CSP、`webview.asWebviewUri(...)`、Extension/Webview message、焦点生命周期或 VS Code 主题注入，因此不能作为 Extension Webview 视觉/交互变更的默认验收证据。此类变更必须在本地使用 Extension Development Host + `vscode-extension-debugger` Skill 运行受影响的真实功能场景；`pnpm smoke:webview:targets` 只证明 page/Webview target 可发现。若功能场景无法运行，必须记录阻塞条件、剩余风险和关闭方式。
 
@@ -201,7 +201,7 @@ Webview/React 变更新增组件前，review 必须确认已经做过组件复�
 
 新功能涉及组件样式、主题、国际化、日志、错误/诊断、配置、路径、文件保存/读写、资源授权、缓存、DTO 或跨包契约时，review 必须确认已经做过公共基础能力审计：
 
-- 是否优先复用或更新 `@neko/shared`、`@neko/ui`、`@neko/neko-client`、`@neko/proto`、`@neko/entity`、`@neko/search`、project-file-io、resource cache 或既有 domain service。
+- 是否优先复用或更新 `@neko/shared`、`@neko/ui`、`@neko/media`、`@neko/proto`、`@neko/entity`、`@neko/search`、project-file-io、resource cache 或既有 domain service。
 - 是否避免了 package-local design system、theme token、i18n runtime、logger/error 类型、项目文件 IO、cache manager、path resolver、Engine HTTP/WS client 或共享 DTO 的并行实现。
 - 如果公共入口缺少能力，是否优先扩展公共契约、公共 adapter、公共 hook/primitive 或 domain service，而不是复制一份功能包私有实现。
 - 如果能力留在 owning package，是否说明了业务边界、依赖方向、后续提取条件和验证命令。

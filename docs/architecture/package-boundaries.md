@@ -2,19 +2,19 @@
 
 状态：Accepted
 
-更新日期：2026-07-17
-对应变更：`align-pruned-workspace-build`
+更新日期：2026-07-26
+对应变更：`replace-cut-engine-with-node-ffmpeg-runtime`
 
-本文定义当前保留 workspace 的依赖方向、公共能力 owner，以及 TUI、VS Code Extension/Webview 和 Rust Media Engine 的边界。包名、入口和示例只描述当前保留实现；已移除产品不构成兼容要求。
+本文定义当前保留 workspace 的依赖方向、公共能力 owner，以及 TUI、VS Code Extension/Webview 和 Node/FFmpeg 媒体运行时的边界。包名、入口和示例只描述当前保留实现；已移除产品不构成兼容要求。
 
 ## 分层与依赖方向
 
 | 层级            | 主要包                                                                                                           | 可依赖                                  | 不得依赖                                                      |
 | --------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------- |
 | L0 host-neutral | `@neko/shared`、`@neko/proto`、`@neko/content`、`@neko/entity`、`@neko/search`、`@neko/markdown`、`@neko/skills` | 更低层纯 contract/utility               | VS Code、React、Webview、应用根、功能包内部实现               |
-| L1 host/client  | `@neko/host`、`@neko/neko-client`、各功能包 host-neutral core/platform                                           | L0、明确 runtime dependency             | React/Webview 实现、`apps/*`、其他功能包内部实现              |
-| L2 browser UI   | `@neko/ui`、功能包 Webview                                                                                       | L0、L2 公共 UI、包自有 contract         | `vscode`、Node-only API、Extension 实现、Engine native handle |
-| Extension Host  | 保留功能包的 Extension、Engine Extension                                                                         | L0/L1、VS Code API、包自有 host adapter | React/Webview implementation、其他功能扩展内部实现            |
+| L1 host/runtime | `@neko/host`、`@neko/media`、各功能包 host-neutral core/platform                                                | L0、明确 runtime dependency             | React/Webview 实现、`apps/*`、其他功能包内部实现              |
+| L2 browser UI   | `@neko/ui`、功能包 Webview                                                                                       | L0、L2 公共 UI、包自有 contract         | `vscode`、Node-only API、Extension 实现、本地文件路径          |
+| Extension Host  | 保留功能包的 Extension                                                                                            | L0/L1、VS Code API、包自有 host adapter | React/Webview implementation、其他功能扩展内部实现            |
 | Application     | `apps/neko-tui`、`apps/neko-vscode`                                                                              | package public entries                  | `packages/*/src`、其他应用内部目录、应用级领域副本            |
 
 依赖必须自上而下组合：
@@ -26,8 +26,8 @@ apps
   -> shared/proto
 
 Webview -> UI/shared contracts
-Extension -> host/domain/client contracts
-Engine hosts -> Host API -> Kernel/runtime
+Extension -> host/domain/runtime contracts
+Node media adapter -> FFmpeg/ffprobe process
 ```
 
 任何跨层消息都先定义类型化 contract；任何跨包复用都走 public entry、port、facade command 或明确 adapter，不直接导入另一个包的内部实现。
@@ -50,18 +50,21 @@ Engine hosts -> Host API -> Kernel/runtime
 - host-neutral core 不读取 VS Code API、DOM 或 Webview global。
 - application identity 是路由契约，不会创建产品入口，也不能让已移除产品成功启动。
 
+### `@neko/media`
+
+`packages/neko-media` 提供领域中立的媒体契约，以及隔离的 Node 与浏览器
+runtime 入口。
+
+- 通用入口只包含 probe、prepared media、PCM、失败范围和生命周期契约。
+- `@neko/media/node` 拥有 FFmpeg/ffprobe 进程与 opaque loopback
+  Range/PCM session，不依赖 VS Code 或产品包。
+- `@neko/media/browser` 拥有 MSE/PCM client，不访问 Node、VS Code 或本地路径。
+- Preview、Canvas、Tools、Agent、Assets 与 Cut 必须通过各自的窄领域端口组合
+  这些能力，不得重新创建宽泛 `EngineClient` facade。
+
 ### `@neko/proto`
 
-`packages/neko-proto` 是跨语言 wire contract 的单一事实来源。涉及 Engine action、stream descriptor 或跨层 DTO 时，优先更新 Proto/Host API 和生成类型，不在功能包手写平行协议。
-
-### `@neko/neko-client`
-
-`packages/neko-client` 是 Engine HTTP/WebSocket 和流消费 client 的边界。
-
-- 功能包不得散落私有 Engine URL、裸 WebSocket 协议或重复 normalizer。
-- Webview 只能消费 Extension 授权后的 descriptor；Extension 负责端口、token、路径授权和生命周期。
-- 普通播放器优先组合公共 stream lifecycle，只保留领域控件、渲染与错误 UI。
-- 被移除的 Scene/Puppet/Model/ML/Device/Live client method 不得以 fallback 或空结果恢复。
+`packages/neko-proto` 是需要持久或跨语言生成的 wire contract 单一事实来源。Node 媒体 session descriptor 由 `@neko/media` 维护；功能包不得手写平行协议。
 
 ### `@neko/content`
 
@@ -106,11 +109,11 @@ Extension 包拥有 VS Code 宿主能力：
 
 - 注册 commands、Custom Editors、providers、status bar 和 disposables；
 - 通过 `webview.asWebviewUri()` 投影资源，并用类型化 `postMessage` bridge 通信；
-- 授权 Engine port、token、file root、stream descriptor 和 preview resource；
-- 通过 `EngineClient` 编排媒体操作；
+- 授权 loopback token、file root、stream descriptor 和 preview resource；
+- 通过领域窄 port 编排 `@neko/media/node` 操作；
 - 在 deactivate、editor close 和取消路径显式释放资源。
 
-Extension 不导入 React，不复制 Rust 媒体计算，不直接依赖其他功能扩展内部实现，也不中继高频视频帧或 PCM。
+Extension 不导入 React，不复制媒体计算，不直接依赖其他功能扩展内部实现，也不中继高频视频帧或 PCM。
 
 文件发现边界：
 
@@ -130,14 +133,17 @@ Webview 负责浏览器沙箱内的 UI、用户交互和可恢复展示状态。
 
 涉及视觉、交互、CSP、焦点、消息或媒体的验收必须运行 Extension Development Host；普通浏览器只适合纯浏览器兼容辅助。
 
-## Rust Media Engine
+## Node/FFmpeg 媒体运行时
 
-Engine 当前只拥有媒体能力：文件/Range、probe/capture、编解码、音频处理、GPU 媒体处理、timeline、stream、effect、color、preview、export 和 task/health。
+`packages/neko-engine` 与 `packages/neko-client` 已删除。当前媒体边界由
+`@neko/media`、领域 port 和 FFmpeg adapter 组成；不存在 Engine fallback。
 
-- TypeScript 只负责编排、展示、请求和校验，不重写 Engine 权威计算。
-- Engine file access 服务大型二进制和需 seek 的媒体；纯文本、配置和 JSON 项目事实仍由 Host IO/领域 codec 管理。
-- Scene、Puppet、Model、ML、Device、Live、panoramic 与设备采集已经移除，不能作为 Engine 入口或领域依赖。
-- 新能力先定义 contract，再实现 Kernel/runtime，最后接 host/client/consumer，并用路径断言证明旧 handler 未参与。
+- H.264/Range、MSE、PCM、抽帧、波形、转码和导出遵循
+  [`media-runtime.md`](media-runtime.md)。
+- OTIO、Canvas 文档、Agent 会话和其他项目事实由 owning domain 持有，FFmpeg
+  只是有界执行 adapter。
+- 新媒体能力先更新中立 contract，再接 owning package adapter 和真实 Webview
+  路径测试；不得恢复 Engine route/client/DTO。
 
 ## Agent 子包
 
@@ -185,10 +191,9 @@ Capability 是 OpenNeko 产品扩展 seam，领域包提供定义，Host 负责 
 | `neko-quality`     | canonical Quality Gate、evaluator port 与模型证据适配 | 只依赖共享 contract；领域 rubric/repair/apply 留在 owning package；provider/config/credential 和 Host IO 由组合层注入                          |
 | `neko-assets`      | Media Library 文件入口、投影和 Entity VS Code surface | 文件走 canonical locator/Host Content I/O；Entity 走 canonical facade；不拥有 catalog、package/generated lifecycle 或 cache                    |
 | `neko-canvas`      | 画布、创作结构、投影与领域 authoring                  | Webview 管交互；持久写入走 domain/host contract；复用公共 UI                                                                                   |
-| `neko-cut`         | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Extension 管 editor/export；媒体走 Engine client                                                                         |
-| `neko-preview`     | 授权只读预览与临时 3D Reference staging               | Preview 拥有面板级 Three.js 会话及形象、动作、机位、全景输出；Agent/Canvas/media 只消费共享 contract；不恢复 Engine Model/Scene 或持久 3D 项目 |
+| `neko-cut`         | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Extension 管 editor/export；媒体走 `@neko/media` 窄端口                                                                  |
+| `neko-preview`     | 授权只读预览与临时 3D Reference staging               | Preview 拥有媒体 session 和面板级 Three.js 会话；Agent/Canvas/media 只消费共享 contract；不拥有持久 3D 项目                                      |
 | `neko-tools`       | 工具、Media LSP、差异与诊断                           | LSP/diagnostic 在 Extension；不得贡献已移除 Device UI                                                                                          |
-| `neko-engine`      | 本地 Rust Media Engine 与 VS Code native wrapper      | 只暴露保留媒体 contract；native 资源显式释放                                                                                                   |
 | `apps/neko-vscode` | VS Code 产品组合根                                    | 拥有单一安装扩展的组合生命周期、scoped context、manifest 合并、平台打包、发布和产品验收；领域实现仍由各 `neko-*` 包拥有                        |
 
 ## Character / World 顶级领域聚合包
@@ -270,7 +275,7 @@ pnpm check:unused
 pnpm test
 pnpm build
 pnpm smoke:webview:targets
-cd packages/neko-engine && cargo test --workspace
+pnpm --dir packages/neko-media test:run
 ```
 
 Webview 运行态验收不进入 CI；通过 Extension Development Host 与 `vscode-extension-debugger` 在本地执行。场景由 owning package 维护业务 fixture 和断言，证据只能使用隔离合成 workspace，并按仓库规则脱敏。

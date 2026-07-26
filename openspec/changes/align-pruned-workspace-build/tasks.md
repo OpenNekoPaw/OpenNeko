@@ -1,3 +1,7 @@
+> **Superseded (2026-07-26):** completed items below record the former retained
+> Engine implementation. Current work and validation are owned by
+> `retire-neko-engine-before-node-media-rebuild`.
+
 ## 1. Close the pruned workspace
 
 - [x] 1.1 Remove `@neko/workbench-core`, stale feature adapter exports, and quality ownership after proving there is no production import, dependency, or TypeScript alias.

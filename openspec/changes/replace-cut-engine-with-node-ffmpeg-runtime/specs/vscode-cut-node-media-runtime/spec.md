@@ -1,0 +1,248 @@
+# vscode-cut-node-media-runtime Specification
+
+## ADDED Requirements
+
+### Requirement: Cut media ports remain runtime-neutral
+
+The system SHALL expose Cut media operations through domain-owned ports that do
+not import Engine, Node, FFmpeg, VS Code, browser transport, or generated Engine
+DTO types.
+
+#### Scenario: Extension composes the runtime
+
+- **WHEN** a Cut document is opened
+- **THEN** the composition root provides exactly one implementation of the
+  frozen Cut media ports
+- **AND** the document and Webview consume only the port contract
+
+#### Scenario: Adapter contract violation
+
+- **WHEN** an adapter returns an unknown descriptor version or stale session
+  identity
+- **THEN** the consumer fails with an explicit diagnostic
+- **AND** it does not substitute a legacy adapter or empty result
+
+### Requirement: Node/FFmpeg owns trusted media preparation
+
+The Extension Host SHALL resolve authorized workspace media paths and use
+ffprobe/FFmpeg to implement probe, frame capture, waveform, preview preparation,
+PCM decoding, and export.
+
+#### Scenario: Probe common media
+
+- **WHEN** a referenced media file is authorized and readable
+- **THEN** the probe result reports duration, video dimensions/rate/codec/pixel
+  format/color metadata, and audio stream/channel/sample-rate metadata where
+  present
+
+#### Scenario: Capture a frame
+
+- **WHEN** Cut requests a timestamp and maximum dimensions
+- **THEN** FFmpeg seeks and returns one bounded image result
+- **AND** cancellation terminates the child process
+
+#### Scenario: Render a waveform
+
+- **WHEN** Cut requests waveform peaks
+- **THEN** FFmpeg decodes the requested audio stream and the adapter returns
+  normalized peaks at the requested density
+
+#### Scenario: Media contains localized corruption
+
+- **WHEN** the container and selected stream are readable but one or more
+  requested packets, frames, or bounded intervals are damaged
+- **THEN** the adapter classifies the failure as localized media corruption
+- **AND** successfully decoded frames or waveform intervals remain available
+- **AND** the operation does not classify the complete source as unavailable
+
+#### Scenario: Source or stream is unusable
+
+- **WHEN** the container cannot be opened or the selected stream cannot produce
+  any usable bounded result
+- **THEN** the adapter reports source-level or stream-level unavailability
+- **AND** it does not fabricate an empty successful representation
+
+#### Scenario: FFmpeg runtime lacks a required capability
+
+- **WHEN** the selected preparation profile requires a filter or encoder that
+  the discovered FFmpeg executable does not provide
+- **THEN** the adapter reports a runtime-capability diagnostic before preparing
+  the proxy
+- **AND** it does not report the input media as corrupt or unsupported
+
+### Requirement: Preview uses declared MSE preparation
+
+Video preview SHALL use an explicit versioned MSE descriptor and opaque loopback
+URLs. The Webview SHALL render it with a muted `<video>` element.
+
+#### Scenario: H.264 input
+
+- **WHEN** an H.264 source is compatible with the preview profile
+- **THEN** the adapter packages or remuxes it without video re-encoding where
+  possible
+- **AND** reports an H.264 MSE MIME type
+
+#### Scenario: Long Clip or locally corrupt suffix
+
+- **WHEN** the next OTIO input boundary is farther than the bounded preview
+  preparation window
+- **THEN** the host prepares only the next window and exposes its end as the
+  active segment boundary
+- **AND** the Webview requests the following window before that boundary
+- **AND** corruption outside the prepared window does not prevent an earlier
+  valid window from playing
+
+#### Scenario: Unsupported input codec
+
+- **WHEN** the input codec is not qualified for direct Webview playback
+- **THEN** the adapter explicitly transcodes it to the H.264 SDR preview profile
+- **AND** diagnostics identify the transcode profile
+- **AND** the system does not attempt an Engine fallback
+
+#### Scenario: VP8 qualification
+
+- **WHEN** the target VS Code/Electron Webview passes the real VP8 WebM MSE
+  fixture
+- **THEN** VP8 may use the direct WebM preparation profile
+- **ELSE** VP8 uses the explicit H.264 transcode profile
+
+#### Scenario: 10-bit or HDR input
+
+- **WHEN** the source requires conversion for the initial preview profile
+- **THEN** the adapter uses an explicit SDR tone-map/conversion filter
+- **AND** the UI does not claim native HDR monitoring
+
+### Requirement: All audible inputs use PCM
+
+The system SHALL decode every audible input, including video-embedded audio, to
+versioned framed float32 PCM delivered over loopback HTTP.
+
+#### Scenario: Start synchronized audio
+
+- **WHEN** a preview interval contains audible inputs
+- **THEN** the Extension creates one PCM session per audible input
+- **AND** each descriptor reports protocol version, sample rate, channels, and
+  an opaque stream URL
+- **AND** the video element remains muted
+
+#### Scenario: Start barrier for audible preview
+
+- **WHEN** the Webview connects an audible preview interval
+- **THEN** the host primes the paused PCM transport so that bounded bytes can
+  reach the Webview without activating video playback
+- **THEN** connection does not complete until every authoritative PCM client
+  has scheduled its first valid packet and exposes a ready media clock
+- **AND** the muted video does not start before that barrier
+
+#### Scenario: Stop PCM
+
+- **WHEN** the preview is stopped, replaced, or disposed
+- **THEN** all FFmpeg children, HTTP responses, audio nodes, and session entries
+  owned by that preview are released
+
+### Requirement: OpenNeko owns preview synchronization
+
+The system SHALL map the selected media clock to OTIO timeline time using an
+explicit timeline origin, media origin, playback rate, and active interval.
+
+#### Scenario: PCM clock ready
+
+- **WHEN** a primary PCM stream has a ready playback clock
+- **THEN** OpenNeko uses it as the authoritative preview clock
+- **AND** video is corrected against that clock
+
+#### Scenario: Video-only interval
+
+- **WHEN** no audible PCM clock exists
+- **THEN** OpenNeko uses the `<video>` media clock
+
+#### Scenario: Discontinuity
+
+- **WHEN** drift exceeds the recoverable correction threshold or a seek crosses
+  a prepared interval
+- **THEN** the system performs an explicit stop/reprepare/seek transition
+- **AND** it disposes all local video and PCM clients before stopping their host
+  sessions
+- **AND** it does not conceal the discontinuity with an unrelated clock
+
+### Requirement: Media bytes stay outside postMessage
+
+The system SHALL transfer media segments and PCM bytes through session-scoped
+loopback HTTP URLs rather than VS Code `postMessage`.
+
+#### Scenario: Webview consumes media
+
+- **WHEN** the Webview receives a preview descriptor
+- **THEN** it receives no local filesystem path
+- **AND** it fetches only opaque loopback URLs
+
+#### Scenario: Unknown session URL
+
+- **WHEN** a request targets an expired, stopped, or unknown media session
+- **THEN** the server returns an explicit non-success response
+- **AND** it does not resolve any workspace path from request text
+
+### Requirement: Cut export is an FFmpeg job
+
+The Node adapter SHALL export the accepted lightweight Cut timeline through an
+owned cancellable FFmpeg job with staged output and post-write validation.
+
+#### Scenario: Successful export
+
+- **WHEN** the selected OTIO timeline is supported and FFmpeg completes
+- **THEN** the adapter validates the staged media
+- **AND** publishes it atomically to the requested target
+
+#### Scenario: Failed or cancelled export
+
+- **WHEN** FFmpeg fails, validation fails, or the job is cancelled
+- **THEN** incomplete output is not published as a successful export
+- **AND** the caller receives an actionable diagnostic
+
+### Requirement: Cut switches through one canonical composition path
+
+The Cut composition root SHALL select only the Node/FFmpeg adapter after the
+switch.
+
+#### Scenario: Canonical adapter selected
+
+- **WHEN** a Cut document is opened after migration
+- **THEN** tests observe construction of the Node/FFmpeg adapter
+- **AND** a poisoned legacy Engine Cut entry is not invoked
+
+#### Scenario: Node adapter cannot initialize
+
+- **WHEN** FFmpeg binaries are absent or the loopback server cannot start
+- **THEN** Cut reports initialization failure
+- **AND** it does not retry with the Engine adapter
+
+### Requirement: Legacy Cut Engine surface is removed
+
+After the canonical path is verified, the repository SHALL remove Cut-owned
+Engine adapters, connections, routes, client calls, DTO references, package
+dependencies, and tests.
+
+#### Scenario: Legacy debt check
+
+- **WHEN** repository searches and dependency checks run
+- **THEN** no Cut production path imports or invokes the removed Engine Cut
+  surface
+
+### Requirement: Whole-Engine deletion is conditional
+
+The repository SHALL delete `packages/neko-engine` only after an audited
+dependency closure proves that it has no remaining owned responsibility.
+
+#### Scenario: A non-Cut consumer remains
+
+- **WHEN** Preview, Canvas, Assets, Tools, Agent, TUI, VS Code host, packaging,
+  protocol, tests, or documentation still owns an Engine dependency
+- **THEN** `packages/neko-engine` remains
+- **AND** the audit records the exact consumer and responsibility
+
+#### Scenario: No consumer remains
+
+- **WHEN** runtime, protocol, build, packaging, test, and documentation audits
+  all report zero remaining responsibilities
+- **THEN** the Engine package and its now-unused shared surface may be deleted
+- **AND** the full local quality gates must pass

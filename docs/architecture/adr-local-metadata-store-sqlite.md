@@ -248,7 +248,7 @@ EntityProjectionRepository
 - Agent Core、Webview、feature domain package 不导入 `node:sqlite` 或 `bun:sqlite`。
 - Webview/TUI presentation 不接收 DB path、table name、cache path 或原始 SQLite error。
 - `node:sqlite` 是同步 API；bulk FTS、semantic rebuild 和大型 migration 必须使用 worker，不能阻塞 Extension Host。
-- `neko-engine` 不拥有本地 metadata DB。
+- `@neko/media` 与 FFmpeg 子进程不拥有本地 metadata DB。
 
 ## 运行时支持策略
 

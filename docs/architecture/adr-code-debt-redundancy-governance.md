@@ -232,7 +232,7 @@ OpenNeko 对重复、冗余和兼容代码采用“先分类、再收敛、最�
 - `pnpm check:unused` 可以从“已知失败”恢复为有用的门禁。
 - 兼容桥保留时有清晰 owner 和移除条件。
 - 重复代码从“局部实现方便”转为“需要复用审计”的架构风险。
-- 新功能更容易落到 `@neko/shared`、`@neko/ui`、`@neko/neko-client`、`@neko/search` 或 owning domain service 的正确边界。
+- 新功能更容易落到 `@neko/shared`、`@neko/ui`、`@neko/media`、`@neko/search` 或 owning domain service 的正确边界。
 
 代价：
 

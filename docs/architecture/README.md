@@ -4,8 +4,8 @@
 
 ## 放入本目录
 
-- Webview、Extension Host、Rust Engine、共享契约之间的边界。
-- Protobuf、路径系统、资源 URI、Engine 权威等跨层约束。
+- Webview、Extension Host、Node/FFmpeg 媒体运行时、共享契约之间的边界。
+- Protobuf、路径系统、资源 URI、媒体授权等跨层约束。
 - 影响多个领域或多个包的 ADR。
 - 全局质量门禁、安全边界、依赖方向和运行时策略。
 
@@ -17,7 +17,7 @@
 | [`adr-agent-autonomous-filmmaking-creation-boundary.md`](adr-agent-autonomous-filmmaking-creation-boundary.md)                                               | 已被 Agent 动态创作编排 ADR 取代的影视创作历史边界                                                                    |
 | [`adr-agent-message-task-queue-boundary.md`](adr-agent-message-task-queue-boundary.md)                                                                       | 历史边界；消息队列与计划进度分离仍有效，通用 Task/TaskCard 已被取代                                                   |
 | [`adr-agent-internal-continuation-boundary.md`](adr-agent-internal-continuation-boundary.md)                                                                 | 历史提案；Subagent 结构化回传仍有效，通用 Task continuation 已被取代                                                  |
-| [`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md)                                               | 以 Tool Call 取代通用 Agent Task，并区分前台 Agent、Subagent、领域 Job、页面关闭与恢复边界                             |
+| [`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md)                                               | 以 Tool Call 取代通用 Agent Task，并区分前台 Agent、Subagent、领域 Job、页面关闭与恢复边界                            |
 | [`adr-agent-runtime-single-authority-and-simplification-boundary.md`](adr-agent-runtime-single-authority-and-simplification-boundary.md)                     | Agent 流式 Timeline 单一权威、Quality/Capability/Pi 所有权、Prompt/渲染/Platform 收敛及条件性 External Processor 边界 |
 | [`adr-agent-runtime-architecture-comparison-boundary.md`](adr-agent-runtime-architecture-comparison-boundary.md)                                             | Agent runtime 对比 Codex/OpenCode/Pi/OpenClaw/Hermes 等后的本地边界、协议面和演进约束                                 |
 | [`adr-pi-agent-runtime.md`](adr-pi-agent-runtime.md)                                                                                                         | Pi 作为唯一 Agent/LLM/Skill/Session canonical path，及模型、路径、凭据和产品职责边界                                  |
@@ -38,8 +38,9 @@
 | [`adr-local-metadata-store-sqlite.md`](adr-local-metadata-store-sqlite.md)                                                                                   | 用户级 SQLite 本地元数据 Store、项目事实和缓存索引边界                                                                |
 | [`adr-neko-desktop-composition-and-open-source-reference-boundary.md`](adr-neko-desktop-composition-and-open-source-reference-boundary.md)                   | 拟议新增 Desktop 组合根、现有子包复用方式及 OpenCode、Zed、Craft Agents、Goose 等参考边界                             |
 | [`adr-neko-desktop-home-project-profile-ux-boundary.md`](adr-neko-desktop-home-project-profile-ux-boundary.md)                                               | Desktop Home、Project Tabs、三类 Project Profile，以及 `neko-chara`/`neko-world` 顶级领域聚合边界                     |
-| [`adr-cut-otio-vscode-desktop-media-runtime-boundary.md`](adr-cut-otio-vscode-desktop-media-runtime-boundary.md)                                             | Cut 以 OTIO 为唯一工程、VS Code 精简保留 Engine adapter、Desktop 迁移到 WebCodecs/Host FFmpeg，以及严格媒体格式边界   |
-| [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md)                                                             | 已实现的 VS Code Cut OTIO 工程、Engine adapter、同源媒体引用和轻量编辑边界                                            |
+| [`adr-cut-otio-vscode-desktop-media-runtime-boundary.md`](adr-cut-otio-vscode-desktop-media-runtime-boundary.md)                                             | Cut OTIO 与跨宿主过渡边界；其中媒体 runtime 目标已被 MSE/Node/FFmpeg ADR 取代                                         |
+| [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md)                                                             | VS Code Cut OTIO 工程、同源媒体引用和轻量编辑的历史过渡边界；运行时实现以 Node/FFmpeg ADR 为准                        |
+| [`adr-cut-mse-node-ffmpeg-media-runtime-boundary.md`](adr-cut-mse-node-ffmpeg-media-runtime-boundary.md)                                                     | Cut 以 H.264/VP8 MSE、Node/FFmpeg remux/transcode、PCM 和 OpenNeko 同步统一媒体运行时的目标边界                       |
 | [`application-composition.md`](application-composition.md)                                                                                                   | TUI、OpenNeko for VS Code 两个应用 composition root 和依赖方向                                                        |
 | [`adr-unified-markdown-resource-rendering.md`](adr-unified-markdown-resource-rendering.md)                                                                   | Canvas MCP 式能力、Markdown 扩展语法、资源增强渲染和 Send to Canvas 边界                                              |
 | [`adr-canvas-cut-playback-route-and-timeline-boundary.md`](adr-canvas-cut-playback-route-and-timeline-boundary.md)                                           | Canvas 预览路线矩阵、Cut 剪辑时间线、Agent 顺序感知和跨包协议边界                                                     |
@@ -50,19 +51,19 @@
 | [`auth.md`](auth.md)                                                                                                                                         | 无独立 Auth 产品时的用户凭据、workspace policy、host adapter 和 session 边界                                          |
 | [`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)                                                                                           | 派生存储、窄内容读写服务、路径变量和 Webview 投影                                                                     |
 | [`client-targets.md`](client-targets.md)                                                                                                                     | TUI、OpenNeko for VS Code 的产品目标、职责边界和验证重点                                                              |
-| [`engine-runtime.md`](engine-runtime.md)                                                                                                                     | 裁剪后的 Rust Media Engine、Host API、文件/Range、编解码和数据路径                                                    |
+| [`media-runtime.md`](media-runtime.md)                                                                                                                       | Node/FFmpeg、文件 Range、PCM、编解码、10-bit/HDR proxy 和损坏范围边界                                                |
 | [`headless-project-authoring.md`](headless-project-authoring.md)                                                                                             | `.nk*` 持久项目写入的无 UI authoring 边界、operation 分类、canonical 入口和客户端适配                                 |
-| [`package-boundaries.md`](package-boundaries.md)                                                                                                             | 子包边界、UI 层、公共代码、Extension/Webview/Engine 约束和验证命令                                                    |
+| [`package-boundaries.md`](package-boundaries.md)                                                                                                             | 子包边界、UI 层、公共代码、Extension/Webview/Node 媒体运行时约束和验证命令                                            |
 | [`proto-and-wire-contracts.md`](proto-and-wire-contracts.md)                                                                                                 | Proto、wire contract、生成类型、UI projection 和项目格式关系                                                          |
 | [`ui-theme-i18n-error-logging.md`](ui-theme-i18n-error-logging.md)                                                                                           | UI 公共层、主题 token、国际化、错误处理、日志和诊断边界                                                               |
 | [`unified-entity.md`](unified-entity.md)                                                                                                                     | 统一实体、候选、实体素材绑定、视觉草案、展示投影和搜索投影                                                            |
-| [`webview-media-security.md`](webview-media-security.md)                                                                                                     | VS Code Webview CSP、媒体格式兼容、Range 和 Engine 媒体访问约束                                                       |
+| [`webview-media-security.md`](webview-media-security.md)                                                                                                     | VS Code Webview CSP、媒体格式兼容、Range、PCM 和 Node 媒体访问约束                                                    |
 
 ## 历史/已取代 ADR
 
 | 文档                                                                                                               | 取代说明                                                                                                                                                                                                |
 | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`adr-neko-desktop-apphost-resource-viewport-boundary.md`](adr-neko-desktop-apphost-resource-viewport-boundary.md) | Desktop 产品壳已删除；当前边界由 application composition、package boundaries 与 Media Engine 文档接续                                                                                                   |
+| [`adr-neko-desktop-apphost-resource-viewport-boundary.md`](adr-neko-desktop-apphost-resource-viewport-boundary.md) | Desktop 产品壳已删除；当前边界由 application composition、package boundaries 与 Media Runtime 文档接续                                                                                                  |
 | [`adr-neko-workbench-core-plugin-host.md`](adr-neko-workbench-core-plugin-host.md)                                 | Workbench Core 与 Desktop Plugin Host 已随产品裁剪删除；仅保留为历史设计背景                                                                                                                            |
 | [`marketplace.md`](marketplace.md)                                                                                 | Market/Registry 客户端、Market Core 和安装面已删除；仅保留为历史产品设计背景                                                                                                                            |
 | [`adr-markdown-storyboard-draft-protocol.md`](adr-markdown-storyboard-draft-protocol.md)                           | 已被 [`adr-unified-markdown-resource-rendering.md`](adr-unified-markdown-resource-rendering.md) 和 Canvas `canvas.ingestMarkdown` / Creative Table profile 方案取代；仅保留为历史背景，不作为新实现入口 |

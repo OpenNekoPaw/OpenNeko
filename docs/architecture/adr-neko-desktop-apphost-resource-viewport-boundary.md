@@ -4,7 +4,7 @@
 日期：2026-07-08  
 范围：`neko-desktop`、Desktop AppHost、Resource Explorer、Market/Packages/Skills 管理面、Engine-owned viewport、VSCode/TUI/未来客户端边界。
 
-取代说明：Desktop 产品壳已由 `restructure-client-applications-and-retire-desktop-shell` 删除，Workbench Core 又由 `align-pruned-workspace-build` 删除；本文仅保留历史决策背景，不是当前产品或实现入口。现行契约以 `application-composition.md`、`package-boundaries.md` 和 `engine-runtime.md` 为准。
+取代说明：Desktop 产品壳已由 `restructure-client-applications-and-retire-desktop-shell` 删除，Workbench Core 又由 `align-pruned-workspace-build` 删除；本文仅保留历史决策背景，不是当前产品或实现入口。现行契约以 `application-composition.md`、`package-boundaries.md` 和 `media-runtime.md` 为准。
 
 ## 背景
 
@@ -152,4 +152,4 @@ VSCode 继续作为插件生态和轻量创作入口，但 VSCode 原生 Extensi
 
 - OpenSpec change：`openspec/changes/introduce-neko-desktop-mvp-client`
 - 客户端目标：[`client-targets.md`](client-targets.md)
-- 相关文档：[`package-boundaries.md`](package-boundaries.md)、[`engine-runtime.md`](engine-runtime.md)、[`webview-media-security.md`](webview-media-security.md)、[`adr-agent-runtime-architecture-comparison-boundary.md`](adr-agent-runtime-architecture-comparison-boundary.md)
+- 相关文档：[`package-boundaries.md`](package-boundaries.md)、[`media-runtime.md`](media-runtime.md)、[`webview-media-security.md`](webview-media-security.md)、[`adr-agent-runtime-architecture-comparison-boundary.md`](adr-agent-runtime-architecture-comparison-boundary.md)
