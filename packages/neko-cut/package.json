@@ -31,9 +31,7 @@
     "neko.neko-preview"
   ],
   "activationEvents": [
-    "onInstallType:shader",
-    "onCustomEditor:neko.cut.otioEditor",
-    "onCommand:neko.cut.newProject"
+    "onInstallType:shader"
   ],
   "main": "./dist/extension.js",
   "contributes": {

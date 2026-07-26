@@ -85,7 +85,10 @@ import { createAgentProjectSearchAdapters } from './services/agentProjectSearchA
 import { ExternalProcessorRegistryService } from './services/externalProcessorRegistryService';
 import { getAgentMediaRuntimeProvider } from './services/mediaRuntimeProvider';
 import { createExtensionAgentContentAccessRuntime } from './services/agentContentAccessRuntime';
-import { createWorkspaceGeneratedAssetIndex } from './services/generatedAssetOpenResolver';
+import {
+  createWorkspaceGeneratedAssetIndex,
+  type WorkspaceGeneratedAssetIndexBinding,
+} from './services/generatedAssetOpenResolver';
 import { MediaGenerationDeliveryHost } from './services/mediaGenerationDeliveryHost';
 import { cleanupLegacyCanvasBoardMetadata } from './services/legacyCanvasBoardMetadataCleanup';
 import { cleanupLegacyConversationWorkspaceState } from './services/legacyConversationWorkspaceStateCleanup';
@@ -247,6 +250,7 @@ export async function activate(
   const standaloneGeneratedAssetIndex = generatedAssetIndexBinding?.index;
   const generatedAssetCatalog = hostServices?.generatedAssets ?? standaloneGeneratedAssetIndex;
   if (generatedAssetIndexBinding) {
+    reportRejectedGeneratedOutputProjections(generatedAssetIndexBinding.rejectedProjections);
     context.subscriptions.push({
       dispose: () => {
         void generatedAssetIndexBinding
@@ -574,6 +578,22 @@ export async function deactivate(): Promise<void> {
   const coordinator = generationJobCoordinator;
   generationJobCoordinator = undefined;
   await coordinator?.dispose();
+}
+
+function reportRejectedGeneratedOutputProjections(
+  rejections: WorkspaceGeneratedAssetIndexBinding['rejectedProjections'],
+): void {
+  if (rejections.length === 0) return;
+  const count = rejections.length;
+  const visibleResourceIds = rejections.slice(0, 3).map(({ resourceId }) => resourceId);
+  const hiddenCount = count - visibleResourceIds.length;
+  const resourceSummary =
+    visibleResourceIds.join(', ') + (hiddenCount > 0 ? `, and ${hiddenCount} more` : '');
+  const message =
+    `OpenNeko skipped ${count} generated-output index ${count === 1 ? 'record' : 'records'} ` +
+    `that require migration (${resourceSummary}). The generated files were preserved, but these ` +
+    'outputs are unavailable until they are regenerated or sent through the current path.';
+  void vscode.window.showWarningMessage(message);
 }
 
 function resolveGeneratedAssetResult(

@@ -33,36 +33,36 @@ function createPosterResourceRef(): ResourceRef {
 function createPlan(): CanvasPlaybackPlan {
   const posterRef = createPosterResourceRef();
   return {
-    adapterId: 'storyboard',
-    requestedAdapterId: 'storyboard',
+    adapterId: 'generic',
+    requestedAdapterId: 'generic',
     behaviorMode: 'linear',
     advancePolicy: 'timer',
-    entryUnitIds: ['unit-shot-1'],
+    entryUnitIds: ['unit-media-1'],
     units: [
       {
-        id: 'unit-shot-1',
-        sourceNodeId: 'shot-1',
-        kind: 'shot',
+        id: 'unit-media-1',
+        sourceNodeId: 'media-1',
+        kind: 'media',
         renderMode: 'media-playback',
-        label: 'Opening shot',
+        label: 'Opening image',
         durationMs: 3000,
         resourceRef: posterRef,
         metadata: { mediaType: 'image', thumbnailUrl: 'webview://runtime-thumbnail' },
       },
       {
-        id: 'unit-shot-2',
-        sourceNodeId: 'shot-2',
-        kind: 'shot',
+        id: 'unit-markdown-1',
+        sourceNodeId: 'markdown-1',
+        kind: 'node',
         renderMode: 'select-node',
-        label: 'Reaction shot',
+        label: 'Reaction notes',
         durationMs: 2500,
       },
     ],
     transitions: [
       {
         id: 'transition-1',
-        sourceUnitId: 'unit-shot-1',
-        targetUnitId: 'unit-shot-2',
+        sourceUnitId: 'unit-media-1',
+        targetUnitId: 'unit-markdown-1',
         type: 'sequence',
         priority: 0,
       },
@@ -71,10 +71,10 @@ function createPlan(): CanvasPlaybackPlan {
       {
         id: 'route-main',
         title: 'Main route',
-        entryUnitId: 'unit-shot-1',
-        unitIds: ['unit-shot-1', 'unit-shot-2'],
+        entryUnitId: 'unit-media-1',
+        unitIds: ['unit-media-1', 'unit-markdown-1'],
         sourceKind: 'entry',
-        sourceNodeId: 'scene-1',
+        sourceNodeId: 'group-1',
         totalDurationMs: 5500,
       },
     ],
@@ -82,9 +82,9 @@ function createPlan(): CanvasPlaybackPlan {
       {
         code: 'playback-missing-media-source',
         severity: 'warning',
-        message: 'Reaction shot has no media source.',
-        adapterId: 'storyboard',
-        nodeId: 'shot-2',
+        message: 'Reaction notes use node selection rendering.',
+        adapterId: 'generic',
+        nodeId: 'markdown-1',
       },
     ],
     metadata: {
@@ -142,14 +142,14 @@ describe('canvas playback route presenter', () => {
       table: {
         rows: [
           {
-            rowId: 'unit-shot-1',
+            rowId: 'unit-media-1',
             cells: {
-              label: { type: 'string', value: 'Opening shot' },
+              label: { type: 'string', value: 'Opening image' },
               duration: { type: 'duration', valueMs: 3000 },
             },
           },
           {
-            rowId: 'unit-shot-2',
+            rowId: 'unit-markdown-1',
             cells: {
               diagnostics: {
                 type: 'tags',
@@ -170,7 +170,7 @@ describe('canvas playback route presenter', () => {
       kind: 'gallery',
       items: [
         {
-          itemId: 'unit-shot-1:poster',
+          itemId: 'unit-media-1:poster',
           mediaType: 'image',
           resourceRef: {
             kind: 'resource',
@@ -204,7 +204,7 @@ describe('canvas playback route presenter', () => {
       title: 'Ordered Units (1/2)',
       kind: 'table',
       table: {
-        rows: [{ rowId: 'unit-shot-1' }],
+        rows: [{ rowId: 'unit-media-1' }],
       },
     });
   });

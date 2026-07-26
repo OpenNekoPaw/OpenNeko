@@ -26,7 +26,9 @@ describe('Canvas content locator persistence boundary', () => {
     const project = vi.fn(async () => 'vscode-webview://panel-a/station-concept.png');
 
     await expect(projectCanvasContentLocatorRuntimeState(node, project)).resolves.toEqual([]);
-    expect(node.data.runtimeAssetPath).toBe('vscode-webview://panel-a/station-concept.png');
+    expect(node.data).toMatchObject({
+      runtimeAssetPath: 'vscode-webview://panel-a/station-concept.png',
+    });
 
     stripCanvasContentLocatorRuntimeState(node);
 
@@ -38,16 +40,14 @@ describe('Canvas content locator persistence boundary', () => {
     expect(JSON.stringify(node)).not.toContain('vscode-webview://');
   });
 
-  it('reopens Shot generated content with a fresh panel projection', async () => {
+  it('reopens generated media with a fresh panel projection', async () => {
     const saved = {
-      id: 'shot-1',
-      type: 'shot',
+      id: 'media-1',
+      type: 'media',
       data: {
-        generatedAsset: {
-          type: 'generated-image',
-          id: 'station-concept',
-          contentLocator: generatedLocator,
-        },
+        assetPath: '',
+        mediaType: 'image',
+        contentLocator: generatedLocator,
       },
     };
     const firstRuntime = structuredClone(saved);
@@ -63,12 +63,10 @@ describe('Canvas content locator persistence boundary', () => {
       async () => 'vscode-webview://panel-b/station-concept.png',
     );
 
-    expect(reopened.data.generatedAsset).toEqual(
-      expect.objectContaining({
-        contentLocator: generatedLocator,
-        path: 'vscode-webview://panel-b/station-concept.png',
-      }),
-    );
+    expect(reopened.data).toMatchObject({
+      contentLocator: generatedLocator,
+      runtimeAssetPath: 'vscode-webview://panel-b/station-concept.png',
+    });
     expect(JSON.stringify(firstRuntime)).not.toContain('panel-a');
   });
 

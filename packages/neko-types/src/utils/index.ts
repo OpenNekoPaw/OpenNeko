@@ -32,14 +32,6 @@ export {
   buildStoryboardImportTimelineSyncPayload,
 } from './canvasTimelineSync';
 export {
-  extractCanvasNodeGenerationLineage,
-  projectCanvasShotPrompt,
-  projectShotDataPrompt,
-  type CanvasGenerationLineage,
-  type CanvasShotPromptProjectableData,
-  type CanvasShotPromptProjection,
-} from './canvasGeneration';
-export {
   buildEntityAssetRequirementsFromGeneratedMediaLineage,
   buildVisualIdentityDraftsFromGeneratedMediaLineage,
   type BuildEntityAssetRequirementsFromGeneratedMediaInput,
@@ -76,11 +68,6 @@ export {
   type FieldBindingWriteResult,
 } from './fieldBinding';
 export {
-  createStoryboardPayload,
-  projectCanonicalStoryboardToCanvasPayload,
-  applyStoryboardPayloadToCanvas,
-} from './storyboardPlanner';
-export {
   applyCanvasHeadlessAuthoringOperations,
   assertNoRuntimeResourceIdentity,
   createCanvasAuthoringDiagnostic,
@@ -92,7 +79,6 @@ export {
   planCanvasCompositeCreation,
   planCanvasConnectionCreation,
   planCanvasNodeCreation,
-  planCanvasStoryboardSceneShotCreation,
   validateCanvasDurableResourceIdentity,
   type CanvasDurableResourceIdentityValidationOptions,
   type CanvasHeadlessAuthoringIdFactoryOptions,
@@ -103,7 +89,3 @@ export {
   planCanvasWorkspaceBoardProjection,
   type CanvasWorkspaceBoardProjectionPlan,
 } from './canvasWorkspaceBoardProjection';
-export {
-  createCanvasStoryboardExecutionSummary,
-  type CreateCanvasStoryboardExecutionSummaryInput,
-} from './storyboardExecutionSummary';

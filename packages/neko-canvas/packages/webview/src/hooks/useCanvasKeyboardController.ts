@@ -3,7 +3,6 @@ import { useKeyboardDispatcher, type ShortcutBinding } from '@neko/ui/keyboard';
 
 export interface CanvasKeyboardState extends Record<string, unknown> {
   readonly canDeleteSelection: boolean;
-  readonly canGenerateSelection: boolean;
   readonly hasNodes: boolean;
   readonly isKeyboardFocused: boolean;
 }
@@ -20,7 +19,6 @@ export interface UseCanvasKeyboardControllerOptions {
   readonly onPaste: () => void;
   readonly onPasteInPlace: () => void;
   readonly onDuplicate: () => void;
-  readonly onGenerateSelected?: () => void;
   readonly onSpacePanEnd: () => void;
   readonly onSpacePanStart: () => void;
   readonly onTogglePanMode: () => void;
@@ -36,7 +34,6 @@ export function useCanvasKeyboardController({
   onDeleteSelected,
   onDuplicate,
   onEscape,
-  onGenerateSelected,
   onPaste,
   onPasteInPlace,
   onRedo,
@@ -84,16 +81,6 @@ export function useCanvasKeyboardController({
       createEditorBinding('duplicate', { key: 'KeyD', primary: true }, onDuplicate, {
         when: (current) => current.canDeleteSelection,
       }),
-      createEditorBinding(
-        'generate-selected',
-        { key: 'KeyG', primary: true },
-        () => {
-          onGenerateSelected?.();
-        },
-        {
-          when: (current) => current.canGenerateSelection,
-        },
-      ),
       createViewportBinding('toggle-pan-mode', 'KeyH', onTogglePanMode),
       createViewportBinding('space-pan-start', 'Space', onSpacePanStart, {
         when: (current) => current.isKeyboardFocused,
@@ -105,7 +92,6 @@ export function useCanvasKeyboardController({
       onDeleteSelected,
       onDuplicate,
       onEscape,
-      onGenerateSelected,
       onPaste,
       onPasteInPlace,
       onRedo,

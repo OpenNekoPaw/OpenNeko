@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AnnotationCanvasNode, CanvasNode, GroupCanvasNode } from '@neko/shared';
+import type { CanvasNode, GroupCanvasNode, MarkdownCanvasNode } from '@neko/shared';
 import {
   arrangeSpatialGroup,
   clampSpatialGroupResize,
@@ -106,10 +106,10 @@ function annotation(
   x: number,
   y: number,
   height: number,
-): AnnotationCanvasNode {
+): MarkdownCanvasNode {
   return {
     id,
-    type: 'annotation',
+    type: 'markdown',
     parentId,
     position: { x, y },
     size: { width: 200, height },

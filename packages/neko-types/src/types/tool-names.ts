@@ -64,10 +64,6 @@ export const TOOL_NAMES_CANVAS = {
   CANVAS_REORDER_PLAYBACK_UNITS: 'canvas.reorderPlaybackUnits',
   CANVAS_INGEST_MARKDOWN: 'canvas.ingestMarkdown',
   CANVAS_CREATE_MARKDOWN_NOTE: 'canvas.createMarkdownNote',
-  CANVAS_CREATE_TABLE_FROM_MARKDOWN: 'canvas.createTableFromMarkdown',
-  CANVAS_CREATE_STORYBOARD_FROM_MARKDOWN: 'canvas.createStoryboardFromMarkdown',
-  CANVAS_ATTACH_RESOURCE: 'canvas.attachResource',
-  CANVAS_VALIDATE_MARKDOWN_STORYBOARD: 'canvas.validateMarkdownStoryboard',
   CANVAS_LIST_NODES: 'canvas_list_nodes',
   CANVAS_GET_NODE: 'canvas_get_node',
   CANVAS_UPDATE_NODE: 'canvas_update_node',
@@ -82,15 +78,6 @@ export const TOOL_NAMES_CANVAS = {
   CANVAS_LIST_CONNECTIONS: 'canvas_list_connections',
   CANVAS_GET_CONNECTION: 'canvas_get_connection',
   CANVAS_CREATE_CONNECTION: 'canvas_create_connection',
-  CANVAS_NARRATIVE_TRAVERSE: 'canvas_narrative_traverse',
-  CANVAS_GET_STORYBOARD_EXECUTION_SUMMARY: 'canvas_get_storyboard_execution_summary',
-  CANVAS_GENERATE_IMAGE: 'canvas_generate_image',
-  CANVAS_GENERATE_BATCH: 'canvas_generate_batch',
-  CANVAS_GENERATE_VIDEO_WITH_KEYFRAMES: 'canvas_generate_video_with_keyframes',
-  CANVAS_APPLY_STYLE_TRANSFER: 'canvas_apply_style_transfer',
-  SET_PROJECT_GENERATION_CONFIG: 'set_project_generation_config',
-  EXPORT_STORYBOARD: 'export_storyboard',
-  IMPORT_SCRIPT_TO_CANVAS: 'import_script_to_canvas',
 } as const;
 
 // =============================================================================

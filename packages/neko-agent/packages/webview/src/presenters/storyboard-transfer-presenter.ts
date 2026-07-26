@@ -31,15 +31,11 @@ export function projectCanonicalStoryboardCanvasAuthoringHandoff(
   return {
     sourceKind: 'structured-content',
     sourceFormat: 'composite-artifact',
-    content: `Canonical Storyboard: ${storyboard.title} (${storyboard.scenes.length} scenes, ${shotCount} shots)`,
+    content: `# ${storyboard.title}\n\n${storyboard.scenes.length} scenes, ${shotCount} shots. Preserve readable content as Markdown and project stable media references as Media nodes.`,
     title: storyboard.title,
     canonicalStoryboard: storyboard,
     userIntent:
-      'Create Canvas storyboard production nodes from this canonical Storyboard without Markdown reconstruction or asset flattening.',
-    targetHints: {
-      declaredProfileHint: 'storyboard',
-      operationHint: 'canvas.createStoryboardFromMarkdown',
-    },
+      'Create canonical Canvas Markdown and Media references from this structured content.',
   };
 }
 

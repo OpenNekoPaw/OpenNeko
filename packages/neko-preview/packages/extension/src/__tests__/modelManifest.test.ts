@@ -16,7 +16,7 @@ describe('model preview manifest', () => {
       (candidate) => candidate.viewType === 'neko.modelPreview',
     );
     expect(editor?.selector).toEqual([{ filenamePattern: '*.{glb,gltf,obj,stl,ply}' }]);
-    expect(manifest.activationEvents).toContain('onCustomEditor:neko.modelPreview');
+    expect(manifest.activationEvents).not.toContain('onCustomEditor:neko.modelPreview');
     expect(manifest.extensionDependencies).toBeUndefined();
   });
 });

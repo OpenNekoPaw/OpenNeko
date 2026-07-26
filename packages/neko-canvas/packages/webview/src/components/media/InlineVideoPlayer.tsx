@@ -4,15 +4,18 @@ import type { HtmlVideoDescriptor, PcmStreamDescriptor } from '@neko/media';
 import { formatMediaTime } from '@neko/media';
 import { ProgressBar } from '@neko/ui/creative';
 import { PlayIcon, PauseIcon, VolumeIcon, VolumeOffIcon } from '@neko/ui/icons';
+import { t } from '../../i18n';
 import { getLogger } from '../../utils/logger';
 
 const logger = getLogger('InlineVideoPlayer');
 const DEFAULT_VOLUME = 0.8;
 const VIDEO_SYNC_THRESHOLD_SECONDS = 0.08;
+const PLAYBACK_SEEK_EPSILON_SECONDS = 0.001;
 
 export interface InlineVideoPlayerProps {
   video: HtmlVideoDescriptor | null;
   audio: PcmStreamDescriptor | null;
+  audioContext?: AudioContext;
   width: number;
   height: number;
   fps: number;
@@ -33,6 +36,7 @@ export interface InlineVideoPlayerProps {
 export function InlineVideoPlayer({
   video,
   audio,
+  audioContext,
   duration,
   startTime = 0,
   playbackRate = 1,
@@ -48,7 +52,7 @@ export function InlineVideoPlayer({
 }: InlineVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioClientRef = useRef<PcmAudioClient>();
-  const audioContextRef = useRef<AudioContext>();
+  const ownedAudioContextRef = useRef<AudioContext>();
   const animationFrameRef = useRef(0);
   const currentTimeRef = useRef(startTime);
   const handledPlaybackRequestRef = useRef<string>();
@@ -61,14 +65,18 @@ export function InlineVideoPlayer({
   const [isMuted, setIsMuted] = useState(false);
 
   const activateAudioContext = useCallback((): AudioContext => {
-    let context = audioContextRef.current;
+    if (audioContext && audioContext.state !== 'closed') {
+      if (audioContext.state === 'suspended') void audioContext.resume();
+      return audioContext;
+    }
+    let context = ownedAudioContextRef.current;
     if (!context || context.state === 'closed') {
       context = new AudioContext({ sampleRate: 48_000 });
-      audioContextRef.current = context;
+      ownedAudioContextRef.current = context;
     }
     if (context.state === 'suspended') void context.resume();
     return context;
-  }, []);
+  }, [audioContext]);
 
   const disposeStreams = useCallback(() => {
     generationRef.current += 1;
@@ -122,7 +130,7 @@ export function InlineVideoPlayer({
   useEffect(() => {
     return () => {
       disposeStreams();
-      const context = audioContextRef.current;
+      const context = ownedAudioContextRef.current;
       if (context && context.state !== 'closed') void context.close();
     };
   }, [disposeStreams]);
@@ -200,7 +208,13 @@ export function InlineVideoPlayer({
       playbackState !== undefined && handledPlaybackStateRef.current !== playbackState;
     if (!requestChanged && !stateChanged) return;
     if (requestChanged) handledPlaybackRequestRef.current = playbackRequestId;
-    if (requestChanged && playbackStartTime !== undefined) onSeek(playbackStartTime);
+    if (
+      requestChanged &&
+      playbackStartTime !== undefined &&
+      Math.abs(currentTimeRef.current - playbackStartTime) > PLAYBACK_SEEK_EPSILON_SECONDS
+    ) {
+      onSeek(playbackStartTime);
+    }
     const nextState = playbackState ?? (requestChanged ? 'playing' : undefined);
     if (!nextState) return;
     handledPlaybackStateRef.current = nextState;
@@ -228,6 +242,9 @@ export function InlineVideoPlayer({
     [isMuted],
   );
 
+  const playbackLabel = isPlaying ? t('toolbar.playbackPause') : t('toolbar.playbackPlay');
+  const muteLabel = isMuted ? t('media.unmute') : t('media.mute');
+
   return (
     <div className="relative flex-1 bg-black overflow-hidden group">
       <video ref={videoRef} className="w-full h-full object-contain" muted playsInline />
@@ -249,7 +266,8 @@ export function InlineVideoPlayer({
             type="button"
             className="flex h-6 w-6 items-center justify-center rounded text-white/85 hover:text-white"
             onClick={isPlaying ? pause : resume}
-            title={isPlaying ? 'Pause' : 'Play'}
+            aria-label={playbackLabel}
+            title={playbackLabel}
           >
             {isPlaying ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
           </button>
@@ -262,7 +280,8 @@ export function InlineVideoPlayer({
               type="button"
               className="flex h-5 w-5 items-center justify-center text-white/80 hover:text-white"
               onClick={handleToggleMute}
-              title={isMuted ? 'Unmute' : 'Mute'}
+              aria-label={muteLabel}
+              title={muteLabel}
             >
               {isMuted ? <VolumeOffIcon size={12} /> : <VolumeIcon size={12} />}
             </button>

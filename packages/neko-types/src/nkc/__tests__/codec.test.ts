@@ -11,7 +11,7 @@ import type { CanvasData } from '../../types/canvas';
 // =============================================================================
 
 const VALID_CANVAS: CanvasData = {
-  version: '2.1',
+  version: '3.0',
   name: 'Test Canvas',
   viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
   nodes: [
@@ -23,6 +23,7 @@ const VALID_CANVAS: CanvasData = {
       zIndex: 1,
       data: {
         assetPath: 'assets/video.mp4',
+        mediaType: 'video',
       },
     },
   ],
@@ -33,6 +34,7 @@ const VALID_CANVAS: CanvasData = {
       targetId: 'node-2',
       sourceEndpoint: { nodeId: 'node-1', scope: 'node' },
       targetEndpoint: { nodeId: 'node-2', scope: 'node' },
+      type: 'reference',
     },
   ],
 };

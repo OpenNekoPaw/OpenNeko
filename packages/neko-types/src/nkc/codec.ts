@@ -53,34 +53,23 @@ export function loadNkc(json: string): NkcLoadResult {
     };
   }
 
-  // Step 2: Validate
-  const validation = validateNkc(parsed);
-
-  if (!validation.valid && validation.errors.length > 0) {
-    const hasCriticalErrors = validation.errors.some(
-      (e) => e.field === '' || e.field === 'nodes' || e.field === 'connections',
-    );
-    if (hasCriticalErrors) {
-      return {
-        data: createEmptyCanvas(),
-        validation,
-      };
-    }
+  if (!isMigratableCanvasRoot(parsed)) {
+    return {
+      data: createEmptyCanvas(),
+      validation: validateNkc(parsed),
+    };
   }
 
-  const migration = migrateNkc(parsed as CanvasData);
+  // Step 2: Migrate legacy formats before validating the canonical schema.
+  const migration = migrateNkc(parsed);
+  const validation = validateNkc(migration.data as unknown);
   if (migration.migrated) {
-    const postMigrationValidation = validateNkc(migration.data as unknown);
-    return {
-      data: migration.data,
-      validation: postMigrationValidation,
-      migration,
-    };
+    return { data: migration.data, validation, migration };
   }
 
   // Step 3: Return result
   return {
-    data: parsed as CanvasData,
+    data: parsed as unknown as CanvasData,
     validation,
   };
 }
@@ -124,4 +113,15 @@ function createEmptyCanvas(): CanvasData {
     nodes: [],
     connections: [],
   };
+}
+
+function isMigratableCanvasRoot(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>)['name'] === 'string' &&
+    Array.isArray((value as Record<string, unknown>)['nodes']) &&
+    Array.isArray((value as Record<string, unknown>)['connections'])
+  );
 }

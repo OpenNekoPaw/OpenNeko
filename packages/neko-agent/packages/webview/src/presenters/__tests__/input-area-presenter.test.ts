@@ -162,36 +162,34 @@ describe('input area presenter', () => {
     );
   });
 
-  it('summarizes ambient canvas selection and recommends generation actions', () => {
+  it('summarizes canonical canvas selection and offers the JobCard workflow', () => {
     expect(
       projectAmbientCanvasContext([
-        { nodeId: 'shot-1', type: 'shot', summary: '#1 wide shot' },
-        { nodeId: 'shot-2', type: 'shot', summary: '#2 close-up' },
-        { nodeId: 'scene-1', type: 'scene', summary: 'Scene 1: Gate' },
+        { nodeId: 'markdown-1', type: 'markdown', summary: 'Brief' },
+        { nodeId: 'media-1', type: 'media', summary: 'image: keyframe.png' },
+        { nodeId: 'group-1', type: 'group', summary: 'Act one (2)' },
       ]),
     ).toMatchObject({
       selectedCount: 3,
-      shotCount: 2,
-      sceneCount: 1,
+      mediaCount: 1,
+      jobCount: 0,
       counts: [
-        { type: 'shot', count: 2 },
-        { type: 'scene', count: 1 },
+        { type: 'markdown', count: 1 },
+        { type: 'media', count: 1 },
+        { type: 'group', count: 1 },
       ],
-      actions: [
-        { id: 'batch-generate-images' },
-        { id: 'optimize-selection' },
-        { id: 'understand-selection' },
-      ],
+      actions: [{ id: 'create-job' }, { id: 'understand-selection' }],
     });
   });
 
-  it('projects a single selected canvas node without inventing batch actions', () => {
+  it('projects a single selected JobCard without old generation actions', () => {
     expect(
-      projectAmbientCanvasContext([{ nodeId: 'shot-1', type: 'shot', summary: '#1 wide shot' }]),
+      projectAmbientCanvasContext([{ nodeId: 'job-1', type: 'job', summary: 'Draft [queued]' }]),
     ).toMatchObject({
       selectedCount: 1,
-      titleNodeSummary: '#1 wide shot',
-      actions: [{ id: 'generate-image' }, { id: 'understand-selection' }],
+      titleNodeSummary: 'Draft [queued]',
+      jobCount: 1,
+      actions: [{ id: 'create-job' }, { id: 'understand-selection' }],
     });
   });
 });

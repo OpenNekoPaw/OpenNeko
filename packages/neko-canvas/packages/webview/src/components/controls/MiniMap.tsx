@@ -4,7 +4,7 @@
  */
 
 import { useMemo, useCallback, useRef } from 'react';
-import type { CanvasNode, CanvasNodeType, CanvasViewport } from '@neko/shared';
+import type { CanonicalCanvasNodeType, CanvasNode, CanvasViewport } from '@neko/shared';
 import { getTopLevelCanvasNodes } from '../../utils/canvasOrganization';
 
 // =============================================================================
@@ -36,7 +36,7 @@ interface MiniMapNodeStyle {
   radius?: number;
 }
 
-type MiniMapNodeStyleRegistry = Partial<Record<CanvasNodeType, MiniMapNodeStyle>>;
+type MiniMapNodeStyleRegistry = Readonly<Record<CanonicalCanvasNodeType, MiniMapNodeStyle>>;
 
 // =============================================================================
 // Constants
@@ -45,11 +45,8 @@ type MiniMapNodeStyleRegistry = Partial<Record<CanvasNodeType, MiniMapNodeStyle>
 const DEFAULT_WIDTH = 200;
 const DEFAULT_HEIGHT = 150;
 const PADDING = 20;
-const DEFAULT_NODE_STYLE: MiniMapNodeStyle = {
-  fill: '#4a4a4a',
-  opacity: 0.8,
-  radius: 1,
-};
+const DEFAULT_NODE_OPACITY = 0.8;
+const DEFAULT_NODE_RADIUS = 1;
 
 // =============================================================================
 // Helpers
@@ -98,25 +95,19 @@ function calculateBounds(nodes: CanvasNode[]): Bounds {
 export function createBuiltInMiniMapNodeStyleRegistry(): MiniMapNodeStyleRegistry {
   return {
     media: { fill: '#4ec9b0' },
-    storyboard: { fill: '#ce9178' },
-    annotation: { fill: '#dcdcaa' },
-    text: { fill: '#c586c0' },
-    artboard: { fill: '#808080' },
+    markdown: { fill: '#dcdcaa' },
     group: { fill: '#569cd6' },
-    shot: { fill: '#f59e0b' },
-    scene: { fill: '#38bdf8' },
-    gallery: { fill: '#8b5cf6' },
-    script: { fill: '#10b981' },
-    document: { fill: '#ef4444' },
-    model: { fill: '#f97316' },
+    job: { fill: '#c586c0' },
+    file: { fill: '#ef4444' },
+    'canvas-embed': { fill: '#ce9178' },
   };
 }
 
 export function resolveMiniMapNodeStyle(
   registry: MiniMapNodeStyleRegistry,
-  nodeType: CanvasNodeType,
+  nodeType: CanonicalCanvasNodeType,
 ): MiniMapNodeStyle {
-  return registry[nodeType] ?? DEFAULT_NODE_STYLE;
+  return registry[nodeType];
 }
 
 const MINI_MAP_NODE_STYLE_REGISTRY = createBuiltInMiniMapNodeStyleRegistry();
@@ -227,8 +218,8 @@ export function MiniMap({
                 width={Math.max(w, 2)}
                 height={Math.max(h, 2)}
                 fill={nodeStyle.fill}
-                opacity={nodeStyle.opacity ?? DEFAULT_NODE_STYLE.opacity}
-                rx={nodeStyle.radius ?? DEFAULT_NODE_STYLE.radius}
+                opacity={nodeStyle.opacity ?? DEFAULT_NODE_OPACITY}
+                rx={nodeStyle.radius ?? DEFAULT_NODE_RADIUS}
               />
             );
           })}

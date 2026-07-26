@@ -1,13 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import type { CanvasNode, CanvasViewport } from '@neko/shared';
-import { getContainerChildIds, getNodeParentId } from '@neko/shared';
 import { Button, IconButton, Popover } from '@neko/ui/primitives';
 import {
   CopyIcon,
   LayersIcon,
   MoreHorizontalIcon,
   OpenIcon,
-  PackageIcon,
   PlayIcon,
   RefreshIcon,
   TrashIcon,
@@ -18,27 +16,6 @@ import { useClipboardStore } from '../../stores/clipboardStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { getGlobalVSCodeApi } from '../../utils/vscode';
 import { t } from '../../i18n';
-import {
-  createBuiltInNodeCardPolicyRegistry,
-  evaluateActionCondition,
-  getContainerActionDescriptors,
-  getNodeCardPolicy,
-  NODE_CARD_ACTION_DISPATCHER,
-} from '../content/node-card';
-import {
-  CONTAINER_ACTION_DISPATCHER,
-  dispatchContainerAction,
-  dispatchNodeCardAction,
-} from '../content/node-card/actionDispatcher';
-import { isContainerActionVisible } from '../content/node-card/containerActions';
-import type {
-  CardActionDescriptor,
-  ContainerActionDescriptor,
-  NodeCardActionId,
-} from '../content/node-card';
-import { createBuiltInNodeTypeDescriptors } from '../nodes/nodeTypeDescriptors';
-import { resolveNodeFullscreenPresentation } from '../nodes/nodeTypeDescriptor';
-import { resolveCanvasMaterialPresentation } from './materialPresentation';
 
 interface SelectionContextToolbarProps {
   readonly nodes: readonly CanvasNode[];
@@ -54,12 +31,9 @@ interface ToolbarAction {
   readonly icon: ReactNode;
   readonly run: () => void;
   readonly danger?: boolean;
-  readonly disabled?: boolean;
   readonly overflowOnly?: boolean;
 }
 
-const POLICY_REGISTRY = createBuiltInNodeCardPolicyRegistry();
-const NODE_TYPE_DESCRIPTORS = createBuiltInNodeTypeDescriptors();
 const MAX_PRIMARY_ACTIONS = 5;
 
 export function SelectionContextToolbar({
@@ -74,14 +48,11 @@ export function SelectionContextToolbar({
     () => selectedNodeIds.flatMap((id) => nodes.find((node) => node.id === id) ?? []),
     [nodes, selectedNodeIds],
   );
-  const actions = useMemo(
-    () => resolveToolbarActions(selectedNodes, nodes),
-    [nodes, selectedNodes],
-  );
+  const actions = useMemo(() => resolveActions(selectedNodes), [selectedNodes]);
   if (hidden || selectedNodes.length === 0 || actions.length === 0) return null;
 
   const position = resolveToolbarPosition(selectedNodes, viewport, viewportSize);
-  const { primary, overflow } = partitionToolbarActions(actions);
+  const { primary, overflow } = partitionActions(actions);
 
   return (
     <div
@@ -100,7 +71,6 @@ export function SelectionContextToolbar({
           data-selection-action-location="primary"
           size="xs"
           variant={action.danger ? 'danger' : 'ghost'}
-          disabled={action.disabled}
           leadingIcon={action.icon}
           onClick={action.run}
         >
@@ -132,7 +102,6 @@ export function SelectionContextToolbar({
                 data-selection-action-location="overflow"
                 size="xs"
                 variant={action.danger ? 'danger' : 'ghost'}
-                disabled={action.disabled}
                 leadingIcon={action.icon}
                 className="justify-start"
                 role="menuitem"
@@ -151,233 +120,127 @@ export function SelectionContextToolbar({
   );
 }
 
-function partitionToolbarActions(actions: readonly ToolbarAction[]): {
-  primary: ToolbarAction[];
-  overflow: ToolbarAction[];
-} {
-  const primary: ToolbarAction[] = [];
-  const overflow: ToolbarAction[] = [];
-  let overflowStarted = false;
-  for (const action of actions) {
-    overflowStarted =
-      overflowStarted || action.overflowOnly === true || primary.length >= MAX_PRIMARY_ACTIONS;
-    (overflowStarted ? overflow : primary).push(action);
+function resolveActions(selectedNodes: readonly CanvasNode[]): ToolbarAction[] {
+  const selectedIds = selectedNodes.map((node) => node.id);
+  if (selectedNodes.length > 1) {
+    return [
+      createQuickGenerateAction(selectedIds),
+      {
+        key: 'group-selection',
+        label: t('menu.group'),
+        icon: <LayersIcon size={14} />,
+        run: () => useCanvasStore.getState().groupNodes(selectedIds),
+      },
+      createDeleteAction(selectedIds),
+    ];
   }
-  return { primary, overflow };
-}
 
-function resolveToolbarActions(
-  selectedNodes: readonly CanvasNode[],
-  allNodes: readonly CanvasNode[],
-): ToolbarAction[] {
-  if (selectedNodes.length > 1) return resolveMultiSelectionActions(selectedNodes);
   const node = selectedNodes[0];
   if (!node) return [];
-  const parentId = getNodeParentId(node);
-  const policy = getNodeCardPolicy(POLICY_REGISTRY, node);
-  const previewSource = policy.resolvePreviewSource(node);
-  const policyActions =
-    policy
-      .resolveActions?.(
-        node,
-        parentId ? allNodes.find((candidate) => candidate.id === parentId) : undefined,
-      )
-      .filter((action) => action.id !== 'remove' || Boolean(parentId)) ?? [];
-  const material = resolveCanvasMaterialPresentation(node, allNodes);
-  const materialActions = material
-    ? [
-        ...(material.canPreview
-          ? [
-              createNodeAction(
-                node,
-                parentId,
-                {
-                  id: 'open-media-preview',
-                  label: 'action.openPreview',
-                  position: 'bottom',
-                  visibleWhen: 'always',
-                },
-                previewSource,
-              ),
-            ]
-          : []),
-        createNodeAction(
-          node,
-          parentId,
-          {
-            id: 'duplicate',
-            label: 'action.duplicateShort',
-            position: 'bottom',
-            visibleWhen: 'always',
-          },
-          previewSource,
-        ),
-        ...(material.canCopyToMediaLibrary
-          ? [
-              createNodeAction(
-                node,
-                parentId,
-                {
-                  id: 'copy-to-media-library',
-                  label: 'action.copyToMediaLibrary',
-                  position: 'bottom',
-                  visibleWhen: 'always',
-                },
-                previewSource,
-              ),
-            ]
-          : []),
-      ]
-    : [];
-  const nodeActions = [
-    ...(material
-      ? materialActions
-      : policyActions.map((action) => createNodeAction(node, parentId, action, previewSource))),
-    ...(!material
-      ? [
-          createNodeAction(
-            node,
-            parentId,
-            {
-              id: 'duplicate',
-              label: 'action.duplicateShort',
-              position: 'bottom',
-              visibleWhen: 'always',
-            },
-            previewSource,
-          ),
-        ]
-      : []),
-    ...(resolveNodeFullscreenPresentation(NODE_TYPE_DESCRIPTORS[node.type], node)
-      ? [
-          createNodeAction(
-            node,
-            parentId,
-            {
-              id: 'open-content-overlay',
-              label: 'action.fullscreen',
-              position: 'bottom',
-              visibleWhen: 'always',
-            },
-            previewSource,
-          ),
-        ]
-      : []),
-    { ...createDeleteAction([node.id]), overflowOnly: true },
-  ];
-  const containerActions = node.container
-    ? resolveContainerActions(
-        node,
-        allNodes,
-        selectedNodes.map((candidate) => candidate.id),
-      )
-    : [];
-  return dedupeActions(node.container ? [...containerActions, ...nodeActions] : nodeActions);
-}
-
-function resolveMultiSelectionActions(selectedNodes: readonly CanvasNode[]): ToolbarAction[] {
-  const selectedIds = selectedNodes.map((node) => node.id);
-  return [
-    {
-      key: 'group-selection',
-      label: t('menu.group'),
-      icon: <LayersIcon size={14} />,
-      run: () => useCanvasStore.getState().groupNodes(selectedIds),
-    },
-    createDeleteAction(selectedIds),
-  ];
-}
-
-function createNodeAction(
-  node: CanvasNode,
-  parentNodeId: string | undefined,
-  descriptor: CardActionDescriptor,
-  previewSource: ReturnType<ReturnType<typeof getNodeCardPolicy>['resolvePreviewSource']>,
-): ToolbarAction {
-  const enabled = evaluateActionCondition(descriptor.enabledWhen, {
-    node,
-    parentNode: parentNodeId
-      ? useCanvasStore
-          .getState()
-          .canvasData?.nodes.find((candidate) => candidate.id === parentNodeId)
-      : undefined,
-    selection: { nodeIds: [node.id] },
-    previewSource,
+  const actions: ToolbarAction[] = [createQuickGenerateAction([node.id])];
+  if (
+    node.type === 'media' &&
+    (node.data.runtimeAssetPath ||
+      node.data.assetPath ||
+      node.data.resourceRef ||
+      node.data.documentResourceRef)
+  ) {
+    actions.push({
+      key: 'node:open-media-preview',
+      label: t('action.openPreview'),
+      icon: <PlayIcon size={14} />,
+      run: () =>
+        getGlobalVSCodeApi()?.postMessage({
+          type: 'openMediaPreview',
+          nodeId: node.id,
+          assetPath: node.data.runtimeAssetPath || node.data.assetPath,
+          mediaType: node.data.mediaType,
+          ...(node.data.resourceRef ? { resourceRef: node.data.resourceRef } : {}),
+          ...(node.data.documentResourceRef
+            ? { documentResourceRef: node.data.documentResourceRef }
+            : {}),
+        }),
+    });
+  }
+  if (node.type === 'file' && node.data.path) {
+    actions.push({
+      key: 'node:open-in-editor',
+      label: t('action.open'),
+      icon: <OpenIcon size={14} />,
+      run: () =>
+        getGlobalVSCodeApi()?.postMessage({ type: 'openDocument', docPath: node.data.path }),
+    });
+  }
+  if (node.type === 'canvas-embed' && node.data.canvasPath) {
+    actions.push({
+      key: 'node:open-in-editor',
+      label: t('action.open'),
+      icon: <OpenIcon size={14} />,
+      run: () =>
+        getGlobalVSCodeApi()?.postMessage({
+          type: 'openDocument',
+          docPath: node.data.canvasPath,
+        }),
+    });
+  }
+  if (node.type === 'group') {
+    actions.push(
+      {
+        key: 'group:fit',
+        label: t('group.fitToContent'),
+        icon: <ZoomInIcon size={14} />,
+        run: () => useCanvasStore.getState().fitGroupToContent(node.id),
+      },
+      {
+        key: 'group:toggle',
+        label: node.container?.collapsed ? t('group.expand') : t('group.collapse'),
+        icon: <LayersIcon size={14} />,
+        run: () =>
+          useCanvasStore.getState().setGroupCollapsed(node.id, node.container?.collapsed !== true),
+      },
+    );
+  }
+  actions.push(createDuplicateAction(node.id), {
+    ...createDeleteAction([node.id]),
+    overflowOnly: true,
   });
+  return actions;
+}
+
+function createQuickGenerateAction(nodeIds: readonly string[]): ToolbarAction {
   return {
-    key: `node:${descriptor.id}`,
-    label: t(descriptor.label),
-    icon: nodeActionIcon(descriptor.id),
-    danger: descriptor.danger,
-    disabled: !enabled,
-    run: () => {
-      if (!enabled) return;
-      dispatchNodeCardAction(NODE_CARD_ACTION_DISPATCHER, descriptor.id, {
-        nodeId: node.id,
-        node,
-        parentNodeId,
-        canvasStore: useCanvasStore.getState(),
-        clipboardStore: useClipboardStore.getState(),
-        historyStore: useHistoryStore.getState(),
-        postMessage: (message) => getGlobalVSCodeApi()?.postMessage(message),
-      });
-    },
+    key: 'selection:quick-generate',
+    label: t('action.quickGenerate'),
+    icon: <RefreshIcon size={14} />,
+    run: () =>
+      getGlobalVSCodeApi()?.postMessage({
+        type: 'sendToAgent',
+        nodeIds: [...nodeIds],
+        action: 'generate',
+      }),
   };
 }
 
-function resolveContainerActions(
-  node: CanvasNode,
-  allNodes: readonly CanvasNode[],
-  selectedNodeIds: readonly string[],
-): ToolbarAction[] {
-  const childIdSet = new Set(getContainerChildIds(node));
-  const childNodes = allNodes.filter((candidate) => childIdSet.has(candidate.id));
-  return getContainerActionDescriptors(node)
-    .filter((action) =>
-      isContainerActionVisible(action, {
-        node,
-        childNodes,
-        selection: { nodeIds: selectedNodeIds },
-        isSelected: true,
-      }),
-    )
-    .filter((action) =>
-      action.id === 'collapse-group'
-        ? node.container?.collapsed !== true
-        : action.id === 'expand-group'
-          ? node.container?.collapsed === true
-          : true,
-    )
-    .map((action) => createContainerAction(node, childNodes, selectedNodeIds, action));
-}
-
-function createContainerAction(
-  node: CanvasNode,
-  childNodes: readonly CanvasNode[],
-  selectedNodeIds: readonly string[],
-  descriptor: ContainerActionDescriptor,
-): ToolbarAction {
-  const enabled = evaluateActionCondition(descriptor.enabledWhen, {
-    node,
-    childNodes,
-    selection: { nodeIds: selectedNodeIds },
-  });
+function createDuplicateAction(nodeId: string): ToolbarAction {
   return {
-    key: `container:${descriptor.id}`,
-    label: t(descriptor.label),
-    icon: containerActionIcon(descriptor.id),
-    danger: descriptor.danger,
-    disabled: !enabled,
+    key: 'node:duplicate',
+    label: t('action.duplicateShort'),
+    icon: <CopyIcon size={14} />,
     run: () => {
-      if (!enabled) return;
-      dispatchContainerAction(CONTAINER_ACTION_DISPATCHER, descriptor.id, {
-        containerId: node.id,
-        node,
-        childNodes,
-        selection: { nodeIds: selectedNodeIds },
-        canvasStore: useCanvasStore.getState(),
-        postMessage: (message) => getGlobalVSCodeApi()?.postMessage(message),
+      const canvasStore = useCanvasStore.getState();
+      const canvasData = canvasStore.canvasData;
+      if (!canvasData) return;
+      const result = useClipboardStore
+        .getState()
+        .duplicate([nodeId], canvasData.nodes, canvasData.connections);
+      if (!result) return;
+      useHistoryStore.getState().pushState(canvasData);
+      canvasStore.setCanvasData({
+        ...canvasData,
+        nodes: [...canvasData.nodes, ...result.nodes],
+        connections: [...canvasData.connections, ...result.connections],
       });
+      canvasStore.selectNodes(result.nodes.map((node) => node.id));
     },
   };
 }
@@ -396,13 +259,19 @@ function createDeleteAction(nodeIds: readonly string[]): ToolbarAction {
   };
 }
 
-function dedupeActions(actions: readonly ToolbarAction[]): ToolbarAction[] {
-  const seen = new Set<string>();
-  return actions.filter((action) => {
-    if (seen.has(action.key)) return false;
-    seen.add(action.key);
-    return true;
-  });
+function partitionActions(actions: readonly ToolbarAction[]): {
+  primary: ToolbarAction[];
+  overflow: ToolbarAction[];
+} {
+  const primary: ToolbarAction[] = [];
+  const overflow: ToolbarAction[] = [];
+  let overflowStarted = false;
+  for (const action of actions) {
+    overflowStarted =
+      overflowStarted || action.overflowOnly === true || primary.length >= MAX_PRIMARY_ACTIONS;
+    (overflowStarted ? overflow : primary).push(action);
+  }
+  return { primary, overflow };
 }
 
 function resolveToolbarPosition(
@@ -420,35 +289,4 @@ function resolveToolbarPosition(
     x: Math.max(12 + horizontalInset, Math.min(viewportSize.width - 12 - horizontalInset, centerX)),
     y: Math.max(10, Math.min(viewportSize.height - 42, preferredY)),
   };
-}
-
-function nodeActionIcon(actionId: NodeCardActionId): ReactNode {
-  switch (actionId) {
-    case 'open-media-preview':
-      return <PlayIcon size={14} />;
-    case 'open-content-overlay':
-      return <ZoomInIcon size={14} />;
-    case 'open-in-editor':
-      return <OpenIcon size={14} />;
-    case 'duplicate':
-      return <CopyIcon size={14} />;
-    case 'copy-to-media-library':
-      return <PackageIcon size={14} />;
-    case 'generate':
-      return <RefreshIcon size={14} />;
-    case 'remove':
-      return <TrashIcon size={14} />;
-  }
-}
-
-function containerActionIcon(actionId: ContainerActionDescriptor['id']): ReactNode {
-  switch (actionId) {
-    case 'fit-to-content':
-      return <ZoomInIcon size={14} />;
-    case 'collapse-group':
-    case 'expand-group':
-      return <LayersIcon size={14} />;
-    default:
-      return <RefreshIcon size={14} />;
-  }
 }

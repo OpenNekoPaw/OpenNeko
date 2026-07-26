@@ -6,7 +6,12 @@
  */
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
-import type { MediaUnderstandingModels, ShellExecutionMode, SessionMode } from '@neko-agent/types';
+import type {
+  AmbientCanvasNode,
+  MediaUnderstandingModels,
+  ShellExecutionMode,
+  SessionMode,
+} from '@neko-agent/types';
 import type { ConversationKind } from '@neko-agent/types';
 import type { ChatModelOption } from '@neko/shared';
 import type { AgentContextPayload } from '@neko/shared';
@@ -79,7 +84,7 @@ export interface InputAreaContextValue {
   contextChips: AgentContextPayload[];
   onRemoveContextChip: (id: string) => void;
   /** Ambient canvas selection — auto-injected from canvas, non-removable. */
-  ambientNodes?: Array<{ nodeId: string; type: string; summary: string }>;
+  ambientNodes?: AmbientCanvasNode[];
   // Generation params (shown in top bar, fed into tool calls)
   genCategory: GenCategory;
   genParams: GenerationParams;

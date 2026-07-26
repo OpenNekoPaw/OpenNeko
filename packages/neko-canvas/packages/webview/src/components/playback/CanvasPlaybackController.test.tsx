@@ -4,25 +4,22 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CanvasConnection, CanvasData, CanvasNode } from '@neko/shared';
+import type { CanvasPlaybackPlan } from '@neko/shared';
 import {
   CanvasPlaybackController,
   buildDefaultPlaybackPath,
-  buildInitialPlaybackRoute,
+  resolveCanvasPlaybackViewState,
 } from './CanvasPlaybackController';
 import { useCanvasStore } from '../../stores/canvasStore';
-import { setLocale } from '../../i18n';
 
 (globalThis as { React?: typeof React }).React = React;
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 vi.mock('@neko/ui/icons', () => ({
-  PauseIcon: ({ size = 16 }: { size?: number }) => <span data-icon="pause">{size}</span>,
-  PlayIcon: ({ size = 16 }: { size?: number }) => <span data-icon="play">{size}</span>,
-  SkipBackIcon: ({ size = 16 }: { size?: number }) => <span data-icon="skip-back">{size}</span>,
-  SkipForwardIcon: ({ size = 16 }: { size?: number }) => (
-    <span data-icon="skip-forward">{size}</span>
-  ),
+  PlayIcon: () => <span>play</span>,
+  PauseIcon: () => <span>pause</span>,
+  SkipBackIcon: () => <span>previous</span>,
+  SkipForwardIcon: () => <span>next</span>,
 }));
 
 describe('CanvasPlaybackController', () => {
@@ -33,329 +30,195 @@ describe('CanvasPlaybackController', () => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
-    setLocale('en');
     useCanvasStore.setState({
       canvasData: null,
       selection: { nodeIds: [], connectionIds: [] },
-      isConnecting: false,
-      pendingConnectionSource: null,
-      activePlayingNodeId: null,
-      expandedNodeId: null,
-      generationPanelState: { visible: false, nodeId: null, childNodeId: null },
-      contentOverlayState: { visible: false, nodeId: null },
     });
   });
 
   afterEach(() => {
-    act(() => {
-      root.unmount();
-    });
+    vi.useRealTimers();
+    act(() => root.unmount());
     host.remove();
   });
 
-  it('renders storyboard playback for scene and shot nodes without narrative nodes', () => {
-    useCanvasStore.setState({
-      canvasData: storyboardCanvas(),
-      selection: { nodeIds: ['scene-a'], connectionIds: [] },
+  it('moves through a canonical linear route', () => {
+    const onActiveUnitChange = vi.fn();
+    act(() => {
+      root.render(
+        <CanvasPlaybackController
+          plan={plan()}
+          routeUnitIds={['markdown-1', 'media-1']}
+          activeUnitId="markdown-1"
+          onActiveUnitChange={onActiveUnitChange}
+        />,
+      );
     });
 
     act(() => {
-      root.render(<CanvasPlaybackController />);
+      host
+        .querySelector<HTMLButtonElement>('button[title="Next"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    const controller = host.querySelector<HTMLElement>(
-      '[data-testid="canvas-playback-controller"]',
-    );
-    expect(controller).not.toBeNull();
-    expect(controller?.getAttribute('data-playback-adapter')).toBe('storyboard');
-    expect(host.textContent).toContain('Storyboard');
-    expect(host.textContent).toContain('1/2');
+    expect(onActiveUnitChange).toHaveBeenCalledWith('media-1', 'navigation');
+    expect(useCanvasStore.getState()).not.toHaveProperty('activePlayingNodeId');
+    expect(host.querySelector('[data-testid="canvas-playback-branches"]')).toBeNull();
   });
 
-  it('moves playback highlight without mutating the graph or changing selection', () => {
-    const data = storyboardCanvas();
-    useCanvasStore.setState({
-      canvasData: data,
-      selection: { nodeIds: ['scene-a'], connectionIds: [] },
+  it('projects route state without branch semantics', () => {
+    expect(resolveCanvasPlaybackViewState(plan(), ['markdown-1', 'media-1'], 'media-1')).toEqual({
+      currentUnitId: 'media-1',
+      currentIndex: 1,
+      canStepPrevious: true,
+      canStepNext: false,
+      canPlay: true,
     });
-    const before = JSON.stringify(data);
-
-    act(() => {
-      root.render(<CanvasPlaybackController />);
-    });
-    const nextButton = host.querySelector<HTMLButtonElement>('button[title="Next"]');
-
-    act(() => {
-      nextButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(useCanvasStore.getState().selection.nodeIds).toEqual(['scene-a']);
-    expect(useCanvasStore.getState().activePlayingNodeId).toBe('shot-a2');
-    expect(JSON.stringify(useCanvasStore.getState().canvasData)).toBe(before);
+    expect(buildDefaultPlaybackPath(plan())).toEqual(['markdown-1', 'media-1']);
   });
 
-  it('renders branch choices for interactive playback plans', () => {
-    const data = genericChoiceCanvas();
-    data.playback = { version: 1, adapterId: 'generic', mode: 'interactive' };
-    useCanvasStore.setState({
-      canvasData: data,
-      selection: { nodeIds: ['a'], connectionIds: [] },
-    });
-
+  it('centers transport controls without rendering time labels', () => {
     act(() => {
-      root.render(<CanvasPlaybackController />);
+      root.render(
+        <CanvasPlaybackController
+          plan={plan()}
+          routeUnitIds={['markdown-1', 'media-1']}
+          activeUnitId="markdown-1"
+          currentTimeMs={600}
+          durationMs={1_200}
+          onSeek={() => undefined}
+        />,
+      );
     });
 
-    expect(host.querySelector('[data-testid="canvas-playback-branches"]')).not.toBeNull();
-    expect(host.textContent).toContain('Go left');
-    expect(host.textContent).toContain('Go right');
+    const controller = host.querySelector('[data-testid="canvas-playback-controller"]');
+    expect(controller?.querySelector('.canvas-playback-controller-transport')).not.toBeNull();
+    expect(controller?.querySelector('.canvas-playback-controller-seek')).not.toBeNull();
+    expect(controller?.querySelector('.canvas-playback-controller-time')).toBeNull();
+    expect(controller?.textContent).not.toContain('0:00');
+    expect(controller?.textContent).not.toContain('0:01');
   });
 
-  it('tracks the actual route after choosing a non-default interactive branch', () => {
-    const data = genericChoiceCanvas();
-    data.playback = { version: 1, adapterId: 'generic', mode: 'interactive' };
-    useCanvasStore.setState({
-      canvasData: data,
-      selection: { nodeIds: ['a'], connectionIds: [] },
-    });
-
-    act(() => {
-      root.render(<CanvasPlaybackController />);
-    });
-
-    const rightChoice = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find(
-      (button) => button.textContent === 'Go right',
-    );
-    act(() => {
-      rightChoice?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(useCanvasStore.getState().activePlayingNodeId).toBe('c');
-    expect(host.textContent).toContain('2/2');
-    expect(host.querySelector<HTMLButtonElement>('button[title="Next"]')?.disabled).toBe(true);
-  });
-
-  it('uses unit duration when auto-advancing timer playback', () => {
+  it('advances through each timer-driven unit exactly once', () => {
     vi.useFakeTimers();
-    useCanvasStore.setState({
-      canvasData: durationCanvas(),
-      selection: { nodeIds: ['a'], connectionIds: [] },
-    });
-
-    act(() => {
-      root.render(<CanvasPlaybackController />);
-    });
-    const playButton = host.querySelector<HTMLButtonElement>('button[title="Play"]');
-
-    act(() => {
-      playButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-    expect(useCanvasStore.getState().activePlayingNodeId).toBe('a');
-
-    act(() => {
-      vi.advanceTimersByTime(49);
-    });
-    expect(useCanvasStore.getState().activePlayingNodeId).toBe('a');
-
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-    expect(useCanvasStore.getState().activePlayingNodeId).toBe('b');
-
-    vi.useRealTimers();
-  });
-
-  it('keeps media sequence playback active until media completion advances the route', () => {
-    const requests: unknown[] = [];
-    const plan = mediaSequencePlan();
+    const onActiveUnitChange = vi.fn();
 
     act(() => {
       root.render(
         <CanvasPlaybackController
-          plan={plan}
-          routeUnitIds={['media-a', 'media-b']}
-          activeUnitId="media-a"
-          isPlaying={false}
-          onPlaybackRequest={(request) => requests.push(request)}
+          plan={timerPlan()}
+          routeUnitIds={['unit-1', 'unit-2', 'unit-3']}
+          onActiveUnitChange={onActiveUnitChange}
         />,
       );
     });
+    onActiveUnitChange.mockClear();
 
-    const playButton = host.querySelector<HTMLButtonElement>('button[title="Play"]');
     act(() => {
-      playButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      host
+        .querySelector<HTMLButtonElement>('button[title="Play"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
+    act(() => vi.advanceTimersByTime(1_200));
+    act(() => vi.advanceTimersByTime(1_200));
+    act(() => vi.advanceTimersByTime(1_200));
 
-    expect(requests).toEqual([
-      expect.objectContaining({
-        unitId: 'media-a',
-        startTimeMs: 0,
-        state: 'playing',
-      }),
+    expect(onActiveUnitChange.mock.calls.map(([unitId]) => unitId)).toEqual([
+      'unit-1',
+      'unit-2',
+      'unit-3',
     ]);
+    expect(onActiveUnitChange.mock.calls.map(([, origin]) => origin)).toEqual([
+      'playback',
+      'playback',
+      'playback',
+    ]);
+    expect(host.querySelector<HTMLButtonElement>('button[title="Play"]')).not.toBeNull();
+  });
+
+  it('clears the pending timer when controlled playback is paused externally', () => {
+    vi.useFakeTimers();
+    const onActiveUnitChange = vi.fn();
+    const renderController = (isPlaying: boolean) => (
+      <CanvasPlaybackController
+        plan={timerPlan()}
+        routeUnitIds={['unit-1', 'unit-2', 'unit-3']}
+        activeUnitId="unit-1"
+        isPlaying={isPlaying}
+        onActiveUnitChange={onActiveUnitChange}
+      />
+    );
+
+    act(() => root.render(renderController(true)));
+    onActiveUnitChange.mockClear();
+    act(() => root.render(renderController(false)));
+    act(() => vi.advanceTimersByTime(2_400));
+
+    expect(onActiveUnitChange).not.toHaveBeenCalled();
+  });
+
+  it('pauses at media completion when the route requires user input', () => {
+    const onActiveUnitChange = vi.fn();
+    const onPlayingChange = vi.fn();
 
     act(() => {
       root.render(
         <CanvasPlaybackController
-          plan={plan}
-          routeUnitIds={['media-a', 'media-b']}
-          activeUnitId="media-a"
-          isPlaying
-          playbackCompletionSignal={{ unitId: 'media-a', nonce: 1 }}
-          onPlaybackRequest={(request) => requests.push(request)}
+          plan={{ ...timerPlan(), advancePolicy: 'user-input' }}
+          routeUnitIds={['unit-1', 'unit-2', 'unit-3']}
+          activeUnitId="unit-1"
+          isPlaying={true}
+          playbackCompletionSignal={{ unitId: 'unit-1', nonce: 1 }}
+          onActiveUnitChange={onActiveUnitChange}
+          onPlayingChange={onPlayingChange}
         />,
       );
     });
 
-    expect(requests).toEqual([
-      expect.objectContaining({ unitId: 'media-a', state: 'playing' }),
-      expect.objectContaining({ unitId: 'media-b', state: 'playing' }),
-    ]);
-  });
-
-  it('starts interactive routes at the entry unit instead of precomputing a default branch', () => {
-    expect(
-      buildInitialPlaybackRoute({
-        adapterId: 'generic',
-        requestedAdapterId: 'generic',
-        behaviorMode: 'interactive',
-        advancePolicy: 'user-input',
-        entryUnitIds: ['a'],
-        units: [
-          { id: 'a', sourceNodeId: 'a', kind: 'node', renderMode: 'select-node' },
-          { id: 'b', sourceNodeId: 'b', kind: 'node', renderMode: 'select-node' },
-        ],
-        transitions: [
-          { id: 'a-b', sourceUnitId: 'a', targetUnitId: 'b', type: 'choice', priority: 0 },
-        ],
-        routeCandidates: [
-          {
-            id: 'entry:a',
-            title: 'A',
-            entryUnitId: 'a',
-            unitIds: ['a', 'b'],
-            sourceKind: 'entry',
-            sourceNodeId: 'a',
-          },
-        ],
-        diagnostics: [],
-        metadata: {},
-      }),
-    ).toEqual(['a']);
-  });
-
-  it('builds a default path without looping forever', () => {
-    expect(
-      buildDefaultPlaybackPath({
-        adapterId: 'generic',
-        requestedAdapterId: 'generic',
-        behaviorMode: 'linear',
-        advancePolicy: 'timer',
-        entryUnitIds: ['a'],
-        units: [
-          { id: 'a', sourceNodeId: 'a', kind: 'node', renderMode: 'select-node' },
-          { id: 'b', sourceNodeId: 'b', kind: 'node', renderMode: 'select-node' },
-        ],
-        transitions: [
-          { id: 'a-b', sourceUnitId: 'a', targetUnitId: 'b', type: 'sequence', priority: 0 },
-          { id: 'b-a', sourceUnitId: 'b', targetUnitId: 'a', type: 'sequence', priority: 0 },
-        ],
-        routeCandidates: [
-          {
-            id: 'entry:a',
-            title: 'A',
-            entryUnitId: 'a',
-            unitIds: ['a', 'b'],
-            sourceKind: 'entry',
-            sourceNodeId: 'a',
-          },
-        ],
-        diagnostics: [],
-        metadata: {},
-      }),
-    ).toEqual(['a', 'b']);
+    expect(onActiveUnitChange).not.toHaveBeenCalledWith('unit-2');
+    expect(onPlayingChange).toHaveBeenCalledWith(false);
   });
 });
 
-function storyboardCanvas(): CanvasData {
+function plan(): CanvasPlaybackPlan {
   return {
-    version: '2.1',
-    name: 'Storyboard',
-    nodes: [
-      scene('scene-a', ['shot-a1', 'shot-a2']),
-      shot('shot-a1', 1, 'scene-a'),
-      shot('shot-a2', 2, 'scene-a'),
-    ],
-    connections: [],
-  };
-}
-
-function genericChoiceCanvas(): CanvasData {
-  return {
-    version: '2.1',
-    name: 'Generic',
-    nodes: [annotation('a'), annotation('b'), annotation('c')],
-    connections: [
-      connection('left', 'a', 'b', 'choice', { choiceText: 'Go left', priority: 0 }),
-      connection('right', 'a', 'c', 'choice', { choiceText: 'Go right', priority: 1 }),
-    ],
-  };
-}
-
-function durationCanvas(): CanvasData {
-  const data = genericChoiceCanvas();
-  data.playback = {
-    version: 1,
     adapterId: 'generic',
-    mode: 'linear',
-    nodeOverrides: { a: { durationMs: 50 } },
-  };
-  data.connections = [connection('next', 'a', 'b', 'sequence', { priority: 0 })];
-  return data;
-}
-
-function mediaSequencePlan() {
-  return {
-    adapterId: 'media-sequence' as const,
-    requestedAdapterId: 'media-sequence' as const,
-    behaviorMode: 'linear' as const,
-    advancePolicy: 'media-ended' as const,
-    entryUnitIds: ['media-a'],
+    requestedAdapterId: 'auto',
+    behaviorMode: 'linear',
+    advancePolicy: 'timer',
+    entryUnitIds: ['markdown-1'],
     units: [
       {
-        id: 'media-a',
-        sourceNodeId: 'media-a',
-        kind: 'media' as const,
-        renderMode: 'media-playback' as const,
-        assetPath: 'assets/a.mp4',
-        durationMs: 1000,
+        id: 'markdown-1',
+        sourceNodeId: 'markdown-1',
+        kind: 'node',
+        renderMode: 'select-node',
+        label: 'Opening',
       },
       {
-        id: 'media-b',
-        sourceNodeId: 'media-b',
-        kind: 'media' as const,
-        renderMode: 'media-playback' as const,
-        assetPath: 'assets/b.mp4',
-        durationMs: 1000,
+        id: 'media-1',
+        sourceNodeId: 'media-1',
+        kind: 'media',
+        renderMode: 'media-playback',
+        label: 'Reference',
       },
     ],
     transitions: [
       {
-        id: 'media-a-b',
-        sourceUnitId: 'media-a',
-        targetUnitId: 'media-b',
-        type: 'sequence' as const,
+        id: 'sequence-1',
+        sourceUnitId: 'markdown-1',
+        targetUnitId: 'media-1',
+        type: 'sequence',
         priority: 0,
       },
     ],
     routeCandidates: [
       {
-        id: 'auto-entry:media-a',
-        title: 'Media route',
-        entryUnitId: 'media-a',
-        unitIds: ['media-a', 'media-b'],
-        sourceKind: 'auto-entry' as const,
-        sourceNodeId: 'media-a',
+        id: 'route-1',
+        title: 'Preview',
+        entryUnitId: 'markdown-1',
+        unitIds: ['markdown-1', 'media-1'],
+        sourceKind: 'entry',
       },
     ],
     diagnostics: [],
@@ -363,66 +226,47 @@ function mediaSequencePlan() {
   };
 }
 
-function scene(id: string, childIds: readonly string[]): CanvasNode {
+function timerPlan(): CanvasPlaybackPlan {
   return {
-    id,
-    type: 'scene',
-    position: { x: 0, y: 0 },
-    size: { width: 400, height: 240 },
-    zIndex: 0,
-    container: { policy: 'scene', childIds: [...childIds], layout: { mode: 'sequence' } },
-    data: { sceneTitle: 'Scene', sceneNumber: 1 },
-  };
-}
-
-function shot(id: string, shotNumber: number, parentId: string): CanvasNode {
-  return {
-    id,
-    type: 'shot',
-    parentId,
-    position: { x: shotNumber * 240, y: 40 },
-    size: { width: 200, height: 120 },
-    zIndex: shotNumber,
-    data: {
-      shotNumber,
-      duration: 3,
-      visualDescription: id,
-      characters: [],
-      shotScale: 'MS',
-      characterAction: '',
-      emotion: [],
-      sceneTags: [],
-      generationStatus: 'idle',
-      generationHistory: [],
-    },
-  };
-}
-
-function annotation(id: string): CanvasNode {
-  return {
-    id,
-    type: 'annotation',
-    position: { x: 0, y: 0 },
-    size: { width: 200, height: 120 },
-    zIndex: 0,
-    data: { content: id },
-  };
-}
-
-function connection(
-  id: string,
-  sourceId: string,
-  targetId: string,
-  type: CanvasConnection['type'],
-  extra: Partial<CanvasConnection>,
-): CanvasConnection {
-  return {
-    id,
-    sourceId,
-    targetId,
-    sourceEndpoint: { nodeId: sourceId, scope: 'node' },
-    targetEndpoint: { nodeId: targetId, scope: 'node' },
-    type,
-    ...extra,
+    adapterId: 'generic',
+    requestedAdapterId: 'auto',
+    behaviorMode: 'linear',
+    advancePolicy: 'timer',
+    entryUnitIds: ['unit-1'],
+    units: ['unit-1', 'unit-2', 'unit-3'].map((id) => ({
+      id,
+      sourceNodeId: id,
+      kind: 'node',
+      renderMode: 'select-node',
+      label: id,
+      durationMs: 1_200,
+    })),
+    transitions: [
+      {
+        id: 'sequence-1-2',
+        sourceUnitId: 'unit-1',
+        targetUnitId: 'unit-2',
+        type: 'sequence',
+        priority: 0,
+      },
+      {
+        id: 'sequence-2-3',
+        sourceUnitId: 'unit-2',
+        targetUnitId: 'unit-3',
+        type: 'sequence',
+        priority: 0,
+      },
+    ],
+    routeCandidates: [
+      {
+        id: 'route-timer',
+        title: 'Timer route',
+        entryUnitId: 'unit-1',
+        unitIds: ['unit-1', 'unit-2', 'unit-3'],
+        sourceKind: 'entry',
+      },
+    ],
+    diagnostics: [],
+    metadata: {},
   };
 }

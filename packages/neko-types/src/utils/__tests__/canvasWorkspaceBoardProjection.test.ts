@@ -24,7 +24,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(plan.canvasData.nodes).toHaveLength(3);
     expect(plan.canvasData.nodes.every((node) => node.type !== 'group')).toBe(true);
     expect(plan.canvasData.nodes.every((node) => node.parentId === undefined)).toBe(true);
-    expect(plan.canvasData.nodes.map((node) => node.type)).toEqual(['document', 'text', 'media']);
+    expect(plan.canvasData.nodes.map((node) => node.type)).toEqual(['file', 'markdown', 'media']);
     expect(plan.canvasData.nodes.map((node) => node.data.provenance?.['role'])).toEqual([
       'source',
       'analysis',
@@ -63,7 +63,6 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     const group = first.canvasData.nodes.find((node) => node.type === 'group');
     expect(group).toMatchObject({
       type: 'group',
-      preset: 'group.container',
       container: {
         policy: 'group',
         layout: { mode: 'grid', columns: 3 },
@@ -301,7 +300,7 @@ describe('planCanvasWorkspaceBoardProjection', () => {
     expect(plan.status).toBe('projected');
     expect(plan.canvasData.nodes).toHaveLength(2);
     expect(plan.canvasData.nodes[1]).toMatchObject({
-      type: 'document',
+      type: 'file',
       data: {
         contentLocator: {
           kind: 'workspace-file',

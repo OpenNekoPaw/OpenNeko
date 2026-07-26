@@ -90,8 +90,8 @@ describe('NodeMediaGenerationDeliveryHost Workspace Board delivery', () => {
 
     const board = await readWorkspaceBoard(fixture.workspaceRoot);
     expect(board.data.nodes.filter((node) => node.type === 'group')).toHaveLength(0);
-    expect(board.data.nodes.filter((node) => node.type === 'document')).toHaveLength(1);
-    expect(board.data.nodes.filter((node) => node.type === 'text')).toHaveLength(1);
+    expect(board.data.nodes.filter((node) => node.type === 'file')).toHaveLength(1);
+    expect(board.data.nodes.filter((node) => node.type === 'markdown')).toHaveLength(1);
     expect(JSON.stringify(board.data.nodes)).toContain('run-material-analysis');
     expect(host.getWorkspaceBoardDeliveryObservability()).toEqual({
       canonicalSubmissionCount: 2,

@@ -1,4 +1,4 @@
-import type { CanvasNode, CanvasNodeType } from './canvas';
+import { isCanvasNodeType, type CanvasNode, type CanvasNodeType } from './canvas';
 import type {
   ArtifactMediaItem,
   ArtifactResourceRef,
@@ -479,7 +479,7 @@ export const CANVAS_NODE_REFERENCE_CONTRIBUTOR_MANIFEST: ReferenceContributorMan
   contributorId: 'neko-canvas:canvas-node-reference-contributor',
   packageName: 'neko-canvas',
   sourceKinds: ['canvas-node'],
-  nodeTypes: ['shot', 'gallery', 'media', 'document', 'storyboard', 'entity', 'generated-asset'],
+  nodeTypes: ['markdown', 'media', 'group', 'job', 'file', 'canvas-embed'],
   producedRoles: [
     'source',
     'reference',
@@ -536,7 +536,7 @@ export const BUILT_IN_REFERENCE_CONTRIBUTORS: readonly ReferenceContributor[] = 
     manifest: CANVAS_NODE_REFERENCE_CONTRIBUTOR_MANIFEST,
     collect: (input) =>
       input.sourceKind === 'canvas-node'
-        ? collectReferencesFromCanvasNode(input.source, input.context).descriptors
+        ? collectReferencesFromCanvasNode(input.source).descriptors
         : [],
   },
   {
@@ -877,12 +877,9 @@ export function summarizeReferenceDescriptors(input: {
   };
 }
 
-export function summarizeReferencesFromCanvasNode(
-  source: unknown,
-  options: ReferenceProjectionOptions = {},
-): ReferenceSummary {
+export function summarizeReferencesFromCanvasNode(source: unknown): ReferenceSummary {
   const sourceId = isCanvasNodeLike(source) ? source.id : '';
-  const collected = collectReferencesFromCanvasNode(source, options);
+  const collected = collectReferencesFromCanvasNode(source);
   return summarizeReferenceDescriptors({
     sourceKind: 'canvas-node',
     sourceId,
@@ -891,10 +888,7 @@ export function summarizeReferencesFromCanvasNode(
   });
 }
 
-export function collectReferencesFromCanvasNode(
-  source: unknown,
-  options: ReferenceProjectionOptions = {},
-): ReferenceCollectionResult {
+export function collectReferencesFromCanvasNode(source: unknown): ReferenceCollectionResult {
   if (!isCanvasNodeLike(source)) {
     return invalidSourceResult('Canvas node reference source must be a CanvasNode-like object.');
   }
@@ -903,146 +897,14 @@ export function collectReferencesFromCanvasNode(
   const data = isRecord(source.data) ? source.data : {};
   const sourceId = source.id;
 
-  const referenceResourceRef = data['referenceResourceRef'];
-  if (referenceResourceRef !== undefined) {
-    descriptors.push(
-      createResourceDescriptor({
-        referenceId: `${sourceId}:referenceResourceRef`,
-        sourceKind: 'canvas-node',
-        sourceId,
-        role: 'reference',
-        modality: inferModalityFromUnknown(referenceResourceRef, 'resource'),
-        resourceRef: referenceResourceRef,
-        metadata: { field: 'referenceResourceRef' },
-      }),
-    );
-  }
-
-  const referenceImageResourceRef = data['referenceImageResourceRef'];
-  if (referenceImageResourceRef !== undefined) {
-    descriptors.push(
-      createResourceDescriptor({
-        referenceId: `${sourceId}:referenceImageResourceRef`,
-        sourceKind: 'canvas-node',
-        sourceId,
-        role: 'reference',
-        modality: 'image',
-        resourceRef: referenceImageResourceRef,
-        metadata: { field: 'referenceImageResourceRef' },
-      }),
-    );
-  }
-
-  const referenceImagePath = data['referenceImagePath'];
-  if (typeof referenceImagePath === 'string' && referenceImagePath.trim().length > 0) {
-    descriptors.push(
-      createPathDescriptor({
-        referenceId: `${sourceId}:referenceImagePath`,
-        sourceKind: 'canvas-node',
-        sourceId,
-        role: 'reference',
-        modality: 'image',
-        path: referenceImagePath,
-        metadata: { field: 'referenceImagePath' },
-      }),
-    );
-    diagnostics.push(
-      createReferenceDiagnostic({
-        code: 'reference-transitional-field',
-        path: ['data', 'referenceImagePath'],
-        purpose: options.purpose ?? 'collection',
-        phase: options.phase ?? 'collect',
-      }),
-    );
-  }
-
-  const runtimeReferenceImagePath = data['runtimeReferenceImagePath'];
-  if (
-    typeof runtimeReferenceImagePath === 'string' &&
-    runtimeReferenceImagePath.trim().length > 0
-  ) {
-    diagnostics.push(
-      createReferenceDiagnostic({
-        code: 'reference-unsafe-runtime-handle',
-        path: ['data', 'runtimeReferenceImagePath'],
-        message: 'runtimeReferenceImagePath is a runtime projection and must not be persisted.',
-        purpose: options.purpose ?? 'validation',
-        phase: options.phase ?? 'validate',
-      }),
-    );
-    if (options.includeRuntimeFields) {
-      descriptors.push(
-        createPathDescriptor({
-          referenceId: `${sourceId}:runtimeReferenceImagePath`,
-          sourceKind: 'canvas-node',
-          sourceId,
-          role: 'reference',
-          modality: 'image',
-          path: runtimeReferenceImagePath,
-          metadata: { field: 'runtimeReferenceImagePath', runtimeOnly: true },
-        }),
-      );
-    }
-  }
-
-  const referenceRefs = data['referenceRefs'];
-  if (Array.isArray(referenceRefs)) {
-    referenceRefs.forEach((ref, index) => {
-      if (typeof ref !== 'string' || ref.trim().length === 0) return;
-      descriptors.push(
-        createCanvasNodeDescriptor({
-          referenceId: `${sourceId}:referenceRefs:${index}`,
-          sourceKind: 'canvas-node',
-          sourceId,
-          role: 'reference',
-          modality: 'image',
-          nodeId: ref,
-          metadata: { field: 'referenceRefs', index },
-        }),
-      );
-    });
-  }
-
-  const generatedAsset = data['generatedAsset'];
-  if (isRecord(generatedAsset) && typeof generatedAsset['id'] === 'string') {
-    descriptors.push(
-      createGeneratedAssetDescriptor({
-        referenceId: `${sourceId}:generatedAsset`,
-        sourceKind: 'canvas-node',
-        sourceId,
-        role: 'output',
-        modality: 'image',
-        assetId: generatedAsset['id'],
-        metadata: { field: 'generatedAsset' },
-      }),
-    );
-  }
-
-  const generatedVideoAsset = data['generatedVideoAsset'];
-  if (isRecord(generatedVideoAsset) && typeof generatedVideoAsset['id'] === 'string') {
-    descriptors.push(
-      createGeneratedAssetDescriptor({
-        referenceId: `${sourceId}:generatedVideoAsset`,
-        sourceKind: 'canvas-node',
-        sourceId,
-        role: 'output',
-        modality: 'video',
-        assetId: generatedVideoAsset['id'],
-        metadata: { field: 'generatedVideoAsset' },
-      }),
-    );
-  }
-
   if (source.type === 'media') {
     projectMediaNodeReferences(data, sourceId, descriptors);
-  } else if (source.type === 'gallery') {
-    projectGalleryNodeReferences(source.container, data, sourceId, descriptors);
-  } else if (source.type === 'document') {
+  } else if (source.type === 'file') {
     projectDocumentNodeReferences(data, sourceId, descriptors);
-  } else if (source.type === 'storyboard') {
+  } else if (source.type === 'markdown') {
     descriptors.push(
       createCanvasNodeDescriptor({
-        referenceId: `${sourceId}:storyboard`,
+        referenceId: `${sourceId}:markdown`,
         sourceKind: 'canvas-node',
         sourceId,
         role: 'semantic-range',
@@ -1051,10 +913,6 @@ export function collectReferencesFromCanvasNode(
         metadata: { nodeType: source.type },
       }),
     );
-  } else if (source.type === 'entity') {
-    projectRegisteredEntityNodeReferences(data, sourceId, descriptors);
-  } else if (source.type === 'generated-asset') {
-    projectRegisteredGeneratedAssetNodeReferences(data, sourceId, descriptors);
   }
 
   return { descriptors, diagnostics };
@@ -1455,120 +1313,28 @@ function summarizeReferenceGroup(
   };
 }
 
-function projectGalleryNodeReferences(
-  container: unknown,
-  data: Readonly<Record<string, unknown>>,
-  sourceId: string,
-  descriptors: ReferenceDescriptor[],
-): void {
-  const referenceAssetId = isRecord(data['characterProfile'])
-    ? data['characterProfile']['referenceAssetId']
-    : undefined;
-  if (typeof referenceAssetId === 'string' && referenceAssetId.trim().length > 0) {
-    descriptors.push(
-      createGeneratedAssetDescriptor({
-        referenceId: `${sourceId}:characterProfile:referenceAssetId`,
-        sourceKind: 'canvas-node',
-        sourceId,
-        role: 'subject',
-        modality: 'image',
-        assetId: referenceAssetId,
-        metadata: { field: 'characterProfile.referenceAssetId' },
-      }),
-    );
-  }
-  const placements = isRecord(container) ? container['childPlacements'] : undefined;
-  if (!isRecord(placements)) return;
-  Object.entries(placements).forEach(([placementId, placement], index) => {
-    if (!isRecord(placement)) return;
-    const childId = readStringFromKeys(placement, ['childId']) ?? placementId;
-    if (!childId) return;
-    const metadata = isRecord(placement['metadata']) ? placement['metadata'] : undefined;
-    descriptors.push(
-      createCanvasNodeDescriptor({
-        referenceId: `${sourceId}:childPlacements:${placementId}`,
-        sourceKind: 'canvas-node',
-        sourceId,
-        role: 'reference',
-        modality: 'image',
-        nodeId: childId,
-        metadata: compactJsonRecord({
-          field: 'container.childPlacements',
-          placementId,
-          slotId: placement['slotId'],
-          order: placement['order'],
-          index,
-          label: metadata?.['label'],
-        }),
-      }),
-    );
-  });
-}
-
 function projectDocumentNodeReferences(
   data: Readonly<Record<string, unknown>>,
   sourceId: string,
   descriptors: ReferenceDescriptor[],
 ): void {
-  const docPath = data['docPath'];
-  if (typeof docPath === 'string' && docPath.trim().length > 0) {
+  const filePath = data['path'];
+  if (typeof filePath === 'string' && filePath.trim().length > 0) {
     descriptors.push(
       createPathDescriptor({
-        referenceId: `${sourceId}:docPath`,
+        referenceId: `${sourceId}:path`,
         sourceKind: 'canvas-node',
         sourceId,
         role: 'source',
         modality: 'document',
-        path: docPath,
+        path: filePath,
         metadata: compactJsonRecord({
-          field: 'docPath',
-          docType: typeof data['docType'] === 'string' ? data['docType'] : undefined,
+          field: 'path',
+          mediaType: typeof data['mediaType'] === 'string' ? data['mediaType'] : undefined,
         }),
       }),
     );
   }
-}
-
-function projectRegisteredEntityNodeReferences(
-  data: Readonly<Record<string, unknown>>,
-  sourceId: string,
-  descriptors: ReferenceDescriptor[],
-): void {
-  const entityId = readStringFromKeys(data, ['entityId', 'id']);
-  const entityKind = readStringFromKeys(data, ['entityKind', 'kind']);
-  if (!entityId || !entityKind) return;
-  descriptors.push(
-    createEntityDescriptor({
-      referenceId: `${sourceId}:entity`,
-      sourceKind: 'canvas-node',
-      sourceId,
-      role: entityKind === 'character' ? 'subject' : 'reference',
-      modality: 'entity',
-      entityId,
-      entityKind,
-      metadata: { field: 'data' },
-    }),
-  );
-}
-
-function projectRegisteredGeneratedAssetNodeReferences(
-  data: Readonly<Record<string, unknown>>,
-  sourceId: string,
-  descriptors: ReferenceDescriptor[],
-): void {
-  const assetId = readStringFromKeys(data, ['assetId', 'id', 'generatedAssetId']);
-  if (!assetId) return;
-  descriptors.push(
-    createGeneratedAssetDescriptor({
-      referenceId: `${sourceId}:generated-asset`,
-      sourceKind: 'canvas-node',
-      sourceId,
-      role: 'output',
-      modality: inferModalityFromUnknown(data, 'resource'),
-      assetId,
-      metadata: { field: 'data' },
-    }),
-  );
 }
 
 function projectGenericTableCell(
@@ -2205,7 +1971,7 @@ function isCanvasNodeLike(value: unknown): value is Pick<CanvasNode, 'id' | 'typ
   readonly data?: unknown;
   readonly container?: unknown;
 } {
-  return isRecord(value) && typeof value['id'] === 'string' && typeof value['type'] === 'string';
+  return isRecord(value) && typeof value['id'] === 'string' && isCanvasNodeType(value['type']);
 }
 
 function isShotImagePrepPlanLike(value: unknown): boolean {

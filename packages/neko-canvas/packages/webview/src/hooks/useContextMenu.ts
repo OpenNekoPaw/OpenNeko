@@ -12,6 +12,7 @@ import type { MenuEntry } from '../components/common/ContextMenu';
 import { useClipboardStore } from '../stores/clipboardStore';
 import { useCanvasStore } from '../stores/canvasStore';
 import { useHistoryStore } from '../stores/historyStore';
+import type { CanvasAddActionId } from '../utils/canvasAddActions';
 
 // =============================================================================
 // Types
@@ -27,12 +28,7 @@ export interface UseContextMenuOptions {
   selectedNodeIds: string[];
   nodes: CanvasNode[];
   screenToCanvas: (screenX: number, screenY: number) => { x: number; y: number };
-  addTextAt: (pos: { x: number; y: number }) => void;
-  addSceneGroupAt: (pos: { x: number; y: number }) => void;
-  addShotAt: (pos: { x: number; y: number }) => void;
-  addGalleryAt: (pos: { x: number; y: number }) => void;
-  addTableAt: (pos: { x: number; y: number }) => void;
-  handleImportFile: () => void;
+  addActionAt: (actionId: CanvasAddActionId, pos: { x: number; y: number }) => void;
   deleteSelected: () => void;
   handleFitContent: () => void;
   handleResetViewport: () => void;
@@ -45,11 +41,7 @@ export interface UseContextMenuOptions {
   handleUngroup: () => void;
   undo: () => void;
   redo: () => void;
-  onGenerateSelected?: () => void;
-  onBatchGenerate?: () => void;
   onSendToAgent?: (intent?: string) => void;
-  onGenerateVideo?: () => void;
-  onEditWithControlNet?: () => void;
   onSetPlaybackEntry?: (nodeId: string) => void;
 }
 
@@ -69,12 +61,7 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
     selectedNodeIds,
     nodes,
     screenToCanvas,
-    addTextAt,
-    addSceneGroupAt,
-    addShotAt,
-    addGalleryAt,
-    addTableAt,
-    handleImportFile,
+    addActionAt,
     deleteSelected,
     handleFitContent,
     handleResetViewport,
@@ -87,11 +74,7 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
     handleUngroup,
     undo,
     redo,
-    onGenerateSelected,
-    onBatchGenerate,
     onSendToAgent,
-    onGenerateVideo,
-    onEditWithControlNet,
     onSetPlaybackEntry,
   } = options;
 
@@ -117,17 +100,11 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
       }
       const showNodeMenu = clickedOnNode;
 
-      const selectedNodes = nodes.filter((n) => effectiveSelectedNodeIds.includes(n.id));
       const menuCtx = {
         canvasPosition: canvasPos,
         hasSelection: showNodeMenu,
         selectedCount: effectiveSelectedNodeIds.length,
-        onAddText: addTextAt,
-        onAddScene: addSceneGroupAt,
-        onAddShot: addShotAt,
-        onAddGallery: addGalleryAt,
-        onAddTable: addTableAt,
-        onImportFile: handleImportFile,
+        onAddAction: addActionAt,
         onDelete: deleteSelected,
         onSelectAll: () => {
           const { selectNodes } = useCanvasStore.getState();
@@ -153,16 +130,7 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
         canPaste: useClipboardStore.getState().canPaste(),
         canUndo: useHistoryStore.getState().canUndo(),
         canRedo: useHistoryStore.getState().canRedo(),
-        hasShotSelected: selectedNodes.some((n) => n.type === 'shot'),
-        hasShotWithImage: selectedNodes.some(
-          (n) =>
-            n.type === 'shot' && Boolean((n.data as Record<string, unknown>)['generatedImage']),
-        ),
-        onGenerateSelected,
-        onBatchGenerate,
         onSendToAgent,
-        onGenerateVideo,
-        onEditWithControlNet,
       };
 
       const items = showNodeMenu ? buildNodeMenuItems(menuCtx) : buildCanvasMenuItems(menuCtx);
@@ -173,12 +141,7 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
       screenToCanvas,
       selectedNodeIds,
       nodes,
-      addTextAt,
-      addSceneGroupAt,
-      addShotAt,
-      addGalleryAt,
-      addTableAt,
-      handleImportFile,
+      addActionAt,
       deleteSelected,
       handleFitContent,
       handleResetViewport,
@@ -191,11 +154,7 @@ export function useContextMenu(options: UseContextMenuOptions): UseContextMenuRe
       handleUngroup,
       undo,
       redo,
-      onGenerateSelected,
-      onBatchGenerate,
       onSendToAgent,
-      onGenerateVideo,
-      onEditWithControlNet,
       onSetPlaybackEntry,
     ],
   );

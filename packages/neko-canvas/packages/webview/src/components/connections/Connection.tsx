@@ -68,11 +68,6 @@ function resolveConnectionColor(
       return 'var(--connection-sequence)';
     case 'reference':
       return 'var(--connection-reference)';
-    case 'choice':
-      return 'var(--connection-choice)';
-    case 'transition':
-      return 'var(--connection-transition)';
-    case 'association':
     case 'derived-from':
       return 'var(--connection-association)';
     default:

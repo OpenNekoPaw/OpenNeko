@@ -823,7 +823,7 @@ describe('PiConversationRuntime', () => {
     });
     const summarizationPrompts: string[] = [];
     const models = createFixtureModels((_model, context) => {
-      if (context.systemPrompt.includes('context summarization assistant')) {
+      if ((context.systemPrompt ?? '').includes('context summarization assistant')) {
         summarizationPrompts.push(JSON.stringify(context.messages));
         return completedStream(assistant('stop', 'Pi-owned compacted summary'));
       }

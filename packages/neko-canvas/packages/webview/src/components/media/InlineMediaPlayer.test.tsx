@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HtmlVideoDescriptor, PcmStreamDescriptor } from '@neko/media';
 import { InlineAudioPlayer } from './InlineAudioPlayer';
 import { InlineVideoPlayer } from './InlineVideoPlayer';
+import { setLocale } from '../../i18n';
 
 (globalThis as { React?: typeof React }).React = React;
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -80,6 +81,7 @@ describe('Inline media players', () => {
   let scheduledFrame: FrameRequestCallback | undefined;
 
   beforeEach(() => {
+    setLocale('en');
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
@@ -178,5 +180,106 @@ describe('Inline media players', () => {
     expect(pcmMock.instances[0]?.startAt).toHaveBeenCalledWith(0.1);
     expect(scheduledFrame).toBeDefined();
     expect(onEnded).not.toHaveBeenCalled();
+  });
+
+  it('starts a prepared PCM stream without replacing it through a redundant initial seek', async () => {
+    const onSeek = vi.fn();
+    await act(async () => {
+      root.render(
+        <InlineAudioPlayer
+          audio={audioDescriptor}
+          duration={2}
+          startTime={0.75}
+          playbackState="playing"
+          playbackRequestId="audio-request-1"
+          playbackStartTime={0.75}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={onSeek}
+          onStop={() => undefined}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onSeek).not.toHaveBeenCalled();
+    expect(pcmMock.instances[0]?.prepare).toHaveBeenCalledTimes(1);
+    expect(pcmMock.instances[0]?.startAt).toHaveBeenCalledWith(0.1);
+  });
+
+  it('starts a prepared video stream without replacing it through a redundant initial seek', async () => {
+    const onSeek = vi.fn();
+    await act(async () => {
+      root.render(
+        <InlineVideoPlayer
+          video={videoDescriptor}
+          audio={audioDescriptor}
+          width={320}
+          height={180}
+          fps={24}
+          duration={2}
+          startTime={0.75}
+          playbackState="playing"
+          playbackRequestId="video-request-1"
+          playbackStartTime={0.75}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={onSeek}
+          onStop={() => undefined}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(onSeek).not.toHaveBeenCalled();
+    expect(host.querySelector('video')?.src).toBe(videoDescriptor.url);
+    expect(pcmMock.instances[0]?.prepare).toHaveBeenCalledTimes(1);
+    expect(pcmMock.instances[0]?.startAt).toHaveBeenCalledWith(0.1);
+  });
+
+  it('preserves the Canvas node-card audio surface on the PCM path', async () => {
+    await act(async () => {
+      root.render(
+        <InlineAudioPlayer
+          audio={audioDescriptor}
+          duration={185}
+          audioLayout="node-card"
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={() => undefined}
+          onStop={() => undefined}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[data-testid="canvas-audio-waveform"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="canvas-audio-node-controls"]')).not.toBeNull();
+    expect(host.querySelector('.canvas-audio-transport')).toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('button[title="Play"]')).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('button[title="Mute"]')).not.toBeNull();
+  });
+
+  it('localizes PCM media controls without starting playback on mount', async () => {
+    setLocale('zh-cn');
+    await act(async () => {
+      root.render(
+        <InlineAudioPlayer
+          audio={audioDescriptor}
+          duration={2}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={() => undefined}
+          onStop={() => undefined}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(pcmMock.instances).toHaveLength(0);
+    expect(host.querySelector<HTMLButtonElement>('button[title="播放"]')).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('button[title="静音"]')).not.toBeNull();
   });
 });

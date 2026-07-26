@@ -24,6 +24,14 @@ export type {
   ToolTargetRequirements,
 } from './tool-planning';
 
+export interface ToolCallInfo {
+  readonly id: string;
+  readonly name: string;
+  readonly arguments: Record<string, unknown>;
+  readonly index: number;
+  readonly trace?: AgentTraceContext;
+}
+
 /**
  * Tool category
  */

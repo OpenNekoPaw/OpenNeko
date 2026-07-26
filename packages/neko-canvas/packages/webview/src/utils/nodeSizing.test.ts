@@ -9,9 +9,9 @@ import {
 
 describe('nodeSizing', () => {
   it('resolves minimum sizes for known container and leaf nodes', () => {
-    expect(resolveNodeMinSize({ type: 'scene' })).toEqual({ width: 320, height: 220 });
-    expect(resolveNodeMinSize({ type: 'gallery' })).toEqual({ width: 280, height: 240 });
-    expect(resolveNodeMinSize({ type: 'shot' })).toEqual({ width: 220, height: 160 });
+    expect(resolveNodeMinSize({ type: 'group' })).toEqual({ width: 260, height: 180 });
+    expect(resolveNodeMinSize({ type: 'media' })).toEqual({ width: 200, height: 120 });
+    expect(resolveNodeMinSize({ type: 'job' })).toEqual({ width: 240, height: 150 });
   });
 
   it('uses conservative fallback minimums for unknown nodes', () => {
@@ -31,23 +31,23 @@ describe('nodeSizing', () => {
 
   it('keeps collapsed render height visual-only while clamping width', () => {
     expect(
-      clampNodeRenderSize({ type: 'scene', size: { width: 90, height: 60 } }, { renderHeight: 42 }),
-    ).toEqual({ width: 320, height: 42 });
+      clampNodeRenderSize({ type: 'group', size: { width: 90, height: 60 } }, { renderHeight: 42 }),
+    ).toEqual({ width: 260, height: 42 });
   });
 
   it('normalizes stored node sizes without changing already valid nodes', () => {
-    const validNode = { id: 'shot-valid', type: 'shot', size: { width: 240, height: 180 } };
-    const tinyNode = { id: 'scene-tiny', type: 'scene', size: { width: 90, height: 60 } };
+    const validNode = { id: 'media-valid', type: 'media', size: { width: 240, height: 180 } };
+    const tinyNode = { id: 'group-tiny', type: 'group', size: { width: 90, height: 60 } };
 
     expect(clampNodeStoredSize(validNode)).toBe(validNode);
     expect(clampNodeStoredSize(tinyNode)).toEqual({
-      id: 'scene-tiny',
-      type: 'scene',
-      size: { width: 320, height: 220 },
+      id: 'group-tiny',
+      type: 'group',
+      size: { width: 260, height: 180 },
     });
     expect(clampNodeStoredSizes([validNode, tinyNode])).toEqual([
       validNode,
-      { id: 'scene-tiny', type: 'scene', size: { width: 320, height: 220 } },
+      { id: 'group-tiny', type: 'group', size: { width: 260, height: 180 } },
     ]);
   });
 });

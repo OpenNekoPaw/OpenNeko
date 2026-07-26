@@ -566,17 +566,17 @@ describe('markdown resource rendering presenter', () => {
 
   it('resolves markdown mentions from ambient Canvas nodes', () => {
     const projection = projectMarkdownResourceRendering({
-      markdown: 'Extend @shot-01 with a close-up panel.',
-      ambientNodes: [createAmbientCanvasNode({ nodeId: 'shot-01', type: 'shot' })],
+      markdown: 'Extend @group-01 with a close-up panel.',
+      ambientNodes: [createAmbientCanvasNode({ nodeId: 'group-01', type: 'group' })],
       requireResolvedReferences: true,
     });
 
     expect(projection.status).toBe('ready');
     expect(projection.mentions).toEqual([
       expect.objectContaining({
-        raw: '@shot-01',
+        raw: '@group-01',
         status: 'bound',
-        ref: { kind: 'canvas-node', id: 'shot-01', namespace: 'canvas' },
+        ref: { kind: 'canvas-node', id: 'group-01', namespace: 'canvas' },
       }),
     ]);
   });

@@ -100,8 +100,12 @@ function validateRoot(
   }
 
   for (const field of ['narrative', 'behavior', 'entityGraph', 'memoryGraph']) {
-    if (data[field] !== undefined && !isRecord(data[field])) {
-      errors.push({ field, message: 'must be an object', severity: 'error' });
+    if (data[field] !== undefined) {
+      errors.push({
+        field,
+        message: 'legacy Canvas subsystem state is not allowed in the canonical format',
+        severity: 'error',
+      });
     }
   }
 }
@@ -233,10 +237,10 @@ function validateNode(
     isString(node['type']) &&
     !ALLOWED_NODE_TYPES.has(node['type'])
   ) {
-    warnings.push({
+    errors.push({
       field: `${path}.type`,
       message: `unknown node type: "${node['type']}"`,
-      severity: 'warning',
+      severity: 'error',
     });
   }
 
@@ -309,7 +313,7 @@ function validateConnection(
   connection: unknown,
   path: string,
   errors: ValidationError[],
-  warnings: ValidationError[],
+  _warnings: ValidationError[],
 ): void {
   if (!isRecord(connection)) {
     errors.push({ field: path, message: 'must be an object', severity: 'error' });
@@ -332,16 +336,14 @@ function validateConnection(
   validateConnectionEndpointShape(connection['sourceEndpoint'], `${path}.sourceEndpoint`, errors);
   validateConnectionEndpointShape(connection['targetEndpoint'], `${path}.targetEndpoint`, errors);
 
-  if (connection['type'] !== undefined) {
-    if (!isString(connection['type'])) {
-      errors.push({ field: `${path}.type`, message: 'must be a string', severity: 'error' });
-    } else if (!ALLOWED_CONNECTION_TYPES.has(connection['type'])) {
-      warnings.push({
-        field: `${path}.type`,
-        message: `unknown connection type: "${connection['type']}"`,
-        severity: 'warning',
-      });
-    }
+  if (!isString(connection['type'])) {
+    errors.push({ field: `${path}.type`, message: 'must be a string', severity: 'error' });
+  } else if (!ALLOWED_CONNECTION_TYPES.has(connection['type'])) {
+    errors.push({
+      field: `${path}.type`,
+      message: `unknown connection type: "${connection['type']}"`,
+      severity: 'error',
+    });
   }
 }
 

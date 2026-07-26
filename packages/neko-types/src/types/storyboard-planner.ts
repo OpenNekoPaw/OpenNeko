@@ -1,4 +1,9 @@
-import type { CameraAngle, CameraMovement, ShotCharacter, ShotScale } from './canvas';
+import type {
+  CameraAngle,
+  CameraMovement,
+  ShotCharacter,
+  ShotScale,
+} from './storyboard-cinematography';
 import type { CanvasCreativeScope, CanvasRelatedBoardRef } from './canvas-creative-scope';
 import type {
   StoryboardMediaRef,

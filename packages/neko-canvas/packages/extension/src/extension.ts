@@ -14,17 +14,11 @@ import {
 } from '@neko-canvas/domain';
 import {
   type CanvasCreativeScope,
+  type CanvasImportAssetRequest,
   getPanoramicPreviewRoute,
-  type ApplyCanvasStoryboardOptions,
-  type CanvasStoryboardExecutionSummary,
-  type CanvasStoryboardExecutionSummaryRequest,
-  type CanvasStoryboardPayload,
-  type CreatedCanvasStoryboard,
-  type CreativeAiApplyRequest,
   type DocumentArchiveResourceRef,
   type CanvasMarkdownCapabilityInput,
   type ResourceRef,
-  type ExternalCreativeAiInvocation,
   CANVAS_WORKSPACE_BOARD_PATH,
   resolveGlobalStorageLayout,
   type LocalMetadataStore,
@@ -54,14 +48,6 @@ import { CanvasOutlineProvider, CanvasStatusBar } from './views';
 import type { NekoCanvasAPI, CanvasConfig } from './api';
 import { createNekoCanvasCapabilityProvider } from './agentCapabilityProvider';
 import { invokeCanvasMarkdownCapability } from './markdownCapabilities';
-import {
-  NARRATIVE_PREVIEW_CONFIG_SECTION,
-  readNarrativePreviewFeatureToggles,
-} from './editor/narrativePreviewFeatureGate';
-import {
-  CANVAS_CREATIVE_AI_INVOKE_EXTERNAL_COMMAND,
-  CanvasCreativeAiApplyAdapter,
-} from './creativeAiCanvasAdapter';
 import { CanvasProjectAuthoringService } from './services/canvasProjectAuthoringService';
 import { WorkspaceBoardProjector } from './services/workspaceBoardProjector';
 import { WorkspaceBoardEditorLeaseOwner } from './services/workspaceBoardEditorLeaseOwner';
@@ -91,7 +77,7 @@ function parseCanvasDocumentUri(documentUri: string | undefined): vscode.Uri | u
  */
 export async function activate(
   context: vscode.ExtensionContext,
-  hostServices?: NekoCanvasHostServices,
+  _hostServices?: NekoCanvasHostServices,
 ): Promise<NekoCanvasAPI> {
   const rootLogger = createVSCodeLogger(
     'Neko Canvas',
@@ -107,17 +93,9 @@ export async function activate(
   logger.info('Activating extension...');
 
   // Create providers
-  const getNarrativePreviewFeatureToggles = () =>
-    readNarrativePreviewFeatureToggles(
-      vscode.workspace.getConfiguration(NARRATIVE_PREVIEW_CONFIG_SECTION),
-    );
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
   const workspaceRoot = workspaceFolder?.uri.fsPath;
-  canvasEditorProvider = await CanvasEditorProvider.create(
-    context,
-    undefined,
-    getNarrativePreviewFeatureToggles,
-  );
+  canvasEditorProvider = await CanvasEditorProvider.create(context);
   canvasProjectAuthoringService = new CanvasProjectAuthoringService({
     context,
     canvasEditorProvider,
@@ -221,11 +199,6 @@ export async function activate(
   canvasEditorProvider.setHeadlessAssetImporter((asset) =>
     canvasProjectAuthoringService.importAsset({ asset }),
   );
-  const creativeAiApplyAdapter = new CanvasCreativeAiApplyAdapter({
-    getNode: (nodeId) => canvasEditorProvider.getNode(nodeId),
-    updateNode: (nodeId, data) => canvasEditorProvider.updateNode(nodeId, data),
-  });
-  canvasEditorProvider.setCreativeAiApplyAdapter(creativeAiApplyAdapter);
   canvasOutlineProvider = new CanvasOutlineProvider();
   canvasStatusBar = new CanvasStatusBar();
 
@@ -286,14 +259,6 @@ export async function activate(
         canvasEditorProvider.updateShape(shapeId, updates),
       deleteShape: (canvasId, shapeId) => canvasEditorProvider.deleteShape(shapeId),
     },
-    storyboard: {
-      import: async (payload, options) => {
-        const created = await importStoryboardToCanvas(payload, options);
-        canvasEditorProvider.reportStoryboardImport(payload, created);
-        return created;
-      },
-      getExecutionSummary: (request) => canvasEditorProvider.getStoryboardExecutionSummary(request),
-    },
     markdown: {
       invoke: async (input) => {
         return invokeCanvasMarkdownCapability(input, {
@@ -302,38 +267,6 @@ export async function activate(
               payload,
               fallbackTitle: createMarkdownCanvasName(input),
             }),
-          createNode: (type, position, data, preset) =>
-            canvasProjectAuthoringService
-              .createNode({
-                node: { type, position, data, preset },
-                fallbackTitle: createMarkdownCanvasName(input),
-              })
-              .then((result) => result.nodeId),
-          updateNode: (nodeId, data) => canvasEditorProvider.updateNode(nodeId, data),
-          createComposite: (request) =>
-            canvasProjectAuthoringService.createComposite({
-              request,
-              fallbackTitle: createCompositeCanvasName(request, createMarkdownCanvasName(input)),
-            }),
-          createStoryboard: (payload, options) =>
-            canvasProjectAuthoringService
-              .createStoryboardFromPayload({
-                target: {
-                  title: createStoryboardCanvasName(payload),
-                },
-                payload,
-                startX: options?.startX,
-                startY: options?.startY,
-                workflowPlanId: options?.workflowPlanId,
-              })
-              .then((result) => {
-                if (!result.storyboard) {
-                  throw new Error(
-                    'Headless storyboard Markdown creation did not return storyboard results.',
-                  );
-                }
-                return { ...result.storyboard, documentUri: result.documentUri };
-              }),
         });
       },
     },
@@ -353,9 +286,9 @@ export async function activate(
       list: (type) => canvasEditorProvider.listNodes(type),
       get: (nodeId) => canvasEditorProvider.getNode(nodeId),
       update: (nodeId, data) => canvasEditorProvider.updateNode(nodeId, data),
-      create: async (type, position, data, preset) => {
+      create: async (type, position, data) => {
         const result = await canvasProjectAuthoringService.createNode({
-          node: { type, position, data: data as Record<string, unknown>, preset },
+          node: { type, position, data: data as Record<string, unknown> },
         });
         return result.nodeId;
       },
@@ -367,9 +300,6 @@ export async function activate(
       extractStructuredContent: (request) => canvasEditorProvider.extractStructuredContent(request),
       getActiveContext: (request) => canvasEditorProvider.getActiveContext(request),
       applyAgentContent: (payload) => canvasProjectAuthoringService.applyAgentContent({ payload }),
-      generateImage: (nodeId, childNodeId) =>
-        canvasEditorProvider.generateImageForNode(nodeId, childNodeId),
-      generateBatch: (nodeIds) => canvasEditorProvider.generateBatchForNodes(nodeIds),
       onSelectionChange: canvasEditorProvider.onSelectionChange,
     },
     projections: {
@@ -383,30 +313,11 @@ export async function activate(
   };
 
   // Register commands
-  registerCommands(
-    context,
-    api.storyboard.getExecutionSummary,
-    getNarrativePreviewFeatureToggles,
-    creativeAiApplyAdapter,
-  );
-
-  // Register plugin slash commands into neko-agent chat panel
-  registerAgentSlashCommands(context);
+  registerCommands(context);
 
   logger.info('Extension activated');
 
-  const capabilityProvider = createNekoCanvasCapabilityProvider(api, {
-    ...(hostServices?.purposeGenerationJobs
-      ? { generationJobs: hostServices.purposeGenerationJobs }
-      : {}),
-  });
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      CANVAS_CREATIVE_AI_INVOKE_EXTERNAL_COMMAND,
-      (invocation: ExternalCreativeAiInvocation) =>
-        capabilityProvider.executeCanvasCreativeAiInvocation(invocation),
-    ),
-  );
+  const capabilityProvider = createNekoCanvasCapabilityProvider(api);
   void registerOptionalAgentCapabilityProvider(capabilityProvider).catch((error: unknown) =>
     handleError(error),
   );
@@ -429,11 +340,11 @@ function getCanvasTemplate(
   name: string,
   options: {
     readonly creativeScope?: CanvasCreativeScope;
-    readonly relatedBoards?: CanvasStoryboardPayload['relatedBoards'];
+    readonly relatedBoards?: CanvasConfig['relatedBoards'];
   } = {},
 ): string {
   const data = {
-    version: '2.1',
+    version: '3.0',
     name,
     viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
     nodes: [],
@@ -447,14 +358,7 @@ function getCanvasTemplate(
 /**
  * Register extension commands
  */
-function registerCommands(
-  context: vscode.ExtensionContext,
-  getExecutionSummary: (
-    request?: CanvasStoryboardExecutionSummaryRequest,
-  ) => Promise<CanvasStoryboardExecutionSummary>,
-  getNarrativePreviewFeatureToggles: () => ReturnType<typeof readNarrativePreviewFeatureToggles>,
-  creativeAiApplyAdapter: CanvasCreativeAiApplyAdapter,
-): void {
+function registerCommands(context: vscode.ExtensionContext): void {
   // New Canvas - create file with inline rename.
   context.subscriptions.push(
     vscode.commands.registerCommand('neko.canvas.new', async (uri?: vscode.Uri) => {
@@ -500,13 +404,33 @@ function registerCommands(
           );
           return;
         }
+        const { type: requestedType, ...assetWithoutType } = asset;
+        if (
+          requestedType !== undefined &&
+          requestedType !== 'image' &&
+          requestedType !== 'audio' &&
+          requestedType !== 'video'
+        ) {
+          void handleError(
+            new Error(`neko.canvas.importAsset: unsupported media type ${requestedType}`),
+            {
+              showToUser: true,
+              severity: 'warning',
+            },
+          );
+          return;
+        }
+        const request: CanvasImportAssetRequest = {
+          ...assetWithoutType,
+          ...(requestedType ? { type: requestedType } : {}),
+        };
 
-        const result = await canvasProjectAuthoringService.importAsset({ asset });
+        const result = await canvasProjectAuthoringService.importAsset({ asset: request });
 
         const source =
-          asset.path ??
-          asset.resourceRef?.id ??
-          asset.documentResourceRef?.entryPath ??
+          request.path ??
+          request.resourceRef?.id ??
+          request.documentResourceRef?.entryPath ??
           'linked-resource';
         getRootLogger().info(
           `importAsset: created media node ${result.nodeId} in ${result.documentUri} from ${source} (${result.mediaType})`,
@@ -516,30 +440,7 @@ function registerCommands(
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'neko.canvas.getStoryboardExecutionSummary',
-      async (request?: CanvasStoryboardExecutionSummaryRequest) =>
-        getExecutionSummary(request ?? {}),
-    ),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'neko.canvas.creativeAi.apply',
-      async (request: CreativeAiApplyRequest) => creativeAiApplyAdapter.apply(request),
-    ),
-  );
-
-  context.subscriptions.push(
     vscode.commands.registerCommand('neko.canvas.revealPlaybackWorkspace', async () => {
-      if (!getNarrativePreviewFeatureToggles().preview) {
-        await handleError(new Error('Canvas Playback Workspace is disabled by configuration.'), {
-          showToUser: true,
-          severity: 'warning',
-        });
-        return;
-      }
-
       const revealed = await canvasEditorProvider.revealPlaybackWorkspace();
       if (!revealed) {
         await handleError(new Error('Open a Canvas editor before revealing Playback Workspace.'), {
@@ -549,18 +450,6 @@ function registerCommands(
       }
     }),
   );
-  context.subscriptions.push(
-    vscode.commands.registerCommand('neko.canvas.openNarrativePreview', async () => {
-      await vscode.commands.executeCommand('neko.canvas.revealPlaybackWorkspace');
-    }),
-  );
-  context.subscriptions.push(
-    vscode.commands.registerCommand('neko.canvas.refreshNarrativePreview', () => {
-      if (!getNarrativePreviewFeatureToggles().preview) return false;
-      return canvasEditorProvider.refreshNarrativePreview();
-    }),
-  );
-
   // Canvas keyboard shortcuts - forwarded to webview
   const keyboardActions = [
     'neko.canvas.deleteSelected',
@@ -572,7 +461,6 @@ function registerCommands(
     'neko.canvas.cut',
     'neko.canvas.paste',
     'neko.canvas.duplicate',
-    'neko.canvas.generateSelected',
   ];
   for (const commandId of keyboardActions) {
     const action = commandId.replace('neko.canvas.', '');
@@ -603,26 +491,6 @@ function registerCommands(
           'selectConnection:' + connectionId,
           parseCanvasDocumentUri(documentUri),
         );
-      },
-    ),
-  );
-
-  // Outline context-menu: detach shot from scene
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'neko.canvas.detachShotFromScene',
-      (element?: {
-        kind?: string;
-        node?: { id: string };
-        parentSceneId?: string;
-        documentUri?: string;
-      }) => {
-        if (element?.kind === 'shot-child' && element.node?.id && element.parentSceneId) {
-          canvasEditorProvider.postKeyboardAction(
-            `detachShot:${element.node.id}:${element.parentSceneId}`,
-            parseCanvasDocumentUri(element.documentUri),
-          );
-        }
       },
     ),
   );
@@ -674,74 +542,9 @@ function registerCommands(
   );
 }
 
-async function importStoryboardToCanvas(
-  payload: CanvasStoryboardPayload,
-  options?: ApplyCanvasStoryboardOptions,
-): Promise<CreatedCanvasStoryboard> {
-  const result = await canvasProjectAuthoringService.createStoryboardFromPayload({
-    target: {
-      title: createStoryboardCanvasName(payload),
-    },
-    payload,
-    startX: options?.startX,
-    startY: options?.startY,
-    workflowPlanId: options?.workflowPlanId,
-  });
-  if (!result.storyboard) {
-    throw new Error('Headless storyboard import did not return created scene/shot results.');
-  }
-  return result.storyboard;
-}
-
-function isStoryboardMarkdownInput(input: CanvasMarkdownCapabilityInput): boolean {
-  return (
-    input.capabilityId === 'canvas.createStoryboardFromMarkdown' ||
-    ('profileHint' in input && input.profileHint?.toLowerCase() === 'storyboard')
-  );
-}
-
-function createStoryboardCanvasName(payload: CanvasStoryboardPayload): string {
-  const scopeTitle = payload.creativeScope?.title?.trim();
-  const firstSceneTitle = payload.scenes[0]?.sceneTitle;
-  const multiSceneTitle =
-    payload.scenes.length > 1
-      ? (payload.creativeScope?.sequenceId ??
-        payload.creativeScope?.episodeId ??
-        payload.creativeScope?.workId ??
-        'Storyboard Sequence')
-      : undefined;
-  const sourceTitle =
-    scopeTitle || multiSceneTitle || firstSceneTitle?.trim() || 'Agent Storyboard';
-  return sanitizeCanvasFileName(sourceTitle).slice(0, 80) || 'Agent Storyboard';
-}
-
 function createMarkdownCanvasName(input: CanvasMarkdownCapabilityInput): string {
-  const tableTitle =
-    input.capabilityId === 'canvas.createTableFromMarkdown' ? input.tableTitle?.trim() : '';
   const sourceTitle = 'title' in input ? input.title?.trim() : '';
-  const profileHint = 'profileHint' in input ? input.profileHint?.trim() : '';
-  const fallbackTitle = isStoryboardMarkdownInput(input) ? 'Agent Storyboard' : 'Agent Canvas';
-  return sanitizeCanvasFileName(sourceTitle || tableTitle || profileHint || fallbackTitle).slice(
-    0,
-    80,
-  );
-}
-
-function createCompositeCanvasName(
-  request: { readonly data?: Readonly<Record<string, unknown>> },
-  defaultName: string,
-): string {
-  const data = request.data ?? {};
-  const title =
-    asTrimmedString(data['sceneTitle']) ??
-    asTrimmedString(data['label']) ??
-    asTrimmedString(data['title']) ??
-    defaultName;
-  return sanitizeCanvasFileName(title).slice(0, 80) || defaultName;
-}
-
-function asTrimmedString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  return sanitizeCanvasFileName(sourceTitle || 'Agent Canvas').slice(0, 80);
 }
 
 function sanitizeCanvasFileName(value: string): string {
@@ -759,8 +562,10 @@ async function createCanvas(config: CanvasConfig): Promise<string> {
   if (!folders || folders.length === 0) {
     throw new Error('No workspace folder open');
   }
+  const [folder] = folders;
+  if (!folder) throw new Error('No workspace folder open');
 
-  const canvasFile = await createAvailableCanvasFilePath(folders[0].uri.fsPath, config.name);
+  const canvasFile = await createAvailableCanvasFilePath(folder.uri.fsPath, config.name);
   const content = getCanvasTemplate(config.name, {
     creativeScope: config.creativeScope,
     relatedBoards: config.relatedBoards,
@@ -781,82 +586,6 @@ async function createAvailableCanvasFilePath(folderPath: string, name: string): 
     }
   }
   return path.join(folderPath, `${baseName}-${Date.now()}.nkc`);
-}
-
-/**
- * Register plugin slash commands into the neko-agent chat panel.
- * Uses the `neko.agent.registerSlashCommands` VSCode command API.
- * Also registers the handler commands that neko-agent invokes on selection.
- */
-function registerAgentSlashCommands(context: vscode.ExtensionContext): void {
-  // Register command handlers that neko-agent will call via invokePluginSlashCommand
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'neko.neko-canvas.slashCommand.batch',
-      async (args?: string) => {
-        // Trigger batch image generation for selected shots
-        const nodeIds = (await canvasEditorProvider.listNodes('shot')).map((n) => n.id);
-        if (nodeIds.length === 0) {
-          vscode.window.showInformationMessage(
-            'No shot nodes found. Add shot nodes to the canvas first.',
-          );
-          return;
-        }
-        await canvasEditorProvider.generateBatchForNodes(nodeIds);
-        getRootLogger().info(`/batch: queued ${nodeIds.length} shots`, { args });
-      },
-    ),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      'neko.neko-canvas.slashCommand.export',
-      async (_args?: string) => {
-        // Export storyboard — show quick pick for format
-        const choice = await vscode.window.showQuickPick(
-          [
-            { label: '$(file-pdf) PDF', description: 'Export storyboard as PDF', value: 'pdf' },
-            {
-              label: '$(file-zip) ZIP',
-              description: 'Export shot images as ZIP archive',
-              value: 'zip',
-            },
-          ],
-          { placeHolder: 'Select export format' },
-        );
-        if (!choice) return;
-        await vscode.commands.executeCommand('neko.canvas.exportStoryboard', choice.value);
-      },
-    ),
-  );
-
-  // Register the slash commands with neko-agent (fires after agent extension activates)
-  const doRegister = () => {
-    vscode.commands
-      .executeCommand('neko.agent.registerSlashCommands', 'neko.neko-canvas', [
-        {
-          id: 'batch',
-          name: '/batch',
-          description: 'Batch generate images for all shot nodes',
-          icon: '🖼️',
-        },
-        {
-          id: 'export',
-          name: '/export',
-          description: 'Export storyboard to PDF or ZIP',
-          icon: '📦',
-        },
-      ])
-      .then(undefined, () => {
-        // neko-agent not installed — silently ignore
-      });
-  };
-
-  // Try immediately (agent may already be active)
-  doRegister();
-
-  // Re-register if extensions change (late activation of neko-agent)
-  context.subscriptions.push(vscode.extensions.onDidChange(doRegister));
 }
 
 /**

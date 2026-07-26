@@ -5,7 +5,7 @@ import { resolveCanvasRenderRefreshDecision } from './renderRefreshTiering';
 function createNodes(count: number): CanvasNode[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `node-${index}`,
-    type: 'annotation',
+    type: 'markdown',
     position: { x: index * 10, y: 0 },
     size: { width: 120, height: 80 },
     zIndex: index,

@@ -85,9 +85,10 @@ function canvas(nodes: CanvasNode[]): CanvasData {
 function node(id: string): CanvasNode {
   return {
     id,
-    type: 'annotation',
+    type: 'markdown',
     position: { x: 0, y: 0 },
     size: { width: 240, height: 160 },
-    data: {},
+    zIndex: 0,
+    data: { content: '' },
   };
 }

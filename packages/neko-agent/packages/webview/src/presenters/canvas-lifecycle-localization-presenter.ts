@@ -59,15 +59,10 @@ export function formatCanvasLifecycleDiagnosticMessage(
 }
 
 export function formatCanvasLifecycleActionLabel(
-  t: ChatTranslation,
+  _t: ChatTranslation,
   action: Pick<AgentCapabilityAction, 'actionId'>,
 ): string {
-  switch (action.actionId) {
-    case 'create-storyboard-nodes':
-      return t('chat.canvasLifecycle.action.createStoryboardNodes');
-    default:
-      return action.actionId;
-  }
+  return action.actionId;
 }
 
 export function formatCanvasLifecycleArtifactRef(ref: AgentCapabilityArtifactRef): string {
@@ -114,18 +109,6 @@ const CANVAS_LIFECYCLE_DIAGNOSTIC_MESSAGE_KEY_BY_CODE: Record<string, string> = 
     'chat.canvasLifecycle.diagnostic.canvasMarkdownRuntimeResourcePath',
   'canvas-markdown-runtime-resource-token':
     'chat.canvasLifecycle.diagnostic.canvasMarkdownRuntimeResourceToken',
-  'canvas-storyboard-profile-create-approval-required':
-    'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardCreateApprovalRequired',
-  'canvas-storyboard-profile-create-not-confirmed':
-    'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardCreateNotConfirmed',
-  'canvas-storyboard-profile-next-action-missing':
-    'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardNextActionMissing',
-  'canvas-storyboard-profile-no-production-rows':
-    'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardNoProductionRows',
-  'canvas-storyboard-profile-visual-column-required':
-    'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardVisualColumnRequired',
-  'canvas-storyboard-profile-visual-or-prompt-missing':
-    'chat.canvasLifecycle.diagnostic.canvasMarkdownStoryboardVisualOrPromptMissing',
   'canvas-markdown-table-empty': 'chat.canvasLifecycle.diagnostic.canvasMarkdownTableEmpty',
   'canvas-markdown-table-missing': 'chat.canvasLifecycle.diagnostic.canvasMarkdownTableMissing',
   'canvas-markdown-table-profile-unknown-column':

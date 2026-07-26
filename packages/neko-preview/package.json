@@ -36,9 +36,7 @@
     "workspace"
   ],
   "activationEvents": [
-    "onCommand:neko.preview.revealDocumentLocator",
-    "onCommand:neko.preview.openThreeReferenceGuide",
-    "onCustomEditor:neko.modelPreview"
+    "onCommand:neko.preview.revealDocumentLocator"
   ],
   "main": "./dist/extension.js",
   "contributes": {

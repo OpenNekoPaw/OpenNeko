@@ -10,6 +10,7 @@ import { toCodiconClassName } from '@neko/ui/icons';
 import { BaseNode } from './BaseNode';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { t } from '../../i18n';
+import type { ConnectionDragTargetState } from '../../hooks/useConnectionDrag';
 
 export interface GroupNodeProps {
   node: GroupCanvasNode;
@@ -31,6 +32,8 @@ export interface GroupNodeProps {
     position: { x: number; y: number },
   ) => void;
   onConnectionStart?: (nodeId: string, anchor: string, e: React.MouseEvent) => void;
+  isConnecting?: boolean;
+  connectionTargetState?: ConnectionDragTargetState | null;
   onUpdateData?: (nodeId: string, data: Record<string, unknown>) => void;
 }
 
@@ -46,6 +49,8 @@ export function GroupNode({
   onResize,
   onResizeEnd,
   onConnectionStart,
+  isConnecting,
+  connectionTargetState,
   onUpdateData,
 }: GroupNodeProps) {
   const setGroupCollapsed = useCanvasStore((state) => state.setGroupCollapsed);
@@ -87,6 +92,8 @@ export function GroupNode({
       onResize={onResize}
       onResizeEnd={onResizeEnd}
       onConnectionStart={onConnectionStart}
+      isConnecting={isConnecting}
+      connectionTargetState={connectionTargetState}
       className="group-node"
       autoSizeContent={false}
       presentation="spatial-container"

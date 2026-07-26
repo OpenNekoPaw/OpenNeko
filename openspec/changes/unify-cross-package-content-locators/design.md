@@ -18,13 +18,13 @@ manager.
 
 ### Five-layer analysis
 
-| Layer | Decision |
-| --- | --- |
-| Responsibility | Domain IDs own semantic identity; `ContentLocator` owns portable location/revision; Host ports own physical resolution and materialization; caller UI owns only presentation state. |
-| Dependency | Agent, Generation, Canvas, and Board depend on shared locator contracts. Host adapters depend on filesystem/Webview/provider/Engine APIs. Shared contracts never depend on those runtimes. |
-| Interface | Durable DTOs carry `ContentLocator` directly. Data-plane execution types carry bytes/base64/opaque handles and cannot be encoded as Job, Timeline, Board, or project facts. |
-| Extension | New durable source kinds extend the closed `ContentLocator` union with validation and a Host handler. New runtime consumers receive a narrow injected projection port. |
-| Testing | Contract validators, codec poison tests, producer/consumer path assertions, generated-output commit tests, and Extension Webview scenarios prove both result and canonical path. |
+| Layer          | Decision                                                                                                                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Responsibility | Domain IDs own semantic identity; `ContentLocator` owns portable location/revision; Host ports own physical resolution and materialization; caller UI owns only presentation state.        |
+| Dependency     | Agent, Generation, Canvas, and Board depend on shared locator contracts. Host adapters depend on filesystem/Webview/provider/Engine APIs. Shared contracts never depend on those runtimes. |
+| Interface      | Durable DTOs carry `ContentLocator` directly. Data-plane execution types carry bytes/base64/opaque handles and cannot be encoded as Job, Timeline, Board, or project facts.                |
+| Extension      | New durable source kinds extend the closed `ContentLocator` union with validation and a Host handler. New runtime consumers receive a narrow injected projection port.                     |
+| Testing        | Contract validators, codec poison tests, producer/consumer path assertions, generated-output commit tests, and Extension Webview scenarios prove both result and canonical path.           |
 
 ## Goals / Non-Goals
 
@@ -149,8 +149,10 @@ fallback. Agent, Canvas, and other embedded features must not become unavailable
 rebuildable projection row requires migration. The product Host owns the generated-output index and
 injects a read-only generated-asset catalog into embedded Agent consumers. An embedded feature must
 not open a second LocalMetadata projection binding or independently reapply rejection policy.
-Standalone Agent development may create and dispose its own binding because no product Host catalog
-exists in that mode.
+The standalone Agent Extension Host may create and dispose its own binding because no product Host
+catalog exists in that mode, but its startup composition must select the same preserve-and-report
+policy, aggregate the rejected rows into a visible diagnostic, and continue activating with the
+remaining canonical projections.
 
 ### 7. `ResourceRef` remains internal only where it models rebuildable representations
 

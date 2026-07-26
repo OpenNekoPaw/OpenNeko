@@ -25,10 +25,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: path.resolve(__dirname, 'index.html'),
-        'narrative-preview-media-runtime': path.resolve(
-          __dirname,
-          'src/preview/narrativePreviewMediaRuntime.ts',
-        ),
       },
       output: {
         entryFileNames: (chunkInfo) =>

@@ -200,10 +200,9 @@ const config: KnipConfig = {
     'packages/neko-agent/test-utils': {},
     'packages/neko-canvas/packages/extension': {},
     'packages/neko-canvas/packages/webview': {
-      entry: ['src/host-adapter/index.tsx', 'src/preview/narrativePreviewMediaRuntime.ts'],
+      entry: ['src/host-adapter/index.tsx'],
       ignore: [
         // Barrel exports
-        'src/types/index.ts',
         'src/utils/index.ts',
         // Used via barrel exports in panels/
         'src/components/panels/PortEditor.tsx',

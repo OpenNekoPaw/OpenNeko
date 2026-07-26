@@ -159,19 +159,6 @@ function projectCanvasMarkdownCapabilityResultContent(
     ? `\n${t('chat.canvasLifecycle.summary.createdNodes', {
         nodes: result.nodeIds.join(', '),
       })}`
-    : result.tableNodeId
-      ? `\n${t('chat.canvasLifecycle.summary.createdTable', { node: result.tableNodeId })}`
-      : '';
-  const actions = result.actions?.length
-    ? [
-        t('chat.canvasLifecycle.summary.availableActions'),
-        ...result.actions.map(
-          (action) =>
-            `- ${formatCanvasLifecycleActionLabel(t, action)} (${
-              action.capabilityId ?? result.capabilityId
-            })`,
-        ),
-      ].join('\n')
     : '';
   const status = message.success ? result.status : 'blocked';
   return [
@@ -181,7 +168,6 @@ function projectCanvasMarkdownCapabilityResultContent(
     }),
     diagnostics ? `${t('chat.canvasLifecycle.summary.diagnostics')}:\n${diagnostics}` : '',
     created.trim(),
-    actions.trim(),
     message.error ? t('chat.canvasLifecycle.summary.error', { error: message.error }) : '',
   ]
     .filter(Boolean)
@@ -241,8 +227,6 @@ function formatCanvasMarkdownCapabilityStatus(
       return t('chat.canvasLifecycle.capabilityStatus.changed');
     case 'validated':
       return t('chat.canvasLifecycle.capabilityStatus.validated');
-    case 'needs-review':
-      return t('chat.canvasLifecycle.capabilityStatus.needs-review');
     case 'blocked':
       return t('chat.canvasLifecycle.capabilityStatus.blocked');
   }

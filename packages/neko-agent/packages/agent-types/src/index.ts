@@ -392,6 +392,7 @@ export type {
   AgentSessionDiagnosticMessage,
   AgentPhaseMessage,
   AgentStateSnapshotMessage,
+  AmbientCanvasNode,
   AmbientCanvasUpdateMessage,
   AgentCapabilityLifecycleResultMessage,
   CompressionErrorMessage,
@@ -479,6 +480,7 @@ export type {
 export type { AgentConfigDiagnostic, AgentConfigDiagnosticCode } from './config-diagnostic';
 export {
   buildAmbientCanvasUpdateMessage,
+  parseAmbientCanvasUpdateNodes,
   buildAgentPhaseMessage,
   buildAgentStateSnapshotMessage,
   buildAgentCapabilityActivationProgressMessage,

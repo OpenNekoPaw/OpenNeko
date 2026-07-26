@@ -6,7 +6,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'node:fs';
 import * as path from 'path';
-import { buildFountainScriptIndex } from '@neko/content';
 import { createNodeDocumentRasterRepresentationGenerator } from '@neko/content/document/node';
 import {
   createDocumentResourceRefFromArchiveRef,
@@ -35,17 +34,14 @@ import {
   type PreviewVariantResourceApi,
 } from '@neko/shared/vscode/extension';
 import {
-  createCanvasStoryboardExecutionSummary,
   getPanoramicPreviewRoute,
-  inferCanvasDocumentType,
   inferCanvasDroppedAssetKind,
   inferCanvasMediaType,
-  inferCanvasModelType,
   inferCanvasTextFileFormat,
-  inferNkProjectType,
   isDocumentArchiveResourceRef,
   isResourceRef,
   isDocumentResourceStatusReason,
+  isCanvasConnectionType,
   isCanvasNodeType,
   isProjectedCanvasData,
   isProjectedCanvasSource,
@@ -57,7 +53,7 @@ import {
   createProjectionAdapterRegistry,
   NEKO_EXTENSION_IDS,
   isNekoMediaRepresentationAPI,
-  normalizeNarrativePreviewFeatureToggles,
+  createCanvasPlaybackPlan,
   PathResolver,
   resolveEffectiveCanvasPlaybackRoutes,
   contractWorkspaceMediaPath,
@@ -69,16 +65,10 @@ import {
   type ProjectSourceAddRequest,
   type ProjectSourceAddResult,
   resolveWorkspaceMediaPath,
-  summarizeCanvasSubsystems,
-  validateCanvasStoryboardActionIntent,
   validateCanvasBoardRef,
-  isCanvasCreativeAiActionId,
-  isCanvasStoryboardPromptState,
   isCanvasTextDocumentReadRequest,
-  createCreativeAiDiagnostic,
 } from '@neko/shared';
 import type {
-  CanvasCreativeAiActionId,
   CanvasCutDraftPayload,
   CanvasPlaybackPlan,
   CanvasPlaybackRouteCandidate,
@@ -95,7 +85,7 @@ import type {
   CanvasExtractStructuredContentRequest,
   CanvasExtractStructuredContentResult,
   CanvasData,
-  CanvasBoardSummary,
+  CanvasSerializableValue,
   CanvasBoardRef,
   CanvasCreativeScope,
   CanvasNode,
@@ -107,15 +97,6 @@ import type {
   ContentRepresentationSpec,
   CanvasUpdateBlockRequest,
   CanvasUpdateBlockResult,
-  CreativeEntityChangedRef,
-  CanvasStoryboardExecutionSummary,
-  CanvasStoryboardExecutionSummaryRequest,
-  CanvasStoryboardActionIntent,
-  CanvasStoryboardPayload,
-  CanvasRelatedBoardRef,
-  CreatedCanvasStoryboard,
-  ExternalCreativeAiInvocation,
-  CreativeAiDiagnostic,
   CanvasAgentActiveContextRequest,
   CanvasAgentActiveContextResult,
   CanvasAgentApplyContentResult,
@@ -136,13 +117,8 @@ import type {
   ProjectFileDiagnostic,
   ProjectFileSaveReason,
   NekoMediaRepresentationAPI,
-  FountainScriptIndex,
-  NarrativePreviewFeatureToggles,
   ResourceRef,
   ResourceVariantRole,
-  ScriptScene,
-  NarrativeGraphSnapshot,
-  PreviewToCanvasMessage,
   CanvasTextDocumentReadResult,
 } from '@neko/shared';
 import type { CanvasChangeEvent, ShapeConfig } from '../api';
@@ -158,44 +134,21 @@ import {
 } from '../services/documentEntryReader';
 import { readCanvasTextDocumentProjection } from '../services/textDocumentProjection';
 import { resolveCanvasPickerAssetKind } from '../services/canvasSourceSelection';
-import {
-  createCanvasPlaybackPlanFromCanvasData,
-  createNarrativeGraphSnapshotFromCanvasData,
-  NarrativePreviewBridge,
-} from './narrativePreviewBridge';
-import { handleCanvasEntityRoute, isCanvasEntityRouteMessage } from './canvasEntityRoutes';
+import { parseCanvasPreviewDelegateRequest } from './previewDelegateMessage';
 import { selectCanvasPlaybackTracks } from './canvasMediaPlaybackPolicy';
-import {
-  applyCandidateEntityBackfill,
-  mergePendingCandidateEntityBackfill,
-  type CanvasEntityBackfillDiagnostic,
-  type CanvasEntityPendingBackfill,
-} from './canvasEntityBackfill';
-import {
-  CanvasCreativeAiApplyAdapter,
-  buildCanvasCreativeActionExternalInvocation,
-  CANVAS_CREATIVE_AI_INVOKE_EXTERNAL_COMMAND,
-  createCanvasDocumentRevision,
-  type CanvasCreativeAiHostInvocationResult,
-  type CanvasCreativeAiDocumentIdentity,
-} from '../creativeAiCanvasAdapter';
 import {
   applyCanvasContentNodeDelta,
   assertCanvasDocumentSnapshotBoundary,
 } from './canvasDocumentSnapshotBoundary';
-import {
-  projectCanvasContentLocatorRuntimeState,
-  stripCanvasContentLocatorRuntimeState,
-} from './canvasContentLocatorBoundary';
 
 const logger = getLogger('CanvasEditorProvider');
 const CANVAS_KEYBOARD_OWNER_PREFIX = 'neko.canvasEditor:';
 const PREVIEW_RESOURCE_VARIANT_TIMEOUT_MS = 4500;
+const CANVAS_MEDIA_LOOPBACK_SOURCE = 'http://127.0.0.1:*';
 const CANVAS_PREVIEW_SEMANTIC_FINGERPRINT_KEYS = [
   'name',
   'nodes',
   'connections',
-  'narrative',
   'projectionStatus',
 ] as const;
 const CANVAS_EDITOR_LEVEL_KEYBOARD_ACTIONS = new Set([
@@ -210,15 +163,13 @@ const CANVAS_EDITOR_LEVEL_KEYBOARD_ACTIONS = new Set([
   'pasteInPlace',
   'duplicate',
   'resetZoom',
-  'generateSelected',
 ]);
 
 type CanvasHeadlessAssetImporter = (
   asset: CanvasImportAssetRequest,
 ) => Promise<CanvasImportAssetResult>;
 
-type CanvasPlaybackPreviewSourceKind =
-  'generated-image' | 'generated-media' | 'reference-image' | 'source-media' | 'media-asset';
+type CanvasPlaybackPreviewSourceKind = 'media-asset';
 
 interface CanvasPlaybackPreviewSourceProjection {
   readonly url: string;
@@ -280,12 +231,24 @@ interface CanvasPlaybackWorkspaceRevealRequest {
   readonly unitId?: string;
 }
 
-function isCanvasEditorLevelKeyboardAction(action: string): boolean {
+export function isCanvasEditorLevelKeyboardAction(action: string): boolean {
   return CANVAS_EDITOR_LEVEL_KEYBOARD_ACTIONS.has(action);
 }
 
-function readPlaybackMediaType(value: unknown): PlaybackMediaType {
+export function readPlaybackMediaType(value: unknown): PlaybackMediaType {
   return value === 'video' || value === 'audio' ? value : 'auto';
+}
+
+export function createCanvasWebviewContentSecurityPolicy(cspSource: string, nonce: string): string {
+  return [
+    "default-src 'none'",
+    `style-src ${cspSource} 'unsafe-inline'`,
+    `script-src 'nonce-${nonce}'`,
+    `img-src ${cspSource} data: blob: https:`,
+    `font-src ${cspSource}`,
+    `media-src ${cspSource} data: blob: https: ${CANVAS_MEDIA_LOOPBACK_SOURCE}`,
+    `connect-src ws://127.0.0.1:* ${CANVAS_MEDIA_LOOPBACK_SOURCE}`,
+  ].join('; ');
 }
 
 function projectCanvasMediaInfo(probe: MediaProbe): CanvasMediaInfo {
@@ -354,7 +317,7 @@ function finitePlaybackNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }
 
-function isWorkspaceScopedVariablePath(value: string): boolean {
+export function isWorkspaceScopedVariablePath(value: string): boolean {
   return (
     value === '${WORKSPACE}' ||
     value.startsWith('${WORKSPACE}/') ||
@@ -382,32 +345,96 @@ function requestCanvasProjectSnapshot(
   });
 }
 
-function assertCanvasNodeType(type: CanvasNodeType | undefined): void {
+export function assertCanvasNodeType(type: CanvasNodeType | undefined): void {
   if (type !== undefined && !isCanvasNodeType(type)) {
     throw new Error(`Unsupported Canvas node type "${type}"`);
   }
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
-function isCanvasDataSnapshot(value: Record<string, unknown>): value is CanvasData {
+export function requireCanvasSerializableValue(
+  value: unknown,
+  label: string,
+): CanvasSerializableValue {
+  if (isCanvasSerializableValue(value)) return value;
+  throw new Error(`${label} is not Canvas-serializable.`);
+}
+
+export function isCanvasSerializableValue(value: unknown): value is CanvasSerializableValue {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'boolean' ||
+    (typeof value === 'number' && Number.isFinite(value))
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) return value.every(isCanvasSerializableValue);
+  return isPlainRecord(value) && Object.values(value).every(isCanvasSerializableValue);
+}
+
+export function isCanvasDataSnapshot(value: unknown): value is CanvasData {
+  if (!isPlainRecord(value)) return false;
   return (
     typeof value['version'] === 'string' &&
     typeof value['name'] === 'string' &&
     Array.isArray(value['nodes']) &&
-    Array.isArray(value['connections'])
+    value['nodes'].every(isCanonicalCanvasNodeSnapshot) &&
+    Array.isArray(value['connections']) &&
+    value['connections'].every(isCanonicalCanvasConnectionSnapshot)
   );
 }
 
-function isStringArray(value: unknown): value is string[] {
+function isCanonicalCanvasNodeSnapshot(value: unknown): value is CanvasNode {
+  if (!isPlainRecord(value) || !isCanvasNodeType(value['type'])) return false;
+  const position = value['position'];
+  const size = value['size'];
+  return (
+    typeof value['id'] === 'string' &&
+    isPlainRecord(value['data']) &&
+    isPlainRecord(position) &&
+    typeof position['x'] === 'number' &&
+    Number.isFinite(position['x']) &&
+    typeof position['y'] === 'number' &&
+    Number.isFinite(position['y']) &&
+    isPlainRecord(size) &&
+    typeof size['width'] === 'number' &&
+    Number.isFinite(size['width']) &&
+    typeof size['height'] === 'number' &&
+    Number.isFinite(size['height']) &&
+    typeof value['zIndex'] === 'number' &&
+    Number.isFinite(value['zIndex'])
+  );
+}
+
+function isCanonicalCanvasConnectionSnapshot(value: unknown): boolean {
+  return (
+    isPlainRecord(value) &&
+    typeof value['id'] === 'string' &&
+    typeof value['sourceId'] === 'string' &&
+    typeof value['targetId'] === 'string' &&
+    isCanvasConnectionType(value['type']) &&
+    isPlainRecord(value['sourceEndpoint']) &&
+    value['sourceEndpoint']['nodeId'] === value['sourceId'] &&
+    isPlainRecord(value['targetEndpoint']) &&
+    value['targetEndpoint']['nodeId'] === value['targetId']
+  );
+}
+
+export function isStringArray(value: unknown): value is string[] {
   return (
     Array.isArray(value) && value.every((entry) => typeof entry === 'string' && entry.length > 0)
   );
 }
 
-function normalizeCanvasAssetPreviewBindings(value: unknown, bindingPath: string): void {
+export function normalizeCanvasAssetPreviewBindings(value: unknown, bindingPath: string): void {
   if (Array.isArray(value)) {
     value.forEach((item) => normalizeCanvasAssetPreviewBindings(item, bindingPath));
     return;
@@ -431,7 +458,9 @@ function normalizeCanvasAssetPreviewBindings(value: unknown, bindingPath: string
   }
 }
 
-function createCanvasPreviewSemanticFingerprint(canvasData: Record<string, unknown>): string {
+export function createCanvasPreviewSemanticFingerprint(
+  canvasData: Record<string, unknown>,
+): string {
   const previewState: Record<string, unknown> = {};
   for (const key of CANVAS_PREVIEW_SEMANTIC_FINGERPRINT_KEYS) {
     previewState[key] = canvasData[key];
@@ -439,7 +468,7 @@ function createCanvasPreviewSemanticFingerprint(canvasData: Record<string, unkno
   return stableCanvasPreviewStringify(previewState);
 }
 
-function stableCanvasPreviewStringify(value: unknown): string {
+export function stableCanvasPreviewStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value) ?? 'undefined';
   }
@@ -454,7 +483,7 @@ function stableCanvasPreviewStringify(value: unknown): string {
     .join(',')}}`;
 }
 
-function resolveCanvasPreviewVariantRole(
+export function resolveCanvasPreviewVariantRole(
   resourceRef: ResourceRef,
   preferredRole: ResourceVariantRole | undefined,
 ): ResourceVariantRole {
@@ -490,7 +519,7 @@ function resolveCanvasPreviewVariantRole(
   return preferredRole ?? 'thumbnail';
 }
 
-function createCanvasRepresentationSpec(
+export function createCanvasRepresentationSpec(
   role: ResourceVariantRole,
 ): ContentRepresentationSpec | undefined {
   switch (role) {
@@ -517,13 +546,13 @@ function createCanvasRepresentationSpec(
   }
 }
 
-function inferCanvasRepresentationMimeType(spec: ContentRepresentationSpec): string {
+export function inferCanvasRepresentationMimeType(spec: ContentRepresentationSpec): string {
   if (spec.kind === 'proxy') return 'application/octet-stream';
   const format = 'format' in spec ? spec.format : undefined;
   return format === 'png' ? 'image/png' : format === 'webp' ? 'image/webp' : 'image/jpeg';
 }
 
-function readCanvasPreviewVariantLocalPath(value: string | undefined): string | undefined {
+export function readCanvasPreviewVariantLocalPath(value: string | undefined): string | undefined {
   if (!value || /^(?:https?|data|blob):/iu.test(value)) return undefined;
   if (!value.startsWith('file://')) return value;
   try {
@@ -533,36 +562,9 @@ function readCanvasPreviewVariantLocalPath(value: string | undefined): string | 
   }
 }
 
-function readCanvasSubsystemSummary(
+export function readCanvasProjectionSummary(
   canvasData: Record<string, unknown>,
-  nodes: readonly unknown[],
 ): string | undefined {
-  const reportedStatus = canvasData._subsystemStatus;
-  if (
-    reportedStatus &&
-    typeof reportedStatus === 'object' &&
-    !Array.isArray(reportedStatus) &&
-    Array.isArray((reportedStatus as { activeSubsystems?: unknown }).activeSubsystems)
-  ) {
-    const activeSubsystems = (
-      reportedStatus as { activeSubsystems: readonly unknown[] }
-    ).activeSubsystems.filter((item): item is string => typeof item === 'string');
-    return activeSubsystems.length > 0 ? activeSubsystems.join(', ') : undefined;
-  }
-
-  const structurallyTypedNodes = nodes.filter(
-    (node): node is CanvasNode =>
-      typeof node === 'object' &&
-      node !== null &&
-      !Array.isArray(node) &&
-      typeof (node as { type?: unknown }).type === 'string' &&
-      isCanvasNodeType((node as { type: string }).type),
-  );
-  const summary = summarizeCanvasSubsystems({ nodes: structurallyTypedNodes });
-  return summary.activeSubsystems.length > 0 ? summary.activeSubsystems.join(', ') : undefined;
-}
-
-function readCanvasProjectionSummary(canvasData: Record<string, unknown>): string | undefined {
   const projectionStatus = canvasData.projectionStatus;
   if (
     !projectionStatus ||
@@ -581,46 +583,45 @@ function readCanvasProjectionSummary(canvasData: Record<string, unknown>): strin
     : `Projected: ${status.state}`;
 }
 
-function readCanvasBoardSummaryInput(canvasData: Record<string, unknown> | undefined): {
-  readonly boardSummary?: CanvasBoardSummary;
-  readonly creativeScope?: CanvasCreativeScope;
-  readonly relatedBoards?: readonly CanvasRelatedBoardRef[];
+export function readCanonicalCanvasNodePresentation(node: CanvasNode): {
+  readonly label: string;
+  readonly summary: string;
 } {
-  if (!canvasData) return {};
-  const creativeScope = isCanvasCreativeScopeLike(canvasData['creativeScope'])
-    ? (canvasData['creativeScope'] as CanvasCreativeScope)
-    : undefined;
-  const relatedBoards = Array.isArray(canvasData['relatedBoards'])
-    ? (canvasData['relatedBoards'].filter(isCanvasRelatedBoardRefLike) as CanvasRelatedBoardRef[])
-    : undefined;
-  if (!creativeScope && !relatedBoards) return {};
-  const nodes = Array.isArray(canvasData['nodes']) ? canvasData['nodes'] : [];
-  const nodeTypeSummary: Record<string, number> = {};
-  for (const node of nodes) {
-    if (
-      typeof node === 'object' &&
-      node !== null &&
-      !Array.isArray(node) &&
-      typeof (node as { type?: unknown }).type === 'string'
-    ) {
-      const type = (node as { type: string }).type;
-      nodeTypeSummary[type] = (nodeTypeSummary[type] ?? 0) + 1;
-    }
+  switch (node.type) {
+    case 'markdown':
+      return {
+        label: node.data.title ?? 'Markdown',
+        summary: node.data.content.slice(0, 240),
+      };
+    case 'media':
+      return {
+        label: node.data.title ?? (path.basename(node.data.assetPath) || 'Media'),
+        summary: node.data.mediaType ?? 'media',
+      };
+    case 'group':
+      return {
+        label: node.data.label ?? 'Group',
+        summary: `${node.container?.childIds.length ?? 0} items`,
+      };
+    case 'job':
+      return {
+        label: node.data.title,
+        summary: node.data.objective ?? node.data.status,
+      };
+    case 'file':
+      return {
+        label: node.data.title || path.basename(node.data.path) || 'File',
+        summary: node.data.path,
+      };
+    case 'canvas-embed':
+      return {
+        label: node.data.canvasTitle || 'Canvas',
+        summary: node.data.canvasPath,
+      };
   }
-  const boardSummary: CanvasBoardSummary = {
-    name: typeof canvasData['name'] === 'string' ? canvasData['name'] : 'Untitled Canvas',
-    ...(creativeScope ? { scope: creativeScope } : {}),
-    ...(relatedBoards ? { relatedBoards } : {}),
-    ...(Object.keys(nodeTypeSummary).length > 0 ? { nodeTypeSummary } : {}),
-  };
-  return {
-    boardSummary,
-    ...(creativeScope ? { creativeScope } : {}),
-    ...(relatedBoards ? { relatedBoards } : {}),
-  };
 }
 
-function isCanvasCreativeScopeLike(value: unknown): boolean {
+export function isCanvasCreativeScopeLike(value: unknown): boolean {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -629,18 +630,7 @@ function isCanvasCreativeScopeLike(value: unknown): boolean {
   );
 }
 
-function isCanvasRelatedBoardRefLike(value: unknown): boolean {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    typeof (value as { role?: unknown }).role === 'string' &&
-    typeof (value as { ref?: unknown }).ref === 'object' &&
-    (value as { ref?: unknown }).ref !== null
-  );
-}
-
-function readCanvasBoardRef(value: unknown): CanvasBoardRef | undefined {
+export function readCanvasBoardRef(value: unknown): CanvasBoardRef | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
   switch (record['kind']) {
@@ -667,7 +657,7 @@ function readCanvasBoardRef(value: unknown): CanvasBoardRef | undefined {
   }
 }
 
-function isUnsafeCanvasBoardUri(value: string): boolean {
+export function isUnsafeCanvasBoardUri(value: string): boolean {
   const trimmed = value.trim();
   return (
     trimmed.length === 0 ||
@@ -678,7 +668,7 @@ function isUnsafeCanvasBoardUri(value: string): boolean {
   );
 }
 
-function findOpenCanvasDocumentUriByProjectRef(
+export function findOpenCanvasDocumentUriByProjectRef(
   ref: Extract<CanvasBoardRef, { kind: 'project' }>,
   snapshots: ReadonlyMap<string, Record<string, unknown>>,
 ): vscode.Uri | undefined {
@@ -697,11 +687,11 @@ function findOpenCanvasDocumentUriByProjectRef(
   return undefined;
 }
 
-function createProjectionSourceKey(source: ProjectedCanvasSource): string {
+export function createProjectionSourceKey(source: ProjectedCanvasSource): string {
   return `${source.kind}:${source.uri}`;
 }
 
-function hashProjectionSource(value: string): string {
+export function hashProjectionSource(value: string): string {
   let hash = 5381;
   for (let index = 0; index < value.length; index += 1) {
     hash = (hash * 33) ^ value.charCodeAt(index);
@@ -709,7 +699,7 @@ function hashProjectionSource(value: string): string {
   return (hash >>> 0).toString(16);
 }
 
-function readCanvasNodeContainerChildIds(node: Record<string, unknown>): string[] {
+export function readCanvasNodeContainerChildIds(node: Record<string, unknown>): string[] {
   const container = node.container;
   if (typeof container !== 'object' || container === null || Array.isArray(container)) {
     return [];
@@ -721,20 +711,7 @@ function readCanvasNodeContainerChildIds(node: Record<string, unknown>): string[
     : [];
 }
 
-function mapStoryScriptIndexToCanvasScenes(index: FountainScriptIndex | undefined): ScriptScene[] {
-  if (!index) {
-    return [];
-  }
-
-  return Array.from(index.scenes, (scene) => ({
-    id: scene.sceneId,
-    title: scene.sceneTitle || scene.heading,
-    lineStart: scene.line_start,
-    lineEnd: scene.line_end,
-  }));
-}
-
-function mapOperationToCanvasChangeEvent(operation: {
+export function mapOperationToCanvasChangeEvent(operation: {
   type?: string;
   payload?: Record<string, unknown>;
 }): CanvasChangeEvent {
@@ -795,11 +772,11 @@ interface NekoPreviewVariantAPI {
       height?: number;
       format?: 'jpeg' | 'png' | 'webp';
     },
-  ): Promise<{ url?: string }>;
+  ): ReturnType<PreviewVariantResourceApi['requestPreviewVariant']>;
   unregisterPreviewAsset(assetIdOrToken: string): Promise<void>;
 }
 
-function isPreviewVariantAPI(api: unknown): api is NekoPreviewVariantAPI {
+export function isPreviewVariantAPI(api: unknown): api is NekoPreviewVariantAPI {
   const candidate = api as Partial<NekoPreviewVariantAPI> | null;
   return (
     typeof candidate?.registerPreviewAsset === 'function' &&
@@ -842,8 +819,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
   private readonly dirtyCanvasDocumentUris = new Set<string>();
   private readonly canvasPreviewFingerprintsByDocumentUri = new Map<string, string>();
   private readonly canvasDataReadyDocumentUris = new Set<string>();
-  private pendingEntityBackfills: CanvasEntityPendingBackfill[] = [];
-  private readonly narrativePreviewBridge: NarrativePreviewBridge;
 
   // External providers for VSCode integration
   private outlineProvider: CanvasOutlineProvider | undefined;
@@ -874,53 +849,29 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     store: this.projectFileStore,
     sourcePolicy: nkcSourcePathPolicy,
     createSourcePolicyOptions: (uri) => ({
-      context: this.createCanvasProjectFileContext(uri),
+      context: this.createCanvasProjectFileContext(vscode.Uri.file(uri.fsPath)),
     }),
     logger,
   });
   private headlessAssetImporter: CanvasHeadlessAssetImporter | undefined;
-  private creativeAiApplyAdapter: CanvasCreativeAiApplyAdapter | undefined;
 
   private constructor(
     private readonly context: vscode.ExtensionContext,
     focusedWebviews: IFocusedWebviewRegistry = createFocusedWebviewRegistry(),
-    getNarrativePreviewFeatureToggles: () => NarrativePreviewFeatureToggles = () =>
-      normalizeNarrativePreviewFeatureToggles(undefined),
   ) {
     this.focusedWebviews = focusedWebviews;
-    this.narrativePreviewBridge = new NarrativePreviewBridge(this, {
-      getFeatureToggles: getNarrativePreviewFeatureToggles,
-      getMediaRuntimeScriptUri: () =>
-        vscode.Uri.joinPath(
-          this.context.extensionUri,
-          'dist',
-          'webview',
-          'assets',
-          'narrative-preview-media-runtime.js',
-        ),
-      getWebviewOptions: (sourceCanvasUri?: string) => ({
-        localResourceRoots: [...this.getNarrativePreviewLocalResourceRoots(sourceCanvasUri)],
-      }),
-    });
   }
 
   static async create(
     context: vscode.ExtensionContext,
     focusedWebviews: IFocusedWebviewRegistry = createFocusedWebviewRegistry(),
-    getNarrativePreviewFeatureToggles: () => NarrativePreviewFeatureToggles = () =>
-      normalizeNarrativePreviewFeatureToggles(undefined),
   ): Promise<CanvasEditorProvider> {
-    const provider = new CanvasEditorProvider(
-      context,
-      focusedWebviews,
-      getNarrativePreviewFeatureToggles,
-    );
+    const provider = new CanvasEditorProvider(context, focusedWebviews);
     await provider.initializeContentRuntime();
     return provider;
   }
 
   dispose(): void {
-    this.narrativePreviewBridge.dispose();
     for (const subscription of this.projectionSubscriptions.values()) {
       subscription.dispose();
     }
@@ -929,12 +880,12 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     this._onDidChangeCanvas.dispose();
     this._onDidChangeDocumentLifecycle.dispose();
     this._onDidChangeCustomDocument.dispose();
-    void this.mediaRuntime
-      .dispose()
-      .catch((error) => logger.warn('Failed to dispose Canvas media runtime', { error }));
     void this.derivedRuntime
       .dispose()
       .catch((error) => logger.warn('Failed to dispose Canvas derived content runtime', { error }));
+    void this.mediaRuntime
+      .dispose()
+      .catch((error) => logger.warn('Failed to dispose Canvas media runtime', { error }));
   }
 
   private async initializeContentRuntime(): Promise<void> {
@@ -1155,10 +1106,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     this.statusBar = opts.statusBar;
   }
 
-  setCreativeAiApplyAdapter(adapter: CanvasCreativeAiApplyAdapter): void {
-    this.creativeAiApplyAdapter = adapter;
-  }
-
   setHeadlessAssetImporter(importer: CanvasHeadlessAssetImporter): void {
     this.headlessAssetImporter = importer;
   }
@@ -1368,23 +1315,25 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       throw new Error('Playback reorder must provide the full selected route unit id set.');
     }
     const unitById = new Map(plan.units.map((unit) => [unit.id, unit]));
-    const orderedUnits = orderedUnitIds.map((unitId) => unitById.get(unitId));
-    if (orderedUnits.some((unit): unit is undefined => unit === undefined)) {
-      throw new Error('Playback reorder references a missing Canvas playback unit.');
+    const orderedUnits: CanvasPlaybackUnit[] = [];
+    for (const unitId of orderedUnitIds) {
+      const unit = unitById.get(unitId);
+      if (!unit) {
+        throw new Error('Playback reorder references a missing Canvas playback unit.');
+      }
+      orderedUnits.push(unit);
     }
-    const sceneId = this.resolveSingleSceneShotReorderParent(documentUri, orderedUnits);
-    if (!sceneId) {
-      throw new Error(
-        'Canvas playback reorder currently supports only full shot reordering within one Scene container.',
-      );
+    const groupId = this.resolveSingleGroupReorderParent(documentUri, orderedUnits);
+    if (!groupId) {
+      throw new Error('Canvas playback reorder requires the complete child set of one Group.');
     }
     if (!this.activeWebviewPanel) {
       throw new Error('No active Canvas editor for playback reorder.');
     }
-    await this.sendRequest('nodes.reorderSceneShots', {
+    await this.sendRequest('nodes.reorderGroupChildren', {
       payload: {
-        sceneId,
-        shotIds: orderedUnits.map((unit) => unit.sourceNodeId),
+        groupId,
+        childIds: orderedUnits.map((unit) => unit.sourceNodeId),
         autoLayout: true,
       },
     });
@@ -1435,18 +1384,29 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     return route;
   }
 
-  private resolveSingleSceneShotReorderParent(
+  private resolveSingleGroupReorderParent(
     documentUri: string,
     orderedUnits: readonly CanvasPlaybackUnit[],
   ): string | undefined {
     const parents = new Set<string>();
     for (const unit of orderedUnits) {
-      if (unit.kind !== 'shot') return undefined;
       const parentId = this.resolveCanvasNodeParentId(documentUri, unit.sourceNodeId);
       if (!parentId) return undefined;
       parents.add(parentId);
     }
-    return parents.size === 1 ? parents.values().next().value : undefined;
+    if (parents.size !== 1) return undefined;
+    const groupId = parents.values().next().value;
+    if (!groupId) return undefined;
+    const canvasData = this.canvasSnapshotsByDocumentUri.get(documentUri);
+    const nodes = Array.isArray(canvasData?.nodes) ? canvasData.nodes : [];
+    const group = nodes.find((candidate) => candidate.id === groupId);
+    if (group?.type !== 'group') return undefined;
+    const childIds = readCanvasNodeContainerChildIds(group);
+    const orderedChildIds = orderedUnits.map((unit) => unit.sourceNodeId);
+    return childIds.length === orderedChildIds.length &&
+      childIds.every((childId) => orderedChildIds.includes(childId))
+      ? groupId
+      : undefined;
   }
 
   private resolveCanvasNodeParentId(documentUri: string, nodeId: string): string | undefined {
@@ -1485,24 +1445,19 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     canvasData: Record<string, unknown>,
   ): void {
     this.updateRememberedCanvasSnapshot(document.uri.toString(), canvasData);
-    this.retryPendingEntityBackfills();
   }
 
   private updateRememberedCanvasSnapshot(
     documentUri: string,
     canvasData: Record<string, unknown>,
   ): void {
-    const previousPreviewFingerprint = this.canvasPreviewFingerprintsByDocumentUri.get(documentUri);
+    if (!isCanvasDataSnapshot(canvasData)) {
+      throw new Error('Canvas snapshot violates the canonical six-node/three-connection contract.');
+    }
     const nextPreviewFingerprint = createCanvasPreviewSemanticFingerprint(canvasData);
     this.canvasSnapshotsByDocumentUri.set(documentUri, canvasData);
     this.canvasRevisionsByDocumentUri.set(documentUri, this.getCanvasRevision(documentUri) + 1);
     this.canvasPreviewFingerprintsByDocumentUri.set(documentUri, nextPreviewFingerprint);
-    if (
-      previousPreviewFingerprint !== undefined &&
-      previousPreviewFingerprint !== nextPreviewFingerprint
-    ) {
-      this.refreshNarrativePreview(documentUri);
-    }
   }
 
   private setAuthoritativeCanvasSnapshot(documentUri: string, canvasData: CanvasData): void {
@@ -1551,87 +1506,16 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     return this.canvasRevisionsByDocumentUri.get(documentUri) ?? 0;
   }
 
-  applyEntityCandidateBackfill(changedRefs: readonly CreativeEntityChangedRef[]): {
-    updated: number;
-    pending: boolean;
-    diagnostics: readonly CanvasEntityBackfillDiagnostic[];
-  } {
-    const diagnostics: CanvasEntityBackfillDiagnostic[] = [];
-    let updated = 0;
-
-    for (const [documentUri, canvasData] of this.canvasSnapshotsByDocumentUri.entries()) {
-      const result = applyCandidateEntityBackfill(canvasData, changedRefs);
-      diagnostics.push(...result.diagnostics);
-      if (!result.updated) continue;
-      updated += result.matchedCount;
-      this.updateRememberedCanvasSnapshot(documentUri, result.data);
-      const webview = this.webviewPanelsByDocumentUri.get(documentUri)?.webview;
-      webview?.postMessage({ type: 'update', data: result.data });
-      this.syncOutline(documentUri, result.data);
-      this.syncStatusBar(result.data);
-    }
-
-    if (updated === 0) {
-      const mergeResult = mergePendingCandidateEntityBackfill(this.pendingEntityBackfills, {
-        changedRefs: [...changedRefs],
-        diagnostics,
-      });
-      this.pendingEntityBackfills = [...mergeResult.pending];
-      return { updated, pending: mergeResult.queued, diagnostics };
-    }
-
-    return { updated, pending: false, diagnostics };
-  }
-
-  private retryPendingEntityBackfills(): void {
-    if (this.pendingEntityBackfills.length === 0) return;
-    const pending = this.pendingEntityBackfills.splice(0, this.pendingEntityBackfills.length);
-    for (const entry of pending) {
-      const result = this.applyEntityCandidateBackfill(entry.changedRefs);
-      if (result.pending) {
-        continue;
-      }
-    }
-  }
-
-  openNarrativePreview(): Promise<boolean> {
-    return this.revealPlaybackWorkspace();
-  }
-
-  refreshNarrativePreview(sourceCanvasUri?: string): boolean {
-    return this.narrativePreviewBridge.refresh(sourceCanvasUri);
-  }
-
-  jumpNarrativePreviewToNode(nodeId: string): boolean {
-    return this.narrativePreviewBridge.jumpTo(nodeId);
-  }
-
-  setNarrativePreviewVariables(variables: Readonly<Record<string, unknown>>): boolean {
-    return this.narrativePreviewBridge.setVariables(variables);
-  }
-
-  extractNarrativeGraphSnapshot(): NarrativeGraphSnapshot | undefined {
-    const document = this.activeDocument;
-    if (!document) return undefined;
-    return this.extractNarrativeGraphSnapshotForSource(document.uri.toString());
-  }
-
-  extractNarrativeGraphSnapshotForSource(documentUri: string): NarrativeGraphSnapshot | undefined {
-    const canvasData = this.canvasSnapshotsByDocumentUri.get(documentUri);
-    if (!canvasData) return undefined;
-    return createNarrativeGraphSnapshotFromCanvasData(canvasData, {
-      revision: this.getCanvasRevision(documentUri),
-      sourceCanvasUri: documentUri,
-    });
-  }
-
   extractCanvasPlaybackPlan(sourceCanvasUri?: string): CanvasPlaybackPlan | undefined {
     const documentUri = sourceCanvasUri ?? this.activeDocument?.uri.toString();
     if (!documentUri) return undefined;
     const canvasData = this.canvasSnapshotsByDocumentUri.get(documentUri);
     if (!canvasData) return undefined;
-    return createCanvasPlaybackPlanFromCanvasData(canvasData, {
+    if (!isCanvasDataSnapshot(canvasData)) return undefined;
+    return createCanvasPlaybackPlan({
+      canvas: canvasData,
       selectedNodeId: this.readCanvasPlaybackSelectedNodeId(canvasData),
+      adapterId: 'auto',
     });
   }
 
@@ -1648,11 +1532,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
 
     switch (boardRef.kind) {
       case 'workspace-path': {
-        const fsPath = await this.resolveAssetPath(
-          boardRef.path,
-          sourceDocumentUri,
-          'neko-canvas.open-related-board',
-        );
+        const fsPath = await this.resolveAssetPath(boardRef.path, sourceDocumentUri);
         await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(fsPath));
         return;
       }
@@ -1698,8 +1578,13 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       parsedDocumentUri,
       webview,
     );
-    const plan = createCanvasPlaybackPlanFromCanvasData(previewCanvasData, {
+    if (!isCanvasDataSnapshot(previewCanvasData)) {
+      throw new Error('Canvas playback preview requires a valid canonical Canvas snapshot.');
+    }
+    const plan = createCanvasPlaybackPlan({
+      canvas: previewCanvasData,
       selectedNodeId: this.readCanvasPlaybackSelectedNodeId(canvasData),
+      adapterId: 'auto',
     });
     return this.enrichCanvasPlaybackPlanForPreview(
       plan,
@@ -1742,85 +1627,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     return cloned;
   }
 
-  postNarrativePreviewCanvasMessage(message: PreviewToCanvasMessage): boolean {
-    switch (message.type) {
-      case 'canvas:highlightNode':
-        return this.postNarrativePreviewKeyboardAction(message, `selectNode:${message.nodeId}`);
-      case 'canvas:highlightPath':
-        return this.postNarrativeHighlightMessage(message);
-      case 'canvas:choiceMade':
-        return this.postNarrativeHighlightMessage(message);
-    }
-    return false;
-  }
-
-  async handleNarrativePreviewMediaMessage(
-    message: Record<string, unknown>,
-    webviewPanel: vscode.WebviewPanel,
-    sourceCanvasUri?: string,
-  ): Promise<void> {
-    const documentUri = sourceCanvasUri
-      ? vscode.Uri.parse(sourceCanvasUri)
-      : this.activeDocument?.uri;
-    logger.debug(
-      `Canvas Preview media host request: ${JSON.stringify({
-        type: typeof message.type === 'string' ? message.type : undefined,
-        nodeId: typeof message.nodeId === 'string' ? message.nodeId : undefined,
-        assetPath: typeof message.assetPath === 'string' ? message.assetPath : undefined,
-        sourceCanvasUri,
-        documentUri: documentUri?.toString(),
-      })}`,
-    );
-    if (!documentUri) {
-      const response = {
-        nodeId: message.nodeId,
-        ...this.readNarrativePreviewSessionEnvelope(message),
-      };
-      if (message.type === 'media:probe') {
-        await this.postMediaPlaybackResponse(webviewPanel, {
-          type: 'media:probeResult',
-          ...response,
-          error: 'Preview media playback requires an active Canvas document or source Canvas URI.',
-        });
-        return;
-      }
-      if (message.type === 'media:play') {
-        await this.postMediaPlaybackResponse(webviewPanel, {
-          type: 'media:streamReady',
-          ...response,
-          error: 'Preview media playback requires an active Canvas document or source Canvas URI.',
-        });
-      }
-      return;
-    }
-    await this.handleMediaPlaybackMessage(message, webviewPanel, documentUri);
-  }
-
-  async resolveNarrativePreviewVariant(
-    message: Record<string, unknown>,
-    webviewPanel: vscode.WebviewPanel,
-    sourceCanvasUri?: string,
-  ): Promise<boolean> {
-    const requestId = typeof message.requestId === 'string' ? message.requestId : undefined;
-    const documentUri = sourceCanvasUri
-      ? vscode.Uri.parse(sourceCanvasUri)
-      : this.activeDocument?.uri;
-    if (!documentUri) {
-      if (requestId) {
-        return webviewPanel.webview.postMessage({
-          type: 'preview:variantResolved',
-          requestId,
-          ...this.readNarrativePreviewSessionEnvelope(message),
-          error:
-            'Preview variant resolution requires an active Canvas document or source Canvas URI.',
-        });
-      }
-      return false;
-    }
-    return this.handlePreviewVariantMessage(message, webviewPanel, documentUri);
-  }
-
-  private readNarrativePreviewSessionEnvelope(
+  private readPreviewSessionEnvelope(
     message: Record<string, unknown>,
   ): Record<string, string | number> {
     const sessionId = typeof message['sessionId'] === 'string' ? message['sessionId'] : undefined;
@@ -1832,50 +1639,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       ...(sourceCanvasUri ? { sourceCanvasUri } : {}),
       ...(revision !== undefined ? { revision } : {}),
     };
-  }
-
-  async disposeNarrativePreviewMediaPanel(webviewPanel: vscode.WebviewPanel): Promise<void> {
-    await this.disposeMediaPlaybackPanel(webviewPanel);
-  }
-
-  private postNarrativeKeyboardAction(action: string): boolean {
-    if (!this.activeWebviewPanel) return false;
-    this.activeWebviewPanel.webview.postMessage({
-      type: 'keyboardAction',
-      action,
-    });
-    return true;
-  }
-
-  private postNarrativeHighlightMessage(message: PreviewToCanvasMessage): boolean {
-    const targetPanel = this.getNarrativePreviewTargetPanel(message);
-    if (!targetPanel) return false;
-    targetPanel.webview.postMessage({
-      type: 'narrativePreviewCanvasMessage',
-      message,
-    });
-    return true;
-  }
-
-  private postNarrativePreviewKeyboardAction(
-    message: PreviewToCanvasMessage,
-    action: string,
-  ): boolean {
-    const targetPanel = this.getNarrativePreviewTargetPanel(message);
-    if (!targetPanel) return false;
-    targetPanel.webview.postMessage({
-      type: 'keyboardAction',
-      action,
-    });
-    return true;
-  }
-
-  private getNarrativePreviewTargetPanel(
-    message: PreviewToCanvasMessage,
-  ): vscode.WebviewPanel | undefined {
-    return message.sourceCanvasUri
-      ? (this.webviewPanelsByDocumentUri.get(message.sourceCanvasUri) ?? this.activeWebviewPanel)
-      : this.activeWebviewPanel;
   }
 
   private syncActiveCanvasChrome(documentUri: string): void {
@@ -1970,7 +1733,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       this.dirtyCanvasDocumentUris.delete(documentUri);
       this.canvasPreviewFingerprintsByDocumentUri.delete(documentUri);
       this.canvasDataReadyDocumentUris.delete(documentUri);
-      this.narrativePreviewBridge.handleCanvasEditorClosed(documentUri);
       await this.disposeMediaPlaybackPanel(webviewPanel);
       if (this.activeWebviewPanel === webviewPanel) {
         this.clearActiveCanvasEditor(webviewPanel);
@@ -2154,9 +1916,8 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     for (const child of request.children) {
       assertCanvasNodeType(child.type);
     }
-    const payload = await this.materializeCompositeRequestRuntimePaths(request);
     const result = await this.sendRequest<CanvasCreateCompositeResult>('nodes.createComposite', {
-      payload,
+      payload: request,
     });
     this._onDidChangeCanvas.fire({
       type: 'add',
@@ -2387,261 +2148,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     }
   }
 
-  async getStoryboardExecutionSummary(
-    request: CanvasStoryboardExecutionSummaryRequest = {},
-  ): Promise<CanvasStoryboardExecutionSummary> {
-    if (!this.activeWebviewPanel) {
-      return {
-        sourceScriptUri: request.sourceScriptUri,
-        canvasFileUri: request.canvasFileUri,
-        status: 'not-available',
-        scenes: [],
-        error: 'No active canvas editor',
-      };
-    }
-
-    const nodes = await this.listNodes();
-    const canvasSnapshot = this.activeDocument
-      ? this.canvasSnapshotsByDocumentUri.get(this.activeDocument.uri.toString())
-      : undefined;
-    return createCanvasStoryboardExecutionSummary({
-      nodes,
-      request,
-      canvasFileUri: this.activeDocument?.uri.toString() ?? request.canvasFileUri,
-      ...readCanvasBoardSummaryInput(canvasSnapshot),
-    });
-  }
-
-  async generateImageForNode(nodeId: string, _childNodeId?: string): Promise<void> {
-    const node = await this.getNode(nodeId);
-    if (!node) {
-      throw new Error(`Cannot generate Canvas node "${nodeId}": node not found.`);
-    }
-    const webview = this.activeWebviewPanel?.webview;
-    if (!webview) throw new Error('Cannot generate Canvas media without an active Canvas Webview.');
-    await this.routeCanvasCreativeAiAction({ node, actionId: 'generate-image', webview });
-  }
-
-  async generateBatchForNodes(nodeIds: string[]): Promise<void> {
-    for (const nodeId of nodeIds) {
-      await this.generateImageForNode(nodeId);
-    }
-  }
-
-  private async routeCanvasCreativeAiAction(input: {
-    readonly node: CanvasNode;
-    readonly actionId: CanvasCreativeAiActionId;
-    readonly webview: vscode.Webview;
-  }): Promise<void> {
-    const documentIdentity = this.createCreativeAiDocumentIdentity();
-    if (!documentIdentity) {
-      const diagnostics = [
-        createCanvasCreativeAiEditorDiagnostic(
-          'canvas-creative-ai-missing-document',
-          'Cannot start Canvas creative AI action without an active .nkc document.',
-          'documentRef',
-        ),
-      ];
-      input.webview.postMessage({
-        type: 'canvasCreativeAiActionResult',
-        nodeId: input.node.id,
-        actionId: input.actionId,
-        ok: false,
-        diagnostics,
-      });
-      return;
-    }
-
-    const built = buildCanvasCreativeActionExternalInvocation({
-      document: documentIdentity,
-      node: input.node,
-      actionId: input.actionId,
-      requestedAt: new Date().toISOString(),
-    });
-    if (!built.ok) {
-      input.webview.postMessage({
-        type: 'canvasCreativeAiActionResult',
-        nodeId: input.node.id,
-        actionId: input.actionId,
-        ok: false,
-        diagnostics: built.diagnostics,
-      });
-      return;
-    }
-
-    const result = await this.invokeExternalCreativeAiDetailed(built.invocation);
-    input.webview.postMessage({
-      type: 'canvasCreativeAiActionResult',
-      nodeId: input.node.id,
-      actionId: input.actionId,
-      ok: result.ok,
-      diagnostics: result.diagnostics,
-      ...(result.ok ? { status: result.status } : {}),
-    });
-  }
-
-  private async routeCanvasCreativeAiCandidateAction(input: {
-    readonly nodeId: string;
-    readonly candidateId: string;
-    readonly candidateAction: 'accept' | 'reject' | 'delete' | 'inspect';
-    readonly actionId?: CanvasCreativeAiActionId;
-    readonly webview: vscode.Webview;
-  }): Promise<void> {
-    if (!this.creativeAiApplyAdapter) {
-      input.webview.postMessage({
-        type: 'canvasCreativeAiActionResult',
-        nodeId: input.nodeId,
-        actionId: input.actionId,
-        ok: false,
-        diagnostics: [
-          createCanvasCreativeAiEditorDiagnostic(
-            'canvas-creative-ai-apply-adapter-unavailable',
-            'Canvas creative AI candidate actions require the Canvas apply adapter.',
-          ),
-        ],
-      });
-      return;
-    }
-
-    const requestedAt = new Date().toISOString();
-    if (input.candidateAction === 'inspect') {
-      input.webview.postMessage({
-        type: 'canvasCreativeAiActionResult',
-        nodeId: input.nodeId,
-        actionId: input.actionId,
-        ok: true,
-        diagnostics: [
-          createCreativeAiDiagnostic(
-            'info',
-            'canvas-creative-ai-candidate-inspect',
-            'Canvas candidate details are available in the shot overlay.',
-            'candidateId',
-          ),
-        ],
-      });
-      return;
-    }
-
-    if (input.candidateAction === 'accept') {
-      const result = await this.creativeAiApplyAdapter.promoteStoredCandidate({
-        nodeId: input.nodeId,
-        candidateId: input.candidateId,
-        actor: 'user',
-        requestedAt,
-      });
-      input.webview.postMessage({
-        type: 'canvasCreativeAiActionResult',
-        nodeId: input.nodeId,
-        actionId: input.actionId,
-        ok: result.ok,
-        diagnostics: result.diagnostics,
-        promotion: result,
-      });
-      return;
-    }
-
-    const result = await this.creativeAiApplyAdapter.markStoredCandidateDisposition({
-      nodeId: input.nodeId,
-      candidateId: input.candidateId,
-      disposition: input.candidateAction === 'reject' ? 'rejected' : 'deleted',
-      requestedAt,
-    });
-    input.webview.postMessage({
-      type: 'canvasCreativeAiActionResult',
-      nodeId: input.nodeId,
-      actionId: input.actionId,
-      ok: result.ok,
-      diagnostics: result.diagnostics,
-      disposition: result,
-    });
-  }
-
-  private createCreativeAiDocumentIdentity(): CanvasCreativeAiDocumentIdentity | null {
-    const document = this.activeDocument;
-    if (!document) return null;
-    const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-    const projectRelativePath =
-      workspaceFolder && document.uri.scheme === 'file'
-        ? path.relative(workspaceFolder.uri.fsPath, document.uri.fsPath).replace(/\\/g, '/')
-        : undefined;
-    const normalizedProjectRelativePath =
-      projectRelativePath &&
-      !projectRelativePath.startsWith('..') &&
-      !path.isAbsolute(projectRelativePath)
-        ? projectRelativePath
-        : undefined;
-    const canvasSnapshot = this.canvasSnapshotsByDocumentUri.get(document.uri.toString());
-    return {
-      documentId: `canvas-document:${hashProjectionSource(document.uri.toString())}`,
-      ...(normalizedProjectRelativePath
-        ? { projectRelativePath: normalizedProjectRelativePath }
-        : {}),
-      label: path.basename(document.uri.fsPath || document.uri.path),
-      revision: canvasSnapshot
-        ? createCanvasDocumentRevision(canvasSnapshot)
-        : `canvas-doc-revision:${this.getCanvasRevision(document.uri.toString())}`,
-    };
-  }
-
-  private async invokeExternalCreativeAi(
-    invocation: ExternalCreativeAiInvocation,
-  ): Promise<boolean> {
-    const result = await this.invokeExternalCreativeAiDetailed(invocation);
-    if (result.ok) {
-      return true;
-    }
-    const message =
-      result.diagnostics.map((diagnostic) => diagnostic.message).join('; ') ??
-      'Canvas creative AI execution returned no result.';
-    await handleError(new Error(message), { showToUser: true, severity: 'warning' });
-    return false;
-  }
-
-  private async invokeExternalCreativeAiDetailed(
-    invocation: ExternalCreativeAiInvocation,
-  ): Promise<CanvasCreativeAiHostInvocationResult> {
-    try {
-      const result = await vscode.commands.executeCommand<
-        CanvasCreativeAiHostInvocationResult | undefined
-      >(CANVAS_CREATIVE_AI_INVOKE_EXTERNAL_COMMAND, invocation);
-      return (
-        result ?? {
-          ok: false,
-          diagnostics: [
-            createCanvasCreativeAiEditorDiagnostic(
-              'canvas-creative-ai-host-no-result',
-              'Canvas creative AI execution returned no result.',
-            ),
-          ],
-        }
-      );
-    } catch (error) {
-      return {
-        ok: false,
-        diagnostics: [
-          createCanvasCreativeAiEditorDiagnostic(
-            'canvas-creative-ai-host-command-failed',
-            error instanceof Error ? error.message : String(error),
-          ),
-        ],
-      };
-    }
-  }
-
-  reportStoryboardImport(payload: CanvasStoryboardPayload, created: CreatedCanvasStoryboard): void {
-    const nodeIds = created.scenes.flatMap((scene) => [scene.sceneNodeId, ...scene.shotIds]);
-    this._onDidChangeCanvas.fire({
-      type: 'update',
-      nodeIds,
-      documentUri: this.activeDocument?.uri.toString(),
-      entityType: 'import',
-      reason: 'storyboardImported',
-      operationType: 'storyboard.import',
-      sourceScriptUri: payload.sourceScriptUri,
-      storyboardImport: created,
-    });
-  }
-
   private reportCanvasReady(documentUri: vscode.Uri, data: Record<string, unknown> | null): void {
     const nodeIds = Array.isArray(data?.['nodes'])
       ? (data['nodes'] as unknown[])
@@ -2672,13 +2178,17 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     );
 
     const nonce = this.getNonce();
+    const contentSecurityPolicy = createCanvasWebviewContentSecurityPolicy(
+      webview.cspSource,
+      nonce,
+    );
 
     return `<!DOCTYPE html>
 <html ${injectLocaleAttribute()}>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data: blob: https:; font-src ${webview.cspSource}; media-src ${webview.cspSource} data: blob: https: http://127.0.0.1:*; connect-src ws://127.0.0.1:* http://127.0.0.1:*;">
+  <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy};">
   <title>Canvas Editor</title>
   <link rel="stylesheet" href="${webviewUri}/assets/index.css">
 </head>
@@ -2723,15 +2233,17 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
 
   private async requestDocumentSave(
     document: vscode.CustomDocument,
-    message: { readonly data?: unknown; readonly saveReason?: unknown },
+    message: Readonly<Record<string, unknown>>,
   ): Promise<void> {
-    if (message.data && typeof message.data === 'object') {
-      this.rememberCanvasSnapshot(document, message.data as Record<string, unknown>);
+    const data = message['data'];
+    if (isPlainRecord(data)) {
+      this.rememberCanvasSnapshot(document, data);
     }
 
+    const requestedSaveReason = message['saveReason'];
     const saveReason =
-      typeof message.saveReason === 'string' && isCanvasProjectSaveReason(message.saveReason)
-        ? message.saveReason
+      typeof requestedSaveReason === 'string' && isCanvasProjectSaveReason(requestedSaveReason)
+        ? requestedSaveReason
         : 'manual';
 
     if (saveReason === 'autosave') {
@@ -2758,6 +2270,11 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     documentUri: vscode.Uri,
   ): Promise<CanvasData> {
     const data = canvasData as unknown as Record<string, unknown>;
+    if (!isCanvasDataSnapshot(data)) {
+      throw new Error(
+        'Canvas save rejected a snapshot outside the canonical six-node/three-connection contract.',
+      );
+    }
     this.normalizeCanvasContentBindingsForSave(data);
     await this.normalizeCanvasPathsForSave(data, documentUri);
     return data as unknown as CanvasData;
@@ -2774,8 +2291,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
 
       if (node['type'] === 'media') {
         normalizeCanvasAssetPreviewBindings(content, '/assetPath');
-      } else if (node['type'] === 'project') {
-        normalizeCanvasAssetPreviewBindings(content, '/projectPath');
       }
     }
   }
@@ -3034,48 +2549,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         }
         break;
       }
-      case 'entity.summary':
-      case 'entity.confirmCandidate':
-      case 'entity.inspect': {
-        const requestId = message._requestId as number | undefined;
-        if (requestId === undefined) break;
-        if (!isCanvasEntityRouteMessage(message)) {
-          webviewPanel.webview.postMessage({
-            type: '_response',
-            _requestId: requestId,
-            ok: false,
-            message: vscode.l10n.t('Invalid Canvas entity route payload.'),
-          });
-          break;
-        }
-        const result = await handleCanvasEntityRoute(
-          message,
-          {
-            projectRoot: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
-            contextUri: document.uri.toString(),
-          },
-          {
-            executeCommand: vscode.commands.executeCommand,
-            translate: (text, ...args) => vscode.l10n.t(text, ...args),
-          },
-        );
-        const backfill =
-          message.type === 'entity.confirmCandidate' &&
-          result.ok &&
-          result.entityRef &&
-          result.candidateId
-            ? this.applyEntityCandidateBackfill([
-                { kind: 'candidate', id: result.candidateId, entityRef: result.entityRef },
-              ])
-            : undefined;
-        webviewPanel.webview.postMessage({
-          type: '_response',
-          _requestId: requestId,
-          ...result,
-          ...(backfill ? { backfill } : {}),
-        });
-        break;
-      }
       case 'openMediaPreview': {
         // Open media in neko-preview's customEditor.
         const mediaTypeHint = message.mediaType as string | undefined;
@@ -3156,43 +2629,13 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         break;
       }
       case 'preview:delegateAction': {
-        const action = message.action as
-          { target?: string; command?: string; route?: string } | undefined;
-        const asset = message.asset as
-          { path?: string; uri?: string; mediaType?: string } | undefined;
-        const assetPath = asset?.path ?? asset?.uri;
-
-        if (action?.command) {
-          await vscode.commands.executeCommand(action.command, assetPath);
-          break;
-        }
-
-        if (!assetPath) break;
-
-        if (action?.target === 'project') {
-          const fsPath = await this.resolveAssetPath(assetPath, document.uri);
-          const fileUri = vscode.Uri.file(fsPath);
-          const ext = assetPath.split('.').pop()?.toLowerCase() ?? '';
-          const editorIdMap: Record<string, string> = {
-            nkv: 'neko.nekocut.editor',
-          };
-          const editorId = editorIdMap[ext];
-          if (editorId) {
-            await vscode.commands.executeCommand('vscode.openWith', fileUri, editorId);
-          } else {
-            await vscode.commands.executeCommand('vscode.open', fileUri);
-          }
-        } else if (
-          action?.target === 'preview' ||
-          action?.target === 'model' ||
-          action?.target === 'cut' ||
-          action?.target === 'audio'
-        ) {
-          const fsPath = await this.resolveAssetPath(assetPath, document.uri);
+        const request = parseCanvasPreviewDelegateRequest(message);
+        if (request.target === 'preview') {
+          const fsPath = await this.resolveAssetPath(request.assetPath, document.uri);
           const fileUri = vscode.Uri.file(fsPath);
           const panoramicRoute = getPanoramicPreviewRoute({
             filePath: fsPath,
-            mediaType: asset?.mediaType,
+            mediaType: request.mediaType,
           });
           if (panoramicRoute) {
             await vscode.commands.executeCommand(
@@ -3204,7 +2647,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             await vscode.commands.executeCommand('vscode.open', fileUri);
           }
         } else {
-          const fsPath = await this.resolveAssetPath(assetPath, document.uri);
+          const fsPath = await this.resolveAssetPath(request.assetPath, document.uri);
           await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(fsPath));
         }
         break;
@@ -3388,247 +2831,12 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         break;
       }
 
-      case 'project:resolveThumbnail': {
-        const projectPath = message.projectPath as string;
-        const projectType = message.projectType as string;
-        const nodeId = message.nodeId as string;
-        if (!projectPath || !nodeId) break;
-        try {
-          const filePath = await this.resolveAssetPath(projectPath, document.uri);
-          const raw = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath));
-          const projectData = JSON.parse(Buffer.from(raw).toString('utf-8')) as Record<
-            string,
-            unknown
-          >;
-
-          let assetSrc: string | undefined;
-          if (projectType === 'nkv') {
-            const tracks = projectData['tracks'] as
-              Array<{ elements?: Array<{ src?: string }> }> | undefined;
-            assetSrc = tracks?.[0]?.elements?.[0]?.src;
-          }
-
-          if (!assetSrc) {
-            webviewPanel.webview.postMessage({
-              type: 'project:thumbnailResult',
-              nodeId,
-              error: 'No primary asset found in project file',
-            });
-            break;
-          }
-
-          const projectDir = filePath.replace(/[/\\][^/\\]+$/, '');
-          const resolvedAssetPath = assetSrc.startsWith('/')
-            ? assetSrc
-            : `${projectDir}/${assetSrc}`;
-
-          const dataUrl = await this.mediaRuntime.captureFrame(resolvedAssetPath, 1);
-          webviewPanel.webview.postMessage({
-            type: 'project:thumbnailResult',
-            nodeId,
-            dataUrl,
-          });
-        } catch (error) {
-          webviewPanel.webview.postMessage({
-            type: 'project:thumbnailResult',
-            nodeId,
-            error: error instanceof Error ? error.message : 'Thumbnail generation failed',
-          });
-        }
-        break;
-      }
-
-      case 'project:openInEditor': {
-        const projectPath = message.projectPath as string;
-        const projectType = message.projectType as string;
-        if (!projectPath) break;
-        try {
-          const filePath = await this.resolveAssetPath(projectPath, document.uri);
-          const uri = vscode.Uri.file(filePath);
-          const editorIdMap: Record<string, string> = {
-            nkv: 'neko.nekocut.editor',
-          };
-          const editorId = editorIdMap[projectType];
-          if (editorId) {
-            await vscode.commands.executeCommand('vscode.openWith', uri, editorId);
-          } else {
-            await vscode.commands.executeCommand('vscode.open', uri);
-          }
-        } catch (error) {
-          logger.warn(`Failed to open project: ${error}`);
-        }
-        break;
-      }
-
       case 'project:addSource': {
         await this.handleCanvasProjectAddSource(
           (message as { request?: ProjectSourceAddRequest }).request,
           webviewPanel.webview,
           document.uri,
         );
-        break;
-      }
-
-      case 'canvasCreativeAiAction': {
-        const nodeId = typeof message.nodeId === 'string' ? message.nodeId : undefined;
-        const actionId = message.actionId;
-        if (!nodeId || !isCanvasCreativeAiActionId(actionId)) {
-          webviewPanel.webview.postMessage({
-            type: 'canvasCreativeAiActionResult',
-            nodeId,
-            actionId,
-            ok: false,
-            diagnostics: [
-              createCanvasCreativeAiEditorDiagnostic(
-                'canvas-creative-ai-invalid-webview-request',
-                'Canvas creative AI action message requires nodeId and a valid actionId.',
-              ),
-            ],
-          });
-          break;
-        }
-        let node = await this.getNode(nodeId);
-        if (!node) {
-          webviewPanel.webview.postMessage({
-            type: 'canvasCreativeAiActionResult',
-            nodeId,
-            actionId,
-            ok: false,
-            diagnostics: [
-              createCanvasCreativeAiEditorDiagnostic(
-                'canvas-creative-ai-node-not-found',
-                `Canvas node "${nodeId}" was not found.`,
-                'nodeId',
-              ),
-            ],
-          });
-          break;
-        }
-        if (message.storyboardPrompt !== undefined) {
-          if (!isCanvasStoryboardPromptState(message.storyboardPrompt)) {
-            webviewPanel.webview.postMessage({
-              type: 'canvasCreativeAiActionResult',
-              nodeId,
-              actionId,
-              ok: false,
-              diagnostics: [
-                createCanvasCreativeAiEditorDiagnostic(
-                  'canvas-creative-ai-invalid-prompt-state',
-                  'Canvas creative AI action received an invalid storyboard prompt state.',
-                  'storyboardPrompt',
-                ),
-              ],
-            });
-            break;
-          }
-          await this.updateNode(nodeId, { storyboardPrompt: message.storyboardPrompt });
-          node = {
-            ...node,
-            data: { ...node.data, storyboardPrompt: message.storyboardPrompt },
-          };
-        }
-        await this.routeCanvasCreativeAiAction({
-          node,
-          actionId,
-          webview: webviewPanel.webview,
-        });
-        break;
-      }
-
-      case 'canvasCreativeAiCandidateAction': {
-        const nodeId = typeof message.nodeId === 'string' ? message.nodeId : undefined;
-        const candidateId =
-          typeof message.candidateId === 'string' ? message.candidateId : undefined;
-        const candidateAction =
-          message.candidateAction === 'accept' ||
-          message.candidateAction === 'reject' ||
-          message.candidateAction === 'delete' ||
-          message.candidateAction === 'inspect'
-            ? message.candidateAction
-            : undefined;
-        const actionId = isCanvasCreativeAiActionId(message.actionId)
-          ? message.actionId
-          : undefined;
-        if (!nodeId || !candidateId || !candidateAction) {
-          webviewPanel.webview.postMessage({
-            type: 'canvasCreativeAiActionResult',
-            nodeId,
-            actionId,
-            ok: false,
-            diagnostics: [
-              createCanvasCreativeAiEditorDiagnostic(
-                'canvas-creative-ai-invalid-candidate-action-request',
-                'Canvas creative AI candidate action requires nodeId, candidateId, and a valid candidateAction.',
-              ),
-            ],
-          });
-          break;
-        }
-        await this.routeCanvasCreativeAiCandidateAction({
-          nodeId,
-          candidateId,
-          candidateAction,
-          actionId,
-          webview: webviewPanel.webview,
-        });
-        break;
-      }
-
-      case 'storyboardActionIntent': {
-        const intent = message.intent as CanvasStoryboardActionIntent | undefined;
-        const validation = validateCanvasStoryboardActionIntent(intent);
-        if (!validation.valid || !intent) {
-          logger.warn(
-            `storyboardActionIntent rejected: ${validation.diagnostics
-              .map((diagnostic) => diagnostic.message)
-              .join('; ')}`,
-          );
-          void handleError(new Error('Invalid storyboard action intent.'), {
-            showToUser: true,
-            severity: 'warning',
-          });
-          break;
-        }
-        try {
-          await vscode.commands.executeCommand('neko.agent.sendContext', {
-            type: 'canvas-storyboard-action-intent',
-            id: intent.requestId ?? `${intent.target.nodeId}:${intent.actionId}`,
-            label: `Storyboard action: ${intent.actionId}`,
-            summary: `Canvas storyboard action ${intent.actionId} for ${intent.target.nodeId}`,
-            data: { intent },
-            intent: intent.actionId,
-          });
-        } catch (err) {
-          logger.error(`storyboardActionIntent failed: ${err}`);
-          void handleError(err instanceof Error ? err : new Error(String(err)), {
-            showToUser: true,
-            severity: 'warning',
-          });
-        }
-        break;
-      }
-
-      case 'getScriptIndex': {
-        const scriptPath = message.scriptPath as string;
-        const requestNodeId = message.nodeId as string;
-        try {
-          const resolvedScriptPath = await this.resolveAssetPath(scriptPath, document.uri);
-          const content = await vscode.workspace.fs.readFile(vscode.Uri.file(resolvedScriptPath));
-          const index = buildFountainScriptIndex({ uri: resolvedScriptPath, content });
-
-          webviewPanel.webview.postMessage({
-            type: 'scriptIndexResult',
-            nodeId: requestNodeId,
-            scenes: mapStoryScriptIndexToCanvasScenes(index),
-          });
-        } catch (error) {
-          webviewPanel.webview.postMessage({
-            type: 'scriptIndexResult',
-            nodeId: requestNodeId,
-            scenes: null,
-            error: error instanceof Error ? error.message : 'Fountain source could not be parsed',
-          });
-        }
         break;
       }
 
@@ -3649,7 +2857,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
                 isFile: (stat.type & vscode.FileType.File) !== 0,
               };
             },
-            readFile: (filePath) => vscode.workspace.fs.readFile(vscode.Uri.file(filePath)),
+            readFile: async (filePath) => vscode.workspace.fs.readFile(vscode.Uri.file(filePath)),
           });
         } catch {
           result = {
@@ -3695,74 +2903,73 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         break;
       }
 
-      case 'importToTimeline': {
-        void handleError(
-          new Error(
-            'Storyboard import to Cut is unavailable until the explicit OTIO target contract is registered.',
-          ),
-          { showToUser: true, severity: 'warning' },
-        );
-        break;
-      }
-
-      case 'exportArtboard': {
-        const artboardData = message.data as Record<string, unknown>;
-        const artboardName = (artboardData.name as string) || 'Untitled Artboard';
-        const safeName = artboardName.replace(/[^a-zA-Z0-9_\-\s]/g, '').trim();
-        const format = (artboardData.format as string) || 'png';
-        const imageData = artboardData.data as string | undefined;
-
-        // 如果 webview 报告导出错误
-        if (artboardData.error) {
-          void handleError(new Error('Failed to capture artboard'), { showToUser: true });
-          break;
+      case 'sendToAgent': {
+        if (
+          !Array.isArray(message.nodeIds) ||
+          !message.nodeIds.every((nodeId) => typeof nodeId === 'string')
+        ) {
+          throw new Error('Canvas sendToAgent requires explicit node IDs.');
         }
+        const nodeIds = message.nodeIds;
+        const action = message.action as string;
 
-        if (!imageData) {
-          void handleError(new Error('No image data received'), { showToUser: true });
-          break;
+        if (nodeIds.length === 0) {
+          throw new Error('Canvas sendToAgent requires at least one node ID.');
         }
-
-        const saveUri = await vscode.window.showSaveDialog({
-          defaultUri: vscode.Uri.joinPath(
-            vscode.Uri.file(document.uri.fsPath).with({
-              path: document.uri.fsPath.replace(/[^/\\]+$/, ''),
-            }),
-            `${safeName}.${format}`,
-          ),
-          filters: {
-            [format.toUpperCase()]: [format],
-            'All Files': ['*'],
-          },
-        });
-
-        if (saveUri) {
+        if (action === 'generate') {
+          const nodes: CanvasNode[] = [];
+          for (const nodeId of nodeIds) {
+            const node = await this.getNode(nodeId);
+            if (!node) {
+              throw new Error(`Cannot start Canvas generation: node "${nodeId}" was not found.`);
+            }
+            nodes.push(node);
+          }
+          const presentations = nodes.map(readCanonicalCanvasNodePresentation);
+          const requestedPrompt =
+            typeof message.prompt === 'string' && message.prompt.trim()
+              ? message.prompt.trim()
+              : undefined;
+          const requestedMediaType =
+            message.mediaType === 'image' ||
+            message.mediaType === 'video' ||
+            message.mediaType === 'audio'
+              ? message.mediaType
+              : undefined;
+          const payload = {
+            type: 'canvas-node' as const,
+            id: nodes.length === 1 ? nodes[0]!.id : `canvas-selection:${nodes[0]!.id}`,
+            label: nodes.length === 1 ? presentations[0]!.label : `${nodes.length} Canvas nodes`,
+            summary: presentations.map((presentation) => presentation.summary).join('; '),
+            data: {
+              nodes: nodeIds,
+              requestedAction: 'create-job',
+              ...(requestedPrompt ? { prompt: requestedPrompt } : {}),
+              ...(requestedMediaType ? { mediaType: requestedMediaType } : {}),
+            },
+          };
+          const instruction = [
+            'Create and run an AI Job for the selected Canvas nodes.',
+            'Use the selected nodes as explicit input references and keep Job lifecycle outside Canvas.',
+            requestedPrompt
+              ? `Creative request: ${requestedPrompt}`
+              : 'Determine the appropriate output from the selected content and preserve provenance.',
+            requestedMediaType ? `Requested output modality: ${requestedMediaType}.` : undefined,
+          ]
+            .filter((line): line is string => line !== undefined)
+            .join('\n');
           try {
-            const buffer = Buffer.from(imageData, 'base64');
-            await vscode.workspace.fs.writeFile(saveUri, buffer);
-            vscode.window.showInformationMessage(`Artboard exported: ${saveUri.fsPath}`);
+            await vscode.commands.executeCommand('neko.agent.sendContext', payload);
+            await vscode.commands.executeCommand('neko.ai.sendMessage', instruction);
           } catch (error) {
-            logger.error(`Failed to export artboard: ${error}`);
+            logger.error(`Canvas quick generation failed: ${error}`);
             void handleError(error instanceof Error ? error : new Error(String(error)), {
               showToUser: true,
+              severity: 'warning',
             });
           }
-        }
-        break;
-      }
-      case 'sendToAgent':
-      case 'sendNodeToAgent': {
-        const nodeIds = (message.nodeIds ?? []) as string[];
-        const action = message.action as string;
-        const intent = (message.intent as string | undefined) ?? undefined;
-
-        if (action === 'generate') {
-          // Generate images through the Canvas-owned creative action path.
-          const nodeId = nodeIds[0];
-          if (nodeId) await this.generateImageForNode(nodeId);
         } else if (action === 'batch') {
-          // Batch-generate all selected ShotNodes
-          await this.generateBatchForNodes(nodeIds);
+          throw new Error('Canvas batch generation requires an explicit Job workflow.');
         } else {
           // Send selected node as context to the Agent panel
           const nodeId = nodeIds[0];
@@ -3776,17 +2983,13 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             });
             break;
           }
-          const d = node.data as Record<string, unknown>;
+          const presentation = readCanonicalCanvasNodePresentation(node);
           const payload = {
             type: 'canvas-node' as const,
             id: node.id,
-            label:
-              node.type === 'shot'
-                ? `Shot #${String(d.shotNumber ?? '?').padStart(3, '0')}`
-                : ((d.characterName as string | undefined) ?? node.type),
-            summary: String(d.visualDescription ?? d.sceneTitle ?? ''),
+            label: presentation.label,
+            summary: presentation.summary,
             data: { nodes: nodeIds },
-            intent,
           };
           try {
             await vscode.commands.executeCommand('neko.agent.sendContext', payload);
@@ -3802,7 +3005,10 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       }
 
       case 'selectionChange': {
-        const nodes = (message.nodes ?? []) as CanvasNode[];
+        if (!Array.isArray(message.nodes) || !message.nodes.every(isCanonicalCanvasNodeSnapshot)) {
+          throw new Error('Canvas selection payload contains a non-canonical node.');
+        }
+        const nodes = message.nodes;
         if (this.isActiveCanvasDocument(document)) {
           this._onSelectionChange.fire(nodes);
           this._onDidChangeCanvas.fire({
@@ -3965,7 +3171,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             await this.postMediaPlaybackResponse(webviewPanel, {
               type: 'media:probeResult',
               nodeId: message.nodeId,
-              ...this.readNarrativePreviewSessionEnvelope(message),
+              ...this.readPreviewSessionEnvelope(message),
               error: 'Media source could not be resolved to a local file path.',
             });
             break;
@@ -3974,7 +3180,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           await this.postMediaPlaybackResponse(webviewPanel, {
             type: 'media:probeResult',
             nodeId: message.nodeId,
-            ...this.readNarrativePreviewSessionEnvelope(message),
+            ...this.readPreviewSessionEnvelope(message),
             mediaInfo,
           });
         } catch (error) {
@@ -3982,7 +3188,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           await this.postMediaPlaybackResponse(webviewPanel, {
             type: 'media:probeResult',
             nodeId: message.nodeId,
-            ...this.readNarrativePreviewSessionEnvelope(message),
+            ...this.readPreviewSessionEnvelope(message),
             error: error instanceof Error ? error.message : 'Probe failed',
           });
         }
@@ -3998,7 +3204,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           await this.postMediaPlaybackResponse(webviewPanel, {
             type: 'media:streamReady',
             nodeId: message.nodeId,
-            ...this.readNarrativePreviewSessionEnvelope(message),
+            ...this.readPreviewSessionEnvelope(message),
             error: 'Media playback requires probe metadata before stream creation.',
           });
           break;
@@ -4013,7 +3219,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             await this.postMediaPlaybackResponse(webviewPanel, {
               type: 'media:streamReady',
               nodeId: message.nodeId,
-              ...this.readNarrativePreviewSessionEnvelope(message),
+              ...this.readPreviewSessionEnvelope(message),
               error: 'Media source could not be resolved to a local file path.',
             });
             break;
@@ -4039,7 +3245,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             await this.postMediaPlaybackResponse(webviewPanel, {
               type: 'media:streamReady',
               nodeId: message.nodeId,
-              ...this.readNarrativePreviewSessionEnvelope(message),
+              ...this.readPreviewSessionEnvelope(message),
               error: 'Media stream could not be created for this source.',
             });
             break;
@@ -4048,7 +3254,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           await this.postMediaPlaybackResponse(webviewPanel, {
             type: 'media:streamReady',
             nodeId: message.nodeId,
-            ...this.readNarrativePreviewSessionEnvelope(message),
+            ...this.readPreviewSessionEnvelope(message),
             ...(handle.video ? { video: handle.video } : {}),
             ...(handle.audio ? { audio: handle.audio } : {}),
             mediaInfo,
@@ -4059,7 +3265,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           await this.postMediaPlaybackResponse(webviewPanel, {
             type: 'media:streamReady',
             nodeId: message.nodeId,
-            ...this.readNarrativePreviewSessionEnvelope(message),
+            ...this.readPreviewSessionEnvelope(message),
             error: error instanceof Error ? error.message : 'Play failed',
           });
         }
@@ -4084,7 +3290,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         await this.postMediaPlaybackResponse(webviewPanel, {
           type: 'media:streamReady',
           nodeId,
-          ...this.readNarrativePreviewSessionEnvelope(message),
+          ...this.readPreviewSessionEnvelope(message),
           ...(replacement.video ? { video: replacement.video } : {}),
           ...(replacement.audio ? { audio: replacement.audio } : {}),
           mediaInfo: replacement.mediaInfo,
@@ -4324,7 +3530,8 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           expectedProjection: panoramicRoute ? 'equirectangular' : undefined,
         });
         const variant = await variantApi.requestPreviewVariant(manifest.assetId, {
-          role: role ?? 'thumbnail',
+          role:
+            role === 'thumbnail' || role === 'proxy' || role === 'fov-crop' ? role : 'thumbnail',
           width: 640,
           height: 360,
         });
@@ -4359,32 +3566,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     }
   }
 
-  private async materializeCompositeRequestRuntimePaths(
-    request: CanvasCreateCompositeRequest,
-  ): Promise<CanvasCreateCompositeRequest> {
-    const webview = this.activeWebviewPanel?.webview;
-    const documentUri = this.activeDocument?.uri;
-    if (!webview) return request;
-
-    const children = await Promise.all(
-      request.children.map(async (child) => {
-        if (child.type !== 'shot' || !child.data) {
-          return child;
-        }
-        const data = { ...child.data };
-        if (documentUri) {
-          await this.materializeShotReferencePreview(data, webview, documentUri);
-        }
-        return { ...child, data };
-      }),
-    );
-
-    return {
-      ...request,
-      children,
-    };
-  }
-
   /** Convert stored asset paths to webview URIs so the webview can display them */
   private async projectCanvasDataForDisplay(
     canvasData: CanvasData,
@@ -4411,32 +3592,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     for (const node of nodes) {
       const nodeData = node['data'] as Record<string, unknown> | undefined;
       if (!nodeData) continue;
-
-      const projectionFailures = await projectCanvasContentLocatorRuntimeState(
-        node,
-        async (locator, slot) =>
-          this.projectCanvasContentLocator(
-            webview,
-            locator,
-            documentUri,
-            slot === 'node-content'
-              ? 'neko-canvas.load-node-content'
-              : 'neko-canvas.load-generated-content',
-          ),
-      );
-      if (projectionFailures.length > 0) {
-        if (node['type'] === 'shot') {
-          throw new Error(
-            `Canvas ${projectionFailures[0]?.slot ?? 'generated content'} projection failed.`,
-          );
-        }
-        this.markDocumentResourceUnavailable(nodeData, 'projection-failed');
-      }
-
-      if (node['type'] === 'shot') {
-        await this.materializeShotReferencePreview(nodeData, webview, documentUri);
-        continue;
-      }
 
       if (node['type'] !== 'media') continue;
 
@@ -4556,7 +3711,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           ok: false,
           diagnostics: [
             createProjectFileDiagnostic({
-              code: 'unsupported-canvas-source-selection',
+              code: 'add-source-failed',
               message,
               recoverability: 'retry',
             }),
@@ -4623,30 +3778,19 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           Audio: ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'],
           'All Files': ['*'],
         };
-      case 'script':
       case 'text':
         return { 'Text Files': ['md', 'markdown', 'txt', 'log', 'fountain'] };
-      case 'document':
-        return {
-          Documents: ['pdf', 'docx', 'epub', 'cbz'],
-          'All Files': ['*'],
-        };
-      case 'model':
-        return { Models: ['safetensors', 'ckpt', 'pt', 'pth', 'bin'], 'All Files': ['*'] };
+      case 'file':
+        return { 'All Files': ['*'] };
       case 'canvas':
         return { 'Neko Canvas': ['nkc'], 'All Files': ['*'] };
-      case 'project':
-        return { 'Neko Projects': ['nkv'], 'All Files': ['*'] };
       default:
         return {
           Images: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'],
           Videos: ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v'],
           Audio: ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'],
           'Text Files': ['md', 'markdown', 'txt', 'log', 'fountain'],
-          Documents: ['pdf', 'docx', 'epub', 'cbz'],
-          Models: ['safetensors', 'ckpt', 'pt', 'pth', 'bin'],
           'Neko Canvas': ['nkc'],
-          'Neko Projects': ['nkv'],
           'All Files': ['*'],
         };
     }
@@ -4684,9 +3828,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     const assetKind = resolveCanvasPickerAssetKind(requestedAssetKind, fileName);
     const mediaType = assetKind === 'media' ? inferCanvasMediaType(fileName) : undefined;
     const textFormat = assetKind === 'text' ? inferCanvasTextFileFormat(fileName) : undefined;
-    const docType = assetKind === 'document' ? inferCanvasDocumentType(fileName) : undefined;
-    const modelType = assetKind === 'model' ? inferCanvasModelType(fileName) : undefined;
-    const projectType = assetKind === 'project' ? inferNkProjectType(fileName) : undefined;
     const metadata = {
       ...(options.request.metadata ?? {}),
       canvasAdd: true,
@@ -4695,9 +3836,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       title: fileName.replace(/\.[^.]+$/, '') || fileName,
       ...(mediaType ? { mediaType } : {}),
       ...(textFormat ? { textFormat } : {}),
-      ...(docType ? { docType } : {}),
-      ...(modelType ? { modelType } : {}),
-      ...(projectType ? { projectType } : {}),
     };
     return createVSCodeProjectSourceAddRequest({
       requestId: options.request.requestId,
@@ -4705,19 +3843,17 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       formatId: 'nkc',
       sourceUri: uri,
       role:
-        assetKind === 'project'
+        assetKind === 'canvas'
           ? 'project'
-          : assetKind === 'document' || assetKind === 'script' || assetKind === 'text'
+          : assetKind === 'file' || assetKind === 'text'
             ? 'document'
-            : assetKind === 'model'
-              ? 'model'
-              : mediaType === 'audio'
-                ? 'audio'
-                : mediaType === 'image'
-                  ? 'image'
-                  : assetKind === 'media'
-                    ? 'media'
-                    : 'other',
+            : mediaType === 'audio'
+              ? 'audio'
+              : mediaType === 'image'
+                ? 'image'
+                : assetKind === 'media'
+                  ? 'media'
+                  : 'other',
       assetDirectory: mediaType ? 'media' : 'assets',
       metadata,
     });
@@ -4957,45 +4093,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     }
   }
 
-  private async materializeShotReferencePreview(
-    nodeData: Record<string, unknown>,
-    webview: vscode.Webview,
-    documentUri: vscode.Uri,
-  ): Promise<void> {
-    const referenceImageResourceRef = isDocumentArchiveResourceRef(
-      nodeData['referenceImageResourceRef'],
-    )
-      ? nodeData['referenceImageResourceRef']
-      : undefined;
-    const unifiedResourceRef = this.resolvePreviewResourceRef(
-      nodeData['referenceResourceRef'],
-      referenceImageResourceRef,
-    );
-    delete nodeData['runtimeReferenceImagePath'];
-    delete nodeData['documentResourceStatus'];
-
-    const projected = await this.projectDocumentResourcePreviewUrl({
-      webview,
-      resourceRef: unifiedResourceRef,
-      documentResourceRef: referenceImageResourceRef,
-      documentUri,
-      caller: 'neko-canvas.shot-reference-preview',
-    });
-    if (projected) {
-      nodeData['runtimeReferenceImagePath'] = projected;
-      delete nodeData['documentResourceStatus'];
-      return;
-    }
-    if (isResourceRef(unifiedResourceRef)) {
-      this.markDocumentResourceUnavailable(nodeData, 'cache-missing');
-      return;
-    }
-
-    if (referenceImageResourceRef) {
-      this.markDocumentResourceUnavailable(nodeData, 'cache-missing');
-    }
-  }
-
   private async enrichCanvasPlaybackPlanForPreview(
     plan: CanvasPlaybackPlan,
     canvasData: Record<string, unknown>,
@@ -5029,10 +4126,20 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
               ? { previewSourceAssetPath: previewSource.source.source }
               : {}),
             ...(previewSource.source?.resourceRef
-              ? { previewSourceResourceRef: previewSource.source.resourceRef }
+              ? {
+                  previewSourceResourceRef: requireCanvasSerializableValue(
+                    previewSource.source.resourceRef,
+                    'Canvas preview ResourceRef',
+                  ),
+                }
               : {}),
             ...(previewSource.source?.documentResourceRef
-              ? { previewSourceDocumentResourceRef: previewSource.source.documentResourceRef }
+              ? {
+                  previewSourceDocumentResourceRef: requireCanvasSerializableValue(
+                    previewSource.source.documentResourceRef,
+                    'Canvas preview document resource ref',
+                  ),
+                }
               : {}),
           },
         };
@@ -5066,264 +4173,9 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     documentUri: vscode.Uri,
     webview: vscode.Webview,
   ): Promise<CanvasPlaybackPreviewSourceProjection | undefined> {
-    if (node.type === 'shot') {
-      return this.resolveShotPlaybackPreviewSource(node, documentUri, webview);
-    }
     if (node.type === 'media') {
       return this.resolveMediaPlaybackPreviewSource(node, documentUri, webview);
     }
-    return undefined;
-  }
-
-  private async resolveShotPlaybackPreviewSource(
-    node: CanvasNode,
-    documentUri: vscode.Uri,
-    webview: vscode.Webview,
-  ): Promise<CanvasPlaybackPreviewSourceProjection | undefined> {
-    const data = node.data as Record<string, unknown>;
-    const selectedGeneration = await this.resolveCanvasPlaybackPreviewSourceCandidate(
-      this.readSelectedGenerationCandidatePreviewSource(data),
-      documentUri,
-      webview,
-      'neko-canvas.preview-playback-selected-generation',
-    );
-    if (selectedGeneration) {
-      return {
-        url: selectedGeneration.url,
-        kind: 'generated-image',
-        mediaType: 'image',
-        source: selectedGeneration.source,
-        playableAssetPath: selectedGeneration.playableAssetPath,
-      };
-    }
-
-    const generatedImage = await this.resolveCanvasPlaybackPreviewSourceCandidate(
-      this.readPreviewSourceCandidate(data['generatedImage']),
-      documentUri,
-      webview,
-      'neko-canvas.preview-playback-generated-image',
-    );
-    if (generatedImage) {
-      return {
-        url: generatedImage.url,
-        kind: 'generated-image',
-        mediaType: 'image',
-        source: generatedImage.source,
-        playableAssetPath: generatedImage.playableAssetPath,
-      };
-    }
-    const generatedAsset = await this.resolveCanvasPlaybackPreviewSourceCandidate(
-      this.readPreviewSourceCandidate(data['generatedAsset']),
-      documentUri,
-      webview,
-      'neko-canvas.preview-playback-generated-asset',
-    );
-    if (generatedAsset) {
-      return {
-        url: generatedAsset.url,
-        kind: 'generated-image',
-        mediaType: 'image',
-        source: generatedAsset.source,
-        playableAssetPath: generatedAsset.playableAssetPath,
-      };
-    }
-
-    const generatedMediaUrl = await this.resolveShotMediaRefsPlaybackPreviewSource(
-      this.readStoryboardMediaRefArray(data['generatedMediaRefs']),
-      documentUri,
-      webview,
-      'generated-media',
-      'neko-canvas.preview-playback-shot-generated-media-ref',
-    );
-    if (generatedMediaUrl) {
-      return generatedMediaUrl;
-    }
-
-    const prepOutputMediaUrl = await this.resolveShotMediaRefsPlaybackPreviewSource(
-      this.readStoryboardMediaRefArray(
-        this.readNestedRecord(data['shotImagePrepPlan'])?.['outputMediaRefs'],
-      ),
-      documentUri,
-      webview,
-      'generated-media',
-      'neko-canvas.preview-playback-shot-prep-output-media-ref',
-    );
-    if (prepOutputMediaUrl) {
-      return prepOutputMediaUrl;
-    }
-
-    const runtimeReferenceImage = await this.resolveCanvasPlaybackPreviewSourceCandidate(
-      this.readPreviewSourceCandidate(data['runtimeReferenceImagePath']),
-      documentUri,
-      webview,
-      'neko-canvas.preview-playback-runtime-reference',
-    );
-    if (runtimeReferenceImage) {
-      return {
-        url: runtimeReferenceImage.url,
-        kind: 'reference-image',
-        mediaType: 'image',
-        source: runtimeReferenceImage.source,
-        playableAssetPath: runtimeReferenceImage.playableAssetPath,
-      };
-    }
-
-    const referenceImageResourceRef = isDocumentArchiveResourceRef(
-      data['referenceImageResourceRef'],
-    )
-      ? data['referenceImageResourceRef']
-      : undefined;
-    const resourceRef = this.resolvePreviewResourceRef(
-      data['referenceResourceRef'],
-      referenceImageResourceRef,
-    );
-    const projected = await this.projectDocumentResourcePreviewUrl({
-      resourceRef,
-      documentResourceRef: referenceImageResourceRef,
-      webview,
-      documentUri,
-      caller: 'neko-canvas.preview-playback-shot-reference',
-    });
-    if (projected) {
-      const referenceImagePath = this.readPreviewSourceString(data['referenceImagePath']);
-      const playableAssetPath = await this.resolveCanvasPlaybackPreviewPlayableAssetPath(
-        {
-          ...(referenceImagePath ? { source: referenceImagePath } : {}),
-          ...(referenceImageResourceRef ? { documentResourceRef: referenceImageResourceRef } : {}),
-          ...(resourceRef ? { resourceRef } : {}),
-        },
-        resourceRef,
-        documentUri,
-        'neko-canvas.preview-playback-shot-reference',
-      );
-      return {
-        url: projected,
-        kind: 'reference-image',
-        mediaType: 'image',
-        source: {
-          ...(resourceRef ? { resourceRef } : {}),
-          ...(referenceImageResourceRef ? { documentResourceRef: referenceImageResourceRef } : {}),
-        },
-        playableAssetPath,
-      };
-    }
-
-    const referenceImage = await this.resolveCanvasPlaybackPreviewSourceCandidate(
-      this.readPreviewSourceCandidate(data['referenceImagePath']),
-      documentUri,
-      webview,
-      'neko-canvas.preview-playback-shot-reference-path',
-    );
-    if (referenceImage) {
-      return {
-        url: referenceImage.url,
-        kind: 'reference-image',
-        mediaType: 'image',
-        source: referenceImage.source,
-        playableAssetPath: referenceImage.playableAssetPath,
-      };
-    }
-
-    return this.resolveShotMediaRefsPlaybackPreviewSource(
-      [
-        ...this.readStoryboardMediaRefArray(data['sourceMediaRefs']),
-        ...this.readStoryboardMediaRefArray(data['mediaRefs']),
-      ],
-      documentUri,
-      webview,
-      'source-media',
-      'neko-canvas.preview-playback-shot-media-ref',
-    );
-  }
-
-  private async resolveShotMediaRefsPlaybackPreviewSource(
-    mediaRefs: readonly Record<string, unknown>[],
-    documentUri: vscode.Uri,
-    webview: vscode.Webview,
-    sourceKind: CanvasPlaybackPreviewSourceKind,
-    caller: string,
-  ): Promise<CanvasPlaybackPreviewSourceProjection | undefined> {
-    for (const mediaRef of this.sortStoryboardPreviewMediaRefs(mediaRefs)) {
-      const candidate = this.readStoryboardMediaRefPreviewSource(mediaRef);
-      const projected = await this.resolveCanvasPlaybackPreviewSourceCandidate(
-        candidate,
-        documentUri,
-        webview,
-        caller,
-      );
-      if (projected) {
-        return {
-          url: projected.url,
-          kind: sourceKind,
-          label: this.readPreviewSourceString(mediaRef['label']),
-          mediaType: this.resolveStoryboardMediaRefMediaType(mediaRef, projected.url),
-          refId: this.readPreviewSourceString(mediaRef['refId']),
-          source: projected.source,
-          playableAssetPath: projected.playableAssetPath,
-        };
-      }
-    }
-    return undefined;
-  }
-
-  private sortStoryboardPreviewMediaRefs(
-    mediaRefs: readonly Record<string, unknown>[],
-  ): readonly Record<string, unknown>[] {
-    const refs = mediaRefs.filter((ref) =>
-      this.hasCanvasPlaybackPreviewSourceCandidate(this.readStoryboardMediaRefPreviewSource(ref)),
-    );
-    const imageRefs = refs.filter((ref) => this.isStoryboardImageMediaRef(ref));
-    return imageRefs.length > 0 ? imageRefs : refs;
-  }
-
-  private readStoryboardMediaRefArray(value: unknown): readonly Record<string, unknown>[] {
-    return Array.isArray(value)
-      ? value.filter(
-          (item): item is Record<string, unknown> =>
-            Boolean(item) && typeof item === 'object' && !Array.isArray(item),
-        )
-      : [];
-  }
-
-  private isStoryboardImageMediaRef(ref: Record<string, unknown>): boolean {
-    const mimeType = this.readPreviewSourceString(ref['mimeType']);
-    if (mimeType?.toLowerCase().startsWith('image/')) {
-      return true;
-    }
-    const pathValue = this.readStoryboardMediaRefPreviewSource(ref);
-    const source = pathValue?.source;
-    return Boolean(
-      source && /\.(avif|gif|jpe?g|png|webp)$/i.test(source.split(/[?#]/)[0] ?? source),
-    );
-  }
-
-  private readStoryboardMediaRefPreviewSource(
-    ref: Record<string, unknown>,
-  ): CanvasPlaybackPreviewSourceCandidate | undefined {
-    const directCandidate = this.readPreviewSourceCandidate(ref);
-    if (this.hasCanvasPlaybackPreviewSourceCandidate(directCandidate)) {
-      return directCandidate;
-    }
-
-    const locator = this.readNestedRecord(ref['locator']);
-    if (!locator) {
-      return undefined;
-    }
-    return this.readPreviewSourceCandidate(locator);
-  }
-
-  private resolveStoryboardMediaRefMediaType(
-    mediaRef: Record<string, unknown>,
-    source: string,
-  ): string | undefined {
-    const mimeType = this.readPreviewSourceString(mediaRef['mimeType']);
-    if (mimeType?.startsWith('image/')) return 'image';
-    if (mimeType?.startsWith('video/')) return 'video';
-    if (mimeType?.startsWith('audio/')) return 'audio';
-    const clean = source.split(/[?#]/)[0]?.toLowerCase() ?? source.toLowerCase();
-    if (/\.(avif|gif|jpe?g|png|webp)$/.test(clean)) return 'image';
-    if (/\.(m4v|mkv|mov|mp4|webm)$/.test(clean)) return 'video';
-    if (/\.(aac|flac|m4a|mp3|ogg|wav)$/.test(clean)) return 'audio';
     return undefined;
   }
 
@@ -5386,26 +4238,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           playableAssetPath: asset.playableAssetPath,
         }
       : undefined;
-  }
-
-  private readSelectedGenerationCandidatePreviewSource(
-    data: Record<string, unknown>,
-  ): CanvasPlaybackPreviewSourceCandidate | undefined {
-    const history = data['generationHistory'];
-    if (!Array.isArray(history)) {
-      return undefined;
-    }
-    const selected = history.find(
-      (candidate): candidate is Record<string, unknown> =>
-        Boolean(candidate) &&
-        typeof candidate === 'object' &&
-        !Array.isArray(candidate) &&
-        candidate['selected'] === true,
-    );
-    if (!selected) {
-      return undefined;
-    }
-    return this.readPreviewSourceCandidate(selected);
   }
 
   private async resolveCanvasPlaybackPreviewSourceCandidate(
@@ -5714,16 +4546,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
 
   private getOwningCanvasWorkspaceRoot(documentUri: vscode.Uri): vscode.Uri | undefined {
     return vscode.workspace.getWorkspaceFolder(documentUri)?.uri;
-  }
-
-  private getNarrativePreviewLocalResourceRoots(
-    sourceCanvasUri: string | undefined,
-  ): readonly vscode.Uri[] {
-    const roots = [vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview')];
-    if (sourceCanvasUri) {
-      roots.push(...this.getCanvasLocalResourceRoots(vscode.Uri.parse(sourceCanvasUri)));
-    }
-    return roots;
   }
 
   private readPreviewSourceString(value: unknown): string | undefined {
@@ -6161,20 +4983,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       const nodeData = node['data'] as Record<string, unknown> | undefined;
       if (!nodeData) continue;
 
-      stripCanvasContentLocatorRuntimeState(node);
-
-      if (node['type'] === 'shot') {
-        delete nodeData['runtimeReferenceImagePath'];
-        delete nodeData['documentResourceStatus'];
-        if (
-          isResourceRef(nodeData['referenceResourceRef']) ||
-          isDocumentArchiveResourceRef(nodeData['referenceImageResourceRef'])
-        ) {
-          delete nodeData['referenceImagePath'];
-        }
-        continue;
-      }
-
       if (node['type'] !== 'media') continue;
 
       const assetPath = typeof nodeData['assetPath'] === 'string' ? nodeData['assetPath'] : '';
@@ -6308,60 +5116,30 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       let detail: string | undefined;
 
       switch (type) {
+        case 'markdown':
+          label = String(data.title || 'Markdown');
+          detail = String(data.content || '').slice(0, 40) || undefined;
+          break;
         case 'media': {
-          const path = String(data.assetPath ?? '');
-          label = path.split('/').pop() || 'Media';
+          const assetPath = String(data.assetPath ?? '');
+          label = String(data.title || assetPath.split('/').pop() || 'Media');
           detail = String(data.mediaType ?? 'media');
           break;
         }
-        case 'storyboard':
-          label = String(data.title || 'Scene');
-          detail = data.description ? String(data.description).slice(0, 40) : undefined;
-          break;
-        case 'annotation':
-          label = String(data.content || 'Note').slice(0, 30) || 'Note';
-          detail = 'annotation';
-          break;
         case 'group':
           label = String(data.label || 'Group');
+          detail = `${readCanvasNodeContainerChildIds(n).length} items`;
           break;
-        case 'text':
-          label = String(data.content || 'Text').slice(0, 30) || 'Text';
-          detail = 'text';
+        case 'job':
+          label = String(data.title || 'JobCard');
+          detail = String(data.status || 'draft');
           break;
-        case 'artboard':
-          label = String(data.title || data.name || 'Artboard');
-          detail = data.preset ? String(data.preset) : undefined;
-          break;
-        case 'shot': {
-          const num = String(data.shotNumber ?? '?');
-          const scale = data.shotScale ? ` [${String(data.shotScale)}]` : '';
-          label = `#${num.padStart(3, '0')}${scale}`;
-          detail = data.visualDescription ? String(data.visualDescription).slice(0, 40) : undefined;
+        case 'file': {
+          const filePath = String(data.path ?? '');
+          label = String(data.title || filePath.split('/').pop() || 'File');
+          detail = data.mediaType ? String(data.mediaType) : undefined;
           break;
         }
-        case 'scene':
-          label = String(data.sceneTitle || 'Scene');
-          detail = data.location
-            ? `${String(data.location)} · ${String(data.timeOfDay ?? '')}`
-            : undefined;
-          break;
-        case 'gallery':
-          label = String(data.characterName || '角色画廊');
-          detail = data.preset ? String(data.preset) : undefined;
-          break;
-        case 'script':
-          label = String(data.scriptTitle ?? 'Script');
-          detail = data.scriptPath ? String(data.scriptPath).split('/').pop() : undefined;
-          break;
-        case 'document':
-          label = String(data.title ?? 'Document');
-          detail = data.docType ? String(data.docType).toUpperCase() : undefined;
-          break;
-        case 'model':
-          label = String(data.modelName ?? 'Model');
-          detail = data.modelType ? String(data.modelType) : undefined;
-          break;
         case 'canvas-embed':
           label = String(data.canvasTitle ?? 'Canvas');
           detail = 'embed';
@@ -6377,7 +5155,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         label,
         detail,
         locked: Boolean(n.locked),
-        ...(type === 'scene' ? { childIds: readCanvasNodeContainerChildIds(n) } : {}),
+        ...(type === 'group' ? { childIds: readCanvasNodeContainerChildIds(n) } : {}),
       };
     });
 
@@ -6407,7 +5185,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
     const viewport = (canvasData.viewport ?? { zoom: 1 }) as Record<string, unknown>;
     const selection = (canvasData._selection ?? {}) as Record<string, unknown>;
     const selectedNodeIds = (selection.nodeIds ?? []) as unknown[];
-    const subsystemSummary = readCanvasSubsystemSummary(canvasData, nodes);
     const projectionSummary = readCanvasProjectionSummary(canvasData);
 
     this.statusBar.update({
@@ -6415,7 +5192,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       connectionCount: connections.length,
       zoom: Number(viewport.zoom ?? 1),
       selectedCount: selectedNodeIds.length,
-      subsystemSummary,
       projectionSummary,
     });
   }
@@ -6472,19 +5248,6 @@ function isCanvasProjectSaveReason(value: string): value is ProjectFileSaveReaso
   );
 }
 
-function createCanvasCreativeAiEditorDiagnostic(
-  code: string,
-  message: string,
-  target?: string,
-): CreativeAiDiagnostic {
-  return {
-    severity: 'error',
-    code,
-    message,
-    ...(target ? { target } : {}),
-  };
-}
-
 function readCanvasProjectSourceAddMediaType(
   request: ProjectSourceAddRequest,
 ): 'image' | 'video' | 'audio' | undefined {
@@ -6527,22 +5290,6 @@ function readCanvasProjectSourceAddDescriptor(request: ProjectSourceAddRequest):
     ...(textFormat ? { textFormat } : {}),
   };
 
-  if (assetKind === 'document') {
-    const docType = inferCanvasDocumentType(fileName);
-    if (!docType) return undefined;
-    metadata['docType'] = docType;
-  }
-  if (assetKind === 'model') {
-    const modelType = inferCanvasModelType(fileName);
-    if (!modelType) return undefined;
-    metadata['modelType'] = modelType;
-  }
-  if (assetKind === 'project') {
-    const projectType = inferNkProjectType(fileName);
-    if (!projectType) return undefined;
-    metadata['projectType'] = projectType;
-  }
-
   return {
     fileName,
     ...(mediaType ? { mediaType } : {}),
@@ -6559,11 +5306,8 @@ function readCanvasProjectSourceAddAssetKind(
   if (
     metadataKind === 'media' ||
     metadataKind === 'text' ||
-    metadataKind === 'script' ||
-    metadataKind === 'document' ||
-    metadataKind === 'model' ||
-    metadataKind === 'canvas' ||
-    metadataKind === 'project'
+    metadataKind === 'file' ||
+    metadataKind === 'canvas'
   ) {
     return metadataKind;
   }

@@ -35,6 +35,9 @@
 - [x] 4.3 Delete legacy Skill loader/registry/service/injector, three-track injection, lifecycle slots/store/projection/runtime, conflict policy, ToolGuard/ToolSet mutation, and Skill model override.
 - [x] 4.4 Delete legacy ConversationManager, Journal reader/writer/projection, duplicate history hydration, custom compaction, AgentSession persistence, and all transcript import/read paths under the explicit prelaunch discard decision.
 - [x] 4.5 Remove obsolete factories, facades, compatibility bridges, dependencies, configuration fields, commands, tests, and exports; add poison/no-import guards proving none can return success.
+- [x] 4.6 Remove the residual shared `AgentExecutor`/`IAgentRuntime` DTO surface and
+      Executor-bound Permission/Validation hook wrappers; keep standalone validators and rule
+      matching, and guard the retired files and root exports.
 
 ## 5. Evaluation and release gates
 

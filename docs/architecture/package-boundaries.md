@@ -190,9 +190,9 @@ Capability 是 OpenNeko 产品扩展 seam，领域包提供定义，Host 负责 
 | `neko-chara`       | Character Dialogue、Embody、角色证据与角色运行编排    | core/application host-neutral；VS Code 依赖只在 `host-vscode`；只消费 Agent contract，不拥有第二套 Agent loop                                  |
 | `neko-quality`     | canonical Quality Gate、evaluator port 与模型证据适配 | 只依赖共享 contract；领域 rubric/repair/apply 留在 owning package；provider/config/credential 和 Host IO 由组合层注入                          |
 | `neko-assets`      | Media Library 文件入口、投影和 Entity VS Code surface | 文件走 canonical locator/Host Content I/O；Entity 走 canonical facade；不拥有 catalog、package/generated lifecycle 或 cache                    |
-| `neko-canvas`      | 画布、创作结构、投影与领域 authoring                  | Webview 管交互；持久写入走 domain/host contract；复用公共 UI                                                                                   |
+| `neko-canvas`      | 六类通用节点、空间布局、连接、投影与 `.nkc` authoring | Webview 管交互；只持久化 Markdown/Media/Group/Job/File/CanvasEmbed 与三类连接；Job/Character/World runtime 外置；复用公共 UI                    |
 | `neko-cut`         | Timeline、视频编辑、媒体控制与导出                    | Webview 管时间线交互；Extension 管 editor/export；媒体走 `@neko/media` 窄端口                                                                  |
-| `neko-preview`     | 授权只读预览与临时 3D Reference staging               | Preview 拥有媒体 session 和面板级 Three.js 会话；Agent/Canvas/media 只消费共享 contract；不拥有持久 3D 项目                                      |
+| `neko-preview`     | 授权只读预览与临时 3D Reference staging               | Preview 拥有媒体 session 和面板级 Three.js 会话；Agent/Canvas/media 只消费共享 contract；不拥有持久 3D 项目                                    |
 | `neko-tools`       | 工具、Media LSP、差异与诊断                           | LSP/diagnostic 在 Extension；不得贡献已移除 Device UI                                                                                          |
 | `apps/neko-vscode` | VS Code 产品组合根                                    | 拥有单一安装扩展的组合生命周期、scoped context、manifest 合并、平台打包、发布和产品验收；领域实现仍由各 `neko-*` 包拥有                        |
 

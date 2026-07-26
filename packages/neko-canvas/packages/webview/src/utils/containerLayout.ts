@@ -1,5 +1,5 @@
 import type { CanvasNode } from '@neko/shared';
-import { getContainerChildIds } from '@neko/shared';
+import { getContainerChildIds, isGroupNode } from '@neko/shared';
 
 export interface Rect {
   x: number;
@@ -19,7 +19,7 @@ export interface FindFreePositionOptions {
 
 export interface AutoArrangeContainerOptions {
   containerId: string;
-  mode?: 'grid' | 'sequence' | 'stack' | 'table' | 'gallery';
+  mode?: 'grid' | 'sequence' | 'stack';
   paddingX?: number;
   paddingTop?: number;
   gapX?: number;
@@ -95,7 +95,10 @@ export function autoArrangeContainer(
 ): CanvasNode[] {
   const container = nodes.find((node) => node.id === containerId);
   if (!container) {
-    return nodes;
+    throw new Error(`Canvas Group "${containerId}" not found`);
+  }
+  if (!isGroupNode(container)) {
+    throw new Error(`Canvas node "${containerId}" is not a Group`);
   }
 
   const childIds = getContainerChildIds(container);
@@ -114,28 +117,17 @@ export function autoArrangeContainer(
   const availableWidth = Math.max(container.size.width - paddingX * 2, minColumnWidth);
   const maxChildWidth = Math.max(...orderedChildren.map((child) => child.size.width));
 
-  const galleryData =
-    container.type === 'gallery' ? (container.data as { cols?: number }) : undefined;
-
   const columns =
-    mode === 'gallery'
-      ? Math.max(1, galleryData?.cols ?? 3)
-      : mode === 'table'
-        ? Math.max(1, layout?.columns ?? 3)
-        : mode === 'sequence'
-          ? Math.max(1, Math.floor((availableWidth + gapX) / (maxChildWidth + gapX)))
-          : mode === 'stack'
-            ? 1
-            : Math.max(1, Math.floor((availableWidth + gapX) / (maxChildWidth + gapX)));
+    mode === 'sequence'
+      ? Math.max(1, Math.floor((availableWidth + gapX) / (maxChildWidth + gapX)))
+      : mode === 'stack'
+        ? 1
+        : Math.max(1, Math.floor((availableWidth + gapX) / (maxChildWidth + gapX)));
 
-  const computedCellWidth =
-    mode === 'table'
-      ? (layout?.columnWidth ?? 200)
-      : resizeChildren
-        ? Math.floor((availableWidth - (columns - 1) * gapX) / columns)
-        : undefined;
-  const computedCellHeight =
-    mode === 'table' ? (layout?.rowHeight ?? 120) : (computedCellWidth ?? undefined);
+  const computedCellWidth = resizeChildren
+    ? Math.floor((availableWidth - (columns - 1) * gapX) / columns)
+    : undefined;
+  const computedCellHeight = computedCellWidth;
 
   const positionById = new Map<string, { x: number; y: number }>();
   const sizeById = new Map<string, { width: number; height: number }>();
@@ -166,21 +158,6 @@ export function autoArrangeContainer(
     if (position) return { ...node, position };
     return node;
   });
-}
-
-export function computeContainerChildSize(
-  container: CanvasNode,
-  options?: { paddingX?: number; gapX?: number },
-): { width: number; height: number } | undefined {
-  const paddingX = options?.paddingX ?? 24;
-  const gapX = options?.gapX ?? 8;
-  const galleryData =
-    container.type === 'gallery' ? (container.data as { cols?: number }) : undefined;
-  const columns = Math.max(1, galleryData?.cols ?? container.container?.layout?.columns ?? 3);
-  const availableWidth = Math.max(container.size.width - paddingX * 2, 60);
-  const cellWidth = Math.floor((availableWidth - (columns - 1) * gapX) / columns);
-  const cellHeight = cellWidth;
-  return { width: cellWidth, height: cellHeight };
 }
 
 function overlapsAny(rect: Rect, occupied: Rect[], gap: number): boolean {

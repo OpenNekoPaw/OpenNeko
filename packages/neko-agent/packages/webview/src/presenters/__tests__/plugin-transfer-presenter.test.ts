@@ -74,35 +74,35 @@ describe('plugin transfer presenter', () => {
   it('projects Canvas content transfer targets from selected node context', () => {
     expect(
       projectCanvasContentTransferTarget({
-        ambientNodes: [{ nodeId: 'shot-1', type: 'shot', summary: 'Shot 1' }],
+        ambientNodes: [{ nodeId: 'markdown-1', type: 'markdown', summary: 'Brief' }],
       }),
-    ).toEqual({ plugin: 'canvas', nodeId: 'shot-1', mode: 'append' });
+    ).toEqual({ plugin: 'canvas', nodeId: 'markdown-1', mode: 'append' });
 
     expect(
       projectCanvasContentTransferTarget({
-        ambientNodes: [{ nodeId: 'scene-1', type: 'scene', summary: 'Scene 1' }],
+        ambientNodes: [{ nodeId: 'group-1', type: 'group', summary: 'Act one' }],
       }),
-    ).toEqual({ plugin: 'canvas', containerId: 'scene-1', mode: 'create-child' });
+    ).toEqual({ plugin: 'canvas', containerId: 'group-1', mode: 'create-child' });
 
     expect(
       projectCanvasContentTransferTarget({
         contextChips: [
           {
             type: 'canvas-node',
-            id: 'gallery-1',
-            label: 'Gallery',
-            summary: 'Gallery',
-            data: { type: 'gallery' },
+            id: 'group-2',
+            label: 'Group',
+            summary: 'References',
+            data: { type: 'group' },
           },
         ],
       }),
-    ).toEqual({ plugin: 'canvas', containerId: 'gallery-1', mode: 'create-child' });
+    ).toEqual({ plugin: 'canvas', containerId: 'group-2', mode: 'create-child' });
 
     expect(
       projectCanvasContentTransferTarget({
         ambientNodes: [
-          { nodeId: 'shot-1', type: 'shot', summary: 'Shot 1' },
-          { nodeId: 'shot-2', type: 'shot', summary: 'Shot 2' },
+          { nodeId: 'markdown-1', type: 'markdown', summary: 'Brief' },
+          { nodeId: 'media-1', type: 'media', summary: 'Image' },
         ],
       }),
     ).toEqual({ plugin: 'canvas', mode: 'insert' });

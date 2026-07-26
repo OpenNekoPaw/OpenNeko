@@ -59,7 +59,7 @@ describe('Canvas keyboard focus routing contracts', () => {
 
   it('routes outline commands back to the document that produced the visible outline tree', () => {
     expect(outlineSource).toContain('documentUri: string;');
-    expect(outlineSource).toContain('arguments: [node.id, element.documentUri]');
+    expect(outlineSource).toContain('arguments: [element.node.id, element.documentUri]');
     expect(outlineSource).toContain('arguments: [connection.id, element.documentUri]');
     expect(extensionSource).toContain('parseCanvasDocumentUri(documentUri)');
     expect(extensionSource).toContain('parseCanvasDocumentUri(element.documentUri)');
@@ -104,7 +104,6 @@ describe('Canvas keyboard focus routing contracts', () => {
       'neko.canvas.undo',
       'neko.canvas.redo',
       'neko.canvas.resetZoom',
-      'neko.canvas.generateSelected',
       'neko.canvas.selectNodeFromOutline',
       'neko.canvas.selectConnectionFromOutline',
     ]) {
@@ -146,7 +145,6 @@ describe('Canvas keyboard focus routing contracts', () => {
     expect(keyboardControllerSource).toContain("createEditorBinding('select-all'");
     expect(keyboardControllerSource).toContain("createEditorBinding('undo'");
     expect(keyboardControllerSource).toContain("createEditorBinding('redo'");
-    expect(keyboardControllerSource).toMatch(/createEditorBinding\(\s*'generate-selected'/);
     expect(keyboardControllerSource).toContain("createViewportBinding('toggle-pan-mode'");
     expect(keyboardControllerSource).toContain("createViewportBinding('space-pan-start'");
     expect(keyboardControllerSource).toContain("createViewportBinding('space-pan-end'");

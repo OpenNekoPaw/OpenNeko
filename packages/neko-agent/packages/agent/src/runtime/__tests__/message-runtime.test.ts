@@ -993,10 +993,10 @@ describe('message runtime helpers', () => {
 
   it('appends ambient canvas context to the system prompt', () => {
     const prompt = appendAmbientCanvasSystemPrompt('base prompt', [
-      { nodeId: 'node-1', type: 'image', summary: 'Hero frame' },
+      { nodeId: 'node-1', type: 'media', summary: 'Hero frame' },
     ]);
 
-    expect(prompt).toContain('[image] Hero frame (id: node-1)');
+    expect(prompt).toContain('[media] Hero frame (id: node-1)');
     expect(prompt).not.toContain('canvas_get_node');
     expect(prompt).not.toContain('canvas_update_node');
     expect(prompt).not.toContain('canvas_generate_image');
@@ -1039,8 +1039,8 @@ describe('message runtime helpers', () => {
     expect(
       projectAgentMentionExtras(
         [
-          { nodeId: 'node-1', type: 'shot', summary: 'Hero frame' },
-          { nodeId: 'node-2', type: 'scene', summary: 'Outro scene' },
+          { nodeId: 'node-1', type: 'media', summary: 'Hero frame' },
+          { nodeId: 'node-2', type: 'group', summary: 'Outro group' },
         ],
         'hero',
       ),
@@ -1093,7 +1093,7 @@ describe('message runtime helpers', () => {
         conversationId: 'conv-1',
         filter: '',
         files: [{ relativePath: 'src/app.ts' }],
-        canvasNodes: [{ nodeId: 'node-1', type: 'shot', summary: 'Hero frame' }],
+        canvasNodes: [{ nodeId: 'node-1', type: 'media', summary: 'Hero frame' }],
       }),
     ).toEqual({
       type: 'projectFiles',
@@ -1162,7 +1162,7 @@ describe('message runtime helpers', () => {
         conversationId: 'conv-1',
         filter: 'app',
         searchProjectFiles,
-        getCanvasNodes: () => [{ nodeId: 'node-1', type: 'shot', summary: 'App hero' }],
+        getCanvasNodes: () => [{ nodeId: 'node-1', type: 'media', summary: 'App hero' }],
       }),
     ).resolves.toEqual({
       type: 'projectFiles',
@@ -1238,7 +1238,7 @@ describe('message runtime helpers', () => {
   it('runs entry-page search without conversation-scoped canvas context', async () => {
     const searchProjectFiles = vi.fn(async () => [{ relativePath: 'assets/hero.png' }]);
     const getCanvasNodes = vi.fn(() => [
-      { nodeId: 'node-1', type: 'shot', summary: 'Current shot' },
+      { nodeId: 'node-1', type: 'media' as const, summary: 'Current image' },
     ]);
 
     await expect(
@@ -1274,7 +1274,7 @@ describe('message runtime helpers', () => {
         searchProjectFiles: async () => {
           throw new Error('findFiles failed');
         },
-        getCanvasNodes: () => [{ nodeId: 'node-1', type: 'shot', summary: 'Fallback shot' }],
+        getCanvasNodes: () => [{ nodeId: 'node-1', type: 'media', summary: 'Fallback image' }],
         onSearchError,
       }),
     ).resolves.toEqual({
@@ -1484,14 +1484,14 @@ describe('message runtime helpers', () => {
       buildAgentTurnContextPatch({
         imageAttachments: [{ type: 'base64', media_type: 'image/png', data: 'abc' }],
         timelineContextPacket: { kind: 'timeline' },
-        canvasNodes: [{ nodeId: 'node-1', type: 'shot', summary: 'Hero frame' }],
+        canvasNodes: [{ nodeId: 'node-1', type: 'media', summary: 'Hero frame' }],
         canvasContextPacket: { kind: 'canvas' },
         executionMetadata: { traceId: 'trace-1' },
       }),
     ).toEqual({
       imageAttachments: [{ type: 'base64', media_type: 'image/png', data: 'abc' }],
       canvasContext: {
-        selectedNodes: [{ nodeId: 'node-1', type: 'shot', summary: 'Hero frame' }],
+        selectedNodes: [{ nodeId: 'node-1', type: 'media', summary: 'Hero frame' }],
       },
       multimodalContextPacket: { kind: 'canvas' },
       metadata: { traceId: 'trace-1' },
@@ -1749,7 +1749,7 @@ describe('message runtime helpers', () => {
         conversationId: 'conv-1',
         baseSystemPrompt: 'base',
         customSystemPrompt: 'Prefer concise replies.',
-        ambientCanvas: [{ nodeId: 'node-1', type: 'shot', summary: 'Opening shot' }],
+        ambientCanvas: [{ nodeId: 'node-1', type: 'markdown', summary: 'Opening note' }],
         executionMode: 'plan',
         chatModel: { providerId: 'openai', modelId: 'gpt-4.1', category: 'llm' },
         mediaModels: {

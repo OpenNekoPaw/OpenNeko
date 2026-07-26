@@ -1,7 +1,15 @@
+// @vitest-environment jsdom
+
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createResourceRef, type CanvasNode } from '@neko/shared';
+import { resetVSCodeApi } from '@neko/shared/vscode';
+import { setLocale } from '../../i18n';
 import { SelectionMaterialGenerationBar } from './SelectionMaterialGenerationBar';
+
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const resourceRef = createResourceRef({
   id: 'generated-image-1',
@@ -14,27 +22,30 @@ const resourceRef = createResourceRef({
 });
 
 describe('SelectionMaterialGenerationBar', () => {
-  it('shows prompt metadata and quick generation for a generated Shot', () => {
-    const node = shotNode('shot-1', {
-      generatedAsset: {
-        path: 'neko/generated/image/shot-1.png',
-        resourceRef,
+  beforeEach(() => setLocale('en'));
+
+  it('shows prompt metadata and quick generation for generated canonical media', () => {
+    const node = mediaNode('generated-media', {
+      assetPath: '',
+      mediaType: 'image',
+      resourceRef,
+      generationContext: {
         prompt: 'Cold industrial corridor',
         model: 'image-model-v2',
-        ratio: '16:9',
+        aspectRatio: '16:9',
       },
     });
 
     const markup = render(node, [node]);
 
     expect(markup).toContain('data-material-generation-context="true"');
-    expect(markup).toContain('data-material-generation-target="shot-1"');
+    expect(markup).toContain('data-material-generation-target="generated-media"');
     expect(markup).toContain('Cold industrial corridor');
     expect(markup).toContain('image-model-v2 · 16:9');
-    expect(markup).toContain('data-material-generation-action="open-generation-panel"');
+    expect(markup).toContain('data-material-generation-action="generate-again"');
   });
 
-  it('shows missing prompt provenance without a failing quick action for legacy media', () => {
+  it('shows missing prompt provenance while retaining the Agent Job quick action', () => {
     const node = mediaNode('legacy-generated', {
       assetPath: '',
       mediaType: 'image',
@@ -45,7 +56,56 @@ describe('SelectionMaterialGenerationBar', () => {
 
     expect(markup).toContain('data-material-generation-context="true"');
     expect(markup).toContain('No generation prompt was recorded');
-    expect(markup).not.toContain('data-material-generation-action');
+    expect(markup).toContain('data-material-generation-action');
+  });
+
+  it('routes generate again through the Agent with explicit provenance', () => {
+    const postMessage = vi.fn();
+    (window as unknown as { vscodeApi?: unknown }).vscodeApi = { postMessage };
+    resetVSCodeApi();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const node = mediaNode('generated-media', {
+      assetPath: '',
+      mediaType: 'image',
+      resourceRef,
+      generationContext: {
+        prompt: 'Cold industrial corridor',
+        model: 'image-model-v2',
+      },
+    });
+
+    try {
+      act(() => {
+        root.render(
+          <SelectionMaterialGenerationBar
+            nodes={[node]}
+            selectedNodeIds={[node.id]}
+            viewport={{ pan: { x: 0, y: 0 }, zoom: 1 }}
+            viewportSize={{ width: 800, height: 600 }}
+          />,
+        );
+      });
+      act(() => {
+        host
+          .querySelector<HTMLButtonElement>('[data-material-generation-action="generate-again"]')
+          ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+
+      expect(postMessage).toHaveBeenCalledWith({
+        type: 'sendToAgent',
+        nodeIds: ['generated-media'],
+        action: 'generate',
+        prompt: 'Cold industrial corridor',
+        mediaType: 'image',
+      });
+    } finally {
+      act(() => root.unmount());
+      host.remove();
+      delete (window as unknown as { vscodeApi?: unknown }).vscodeApi;
+      resetVSCodeApi();
+    }
   });
 });
 
@@ -64,17 +124,6 @@ function mediaNode(id: string, data: Record<string, unknown>): CanvasNode {
   return {
     id,
     type: 'media',
-    position: { x: 100, y: 100 },
-    size: { width: 280, height: 200 },
-    zIndex: 1,
-    data,
-  } as CanvasNode;
-}
-
-function shotNode(id: string, data: Record<string, unknown>): CanvasNode {
-  return {
-    id,
-    type: 'shot',
     position: { x: 100, y: 100 },
     size: { width: 280, height: 200 },
     zIndex: 1,

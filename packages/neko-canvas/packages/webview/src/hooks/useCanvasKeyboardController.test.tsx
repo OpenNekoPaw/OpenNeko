@@ -48,7 +48,6 @@ describe('useCanvasKeyboardController', () => {
     expect(options.onSelectAll).toHaveBeenCalledTimes(1);
     expect(options.onUndo).toHaveBeenCalledTimes(1);
     expect(options.onRedo).toHaveBeenCalledTimes(1);
-    expect(options.onGenerateSelected).toHaveBeenCalledTimes(1);
   });
 
   it('does not mutate editor state while a nested input has DOM focus', () => {
@@ -214,7 +213,6 @@ function createOptions(
   return {
     state: {
       canDeleteSelection: true,
-      canGenerateSelection: true,
       hasNodes: true,
       isKeyboardFocused: true,
       ...stateOverrides,
@@ -229,7 +227,6 @@ function createOptions(
     onPaste: vi.fn(),
     onPasteInPlace: vi.fn(),
     onDuplicate: vi.fn(),
-    onGenerateSelected: vi.fn(),
     onSpacePanEnd: vi.fn(),
     onSpacePanStart: vi.fn(),
     onTogglePanMode: vi.fn(),

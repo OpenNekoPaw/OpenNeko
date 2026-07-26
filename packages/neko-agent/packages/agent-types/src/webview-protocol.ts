@@ -14,6 +14,7 @@ import type {
   CanvasMarkdownCapabilityTarget,
   CanvasMarkdownCapabilityResult,
   CanvasMarkdownResourceRef,
+  CanvasNodeType,
   ChatModelOption,
   DocumentLocator,
   DocumentSourceRef,
@@ -29,6 +30,7 @@ import {
   isAgentCapabilityInvocationInput,
   isCanvasMarkdownCapabilityTarget,
   isCanvasMarkdownResourceRef,
+  isCanvasNodeType,
   isThreeReferenceContextData,
   isResourceRef,
   parseDocumentArchiveResourceRef,
@@ -886,10 +888,16 @@ export interface InjectContextMessage {
   payload: AgentContextPayload;
 }
 
+export interface AmbientCanvasNode {
+  readonly nodeId: string;
+  readonly type: CanvasNodeType;
+  readonly summary: string;
+}
+
 export interface AmbientCanvasUpdateMessage {
   type: 'ambientCanvasUpdate';
   conversationId?: string | null;
-  nodes?: Array<{ nodeId: string; type: string; summary: string }>;
+  nodes?: AmbientCanvasNode[];
 }
 
 export type ExtensionToWebviewMessage =
@@ -1184,6 +1192,36 @@ export function buildAmbientCanvasUpdateMessage(input: {
     ...(input.nodes !== undefined ? { nodes: input.nodes } : {}),
     ...(input.conversationId !== undefined ? { conversationId: input.conversationId } : {}),
   };
+}
+
+export function parseAmbientCanvasUpdateNodes(value: unknown): AmbientCanvasNode[] {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error('ambientCanvasUpdate.nodes must be an array.');
+  }
+  return value.map((node, index) => {
+    if (!isRecord(node)) {
+      throw new Error(`ambientCanvasUpdate.nodes[${index}] must be an object.`);
+    }
+    if (!isNonEmptyString(node.nodeId)) {
+      throw new Error(`ambientCanvasUpdate.nodes[${index}].nodeId must be a non-empty string.`);
+    }
+    if (!isCanvasNodeType(node.type)) {
+      throw new Error(
+        `ambientCanvasUpdate.nodes[${index}].type is not a canonical Canvas node type.`,
+      );
+    }
+    if (!isNonEmptyString(node.summary)) {
+      throw new Error(`ambientCanvasUpdate.nodes[${index}].summary must be a non-empty string.`);
+    }
+    return {
+      nodeId: node.nodeId,
+      type: node.type,
+      summary: node.summary,
+    };
+  });
 }
 
 export function buildAgentCapabilityLifecycleResultMessage(input: {

@@ -30,6 +30,7 @@ import {
 } from '@neko-agent/types';
 import type {
   AgentContextPayload,
+  CanvasNodeType,
   DocumentContextData,
   DocumentLocator,
   MessageAttachment,
@@ -351,7 +352,7 @@ export type RunAgentMessageTurnRuntimeResult =
 
 export interface AgentAmbientCanvasNode {
   readonly nodeId: string;
-  readonly type: string;
+  readonly type: CanvasNodeType;
   readonly summary: string;
 }
 

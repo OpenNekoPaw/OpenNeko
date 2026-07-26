@@ -55,6 +55,8 @@ export function arrangeSpatialGroup(
   const deltaByNodeId = new Map<string, { x: number; y: number }>();
   for (const [childId, delta] of deltas) {
     deltaByNodeId.set(childId, delta);
+    const child = childById.get(childId);
+    if (!child || !isGroupNode(child)) continue;
     for (const descendantId of getContainerDescendantIds(reordered.nodes, childId)) {
       deltaByNodeId.set(descendantId, delta);
     }

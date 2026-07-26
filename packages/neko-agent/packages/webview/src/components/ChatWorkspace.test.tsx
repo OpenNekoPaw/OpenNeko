@@ -804,7 +804,7 @@ describe('ChatWorkspace pending send', () => {
         new MessageEvent('message', {
           data: {
             type: 'ambientCanvasUpdate',
-            nodes: [{ nodeId: 'node-b', type: 'scene', summary: 'Tab B scene' }],
+            nodes: [{ nodeId: 'node-b', type: 'group', summary: 'Tab B group' }],
           },
         }),
       );
@@ -827,7 +827,7 @@ describe('ChatWorkspace pending send', () => {
     expect(vscodeMocks.editQueuedMessage).toHaveBeenCalledWith('tab-b', 'conv-b', 'queued-1');
     expect(clearMessages).toHaveBeenCalledTimes(1);
     expect(setAmbientNodes).toHaveBeenCalledWith([
-      { nodeId: 'node-b', type: 'scene', summary: 'Tab B scene' },
+      { nodeId: 'node-b', type: 'group', summary: 'Tab B group' },
     ]);
   });
 
@@ -952,7 +952,7 @@ function createProps(overrides: Partial<ChatWorkspaceProps> = {}): ChatWorkspace
     ambientNodes: [],
     agentState: null,
     setAmbientNodes: noop as React.Dispatch<
-      React.SetStateAction<Array<{ nodeId: string; type: string; summary: string }>>
+      React.SetStateAction<import('@neko-agent/types').AmbientCanvasNode[]>
     >,
     onNewChat: noop,
     queuedEditDraftConflictMessage: 'Queued edit draft conflict',

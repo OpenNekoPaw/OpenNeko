@@ -5,15 +5,12 @@
  * file system, and Media Library into the canvas.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import {
   createProjectSourceAddClient,
-  inferCanvasDocumentType,
   inferCanvasDroppedAssetKind,
   inferCanvasMediaType,
-  inferCanvasModelType,
   inferCanvasTextFileFormat,
-  inferNkProjectType,
   isMediaLibraryDragData,
   type ProjectSourceAddClient,
   type ProjectSourceAddClientInput,
@@ -24,7 +21,6 @@ import {
 import { useFileDrop } from '@neko/ui/hooks';
 import type { FileDropResult } from '@neko/ui/hooks';
 import { detectMediaType } from '../utils/mediaType';
-import { hasNodeLibraryDragPayload, readNodeLibraryDragPayload } from '../utils/nodeLibraryDrag';
 import type { VSCodeAPI } from './useVSCodeMessages';
 
 // =============================================================================
@@ -35,7 +31,6 @@ export type CanvasProjectSourceAddClient = ProjectSourceAddClient;
 
 export interface UseDragDropOptions {
   vscode: VSCodeAPI;
-  canvasContainerRef: React.RefObject<HTMLDivElement | null>;
   screenToCanvas: (screenX: number, screenY: number) => { x: number; y: number };
   addMediaAt: (
     pos: { x: number; y: number },
@@ -44,7 +39,6 @@ export interface UseDragDropOptions {
     name?: string,
     options?: { runtimeAssetPath?: string },
   ) => void;
-  onDropNodeType?: (type: CanvasNodeType, position: { x: number; y: number }) => void;
   onDropAssets?: (assets: CanvasDroppedAsset[], position?: { x: number; y: number }) => void;
   addSourceClient?: ProjectSourceAddClient;
   onError?: (message: string) => void;
@@ -64,10 +58,9 @@ export interface UseDragDropReturn {
 // =============================================================================
 
 export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
-  const { vscode, screenToCanvas, addMediaAt, onDropNodeType, onError } = options;
+  const { vscode, screenToCanvas, addMediaAt, onError } = options;
 
   const dropPositionRef = useRef<{ x: number; y: number } | null>(null);
-  const [isNodeLibraryDragOver, setIsNodeLibraryDragOver] = useState(false);
 
   const handleFileDrop = useCallback(
     async (result: FileDropResult, event: React.DragEvent) => {
@@ -163,63 +156,12 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
 
   const { isDragOver, dropProps } = useFileDrop(handleFileDrop);
 
-  const handleDragEnter = useCallback(
-    (e: React.DragEvent) => {
-      if (hasNodeLibraryDragPayload(e.dataTransfer)) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = 'copy';
-        setIsNodeLibraryDragOver(true);
-        return;
-      }
-      dropProps.onDragEnter(e);
-    },
-    [dropProps],
-  );
-
-  const handleDragOver = useCallback(
-    (e: React.DragEvent) => {
-      if (hasNodeLibraryDragPayload(e.dataTransfer)) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = 'copy';
-        setIsNodeLibraryDragOver(true);
-        return;
-      }
-      dropProps.onDragOver(e);
-    },
-    [dropProps],
-  );
-
-  const handleDragLeave = useCallback(
-    (e: React.DragEvent) => {
-      if (isNodeLibraryDragLeavingCanvas(e, options.canvasContainerRef.current)) {
-        setIsNodeLibraryDragOver(false);
-      }
-      dropProps.onDragLeave(e);
-    },
-    [dropProps, options.canvasContainerRef],
-  );
-
   // Wrap the drop handler to also check for cross-extension DnD payload (ADR-5 P1).
   // When a drag originates from another VSCode webview iframe, the dataTransfer is
   // empty — so we always notify the extension host to check for a pending DnD payload.
   const handleDropWithCrossExtension = useCallback(
     (e: React.DragEvent) => {
-      const droppedNodeType = readNodeLibraryDragPayload(e.dataTransfer);
-      if (droppedNodeType) {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsNodeLibraryDragOver(false);
-        const position = screenToCanvas(e.clientX, e.clientY);
-        dropPositionRef.current = position;
-        onDropNodeType?.(droppedNodeType, position);
-        dropPositionRef.current = null;
-        return;
-      }
-
       // Let useFileDrop handle file/URI/asset drops first
-      setIsNodeLibraryDragOver(false);
       const hasExternalDropPayload = hasCanvasExternalDropPayload(e.dataTransfer);
       dropProps.onDrop(e);
 
@@ -228,15 +170,15 @@ export function useDragDrop(options: UseDragDropOptions): UseDragDropReturn {
         vscode.postMessage({ type: 'dnd:drop' });
       }
     },
-    [dropProps, onDropNodeType, screenToCanvas, vscode],
+    [dropProps, vscode],
   );
 
   return {
-    isDragOver: isDragOver || isNodeLibraryDragOver,
+    isDragOver,
     dropPositionRef,
-    handleDragEnter,
-    handleDragOver,
-    handleDragLeave,
+    handleDragEnter: dropProps.onDragEnter,
+    handleDragOver: dropProps.onDragOver,
+    handleDragLeave: dropProps.onDragLeave,
     handleDrop: handleDropWithCrossExtension,
   };
 }
@@ -266,17 +208,15 @@ function createCanvasAssetAddSourceInput(input: {
     browserFile: { name: fileName },
     target: {
       role:
-        metadata.canvasAssetKind === 'project'
+        metadata.canvasAssetKind === 'canvas'
           ? 'project'
-          : metadata.canvasAssetKind === 'document'
+          : metadata.canvasAssetKind === 'file'
             ? 'document'
-            : metadata.canvasAssetKind === 'model'
-              ? 'model'
-              : mediaType === 'audio'
-                ? 'audio'
-                : mediaType === 'image'
-                  ? 'image'
-                  : 'media',
+            : mediaType === 'audio'
+              ? 'audio'
+              : mediaType === 'image'
+                ? 'image'
+                : 'media',
     },
     assetDirectory: mediaType ? 'media' : 'assets',
     metadata,
@@ -310,12 +250,14 @@ export function createCanvasMediaAddSourceInput(input: {
 export function createCanvasFilePickerAddSourceInput(
   nodeType: CanvasNodeType | undefined,
   dropPosition: { x: number; y: number },
+  mediaTypeHint?: 'image' | 'video' | 'audio',
 ): ProjectSourceAddClientInput {
-  const sourceNameHint = getCanvasFilePickerDefaultName(nodeType);
+  const sourceNameHint = getCanvasFilePickerDefaultName(nodeType, mediaTypeHint);
   const assetKind = readCanvasAssetKindForNodeType(nodeType);
   const metadata = createCanvasAddSourceMetadata({
     fileName: sourceNameHint,
     assetKind,
+    mediaType: mediaTypeHint,
     dropPosition,
   });
 
@@ -324,44 +266,35 @@ export function createCanvasFilePickerAddSourceInput(
     formatId: 'nkc',
     browserFile: { name: sourceNameHint },
     target: {
-      role: readCanvasSourceRoleForNodeType(nodeType),
+      role: readCanvasSourceRoleForNodeType(nodeType, mediaTypeHint),
     },
     assetDirectory: assetKind === 'media' ? 'media' : 'assets',
     metadata,
   };
 }
 
-export function getCanvasFilePickerDefaultName(nodeType: CanvasNodeType | undefined): string {
+export function getCanvasFilePickerDefaultName(
+  nodeType: CanvasNodeType | undefined,
+  mediaTypeHint?: 'image' | 'video' | 'audio',
+): string {
   switch (nodeType) {
     case 'media':
-      return 'media';
-    case 'text':
-      return 'text.txt';
-    case 'script':
-      return 'script.fountain';
-    case 'document':
-      return 'document.pdf';
-    case 'model':
-      return 'model.safetensors';
+      return mediaTypeHint ?? 'media';
+    case 'file':
+      return 'file';
     case 'canvas-embed':
       return 'canvas.nkc';
-    case 'project':
-      return 'project';
     default:
       return 'source';
   }
 }
 
 function readCanvasAddSourceMetadata(result: ProjectSourceAddResult): {
-  readonly canvasAssetKind?:
-    'media' | 'text' | 'script' | 'document' | 'model' | 'canvas' | 'project';
+  readonly canvasAssetKind?: 'media' | 'text' | 'file' | 'canvas';
   readonly mediaType?: 'image' | 'video' | 'audio';
   readonly runtimeAssetPath?: string;
   readonly name?: string;
   readonly title?: string;
-  readonly docType?: string;
-  readonly modelType?: string;
-  readonly projectType?: string;
   readonly textFormat?: string;
   readonly textContent?: string;
 } {
@@ -371,9 +304,6 @@ function readCanvasAddSourceMetadata(result: ProjectSourceAddResult): {
   const runtimeAssetPath = metadata?.['runtimeAssetPath'];
   const name = metadata?.['name'];
   const title = metadata?.['title'];
-  const docType = metadata?.['docType'];
-  const modelType = metadata?.['modelType'];
-  const projectType = metadata?.['projectType'];
   const textFormat = metadata?.['textFormat'];
   const textContent = metadata?.['textContent'];
   return {
@@ -384,9 +314,6 @@ function readCanvasAddSourceMetadata(result: ProjectSourceAddResult): {
     ...(typeof runtimeAssetPath === 'string' ? { runtimeAssetPath } : {}),
     ...(typeof name === 'string' ? { name } : {}),
     ...(typeof title === 'string' ? { title } : {}),
-    ...(typeof docType === 'string' ? { docType } : {}),
-    ...(typeof modelType === 'string' ? { modelType } : {}),
-    ...(typeof projectType === 'string' ? { projectType } : {}),
     ...(typeof textFormat === 'string' ? { textFormat } : {}),
     ...(typeof textContent === 'string' ? { textContent } : {}),
   };
@@ -467,51 +394,11 @@ function createCanvasDroppedAssetFromAddSourceResult(input: {
     }
     return { kind: 'text', path: input.durablePath, name, title, format, content };
   }
-  if (kind === 'script') {
-    return { kind: 'script', path: input.durablePath, name, title };
-  }
-  if (kind === 'document') {
-    const docType = input.metadata.docType;
-    if (
-      docType !== 'pdf' &&
-      docType !== 'docx' &&
-      docType !== 'epub' &&
-      docType !== 'cbz' &&
-      docType !== 'markdown' &&
-      docType !== 'text'
-    ) {
-      return undefined;
-    }
-    return { kind: 'document', path: input.durablePath, name, title, docType };
-  }
-  if (kind === 'model') {
-    const modelType = input.metadata.modelType;
-    if (
-      modelType !== 'checkpoint' &&
-      modelType !== 'lora' &&
-      modelType !== 'vae' &&
-      modelType !== 'controlnet'
-    ) {
-      return undefined;
-    }
-    return {
-      kind: 'model',
-      path: input.durablePath,
-      name,
-      modelName: title,
-      modelType,
-      role: 'reference',
-    };
+  if (kind === 'file') {
+    return { kind: 'file', path: input.durablePath, name, title };
   }
   if (kind === 'canvas') {
     return { kind: 'canvas', path: input.durablePath, name, title };
-  }
-  if (kind === 'project') {
-    const projectType = input.metadata.projectType;
-    if (projectType !== 'nkv') {
-      return undefined;
-    }
-    return { kind: 'project', path: input.durablePath, name, title, projectType };
   }
   return undefined;
 }
@@ -532,17 +419,8 @@ function createCanvasAddSourceMetadata(input: {
     dropY: input.dropPosition.y,
     name: input.fileName,
     title: baseName || input.fileName,
-    ...(assetKind === 'document'
-      ? { docType: inferCanvasDocumentType(input.fileName) ?? undefined }
-      : {}),
     ...(assetKind === 'text'
       ? { textFormat: inferCanvasTextFileFormat(input.fileName) ?? undefined }
-      : {}),
-    ...(assetKind === 'model'
-      ? { modelType: inferCanvasModelType(input.fileName) ?? undefined }
-      : {}),
-    ...(assetKind === 'project'
-      ? { projectType: inferNkProjectType(input.fileName) ?? undefined }
       : {}),
   };
 }
@@ -576,18 +454,10 @@ function readCanvasAssetKindForNodeType(
   switch (nodeType) {
     case 'media':
       return 'media';
-    case 'text':
-      return 'text';
-    case 'script':
-      return 'text';
-    case 'document':
-      return 'document';
-    case 'model':
-      return 'model';
+    case 'file':
+      return 'file';
     case 'canvas-embed':
       return 'canvas';
-    case 'project':
-      return 'project';
     default:
       return undefined;
   }
@@ -595,39 +465,22 @@ function readCanvasAssetKindForNodeType(
 
 function readCanvasSourceRoleForNodeType(
   nodeType: CanvasNodeType | undefined,
+  mediaTypeHint?: 'image' | 'video' | 'audio',
 ): NonNullable<ProjectSourceAddClientInput['target']>['role'] {
   switch (nodeType) {
-    case 'script':
+    case 'file':
       return 'document';
-    case 'text':
-      return 'document';
-    case 'document':
-      return 'document';
-    case 'model':
-      return 'model';
-    case 'project':
-      return 'project';
     case 'canvas-embed':
       return 'project';
     case 'media':
-      return 'media';
+      return mediaTypeHint === 'image' ? 'image' : mediaTypeHint === 'audio' ? 'audio' : 'media';
     default:
       return 'other';
   }
 }
 
-function isCanvasAddSourceAssetKind(
-  value: unknown,
-): value is 'media' | 'text' | 'script' | 'document' | 'model' | 'canvas' | 'project' {
-  return (
-    value === 'media' ||
-    value === 'text' ||
-    value === 'script' ||
-    value === 'document' ||
-    value === 'model' ||
-    value === 'canvas' ||
-    value === 'project'
-  );
+function isCanvasAddSourceAssetKind(value: unknown): value is 'media' | 'text' | 'file' | 'canvas' {
+  return value === 'media' || value === 'text' || value === 'file' || value === 'canvas';
 }
 
 export function createCanvasProjectSourceAddClient(vscode: VSCodeAPI): ProjectSourceAddClient {
@@ -662,14 +515,6 @@ export function createCanvasProjectSourceAddClient(vscode: VSCodeAPI): ProjectSo
   });
 }
 
-export function isNodeLibraryDragLeavingCanvas(
-  event: Pick<React.DragEvent, 'relatedTarget'>,
-  canvasElement: HTMLDivElement | null,
-): boolean {
-  const nextTarget = event.relatedTarget;
-  return nextTarget === null || !isDomNode(nextTarget) || !canvasElement?.contains(nextTarget);
-}
-
 export function hasCanvasExternalDropPayload(dataTransfer: Pick<DataTransfer, 'types'>): boolean {
   const types = Array.from(dataTransfer.types);
   return (
@@ -678,14 +523,4 @@ export function hasCanvasExternalDropPayload(dataTransfer: Pick<DataTransfer, 't
     types.includes('application/json') ||
     types.includes('text/plain')
   );
-}
-
-export function isDomNode(value: EventTarget | null): value is Node {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-  if (typeof Node !== 'undefined') {
-    return value instanceof Node;
-  }
-  return typeof (value as { nodeType?: unknown }).nodeType === 'number';
 }

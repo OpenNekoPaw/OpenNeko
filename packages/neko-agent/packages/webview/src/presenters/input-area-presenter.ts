@@ -40,8 +40,7 @@ export interface InputAreaUiProjection {
   sendTitleKey: 'chat.input.send' | 'chat.input.queue';
 }
 
-export type AmbientCanvasContextActionId =
-  'generate-image' | 'batch-generate-images' | 'optimize-selection' | 'understand-selection';
+export type AmbientCanvasContextActionId = 'create-job' | 'understand-selection';
 
 export interface AmbientCanvasContextActionProjection {
   id: AmbientCanvasContextActionId;
@@ -62,9 +61,8 @@ export interface AmbientCanvasContextProjection {
   counts: AmbientCanvasContextCountProjection[];
   previewNodes: AmbientCanvasNodeProjection[];
   actions: AmbientCanvasContextActionProjection[];
-  shotCount: number;
-  sceneCount: number;
   mediaCount: number;
+  jobCount: number;
 }
 
 export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputAreaUiProjection {
@@ -123,12 +121,12 @@ export function projectInputAreaUi(input: InputAreaUiProjectionInput): InputArea
 }
 
 const AMBIENT_CANVAS_COUNT_LABEL_KEYS: Record<string, string> = {
-  shot: 'chat.input.canvasContext.count.shots',
-  scene: 'chat.input.canvasContext.count.scenes',
+  markdown: 'chat.input.canvasContext.count.markdown',
   media: 'chat.input.canvasContext.count.media',
-  gallery: 'chat.input.canvasContext.count.galleries',
-  annotation: 'chat.input.canvasContext.count.notes',
-  text: 'chat.input.canvasContext.count.notes',
+  group: 'chat.input.canvasContext.count.groups',
+  job: 'chat.input.canvasContext.count.jobs',
+  file: 'chat.input.canvasContext.count.files',
+  'canvas-embed': 'chat.input.canvasContext.count.canvases',
 };
 
 export function projectAmbientCanvasContext(
@@ -141,9 +139,8 @@ export function projectAmbientCanvasContext(
     countsByType.set(node.type, (countsByType.get(node.type) ?? 0) + 1);
   }
 
-  const shotCount = countsByType.get('shot') ?? 0;
-  const sceneCount = countsByType.get('scene') ?? 0;
   const mediaCount = countsByType.get('media') ?? 0;
+  const jobCount = countsByType.get('job') ?? 0;
   const counts = Array.from(countsByType.entries())
     .map(([type, count]) => ({
       type,
@@ -161,49 +158,25 @@ export function projectAmbientCanvasContext(
         : 'chat.input.canvasContext.multiTitle',
     counts,
     previewNodes: nodes.slice(0, 3),
-    actions: createAmbientCanvasActions({ selectedCount: nodes.length, shotCount, sceneCount }),
-    shotCount,
-    sceneCount,
+    actions: createAmbientCanvasActions(),
     mediaCount,
+    jobCount,
   };
 }
 
-function createAmbientCanvasActions(input: {
-  selectedCount: number;
-  shotCount: number;
-  sceneCount: number;
-}): AmbientCanvasContextActionProjection[] {
-  const actions: AmbientCanvasContextActionProjection[] = [];
-
-  if (input.shotCount > 1) {
-    actions.push({
-      id: 'batch-generate-images',
-      labelKey: 'chat.input.canvasContext.action.batchGenerate',
-      promptKey: 'chat.input.canvasContext.prompt.batchGenerate',
-    });
-  } else if (input.shotCount === 1) {
-    actions.push({
-      id: 'generate-image',
-      labelKey: 'chat.input.canvasContext.action.generateImage',
-      promptKey: 'chat.input.canvasContext.prompt.generateImage',
-    });
-  }
-
-  if (input.selectedCount > 1 || input.sceneCount > 0) {
-    actions.push({
-      id: 'optimize-selection',
-      labelKey: 'chat.input.canvasContext.action.optimize',
-      promptKey: 'chat.input.canvasContext.prompt.optimize',
-    });
-  }
-
-  actions.push({
-    id: 'understand-selection',
-    labelKey: 'chat.input.canvasContext.action.understand',
-    promptKey: 'chat.input.canvasContext.prompt.understand',
-  });
-
-  return actions;
+function createAmbientCanvasActions(): AmbientCanvasContextActionProjection[] {
+  return [
+    {
+      id: 'create-job',
+      labelKey: 'chat.input.canvasContext.action.createJob',
+      promptKey: 'chat.input.canvasContext.prompt.createJob',
+    },
+    {
+      id: 'understand-selection',
+      labelKey: 'chat.input.canvasContext.action.understand',
+      promptKey: 'chat.input.canvasContext.prompt.understand',
+    },
+  ];
 }
 
 function compareAmbientCanvasCounts(
@@ -218,12 +191,18 @@ function compareAmbientCanvasCounts(
 
 function getAmbientCanvasTypePriority(type: string): number {
   switch (type) {
-    case 'shot':
+    case 'markdown':
       return 0;
-    case 'scene':
-      return 1;
     case 'media':
+      return 1;
+    case 'group':
       return 2;
+    case 'job':
+      return 3;
+    case 'file':
+      return 4;
+    case 'canvas-embed':
+      return 5;
     default:
       return 10;
   }

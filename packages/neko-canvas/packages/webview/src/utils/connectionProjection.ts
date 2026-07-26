@@ -4,14 +4,13 @@ import type {
   ConnectionType,
   ContainerPolicyName,
 } from '@neko/shared';
-import { getContainerPolicyName, getNodeParentId } from '@neko/shared';
+import { getNodeParentId } from '@neko/shared';
 
 export type CanvasConnectionProjectionMode = 'top-level' | 'local-container';
 
 export type ProjectedConnectionKind = 'direct' | 'aggregate' | 'internal' | 'hidden';
 
-export type ConnectionOrderSyncMode =
-  'none' | 'derive-from-container' | 'sync-sequence-edges' | 'sync-branch-priority';
+export type ConnectionOrderSyncMode = 'none' | 'sync-sequence-edges';
 
 export type ConnectionProjectionDiagnosticSeverity = 'info' | 'warning' | 'error';
 
@@ -91,22 +90,12 @@ export interface CanvasConnectionProjectionResult {
   directConnections: readonly DirectConnectionView[];
   aggregateConnections: readonly AggregateConnectionView[];
   internalSummaries: readonly InternalConnectionSummary[];
-  derivedSequenceConnections: readonly DerivedSequenceConnectionView[];
   hiddenConnections: readonly HiddenConnectionView[];
   hiddenConnectionIds: readonly string[];
   diagnostics: readonly ConnectionProjectionDiagnostic[];
   orderSync: {
     defaultModes: Readonly<Record<string, ConnectionOrderSyncMode>>;
   };
-}
-
-export interface DerivedSequenceConnectionView {
-  kind: 'derived-sequence';
-  id: string;
-  containerId: string;
-  sourceId: string;
-  targetId: string;
-  order: number;
 }
 
 export interface SequenceEdgeSyncPlan {
@@ -116,11 +105,6 @@ export interface SequenceEdgeSyncPlan {
   matchedConnectionIds: readonly string[];
   missingEdges: readonly { sourceId: string; targetId: string; order: number }[];
   staleConnectionIds: readonly string[];
-}
-
-export interface ConnectionOrderSyncPatch {
-  connectionId: string;
-  updates: Pick<CanvasConnection, 'priority'>;
 }
 
 interface EndpointProjection {
@@ -143,21 +127,11 @@ interface AggregateAccumulator {
 }
 
 const DEFAULT_CONNECTION_ORDER_SYNC_MODES = {
-  scene: 'derive-from-container',
   group: 'none',
-  gallery: 'none',
-  artboard: 'none',
-  table: 'none',
-  narrative: 'sync-branch-priority',
-  flow: 'sync-branch-priority',
   sequence: 'sync-sequence-edges',
 } as const satisfies Readonly<Record<string, ConnectionOrderSyncMode>>;
 
-const CYCLE_DISALLOWED_CONNECTION_TYPES = new Set<ConnectionType>([
-  'derived-from',
-  'sequence',
-  'transition',
-]);
+const CYCLE_DISALLOWED_CONNECTION_TYPES = new Set<ConnectionType>(['derived-from', 'sequence']);
 
 export function getDefaultConnectionOrderSyncMode(
   policyName: ContainerPolicyName | string | undefined,
@@ -181,7 +155,6 @@ export function projectCanvasConnectionView(
   const internalByContainer = new Map<string, InternalConnectionSummary>();
   const hiddenConnections: HiddenConnectionView[] = [];
   const diagnostics: ConnectionProjectionDiagnostic[] = [];
-  const derivedSequenceConnections = deriveSequenceConnectionsFromContainerOrder(input.nodes);
 
   for (const connection of input.connections) {
     const sourceNode = nodeById.get(connection.sourceId);
@@ -280,7 +253,7 @@ export function projectCanvasConnectionView(
       continue;
     }
 
-    const key = `${sourceVisibleNode.id}->${targetVisibleNode.id}:${connection.type ?? 'default'}`;
+    const key = `${sourceVisibleNode.id}->${targetVisibleNode.id}:${connection.type}`;
     const diagnostic = createAggregateProjectionDiagnostic(
       connection,
       sourceVisibleNode.id,
@@ -332,7 +305,6 @@ export function projectCanvasConnectionView(
     directConnections,
     aggregateConnections,
     internalSummaries: [...internalByContainer.values()],
-    derivedSequenceConnections,
     hiddenConnections,
     hiddenConnectionIds: hiddenConnections.map((connection) => connection.connectionId),
     diagnostics,
@@ -351,37 +323,6 @@ export function createsDisallowedConnectionCycle(
   return hasPath(connections, connection.targetId, connection.sourceId, connection.sourceId);
 }
 
-export function deriveSequenceConnectionsFromContainerOrder(
-  nodes: readonly CanvasNode[],
-): DerivedSequenceConnectionView[] {
-  const result: DerivedSequenceConnectionView[] = [];
-
-  for (const node of nodes) {
-    if (
-      getDefaultConnectionOrderSyncMode(getContainerPolicyName(node)) !== 'derive-from-container'
-    ) {
-      continue;
-    }
-
-    const childIds = node.container?.childIds ?? [];
-    for (let index = 0; index < childIds.length - 1; index += 1) {
-      const sourceId = childIds[index];
-      const targetId = childIds[index + 1];
-      if (!sourceId || !targetId) continue;
-      result.push({
-        kind: 'derived-sequence',
-        id: `derived-sequence-${node.id}-${sourceId}-${targetId}`,
-        containerId: node.id,
-        sourceId,
-        targetId,
-        order: index,
-      });
-    }
-  }
-
-  return result;
-}
-
 export function createSequenceEdgeSyncPlan(
   connections: readonly CanvasConnection[],
   orderedNodeIds: readonly string[],
@@ -391,9 +332,7 @@ export function createSequenceEdgeSyncPlan(
     targetId: orderedNodeIds[index + 1]!,
     order: index,
   }));
-  const sequenceConnections = connections.filter(
-    (connection) => connection.type === 'sequence' || connection.type === 'transition',
-  );
+  const sequenceConnections = connections.filter((connection) => connection.type === 'sequence');
   const matchedConnectionIds: string[] = [];
   const missingEdges: Array<{ sourceId: string; targetId: string; order: number }> = [];
 
@@ -430,22 +369,6 @@ export function createSequenceEdgeSyncPlan(
     missingEdges,
     staleConnectionIds,
   };
-}
-
-export function createBranchPrioritySyncPatches(
-  connections: readonly CanvasConnection[],
-  sourceNodeId: string,
-  orderedTargetIds: readonly string[],
-): ConnectionOrderSyncPatch[] {
-  return orderedTargetIds.flatMap((targetId, priority) => {
-    const connection = connections.find(
-      (item) =>
-        item.sourceId === sourceNodeId &&
-        item.targetId === targetId &&
-        (item.type === 'choice' || item.type === 'default'),
-    );
-    return connection ? [{ connectionId: connection.id, updates: { priority } }] : [];
-  });
 }
 
 function projectEndpoint(input: {
@@ -637,7 +560,7 @@ function getPolicyCycleDiagnostic(
 }
 
 function isCycleDisallowedConnectionType(type: CanvasConnection['type']): boolean {
-  return type !== undefined && CYCLE_DISALLOWED_CONNECTION_TYPES.has(type);
+  return CYCLE_DISALLOWED_CONNECTION_TYPES.has(type);
 }
 
 function hasPath(

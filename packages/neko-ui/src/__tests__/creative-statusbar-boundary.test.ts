@@ -35,7 +35,7 @@ describe('creative workbench StatusBar boundary', () => {
     expect(css).not.toMatch(/\.cut-statusbar|\.cut-status-bar|\.cut-topbar/);
   });
 
-  it('projects Canvas subsystem and projection state to the native StatusBar', () => {
+  it('projects generic Canvas selection and projection state to the native StatusBar', () => {
     const statusBar = readRepoSource(
       'packages/neko-canvas/packages/extension/src/views/canvasStatusBar.ts',
     );
@@ -46,7 +46,7 @@ describe('creative workbench StatusBar boundary', () => {
 
     expect(statusBar).toMatch(/class CanvasStatusBar/);
     expect(statusBar).toMatch(/projectionSummary/);
-    expect(statusBar).toMatch(/subsystemSummary/);
+    expect(statusBar).not.toMatch(/subsystemSummary/);
     expect(provider).toMatch(/case 'canvasStatus'/);
     expect(provider).toMatch(/readCanvasProjectionSummary/);
     expect(provider).toMatch(/this\.statusBar\.update\(\{/);

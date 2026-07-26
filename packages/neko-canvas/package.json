@@ -112,16 +112,6 @@
         "category": "NekoCanvas"
       },
       {
-        "command": "neko.canvas.generateSelected",
-        "title": "%neko.canvas.generateSelected.title%",
-        "category": "NekoCanvas"
-      },
-      {
-        "command": "neko.canvas.detachShotFromScene",
-        "title": "%neko.canvas.detachShotFromScene.title%",
-        "category": "NekoCanvas"
-      },
-      {
         "command": "neko.canvas.deleteNodeFromOutline",
         "title": "%neko.canvas.deleteNodeFromOutline.title%",
         "category": "NekoCanvas"
@@ -137,51 +127,11 @@
       ],
       "view/item/context": [
         {
-          "command": "neko.canvas.detachShotFromScene",
-          "when": "view == neko.canvasOutline && viewItem == shotChild",
-          "group": "1_shot@1"
-        },
-        {
           "command": "neko.canvas.deleteNodeFromOutline",
-          "when": "view == neko.canvasOutline && viewItem =~ /canvasNode|shotChild/",
+          "when": "view == neko.canvasOutline && viewItem == canvasNode",
           "group": "2_manage@1"
         }
       ]
-    },
-    "configuration": {
-      "title": "NekoCanvas",
-      "properties": {
-        "neko.canvas.narrative.preview": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the Canvas Playback Workspace inside the Canvas editor."
-        },
-        "neko.canvas.narrative.typewriterEffect": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable typewriter-style dialogue rendering in Canvas route preview."
-        },
-        "neko.canvas.narrative.autoExpressionMatch": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable automatic parenthetical-to-expression matching in Canvas route preview."
-        },
-        "neko.canvas.narrative.showLockedChoices": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show locked choices as disabled instead of hiding them in Canvas route preview."
-        },
-        "neko.canvas.narrative.previewAutoSync": {
-          "type": "boolean",
-          "default": true,
-          "description": "Synchronize Canvas selection and Playback Workspace highlights automatically."
-        },
-        "neko.canvas.narrative.live2dPerformance": {
-          "type": "boolean",
-          "default": false,
-          "description": "Prefer the Live2D performance path when Canvas route preview renderers support it."
-        }
-      }
     }
   },
   "scripts": {

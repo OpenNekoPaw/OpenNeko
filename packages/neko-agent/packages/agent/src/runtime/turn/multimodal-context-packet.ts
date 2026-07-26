@@ -13,6 +13,7 @@ import type {
 import type {
   ArtifactKind,
   ArtifactRef,
+  CanvasNodeType,
   MultimodalContextPacket,
   PerceptionInputKind,
   PerceptionInputRef,
@@ -24,7 +25,7 @@ import type {
 
 export interface CanvasSelectionContextNode {
   readonly nodeId: string;
-  readonly type: string;
+  readonly type: CanvasNodeType;
   readonly summary: string;
   readonly assetUri?: string;
   readonly assetKind?: ArtifactRef['kind'];

@@ -39,8 +39,6 @@ describe('SendToMenu', () => {
           markdown:
             '| scene | shot id | visual | image |\n| --- | --- | --- | --- |\n| S1 | 1 | open | P1 |',
           sourceFormat: 'gfm-table',
-          declaredIntentHint: 'creative-table',
-          declaredProfileHint: 'storyboard',
           resources: [{ token: 'P1', sourcePath: '${PROJECT}/assets/panel-1.png' }],
           stableRefs: [
             { kind: 'character', id: 'character-rin', namespace: 'entity', token: '@Rin' },
@@ -92,8 +90,6 @@ describe('SendToMenu', () => {
         sourceFormat: 'gfm-table',
         targetHints: {
           sourceFormat: 'gfm-table',
-          declaredIntentHint: 'creative-table',
-          declaredProfileHint: 'storyboard',
         },
         resources: [{ token: 'P1', sourcePath: '${PROJECT}/assets/panel-1.png' }],
         stableRefs: [
