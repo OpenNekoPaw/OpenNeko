@@ -16,11 +16,17 @@ Date: 2026-07-26
   Preview markup and footer; the removed `StorylineGraph` and `PlaybackStage`
   component composition cannot be mounted independently.
 - The Overlay renders Storyline first, controls/progress second, conditional
-  Preview media third and title/full-bleed/close actions last. Idle, paused and
-  stale states dock the same Overlay at the Canvas top without a dimming
-  backdrop, modal semantics or pointer interception outside the compact strip.
-  Playing centers the same Overlay, enables its modal backdrop and mounts the
-  existing Preview surface; pausing returns it to the top-docked state.
+  Preview media third and title/full-bleed/close actions last. Each Overlay
+  mount starts with Preview collapsed. First playback or full-bleed entry
+  reveals Preview for the rest of that mount; pause, end, stale and restore do
+  not hide it. Closing and reopening Storyline creates a new collapsed mount.
+  The same Overlay remains docked at the Canvas top without a dimming backdrop,
+  modal semantics or pointer interception outside its shell.
+- Preview visibility is a single local latch owned by
+  `StorylinePlaybackOverlay`; it is not playback-session/store state and is no
+  longer directly derived from `playbackState`. This keeps playback lifecycle
+  and transient presentation lifecycle separate without adding another
+  surface or compatibility path.
 - Previous, play/pause and next controls occupy the true horizontal center.
   Route position remains secondary at the right edge. Current/total time text
   and time-formatted Seek tooltips are absent, while relative Seek progress and
@@ -29,27 +35,39 @@ Date: 2026-07-26
   Routes provide branch lanes and `unitId` occurrences without creating a
   second persisted route model. Node spacing is structural rather than
   duration-proportional.
+- Storyline node activation, route selection and previous/next navigation issue
+  one viewport reveal. Playback start/pause, automatic advance and Seek only
+  synchronize the session. The reveal path does not write Canvas selection or
+  persistent playback-highlight state, so it cannot open node action controls.
 - No Matrix store, renderer, projection, CSS, localization key, hidden
   compatibility flag, fallback renderer, persistent Storyline panel,
-  independent Preview visibility state, resizable Preview pane, or second
-  playback controller remains.
+  persisted or parallel Preview visibility state, resizable Preview pane, or
+  second playback controller remains.
 - Reuse review: the existing `PlaybackWorkspace`, playback controller, viewport
-  store, localization runtime, theme tokens, keyboard-boundary metadata, shared
-  Toolbar primitives and Canvas selection path were extended in place. The only
-  new shared UI assets are generic fullscreen/restore and Storyline branch
-  icons in the existing shared icon package. The Canvas Toolbar now uses the
-  Storyline icon instead of a generic play triangle.
+  store, localization runtime, theme tokens, keyboard-boundary metadata and
+  shared Toolbar primitives were extended in place. Session synchronization
+  and one-shot viewport navigation are explicit paths; the obsolete
+  `activePlayingNodeId` Canvas store state was deleted. The only new shared UI
+  assets are generic fullscreen/restore and Storyline branch icons in the
+  existing shared icon package. The Canvas Toolbar now uses the Storyline icon
+  instead of a generic play triangle.
 
 ## Automated checks
 
 - Focused Canvas Webview run:
-  `pnpm exec vitest run src/components/playback/storylineGraphLayout.test.ts src/components/playback/CanvasPlaybackController.test.tsx src/components/playback/PlaybackWorkspace.test.tsx src/components/toolbar/CanvasToolbar.test.tsx src/stores/__tests__/playbackStore.test.ts src/CanvasApp.layout.test.ts --maxWorkers=1`
-  - Passed: 6 files, 62 tests.
+  `pnpm exec vitest run src/components/playback/PlaybackWorkspace.test.tsx src/components/playback/CanvasPlaybackController.test.tsx src/CanvasApp.layout.test.ts src/stores/__tests__/canvasStore.test.ts src/stores/__tests__/runtimeViewportStore.test.ts src/stores/__tests__/playbackStore.test.ts`
+  - Passed: 6 files, 64 tests.
   - Covers shared prefixes, branches, merges, same-label source identities,
     route emphasis, compact node content, top-docked non-modal collapsed state,
-    centered modal playing state, pause return, full-bleed/close/Escape,
-    dedicated Toolbar icon, single presentation component, centered time-free
-    controls, relative Seek, single controller ownership and source-node reveal.
+    in-place non-modal Preview expansion, persistence across pause and
+    full-bleed restore, close/reopen reset, stable Storyline geometry,
+    full-bleed/close/Escape, dedicated Toolbar icon, single presentation
+    component, centered time-free controls, relative Seek, single controller
+    ownership, one-shot source reveal and selection-free playback sync.
+- Preview lifecycle regression:
+  `pnpm exec vitest run src/components/playback/PlaybackWorkspace.test.tsx`
+  - Confirmed red before implementation: 2 failed, 18 passed.
+  - Passed after implementation: 1 file, 20 tests.
 - `pnpm test` in `packages/neko-canvas/packages/webview`
   - Passed: 55 files, 307 tests.
 - `pnpm test` in `packages/neko-canvas`
@@ -64,7 +82,7 @@ Date: 2026-07-26
     changed Canvas Webview.
 - `pnpm check`
   - Passed: unused-code scan completed with configuration hints only; dependency
-    cruise checked 1,297 modules and 4,316 dependencies with zero violations.
+    cruise checked 1,297 modules and 4,315 dependencies with zero violations.
 - `pnpm check:quality`
   - Passed, including Canvas playback, Webview, application, content-access,
     strict TypeScript, test-ownership and all OpenSpec boundaries.
@@ -91,20 +109,57 @@ packages; neither warning class failed a changed package.
 
 ## Extension Development Host
 
-No VS Code instance was launched, reloaded or manipulated for the corrected
-Overlay/branch-graph design. This intentionally follows the safety constraint
-established after the user's current VS Code/Webview service-worker conflict.
-
-An earlier isolated-host run validated the superseded right-panel design. It is
-not accepted as runtime evidence for the corrected layout.
+- Host: isolated `[扩展开发宿主] Untitled.nkc — neko-test`, VS Code CDP port
+  `9222`, Canvas Webview target `7F594E002549A56D59CC81CDA1861E20`.
+- `pnpm smoke:vscode:targets -- --skill vscode-extension-debugger` and
+  `pnpm smoke:webview:targets` passed. The target inventory identified the
+  Extension Development Host and its Canvas iframe without using the normal
+  VS Code window.
+- `pnpm build:vscode:dev` passed and staged all seven development features.
+  Only the isolated Extension Development Host was reloaded.
+- Collapsed Overlay measurement:
+  `x=241.5`, `y=12`, `width=1080`, `height=261.25`,
+  `storylineHeight=148`, `aria-modal=null`, layer `z-index=1000`.
+- Playing Overlay measurement:
+  `x=241.5`, `y=12`, `width=1080`, `height=820`,
+  `storylineHeight=148`, `aria-modal=null`, transparent layer with
+  `pointer-events:none`. Preview was mounted below the unchanged Storyline and
+  controls.
+- Clicking Storyline node 2 moved the Canvas viewport once from
+  `translate(177.5px, 236px) scale(1)` to
+  `translate(-291.5px, 244px) scale(1)`. Starting playback did not change that
+  transform. Manual previous navigation returned the viewport to the first
+  node.
+- Canvas selected-node count, persistent playback-active count and selection
+  context toolbar presence all remained zero after Storyline navigation and
+  playback. No Canvas toolbar was painted above the expanded Preview.
+- Preview lifecycle observations after reloading only the isolated development
+  host:
+  - opening Storyline: `expanded=false`, `presentation=overlay`, Preview absent;
+  - starting playback: `expanded=true`, Preview mounted;
+  - pausing: `expanded=true`, Preview remained mounted;
+  - closing and reopening Storyline: `expanded=false`, Preview absent;
+  - entering full-bleed before playback: `expanded=true`, Preview mounted;
+  - restoring the top-docked Overlay: `expanded=true`, Preview remained mounted.
+- Canvas Webview console contained only VS Code's known
+  `local-network-access` warning and an autoplay-policy `AudioContext` warning
+  while validating the audio fixture; neither represented a Canvas CSP,
+  resource or runtime failure.
+- Evidence screenshot:
+  `reports/webview-functional/canvas-storyline/in-place-playing-overlay.png`
+  (gitignored raw runtime evidence).
+- Preview-latch evidence screenshot:
+  `reports/webview-functional/canvas-storyline/preview-visibility-latched.png`
+  (gitignored raw runtime evidence; paused transport with Preview still
+  expanded).
 
 ## Remaining risk
 
-- The top-docked Overlay sizing, compact-to-centered transition, click-through
-  Canvas behavior, visual branch routing, focus containment and real media
-  playback have component and build coverage but no fresh Extension Development
-  Host visual acceptance.
 - Root test health remains red because of the unrelated `neko-assets` activation
   event assertion described above.
-- No local project, generated-output record, extension state or VS Code user data
-  was changed as part of this UI correction.
+- The runtime scenario used the isolated synthetic `neko-test` workspace and
+  its two-node fixture. Dense multi-route branch routing remains covered by
+  deterministic component/layout tests rather than this visual fixture.
+- The isolated fixture's playback/session and viewport state changed during
+  runtime validation; no project document, generated-output record, extension
+  setting or normal VS Code user data was written.

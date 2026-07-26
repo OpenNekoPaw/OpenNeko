@@ -76,8 +76,6 @@ export interface CanvasStore {
   selection: CanvasSelection;
   isConnecting: boolean;
   pendingConnectionSource: { nodeId: string; handleId: string } | null;
-  /** Currently playing media node ID (only one at a time) */
-  activePlayingNodeId: string | null;
   // ==================== Data Actions ====================
   setCanvasData: (data: CanvasData) => void;
   updateCanvasData: (updates: Partial<CanvasData>, options?: { dirty?: boolean }) => void;
@@ -154,10 +152,6 @@ export interface CanvasStore {
   selectNodes: (ids: string[]) => void;
   clearSelection: () => void;
   deleteSelected: () => void;
-
-  // ==================== Media Playback ====================
-  /** Set the currently playing media node (null to clear) */
-  setActivePlayingNode: (nodeId: string | null) => void;
 
   // ==================== Inline Node Expansion ====================
 
@@ -334,7 +328,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   selection: { nodeIds: [], connectionIds: [] },
   isConnecting: false,
   pendingConnectionSource: null,
-  activePlayingNodeId: null,
   // ==================== Data Actions ====================
   setCanvasData: (data) => {
     set({ canvasData: normalizeCanvasData(data) });
@@ -1247,11 +1240,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
     useCanvasOperationStore.getState().recordContentNodeDelta([...deletion.removedNodeIds]);
     recordCanvasDirty('Delete selection');
-  },
-
-  // ==================== Media Playback ====================
-  setActivePlayingNode: (nodeId) => {
-    set({ activePlayingNodeId: nodeId });
   },
 
   // ==================== History Actions ====================

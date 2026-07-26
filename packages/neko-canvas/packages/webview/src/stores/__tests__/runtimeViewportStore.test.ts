@@ -25,7 +25,6 @@ describe('runtime viewport store', () => {
       selection: { nodeIds: [], connectionIds: [] },
       isConnecting: false,
       pendingConnectionSource: null,
-      activePlayingNodeId: null,
     });
     useRuntimeViewportStore.setState({
       viewport: DEFAULT_RUNTIME_VIEWPORT,

@@ -6,13 +6,13 @@
 
 ### Five-Layer Analysis
 
-| 层   | 决策                                                                                                                                        |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 职责 | Canvas 节点与 sequence connection 是事实；PlaybackPlan 是路线契约；同一个 Overlay 承载 Storyline、单一 Controller 与 Preview。              |
-| 依赖 | Storyline 只消费 `@neko/shared` playback contract 与共享 UI，不新增 Extension、Engine 或持久化依赖。                                        |
-| 接口 | 路线选择使用 `routeId`，节点选择使用 `unitId`，Canvas 定位只使用 `sourceNodeId`；不保留 Matrix-only DTO 或 store API。                      |
-| 扩展 | adapter 可提供多条共享 unit 的路线；Storyline 由稳定 source identity 投影 lane/branch layout，不创建第二套路线事实或推断节点等价。          |
-| 测试 | 单元/组件测试证明 Overlay/全屏、分支投影、节点定位、路线切换、诊断、键盘和单一 Controller；Extension Host 验证真实 Webview 定位与 Preview。 |
+| 层   | 决策                                                                                                                                                |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 职责 | Canvas 节点与 sequence connection 是事实；PlaybackPlan 是路线契约；同一个 Overlay 承载 Storyline、单一 Controller 与 Preview。                      |
+| 依赖 | Storyline 只消费 `@neko/shared` playback contract 与共享 UI，不新增 Extension、Engine 或持久化依赖。                                                |
+| 接口 | 路线选择使用 `routeId`，节点选择使用 `unitId`，Canvas 一次性定位只使用 `sourceNodeId`；不写 Canvas selection，不保留 Matrix-only DTO 或 store API。 |
+| 扩展 | adapter 可提供多条共享 unit 的路线；Storyline 由稳定 source identity 投影 lane/branch layout，不创建第二套路线事实或推断节点等价。                  |
+| 测试 | 单元/组件测试证明 Overlay/全屏、分支投影、节点定位、路线切换、诊断、键盘和单一 Controller；Extension Host 验证真实 Webview 定位与 Preview。         |
 
 ## Goals / Non-Goals
 
@@ -21,11 +21,12 @@
 - 删除 Matrix 组件、投影、状态和模式切换，收敛到唯一 Storyline。
 - 将 Storyline、播放控制与 Preview 全部移入同一个按需 Overlay，并支持 Webview 内全屏。
 - 由一个 `StorylinePlaybackOverlay` 组件拥有 Storyline、控制条、折叠/展开 Preview 与 footer 的完整视觉结构；`PlaybackWorkspace` 不再组合两个并列视觉组件。
-- 未播放时将统一 Overlay 停靠在 Canvas 顶部并折叠媒体 Preview，不渲染遮罩或阻断条外 Canvas；播放时自动展开为居中模态预览。
+- 每次显示统一 Overlay 时将其停靠在 Canvas 顶部并默认折叠媒体 Preview，不渲染遮罩或阻断条外 Canvas；本次 Overlay 生命周期内首次播放或进入铺满模式后，保持同一顶部容器原位向下展开 Preview，不改变锚点、宽度、Storyline 高度或模态语义。
+- Preview 一旦展开，在暂停、结束、stale 或退出铺满模式后仍保持展开；只有关闭并重新显示整个 Overlay 才重置为折叠状态。
 - 以横向 Git graph 式节点和分支线展示路线拓扑；存在多路线时可辨识共享、分叉与汇合关系。
 - 用专用 Storyline 分支图标替换 Toolbar 上容易被误解为立即播放的通用播放图标。
 - 播放 transport 按钮居中，不展示当前时间/总时长文字；保留不带时间 tooltip 的 Seek 进度反馈。
-- 点击剧情节点时选择并定位其真实 Canvas source node，并同步 Preview session。
+- 点击剧情节点、切换路线或使用上一/下一节点时一次性定位其真实 Canvas source node，并同步 Preview session；不得选中 Canvas 节点或保持播放高亮。
 - 保留播放、stale、媒体缺失与诊断的可观察性。
 - 结构布局不再伪装成精确时间线。
 
@@ -55,15 +56,15 @@ Playback Overlay
   -> Storyline branch graph
   -> centered previous / play-pause / next controls
   -> unlabeled seek progress
-  -> media Preview surface (playing only)
+  -> media Preview surface (revealed for the current Overlay lifetime)
   -> title / diagnostics / full-bleed / close footer
 ```
 
-`playbackState !== 'playing'` 时，Overlay 以无 backdrop 的紧凑条停靠在 Canvas 顶部，媒体 Preview 折叠，条外区域不接管 pointer events，也不声明模态语义，因此 Canvas 工具、节点和 viewport 仍可操作。开始播放后，同一个 Overlay 切换为带 backdrop 的居中模态形态并展开媒体内容；暂停、结束或 stale 后再次折叠并返回顶部停靠。用户可切换为铺满 Canvas Webview 内容区的 full-bleed presentation，再切回 Overlay。这里的“全屏”不调用浏览器 Fullscreen API，不逃逸 VS Code Webview，也不覆盖 VS Code 原生 chrome。Escape 关闭 Overlay，关闭时若正在播放则暂停。
+每次显示 Storyline Overlay 时，它以无 backdrop 的紧凑条停靠在 Canvas 顶部，媒体 Preview 默认折叠，条外区域不接管 pointer events，也不声明模态语义，因此 Canvas 工具、节点和 viewport 仍可操作。本次 Overlay 生命周期内首次开始播放或进入 full-bleed presentation 后，同一个 Overlay 保持顶部锚点、宽度、Storyline 高度、控制区位置和非模态语义，仅在控制区下方增加 Preview 内容并向下扩展；不得重新居中、缩放外壳或增加暗色 backdrop。Preview 展开状态由 `StorylinePlaybackOverlay` 本地拥有并锁存，暂停、结束、stale 或退出 full-bleed 后不自动折叠；关闭整个 Overlay 后组件卸载，下一次显示才恢复默认折叠状态。用户可显式切换为铺满 Canvas Webview 内容区的 full-bleed presentation，再切回顶部 Overlay；full-bleed 中 Preview 始终可见且不提供隐藏动作。这里的“全屏”不调用浏览器 Fullscreen API，不逃逸 VS Code Webview，也不覆盖 VS Code 原生 chrome。Escape 关闭 Overlay，关闭时若正在播放则暂停。
 
 Canvas Toolbar 的 visibility action 使用专用 Storyline 分支图标直接打开/关闭整个 Overlay，不再使用暗示“点击后立即播放”的通用播放图标，也不再提供 Storyline header 到 Preview 的第二次打开动作。图标作为无业务状态的共享 editor icon 进入 `@neko/shared/icons`，Canvas 只拥有按钮语义和 Overlay 状态。
 
-`PlaybackWorkspace` 只负责编排 plan、session、Preview request 和 Canvas source reveal，并把单一 view model 交给 `StorylinePlaybackOverlay`。`StorylinePlaybackOverlay` 是 Storyline、控制条、条件 Preview 和 footer 的唯一视觉 owner；不得在 Workspace 中并列挂载 `StorylineGraph` 与 `PlaybackStage` 两个 surface。内部 graph 与 Preview markup 可以继续复用共享 Preview primitive，但不能拥有独立 visibility、边框容器或 session。
+`PlaybackWorkspace` 只负责编排 plan、session、Preview request 和 Canvas source reveal，并把单一 view model 交给 `StorylinePlaybackOverlay`。`StorylinePlaybackOverlay` 是 Storyline、控制条、条件 Preview 和 footer 的唯一视觉 owner，并以组件生命周期内的最小本地状态记录 Preview 是否已经被播放或 full-bleed 揭示；不得把该纯展示状态写入 playback session/store，也不得再由 `playbackState` 直接推导折叠。不得在 Workspace 中并列挂载 `StorylineGraph` 与 `PlaybackStage` 两个 surface。内部 graph 与 Preview markup 可以继续复用共享 Preview primitive，但不能拥有独立 visibility、边框容器或 session。
 
 ### 3. Storyline 使用顺序坐标，不使用时间坐标
 
@@ -77,20 +78,19 @@ Canvas Toolbar 的 visibility action 使用专用 Storyline 分支图标直接�
 
 路线共享/汇合只能由相同 `CanvasPlaybackUnit.sourceNodeId`（并以 unit id 作为路径内 identity）或 adapter 提供的稳定 identity 证明；不得根据标题或内容相似度猜测。通用 adapter 只有一条 canonical route 时显示单一直线节点序列。
 
-### 5. 节点定位复用现有 source identity 链路
+### 5. 节点定位使用一次性 source identity 导航
 
-Storyline 节点激活继续调用唯一 `selectPlaybackUnit` 路径：
+播放 session 同步与 Canvas viewport 导航必须是两条职责明确的路径。自动播放推进、播放/暂停和 Seek 只更新 session；Storyline 节点激活、路线切换与上一/下一节点操作才在更新 session 后执行一次 viewport reveal：
 
 ```text
 Storyline node
   -> routeId + unitId
   -> CanvasPlaybackUnit.sourceNodeId
-  -> select Canvas node
-  -> reveal node inside unobscured Canvas viewport
+  -> reveal node once inside unobscured Canvas viewport
   -> update Preview/playback session
 ```
 
-Storyline 不缓存 Canvas position，也不创建私有 node mapping。缺失 unit 或 source node 必须通过现有 diagnostic/stale 语义 fail-visible。
+该路径不得调用 Canvas `selectNode`、不得写 `activePlayingNodeId`，因此不会触发 selection context toolbar、节点操作按钮或持续蓝色高亮。Storyline 不缓存 Canvas position，也不创建私有 node mapping。缺失 unit 或 source node 必须通过现有 diagnostic/stale 语义 fail-visible。
 
 ### 6. Matrix 与 Overlay 的真实信息迁移到 owning surface
 
@@ -106,7 +106,8 @@ Storyline 不缓存 Canvas position，也不创建私有 node mapping。缺失 u
 - [失去跨路线逐列审计] → 当前没有明确用户任务依赖该能力；未来若出现专业审阅需求，以独立 inspector 重新设计，不复活隐藏 Matrix。
 - [多路线 lane 可能在密集图中变高] → 采用固定 lane 间距和横向滚动；只合并稳定 identity，不为压缩高度猜测拓扑。
 - [删除大范围 CSS/i18n/tests 可能留下 residual] → 使用 legacy-debt、unused、focused typecheck/build 和 `rg` 断言清除 Matrix 标识。
-- [Overlay 遮挡 Canvas] → 未播放时 Overlay 仅占用顶部紧凑带，外层透明且不截获 pointer events；只有用户开始播放后才进入带遮罩的显式模态预览，关闭后 Canvas 原布局立即恢复。
+- [Overlay 遮挡 Canvas] → 每次打开时 Overlay 仅占用顶部紧凑带；Preview 经播放或 full-bleed 展开后，同一外壳会持续向下覆盖 Preview 所需区域，直到用户关闭整个 Overlay，但外层始终透明且不截获条外 pointer events。需要独占查看时由用户显式进入 full-bleed。
+- [Canvas 上下文工具穿透 Preview] → Overlay layer 的 stacking order 必须高于 Canvas selection/context toolbar 与 drop indicator，确保被 Overlay 实体区域覆盖的画布工具不会绘制在 Preview 上方。
 - [Storyline 失去 Matrix 的诊断细节] → 节点和路线级 diagnostic 必须在 Storyline 可见且可通过键盘读取。
 
 ## Migration Plan
@@ -117,10 +118,10 @@ Storyline 不缓存 Canvas position，也不创建私有 node mapping。缺失 u
 4. 将 Storyline、单一控制条与 Preview 合并到唯一按需 Overlay/full-bleed presentation。
 5. 删除 Preview stage width/resize 状态，把多路线投影为稳定 identity 驱动的 branch graph。
 6. 运行 Canvas Webview 聚焦测试、typecheck/build、legacy/unused 检查。
-7. 在隔离 Extension Development Host 中验证顶部非模态 Overlay、播放态模态展开、Storyline、节点点击、Canvas reveal 和全屏；若 Host 不可安全隔离则记录阻塞，不操作用户现有实例。
+7. 在隔离 Extension Development Host 中验证顶部非模态 Overlay、首次播放/铺满触发展开、暂停和退出铺满后保持展开、关闭重开后恢复折叠、Storyline、节点点击、Canvas reveal 与层级隔离；若 Host 不可安全隔离则记录阻塞，不操作用户现有实例。
 
 没有用户数据迁移。回滚只能恢复整个变更前的代码版本；不得保留运行时 feature flag 或 Matrix fallback。
 
 ## Open Questions
 
-无。Matrix 删除、统一 Overlay/全屏、非播放态顶部停靠、播放态模态展开、专用 Storyline 图标、Storyline 唯一路径、Git 式分支线、节点 source 定位和非时间比例布局已由本轮产品决策确定。
+无。Matrix 删除、统一 Overlay/全屏、顶部停靠、Overlay 生命周期内一次性展开 Preview、专用 Storyline 图标、Storyline 唯一路径、Git 式分支线、节点 source 定位和非时间比例布局已由本轮产品决策确定。

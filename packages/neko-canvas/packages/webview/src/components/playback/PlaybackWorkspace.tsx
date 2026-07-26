@@ -51,8 +51,6 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
   const canvasPaneRef = useRef<HTMLDivElement | null>(null);
   const canvasData = useCanvasStore((state) => state.canvasData);
   const selectedNodeId = useCanvasStore((state) => state.selection.nodeIds[0]);
-  const selectNode = useCanvasStore((state) => state.selectNode);
-  const setActivePlayingNode = useCanvasStore((state) => state.setActivePlayingNode);
   const viewportZoom = useRuntimeViewportStore((state) => state.viewport.zoom);
   const setViewport = useRuntimeViewportStore((state) => state.setViewport);
   const session = usePlaybackStore((state) => state.playbackSession);
@@ -241,44 +239,6 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
 
   const workspaceClasses = ['canvas-playback-workspace', className].filter(Boolean).join(' ');
   const overlayVisible = session.visible;
-  const previewExpanded = session.playbackState === 'playing';
-  const selectPlaybackUnit = (
-    unitId: string | undefined,
-    playheadMs = 0,
-    routeId = selectedRoute?.id,
-  ) => {
-    if (!unitId) return;
-    const unit = unitById.get(unitId);
-    const targetRoute = routeId && routeResolution?.routes.find((route) => route.id === routeId);
-    if (targetRoute && targetRoute.unitIds.includes(unitId)) {
-      setRoute(targetRoute.id, unitId, playheadMs);
-    } else {
-      setCurrentUnit(unitId, playheadMs);
-    }
-    if (!unit) return;
-    setActivePlayingNode(unit.sourceNodeId);
-    selectNode(unit.sourceNodeId);
-    revealCanvasSourceNode(unit.sourceNodeId);
-    if (unit.assetPath) {
-      savePlayback(unit.assetPath, {
-        currentTime: playheadMs / 1000,
-        duration: resolveRouteUnitDurationMs(unit) / 1000,
-        wasPlaying: false,
-      });
-    }
-  };
-  const selectPlaybackTime = (targetMs: number) => {
-    const segment = resolveRouteTimeSegment(routeTimeSegments, targetMs);
-    if (!segment) return;
-    const unitPlayheadMs = clampNumber(targetMs - segment.startMs, 0, segment.durationMs);
-    selectPlaybackUnit(segment.unit.id, unitPlayheadMs);
-    setPlaybackRequest((prev) => ({
-      unitId: segment.unit.id,
-      startTimeMs: unitPlayheadMs,
-      state: session.playbackState === 'playing' ? 'playing' : 'paused',
-      requestId: `route-seek-${Date.now()}-${prev?.requestId ?? 'initial'}`,
-    }));
-  };
   const revealCanvasSourceNode = (sourceNodeId: string) => {
     const target = canvasData?.nodes.find((node) => node.id === sourceNodeId);
     if (!target) return;
@@ -296,6 +256,49 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
         y: height / 2 - centerY * viewportZoom,
       },
     });
+  };
+  const syncPlaybackUnit = (
+    unitId: string | undefined,
+    playheadMs = 0,
+    routeId = selectedRoute?.id,
+  ): CanvasPlaybackUnit | undefined => {
+    if (!unitId) return undefined;
+    const unit = unitById.get(unitId);
+    const targetRoute = routeId && routeResolution?.routes.find((route) => route.id === routeId);
+    if (targetRoute && targetRoute.unitIds.includes(unitId)) {
+      setRoute(targetRoute.id, unitId, playheadMs);
+    } else {
+      setCurrentUnit(unitId, playheadMs);
+    }
+    if (!unit) return undefined;
+    if (unit.assetPath) {
+      savePlayback(unit.assetPath, {
+        currentTime: playheadMs / 1000,
+        duration: resolveRouteUnitDurationMs(unit) / 1000,
+        wasPlaying: false,
+      });
+    }
+    return unit;
+  };
+  const navigateToPlaybackUnit = (
+    unitId: string | undefined,
+    playheadMs = 0,
+    routeId = selectedRoute?.id,
+  ) => {
+    const unit = syncPlaybackUnit(unitId, playheadMs, routeId);
+    if (unit) revealCanvasSourceNode(unit.sourceNodeId);
+  };
+  const selectPlaybackTime = (targetMs: number) => {
+    const segment = resolveRouteTimeSegment(routeTimeSegments, targetMs);
+    if (!segment) return;
+    const unitPlayheadMs = clampNumber(targetMs - segment.startMs, 0, segment.durationMs);
+    syncPlaybackUnit(segment.unit.id, unitPlayheadMs);
+    setPlaybackRequest((prev) => ({
+      unitId: segment.unit.id,
+      startTimeMs: unitPlayheadMs,
+      state: session.playbackState === 'playing' ? 'playing' : 'paused',
+      requestId: `route-seek-${Date.now()}-${prev?.requestId ?? 'initial'}`,
+    }));
   };
   const handlePreviewPlaybackTimeUpdate = useCallback(
     (event: PreviewPlaybackProgressEvent) => {
@@ -335,8 +338,12 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     currentTimeMs: absoluteRoutePlayheadMs,
     durationMs: routeDurationMs,
     playbackCompletionSignal,
-    onActiveUnitChange: (unitId) => {
-      selectPlaybackUnit(unitId, 0);
+    onActiveUnitChange: (unitId, origin) => {
+      if (origin === 'navigation') {
+        navigateToPlaybackUnit(unitId, 0);
+        return;
+      }
+      syncPlaybackUnit(unitId, 0);
     },
     onPlayingChange: (playing) => {
       setPlaybackState(playing ? 'playing' : 'paused');
@@ -385,7 +392,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
         {overlayVisible ? (
           <StorylinePlaybackOverlay
             presentation={session.presentation}
-            expanded={previewExpanded}
+            isPlaying={session.playbackState === 'playing'}
             routes={routeResolution?.routes ?? []}
             diagnostics={playbackDiagnostics}
             runtimeError={hostPlanState.error}
@@ -397,10 +404,9 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
             playbackController={playbackController}
             previewPlaybackControl={previewPlaybackControl}
             onSelectRoute={(route) => {
-              setRoute(route.id, route.unitIds[0]);
-              selectPlaybackUnit(route.unitIds[0], 0, route.id);
+              navigateToPlaybackUnit(route.unitIds[0], 0, route.id);
             }}
-            onSelectUnit={(unitId, routeId) => selectPlaybackUnit(unitId, 0, routeId)}
+            onSelectUnit={(unitId, routeId) => navigateToPlaybackUnit(unitId, 0, routeId)}
             onFocusStoryline={() => setFocusOwner('route')}
             onTogglePresentation={toggleOverlayPresentation}
             onClose={closeOverlay}
@@ -413,7 +419,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
 
 interface StorylinePlaybackOverlayProps {
   readonly presentation: 'overlay' | 'fullscreen';
-  readonly expanded: boolean;
+  readonly isPlaying: boolean;
   readonly routes: readonly CanvasPlaybackRouteCandidate[];
   readonly diagnostics: readonly CanvasPlaybackDiagnostic[];
   readonly runtimeError?: string;
@@ -433,7 +439,7 @@ interface StorylinePlaybackOverlayProps {
 
 function StorylinePlaybackOverlay({
   presentation,
-  expanded,
+  isPlaying,
   routes,
   diagnostics,
   runtimeError,
@@ -450,21 +456,26 @@ function StorylinePlaybackOverlay({
   onTogglePresentation,
   onClose,
 }: StorylinePlaybackOverlayProps) {
+  const [previewRevealed, setPreviewRevealed] = useState(false);
+  const revealRequested = isPlaying || presentation === 'fullscreen';
+  const expanded = previewRevealed || revealRequested;
   const storylineGraph = useMemo(
     () => buildStorylineGraphLayout(routes, unitById),
     [routes, unitById],
   );
 
+  useEffect(() => {
+    if (revealRequested) {
+      setPreviewRevealed(true);
+    }
+  }, [revealRequested]);
+
   return (
     <div
-      className="canvas-playback-overlay-backdrop"
-      data-testid="canvas-playback-overlay-backdrop"
+      className="canvas-playback-overlay-layer"
+      data-testid="canvas-playback-overlay-layer"
       data-presentation={presentation}
-      data-expanded={expanded ? 'true' : 'false'}
       role="presentation"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
     >
       <section
         id="canvas-playback-overlay"
@@ -473,7 +484,6 @@ function StorylinePlaybackOverlay({
         data-presentation={presentation}
         data-expanded={expanded ? 'true' : 'false'}
         role="dialog"
-        aria-modal={expanded ? true : undefined}
         aria-label={t('playback.overlay.title')}
         {...getKeyboardBoundaryMetadata({
           scope: 'media-preview',

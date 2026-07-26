@@ -14,7 +14,6 @@ import { getDefaultPorts } from '@neko/shared';
 import { useNodeDrag } from '../../hooks/useNodeDrag';
 import { useNodeResize, type ResizeHandle } from '../../hooks/useNodeResize';
 import { useNodeRotate } from '../../hooks/useNodeRotate';
-import { useCanvasStore } from '../../stores/canvasStore';
 import { clampNodeRenderSize, clampNodeSize, resolveNodeMinSize } from '../../utils/nodeSizing';
 import type { NodeSize } from '../../utils/nodeSizing';
 import clsx from 'clsx';
@@ -147,8 +146,6 @@ export function BaseNode({
   renderZIndex,
   onActivate,
 }: BaseNodeProps) {
-  const activePlayingNodeId = useCanvasStore((state) => state.activePlayingNodeId);
-  const isPlaybackActive = activePlayingNodeId === node.id;
   const nodeMinSize = minSize ?? resolveNodeMinSize(node);
   const initialResizeSize = useMemo(
     () => clampNodeSize(node.size, nodeMinSize),
@@ -331,7 +328,6 @@ export function BaseNode({
       data-node-presentation={presentation}
       data-node-selected={isSelected ? 'true' : 'false'}
       data-node-locked={node.locked ? 'true' : undefined}
-      data-playback-active={isPlaybackActive ? 'true' : undefined}
       {...getKeyboardBoundaryMetadata({
         scope: 'node',
         ownerId: node.id,
@@ -383,8 +379,7 @@ export function BaseNode({
           `node-card--${presentation}`,
           opaqueSurface && 'node-card--opaque',
           'transition-colors duration-150',
-          (isSelected || isPlaybackActive) && 'selected',
-          isPlaybackActive && !isSelected && 'ring-2 ring-[var(--node-selected)] ring-offset-2',
+          isSelected && 'selected',
           (isDragging || isResizing) && 'shadow-2xl',
         )}
       >

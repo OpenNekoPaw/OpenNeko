@@ -80,3 +80,19 @@
 - [x] 12.4 Center transport controls, remove visible time labels and remove time-formatted Seek tooltip while retaining relative Seek progress
 - [x] 12.5 Run affected tests, builds, quality checks, OpenSpec validation and residual scans
 - [x] 12.6 Update verification evidence without launching or manipulating the user's VS Code instance
+
+## 13. In-place playback expansion correction
+
+- [x] 13.1 Add regression coverage for stable top anchor, width, non-modal semantics and Storyline geometry across Preview expansion
+- [x] 13.2 Replace playback-state backdrop/centering with one pointer-transparent top layer whose shell expands downward in place
+- [x] 13.3 Keep the Overlay above Canvas context toolbars without blocking Canvas outside the shell
+- [x] 13.4 Split playback synchronization from one-shot user navigation; remove Canvas selection and persistent playback highlight writes
+- [x] 13.5 Run affected tests, build, OpenSpec validation and residual scans; update verification evidence
+
+## 14. Overlay-lifetime Preview visibility
+
+- [x] 14.1 Add regression coverage for default collapsed state, playback-triggered reveal and persistence across pause
+- [x] 14.2 Move the Preview visibility latch into `StorylinePlaybackOverlay` and remove playback-state-derived collapsing
+- [x] 14.3 Make full-bleed reveal Preview and preserve it after restoring the top-docked Overlay
+- [x] 14.4 Verify close/reopen resets Preview to collapsed without adding session/store state
+- [x] 14.5 Run affected tests, builds, quality checks, OpenSpec validation and isolated Extension Host verification; update evidence

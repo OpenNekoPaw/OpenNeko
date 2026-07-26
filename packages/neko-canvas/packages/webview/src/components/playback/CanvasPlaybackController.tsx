@@ -31,6 +31,8 @@ export interface PlaybackCompletionSignal {
   readonly nonce: number;
 }
 
+export type CanvasPlaybackUnitChangeOrigin = 'navigation' | 'playback';
+
 export interface CanvasPlaybackControllerProps {
   readonly plan?: CanvasPlaybackPlan | null;
   readonly routeUnitIds?: readonly string[];
@@ -39,7 +41,10 @@ export interface CanvasPlaybackControllerProps {
   readonly currentTimeMs?: number;
   readonly durationMs?: number;
   readonly playbackCompletionSignal?: PlaybackCompletionSignal;
-  readonly onActiveUnitChange?: (unitId: string | undefined) => void;
+  readonly onActiveUnitChange?: (
+    unitId: string | undefined,
+    origin: CanvasPlaybackUnitChangeOrigin,
+  ) => void;
   readonly onPlayingChange?: (isPlaying: boolean) => void;
   readonly onSeek?: (playheadMs: number) => void;
   readonly onRouteChange?: (routeUnitIds: readonly string[]) => void;
@@ -75,7 +80,6 @@ export function useCanvasPlaybackController({
 }: CanvasPlaybackControllerProps = {}): CanvasPlaybackControllerModel | null {
   const canvasData = useCanvasStore((state) => state.canvasData);
   const selectedNodeId = useCanvasStore((state) => state.selection.nodeIds[0]);
-  const setActivePlayingNode = useCanvasStore((state) => state.setActivePlayingNode);
   const [activeUnitId, setActiveUnitId] = useState<string | undefined>();
   const [isPlaying, setIsPlaying] = useState(false);
   const [route, setRoute] = useState<readonly string[]>([]);
@@ -114,15 +118,18 @@ export function useCanvasPlaybackController({
   const planKey = `${plan?.adapterId ?? 'none'}:${defaultRoute.join('|')}`;
 
   const commitActive = useCallback(
-    (unitId: string | undefined, playbackState: 'playing' | 'paused') => {
+    (
+      unitId: string | undefined,
+      playbackState: 'playing' | 'paused',
+      origin: CanvasPlaybackUnitChangeOrigin,
+    ) => {
       if (!unitId || !plan) return;
       const unit = plan.units.find((candidate) => candidate.id === unitId);
       if (!unit) {
         throw new Error(`Playback route references missing unit "${unitId}".`);
       }
       if (controlledActiveUnitId === undefined) setActiveUnitId(unitId);
-      onActiveUnitChangeRef.current?.(unitId);
-      setActivePlayingNode(unit.sourceNodeId);
+      onActiveUnitChangeRef.current?.(unitId, origin);
       requestCounterRef.current += 1;
       onPlaybackRequestRef.current?.({
         unitId,
@@ -131,7 +138,7 @@ export function useCanvasPlaybackController({
         requestId: `canvas-playback-${requestCounterRef.current}`,
       });
     },
-    [controlledActiveUnitId, plan, setActivePlayingNode],
+    [controlledActiveUnitId, plan],
   );
 
   const commitPlaying = useCallback(
@@ -143,7 +150,11 @@ export function useCanvasPlaybackController({
   );
 
   const advance = useCallback(
-    (delta: -1 | 1, continuePlaying = false) => {
+    (
+      delta: -1 | 1,
+      continuePlaying = false,
+      origin: CanvasPlaybackUnitChangeOrigin = 'playback',
+    ) => {
       clearTimer(timerRef);
       const nextIndex = viewState.currentIndex + delta;
       const nextUnitId = effectiveRoute[nextIndex];
@@ -151,7 +162,7 @@ export function useCanvasPlaybackController({
         commitPlaying(false);
         return;
       }
-      commitActive(nextUnitId, continuePlaying ? 'playing' : 'paused');
+      commitActive(nextUnitId, continuePlaying ? 'playing' : 'paused', origin);
       commitPlaying(continuePlaying);
     },
     [commitActive, commitPlaying, effectiveRoute, viewState.currentIndex],
@@ -163,7 +174,7 @@ export function useCanvasPlaybackController({
     setActiveUnitId(undefined);
     setIsPlaying(false);
     onRouteChangeRef.current?.(defaultRouteRef.current);
-    onActiveUnitChangeRef.current?.(undefined);
+    onActiveUnitChangeRef.current?.(undefined, 'playback');
     onPlayingChangeRef.current?.(false);
     return () => clearTimer(timerRef);
   }, [planKey]);
@@ -209,10 +220,10 @@ export function useCanvasPlaybackController({
     if (effectiveIsPlaying) {
       clearTimer(timerRef);
       commitPlaying(false);
-      commitActive(unitId, 'paused');
+      commitActive(unitId, 'paused', 'playback');
       return;
     }
-    commitActive(unitId, 'playing');
+    commitActive(unitId, 'playing', 'playback');
     commitPlaying(true);
   }
 
@@ -226,8 +237,8 @@ export function useCanvasPlaybackController({
     ...(currentTimeMs !== undefined ? { currentTimeMs } : {}),
     ...(durationMs !== undefined ? { durationMs } : {}),
     playPause: handlePlayPause,
-    stepPrevious: () => advance(-1),
-    stepNext: () => advance(1),
+    stepPrevious: () => advance(-1, false, 'navigation'),
+    stepNext: () => advance(1, false, 'navigation'),
     ...(onSeek ? { seek: onSeek } : {}),
   };
 }

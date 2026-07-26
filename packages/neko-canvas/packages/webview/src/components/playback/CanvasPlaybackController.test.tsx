@@ -35,7 +35,6 @@ describe('CanvasPlaybackController', () => {
       selection: { nodeIds: [], connectionIds: [] },
       isConnecting: false,
       pendingConnectionSource: null,
-      activePlayingNodeId: null,
     });
   });
 
@@ -64,8 +63,8 @@ describe('CanvasPlaybackController', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(onActiveUnitChange).toHaveBeenCalledWith('media-1');
-    expect(useCanvasStore.getState().activePlayingNodeId).toBe('media-1');
+    expect(onActiveUnitChange).toHaveBeenCalledWith('media-1', 'navigation');
+    expect(useCanvasStore.getState()).not.toHaveProperty('activePlayingNodeId');
     expect(host.querySelector('[data-testid="canvas-playback-branches"]')).toBeNull();
   });
 
@@ -130,6 +129,11 @@ describe('CanvasPlaybackController', () => {
       'unit-1',
       'unit-2',
       'unit-3',
+    ]);
+    expect(onActiveUnitChange.mock.calls.map(([, origin]) => origin)).toEqual([
+      'playback',
+      'playback',
+      'playback',
     ]);
     expect(host.querySelector<HTMLButtonElement>('button[title="Play"]')).not.toBeNull();
   });

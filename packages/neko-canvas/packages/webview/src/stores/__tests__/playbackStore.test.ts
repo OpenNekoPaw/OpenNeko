@@ -10,7 +10,6 @@ describe('playbackStore storyline session state', () => {
       selection: { nodeIds: [], connectionIds: [] },
       isConnecting: false,
       pendingConnectionSource: null,
-      activePlayingNodeId: null,
     });
     usePlaybackStore.setState({
       activePlayback: null,

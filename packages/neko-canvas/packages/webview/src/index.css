@@ -274,23 +274,15 @@ body,
   overflow: hidden;
 }
 
-.canvas-playback-overlay-backdrop {
+.canvas-playback-overlay-layer {
   position: absolute;
   inset: 0;
-  z-index: 50;
+  z-index: 1000;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   padding: 12px 24px 12px 80px;
   pointer-events: none;
-}
-
-.canvas-playback-overlay-backdrop[data-expanded='true'] {
-  align-items: center;
-  background: color-mix(in srgb, black 54%, transparent);
-  padding: 24px;
-  backdrop-filter: blur(3px);
-  pointer-events: auto;
 }
 
 .canvas-playback-overlay {
@@ -309,14 +301,11 @@ body,
 }
 
 .canvas-playback-overlay[data-expanded='true'] {
-  width: min(960px, 100%);
   height: min(820px, 100%);
 }
 
-.canvas-playback-overlay-backdrop[data-presentation='fullscreen'] {
-  align-items: center;
+.canvas-playback-overlay-layer[data-presentation='fullscreen'] {
   padding: 0;
-  pointer-events: auto;
 }
 
 .canvas-playback-overlay[data-presentation='fullscreen'] {
@@ -336,7 +325,6 @@ body,
   overflow: hidden;
 }
 
-.canvas-playback-overlay[data-expanded='true'] .canvas-playback-overlay-storyline,
 .canvas-playback-overlay[data-presentation='fullscreen'] .canvas-playback-overlay-storyline {
   height: clamp(160px, 24vh, 260px);
   min-height: 140px;
@@ -791,15 +779,10 @@ body,
 }
 
 @media (max-width: 920px) {
-  .canvas-playback-overlay-backdrop {
+  .canvas-playback-overlay-layer {
     padding: 8px 12px 8px 68px;
   }
 
-  .canvas-playback-overlay-backdrop[data-expanded='true'] {
-    padding: 12px;
-  }
-
-  .canvas-playback-overlay[data-expanded='true'] .canvas-playback-overlay-storyline,
   .canvas-playback-overlay[data-presentation='fullscreen'] .canvas-playback-overlay-storyline {
     height: clamp(150px, 30vh, 230px);
   }

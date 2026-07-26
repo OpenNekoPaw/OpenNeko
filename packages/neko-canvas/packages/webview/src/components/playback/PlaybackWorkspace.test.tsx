@@ -93,7 +93,6 @@ describe('PlaybackWorkspace', () => {
       selection: { nodeIds: ['scene-a'], connectionIds: [] },
       isConnecting: false,
       pendingConnectionSource: null,
-      activePlayingNodeId: null,
     });
     usePlaybackStore.setState({
       activePlayback: null,
@@ -139,13 +138,12 @@ describe('PlaybackWorkspace', () => {
     });
 
     const overlay = host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]');
-    const backdrop = host.querySelector<HTMLElement>(
-      '[data-testid="canvas-playback-overlay-backdrop"]',
-    );
+    const layer = host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay-layer"]');
     expect(overlay).not.toBeNull();
     expect(overlay?.dataset.expanded).toBe('false');
     expect(overlay?.getAttribute('aria-modal')).toBeNull();
-    expect(backdrop?.dataset.expanded).toBe('false');
+    expect(layer).not.toBeNull();
+    expect(layer?.dataset.expanded).toBeUndefined();
     expect(overlay?.querySelector('[data-testid="canvas-playback-storyline"]')).not.toBeNull();
     expect(overlay?.querySelector('[data-testid="canvas-playback-controller"]')).not.toBeNull();
     expect(overlay?.querySelector('[data-testid="canvas-playback-stage"]')).toBeNull();
@@ -171,6 +169,8 @@ describe('PlaybackWorkspace', () => {
     const overlay = host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]');
     expect(overlay).not.toBeNull();
     expect(overlay?.dataset.presentation).toBe('overlay');
+    expect(overlay?.dataset.expanded).toBe('false');
+    expect(overlay?.querySelector('[data-testid="canvas-playback-stage"]')).toBeNull();
     expect(host.querySelectorAll('[data-testid="canvas-playback-controller"]')).toHaveLength(1);
     expect(overlay?.querySelector('[data-testid="canvas-playback-storyline"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="canvas-playback-canvas-pane"]')).not.toBeNull();
@@ -184,6 +184,24 @@ describe('PlaybackWorkspace', () => {
       host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]')?.dataset
         .presentation,
     ).toBe('fullscreen');
+    expect(
+      host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]')?.dataset.expanded,
+    ).toBe('true');
+    expect(host.querySelector('[data-testid="canvas-playback-stage"]')).not.toBeNull();
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>('[data-playback-action="toggle-overlay-fullscreen"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(
+      host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]')?.dataset
+        .presentation,
+    ).toBe('overlay');
+    expect(
+      host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]')?.dataset.expanded,
+    ).toBe('true');
+    expect(host.querySelector('[data-testid="canvas-playback-stage"]')).not.toBeNull();
 
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -265,8 +283,8 @@ describe('PlaybackWorkspace', () => {
     });
 
     expect(usePlaybackStore.getState().playbackSession.currentUnitId).toBe('shot-a2');
-    expect(useCanvasStore.getState().selection.nodeIds).toEqual(['shot-a2']);
-    expect(useCanvasStore.getState().activePlayingNodeId).toBe('shot-a2');
+    expect(useCanvasStore.getState().selection.nodeIds).toEqual(['scene-a']);
+    expect(useCanvasStore.getState()).not.toHaveProperty('activePlayingNodeId');
     expect(JSON.stringify(useCanvasStore.getState().canvasData)).toBe(before);
     expect(JSON.stringify(useCanvasStore.getState().canvasData)).not.toContain('timelineOrder');
   });
@@ -305,7 +323,7 @@ describe('PlaybackWorkspace', () => {
       shotTwo?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(useCanvasStore.getState().selection.nodeIds).toEqual(['shot-a2']);
+    expect(useCanvasStore.getState().selection.nodeIds).toEqual(['scene-a']);
     expect(useRuntimeViewportStore.getState().viewport.pan).toEqual({
       x: -680,
       y: 180,
@@ -402,7 +420,8 @@ describe('PlaybackWorkspace', () => {
 
     expect(usePlaybackStore.getState().playbackSession.currentUnitId).toBe('shot-a2');
     expect(usePlaybackStore.getState().playbackSession.playheadMs).toBe(1000);
-    expect(useCanvasStore.getState().selection.nodeIds).toEqual(['shot-a2']);
+    expect(useCanvasStore.getState().selection.nodeIds).toEqual(['scene-a']);
+    expect(useRuntimeViewportStore.getState().viewport.pan).toEqual({ x: 0, y: 0 });
   });
 
   it('continues a media route when the current preview media ends', () => {
@@ -439,7 +458,7 @@ describe('PlaybackWorkspace', () => {
     );
   });
 
-  it('switches the same Overlay from top-docked non-modal to modal playback and back', () => {
+  it('keeps Preview expanded after pausing and resets it only after reopening Storyline', () => {
     act(() => {
       useCanvasStore.setState({
         canvasData: mediaRouteCanvas(),
@@ -452,13 +471,12 @@ describe('PlaybackWorkspace', () => {
     const collapsedOverlay = host.querySelector<HTMLElement>(
       '[data-testid="canvas-playback-overlay"]',
     );
-    const backdrop = host.querySelector<HTMLElement>(
-      '[data-testid="canvas-playback-overlay-backdrop"]',
-    );
+    const layer = host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay-layer"]');
     expect(collapsedOverlay).not.toBeNull();
     expect(collapsedOverlay?.dataset.expanded).toBe('false');
     expect(collapsedOverlay?.getAttribute('aria-modal')).toBeNull();
-    expect(backdrop?.dataset.expanded).toBe('false');
+    expect(layer).not.toBeNull();
+    expect(layer?.dataset.expanded).toBeUndefined();
     expect(host.querySelector('[data-testid="canvas-playback-stage"]')).toBeNull();
     expect(host.querySelectorAll('[data-testid="canvas-playback-controller"]')).toHaveLength(1);
 
@@ -472,9 +490,10 @@ describe('PlaybackWorkspace', () => {
       '[data-testid="canvas-playback-overlay"]',
     );
     expect(expandedOverlay).not.toBeNull();
+    expect(expandedOverlay).toBe(collapsedOverlay);
     expect(expandedOverlay?.dataset.expanded).toBe('true');
-    expect(expandedOverlay?.getAttribute('aria-modal')).toBe('true');
-    expect(backdrop?.dataset.expanded).toBe('true');
+    expect(expandedOverlay?.getAttribute('aria-modal')).toBeNull();
+    expect(layer?.dataset.expanded).toBeUndefined();
     expect(host.querySelector('[data-testid="canvas-playback-stage"]')).not.toBeNull();
     expect(
       host.querySelector<HTMLElement>('[data-testid="preview-surface"]')?.dataset.playbackState,
@@ -490,16 +509,31 @@ describe('PlaybackWorkspace', () => {
     expect(usePlaybackStore.getState().playbackSession.playbackState).toBe('paused');
     expect(
       host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]')?.dataset.expanded,
-    ).toBe('false');
+    ).toBe('true');
     expect(
       host
         .querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]')
         ?.getAttribute('aria-modal'),
     ).toBeNull();
-    expect(backdrop?.dataset.expanded).toBe('false');
-    expect(host.querySelector('[data-testid="canvas-playback-stage"]')).toBeNull();
+    expect(layer?.dataset.expanded).toBeUndefined();
+    expect(host.querySelector('[data-testid="canvas-playback-stage"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="canvas-playback-storyline"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="canvas-playback-controller"]')).not.toBeNull();
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>('[data-playback-action="close-overlay"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(host.querySelector('[data-testid="canvas-playback-overlay"]')).toBeNull();
+
+    act(() => {
+      usePlaybackStore.getState().revealPlaybackWorkspace();
+    });
+    expect(
+      host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]')?.dataset.expanded,
+    ).toBe('false');
+    expect(host.querySelector('[data-testid="canvas-playback-stage"]')).toBeNull();
   });
 
   it('requests and renders host-enriched preview plans inside the same Webview', async () => {
@@ -592,7 +626,7 @@ describe('PlaybackWorkspace', () => {
       routeId: 'route-alternate',
       currentUnitId: 'shot-a2',
     });
-    expect(useCanvasStore.getState().selection.nodeIds).toEqual(['shot-a2']);
+    expect(useCanvasStore.getState().selection.nodeIds).toEqual(['scene-a']);
     expect(host.querySelectorAll('[data-storyline-node="true"]')).toHaveLength(2);
     expect(
       host

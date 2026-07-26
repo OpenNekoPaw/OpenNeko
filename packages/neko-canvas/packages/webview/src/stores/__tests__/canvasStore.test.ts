@@ -97,7 +97,6 @@ describe('canvasStore canonical workspace', () => {
       selection: { nodeIds: [], connectionIds: [] },
       isConnecting: false,
       pendingConnectionSource: null,
-      activePlayingNodeId: null,
     });
     useHistoryStore.setState({ undoStack: [], redoStack: [], maxHistory: 50 });
   });

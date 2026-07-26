@@ -12,9 +12,9 @@ The Canvas Webview SHALL render Storyline as the only route presentation inside 
 - **AND** no persistent Storyline or Preview panel remains outside the Overlay
 - **AND** no Matrix projection or Matrix runtime state is created
 
-### Requirement: Playback state controls Preview expansion
+### Requirement: Overlay lifecycle controls Preview expansion
 
-The unified Overlay SHALL keep Storyline at the top and playback controls directly below it. Preview media content SHALL be collapsed whenever playback is not active and SHALL expand below the controls while playback is active. While playback is not active, the Overlay SHALL be a top-docked, non-modal strip without a dimming backdrop and Canvas SHALL remain interactive outside the strip. While playback is active, the same Overlay SHALL become a centered modal presentation with a dimming backdrop. The Overlay SHALL also support Webview-full-bleed presentation.
+The unified Overlay SHALL keep Storyline at the top and playback controls directly below it. Preview media content SHALL start collapsed each time the Storyline Overlay is shown. Starting playback or entering Webview-full-bleed presentation SHALL reveal Preview below the controls for the remainder of that Overlay component lifetime. Pausing, ending playback, becoming stale, or restoring from full-bleed MUST NOT automatically hide Preview. Closing and subsequently showing the Storyline Overlay SHALL create a new collapsed lifecycle. In all states, the Overlay SHALL retain the same top dock, width, shell, Storyline geometry and non-modal semantics without a dimming backdrop. Canvas SHALL remain interactive outside the Overlay.
 
 #### Scenario: User opens the Overlay while not playing
 
@@ -30,23 +30,39 @@ The unified Overlay SHALL keep Storyline at the top and playback controls direct
 - **WHEN** the user starts playback from the collapsed Overlay
 - **THEN** the same Overlay expands without opening another surface
 - **AND** Preview media content appears below Storyline and controls
-- **AND** the Overlay becomes centered and modal with a dimming backdrop
+- **AND** the Overlay keeps its top anchor, width, Storyline geometry and non-modal semantics
+- **AND** no dimming backdrop or centered modal presentation is introduced
 - **AND** Storyline, controls and Preview consume the same playback session
 
-#### Scenario: Playback stops
+#### Scenario: Playback stops after Preview was revealed
 
 - **WHEN** active playback pauses, ends or becomes stale
-- **THEN** Preview media content is removed
+- **THEN** Preview media content remains visible
 - **AND** Storyline and playback controls remain in the same Overlay
-- **AND** the Overlay returns to its top-docked non-modal presentation
+- **AND** the unchanged top-docked shell remains expanded in place
+
+#### Scenario: User closes and reopens the Overlay
+
+- **WHEN** the user closes an Overlay whose Preview was revealed and later shows Storyline again
+- **THEN** the new Overlay lifecycle displays Storyline and controls with Preview collapsed
+- **AND** no persisted Preview-visibility state is restored from the playback session or store
 
 #### Scenario: User toggles Preview full-bleed presentation
 
 - **WHEN** the Overlay is open and the user activates its fullscreen action
 - **THEN** the same Overlay expands to fill the Canvas Webview content area
+- **AND** Preview is visible even if playback has not started
 - **AND** playback state and current media are preserved
-- **AND** activating the action again restores the centered Overlay
+- **AND** activating the action again restores the top-docked Overlay
+- **AND** Preview remains visible after restoring the top-docked Overlay
+- **AND** full-bleed presentation does not expose an action that hides Preview independently
 - **AND** the implementation does not invoke the browser Fullscreen API
+
+#### Scenario: Canvas context UI intersects the expanded Overlay
+
+- **WHEN** selection or generation controls are visible on the Canvas while Preview expands
+- **THEN** controls geometrically beneath the Overlay are not painted above Storyline, transport controls or Preview
+- **AND** Canvas UI outside the Overlay remains visible and interactive
 
 #### Scenario: User closes the Overlay
 
@@ -80,17 +96,24 @@ Storyline SHALL project valid `CanvasPlaybackRouteCandidate` values as an ordere
 - **THEN** Storyline does not display an invented duration for that node
 - **AND** playback may continue using the controller's existing advance policy
 
-### Requirement: Storyline nodes reveal their source Canvas nodes
+### Requirement: Storyline navigation reveals source Canvas nodes once
 
-Each Storyline node SHALL retain the selected route id, playback unit id and `CanvasPlaybackUnit.sourceNodeId`. Activating a Storyline node MUST select and reveal that exact source Canvas node while updating the existing Preview and playback session.
+Each Storyline node SHALL retain the selected route id, playback unit id and `CanvasPlaybackUnit.sourceNodeId`. Activating a Storyline node, choosing a route, or using previous/next navigation MUST reveal that exact source Canvas node once while updating the existing Preview and playback session. Reveal MUST NOT write Canvas selection or persistent playback-highlight state. Automatic playback advancement, play/pause and Seek MUST update the playback session without moving the Canvas viewport.
 
 #### Scenario: User activates a Storyline node
 
 - **WHEN** the user clicks or keyboard-activates a valid Storyline node
 - **THEN** the corresponding route and playback unit become current
-- **AND** the Canvas node identified by `sourceNodeId` becomes selected
-- **AND** the Canvas viewport reveals the node inside the unobscured Canvas pane
+- **AND** the Canvas viewport reveals the node identified by `sourceNodeId` once inside the unobscured Canvas pane
+- **AND** existing Canvas selection remains unchanged
+- **AND** no node selection toolbar or persistent playback highlight is activated
 - **AND** Preview updates through the existing playback path
+
+#### Scenario: Playback advances without explicit navigation
+
+- **WHEN** playback starts, advances automatically, pauses or seeks
+- **THEN** Storyline and Preview session state remain synchronized
+- **AND** Canvas selection and viewport remain unchanged
 
 #### Scenario: Source identity is unavailable
 

@@ -227,14 +227,21 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(playbackWorkspaceSource).not.toMatch(/canvas-playback-route-time-ruler/);
     expect(playbackWorkspaceSource).not.toMatch(/--canvas-playback-overlay-safe-top/);
     expect(playbackWorkspaceSource).toMatch(/data-expanded=\{expanded \? 'true' : 'false'\}/);
-    expect(playbackWorkspaceSource).toMatch(/aria-modal=\{expanded \? true : undefined\}/);
+    expect(playbackWorkspaceSource).not.toMatch(/aria-modal=/);
+    expect(playbackWorkspaceSource).toMatch(/canvas-playback-overlay-layer/);
+    expect(playbackWorkspaceSource).not.toMatch(/canvas-playback-overlay-backdrop/);
     expect(cssSource).not.toMatch(/\.canvas-playback-route-pane/);
     expect(cssSource).toMatch(/data-presentation='fullscreen'/);
     expect(cssSource).toMatch(
-      /\.canvas-playback-overlay-backdrop\s*\{[\s\S]*?align-items:\s*flex-start;[\s\S]*?pointer-events:\s*none;/,
+      /\.canvas-playback-overlay-layer\s*\{[\s\S]*?z-index:\s*1000;[\s\S]*?align-items:\s*flex-start;[\s\S]*?pointer-events:\s*none;/,
     );
-    expect(cssSource).toMatch(
-      /\.canvas-playback-overlay-backdrop\[data-expanded='true'\]\s*\{[\s\S]*?align-items:\s*center;[\s\S]*?pointer-events:\s*auto;/,
+    expect(cssSource).not.toMatch(/canvas-playback-overlay-layer\[data-expanded='true'\]/);
+    expect(cssSource).not.toMatch(/canvas-playback-overlay-backdrop/);
+    expect(cssSource).not.toMatch(
+      /\.canvas-playback-overlay\[data-expanded='true'\]\s*\{[^}]*width:/s,
+    );
+    expect(cssSource).not.toMatch(
+      /\.canvas-playback-overlay\[data-expanded='true'\][^{]*canvas-playback-overlay-storyline/,
     );
     expect(cssSource).toMatch(
       /\.canvas-playback-controller-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto\s+minmax\(0,\s*1fr\);/,
@@ -247,7 +254,7 @@ describe('Canvas creative workbench layout boundary', () => {
     const narrowPlaybackStart = cssSource.indexOf('@media (max-width: 920px)');
     const nextResponsiveBlock = cssSource.indexOf('@media (max-width:', narrowPlaybackStart + 1);
     const narrowPlaybackCss = cssSource.slice(narrowPlaybackStart, nextResponsiveBlock);
-    expect(narrowPlaybackCss).toMatch(/\.canvas-playback-overlay-backdrop\s*\{/);
+    expect(narrowPlaybackCss).toMatch(/\.canvas-playback-overlay-layer\s*\{/);
   });
 
   it('keeps floating toolbar actions grouped by canvas workflow frequency', () => {
@@ -284,11 +291,11 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(infiniteCanvasSource).toMatch(/\{isGridVisible && \(/);
   });
 
-  it('keeps playback highlight as visual state separate from selection props', () => {
-    expect(baseNodeSource).toMatch(/state\.activePlayingNodeId/);
-    expect(baseNodeSource).toMatch(/data-playback-active=\{isPlaybackActive/);
-    expect(baseNodeSource).toMatch(/isSelected \|\| isPlaybackActive/);
-    expect(appSource).not.toMatch(/setActivePlayingNode\(/);
+  it('keeps Storyline reveal transient without Canvas selection or playback highlight state', () => {
+    expect(baseNodeSource).not.toMatch(/activePlayingNodeId|isPlaybackActive/);
+    expect(playbackControllerSource).not.toMatch(/setActivePlayingNode|activePlayingNodeId/);
+    expect(playbackWorkspaceSource).not.toMatch(/setActivePlayingNode|activePlayingNodeId/);
+    expect(playbackWorkspaceSource).not.toMatch(/selectNode\(unit\.sourceNodeId\)/);
   });
 
   it('removes the persistent right node library Dock', () => {
