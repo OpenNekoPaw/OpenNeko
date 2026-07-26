@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { HtmlVideoNativeCapabilities } from '@neko/media';
+import { MediaRuntimeUnavailableError, type HtmlVideoNativeCapabilities } from '@neko/media';
 import { PreviewService, type MediaInfo, type PreviewPlayback } from '../services/PreviewService';
 import type { StatusBarManager } from '../ui/StatusBarManager';
 import { getLogger } from '../utils/logger';
@@ -177,12 +177,14 @@ export class VideoPreviewProvider implements vscode.CustomReadonlyEditorProvider
       (message: Record<string, unknown>) => {
         void handleMessage(message).catch((error: unknown) => {
           const failure = error instanceof Error ? error.message : String(error);
+          const operation = previewOperation(message['type']);
+          logger.error(`Video preview ${operation} operation failed.`, error);
           void Promise.resolve(
             panel.webview.postMessage({
               type: 'preview:operationFailed',
               payload: {
-                operation: previewOperation(message['type']),
-                message: failure,
+                operation,
+                code: videoPreviewDiagnosticCode(error, operation),
               },
             }),
           ).catch((reportError: unknown) => {
@@ -287,4 +289,28 @@ function previewOperation(value: unknown): 'captureFrame' | 'playback' | 'protoc
     return 'playback';
   }
   return 'protocol';
+}
+
+function videoPreviewDiagnosticCode(
+  error: unknown,
+  operation: 'captureFrame' | 'playback' | 'protocol',
+):
+  | 'hardware-decoder-unavailable'
+  | 'hardware-preview-unavailable'
+  | 'hdr-poster-unavailable'
+  | 'frame-capture-failed'
+  | 'playback-failed'
+  | 'protocol-failed' {
+  if (error instanceof MediaRuntimeUnavailableError) {
+    if (error.capability === 'hardware-only HDR frame capture') {
+      return 'hdr-poster-unavailable';
+    }
+    if (/ VideoToolbox decoder$/u.test(error.capability)) {
+      return 'hardware-decoder-unavailable';
+    }
+    return 'hardware-preview-unavailable';
+  }
+  if (operation === 'captureFrame') return 'frame-capture-failed';
+  if (operation === 'playback') return 'playback-failed';
+  return 'protocol-failed';
 }

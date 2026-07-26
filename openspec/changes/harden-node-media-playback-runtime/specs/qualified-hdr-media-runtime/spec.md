@@ -96,6 +96,29 @@ distinguish optional poster capture from playback preparation.
 - **THEN** the Webview receives a playback diagnostic
 - **AND** the failed media session is disposed
 
+### Requirement: Capability diagnostics retain the player surface
+
+Preview SHALL project media capability failures as stable, localized notices
+inside the mounted player. It MUST NOT replace the complete player with a raw
+runtime error message.
+
+#### Scenario: Hardware decoder is unavailable
+
+- **WHEN** VideoToolbox rejects the source decoder
+- **THEN** the video element, metadata, controls, and editor session remain
+  mounted
+- **AND** Preview shows a localized hardware-decoder notice with a source or
+  device recommendation
+- **AND** raw FFmpeg or runtime implementation text is not used as the primary
+  user message
+
+#### Scenario: HDR poster capture is disabled
+
+- **WHEN** the hardware-only policy prevents HDR frame capture
+- **THEN** Preview shows a localized informational poster notice
+- **AND** the play action and transport controls remain available
+- **AND** the notice does not claim that the source file is corrupt
+
 ### Requirement: Preview replacement is generation-safe
 
 Preview seek and speed changes SHALL replace the current video and PCM

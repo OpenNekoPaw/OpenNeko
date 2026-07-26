@@ -2,6 +2,12 @@
 
 Date: 2026-07-26
 
+Directory policy update (2026-07-27): sections below that name
+`~/Assets/Media` or the retired repository-local
+`.tmp/vscode-test-workspaces/media-runtime` workspace are historical evidence.
+All subsequent runtime acceptance uses only `${HOME}/Git/neko-test`; generated
+fixtures belong in `.neko/.functional/media-runtime` below that root.
+
 ## Superseded native-playback diagnostic
 
 Date: 2026-07-27

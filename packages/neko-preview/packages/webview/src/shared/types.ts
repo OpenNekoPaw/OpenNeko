@@ -70,11 +70,19 @@ export interface PreviewFrameDataMessage {
 
 export type PreviewOperation = 'captureFrame' | 'playback' | 'protocol';
 
+export type PreviewOperationDiagnosticCode =
+  | 'hardware-decoder-unavailable'
+  | 'hardware-preview-unavailable'
+  | 'hdr-poster-unavailable'
+  | 'frame-capture-failed'
+  | 'playback-failed'
+  | 'protocol-failed';
+
 export interface PreviewOperationFailedMessage {
   type: 'preview:operationFailed';
   payload: {
     operation: PreviewOperation;
-    message: string;
+    code: PreviewOperationDiagnosticCode;
   };
 }
 

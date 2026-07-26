@@ -24,6 +24,7 @@ vi.mock('../../services/PreviewService', () => ({
 }));
 
 import * as vscode from 'vscode';
+import { MediaRuntimeUnavailableError } from '@neko/media';
 import { VideoPreviewProvider } from '../VideoPreviewProvider';
 import type { MediaInfo, PreviewPlayback } from '../../services/PreviewService';
 
@@ -251,7 +252,10 @@ describe('VideoPreviewProvider Node media path', () => {
 
   it('observes poster capture failures without rejecting the VS Code event callback', async () => {
     service.captureFrame.mockRejectedValueOnce(
-      new Error('Media runtime is unavailable for HDR frame filter zscale.'),
+      new MediaRuntimeUnavailableError(
+        'hardware-only HDR frame capture',
+        'HDR frame capture would require a CPU video-filter/readback path and is disabled.',
+      ),
     );
     const { panel, message } = await resolve(provider);
 
@@ -261,7 +265,26 @@ describe('VideoPreviewProvider Node media path', () => {
         type: 'preview:operationFailed',
         payload: {
           operation: 'captureFrame',
-          message: 'Media runtime is unavailable for HDR frame filter zscale.',
+          code: 'hdr-poster-unavailable',
+        },
+      }),
+    );
+  });
+
+  it('projects unavailable VideoToolbox decode as a structured playback diagnostic', async () => {
+    service.startPlayback.mockRejectedValueOnce(
+      new MediaRuntimeUnavailableError('AV1 VideoToolbox decoder'),
+    );
+    const { panel, message } = await resolve(provider);
+
+    await message({ type: 'preview:play', startTime: 0, speed: 1 });
+
+    await vi.waitFor(() =>
+      expect(panel.webview.postMessage).toHaveBeenLastCalledWith({
+        type: 'preview:operationFailed',
+        payload: {
+          operation: 'playback',
+          code: 'hardware-decoder-unavailable',
         },
       }),
     );

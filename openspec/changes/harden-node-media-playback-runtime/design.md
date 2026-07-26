@@ -167,6 +167,16 @@ Extension event callbacks consume every rejected promise and project the
 operation and diagnostic to the Webview; they never return an unobserved async
 callback promise to the VS Code event emitter.
 
+Preview operation failures cross the Host/Webview boundary as stable diagnostic
+codes rather than user-facing `Error.message` strings. An unavailable hardware
+decoder is a non-crashing playback limitation: the mounted video element,
+transport controls, metadata, and editor session remain present while a
+localized notice explains that software fallback is disabled and recommends a
+hardware-supported device or H.264 source. Hardware-only HDR poster capture is
+an informational notice; it explains that no cover frame was generated and
+that playback may still be attempted. Unknown failures use a generic localized
+operation notice while the Host logger retains implementation details.
+
 The native video file session is editor-scoped and remains stable across seek
 and speed changes. A seek updates `<video>.currentTime`, allowing Chromium to
 issue a Range request against the already prepared source; it does not remux,
@@ -227,6 +237,9 @@ selected stream cannot produce any valid prefix.
 - `scale_vt` availability does not prove acceptable HDR-to-SDR output; that
   graph remains unqualified until real-host color and changing-frame evidence
   exists.
+- Retaining controls after a capability failure allows seeking and retrying,
+  but it does not imply that the same unsupported source will become playable
+  without a source or hardware change.
 - Shipping FFmpeg has binary-size and license-notice costs. The staged
   descriptor and release audit make those costs visible and reviewable.
 

@@ -185,7 +185,11 @@ export function AudioPlayer() {
       case 'preview:operationFailed': {
         const failure = message as PreviewOperationFailedMessage;
         setIsPlaying(false);
-        setError(failure.payload.message);
+        setError(
+          failure.payload.code === 'protocol-failed'
+            ? t('preview.audio.protocolFailed')
+            : t('preview.audio.playbackFailed'),
+        );
         return;
       }
       default:

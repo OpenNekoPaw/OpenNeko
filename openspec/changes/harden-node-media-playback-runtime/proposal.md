@@ -24,6 +24,9 @@ wholly unreadable source.
   message callbacks must consume rejected promises and project an
   operation-scoped diagnostic instead of producing an Extension Host
   `unhandledRejection`.
+- Project hardware playback and HDR poster limitations as structured,
+  localized notices inside the retained player surface. Raw FFmpeg/runtime
+  messages must not replace the whole Webview or become the primary user copy.
 - Replace eager PCM scheduling with a bounded browser buffer, explicit
   prepare/start phases, a shared multi-track start barrier, and deterministic
   disposal of scheduled sources.
@@ -36,10 +39,10 @@ wholly unreadable source.
 - Classify bounded no-frame/early-EOF results as interval corruption while
   retaining successful probe, frame, PCM, waveform, and preview-prefix
   evidence.
-- Validate the path with the read-only files under `~/Assets/Media`, the
-  explicitly requested `~/Git/neko-test` fixture workspace, and a generated
-  isolated VS Code workspace. User media is never copied into the repository
-  or modified.
+- Validate the path only in the explicitly requested `~/Git/neko-test`
+  workspace. Read-only real media stays under that root; generated VS Code
+  fixtures stay in its marker-owned `.neko/.functional/media-runtime`
+  subtree. User media is never copied into the repository or modified.
 
 ## Capabilities
 

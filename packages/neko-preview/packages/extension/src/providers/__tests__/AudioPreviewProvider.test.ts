@@ -200,7 +200,7 @@ describe('AudioPreviewProvider PCM path', () => {
         type: 'preview:operationFailed',
         payload: {
           operation: 'playback',
-          message: 'PCM decoder unavailable',
+          code: 'playback-failed',
         },
       }),
     );

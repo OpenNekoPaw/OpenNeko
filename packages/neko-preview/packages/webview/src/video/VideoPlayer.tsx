@@ -10,7 +10,9 @@ import type {
 import { useExtensionMessage, useVscodeReady } from '../shared/useVscodeMessage';
 import { useTranslation } from '../i18n/I18nContext';
 import { VideoControls } from './VideoControls';
-import { PlayIcon } from '@neko/ui/icons';
+import { EmptyState } from '@neko/ui/primitives';
+import { InfoIcon, PlayIcon, WarningIcon } from '@neko/ui/icons';
+import type { PreviewOperationDiagnosticCode } from '../shared/types';
 
 const CONTROLS_HIDE_DELAY = 3000;
 const VIDEO_SYNC_THRESHOLD_SECONDS = 0.08;
@@ -35,8 +37,8 @@ export function VideoPlayer() {
   const [speed, setSpeed] = useState(1);
   const [volume, setVolume] = useState(1);
   const [posterUrl, setPosterUrl] = useState<string>();
-  const [posterError, setPosterError] = useState<string>();
-  const [error, setError] = useState<string>();
+  const [posterDiagnostic, setPosterDiagnostic] = useState<PreviewOperationDiagnosticCode>();
+  const [playbackDiagnostic, setPlaybackDiagnostic] = useState<PreviewOperationDiagnosticCode>();
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isPiPActive, setIsPiPActive] = useState(false);
 
@@ -110,9 +112,9 @@ export function VideoPlayer() {
             descriptor: audio,
             playbackRate,
             volume: volumeRef.current,
-            onError: (failure) => {
+            onError: (_failure) => {
               if (generation === generationRef.current && audioRef.current === audioClient) {
-                setError(failure.message);
+                setPlaybackDiagnostic('playback-failed');
               }
             },
             onPlaybackEnd: () => finishPlayback(audioClient, descriptor.durationSeconds),
@@ -148,23 +150,23 @@ export function VideoPlayer() {
         return;
       }
       case 'preview:playbackReady':
-        void connectPlayback(message as PreviewPlaybackReadyMessage).catch((failure: unknown) => {
+        void connectPlayback(message as PreviewPlaybackReadyMessage).catch((_failure: unknown) => {
           setIsPlaying(false);
-          setError(failure instanceof Error ? failure.message : String(failure));
+          setPlaybackDiagnostic('playback-failed');
         });
         return;
       case 'preview:frameData':
         setPosterUrl(message.payload.imageDataUrl);
-        setPosterError(undefined);
+        setPosterDiagnostic(undefined);
         return;
       case 'preview:operationFailed': {
         const failure = message as PreviewOperationFailedMessage;
         if (failure.payload.operation === 'captureFrame') {
-          setPosterError(failure.payload.message);
+          setPosterDiagnostic(failure.payload.code);
           return;
         }
         setIsPlaying(false);
-        setError(failure.payload.message);
+        setPlaybackDiagnostic(failure.payload.code);
         return;
       }
       default:
@@ -233,7 +235,7 @@ export function VideoPlayer() {
     (time: number) => {
       if (!mediaInfo) return;
       activateAudioContext();
-      setError(undefined);
+      setPlaybackDiagnostic(undefined);
       playbackEndedRef.current = false;
       setCurrentTime(time);
       setIsPlaying(true);
@@ -267,7 +269,7 @@ export function VideoPlayer() {
 
   const handleSeek = useCallback(
     (time: number) => {
-      setError(undefined);
+      setPlaybackDiagnostic(undefined);
       playbackEndedRef.current = false;
       setCurrentTime(time);
       if (isPlaying) {
@@ -306,7 +308,7 @@ export function VideoPlayer() {
   const handleVideoError = useCallback(() => {
     const video = videoRef.current;
     if (!video || !video.hasAttribute('src')) return;
-    setError(video.error?.message ?? 'Video playback failed.');
+    setPlaybackDiagnostic('playback-failed');
   }, []);
 
   const handleVideoEnded = useCallback(() => {
@@ -337,12 +339,24 @@ export function VideoPlayer() {
       <div className="flex items-center justify-center h-full">{t('preview.video.loading')}</div>
     );
   }
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-full text-vscode-error p-5">{error}</div>
-    );
-  }
   if (!mediaInfo) return null;
+
+  const hardwareDecoderUnavailable = playbackDiagnostic === 'hardware-decoder-unavailable';
+  const hardwarePreviewUnavailable = playbackDiagnostic === 'hardware-preview-unavailable';
+  const playbackNoticeTitle = hardwareDecoderUnavailable
+    ? t('preview.video.hardwareDecoderUnavailableTitle', {
+        codec: mediaInfo.codec.toUpperCase(),
+      })
+    : hardwarePreviewUnavailable
+      ? t('preview.video.hardwarePreviewUnavailableTitle')
+      : t('preview.video.playbackFailedTitle');
+  const playbackNoticeDescription = hardwareDecoderUnavailable
+    ? t('preview.video.hardwareDecoderUnavailableDescription', {
+        codec: mediaInfo.codec.toUpperCase(),
+      })
+    : hardwarePreviewUnavailable
+      ? t('preview.video.hardwarePreviewUnavailableDescription')
+      : t('preview.video.playbackFailedDescription');
 
   return (
     <div className="absolute inset-0 bg-black" onMouseMove={showControls}>
@@ -356,7 +370,7 @@ export function VideoPlayer() {
           onEnded={handleVideoEnded}
           onError={handleVideoError}
         />
-        {!isPlaying && (
+        {!isPlaying && !playbackDiagnostic && (
           <button
             type="button"
             className="absolute inset-0 flex items-center justify-center"
@@ -368,12 +382,33 @@ export function VideoPlayer() {
             </span>
           </button>
         )}
-        {posterError && !posterUrl && (
+        {playbackDiagnostic && (
           <div
-            className="absolute top-3 left-3 right-3 text-center text-xs text-vscode-descriptionForeground"
-            role="status"
+            className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 pb-16"
+            role="alert"
+            aria-live="assertive"
           >
-            {posterError}
+            <EmptyState
+              className="w-full max-w-md rounded-xl border border-[var(--vscode-inputValidation-warningBorder,var(--vscode-panel-border))] bg-[var(--vscode-editor-background)] shadow-xl"
+              icon={<WarningIcon size={28} />}
+              title={playbackNoticeTitle}
+              description={playbackNoticeDescription}
+            />
+          </div>
+        )}
+        {posterDiagnostic && !posterUrl && (
+          <div
+            className="absolute top-3 left-1/2 flex w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 items-start gap-2 rounded-lg border border-[var(--vscode-inputValidation-infoBorder,var(--vscode-panel-border))] bg-[var(--vscode-editor-background)] px-3 py-2 text-xs text-vscode-descriptionForeground shadow-lg"
+            role="status"
+            aria-live="polite"
+          >
+            <InfoIcon className="mt-0.5 shrink-0" size={16} />
+            <span>
+              <strong className="block font-medium text-vscode-foreground">
+                {t('preview.video.hdrPosterUnavailableTitle')}
+              </strong>
+              {t('preview.video.hdrPosterUnavailableDescription')}
+            </span>
           </div>
         )}
       </div>
@@ -388,7 +423,6 @@ export function VideoPlayer() {
           duration={mediaInfo.duration}
           speed={speed}
           volume={volume}
-          isConnected={isConnected}
           isPiPActive={isPiPActive}
           onTogglePlay={handleTogglePlay}
           onSeek={handleSeek}

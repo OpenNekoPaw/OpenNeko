@@ -26,7 +26,18 @@ const preview: MessageBundle = {
   'preview.video.hideStats': 'Hide Stats (D)',
   'preview.video.pipButton': 'Picture-in-Picture',
   'preview.video.exitPip': 'Exit Picture-in-Picture',
-  'preview.video.disconnected': 'Disconnected',
+  'preview.video.hardwareDecoderUnavailableTitle': '{codec} hardware decoding is unavailable',
+  'preview.video.hardwareDecoderUnavailableDescription':
+    'This device cannot decode {codec} in hardware. OpenNeko did not use software transcoding; use a device with {codec} hardware decoding or provide an H.264 version.',
+  'preview.video.hardwarePreviewUnavailableTitle': 'Hardware video preview is unavailable',
+  'preview.video.hardwarePreviewUnavailableDescription':
+    'The required hardware video pipeline is unavailable. OpenNeko did not fall back to CPU transcoding.',
+  'preview.video.playbackFailedTitle': 'Video preview could not start',
+  'preview.video.playbackFailedDescription':
+    'The player remains available. Check the source and try playback again.',
+  'preview.video.hdrPosterUnavailableTitle': 'HDR cover frame was not generated',
+  'preview.video.hdrPosterUnavailableDescription':
+    'OpenNeko avoids CPU conversion for HDR frame capture. This does not mean the source is damaged, and playback can still be attempted.',
   // Audio player
   'preview.audio.loading': 'Loading audio...',
   'preview.audio.error': 'Error: {error}',
@@ -48,6 +59,8 @@ const preview: MessageBundle = {
   'preview.audio.viewLyrics': 'Lyrics',
   'preview.audio.viewWaveform': 'Waveform',
   'preview.audio.viewSpectrum': 'Spectrum',
+  'preview.audio.playbackFailed': 'Audio playback could not start.',
+  'preview.audio.protocolFailed': 'The audio preview request was not recognized.',
   // Document shared
   'preview.document.sendContentToAgent': 'Send Content to Agent',
   'preview.document.sendFileToAgent': 'Send File to Agent',

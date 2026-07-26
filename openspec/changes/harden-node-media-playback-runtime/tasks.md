@@ -68,6 +68,9 @@
       invoked.
 - [x] 5.9 Apply the same hardware-only rule to Cut preview preparation so
       Preview and Cut cannot diverge onto different video-processing paths.
+- [x] 5.10 Replace raw Preview runtime strings and the whole-player error
+      return with structured localized AV1/hardware and HDR-poster notices that
+      retain video, controls, metadata, and session state.
 
 ## 6. Validation
 
@@ -88,3 +91,5 @@
 - [x] 6.7 Re-run the AV1 Main10 fixture on Apple M2 and assert a visible
       VideoToolbox capability failure, zero CPU proxy processes, and no frozen
       native playback.
+- [x] 6.8 Add red-capable Host/Webview diagnostic tests and verify both notices
+      in the real `~/Git/neko-test` Extension Development Host.

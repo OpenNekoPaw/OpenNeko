@@ -36,7 +36,6 @@ const pcmClients = vi.hoisted(() => ({
 const videoControls = vi.hoisted(() => ({
   onSeek: undefined as ((time: number) => void) | undefined,
   onTogglePlay: undefined as (() => void) | undefined,
-  isConnected: false,
 }));
 
 vi.mock('@neko/media/browser', () => ({
@@ -84,14 +83,9 @@ vi.mock('../shared/useVscodeMessage', () => ({
 }));
 
 vi.mock('./VideoControls', () => ({
-  VideoControls: (props: {
-    isConnected: boolean;
-    onSeek: (time: number) => void;
-    onTogglePlay: () => void;
-  }) => {
+  VideoControls: (props: { onSeek: (time: number) => void; onTogglePlay: () => void }) => {
     videoControls.onSeek = props.onSeek;
     videoControls.onTogglePlay = props.onTogglePlay;
-    videoControls.isConnected = props.isConnected;
     return <div data-testid="video-controls" />;
   },
 }));
@@ -110,7 +104,6 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
     pcmClients.connectBehaviors.length = 0;
     videoControls.onSeek = undefined;
     videoControls.onTogglePlay = undefined;
-    videoControls.isConnected = false;
     vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockImplementation((type) =>
       type.includes('video/mp4') && (type.includes('av01') || type.includes('vp09'))
         ? 'probably'
@@ -202,13 +195,53 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
       type: 'preview:operationFailed',
       payload: {
         operation: 'captureFrame',
-        message: 'Media runtime is unavailable for HDR frame filter zscale.',
+        code: 'hdr-poster-unavailable',
+        message:
+          'HDR frame capture would require a CPU video-filter/readback path and is disabled.',
       },
     });
 
-    expect(host.textContent).toContain('Media runtime is unavailable for HDR frame filter zscale.');
+    const notice = host.querySelector('[role="status"]');
+    expect(notice?.textContent).toContain('preview.video.hdrPosterUnavailableTitle');
+    expect(notice?.textContent).toContain('preview.video.hdrPosterUnavailableDescription');
+    expect(host.textContent).not.toContain('CPU video-filter/readback');
     expect(host.querySelector('video')).not.toBeNull();
     expect(host.querySelector('button')).not.toBeNull();
+    expect(host.querySelector('[data-testid="video-controls"]')).not.toBeNull();
+  });
+
+  it('keeps the player mounted and localizes an unavailable AV1 hardware decoder', async () => {
+    await act(async () => root.render(<VideoPlayer />));
+    await emit({
+      type: 'preview:init',
+      payload: {
+        mediaInfo: {
+          width: 3840,
+          height: 2160,
+          fps: 24,
+          duration: 100,
+          codec: 'av1',
+          format: 'mp4',
+          hasAudio: true,
+        },
+        displayName: '4K.mp4',
+      },
+    });
+    await emit({
+      type: 'preview:operationFailed',
+      payload: {
+        operation: 'playback',
+        code: 'hardware-decoder-unavailable',
+        message: 'Media runtime is unavailable for AV1 VideoToolbox decoder.',
+      },
+    });
+
+    const notice = host.querySelector('[role="alert"]');
+    expect(notice?.textContent).toContain('preview.video.hardwareDecoderUnavailableTitle');
+    expect(notice?.textContent).toContain('preview.video.hardwareDecoderUnavailableDescription');
+    expect(host.textContent).not.toContain('Media runtime is unavailable');
+    expect(host.querySelector('video')).not.toBeNull();
+    expect(host.querySelector('[data-testid="video-controls"]')).not.toBeNull();
   });
 
   it('keeps the video element mounted while a playing seek replaces its source', async () => {
@@ -304,11 +337,9 @@ describe('Preview VideoPlayer native playback lifecycle', () => {
 
     const video = host.querySelector('video');
     await vi.waitFor(() => expect(pcmClients.instances).toHaveLength(1));
-    await vi.waitFor(() => expect(videoControls.isConnected).toBe(true));
     const loadCount = load.mock.calls.length;
     await act(async () => pcmClients.instances[0]?.options.onPlaybackEnd?.());
 
-    expect(videoControls.isConnected).toBe(false);
     expect(pcmClients.instances[0]?.dispose).toHaveBeenCalledOnce();
     postMessage.mockClear();
     await act(async () => videoControls.onTogglePlay?.());

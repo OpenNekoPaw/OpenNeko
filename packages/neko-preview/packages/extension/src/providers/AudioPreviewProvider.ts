@@ -140,12 +140,14 @@ export class AudioPreviewProvider implements vscode.CustomReadonlyEditorProvider
         const handling = handleMessage(message);
         void handling.catch((error: unknown) => {
           const failure = error instanceof Error ? error.message : String(error);
+          const operation = audioPreviewOperation(message['type']);
+          logger.error(`Audio preview ${operation} operation failed.`, error);
           void Promise.resolve(
             panel.webview.postMessage({
               type: 'preview:operationFailed',
               payload: {
-                operation: audioPreviewOperation(message['type']),
-                message: failure,
+                operation,
+                code: operation === 'playback' ? 'playback-failed' : 'protocol-failed',
               },
             }),
           ).catch((reportError: unknown) => {
