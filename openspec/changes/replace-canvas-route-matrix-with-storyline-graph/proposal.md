@@ -21,7 +21,7 @@ Canvas 路线浮层同时提供 Storyline 与 Matrix，但 Matrix 的路线族�
 - Storyline 不再重复显示“故事线 + 当前路线”标题行，也不保留常驻路线 Tab；单路线不显示选择器，多路线只显示一个紧凑路线选择器，路线分支和节点仍在同一图内可直接选择。
 - 上一节点、播放/暂停、下一节点是唯一主 transport；路线切换不再复制为 transport 按钮。受该 transport 控制的 Preview 未启动态不渲染第二个播放按钮。
 - Storyline 固定为可容纳约 2～3 条 lane 的紧凑高度，更多路线通过既有滚动视口浏览；不得因铺满或 Preview 展开恢复为高占用区域。
-- Preview 折叠时在 Overlay footer 提供明确的“显示预览”动作；该动作与播放一样只锁存当前 Overlay 生命周期的展开状态，展开后不提供普通模式或铺满模式下的独立隐藏动作。
+- Overlay footer 在普通顶部模式始终提供同一个 Preview 显隐切换：折叠时显示“显示预览”，展开时替换为“隐藏预览”；铺满模式强制显示 Preview，因此不提供隐藏动作。
 - Canvas 音频节点采用面向画布创作的单卡片布局：文件标题、可 Seek 的波形轮廓、时间、居中播放/暂停与音量控制直接归属节点表面；Storyline Preview 继续使用紧凑横向 transport。两者共享同一播放生命周期，不嵌套第二层播放卡片。
 - Canvas 节点、Storyline Overlay 与 full-bleed presentation 共享同一媒体描述和播放 session：媒体时长、尺寸、音轨与 poster 等就绪信息不得依附于“已经开始播放”，Overlay/full-bleed 切换也不得卸载 Preview、重置播放头或退回未知信息。
 

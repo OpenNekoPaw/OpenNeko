@@ -335,6 +335,48 @@ packages; neither warning class failed a changed package.
   restored the Overlay with the same Preview DOM node, `26.3s` duration,
   paused state and playhead.
 
+### Persistent Preview visibility toggle follow-up
+
+- Risk: L1 Canvas Webview interaction correction. The existing
+  `StorylinePlaybackOverlay` local latch remains the only Preview visibility
+  owner; playback store, Preview request identity, Extension messages,
+  Engine/Proto and persisted Canvas data were unchanged.
+- Architecture review:
+  - Responsibility: starting playback and entering full-bleed may reveal the
+    local latch; the top-docked footer can explicitly set it visible or hidden.
+    Full-bleed only forces presentation visibility and does not become another
+    state owner.
+  - Dependency and reuse: the existing `IconButton`, shared `EyeIcon` /
+    `EyeOffIcon`, localization runtime and one mounted Preview surface were
+    reused. No new component, store field or fallback path was introduced.
+  - Testing: the regression asserts action replacement in both directions,
+    manual hiding while playback remains active, and the existing full-bleed
+    no-hide invariant.
+- Red evidence: the focused suite failed because expanded top-docked mode had
+  no `hide-preview` action and because `isPlaying` kept `expanded=true` after a
+  manual hide attempt. After the fix,
+  `pnpm exec vitest run src/components/playback/PlaybackWorkspace.test.tsx src/CanvasApp.layout.test.ts`
+  passed 2 files / 46 tests.
+- `pnpm test` in the Canvas Webview passed 56 files / 335 tests.
+  `pnpm test` in `packages/neko-canvas` passed 19 files / 102 tests.
+  `pnpm compile` and `pnpm typecheck` in `packages/neko-canvas` passed.
+- `pnpm lint` in `packages/neko-canvas` passed with 0 errors and 27 existing
+  warnings. Canvas playback/Webview boundary checks, strict OpenSpec
+  validation and `git diff --check` passed.
+- Runtime host: isolated `[扩展开发宿主] Untitled.nkc — neko-test`; only this
+  host was reloaded. CDP page target
+  `21F0F967C6D4E434EBF088345CF4175C`, Canvas iframe target
+  `2E4658C49BA5A0D4E615951166CCAD9C`.
+- Black-box UI verification observed `显示预览` in the collapsed Overlay,
+  `隐藏预览` after reveal, and `显示预览` again after explicit hide. Reopening the
+  Preview and entering full-bleed removed both visibility actions while
+  retaining Preview content and the restore action.
+- CDP confirmed full-bleed state
+  `presentation=fullscreen`, `expanded=true`, Preview mounted, and only
+  `toggle-overlay-fullscreen` plus `close-overlay` footer actions. The Canvas
+  iframe console contained only VS Code's known `local-network-access`
+  warning.
+
 ## Remaining risk
 
 - Root test health remains red because of the unrelated `neko-assets` activation

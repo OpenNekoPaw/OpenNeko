@@ -31,7 +31,14 @@ The unified Overlay SHALL keep Storyline at the top and playback controls direct
 - **THEN** Preview appears below the controls without starting playback
 - **AND** the same Overlay, playback session and current unit are preserved
 - **AND** the show-Preview action is removed after Preview becomes visible
-- **AND** no hide-Preview action replaces it
+- **AND** one hide-Preview action replaces it in the same footer position
+
+#### Scenario: User explicitly hides Preview
+
+- **WHEN** Preview is visible in the top-docked Overlay and the user activates the hide-Preview action
+- **THEN** Preview collapses without changing playback state, current unit or playback session
+- **AND** one show-Preview action replaces it in the same footer position
+- **AND** Storyline and the centered playback controls remain visible
 
 #### Scenario: Playback starts
 

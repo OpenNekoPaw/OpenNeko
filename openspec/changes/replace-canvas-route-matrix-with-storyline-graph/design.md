@@ -28,7 +28,7 @@
 - 播放 transport 按钮居中，不展示当前时间/总时长文字；保留不带时间 tooltip 的 Seek 进度反馈。
 - 删除重复的 Storyline 标题行和常驻路线 Tab；单路线不显示路线选择控件，多路线只显示一个紧凑 selector。
 - 保持上一节点、播放/暂停、下一节点为唯一主 transport，不增加路线前后切换按钮；受控 Preview 不再提供第二个未启动播放入口。
-- Storyline 视口只占约 2～3 条 lane 的高度，超出部分继续使用同一滚动视口；折叠 Preview 时提供一次性的“显示预览”动作。
+- Storyline 视口只占约 2～3 条 lane 的高度，超出部分继续使用同一滚动视口；普通顶部模式始终提供同一个 Preview 显隐切换。
 - 点击剧情节点、切换路线或使用上一/下一节点时一次性定位其真实 Canvas source node，并同步 Preview session；不得选中 Canvas 节点或保持播放高亮。
 - 保留播放、stale、媒体缺失与诊断的可观察性。
 - 结构布局不再伪装成精确时间线。
@@ -126,7 +126,7 @@ Overlay 的 Storyline 区域不再渲染“故事线 + 当前路线”标题行�
 
 Storyline 的垂直尺寸按 lane 几何而不是视口比例无限增长。默认和 full-bleed presentation 都使用约 2～3 条 lane 的高度范围；第三条之后的路线继续由既有 `overflow: auto` 视口浏览。Preview 展开不得改变 Storyline 高度。小尺寸 Webview 也不得通过响应式规则把 Storyline 恢复为 230px 以上的高区域。
 
-Preview 默认折叠时，footer actions 在 full-bleed 与 close 之前提供一个带 accessible label 的“显示预览”按钮。它只调用 `StorylinePlaybackOverlay` 已有的本地 `previewRevealed` latch，不写入 playback store、不开启播放、不创建新的 surface。点击后 Preview 在同一 Overlay 内展开，按钮随即消失；暂停、播放结束或退出 full-bleed 后 Preview 继续保持展开。full-bleed presentation 中 Preview 必须可见，因此不显示“隐藏预览”或任何独立折叠动作。关闭并重开整个 Overlay 仍是恢复默认折叠状态的唯一方式。
+普通顶部模式的 footer actions 在 full-bleed 与 close 之前始终提供一个带 accessible label 的 Preview 显隐切换。Preview 折叠时显示“显示预览”并设置 `previewRevealed=true`；Preview 展开时同一位置替换为“隐藏预览”并设置 `previewRevealed=false`。该动作只修改 `StorylinePlaybackOverlay` 本地 latch，不写入 playback store、不改变播放状态、不开启播放，也不创建新的 surface。开始播放或进入 full-bleed 会把 latch 揭示为可见，但用户之后仍可在普通顶部模式手动折叠；暂停、播放结束或退出 full-bleed 不得自行改变 latch。full-bleed presentation 中 Preview 强制可见，因此不显示隐藏动作。关闭并重开整个 Overlay 仍会创建默认折叠的新生命周期。
 
 ### 10. 媒体描述与播放 session 分离，presentation 不拥有播放状态
 

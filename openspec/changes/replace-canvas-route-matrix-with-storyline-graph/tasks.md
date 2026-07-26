@@ -132,3 +132,10 @@
 - [x] 19.3 Keep Storyline Preview control ownership stable before and after playback without adding a second play action
 - [x] 19.4 Prove Overlay/full-bleed toggles preserve the mounted Preview, active request, playback state and current unit
 - [x] 19.5 Run focused/full Canvas tests, builds, quality checks, strict OpenSpec validation and isolated Extension Host verification; update evidence
+
+## 20. Persistent Preview visibility toggle
+
+- [x] 20.1 Add red regression coverage for show/hide replacement in top-docked mode and no hide action in full-bleed
+- [x] 20.2 Keep one Overlay-local visibility latch that manual hide can override without changing playback state
+- [x] 20.3 Add localized hide-Preview semantics and replace the footer icon/action without adding store state
+- [x] 20.4 Run focused/full Canvas tests, builds, strict OpenSpec validation and isolated Extension Host verification; update evidence
