@@ -7,7 +7,6 @@ const SHARED_GATE_JOBS = Object.freeze([
   'build',
   'local-metadata-runtime',
   'test-ts',
-  'proto-check',
   'code-quality',
   'openspec-check',
   'package-openneko-vsix',
@@ -22,7 +21,7 @@ describe('development/main quality gate orchestration', () => {
       scripts['gate:local'],
       'pnpm check:build && pnpm test && pnpm check:repository-quality && pnpm test:local:vscode',
     );
-    assert.equal(scripts['gate:remote'], 'pnpm check:ci && pnpm check:proto-sync');
+    assert.equal(scripts['gate:remote'], 'pnpm check:ci');
     assert.equal(scripts['ci:local'], 'pnpm gate:local');
     assert.equal(scripts['ci:remote'], 'pnpm gate:remote');
     for (const removedScript of ['gate:branch', 'gate:main', 'ci:branch', 'ci:main']) {
@@ -71,7 +70,7 @@ describe('development/main quality gate orchestration', () => {
     const workflow = parse(await readFile('.github/workflows/ci.yml', 'utf8'));
 
     assert.equal(workflow.jobs?.changes, undefined);
-    for (const jobName of ['test-rust', 'cargo-deny', 'proto-check', 'openspec-check']) {
+    for (const jobName of ['test-rust', 'cargo-deny', 'openspec-check']) {
       assert.equal(workflow.jobs?.[jobName]?.if, undefined, `${jobName} must always run`);
     }
     assert.equal(workflow.jobs?.['package-openneko-vsix']?.if, undefined);

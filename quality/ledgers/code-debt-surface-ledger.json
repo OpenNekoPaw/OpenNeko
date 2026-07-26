@@ -84,7 +84,9 @@
     {
       "id": "REQ-LCDR-009",
       "pathPattern": "packages/neko-types/src/generated/*.engine.ts",
-      "ledgerEntryId": "LCDR-009"
+      "ledgerEntryId": "LCDR-009",
+      "requiredWhileMatched": false,
+      "allowRemovedEntry": true
     },
     {
       "id": "REQ-LCDR-010",
@@ -537,18 +539,19 @@
     {
       "id": "LCDR-009",
       "package": "@neko/types",
-      "surface": "Generated engine/proto legacy and deprecated fields",
-      "semanticClass": "generated-source",
-      "action": "defer",
-      "status": "active",
-      "owner": "neko-proto/neko-types",
+      "surface": "Generated Timeline/Diff interface-only Proto projection",
+      "semanticClass": "delete-now",
+      "action": "delete",
+      "status": "removed",
+      "owner": "architecture",
       "paths": ["packages/neko-types/src/generated/*.engine.ts"],
-      "replacement": "Source IDL/schema field cleanup followed by regenerated TypeScript output.",
-      "removeCondition": "Proto or engine source schema removes prelaunch legacy fields and generated diff validation passes.",
+      "replacement": "Owning package TypeScript contracts; future Proto requires a real serialized producer/consumer boundary.",
+      "removeCondition": "Removed with the NKV/Timeline contract retirement.",
+      "removedAt": "2026-07-27",
       "validation": {
         "commands": [
-          "pnpm generate:types",
-          "git diff --exit-code packages/neko-types/src/generated/"
+          "pnpm check:application-boundaries",
+          "rg \"EngineDiff|EngineTimeline|packages/neko-proto\" packages scripts package.json"
         ]
       }
     },

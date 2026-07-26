@@ -61,6 +61,8 @@ describe('Agent Evaluation change-to-suite selector', () => {
         'packages/neko-content/src/document/read-image-tool.ts',
         'packages/neko-agent/packages/agent/src/pi/event-projector.ts',
         'packages/neko-agent/packages/agent/src/pi/timeline-projector.ts',
+        'packages/neko-agent/packages/agent/src/runtime/turn/multimodal-context-packet.ts',
+        'packages/neko-agent/packages/agent/src/runtime/capability/capability-runtime-bindings.ts',
         'packages/neko-agent/packages/agent/src/runtime/projection/conversation-projection-store.ts',
         'packages/neko-agent/packages/agent-types/src/conversation-projection.ts',
         'packages/neko-agent/packages/extension/src/chat/message/piAgentStreamProcessor.ts',

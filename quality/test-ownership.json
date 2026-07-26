@@ -214,6 +214,13 @@
       "testScope": "src and package child tests"
     },
     {
+      "path": "packages/neko-tools/packages/contracts",
+      "owner": "packages/neko-tools/packages/contracts",
+      "mode": "self",
+      "sourceScope": "src/**/*.ts",
+      "testScope": "src/**/*.test.ts"
+    },
+    {
       "path": "packages/neko-tools/packages/extension",
       "owner": "packages/neko-tools",
       "mode": "aggregated",

@@ -66,7 +66,7 @@ Desktop 优先复用以下公共能力：
 | 素材、实体与搜索                   | `packages/neko-assets`、`packages/neko-entity`、`packages/neko-search` | 复用 domain service 与 DTO；为 Desktop 组合 React 素材管理面，不复用 VS Code TreeView 宿主实现           |
 | Preview                            | `packages/neko-preview`                                                | 保留只读投影职责；把完整 root 的宿主通信抽到 adapter                                                     |
 | Host、UI 与基础能力                | `packages/neko-host`、`packages/neko-ui`、`packages/neko-types`        | 扩展现有公共 ports/primitives，不在 Desktop 建第二套 host framework、design system、i18n、日志或错误类型 |
-| 媒体执行与跨层契约                 | `packages/neko-media`、领域窄 ports、`packages/neko-proto`             | 复用 Node/FFmpeg 与浏览器媒体客户端；宿主只实现授权、生命周期和组合，不恢复旧 Engine/client              |
+| 媒体执行与跨层契约                 | `packages/neko-media`、领域窄 ports、package-owned L0 contracts        | 复用 Node/FFmpeg 与浏览器媒体客户端；宿主只实现授权、生命周期和组合，不恢复旧 Engine/client              |
 
 当前复用成熟度不同：Agent Web UI 已存在 `AgentHostRuntimeAdapter` 与 `electron` host kind，可作为第一阶段入口；Canvas、Cut、Preview 的完整 UI root 仍有较强 VS Code `postMessage` 耦合；Assets 的主要宿主 UI 仍偏向 VS Code TreeView。后两类必须先完成宿主适配器和公共入口收敛，不能在 Desktop 中复制一套平行实现。
 

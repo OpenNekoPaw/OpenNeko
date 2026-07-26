@@ -61,7 +61,6 @@ const config: KnipConfig = {
         'scripts/compile-ts-vsix.mjs',
         'scripts/project-release-version.mjs',
         'scripts/prepare-vscode-media-fixture.mjs',
-        'scripts/proto-gen-ts.mjs',
         'scripts/smoke-vscode-targets.mjs',
         'scripts/smoke-webview-builds.mjs',
         'scripts/stage-openneko-dev-extension.mjs',
@@ -78,7 +77,6 @@ const config: KnipConfig = {
         'src/components/index.ts',
         'src/config/config-reader.ts',
         'src/content-access/index.ts',
-        'src/generated/__engine-check.ts',
         'src/i18n/index.ts',
         'src/i18n/react.tsx',
         'src/i18n/webview.ts',
@@ -89,7 +87,6 @@ const config: KnipConfig = {
         'src/local-metadata/sqlite/index.ts',
         'src/local-metadata/testing/index.ts',
         'src/nkc/index.ts',
-        'src/nkv/index.ts',
         'src/path/index.ts',
         'src/project-authoring/index.ts',
         'src/project-file-io/index.ts',
@@ -209,8 +206,11 @@ const config: KnipConfig = {
         'src/components/panels/PropertyPanel.tsx',
       ],
     },
+    'packages/neko-tools/packages/contracts': {
+      entry: ['src/index.ts'],
+    },
     'packages/neko-tools/packages/extension': {
-      entry: ['src/bootstrap/index.ts', 'src/media-diff/index.ts', 'src/media-lsp/index.ts'],
+      entry: ['src/bootstrap/index.ts', 'src/media-diff/index.ts'],
     },
     'packages/neko-tools/packages/webview': {
       entry: ['src/mediaDiff.tsx'],
@@ -239,12 +239,7 @@ const config: KnipConfig = {
 
     // ── Skills (CLI scripts, not imported) ───────────────
     // Skills are excluded from analysis - they are runtime scripts, not imported modules
-
     // ── Skip packages ─────────────────────────────────
-    'packages/neko-proto': {
-      // Protobuf IDL files, not TypeScript code
-      entry: ['package.json'],
-    },
     'apps/neko-vscode': {
       entry: ['package.json', 'scripts/run-tests.mjs', 'scripts/validate-manifest.mjs'],
     },

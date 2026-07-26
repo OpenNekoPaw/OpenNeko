@@ -9,20 +9,20 @@ Neko 项目文件是持久创作事实。来自 Agent、Assets、TUI、VS Code c
 
 ## Operation 分类
 
-| Class | 含义 | UI 要求 |
-| --- | --- | --- |
+| Class                | 含义                                                                | UI 要求                                                          |
+| -------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `document-authoring` | 写入 Canvas node、Cut clip/timeline、稳定 source ref 等持久项目事实 | 必须经 owning package authoring service 执行，不要求打开 Webview |
-| `interactive-editor` | 依赖焦点、选择、viewport、playhead、键盘或实时 stream | 可以要求 active editor，但缺失时必须明确失败 |
-| `projection-only` | 展示预览、进度、状态、波形、画面或 diagnostic | 不得报告持久保存/导入成功 |
+| `interactive-editor` | 依赖焦点、选择、viewport、playhead、键盘或实时 stream               | 可以要求 active editor，但缺失时必须明确失败                     |
+| `projection-only`    | 展示预览、进度、状态、波形、画面或 diagnostic                       | 不得报告持久保存/导入成功                                        |
 
-一个需求同时有持久与交互语义时必须拆分 contract。例如把生成片段写入 `.nkv` 是 `document-authoring`；选中当前时间线中的片段是 `interactive-editor`。
+一个需求同时有持久与交互语义时必须拆分 contract。例如把生成片段写入显式 `.otio` 是 `document-authoring`；选中当前时间线中的片段是 `interactive-editor`。
 
 ## Canonical authoring path
 
-| 包 | Canonical path | 禁止路径 |
-| --- | --- | --- |
-| Canvas | `CanvasProjectAuthoringService`、Canvas authoring capability、`NekoCanvasAPI` 的持久写入 API | 用 Webview 私有 node mutation 充当 Agent/Assets/TUI executor |
-| Cut | VS Code Canvas 通过 shared `NekoCutAPI.routes.handoff` 创建新 `.otio`，或追加到已打开的显式 URI + revision | Agent/TUI authoring、active/recent target、隐藏 editor、Webview import message |
+| 包     | Canonical path                                                                                             | 禁止路径                                                                       |
+| ------ | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Canvas | `CanvasProjectAuthoringService`、Canvas authoring capability、`NekoCanvasAPI` 的持久写入 API               | 用 Webview 私有 node mutation 充当 Agent/Assets/TUI executor                   |
+| Cut    | VS Code Canvas 通过 shared `NekoCutAPI.routes.handoff` 创建新 `.otio`，或追加到已打开的显式 URI + revision | Agent/TUI authoring、active/recent target、隐藏 editor、Webview import message |
 
 共享层只拥有 client-neutral target、result、diagnostic、operation classification 和测试 poison helper。领域 edit planning、codec、source policy 与项目 mutation 留在 owning package。
 
