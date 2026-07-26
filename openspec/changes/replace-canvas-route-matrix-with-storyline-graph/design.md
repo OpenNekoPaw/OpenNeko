@@ -26,6 +26,8 @@
 - 以横向 Git graph 式节点和分支线展示路线拓扑；存在多路线时可辨识共享、分叉与汇合关系。
 - 用专用 Storyline 分支图标替换 Toolbar 上容易被误解为立即播放的通用播放图标。
 - 播放 transport 按钮居中，不展示当前时间/总时长文字；保留不带时间 tooltip 的 Seek 进度反馈。
+- 删除重复的 Storyline 标题行和常驻路线 Tab；单路线不显示路线选择控件，多路线只显示一个紧凑 selector。
+- 保持上一节点、播放/暂停、下一节点为唯一主 transport，不增加路线前后切换按钮；受控 Preview 不再提供第二个未启动播放入口。
 - 点击剧情节点、切换路线或使用上一/下一节点时一次性定位其真实 Canvas source node，并同步 Preview session；不得选中 Canvas 节点或保持播放高亮。
 - 保留播放、stale、媒体缺失与诊断的可观察性。
 - 结构布局不再伪装成精确时间线。
@@ -107,7 +109,17 @@ Canvas 音频节点和 Storyline Preview 都复用 `PreviewSurface`、`useMediaS
 
 Canvas 音频节点使用单张 node card：标题行位于节点顶部；中部为可 Seek 的波形轮廓和播放头；底部按三列放置当前/总时长、居中播放/暂停和右侧音量控制。这里的波形轮廓只承担导航与音频类型识别，不声明为媒体幅值分析结果。标题、波形区和控制区都直接属于既有 `BaseNode` 表面，不再套入第二张带边框、背景、圆角或阴影的播放卡片。
 
-Storyline Preview 保持紧凑横向 transport：播放/暂停、当前/总时长、可伸缩 Seek 和静音依次排列；未开始播放时只显示启动按钮。Overlay footer 继续拥有标题。`audio-waveform` 仍是既有 preview source role，不修改共享 source contract。两个 layout 只分叉渲染结构，不分叉流、时钟、暂停、Seek、结束或资源释放逻辑。
+Storyline Preview 的媒体流启动后保持紧凑横向 transport：播放/暂停、当前/总时长、可伸缩 Seek 和静音依次排列。未受 Storyline controller 控制的独立 Preview 在未开始时保留启动按钮；受控 Storyline Preview 的未启动空态不提供第二个启动入口。Overlay footer 继续拥有标题。`audio-waveform` 仍是既有 preview source role，不修改共享 source contract。两个 layout 只分叉渲染结构，不分叉流、时钟、暂停、Seek、结束或资源释放逻辑。
+
+### 8. Storyline 只保留一层路线选择与一个播放入口
+
+Overlay 的 Storyline 区域不再渲染“故事线 + 当前路线”标题行。当前路线已经由选中分支、节点状态和必要时的路线选择器表达，重复标题既不增加导航能力，也占用本应显示 2～3 条 lane 的垂直空间。
+
+路线只有一条时不渲染任何路线选择控件；路线超过一条时，在 Storyline 内仅渲染一个带 accessible label 的紧凑原生 selector。selector 只负责把 `routeId` 交给现有路线选择路径；所有路线分支继续同时显示，用户也可直接激活图中的节点来切换路线。不得保留 Tab row、第二个路线列表或隐藏 compatibility renderer。
+
+主 transport 只保留上一节点、播放/暂停、下一节点，并继续显示当前节点计数。路线选择不复制为“上一路线/下一路线”按钮，因为路线切换是结构选择而非时间 transport；把两类导航混在同一按钮组会让按钮语义和禁用状态变得不稳定。
+
+当 `PreviewSurface` 收到 `playbackControl` 时，表示播放生命周期由 Storyline controller 拥有。此时未启动的视频 poster 或音频空态只作为不可独立启动的媒体舞台，不再渲染自己的播放按钮；唯一启动入口是 Overlay 主 transport。媒体流启动后仍可保留 owning media surface 的 Seek、音量等媒体专属操作，但不得创建第二个播放 session 或独立请求 owner。未提供 `playbackControl` 的普通 Canvas 节点和独立 Preview 继续保留原有直接播放入口。
 
 ## Risks / Trade-offs
 

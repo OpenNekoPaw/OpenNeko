@@ -110,3 +110,10 @@
 - [x] 16.2 Introduce an explicit node-card audio layout while preserving the Storyline Preview transport
 - [x] 16.3 Keep both layouts on one stream/clock lifecycle and remove nested card/pill styling
 - [x] 16.4 Run focused tests/build, quality checks and isolated Extension Host validation; update evidence
+
+## 17. Storyline navigation and playback simplification
+
+- [x] 17.1 Add regression coverage for no redundant title row, conditional route selector and one controlled Preview launch
+- [x] 17.2 Delete the persistent route Tab row and render one compact selector only when multiple routes exist
+- [x] 17.3 Keep node transport separate from route selection and suppress the controlled Preview idle play button
+- [x] 17.4 Run focused/full Canvas tests, build, quality checks, OpenSpec validation and isolated Extension Host verification; update evidence

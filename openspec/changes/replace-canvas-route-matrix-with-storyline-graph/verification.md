@@ -189,13 +189,57 @@ packages; neither warning class failed a changed package.
   (gitignored raw runtime evidence; paused transport with Preview still
   expanded).
 
+### Storyline navigation simplification follow-up
+
+- Risk: L2 Webview interaction/media presentation change within the existing
+  Storyline Overlay. The route plan, playback store, Extension messages,
+  Engine stream and persisted Canvas contract were unchanged.
+- Reuse review: the existing `StorylinePlaybackOverlay`,
+  `CanvasPlaybackControls`, `PreviewSurface`, route-selection callback,
+  localization runtime and theme tokens were modified in place. No new
+  component, playback owner, route model or package-local UI foundation was
+  introduced.
+- Regression tests were red before implementation for the redundant heading,
+  missing conditional selector and duplicate controlled Preview launch. After
+  implementation,
+  `pnpm exec vitest run src/components/playback/PlaybackWorkspace.test.tsx src/preview/PreviewRendererRegistry.test.tsx`
+  passed 2 files / 29 tests.
+- `pnpm exec vitest run` in
+  `packages/neko-canvas/packages/webview` passed 56 files / 323 tests.
+- `pnpm --filter @neko-canvas/webview build` and
+  `pnpm --dir packages/neko-canvas compile` passed. The latter rebuilt and
+  copied the Webview assets consumed by the Extension Development Host.
+- `pnpm check:legacy-debt`, `pnpm check:unused`,
+  `pnpm check:canvas-playback-boundary`,
+  `pnpm check:webview-boundaries`, strict OpenSpec validation,
+  scoped Prettier, residual selector scans and `git diff --check` passed.
+  `check:unused` reported existing configuration hints only.
+- Runtime host: isolated `[扩展开发宿主] Untitled.nkc — neko-test`; only this
+  host was reloaded. CDP page target
+  `21F0F967C6D4E434EBF088345CF4175C`, Canvas iframe target
+  `BD43D386B996948B10830A68F1F9A6CD`.
+- Host UI showed one compact `故事路线` selector for the two-route fixture,
+  no “故事线 + 当前路线” heading/Tab row, and only the centered
+  previous-node / play-pause / next-node transport.
+- In full-bleed idle video Preview, CDP measured
+  `headingRows=0`, `routeSelectors=1`, `routeTabs=0`,
+  `controllerButtons=3`, `controlledIdleSurfaces=1` and
+  `previewPlayButtons=0`.
+- Dispatching the selector's second valid route changed the selected route to
+  the audio source, updated the current Storyline node and footer to
+  `test.aac`, and kept the same Overlay/session.
+- Canvas iframe console contained only VS Code's known
+  `local-network-access` warning; no Neko CSP, resource, media or runtime error
+  was observed. Escape closed the entire verification Overlay.
+
 ## Remaining risk
 
 - Root test health remains red because of the unrelated `neko-assets` activation
   event assertion described above.
 - The runtime scenario used the isolated synthetic `neko-test` workspace and
-  its two-node fixture. Dense multi-route branch routing remains covered by
-  deterministic component/layout tests rather than this visual fixture.
+  its two-node/two-route fixture. The single-route selector omission and dense
+  branch routing remain covered by deterministic component/layout tests rather
+  than separate visual fixtures.
 - The Canvas waveform is currently a deterministic silhouette used for media
   recognition and Seek position, not decoded per-file amplitude data. A real
   waveform would require a separately specified Engine/preview-analysis

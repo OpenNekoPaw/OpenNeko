@@ -123,7 +123,20 @@ Each Storyline node SHALL retain the selected route id, playback unit id and `Ca
 
 ### Requirement: Storyline preserves multiple route selection
 
-Storyline SHALL preserve valid multiple `CanvasPlaybackRouteCandidate` values without introducing a separate comparison surface. Route/lane controls MUST allow the user to choose a route, and shared or merged nodes MUST only be represented when stable source identity proves that the routes reference the same story node.
+Storyline SHALL preserve valid multiple `CanvasPlaybackRouteCandidate` values without introducing a separate comparison surface. A single route MUST NOT render a route selector. Multiple routes SHALL expose exactly one compact named route selector instead of a persistent Tab row, while every route branch remains visible and its nodes remain directly selectable. Shared or merged nodes MUST only be represented when stable source identity proves that the routes reference the same story node.
+
+#### Scenario: Storyline has one route
+
+- **WHEN** the PlaybackPlan contains one valid route
+- **THEN** Storyline does not render a route selector or route Tab row
+- **AND** the route graph remains directly visible
+
+#### Scenario: Storyline has multiple routes
+
+- **WHEN** the PlaybackPlan contains more than one valid route
+- **THEN** Storyline renders exactly one compact route selector with an accessible name
+- **AND** it does not render a persistent route Tab row
+- **AND** every valid branch remains visible in the same graph
 
 #### Scenario: User chooses another route
 
@@ -178,15 +191,37 @@ Storyline SHALL use the single existing Canvas playback controller and on-demand
 
 ### Requirement: Playback controls are centered and omit time labels
 
-The unified Overlay SHALL center the previous, play/pause and next transport controls independently of route-position metadata. It SHALL NOT display current-time, total-duration or time-formatted Seek tooltip text. The controller MAY retain an unlabeled Seek progress bar and route-position count.
+The unified Overlay SHALL center the previous-node, play/pause and next-node transport controls independently of route-position metadata. It SHALL NOT add previous-route or next-route controls, and SHALL NOT display current-time, total-duration or time-formatted Seek tooltip text. The controller MAY retain an unlabeled Seek progress bar and route-position count.
 
 #### Scenario: Playback controls render
 
 - **WHEN** the unified Overlay is collapsed or expanded
 - **THEN** the previous, play/pause and next buttons are horizontally centered
+- **AND** no route-switch button is added to the transport
 - **AND** no current-time or total-duration text is visible
 - **AND** the Seek bar does not reveal a formatted time tooltip
 - **AND** playback timing remains available internally for seeking and media synchronization
+
+### Requirement: Storyline Overlay has no redundant heading or Preview launch
+
+The Storyline region SHALL NOT render a separate title row that repeats the surface name and current route. When Preview receives a `PreviewPlaybackControl`, the Overlay controller SHALL be the only control that can start the media lifecycle. The controlled Preview MUST NOT render an independent idle play button. Once the media stream is active, media-specific Seek and volume controls MAY remain available.
+
+#### Scenario: Storyline Overlay renders
+
+- **WHEN** the unified Overlay is visible
+- **THEN** no separate “Storyline + current route” heading row is rendered
+- **AND** the Storyline graph begins at the top of the Overlay content
+
+#### Scenario: Controlled Preview is revealed before its stream starts
+
+- **WHEN** full-bleed presentation reveals a video or audio Preview with `PreviewPlaybackControl`
+- **THEN** the Preview does not render an independent play button
+- **AND** the centered Overlay transport remains the only playback start action
+
+#### Scenario: Independent media surface is idle
+
+- **WHEN** a Canvas node or independent Preview renders without `PreviewPlaybackControl`
+- **THEN** its existing direct play action remains available
 
 ### Requirement: Canvas audio layouts share one playback lifecycle
 
