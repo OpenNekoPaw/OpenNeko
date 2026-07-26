@@ -2,6 +2,10 @@
 
 Date: 2026-07-25
 
+Directory policy update (2026-07-27): the standalone workspace and report path
+below are historical evidence. Future reruns use only `~/Git/neko-test` with a
+scenario-owned `.neko/.functional` subtree.
+
 ## Automated checks
 
 - `pnpm --filter @neko-canvas/webview test`

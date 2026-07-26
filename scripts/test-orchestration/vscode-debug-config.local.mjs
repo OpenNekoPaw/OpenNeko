@@ -8,13 +8,9 @@ const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const localVSCodeConfigurationPaths = ['.vscode/launch.json', '.vscode/tasks.json'];
 const productDevStageArgument =
   '--extensionDevelopmentPath=${workspaceFolder}/.tmp/openneko-vscode-dev';
-const mediaFixtureWorkspaceArgument =
-  '${workspaceFolder}/.tmp/vscode-test-workspaces/media-runtime';
-const processScopedArguments = [
-  '--extensions-dir',
-  '--remote-debugging-port',
-  '--user-data-dir',
-];
+const canonicalTestWorkspaceArgument = '${env:HOME}/Git/neko-test';
+const retiredRepositoryTestWorkspace = '.tmp/vscode-test-workspaces/media-runtime';
+const processScopedArguments = ['--extensions-dir', '--remote-debugging-port', '--user-data-dir'];
 const presentLocalVSCodeConfigurationPaths = localVSCodeConfigurationPaths.filter((relativePath) =>
   existsSync(path.join(repositoryRoot, relativePath)),
 );
@@ -92,13 +88,13 @@ test(
       'Debug Dev (All) must load the composed apps/neko-vscode development stage',
     );
     assert.ok(
-      developmentConfiguration.args.includes(mediaFixtureWorkspaceArgument),
-      'Debug Dev (All) must open the dedicated synthetic media runtime workspace',
+      developmentConfiguration.args.includes(canonicalTestWorkspaceArgument),
+      'Debug Dev (All) must open the canonical neko-test workspace',
     );
     assert.equal(
-      JSON.stringify(launchConfiguration).includes('Git/neko-test'),
+      JSON.stringify(launchConfiguration).includes(retiredRepositoryTestWorkspace),
       false,
-      'VS Code launch configurations must not use the legacy neko-test workspace',
+      'VS Code launch configurations must not use a repository-local test workspace',
     );
     assert.equal(
       JSON.stringify(launchConfiguration).includes('/packages/neko-engine'),
@@ -140,6 +136,10 @@ test(
         argument.startsWith('--extensionDevelopmentPath=${workspaceFolder}/packages/'),
       ),
       'Debug Feature Packages (All) must retain the package-local extension roots',
+    );
+    assert.ok(
+      featureConfiguration.args.includes(canonicalTestWorkspaceArgument),
+      'Debug Feature Packages (All) must open the canonical neko-test workspace',
     );
     assert.equal(featureConfiguration.preLaunchTask, 'build:feature-dev');
     assert.equal(

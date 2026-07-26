@@ -100,6 +100,10 @@ ffprobe，并单独审计 codec license。`NEKO_FFMPEG_PATH` 和
 
 - `pnpm check:engine-retirement-boundary`
 - `pnpm --filter @neko/media test -- --run`
-- `pnpm validate:media-matrix .tmp/vscode-test-workspaces/media-runtime/media`
+- `pnpm validate:media-matrix ~/Git/neko-test/cases`
 - 真实 Extension Development Host + 隔离 fixture workspace，验证 Range、
   `<video>`、PCM、seek、Cut 和 CSP；普通浏览器不能替代。
+
+运行态验收 workspace 唯一允许 `${HOME}/Git/neko-test`。生成的媒体 fixture
+只写入其 `.neko/.functional/media-runtime` 子目录；不得使用仓库内 `.tmp`
+或其他 workspace，也不得删除或重建 `neko-test` 根目录。

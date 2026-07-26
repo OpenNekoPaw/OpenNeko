@@ -25,10 +25,12 @@ Use the `computer-use` skill for direct VS Code UI actions. It operates through
 macOS Accessibility and does not require VS Code to expose a remote debugging
 port.
 
-1. Use an isolated Extension Development Host and the generated synthetic
-   `.tmp/vscode-test-workspaces/media-runtime` workspace. Generate it with
-   `pnpm prepare:vscode-media-fixture`; do not use `neko-test` or capture the
-   user's normal workspace, settings, credentials, or unrelated files.
+1. Use an isolated Extension Development Host whose workspace root is exactly
+   `${HOME}/Git/neko-test`. Generate disposable media fixtures with
+   `pnpm prepare:vscode-media-fixture`; the generator owns only
+   `.neko/.functional/media-runtime` below that workspace. Do not open another
+   workspace or capture unrelated files, settings, credentials, or content
+   outside the selected scenario.
 2. Select the repository launch configuration `Debug Dev (All)` and start the
    debug session through the visible VS Code UI. The configuration owns the
    extension development paths and its `build:dev` prelaunch task.
@@ -121,6 +123,8 @@ configuration for the repository smoke.
 ## Evidence Rules
 
 - Use an isolated synthetic workspace for every functional scenario.
+- The workspace root must be `${HOME}/Git/neko-test`; scenario-generated state
+  belongs in a marker-owned `.neko/.functional/<scenario>` subtree.
 - Record the host, extension/configuration identity, target type, command,
   observed result, and failure classification.
 - Keep host UI evidence and CDP evidence separately labeled. A no-port

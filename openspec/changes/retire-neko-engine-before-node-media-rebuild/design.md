@@ -88,9 +88,10 @@ or mismatched identity fails visibly.
   calls.
 - Extension Development Host tests validate MSE video, PCM audio, seek/sync,
   frame/thumbnail/waveform operations, and explicit transcode.
-- Runtime tests use only the generated
-  `.tmp/vscode-test-workspaces/media-runtime` fixture workspace. They must not
-  open `neko-test`, a normal development workspace, or user media.
+- Runtime tests open only `${HOME}/Git/neko-test`. Generated data is confined
+  to its marker-owned `.neko/.functional/media-runtime` subtree; tests must not
+  open a repository-local or other workspace, delete the workspace root, or
+  modify user-provided media.
 - Full build/test/check and legacy/unused gates run before physical package
   deletion is accepted.
 

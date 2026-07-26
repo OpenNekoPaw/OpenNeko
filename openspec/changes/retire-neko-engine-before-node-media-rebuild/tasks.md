@@ -74,8 +74,9 @@
 - [x] 7.1 Run focused producer/consumer tests and path assertions.
 - [x] 7.2 Run full build, test, check, quality, legacy-debt, and unused gates.
 - [x] 7.3 Validate affected playback paths in the Extension Development Host.
-- [x] 7.3a Add a generated isolated media fixture workspace and remove
-      `neko-test` from the active VS Code launch paths.
+- [x] 7.3a Add a generated isolated media fixture subtree; superseded on
+      2026-07-27 so active VS Code launch paths now use only
+      `${HOME}/Git/neko-test`.
 - [x] 7.4 Record actual commands, evidence, and remaining FFmpeg/HDR/release
       risks.
 - [x] 7.5 Re-run focused orchestration, architecture, retirement, OpenSpec, and

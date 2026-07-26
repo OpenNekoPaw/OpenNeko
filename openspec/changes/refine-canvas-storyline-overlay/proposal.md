@@ -27,4 +27,5 @@ Canvas Playback 当前将路线矩阵作为唯一默认路线表面，并以最�
 - 影响 `packages/neko-canvas/packages/webview` 的 Playback workspace、Store、路线投影展示、主题样式、国际化和测试。
 - 不修改 `.nkc` schema、`CanvasPlaybackPlan`、Extension/Webview message、Engine、Proto 或 Cut 契约。
 - 继续复用 `@neko/ui` 的 SegmentedControl、ResizeHandle、SeekBar、图标和主题 token。
-- 运行态验收使用隔离合成 workspace；按用户要求不得使用共享 `neko-test` workspace。
+- 运行态验收 workspace 统一使用 `~/Git/neko-test`；场景数据隔离在其
+  `.neko/.functional/<scenario>` 子目录，不得使用其他 workspace。
