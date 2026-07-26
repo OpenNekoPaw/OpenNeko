@@ -1,4 +1,4 @@
-import { forwardRef, memo } from 'react';
+import { forwardRef, memo, type Ref } from 'react';
 import { useTranslation } from '../../i18n/I18nContext';
 
 export interface PreviewPanelProps {
@@ -6,6 +6,7 @@ export interface PreviewPanelProps {
   readonly source?: string;
   readonly projectWidth?: number;
   readonly projectHeight?: number;
+  readonly videoRef?: Ref<HTMLVideoElement>;
 }
 
 export interface PreviewPanelRef {
@@ -14,7 +15,7 @@ export interface PreviewPanelRef {
 
 export const PreviewPanel = memo(
   forwardRef<HTMLCanvasElement, PreviewPanelProps>(function PreviewPanel(
-    { title, projectWidth = 1920, projectHeight = 1080 },
+    { title, projectWidth = 1920, projectHeight = 1080, videoRef },
     canvasRef,
   ) {
     const { t } = useTranslation();
@@ -30,6 +31,14 @@ export const PreviewPanel = memo(
               width={projectWidth}
               height={projectHeight}
               className="block max-h-full max-w-full bg-black object-contain"
+              aria-label={title ?? t('preview.noProjectLoaded')}
+            />
+            <video
+              ref={videoRef}
+              muted
+              playsInline
+              preload="auto"
+              className="absolute inset-0 block h-full w-full bg-black object-contain"
               aria-label={title ?? t('preview.noProjectLoaded')}
             />
             {title ? null : (

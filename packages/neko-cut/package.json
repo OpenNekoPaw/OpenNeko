@@ -13,10 +13,23 @@
   "engines": {
     "vscode": "^1.128.0"
   },
-  "categories": ["Other", "Visualization"],
-  "keywords": ["video", "editor", "timeline", "editing"],
-  "extensionKind": ["workspace"],
-  "extensionDependencies": ["neko.neko-engine", "neko.neko-tools", "neko.neko-preview"],
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "video",
+    "editor",
+    "timeline",
+    "editing"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "extensionDependencies": [
+    "neko.neko-tools",
+    "neko.neko-preview"
+  ],
   "activationEvents": [
     "onInstallType:shader",
     "onCustomEditor:neko.cut.otioEditor",
@@ -46,7 +59,11 @@
       {
         "viewType": "neko.cut.otioEditor",
         "displayName": "Neko Cut",
-        "selector": [{ "filenamePattern": "*.otio" }],
+        "selector": [
+          {
+            "filenamePattern": "*.otio"
+          }
+        ],
         "priority": "default"
       }
     ],
@@ -78,6 +95,5 @@
     "esbuild": "^0.19.8",
     "typescript": "^5.3.2",
     "vitest": "^4.1.2"
-  },
-  "dependencies": {}
+  }
 }

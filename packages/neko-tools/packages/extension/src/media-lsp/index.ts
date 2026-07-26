@@ -7,7 +7,7 @@
  */
 
 import * as vscode from 'vscode';
-import type { IEngineMediaService } from '../contracts/IEngineMediaService';
+import type { IMediaRuntimeService } from '../contracts/IMediaRuntimeService';
 import type { IScheduler } from '../contracts/IScheduler';
 import type { IWorkspaceIO } from '../contracts/IWorkspaceIO';
 import { getLogger } from '../utils/logger';
@@ -23,7 +23,7 @@ import { JviReferenceProvider } from './providers/JviReferenceProvider';
 const JVI_SELECTOR: vscode.DocumentSelector = { language: 'nekotools-jvi' };
 
 export interface IMediaLspInitializationOptions {
-  engineService?: IEngineMediaService;
+  mediaService?: IMediaRuntimeService;
   probeCache: IMediaProbeCache;
   scheduler: IScheduler;
   workspaceIO: IWorkspaceIO;
@@ -38,18 +38,18 @@ export function initializeMediaLsp(
   context: vscode.ExtensionContext,
   options: IMediaLspInitializationOptions,
 ): void {
-  const { engineService, probeCache, scheduler, workspaceIO, workspaceIndex } = options;
+  const { mediaService, probeCache, scheduler, workspaceIO, workspaceIndex } = options;
 
   // ─── Phase 1: Diagnostics + Hover ──────────────────────────────────────
 
-  const diagnostics = new JviDiagnosticsProvider(engineService, probeCache, workspaceIO, scheduler);
+  const diagnostics = new JviDiagnosticsProvider(mediaService, probeCache, workspaceIO, scheduler);
   diagnostics.activate();
   context.subscriptions.push(diagnostics);
 
   context.subscriptions.push(
     vscode.languages.registerHoverProvider(
       JVI_SELECTOR,
-      new JviHoverProvider(engineService, probeCache, workspaceIO),
+      new JviHoverProvider(mediaService, probeCache, workspaceIO),
     ),
   );
 

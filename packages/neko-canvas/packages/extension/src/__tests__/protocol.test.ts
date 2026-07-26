@@ -958,11 +958,9 @@ describe('canvasEditorProvider message contracts', () => {
       expect(providerSource).toContain(
         'Media playback requires probe metadata before stream creation.',
       );
-      expect(narrativePreviewMediaRuntimeSource).toContain(
-        'HOST_MEDIA_RESPONSE_TIMEOUT_MS = 10_000',
-      );
-      expect(narrativePreviewMediaRuntimeSource).toContain('scheduleHostResponseTimeout(');
-      expect(narrativePreviewMediaRuntimeSource).toContain('clearHostResponseTimeout(');
+      expect(narrativePreviewMediaRuntimeSource).toContain('HOST_RESPONSE_TIMEOUT_MS = 10_000');
+      expect(narrativePreviewMediaRuntimeSource).toContain('function setLoading(');
+      expect(narrativePreviewMediaRuntimeSource).toContain('function clearTimeoutFor(');
       expect(narrativePreviewMediaRuntimeSource).toContain('probeTimeout');
       expect(narrativePreviewMediaRuntimeSource).toContain('streamTimeout');
       expect(narrativePreviewMediaRuntimeSource).toContain(
@@ -971,32 +969,30 @@ describe('canvasEditorProvider message contracts', () => {
       expect(narrativePreviewMediaRuntimeSource).toContain(
         'probeMediaInfo?: Record<string, unknown>',
       );
-      expect(narrativePreviewMediaRuntimeSource).toContain('function requestMediaStream(player');
-      expect(narrativePreviewMediaRuntimeSource).toContain('if (player.shouldPlayWhenReady) {');
+      expect(narrativePreviewMediaRuntimeSource).toContain('function requestStream(player');
+      expect(narrativePreviewMediaRuntimeSource).toContain(
+        'if (player.shouldPlayWhenReady) requestStream(player)',
+      );
       expect(narrativePreviewMediaRuntimeSource).toContain("player.root.dataset.state = 'ready'");
       expect(narrativePreviewMediaRuntimeSource.indexOf('function handleProbeResult')).toBeLessThan(
-        narrativePreviewMediaRuntimeSource.indexOf('function requestMediaStream'),
+        narrativePreviewMediaRuntimeSource.indexOf('function requestStream'),
       );
       const runtimeProbeResultHandler = narrativePreviewMediaRuntimeSource.slice(
         narrativePreviewMediaRuntimeSource.indexOf('function handleProbeResult'),
-        narrativePreviewMediaRuntimeSource.indexOf('function requestMediaStream'),
+        narrativePreviewMediaRuntimeSource.indexOf('function requestStream'),
       );
       expect(runtimeProbeResultHandler).not.toContain("type: 'media:play'");
-      expect(narrativePreviewMediaRuntimeSource).toContain('shouldRestartMediaProbe(player)');
-      expect(narrativePreviewMediaRuntimeSource).toContain("player.root.dataset.state === 'error'");
+      expect(narrativePreviewMediaRuntimeSource).toContain('if (!player.probeMediaInfo) {');
       expect(narrativePreviewMediaRuntimeSource).toContain(
-        "type PreviewMediaRuntimeEventType = 'ready' | 'timeUpdate' | 'ended' | 'error'",
+        'if (request) start({ ...request, autoPlay: true',
+      );
+      expect(narrativePreviewMediaRuntimeSource).toContain(
+        "type RuntimeEventType = 'ready' | 'timeUpdate' | 'ended' | 'error'",
       );
       expect(narrativePreviewMediaRuntimeSource).toContain("new CustomEvent('neko-preview-media'");
-      expect(narrativePreviewMediaRuntimeSource).toContain(
-        "dispatchMediaRuntimeEvent(player, 'ended')",
-      );
-      expect(narrativePreviewMediaRuntimeSource).toContain(
-        "dispatchMediaRuntimeEvent(player, 'error'",
-      );
-      expect(narrativePreviewMediaRuntimeSource).toContain(
-        "dispatchMediaRuntimeEvent(player, 'timeUpdate')",
-      );
+      expect(narrativePreviewMediaRuntimeSource).toContain("dispatch(player, 'ended')");
+      expect(narrativePreviewMediaRuntimeSource).toContain("dispatch(player, 'error'");
+      expect(narrativePreviewMediaRuntimeSource).toContain("dispatch(player, 'timeUpdate')");
       expect(narrativePreviewBridgeSource).toContain(
         "window.addEventListener('neko-preview-media'",
       );

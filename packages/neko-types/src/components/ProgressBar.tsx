@@ -5,7 +5,7 @@
  * Only commits seek on mouseup.
  *
  * The hover time tooltip is shown only when `formatTooltip` is provided.
- * Consumers that need time formatting should pass e.g. `formatTime` from @neko/neko-client.
+ * Consumers that need time formatting should pass `formatMediaTime` from @neko/media.
  */
 
 import { useState, useRef, useCallback } from 'react';

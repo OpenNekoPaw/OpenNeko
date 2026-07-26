@@ -1,9 +1,7 @@
 /**
  * AudioDiffAnalyzer - Audio Diff Analyzer
  *
- * Delegates audio comparison to neko-engine's native audios:diff action.
- * Engine performs: FFmpeg decode → 48kHz mono PCM → SNR + diff regions.
- * This analyzer converts EngineDiffResult → Protocol AudioDiffDetails.
+ * Delegates audio comparison to the Node/FFmpeg media runtime.
  */
 
 import type {
@@ -12,8 +10,10 @@ import type {
   AudioDiffDetails,
   EngineAudioDiffRegion,
 } from '@neko/shared';
-import type { SilenceAnalysis } from '@neko/neko-client/engine/types';
-import type { IEngineMediaService } from '../../../contracts/IEngineMediaService';
+import type {
+  IMediaRuntimeService,
+  SilenceAnalysis,
+} from '../../../contracts/IMediaRuntimeService';
 import type { ITempFileService } from '../../../contracts/ITempFileService';
 import { getLogger } from '../../../utils/logger';
 import { TempFileBackedMediaDiffAnalyzer } from './TempFileBackedMediaDiffAnalyzer';
@@ -26,7 +26,7 @@ export class AudioDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
   readonly mediaType = 'audio' as const;
 
   constructor(
-    private readonly engineMediaService: IEngineMediaService,
+    private readonly mediaRuntimeService: IMediaRuntimeService,
     tempFileService: ITempFileService,
   ) {
     super(AUDIO_EXTENSIONS, tempFileService);
@@ -60,8 +60,8 @@ export class AudioDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
       this.throwIfAborted();
 
       // Step 1: Quick probe to get durations for smart range selection
-      const probeA = await this.engineMediaService.probe('audios', currentPath);
-      const probeB = await this.engineMediaService.probe('audios', previousPath);
+      const probeA = await this.mediaRuntimeService.probe('audios', currentPath);
+      const probeB = await this.mediaRuntimeService.probe('audios', previousPath);
       const probeDurA = probeA?.duration ?? 0;
       const probeDurB = probeB?.duration ?? 0;
 
@@ -89,7 +89,7 @@ export class AudioDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
         );
       }
 
-      const engineResult = await this.engineMediaService.diff(
+      const runtimeResult = await this.mediaRuntimeService.diff(
         'audios',
         currentPath,
         previousPath,
@@ -98,20 +98,15 @@ export class AudioDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
 
       this.throwIfAborted();
 
-      if (!engineResult) {
-        throw new Error('Engine audio diff unavailable');
-      }
-
       // Step 3: Parallel silence detection (non-blocking, graceful fallback)
       const [silenceA, silenceB]: Array<SilenceAnalysis | null> = await Promise.all([
-        this.engineMediaService.detectSilence(currentPath).catch((): null => null),
-        this.engineMediaService.detectSilence(previousPath).catch((): null => null),
+        this.mediaRuntimeService.detectSilence(currentPath).catch((): null => null),
+        this.mediaRuntimeService.detectSilence(previousPath).catch((): null => null),
       ]);
 
       this.throwIfAborted();
 
-      // Convert Engine types → Protocol types
-      const audioDiff = engineResult.audioDiff;
+      const audioDiff = runtimeResult.audioDiff;
       const details: AudioDiffDetails = {
         duration: {
           current: audioDiff?.durationA ?? 0,
@@ -121,7 +116,7 @@ export class AudioDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
           current: audioDiff?.compareSampleRate ?? 0,
           previous: audioDiff?.compareSampleRate ?? 0,
         },
-        channels: { current: 1, previous: 1 }, // Engine compares as mono
+        channels: { current: 1, previous: 1 }, // The comparison path normalizes to mono.
         waveformSimilarity: this.snrToSimilarity(audioDiff?.snr ?? 0),
         spectralDifference: (audioDiff?.diffPercent ?? 0) / 100,
         diffRegions: audioDiff?.diffRegions?.map((r: EngineAudioDiffRegion) => ({

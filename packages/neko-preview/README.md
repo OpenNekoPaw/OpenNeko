@@ -6,16 +6,16 @@
 
 - 项目：OpenNeko - VSCode 创意工作套件
 - 架构：Extension Host（PreviewService + DocumentProvider + ModelPreviewProvider）+ Webview（React）
-- 运行边界：neko-engine 仅为视频、音频和全景媒体提供解码；文档由 Extension Host 读取；3D 参考由独立 Three.js Webview 渲染
+- 运行边界：`@neko/media` 在 Extension Host 中按需调用 FFmpeg；Webview 使用原生 `<video>` + PCM；文档由 Extension Host 读取；3D 参考由独立 Three.js Webview 渲染
 
 ## Quick Reference
 
 - **职责**：视频/音频播放、文档预览（PDF/EPUB/CBZ/DOCX），以及形象、动作、机位和 720° 场景的临时 3D 参考布置
 - **入口**：`packages/extension/src/extension.ts`
 - **子包**：`extension/`（Host）、`webview/`（React UI）
-- **依赖**：`@neko/shared`、`@neko/neko-client`；`three` 仅属于 `@neko/preview-webview`
+- **依赖**：`@neko/shared`、`@neko/media`；`three` 仅属于 `@neko/preview-webview`
 - **无模型入口**：命令 `Neko Preview: Open 3D Reference Guide` 打开内置中性素体；内置素体只允许动作和机位参考
-- **按需媒体依赖**：仅打开视频、音频或全景媒体时激活 neko-engine；文档和 3D 参考不启动 Engine
+- **按需媒体依赖**：仅打开视频、音频或全景媒体时创建 FFmpeg/HTTP session；文档和 3D 参考不启动媒体进程
 
 ### 3D 参考用途
 
@@ -57,12 +57,12 @@ CustomReadonlyEditorProvider
   └── DocxPreviewProvider   (*.docx)
         │
         ▼
-媒体：PreviewService（按需连接 neko-engine）
-  ├── probeMedia()          → videos:probe
-  ├── startVideoPlayback()  → timelines:stream (H.264 推流)
-  ├── seekTo/pause/resume   → timelines:seek/pause/resume
-  ├── decodeAudioSegment()  → audios:extract (PCM)
-  └── getWaveform()         → audios:waveform
+媒体：PreviewService（拥有 NodeMediaRuntime）
+  ├── probeMedia()          → ffprobe
+  ├── startPlayback()       → 原文件 / remux / H.264 代理 + tokenized HTTP Range
+  ├── startPlayback()       → 48 kHz stereo Float32 PCM
+  ├── captureFrame()        → FFmpeg 单帧 JPEG
+  └── getWaveform()         → FFmpeg PCM 峰值
 文档：NodeDocumentPreviewServer（Extension Host）
   ├── PDF/CBZ               → 支持 Range 的原始字节读取
   ├── EPUB                  → 带尾斜杠的目录 URL + ZIP entry 读取
@@ -71,7 +71,8 @@ CustomReadonlyEditorProvider
         ▼
 Webview (React + Vite)
   ├── VideoPlayer
-  │   ├── H264StreamClient (WebSocket → WebCodecs → Canvas)
+  │   ├── 原生 <video>（HTTP Range）
+  │   ├── PcmAudioClient（PCM 主时钟）
   │   └── VideoControls (播放/暂停/进度/速度/音量)
   ├── AudioPlayer
   │   ├── Web Audio API (AudioContext → AudioBufferSourceNode)
@@ -133,9 +134,9 @@ DocumentProvider (setupDocumentWebview 统一消息处理)
 
 ### 数据流
 
-**视频预览**：`NativeEngine → H.264 NAL (WebSocket) → WebCodecs VideoDecoder → Canvas`
+**视频预览**：`NodeMediaRuntime → tokenized HTTP Range → 原生 <video>`
 
-**音频预览**：`NativeEngine → PCM Float32 (postMessage) → Web Audio API → 扬声器`
+**音频预览**：`FFmpeg → framed PCM Float32 (HTTP) → Web Audio API → 扬声器`
 
 **文档预览**：`Node Extension Host → loopback HTTP → Webview 文档 renderer`，不经过 Rust Engine。
 
@@ -152,7 +153,7 @@ Apple Music 风格的现代化 UI，三视图可切换（封面 / 歌词 / 波�
 
 后续关注点：
 
-- Engine 元数据扩展：真实封面 + ID3/Vorbis 标签。
+- 媒体元数据扩展：真实封面 + ID3/Vorbis 标签。
 - `.lrc` 歌词解析：滚动歌词与定位同步。
 
 ## 构建

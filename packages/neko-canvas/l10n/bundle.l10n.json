@@ -46,7 +46,7 @@
   "neko.canvas.preview.mediaUnavailable": "Media unavailable",
   "neko.canvas.preview.mediaUnavailableDescription": "A durable media reference exists, but no runtime preview URL is available in this player shell.",
   "neko.canvas.preview.mediaProbeTimeout": "Media probe timed out. Check that the source file is still available.",
-  "neko.canvas.preview.mediaStreamTimeout": "Media stream timed out. Check the media engine connection.",
+  "neko.canvas.preview.mediaStreamTimeout": "Media stream timed out. Check the local media runtime connection.",
   "neko.canvas.preview.storyboardShot": "Storyboard shot",
   "neko.canvas.preview.storyboardShotUnavailableDescription": "No generated image or safe preview source is available for this shot yet.",
   "neko.canvas.preview.storyboardScene": "Storyboard scene",

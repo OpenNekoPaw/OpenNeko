@@ -5,6 +5,8 @@ import type {
   CutCommand,
   CutExportTaskSnapshot,
   CutExportSettings,
+  CutMseVideoDescriptor,
+  CutPcmStreamDescriptor,
   OtioTrackKind,
   TimelineView,
 } from '@neko-cut/domain';
@@ -110,8 +112,9 @@ export interface CutPreviewReadyMessage extends Record<string, unknown> {
   readonly width: number;
   readonly height: number;
   readonly framesPerSecond: number;
-  readonly videoStreamUrl?: string;
-  readonly audioStreamUrls: readonly string[];
+  readonly video?: CutMseVideoDescriptor;
+  readonly videoPlaybackRate?: number;
+  readonly audioStreams: readonly CutPcmStreamDescriptor[];
   readonly audioGainsDb: readonly number[];
 }
 
@@ -547,7 +550,7 @@ function retainRepresentations(
   }
   const retained = new Map<string, CutClipRepresentationResult>();
   for (const result of current.values()) {
-    if (result.status !== 'ready') continue;
+    if (result.status !== 'ready' && result.status !== 'partial') continue;
     const previousClip = findClipProjection(previous, result.clipId);
     const nextClip = findClipProjection(next, result.clipId);
     if (!previousClip || !nextClip || !sameRepresentationInput(previousClip, nextClip)) continue;
@@ -694,11 +697,42 @@ function isPreviewReadyMessage(value: Record<string, unknown>): value is CutPrev
     typeof value['width'] === 'number' &&
     typeof value['height'] === 'number' &&
     typeof value['framesPerSecond'] === 'number' &&
-    (value['videoStreamUrl'] === undefined || typeof value['videoStreamUrl'] === 'string') &&
-    Array.isArray(value['audioStreamUrls']) &&
-    value['audioStreamUrls'].every((item) => typeof item === 'string') &&
+    (value['video'] === undefined || isMseVideoDescriptor(value['video'])) &&
+    (value['videoPlaybackRate'] === undefined ||
+      (typeof value['videoPlaybackRate'] === 'number' &&
+        Number.isFinite(value['videoPlaybackRate']) &&
+        value['videoPlaybackRate'] > 0)) &&
+    Array.isArray(value['audioStreams']) &&
+    value['audioStreams'].every(isPcmStreamDescriptor) &&
     Array.isArray(value['audioGainsDb']) &&
+    value['audioGainsDb'].length === value['audioStreams'].length &&
     value['audioGainsDb'].every((item) => typeof item === 'number')
+  );
+}
+
+function isMseVideoDescriptor(value: unknown): value is CutMseVideoDescriptor {
+  return (
+    isRecord(value) &&
+    value['version'] === 1 &&
+    value['transport'] === 'http-mse' &&
+    typeof value['mimeType'] === 'string' &&
+    typeof value['preparationProfile'] === 'string' &&
+    typeof value['mediaTimeOriginSeconds'] === 'number' &&
+    typeof value['durationSeconds'] === 'number' &&
+    Array.isArray(value['segments']) &&
+    value['segments'].length > 0
+  );
+}
+
+function isPcmStreamDescriptor(value: unknown): value is CutPcmStreamDescriptor {
+  return (
+    isRecord(value) &&
+    value['version'] === 1 &&
+    value['transport'] === 'http' &&
+    value['protocol'] === 'neko-pcm-f32le-v1' &&
+    typeof value['streamUrl'] === 'string' &&
+    typeof value['sampleRate'] === 'number' &&
+    typeof value['channels'] === 'number'
   );
 }
 
@@ -732,6 +766,36 @@ function isRepresentationResult(value: unknown): value is CutClipRepresentationR
   if (!isRecord(value) || typeof value['clipId'] !== 'string') return false;
   if (value['kind'] !== 'thumbnail' && value['kind'] !== 'waveform') return false;
   if (value['status'] === 'unavailable') return typeof value['message'] === 'string';
+  if (value['status'] === 'partial') {
+    if (value['kind'] === 'waveform') {
+      return (
+        isRecord(value['waveform']) &&
+        Array.isArray(value['waveform']['peaks']) &&
+        isRecord(value['waveform']['partial']) &&
+        typeof value['waveform']['partial']['availableDurationSeconds'] === 'number' &&
+        (value['waveform']['partial']['failureScope'] === 'source' ||
+          value['waveform']['partial']['failureScope'] === 'stream' ||
+          value['waveform']['partial']['failureScope'] === 'interval') &&
+        typeof value['waveform']['partial']['message'] === 'string'
+      );
+    }
+    return (
+      Array.isArray(value['thumbnails']) &&
+      value['thumbnails'].length > 0 &&
+      Array.isArray(value['failures']) &&
+      value['failures'].length > 0 &&
+      value['failures'].every(
+        (failure) =>
+          isRecord(failure) &&
+          typeof failure['sourceTimeSeconds'] === 'number' &&
+          (failure['failureScope'] === 'source' ||
+            failure['failureScope'] === 'stream' ||
+            failure['failureScope'] === 'interval' ||
+            failure['failureScope'] === 'operation') &&
+          typeof failure['message'] === 'string',
+      )
+    );
+  }
   if (value['status'] !== 'ready') return false;
   return value['kind'] === 'thumbnail'
     ? Array.isArray(value['thumbnails'])

@@ -9,7 +9,7 @@
  */
 
 import type { DiffResult } from '@neko/shared';
-import type { EngineClient } from '@neko/neko-client/EngineClient';
+import type { IToolsMediaRuntime } from '../../../contracts/IMediaRuntimeService';
 import type { IHandlerContext } from './types';
 import { handleSeek } from './FrameOperations';
 import { getLogger } from '../../../utils/logger';
@@ -208,12 +208,15 @@ export function sendWaveformFromResult(ctx: IHandlerContext, result: DiffResult)
  */
 export function startEarlyWaveform(
   ctx: IHandlerContext,
-  engine: EngineClient,
+  runtime: IToolsMediaRuntime,
   currentPath: string,
   previousPath: string,
   signal: AbortSignal,
 ): Promise<void> {
-  return Promise.all([engine.waveform(currentPath), engine.waveform(previousPath)])
+  return Promise.all([
+    runtime.generateWaveform(currentPath),
+    runtime.generateWaveform(previousPath),
+  ])
     .then(([wfA, wfB]) => {
       if (ctx.isDisposed || signal.aborted) return;
       ctx.sendMessage({
@@ -242,14 +245,15 @@ export function startEarlyWaveform(
  */
 export function startEarlyFrameExtraction(
   ctx: IHandlerContext,
-  engine: EngineClient,
+  runtime: IToolsMediaRuntime,
   currentPath: string,
   previousPath: string,
   signal: AbortSignal,
 ): void {
   const extract = async (filePath: string, version: 'current' | 'previous') => {
     try {
-      const imageBuffer = await engine.extractFrame(filePath, 0);
+      const dataUrl = await runtime.captureFrame(filePath, 0);
+      const imageBuffer = dataUrlToArrayBuffer(dataUrl);
       if (ctx.isDisposed || signal.aborted || !imageBuffer) return;
       ctx.sendMessage({
         type: 'mediaDiff:frameData',
@@ -262,4 +266,11 @@ export function startEarlyFrameExtraction(
   };
   void extract(currentPath, 'current');
   void extract(previousPath, 'previous');
+}
+
+function dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer {
+  const separator = dataUrl.indexOf(',');
+  if (separator < 0) throw new Error('Frame capture returned an invalid data URL.');
+  const bytes = Buffer.from(dataUrl.slice(separator + 1), 'base64');
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }

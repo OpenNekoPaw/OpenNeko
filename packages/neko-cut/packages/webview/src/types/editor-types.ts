@@ -46,7 +46,7 @@ import {
  *
  * Used throughout the webview Store and components.
  * The UI fields are stored directly on the element for convenience,
- * but are NOT sent to the engine.
+ * but are NOT sent to the Host runtime.
  */
 export type EditorElement = TimelineElement & Partial<ElementEditState>;
 
@@ -74,7 +74,7 @@ export type EditorSubtitleElement = SubtitleElement & Partial<ElementEditState>;
  *
  * Used throughout the webview Store and components.
  * The UI fields (solo, color, height, etc.) are stored directly on the track
- * for convenience, but are NOT sent to the engine.
+ * for convenience, but are NOT sent to the Host runtime.
  */
 export type EditorTrack = TimelineTrack & Partial<TrackUIState>;
 

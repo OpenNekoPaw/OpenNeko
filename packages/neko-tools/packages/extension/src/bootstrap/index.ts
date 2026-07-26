@@ -5,8 +5,7 @@ export { bootstrapNekoToolsExtension } from './bootstrapExtension';
 export { bootstrapMediaDiff } from './bootstrapMediaDiff';
 export { bootstrapMediaLsp } from './bootstrapMediaLsp';
 export {
-  IEngineMediaService,
-  IEngineRuntimeResolver,
+  IMediaRuntimeService,
   IExtensionErrorHandler,
   IExtensionI18n,
   IScheduler,

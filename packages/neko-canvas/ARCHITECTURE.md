@@ -101,10 +101,10 @@ packages/neko-canvas/
 │  │    └─ useCanvasCoordinates (屏幕↔画布坐标转换)    │      │
 │  └─────────────────────────────────────────────────┘      │
 └───────────────────────────────────────────────────────────┘
-          │ WebSocket (通过 neko-preview API)
+          │ tokenized HTTP descriptors
           ▼
-    neko-engine (Rust Sidecar)
-      └─ H.264 + PCM 流（媒体节点内联播放）
+    NodeMediaRuntime
+      └─ 原生 <video> + PCM（媒体节点内联播放）
 ```
 
 ---
@@ -188,9 +188,9 @@ Canvas Basic/Professional 共用下列节点 schema 与 renderer。Basic 仅把�
 ```
 用户点击 MediaNode
   → postMessage('media:play', {path})
-    → Extension Host → neko-preview API
-      → neko-engine 流启动
-        → H264StreamClient / AudioStreamClient
+    → Extension Host → NodeMediaRuntime
+      → tokenized video / PCM session
+        → HTMLVideoElement / PcmAudioClient
           → InlineMediaPlayer 渲染
 ```
 
@@ -208,7 +208,7 @@ Canvas Basic/Professional 共用下列节点 schema 与 renderer。Basic 仅把�
 
 `RouteStoryboardMatrix` 是 `CanvasPlaybackPlan` 的 Webview-local 投影视图：行表示 route family 下的分支路线，列表示容器边界内的播放步骤，cell 表示可播放 unit/shot，空 cell 仅用于对齐。矩阵运行态只保存 view mode、active family、filter/highlight、fold、focus 等 UI 状态，不保存私有排序、列、空 cell 或矩阵顺序到 `.nkc`，也不成为第二个 timeline。若未来启用 route edit mode，写操作必须调用 canvasStore 的容器/节点/连线排序命令写回 `.nkc`，再重新生成 `CanvasPlaybackPlan`。
 
-从矩阵发送到 Cut 时，Webview 只提交 route id 和当前 revision；Extension Host 重新从当前 `CanvasPlaybackPlan` 创建 `CanvasCutDraftPayload`，再调用 `neko.cut.importCanvasDraft`。矩阵折叠、筛选、空 cell 和可见列不会进入 draft。媒体、缩略图和视频流仍通过 Extension Host、`neko-preview` API 和 Engine 授权，不由 Webview 直接访问工作区文件。
+从矩阵发送到 Cut 时，Webview 只提交 route id 和当前 revision；Extension Host 重新从当前 `CanvasPlaybackPlan` 创建 `CanvasCutDraftPayload`，再调用 `neko.cut.importCanvasDraft`。矩阵折叠、筛选、空 cell 和可见列不会进入 draft。媒体、缩略图和视频流仍通过 Extension Host 与 `@neko/media` 授权，不由 Webview 直接访问工作区文件。
 
 Agent 对 Canvas 播放顺序的参与仅限读取 `CanvasPlaybackPlan`、展示 route card、触发 reveal/import/reorder capability 和执行确认门控。Agent 不持有 `PlaybackSession`、playhead、播放器或私有 route 顺序；播放请求应定位到 Canvas `PlaybackWorkspace`，后续剪辑请求应投递到 Cut。
 
@@ -331,6 +331,6 @@ playback:timelineSync(payload)   — Cut 轻量回流后的播放路线状态刷
 | Extension Host | VSCode Extension API + TypeScript + esbuild                   |
 | Webview UI     | React 18 + Zustand + Tailwind CSS + Vite                      |
 | 画布渲染       | CSS Transform（平移/缩放）+ SVG（连线）                       |
-| 媒体播放       | 委托 neko-preview API（H264StreamClient / AudioStreamClient） |
+| 媒体播放       | NodeMediaRuntime + 原生 `<video>` / PcmAudioClient            |
 | 交互系统       | 自定义 React Hooks（drag/resize/snap/connect）                |
 | 测试           | Vitest                                                        |

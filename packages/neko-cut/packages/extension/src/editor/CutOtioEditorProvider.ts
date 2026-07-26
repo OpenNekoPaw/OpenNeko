@@ -8,6 +8,8 @@ import {
   serializeOtio,
   type CutCommand,
   type CutRouteAppendItem,
+  type CutMseVideoDescriptor,
+  type CutPcmStreamDescriptor,
   type TimelineView,
 } from '@neko-cut/domain';
 import type {
@@ -29,8 +31,7 @@ import { freezeCutExportRequest, readCutExportSettings } from './cutExportReques
 import type { ExportJobStore } from '../services/export-job';
 import { CutWorkspaceMediaImporter } from '../services/CutWorkspaceMediaImporter';
 import { CutWorkspaceMediaPaths } from '../services/CutWorkspaceMediaPaths';
-import { EngineConnection } from '../services/EngineConnection';
-import { NekoEngineCutMediaAdapter } from '../services/NekoEngineCutMediaAdapter';
+import { NodeFfmpegCutMediaAdapter } from '../services/NodeFfmpegCutMediaAdapter';
 import { handleError } from '../base';
 import { projectCutAgentContext, type CutAgentSelection } from './cutAgentContext';
 import { buildDuplicateClipCommands, buildPasteClipCommands } from './cutClipboardCommands';
@@ -63,8 +64,9 @@ interface CutPreviewRecord {
     readonly width: number;
     readonly height: number;
     readonly framesPerSecond: number;
-    readonly videoStreamUrl?: string;
-    readonly audioStreamUrls: readonly string[];
+    readonly video?: CutMseVideoDescriptor;
+    readonly videoPlaybackRate?: number;
+    readonly audioStreams: readonly CutPcmStreamDescriptor[];
     readonly audioGainsDb: readonly number[];
   };
 }
@@ -83,7 +85,6 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
   private readonly representationRequests = new Map<vscode.WebviewPanel, AbortController>();
   private readonly documents = new Map<string, CutOtioDocument>();
   private readonly storage = new VSCodeCutDocumentStorage();
-  private readonly engineConnection = new EngineConnection();
   private readonly exportTasks: CutExportTaskRegistry;
   private readonly localResourceAccess: LocalResourceAccessService;
   private activePanel: vscode.WebviewPanel | undefined;
@@ -139,7 +140,9 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     }
     const document = new CutOtioDocument(
       session,
-      new NekoEngineCutMediaAdapter(workspace.uri.fsPath, this.engineConnection),
+      new NodeFfmpegCutMediaAdapter(workspace.uri.fsPath, {
+        cacheRoot: nodePath.join(this.context.globalStorageUri.fsPath, 'cut-media-runtime'),
+      }),
     );
     this.documents.set(uri.toString(), document);
     document.onDidDispose(() => {
@@ -977,12 +980,16 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
     let preview:
       | {
           readonly sessionId: string;
-          readonly videoStreamUrl?: string;
-          readonly audioStreamUrl?: string;
+          readonly video: CutMseVideoDescriptor;
         }
       | undefined;
     let videoProbe:
-      | { readonly width: number; readonly height: number; readonly framesPerSecond: number }
+      | {
+          readonly width: number;
+          readonly height: number;
+          readonly framesPerSecond: number;
+          readonly hasAudio: boolean;
+        }
       | undefined;
     if (videoClip) {
       const source = await paths.resolveTarget(document.uri.fsPath, videoClip.targetUrl);
@@ -996,38 +1003,50 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
           startTimeSeconds:
             videoClip.sourceStartSeconds +
             Math.max(0, timelineTime - videoClip.startSeconds) * videoClip.playbackRate,
-          includeAudio: !selection.videoAudioMuted && !videoClip.audio.muted,
+          durationSeconds: selection.segmentEndSeconds - timelineTime,
           playbackRate: videoClip.playbackRate,
           startPaused: true,
         },
       );
     }
-    const pcmSessions: Array<{ readonly sessionId: string; readonly streamUrl: string }> = [];
+    const pcmSessions: Array<{
+      readonly sessionId: string;
+      readonly stream: CutPcmStreamDescriptor;
+      readonly clip: NonNullable<typeof videoClip>;
+    }> = [];
     try {
-      for (const audioClip of selection.audioClips) {
+      const audibleClips = [
+        ...(!selection.videoAudioMuted &&
+        videoClip &&
+        videoProbe?.hasAudio === true &&
+        !videoClip.audio.muted
+          ? [videoClip]
+          : []),
+        ...selection.audioClips,
+      ];
+      for (const audioClip of audibleClips) {
         const audioSource = await paths.resolveTarget(document.uri.fsPath, audioClip.targetUrl);
         if (audioSource.status !== 'available') {
           throw new Error(`Cannot preview missing audio media: ${audioClip.targetUrl}`);
         }
-        pcmSessions.push(
-          await document.mediaAdapter.startPcm(
-            { workspaceRelativePath: audioSource.workspaceRelativePath },
-            {
-              startTimeSeconds:
-                audioClip.sourceStartSeconds +
-                Math.max(0, timelineTime - audioClip.startSeconds) * audioClip.playbackRate,
-              playbackRate: audioClip.playbackRate,
-              startPaused: true,
-            },
-          ),
+        const session = await document.mediaAdapter.startPcm(
+          { workspaceRelativePath: audioSource.workspaceRelativePath },
+          {
+            startTimeSeconds:
+              audioClip.sourceStartSeconds +
+              Math.max(0, timelineTime - audioClip.startSeconds) * audioClip.playbackRate,
+            durationSeconds: selection.segmentEndSeconds - timelineTime,
+            playbackRate: audioClip.playbackRate,
+            startPaused: true,
+          },
         );
+        pcmSessions.push({ ...session, clip: audioClip });
       }
       if (this.previewGenerations.get(panel) !== generation) {
         throw new Error(`Cut preview generation ${generation} is no longer current.`);
       }
       const profile = view.profile;
-      const primaryClockClip =
-        preview?.audioStreamUrl && videoClip ? videoClip : (selection.audioClips[0] ?? videoClip);
+      const primaryClockClip = pcmSessions[0]?.clip ?? videoClip;
       const mediaSourceTimeSeconds = primaryClockClip
         ? primaryClockClip.sourceStartSeconds +
           Math.max(0, timelineTime - primaryClockClip.startSeconds) * primaryClockClip.playbackRate
@@ -1052,15 +1071,10 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
           framesPerSecond:
             videoProbe?.framesPerSecond ??
             (profile ? profile.editRateNumerator / profile.editRateDenominator : 30),
-          ...(preview?.videoStreamUrl ? { videoStreamUrl: preview.videoStreamUrl } : {}),
-          audioStreamUrls: [
-            ...(preview?.audioStreamUrl ? [preview.audioStreamUrl] : []),
-            ...pcmSessions.map((session) => session.streamUrl),
-          ],
-          audioGainsDb: [
-            ...(preview?.audioStreamUrl && videoClip ? [videoClip.audio.gainDb] : []),
-            ...selection.audioClips.map((clip) => clip.audio.gainDb),
-          ],
+          ...(preview ? { video: preview.video } : {}),
+          ...(videoClip ? { videoPlaybackRate: videoClip.playbackRate } : {}),
+          audioStreams: pcmSessions.map((session) => session.stream),
+          audioGainsDb: pcmSessions.map((session) => session.clip.audio.gainDb),
         },
       };
     } catch (error) {
@@ -1075,7 +1089,7 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
           width: 0,
           height: 0,
           framesPerSecond: 0,
-          audioStreamUrls: [],
+          audioStreams: [],
           audioGainsDb: [],
         },
       });

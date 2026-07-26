@@ -15,9 +15,9 @@ import type {
   MediaSymbolLocation,
 } from '../types';
 
-// ─── Probe result (minimal shape from EngineClient) ─────────────────────────
+// ─── Probe result (minimal shape from the media runtime) ────────────────────
 
-/** Subset of EngineClient ProbeResult needed by diagnostics */
+/** Subset of media probe metadata needed by diagnostics. */
 export interface ProbeResultLike {
   readonly duration: number;
   readonly width: number;

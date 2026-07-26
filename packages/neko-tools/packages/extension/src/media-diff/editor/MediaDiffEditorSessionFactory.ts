@@ -1,6 +1,8 @@
 import type * as vscode from 'vscode';
-import type { EngineClient } from '@neko/neko-client/EngineClient';
-import type { IEngineMediaService } from '../../contracts/IEngineMediaService';
+import type {
+  IMediaRuntimeService,
+  IToolsMediaRuntime,
+} from '../../contracts/IMediaRuntimeService';
 import type { IScheduler } from '../../contracts/IScheduler';
 import type { ITempFileService } from '../../contracts/ITempFileService';
 import type { IMediaDiffService } from '../services/MediaDiffService';
@@ -17,7 +19,7 @@ export interface IMediaDiffEditorMessageHandlerFactoryOptions {
   webview: vscode.Webview;
   documentUri: vscode.Uri;
   diffService: IMediaDiffService;
-  engineClient: EngineClient | null;
+  mediaRuntime: IToolsMediaRuntime;
   scheduler: IScheduler;
   tempFileService: ITempFileService;
   previousUri?: vscode.Uri;
@@ -32,7 +34,7 @@ export class MediaDiffEditorSessionFactory implements IMediaDiffEditorSessionFac
 
   constructor(
     private readonly diffService: IMediaDiffService,
-    private readonly engineMediaService: IEngineMediaService,
+    private readonly mediaRuntimeService: IMediaRuntimeService,
     private readonly scheduler: IScheduler,
     private readonly tempFileService: ITempFileService,
     private readonly createMessageHandler: MediaDiffEditorMessageHandlerFactory = (options) =>
@@ -40,7 +42,7 @@ export class MediaDiffEditorSessionFactory implements IMediaDiffEditorSessionFac
         options.webview,
         options.documentUri,
         options.diffService,
-        options.engineClient,
+        options.mediaRuntime,
         options.scheduler,
         options.tempFileService,
         options.previousUri,
@@ -49,8 +51,6 @@ export class MediaDiffEditorSessionFactory implements IMediaDiffEditorSessionFac
 
   async createSession(options: IMediaDiffEditorSessionOptions): Promise<IMediaDiffEditorSession> {
     this.throwIfDisposed();
-    const engineClient = await this.engineMediaService.ensureClient();
-    this.throwIfDisposed();
     let messageHandler: IMediaDiffEditorMessageHandler | undefined;
 
     try {
@@ -58,17 +58,13 @@ export class MediaDiffEditorSessionFactory implements IMediaDiffEditorSessionFac
         webview: options.webviewPanel.webview,
         documentUri: options.documentUri,
         diffService: this.diffService,
-        engineClient,
+        mediaRuntime: this.mediaRuntimeService.runtime,
         scheduler: this.scheduler,
         tempFileService: this.tempFileService,
         previousUri: options.previousUri,
       });
 
-      return new MediaDiffEditorSession(
-        options.webviewPanel,
-        messageHandler,
-        engineClient !== null,
-      );
+      return new MediaDiffEditorSession(options.webviewPanel, messageHandler);
     } catch (error) {
       if (messageHandler) {
         await messageHandler.disposeAsync();

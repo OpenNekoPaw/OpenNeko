@@ -4,7 +4,7 @@
  * VSCode extension entry point for Media Library and Creative Entity surfaces.
  *
  * Responsibilities:
- * - Connect engine probeMedia for rich metadata extraction
+ * - Connect the Node/FFmpeg media runtime for metadata and thumbnails
  * - Register context menu commands (add to timeline/canvas)
  * - Register linked Media Library and preview commands
  */
@@ -12,6 +12,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
+import { NodeMediaRuntime } from '@neko/media/node';
 import { createNodeDocumentLowLevelAccess } from '@neko/content/document/node';
 import {
   ENTITY_FACADE_COMMANDS,
@@ -31,7 +32,7 @@ import {
   VSCodeEntityRuntimeRegistry,
   registerEntityFacadeCommands,
 } from '@neko/entity/host-vscode';
-import { createEngineMetadataExtractor } from './services/EngineMetadataExtractor';
+import { createNodeMediaMetadataExtractor } from './services/NodeMediaMetadataExtractor';
 import { AssetsThumbnailGenerator, ThumbnailService } from './services/ThumbnailService';
 import { MediaMetadataCache } from './services/MediaMetadataCache';
 import {
@@ -133,8 +134,15 @@ export async function activate(
   initI18n(locale);
   logger.info(`i18n initialized with locale: ${locale}`);
 
-  // Create metadata extractor for the Media Library projection.
-  const metadataExtractor = createEngineMetadataExtractor();
+  const mediaRuntime = new NodeMediaRuntime();
+  context.subscriptions.push({
+    dispose: () => {
+      void mediaRuntime
+        .dispose()
+        .catch((error) => logger.warn('Failed to dispose Assets media runtime', { error }));
+    },
+  });
+  const metadataExtractor = createNodeMediaMetadataExtractor(mediaRuntime);
 
   // 1. Initialize Creative Entity runtime and local projections.
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -206,7 +214,7 @@ export async function activate(
   if (workspaceRoot) {
     const derivedRuntime = await createHostDerivedContentRuntime({
       target: { kind: 'workspace', workspaceRoot, homedir: os.homedir() },
-      representationGenerators: [new AssetsThumbnailGenerator(workspaceRoot)],
+      representationGenerators: [new AssetsThumbnailGenerator(workspaceRoot, mediaRuntime)],
       logger: rootLogger,
     });
     thumbnailService = new ThumbnailService(workspaceRoot, derivedRuntime.contentRepresentation);

@@ -1,0 +1,1163 @@
+import * as nodeFs from 'node:fs/promises';
+import * as nodeOs from 'node:os';
+import * as nodePath from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  resolveTimelinePlaybackEndSeconds,
+  type CutExportRequest,
+  type CutMediaAudioStream,
+  type CutMediaProbe,
+  type CutMediaRuntimeAdapter,
+  type CutMediaVideoStream,
+  type CutPreviewPreparationProfile,
+  type CutRuntimeMediaSource,
+  type TimelineClipView,
+  type TimelineTrackView,
+  CutMediaCorruptionError,
+  CutMediaRuntimeUnavailableError,
+} from '@neko-cut/domain';
+import {
+  FfmpegCommandError,
+  NodeMediaLoopbackServer,
+  NodeFfmpegProcess,
+  createPcmPacketTransform,
+  type FfmpegProcessPort,
+  type RunningProcess,
+} from '@neko/media/node';
+
+export interface NodeFfmpegCutMediaAdapterOptions {
+  readonly cacheRoot?: string;
+  readonly process?: FfmpegProcessPort;
+  readonly server?: NodeMediaLoopbackServer;
+  readonly vp8WebmDirectQualified?: boolean;
+}
+
+interface PreviewSessionRecord {
+  readonly kind: 'preview';
+  readonly token: string;
+  readonly directory: string;
+  state: 'paused' | 'active';
+}
+
+interface PcmSessionRecord {
+  readonly kind: 'pcm';
+  readonly token: string;
+  state: 'paused' | 'active';
+}
+
+type SessionRecord = PreviewSessionRecord | PcmSessionRecord;
+
+interface FfprobeStream {
+  readonly index?: number;
+  readonly codec_type?: string;
+  readonly codec_name?: string;
+  readonly profile?: string;
+  readonly pix_fmt?: string;
+  readonly bits_per_raw_sample?: string;
+  readonly width?: number;
+  readonly height?: number;
+  readonly r_frame_rate?: string;
+  readonly avg_frame_rate?: string;
+  readonly duration?: string;
+  readonly sample_rate?: string;
+  readonly channels?: number;
+  readonly channel_layout?: string;
+  readonly color_primaries?: string;
+  readonly color_transfer?: string;
+  readonly color_space?: string;
+  readonly color_range?: string;
+  readonly level?: number;
+}
+
+interface FfprobeJson {
+  readonly streams?: readonly FfprobeStream[];
+  readonly format?: { readonly duration?: string };
+}
+
+interface ExportInput {
+  readonly clip: TimelineClipView;
+  readonly track: TimelineTrackView;
+  readonly inputIndex: number;
+  readonly sourcePath: string;
+  readonly hasAudio: boolean;
+}
+
+const PCM_SAMPLE_RATE = 48_000;
+const PCM_CHANNELS = 2;
+
+export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
+  private readonly process: FfmpegProcessPort;
+  private readonly server: NodeMediaLoopbackServer;
+  private readonly cacheRoot: string;
+  private readonly sessions = new Map<string, SessionRecord>();
+  private readonly vp8WebmDirectQualified: boolean;
+  private adapterRootPromise: Promise<string> | undefined;
+  private nextSessionId = 0;
+  private disposed = false;
+
+  constructor(
+    private readonly workspaceRoot: string,
+    options: NodeFfmpegCutMediaAdapterOptions = {},
+  ) {
+    this.process = options.process ?? new NodeFfmpegProcess();
+    this.server = options.server ?? new NodeMediaLoopbackServer();
+    this.cacheRoot = options.cacheRoot ?? nodePath.join(nodeOs.tmpdir(), 'openneko-cut-media');
+    this.vp8WebmDirectQualified = options.vp8WebmDirectQualified ?? true;
+  }
+
+  async probe(source: CutRuntimeMediaSource, signal?: AbortSignal): Promise<CutMediaProbe> {
+    this.assertUsable();
+    return this.probePath(this.resolveSource(source), signal);
+  }
+
+  private async probePath(sourcePath: string, signal?: AbortSignal): Promise<CutMediaProbe> {
+    let result;
+    try {
+      result = await this.process.run(
+        'ffprobe',
+        ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', sourcePath],
+        signal,
+      );
+    } catch (error) {
+      throw classifyMediaCommandError(error, 'source', 'probe media');
+    }
+    const json = parseProbeJson(result.stdout);
+    const streams = json.streams ?? [];
+    const videoStream = streams.find((stream) => stream.codec_type === 'video');
+    const audioStreams = streams
+      .filter((stream) => stream.codec_type === 'audio')
+      .map(projectAudioStream);
+    const video = videoStream ? projectVideoStream(videoStream) : undefined;
+    const durationSeconds = readDuration(json, streams);
+    const primaryAudio = audioStreams[0];
+    return {
+      durationSeconds,
+      width: video?.width ?? 0,
+      height: video?.height ?? 0,
+      framesPerSecond: video?.framesPerSecond ?? 0,
+      hasVideo: video !== undefined,
+      hasAudio: audioStreams.length > 0,
+      ...(primaryAudio
+        ? {
+            audioChannels: primaryAudio.channels,
+            audioSampleRate: primaryAudio.sampleRate,
+          }
+        : {}),
+      ...(video ? { video } : {}),
+      audioStreams,
+    };
+  }
+
+  async captureFrame(
+    source: CutRuntimeMediaSource,
+    timeSeconds: number,
+    options: { readonly width: number; readonly height: number },
+    signal?: AbortSignal,
+  ): Promise<{ readonly dataUrl: string }> {
+    this.assertUsable();
+    assertNonNegativeFinite(timeSeconds, 'frame time');
+    assertPositiveInteger(options.width, 'frame width');
+    assertPositiveInteger(options.height, 'frame height');
+    let result;
+    try {
+      result = await this.process.run(
+        'ffmpeg',
+        [
+          '-v',
+          'error',
+          '-ss',
+          decimal(timeSeconds),
+          '-i',
+          this.resolveSource(source),
+          '-map',
+          '0:v:0',
+          '-frames:v',
+          '1',
+          '-vf',
+          `scale=${options.width}:${options.height}:force_original_aspect_ratio=decrease`,
+          '-f',
+          'image2pipe',
+          '-c:v',
+          'mjpeg',
+          'pipe:1',
+        ],
+        signal,
+      );
+    } catch (error) {
+      throw classifyMediaCommandError(
+        error,
+        'interval',
+        `capture frame at ${decimal(timeSeconds)} seconds`,
+      );
+    }
+    if (result.stdout.byteLength === 0) throw new Error('FFmpeg returned no captured frame.');
+    return { dataUrl: `data:image/jpeg;base64,${result.stdout.toString('base64')}` };
+  }
+
+  async generateWaveform(
+    source: CutRuntimeMediaSource,
+    options: { readonly peaksPerSecond: number },
+    signal?: AbortSignal,
+  ) {
+    this.assertUsable();
+    assertPositiveFinite(options.peaksPerSecond, 'waveform peaks per second');
+    const probe = await this.probe(source, signal);
+    if (!probe.hasAudio) throw new Error('Waveform source contains no audio stream.');
+    const decodeRate = Math.min(
+      PCM_SAMPLE_RATE,
+      Math.max(1_000, Math.ceil(options.peaksPerSecond * 128)),
+    );
+    let result;
+    let partialFailure: FfmpegCommandError | undefined;
+    try {
+      result = await this.process.run(
+        'ffmpeg',
+        [
+          '-v',
+          'error',
+          '-i',
+          this.resolveSource(source),
+          '-map',
+          '0:a:0',
+          '-vn',
+          '-ac',
+          '1',
+          '-ar',
+          String(decodeRate),
+          '-f',
+          'f32le',
+          'pipe:1',
+        ],
+        signal,
+      );
+    } catch (error) {
+      if (
+        error instanceof FfmpegCommandError &&
+        isMediaCorruptionDiagnostic(error.stderr) &&
+        error.stdout.byteLength > 0
+      ) {
+        result = { stdout: error.stdout, stderr: error.stderr };
+        partialFailure = error;
+      } else {
+        throw classifyMediaCommandError(error, 'stream', 'generate audio waveform');
+      }
+    }
+    const samples = toFloat32(result.stdout);
+    const samplesPerPeak = Math.max(1, Math.ceil(decodeRate / options.peaksPerSecond));
+    const peakCount = Math.max(1, Math.ceil(samples.length / samplesPerPeak));
+    const peaks = Array.from({ length: peakCount }, (_unused, peakIndex) => {
+      const start = peakIndex * samplesPerPeak;
+      const end = Math.min(samples.length, start + samplesPerPeak);
+      let peak = 0;
+      for (let index = start; index < end; index += 1) {
+        peak = Math.max(peak, Math.abs(samples[index] ?? 0));
+      }
+      return Math.min(1, peak);
+    });
+    return {
+      peaks,
+      durationSeconds: probe.durationSeconds,
+      peaksPerSecond: options.peaksPerSecond,
+      ...(partialFailure
+        ? {
+            partial: {
+              availableDurationSeconds: samples.length / decodeRate,
+              failureScope: 'stream' as const,
+              message: compactFfmpegDiagnostic(partialFailure.stderr),
+            },
+          }
+        : {}),
+    };
+  }
+
+  async startPreview(
+    source: CutRuntimeMediaSource,
+    options: {
+      readonly startTimeSeconds: number;
+      readonly durationSeconds: number;
+      readonly playbackRate: number;
+      readonly startPaused: boolean;
+    },
+    signal?: AbortSignal,
+  ) {
+    this.assertUsable();
+    validatePreviewInterval(options);
+    const sourcePath = this.resolveSource(source);
+    const probe = await this.probe(source, signal);
+    if (!probe.video) throw new Error('Preview source contains no video stream.');
+    const profile = this.selectPreparationProfile(sourcePath, probe.video);
+    await this.assertPreviewRuntimeCapabilities(probe.video, profile, signal);
+    const sessionId = this.newSessionId('preview');
+    const directory = await nodeFs.mkdtemp(
+      nodePath.join(await this.adapterRoot(), `${sessionId}-`),
+    );
+    const webm = profile === 'vp8-webm-direct';
+    const outputPath = nodePath.join(directory, webm ? 'preview.webm' : 'preview.mp4');
+    try {
+      const sourceDuration = options.durationSeconds * options.playbackRate;
+      try {
+        await this.process.run(
+          'ffmpeg',
+          buildPreviewArgs(sourcePath, outputPath, probe.video, profile, {
+            startTimeSeconds: options.startTimeSeconds,
+            sourceDurationSeconds: sourceDuration,
+          }),
+          signal,
+        );
+      } catch (error) {
+        throw classifyMediaCommandError(error, 'interval', 'prepare preview interval');
+      }
+      const registration = await this.server.registerFile(
+        outputPath,
+        webm ? 'video/webm' : 'video/mp4',
+      );
+      this.sessions.set(sessionId, {
+        kind: 'preview',
+        token: registration.token,
+        directory,
+        state: options.startPaused ? 'paused' : 'active',
+      });
+      return {
+        sessionId,
+        video: {
+          version: 1 as const,
+          transport: 'http-mse' as const,
+          mimeType: webm
+            ? 'video/webm; codecs="vp8"'
+            : profile === 'h264-sdr-transcode'
+              ? 'video/mp4; codecs="avc1.640029"'
+              : h264MimeType(probe.video),
+          preparationProfile: profile,
+          mediaTimeOriginSeconds: 0,
+          durationSeconds: options.durationSeconds,
+          segments: [
+            {
+              index: 0,
+              startTimeSeconds: 0,
+              endTimeSeconds: options.durationSeconds,
+              url: registration.url,
+            },
+          ],
+        },
+      };
+    } catch (error) {
+      await nodeFs.rm(directory, { recursive: true, force: true });
+      throw error;
+    }
+  }
+
+  async resumePreview(sessionId: string): Promise<void> {
+    const session = this.requireSession(sessionId, 'preview');
+    if (session.state !== 'paused') {
+      throw new Error(`Cut preview session is not paused: ${sessionId}`);
+    }
+    session.state = 'active';
+  }
+
+  async stopPreview(sessionId: string): Promise<void> {
+    const session = this.requireSession(sessionId, 'preview');
+    this.sessions.delete(sessionId);
+    this.server.unregister(session.token);
+    await nodeFs.rm(session.directory, { recursive: true, force: true });
+  }
+
+  async startPcm(
+    source: CutRuntimeMediaSource,
+    options: {
+      readonly startTimeSeconds: number;
+      readonly durationSeconds: number;
+      readonly playbackRate: number;
+      readonly startPaused: boolean;
+      readonly audioStreamIndex?: number;
+    },
+    signal?: AbortSignal,
+  ) {
+    this.assertUsable();
+    validatePreviewInterval(options);
+    const sourcePath = this.resolveSource(source);
+    const probe = await this.probe(source, signal);
+    const audioStream =
+      options.audioStreamIndex === undefined
+        ? probe.audioStreams[0]
+        : probe.audioStreams.find(
+            (candidate) => candidate.streamIndex === options.audioStreamIndex,
+          );
+    if (!audioStream) throw new Error('PCM source contains no selected audio stream.');
+    const registration = await this.server.registerPcm((streamSignal) =>
+      this.createPcmProcess(sourcePath, audioStream.streamIndex, options, streamSignal),
+    );
+    const sessionId = this.newSessionId('pcm');
+    registration.prime();
+    this.sessions.set(sessionId, {
+      kind: 'pcm',
+      token: registration.token,
+      state: options.startPaused ? 'paused' : 'active',
+    });
+    return {
+      sessionId,
+      stream: {
+        version: 1 as const,
+        transport: 'http' as const,
+        protocol: 'neko-pcm-f32le-v1' as const,
+        streamUrl: registration.url,
+        sampleRate: PCM_SAMPLE_RATE,
+        channels: PCM_CHANNELS,
+      },
+    };
+  }
+
+  async resumePcm(sessionId: string): Promise<void> {
+    const session = this.requireSession(sessionId, 'pcm');
+    if (session.state !== 'paused') throw new Error(`Cut PCM session is not paused: ${sessionId}`);
+    session.state = 'active';
+  }
+
+  async stopPcm(sessionId: string): Promise<void> {
+    const session = this.requireSession(sessionId, 'pcm');
+    this.sessions.delete(sessionId);
+    this.server.unregister(session.token);
+  }
+
+  async export(
+    request: CutExportRequest,
+    signal?: AbortSignal,
+  ): Promise<{ readonly outputWorkspaceRelativePath: string }> {
+    this.assertUsable();
+    const playbackEnd = resolveTimelinePlaybackEndSeconds(request.timeline);
+    if (playbackEnd <= 0) {
+      throw new Error('Cut export requires at least one enabled Video or audible Audio Clip.');
+    }
+    const outputPath = await this.resolveWritableOutput(request.outputWorkspaceRelativePath);
+    const jobId = this.newSessionId('export');
+    const stagingPath = nodePath.join(
+      nodePath.dirname(outputPath),
+      `.${nodePath.basename(outputPath, nodePath.extname(outputPath))}.${jobId}.tmp${nodePath.extname(outputPath)}`,
+    );
+    try {
+      const args = await this.buildExportArgs(request, stagingPath, playbackEnd, signal);
+      await this.process.run('ffmpeg', args, signal);
+      const result = await this.probeAbsolute(stagingPath, signal);
+      validateExportProbe(result, playbackEnd, request.settings.framesPerSecond);
+      await replaceOutputAtomically(stagingPath, outputPath, jobId);
+      return { outputWorkspaceRelativePath: request.outputWorkspaceRelativePath };
+    } finally {
+      await nodeFs.rm(stagingPath, { force: true });
+    }
+  }
+
+  async dispose(): Promise<void> {
+    if (this.disposed) return;
+    this.disposed = true;
+    const records = [...this.sessions.entries()];
+    this.sessions.clear();
+    for (const [, session] of records) this.server.unregister(session.token);
+    await Promise.all(
+      records
+        .filter((entry): entry is [string, PreviewSessionRecord] => entry[1].kind === 'preview')
+        .map(([, session]) => nodeFs.rm(session.directory, { recursive: true, force: true })),
+    );
+    await this.server.dispose();
+    if (this.adapterRootPromise) {
+      await nodeFs.rm(await this.adapterRootPromise, { recursive: true, force: true });
+    }
+  }
+
+  private createPcmProcess(
+    sourcePath: string,
+    streamIndex: number,
+    options: {
+      readonly startTimeSeconds: number;
+      readonly durationSeconds: number;
+      readonly playbackRate: number;
+    },
+    signal: AbortSignal,
+  ): RunningProcess {
+    const sourceDuration = options.durationSeconds * options.playbackRate;
+    const filter = atempoFilter(options.playbackRate);
+    const process = this.process.streamFfmpeg(
+      [
+        '-v',
+        'error',
+        '-ss',
+        decimal(options.startTimeSeconds),
+        '-t',
+        decimal(sourceDuration),
+        '-i',
+        sourcePath,
+        '-map',
+        `0:${streamIndex}`,
+        '-vn',
+        ...(filter ? ['-af', filter] : []),
+        '-ac',
+        String(PCM_CHANNELS),
+        '-ar',
+        String(PCM_SAMPLE_RATE),
+        '-f',
+        'f32le',
+        'pipe:1',
+      ],
+      signal,
+    );
+    const framed = createPcmPacketTransform({
+      sampleRate: PCM_SAMPLE_RATE,
+      channels: PCM_CHANNELS,
+      startTimeSeconds: options.startTimeSeconds,
+      playbackRate: options.playbackRate,
+    });
+    process.stdout.pipe(framed);
+    return {
+      stdout: framed,
+      completion: process.completion,
+      terminate: process.terminate,
+    };
+  }
+
+  private selectPreparationProfile(
+    sourcePath: string,
+    video: CutMediaVideoStream,
+  ): CutPreviewPreparationProfile {
+    if (video.codecName === 'vp8' && this.vp8WebmDirectQualified) return 'vp8-webm-direct';
+    if (video.codecName !== 'h264') return 'h264-sdr-transcode';
+    const extension = nodePath.extname(sourcePath).toLowerCase();
+    return extension === '.mp4' || extension === '.m4v'
+      ? 'h264-fragmented-mp4-copy'
+      : 'h264-fragmented-mp4-remux';
+  }
+
+  private async buildExportArgs(
+    request: CutExportRequest,
+    stagingPath: string,
+    playbackEnd: number,
+    signal?: AbortSignal,
+  ): Promise<readonly string[]> {
+    const { timeline, settings } = request;
+    const documentPath = fileURLToPath(timeline.documentUri);
+    const realRoot = await nodeFs.realpath(this.workspaceRoot);
+    const inputs: ExportInput[] = [];
+    const inputArgs: string[] = [];
+    const tracks = timeline.tracks.filter((track) => track.enabled);
+    for (const track of tracks) {
+      if (track.kind === 'Subtitle' && track.items.some((item) => item.kind === 'clip')) {
+        throw new Error('The Node/FFmpeg Cut adapter cannot burn Subtitle Tracks into export yet.');
+      }
+      for (const item of track.items) {
+        if (item.kind !== 'clip' || !item.enabled || track.kind === 'Subtitle') continue;
+        const sourcePath = await resolveTimelineSource(realRoot, documentPath, item.targetUrl);
+        const mediaProbe = await this.probeAbsolute(sourcePath, signal);
+        const inputIndex = inputs.length;
+        inputArgs.push(
+          '-ss',
+          decimal(item.sourceStartSeconds),
+          '-t',
+          decimal(item.durationSeconds * item.playbackRate),
+          '-i',
+          sourcePath,
+        );
+        inputs.push({
+          clip: item,
+          track,
+          inputIndex,
+          sourcePath,
+          hasAudio: mediaProbe.hasAudio,
+        });
+      }
+    }
+    const filters: string[] = [];
+    const videoTrack = tracks.find((track) => track.kind === 'Video');
+    const videoLabels: string[] = [];
+    let videoCursor = 0;
+    if (videoTrack) {
+      for (const item of videoTrack.items) {
+        if (item.startSeconds >= playbackEnd) break;
+        const duration = Math.min(item.durationSeconds, playbackEnd - item.startSeconds);
+        if (duration <= 0) continue;
+        const input =
+          item.kind === 'clip'
+            ? inputs.find((candidate) => candidate.track === videoTrack && candidate.clip === item)
+            : undefined;
+        const label = `vseg${videoLabels.length}`;
+        if (!input) {
+          filters.push(
+            `color=c=black:s=${settings.width}x${settings.height}:r=${decimal(settings.framesPerSecond)}:d=${decimal(duration)}[${label}]`,
+          );
+        } else {
+          filters.push(
+            `[${input.inputIndex}:v:0]setpts=(PTS-STARTPTS)/${decimal(input.clip.playbackRate)},` +
+              `scale=${settings.width}:${settings.height}:force_original_aspect_ratio=decrease,` +
+              `pad=${settings.width}:${settings.height}:(ow-iw)/2:(oh-ih)/2:black,` +
+              `setsar=1,fps=${decimal(settings.framesPerSecond)},format=yuv420p,` +
+              `trim=duration=${decimal(duration)},setpts=PTS-STARTPTS[${label}]`,
+          );
+        }
+        videoLabels.push(`[${label}]`);
+        videoCursor = item.startSeconds + duration;
+      }
+    }
+    if (videoCursor < playbackEnd) {
+      const label = `vseg${videoLabels.length}`;
+      filters.push(
+        `color=c=black:s=${settings.width}x${settings.height}:r=${decimal(settings.framesPerSecond)}:d=${decimal(playbackEnd - videoCursor)}[${label}]`,
+      );
+      videoLabels.push(`[${label}]`);
+    }
+    if (videoLabels.length === 0) {
+      filters.push(
+        `color=c=black:s=${settings.width}x${settings.height}:r=${decimal(settings.framesPerSecond)}:d=${decimal(playbackEnd)}[vout]`,
+      );
+    } else if (videoLabels.length === 1) {
+      filters.push(`${videoLabels[0]}null[vout]`);
+    } else {
+      filters.push(`${videoLabels.join('')}concat=n=${videoLabels.length}:v=1:a=0[vout]`);
+    }
+
+    const audioLabels: string[] = [];
+    if (settings.includeAudio) {
+      for (const input of inputs) {
+        const { clip, track } = input;
+        const audible =
+          input.hasAudio &&
+          !track.audioMuted &&
+          !clip.audio.muted &&
+          (track.kind === 'Audio' || track.kind === 'Video');
+        if (!audible) continue;
+        const label = `aseg${audioLabels.length}`;
+        const audioFilters = [
+          `atrim=duration=${decimal(clip.durationSeconds * clip.playbackRate)}`,
+          'asetpts=PTS-STARTPTS',
+          ...atempoFilterChain(clip.playbackRate),
+          `volume=${decimal(10 ** (clip.audio.gainDb / 20))}`,
+        ];
+        if (clip.audio.fadeInSeconds > 0) {
+          audioFilters.push(`afade=t=in:st=0:d=${decimal(clip.audio.fadeInSeconds)}`);
+        }
+        if (clip.audio.fadeOutSeconds > 0) {
+          audioFilters.push(
+            `afade=t=out:st=${decimal(Math.max(0, clip.durationSeconds - clip.audio.fadeOutSeconds))}:d=${decimal(clip.audio.fadeOutSeconds)}`,
+          );
+        }
+        audioFilters.push(`adelay=${Math.round(clip.startSeconds * 1_000)}:all=1`);
+        filters.push(`[${input.inputIndex}:a:0]${audioFilters.join(',')}[${label}]`);
+        audioLabels.push(`[${label}]`);
+      }
+      if (audioLabels.length === 1) {
+        filters.push(`${audioLabels[0]}atrim=duration=${decimal(playbackEnd)}[aout]`);
+      } else if (audioLabels.length > 1) {
+        filters.push(
+          `${audioLabels.join('')}amix=inputs=${audioLabels.length}:duration=longest:normalize=0,atrim=duration=${decimal(playbackEnd)}[aout]`,
+        );
+      }
+    }
+    return [
+      '-y',
+      '-v',
+      'error',
+      ...inputArgs,
+      '-filter_complex',
+      filters.join(';'),
+      '-map',
+      '[vout]',
+      ...(audioLabels.length > 0 ? ['-map', '[aout]'] : []),
+      '-c:v',
+      'libx264',
+      '-pix_fmt',
+      'yuv420p',
+      '-r',
+      decimal(settings.framesPerSecond),
+      '-b:v',
+      String(settings.videoBitrate),
+      ...(audioLabels.length > 0
+        ? [
+            '-c:a',
+            'aac',
+            '-b:a',
+            String(settings.audioBitrate),
+            '-ar',
+            String(settings.audioSampleRate),
+          ]
+        : []),
+      '-movflags',
+      '+faststart',
+      stagingPath,
+    ];
+  }
+
+  private async probeAbsolute(path: string, signal?: AbortSignal): Promise<CutMediaProbe> {
+    return this.probePath(path, signal);
+  }
+
+  private resolveSource(source: CutRuntimeMediaSource): string {
+    const value = source.workspaceRelativePath;
+    if (
+      value.length === 0 ||
+      value.includes('\\') ||
+      value.includes('\0') ||
+      nodePath.posix.isAbsolute(value)
+    ) {
+      throw new Error('Cut media source must be a POSIX workspace-relative path.');
+    }
+    const resolved = nodePath.resolve(this.workspaceRoot, ...value.split('/'));
+    assertContained(this.workspaceRoot, resolved);
+    return resolved;
+  }
+
+  private async resolveWritableOutput(workspaceRelativePath: string): Promise<string> {
+    const extension = nodePath.posix.extname(workspaceRelativePath).toLowerCase();
+    if (extension !== '.mp4' && extension !== '.mov') {
+      throw new Error('Cut export requires a workspace-relative .mp4 or .mov output.');
+    }
+    const outputPath = this.resolveSource({ workspaceRelativePath });
+    const [realRoot, realParent] = await Promise.all([
+      nodeFs.realpath(this.workspaceRoot),
+      nodeFs.realpath(nodePath.dirname(outputPath)),
+    ]);
+    assertContained(realRoot, realParent);
+    return nodePath.join(realParent, nodePath.basename(outputPath));
+  }
+
+  private requireSession<TKind extends SessionRecord['kind']>(
+    sessionId: string,
+    kind: TKind,
+  ): Extract<SessionRecord, { readonly kind: TKind }> {
+    const session = this.sessions.get(sessionId);
+    if (!session || session.kind !== kind) {
+      throw new Error(`Unknown Cut ${kind} session: ${sessionId}`);
+    }
+    return session as Extract<SessionRecord, { readonly kind: TKind }>;
+  }
+
+  private newSessionId(kind: 'preview' | 'pcm' | 'export'): string {
+    this.nextSessionId += 1;
+    return `cut-${kind}-${this.nextSessionId}`;
+  }
+
+  private adapterRoot(): Promise<string> {
+    this.adapterRootPromise ??= nodeFs
+      .mkdir(this.cacheRoot, { recursive: true })
+      .then(() => nodeFs.mkdtemp(nodePath.join(this.cacheRoot, 'document-')));
+    return this.adapterRootPromise;
+  }
+
+  private assertUsable(): void {
+    if (this.disposed) throw new Error('Node/FFmpeg Cut media adapter is disposed.');
+  }
+
+  private async assertPreviewRuntimeCapabilities(
+    video: CutMediaVideoStream,
+    profile: CutPreviewPreparationProfile,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (profile !== 'h264-sdr-transcode' || !isHdrVideo(video)) return;
+    const result = await this.process.run('ffmpeg', ['-hide_banner', '-filters'], signal);
+    const filters = parseFfmpegFilterNames(`${result.stdout.toString('utf8')}\n${result.stderr}`);
+    for (const required of ['zscale', 'tonemap']) {
+      if (!filters.has(required)) {
+        throw new CutMediaRuntimeUnavailableError(`HDR preview filter ${required}`);
+      }
+    }
+  }
+}
+
+function buildPreviewArgs(
+  sourcePath: string,
+  outputPath: string,
+  video: CutMediaVideoStream,
+  profile: CutPreviewPreparationProfile,
+  interval: { readonly startTimeSeconds: number; readonly sourceDurationSeconds: number },
+): readonly string[] {
+  const base = [
+    '-y',
+    '-v',
+    'error',
+    '-ss',
+    decimal(interval.startTimeSeconds),
+    '-t',
+    decimal(interval.sourceDurationSeconds),
+    '-i',
+    sourcePath,
+    '-map',
+    '0:v:0',
+    '-an',
+    '-sn',
+    '-dn',
+  ];
+  if (profile === 'vp8-webm-direct') {
+    return [...base, '-c:v', 'copy', '-avoid_negative_ts', 'make_zero', '-f', 'webm', outputPath];
+  }
+  if (profile === 'h264-fragmented-mp4-copy' || profile === 'h264-fragmented-mp4-remux') {
+    return [
+      ...base,
+      '-c:v',
+      'copy',
+      '-avoid_negative_ts',
+      'make_zero',
+      '-movflags',
+      '+frag_keyframe+empty_moov+default_base_moof',
+      '-f',
+      'mp4',
+      outputPath,
+    ];
+  }
+  const fps = Math.max(1, video.framesPerSecond || 30);
+  const keyframeInterval = Math.max(1, Math.round(fps * 2));
+  return [
+    ...base,
+    '-vf',
+    previewVideoFilter(video),
+    '-c:v',
+    'libx264',
+    '-preset',
+    'veryfast',
+    '-profile:v',
+    'high',
+    '-level:v',
+    '4.1',
+    '-g',
+    String(keyframeInterval),
+    '-keyint_min',
+    String(keyframeInterval),
+    '-sc_threshold',
+    '0',
+    '-movflags',
+    '+frag_keyframe+empty_moov+default_base_moof',
+    '-f',
+    'mp4',
+    outputPath,
+  ];
+}
+
+function previewVideoFilter(video: CutMediaVideoStream): string {
+  if (!isHdrVideo(video)) return 'format=yuv420p';
+  return [
+    'zscale=t=linear:npl=100',
+    'format=gbrpf32le',
+    'zscale=p=bt709',
+    'tonemap=hable:desat=0',
+    'zscale=t=bt709:m=bt709:r=tv',
+    'format=yuv420p',
+  ].join(',');
+}
+
+function isHdrVideo(video: CutMediaVideoStream): boolean {
+  return (
+    video.bitDepth !== undefined &&
+    video.bitDepth > 8 &&
+    (video.color?.colorTransfer === 'smpte2084' || video.color?.colorTransfer === 'arib-std-b67')
+  );
+}
+
+function parseFfmpegFilterNames(output: string): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const line of output.split(/\r?\n/u)) {
+    const fields = line.trim().split(/\s+/u);
+    const flags = fields[0];
+    const name = fields[1];
+    if (flags && name && /^[TSC.]{2,3}$/u.test(flags)) names.add(name);
+  }
+  return names;
+}
+
+function classifyMediaCommandError(
+  error: unknown,
+  scope: 'source' | 'stream' | 'interval',
+  operation: string,
+): Error {
+  if (error instanceof FfmpegCommandError && isMediaCorruptionDiagnostic(error.stderr)) {
+    return new CutMediaCorruptionError(scope, operation, compactFfmpegDiagnostic(error.stderr));
+  }
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function isMediaCorruptionDiagnostic(stderr: string): boolean {
+  return /(?:invalid nal unit size|missing picture in access unit|packet corrupt|invalid data found when processing input|channel element \d+\.\d+ is not allocated|error while decoding stream)/iu.test(
+    stderr,
+  );
+}
+
+function compactFfmpegDiagnostic(stderr: string): string {
+  return stderr.trim().split(/\r?\n/u).filter(Boolean).slice(0, 2).join(' ');
+}
+
+function h264MimeType(video: CutMediaVideoStream): string {
+  const profilePrefix =
+    video.profile?.toLowerCase().includes('high') === true
+      ? '6400'
+      : video.profile?.toLowerCase().includes('main') === true
+        ? '4d00'
+        : '42e0';
+  const level = Math.max(10, Math.min(255, videoLevel(video)));
+  return `video/mp4; codecs="avc1.${profilePrefix}${level.toString(16).padStart(2, '0')}"`;
+}
+
+function videoLevel(video: CutMediaVideoStream): number {
+  return video.level ?? 41;
+}
+
+function parseProbeJson(stdout: Buffer): FfprobeJson {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout.toString('utf8'));
+  } catch (error) {
+    throw new Error('ffprobe returned invalid JSON.', { cause: error });
+  }
+  if (!isFfprobeJson(parsed)) throw new Error('ffprobe returned an invalid probe result.');
+  return parsed;
+}
+
+function projectVideoStream(stream: FfprobeStream): CutMediaVideoStream {
+  const width = positiveNumber(stream.width);
+  const height = positiveNumber(stream.height);
+  if (width === undefined || height === undefined) {
+    throw new Error('ffprobe video stream is missing dimensions.');
+  }
+  const streamIndex = nonNegativeInteger(stream.index);
+  const codecName = nonEmptyString(stream.codec_name);
+  return {
+    streamIndex,
+    codecName,
+    ...(stream.profile ? { profile: stream.profile } : {}),
+    ...(stream.level !== undefined ? { level: stream.level } : {}),
+    ...(stream.pix_fmt ? { pixelFormat: stream.pix_fmt } : {}),
+    ...(inferBitDepth(stream) ? { bitDepth: inferBitDepth(stream) } : {}),
+    width,
+    height,
+    framesPerSecond: parseRate(stream.avg_frame_rate ?? stream.r_frame_rate),
+    color: {
+      ...(stream.color_primaries ? { colorPrimaries: stream.color_primaries } : {}),
+      ...(stream.color_transfer ? { colorTransfer: stream.color_transfer } : {}),
+      ...(stream.color_space ? { colorSpace: stream.color_space } : {}),
+      ...(stream.color_range ? { colorRange: stream.color_range } : {}),
+    },
+  };
+}
+
+function isFfprobeJson(value: unknown): value is FfprobeJson {
+  if (!isRecord(value)) return false;
+  if (value['streams'] !== undefined) {
+    if (!Array.isArray(value['streams']) || !value['streams'].every(isFfprobeStream)) {
+      return false;
+    }
+  }
+  if (value['format'] !== undefined) {
+    if (!isRecord(value['format'])) return false;
+    const duration = value['format']['duration'];
+    if (duration !== undefined && typeof duration !== 'string') return false;
+  }
+  return true;
+}
+
+function isFfprobeStream(value: unknown): value is FfprobeStream {
+  if (!isRecord(value)) return false;
+  return (
+    hasOptionalNumber(value, 'index') &&
+    hasOptionalString(value, 'codec_type') &&
+    hasOptionalString(value, 'codec_name') &&
+    hasOptionalString(value, 'profile') &&
+    hasOptionalString(value, 'pix_fmt') &&
+    hasOptionalString(value, 'bits_per_raw_sample') &&
+    hasOptionalNumber(value, 'width') &&
+    hasOptionalNumber(value, 'height') &&
+    hasOptionalString(value, 'r_frame_rate') &&
+    hasOptionalString(value, 'avg_frame_rate') &&
+    hasOptionalString(value, 'duration') &&
+    hasOptionalString(value, 'sample_rate') &&
+    hasOptionalNumber(value, 'channels') &&
+    hasOptionalString(value, 'channel_layout') &&
+    hasOptionalString(value, 'color_primaries') &&
+    hasOptionalString(value, 'color_transfer') &&
+    hasOptionalString(value, 'color_space') &&
+    hasOptionalString(value, 'color_range') &&
+    hasOptionalNumber(value, 'level')
+  );
+}
+
+function hasOptionalString(value: Record<string, unknown>, key: string): boolean {
+  return value[key] === undefined || typeof value[key] === 'string';
+}
+
+function hasOptionalNumber(value: Record<string, unknown>, key: string): boolean {
+  return value[key] === undefined || typeof value[key] === 'number';
+}
+
+function projectAudioStream(stream: FfprobeStream): CutMediaAudioStream {
+  return {
+    streamIndex: nonNegativeInteger(stream.index),
+    codecName: nonEmptyString(stream.codec_name),
+    ...(stream.profile ? { profile: stream.profile } : {}),
+    channels: positiveNumber(stream.channels) ?? 1,
+    ...(stream.channel_layout ? { channelLayout: stream.channel_layout } : {}),
+    sampleRate: positiveNumber(Number(stream.sample_rate)) ?? PCM_SAMPLE_RATE,
+  };
+}
+
+function readDuration(json: FfprobeJson, streams: readonly FfprobeStream[]): number {
+  const formatDuration = positiveNumber(Number(json.format?.duration));
+  if (formatDuration !== undefined) return formatDuration;
+  const streamDuration = streams.reduce(
+    (maximum, stream) => Math.max(maximum, positiveNumber(Number(stream.duration)) ?? 0),
+    0,
+  );
+  if (streamDuration <= 0) throw new Error('ffprobe returned no positive media duration.');
+  return streamDuration;
+}
+
+function parseRate(value: string | undefined): number {
+  if (!value) return 0;
+  const [numeratorText, denominatorText] = value.split('/');
+  const numerator = Number(numeratorText);
+  const denominator = Number(denominatorText ?? 1);
+  return Number.isFinite(numerator) && Number.isFinite(denominator) && denominator > 0
+    ? numerator / denominator
+    : 0;
+}
+
+function inferBitDepth(stream: FfprobeStream): number | undefined {
+  const explicit = Number(stream.bits_per_raw_sample);
+  if (Number.isInteger(explicit) && explicit > 0) return explicit;
+  const match = /(?:p|yuv)\d*(10|12|16)(?:le|be)?/u.exec(stream.pix_fmt ?? '');
+  return match?.[1] ? Number(match[1]) : stream.pix_fmt ? 8 : undefined;
+}
+
+function toFloat32(buffer: Buffer): Float32Array {
+  const length = Math.floor(buffer.byteLength / Float32Array.BYTES_PER_ELEMENT);
+  const copy = buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + length * Float32Array.BYTES_PER_ELEMENT,
+  );
+  return new Float32Array(copy);
+}
+
+function atempoFilter(playbackRate: number): string | undefined {
+  const filters = atempoFilterChain(playbackRate);
+  return filters.length > 0 ? filters.join(',') : undefined;
+}
+
+function atempoFilterChain(playbackRate: number): string[] {
+  if (Math.abs(playbackRate - 1) < 0.000001) return [];
+  const filters: string[] = [];
+  let remaining = playbackRate;
+  while (remaining > 2) {
+    filters.push('atempo=2');
+    remaining /= 2;
+  }
+  while (remaining < 0.5) {
+    filters.push('atempo=0.5');
+    remaining /= 0.5;
+  }
+  filters.push(`atempo=${decimal(remaining)}`);
+  return filters;
+}
+
+function validatePreviewInterval(options: {
+  readonly startTimeSeconds: number;
+  readonly durationSeconds: number;
+  readonly playbackRate: number;
+}): void {
+  assertNonNegativeFinite(options.startTimeSeconds, 'preview start');
+  assertPositiveFinite(options.durationSeconds, 'preview duration');
+  assertPositiveFinite(options.playbackRate, 'preview playback rate');
+}
+
+async function resolveTimelineSource(
+  realRoot: string,
+  documentPath: string,
+  targetUrl: string,
+): Promise<string> {
+  if (!targetUrl || targetUrl.includes('\\') || nodePath.posix.isAbsolute(targetUrl)) {
+    throw new Error('Cut timeline target must be a POSIX relative path.');
+  }
+  const resolved = nodePath.resolve(nodePath.dirname(documentPath), ...targetUrl.split('/'));
+  const realSource = await nodeFs.realpath(resolved);
+  assertContained(realRoot, realSource);
+  return realSource;
+}
+
+function validateExportProbe(
+  probe: CutMediaProbe,
+  expectedDurationSeconds: number,
+  framesPerSecond: number,
+): void {
+  if (!probe.hasVideo || probe.durationSeconds <= 0) {
+    throw new Error('Node/FFmpeg export validation returned no video.');
+  }
+  const tolerance = 1 / framesPerSecond + 0.05;
+  if (Math.abs(probe.durationSeconds - expectedDurationSeconds) > tolerance) {
+    throw new Error(
+      `Node/FFmpeg export duration ${probe.durationSeconds}s does not match timeline duration ${expectedDurationSeconds}s.`,
+    );
+  }
+}
+
+async function replaceOutputAtomically(
+  stagingPath: string,
+  outputPath: string,
+  jobId: string,
+): Promise<void> {
+  const backupPath = `${outputPath}.${jobId}.backup`;
+  let backedUp = false;
+  try {
+    await nodeFs.rename(outputPath, backupPath);
+    backedUp = true;
+  } catch (error) {
+    if (!isMissingFileError(error)) throw error;
+  }
+  try {
+    await nodeFs.rename(stagingPath, outputPath);
+    if (backedUp) await nodeFs.rm(backupPath, { force: true });
+  } catch (error) {
+    if (backedUp) await nodeFs.rename(backupPath, outputPath);
+    throw error;
+  }
+}
+
+function assertContained(root: string, candidate: string): void {
+  const relative = nodePath.relative(nodePath.resolve(root), nodePath.resolve(candidate));
+  if (
+    relative === '..' ||
+    relative.startsWith(`..${nodePath.sep}`) ||
+    nodePath.isAbsolute(relative)
+  ) {
+    throw new Error('Cut path escapes the workspace.');
+  }
+}
+
+function decimal(value: number): string {
+  if (!Number.isFinite(value)) throw new Error('FFmpeg numeric argument must be finite.');
+  return value.toFixed(6).replace(/\.?0+$/u, '');
+}
+
+function assertPositiveFinite(value: number, label: string): void {
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${label} must be positive.`);
+}
+
+function assertNonNegativeFinite(value: number, label: string): void {
+  if (!Number.isFinite(value) || value < 0) throw new Error(`${label} must be non-negative.`);
+}
+
+function assertPositiveInteger(value: number, label: string): void {
+  if (!Number.isInteger(value) || value <= 0)
+    throw new Error(`${label} must be a positive integer.`);
+}
+
+function positiveNumber(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function nonNegativeInteger(value: number | undefined): number {
+  if (!Number.isInteger(value) || (value ?? -1) < 0) {
+    throw new Error('ffprobe stream is missing a valid stream index.');
+  }
+  return value as number;
+}
+
+function nonEmptyString(value: string | undefined): string {
+  if (!value) throw new Error('ffprobe stream is missing a codec name.');
+  return value;
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return isRecord(error) && error['code'] === 'ENOENT';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

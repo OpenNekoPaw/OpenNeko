@@ -11,7 +11,7 @@
     "./*": "./src/*"
   },
   "dependencies": {
-    "@neko/neko-client": "workspace:*",
+    "@neko/media": "workspace:*",
     "@neko/shared": "workspace:*"
   },
   "license": "AGPL-3.0-or-later"

@@ -15,7 +15,7 @@
 - **Board 约定**：`neko/boards/workspace.nkc` 是工作区默认 Board；其他 `neko/boards/*.nkc` 仍是可显式打开和定向写入的普通 Canvas 文档，不存在会话 Board、Draft 格式或 profile 转换
 - **子包**：`extension/`（Host）、`webview/`（React UI）
 - **依赖**：`@neko/shared`
-- **激活依赖**：neko-engine、neko-tools、neko-preview
+- **媒体依赖**：`@neko/media`、neko-tools、neko-preview
 - **节点类型（现有）**：Media / Storyboard / Annotation / Text / Artboard / Group / Shot / Scene / Gallery / Script / Document / Model / CanvasEmbed（13 种）
 - **核心功能**：富文本编辑、分组管理、连接标签、图层面板、画板导出（PNG/SVG）、原地粘贴、分镜候选审阅、场景容器排序、输入引用节点投放
 - **布局**：Webview 使用 Creative Workbench Shell：左侧 CanvasToolbar 承接 Pan/Add/Import/Undo/Redo 等全局画布工具，底部显隐组承接 HUD（MiniMap/ZoomControls）与右侧 NodeLibrary 显隐；FloatingPanelHost、PlaybackControllerHost、GenerationPromptPanel、ContentOverlay 保留为主面板控件或 overlay；NodeLibrary 作为右侧创建面板。
@@ -36,7 +36,7 @@ Webview (React + Vite)
   ├── InfiniteCanvas        → 无限画布（CSS Transform 平移/缩放）
   ├── NodeLayer             → DOM 节点渲染（13 种节点类型）
   ├── ConnectionLayer       → SVG 贝塞尔曲线连线 + 类型化端口
-  ├── InlineMediaPlayer     → H.264+PCM 流式内联播放（WebCodecs）
+  ├── InlineMediaPlayer     → 原生 `<video>` + PCM 主时钟
   ├── ViewportCulling       → AABB 视口裁剪（仅渲染可见节点）
   ├── GenerationPromptPanel → 内嵌 AI 生图对话框（委托 neko-agent）
   └── Zustand Store         → 画布状态 + EditOperation 记录
@@ -58,7 +58,7 @@ packages/
 
 ### 技术栈
 
-DOM / SVG / CSS Transform、Canvas 2D（媒体帧）、WebCodecs（H.264 解码）、React 18、Zustand、Tailwind CSS、Vite
+DOM / SVG / CSS Transform、原生 `<video>`、Web Audio、React 18、Zustand、Tailwind CSS、Vite
 
 ### EditOperation 集成
 

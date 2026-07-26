@@ -2,15 +2,15 @@
  * Neko Preview Extension
  *
  * Lightweight media preview for video and audio files,
- * powered by neko-engine's hardware-accelerated pipeline.
+ * powered by the local Node/FFmpeg media runtime.
  *
  * Architecture:
  * extension.ts → VideoPreviewProvider / AudioPreviewProvider
- *   → PreviewService → EngineClient (HTTP) → neko-engine Frame Server
- *   → Webview (H264StreamClient / Web Audio API)
+ *   → PreviewService → NodeMediaRuntime → local FFmpeg and tokenized loopback media
+ *   → Webview (`<video>` / Web Audio API)
  *
- * Exports NekoPreviewAPI for other extensions (e.g. neko-canvas)
- * to share the same engine connection and frame server.
+ * Exports NekoPreviewAPI for host-side probe, frame capture, and authorized
+ * preview asset registration.
  */
 
 import * as vscode from 'vscode';
@@ -111,9 +111,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
         sharedPreviewService = service;
         if (service) {
           context.subscriptions.push(service);
-          logger.info(`Shared PreviewService ready (port: ${service.port})`);
+          logger.info('Shared Node/FFmpeg PreviewService ready.');
         } else {
-          logger.warn('Failed to create PreviewService — native engine unavailable');
+          logger.warn('Failed to create PreviewService — Node/FFmpeg runtime unavailable');
         }
         return service;
       });
@@ -626,56 +626,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
     get isAvailable() {
       return sharedPreviewService?.isAvailable ?? false;
     },
-    get port() {
-      return sharedPreviewService?.port ?? null;
-    },
-    getStreamWebSocketUrl(streamId: string) {
-      return sharedPreviewService?.getStreamWebSocketUrl(streamId) ?? null;
-    },
-    getPreviewBaseUrl() {
-      return sharedPreviewService?.getPreviewBaseUrl() ?? null;
-    },
     probeMedia(filePath: string) {
       if (!sharedPreviewService?.isAvailable) {
         return Promise.reject(new Error('PreviewService not available'));
       }
       return sharedPreviewService.probeMedia(filePath);
-    },
-    startPlayback(filePath, mediaInfo, startTime = 0, speed = 1.0) {
-      if (!sharedPreviewService?.isAvailable) {
-        return Promise.reject(new Error('PreviewService not available'));
-      }
-      return sharedPreviewService.startVideoPlayback(filePath, mediaInfo, startTime, speed);
-    },
-    stopStreams(videoStreamId, audioStreamId) {
-      if (!sharedPreviewService?.isAvailable) {
-        return Promise.resolve();
-      }
-      return sharedPreviewService.stopStreams(videoStreamId, audioStreamId);
-    },
-    seekStreams(videoStreamId, audioStreamId, time) {
-      if (!sharedPreviewService?.isAvailable) {
-        return Promise.resolve();
-      }
-      return sharedPreviewService.seekStreams(videoStreamId, audioStreamId, time);
-    },
-    pauseStreams(videoStreamId, audioStreamId) {
-      if (!sharedPreviewService?.isAvailable) {
-        return Promise.resolve();
-      }
-      return sharedPreviewService.pauseStreams(videoStreamId, audioStreamId);
-    },
-    resumeStreams(videoStreamId, audioStreamId) {
-      if (!sharedPreviewService?.isAvailable) {
-        return Promise.resolve();
-      }
-      return sharedPreviewService.resumeStreams(videoStreamId, audioStreamId);
-    },
-    setStreamSpeed(videoStreamId, audioStreamId, speed) {
-      if (!sharedPreviewService?.isAvailable) {
-        return Promise.resolve();
-      }
-      return sharedPreviewService.setStreamSpeed(videoStreamId, audioStreamId, speed);
     },
     captureFrame(filePath, time, quality = 80) {
       if (!sharedPreviewService?.isAvailable) {

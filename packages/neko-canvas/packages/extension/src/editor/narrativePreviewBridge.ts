@@ -1115,7 +1115,7 @@ export class NarrativePreviewBridge implements vscode.Disposable {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}'; img-src ${webview.cspSource} data: blob: https:; font-src ${webview.cspSource}; media-src ${webview.cspSource} data: blob: https:; connect-src ws://127.0.0.1:* http://127.0.0.1:*;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}'; img-src ${webview.cspSource} data: blob: https:; font-src ${webview.cspSource}; media-src ${webview.cspSource} data: blob: https: http://127.0.0.1:*; connect-src ws://127.0.0.1:* http://127.0.0.1:*;">
   <title>${h(i18n.title)}</title>
   <style>
     :root {
@@ -3386,7 +3386,7 @@ function createNarrativePreviewI18n(): NarrativePreviewI18n {
     ),
     mediaStreamTimeout: t(
       'neko.canvas.preview.mediaStreamTimeout',
-      'Media stream timed out. Check the media engine connection.',
+      'Media stream timed out. Check the local media runtime connection.',
     ),
     storyboardShot: t('neko.canvas.preview.storyboardShot', 'Storyboard shot'),
     storyboardShotUnavailableDescription: t(

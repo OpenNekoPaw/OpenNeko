@@ -5,6 +5,7 @@ import {
   ExportJobCoordinator,
   type ExportEnginePort,
   type ExportEngineProgress,
+  type ExportJobCommandInput,
   type ExportJobResultCommitter,
   type ExportJobSnapshot,
   type ExportJobStore,

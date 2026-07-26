@@ -2,7 +2,7 @@
  * Animation Utilities
  * 动画工具函数
  *
- * Rendering-time animation is handled by neko-engine. This Webview helper only
+ * Rendering-time animation is handled by the selected media adapter. This Webview helper only
  * projects easing used by the retained lightweight speed mapping.
  */
 

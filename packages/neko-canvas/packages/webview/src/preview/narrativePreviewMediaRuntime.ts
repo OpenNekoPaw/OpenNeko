@@ -1,12 +1,17 @@
-import {
-  EngineAvStreamLifecycle,
-  type EngineAvAudioStreamClient,
-  type EngineAvFrameScheduler,
-  type EngineAvVideoStreamClient,
-  formatTime,
-} from '@neko/neko-client';
+import { formatMediaTime, type HtmlVideoDescriptor, type PcmStreamDescriptor } from '@neko/media';
+import { PcmAudioClient } from '@neko/media/browser';
 
 type PreviewMediaType = 'audio' | 'video';
+type RuntimeEventType = 'ready' | 'timeUpdate' | 'ended' | 'error';
+
+interface PreviewMediaLabels {
+  readonly play?: string;
+  readonly pause?: string;
+  readonly loading?: string;
+  readonly preparing?: string;
+  readonly probeTimeout?: string;
+  readonly streamTimeout?: string;
+}
 
 interface PreviewMediaMountRequest {
   readonly surfaceId: string;
@@ -29,22 +34,6 @@ interface PreviewMediaStartRequest {
   readonly autoPlay?: boolean;
 }
 
-interface PreviewMediaStreamReadyMessage {
-  readonly type: 'media:streamReady';
-  readonly nodeId?: unknown;
-  readonly videoStreamUrl?: unknown;
-  readonly audioStreamUrl?: unknown;
-  readonly mediaInfo?: unknown;
-  readonly error?: unknown;
-}
-
-interface PreviewMediaProbeResultMessage {
-  readonly type: 'media:probeResult';
-  readonly nodeId?: unknown;
-  readonly mediaInfo?: unknown;
-  readonly error?: unknown;
-}
-
 interface PreviewMediaRuntimeApi {
   mount(request: PreviewMediaMountRequest): void;
   start(request: PreviewMediaStartRequest): void;
@@ -56,64 +45,44 @@ interface PreviewMediaRuntimeApi {
   handleHostMessage(message: unknown): void;
 }
 
-type PreviewMediaRuntimeEventType = 'ready' | 'timeUpdate' | 'ended' | 'error';
-
-interface PlayerState {
-  readonly surfaceId: string;
-  readonly mediaType: PreviewMediaType;
-  readonly container: HTMLElement;
-  readonly root: HTMLElement;
-  readonly canvas?: HTMLCanvasElement;
-  readonly audioVisualization?: HTMLElement;
-  readonly title: HTMLElement;
-  readonly time: HTMLElement;
-  readonly progress: HTMLInputElement;
-  readonly playButton: HTMLButtonElement;
-  readonly message: HTMLElement;
-  readonly labels: NormalizedPreviewMediaLabels;
-  readonly posterUrl?: string;
-  readonly label?: string;
-  lastStartRequest?: PreviewMediaStartRequest;
-  probeMediaInfo?: Record<string, unknown>;
-  assetPath?: string;
-  resourceRef?: unknown;
-  documentResourceRef?: unknown;
-  videoClient?: EngineAvVideoStreamClient;
-  audioClient?: EngineAvAudioStreamClient;
-  scheduler?: EngineAvFrameScheduler;
-  lifecycle: EngineAvStreamLifecycle;
-  animationFrameId?: number;
-  requestTimeoutId?: number;
-  pendingRequestStage?: 'probe' | 'stream';
-  currentTime: number;
-  duration: number;
-  fps: number;
-  width: number;
-  height: number;
-  isPlaying: boolean;
-  shouldPlayWhenReady: boolean;
-  waitingForStream: boolean;
-  playStartTime: number;
-  playWallTime: number;
-  clockSource: 'wall' | 'audio';
-}
-
-interface PreviewMediaLabels {
-  readonly play?: string;
-  readonly pause?: string;
-  readonly loading?: string;
-  readonly preparing?: string;
-  readonly probeTimeout?: string;
-  readonly streamTimeout?: string;
-}
-
-interface NormalizedPreviewMediaLabels {
+interface NormalizedLabels {
   readonly play: string;
   readonly pause: string;
   readonly loading: string;
   readonly preparing: string;
   readonly probeTimeout: string;
   readonly streamTimeout: string;
+}
+
+interface PlayerState {
+  readonly surfaceId: string;
+  readonly mediaType: PreviewMediaType;
+  readonly container: HTMLElement;
+  readonly root: HTMLElement;
+  readonly video?: HTMLVideoElement;
+  readonly audioVisualization?: HTMLElement;
+  readonly progress: HTMLInputElement;
+  readonly time: HTMLElement;
+  readonly playButton: HTMLButtonElement;
+  readonly message: HTMLElement;
+  readonly labels: NormalizedLabels;
+  lastStartRequest?: PreviewMediaStartRequest;
+  probeMediaInfo?: Record<string, unknown>;
+  assetPath?: string;
+  resourceRef?: unknown;
+  documentResourceRef?: unknown;
+  audioContext?: AudioContext;
+  audioClient?: PcmAudioClient;
+  animationFrameId?: number;
+  timeoutId?: number;
+  pendingStage?: 'probe' | 'stream';
+  generation: number;
+  currentTime: number;
+  duration: number;
+  playbackRate: number;
+  isPlaying: boolean;
+  shouldPlayWhenReady: boolean;
+  waitingForStream: boolean;
 }
 
 declare global {
@@ -125,7 +94,9 @@ declare global {
 
 const DEFAULT_DURATION_SECONDS = 1.2;
 const DEFAULT_VOLUME = 0.8;
-const DEFAULT_LABELS: NormalizedPreviewMediaLabels = {
+const HOST_RESPONSE_TIMEOUT_MS = 10_000;
+const VIDEO_SYNC_THRESHOLD_SECONDS = 0.08;
+const DEFAULT_LABELS: NormalizedLabels = {
   play: 'Play',
   pause: 'Pause',
   loading: 'Loading media stream...',
@@ -133,54 +104,32 @@ const DEFAULT_LABELS: NormalizedPreviewMediaLabels = {
   probeTimeout: 'Media probe timed out.',
   streamTimeout: 'Media stream timed out.',
 };
-const HOST_MEDIA_RESPONSE_TIMEOUT_MS = 10_000;
 const players = new Map<string, PlayerState>();
 
-function createRuntime(): PreviewMediaRuntimeApi {
-  return {
-    mount,
-    start,
-    pause,
-    resume,
-    seek,
-    stop,
-    dispose,
-    handleHostMessage,
-  };
-}
-
 function mount(request: PreviewMediaMountRequest): void {
-  const existing = players.get(request.surfaceId);
-  if (existing) {
-    dispose(request.surfaceId);
-  }
-
+  dispose(request.surfaceId);
   const root = document.createElement('div');
   root.className = 'neko-preview-media-player';
   root.dataset.mediaType = request.mediaType;
-
   const viewport = document.createElement('div');
   viewport.className = 'neko-preview-media-viewport';
-
   const title = document.createElement('div');
   title.className = 'neko-preview-media-title';
   title.textContent = request.label ?? request.mediaType;
-
   const message = document.createElement('div');
   message.className = 'neko-preview-media-message';
   const labels = normalizeLabels(request.labels);
   message.textContent = labels.loading;
-
-  const canvas = request.mediaType === 'video' ? document.createElement('canvas') : undefined;
+  const video = request.mediaType === 'video' ? document.createElement('video') : undefined;
+  if (video) {
+    video.className = 'neko-preview-video-surface';
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    viewport.appendChild(video);
+  }
   const audioVisualization = request.mediaType === 'audio' ? createAudioVisualization() : undefined;
-
-  if (canvas) {
-    canvas.className = 'neko-preview-video-surface';
-    viewport.appendChild(canvas);
-  }
-  if (audioVisualization) {
-    viewport.appendChild(audioVisualization);
-  }
+  if (audioVisualization) viewport.appendChild(audioVisualization);
   if (request.posterUrl) {
     const poster = document.createElement('img');
     poster.className = 'neko-preview-media-poster';
@@ -189,112 +138,70 @@ function mount(request: PreviewMediaMountRequest): void {
     viewport.appendChild(poster);
   }
   viewport.appendChild(message);
-
   const controls = document.createElement('div');
   controls.className = 'neko-preview-media-controls';
-
   const playButton = document.createElement('button');
   playButton.type = 'button';
   playButton.className = 'neko-preview-media-play';
-  playButton.textContent = labels.pause;
-
   const progress = document.createElement('input');
   progress.type = 'range';
   progress.className = 'neko-preview-media-progress';
   progress.min = '0';
-  progress.max = String(Math.max(request.duration ?? DEFAULT_DURATION_SECONDS, 0.1));
   progress.step = '0.01';
-  progress.value = String(request.startTime ?? 0);
-
   const time = document.createElement('span');
   time.className = 'neko-preview-media-time';
-  time.textContent = `${formatTime(request.startTime ?? 0)} / ${formatTime(
-    request.duration ?? DEFAULT_DURATION_SECONDS,
-  )}`;
-
   controls.append(playButton, progress, time);
   root.append(title, viewport, controls);
   request.container.replaceChildren(root);
-
-  const lifecycle = new EngineAvStreamLifecycle({
-    callbacks: {
-      onClientsChanged: ({ videoClient, audioClient, scheduler }) => {
-        const current = players.get(request.surfaceId);
-        if (!current) return;
-        current.videoClient = videoClient ?? undefined;
-        current.audioClient = audioClient ?? undefined;
-        current.scheduler = scheduler ?? undefined;
-      },
-    },
-  });
-
   const player: PlayerState = {
     surfaceId: request.surfaceId,
     mediaType: request.mediaType,
     container: request.container,
     root,
-    canvas,
-    audioVisualization,
-    title,
-    time,
+    ...(video ? { video } : {}),
+    ...(audioVisualization ? { audioVisualization } : {}),
     progress,
+    time,
     playButton,
     message,
     labels,
-    posterUrl: request.posterUrl,
-    label: request.label,
+    generation: 0,
     currentTime: request.startTime ?? 0,
     duration: request.duration ?? DEFAULT_DURATION_SECONDS,
-    fps: 30,
-    width: 640,
-    height: 360,
+    playbackRate: 1,
     isPlaying: false,
     shouldPlayWhenReady: false,
     waitingForStream: true,
-    playStartTime: request.startTime ?? 0,
-    playWallTime: performance.now(),
-    clockSource: 'wall',
-    lifecycle,
   };
   players.set(request.surfaceId, player);
-
   playButton.addEventListener('click', () => {
-    if (player.isPlaying) {
-      pause(player.surfaceId);
-    } else {
-      resume(player.surfaceId);
-    }
+    activateAudioContext(player);
+    if (player.isPlaying) pause(player.surfaceId);
+    else resume(player.surfaceId);
   });
   progress.addEventListener('input', () => {
     player.currentTime = Number(progress.value);
-    renderPlayer(player);
+    render(player);
   });
-  progress.addEventListener('change', () => {
-    seek(player.surfaceId, Number(progress.value));
-  });
-
-  renderPlayer(player);
+  progress.addEventListener('change', () => seek(player.surfaceId, Number(progress.value)));
+  render(player);
 }
 
 function start(request: PreviewMediaStartRequest): void {
   const player = players.get(request.surfaceId);
-  if (!player) {
-    return;
-  }
+  if (!player) return;
+  activateAudioContext(player);
   player.lastStartRequest = request;
   player.probeMediaInfo = undefined;
   player.assetPath = request.assetPath;
   player.resourceRef = request.resourceRef;
   player.documentResourceRef = request.documentResourceRef;
+  player.currentTime = request.startTime ?? player.currentTime;
   player.shouldPlayWhenReady = request.autoPlay === true;
-  player.waitingForStream = true;
-  player.message.textContent = player.labels.preparing;
-  player.root.dataset.state = 'loading';
-  scheduleHostResponseTimeout(player, 'probe');
-  renderPlayer(player);
+  setLoading(player, 'probe');
   postHostMessage({
     type: 'media:probe',
-    nodeId: request.surfaceId,
+    nodeId: player.surfaceId,
     assetPath: request.assetPath,
     resourceRef: request.resourceRef,
     documentResourceRef: request.documentResourceRef,
@@ -307,65 +214,52 @@ function pause(surfaceId: string): void {
   if (!player) return;
   player.isPlaying = false;
   player.shouldPlayWhenReady = false;
-  player.audioClient?.pause();
-  player.scheduler?.flush();
-  cancelPlayerFrame(player);
+  player.video?.pause();
+  void player.audioClient?.pause();
+  cancelFrame(player);
   postHostMessage({ type: 'media:pause', nodeId: surfaceId });
-  renderPlayer(player);
+  render(player);
 }
 
 function resume(surfaceId: string): void {
   const player = players.get(surfaceId);
   if (!player) return;
+  activateAudioContext(player);
   player.shouldPlayWhenReady = true;
   if (player.waitingForStream) {
-    renderPlayer(player);
+    render(player);
     return;
   }
-  if (shouldRestartMediaProbe(player)) {
+  if (!player.probeMediaInfo) {
     const request = player.lastStartRequest;
-    if (request) {
-      start({ ...request, autoPlay: true, startTime: player.currentTime });
-    }
+    if (request) start({ ...request, autoPlay: true, startTime: player.currentTime });
     return;
   }
-  if (!player.videoClient && !player.audioClient) {
-    requestMediaStream(player);
+  if (!player.audioClient && !player.video?.src) {
+    requestStream(player);
     return;
   }
   player.isPlaying = true;
-  player.audioClient?.resume();
-  player.playStartTime = player.currentTime;
-  player.playWallTime = performance.now();
-  player.clockSource = 'wall';
+  void player.audioClient?.resume();
+  void player.video?.play();
   postHostMessage({ type: 'media:resume', nodeId: surfaceId });
-  schedulePlaybackLoop(player);
-  renderPlayer(player);
-}
-
-function shouldRestartMediaProbe(player: PlayerState): boolean {
-  if (player.waitingForStream) {
-    return false;
-  }
-  if (player.root.dataset.state === 'error') {
-    return true;
-  }
-  return !player.probeMediaInfo && !player.videoClient && !player.audioClient;
+  scheduleClock(player);
+  render(player);
 }
 
 function seek(surfaceId: string, time: number): void {
   const player = players.get(surfaceId);
   if (!player) return;
-  const nextTime = clamp(time, 0, player.duration);
-  player.currentTime = nextTime;
-  player.playStartTime = nextTime;
-  player.playWallTime = performance.now();
-  player.clockSource = 'wall';
-  player.scheduler?.flush();
-  player.videoClient?.resetDecoder?.();
-  player.audioClient?.resetClock();
-  postHostMessage({ type: 'media:seek', nodeId: surfaceId, time: nextTime });
-  renderPlayer(player);
+  player.currentTime = clamp(time, 0, player.duration);
+  teardownStreams(player);
+  setLoading(player, 'stream');
+  postHostMessage({
+    type: 'media:seek',
+    nodeId: surfaceId,
+    time: player.currentTime,
+    speed: player.playbackRate,
+  });
+  render(player);
 }
 
 function stop(surfaceId: string): void {
@@ -373,10 +267,9 @@ function stop(surfaceId: string): void {
   if (!player) return;
   player.isPlaying = false;
   player.shouldPlayWhenReady = false;
-  player.audioClient?.pause();
-  cancelPlayerFrame(player);
+  teardownStreams(player);
   postHostMessage({ type: 'media:stop', nodeId: surfaceId });
-  renderPlayer(player);
+  render(player);
 }
 
 function dispose(surfaceId: string): void {
@@ -384,247 +277,199 @@ function dispose(surfaceId: string): void {
   if (!player) return;
   players.delete(surfaceId);
   teardownStreams(player);
-  player.lifecycle.dispose();
+  if (player.audioContext?.state !== 'closed') void player.audioContext?.close();
   postHostMessage({ type: 'media:stop', nodeId: surfaceId });
   player.container.replaceChildren();
 }
 
 function handleHostMessage(message: unknown): void {
-  if (!isRecord(message) || typeof message.type !== 'string') {
-    return;
-  }
-  if (message.type === 'media:probeResult') {
-    handleProbeResult(message as unknown as PreviewMediaProbeResultMessage);
-  } else if (message.type === 'media:streamReady') {
-    handleStreamReady(message as unknown as PreviewMediaStreamReadyMessage);
-  }
+  if (!isRecord(message) || typeof message['type'] !== 'string') return;
+  if (message['type'] === 'media:probeResult') handleProbeResult(message);
+  if (message['type'] === 'media:streamReady') void handleStreamReady(message);
 }
 
-function handleProbeResult(message: PreviewMediaProbeResultMessage): void {
-  const surfaceId = typeof message.nodeId === 'string' ? message.nodeId : undefined;
-  const player = surfaceId ? players.get(surfaceId) : undefined;
+function handleProbeResult(message: Record<string, unknown>): void {
+  const player = findPlayer(message['nodeId']);
   if (!player) return;
-  clearHostResponseTimeout(player, 'probe');
-  if (message.error) {
-    showError(player, String(message.error));
+  clearTimeoutFor(player, 'probe');
+  if (message['error']) {
+    showError(player, String(message['error']));
     return;
   }
-  player.waitingForStream = true;
-  player.message.textContent = player.labels.preparing;
-  player.root.dataset.state = 'loading';
-  const mediaInfo = isRecord(message.mediaInfo) ? message.mediaInfo : {};
+  const mediaInfo = isRecord(message['mediaInfo']) ? message['mediaInfo'] : {};
   player.probeMediaInfo = mediaInfo;
-  const duration = readNumber(mediaInfo.duration);
-  if (duration !== undefined && duration > 0) {
-    player.duration = duration;
-  }
-  const width = readNumber(mediaInfo.width);
-  const height = readNumber(mediaInfo.height);
-  const fps = readNumber(mediaInfo.fps);
-  player.width = width ?? player.width;
-  player.height = height ?? player.height;
-  player.fps = fps ?? player.fps;
+  player.duration = readNumber(mediaInfo['duration']) ?? player.duration;
   player.progress.max = String(Math.max(player.duration, 0.1));
-  if (player.shouldPlayWhenReady) {
-    requestMediaStream(player);
-    return;
+  if (player.shouldPlayWhenReady) requestStream(player);
+  else {
+    player.waitingForStream = false;
+    player.message.textContent = '';
+    player.root.dataset.state = 'ready';
+    render(player);
+    dispatch(player, 'ready');
   }
-  player.waitingForStream = false;
-  player.message.textContent = '';
-  player.root.dataset.state = 'ready';
-  renderPlayer(player);
-  dispatchMediaRuntimeEvent(player, 'ready');
 }
 
-function requestMediaStream(player: PlayerState): void {
-  const mediaInfo = player.probeMediaInfo;
-  if (!mediaInfo) {
-    const request = player.lastStartRequest;
-    if (request) {
-      start({ ...request, autoPlay: true, startTime: player.currentTime });
-      return;
-    }
-    showError(player, player.labels.preparing);
+function requestStream(player: PlayerState): void {
+  if (!player.probeMediaInfo) {
+    showError(player, 'Media probe metadata is unavailable.');
     return;
   }
-  player.shouldPlayWhenReady = true;
-  player.waitingForStream = true;
-  player.message.textContent = player.labels.preparing;
-  player.root.dataset.state = 'loading';
-  scheduleHostResponseTimeout(player, 'stream');
-  renderPlayer(player);
+  setLoading(player, 'stream');
   postHostMessage({
     type: 'media:play',
     nodeId: player.surfaceId,
     assetPath: player.assetPath,
     resourceRef: player.resourceRef,
     documentResourceRef: player.documentResourceRef,
-    mediaInfo,
+    mediaInfo: player.probeMediaInfo,
     mediaType: player.mediaType,
     startTime: player.currentTime,
-    speed: 1,
+    speed: player.playbackRate,
   });
 }
 
-function handleStreamReady(message: PreviewMediaStreamReadyMessage): void {
-  const surfaceId = typeof message.nodeId === 'string' ? message.nodeId : undefined;
-  const player = surfaceId ? players.get(surfaceId) : undefined;
+async function handleStreamReady(message: Record<string, unknown>): Promise<void> {
+  const player = findPlayer(message['nodeId']);
   if (!player) return;
-  clearHostResponseTimeout(player, 'stream');
-  if (message.error) {
-    showError(player, String(message.error));
+  clearTimeoutFor(player, 'stream');
+  if (message['error']) {
+    showError(player, String(message['error']));
     return;
   }
   teardownStreams(player);
-  const mediaInfo = isRecord(message.mediaInfo) ? message.mediaInfo : {};
-  player.duration = readNumber(mediaInfo.duration) ?? player.duration;
-  player.width = readNumber(mediaInfo.width) ?? player.width;
-  player.height = readNumber(mediaInfo.height) ?? player.height;
-  player.fps = readNumber(mediaInfo.fps) ?? player.fps;
-  player.progress.max = String(Math.max(player.duration, 0.1));
-  player.waitingForStream = false;
-  player.message.textContent = '';
-  player.root.dataset.state = 'playing';
-
-  const videoStreamUrl =
-    typeof message.videoStreamUrl === 'string' ? message.videoStreamUrl : undefined;
-  const audioStreamUrl =
-    typeof message.audioStreamUrl === 'string' ? message.audioStreamUrl : undefined;
-
-  void player.lifecycle
-    .start({
-      video:
-        player.mediaType === 'video' && videoStreamUrl
-          ? {
-              websocketUrl: videoStreamUrl,
-              width: player.width,
-              height: player.height,
-              onFrame: (frame) => handleVideoFrame(player, frame),
-              onError: (error) => showError(player, String(error)),
-            }
-          : undefined,
-      audio: audioStreamUrl
-        ? {
-            websocketUrl: audioStreamUrl,
-            volume: DEFAULT_VOLUME,
-            onError: (error) => showError(player, String(error)),
-          }
-        : undefined,
-      fps: player.fps,
-      schedulerMode: player.mediaType === 'video' ? 'video' : 'none',
-      videoFrameRoute: 'callback',
-    })
-    .catch((error) => showError(player, String(error)));
-
-  player.isPlaying = player.shouldPlayWhenReady;
-  player.playStartTime = player.currentTime;
-  player.playWallTime = performance.now();
-  player.clockSource = 'wall';
-  if (player.isPlaying) {
-    schedulePlaybackLoop(player);
-  } else {
-    player.audioClient?.pause();
-    postHostMessage({ type: 'media:pause', nodeId: player.surfaceId });
-  }
-  renderPlayer(player);
-  dispatchMediaRuntimeEvent(player, 'ready');
-}
-
-function handleVideoFrame(player: PlayerState, frame: VideoFrame): void {
-  if (!player.isPlaying) {
-    drawVideoFrame(player, frame);
-    return;
-  }
-  if (player.scheduler) {
-    player.scheduler.enqueue(frame);
-    return;
-  }
-  drawVideoFrame(player, frame);
-}
-
-function schedulePlaybackLoop(player: PlayerState): void {
-  cancelPlayerFrame(player);
-  const tick = () => {
-    if (!player.isPlaying) {
+  const generation = player.generation;
+  const videoDescriptor = readVideoDescriptor(message['video']);
+  const audioDescriptor = readAudioDescriptor(message['audio']);
+  player.playbackRate = readNumber(message['playbackRate']) ?? 1;
+  player.currentTime = readNumber(message['startTime']) ?? player.currentTime;
+  try {
+    const audioClient = audioDescriptor
+      ? new PcmAudioClient({
+          descriptor: audioDescriptor,
+          volume: DEFAULT_VOLUME,
+          playbackRate: player.playbackRate,
+          onError: (error) => showError(player, error.message),
+        })
+      : undefined;
+    if (audioClient) await audioClient.connect(activateAudioContext(player));
+    if (generation !== player.generation) {
+      audioClient?.dispose();
       return;
     }
-    const audioClient = player.audioClient;
-    if (audioClient?.isClockReady) {
-      if (player.clockSource === 'wall') {
-        player.clockSource = 'audio';
-        player.scheduler?.flush();
+    player.audioClient = audioClient;
+    if (player.mediaType === 'video') {
+      if (!videoDescriptor || !player.video) {
+        throw new Error('Narrative video descriptor is unavailable.');
       }
-      player.currentTime = audioClient.getCurrentTime();
-    } else {
-      const elapsed = (performance.now() - player.playWallTime) / 1000;
-      player.currentTime = player.playStartTime + elapsed;
+      player.video.playbackRate = player.playbackRate;
+      player.video.src = videoDescriptor.url;
+      player.video.load();
+      await waitForMetadata(player.video);
+      player.video.currentTime = player.currentTime;
     }
+    player.waitingForStream = false;
+    player.message.textContent = '';
+    player.root.dataset.state = 'playing';
+    player.isPlaying = player.shouldPlayWhenReady;
+    if (player.isPlaying) {
+      await player.video?.play();
+      scheduleClock(player);
+    } else {
+      void player.audioClient?.pause();
+    }
+    render(player);
+    dispatch(player, 'ready');
+  } catch (error) {
+    showError(player, error instanceof Error ? error.message : String(error));
+  }
+}
 
-    if (player.currentTime >= player.duration) {
+function scheduleClock(player: PlayerState): void {
+  cancelFrame(player);
+  const tick = (): void => {
+    if (!player.isPlaying) return;
+    const audioClient = player.audioClient;
+    const nextTime = audioClient?.isClockReady
+      ? audioClient.getCurrentTime()
+      : (player.video?.currentTime ?? player.currentTime);
+    if (
+      player.video &&
+      audioClient?.isClockReady &&
+      Math.abs(player.video.currentTime - nextTime) > VIDEO_SYNC_THRESHOLD_SECONDS
+    ) {
+      player.video.currentTime = nextTime;
+    }
+    player.currentTime = nextTime;
+    if (nextTime >= player.duration) {
       player.currentTime = player.duration;
       player.isPlaying = false;
-      player.scheduler?.flush();
-      renderPlayer(player);
-      dispatchMediaRuntimeEvent(player, 'ended');
+      render(player);
+      dispatch(player, 'ended');
       postHostMessage({ type: 'media:stop', nodeId: player.surfaceId });
       return;
     }
-
-    const scheduler = player.scheduler;
-    if (scheduler) {
-      const result = scheduler.schedule(player.currentTime * 1_000_000);
-      if (result.action === 'render' && result.frame) {
-        drawVideoFrame(player, result.frame);
-      }
-    }
-    renderPlayer(player);
-    player.animationFrameId = window.requestAnimationFrame(tick);
+    render(player);
+    player.animationFrameId = requestAnimationFrame(tick);
   };
-  player.animationFrameId = window.requestAnimationFrame(tick);
+  player.animationFrameId = requestAnimationFrame(tick);
 }
 
-function renderPlayer(player: PlayerState): void {
-  player.playButton.textContent = player.isPlaying ? player.labels.pause : player.labels.play;
-  player.playButton.disabled = player.waitingForStream;
-  player.progress.value = String(clamp(player.currentTime, 0, player.duration));
-  player.time.textContent = `${formatTime(player.currentTime)} / ${formatTime(player.duration)}`;
-  dispatchMediaRuntimeEvent(player, 'timeUpdate');
-}
-
-function drawVideoFrame(player: PlayerState, frame: VideoFrame): void {
-  const canvas = player.canvas;
-  if (!canvas) {
-    frame.close();
-    return;
+function activateAudioContext(player: PlayerState): AudioContext {
+  let context = player.audioContext;
+  if (!context || context.state === 'closed') {
+    context = new AudioContext({ sampleRate: 48_000 });
+    player.audioContext = context;
   }
-  const context = canvas.getContext('2d');
-  if (!context) {
-    frame.close();
-    return;
-  }
-  if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
-    canvas.width = frame.displayWidth;
-    canvas.height = frame.displayHeight;
-  }
-  context.drawImage(frame, 0, 0, canvas.width, canvas.height);
-  frame.close();
+  if (context.state === 'suspended') void context.resume();
+  return context;
 }
 
 function teardownStreams(player: PlayerState): void {
-  clearHostResponseTimeout(player);
-  cancelPlayerFrame(player);
-  player.audioClient?.setVolume(0);
-  player.lifecycle.stop();
-  player.scheduler = undefined;
-  player.videoClient = undefined;
+  player.generation += 1;
+  clearTimeoutFor(player);
+  cancelFrame(player);
+  player.audioClient?.dispose();
   player.audioClient = undefined;
+  if (player.video) {
+    player.video.pause();
+    player.video.removeAttribute('src');
+    player.video.load();
+  }
 }
 
-function cancelPlayerFrame(player: PlayerState): void {
-  if (player.animationFrameId !== undefined) {
-    window.cancelAnimationFrame(player.animationFrameId);
-    player.animationFrameId = undefined;
-  }
+function render(player: PlayerState): void {
+  player.playButton.textContent = player.isPlaying ? player.labels.pause : player.labels.play;
+  player.playButton.disabled = player.waitingForStream;
+  player.progress.max = String(Math.max(player.duration, 0.1));
+  player.progress.value = String(clamp(player.currentTime, 0, player.duration));
+  player.time.textContent = `${formatMediaTime(player.currentTime)} / ${formatMediaTime(player.duration)}`;
+  dispatch(player, 'timeUpdate');
+}
+
+function setLoading(player: PlayerState, stage: 'probe' | 'stream'): void {
+  clearTimeoutFor(player);
+  player.pendingStage = stage;
+  player.waitingForStream = true;
+  player.message.textContent = player.labels.preparing;
+  player.root.dataset.state = 'loading';
+  player.timeoutId = window.setTimeout(() => {
+    if (player.pendingStage !== stage) return;
+    showError(player, stage === 'probe' ? player.labels.probeTimeout : player.labels.streamTimeout);
+  }, HOST_RESPONSE_TIMEOUT_MS);
+  render(player);
+}
+
+function clearTimeoutFor(player: PlayerState, stage?: 'probe' | 'stream'): void {
+  if (stage && player.pendingStage !== stage) return;
+  if (player.timeoutId !== undefined) window.clearTimeout(player.timeoutId);
+  player.timeoutId = undefined;
+  player.pendingStage = undefined;
+}
+
+function cancelFrame(player: PlayerState): void {
+  if (player.animationFrameId !== undefined) cancelAnimationFrame(player.animationFrameId);
+  player.animationFrameId = undefined;
 }
 
 function showError(player: PlayerState, message: string): void {
@@ -633,13 +478,13 @@ function showError(player: PlayerState, message: string): void {
   player.isPlaying = false;
   player.root.dataset.state = 'error';
   player.message.textContent = message;
-  renderPlayer(player);
-  dispatchMediaRuntimeEvent(player, 'error', { error: message });
+  render(player);
+  dispatch(player, 'error', { error: message });
 }
 
-function dispatchMediaRuntimeEvent(
+function dispatch(
   player: PlayerState,
-  type: PreviewMediaRuntimeEventType,
+  type: RuntimeEventType,
   extra: Record<string, unknown> = {},
 ): void {
   window.dispatchEvent(
@@ -658,35 +503,15 @@ function dispatchMediaRuntimeEvent(
   );
 }
 
-function scheduleHostResponseTimeout(player: PlayerState, stage: 'probe' | 'stream'): void {
-  clearHostResponseTimeout(player);
-  player.pendingRequestStage = stage;
-  player.requestTimeoutId = window.setTimeout(() => {
-    if (player.pendingRequestStage !== stage) {
-      return;
-    }
-    showError(player, stage === 'probe' ? player.labels.probeTimeout : player.labels.streamTimeout);
-  }, HOST_MEDIA_RESPONSE_TIMEOUT_MS);
-}
-
-function clearHostResponseTimeout(player: PlayerState, stage?: 'probe' | 'stream'): void {
-  if (stage && player.pendingRequestStage !== stage) {
-    return;
-  }
-  if (player.requestTimeoutId !== undefined) {
-    window.clearTimeout(player.requestTimeoutId);
-    player.requestTimeoutId = undefined;
-  }
-  if (!stage || player.pendingRequestStage === stage) {
-    player.pendingRequestStage = undefined;
-  }
+function findPlayer(value: unknown): PlayerState | undefined {
+  return typeof value === 'string' ? players.get(value) : undefined;
 }
 
 function postHostMessage(message: Record<string, unknown>): void {
   window.__nekoNarrativePreviewPostMessage?.(message);
 }
 
-function normalizeLabels(labels: PreviewMediaLabels | undefined): NormalizedPreviewMediaLabels {
+function normalizeLabels(labels: PreviewMediaLabels | undefined): NormalizedLabels {
   return {
     play: readLabel(labels?.play) ?? DEFAULT_LABELS.play,
     pause: readLabel(labels?.pause) ?? DEFAULT_LABELS.pause,
@@ -697,8 +522,71 @@ function normalizeLabels(labels: PreviewMediaLabels | undefined): NormalizedPrev
   };
 }
 
-function readLabel(value: string | undefined): string | undefined {
-  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+function readVideoDescriptor(value: unknown): HtmlVideoDescriptor | undefined {
+  if (
+    !isRecord(value) ||
+    value['version'] !== 1 ||
+    value['transport'] !== 'http' ||
+    typeof value['url'] !== 'string' ||
+    typeof value['mimeType'] !== 'string' ||
+    typeof value['durationSeconds'] !== 'number' ||
+    (value['preparationProfile'] !== 'h264-mp4-direct' &&
+      value['preparationProfile'] !== 'vp8-webm-direct' &&
+      value['preparationProfile'] !== 'h264-mp4-remux' &&
+      value['preparationProfile'] !== 'h264-sdr-transcode')
+  ) {
+    return undefined;
+  }
+  return {
+    version: 1,
+    transport: 'http',
+    url: value['url'],
+    mimeType: value['mimeType'],
+    preparationProfile: value['preparationProfile'],
+    durationSeconds: value['durationSeconds'],
+  };
+}
+
+function readAudioDescriptor(value: unknown): PcmStreamDescriptor | undefined {
+  if (
+    !isRecord(value) ||
+    value['version'] !== 1 ||
+    value['transport'] !== 'http' ||
+    value['protocol'] !== 'neko-pcm-f32le-v1' ||
+    typeof value['streamUrl'] !== 'string' ||
+    typeof value['sampleRate'] !== 'number' ||
+    typeof value['channels'] !== 'number'
+  ) {
+    return undefined;
+  }
+  return {
+    version: 1,
+    transport: 'http',
+    protocol: 'neko-pcm-f32le-v1',
+    streamUrl: value['streamUrl'],
+    sampleRate: value['sampleRate'],
+    channels: value['channels'],
+  };
+}
+
+function waitForMetadata(video: HTMLVideoElement): Promise<void> {
+  if (video.readyState >= HTMLMediaElement.HAVE_METADATA) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const cleanup = (): void => {
+      video.removeEventListener('loadedmetadata', loaded);
+      video.removeEventListener('error', failed);
+    };
+    const loaded = (): void => {
+      cleanup();
+      resolve();
+    };
+    const failed = (): void => {
+      cleanup();
+      reject(new Error('Narrative preview video metadata failed to load.'));
+    };
+    video.addEventListener('loadedmetadata', loaded, { once: true });
+    video.addEventListener('error', failed, { once: true });
+  });
 }
 
 function createAudioVisualization(): HTMLElement {
@@ -713,17 +601,29 @@ function createAudioVisualization(): HTMLElement {
   return root;
 }
 
-function clamp(value: number, min: number, max: number): number {
-  if (!Number.isFinite(value)) return min;
-  return Math.max(min, Math.min(max, value));
+function readLabel(value: string | undefined): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
 function readNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+function clamp(value: number, min: number, max: number): number {
+  return Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : min;
 }
 
-window.__nekoNarrativePreviewMediaRuntime = createRuntime();
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+window.__nekoNarrativePreviewMediaRuntime = {
+  mount,
+  start,
+  pause,
+  resume,
+  seek,
+  stop,
+  dispose,
+  handleHostMessage,
+};

@@ -3,7 +3,7 @@
  *
  * Canonical source for UI state types.
  * These types represent UI-only state that the engine does not recognize.
- * They exist only in the frontend Store and are never sent to the engine.
+ * They exist only in the frontend Store and are never sent to the Host runtime.
  *
  * Separation rationale:
  * - Engine Track has 8 fields; UI needs additional display state
@@ -21,7 +21,7 @@ import type { BlendModeType, ElementTransition } from '@neko/shared';
 // =============================================================================
 
 /**
- * Track UI state — only exists in frontend Store, not sent to engine.
+ * Track UI state — only exists in frontend Store, not sent to the Host runtime.
  *
  * Keyed by track ID in the Store:
  *   Map<trackId, TrackUIState>

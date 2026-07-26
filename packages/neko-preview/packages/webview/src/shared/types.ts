@@ -13,6 +13,7 @@ import type {
   PreviewVariant,
   PreviewVariantRequest,
 } from '@neko/shared';
+import type { HtmlVideoDescriptor, PcmStreamDescriptor } from '@neko/media';
 
 // =============================================================================
 // Media Info (from Extension probe)
@@ -41,20 +42,18 @@ export interface MediaInfo {
 export interface PreviewInitMessage {
   type: 'preview:init';
   payload: {
-    filePath: string;
     mediaInfo: MediaInfo;
-    /** Frame server port (video only) */
-    port?: number | null;
+    displayName: string;
   };
 }
 
-export interface PreviewStreamReadyMessage {
-  type: 'preview:streamReady';
+export interface PreviewPlaybackReadyMessage {
+  type: 'preview:playbackReady';
   payload: {
-    streamId: string;
-    streamUrl: string;
-    audioStreamId?: string | null;
-    audioStreamUrl?: string | null;
+    video?: HtmlVideoDescriptor;
+    audio?: PcmStreamDescriptor;
+    startTime: number;
+    playbackRate: number;
   };
 }
 
@@ -85,7 +84,6 @@ export interface PanoramaInitMessage {
   type: 'panorama:init';
   payload: {
     manifest: PreviewManifest;
-    engineBaseUrl: string | null;
   };
 }
 
@@ -103,20 +101,9 @@ export interface PanoramaErrorMessage {
   };
 }
 
-export interface PreviewStreamReconnectMessage {
-  type: 'preview:streamReconnect';
-  payload: {
-    streamId: string;
-    audioStreamUrl?: string | null;
-    streamUrl?: string | null;
-    audioStreamId?: string | null;
-  };
-}
-
 export type ExtensionMessage =
   | PreviewInitMessage
-  | PreviewStreamReadyMessage
-  | PreviewStreamReconnectMessage
+  | PreviewPlaybackReadyMessage
   | PreviewFrameDataMessage
   | PreviewWaveformMessage
   | PreviewLyricsMessage
@@ -154,6 +141,7 @@ export interface StopMessage {
 export interface SeekMessage {
   type: 'preview:seek';
   time: number;
+  speed?: number;
 }
 
 export interface SpeedMessage {

@@ -1,7 +1,6 @@
 import type { IErrorHandler, ILogger } from '@neko/shared';
 import { createServiceId } from '../base/serviceCollection';
-import type { IEngineMediaService as EngineMediaServiceContract } from '../contracts/IEngineMediaService';
-import type { IEngineRuntimeResolver as EngineRuntimeResolverContract } from '../contracts/IEngineRuntimeResolver';
+import type { IMediaRuntimeService as MediaRuntimeServiceContract } from '../contracts/IMediaRuntimeService';
 import type { IExtensionI18n as ExtensionI18nContract } from '../contracts/IExtensionI18n';
 import type { IScheduler as SchedulerContract } from '../contracts/IScheduler';
 import type { ITempFileService as TempFileServiceContract } from '../contracts/ITempFileService';
@@ -17,11 +16,8 @@ export const IExtensionErrorHandler = createServiceId<IErrorHandler>(
   'nekoTools.extensionErrorHandler',
 );
 export const IExtensionI18n = createServiceId<ExtensionI18nContract>('nekoTools.extensionI18n');
-export const IEngineRuntimeResolver = createServiceId<EngineRuntimeResolverContract>(
-  'nekoTools.engineRuntimeResolver',
-);
-export const IEngineMediaService = createServiceId<EngineMediaServiceContract>(
-  'nekoTools.engineMediaService',
+export const IMediaRuntimeService = createServiceId<MediaRuntimeServiceContract>(
+  'nekoTools.mediaRuntimeService',
 );
 export const IWorkspaceIO = createServiceId<WorkspaceIOContract>('nekoTools.workspaceIO');
 export const IScheduler = createServiceId<SchedulerContract>('nekoTools.scheduler');

@@ -8,8 +8,10 @@ import { VideoPlayer } from './VideoPlayer';
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const messageHandlers = vi.hoisted(() => new Set<(message: unknown) => void>());
-const lifecycleStart = vi.hoisted(() => vi.fn());
-const lifecycleDispose = vi.hoisted(() => vi.fn());
+const pause = vi.hoisted(() => vi.fn());
+const load = vi.hoisted(() => vi.fn());
+const play = vi.hoisted(() => vi.fn(async () => undefined));
+const postMessage = vi.hoisted(() => vi.fn());
 
 vi.mock('../i18n/I18nContext', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -17,124 +19,90 @@ vi.mock('../i18n/I18nContext', () => ({
 
 vi.mock('../shared/useVscodeMessage', () => ({
   useExtensionMessage: (handler: (message: unknown) => void) => {
+    messageHandlers.clear();
     messageHandlers.add(handler);
   },
-  useVscodeReady: () => ({ postMessage: vi.fn() }),
+  useVscodeReady: () => ({ postMessage }),
 }));
 
 vi.mock('./VideoControls', () => ({
   VideoControls: () => <div data-testid="video-controls" />,
 }));
 
-vi.mock('@neko/neko-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@neko/neko-client')>();
-  class EngineAvStreamLifecycle {
-    private readonly callbacks: {
-      onClientsChanged?: (clients: {
-        videoClient: unknown;
-        audioClient: unknown;
-        scheduler: unknown;
-      }) => void;
-    };
-
-    constructor(options: {
-      callbacks?: {
-        onClientsChanged?: (clients: {
-          videoClient: unknown;
-          audioClient: unknown;
-          scheduler: unknown;
-        }) => void;
-      };
-    }) {
-      this.callbacks = options.callbacks ?? {};
-    }
-
-    async start(descriptor: unknown) {
-      lifecycleStart(descriptor);
-      this.callbacks.onClientsChanged?.({
-        videoClient: { getStats: () => ({ framesDecoded: 1 }), resetDecoder: vi.fn() },
-        audioClient: null,
-        scheduler: { getStats: () => null, flush: vi.fn(), schedule: vi.fn() },
-      });
-    }
-
-    dispose() {
-      lifecycleDispose();
-    }
-  }
-
-  return {
-    ...actual,
-    EngineAvStreamLifecycle,
-  };
-});
-
-describe('Preview VideoPlayer stream lifecycle', () => {
+describe('Preview VideoPlayer native playback lifecycle', () => {
   let host: HTMLDivElement;
   let root: Root;
 
   beforeEach(() => {
-    lifecycleStart.mockClear();
-    lifecycleDispose.mockClear();
     messageHandlers.clear();
+    pause.mockClear();
+    load.mockClear();
+    play.mockClear();
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(pause);
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(load);
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(play);
+    vi.spyOn(HTMLMediaElement.prototype, 'readyState', 'get').mockReturnValue(3);
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
   });
 
   afterEach(() => {
-    act(() => {
-      root.unmount();
-    });
+    act(() => root.unmount());
     host.remove();
+    vi.restoreAllMocks();
     messageHandlers.clear();
   });
 
-  it('starts and disposes streams through EngineAvStreamLifecycle', async () => {
-    await act(async () => {
-      root.render(<VideoPlayer />);
+  it('attaches the tokenized HTTP descriptor to a native video element and releases it', async () => {
+    await act(async () => root.render(<VideoPlayer />));
+    await emit({
+      type: 'preview:init',
+      payload: {
+        mediaInfo: {
+          width: 640,
+          height: 360,
+          fps: 24,
+          duration: 10,
+          codec: 'h264',
+          format: 'mp4',
+          hasAudio: false,
+        },
+        displayName: 'fixture.mp4',
+      },
+    });
+    await emit({
+      type: 'preview:playbackReady',
+      payload: {
+        video: {
+          version: 1,
+          transport: 'http',
+          url: 'http://127.0.0.1:4567/media/token',
+          mimeType: 'video/mp4',
+          preparationProfile: 'h264-mp4-direct',
+          durationSeconds: 10,
+        },
+        startTime: 2,
+        playbackRate: 1,
+      },
     });
 
-    await act(async () => {
-      for (const handler of messageHandlers) {
-        handler({
-          type: 'preview:init',
-          payload: {
-            mediaInfo: { width: 640, height: 360, fps: 24, duration: 10 },
-          },
-        });
-      }
-      await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(host.querySelector('video')?.src).toBe('http://127.0.0.1:4567/media/token');
     });
+    const video = host.querySelector('video');
+    expect(video?.muted).toBe(true);
+    expect(play).toHaveBeenCalledOnce();
 
-    await act(async () => {
-      for (const handler of messageHandlers) {
-        handler({
-          type: 'preview:streamReady',
-          payload: {
-            streamId: 'video-1',
-            streamUrl: 'ws://video',
-            audioStreamUrl: 'ws://audio',
-          },
-        });
-      }
-      await Promise.resolve();
-    });
-
-    expect(lifecycleStart).toHaveBeenCalledWith(
-      expect.objectContaining({
-        video: expect.objectContaining({ websocketUrl: 'ws://video' }),
-        audio: expect.objectContaining({ websocketUrl: 'ws://audio' }),
-        fps: 24,
-        schedulerMode: 'video',
-        videoFrameRoute: 'callback',
-      }),
-    );
-
-    await act(async () => {
-      root.unmount();
-    });
-
-    expect(lifecycleDispose).toHaveBeenCalled();
+    await act(async () => root.unmount());
+    expect(pause).toHaveBeenCalled();
+    expect(load).toHaveBeenCalled();
   });
 });
+
+async function emit(message: unknown): Promise<void> {
+  await act(async () => {
+    for (const handler of messageHandlers) handler(message);
+    await Promise.resolve();
+  });
+}

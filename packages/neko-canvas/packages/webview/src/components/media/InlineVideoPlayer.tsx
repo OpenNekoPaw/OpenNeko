@@ -1,33 +1,24 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import {
-  EngineAvStreamLifecycle,
-  formatTime,
-  type EngineAvAudioStreamClient,
-  type EngineAvFrameScheduler,
-  type EngineAvVideoStreamClient,
-} from '@neko/neko-client';
+import { PcmAudioClient } from '@neko/media/browser';
+import type { HtmlVideoDescriptor, PcmStreamDescriptor } from '@neko/media';
+import { formatMediaTime } from '@neko/media';
 import { ProgressBar } from '@neko/ui/creative';
 import { PlayIcon, PauseIcon, VolumeIcon, VolumeOffIcon } from '@neko/ui/icons';
 import { getLogger } from '../../utils/logger';
-import {
-  createInlineVideoSeekGate,
-  resetInlineVideoPlaybackForSeek,
-  shouldAcceptInlineVideoFrameAfterSeek,
-  type InlineVideoSeekGate,
-} from './inlineVideoPlayback';
 
 const logger = getLogger('InlineVideoPlayer');
-
 const DEFAULT_VOLUME = 0.8;
+const VIDEO_SYNC_THRESHOLD_SECONDS = 0.08;
 
 export interface InlineVideoPlayerProps {
-  videoStreamUrl: string | null;
-  audioStreamUrl: string | null;
+  video: HtmlVideoDescriptor | null;
+  audio: PcmStreamDescriptor | null;
   width: number;
   height: number;
   fps: number;
   duration: number;
   startTime?: number;
+  playbackRate?: number;
   onPause: (currentTime: number) => void;
   onResume: () => void;
   onSeek: (time: number) => void;
@@ -40,13 +31,11 @@ export interface InlineVideoPlayerProps {
 }
 
 export function InlineVideoPlayer({
-  videoStreamUrl,
-  audioStreamUrl,
-  width,
-  height,
-  fps,
+  video,
+  audio,
   duration,
   startTime = 0,
+  playbackRate = 1,
   onPause,
   onResume,
   onSeek,
@@ -57,279 +46,129 @@ export function InlineVideoPlayer({
   playbackStartTime,
   onEnded,
 }: InlineVideoPlayerProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const clientRef = useRef<EngineAvVideoStreamClient | null>(null);
-  const audioClientRef = useRef<EngineAvAudioStreamClient | null>(null);
-  const schedulerRef = useRef<EngineAvFrameScheduler | null>(null);
-  const lifecycleRef = useRef<EngineAvStreamLifecycle | null>(null);
-  const animFrameRef = useRef<number>(0);
-  const playStartTimeRef = useRef(startTime);
-  const playWallTimeRef = useRef(0);
-  const clockSourceRef = useRef<'wall' | 'audio'>('wall');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioClientRef = useRef<PcmAudioClient>();
+  const audioContextRef = useRef<AudioContext>();
+  const animationFrameRef = useRef(0);
   const currentTimeRef = useRef(startTime);
-  const seekGateRef = useRef<InlineVideoSeekGate | null>(null);
-  const handledPlaybackRequestRef = useRef<string | undefined>();
-  const handledPlaybackStateRef = useRef<'playing' | 'paused' | undefined>();
-  const completedRef = useRef(false);
-  const completePlaybackRef = useRef<(() => void) | null>(null);
-
+  const handledPlaybackRequestRef = useRef<string>();
+  const handledPlaybackStateRef = useRef<'playing' | 'paused'>();
+  const generationRef = useRef(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(startTime);
   const [isMuted, setIsMuted] = useState(false);
 
-  if (!lifecycleRef.current) {
-    lifecycleRef.current = new EngineAvStreamLifecycle({
-      callbacks: {
-        onClientsChanged: ({ videoClient, audioClient, scheduler }) => {
-          clientRef.current = videoClient;
-          audioClientRef.current = audioClient;
-          schedulerRef.current = scheduler;
-        },
-        onStreamEnd: (kind) => {
-          if (kind === 'video' || !videoStreamUrl) {
-            completePlaybackRef.current?.();
-          }
-        },
-      },
-    });
-  }
-
-  useEffect(() => {
-    currentTimeRef.current = currentTime;
-  }, [currentTime]);
-
-  // =========================================================================
-  // Frame rendering
-  // =========================================================================
-
-  const renderFrame = useCallback((frame: VideoFrame) => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      frame.close();
-      return;
+  const activateAudioContext = useCallback((): AudioContext => {
+    let context = audioContextRef.current;
+    if (!context || context.state === 'closed') {
+      context = new AudioContext({ sampleRate: 48_000 });
+      audioContextRef.current = context;
     }
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      frame.close();
-      return;
-    }
-    if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
-      canvas.width = frame.displayWidth;
-      canvas.height = frame.displayHeight;
-    }
-    ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
-    frame.close();
+    if (context.state === 'suspended') void context.resume();
+    return context;
   }, []);
 
-  const onFrame = useCallback(
-    (frame: VideoFrame) => {
-      if (!shouldAcceptInlineVideoFrameAfterSeek(frame.timestamp, seekGateRef.current)) {
-        frame.close();
-        return;
-      }
-      seekGateRef.current = null;
-
-      const scheduler = schedulerRef.current;
-      if (scheduler) {
-        scheduler.enqueue(frame);
-      } else {
-        renderFrame(frame);
-      }
-    },
-    [renderFrame],
-  );
-
-  // =========================================================================
-  // Playback loop
-  // =========================================================================
-
-  const completePlayback = useCallback(() => {
-    if (completedRef.current) return;
-    completedRef.current = true;
-    const endedAt = duration;
-    if (animFrameRef.current) {
-      cancelAnimationFrame(animFrameRef.current);
-      animFrameRef.current = 0;
+  const disposeStreams = useCallback(() => {
+    generationRef.current += 1;
+    audioClientRef.current?.dispose();
+    audioClientRef.current = undefined;
+    const element = videoRef.current;
+    if (element) {
+      element.pause();
+      element.removeAttribute('src');
+      element.load();
     }
-    setIsPlaying(false);
-    setCurrentTime(endedAt);
-    currentTimeRef.current = endedAt;
-    schedulerRef.current?.flush();
-    onStop(endedAt);
-    onEnded?.(endedAt);
-  }, [duration, onEnded, onStop]);
-  completePlaybackRef.current = completePlayback;
-
-  const updatePlaybackTime = useCallback(() => {
-    if (completedRef.current) return;
-
-    let newTime: number;
-    const audioClient = audioClientRef.current;
-
-    if (audioClient?.isClockReady) {
-      if (clockSourceRef.current === 'wall') {
-        clockSourceRef.current = 'audio';
-        schedulerRef.current?.flush();
-      }
-      newTime = audioClient.getCurrentTime();
-    } else {
-      const h264Stats = clientRef.current?.getStats();
-      if (!h264Stats || h264Stats.framesDecoded === 0) {
-        playWallTimeRef.current = performance.now();
-        newTime = playStartTimeRef.current;
-      } else {
-        const elapsed = (performance.now() - playWallTimeRef.current) / 1000;
-        newTime = playStartTimeRef.current + elapsed;
-      }
-    }
-
-    if (newTime >= duration) {
-      completePlayback();
-      return;
-    }
-
-    const scheduler = schedulerRef.current;
-    if (scheduler) {
-      const masterClockUs = newTime * 1_000_000;
-      const result = scheduler.schedule(masterClockUs);
-      if (result.action === 'render' && result.frame) {
-        renderFrame(result.frame);
-      }
-    }
-
-    setCurrentTime(newTime);
-    onTimeUpdate?.(newTime);
-    animFrameRef.current = requestAnimationFrame(updatePlaybackTime);
-  }, [completePlayback, duration, onTimeUpdate, renderFrame]);
+  }, []);
 
   useEffect(() => {
-    if (isPlaying) {
-      animFrameRef.current = requestAnimationFrame(updatePlaybackTime);
-    }
-    return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    };
-  }, [isPlaying, updatePlaybackTime]);
-
-  // =========================================================================
-  // Connect streams on mount
-  // =========================================================================
-
-  useEffect(() => {
-    void lifecycleRef.current
-      ?.start({
-        video: videoStreamUrl
-          ? {
-              websocketUrl: videoStreamUrl,
-              width,
-              height,
-              onFrame,
-              onError: (err) => logger.error(`H264 error: ${err}`),
-            }
-          : undefined,
-        audio: audioStreamUrl
-          ? {
-              websocketUrl: audioStreamUrl,
-              volume: DEFAULT_VOLUME,
-              onError: (err) => logger.warn(`Audio error: ${err}`),
-            }
-          : undefined,
-        fps,
-        schedulerMode: 'video',
-        videoFrameRoute: 'callback',
-      })
-      .catch((err) => logger.error(`Inline video lifecycle error: ${err}`));
-
-    setIsPlaying(true);
-    setCurrentTime(startTime);
-    playStartTimeRef.current = startTime;
-    playWallTimeRef.current = performance.now();
-    clockSourceRef.current = 'wall';
-    completedRef.current = false;
-
-    return () => {
-      audioClientRef.current?.setVolume(0);
-      lifecycleRef.current?.stop();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- startTime is only used for initial value; including it would restart streams on pause
-  }, [videoStreamUrl, audioStreamUrl, width, height, fps, onFrame]);
-
-  // =========================================================================
-  // Controls
-  // =========================================================================
-
-  const handleTogglePlay = useCallback(
-    (e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      if (isPlaying) {
-        setIsPlaying(false);
-        schedulerRef.current?.flush();
-        audioClientRef.current?.pause();
-        onPause(currentTimeRef.current);
-      } else {
-        completedRef.current = false;
-        setIsPlaying(true);
-        audioClientRef.current?.resume();
-        playStartTimeRef.current = currentTimeRef.current;
-        playWallTimeRef.current = performance.now();
-        clockSourceRef.current = 'wall';
-        onResume();
-      }
-    },
-    [isPlaying, onPause, onResume],
-  );
-
-  const handleSeekCommit = useCallback(
-    (time: number) => {
-      completedRef.current = false;
-      setCurrentTime(time);
-      onTimeUpdate?.(time);
-      seekGateRef.current = createInlineVideoSeekGate(
-        time,
-        schedulerRef.current?.getStats() ?? null,
-        fps,
-      );
-      resetInlineVideoPlaybackForSeek({
-        time,
-        now: () => performance.now(),
-        clock: {
-          currentTimeRef,
-          playStartTimeRef,
-          playWallTimeRef,
-          clockSourceRef,
-        },
-        pipeline: {
-          scheduler: schedulerRef.current,
-          videoClient: clientRef.current,
-          audioClient: audioClientRef.current,
-        },
-      });
-      onSeek(time);
-    },
-    [fps, onSeek, onTimeUpdate],
-  );
-
-  const applyControlledPlaybackState = useCallback(
-    (nextState: 'playing' | 'paused') => {
-      if (nextState === 'paused') {
-        if (!isPlaying) return;
-        setIsPlaying(false);
-        schedulerRef.current?.flush();
-        audioClientRef.current?.pause();
-        onPause(currentTimeRef.current);
+    if (!video) return;
+    const generation = generationRef.current;
+    const connect = async (): Promise<void> => {
+      const audioClient = audio
+        ? new PcmAudioClient({
+            descriptor: audio,
+            playbackRate,
+            volume: DEFAULT_VOLUME,
+            onError: (error) => logger.warn(`Canvas PCM error: ${error.message}`),
+          })
+        : undefined;
+      if (audioClient) await audioClient.connect(activateAudioContext());
+      if (generation !== generationRef.current) {
+        audioClient?.dispose();
         return;
       }
-      if (isPlaying) return;
-      completedRef.current = false;
+      const element = videoRef.current;
+      if (!element) throw new Error('Canvas inline video element is unavailable.');
+      element.muted = true;
+      element.defaultMuted = true;
+      element.playsInline = true;
+      element.playbackRate = playbackRate;
+      element.src = video.url;
+      element.load();
+      await waitForVideoMetadata(element);
+      element.currentTime = startTime;
+      audioClientRef.current = audioClient;
+      await element.play();
       setIsPlaying(true);
-      audioClientRef.current?.resume();
-      playStartTimeRef.current = currentTimeRef.current;
-      playWallTimeRef.current = performance.now();
-      clockSourceRef.current = 'wall';
-      onResume();
-    },
-    [isPlaying, onPause, onResume],
-  );
+    };
+    void connect().catch((error: unknown) =>
+      logger.error(`Inline video playback failed: ${error}`),
+    );
+    return disposeStreams;
+  }, [activateAudioContext, audio, disposeStreams, playbackRate, startTime, video]);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const tick = (): void => {
+      const element = videoRef.current;
+      const audioClient = audioClientRef.current;
+      const nextTime = audioClient?.isClockReady
+        ? audioClient.getCurrentTime()
+        : (element?.currentTime ?? currentTimeRef.current);
+      if (
+        element &&
+        audioClient?.isClockReady &&
+        Math.abs(element.currentTime - nextTime) > VIDEO_SYNC_THRESHOLD_SECONDS
+      ) {
+        element.currentTime = nextTime;
+      }
+      currentTimeRef.current = nextTime;
+      setCurrentTime(nextTime);
+      onTimeUpdate?.(nextTime);
+      if (nextTime >= duration) {
+        setIsPlaying(false);
+        onStop(duration);
+        onEnded?.(duration);
+        return;
+      }
+      animationFrameRef.current = requestAnimationFrame(tick);
+    };
+    animationFrameRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(animationFrameRef.current);
+  }, [duration, isPlaying, onEnded, onStop, onTimeUpdate]);
+
+  useEffect(() => {
+    return () => {
+      disposeStreams();
+      const context = audioContextRef.current;
+      if (context && context.state !== 'closed') void context.close();
+    };
+  }, [disposeStreams]);
+
+  const pause = useCallback(() => {
+    videoRef.current?.pause();
+    void audioClientRef.current?.pause();
+    setIsPlaying(false);
+    onPause(currentTimeRef.current);
+  }, [onPause]);
+
+  const resume = useCallback(() => {
+    activateAudioContext();
+    void audioClientRef.current?.resume();
+    void videoRef.current?.play();
+    setIsPlaying(true);
+    onResume();
+  }, [activateAudioContext, onResume]);
 
   useEffect(() => {
     const requestChanged =
@@ -337,90 +176,65 @@ export function InlineVideoPlayer({
     const stateChanged =
       playbackState !== undefined && handledPlaybackStateRef.current !== playbackState;
     if (!requestChanged && !stateChanged) return;
-
-    if (requestChanged) {
-      handledPlaybackRequestRef.current = playbackRequestId;
-    }
-    if (requestChanged && playbackStartTime !== undefined) {
-      handleSeekCommit(playbackStartTime);
-    }
+    if (requestChanged) handledPlaybackRequestRef.current = playbackRequestId;
+    if (requestChanged && playbackStartTime !== undefined) onSeek(playbackStartTime);
     const nextState = playbackState ?? (requestChanged ? 'playing' : undefined);
     if (!nextState) return;
     handledPlaybackStateRef.current = nextState;
-    applyControlledPlaybackState(nextState);
-  }, [
-    applyControlledPlaybackState,
-    handleSeekCommit,
-    playbackRequestId,
-    playbackStartTime,
-    playbackState,
-  ]);
+    if (nextState === 'paused' && isPlaying) pause();
+    if (nextState === 'playing' && !isPlaying) resume();
+  }, [isPlaying, onSeek, pause, playbackRequestId, playbackStartTime, playbackState, resume]);
 
-  const handleSeeking = useCallback((time: number) => {
-    setCurrentTime(time);
-  }, []);
+  const handleSeek = useCallback(
+    (time: number) => {
+      currentTimeRef.current = time;
+      setCurrentTime(time);
+      onTimeUpdate?.(time);
+      onSeek(time);
+    },
+    [onSeek, onTimeUpdate],
+  );
 
   const handleToggleMute = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      const newMuted = !isMuted;
-      setIsMuted(newMuted);
-      audioClientRef.current?.setVolume(newMuted ? 0 : DEFAULT_VOLUME);
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      const nextMuted = !isMuted;
+      setIsMuted(nextMuted);
+      audioClientRef.current?.setVolume(nextMuted ? 0 : DEFAULT_VOLUME);
     },
     [isMuted],
   );
 
-  // =========================================================================
-  // Render
-  // =========================================================================
-
   return (
     <div className="relative flex-1 bg-black overflow-hidden group">
-      <canvas
-        ref={canvasRef}
-        className="w-full h-full object-contain"
-        style={{ display: 'block' }}
-      />
-
-      {/* Controls overlay — gradient background */}
+      <video ref={videoRef} className="w-full h-full object-contain" muted playsInline />
       <div
         className="absolute bottom-0 left-0 right-0 flex flex-col gap-1 px-2 pb-2 pt-6 opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{
-          background: 'linear-gradient(transparent 0%, rgba(0,0,0,0.7) 100%)',
-        }}
-        onMouseDown={(e) => e.stopPropagation()}
+        style={{ background: 'linear-gradient(transparent 0%, rgba(0,0,0,0.7) 100%)' }}
+        onMouseDown={(event) => event.stopPropagation()}
       >
-        {/* Progress bar */}
         <ProgressBar
           currentTime={currentTime}
           duration={duration}
-          onSeekCommit={handleSeekCommit}
-          onSeeking={handleSeeking}
+          onSeekCommit={handleSeek}
+          onSeeking={setCurrentTime}
           variant="video"
-          formatTooltip={formatTime}
+          formatTooltip={formatMediaTime}
         />
-
-        {/* Button row */}
         <div className="flex items-center gap-1.5">
-          {/* Play/Pause */}
           <button
             type="button"
             className="flex h-6 w-6 items-center justify-center rounded text-white/85 hover:text-white"
-            onClick={handleTogglePlay}
+            onClick={isPlaying ? pause : resume}
             title={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
           </button>
-
-          {/* Time display */}
           <span className="text-[10px] tabular-nums text-white/80 whitespace-nowrap">
-            {formatTime(currentTime)} / {formatTime(duration)}
+            {formatMediaTime(currentTime)} / {formatMediaTime(duration)}
           </span>
-
           <div className="flex-1" />
-
-          {/* Mute toggle */}
-          {audioStreamUrl && (
+          {audio ? (
             <button
               type="button"
               className="flex h-5 w-5 items-center justify-center text-white/80 hover:text-white"
@@ -429,9 +243,29 @@ export function InlineVideoPlayer({
             >
               {isMuted ? <VolumeOffIcon size={12} /> : <VolumeIcon size={12} />}
             </button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
   );
+}
+
+function waitForVideoMetadata(element: HTMLVideoElement): Promise<void> {
+  if (element.readyState >= HTMLMediaElement.HAVE_METADATA) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const cleanup = (): void => {
+      element.removeEventListener('loadedmetadata', onLoaded);
+      element.removeEventListener('error', onError);
+    };
+    const onLoaded = (): void => {
+      cleanup();
+      resolve();
+    };
+    const onError = (): void => {
+      cleanup();
+      reject(new Error('Canvas inline video metadata failed to load.'));
+    };
+    element.addEventListener('loadedmetadata', onLoaded, { once: true });
+    element.addEventListener('error', onError, { once: true });
+  });
 }

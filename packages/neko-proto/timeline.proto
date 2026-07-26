@@ -1,27 +1,16 @@
 // =============================================================================
 // Timeline Proto Definition (IDL)
 //
-// Authority: neko-engine Rust domain model
-// Source files:
-//   - packages/neko-engine/packages/engine-kernel/src/domain/timeline.rs
-//   - packages/neko-engine/packages/engine-kernel/src/domain/transform.rs
-//   - packages/neko-engine/packages/engine-kernel/src/animation/easing.rs
-//   - packages/neko-engine/packages/engine-kernel/src/animation/keyframe.rs
-//   - packages/neko-engine/packages/engine-kernel/src/animation/interpolate.rs
-//   - packages/neko-engine/packages/engine-kernel/src/gpu/compositor.rs (BlendMode)
-//   - packages/neko-engine/packages/engine-kernel/src/gpu/transition_processor.rs (TransitionType)
-//   - packages/neko-engine/packages/types/src/common.rs (TrackType)
-//   - packages/neko-engine/packages/types/src/effects.rs (EffectParams)
+// Authority: OpenNeko Timeline structured-data contract.
 //
 // Purpose:
-//   This file serves as the single source of truth IDL document that both
-//   TS and Rust types must conform to. Currently hand-maintained; protoc/buf
-//   auto-generation is planned for a future phase.
+//   This file serves as the single source of truth IDL for generated
+//   TypeScript Timeline types.
 //
 // Convention:
-//   - Field names use camelCase (matching Rust serde rename_all = "camelCase")
-//   - Enum values use PascalCase (matching Rust enum variants)
-//   - Only engine-recognized fields are included; UI state is separate
+//   - Field names use camelCase for generated TypeScript consumers
+//   - Enum values use stable PascalCase variants
+//   - Only shared structured-data fields are included; UI state is separate
 // =============================================================================
 
 syntax = "proto3";

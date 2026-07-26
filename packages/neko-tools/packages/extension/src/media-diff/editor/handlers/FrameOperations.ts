@@ -41,7 +41,7 @@ export async function handleSeek(
 }
 
 /**
- * Handle get frame request for video — extracts a single frame via neko-engine.
+ * Handle get frame request for video through the Node/FFmpeg runtime.
  * Includes concurrency control to prevent VideoToolbox session exhaustion.
  */
 export async function handleGetFrame(
@@ -64,7 +64,9 @@ export async function handleGetFrame(
   ctx.activeFrameExtractions++;
 
   try {
-    const imageBuffer = await ctx.requireEngine().extractFrame(filePath, time);
+    const imageBuffer = dataUrlToArrayBuffer(
+      await ctx.requireMediaRuntime().captureFrame(filePath, time),
+    );
 
     if (imageBuffer) {
       ctx.sendMessage({
@@ -102,7 +104,12 @@ export async function handleInspectElement(
 
   try {
     // Extract a thumbnail frame at t=0 with low resolution
-    const imageBuffer = await ctx.requireEngine().extractFrame(absoluteSrc, 0);
+    const imageBuffer = dataUrlToArrayBuffer(
+      await ctx.requireMediaRuntime().captureFrame(absoluteSrc, 0, {
+        width: 480,
+        height: 270,
+      }),
+    );
 
     if (imageBuffer) {
       ctx.sendMessage({
@@ -117,4 +124,11 @@ export async function handleInspectElement(
   } catch (error) {
     logger.error(`Failed to inspect element ${src}:`, error);
   }
+}
+
+function dataUrlToArrayBuffer(dataUrl: string): ArrayBuffer {
+  const separator = dataUrl.indexOf(',');
+  if (separator < 0) throw new Error('Frame capture returned an invalid data URL.');
+  const bytes = Buffer.from(dataUrl.slice(separator + 1), 'base64');
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }

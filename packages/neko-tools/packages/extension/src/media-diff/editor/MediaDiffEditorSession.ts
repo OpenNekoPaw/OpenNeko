@@ -33,7 +33,6 @@ export class MediaDiffEditorSession implements IMediaDiffEditorSession {
   constructor(
     private readonly webviewPanel: vscode.WebviewPanel,
     private readonly messageHandler: IMediaDiffEditorMessageHandler,
-    private readonly engineAvailable: boolean,
   ) {}
 
   attach(onDidDispose: () => void): void {
@@ -54,14 +53,6 @@ export class MediaDiffEditorSession implements IMediaDiffEditorSession {
 
   async start(requiresRecompare: boolean = false): Promise<void> {
     if (this.isDisposed) {
-      return;
-    }
-
-    if (!this.engineAvailable) {
-      this.webviewPanel.webview.postMessage({
-        type: 'mediaDiff:error',
-        error: vscode.l10n.t('mediaDiff.error.engineUnavailable'),
-      });
       return;
     }
 

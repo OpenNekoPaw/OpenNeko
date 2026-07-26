@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { IEngineMediaService } from '../contracts/IEngineMediaService';
+import type { IMediaRuntimeService } from '../contracts/IMediaRuntimeService';
 import type { IScheduler } from '../contracts/IScheduler';
 import type { ITempFileService } from '../contracts/ITempFileService';
 import type { IWorkspaceIO } from '../contracts/IWorkspaceIO';
@@ -20,7 +20,7 @@ import { IMediaDiffService as IMediaDiffServiceId } from './serviceIds';
 export function bootstrapMediaDiff(
   context: vscode.ExtensionContext,
   services: ServiceCollection,
-  engineMediaService: IEngineMediaService,
+  mediaRuntimeService: IMediaRuntimeService,
   workspaceIO: IWorkspaceIO,
   scheduler: IScheduler,
   tempFileService: ITempFileService,
@@ -29,15 +29,15 @@ export function bootstrapMediaDiff(
   const diffService = new MediaDiffService(undefined, registry, workspaceIO, scheduler);
   const sessionFactory = new MediaDiffEditorSessionFactory(
     diffService,
-    engineMediaService,
+    mediaRuntimeService,
     scheduler,
     tempFileService,
   );
 
-  diffService.registerAnalyzer(new ImageDiffAnalyzer(engineMediaService, tempFileService));
-  diffService.registerAnalyzer(new VideoDiffAnalyzer(engineMediaService, tempFileService));
-  diffService.registerAnalyzer(new AudioDiffAnalyzer(engineMediaService, tempFileService));
-  diffService.registerAnalyzer(new TimelineDiffAnalyzer(engineMediaService, tempFileService));
+  diffService.registerAnalyzer(new ImageDiffAnalyzer(mediaRuntimeService, tempFileService));
+  diffService.registerAnalyzer(new VideoDiffAnalyzer(mediaRuntimeService, tempFileService));
+  diffService.registerAnalyzer(new AudioDiffAnalyzer(mediaRuntimeService, tempFileService));
+  diffService.registerAnalyzer(new TimelineDiffAnalyzer(mediaRuntimeService, tempFileService));
 
   services.set(IMediaDiffServiceId, diffService);
 

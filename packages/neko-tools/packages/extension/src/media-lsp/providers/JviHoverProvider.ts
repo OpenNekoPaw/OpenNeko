@@ -2,7 +2,7 @@
  * JVI Hover Provider — Show media metadata on hover over `src` values.
  *
  * When the cursor hovers over a "src" string in a .nkv file, probes the
- * referenced media file via EngineMediaService and displays a Markdown tooltip
+ * referenced media file via the Node media runtime and displays a Markdown tooltip
  * with resolution, duration, codec, FPS, bitrate, and audio info.
  */
 
@@ -11,12 +11,12 @@ import * as path from 'path';
 import type { IWorkspaceIO } from '../../contracts/IWorkspaceIO';
 import { findSrcNodeAtOffset } from '../services/JviParser';
 import type { IMediaProbeCache, ProbeResultLike } from '../services/types';
-import type { IEngineMediaService } from '../../contracts/IEngineMediaService';
+import type { IMediaRuntimeService } from '../../contracts/IMediaRuntimeService';
 import { resolveMediaSrcPath } from '../services/resolveMediaSrcPath';
 
 export class JviHoverProvider implements vscode.HoverProvider {
   constructor(
-    private readonly engineService: IEngineMediaService | undefined,
+    private readonly mediaService: IMediaRuntimeService | undefined,
     private readonly probeCache: IMediaProbeCache,
     private readonly workspaceIO: IWorkspaceIO,
   ) {}
@@ -93,10 +93,10 @@ export class JviHoverProvider implements vscode.HoverProvider {
     const cached = this.probeCache.get(absolutePath);
     if (cached) return cached;
 
-    if (!this.engineService) return null;
+    if (!this.mediaService) return null;
 
     try {
-      const result = await this.engineService.probe('videos', absolutePath);
+      const result = await this.mediaService.probe('videos', absolutePath);
       if (result) {
         this.probeCache.set(absolutePath, result as ProbeResultLike);
         return result as ProbeResultLike;

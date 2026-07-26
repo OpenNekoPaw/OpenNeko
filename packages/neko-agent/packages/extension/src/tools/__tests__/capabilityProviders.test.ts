@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
     0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
   ]),
-  getEngineClientProvider: vi.fn(() => ({})),
   contentAccessRuntime: {
     resolve: vi.fn(),
     resolveImageMetadata: vi.fn(async (input: { source: unknown }) => ({
@@ -60,10 +59,6 @@ vi.mock('../../base', () => ({
       debug: vi.fn(),
     }),
   }),
-}));
-
-vi.mock('../../services/engineClientProvider', () => ({
-  getEngineClientProvider: mocks.getEngineClientProvider,
 }));
 
 vi.mock('../../bootstrap/capabilityBootstrap', () => ({

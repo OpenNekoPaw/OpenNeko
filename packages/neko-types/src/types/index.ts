@@ -141,7 +141,6 @@ export * from './tool-injection';
 export * from './hook';
 
 // Media protocol types (Extension ↔ Webview media processing IPC)
-export * from './mediaProtocol';
 
 // Export protocol types (Extension ↔ Webview export IPC)
 export * from './exportProtocol';
@@ -174,9 +173,6 @@ export * from './context-persistence';
 export * from './project-memory';
 
 export * from './creative-ai-invocation';
-
-// Media engine types (progressive media processing architecture)
-export * from './mediaEngine';
 
 // Canvas types (infinite canvas editor)
 export * from './canvas';

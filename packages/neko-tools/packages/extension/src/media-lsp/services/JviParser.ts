@@ -2,7 +2,7 @@
  * JVI Parser — Parse .nkv JSON into JviParsedProject with source positions.
  *
  * Uses jsonc-parser to get a full AST with byte offsets, then walks the tree
- * to extract structured data aligned with the JVI schema (neko-engine jvi/types.rs).
+ * to extract structured data aligned with the retained JVI schema.
  *
  * All exported functions are pure (no vscode dependency) and testable.
  */

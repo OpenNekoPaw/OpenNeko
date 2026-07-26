@@ -10,7 +10,10 @@ import type * as vscode from 'vscode';
 import { MediaDiffEditorSession } from './MediaDiffEditorSession';
 import { MediaDiffEditorSessionFactory } from './MediaDiffEditorSessionFactory';
 import type { IMediaDiffEditorMessageHandler } from './MediaDiffEditorSession';
-import type { IEngineMediaService } from '../../contracts/IEngineMediaService';
+import type {
+  IMediaRuntimeService,
+  IToolsMediaRuntime,
+} from '../../contracts/IMediaRuntimeService';
 import type { IScheduler } from '../../contracts/IScheduler';
 import type { ITempFileService } from '../../contracts/ITempFileService';
 import type { MediaDiffService } from '../services/MediaDiffService';
@@ -58,7 +61,7 @@ describe('MediaDiffEditorSession', () => {
   it('should attach listeners and initialize diff when recompare is not required', async () => {
     const { panel, webview } = createMockWebviewPanel();
     const handler = createMockMessageHandler();
-    const session = new MediaDiffEditorSession(panel, handler, true);
+    const session = new MediaDiffEditorSession(panel, handler);
     const onDidDispose = vi.fn();
 
     session.attach(onDidDispose);
@@ -73,31 +76,17 @@ describe('MediaDiffEditorSession', () => {
   it('should skip initializeDiff when session requires recompare', async () => {
     const { panel } = createMockWebviewPanel();
     const handler = createMockMessageHandler();
-    const session = new MediaDiffEditorSession(panel, handler, true);
+    const session = new MediaDiffEditorSession(panel, handler);
 
     await session.start(true);
 
     expect(handler.initializeDiff).not.toHaveBeenCalled();
   });
 
-  it('should notify webview and skip initialization when engine client is unavailable', async () => {
-    const { panel, webview } = createMockWebviewPanel();
-    const handler = createMockMessageHandler();
-    const session = new MediaDiffEditorSession(panel, handler, false);
-
-    await session.start(false);
-
-    expect(webview.postMessage).toHaveBeenCalledWith({
-      type: 'mediaDiff:error',
-      error: 'mediaDiff.error.engineUnavailable',
-    });
-    expect(handler.initializeDiff).not.toHaveBeenCalled();
-  });
-
   it('should dispose listeners and handler only once', async () => {
     const { panel, receiveDisposable, disposeDisposable } = createMockWebviewPanel();
     const handler = createMockMessageHandler();
-    const session = new MediaDiffEditorSession(panel, handler, true);
+    const session = new MediaDiffEditorSession(panel, handler);
 
     session.attach(vi.fn());
     await session.disposeAsync();
@@ -114,14 +103,14 @@ describe('MediaDiffEditorSessionFactory', () => {
     vi.clearAllMocks();
   });
 
-  it('should create session with resolved engine client and message handler factory', async () => {
+  it('should create a session with the canonical media runtime', async () => {
     const { panel } = createMockWebviewPanel();
     const documentUri = { toString: () => 'file:///demo.mp4' } as vscode.Uri;
     const previousUri = { toString: () => 'file:///demo.prev.mp4' } as vscode.Uri;
     const diffService = {} as MediaDiffService;
-    const engineClient = { baseUrl: 'http://127.0.0.1:9999' };
-    const engineMediaService: IEngineMediaService = {
-      ensureClient: vi.fn().mockResolvedValue(engineClient),
+    const mediaRuntime = {} as IToolsMediaRuntime;
+    const mediaRuntimeService: IMediaRuntimeService = {
+      runtime: mediaRuntime,
       diff: vi.fn(),
       detectSilence: vi.fn(),
       probe: vi.fn(),
@@ -139,7 +128,7 @@ describe('MediaDiffEditorSessionFactory', () => {
     const createMessageHandler = vi.fn().mockReturnValue(messageHandler);
     const factory = new MediaDiffEditorSessionFactory(
       diffService,
-      engineMediaService,
+      mediaRuntimeService,
       scheduler,
       tempFileService,
       createMessageHandler,
@@ -151,12 +140,11 @@ describe('MediaDiffEditorSessionFactory', () => {
       previousUri,
     });
 
-    expect(engineMediaService.ensureClient).toHaveBeenCalledTimes(1);
     expect(createMessageHandler).toHaveBeenCalledWith({
       webview: panel.webview,
       documentUri,
       diffService,
-      engineClient,
+      mediaRuntime,
       scheduler,
       tempFileService,
       previousUri,
@@ -170,8 +158,8 @@ describe('MediaDiffEditorSessionFactory', () => {
     const { panel } = createMockWebviewPanel();
     const documentUri = { toString: () => 'file:///demo.mp4' } as vscode.Uri;
     const diffService = {} as MediaDiffService;
-    const engineMediaService: IEngineMediaService = {
-      ensureClient: vi.fn().mockResolvedValue(null),
+    const mediaRuntimeService: IMediaRuntimeService = {
+      runtime: {} as IToolsMediaRuntime,
       diff: vi.fn(),
       detectSilence: vi.fn(),
       probe: vi.fn(),
@@ -190,7 +178,7 @@ describe('MediaDiffEditorSessionFactory', () => {
     });
     const factory = new MediaDiffEditorSessionFactory(
       diffService,
-      engineMediaService,
+      mediaRuntimeService,
       scheduler,
       tempFileService,
       createMessageHandler,

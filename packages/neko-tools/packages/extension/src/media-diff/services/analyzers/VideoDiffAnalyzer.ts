@@ -1,9 +1,7 @@
 /**
  * VideoDiffAnalyzer - Video Diff Analyzer
  *
- * Delegates video comparison to neko-engine's native videos:diff action.
- * Engine performs: FFmpeg SSIM/PSNR filter → per-frame metrics + diff regions.
- * This analyzer converts EngineDiffResult → Protocol VideoDiffDetails.
+ * Delegates video comparison to the Node/FFmpeg media runtime.
  */
 
 import type {
@@ -12,10 +10,9 @@ import type {
   VideoDiffDetails,
   KeyframeDiff,
   EngineVideoDiffRegion,
-  EngineMediaInfo,
   EngineFieldDiff,
 } from '@neko/shared';
-import type { IEngineMediaService } from '../../../contracts/IEngineMediaService';
+import type { IMediaRuntimeService } from '../../../contracts/IMediaRuntimeService';
 import type { ITempFileService } from '../../../contracts/ITempFileService';
 import { getLogger } from '../../../utils/logger';
 import { TempFileBackedMediaDiffAnalyzer } from './TempFileBackedMediaDiffAnalyzer';
@@ -25,25 +22,47 @@ const logger = getLogger('VideoDiffAnalyzer');
 const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v'];
 
 /**
- * Parse infoA/infoB which may be a JSON string or already-parsed object.
- * Rust serializes info_a as serde_json::Value (object), so depending on
- * the transport layer it may arrive as an object or a JSON string.
+ * Parse generated infoA/infoB values without trusting their JSON shape.
  */
-function parseMediaInfo(raw: unknown): Partial<EngineMediaInfo> {
-  if (!raw) return {};
-  if (typeof raw === 'object' && raw !== null) return raw as Partial<EngineMediaInfo>;
-  if (typeof raw === 'string') {
+function parseMediaInfo(raw: unknown): {
+  readonly duration?: number;
+  readonly width?: number;
+  readonly height?: number;
+  readonly fps?: number;
+  readonly codec?: string;
+} {
+  let value = raw;
+  if (typeof value === 'string') {
     try {
-      return JSON.parse(raw) as Partial<EngineMediaInfo>;
+      value = JSON.parse(value);
     } catch {
       return {};
     }
   }
-  return {};
+  if (!isRecord(value)) return {};
+  return {
+    ...(finiteNumber(value['duration']) === undefined
+      ? {}
+      : { duration: finiteNumber(value['duration']) }),
+    ...(finiteNumber(value['width']) === undefined ? {} : { width: finiteNumber(value['width']) }),
+    ...(finiteNumber(value['height']) === undefined
+      ? {}
+      : { height: finiteNumber(value['height']) }),
+    ...(finiteNumber(value['fps']) === undefined ? {} : { fps: finiteNumber(value['fps']) }),
+    ...(typeof value['codec'] === 'string' ? { codec: value['codec'] } : {}),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 /**
- * Extract a numeric value from engine fields array.
+ * Extract a numeric value from generated diff fields.
  * Fields contain probe metadata that's always available even when SSIM fails.
  */
 function fieldValue(fields: EngineFieldDiff[], name: string, side: 'A' | 'B'): number | undefined {
@@ -65,7 +84,7 @@ export class VideoDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
   readonly mediaType = 'video' as const;
 
   constructor(
-    private readonly engineMediaService: IEngineMediaService,
+    private readonly mediaRuntimeService: IMediaRuntimeService,
     tempFileService: ITempFileService,
   ) {
     super(VIDEO_EXTENSIONS, tempFileService);
@@ -95,8 +114,8 @@ export class VideoDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
       this.throwIfAborted();
 
       // Step 1: Quick probe to get durations for smart range selection
-      const probeA = await this.engineMediaService.probe('videos', currentPath);
-      const probeB = await this.engineMediaService.probe('videos', previousPath);
+      const probeA = await this.mediaRuntimeService.probe('videos', currentPath);
+      const probeB = await this.mediaRuntimeService.probe('videos', previousPath);
       const probeDurA = probeA?.duration ?? 0;
       const probeDurB = probeB?.duration ?? 0;
 
@@ -128,7 +147,7 @@ export class VideoDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
 
       // Use 1fps sampling for initial diff to reduce computation time
       // For 60min video: 108K frames → 3.6K frames → ~1-2s instead of 30s
-      const engineResult = await this.engineMediaService.diff(
+      const runtimeResult = await this.mediaRuntimeService.diff(
         'videos',
         currentPath,
         previousPath,
@@ -137,14 +156,10 @@ export class VideoDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
 
       this.throwIfAborted();
 
-      if (!engineResult) {
-        throw new Error('Engine video diff unavailable');
-      }
-
-      const videoDiff = engineResult.videoDiff;
-      const fields = engineResult.fields ?? [];
-      const infoA = parseMediaInfo(engineResult.infoA);
-      const infoB = parseMediaInfo(engineResult.infoB);
+      const videoDiff = runtimeResult.videoDiff;
+      const fields = runtimeResult.fields ?? [];
+      const infoA = parseMediaInfo(runtimeResult.infoA);
+      const infoB = parseMediaInfo(runtimeResult.infoB);
 
       if (!videoDiff) {
         logger.warn('videoDiff unavailable (SSIM/PSNR failed), using probe metadata');

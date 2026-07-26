@@ -16,7 +16,7 @@
 
 import * as vscode from 'vscode';
 import type { MediaDiffRequest, MediaDiffResponse } from '@neko/shared';
-import type { EngineClient } from '@neko/neko-client/EngineClient';
+import type { IToolsMediaRuntime } from '../../contracts/IMediaRuntimeService';
 import type { IScheduler } from '../../contracts/IScheduler';
 import type { ITempFileService } from '../../contracts/ITempFileService';
 import type { IMediaDiffService } from '../services/MediaDiffService';
@@ -86,7 +86,7 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
     readonly webview: vscode.Webview,
     readonly fileUri: vscode.Uri,
     readonly diffService: IMediaDiffService,
-    readonly engineClient: EngineClient | null,
+    readonly mediaRuntime: IToolsMediaRuntime,
     readonly scheduler: IScheduler,
     readonly tempFileService: ITempFileService,
     readonly previousUri?: vscode.Uri,
@@ -105,14 +105,8 @@ export class MediaDiffMessageHandler implements vscode.Disposable, IHandlerConte
 
   // ── IHandlerContext — helpers ───────────────────────────────────────
 
-  /**
-   * Assert engine client is available. Throws into caller's try/catch.
-   */
-  requireEngine(): EngineClient {
-    if (!this.engineClient) {
-      throw new Error('neko-engine not available');
-    }
-    return this.engineClient;
+  requireMediaRuntime(): IToolsMediaRuntime {
+    return this.mediaRuntime;
   }
 
   /**

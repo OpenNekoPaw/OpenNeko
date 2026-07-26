@@ -49,7 +49,12 @@ export const TimelineElementContent = memo(function TimelineElementContent(
 
 function renderDerivedVisual(props: TimelineElementContentProps): React.ReactNode {
   const representation = props.representation;
-  if (!representation || representation.status !== 'ready') return null;
+  if (
+    !representation ||
+    (representation.status !== 'ready' && representation.status !== 'partial')
+  ) {
+    return null;
+  }
   if (representation.kind === 'thumbnail') {
     return (
       <div className="cut-basic-thumbnails" aria-hidden="true">
@@ -64,9 +69,20 @@ function renderDerivedVisual(props: TimelineElementContentProps): React.ReactNod
       </div>
     );
   }
+  const waveformWidth = representation.waveform.partial
+    ? Math.max(
+        0,
+        Math.min(
+          props.width,
+          props.width *
+            (representation.waveform.partial.availableDurationSeconds /
+              representation.waveform.durationSeconds),
+        ),
+      )
+    : props.width;
   const path = buildWaveformPath(
     representation.waveform.peaks,
-    Math.max(1, props.width),
+    Math.max(1, waveformWidth),
     Math.max(1, props.height - 8),
   );
   return (

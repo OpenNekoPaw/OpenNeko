@@ -47,7 +47,7 @@ export default defineConfig({
       '@neko-agent/types': path.resolve(__dirname, 'packages/agent-types/src'),
       '@neko-agent/test-utils': path.resolve(__dirname, 'test-utils/src'),
       '@neko/markdown': path.resolve(__dirname, '../neko-markdown/src'),
-      '@neko/neko-client': path.resolve(__dirname, '../neko-client/src'),
+      '@neko/media': path.resolve(__dirname, '../neko-media/src'),
       // Handler tests mock vscode via vi.mock('vscode') — alias ensures resolution
       'vscode': path.resolve(__dirname, 'packages/extension/src/__mocks__/vscode.ts'),
     },

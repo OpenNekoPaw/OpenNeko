@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { IEngineMediaService } from '../contracts/IEngineMediaService';
+import type { IMediaRuntimeService } from '../contracts/IMediaRuntimeService';
 import type { IScheduler } from '../contracts/IScheduler';
 import type { IWorkspaceIO } from '../contracts/IWorkspaceIO';
 import { initializeMediaLsp } from '../media-lsp';
@@ -14,7 +14,7 @@ import {
 export function bootstrapMediaLsp(
   context: vscode.ExtensionContext,
   services: ServiceCollection,
-  engineMediaService: IEngineMediaService,
+  mediaRuntimeService: IMediaRuntimeService,
   workspaceIO: IWorkspaceIO,
   scheduler: IScheduler,
 ): void {
@@ -25,7 +25,7 @@ export function bootstrapMediaLsp(
   services.set(IMediaWorkspaceIndexId, workspaceIndex);
 
   initializeMediaLsp(context, {
-    engineService: engineMediaService,
+    mediaService: mediaRuntimeService,
     probeCache,
     scheduler,
     workspaceIO,

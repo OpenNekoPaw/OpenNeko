@@ -1,4 +1,6 @@
+import { CutMediaCorruptionError } from '@neko-cut/domain';
 import type {
+  CutRepresentationFailureScope,
   AudioWaveformPort,
   CutClipRepresentationRequest,
   CutClipRepresentationResult,
@@ -84,29 +86,66 @@ export async function generateClipRepresentations(input: {
             { peaksPerSecond: request.peaksPerSecond },
             input.signal,
           );
+          const sliced = sliceWaveform(
+            waveform,
+            located.clip.sourceStartSeconds,
+            located.clip.durationSeconds,
+          );
+          if (sliced.partial && sliced.peaks.length === 0) {
+            return unavailable(request, sliced.partial.message, sliced.partial.failureScope);
+          }
           return {
             clipId: request.clipId,
             kind: 'waveform',
-            status: 'ready',
-            waveform: sliceWaveform(
-              waveform,
-              located.clip.sourceStartSeconds,
-              located.clip.durationSeconds,
-            ),
+            status: sliced.partial ? 'partial' : 'ready',
+            waveform: sliced,
           };
         }
         const thumbnails = [];
+        const failures: {
+          sourceTimeSeconds: number;
+          failureScope: CutRepresentationFailureScope;
+          message: string;
+        }[] = [];
         for (let index = 0; index < request.sampleCount; index += 1) {
           const sourceTimeSeconds =
             located.clip.sourceStartSeconds +
             (located.clip.durationSeconds * (index + 0.5)) / request.sampleCount;
-          const frame = await input.ports.captureFrame(
-            source,
-            sourceTimeSeconds,
-            { width: 160, height: 90 },
-            input.signal,
+          try {
+            const frame = await input.ports.captureFrame(
+              source,
+              sourceTimeSeconds,
+              { width: 160, height: 90 },
+              input.signal,
+            );
+            thumbnails.push({ sourceTimeSeconds, dataUrl: frame.dataUrl });
+          } catch (error) {
+            if (input.signal?.aborted) throw error;
+            failures.push({
+              sourceTimeSeconds,
+              failureScope: error instanceof CutMediaCorruptionError ? error.scope : 'operation',
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+        if (thumbnails.length === 0) {
+          const firstFailure = failures[0];
+          return unavailable(
+            request,
+            firstFailure
+              ? `All requested thumbnail frames failed. ${firstFailure.message}`
+              : 'All requested thumbnail frames failed.',
+            commonFailureScope(failures),
           );
-          thumbnails.push({ sourceTimeSeconds, dataUrl: frame.dataUrl });
+        }
+        if (failures.length > 0) {
+          return {
+            clipId: request.clipId,
+            kind: 'thumbnail',
+            status: 'partial',
+            thumbnails,
+            failures,
+          };
         }
         return {
           clipId: request.clipId,
@@ -135,6 +174,21 @@ function sliceWaveform(
     peaks: waveform.peaks.slice(startIndex, endIndex),
     durationSeconds,
     peaksPerSecond: waveform.peaksPerSecond,
+    ...(waveform.partial
+      ? {
+          partial: {
+            availableDurationSeconds: Math.max(
+              0,
+              Math.min(
+                durationSeconds,
+                waveform.partial.availableDurationSeconds - sourceStartSeconds,
+              ),
+            ),
+            failureScope: waveform.partial.failureScope,
+            message: waveform.partial.message,
+          },
+        }
+      : {}),
   };
 }
 
@@ -151,13 +205,22 @@ function findClip(view: TimelineView, clipId: string) {
 function unavailable(
   request: CutClipRepresentationRequest,
   message: string,
+  failureScope?: CutRepresentationFailureScope,
 ): CutClipRepresentationResult {
   return {
     clipId: request.clipId,
     kind: request.kind,
     status: 'unavailable',
     message,
+    ...(failureScope ? { failureScope } : {}),
   };
+}
+
+function commonFailureScope(
+  failures: readonly { readonly failureScope: CutRepresentationFailureScope }[],
+): CutRepresentationFailureScope {
+  const first = failures[0]?.failureScope ?? 'operation';
+  return failures.every((failure) => failure.failureScope === first) ? first : 'operation';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

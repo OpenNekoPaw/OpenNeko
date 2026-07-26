@@ -23,6 +23,7 @@ export type PreviewEntry =
 
 /** Document entries fetch tokenized data from the Preview Node loopback host. */
 const DOCUMENT_ENTRIES = new Set<PreviewEntry>(['pdf', 'cbz', 'epub', 'docx']);
+const MEDIA_ENTRIES = new Set<PreviewEntry>(['video', 'audio', 'panorama-image', 'panorama-video']);
 
 export interface WebviewHtmlOptions {
   /** Webview instance */
@@ -67,7 +68,7 @@ const ENTRY_TITLES: Record<PreviewEntry, string> = {
   model: '3D Reference',
 };
 
-/** Loopback origin shared by the Node document host and Rust media Engine. */
+/** Loopback origin shared by the Node document and media hosts. */
 const LOOPBACK_HTTP = 'http://127.0.0.1:*';
 
 /**
@@ -83,6 +84,7 @@ function getDevHtml(
 ): string {
   const devUrl = `http://localhost:${devPort}`;
   const isDocument = DOCUMENT_ENTRIES.has(entry);
+  const isMedia = MEDIA_ENTRIES.has(entry);
   const isEpub = entry === 'epub';
   const isModel = entry === 'model';
 
@@ -100,7 +102,9 @@ function getDevHtml(
     ? `img-src ${devUrl} ${cspSource} data: blob:;`
     : isDocument
       ? `img-src ${devUrl} ${LOOPBACK_HTTP} data: blob:;`
-      : `img-src ${devUrl} data: blob:;`;
+      : isMedia
+        ? `img-src ${devUrl} ${LOOPBACK_HTTP} data: blob:;`
+        : `img-src ${devUrl} data: blob:;`;
   const styleSrc = isDocument
     ? `style-src 'unsafe-inline' blob: ${devUrl} ${LOOPBACK_HTTP};`
     : `style-src 'unsafe-inline' ${devUrl};`;
@@ -120,7 +124,7 @@ function getDevHtml(
 		default-src 'none';
 		${connectSrc}
 		${imgSrc}
-		media-src blob:;
+		media-src ${isMedia ? `${LOOPBACK_HTTP} blob:` : "'none'"};
 		script-src 'nonce-${nonce}' ${devUrl};
 		${styleSrc}
 		${fontSrc}
@@ -154,6 +158,7 @@ function getProdHtml(
   const csp = webview.cspSource;
 
   const isDocument = DOCUMENT_ENTRIES.has(entry);
+  const isMedia = MEDIA_ENTRIES.has(entry);
   const isEpub = entry === 'epub';
   const isModel = entry === 'model';
 
@@ -165,9 +170,10 @@ function getProdHtml(
         : `connect-src ${LOOPBACK_HTTP};`
       : `connect-src ws://127.0.0.1:* ${LOOPBACK_HTTP};`;
 
-  const imgSrc = isDocument
-    ? `img-src ${csp} ${LOOPBACK_HTTP} data: blob:;`
-    : `img-src ${csp} data: blob:;`;
+  const imgSrc =
+    isDocument || isMedia
+      ? `img-src ${csp} ${LOOPBACK_HTTP} data: blob:;`
+      : `img-src ${csp} data: blob:;`;
   const styleSrc = isDocument
     ? `style-src 'unsafe-inline' blob: ${csp} ${LOOPBACK_HTTP};`
     : `style-src 'unsafe-inline' ${csp};`;
@@ -185,7 +191,7 @@ function getProdHtml(
 		default-src 'none';
 		${connectSrc}
 		${imgSrc}
-		media-src blob:;
+		media-src ${isMedia ? `${LOOPBACK_HTTP} blob:` : "'none'"};
 		script-src 'nonce-${nonce}';
 		${styleSrc}
 		${fontSrc}

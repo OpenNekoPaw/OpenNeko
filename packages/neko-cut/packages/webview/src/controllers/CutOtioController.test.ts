@@ -478,7 +478,16 @@ describe('CutOtioController', () => {
       width: 1920,
       height: 1080,
       framesPerSecond: 30,
-      audioStreamUrls: ['ws://audio/pcm-1'],
+      audioStreams: [
+        {
+          version: 1,
+          transport: 'http',
+          protocol: 'neko-pcm-f32le-v1',
+          streamUrl: 'http://127.0.0.1:4123/v1/cut-media/pcm/pcm-1',
+          sampleRate: 48_000,
+          channels: 2,
+        },
+      ],
       audioGainsDb: [0],
     };
 

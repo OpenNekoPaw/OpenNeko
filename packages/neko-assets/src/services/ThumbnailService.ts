@@ -3,9 +3,9 @@
  */
 
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import type { NodeMediaRuntime } from '@neko/media/node';
 import {
   detectMediaType,
   normalizeWorkspaceContentPath,
@@ -29,10 +29,13 @@ export interface ThumbnailResult {
 
 export class AssetsThumbnailGenerator implements ContentRepresentationGenerator {
   readonly id = 'neko-assets-thumbnail';
-  readonly revision = '2';
+  readonly revision = '3';
   readonly kinds = ['thumbnail'] as const;
 
-  constructor(private readonly workspaceRoot: string) {}
+  constructor(
+    private readonly workspaceRoot: string,
+    private readonly mediaRuntime: NodeMediaRuntime,
+  ) {}
 
   async generate(
     input: Parameters<ContentRepresentationGenerator['generate']>[0],
@@ -50,32 +53,30 @@ export class AssetsThumbnailGenerator implements ContentRepresentationGenerator 
     const sourcePath = resolveWorkspaceFile(this.workspaceRoot, input.source.path);
     const width = input.spec.maxWidth ?? 256;
     const height = input.spec.maxHeight ?? 256;
-    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'neko-thumbnail-'));
-    const outputPath = path.join(tempRoot, 'thumbnail.jpg');
-    try {
-      const result = await vscode.commands.executeCommand<{
-        readonly success: boolean;
-        readonly path?: string;
-        readonly width?: number;
-        readonly height?: number;
-      }>('neko.engine.extractThumbnail', sourcePath, outputPath, width, height, 1);
-      if (!result?.success || result.path !== outputPath) {
-        throw new Error('Engine thumbnail generation failed.');
-      }
-      const bytes = await fs.readFile(outputPath);
-      return {
-        bytes,
-        metadata: {
-          mimeType: 'image/jpeg',
-          byteLength: bytes.byteLength,
-          width: result.width ?? width,
-          height: result.height ?? height,
-        },
-      };
-    } finally {
-      await fs.rm(tempRoot, { recursive: true, force: true });
-    }
+    const dataUrl = await this.mediaRuntime.captureFrame(sourcePath, 0, {
+      width,
+      height,
+      quality: 85,
+    });
+    const bytes = decodeJpegDataUrl(dataUrl);
+    return {
+      bytes,
+      metadata: {
+        mimeType: 'image/jpeg',
+        byteLength: bytes.byteLength,
+        width,
+        height,
+      },
+    };
   }
+}
+
+function decodeJpegDataUrl(dataUrl: string): Uint8Array {
+  const prefix = 'data:image/jpeg;base64,';
+  if (!dataUrl.startsWith(prefix)) {
+    throw new Error('Node media runtime returned an invalid JPEG thumbnail.');
+  }
+  return new Uint8Array(Buffer.from(dataUrl.slice(prefix.length), 'base64'));
 }
 
 export class ThumbnailService implements vscode.Disposable {

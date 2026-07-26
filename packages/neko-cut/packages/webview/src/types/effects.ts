@@ -27,7 +27,6 @@ import type {
   AnimatableEffectParameter,
   EffectInstance,
 } from '@neko/shared';
-import type { EffectCapability } from '@neko/neko-client';
 
 // =============================================================================
 // Webview-Specific Extensions: Effect Parameter Definitions
@@ -637,101 +636,6 @@ export function getEffectDefinition(type: string): EffectDefinition | undefined 
  */
 export function getEffectsByCategory(category: EffectCategory): EffectDefinition[] {
   return BUILT_IN_EFFECTS.filter((e) => e.category === category);
-}
-
-/**
- * Build webview effect definitions from engine-discovered shader capabilities.
- */
-export function buildEffectDefinitionsFromCapabilities(
-  capabilities: readonly EffectCapability[],
-): EffectDefinition[] {
-  const engineDefinitions = capabilities
-    .filter((capability) => capability.kind === 'shader')
-    .map(effectDefinitionFromCapability)
-    .filter((definition): definition is EffectDefinition => Boolean(definition));
-
-  if (engineDefinitions.length === 0) {
-    return BUILT_IN_EFFECTS;
-  }
-
-  const definitions = new Map<string, EffectDefinition>();
-  for (const definition of BUILT_IN_EFFECTS) {
-    definitions.set(definition.type, definition);
-  }
-  for (const definition of engineDefinitions) {
-    definitions.set(definition.type, definition);
-  }
-
-  return Array.from(definitions.values());
-}
-
-function effectDefinitionFromCapability(capability: EffectCapability): EffectDefinition | null {
-  const category = toEffectCategory(capability.category);
-  if (!category) return null;
-
-  return {
-    type: capability.id,
-    nameKey: capability.nameKey ?? `effects.${capability.id}`,
-    descriptionKey: capability.description,
-    category,
-    gpuAccelerated: capability.gpuAccelerated ?? capability.kind === 'shader',
-    parameters: capability.params.map((param) => ({
-      key: param.name,
-      nameKey: param.labelKey ?? `effects.params.${param.name}`,
-      type: toEffectParameterType(param.type),
-      defaultValue: param.default ?? defaultValueForParameterType(param.type),
-      min: param.min,
-      max: param.max,
-      step: param.step,
-      unit: param.unit,
-      options: param.options?.map((option) => ({
-        value: option.value as string | number,
-        labelKey: option.labelKey ?? option.label ?? String(option.value),
-      })),
-      animatable: param.animatable,
-    })),
-  };
-}
-
-function toEffectCategory(category: string | undefined): EffectCategory | null {
-  if (
-    category === 'blur' ||
-    category === 'sharpen' ||
-    category === 'distort' ||
-    category === 'stylize' ||
-    category === 'color' ||
-    category === 'generate' ||
-    category === 'keying' ||
-    category === 'utility'
-  ) {
-    return category;
-  }
-
-  return 'utility';
-}
-
-function toEffectParameterType(paramType: string): EffectParameterType {
-  if (
-    paramType === 'number' ||
-    paramType === 'boolean' ||
-    paramType === 'color' ||
-    paramType === 'select' ||
-    paramType === 'angle' ||
-    paramType === 'point' ||
-    paramType === 'range'
-  ) {
-    return paramType;
-  }
-
-  return 'number';
-}
-
-function defaultValueForParameterType(paramType: string): EffectParameterValue {
-  if (paramType === 'boolean') return false;
-  if (paramType === 'point') return [0, 0];
-  if (paramType === 'color') return '#ffffff';
-  if (paramType === 'select') return '';
-  return 0;
 }
 
 /**

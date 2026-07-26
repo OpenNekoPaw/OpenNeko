@@ -246,7 +246,7 @@ describe('PerceptionImageSimilarityTool', () => {
         observationId: 'obs-image',
         modelContext: {
           modelId: 'clip-vit-b32',
-          providerId: 'neko-engine',
+          providerId: 'openneko-perception',
         },
         data: {
           kind: 'perception.image.similarity',
@@ -282,7 +282,7 @@ describe('PerceptionImageSimilarityTool', () => {
         toolName: TOOL_NAMES_PERCEPTION.IMAGE_SIMILARITY,
         modelContext: {
           modelId: 'clip-vit-b32',
-          providerId: 'neko-engine',
+          providerId: 'openneko-perception',
         },
       }),
     });
@@ -380,7 +380,7 @@ describe('PerceptionImageClassifyTool', () => {
         observationId: 'obs-image',
         modelContext: {
           modelId: 'clip-vit-b32',
-          providerId: 'neko-engine',
+          providerId: 'openneko-perception',
         },
         data: {
           kind: 'perception.image.classify',
@@ -470,7 +470,7 @@ describe('PerceptionAudioTranscribeTool', () => {
         observationId: 'obs-a',
         modelContext: {
           modelId: 'whisper-small',
-          providerId: 'neko-engine',
+          providerId: 'openneko-perception',
         },
         data: {
           kind: 'perception.audio.transcribe',
@@ -503,7 +503,7 @@ describe('PerceptionAudioTranscribeTool', () => {
         toolName: TOOL_NAMES_PERCEPTION.AUDIO_TRANSCRIBE,
         modelContext: {
           modelId: 'whisper-base',
-          providerId: 'neko-engine',
+          providerId: 'openneko-perception',
         },
         data: expect.objectContaining({
           kind: 'perception.audio.transcribe',

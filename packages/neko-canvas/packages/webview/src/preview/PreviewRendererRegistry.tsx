@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isResourceRef, type DelegateAction, type ResourceRef } from '@neko/shared';
+import type { HtmlVideoDescriptor, PcmStreamDescriptor } from '@neko/media';
 import { dispatchPreviewDelegate } from './previewDelegates';
 import { isImagePreviewUrl, isSafeWebviewUrl, WebviewPreviewResolver } from './previewResolver';
 import { PreviewRuntime } from './previewRuntime';
@@ -123,13 +124,14 @@ function useCaptureFrame(
 // =============================================================================
 
 interface MediaStreamState {
-  videoStreamUrl: string | null;
-  audioStreamUrl: string | null;
+  video: HtmlVideoDescriptor | null;
+  audio: PcmStreamDescriptor | null;
   width: number;
   height: number;
   fps: number;
   duration: number;
   startTime: number;
+  playbackRate: number;
 }
 
 const PLAYBACK_PROGRESS_SYNC_INTERVAL_MS = 250;
@@ -247,13 +249,14 @@ function useMediaStream(
             updatedAtMs: getMonotonicTimeMs(),
           };
           setStream({
-            videoStreamUrl: (msg.videoStreamUrl as string) ?? null,
-            audioStreamUrl: (msg.audioStreamUrl as string) ?? null,
+            video: readHtmlVideoDescriptor(msg.video),
+            audio: readPcmStreamDescriptor(msg.audio),
             width: (mediaInfo?.width as number) ?? 640,
             height: (mediaInfo?.height as number) ?? 360,
             fps: (mediaInfo?.fps as number) ?? 30,
             duration: dur,
-            startTime,
+            startTime: typeof msg.startTime === 'number' ? msg.startTime : startTime,
+            playbackRate: typeof msg.playbackRate === 'number' ? msg.playbackRate : 1,
           });
         }
       };
@@ -693,13 +696,14 @@ function VideoPreviewRenderer({
         data-preview-chrome={chrome}
       >
         <InlineVideoPlayer
-          videoStreamUrl={stream.videoStreamUrl}
-          audioStreamUrl={stream.audioStreamUrl}
+          video={stream.video}
+          audio={stream.audio}
           width={stream.width}
           height={stream.height}
           fps={stream.fps}
           duration={stream.duration}
           startTime={stream.startTime}
+          playbackRate={stream.playbackRate}
           onPause={pausePlayback}
           onResume={resumePlayback}
           onSeek={seekPlayback}
@@ -817,7 +821,7 @@ function AudioPreviewRenderer({
     [playbackControl?.onEnded, source.id, stream?.duration],
   );
 
-  if (stream && stream.audioStreamUrl) {
+  if (stream && stream.audio) {
     return (
       <div
         className={getAudioPreviewFrameClassName(chrome)}
@@ -825,9 +829,10 @@ function AudioPreviewRenderer({
         data-preview-chrome={chrome}
       >
         <InlineAudioPlayer
-          audioStreamUrl={stream.audioStreamUrl}
+          audio={stream.audio}
           duration={stream.duration}
           startTime={stream.startTime}
+          playbackRate={stream.playbackRate}
           onPause={pausePlayback}
           onResume={resumePlayback}
           onSeek={seekPlayback}
@@ -1004,6 +1009,57 @@ function resolveProjectTypeLabel(value: unknown, defaultExt: string): string {
   void value;
   void defaultExt;
   return t('node.project');
+}
+
+function readHtmlVideoDescriptor(value: unknown): HtmlVideoDescriptor | null {
+  if (
+    !isRecordValue(value) ||
+    value['version'] !== 1 ||
+    value['transport'] !== 'http' ||
+    typeof value['url'] !== 'string' ||
+    typeof value['mimeType'] !== 'string' ||
+    typeof value['durationSeconds'] !== 'number' ||
+    (value['preparationProfile'] !== 'h264-mp4-direct' &&
+      value['preparationProfile'] !== 'vp8-webm-direct' &&
+      value['preparationProfile'] !== 'h264-mp4-remux' &&
+      value['preparationProfile'] !== 'h264-sdr-transcode')
+  ) {
+    return null;
+  }
+  return {
+    version: 1,
+    transport: 'http',
+    url: value['url'],
+    mimeType: value['mimeType'],
+    durationSeconds: value['durationSeconds'],
+    preparationProfile: value['preparationProfile'],
+  };
+}
+
+function readPcmStreamDescriptor(value: unknown): PcmStreamDescriptor | null {
+  if (
+    !isRecordValue(value) ||
+    value['version'] !== 1 ||
+    value['transport'] !== 'http' ||
+    value['protocol'] !== 'neko-pcm-f32le-v1' ||
+    typeof value['streamUrl'] !== 'string' ||
+    typeof value['sampleRate'] !== 'number' ||
+    typeof value['channels'] !== 'number'
+  ) {
+    return null;
+  }
+  return {
+    version: 1,
+    transport: 'http',
+    protocol: 'neko-pcm-f32le-v1',
+    streamUrl: value['streamUrl'],
+    sampleRate: value['sampleRate'],
+    channels: value['channels'],
+  };
+}
+
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function getStableSafeUrl(source: PreviewSourceDescriptor): string | undefined {

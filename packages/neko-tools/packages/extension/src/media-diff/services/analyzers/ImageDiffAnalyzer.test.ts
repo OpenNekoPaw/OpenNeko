@@ -1,11 +1,14 @@
 /**
  * ImageDiffAnalyzer 单元测试
  *
- * 测试图片 Diff 分析器的核心功能（委托给引擎）
+ * 测试图片 Diff 分析器的核心功能（委托给 Node/FFmpeg runtime）
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { IEngineMediaService } from '../../../contracts/IEngineMediaService';
+import type {
+  IMediaRuntimeService,
+  IToolsMediaRuntime,
+} from '../../../contracts/IMediaRuntimeService';
 import type { ITempFileService } from '../../../contracts/ITempFileService';
 import { ImageDiffAnalyzer } from './ImageDiffAnalyzer';
 
@@ -31,13 +34,13 @@ const mockDiff = vi.fn();
 
 describe('ImageDiffAnalyzer', () => {
   let analyzer: ImageDiffAnalyzer;
-  let engineMediaService: IEngineMediaService;
+  let mediaRuntimeService: IMediaRuntimeService;
   let tempFileService: ITempFileService;
 
   beforeEach(() => {
     mockDiff.mockReset();
-    engineMediaService = {
-      ensureClient: vi.fn(),
+    mediaRuntimeService = {
+      runtime: {} as IToolsMediaRuntime,
       diff: mockDiff,
       detectSilence: vi.fn(),
       probe: vi.fn(),
@@ -50,7 +53,7 @@ describe('ImageDiffAnalyzer', () => {
         .mockResolvedValueOnce('/tmp/previous.png'),
       deleteTempFile: vi.fn().mockResolvedValue(undefined),
     };
-    analyzer = new ImageDiffAnalyzer(engineMediaService, tempFileService);
+    analyzer = new ImageDiffAnalyzer(mediaRuntimeService, tempFileService);
   });
 
   afterEach(() => {
@@ -122,7 +125,7 @@ describe('ImageDiffAnalyzer', () => {
   });
 
   describe('analyze', () => {
-    it('should return diff result from engine', async () => {
+    it('should return diff result from the Node media runtime', async () => {
       mockDiff.mockResolvedValue({
         category: 'image',
         identical: false,
@@ -155,17 +158,6 @@ describe('ImageDiffAnalyzer', () => {
       expect(result).toHaveProperty('similarity');
       expect(result.similarity).toBeCloseTo(0.85, 1);
       expect(mockDiff).toHaveBeenCalledWith('images', '/tmp/current.png', '/tmp/previous.png');
-    });
-
-    it('should throw when engine is unavailable', async () => {
-      mockDiff.mockResolvedValue(null);
-
-      const current = Buffer.from('current image data');
-      const previous = Buffer.from('previous image data');
-
-      await expect(analyzer.analyze(current, previous)).rejects.toThrow(
-        'Engine image diff unavailable',
-      );
     });
 
     it('should return image diff details with dimensions', async () => {

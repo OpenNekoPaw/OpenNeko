@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import type { TimelineView } from '@neko-cut/domain';
+import { CutMediaCorruptionError, type TimelineView } from '@neko-cut/domain';
 import { generateClipRepresentations, readClipRepresentationRequests } from './clipRepresentations';
 
 const view: TimelineView = {
@@ -101,6 +101,87 @@ describe('Cut Clip representations', () => {
         kind: 'thumbnail',
         status: 'unavailable',
         message: 'thumbnail is incompatible with a Audio Clip.',
+      },
+    ]);
+  });
+
+  it('preserves valid thumbnails when another bounded frame fails', async () => {
+    const captureFrame = vi.fn(async (_source, timeSeconds: number) => {
+      if (timeSeconds === 2) {
+        throw new CutMediaCorruptionError(
+          'interval',
+          'capture frame',
+          'Invalid NAL unit at the requested frame.',
+        );
+      }
+      return { dataUrl: `data:image/jpeg;base64,${timeSeconds}` };
+    });
+
+    const results = await generateClipRepresentations({
+      view,
+      requests: [{ clipId: 'video-clip', kind: 'thumbnail', sampleCount: 2 }],
+      ports: { captureFrame, generateWaveform: vi.fn() },
+      resolveSource: async () => ({ workspaceRelativePath: 'shot.mp4' }),
+    });
+
+    expect(results).toEqual([
+      {
+        clipId: 'video-clip',
+        kind: 'thumbnail',
+        status: 'partial',
+        thumbnails: [
+          {
+            sourceTimeSeconds: 4,
+            dataUrl: 'data:image/jpeg;base64,4',
+          },
+        ],
+        failures: [
+          {
+            sourceTimeSeconds: 2,
+            failureScope: 'interval',
+            message:
+              'Media corruption in interval while attempting capture frame. Invalid NAL unit at the requested frame.',
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('projects only the available prefix of a partially decoded waveform', async () => {
+    const results = await generateClipRepresentations({
+      view,
+      requests: [{ clipId: 'audio-clip', kind: 'waveform', peaksPerSecond: 2 }],
+      ports: {
+        captureFrame: vi.fn(),
+        generateWaveform: vi.fn(async () => ({
+          peaks: [0, 0.1, 0.2, 0.3, 0.4],
+          durationSeconds: 6,
+          peaksPerSecond: 2,
+          partial: {
+            availableDurationSeconds: 2.5,
+            failureScope: 'stream' as const,
+            message: 'AAC suffix is corrupt.',
+          },
+        })),
+      },
+      resolveSource: async () => ({ workspaceRelativePath: 'audio.mp4' }),
+    });
+
+    expect(results).toEqual([
+      {
+        clipId: 'audio-clip',
+        kind: 'waveform',
+        status: 'partial',
+        waveform: {
+          peaks: [0.2, 0.3, 0.4],
+          durationSeconds: 4,
+          peaksPerSecond: 2,
+          partial: {
+            availableDurationSeconds: 1.5,
+            failureScope: 'stream',
+            message: 'AAC suffix is corrupt.',
+          },
+        },
       },
     ]);
   });

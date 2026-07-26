@@ -5,12 +5,11 @@
  * - Images: transform according to platform vision policy
  * - Videos: extract keyframes, resize, return as frame array
  *
- * Uses neko-engine (via EngineClient) for video processing and sharp for images.
- * Degrades gracefully when engine is unavailable.
+ * Uses the canonical Node/FFmpeg runtime for video processing and sharp for images.
  */
 
 import { getLogger } from '../../base';
-import type { EngineClient } from '@neko/neko-client/EngineClient';
+import type { NodeMediaRuntime } from '@neko/media/node';
 import { getMimeType } from '@neko/shared';
 import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
 import {
@@ -34,13 +33,13 @@ export class MediaPreprocessor {
   private readonly preprocessor: VisionPreprocessor;
 
   constructor(
-    engineClient: EngineClient | null,
+    mediaRuntime: NodeMediaRuntime,
     private readonly contentAccessRuntime?: AgentContentAccessRuntime,
   ) {
     this.preprocessor = new VisionPreprocessor({
       readFile: (filePath) => this.readImageBytes(filePath),
       imageProcessor: createSharpVisionImageProcessor(),
-      videoProcessor: createEngineVideoProcessor(engineClient),
+      videoProcessor: createNodeVideoProcessor(mediaRuntime),
       logger,
     });
   }
@@ -90,19 +89,31 @@ export class MediaPreprocessor {
   }
 }
 
-function createEngineVideoProcessor(
-  engineClient: EngineClient | null,
-): VisionVideoProcessor | null {
-  if (!engineClient) {
-    return null;
-  }
-
+function createNodeVideoProcessor(mediaRuntime: NodeMediaRuntime): VisionVideoProcessor {
   return {
-    probe: (filePath) => engineClient.probe('videos', filePath),
-    getKeyframes: (filePath) => engineClient.getKeyframes(filePath),
+    probe: async (filePath) => {
+      const probe = await mediaRuntime.probe(filePath);
+      if (!probe.video) {
+        throw new Error('Vision video preprocessing requires a video stream.');
+      }
+      return {
+        duration: probe.durationSeconds,
+        width: probe.video.width,
+        height: probe.video.height,
+      };
+    },
+    getKeyframes: (filePath) => mediaRuntime.keyframes(filePath),
     extractFrame: async (filePath, time, options) => {
-      const frame = await engineClient.extractFrame(filePath, time, options);
-      return frame ? new Uint8Array(frame) : null;
+      const dataUrl = await mediaRuntime.captureFrame(filePath, time, options);
+      return decodeDataUrl(dataUrl);
     },
   };
+}
+
+function decodeDataUrl(dataUrl: string): Uint8Array {
+  const separator = dataUrl.indexOf(',');
+  if (separator < 0 || !dataUrl.slice(0, separator).endsWith(';base64')) {
+    throw new Error('Media runtime returned an invalid frame data URL.');
+  }
+  return new Uint8Array(Buffer.from(dataUrl.slice(separator + 1), 'base64'));
 }

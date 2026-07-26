@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { formatTime } from '@neko/neko-client';
+import { formatMediaTime } from '@neko/media';
 
 export interface ProgressBarProps {
   currentTime: number;
@@ -13,7 +13,7 @@ export interface ProgressBarProps {
 export function ProgressBar({
   currentTime,
   duration,
-  formatTooltip = formatTime,
+  formatTooltip = formatMediaTime,
   onSeekCommit,
   onSeeking,
   variant = 'default',

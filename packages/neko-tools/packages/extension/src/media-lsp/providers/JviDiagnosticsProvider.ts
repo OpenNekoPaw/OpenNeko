@@ -15,7 +15,7 @@ import { parseJviDocument } from '../services/JviParser';
 import { checkStructure, checkReferences } from '../services/JviDiagnosticAnalyzer';
 import type { DiagnosticEntry } from '../types';
 import type { IMediaProbeCache, ProbeResultLike } from '../services/types';
-import type { IEngineMediaService } from '../../contracts/IEngineMediaService';
+import type { IMediaRuntimeService } from '../../contracts/IMediaRuntimeService';
 import { resolveMediaSrcPath } from '../services/resolveMediaSrcPath';
 
 const LANGUAGE_ID = 'nekotools-jvi';
@@ -27,7 +27,7 @@ export class JviDiagnosticsProvider implements vscode.Disposable {
   private readonly debounceTasks = new Map<string, IScheduledTask>();
 
   constructor(
-    private readonly engineService: IEngineMediaService | undefined,
+    private readonly mediaService: IMediaRuntimeService | undefined,
     private readonly probeCache: IMediaProbeCache,
     private readonly workspaceIO: IWorkspaceIO,
     private readonly scheduler: IScheduler,
@@ -96,8 +96,7 @@ export class JviDiagnosticsProvider implements vscode.Disposable {
     // Synchronous structural checks (always run)
     const entries: DiagnosticEntry[] = [...checkStructure(project)];
 
-    // Asynchronous reference checks (only when engine is available)
-    if (this.engineService) {
+    if (this.mediaService) {
       try {
         const jviDir = path.dirname(doc.uri.fsPath);
         const refEntries = await checkReferences(
@@ -109,7 +108,7 @@ export class JviDiagnosticsProvider implements vscode.Disposable {
         );
         entries.push(...refEntries);
       } catch {
-        // Engine unavailable — skip reference checks silently
+        // External media probe failure is non-fatal to structural diagnostics.
       }
     }
 
@@ -153,10 +152,10 @@ export class JviDiagnosticsProvider implements vscode.Disposable {
     const cached = this.probeCache.get(absolutePath);
     if (cached) return cached;
 
-    if (!this.engineService) return null;
+    if (!this.mediaService) return null;
 
     try {
-      const result = await this.engineService.probe('videos', absolutePath);
+      const result = await this.mediaService.probe('videos', absolutePath);
       if (result) {
         this.probeCache.set(absolutePath, result as ProbeResultLike);
         return result as ProbeResultLike;

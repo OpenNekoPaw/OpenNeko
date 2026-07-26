@@ -9,7 +9,7 @@
 - 基础编辑最多支持 5 个轨道：固定 1 个 Video、最多 3 个 Audio、最多 1 个 Subtitle；支持向指定轨道 link/relink、同类轨道内/之间拖拽、split、trim、ripple delete、Gap、undo/redo 和音频 gain/mute/fade。
 - Subtitle Track 初版可链接 SRT/VTT 并在时间线排列；当前媒体 adapter 尚不支持字幕预览叠加或导出烧录，非空字幕轨导出会明确报错。
 - 视频 Clip 默认保留内嵌音轨及独立静音按钮；显式“分离音频”创建引用同一媒体和范围的 Audio Clip，不生成 WAV。分离关系不会自动静音任一输入。
-- 预览、PCM、抽帧和 MP4 导出通过文档级媒体端口接入当前 Neko Engine；OTIO Core 不依赖 Engine 类型。
+- 预览、PCM、抽帧和 MP4 导出通过文档级媒体端口接入 Node/FFmpeg adapter；OTIO Core 不依赖宿主实现类型。
 - 项目 Inspector 可选择电视（16:9）、电影（2.39:1）、短视频（9:16）和方形（1:1）画布；尺寸持久化到 OTIO profile，并由自适应 Preview 与后台导出共同消费。
 - Canvas 只能把有序 workspace media/Gap 快照交给新 `.otio`，或追加到已打开的明确 `.otio` URI + revision；不推断 active/recent Cut。
 
@@ -20,7 +20,7 @@
 ```text
 packages/neko-cut/
 ├── packages/domain/     # Host-neutral OTIO subset、命令、投影和文档会话
-├── packages/extension/  # VS Code 文件生命周期、路径授权、Engine adapter
+├── packages/extension/  # VS Code 文件生命周期、路径授权、Node/FFmpeg adapter
 └── packages/webview/    # revisioned TimelineView 的基础编辑界面
 ```
 

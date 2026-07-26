@@ -692,7 +692,7 @@ describe('NarrativePreviewBridge', () => {
     expect(html).not.toContain('legacyCachePath');
     expect(html).toContain("value.includes('vscode-resource.vscode-cdn.net/')");
     expect(html).toContain('img-src vscode-webview: data: blob: https:');
-    expect(html).toContain('media-src vscode-webview: data: blob: https:');
+    expect(html).toContain('media-src vscode-webview: data: blob: https: http://127.0.0.1:*');
     expect(html).toContain('__nekoNarrativePreviewMediaRuntime');
     expect(html).not.toContain("document.createElement('video')");
     expect(html).not.toContain("document.createElement('audio')");

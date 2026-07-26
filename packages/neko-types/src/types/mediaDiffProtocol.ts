@@ -718,31 +718,42 @@ export interface FileHistoryResponse extends BaseMediaDiffResponse {
  * Audio-only stream configuration for audio diff (no video).
  * Sent when audio diff starts streaming via WebSocket PCM.
  */
+export interface MediaDiffPcmDescriptor {
+  version: 1;
+  transport: 'http';
+  protocol: 'neko-pcm-f32le-v1';
+  streamUrl: string;
+  sampleRate: number;
+  channels: number;
+}
+
+export interface MediaDiffVideoDescriptor {
+  version: 1;
+  transport: 'http';
+  url: string;
+  mimeType: string;
+  preparationProfile:
+    'h264-mp4-direct' | 'vp8-webm-direct' | 'h264-mp4-remux' | 'h264-sdr-transcode';
+  durationSeconds: number;
+}
+
 export interface AudioStreamConfig {
-  /** Frame server port */
-  port: number;
-  /** Current version audio stream ID */
-  currentAudioStreamId: string;
-  /** Previous version audio stream ID */
-  previousAudioStreamId: string;
+  currentAudio: MediaDiffPcmDescriptor;
+  previousAudio: MediaDiffPcmDescriptor;
   /** Audio duration in seconds */
   duration: number;
+  startTime: number;
+  playbackRate: number;
 }
 
 /**
  * Stream configuration data sent to webview after streams are created
  */
 export interface StreamConfig {
-  /** Frame server port */
-  port: number;
-  /** Current version video stream ID */
-  currentStreamId: string;
-  /** Previous version video stream ID */
-  previousStreamId: string;
-  /** Current version audio stream ID (if audio exists) */
-  currentAudioStreamId?: string;
-  /** Previous version audio stream ID (if audio exists) */
-  previousAudioStreamId?: string;
+  currentVideo: MediaDiffVideoDescriptor;
+  previousVideo: MediaDiffVideoDescriptor;
+  currentAudio?: MediaDiffPcmDescriptor;
+  previousAudio?: MediaDiffPcmDescriptor;
   /** Video width */
   width: number;
   /** Video height */
@@ -751,6 +762,8 @@ export interface StreamConfig {
   fps: number;
   /** Video duration in seconds */
   duration: number;
+  startTime: number;
+  playbackRate: number;
 }
 
 /**

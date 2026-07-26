@@ -563,8 +563,8 @@ describe('8. Command Preview in Tool Approval', () => {
       toolCallId: 'tc-cwd',
       toolName: 'execute_command',
       arguments: {
-        command: 'cargo test',
-        cwd: '/packages/neko-engine',
+        command: 'pnpm test',
+        cwd: '/packages/neko-media',
       },
       resolve: () => {},
     };
@@ -574,8 +574,8 @@ describe('8. Command Preview in Tool Approval', () => {
     );
     const frame = lastFrame()!;
     expect(frame).toContain('execute_command');
-    expect(frame).toContain('cargo test');
-    expect(frame).toContain('/packages/neko-engine');
+    expect(frame).toContain('pnpm test');
+    expect(frame).toContain('/packages/neko-media');
     console.log('[Command] With cwd:\n', frame);
   });
 

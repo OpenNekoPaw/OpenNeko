@@ -2,7 +2,7 @@
 // AUTO-GENERATED — DO NOT EDIT
 //
 // Source: packages/neko-proto/diff.proto
-// Source hash: 07a442e88f0bb432
+// Source hash: 87339d1afdabec90
 // Command: node scripts/proto-gen-ts.mjs
 // =============================================================================
 

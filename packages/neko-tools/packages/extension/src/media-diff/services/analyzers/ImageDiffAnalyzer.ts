@@ -1,15 +1,11 @@
 /**
  * ImageDiffAnalyzer - Image Diff Analyzer
  *
- * Delegates image comparison to neko-engine's native images:diff action.
- * Engine performs: pixel-level SSIM/PSNR/MSE + heatmap generation.
- * This analyzer converts EngineDiffResult → Protocol ImageDiffDetails.
- *
- * Fallback: If engine is unavailable, uses sharp for local comparison.
+ * Delegates image comparison to the canonical Node/FFmpeg media runtime.
  */
 
 import type { DiffOptions, DiffResult, ImageDiffDetails } from '@neko/shared';
-import type { IEngineMediaService } from '../../../contracts/IEngineMediaService';
+import type { IMediaRuntimeService } from '../../../contracts/IMediaRuntimeService';
 import type { ITempFileService } from '../../../contracts/ITempFileService';
 import { TempFileBackedMediaDiffAnalyzer } from './TempFileBackedMediaDiffAnalyzer';
 
@@ -19,7 +15,7 @@ export class ImageDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
   readonly mediaType = 'image' as const;
 
   constructor(
-    private readonly engineMediaService: IEngineMediaService,
+    private readonly mediaRuntimeService: IMediaRuntimeService,
     tempFileService: ITempFileService,
   ) {
     super(IMAGE_EXTENSIONS, tempFileService);
@@ -41,15 +37,15 @@ export class ImageDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
       );
       this.throwIfAborted();
 
-      const engineResult = await this.engineMediaService.diff('images', currentPath, previousPath);
+      const runtimeResult = await this.mediaRuntimeService.diff(
+        'images',
+        currentPath,
+        previousPath,
+      );
 
       this.throwIfAborted();
 
-      if (!engineResult) {
-        throw new Error('Engine image diff unavailable');
-      }
-
-      const imageDiff = engineResult.imageDiff;
+      const imageDiff = runtimeResult.imageDiff;
 
       const details: ImageDiffDetails = {
         dimensions: {
@@ -58,13 +54,13 @@ export class ImageDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
         },
         pixelDifference: (imageDiff?.diffPixelPercent ?? 0) / 100,
         structuralSimilarity: imageDiff?.ssim ?? 0,
-        colorHistogramDiff: 0, // Engine doesn't compute histogram; use 0
+        colorHistogramDiff: 0, // The FFmpeg adapter does not compute a histogram.
       };
 
-      // Use engine's SSIM as primary similarity metric
+      // Use FFmpeg SSIM as the primary similarity metric.
       const similarity = imageDiff?.ssim ?? 0;
 
-      // Build visualization from engine heatmap
+      // Build visualization from the runtime heatmap when available.
       let visualization: DiffResult['visualization'];
       if (options?.generateHeatmap && imageDiff?.heatmap) {
         const heatmapBuffer = Buffer.from(imageDiff.heatmap, 'base64');

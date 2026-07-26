@@ -10,7 +10,7 @@
  *
  * Migrated sub-packages (2026-04-08):
  * - neko-cut → timeline tools
- * - neko-engine → effects + retained media analysis tools
+ * - Node/FFmpeg media runtime → retained media analysis tools
  * - neko-canvas → canvas node/generation tools
  */
 

@@ -161,14 +161,32 @@ describe('PreviewSurface media playback control', () => {
       role: 'video-proxy' as const,
       mediaType: 'video' as const,
       assetPath: 'clips/a.mp4',
-      readyUrls: { videoStreamUrl: 'ws://video/a', audioStreamUrl: null },
+      readyDescriptors: {
+        video: {
+          version: 1,
+          transport: 'http',
+          url: 'http://127.0.0.1:3000/file/video-a',
+          mimeType: 'video/mp4',
+          preparationProfile: 'h264-mp4-direct',
+          durationSeconds: 2,
+        },
+      },
       endedTestId: 'inline-video-ended',
     },
     {
       role: 'audio-waveform' as const,
       mediaType: 'audio' as const,
       assetPath: 'audio/a.wav',
-      readyUrls: { videoStreamUrl: null, audioStreamUrl: 'ws://audio/a' },
+      readyDescriptors: {
+        audio: {
+          version: 1,
+          transport: 'http',
+          protocol: 'neko-pcm-f32le-v1',
+          streamUrl: 'http://127.0.0.1:3000/pcm/audio-a',
+          sampleRate: 48_000,
+          channels: 2,
+        },
+      },
       endedTestId: 'inline-audio-ended',
     },
   ])(
@@ -230,7 +248,9 @@ describe('PreviewSurface media playback control', () => {
           type: 'media:streamReady',
           nodeId,
           mediaInfo: mediaInfoFor(caseData.mediaType),
-          ...caseData.readyUrls,
+          ...caseData.readyDescriptors,
+          startTime: 0,
+          playbackRate: 1,
         });
       });
 

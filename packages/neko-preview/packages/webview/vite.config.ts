@@ -58,7 +58,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@neko/shared': path.resolve(__dirname, '../../../neko-types/src'),
-      '@neko/neko-client': path.resolve(__dirname, '../../../neko-client/src'),
+      '@neko/media': path.resolve(__dirname, '../../../neko-media/src'),
       '@neko/ui': path.resolve(__dirname, '../../../neko-ui/src'),
     },
   },
@@ -87,6 +87,8 @@ export default defineConfig({
       input: {
         video: path.resolve(__dirname, 'video.html'),
         audio: path.resolve(__dirname, 'audio.html'),
+        'panorama-image': path.resolve(__dirname, 'panorama-image.html'),
+        'panorama-video': path.resolve(__dirname, 'panorama-video.html'),
         pdf: path.resolve(__dirname, 'pdf.html'),
         cbz: path.resolve(__dirname, 'cbz.html'),
         epub: path.resolve(__dirname, 'epub.html'),

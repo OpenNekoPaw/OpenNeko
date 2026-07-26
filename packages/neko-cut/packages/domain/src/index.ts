@@ -7,5 +7,6 @@ export * from './metadata';
 export * from './media-ports';
 export * from './projection';
 export * from './session';
+export * from './time-format';
 export * from './types';
 export * from './user-diagnostics';

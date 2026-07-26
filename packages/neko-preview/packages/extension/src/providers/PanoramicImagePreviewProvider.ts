@@ -73,10 +73,7 @@ export class PanoramicImagePreviewProvider implements vscode.CustomReadonlyEdito
             activeManifest = manifest;
             await webviewPanel.webview.postMessage({
               type: 'panorama:init',
-              payload: {
-                manifest,
-                engineBaseUrl: this._previewService?.getPreviewBaseUrl() ?? null,
-              },
+              payload: { manifest },
             });
             break;
           }
@@ -178,10 +175,7 @@ export class PanoramicImagePreviewProvider implements vscode.CustomReadonlyEdito
       if (!manifest) return null;
       await webviewPanel.webview.postMessage({
         type: 'panorama:init',
-        payload: {
-          manifest,
-          engineBaseUrl: this._previewService?.getPreviewBaseUrl() ?? null,
-        },
+        payload: { manifest },
       });
       return manifest;
     } catch (error) {
@@ -235,7 +229,7 @@ export class PanoramicImagePreviewProvider implements vscode.CustomReadonlyEdito
     }
     if (!this._previewService?.isAvailable) {
       webviewPanel.webview.html = getPreviewErrorHtml(
-        'Failed to initialize media engine. Please ensure neko-engine is installed.',
+        'Failed to initialize the local Node/FFmpeg media runtime.',
         'Panoramic Preview Error',
       );
       this._statusBar.hide();

@@ -7,7 +7,7 @@
  */
 
 import { useCallback } from 'react';
-import { formatTime } from '@neko/neko-client';
+import { formatMediaTime } from '@neko/media';
 import { useTranslation } from '../i18n/I18nContext';
 import { ProgressBar } from '../shared/ProgressBar';
 import { MacIconButton } from '../shared/MacIconButton';
@@ -163,7 +163,7 @@ export function VideoControls({
 
           {/* Time */}
           <span className="text-xs tabular-nums text-white/85 whitespace-nowrap min-w-[90px] text-center">
-            {formatTime(currentTime)} / {formatTime(duration)}
+            {formatMediaTime(currentTime)} / {formatMediaTime(duration)}
           </span>
         </div>
 

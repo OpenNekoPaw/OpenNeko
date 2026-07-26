@@ -7,8 +7,8 @@
  */
 
 import type * as vscode from 'vscode';
-import type { EngineClient } from '@neko/neko-client/EngineClient';
 import type { DiffResult, MediaDiffResponse } from '@neko/shared';
+import type { IToolsMediaRuntime } from '../../../contracts/IMediaRuntimeService';
 import type { IScheduledTask, IScheduler } from '../../../contracts/IScheduler';
 import type { ITempFileService } from '../../../contracts/ITempFileService';
 import type { IMediaDiffService } from '../../services/MediaDiffService';
@@ -20,7 +20,7 @@ export interface IHandlerContext {
   readonly fileUri: vscode.Uri;
   readonly previousUri?: vscode.Uri;
   readonly diffService: IMediaDiffService;
-  readonly engineClient: EngineClient | null;
+  readonly mediaRuntime: IToolsMediaRuntime;
   readonly scheduler: IScheduler;
   readonly tempFileService: ITempFileService;
   readonly requestState: IMediaDiffRequestState;
@@ -59,8 +59,7 @@ export interface IHandlerContext {
   // ── Helpers ─────────────────────────────────────────────────────────
   /** Send message to webview (no-op if disposed) */
   sendMessage(message: Partial<MediaDiffResponse>): void;
-  /** Assert engine client is available. Throws into caller's try/catch. */
-  requireEngine(): EngineClient;
+  requireMediaRuntime(): IToolsMediaRuntime;
 }
 
 /** Maximum concurrent frame extractions (shared constant) */

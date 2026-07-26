@@ -136,19 +136,31 @@ describe('Cut OTIO Webview boundary', () => {
   });
 
   it('keeps preview stream ownership in the controller layer and consumes all audio streams', () => {
-    expect(app).toMatch(/EngineAvStreamLifecycle/);
+    expect(app).toMatch(/CutMseVideoClient/);
+    expect(app).toMatch(/CutPcmAudioClient/);
+    expect(app).toMatch(/CutPreviewClock/);
     expect(app).toMatch(/PreviewAudioContextOwner/);
     expect(app).toMatch(/contextForConnection\(\)/);
-    expect(app).toMatch(/\{ audioContext \}/);
-    expect(app).toMatch(/additionalAudioStreamUrls\.map/);
-    expect(app).toMatch(/new AudioStreamClient/);
-    expect(app).toMatch(/frame\.timestamp \/ 1_000_000/);
-    expect(app).toMatch(/setClockPlaybackRate\(message\.mediaPlaybackRate \?\? 1\)/);
+    expect(app).toMatch(/message\.audioStreams\.map/);
+    expect(app).toMatch(/new CutPcmAudioClient/);
+    expect(app).toMatch(/previewClockRef\.current\?\.read\(\)/);
+    expect(app).not.toMatch(/EngineAvStreamLifecycle|AudioStreamClient/);
     expect(app).toMatch(/timelineEndSeconds: prepared\.playbackEndSeconds/);
     expect(app).toMatch(/controller\.startPreview\(playheadSeconds\)/);
     expect(app).toMatch(/controller\.preparePreview\(playheadSeconds\)/);
     expect(app).toMatch(/controller\.activatePreview\(generation\)/);
     expect(app.match(/controller\.startPreview\(/g)).toHaveLength(1);
+  });
+
+  it('disposes Webview playback clients before stopping a discontinuous host preview', () => {
+    const branchStart = app.indexOf('if (clock?.discontinuity) {');
+    const branchEnd = app.indexOf('return;', branchStart);
+    const branch = app.slice(branchStart, branchEnd);
+    expect(branchStart).toBeGreaterThan(-1);
+    expect(branch).toContain('stopPlaybackClients(');
+    expect(branch.indexOf('stopPlaybackClients(')).toBeLessThan(
+      branch.indexOf('controller.stopPreview()'),
+    );
   });
 
   it('projects localized failures through the retained Toast surface only', () => {

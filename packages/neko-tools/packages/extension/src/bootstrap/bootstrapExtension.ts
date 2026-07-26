@@ -19,7 +19,7 @@ export function bootstrapNekoToolsExtension(
   const mediaDiffProvider = bootstrapMediaDiff(
     context,
     coreServices.services,
-    coreServices.engineMediaService,
+    coreServices.mediaRuntimeService,
     coreServices.workspaceIO,
     coreServices.scheduler,
     coreServices.tempFileService,
@@ -27,7 +27,7 @@ export function bootstrapNekoToolsExtension(
   bootstrapMediaLsp(
     context,
     coreServices.services,
-    coreServices.engineMediaService,
+    coreServices.mediaRuntimeService,
     coreServices.workspaceIO,
     coreServices.scheduler,
   );

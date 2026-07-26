@@ -66,29 +66,6 @@ export interface NekoDisposableLike {
 export type NekoEventLike<T> = (listener: (event: T) => void) => NekoDisposableLike;
 
 // =============================================================================
-// NekoEngine API
-// =============================================================================
-
-export type NekoEngineRuntimeState = 'idle' | 'starting' | 'ready' | 'error';
-
-export interface NekoEngineConnectionEndpoint {
-  /** Host clients should use for local HTTP/WebSocket checks. */
-  readonly host: string;
-  /** Bound HTTP/WebSocket frame server port. */
-  readonly port: number;
-  /** Human-readable endpoint, e.g. "127.0.0.1:43123". */
-  readonly address: string;
-  /** Base HTTP URL for diagnostics and preview clients. */
-  readonly url: string;
-}
-
-export interface NekoEngineRuntimeStatus {
-  readonly state: NekoEngineRuntimeState;
-  readonly endpoint?: NekoEngineConnectionEndpoint;
-  readonly health?: 'unknown' | 'healthy' | 'unhealthy';
-}
-
-// =============================================================================
 // NekoCut API
 // =============================================================================
 

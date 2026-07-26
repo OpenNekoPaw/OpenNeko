@@ -4,113 +4,111 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { HtmlVideoDescriptor, PcmStreamDescriptor } from '@neko/media';
 import { InlineAudioPlayer } from './InlineAudioPlayer';
 import { InlineVideoPlayer } from './InlineVideoPlayer';
 
 (globalThis as { React?: typeof React }).React = React;
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-type StreamEndCallback = (kind: 'video' | 'audio') => void;
-
-const lifecycleMock = vi.hoisted(() => ({
-  callbacks: [] as Array<{ onStreamEnd?: StreamEndCallback }>,
-  start: vi.fn<(descriptor: unknown) => Promise<unknown>>(),
-  stop: vi.fn<() => void>(),
+const pcmMock = vi.hoisted(() => ({
+  instances: [] as Array<{
+    options: { onStreamEnd?: () => void };
+    connect: ReturnType<typeof vi.fn>;
+    dispose: ReturnType<typeof vi.fn>;
+  }>,
 }));
 
-vi.mock('@neko/neko-client', () => {
-  class EngineAvStreamLifecycle {
-    private readonly callbacks: {
-      onClientsChanged?: (clients: unknown) => void;
-      onStreamEnd?: StreamEndCallback;
-    };
+vi.mock('@neko/media/browser', () => ({
+  PcmAudioClient: class {
+    readonly isClockReady = false;
+    readonly connect = vi.fn().mockResolvedValue(undefined);
+    readonly dispose = vi.fn();
+    readonly pause = vi.fn().mockResolvedValue(undefined);
+    readonly resume = vi.fn().mockResolvedValue(undefined);
+    readonly setVolume = vi.fn();
 
-    constructor(
-      options: {
-        readonly callbacks?: {
-          readonly onClientsChanged?: (clients: unknown) => void;
-          readonly onStreamEnd?: StreamEndCallback;
-        };
-      } = {},
-    ) {
-      this.callbacks = options.callbacks ?? {};
-      lifecycleMock.callbacks.push(this.callbacks);
+    constructor(readonly options: { onStreamEnd?: () => void }) {
+      pcmMock.instances.push(this);
     }
 
-    async start(descriptor: unknown): Promise<unknown> {
-      lifecycleMock.start(descriptor);
-      this.callbacks.onClientsChanged?.({
-        videoClient: createVideoClient(),
-        audioClient: createAudioClient(),
-        scheduler: createScheduler(),
-      });
-      return {
-        descriptor,
-        videoClient: createVideoClient(),
-        audioClient: createAudioClient(),
-        scheduler: createScheduler(),
-      };
+    getCurrentTime(): number {
+      return 0;
     }
-
-    stop(): void {
-      lifecycleMock.stop();
-    }
-  }
-
-  return {
-    EngineAvStreamLifecycle,
-    formatTime: (time: number) => String(Math.round(time)),
-  };
-});
+  },
+}));
 
 vi.mock('@neko/ui/creative', () => ({
   ProgressBar: () => <div data-testid="progress-bar" />,
 }));
 
 vi.mock('@neko/ui/icons', () => ({
-  PauseIcon: ({ size = 16 }: { size?: number }) => <span data-icon="pause">{size}</span>,
-  PlayIcon: ({ size = 16 }: { size?: number }) => <span data-icon="play">{size}</span>,
-  VolumeIcon: ({ size = 16 }: { size?: number }) => <span data-icon="volume">{size}</span>,
-  VolumeOffIcon: ({ size = 16 }: { size?: number }) => <span data-icon="volume-off">{size}</span>,
+  PauseIcon: () => <span data-icon="pause" />,
+  PlayIcon: () => <span data-icon="play" />,
+  VolumeIcon: () => <span data-icon="volume" />,
+  VolumeOffIcon: () => <span data-icon="volume-off" />,
 }));
+
+const audioDescriptor: PcmStreamDescriptor = {
+  version: 1,
+  transport: 'http',
+  protocol: 'neko-pcm-f32le-v1',
+  streamUrl: 'http://127.0.0.1:3000/pcm/token',
+  sampleRate: 48_000,
+  channels: 2,
+};
+const videoDescriptor: HtmlVideoDescriptor = {
+  version: 1,
+  transport: 'http',
+  url: 'http://127.0.0.1:3000/file/token',
+  mimeType: 'video/mp4',
+  preparationProfile: 'h264-mp4-direct',
+  durationSeconds: 2,
+};
 
 describe('Inline media players', () => {
   let host: HTMLDivElement;
   let root: Root;
-  let requestAnimationFrameSpy: ReturnType<typeof vi.spyOn>;
-  let cancelAnimationFrameSpy: ReturnType<typeof vi.spyOn>;
+  let scheduledFrame: FrameRequestCallback | undefined;
 
   beforeEach(() => {
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
-    lifecycleMock.callbacks.length = 0;
-    lifecycleMock.start.mockClear();
-    lifecycleMock.stop.mockClear();
-    requestAnimationFrameSpy = vi
-      .spyOn(window, 'requestAnimationFrame')
-      .mockImplementation(() => 1);
-    cancelAnimationFrameSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    pcmMock.instances.length = 0;
+    scheduledFrame = undefined;
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      scheduledFrame = callback;
+      return 1;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    vi.spyOn(HTMLMediaElement.prototype, 'readyState', 'get').mockReturnValue(
+      HTMLMediaElement.HAVE_METADATA,
+    );
+    class AudioContextMock {
+      readonly state = 'running';
+      readonly close = vi.fn().mockResolvedValue(undefined);
+      readonly resume = vi.fn().mockResolvedValue(undefined);
+    }
+    Object.assign(globalThis, { AudioContext: AudioContextMock });
   });
 
   afterEach(() => {
-    act(() => {
-      root.unmount();
-    });
+    act(() => root.unmount());
     host.remove();
-    requestAnimationFrameSpy.mockRestore();
-    cancelAnimationFrameSpy.mockRestore();
     vi.restoreAllMocks();
   });
 
-  it('completes route-controlled audio playback when the engine audio stream ends', async () => {
-    const onStop = vi.fn<(currentTime: number) => void>();
-    const onEnded = vi.fn<(currentTime: number) => void>();
-
+  it('uses the canonical PCM descriptor and completes audio playback at stream end', async () => {
+    const onStop = vi.fn();
+    const onEnded = vi.fn();
     await act(async () => {
       root.render(
         <InlineAudioPlayer
-          audioStreamUrl="ws://audio"
+          audio={audioDescriptor}
           duration={2}
           onPause={() => undefined}
           onResume={() => undefined}
@@ -122,26 +120,20 @@ describe('Inline media players', () => {
       await Promise.resolve();
     });
 
-    await act(async () => {
-      lifecycleMock.callbacks[0]?.onStreamEnd?.('audio');
-      lifecycleMock.callbacks[0]?.onStreamEnd?.('audio');
-    });
-
-    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(pcmMock.instances[0]?.connect).toHaveBeenCalledTimes(1);
+    await act(async () => pcmMock.instances[0]?.options.onStreamEnd?.());
     expect(onStop).toHaveBeenCalledWith(2);
-    expect(onEnded).toHaveBeenCalledTimes(1);
     expect(onEnded).toHaveBeenCalledWith(2);
   });
 
-  it('waits for video stream end before completing video playback when audio ends first', async () => {
-    const onStop = vi.fn<(currentTime: number) => void>();
-    const onEnded = vi.fn<(currentTime: number) => void>();
-
+  it('loads the tokenized HTTP video in a native video element and keeps PCM as master clock', async () => {
+    const onStop = vi.fn();
+    const onEnded = vi.fn();
     await act(async () => {
       root.render(
         <InlineVideoPlayer
-          videoStreamUrl="ws://video"
-          audioStreamUrl="ws://audio"
+          video={videoDescriptor}
+          audio={audioDescriptor}
           width={320}
           height={180}
           fps={24}
@@ -156,60 +148,11 @@ describe('Inline media players', () => {
       await Promise.resolve();
     });
 
-    await act(async () => {
-      lifecycleMock.callbacks[0]?.onStreamEnd?.('audio');
-    });
-
+    const video = host.querySelector('video');
+    expect(video?.src).toBe(videoDescriptor.url);
+    expect(video?.muted).toBe(true);
+    expect(pcmMock.instances[0]?.connect).toHaveBeenCalledTimes(1);
+    expect(scheduledFrame).toBeDefined();
     expect(onEnded).not.toHaveBeenCalled();
-
-    await act(async () => {
-      lifecycleMock.callbacks[0]?.onStreamEnd?.('video');
-      lifecycleMock.callbacks[0]?.onStreamEnd?.('video');
-    });
-
-    expect(onStop).toHaveBeenCalledTimes(1);
-    expect(onStop).toHaveBeenCalledWith(2);
-    expect(onEnded).toHaveBeenCalledTimes(1);
-    expect(onEnded).toHaveBeenCalledWith(2);
   });
 });
-
-function createAudioClient() {
-  return {
-    connect: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    dispose: vi.fn<() => void>(),
-    getStats: vi.fn<() => Record<string, unknown>>().mockReturnValue({}),
-    getCurrentTime: vi.fn<() => number>().mockReturnValue(0),
-    isClockReady: false,
-    getAudioContext: vi.fn<() => null>().mockReturnValue(null),
-    getGainNode: vi.fn<() => null>().mockReturnValue(null),
-    setVolume: vi.fn<(volume: number) => void>(),
-    setClockPlaybackRate: vi.fn<(rate: number) => void>(),
-    pause: vi.fn<() => void>(),
-    resume: vi.fn<() => void>(),
-    fadeOut: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    resetClock: vi.fn<() => void>(),
-  };
-}
-
-function createVideoClient() {
-  return {
-    connect: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-    dispose: vi.fn<() => void>(),
-    getStats: vi.fn<() => { framesDecoded: number }>().mockReturnValue({ framesDecoded: 1 }),
-  };
-}
-
-function createScheduler() {
-  return {
-    enqueue: vi.fn<(frame: VideoFrame) => void>(),
-    schedule: vi.fn<() => { action: 'wait'; delayMs: number }>().mockReturnValue({
-      action: 'wait',
-      delayMs: 0,
-    }),
-    flush: vi.fn<() => void>(),
-    switchClock: vi.fn<(newMasterClockUs: number) => void>(),
-    dispose: vi.fn<() => void>(),
-    getStats: vi.fn<() => null>().mockReturnValue(null),
-  };
-}

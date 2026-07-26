@@ -1,13 +1,10 @@
 /**
- * StreamingVideoDiffViewer — Real-time H264 dual-stream video diff.
+ * StreamingVideoDiffViewer — Real-time qualified dual-video diff.
  *
- * Connects two H264StreamClients to the frame server, pairs decoded
- * VideoFrames via FramePairBuffer, and renders diffs via WebGL DiffRenderer.
+ * Connects two authorized video descriptors and renders both HTML video
+ * projections through WebGL DiffRenderer.
  *
- * Seek handling follows the neko-preview pattern:
- * 1. Arm seekFilter — reject stale pre-seek frames still in WebSocket buffer
- * 2. Flush FramePairBuffer — discard queued frames
- * 3. Reset H264 decoders — start clean from next keyframe
+ * Seek resets both browser projections to the requested media time.
  */
 
 import { useRef, useCallback, useImperativeHandle, forwardRef, memo } from 'react';
@@ -39,7 +36,7 @@ export interface StreamingVideoDiffViewerProps {
 
 /** Imperative handle exposed via ref for parent-driven seek and static rendering */
 export interface StreamingVideoDiffViewerHandle {
-  /** Locally reset decoders and buffers for a seek at `time` (seconds) */
+  /** Seek both browser video projections to `time` (seconds). */
   seek(time: number): void;
   /** Render a static frame pair (Blob URLs) through the existing DiffRenderer */
   renderStaticPair(blobUrlA: string, blobUrlB: string): Promise<void>;

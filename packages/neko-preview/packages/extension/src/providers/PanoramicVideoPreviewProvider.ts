@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { PreviewManifest } from '@neko/shared';
-import { PreviewService } from '../services/PreviewService';
+import { PreviewService, type PreviewPlayback } from '../services/PreviewService';
 import type { StatusBarManager } from '../ui/StatusBarManager';
 import { getLogger } from '../utils/logger';
 import { PANORAMIC_VIDEO_VIEW_TYPE } from '../types/panoramic-api';
@@ -52,13 +52,13 @@ export class PanoramicVideoPreviewProvider implements vscode.CustomReadonlyEdito
     this._statusBar.show({ fileName, duration: 0 });
     const manifestPromise = this.registerManifest(filePath, fileName);
     let activeManifest: PreviewManifest | null = null;
-    let activeVideoStreamId: string | null = null;
-    let activeAudioStreamId: string | null = null;
+    let playback: PreviewPlayback | undefined;
 
-    const stopStreams = async () => {
-      await this._previewService?.stopStreams(activeVideoStreamId, activeAudioStreamId);
-      activeVideoStreamId = null;
-      activeAudioStreamId = null;
+    const stopPlayback = async (): Promise<void> => {
+      if (!playback || !this._previewService) return;
+      const active = playback;
+      playback = undefined;
+      await this._previewService.stopPlayback(active);
     };
 
     const messageDisposable = webviewPanel.webview.onDidReceiveMessage(
@@ -70,74 +70,71 @@ export class PanoramicVideoPreviewProvider implements vscode.CustomReadonlyEdito
             activeManifest = manifest;
             await webviewPanel.webview.postMessage({
               type: 'panorama:init',
-              payload: {
-                manifest,
-                engineBaseUrl: this._previewService?.getPreviewBaseUrl() ?? null,
-              },
+              payload: { manifest },
             });
             break;
           }
           case 'preview:play': {
-            await stopStreams();
+            await stopPlayback();
             const startTime = finiteNumber(message.startTime) ?? 0;
             const speed = finiteNumber(message.speed) ?? 1;
             const mediaInfo = await this._previewService?.probeMedia(filePath);
             if (!mediaInfo) return;
-            const result = await this._previewService?.startVideoPlayback(
+            playback = await this._previewService?.startPlayback(
               filePath,
               mediaInfo,
+              'video',
               startTime,
               speed,
             );
-            activeVideoStreamId = result?.videoStreamId ?? null;
-            activeAudioStreamId = result?.audioStreamId ?? null;
-            if (activeVideoStreamId) {
-              await webviewPanel.webview.postMessage({
-                type: 'preview:streamReady',
-                payload: {
-                  streamId: activeVideoStreamId,
-                  streamUrl: this._previewService?.getStreamWebSocketUrl(activeVideoStreamId),
-                  audioStreamId: activeAudioStreamId,
-                  audioStreamUrl: activeAudioStreamId
-                    ? this._previewService?.getAudioWebSocketUrl(activeAudioStreamId)
-                    : null,
-                },
-              });
-            }
+            if (!playback?.video)
+              throw new Error('Panoramic preview produced no video descriptor.');
+            await webviewPanel.webview.postMessage({
+              type: 'preview:playbackReady',
+              payload: {
+                video: playback.video,
+                ...(playback.audio ? { audio: playback.audio } : {}),
+                startTime,
+                playbackRate: speed,
+              },
+            });
             break;
           }
           case 'preview:pause':
-            await this._previewService?.pauseStreams(activeVideoStreamId, activeAudioStreamId);
-            break;
           case 'preview:resume':
-            await this._previewService?.resumeStreams(activeVideoStreamId, activeAudioStreamId);
+          case 'preview:speed':
             break;
           case 'preview:seek': {
-            const time = finiteNumber(message.time);
-            if (time !== null) {
-              await this._previewService?.seekStreams(
-                activeVideoStreamId,
-                activeAudioStreamId,
-                time,
-              );
-            }
-            break;
-          }
-          case 'preview:speed': {
-            const speed = finiteNumber(message.speed);
-            if (speed !== null) {
-              await this._previewService?.setStreamSpeed(
-                activeVideoStreamId,
-                activeAudioStreamId,
-                speed,
-              );
-            }
+            const time = finiteNumber(message.time) ?? 0;
+            const speed = finiteNumber(message.speed) ?? 1;
+            const mediaInfo = await this._previewService?.probeMedia(filePath);
+            if (!mediaInfo || !this._previewService) return;
+            await stopPlayback();
+            playback = await this._previewService.startPlayback(
+              filePath,
+              mediaInfo,
+              'video',
+              time,
+              speed,
+            );
+            if (!playback.video) throw new Error('Panoramic preview produced no video descriptor.');
+            await webviewPanel.webview.postMessage({
+              type: 'preview:playbackReady',
+              payload: {
+                video: playback.video,
+                ...(playback.audio ? { audio: playback.audio } : {}),
+                startTime: time,
+                playbackRate: speed,
+              },
+            });
             break;
           }
           case 'preview:stop':
           case 'preview:eof':
-            await stopStreams();
+            await stopPlayback();
             break;
+          default:
+            throw new Error(`Unknown panoramic video message: ${String(message.type)}`);
         }
       },
     );
@@ -145,7 +142,7 @@ export class PanoramicVideoPreviewProvider implements vscode.CustomReadonlyEdito
     webviewPanel.onDidDispose(() => {
       void (async () => {
         messageDisposable.dispose();
-        await stopStreams();
+        await stopPlayback();
         const manifest = activeManifest ?? (await manifestPromise.catch(() => null));
         if (manifest) {
           await this._previewService?.unregisterPreviewAsset(manifest.assetId);

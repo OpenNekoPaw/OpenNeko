@@ -1,23 +1,16 @@
 // =============================================================================
 // Media Diff Proto Definition (IDL)
 //
-// Authority: neko-engine Rust media_service module
-// Source files:
-//   - packages/neko-engine/packages/engine-kernel/src/media_service/diff.rs
-//   - packages/neko-engine/packages/engine-kernel/src/media_service/image_diff.rs
-//   - packages/neko-engine/packages/engine-kernel/src/media_service/audio_diff.rs
-//   - packages/neko-engine/packages/engine-kernel/src/media_service/video_diff.rs
-//   - packages/neko-engine/packages/engine-kernel/src/media_service/probe.rs
+// Authority: OpenNeko media comparison structured-data contract.
 //
 // Purpose:
-//   Single source of truth for diff result types shared between neko-engine
-//   (Rust) and TypeScript consumers. Covers media probe metadata, per-type
+//   Single source of truth for TypeScript diff result types. Covers media probe metadata, per-type
 //   content diff results, and timeline structural diff.
 //
 // Convention:
 //   - Field names use snake_case (TS codegen converts to camelCase)
 //   - Enum values use SCREAMING_SNAKE_CASE with type prefix
-//   - Only engine-recognized fields; UI/view state is separate
+//   - Only shared structured-data fields; UI/view state is separate
 // =============================================================================
 
 syntax = "proto3";

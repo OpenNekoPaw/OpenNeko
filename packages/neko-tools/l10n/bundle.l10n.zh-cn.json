@@ -33,7 +33,6 @@
   "mediaDiff.error.selectTwoFiles": "请选择恰好 2 个文件进行比较",
   "mediaDiff.error.unsupportedType": "不支持的媒体类型",
   "mediaDiff.error.typeMismatch": "所选文件必须属于相同的媒体类型",
-  "mediaDiff.error.engineUnavailable": "neko-engine 扩展不可用。安装后才能进行媒体差异分析。",
   "assetDiff.title": "素材变体对比",
   "assetDiff.loading": "加载中...",
   "assetDiff.analyzing": "分析中...",

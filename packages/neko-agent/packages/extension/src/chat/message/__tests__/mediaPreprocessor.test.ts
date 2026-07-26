@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MediaPreprocessor } from '../mediaPreprocessor';
 import type { AgentContentAccessRuntime } from '@neko/agent/runtime';
+import type { NodeMediaRuntime } from '@neko/media/node';
 
 const processMock = vi.hoisted(() => vi.fn());
 const processImageMock = vi.hoisted(() => vi.fn());
@@ -60,7 +61,7 @@ describe('MediaPreprocessor', () => {
     processImageMock.mockResolvedValue({ type: 'unsupported', images: [] });
     processVideoMock.mockResolvedValue({ type: 'unsupported', images: [] });
 
-    const processor = new MediaPreprocessor(null);
+    const processor = new MediaPreprocessor(createMediaRuntime());
     await processor.processImage('/Volumes/assets/image/ref.png');
     await processor.processVideo('/Volumes/assets/video/ref.mp4', { maxFrames: 3 });
 
@@ -75,7 +76,7 @@ describe('MediaPreprocessor', () => {
     processImageMock.mockResolvedValue({ type: 'image', images: [] });
     const contentAccessRuntime = createContentAccessRuntime(new Uint8Array([1, 2, 3]));
 
-    const processor = new MediaPreprocessor(null, contentAccessRuntime);
+    const processor = new MediaPreprocessor(createMediaRuntime(), contentAccessRuntime);
     await processor.processImage('/Volumes/assets/image/ref.png');
 
     expect(contentAccessRuntime.loadProviderAsset).toHaveBeenCalledWith({
@@ -85,7 +86,7 @@ describe('MediaPreprocessor', () => {
     expect(processImageMock).toHaveBeenCalledWith('/Volumes/assets/image/ref.png');
   });
 
-  it('keeps video preprocessing Engine-backed and does not use image content access', async () => {
+  it('keeps video preprocessing Node/FFmpeg-backed and does not use image content access', async () => {
     const contentAccessRuntime = createContentAccessRuntime(new Uint8Array([1, 2, 3]));
     processVideoMock.mockResolvedValue({
       type: 'unsupported',
@@ -93,16 +94,30 @@ describe('MediaPreprocessor', () => {
       metadata: { duration: 0 },
     });
 
-    const processor = new MediaPreprocessor(null, contentAccessRuntime);
+    const processor = new MediaPreprocessor(createMediaRuntime(), contentAccessRuntime);
     await processor.processVideo('/Volumes/assets/video/ref.mp4', { maxFrames: 3 });
 
-    expect(visionDeps[0]?.videoProcessor).toBeNull();
+    expect(visionDeps[0]?.videoProcessor).toEqual(
+      expect.objectContaining({
+        probe: expect.any(Function),
+        getKeyframes: expect.any(Function),
+        extractFrame: expect.any(Function),
+      }),
+    );
     expect(contentAccessRuntime.loadProviderAsset).not.toHaveBeenCalled();
     expect(processVideoMock).toHaveBeenCalledWith('/Volumes/assets/video/ref.mp4', {
       maxFrames: 3,
     });
   });
 });
+
+function createMediaRuntime(): NodeMediaRuntime {
+  return {
+    probe: vi.fn(),
+    keyframes: vi.fn(),
+    captureFrame: vi.fn(),
+  } as unknown as NodeMediaRuntime;
+}
 
 function createContentAccessRuntime(bytes: Uint8Array): AgentContentAccessRuntime {
   return {

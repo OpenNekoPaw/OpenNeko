@@ -1,13 +1,11 @@
 /**
  * TimelineDiffAnalyzer - JVI Project Structural Diff
  *
- * Delegates timeline comparison to neko-engine's native timelines:diff action.
- * Engine performs: JVI JSON parsing → track/element structural diff + optional content diff.
- * This analyzer converts EngineDiffResult → Protocol TimelineDiffDetails.
+ * Delegates Timeline JSON comparison to the Node media runtime service.
  */
 
 import type { DiffOptions, DiffResult, TimelineDiffDetails } from '@neko/shared';
-import type { IEngineMediaService } from '../../../contracts/IEngineMediaService';
+import type { IMediaRuntimeService } from '../../../contracts/IMediaRuntimeService';
 import type { ITempFileService } from '../../../contracts/ITempFileService';
 import { TempFileBackedMediaDiffAnalyzer } from './TempFileBackedMediaDiffAnalyzer';
 
@@ -15,7 +13,7 @@ export class TimelineDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
   readonly mediaType = 'timeline' as const;
 
   constructor(
-    private readonly engineMediaService: IEngineMediaService,
+    private readonly mediaRuntimeService: IMediaRuntimeService,
     tempFileService: ITempFileService,
   ) {
     super(['.nkv'], tempFileService);
@@ -37,7 +35,7 @@ export class TimelineDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
       );
       this.throwIfAborted();
 
-      const engineResult = await this.engineMediaService.diff(
+      const runtimeResult = await this.mediaRuntimeService.diff(
         'timelines',
         currentPath,
         previousPath,
@@ -45,13 +43,9 @@ export class TimelineDiffAnalyzer extends TempFileBackedMediaDiffAnalyzer {
 
       this.throwIfAborted();
 
-      if (!engineResult) {
-        throw new Error('Engine timeline diff unavailable');
-      }
+      const tl = runtimeResult.timelineDiff;
 
-      const tl = engineResult.timelineDiff;
-
-      // Convert Engine types → Protocol types
+      // Convert generated Diff contract types to the UI protocol.
       const details: TimelineDiffDetails = {
         project: {
           name: {

@@ -5,7 +5,7 @@
  * 职责：提供时间范围计算、碰撞检测等纯函数
  */
 
-import { formatMediaTime } from '@neko/neko-client';
+import { formatCutMediaTime } from '@neko-cut/domain';
 
 // =============================================================================
 // 类型定义
@@ -205,7 +205,7 @@ export function getProjectDuration(
  * 将秒数格式化为时间字符串 (HH:MM:SS.mmm)
  */
 export function formatTime(seconds: number, showMilliseconds = true): string {
-  return formatMediaTime(seconds, {
+  return formatCutMediaTime(seconds, {
     alwaysHours: true,
     fractionalDigits: showMilliseconds ? 3 : 0,
   });
@@ -215,7 +215,7 @@ export function formatTime(seconds: number, showMilliseconds = true): string {
  * 将秒数格式化为简短时间字符串 (MM:SS)
  */
 export function formatTimeShort(seconds: number): string {
-  return formatMediaTime(seconds, { padMinutes: true, rollHoursIntoMinutes: true });
+  return formatCutMediaTime(seconds, { padMinutes: true, rollHoursIntoMinutes: true });
 }
 
 /**

@@ -369,11 +369,11 @@ function runAnalysisPipeline(
       );
 
       // Task B: Early waveform (audio) or early frame extraction (video), ~200-500ms
-      if (ctx.engineClient && previousPath) {
+      if (previousPath) {
         if (mediaType === 'audio') {
           startEarlyWaveform(
             ctx,
-            ctx.engineClient,
+            ctx.mediaRuntime,
             ctx.fileUri.fsPath,
             previousPath,
             abortController.signal,
@@ -381,7 +381,7 @@ function runAnalysisPipeline(
         } else if (mediaType === 'video') {
           startEarlyFrameExtraction(
             ctx,
-            ctx.engineClient,
+            ctx.mediaRuntime,
             ctx.fileUri.fsPath,
             previousPath,
             abortController.signal,
@@ -456,24 +456,22 @@ function runLocalAnalysisPipeline(
       );
 
       // Task B: Early waveform (audio) or early frame extraction (video)
-      if (ctx.engineClient) {
-        if (mediaType === 'audio') {
-          startEarlyWaveform(
-            ctx,
-            ctx.engineClient,
-            ctx.fileUri.fsPath,
-            previousUri.fsPath,
-            abortController.signal,
-          );
-        } else if (mediaType === 'video') {
-          startEarlyFrameExtraction(
-            ctx,
-            ctx.engineClient,
-            ctx.fileUri.fsPath,
-            previousUri.fsPath,
-            abortController.signal,
-          );
-        }
+      if (mediaType === 'audio') {
+        startEarlyWaveform(
+          ctx,
+          ctx.mediaRuntime,
+          ctx.fileUri.fsPath,
+          previousUri.fsPath,
+          abortController.signal,
+        );
+      } else if (mediaType === 'video') {
+        startEarlyFrameExtraction(
+          ctx,
+          ctx.mediaRuntime,
+          ctx.fileUri.fsPath,
+          previousUri.fsPath,
+          abortController.signal,
+        );
       }
 
       // Task C: Full diff analysis
