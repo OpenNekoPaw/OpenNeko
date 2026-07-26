@@ -9,6 +9,7 @@ Canvas 当前把媒体数据端口和叙事关系连接混在同一套拖拽交�
 - 通过一个经过验证的连接提交路径直接创建 `sequence`，统一处理自连接、重复连接、缺失端点和有向环。
 - 连接类型更新复用相同验证规则，禁止先创建 `reference` 再无验证地转换为非法 `sequence`。
 - Storyline 只把显式 `sequence` connection 投影为连接边；未连接节点保持孤立，不再由节点数组顺序生成虚假相邻关系。
+- Storyline 在折叠 Overlay 中保留可同时辨认两至三条分支行的图区域高度，更多分支继续使用既有滚动视口。
 - 增加共享契约、Store、交互组件、Storyline projection 和真实 VS Code Webview 回归覆盖。
 
 ## Capabilities

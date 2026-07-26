@@ -47,6 +47,19 @@ Screenshot evidence is stored in the gitignored report path:
 
 The first runtime pass exposed a host-plan race where Storyline retained one stale edge after undo. The final implementation associates host-enriched plans with the exact Canvas snapshot that requested them and defers the host request until the current Canvas status message is queued. A regression test and the repeated Extension Host path prove the stale edge no longer remains.
 
+### Multi-lane Storyline height follow-up
+
+- Increased the collapsed Storyline height from `108–148px` to `204–240px`; fullscreen uses `204–280px`.
+- Retained `.canvas-playback-storyline-viewport` as the only horizontal and vertical scroll owner.
+- In the isolated `neko-test` Extension Development Host at a 936px Webview height, CDP observed:
+  - Storyline height: `240px`;
+  - graph viewport height: `165px`;
+  - two independent lanes fully visible;
+  - `overflow-x: auto` and `overflow-y: auto`;
+  - playback controls immediately below the Storyline without overlap.
+- The Webview console contained only VS Code's known `local-network-access` container warning.
+- The full Webview suite completed 55 files / 318 tests successfully and one unrelated toolbar popover test timed out under the concurrent run; the timed-out test passed alone with both of its assertions. Focused Storyline layout and component tests passed.
+
 ## Commit boundaries
 
 - `360a703 docs(canvas): specify storyline connection authoring`

@@ -28,3 +28,9 @@
 - [x] 5.2 Run OpenSpec strict validation, diff checks and applicable legacy/unused quality gates
 - [x] 5.3 Validate Media-to-Media sequence authoring and Storyline update in an isolated Extension Development Host with the VS Code debugger
 - [x] 5.4 Record verification evidence, residual risks and staged commit boundaries
+
+## 6. Storyline multi-lane viewport
+
+- [x] 6.1 Add a layout regression contract for a two-to-three-lane responsive Storyline height while retaining the existing viewport scroll owner
+- [x] 6.2 Increase only the Storyline Overlay height range without changing playback controls or Preview layout
+- [x] 6.3 Run focused Webview tests/build and validate the multi-lane height in the Extension Development Host

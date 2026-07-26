@@ -104,3 +104,14 @@ Connection affordances and rejection feedback SHALL have accessible labels. The 
 - **THEN** the Canvas connection count increases by one
 - **AND** the persisted connection type is `sequence`
 - **AND** Storyline displays the corresponding connector
+
+### Requirement: Storyline keeps multiple branch lanes visible
+
+The collapsed Storyline Overlay SHALL reserve enough responsive height to show at least two complete graph lanes in a constrained host and approximately three graph lanes at a normal desktop height. The graph viewport SHALL remain the existing horizontal and vertical scroll owner when topology exceeds the visible area. Storyline height MUST NOT grow with the total branch count or move scrolling to the playback controls or Preview.
+
+#### Scenario: Storyline contains several branch lanes
+
+- **WHEN** authored topology lays out three or more graph lanes
+- **THEN** the collapsed Overlay exposes two to three lanes at once according to available host height
+- **AND** additional lanes remain reachable through the existing Storyline viewport scrolling
+- **AND** playback controls and Preview stay outside that scrolling region

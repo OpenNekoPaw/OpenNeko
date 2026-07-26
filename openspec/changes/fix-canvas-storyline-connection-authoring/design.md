@@ -98,6 +98,12 @@ adapter 为每个有向连接组件投影 root-to-terminal route；孤立 playab
 
 Escape、mouseup 到空白和 Webview 卸载都会取消 session。成功提交后 preview 与 target 状态同时清理。
 
+### 6. Storyline 高度服务于分支辨识，滚动仍由既有 viewport 负责
+
+折叠 Overlay 的 Storyline 区域使用受限的响应式高度：受限窗口仍应完整显示至少两条 lane，常规桌面高度可同时显示约三条 lane。高度上限保持固定范围，避免 Storyline 随分支数无限挤压播放控制和 Preview。
+
+`.canvas-playback-storyline-viewport` 继续作为唯一横纵滚动 owner；本变更不新增外层滚动容器，也不改变 graph 的内容高度计算。这样高度只决定“同时看到多少行”，全部分支仍由现有滚动能力访问。
+
 ## Risks / Trade-offs
 
 - [为 Media 增加默认输入 port 改变可见 chrome] → 使用与现有 handle 一致的低权重样式，并在拖拽/hover 时增强，不改变节点尺寸。
@@ -105,6 +111,7 @@ Escape、mouseup 到空白和 Webview 卸载都会取消 session。成功提交�
 - [多组件产生多个单节点 route，路线控件可能增加] → 使用组件/route 稳定标题与顺序；后续可增加“未编排”分组，但不得重新合成边。
 - [DAG root-to-terminal 路径组合爆炸] → 使用显式上限与 diagnostic，Canvas 保持可编辑。
 - [节点卡片吸附可能误连] → 仅在 active connection gesture 中启用，排除 source/self，并展示高亮后才提交。
+- [提高 Storyline 会占用更多 Canvas 垂直空间] → 将高度限制在约两至三条 lane，不按分支总数增长；Preview 与播放控制布局保持不变。
 
 ## Migration Plan
 
