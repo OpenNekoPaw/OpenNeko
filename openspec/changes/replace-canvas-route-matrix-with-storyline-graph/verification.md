@@ -117,11 +117,12 @@ Date: 2026-07-26
 - Scoped Prettier write, `git diff --check` and residual identifier scan
   - Passed. Remaining Matrix and resize terms are documentation or negative
     regression assertions.
-- Root `pnpm test`
-  - Did not complete: Turbo stopped after an unrelated `neko-assets` protocol
-    test expected `onView:neko.entityInspector` in the current package manifest.
-    The failure is outside the changed files. All affected Canvas and shared
-    package suites passed independently.
+- Root `pnpm ci:local`
+  - Passed after aligning the `neko-assets` protocol test with VS Code's
+    contribution-inferred View activation contract.
+  - Format, lint, build, 28/28 full-repository test tasks, repository quality,
+    85/85 test-orchestration checks, 58/58 strict OpenSpec validations and 4/4
+    local VS Code configuration checks completed successfully.
 
 Vite reported the existing chunk-size and stale `caniuse-lite` advisories.
 Existing React test-environment `act(...)` warnings also appeared in unrelated
