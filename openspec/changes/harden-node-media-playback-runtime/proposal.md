@@ -15,9 +15,15 @@ wholly unreadable source.
 - Freeze one qualified FFmpeg runtime contract for development and packaged
   OpenNeko: exact executable identity, required codecs/filters, target identity,
   integrity metadata, and fail-visible activation diagnostics.
-- Require HDR10/PQ and HLG sources to use an explicit 10-bit-to-SDR proxy with
-  `zscale` and `tonemap`; never silently treat unqualified HDR as SDR or direct
-  play.
+- Require HDR10/PQ and HLG sources to use either a changing-frame-qualified
+  native MP4 profile or an all-hardware preview closure. On darwin the closure
+  is VideoToolbox decode, `scale_vt`, and `h264_videotoolbox` with software
+  fallback disabled; never infer native support from type/clock signals or
+  silently use a CPU proxy.
+- Keep optional poster capture failure separate from playback failure. Preview
+  message callbacks must consume rejected promises and project an
+  operation-scoped diagnostic instead of producing an Extension Host
+  `unhandledRejection`.
 - Replace eager PCM scheduling with a bounded browser buffer, explicit
   prepare/start phases, a shared multi-track start barrier, and deterministic
   disposal of scheduled sources.
@@ -30,9 +36,10 @@ wholly unreadable source.
 - Classify bounded no-frame/early-EOF results as interval corruption while
   retaining successful probe, frame, PCM, waveform, and preview-prefix
   evidence.
-- Validate the path with the read-only files under `~/Assets/Media` and a
-  generated isolated VS Code workspace. User media is never copied into the
-  repository or modified.
+- Validate the path with the read-only files under `~/Assets/Media`, the
+  explicitly requested `~/Git/neko-test` fixture workspace, and a generated
+  isolated VS Code workspace. User media is never copied into the repository
+  or modified.
 
 ## Capabilities
 
@@ -42,8 +49,8 @@ wholly unreadable source.
   shared multi-track start, mix-bus ownership, and disposal.
 - `streaming-media-waveform`: Defines incremental waveform aggregation,
   cancellation, and partial-prefix behavior without retaining decoded PCM.
-- `qualified-hdr-media-runtime`: Defines reproducible FFmpeg qualification and
-  explicit HDR-to-SDR proxy behavior.
+- `qualified-hdr-media-runtime`: Defines reproducible FFmpeg qualification,
+  changing-frame native qualification, and hardware-only preview behavior.
 
 ### Modified Capabilities
 

@@ -2,7 +2,7 @@
 
 状态：Accepted
 
-更新日期：2026-07-26
+更新日期：2026-07-27
 
 OpenNeko 的本地媒体 canonical path 是 `@neko/media` 与各领域的窄媒体
 port。`packages/neko-engine` 和 `packages/neko-client` 已删除，不是可选
@@ -33,11 +33,19 @@ domain controller
 - H.264 8-bit SDR MP4：`<video>` + HTTP Range 直接播放。
 - 已通过真实 VS Code Webview 资格验证的 VP8：允许声明直接播放；当前产品优先
   H.264 路径，不以通用 Chromium 能力推断 VS Code 支持。
-- 其他容器或 codec：显式 remux 或转码为声明的 H.264 SDR preview profile。
-- 10-bit、HDR10/PQ、HLG、HEVC、AV1、VP9：probe、截帧和 PCM 可由 FFmpeg
-  解码；用于 8-bit H.264 预览时必须显式 tone-map，不能伪装成原生 HDR 监看。
-- HDR-to-SDR profile 必须先验证 `zscale` 与 `tonemap`。缺少过滤器时返回
-  `MediaRuntimeUnavailableError`，不得回退旧 Engine 或使用错误色彩转换。
+- Preview Webview 以 versioned readiness payload 报告窄化的 MP4 codec 能力。
+  AV1/MP4 只有在当前 Webview 对该 profile 完成真实变化帧验证后才可发布原
+  文件；`canPlayType()`、`readyState`、`currentTime` 和 Range 请求本身都不
+  构成证明。当前 Preview 将 AV1 标记为不合格。VP9/WebM 不是产品优先格式；
+  仅在 MP4 VP9 能力成立时允许无重编码 remux 为 MP4。
+- 10-bit、HDR10/PQ、HLG、HEVC、AV1、VP9：probe 与音频 PCM 可由 FFmpeg
+  处理。未命中合格 native/remux profile 的视频只能进入完整硬件闭包：
+  VideoToolbox 硬解、`scale_vt` 和 `h264_videotoolbox`，并以 `-allow_sw 0`
+  禁止软件编码回退。`libx264`、CPU `scale`、`zscale`、`tonemap` 以及
+  `hwdownload` 不得进入实时预览或预览代理路径。
+- 硬件 decoder/filter/encoder 缺失或拒绝源 profile 时返回
+  `MediaRuntimeUnavailableError`。HDR 截帧需要 CPU filter/readback 时独立
+  失败，不得阻塞另一个已合格播放路径，也不得回退旧 Engine。
 - AAC、MP3、FLAC、PCM 以及 FFmpeg 构建可解码的多声道音轨统一解码为
   48 kHz stereo float32 PCM。源 codec 和通道数仍由 probe 报告。
 
@@ -81,7 +89,9 @@ ffprobe，并单独审计 codec license。`NEKO_FFMPEG_PATH` 和
 ## 安全与生命周期
 
 - Loopback 只监听 `127.0.0.1`，URL 使用不可预测 session token，不暴露路径。
-- 文件响应支持标准 byte Range；PCM 每个 token 只允许一个消费者。
+- 文件响应支持标准 byte Range；PCM 每个 token 只允许一个消费者。Chromium
+  在 seek/替换资源时关闭旧 Range response 属于正常取消；只有连接仍有效时的
+  流关闭或真实文件 IO 失败才记录为 loopback 错误。
 - Webview CSP 仅为媒体/文档 entry 开放 loopback，其他 entry 保持关闭。
 - stop、seek、替换或 Extension dispose 必须终止子进程、撤销 token、结束 HTTP
   响应并删除 session 临时文件。未知 session 必须 fail-visible。

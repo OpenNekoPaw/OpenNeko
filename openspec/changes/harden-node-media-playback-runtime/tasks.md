@@ -23,8 +23,9 @@
 
 ## 3. FFmpeg Preview and Export
 
-- [x] 3.1 Require the exact HDR decoder/encoder/filter closure before proxy
-      generation and retain the explicit BT.709 tone-map graph.
+- [x] 3.1 Require the exact video decoder/filter/encoder closure before preview
+      generation; section 5.7 supersedes the former CPU BT.709 tone-map graph
+      with the hardware-only VideoToolbox closure.
 - [x] 3.2 Add post-mix `alimiter` to Cut export and validate required video/audio
       streams.
 - [x] 3.3 Classify bounded no-frame/early-EOF outcomes as interval corruption
@@ -42,15 +43,48 @@
 - [ ] 4.3 Reject packaged PATH fallback, wrong target, checksum mismatch, and
       missing HDR/audio capabilities in orchestration tests.
 
-## 5. Validation
+## 5. Native Preview Qualification
 
-- [x] 5.1 Run focused `@neko/media` and Cut tests/typechecks.
-- [x] 5.2 Run the read-only matrix against `~/Assets/Media` and record healthy,
+- [x] 5.1 Add red-capable media tests for qualified AV1/MP4 direct playback,
+      VP9/WebM-to-MP4 remux, and unqualified HDR proxy behavior.
+- [x] 5.2 Add a versioned Preview readiness capability payload and pass its
+      narrowly named native MP4 profiles into the Node media runtime.
+- [x] 5.3 Observe Preview message promises and project capture-frame versus
+      playback failures without an Extension Host unhandled rejection.
+- [ ] 5.4 Inject the qualified development FFmpeg/ffprobe pair explicitly from
+      the VS Code development composition.
+- [x] 5.5 Treat response-side Chromium Range cancellation as an expected
+      transport boundary without hiding real loopback failures.
+- [x] 5.6 Make Preview seek generation-safe: retain one editor-scoped native
+      video/Range session, serialize latest-only PCM replacement, ignore
+      intentional empty-source reset, consume intentional PCM FFmpeg
+      termination, and replace rather than resume a spent PCM generation after
+      EOF.
+- [x] 5.7 Replace the CPU H.264 SDR proxy with one VideoToolbox-only closure:
+      forced hardware decode/output, `scale_vt`, `h264_videotoolbox`, disabled
+      software encoder fallback, and no CPU video-filter fallback.
+- [x] 5.8 Classify source-specific VideoToolbox decoder rejection as an
+      actionable runtime-unavailable failure and prove no legacy CPU proxy is
+      invoked.
+- [x] 5.9 Apply the same hardware-only rule to Cut preview preparation so
+      Preview and Cut cannot diverge onto different video-processing paths.
+
+## 6. Validation
+
+- [x] 6.1 Run focused `@neko/media` and Cut tests/typechecks.
+- [x] 6.2 Run the read-only matrix against `~/Assets/Media` and record healthy,
       partial-corruption, HDR, and non-priority WebM results.
-- [x] 5.3 Run build, test, check, quality, legacy-debt, unused, Engine-retirement,
+- [x] 6.3 Run build, test, check, quality, legacy-debt, unused, Engine-retirement,
       and OpenSpec gates.
-- [x] 5.4 Validate Preview, Canvas, and Cut in the generated isolated Extension
+- [x] 6.4 Validate Preview, Canvas, and Cut in the generated isolated Extension
       Development Host using both visible host and Webview/CDP evidence.
-- [x] 5.5 Re-run the focused media suite and read-only waveform validation
+- [x] 6.5 Re-run the focused media suite and read-only waveform validation
       against a long file under `~/Assets/Media`, recording peak count,
       available duration, and process memory.
+- [x] 6.6 Re-run the exact `~/Git/neko-test/cases/4K.mp4` and `test.webm`
+      Preview paths in the Extension Development Host and record Range,
+      descriptor profile, `readyState`, current-time progression, PCM, and
+      console evidence.
+- [x] 6.7 Re-run the AV1 Main10 fixture on Apple M2 and assert a visible
+      VideoToolbox capability failure, zero CPU proxy processes, and no frozen
+      native playback.

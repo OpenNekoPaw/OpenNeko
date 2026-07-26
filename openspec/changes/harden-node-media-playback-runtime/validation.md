@@ -2,6 +2,43 @@
 
 Date: 2026-07-26
 
+## Superseded native-playback diagnostic
+
+Date: 2026-07-27
+
+The exact user-provided files were read in place from
+`~/Git/neko-test/cases`; they were not modified or copied into the repository.
+The Extension Development Host used VS Code 1.130.0 / Electron 42.6.0 /
+Chromium 148.0.7778.280 and explicit FFmpeg/ffprobe 8.1.2 binaries from the
+installed `ffmpeg-full` development runtime.
+
+- `4K.mp4` probed as AV1 Main 10, 3840x2160, PQ/BT.2020 with AAC 5.1. An early
+  diagnostic selected `av1-mp4-direct`; the original 262,309,330-byte MP4 was
+  published through tokenized Range. The Webview reached `readyState=4`,
+  `networkState=1`, 3840x2160, no `MediaError`, and advanced `currentTime`.
+  Later pixel comparison proved that the composed frame remained frozen.
+  Therefore these readiness, clock, Range, and poster signals are explicitly
+  rejected as native-playback qualification.
+- The same session requested a distinct `/pcm/<token>` resource while native
+  video remained muted. This proved PCM ownership only; it did not prove A/V
+  synchronization because the video pixels were frozen.
+- `test.webm` probed as VP9 Profile 2, 10-bit PQ, 3840x2160 at 60 fps.
+  Direct WebM had already failed in this host with media error 4 despite
+  `canPlayType(video/webm)` returning `probably`. The readiness contract instead
+  selected `vp9-mp4-remux`; FFmpeg copied the video stream into a
+  1,622,269,528-byte MP4 without re-encoding. The real Webview reached
+  `readyState=4`, `networkState=1`, 3840x2160, no `MediaError`, and advanced
+  beyond 11 seconds.
+- Both published descriptors returned `206`, `Content-Type: video/mp4`,
+  `Accept-Ranges: bytes`, and the exact `Content-Range` for a one-byte request.
+- Preview no longer emitted an unhandled
+  rejection. A red-capable loopback test reproduced Chromium's client-side
+  Range cancellation as `ERR_STREAM_PREMATURE_CLOSE`; after the fix the same
+  cancellation emitted no media error and later Range requests still
+  succeeded. The remaining generic VS Code debug-host notification was traced
+  to `node:internal/inspector/network_http` (`Missing dataLength in event`), not
+  Preview, FFmpeg, or the loopback logger.
+
 ## Real media matrix
 
 Command:
@@ -18,8 +55,9 @@ override. It did not modify or copy user media.
 - H.264 720p/AAC 5.1, H.264 video-only, and the small H.264 MP4 produced valid
   probe, five requested frames, direct H.264 preview, and PCM where present.
 - AAC and MP3 inputs produced framed PCM.
-- AV1 Main 10, PQ/BT.2020, AAC 5.1 produced five requested frames, stereo PCM,
-  and an H.264/yuv420p BT.709 proxy. Output contained no HDR side-data block.
+- The former CPU AV1 Main 10 proxy result is superseded by the hardware-only
+  policy below. Apple M2 rejects that source in VideoToolbox; OpenNeko no
+  longer captures its HDR poster or creates a software H.264 proxy.
 - `1080P.mp4` produced a valid first frame, direct-play prefix, and PCM prefix.
   Requests at later advertised timestamps produced `corrupt/interval`; the
   source was not mislabeled as wholly unreadable.
@@ -54,6 +92,53 @@ VS Code 1.130.0 / Electron 42.6.0 / Chromium 148.0.7778.280.
 Visible host interaction and CDP Webview inspection were both used. A regular
 browser was not used as Extension Webview acceptance.
 
+## Hardware-only follow-up (2026-07-27)
+
+Validation used Apple M2, VS Code 1.130.0 / Electron 42.6.0 / Chromium
+148.0.7778.280, and FFmpeg/ffprobe 8.1.2 from the explicit development
+override.
+
+- The Preview and Cut `h264-sdr-transcode` profile now forces
+  `-hwaccel videotoolbox`, `-hwaccel_output_format videotoolbox_vld`,
+  `scale_vt`, `h264_videotoolbox`, and `-allow_sw 0`. Regression tests reject
+  `libx264`, CPU `scale`, `zscale`, `tonemap`, and a forced output pixel-format
+  conversion.
+- A two-second hardware-only H.264 smoke kept decode, `scale_vt`, and encode on
+  VideoToolbox. The output was H.264/yuv420p 320x180 and retained BT.709
+  primaries, transfer, and matrix metadata. Forcing an additional output
+  `videotoolbox_vld` pixel format caused FFmpeg to insert `auto_scale`; that
+  redundant option was removed from production arguments and locked out by
+  tests.
+- The exact AV1 Main10/PQ 3840x2160 fixture was linked into the isolated
+  synthetic workspace. On Play, VideoToolbox returned decoder error `-78`
+  (`Function not implemented`). The Webview showed
+  `Media runtime is unavailable for AV1 VideoToolbox decoder.` and no FFmpeg
+  process remained. No Chrome software decode, CPU proxy, or frozen native
+  playback path was attempted.
+- The synthetic H.264/AAC direct profile advanced from 0 to 1.88 seconds and
+  reached 0:06 EOF. Webview CDP contained only VS Code's known
+  `local-network-access` warning.
+- HDR poster capture now fails independently with a hardware-only diagnostic
+  because JPEG capture would require CPU filtering/readback. It does not block
+  the subsequent playback attempt.
+
+Commands:
+
+```text
+pnpm --filter @neko/media exec vitest run
+pnpm --dir packages/neko-preview test --run
+pnpm --dir packages/neko-cut test --run
+pnpm --filter @neko/media typecheck
+pnpm --dir packages/neko-preview compile
+pnpm --dir packages/neko-cut compile
+pnpm smoke:webview:targets
+pnpm exec openspec validate harden-node-media-playback-runtime --strict
+```
+
+The remaining visual-quality gap is HDR-to-SDR comparison on hardware that
+actually supports the source codec. Apple M2 cannot qualify AV1 HDR output
+because VideoToolbox has no AV1 decoder.
+
 ## Automated gates
 
 The following repository gates passed:
@@ -70,8 +155,9 @@ pnpm smoke:webview:targets -- --expect-extension-id neko.neko-suite \
   --expect-title "canvas-media.nkc — media-runtime"
 ```
 
-`pnpm test` completed 27/27 Turbo tasks successfully. Dependency analysis found
-no violations across 1,341 modules, the Engine retirement boundary retained all
+`pnpm test` completed 28/28 Turbo tasks successfully. Dependency analysis found
+no violations across 1,206 modules and 4,041 dependencies, the Engine
+retirement boundary retained all
 three poisoned commands, and strict OpenSpec validation passed all 57 items.
 
 ## Streaming waveform validation

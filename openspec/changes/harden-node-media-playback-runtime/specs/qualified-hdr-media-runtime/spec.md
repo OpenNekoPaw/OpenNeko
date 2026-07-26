@@ -21,22 +21,138 @@ metadata.
 - **THEN** media activation fails with an actionable diagnostic
 - **AND** it does not fall back to PATH, Neko Engine, or browser-native audio
 
-### Requirement: HDR input uses a qualified tone-map profile
+### Requirement: Video processing is hardware-only
 
-HDR10/PQ and HLG sources SHALL use a declared SDR proxy graph in VS Code until
-an HDR-preserving Webview profile is separately qualified.
+HDR10/PQ and HLG sources SHALL use either a narrowly qualified native Webview
+profile or a declared all-hardware SDR preview graph. Probe codec and container
+facts alone MUST NOT authorize native playback. Preview MUST NOT use CPU video
+decode, filters, transcoding, proxy generation, or a software fallback.
 
-#### Scenario: Required closure exists
+#### Scenario: MP4 AV1 native playback is qualified
 
-- **WHEN** source decode, H.264 encode, `zscale`, and `tonemap` are qualified
-- **THEN** the host decodes the 10-bit source, tone maps in linear/float space,
-  converts to BT.709, and emits an H.264/yuv420p proxy
+- **WHEN** the active Preview Webview has proved MP4 AV1 frame output for the
+  active Electron runtime rather than relying on `canPlayType()` alone
+- **AND** the source is AV1 in an MP4-family container
+- **THEN** the host publishes the original bytes through tokenized HTTP Range
+- **AND** audio, when present, continues through OpenNeko PCM
+
+#### Scenario: Electron only reports AV1 type support
+
+- **WHEN** `canPlayType()` reports MP4 AV1 support without real frame-output
+  qualification
+- **THEN** Preview reports AV1 native playback as unqualified
+- **AND** the source may use only a separately qualified all-hardware H.264 SDR
+  preview path
+
+#### Scenario: WebM VP9 is qualified through MP4 remux
+
+- **WHEN** the active Preview Webview reports MP4 VP9 playback capability
+- **AND** the source is VP9 in WebM
+- **THEN** the host remuxes the video stream without re-encoding into MP4
+- **AND** does not authorize WebM direct playback from `canPlayType()` alone
+
+#### Scenario: VideoToolbox closure exists
+
+- **WHEN** VideoToolbox supports the source decoder
+- **AND** `scale_vt` color conversion and scaling has real-host output
+  qualification for the source color profile
+- **AND** `h264_videotoolbox` hardware encode is available
+- **THEN** FFmpeg keeps decoded and filtered video in VideoToolbox hardware
+  frames and emits the H.264 SDR preview
+- **AND** software encoder fallback is disabled
 
 #### Scenario: Required closure is absent
 
-- **WHEN** any required decoder, encoder, or filter is missing
+- **WHEN** any required hardware decoder, hardware encoder, hardware filter, or
+  output qualification is missing
 - **THEN** proxy preparation fails before output publication
-- **AND** no direct-play or untagged-SDR fallback is attempted
+- **AND** the failure identifies the unavailable hardware capability
+- **AND** no direct-play, CPU-processing, or untagged-SDR fallback is attempted
+
+#### Scenario: Apple M2 rejects AV1 hardware decode
+
+- **WHEN** VideoToolbox rejects the AV1 Main10 source decoder on Apple M2
+- **THEN** Preview reports a media-runtime-unavailable diagnostic
+- **AND** does not classify the valid source as corrupt
+- **AND** does not retry through Chrome software decode, an FFmpeg software
+  decoder, CPU filters, or `libx264`
+
+### Requirement: Preview media operation failures are observed
+
+Preview SHALL observe every asynchronous Webview message operation and SHALL
+distinguish optional poster capture from playback preparation.
+
+#### Scenario: HDR poster capture is unavailable
+
+- **WHEN** HDR frame capture would require CPU filtering or hardware readback
+- **THEN** the Extension Host consumes the rejection
+- **AND** the Webview receives a hardware-only capture-frame diagnostic without
+  invalidating a separately available playback route
+- **AND** no `unhandledRejection` is emitted
+
+#### Scenario: Playback preparation fails
+
+- **WHEN** the selected playback profile cannot be prepared
+- **THEN** the Webview receives a playback diagnostic
+- **AND** the failed media session is disposed
+
+### Requirement: Preview replacement is generation-safe
+
+Preview seek and speed changes SHALL replace the current video and PCM
+generation without treating intentional teardown as media corruption.
+
+#### Scenario: User seeks while video and PCM are playing
+
+- **WHEN** the player seeks the existing native video source and stops the old
+  PCM session
+- **THEN** the editor-scoped video descriptor remains registered and Chromium
+  seeks it through HTTP Range without another remux or transcode
+- **AND** intentional FFmpeg termination is consumed as cancellation
+- **AND** the replacement descriptor starts at the requested media time
+
+#### Scenario: Native video source is finally released
+
+- **WHEN** the preview panel is disposed or its source changes
+- **THEN** clearing the native video source does not unmount the video element
+- **AND** the editor-scoped file session is revoked exactly once
+
+#### Scenario: Playback requests overlap
+
+- **WHEN** a newer seek arrives before prior preparation completes
+- **THEN** the provider publishes only the latest owned PCM generation
+- **AND** every superseded PCM session is stopped
+- **AND** the one editor-scoped video session remains unchanged
+
+#### Scenario: Superseded Webview connection rejects
+
+- **WHEN** a newer playback descriptor supersedes a Webview PCM connection
+- **AND** the obsolete connection later rejects
+- **THEN** the obsolete client is disposed
+- **AND** its rejection does not unmount the video element or overwrite the
+  current generation with an error view
+
+#### Scenario: Replay after PCM reaches EOF
+
+- **WHEN** the finite PCM generation and media timeline reach playback EOF
+- **THEN** Preview marks that PCM generation spent instead of treating it as a
+  resumable connection
+- **AND** retains the editor-scoped video URL and shared `AudioContext`
+- **AND** replay from zero creates a new PCM generation without republishing or
+  reloading the video source
+
+### Requirement: Obsolete Range requests cancel cleanly
+
+The tokenized loopback transport SHALL distinguish a browser-aborted response
+from a media runtime or file IO failure.
+
+#### Scenario: Chromium replaces an active Range request
+
+- **WHEN** the Webview closes an in-flight file response during seek or source
+  replacement
+- **AND** Node reports `ERR_STREAM_PREMATURE_CLOSE` after the response closes
+- **THEN** the loopback server completes that request without an error
+  diagnostic or synthetic 500 response
+- **AND** later Range requests for the same token remain available
 
 ### Requirement: Partial corruption retains valid interval evidence
 
