@@ -1,0 +1,27 @@
+{
+  "name": "@neko/media",
+  "description": "Domain-neutral media runtime contracts and Node/browser adapters",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node/index.ts",
+    "./browser": "./src/browser/index.ts"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:run": "vitest --run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@neko/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "jsdom": "^27.0.1",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.2"
+  },
+  "license": "AGPL-3.0-or-later"
+}
