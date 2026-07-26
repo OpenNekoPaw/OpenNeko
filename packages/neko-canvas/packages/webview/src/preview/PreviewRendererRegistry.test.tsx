@@ -23,7 +23,9 @@ type InlineVideoPlayerMockProps = {
   readonly onEnded?: (currentTime: number) => void;
 };
 
-type InlineAudioPlayerMockProps = InlineVideoPlayerMockProps;
+type InlineAudioPlayerMockProps = InlineVideoPlayerMockProps & {
+  readonly audioLayout?: 'transport' | 'node-card';
+};
 
 vi.mock('../components/media/InlineVideoPlayer', async () => {
   const ReactModule = await vi.importActual<typeof import('react')>('react');
@@ -47,12 +49,27 @@ vi.mock('../components/media/InlineVideoPlayer', async () => {
 vi.mock('../components/media/InlineAudioPlayer', async () => {
   const ReactModule = await vi.importActual<typeof import('react')>('react');
   return {
-    InlineAudioPlayer: ({ duration, onStop, onEnded }: InlineAudioPlayerMockProps) =>
+    AudioPlayerSurface: ({ layout }: { readonly layout?: 'transport' | 'node-card' }) =>
+      layout === 'node-card'
+        ? ReactModule.createElement(
+            'div',
+            { 'data-testid': 'canvas-audio-waveform' },
+            ReactModule.createElement('div', {
+              'data-testid': 'canvas-audio-node-controls',
+            }),
+          )
+        : ReactModule.createElement(
+            'div',
+            { className: 'canvas-audio-transport' },
+            ReactModule.createElement('button', { type: 'button', title: 'Play' }, 'Play'),
+          ),
+    InlineAudioPlayer: ({ duration, onStop, onEnded, audioLayout }: InlineAudioPlayerMockProps) =>
       ReactModule.createElement(
         'button',
         {
           type: 'button',
           'data-testid': 'inline-audio-ended',
+          'data-audio-layout': audioLayout ?? 'transport',
           onClick: () => {
             onStop(duration);
             onEnded?.(duration);
@@ -156,7 +173,7 @@ describe('PreviewSurface media playback control', () => {
     expect(host.querySelector('[data-preview-surface="visual"]')).not.toBeNull();
   });
 
-  it('renders Canvas audio nodes as playback controls without a waveform or duplicate title', async () => {
+  it('keeps the default Storyline audio Preview as a compact transport', async () => {
     await act(async () => {
       root.render(
         <PreviewSurface
@@ -167,7 +184,6 @@ describe('PreviewSurface media playback control', () => {
           }}
           surfaceKind="inline"
           chrome="full-bleed"
-          audioPresentation="controls-only"
         />,
       );
     });
@@ -175,6 +191,27 @@ describe('PreviewSurface media playback control', () => {
     expect(host.querySelectorAll('[data-preview-surface="audio"] .w-1')).toHaveLength(0);
     expect(host.querySelector<HTMLButtonElement>('button[title="Play"]')).not.toBeNull();
     expect(host.textContent).not.toContain('Canvas audio');
+  });
+
+  it('renders the explicit Canvas node audio layout with a waveform silhouette', async () => {
+    await act(async () => {
+      root.render(
+        <PreviewSurface
+          source={{
+            id: 'canvas-node:audio-b',
+            role: 'audio-waveform',
+            title: 'Canvas audio',
+          }}
+          surfaceKind="inline"
+          chrome="full-bleed"
+          audioLayout="node-card"
+        />,
+      );
+    });
+
+    expect(host.querySelector('[data-testid="canvas-audio-waveform"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="canvas-audio-node-controls"]')).not.toBeNull();
+    expect(host.querySelector('.canvas-audio-transport')).toBeNull();
   });
 
   it.each([

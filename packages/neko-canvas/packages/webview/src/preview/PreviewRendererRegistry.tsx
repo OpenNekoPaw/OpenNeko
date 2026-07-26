@@ -9,7 +9,11 @@ import type {
   RuntimePreviewVariant,
 } from './types';
 import { InlineVideoPlayer } from '../components/media/InlineVideoPlayer';
-import { InlineAudioPlayer } from '../components/media/InlineAudioPlayer';
+import {
+  AudioPlayerSurface,
+  InlineAudioPlayer,
+  type AudioPlayerLayout,
+} from '../components/media/InlineAudioPlayer';
 import { usePlaybackStore } from '../stores/playbackStore';
 import type { PlaybackSurfaceKind } from '../stores/playbackStore';
 import { getGlobalVSCodeApi } from '../utils/vscode';
@@ -22,7 +26,7 @@ export interface PreviewRendererProps {
   surfaceKind?: PlaybackSurfaceKind;
   playbackControl?: PreviewPlaybackControl;
   chrome?: 'contained' | 'full-bleed';
-  audioPresentation?: 'waveform' | 'controls-only';
+  audioLayout?: AudioPlayerLayout;
 }
 
 export type PreviewRenderer = React.ComponentType<PreviewRendererProps>;
@@ -749,11 +753,10 @@ function readImagePreviewUrl(url: string | undefined): string | undefined {
 
 function AudioPreviewRenderer({
   source,
-  delegateActions,
   surfaceKind = 'inline',
   playbackControl,
   chrome = 'contained',
-  audioPresentation = 'waveform',
+  audioLayout = 'transport',
 }: PreviewRendererProps): React.ReactNode {
   const assetPath = source.asset?.path;
   const resourceRef = readPreviewSourceResourceRef(source);
@@ -828,8 +831,8 @@ function AudioPreviewRenderer({
         <InlineAudioPlayer
           audioStreamUrl={stream.audioStreamUrl}
           duration={stream.duration}
+          audioLayout={audioLayout}
           startTime={stream.startTime}
-          showWaveform={audioPresentation === 'waveform'}
           onPause={pausePlayback}
           onResume={resumePlayback}
           onSeek={seekPlayback}
@@ -850,57 +853,19 @@ function AudioPreviewRenderer({
       data-preview-surface="audio"
       data-preview-chrome={chrome}
     >
-      {audioPresentation === 'waveform' ? (
-        <div className="mb-2 flex h-8 items-end gap-0.5">
-          {Array.from({ length: 24 }).map((_, index) => (
-            <div
-              key={index}
-              className="w-1 rounded-sm bg-[var(--node-selected)] opacity-70"
-              style={{ height: `${20 + ((index * 17) % 60)}%` }}
-            />
-          ))}
-        </div>
-      ) : null}
-      <div
-        className={
-          audioPresentation === 'controls-only'
-            ? 'flex h-full items-center justify-center'
-            : 'flex items-center gap-2'
-        }
-      >
-        <button
-          type="button"
-          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--control-border)] bg-[var(--node-selected)] text-xs text-white"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            startPlayback();
-          }}
-          disabled={probing || !canStartPlayback}
-          aria-label={t('toolbar.playbackPlay')}
-          title={t('toolbar.playbackPlay')}
-        >
-          {probing ? '...' : '▶'}
-        </button>
-        {audioPresentation === 'waveform' ? (
-          <span className="truncate text-xs text-[var(--node-fg-secondary)]">
-            {source.title ?? source.asset?.path ?? source.id}
-          </span>
-        ) : null}
-        {audioPresentation === 'waveform' && delegateActions && delegateActions.length > 0 ? (
-          <button
-            type="button"
-            className="ml-auto flex-shrink-0 rounded border border-[var(--node-border)] px-2 py-1 text-xs"
-            onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation();
-              dispatchPreviewDelegate({ action: delegateActions[0]!, asset: source.asset });
-            }}
-          >
-            Open
-          </button>
-        ) : null}
-      </div>
+      <AudioPlayerSurface
+        layout={audioLayout}
+        currentTime={0}
+        duration={0}
+        isPlaying={false}
+        disabled={probing || !canStartPlayback}
+        onTogglePlay={(event) => {
+          event?.stopPropagation();
+          startPlayback();
+        }}
+        playbackLabel={t('toolbar.playbackPlay')}
+        muteLabel={t('media.mute')}
+      />
     </div>
   );
 }
@@ -919,9 +884,7 @@ function getMediaPreviewFrameClassName(
 function getAudioPreviewFrameClassName(
   chrome: NonNullable<PreviewRendererProps['chrome']>,
 ): string {
-  return chrome === 'full-bleed'
-    ? 'h-full min-h-0 w-full bg-black/20 p-2'
-    : 'rounded-[var(--radius-sm)] border border-[var(--control-border)] bg-black/20 p-2';
+  return chrome === 'full-bleed' ? 'h-full min-h-0 w-full' : 'h-full min-h-[90px] w-full';
 }
 
 function readPreviewSourceResourceRef(source: PreviewSourceDescriptor): ResourceRef | undefined {

@@ -11,12 +11,18 @@ import { getLogger } from '../../utils/logger';
 
 const logger = getLogger('InlineAudioPlayer');
 
-const BAR_COUNT = 24;
 const DEFAULT_VOLUME = 0.8;
+const WAVEFORM_BAR_HEIGHTS = [
+  30, 48, 66, 42, 58, 74, 50, 36, 62, 82, 56, 40, 68, 52, 34, 78, 64, 46, 72, 54, 38, 60, 84, 52,
+  44, 70, 58, 36, 76, 62, 48, 80, 56, 42, 68, 50, 74, 46, 64, 34,
+] as const;
+
+export type AudioPlayerLayout = 'transport' | 'node-card';
 
 export interface InlineAudioPlayerProps {
   audioStreamUrl: string;
   duration: number;
+  audioLayout?: AudioPlayerLayout;
   startTime?: number;
   onPause: (currentTime: number) => void;
   onResume: () => void;
@@ -27,12 +33,12 @@ export interface InlineAudioPlayerProps {
   playbackRequestId?: string;
   playbackStartTime?: number;
   onEnded?: (currentTime: number) => void;
-  showWaveform?: boolean;
 }
 
 export function InlineAudioPlayer({
   audioStreamUrl,
   duration,
+  audioLayout = 'transport',
   startTime = 0,
   onPause,
   onResume,
@@ -43,7 +49,6 @@ export function InlineAudioPlayer({
   playbackRequestId,
   playbackStartTime,
   onEnded,
-  showWaveform = true,
 }: InlineAudioPlayerProps) {
   const audioClientRef = useRef<EngineAvAudioStreamClient | null>(null);
   const lifecycleRef = useRef<EngineAvStreamLifecycle | null>(null);
@@ -266,87 +271,249 @@ export function InlineAudioPlayer({
   // Render
   // =========================================================================
 
-  const progress = duration > 0 ? currentTime / duration : 0;
   const playbackLabel = isPlaying ? t('toolbar.playbackPause') : t('toolbar.playbackPlay');
   const muteLabel = isMuted ? t('media.unmute') : t('media.mute');
 
   return (
-    <div
-      className={`flex flex-col gap-2 p-3 ${showWaveform ? '' : 'h-full justify-center'}`}
-      onMouseDown={(e) => e.stopPropagation()}
-    >
-      {showWaveform ? (
-        <div className="flex h-12 items-end justify-center gap-[2px]">
-          {Array.from({ length: BAR_COUNT }).map((_, index) => {
-            const baseHeight = 20 + ((index * 17 + 7) % 60);
-            return (
-              <div
-                key={index}
-                className={`w-1.5 rounded-sm bg-[var(--node-selected)] ${isPlaying ? 'animate-audio-bar' : ''}`}
-                style={{
-                  height: `${baseHeight}%`,
-                  opacity: progress > 0 && index / BAR_COUNT <= progress ? 0.9 : 0.3,
-                  animationDelay: isPlaying ? `${(index * 120) % 800}ms` : undefined,
-                }}
-              />
-            );
-          })}
-        </div>
-      ) : null}
+    <AudioPlayerSurface
+      layout={audioLayout}
+      currentTime={currentTime}
+      duration={duration}
+      isPlaying={isPlaying}
+      isMuted={isMuted}
+      onTogglePlay={handleTogglePlay}
+      onSeekCommit={handleSeekCommit}
+      onSeeking={handleSeeking}
+      onToggleMute={handleToggleMute}
+      playbackLabel={playbackLabel}
+      muteLabel={muteLabel}
+    />
+  );
+}
 
-      {/* Progress bar */}
-      <ProgressBar
+interface AudioPlayerSurfaceProps {
+  readonly layout?: AudioPlayerLayout;
+  readonly currentTime: number;
+  readonly duration: number;
+  readonly isPlaying: boolean;
+  readonly isMuted?: boolean;
+  readonly disabled?: boolean;
+  readonly onTogglePlay: (event?: React.MouseEvent) => void;
+  readonly onSeekCommit?: (time: number) => void;
+  readonly onSeeking?: (time: number) => void;
+  readonly onToggleMute?: (event: React.MouseEvent) => void;
+  readonly playbackLabel: string;
+  readonly muteLabel?: string;
+}
+
+export function AudioPlayerSurface({
+  layout = 'transport',
+  currentTime,
+  duration,
+  isPlaying,
+  isMuted = false,
+  disabled = false,
+  onTogglePlay,
+  onSeekCommit,
+  onSeeking,
+  onToggleMute,
+  playbackLabel,
+  muteLabel = t('media.mute'),
+}: AudioPlayerSurfaceProps) {
+  if (layout === 'node-card') {
+    return (
+      <CanvasAudioNodePlayer
         currentTime={currentTime}
         duration={duration}
-        onSeekCommit={handleSeekCommit}
-        onSeeking={handleSeeking}
-        formatTooltip={formatTime}
+        isPlaying={isPlaying}
+        isMuted={isMuted}
+        disabled={disabled}
+        onTogglePlay={onTogglePlay}
+        onSeekCommit={onSeekCommit}
+        onSeeking={onSeeking}
+        onToggleMute={onToggleMute}
+        playbackLabel={playbackLabel}
+        muteLabel={muteLabel}
       />
+    );
+  }
 
-      {/* Controls row */}
-      <div className="flex items-center gap-2">
-        {/* Play/Pause */}
-        <button
-          type="button"
-          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[var(--node-selected)] text-white hover:opacity-90"
-          onClick={handleTogglePlay}
-          aria-label={playbackLabel}
-          title={playbackLabel}
-        >
-          {isPlaying ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
-        </button>
+  const isIdle = !onSeekCommit;
+  return (
+    <div className="canvas-audio-transport-shell" onMouseDown={(event) => event.stopPropagation()}>
+      <div
+        className="canvas-audio-transport"
+        data-testid="canvas-audio-transport"
+        data-state={isIdle ? 'idle' : 'ready'}
+      >
+        <AudioPlaybackButton
+          isPlaying={isPlaying}
+          label={playbackLabel}
+          onClick={onTogglePlay}
+          disabled={disabled}
+        />
 
-        {/* Time display */}
-        <span className="min-w-[70px] text-center text-[11px] tabular-nums text-[var(--node-fg-secondary)]">
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </span>
+        {!isIdle ? (
+          <>
+            <span className="canvas-audio-transport-time">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
 
-        <div className="flex-1" />
+            <div className="canvas-audio-transport-seek">
+              <ProgressBar
+                currentTime={currentTime}
+                duration={duration}
+                onSeekCommit={onSeekCommit}
+                onSeeking={onSeeking}
+                formatTooltip={formatTime}
+              />
+            </div>
 
-        {/* Volume toggle */}
-        <button
-          type="button"
-          className="flex h-5 w-5 items-center justify-center text-[var(--node-fg-secondary)] hover:text-[var(--node-fg)]"
-          onClick={handleToggleMute}
-          aria-label={muteLabel}
-          title={muteLabel}
-        >
-          {isMuted ? <VolumeOffIcon size={14} /> : <VolumeIcon size={14} />}
-        </button>
+            <AudioMuteButton isMuted={isMuted} label={muteLabel} onClick={onToggleMute} />
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function CanvasAudioNodePlayer({
+  currentTime,
+  duration,
+  isPlaying,
+  isMuted,
+  disabled,
+  onTogglePlay,
+  onSeekCommit,
+  onSeeking,
+  onToggleMute,
+  playbackLabel,
+  muteLabel,
+}: Required<
+  Pick<
+    AudioPlayerSurfaceProps,
+    | 'currentTime'
+    | 'duration'
+    | 'isPlaying'
+    | 'isMuted'
+    | 'disabled'
+    | 'onTogglePlay'
+    | 'playbackLabel'
+    | 'muteLabel'
+  >
+> &
+  Pick<AudioPlayerSurfaceProps, 'onSeekCommit' | 'onSeeking' | 'onToggleMute'>) {
+  const progress = duration > 0 ? Math.max(0, Math.min(1, currentTime / duration)) : 0;
+  const handleRangeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    onSeeking?.(Number(event.currentTarget.value));
+  };
+  const commitRangeValue = (event: React.SyntheticEvent<HTMLInputElement>) => {
+    onSeekCommit?.(Number(event.currentTarget.value));
+  };
+  const handleRangeKeyUp = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+      commitRangeValue(event);
+    }
+  };
+
+  return (
+    <div className="canvas-audio-node-player" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="canvas-audio-node-waveform" data-testid="canvas-audio-waveform">
+        <div className="canvas-audio-node-waveform-bars" aria-hidden="true">
+          {WAVEFORM_BAR_HEIGHTS.map((height, index) => (
+            <span
+              key={`${height}-${index}`}
+              className="canvas-audio-node-waveform-bar"
+              style={{ height: `${height}%` }}
+            />
+          ))}
+        </div>
+        <span
+          className="canvas-audio-node-playhead"
+          style={{ left: `${progress * 100}%` }}
+          aria-hidden="true"
+        />
+        <input
+          className="canvas-audio-node-waveform-seek"
+          type="range"
+          min={0}
+          max={Math.max(duration, 0)}
+          step={0.1}
+          value={Math.min(currentTime, Math.max(duration, 0))}
+          disabled={!onSeekCommit || duration <= 0}
+          aria-label={t('media.seek')}
+          onChange={handleRangeChange}
+          onPointerUp={commitRangeValue}
+          onKeyUp={handleRangeKeyUp}
+        />
       </div>
 
-      {showWaveform ? (
-        <style>{`
-          @keyframes audio-bar-pulse {
-            0%, 100% { transform: scaleY(1); }
-            50% { transform: scaleY(0.4); }
-          }
-          .animate-audio-bar {
-            animation: audio-bar-pulse 0.8s ease-in-out infinite;
-            transform-origin: bottom;
-          }
-        `}</style>
-      ) : null}
+      <div className="canvas-audio-node-controls" data-testid="canvas-audio-node-controls">
+        <span className="canvas-audio-node-time">
+          {formatTime(currentTime)} / {duration > 0 ? formatTime(duration) : '--:--'}
+        </span>
+        <div className="canvas-audio-node-playback">
+          <AudioPlaybackButton
+            isPlaying={isPlaying}
+            label={playbackLabel}
+            onClick={onTogglePlay}
+            disabled={disabled}
+          />
+        </div>
+        <div className="canvas-audio-node-volume">
+          <AudioMuteButton isMuted={isMuted} label={muteLabel} onClick={onToggleMute} />
+        </div>
+      </div>
     </div>
+  );
+}
+
+function AudioPlaybackButton({
+  isPlaying,
+  label,
+  onClick,
+  disabled = false,
+}: {
+  readonly isPlaying: boolean;
+  readonly label: string;
+  readonly onClick: (event?: React.MouseEvent) => void;
+  readonly disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      className="canvas-audio-transport-button"
+      data-variant="primary"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+    >
+      {isPlaying ? <PauseIcon size={14} /> : <PlayIcon size={14} />}
+    </button>
+  );
+}
+
+function AudioMuteButton({
+  isMuted,
+  label,
+  onClick,
+}: {
+  readonly isMuted: boolean;
+  readonly label: string;
+  readonly onClick?: (event: React.MouseEvent) => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="canvas-audio-transport-button"
+      data-variant="secondary"
+      onClick={onClick}
+      disabled={!onClick}
+      aria-label={label}
+      title={label}
+    >
+      {isMuted ? <VolumeOffIcon size={14} /> : <VolumeIcon size={14} />}
+    </button>
   );
 }

@@ -135,13 +135,12 @@ describe('Inline media players', () => {
     expect(onEnded).toHaveBeenCalledWith(2);
   });
 
-  it('can render audio playback controls without waveform bars', async () => {
+  it('renders the canonical audio playback controls without waveform bars', async () => {
     await act(async () => {
       root.render(
         <InlineAudioPlayer
           audioStreamUrl="ws://audio"
           duration={2}
-          showWaveform={false}
           onPause={() => undefined}
           onResume={() => undefined}
           onSeek={() => undefined}
@@ -155,6 +154,30 @@ describe('Inline media players', () => {
     expect(host.querySelector('[data-testid="progress-bar"]')).not.toBeNull();
     expect(host.querySelector<HTMLButtonElement>('button[title="Pause"]')).not.toBeNull();
     expect(host.querySelector<HTMLButtonElement>('button[title="Mute"]')).not.toBeNull();
+  });
+
+  it('renders the Canvas node audio layout as one waveform card surface', async () => {
+    await act(async () => {
+      root.render(
+        <InlineAudioPlayer
+          audioStreamUrl="ws://audio"
+          duration={185}
+          audioLayout="node-card"
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={() => undefined}
+          onStop={() => undefined}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(host.querySelector('[data-testid="canvas-audio-waveform"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="canvas-audio-node-controls"]')).not.toBeNull();
+    expect(host.querySelector('.canvas-audio-transport')).toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('button[title="Pause"]')).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('button[title="Mute"]')).not.toBeNull();
+    expect(host.querySelector<HTMLButtonElement>('button[title="Download"]')).toBeNull();
   });
 
   it('waits for video stream end before completing video playback when audio ends first', async () => {

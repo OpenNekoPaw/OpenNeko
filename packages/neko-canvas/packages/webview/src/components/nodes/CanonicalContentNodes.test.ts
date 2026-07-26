@@ -8,9 +8,10 @@ describe('canonical content node runtime boundaries', () => {
     expect(source).toContain('<MarkdownDocumentView');
     expect(source).toContain('<PreviewSurface');
     expect(source).toContain('surfaceKind="inline"');
-    expect(source).toContain(
-      "audioPresentation={mediaType === 'audio' ? 'controls-only' : undefined}",
-    );
+    expect(source).not.toContain('audioPresentation');
+    expect(source).toContain('audioLayout={mediaType ===');
+    expect(source).toContain("'node-card'");
+    expect(source).toContain('canvas-audio-node-title');
     expect(source).not.toContain('<audio');
     expect(source).not.toContain('<video');
   });

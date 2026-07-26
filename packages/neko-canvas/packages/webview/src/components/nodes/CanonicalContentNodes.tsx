@@ -62,6 +62,8 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
   const source = node.data.runtimeAssetPath || node.data.assetPath;
   const mediaType = node.data.mediaType ?? 'image';
   const previewRole = mediaType === 'audio' ? 'audio-waveform' : 'video-proxy';
+  const title =
+    node.data.title || node.data.assetPath.split('/').pop() || resolveMediaTypeLabel(mediaType);
   return (
     <BaseNode
       node={node}
@@ -70,7 +72,21 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
       presentation="foundational"
       opaqueSurface
     >
-      <div className="flex h-full min-h-0 flex-col">
+      <div
+        className={
+          mediaType === 'audio'
+            ? 'canvas-audio-node flex h-full min-h-0 flex-col'
+            : 'flex h-full min-h-0 flex-col'
+        }
+      >
+        {mediaType === 'audio' ? (
+          <div className="canvas-audio-node-title">
+            <span className="canvas-audio-node-title-icon" aria-hidden="true">
+              ♪
+            </span>
+            <span className="truncate">{title}</span>
+          </div>
+        ) : null}
         <div
           className="min-h-0 flex-1 overflow-hidden"
           style={{ background: 'var(--node-surface)' }}
@@ -109,18 +125,18 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
               }}
               surfaceKind="inline"
               chrome="full-bleed"
-              audioPresentation={mediaType === 'audio' ? 'controls-only' : undefined}
+              audioLayout={mediaType === 'audio' ? 'node-card' : undefined}
             />
           )}
         </div>
-        <div
-          className="truncate border-t px-2 py-1.5 text-xs"
-          style={{ borderColor: 'var(--node-divider)', color: 'var(--node-fg)' }}
-        >
-          {node.data.title ||
-            node.data.assetPath.split('/').pop() ||
-            resolveMediaTypeLabel(mediaType)}
-        </div>
+        {mediaType === 'audio' ? null : (
+          <div
+            className="truncate border-t px-2 py-1.5 text-xs"
+            style={{ borderColor: 'var(--node-divider)', color: 'var(--node-fg)' }}
+          >
+            {title}
+          </div>
+        )}
       </div>
     </BaseNode>
   );

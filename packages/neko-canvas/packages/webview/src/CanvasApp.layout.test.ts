@@ -250,6 +250,26 @@ describe('Canvas creative workbench layout boundary', () => {
       /\.canvas-playback-storyline-viewport\s*\{[\s\S]*?flex:\s*1 1 auto;[\s\S]*?overflow:\s*auto;/,
     );
     expect(cssSource).toMatch(
+      /\.canvas-audio-transport\s*\{[\s\S]*?width:\s*min\(100%,\s*640px\);[\s\S]*?grid-template-columns:\s*auto auto minmax\(32px,\s*1fr\) auto;/,
+    );
+    const audioTransportCss = cssSource.slice(
+      cssSource.indexOf('.canvas-audio-transport {'),
+      cssSource.indexOf(".canvas-audio-transport[data-state='idle']"),
+    );
+    expect(audioTransportCss).not.toMatch(/\b(?:border|background|box-shadow):/);
+    expect(cssSource).toMatch(
+      /\.canvas-audio-node-player\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto;/,
+    );
+    expect(cssSource).toMatch(
+      /\.canvas-audio-node-controls\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto\s+minmax\(0,\s*1fr\);/,
+    );
+    expect(cssSource).toMatch(/\.canvas-audio-node-playback\s*\{[\s\S]*?grid-column:\s*2;/);
+    const audioNodePlayerCss = cssSource.slice(
+      cssSource.indexOf('.canvas-audio-node-player {'),
+      cssSource.indexOf('.canvas-audio-node-waveform {'),
+    );
+    expect(audioNodePlayerCss).not.toMatch(/\b(?:border|box-shadow):/);
+    expect(cssSource).toMatch(
       /\.canvas-playback-controller-row\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto\s+minmax\(0,\s*1fr\);/,
     );
     expect(cssSource).toMatch(

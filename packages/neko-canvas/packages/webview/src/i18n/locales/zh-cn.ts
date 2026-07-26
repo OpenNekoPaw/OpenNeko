@@ -22,6 +22,7 @@ export const zhCN = {
   'zoom.resetViewport': '重置视图 (100%)',
   'media.mute': '静音',
   'media.unmute': '取消静音',
+  'media.seek': '跳转音频进度',
   'errorBoundary.title': '出现错误',
   'errorBoundary.retry': '重试',
   'selection.toolbar': '{count} 个已选节点的操作',

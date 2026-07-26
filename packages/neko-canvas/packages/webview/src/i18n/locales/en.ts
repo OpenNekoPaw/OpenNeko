@@ -22,6 +22,7 @@ export const en = {
   'zoom.resetViewport': 'Reset viewport (100%)',
   'media.mute': 'Mute',
   'media.unmute': 'Unmute',
+  'media.seek': 'Seek audio',
   'errorBoundary.title': 'Something went wrong',
   'errorBoundary.retry': 'Try again',
   'selection.toolbar': 'Actions for {count} selected nodes',
