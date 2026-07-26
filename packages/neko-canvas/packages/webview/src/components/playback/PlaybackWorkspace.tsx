@@ -105,6 +105,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     (session.currentUnitId ? unitById.get(session.currentUnitId) : undefined) ??
     (selectedRoute?.unitIds[0] ? unitById.get(selectedRoute.unitIds[0]) : undefined);
   const currentUnitId = currentUnit?.id;
+  const activeSessionUnitId = currentUnitId ?? session.currentUnitId;
   const routeUnitIds = useMemo(() => selectedRoute?.unitIds ?? [], [selectedRoute]);
   const routeUnits = useMemo(
     () =>
@@ -330,15 +331,32 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     [currentUnit?.id, session.currentUnitId, setCurrentUnit],
   );
   const previewPlaybackControl = useMemo<PreviewPlaybackControl | undefined>(() => {
-    if (!currentUnitId || playbackRequest?.unitId !== currentUnitId) return undefined;
+    if (!currentUnitId) return undefined;
+    const state = session.playbackState === 'playing' ? 'playing' : 'paused';
+    if (playbackRequest?.unitId !== currentUnitId) {
+      return {
+        requestId: `route-idle-${currentUnitId}`,
+        state,
+        startTimeSeconds: session.playheadMs / 1000,
+        onTimeUpdate: handlePreviewPlaybackTimeUpdate,
+        onEnded: handlePreviewPlaybackEnded,
+      };
+    }
     return {
       requestId: playbackRequest.requestId,
-      state: playbackRequest.state,
+      state,
       startTimeSeconds: playbackRequest.startTimeMs / 1000,
       onTimeUpdate: handlePreviewPlaybackTimeUpdate,
       onEnded: handlePreviewPlaybackEnded,
     };
-  }, [currentUnitId, handlePreviewPlaybackEnded, handlePreviewPlaybackTimeUpdate, playbackRequest]);
+  }, [
+    currentUnitId,
+    handlePreviewPlaybackEnded,
+    handlePreviewPlaybackTimeUpdate,
+    playbackRequest,
+    session.playbackState,
+    session.playheadMs,
+  ]);
   const playbackController = useCanvasPlaybackController({
     plan,
     routeUnitIds,
@@ -352,7 +370,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
         navigateToPlaybackUnit(unitId, 0);
         return;
       }
-      syncPlaybackUnit(unitId, 0);
+      syncPlaybackUnit(unitId, unitId === activeSessionUnitId ? session.playheadMs : 0);
     },
     onPlayingChange: (playing) => {
       setPlaybackState(playing ? 'playing' : 'paused');
@@ -366,7 +384,13 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
       }
     },
     onSeek: selectPlaybackTime,
-    onPlaybackRequest: setPlaybackRequest,
+    onPlaybackRequest: (request) => {
+      setPlaybackRequest({
+        ...request,
+        startTimeMs:
+          request.unitId === activeSessionUnitId ? session.playheadMs : request.startTimeMs,
+      });
+    },
   });
   const closeOverlay = () => {
     hidePlaybackWorkspace();
@@ -987,6 +1011,11 @@ function createPreviewSourceForUnit(unit: CanvasPlaybackUnit): PreviewSourceDesc
       : {}),
     metadata: {
       sourceNodeId: unit.sourceNodeId,
+      ...(typeof unit.durationMs === 'number' &&
+      Number.isFinite(unit.durationMs) &&
+      unit.durationMs > 0
+        ? { duration: unit.durationMs / 1000 }
+        : {}),
       ...(resourceRef ? { resourceRef } : {}),
       ...(documentResourceRef ? { documentResourceRef } : {}),
     },

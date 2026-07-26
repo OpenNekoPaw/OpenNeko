@@ -117,6 +117,7 @@ export function MediaNode({ node, isSelected, ...baseProps }: CanonicalNodeProps
                   mediaType,
                 },
                 metadata: {
+                  ...(node.data.duration ? { duration: node.data.duration } : {}),
                   ...(node.data.resourceRef ? { resourceRef: node.data.resourceRef } : {}),
                   ...(node.data.documentResourceRef
                     ? { documentResourceRef: node.data.documentResourceRef }

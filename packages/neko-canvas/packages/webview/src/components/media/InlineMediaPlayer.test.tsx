@@ -17,6 +17,9 @@ const lifecycleMock = vi.hoisted(() => ({
   callbacks: [] as Array<{ onStreamEnd?: StreamEndCallback }>,
   start: vi.fn<(descriptor: unknown) => Promise<unknown>>(),
   stop: vi.fn<() => void>(),
+  audioPause: vi.fn<() => void>(),
+  audioResume: vi.fn<() => void>(),
+  videoFlush: vi.fn<() => void>(),
 }));
 
 vi.mock('@neko/neko-client', () => {
@@ -89,6 +92,9 @@ describe('Inline media players', () => {
     lifecycleMock.callbacks.length = 0;
     lifecycleMock.start.mockClear();
     lifecycleMock.stop.mockClear();
+    lifecycleMock.audioPause.mockClear();
+    lifecycleMock.audioResume.mockClear();
+    lifecycleMock.videoFlush.mockClear();
     requestAnimationFrameSpy = vi
       .spyOn(window, 'requestAnimationFrame')
       .mockImplementation(() => 1);
@@ -180,6 +186,201 @@ describe('Inline media players', () => {
     expect(host.querySelector<HTMLButtonElement>('button[title="Download"]')).toBeNull();
   });
 
+  it.each([
+    {
+      kind: 'audio',
+      render: (state: 'playing' | 'paused', requestId: string) => (
+        <InlineAudioPlayer
+          audioStreamUrl="ws://audio"
+          duration={185}
+          playbackState={state}
+          playbackRequestId={requestId}
+          playbackStartTime={0}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={() => undefined}
+          onStop={() => undefined}
+        />
+      ),
+    },
+    {
+      kind: 'video',
+      render: (state: 'playing' | 'paused', requestId: string) => (
+        <InlineVideoPlayer
+          videoStreamUrl="ws://video"
+          audioStreamUrl="ws://audio"
+          width={320}
+          height={180}
+          fps={24}
+          duration={26}
+          playbackState={state}
+          playbackRequestId={requestId}
+          playbackStartTime={0}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={() => undefined}
+          onStop={() => undefined}
+        />
+      ),
+    },
+  ])(
+    'keeps controlled $kind playback aligned with the session across mount and state changes',
+    async ({ render }) => {
+      await act(async () => {
+        root.render(render('paused', 'request-1'));
+        await Promise.resolve();
+      });
+
+      expect(host.querySelector<HTMLButtonElement>('button[title="Play"]')).not.toBeNull();
+      expect(lifecycleMock.audioPause).toHaveBeenCalled();
+
+      await act(async () => {
+        root.render(render('playing', 'request-2'));
+      });
+
+      expect(host.querySelector<HTMLButtonElement>('button[title="Pause"]')).not.toBeNull();
+      expect(lifecycleMock.audioResume).toHaveBeenCalled();
+
+      const pauseCallsBeforeFinalTransition = lifecycleMock.audioPause.mock.calls.length;
+      await act(async () => {
+        root.render(render('paused', 'request-3'));
+      });
+
+      expect(host.querySelector<HTMLButtonElement>('button[title="Play"]')).not.toBeNull();
+      expect(lifecycleMock.audioPause).toHaveBeenCalledTimes(pauseCallsBeforeFinalTransition + 1);
+    },
+  );
+
+  it.each([
+    {
+      kind: 'audio',
+      streamKind: 'audio' as const,
+      render: (
+        state: 'playing' | 'paused',
+        onStop: (currentTime: number) => void,
+        onEnded: (currentTime: number) => void,
+      ) => (
+        <InlineAudioPlayer
+          audioStreamUrl="ws://audio"
+          duration={185}
+          playbackState={state}
+          playbackRequestId={`audio-${state}`}
+          playbackStartTime={4}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={() => undefined}
+          onStop={onStop}
+          onEnded={onEnded}
+        />
+      ),
+    },
+    {
+      kind: 'video',
+      streamKind: 'video' as const,
+      render: (
+        state: 'playing' | 'paused',
+        onStop: (currentTime: number) => void,
+        onEnded: (currentTime: number) => void,
+      ) => (
+        <InlineVideoPlayer
+          videoStreamUrl="ws://video"
+          audioStreamUrl="ws://audio"
+          width={320}
+          height={180}
+          fps={24}
+          duration={26}
+          playbackState={state}
+          playbackRequestId={`video-${state}`}
+          playbackStartTime={4}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={() => undefined}
+          onStop={onStop}
+          onEnded={onEnded}
+        />
+      ),
+    },
+  ])(
+    'does not treat a controlled $kind stream closure during pause as playback completion',
+    async ({ render, streamKind }) => {
+      const onStop = vi.fn<(currentTime: number) => void>();
+      const onEnded = vi.fn<(currentTime: number) => void>();
+
+      await act(async () => {
+        root.render(render('playing', onStop, onEnded));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        root.render(render('paused', onStop, onEnded));
+      });
+      await act(async () => {
+        lifecycleMock.callbacks[0]?.onStreamEnd?.(streamKind);
+      });
+
+      expect(onStop).not.toHaveBeenCalled();
+      expect(onEnded).not.toHaveBeenCalled();
+      expect(host.querySelector<HTMLButtonElement>('button[title="Play"]')).not.toBeNull();
+    },
+  );
+
+  it.each([
+    {
+      kind: 'audio',
+      streamKind: 'audio' as const,
+      render: (onStop: (currentTime: number) => void, onEnded: (currentTime: number) => void) => (
+        <InlineAudioPlayer
+          audioStreamUrl="ws://audio"
+          duration={185}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={() => undefined}
+          onStop={onStop}
+          onEnded={onEnded}
+        />
+      ),
+    },
+    {
+      kind: 'video',
+      streamKind: 'video' as const,
+      render: (onStop: (currentTime: number) => void, onEnded: (currentTime: number) => void) => (
+        <InlineVideoPlayer
+          videoStreamUrl="ws://video"
+          audioStreamUrl="ws://audio"
+          width={320}
+          height={180}
+          fps={24}
+          duration={26}
+          onPause={() => undefined}
+          onResume={() => undefined}
+          onSeek={() => undefined}
+          onStop={onStop}
+          onEnded={onEnded}
+        />
+      ),
+    },
+  ])(
+    'keeps a locally paused Canvas $kind node out of the completion path',
+    async ({ render, streamKind }) => {
+      const onStop = vi.fn<(currentTime: number) => void>();
+      const onEnded = vi.fn<(currentTime: number) => void>();
+
+      await act(async () => {
+        root.render(render(onStop, onEnded));
+        await Promise.resolve();
+      });
+      act(() => {
+        host.querySelector<HTMLButtonElement>('button[title="Pause"]')?.click();
+      });
+      await act(async () => {
+        lifecycleMock.callbacks[0]?.onStreamEnd?.(streamKind);
+      });
+
+      expect(onStop).not.toHaveBeenCalled();
+      expect(onEnded).not.toHaveBeenCalled();
+      expect(host.querySelector<HTMLButtonElement>('button[title="Play"]')).not.toBeNull();
+    },
+  );
+
   it('waits for video stream end before completing video playback when audio ends first', async () => {
     const onStop = vi.fn<(currentTime: number) => void>();
     const onEnded = vi.fn<(currentTime: number) => void>();
@@ -265,8 +466,8 @@ function createAudioClient() {
     getGainNode: vi.fn<() => null>().mockReturnValue(null),
     setVolume: vi.fn<(volume: number) => void>(),
     setClockPlaybackRate: vi.fn<(rate: number) => void>(),
-    pause: vi.fn<() => void>(),
-    resume: vi.fn<() => void>(),
+    pause: lifecycleMock.audioPause,
+    resume: lifecycleMock.audioResume,
     fadeOut: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     resetClock: vi.fn<() => void>(),
   };
@@ -287,7 +488,7 @@ function createScheduler() {
       action: 'wait',
       delayMs: 0,
     }),
-    flush: vi.fn<() => void>(),
+    flush: lifecycleMock.videoFlush,
     switchClock: vi.fn<(newMasterClockUs: number) => void>(),
     dispose: vi.fn<() => void>(),
     getStats: vi.fn<() => null>().mockReturnValue(null),

@@ -42,6 +42,7 @@ vi.mock('../../preview/PreviewRendererRegistry', () => ({
     playbackControl?: {
       requestId?: string;
       state?: 'playing' | 'paused';
+      startTimeSeconds?: number;
       onEnded?: (event: {
         sourceId: string;
         mediaType: 'video';
@@ -54,6 +55,7 @@ vi.mock('../../preview/PreviewRendererRegistry', () => ({
       data-testid="preview-surface"
       data-playback-request-id={playbackControl?.requestId}
       data-playback-state={playbackControl?.state}
+      data-playback-start-time={playbackControl?.startTimeSeconds}
     >
       {source.id}
       <button
@@ -236,6 +238,115 @@ describe('PlaybackWorkspace', () => {
     });
     expect(host.querySelector('[data-testid="canvas-playback-overlay"]')).toBeNull();
     expect(host.querySelector('[data-testid="canvas-playback-storyline"]')).toBeNull();
+  });
+
+  it('keeps one controlled Preview instance and playback identity across full-bleed toggles', () => {
+    act(() => {
+      usePlaybackStore.getState().revealPlaybackWorkspace();
+      root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
+    });
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>('[data-playback-action="reveal-preview"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const previewBefore = host.querySelector<HTMLElement>('[data-testid="preview-surface"]');
+    if (!previewBefore) throw new Error('preview surface was not revealed');
+    const requestIdBefore = previewBefore.dataset.playbackRequestId;
+    expect(requestIdBefore).toBeTruthy();
+    expect(previewBefore.dataset.playbackState).toBe('paused');
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>('[data-playback-action="toggle-overlay-fullscreen"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const previewFullscreen = host.querySelector<HTMLElement>('[data-testid="preview-surface"]');
+    expect(previewFullscreen).toBe(previewBefore);
+    expect(previewFullscreen?.dataset.playbackRequestId).toBe(requestIdBefore);
+    expect(previewFullscreen?.dataset.playbackState).toBe('paused');
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>('[data-playback-action="toggle-overlay-fullscreen"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const previewRestored = host.querySelector<HTMLElement>('[data-testid="preview-surface"]');
+    expect(previewRestored).toBe(previewBefore);
+    expect(previewRestored?.dataset.playbackRequestId).toBe(requestIdBefore);
+    expect(previewRestored?.dataset.playbackState).toBe('paused');
+  });
+
+  it('preserves an active playback request and playhead across full-bleed presentation changes', () => {
+    act(() => {
+      usePlaybackStore.getState().revealPlaybackWorkspace();
+      usePlaybackStore.getState().setPlaybackSessionCurrentUnit('shot-a1', 750);
+      root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
+    });
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="canvas-playback-controller"] button[title="Play"]',
+        )
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const previewBefore = host.querySelector<HTMLElement>('[data-testid="preview-surface"]');
+    if (!previewBefore) throw new Error('playing preview surface was not rendered');
+    const requestIdBefore = previewBefore.dataset.playbackRequestId;
+    const startTimeBefore = previewBefore.dataset.playbackStartTime;
+    const sessionBefore = usePlaybackStore.getState().playbackSession;
+    expect(previewBefore.dataset.playbackState).toBe('playing');
+    expect(requestIdBefore).toBeTruthy();
+    expect(startTimeBefore).toBe('0.75');
+    expect(sessionBefore.playheadMs).toBe(750);
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>('[data-playback-action="toggle-overlay-fullscreen"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>('[data-playback-action="toggle-overlay-fullscreen"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const previewAfter = host.querySelector<HTMLElement>('[data-testid="preview-surface"]');
+    expect(previewAfter).toBe(previewBefore);
+    expect(previewAfter?.dataset.playbackRequestId).toBe(requestIdBefore);
+    expect(previewAfter?.dataset.playbackState).toBe('playing');
+    expect(previewAfter?.dataset.playbackStartTime).toBe(startTimeBefore);
+    expect(usePlaybackStore.getState().playbackSession).toMatchObject({
+      presentation: 'overlay',
+      playbackState: sessionBefore.playbackState,
+      currentUnitId: sessionBefore.currentUnitId,
+      playheadMs: sessionBefore.playheadMs,
+    });
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="canvas-playback-controller"] button[title="Pause"]',
+        )
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(
+      host.querySelector<HTMLElement>('[data-testid="preview-surface"]')?.dataset.playbackState,
+    ).toBe('paused');
+    expect(
+      host.querySelector<HTMLElement>('[data-testid="preview-surface"]')?.dataset.playbackStartTime,
+    ).toBe('0.75');
+    expect(usePlaybackStore.getState().playbackSession).toMatchObject({
+      playbackState: 'paused',
+      playheadMs: 750,
+    });
   });
 
   it('keeps persisted media titles while localizing the unified Overlay shell', () => {

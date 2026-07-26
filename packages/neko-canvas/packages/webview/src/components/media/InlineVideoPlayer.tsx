@@ -71,12 +71,18 @@ export function InlineVideoPlayer({
   const seekGateRef = useRef<InlineVideoSeekGate | null>(null);
   const handledPlaybackRequestRef = useRef<string | undefined>();
   const handledPlaybackStateRef = useRef<'playing' | 'paused' | undefined>();
+  const controlledPlaybackStateRef = useRef(playbackState);
+  const pauseIntentRef = useRef(playbackState === 'paused');
   const completedRef = useRef(false);
   const completePlaybackRef = useRef<(() => void) | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(startTime);
   const [isMuted, setIsMuted] = useState(false);
+  controlledPlaybackStateRef.current = playbackState;
+  if (playbackState !== undefined) {
+    pauseIntentRef.current = playbackState === 'paused';
+  }
 
   if (!lifecycleRef.current) {
     lifecycleRef.current = new EngineAvStreamLifecycle({
@@ -85,8 +91,13 @@ export function InlineVideoPlayer({
           clientRef.current = videoClient;
           audioClientRef.current = audioClient;
           schedulerRef.current = scheduler;
+          if (controlledPlaybackStateRef.current === 'paused') {
+            audioClient?.pause();
+            scheduler?.flush();
+          }
         },
         onStreamEnd: (kind) => {
+          if (pauseIntentRef.current) return;
           if (kind === 'video' || !videoStreamUrl) {
             completePlaybackRef.current?.();
           }
@@ -241,7 +252,7 @@ export function InlineVideoPlayer({
       })
       .catch((err) => logger.error(`Inline video lifecycle error: ${err}`));
 
-    setIsPlaying(true);
+    setIsPlaying(controlledPlaybackStateRef.current !== 'paused');
     setCurrentTime(startTime);
     playStartTimeRef.current = startTime;
     playWallTimeRef.current = performance.now();
@@ -263,11 +274,13 @@ export function InlineVideoPlayer({
     (e?: React.MouseEvent) => {
       e?.stopPropagation();
       if (isPlaying) {
+        pauseIntentRef.current = true;
         setIsPlaying(false);
         schedulerRef.current?.flush();
         audioClientRef.current?.pause();
         onPause(currentTimeRef.current);
       } else {
+        pauseIntentRef.current = false;
         completedRef.current = false;
         setIsPlaying(true);
         audioClientRef.current?.resume();
@@ -313,14 +326,14 @@ export function InlineVideoPlayer({
   const applyControlledPlaybackState = useCallback(
     (nextState: 'playing' | 'paused') => {
       if (nextState === 'paused') {
-        if (!isPlaying) return;
+        pauseIntentRef.current = true;
         setIsPlaying(false);
         schedulerRef.current?.flush();
         audioClientRef.current?.pause();
         onPause(currentTimeRef.current);
         return;
       }
-      if (isPlaying) return;
+      pauseIntentRef.current = false;
       completedRef.current = false;
       setIsPlaying(true);
       audioClientRef.current?.resume();
@@ -329,7 +342,7 @@ export function InlineVideoPlayer({
       clockSourceRef.current = 'wall';
       onResume();
     },
-    [isPlaying, onPause, onResume],
+    [onPause, onResume],
   );
 
   useEffect(() => {

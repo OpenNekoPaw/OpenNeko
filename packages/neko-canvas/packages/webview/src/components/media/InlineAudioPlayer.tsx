@@ -59,6 +59,8 @@ export function InlineAudioPlayer({
   const currentTimeRef = useRef(startTime);
   const handledPlaybackRequestRef = useRef<string | undefined>();
   const handledPlaybackStateRef = useRef<'playing' | 'paused' | undefined>();
+  const controlledPlaybackStateRef = useRef(playbackState);
+  const pauseIntentRef = useRef(playbackState === 'paused');
   const completedRef = useRef(false);
   const completePlaybackRef = useRef<(() => void) | null>(null);
 
@@ -66,14 +68,22 @@ export function InlineAudioPlayer({
   const [currentTime, setCurrentTime] = useState(startTime);
   const [volume] = useState(DEFAULT_VOLUME);
   const [isMuted, setIsMuted] = useState(false);
+  controlledPlaybackStateRef.current = playbackState;
+  if (playbackState !== undefined) {
+    pauseIntentRef.current = playbackState === 'paused';
+  }
 
   if (!lifecycleRef.current) {
     lifecycleRef.current = new EngineAvStreamLifecycle({
       callbacks: {
         onClientsChanged: ({ audioClient }) => {
           audioClientRef.current = audioClient;
+          if (controlledPlaybackStateRef.current === 'paused') {
+            audioClient?.pause();
+          }
         },
         onStreamEnd: () => {
+          if (pauseIntentRef.current) return;
           completePlaybackRef.current?.();
         },
       },
@@ -154,7 +164,7 @@ export function InlineAudioPlayer({
       })
       .catch((err) => logger.warn(`Inline audio lifecycle error: ${err}`));
 
-    setIsPlaying(true);
+    setIsPlaying(controlledPlaybackStateRef.current !== 'paused');
     setCurrentTime(startTime);
     playStartTimeRef.current = startTime;
     playWallTimeRef.current = performance.now();
@@ -176,10 +186,12 @@ export function InlineAudioPlayer({
     (e?: React.MouseEvent) => {
       e?.stopPropagation();
       if (isPlaying) {
+        pauseIntentRef.current = true;
         setIsPlaying(false);
         audioClientRef.current?.pause();
         onPause(currentTimeRef.current);
       } else {
+        pauseIntentRef.current = false;
         completedRef.current = false;
         setIsPlaying(true);
         audioClientRef.current?.resume();
@@ -210,13 +222,13 @@ export function InlineAudioPlayer({
   const applyControlledPlaybackState = useCallback(
     (nextState: 'playing' | 'paused') => {
       if (nextState === 'paused') {
-        if (!isPlaying) return;
+        pauseIntentRef.current = true;
         setIsPlaying(false);
         audioClientRef.current?.pause();
         onPause(currentTimeRef.current);
         return;
       }
-      if (isPlaying) return;
+      pauseIntentRef.current = false;
       completedRef.current = false;
       setIsPlaying(true);
       audioClientRef.current?.resume();
@@ -225,7 +237,7 @@ export function InlineAudioPlayer({
       clockSourceRef.current = 'wall';
       onResume();
     },
-    [isPlaying, onPause, onResume],
+    [onPause, onResume],
   );
 
   useEffect(() => {
@@ -298,6 +310,7 @@ interface AudioPlayerSurfaceProps {
   readonly isPlaying: boolean;
   readonly isMuted?: boolean;
   readonly disabled?: boolean;
+  readonly showPlaybackButton?: boolean;
   readonly onTogglePlay: (event?: React.MouseEvent) => void;
   readonly onSeekCommit?: (time: number) => void;
   readonly onSeeking?: (time: number) => void;
@@ -313,6 +326,7 @@ export function AudioPlayerSurface({
   isPlaying,
   isMuted = false,
   disabled = false,
+  showPlaybackButton = true,
   onTogglePlay,
   onSeekCommit,
   onSeeking,
@@ -338,35 +352,54 @@ export function AudioPlayerSurface({
     );
   }
 
-  const isIdle = !onSeekCommit;
+  const showTimeline = Boolean(onSeekCommit) || duration > 0;
   return (
     <div className="canvas-audio-transport-shell" onMouseDown={(event) => event.stopPropagation()}>
       <div
         className="canvas-audio-transport"
         data-testid="canvas-audio-transport"
-        data-state={isIdle ? 'idle' : 'ready'}
+        data-state={showTimeline ? 'ready' : 'idle'}
       >
-        <AudioPlaybackButton
-          isPlaying={isPlaying}
-          label={playbackLabel}
-          onClick={onTogglePlay}
-          disabled={disabled}
-        />
+        {showPlaybackButton ? (
+          <AudioPlaybackButton
+            isPlaying={isPlaying}
+            label={playbackLabel}
+            onClick={onTogglePlay}
+            disabled={disabled}
+          />
+        ) : null}
 
-        {!isIdle ? (
+        {showTimeline ? (
           <>
             <span className="canvas-audio-transport-time">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
 
             <div className="canvas-audio-transport-seek">
-              <ProgressBar
-                currentTime={currentTime}
-                duration={duration}
-                onSeekCommit={onSeekCommit}
-                onSeeking={onSeeking}
-                formatTooltip={formatTime}
-              />
+              {onSeekCommit ? (
+                <ProgressBar
+                  currentTime={currentTime}
+                  duration={duration}
+                  onSeekCommit={onSeekCommit}
+                  onSeeking={onSeeking}
+                  formatTooltip={formatTime}
+                />
+              ) : (
+                <div
+                  className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--control-border)]"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={duration}
+                  aria-valuenow={Math.min(currentTime, duration)}
+                >
+                  <div
+                    className="h-full bg-[var(--accent)]"
+                    style={{
+                      width: `${duration > 0 ? Math.min(1, currentTime / duration) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             <AudioMuteButton isMuted={isMuted} label={muteLabel} onClick={onToggleMute} />

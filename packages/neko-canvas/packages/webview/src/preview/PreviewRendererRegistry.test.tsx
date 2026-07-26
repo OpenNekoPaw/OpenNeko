@@ -49,19 +49,35 @@ vi.mock('../components/media/InlineVideoPlayer', async () => {
 vi.mock('../components/media/InlineAudioPlayer', async () => {
   const ReactModule = await vi.importActual<typeof import('react')>('react');
   return {
-    AudioPlayerSurface: ({ layout }: { readonly layout?: 'transport' | 'node-card' }) =>
+    AudioPlayerSurface: ({
+      layout,
+      duration,
+      showPlaybackButton = true,
+    }: {
+      readonly layout?: 'transport' | 'node-card';
+      readonly duration: number;
+      readonly showPlaybackButton?: boolean;
+    }) =>
       layout === 'node-card'
         ? ReactModule.createElement(
             'div',
-            { 'data-testid': 'canvas-audio-waveform' },
+            {
+              'data-testid': 'canvas-audio-waveform',
+              'data-duration': duration,
+            },
             ReactModule.createElement('div', {
               'data-testid': 'canvas-audio-node-controls',
             }),
           )
         : ReactModule.createElement(
             'div',
-            { className: 'canvas-audio-transport' },
-            ReactModule.createElement('button', { type: 'button', title: 'Play' }, 'Play'),
+            {
+              className: 'canvas-audio-transport',
+              'data-duration': duration,
+            },
+            showPlaybackButton
+              ? ReactModule.createElement('button', { type: 'button', title: 'Play' }, 'Play')
+              : ReactModule.createElement('span', null, `0:00 / ${duration.toFixed(0)}`),
           ),
     InlineAudioPlayer: ({ duration, onStop, onEnded, audioLayout }: InlineAudioPlayerMockProps) =>
       ReactModule.createElement(
@@ -235,6 +251,69 @@ describe('PreviewSurface media playback control', () => {
     },
   );
 
+  it.each([
+    {
+      role: 'video-proxy' as const,
+      mediaType: 'video' as const,
+      assetPath: 'clips/idle.mp4',
+    },
+    {
+      role: 'audio-waveform' as const,
+      mediaType: 'audio' as const,
+      assetPath: 'audio/idle.aac',
+    },
+  ])(
+    'probes idle $mediaType metadata without starting playback and keeps the controlled Preview populated',
+    async ({ role, mediaType, assetPath }) => {
+      await act(async () => {
+        root.render(
+          <PreviewSurface
+            source={{
+              id: `idle-${mediaType}`,
+              role,
+              title: assetPath,
+              asset: {
+                kind: 'asset-identity',
+                path: assetPath,
+                mediaType,
+              },
+            }}
+            surfaceKind="overlay"
+            playbackControl={{
+              requestId: `idle-${mediaType}-request`,
+              state: 'paused',
+              startTimeSeconds: 0,
+            }}
+          />,
+        );
+      });
+
+      const probe = latestMessageOfType('media:probe');
+      const nodeId = readString(probe['nodeId']);
+      if (!nodeId) throw new Error('idle media probe did not include a node id');
+      expect(probe).toMatchObject({
+        type: 'media:probe',
+        assetPath,
+        mediaType,
+      });
+      expect(messagesOfType('media:play')).toHaveLength(0);
+
+      await act(async () => {
+        mockWindow.dispatchMessage({
+          type: 'media:probeResult',
+          nodeId,
+          mediaInfo: mediaInfoFor(mediaType),
+        });
+      });
+
+      const idleSurface = host.querySelector<HTMLElement>(`[data-preview-surface="${mediaType}"]`);
+      expect(idleSurface?.dataset.mediaDuration).toBe('2');
+      expect(idleSurface?.querySelector('button')).toBeNull();
+      expect(idleSurface?.childElementCount).toBeGreaterThan(0);
+      expect(messagesOfType('media:play')).toHaveLength(0);
+    },
+  );
+
   it('renders the explicit Canvas node audio layout with a waveform silhouette', async () => {
     await act(async () => {
       root.render(
@@ -338,6 +417,10 @@ describe('PreviewSurface media playback control', () => {
         `[data-testid="${caseData.endedTestId}"]`,
       );
       if (!endedButton) throw new Error('inline media player was not rendered');
+      expect(
+        host.querySelector<HTMLElement>(`[data-preview-surface="${caseData.mediaType}"]`)?.dataset
+          .mediaDuration,
+      ).toBe('2');
 
       await act(async () => {
         endedButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));

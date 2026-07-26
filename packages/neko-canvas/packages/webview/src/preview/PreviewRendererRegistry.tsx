@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isResourceRef, type DelegateAction, type ResourceRef } from '@neko/shared';
+import { formatTime } from '@neko/neko-client';
 import { dispatchPreviewDelegate } from './previewDelegates';
 import { isImagePreviewUrl, isSafeWebviewUrl, WebviewPreviewResolver } from './previewResolver';
 import { PreviewRuntime } from './previewRuntime';
@@ -134,6 +135,14 @@ interface MediaStreamState {
   startTime: number;
 }
 
+interface MediaDescription {
+  readonly duration: number;
+  readonly width?: number;
+  readonly height?: number;
+  readonly fps?: number;
+  readonly hasAudio?: boolean;
+}
+
 const PLAYBACK_PROGRESS_SYNC_INTERVAL_MS = 250;
 const PLAYBACK_PROGRESS_SYNC_DELTA_SECONDS = 0.25;
 
@@ -153,12 +162,18 @@ function useMediaStream(
   mediaType: 'video' | 'audio',
   surfaceKind: PlaybackSurfaceKind,
   resourceRef: ResourceRef | undefined,
+  knownDuration: number,
 ) {
   const [surfaceId] = useState(() => createPlaybackSurfaceId(mediaType));
   const [stream, setStream] = useState<MediaStreamState | null>(null);
+  const [mediaDescription, setMediaDescription] = useState<MediaDescription>(() => ({
+    duration: knownDuration,
+  }));
   const [probing, setProbing] = useState(false);
   const isPausedRef = useRef(false);
-  const listenerRef = useRef<((e: MessageEvent) => void) | null>(null);
+  const mediaInfoRef = useRef<Record<string, unknown> | null>(null);
+  const pendingPlaybackStartRef = useRef<number | null>(null);
+  const requestProbeRef = useRef<() => void>(() => undefined);
   const streamDurationRef = useRef(0);
   const stoppedPlaybackRef = useRef(true);
 
@@ -177,6 +192,127 @@ function useMediaStream(
     currentTime: savedStartTime,
     updatedAtMs: 0,
   });
+
+  const postPlaybackRequest = useCallback(
+    (mediaInfo: Record<string, unknown>, startTime: number) => {
+      const vscode = getGlobalVSCodeApi();
+      if (!vscode) return;
+      vscode.postMessage({
+        type: 'media:play',
+        nodeId: surfaceId,
+        ...(assetPath ? { assetPath } : {}),
+        ...(resourceRef ? { resourceRef } : {}),
+        mediaInfo,
+        mediaType,
+        startTime,
+        speed: 1.0,
+      });
+    },
+    [assetPath, mediaType, resourceRef, surfaceId],
+  );
+
+  useEffect(() => {
+    const vscode = getGlobalVSCodeApi();
+    const sourceKey = createMediaPlaybackSourceKey(assetPath, resourceRef);
+    if (!vscode || !sourceKey) {
+      setProbing(false);
+      return;
+    }
+
+    mediaInfoRef.current = null;
+    pendingPlaybackStartRef.current = null;
+    streamDurationRef.current = knownDuration;
+    setMediaDescription({ duration: knownDuration });
+    let probeRequested = false;
+    const requestProbe = () => {
+      if (probeRequested) return;
+      probeRequested = true;
+      setProbing(true);
+      vscode.postMessage({
+        type: 'media:probe',
+        nodeId: surfaceId,
+        ...(assetPath ? { assetPath } : {}),
+        ...(resourceRef ? { resourceRef } : {}),
+        mediaType,
+      });
+    };
+    requestProbeRef.current = requestProbe;
+
+    const handleMessage = (event: MessageEvent) => {
+      const msg = event.data as Record<string, unknown>;
+      if (msg.type === 'media:probeResult' && msg.nodeId === surfaceId) {
+        setProbing(false);
+        if (msg.error) {
+          probeRequested = false;
+          pendingPlaybackStartRef.current = null;
+          return;
+        }
+        if (!isRecord(msg.mediaInfo)) {
+          throw new Error(`Media probe for "${sourceKey}" returned invalid mediaInfo.`);
+        }
+        const mediaInfo = msg.mediaInfo;
+        const description = readMediaDescription(mediaInfo, knownDuration);
+        mediaInfoRef.current = mediaInfo;
+        streamDurationRef.current = description.duration;
+        setMediaDescription(description);
+
+        const pendingStartTime = pendingPlaybackStartRef.current;
+        if (pendingStartTime !== null) {
+          pendingPlaybackStartRef.current = null;
+          postPlaybackRequest(mediaInfo, pendingStartTime);
+        }
+      }
+      if (msg.type === 'media:streamReady' && msg.nodeId === surfaceId) {
+        setProbing(false);
+        if (msg.error) return;
+        if (!isRecord(msg.mediaInfo)) {
+          throw new Error(`Media stream for "${sourceKey}" returned invalid mediaInfo.`);
+        }
+        const description = readMediaDescription(msg.mediaInfo, knownDuration);
+        const startTime = currentTimeRef.current;
+        streamDurationRef.current = description.duration;
+        setMediaDescription(description);
+        usePlaybackStore.getState().startActivePlayback({
+          sourceKey,
+          ...(assetPath ? { assetPath } : {}),
+          mediaType,
+          surfaceId,
+          surfaceKind,
+          currentTime: startTime,
+          duration: description.duration,
+        });
+        lastProgressSyncRef.current = {
+          currentTime: startTime,
+          updatedAtMs: getMonotonicTimeMs(),
+        };
+        setStream({
+          videoStreamUrl: (msg.videoStreamUrl as string) ?? null,
+          audioStreamUrl: (msg.audioStreamUrl as string) ?? null,
+          width: description.width ?? 640,
+          height: description.height ?? 360,
+          fps: description.fps ?? 30,
+          duration: description.duration,
+          startTime,
+        });
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    requestProbe();
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      requestProbeRef.current = () => undefined;
+    };
+  }, [
+    assetPath,
+    knownDuration,
+    mediaType,
+    postPlaybackRequest,
+    resourceRef,
+    surfaceId,
+    surfaceKind,
+  ]);
 
   const startPlayback = useCallback(
     (resumeFromTime?: number) => {
@@ -198,7 +334,6 @@ function useMediaStream(
         return;
       }
 
-      setProbing(true);
       isPausedRef.current = false;
       stoppedPlaybackRef.current = false;
 
@@ -208,69 +343,24 @@ function useMediaStream(
         sourceHandoff?.startTime ??
         playbackStore.getPlayback(sourceKey)?.currentTime ??
         savedStartTime;
-
-      const handleMessage = (event: MessageEvent) => {
-        const msg = event.data as Record<string, unknown>;
-        if (msg.type === 'media:probeResult' && msg.nodeId === surfaceId) {
-          if (msg.error) {
-            setProbing(false);
-            return;
-          }
-          const mediaInfo = msg.mediaInfo as Record<string, unknown>;
-          vscode.postMessage({
-            type: 'media:play',
-            nodeId: surfaceId,
-            ...(assetPath ? { assetPath } : {}),
-            ...(resourceRef ? { resourceRef } : {}),
-            mediaInfo,
-            mediaType,
-            startTime,
-            speed: 1.0,
-          });
-        }
-        if (msg.type === 'media:streamReady' && msg.nodeId === surfaceId) {
-          setProbing(false);
-          if (msg.error) return;
-          const mediaInfo = msg.mediaInfo as Record<string, unknown>;
-          const dur = (mediaInfo?.duration as number) ?? 0;
-          streamDurationRef.current = dur;
-          usePlaybackStore.getState().startActivePlayback({
-            sourceKey,
-            ...(assetPath ? { assetPath } : {}),
-            mediaType,
-            surfaceId,
-            surfaceKind,
-            currentTime: startTime,
-            duration: dur,
-          });
-          currentTimeRef.current = startTime;
-          lastProgressSyncRef.current = {
-            currentTime: startTime,
-            updatedAtMs: getMonotonicTimeMs(),
-          };
-          setStream({
-            videoStreamUrl: (msg.videoStreamUrl as string) ?? null,
-            audioStreamUrl: (msg.audioStreamUrl as string) ?? null,
-            width: (mediaInfo?.width as number) ?? 640,
-            height: (mediaInfo?.height as number) ?? 360,
-            fps: (mediaInfo?.fps as number) ?? 30,
-            duration: dur,
-            startTime,
-          });
-        }
-      };
-
-      listenerRef.current = handleMessage;
-      window.addEventListener('message', handleMessage);
-      vscode.postMessage({
-        type: 'media:probe',
-        nodeId: surfaceId,
-        ...(assetPath ? { assetPath } : {}),
-        ...(resourceRef ? { resourceRef } : {}),
-        mediaType,
-      });
+      currentTimeRef.current = startTime;
+      const mediaInfo = mediaInfoRef.current;
+      if (mediaInfo) {
+        postPlaybackRequest(mediaInfo, startTime);
+        return;
+      }
+      pendingPlaybackStartRef.current = startTime;
+      requestProbeRef.current();
     },
-    [assetPath, mediaType, resourceRef, savedStartTime, surfaceId, surfaceKind],
+    [
+      assetPath,
+      mediaType,
+      postPlaybackRequest,
+      resourceRef,
+      savedStartTime,
+      surfaceId,
+      surfaceKind,
+    ],
   );
 
   const pausePlayback = useCallback(
@@ -351,10 +441,6 @@ function useMediaStream(
     (currentTime: number) => {
       if (stoppedPlaybackRef.current) return;
       stoppedPlaybackRef.current = true;
-      if (listenerRef.current) {
-        window.removeEventListener('message', listenerRef.current);
-        listenerRef.current = null;
-      }
       const vscode = getGlobalVSCodeApi();
       if (vscode && createMediaPlaybackSourceKey(assetPath, resourceRef)) {
         vscode.postMessage({ type: 'media:stop', nodeId: surfaceId });
@@ -392,16 +478,9 @@ function useMediaStream(
     stopPlayback,
   });
 
-  useEffect(() => {
-    return () => {
-      if (listenerRef.current) {
-        window.removeEventListener('message', listenerRef.current);
-      }
-    };
-  }, []);
-
   return {
     stream,
+    mediaDescription,
     probing,
     isPaused: isPausedRef.current,
     surfaceId,
@@ -412,6 +491,34 @@ function useMediaStream(
     updatePlaybackProgress,
     stopPlayback,
   };
+}
+
+function readMediaDescription(
+  mediaInfo: Record<string, unknown>,
+  knownDuration: number,
+): MediaDescription {
+  const duration = readPositiveFiniteNumber(mediaInfo['duration']) ?? knownDuration;
+  return {
+    duration,
+    ...(readPositiveFiniteNumber(mediaInfo['width']) !== undefined
+      ? { width: readPositiveFiniteNumber(mediaInfo['width']) }
+      : {}),
+    ...(readPositiveFiniteNumber(mediaInfo['height']) !== undefined
+      ? { height: readPositiveFiniteNumber(mediaInfo['height']) }
+      : {}),
+    ...(readPositiveFiniteNumber(mediaInfo['fps']) !== undefined
+      ? { fps: readPositiveFiniteNumber(mediaInfo['fps']) }
+      : {}),
+    ...(typeof mediaInfo['hasAudio'] === 'boolean' ? { hasAudio: mediaInfo['hasAudio'] } : {}),
+  };
+}
+
+function readPositiveFiniteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function createMediaPlaybackSourceKey(
@@ -623,6 +730,7 @@ function VideoPreviewRenderer({
     readImagePreviewUrl(variant?.runtimeUrl) ?? readImagePreviewUrl(getStableSafeUrl(source));
   const assetPath = source.asset?.path;
   const resourceRef = readPreviewSourceResourceRef(source);
+  const knownDuration = readPreviewSourceDuration(source);
   const capturedFrame = useCaptureFrame(assetPath, source.id, resourceRef);
   const canStartPlayback = Boolean(assetPath || resourceRef);
   const {
@@ -634,10 +742,13 @@ function VideoPreviewRenderer({
     seekPlayback,
     updatePlaybackProgress,
     stopPlayback,
-  } = useMediaStream(assetPath, 'video', surfaceKind, resourceRef);
+    mediaDescription,
+  } = useMediaStream(assetPath, 'video', surfaceKind, resourceRef, knownDuration);
 
   const posterUrl = capturedFrame ?? thumbnailUrl;
   const consumedPlaybackRequestRef = useRef<string | undefined>();
+  const onPlaybackTimeUpdate = playbackControl?.onTimeUpdate;
+  const onPlaybackEnded = playbackControl?.onEnded;
 
   useEffect(() => {
     if (
@@ -666,25 +777,25 @@ function VideoPreviewRenderer({
     (currentTime: number) => {
       const synced = updatePlaybackProgress(currentTime);
       if (!synced || !stream) return;
-      playbackControl?.onTimeUpdate?.({
+      onPlaybackTimeUpdate?.({
         sourceId: source.id,
         currentTime,
         duration: stream.duration,
       });
     },
-    [playbackControl?.onTimeUpdate, source.id, stream, updatePlaybackProgress],
+    [onPlaybackTimeUpdate, source.id, stream, updatePlaybackProgress],
   );
 
   const handleEnded = useCallback(
     (currentTime: number) => {
-      playbackControl?.onEnded?.({
+      onPlaybackEnded?.({
         sourceId: source.id,
         mediaType: 'video',
         currentTime,
         duration: stream?.duration ?? currentTime,
       });
     },
-    [playbackControl?.onEnded, source.id, stream?.duration],
+    [onPlaybackEnded, source.id, stream?.duration],
   );
 
   if (stream) {
@@ -693,6 +804,7 @@ function VideoPreviewRenderer({
         className={getMediaPreviewFrameClassName(chrome, 'bg-black')}
         data-preview-surface="video"
         data-preview-chrome={chrome}
+        data-media-duration={String(stream.duration)}
       >
         <InlineVideoPlayer
           videoStreamUrl={stream.videoStreamUrl}
@@ -721,6 +833,9 @@ function VideoPreviewRenderer({
       className={getMediaPreviewFrameClassName(chrome, 'bg-black/30')}
       data-preview-surface="video"
       data-preview-chrome={chrome}
+      data-media-duration={
+        mediaDescription.duration > 0 ? String(mediaDescription.duration) : undefined
+      }
       data-preview-controlled-idle={playbackControl ? 'true' : undefined}
     >
       {posterUrl ? (
@@ -729,6 +844,11 @@ function VideoPreviewRenderer({
           alt={source.title ?? source.id}
           className="h-full w-full object-cover"
         />
+      ) : null}
+      {mediaDescription.duration > 0 ? (
+        <span className="absolute bottom-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
+          {formatTime(mediaDescription.duration)}
+        </span>
       ) : null}
       {playbackControl ? null : (
         <button
@@ -763,6 +883,7 @@ function AudioPreviewRenderer({
 }: PreviewRendererProps): React.ReactNode {
   const assetPath = source.asset?.path;
   const resourceRef = readPreviewSourceResourceRef(source);
+  const knownDuration = readPreviewSourceDuration(source);
   const canStartPlayback = Boolean(assetPath || resourceRef);
   const {
     stream,
@@ -773,8 +894,11 @@ function AudioPreviewRenderer({
     seekPlayback,
     updatePlaybackProgress,
     stopPlayback,
-  } = useMediaStream(assetPath, 'audio', surfaceKind, resourceRef);
+    mediaDescription,
+  } = useMediaStream(assetPath, 'audio', surfaceKind, resourceRef, knownDuration);
   const consumedPlaybackRequestRef = useRef<string | undefined>();
+  const onPlaybackTimeUpdate = playbackControl?.onTimeUpdate;
+  const onPlaybackEnded = playbackControl?.onEnded;
 
   useEffect(() => {
     if (
@@ -803,25 +927,25 @@ function AudioPreviewRenderer({
     (currentTime: number) => {
       const synced = updatePlaybackProgress(currentTime);
       if (!synced || !stream) return;
-      playbackControl?.onTimeUpdate?.({
+      onPlaybackTimeUpdate?.({
         sourceId: source.id,
         currentTime,
         duration: stream.duration,
       });
     },
-    [playbackControl?.onTimeUpdate, source.id, stream, updatePlaybackProgress],
+    [onPlaybackTimeUpdate, source.id, stream, updatePlaybackProgress],
   );
 
   const handleEnded = useCallback(
     (currentTime: number) => {
-      playbackControl?.onEnded?.({
+      onPlaybackEnded?.({
         sourceId: source.id,
         mediaType: 'audio',
         currentTime,
         duration: stream?.duration ?? currentTime,
       });
     },
-    [playbackControl?.onEnded, source.id, stream?.duration],
+    [onPlaybackEnded, source.id, stream?.duration],
   );
 
   if (stream && stream.audioStreamUrl) {
@@ -830,6 +954,7 @@ function AudioPreviewRenderer({
         className={getAudioPreviewFrameClassName(chrome)}
         data-preview-surface="audio"
         data-preview-chrome={chrome}
+        data-media-duration={String(stream.duration)}
       >
         <InlineAudioPlayer
           audioStreamUrl={stream.audioStreamUrl}
@@ -855,23 +980,25 @@ function AudioPreviewRenderer({
       className={getAudioPreviewFrameClassName(chrome)}
       data-preview-surface="audio"
       data-preview-chrome={chrome}
+      data-media-duration={
+        mediaDescription.duration > 0 ? String(mediaDescription.duration) : undefined
+      }
       data-preview-controlled-idle={playbackControl ? 'true' : undefined}
     >
-      {playbackControl ? null : (
-        <AudioPlayerSurface
-          layout={audioLayout}
-          currentTime={0}
-          duration={0}
-          isPlaying={false}
-          disabled={probing || !canStartPlayback}
-          onTogglePlay={(event) => {
-            event?.stopPropagation();
-            startPlayback();
-          }}
-          playbackLabel={t('toolbar.playbackPlay')}
-          muteLabel={t('media.mute')}
-        />
-      )}
+      <AudioPlayerSurface
+        layout={audioLayout}
+        currentTime={playbackControl?.startTimeSeconds ?? 0}
+        duration={mediaDescription.duration}
+        isPlaying={false}
+        disabled={probing || !canStartPlayback}
+        showPlaybackButton={!playbackControl}
+        onTogglePlay={(event) => {
+          event?.stopPropagation();
+          startPlayback();
+        }}
+        playbackLabel={t('toolbar.playbackPlay')}
+        muteLabel={t('media.mute')}
+      />
     </div>
   );
 }
@@ -896,6 +1023,10 @@ function getAudioPreviewFrameClassName(
 function readPreviewSourceResourceRef(source: PreviewSourceDescriptor): ResourceRef | undefined {
   const ref = source.metadata?.['resourceRef'];
   return isResourceRef(ref) ? ref : undefined;
+}
+
+function readPreviewSourceDuration(source: PreviewSourceDescriptor): number {
+  return readPositiveFiniteNumber(source.metadata?.['duration']) ?? 0;
 }
 
 function getStableSafeUrl(source: PreviewSourceDescriptor): string | undefined {
