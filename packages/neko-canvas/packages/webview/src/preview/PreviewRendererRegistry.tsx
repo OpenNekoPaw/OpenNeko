@@ -1102,8 +1102,10 @@ function readHtmlVideoDescriptor(value: unknown): HtmlVideoDescriptor | null {
     typeof value['mimeType'] !== 'string' ||
     typeof value['durationSeconds'] !== 'number' ||
     (value['preparationProfile'] !== 'h264-mp4-direct' &&
+      value['preparationProfile'] !== 'av1-mp4-direct' &&
       value['preparationProfile'] !== 'vp8-webm-direct' &&
       value['preparationProfile'] !== 'h264-mp4-remux' &&
+      value['preparationProfile'] !== 'vp9-mp4-remux' &&
       value['preparationProfile'] !== 'h264-sdr-transcode')
   ) {
     return null;

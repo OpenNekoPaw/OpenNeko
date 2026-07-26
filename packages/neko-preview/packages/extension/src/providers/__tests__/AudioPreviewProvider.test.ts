@@ -131,6 +131,46 @@ describe('AudioPreviewProvider PCM path', () => {
     });
   });
 
+  it('publishes only the latest PCM generation during overlapping seeks', async () => {
+    const first = deferred<PreviewPlayback>();
+    const second = deferred<PreviewPlayback>();
+    const seekPlayback: PreviewPlayback = {
+      audioSessionId: 'seek-audio-session',
+      audio: {
+        ...PLAYBACK.audio!,
+        streamUrl: 'http://127.0.0.1:1234/v1/cut-media/pcm/seek-token',
+      },
+    };
+    service.startPlayback
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise);
+    const { panel, message } = await resolve(provider);
+
+    const playRequest = message({ type: 'preview:play', startTime: 5, speed: 1 });
+    await vi.waitFor(() => expect(service.startPlayback).toHaveBeenCalledTimes(1));
+    const seekRequest = message({ type: 'preview:seek', time: 60, speed: 1 });
+    await new Promise<void>((resolveTick) => setTimeout(resolveTick, 0));
+    expect(service.startPlayback).toHaveBeenCalledTimes(1);
+
+    first.resolve(PLAYBACK);
+    await vi.waitFor(() => expect(service.startPlayback).toHaveBeenCalledTimes(2));
+    expect(service.stopPlayback).toHaveBeenCalledWith(PLAYBACK);
+    expect(panel.webview.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'preview:playbackReady' }),
+    );
+
+    second.resolve(seekPlayback);
+    await Promise.all([playRequest, seekRequest]);
+    expect(panel.webview.postMessage).toHaveBeenLastCalledWith({
+      type: 'preview:playbackReady',
+      payload: {
+        audio: seekPlayback.audio,
+        startTime: 60,
+        playbackRate: 1,
+      },
+    });
+  });
+
   it('stops PCM on request and disposal', async () => {
     const { panel, message } = await resolve(provider);
     await message({ type: 'preview:play' });
@@ -140,6 +180,30 @@ describe('AudioPreviewProvider PCM path', () => {
     const dispose = panel.onDidDispose.mock.calls[0]?.[0] as () => void;
     dispose();
     await vi.waitFor(() => expect(service.stopPlayback).toHaveBeenCalledTimes(2));
+  });
+
+  it('releases the finite PCM generation at EOF', async () => {
+    const { message } = await resolve(provider);
+    await message({ type: 'preview:play' });
+    await message({ type: 'preview:eof' });
+
+    expect(service.stopPlayback).toHaveBeenCalledWith(PLAYBACK);
+  });
+
+  it('observes playback rejection and projects an operation-scoped failure', async () => {
+    service.startPlayback.mockRejectedValueOnce(new Error('PCM decoder unavailable'));
+    const { panel, message } = await resolve(provider);
+
+    await expect(message({ type: 'preview:play' })).rejects.toThrow('PCM decoder unavailable');
+    await vi.waitFor(() =>
+      expect(panel.webview.postMessage).toHaveBeenCalledWith({
+        type: 'preview:operationFailed',
+        payload: {
+          operation: 'playback',
+          message: 'PCM decoder unavailable',
+        },
+      }),
+    );
   });
 
   it('keeps pause/resume/speed in the Webview and projects status updates', async () => {
@@ -226,4 +290,15 @@ function createPanel() {
     onDidChangeViewState: vi.fn(() => ({ dispose: vi.fn() })),
     onDidDispose: vi.fn(() => ({ dispose: vi.fn() })),
   };
+}
+
+function deferred<T>(): {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }

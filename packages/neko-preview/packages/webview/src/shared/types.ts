@@ -13,7 +13,11 @@ import type {
   PreviewVariant,
   PreviewVariantRequest,
 } from '@neko/shared';
-import type { HtmlVideoDescriptor, PcmStreamDescriptor } from '@neko/media';
+import type {
+  HtmlVideoDescriptor,
+  HtmlVideoNativeCapabilities,
+  PcmStreamDescriptor,
+} from '@neko/media';
 
 // =============================================================================
 // Media Info (from Extension probe)
@@ -64,6 +68,16 @@ export interface PreviewFrameDataMessage {
   };
 }
 
+export type PreviewOperation = 'captureFrame' | 'playback' | 'protocol';
+
+export interface PreviewOperationFailedMessage {
+  type: 'preview:operationFailed';
+  payload: {
+    operation: PreviewOperation;
+    message: string;
+  };
+}
+
 export interface PreviewWaveformMessage {
   type: 'preview:waveform';
   payload: {
@@ -105,6 +119,7 @@ export type ExtensionMessage =
   | PreviewInitMessage
   | PreviewPlaybackReadyMessage
   | PreviewFrameDataMessage
+  | PreviewOperationFailedMessage
   | PreviewWaveformMessage
   | PreviewLyricsMessage
   | PanoramaInitMessage
@@ -118,6 +133,7 @@ export type ExtensionMessage =
 
 export interface ReadyMessage {
   type: 'ready';
+  nativeVideoCapabilities?: HtmlVideoNativeCapabilities;
 }
 
 export interface PlayMessage {

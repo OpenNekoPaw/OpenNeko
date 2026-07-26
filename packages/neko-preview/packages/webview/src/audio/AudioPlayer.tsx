@@ -12,6 +12,7 @@ import type {
   MediaInfo,
   PreviewInitMessage,
   PreviewLyricsMessage,
+  PreviewOperationFailedMessage,
   PreviewPlaybackReadyMessage,
   PreviewWaveformMessage,
 } from '../shared/types';
@@ -39,6 +40,7 @@ export function AudioPlayer() {
   const audioClientRef = useRef<PcmAudioClient>();
   const audioContextRef = useRef<AudioContext>();
   const generationRef = useRef(0);
+  const playbackEndedRef = useRef(false);
   const volumeRef = useRef(volume);
   const statusThrottleRef = useRef(0);
 
@@ -60,6 +62,21 @@ export function AudioPlayer() {
     return context;
   }, []);
 
+  const finishPlayback = useCallback(
+    (expectedClient: PcmAudioClient) => {
+      if (audioClientRef.current !== expectedClient) return;
+      audioClientRef.current = undefined;
+      expectedClient.dispose();
+      playbackEndedRef.current = true;
+      setAudioClient(undefined);
+      setIsConnected(false);
+      setIsPlaying(false);
+      if (mediaInfo) setCurrentTime(mediaInfo.duration);
+      postMessage({ type: 'preview:eof' });
+    },
+    [mediaInfo, postMessage],
+  );
+
   const connectPlayback = useCallback(
     async (message: PreviewPlaybackReadyMessage): Promise<void> => {
       disposeClient();
@@ -68,27 +85,39 @@ export function AudioPlayer() {
       if (!descriptor) throw new Error('Audio preview produced no PCM descriptor.');
       const context = audioContextRef.current;
       if (!context) throw new Error('Preview AudioContext was not activated by a user gesture.');
-      const client = new PcmAudioClient({
-        descriptor,
-        playbackRate: message.payload.playbackRate,
-        volume: volumeRef.current,
-        onError: (failure) => setError(failure.message),
-        onPlaybackEnd: () => {
-          setIsPlaying(false);
-          postMessage({ type: 'preview:eof' });
-        },
-      });
-      await client.connect(context);
-      if (generation !== generationRef.current) {
-        client.dispose();
-        return;
+      let client: PcmAudioClient | undefined;
+      try {
+        client = new PcmAudioClient({
+          descriptor,
+          playbackRate: message.payload.playbackRate,
+          volume: volumeRef.current,
+          onError: (failure) => {
+            if (generation === generationRef.current && audioClientRef.current === client) {
+              setError(failure.message);
+            }
+          },
+          onPlaybackEnd: () => {
+            if (client) finishPlayback(client);
+          },
+        });
+        await client.connect(context);
+        if (generation !== generationRef.current) {
+          client.dispose();
+          return;
+        }
+        audioClientRef.current = client;
+        playbackEndedRef.current = false;
+        setAudioClient(client);
+        setIsConnected(true);
+        setIsPlaying(true);
+      } catch (error) {
+        client?.dispose();
+        if (audioClientRef.current === client) audioClientRef.current = undefined;
+        if (generation !== generationRef.current) return;
+        throw error;
       }
-      audioClientRef.current = client;
-      setAudioClient(client);
-      setIsConnected(true);
-      setIsPlaying(true);
     },
-    [disposeClient, postMessage],
+    [disposeClient, finishPlayback],
   );
 
   useEffect(() => {
@@ -153,6 +182,12 @@ export function AudioPlayer() {
         }
         return;
       }
+      case 'preview:operationFailed': {
+        const failure = message as PreviewOperationFailedMessage;
+        setIsPlaying(false);
+        setError(failure.payload.message);
+        return;
+      }
       default:
         return;
     }
@@ -163,6 +198,7 @@ export function AudioPlayer() {
       if (!mediaInfo) return;
       activateAudioContext();
       setError(undefined);
+      playbackEndedRef.current = false;
       setCurrentTime(time);
       setIsPlaying(true);
       postMessage({ type: 'preview:play', startTime: time, speed: playbackRate });
@@ -177,6 +213,10 @@ export function AudioPlayer() {
       postMessage({ type: 'preview:pause' });
       return;
     }
+    if (playbackEndedRef.current) {
+      startAt(0);
+      return;
+    }
     if (isConnected) {
       activateAudioContext();
       void audioClientRef.current?.resume();
@@ -189,6 +229,7 @@ export function AudioPlayer() {
 
   const handleSeek = useCallback(
     (time: number) => {
+      playbackEndedRef.current = false;
       setCurrentTime(time);
       if (!isPlaying) return;
       disposeClient();

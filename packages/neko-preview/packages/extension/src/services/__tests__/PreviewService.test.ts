@@ -110,6 +110,23 @@ describe('PreviewService Node media adapter', () => {
     expect(runtime.stop).toHaveBeenCalledWith('audio-session');
   });
 
+  it('forwards the active Webview MP4 capabilities to video preparation', async () => {
+    const mediaInfo = await service.probeMedia('/fixture/input.mp4');
+    const nativeVideoCapabilities = {
+      version: 1,
+      av1Mp4: true,
+      vp9Mp4: true,
+    } as const;
+
+    await service.startPlayback('/fixture/input.mp4', mediaInfo, 'video', 0, 1, {
+      nativeVideoCapabilities,
+    });
+
+    expect(runtime.prepareVideo).toHaveBeenCalledWith('/fixture/input.mp4', {
+      nativeCapabilities: nativeVideoCapabilities,
+    });
+  });
+
   it('uses the owning provider kind instead of media dimensions to select video preparation', async () => {
     const mediaInfo = {
       ...(await service.probeMedia('/fixture/input.mp4')),

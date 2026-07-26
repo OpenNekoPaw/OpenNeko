@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PcmAudioClient } from '@neko/media/browser';
-import type { PreviewInitMessage, PreviewPlaybackReadyMessage, MediaInfo } from '../shared/types';
+import type {
+  PreviewInitMessage,
+  PreviewOperationFailedMessage,
+  PreviewPlaybackReadyMessage,
+  MediaInfo,
+  ReadyMessage,
+} from '../shared/types';
 import { useExtensionMessage, useVscodeReady } from '../shared/useVscodeMessage';
 import { useTranslation } from '../i18n/I18nContext';
 import { VideoControls } from './VideoControls';
@@ -11,11 +17,14 @@ const VIDEO_SYNC_THRESHOLD_SECONDS = 0.08;
 
 export function VideoPlayer() {
   const { t } = useTranslation();
-  const { postMessage } = useVscodeReady();
+  const readyMessageRef = useRef<ReadyMessage>();
+  readyMessageRef.current ??= createVideoReadyMessage();
+  const { postMessage } = useVscodeReady(readyMessageRef.current);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<PcmAudioClient>();
   const audioContextRef = useRef<AudioContext>();
   const generationRef = useRef(0);
+  const playbackEndedRef = useRef(false);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const volumeRef = useRef(1);
   const [mediaInfo, setMediaInfo] = useState<MediaInfo>();
@@ -26,67 +35,107 @@ export function VideoPlayer() {
   const [speed, setSpeed] = useState(1);
   const [volume, setVolume] = useState(1);
   const [posterUrl, setPosterUrl] = useState<string>();
+  const [posterError, setPosterError] = useState<string>();
   const [error, setError] = useState<string>();
   const [controlsVisible, setControlsVisible] = useState(true);
   const [isPiPActive, setIsPiPActive] = useState(false);
 
-  const disposeClients = useCallback(() => {
+  const disposeClients = useCallback((resetVideo = true) => {
     generationRef.current += 1;
     audioRef.current?.dispose();
     audioRef.current = undefined;
     const video = videoRef.current;
     if (video) {
       video.pause();
-      video.removeAttribute('src');
-      video.load();
+      if (resetVideo) {
+        video.removeAttribute('src');
+        video.load();
+      }
     }
     setIsConnected(false);
   }, []);
 
+  const finishPlayback = useCallback(
+    (expectedAudio: PcmAudioClient | undefined, endTime: number) => {
+      if (expectedAudio && audioRef.current !== expectedAudio) return;
+      const audio = audioRef.current;
+      audioRef.current = undefined;
+      audio?.dispose();
+      videoRef.current?.pause();
+      playbackEndedRef.current = true;
+      setCurrentTime(endTime);
+      setIsConnected(false);
+      setIsPlaying(false);
+      postMessage({ type: 'preview:eof' });
+    },
+    [postMessage],
+  );
+
   const connectPlayback = useCallback(
     async (message: PreviewPlaybackReadyMessage): Promise<void> => {
-      disposeClients();
-      const generation = generationRef.current;
       const { audio, video: descriptor, startTime, playbackRate } = message.payload;
+      const existingVideo = videoRef.current;
+      const reuseVideo =
+        descriptor !== undefined &&
+        existingVideo !== null &&
+        existingVideo.src === descriptor.url &&
+        existingVideo.hasAttribute('src');
+      disposeClients(!reuseVideo);
+      const generation = generationRef.current;
       let audioClient: PcmAudioClient | undefined;
-      if (audio) {
-        const context = audioContextRef.current;
-        if (!context) throw new Error('Preview AudioContext was not activated by a user gesture.');
-        audioClient = new PcmAudioClient({
-          descriptor: audio,
-          playbackRate,
-          volume: volumeRef.current,
-          onError: (failure) => setError(failure.message),
-        });
-        await audioClient.connect(context);
-      }
-      if (generation !== generationRef.current) {
+      try {
+        const element = videoRef.current;
+        if (!descriptor) {
+          throw new Error('Video preview descriptor is unavailable.');
+        }
+        if (!element) {
+          throw new Error('Video preview element is no longer mounted.');
+        }
+        element.muted = true;
+        element.defaultMuted = true;
+        element.playsInline = true;
+        element.playbackRate = playbackRate;
+        if (!reuseVideo) {
+          element.src = descriptor.url;
+          element.load();
+          await waitForVideoReady(element);
+        }
+        element.currentTime = Math.min(startTime, Math.max(0, element.duration || startTime));
+        if (audio) {
+          const context = audioContextRef.current;
+          if (!context) {
+            throw new Error('Preview AudioContext was not activated by a user gesture.');
+          }
+          audioClient = new PcmAudioClient({
+            descriptor: audio,
+            playbackRate,
+            volume: volumeRef.current,
+            onError: (failure) => {
+              if (generation === generationRef.current && audioRef.current === audioClient) {
+                setError(failure.message);
+              }
+            },
+            onPlaybackEnd: () => finishPlayback(audioClient, descriptor.durationSeconds),
+          });
+          await audioClient.connect(context);
+        }
+        if (generation !== generationRef.current) {
+          audioClient?.dispose();
+          return;
+        }
+        audioRef.current = audioClient;
+        playbackEndedRef.current = false;
+        await element.play();
+        setIsConnected(true);
+        setIsPlaying(true);
+      } catch (error) {
         audioClient?.dispose();
-        return;
+        if (audioRef.current === audioClient) audioRef.current = undefined;
+        if (generation !== generationRef.current) return;
+        throw error;
       }
-      const element = videoRef.current;
-      if (!descriptor) {
-        audioClient?.dispose();
-        throw new Error('Video preview descriptor is unavailable.');
-      }
-      if (!element) {
-        audioClient?.dispose();
-        throw new Error('Video preview element is no longer mounted.');
-      }
-      element.muted = true;
-      element.defaultMuted = true;
-      element.playsInline = true;
-      element.playbackRate = playbackRate;
-      element.src = descriptor.url;
-      element.load();
-      await waitForVideoReady(element);
-      element.currentTime = Math.min(startTime, Math.max(0, element.duration || startTime));
-      audioRef.current = audioClient;
-      await element.play();
-      setIsConnected(true);
-      setIsPlaying(true);
     },
-    [disposeClients],
+    [disposeClients, finishPlayback],
   );
 
   useExtensionMessage((message) => {
@@ -106,7 +155,18 @@ export function VideoPlayer() {
         return;
       case 'preview:frameData':
         setPosterUrl(message.payload.imageDataUrl);
+        setPosterError(undefined);
         return;
+      case 'preview:operationFailed': {
+        const failure = message as PreviewOperationFailedMessage;
+        if (failure.payload.operation === 'captureFrame') {
+          setPosterError(failure.payload.message);
+          return;
+        }
+        setIsPlaying(false);
+        setError(failure.payload.message);
+        return;
+      }
       default:
         return;
     }
@@ -128,15 +188,14 @@ export function VideoPlayer() {
       }
       setCurrentTime(Math.min(mediaInfo.duration, time));
       if (time >= mediaInfo.duration) {
-        setIsPlaying(false);
-        postMessage({ type: 'preview:eof' });
+        finishPlayback(audio, mediaInfo.duration);
         return;
       }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [isPlaying, mediaInfo, postMessage]);
+  }, [finishPlayback, isPlaying, mediaInfo]);
 
   useEffect(() => {
     return () => {
@@ -175,6 +234,7 @@ export function VideoPlayer() {
       if (!mediaInfo) return;
       activateAudioContext();
       setError(undefined);
+      playbackEndedRef.current = false;
       setCurrentTime(time);
       setIsPlaying(true);
       postMessage({ type: 'preview:play', startTime: time, speed });
@@ -190,6 +250,10 @@ export function VideoPlayer() {
       postMessage({ type: 'preview:pause' });
       return;
     }
+    if (playbackEndedRef.current) {
+      startAt(0);
+      return;
+    }
     if (isConnected) {
       activateAudioContext();
       void audioRef.current?.resume();
@@ -203,9 +267,12 @@ export function VideoPlayer() {
 
   const handleSeek = useCallback(
     (time: number) => {
+      setError(undefined);
+      playbackEndedRef.current = false;
       setCurrentTime(time);
       if (isPlaying) {
-        disposeClients();
+        disposeClients(false);
+        if (videoRef.current) videoRef.current.currentTime = time;
         activateAudioContext();
         postMessage({ type: 'preview:seek', time, speed });
       } else if (videoRef.current) {
@@ -219,7 +286,8 @@ export function VideoPlayer() {
     (nextSpeed: number) => {
       setSpeed(nextSpeed);
       if (isPlaying) {
-        disposeClients();
+        disposeClients(false);
+        if (videoRef.current) videoRef.current.playbackRate = nextSpeed;
         activateAudioContext();
         postMessage({ type: 'preview:play', startTime: currentTime, speed: nextSpeed });
       } else if (videoRef.current) {
@@ -234,6 +302,17 @@ export function VideoPlayer() {
     setVolume(nextVolume);
     audioRef.current?.setVolume(nextVolume);
   }, []);
+
+  const handleVideoError = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !video.hasAttribute('src')) return;
+    setError(video.error?.message ?? 'Video playback failed.');
+  }, []);
+
+  const handleVideoEnded = useCallback(() => {
+    if (audioRef.current || !mediaInfo) return;
+    finishPlayback(undefined, mediaInfo.duration);
+  }, [finishPlayback, mediaInfo]);
 
   const handleTogglePiP = useCallback(async () => {
     const video = videoRef.current;
@@ -274,7 +353,8 @@ export function VideoPlayer() {
           poster={posterUrl}
           playsInline
           muted
-          onError={() => setError(videoRef.current?.error?.message ?? 'Video playback failed.')}
+          onEnded={handleVideoEnded}
+          onError={handleVideoError}
         />
         {!isPlaying && (
           <button
@@ -287,6 +367,14 @@ export function VideoPlayer() {
               <PlayIcon className="w-8 h-8 text-white" />
             </span>
           </button>
+        )}
+        {posterError && !posterUrl && (
+          <div
+            className="absolute top-3 left-3 right-3 text-center text-xs text-vscode-descriptionForeground"
+            role="status"
+          >
+            {posterError}
+          </div>
         )}
       </div>
       <div
@@ -313,6 +401,20 @@ export function VideoPlayer() {
       </div>
     </div>
   );
+}
+
+function createVideoReadyMessage(): ReadyMessage {
+  const video = document.createElement('video');
+  return {
+    type: 'ready',
+    nativeVideoCapabilities: {
+      version: 1,
+      // Electron can report AV1 Main10 as playable while composing one frozen frame.
+      // Direct AV1 requires source-specific frame-output qualification, not canPlayType().
+      av1Mp4: false,
+      vp9Mp4: video.canPlayType('video/mp4; codecs="vp09.02.51.10"') === 'probably',
+    },
+  };
 }
 
 function waitForVideoReady(video: HTMLVideoElement): Promise<void> {
