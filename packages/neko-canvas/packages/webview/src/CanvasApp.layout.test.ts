@@ -214,6 +214,8 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(playbackWorkspaceSource).not.toMatch(/<StorylineGraph/);
     expect(playbackWorkspaceSource).not.toMatch(/<PlaybackStage/);
     expect(playbackWorkspaceSource).not.toMatch(/data-playback-action="open-preview"/);
+    expect(playbackWorkspaceSource).toMatch(/data-playback-action="reveal-preview"/);
+    expect(playbackWorkspaceSource).not.toMatch(/data-playback-action="hide-preview"/);
     expect(playbackWorkspaceSource).toMatch(/data-playback-action="toggle-overlay-fullscreen"/);
     expect(playbackWorkspaceSource).toMatch(/data-playback-action="close-overlay"/);
     expect(playbackWorkspaceSource.match(/<CanvasPlaybackControls/g)).toHaveLength(1);
@@ -244,8 +246,9 @@ describe('Canvas creative workbench layout boundary', () => {
       /\.canvas-playback-overlay\[data-expanded='true'\][^{]*canvas-playback-overlay-storyline/,
     );
     expect(cssSource).toMatch(
-      /\.canvas-playback-overlay-storyline\s*\{[\s\S]*?height:\s*clamp\(204px,\s*28vh,\s*240px\);[\s\S]*?min-height:\s*204px;/,
+      /\.canvas-playback-overlay-storyline\s*\{[\s\S]*?height:\s*clamp\(132px,\s*18vh,\s*168px\);[\s\S]*?min-height:\s*132px;/,
     );
+    expect(cssSource).not.toMatch(/height:\s*clamp\(150px,\s*30vh,\s*230px\)/);
     expect(cssSource).toMatch(
       /\.canvas-playback-storyline-viewport\s*\{[\s\S]*?flex:\s*1 1 auto;[\s\S]*?overflow:\s*auto;/,
     );

@@ -318,16 +318,11 @@ body,
 
 .canvas-playback-overlay-storyline {
   display: flex;
-  height: clamp(204px, 28vh, 240px);
-  min-height: 204px;
+  height: clamp(132px, 18vh, 168px);
+  min-height: 132px;
   flex: 0 0 auto;
   flex-direction: column;
   overflow: hidden;
-}
-
-.canvas-playback-overlay[data-presentation='fullscreen'] .canvas-playback-overlay-storyline {
-  height: clamp(204px, 28vh, 280px);
-  min-height: 204px;
 }
 
 .canvas-playback-overlay-footer strong {
@@ -942,10 +937,6 @@ body,
 @media (max-width: 920px) {
   .canvas-playback-overlay-layer {
     padding: 8px 12px 8px 68px;
-  }
-
-  .canvas-playback-overlay[data-presentation='fullscreen'] .canvas-playback-overlay-storyline {
-    height: clamp(150px, 30vh, 230px);
   }
 }
 

@@ -155,8 +155,35 @@ describe('PlaybackWorkspace', () => {
     expect(host.querySelector('.canvas-playback-route-pane-toolbar')).toBeNull();
     expect(overlay?.querySelector('.canvas-playback-overlay-storyline-header')).toBeNull();
     expect(overlay?.querySelector('[data-testid="canvas-playback-route-selector"]')).toBeNull();
+    expect(overlay?.querySelector('[data-playback-action="reveal-preview"]')).not.toBeNull();
     expect(host.textContent).toContain('Media 1');
     expect(host.textContent).toContain('Media 2');
+  });
+
+  it('reveals Preview explicitly without starting playback or adding a hide action', () => {
+    act(() => {
+      usePlaybackStore.getState().revealPlaybackWorkspace();
+      root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
+    });
+
+    const revealPreview = host.querySelector<HTMLButtonElement>(
+      '[data-playback-action="reveal-preview"]',
+    );
+    expect(revealPreview?.title).toBe('Show preview');
+    const playbackStateBeforeReveal = usePlaybackStore.getState().playbackSession.playbackState;
+
+    act(() => {
+      revealPreview?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const overlay = host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]');
+    expect(overlay?.dataset.expanded).toBe('true');
+    expect(overlay?.querySelector('[data-testid="canvas-playback-stage"]')).not.toBeNull();
+    expect(usePlaybackStore.getState().playbackSession.playbackState).toBe(
+      playbackStateBeforeReveal,
+    );
+    expect(overlay?.querySelector('[data-playback-action="reveal-preview"]')).toBeNull();
+    expect(overlay?.querySelector('[data-playback-action="hide-preview"]')).toBeNull();
   });
 
   it('toggles the unified Overlay full-bleed presentation and closes everything with Escape', () => {
@@ -187,6 +214,8 @@ describe('PlaybackWorkspace', () => {
       host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]')?.dataset.expanded,
     ).toBe('true');
     expect(host.querySelector('[data-testid="canvas-playback-stage"]')).not.toBeNull();
+    expect(host.querySelector('[data-playback-action="reveal-preview"]')).toBeNull();
+    expect(host.querySelector('[data-playback-action="hide-preview"]')).toBeNull();
 
     act(() => {
       host

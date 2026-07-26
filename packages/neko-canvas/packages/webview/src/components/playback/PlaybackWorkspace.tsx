@@ -11,7 +11,7 @@ import {
   type ResourceRef,
 } from '@neko/shared';
 import { isResourceRef } from '@neko/shared';
-import { CloseIcon, FullscreenIcon, RestoreIcon } from '@neko/shared/icons';
+import { CloseIcon, EyeIcon, FullscreenIcon, RestoreIcon } from '@neko/shared/icons';
 import { PlayIcon } from '@neko/ui/icons';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { IconButton } from '@neko/ui/primitives';
@@ -534,6 +534,16 @@ function StorylinePlaybackOverlay({
               : t('playback.overlay.title')}
           </strong>
           <div className="canvas-playback-overlay-actions">
+            {!expanded ? (
+              <IconButton
+                className="canvas-playback-panel-icon-button"
+                data-playback-action="reveal-preview"
+                icon={<EyeIcon size={15} />}
+                label={t('playback.overlay.showPreview')}
+                title={t('playback.overlay.showPreview')}
+                onClick={() => setPreviewRevealed(true)}
+              />
+            ) : null}
             <IconButton
               className="canvas-playback-panel-icon-button"
               data-playback-action="toggle-overlay-fullscreen"

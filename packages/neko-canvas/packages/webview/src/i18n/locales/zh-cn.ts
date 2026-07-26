@@ -38,6 +38,7 @@ export const zhCN = {
   'playback.workspace.showPanel': '打开故事播放',
   'playback.overlay.title': '故事播放',
   'playback.overlay.close': '关闭故事播放',
+  'playback.overlay.showPreview': '显示预览',
   'playback.overlay.fullscreen': '铺满画布工作区',
   'playback.overlay.restore': '恢复播放浮层',
   'playback.stage.noUnit': '没有可播放单元',

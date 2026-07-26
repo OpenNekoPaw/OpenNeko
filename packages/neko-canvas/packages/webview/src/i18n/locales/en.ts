@@ -38,6 +38,7 @@ export const en = {
   'playback.workspace.showPanel': 'Open story playback',
   'playback.overlay.title': 'Story playback',
   'playback.overlay.close': 'Close story playback',
+  'playback.overlay.showPreview': 'Show preview',
   'playback.overlay.fullscreen': 'Fill canvas workspace',
   'playback.overlay.restore': 'Restore playback overlay',
   'playback.stage.noUnit': 'No playable unit',
