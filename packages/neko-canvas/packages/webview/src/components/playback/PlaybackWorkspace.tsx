@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createCanvasPlaybackPlan,
   resolveEffectiveCanvasPlaybackRoutes,
+  type CanvasData,
   type CanvasPlaybackDiagnostic,
   type CanvasPlaybackPlan,
   type CanvasPlaybackRouteCandidate,
@@ -73,13 +74,15 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
   const [hostPlanState, setHostPlanState] = useState<{
     readonly plan: CanvasPlaybackPlan | null;
     readonly stale: boolean;
+    readonly sourceCanvasData: CanvasData | null;
     readonly error?: string;
-  }>({ plan: null, stale: false });
+  }>({ plan: null, stale: false, sourceCanvasData: null });
   const [playbackRequest, setPlaybackRequest] = useState<CanvasPlaybackRequest | undefined>();
   const [playbackCompletionSignal, setPlaybackCompletionSignal] = useState<
     PlaybackCompletionSignal | undefined
   >();
-  const plan = hostPlanState.plan ?? localPlan;
+  const hostPlan = hostPlanState.sourceCanvasData === canvasData ? hostPlanState.plan : null;
+  const plan = hostPlan ?? localPlan;
   const routeResolution = useMemo(
     () => (plan ? resolveEffectiveCanvasPlaybackRoutes(plan) : null),
     [plan],
@@ -123,7 +126,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     }
     const vscode = getGlobalVSCodeApi();
     if (!vscode) {
-      setHostPlanState({ plan: null, stale: false });
+      setHostPlanState({ plan: null, stale: false, sourceCanvasData: null });
       return;
     }
 
@@ -132,6 +135,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     const settleHostPlan = (nextState: {
       readonly plan: CanvasPlaybackPlan | null;
       readonly stale: boolean;
+      readonly sourceCanvasData: CanvasData | null;
       readonly error?: string;
     }) => {
       window.removeEventListener('message', handleMessage);
@@ -154,6 +158,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
       settleHostPlan({
         plan: message.plan ?? null,
         stale: message.stale === true,
+        sourceCanvasData: canvasData,
         ...(typeof message.error === 'string' ? { error: message.error } : {}),
       });
     };
@@ -161,14 +166,18 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
       settleHostPlan({
         plan: null,
         stale: true,
+        sourceCanvasData: canvasData,
         error: t('playback.stage.hostPlanTimeout'),
       });
     }, HOST_PLAYBACK_PLAN_TIMEOUT_MS);
 
     window.addEventListener('message', handleMessage);
-    vscode.postMessage({
-      type: 'playback:getPreviewPlan',
-      requestId,
+    queueMicrotask(() => {
+      if (cancelled) return;
+      vscode.postMessage({
+        type: 'playback:getPreviewPlan',
+        requestId,
+      });
     });
 
     return () => {
@@ -182,7 +191,7 @@ export function PlaybackWorkspace({ canvasPane, className }: PlaybackWorkspacePr
     if (usePlaybackStore.getState().playbackSession.stale) {
       markStale(false);
     }
-    setHostPlanState({ plan: null, stale: false });
+    setHostPlanState({ plan: null, stale: false, sourceCanvasData: null });
   }, [canvasData, markStale]);
 
   useEffect(() => {

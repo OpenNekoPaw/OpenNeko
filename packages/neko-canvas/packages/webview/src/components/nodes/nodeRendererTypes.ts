@@ -1,6 +1,7 @@
 import type React from 'react';
 import type { CanvasNode, CanvasNodeType, CanvasViewport } from '@neko/shared';
 import type { NodeTypeDescriptorRegistry } from './nodeTypeDescriptor';
+import type { ConnectionDragTargetState } from '../../hooks/useConnectionDrag';
 
 export interface NodeRendererCommonProps {
   viewport: CanvasViewport;
@@ -23,6 +24,8 @@ export interface NodeRendererCommonProps {
   onRotate?: (nodeId: string, rotation: number) => void;
   onRotateEnd?: (nodeId: string, rotation: number) => void;
   onConnectionStart?: (nodeId: string, anchor: string, e: React.MouseEvent) => void;
+  isConnecting?: boolean;
+  connectionTargetState?: ConnectionDragTargetState | null;
   onUpdateData?: (nodeId: string, data: Record<string, unknown>) => void;
   interactionRenderMode?: 'full' | 'shell';
 }

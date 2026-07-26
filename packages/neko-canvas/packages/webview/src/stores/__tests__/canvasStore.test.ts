@@ -7,6 +7,7 @@ import type {
   MarkdownCanvasNode,
   MediaCanvasNode,
 } from '@neko/shared';
+import { createNodeConnectionEndpoint, createPortConnectionEndpoint } from '@neko/shared';
 import { canCreateCanvasConnection, useCanvasStore } from '../canvasStore';
 import { useHistoryStore } from '../historyStore';
 import { useCanvasOperationStore } from '../canvasOperationStore';
@@ -95,8 +96,6 @@ describe('canvasStore canonical workspace', () => {
     useCanvasStore.setState({
       canvasData: null,
       selection: { nodeIds: [], connectionIds: [] },
-      isConnecting: false,
-      pendingConnectionSource: null,
     });
     useHistoryStore.setState({ undoStack: [], redoStack: [], maxHistory: 50 });
   });
@@ -262,6 +261,105 @@ describe('canvasStore canonical workspace', () => {
         [connection('reverse-ref', 'second', 'first', 'reference')],
       ),
     ).toBe(true);
+  });
+
+  it('commits a Media-to-Media sequence through compatible ports exactly once', () => {
+    useCanvasStore
+      .getState()
+      .setCanvasData(canvas([media('source', 0, 0), media('target', 320, 0)]));
+
+    const result = useCanvasStore.getState().addConnection({
+      sourceId: 'source',
+      targetId: 'target',
+      type: 'sequence',
+      sourceEndpoint: createPortConnectionEndpoint('source', 'out'),
+      targetEndpoint: createPortConnectionEndpoint('target', 'in'),
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(useCanvasStore.getState().canvasData?.connections).toEqual([
+      expect.objectContaining({
+        sourceId: 'source',
+        targetId: 'target',
+        type: 'sequence',
+      }),
+    ]);
+    expect(useHistoryStore.getState().undoStack).toHaveLength(1);
+  });
+
+  it('rejects duplicate and self sequence drafts without recording history', () => {
+    const existing = connection('existing', 'source', 'target', 'sequence');
+    useCanvasStore
+      .getState()
+      .setCanvasData(canvas([media('source', 0, 0), media('target', 320, 0)], [existing]));
+
+    const duplicate = useCanvasStore.getState().addConnection({
+      sourceId: 'source',
+      targetId: 'target',
+      type: 'sequence',
+      sourceEndpoint: createNodeConnectionEndpoint('source'),
+      targetEndpoint: createNodeConnectionEndpoint('target'),
+    });
+    const self = useCanvasStore.getState().addConnection({
+      sourceId: 'source',
+      targetId: 'source',
+      type: 'sequence',
+      sourceEndpoint: createNodeConnectionEndpoint('source'),
+      targetEndpoint: createNodeConnectionEndpoint('source'),
+    });
+
+    expect(duplicate).toEqual({ ok: false, reason: 'duplicate' });
+    expect(self).toEqual({ ok: false, reason: 'self-connection' });
+    expect(useCanvasStore.getState().canvasData?.connections).toEqual([existing]);
+    expect(useHistoryStore.getState().undoStack).toEqual([]);
+  });
+
+  it('validates connection type updates and preserves the original edge on rejection', () => {
+    const reference = connection('forward', 'a', 'b', 'reference');
+    const reverse = connection('reverse', 'b', 'a', 'sequence');
+    useCanvasStore
+      .getState()
+      .setCanvasData(canvas([markdown('a', 0, 0), markdown('b', 320, 0)], [reference, reverse]));
+
+    const result = useCanvasStore.getState().updateConnection('forward', { type: 'sequence' });
+
+    expect(result).toEqual({ ok: false, reason: 'cycle' });
+    expect(
+      useCanvasStore.getState().canvasData?.connections.find((item) => item.id === 'forward')?.type,
+    ).toBe('reference');
+    expect(useHistoryStore.getState().undoStack).toEqual([]);
+  });
+
+  it('allows node-scoped sequence branches and merges', () => {
+    useCanvasStore
+      .getState()
+      .setCanvasData(
+        canvas([
+          markdown('a', 0, 0),
+          markdown('b', 320, 0),
+          markdown('c', 320, 240),
+          markdown('d', 640, 0),
+        ]),
+      );
+
+    for (const [sourceId, targetId] of [
+      ['a', 'b'],
+      ['a', 'c'],
+      ['b', 'd'],
+      ['c', 'd'],
+    ] as const) {
+      expect(
+        useCanvasStore.getState().addConnection({
+          sourceId,
+          targetId,
+          type: 'sequence',
+          sourceEndpoint: createNodeConnectionEndpoint(sourceId),
+          targetEndpoint: createNodeConnectionEndpoint(targetId),
+        }),
+      ).toMatchObject({ ok: true });
+    }
+
+    expect(useCanvasStore.getState().canvasData?.connections).toHaveLength(4);
   });
 
   it('normalizes undersized canonical nodes at store boundaries', () => {

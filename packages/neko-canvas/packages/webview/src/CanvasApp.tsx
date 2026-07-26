@@ -10,6 +10,7 @@ import { CANVAS_VERSION, validateCanvasBoardRef } from '@neko/shared';
 import type {
   CanvasBoardNavigationDiagnostic,
   CanvasBoardRef,
+  CanvasConnection,
   CanvasData,
   CanvasDroppedAsset,
   CanvasViewport,
@@ -63,6 +64,7 @@ import {
 import { resolveCanvasRenderRefreshDecision } from './utils/renderRefreshTiering';
 import { t } from './i18n';
 import { getLogger } from './utils/logger';
+import type { CanvasConnectionMutationResult } from './utils/canvasConnectionAuthoring';
 
 // =============================================================================
 // Constants & VSCode API
@@ -95,6 +97,7 @@ export function CanvasApp() {
   // Interaction tool: select/marquee by default, hand tool pans on drag.
   const [interactionTool, setInteractionTool] = useState<'select' | 'pan'>('select');
   const [isSpacePanActive, setIsSpacePanActive] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const isHudVisible = true;
   const isGridVisible = true;
   // Minimap width tracks ZoomControls width for alignment
@@ -112,7 +115,6 @@ export function CanvasApp() {
 
   const canvasData = useCanvasStore((state) => state.canvasData);
   const selection = useCanvasStore((state) => state.selection);
-  const isConnecting = useCanvasStore((state) => state.isConnecting);
   const setCanvasData = useCanvasStore((state) => state.setCanvasData);
   const selectNode = useCanvasStore((state) => state.selectNode);
   const selectConnection = useCanvasStore((state) => state.selectConnection);
@@ -122,9 +124,6 @@ export function CanvasApp() {
   const deleteSelected = useCanvasStore((state) => state.deleteSelected);
   const setPlaybackEntry = useCanvasStore((state) => state.setPlaybackEntry);
   const updateNodeData = useCanvasStore((state) => state.updateNodeData);
-  const startConnection = useCanvasStore((state) => state.startConnection);
-  const completeConnection = useCanvasStore((state) => state.completeConnection);
-  const cancelConnection = useCanvasStore((state) => state.cancelConnection);
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
   const moveNodeEnd = useCanvasStore((state) => state.moveNodeEnd);
@@ -476,7 +475,7 @@ export function CanvasApp() {
       if (!request.sourceId || !request.targetId) {
         throw new Error('Connection sourceId and targetId are required');
       }
-      const connectionId = useCanvasStore.getState().addConnection({
+      const result = useCanvasStore.getState().addConnection({
         sourceId: request.sourceId,
         targetId: request.targetId,
         type: request.type ?? 'reference',
@@ -484,6 +483,10 @@ export function CanvasApp() {
         sourceEndpoint: request.sourceEndpoint ?? { nodeId: request.sourceId, scope: 'node' },
         targetEndpoint: request.targetEndpoint ?? { nodeId: request.targetId, scope: 'node' },
       });
+      if (!result.ok) {
+        throw new Error(`Canvas connection rejected: ${result.reason}`);
+      }
+      const connectionId = result.connectionId;
       const connection = useCanvasStore
         .getState()
         .canvasData?.connections.find((item) => item.id === connectionId);
@@ -634,13 +637,11 @@ export function CanvasApp() {
     selectedNodeIds,
     selectedConnectionIds,
     nodes,
-    isConnecting,
     contextMenu,
     setContextMenu: () => setContextMenu(null),
     selectNode,
     selectConnection,
     deleteSelected,
-    cancelConnection,
     clearSelection,
     resetViewport,
     undo,
@@ -824,9 +825,8 @@ export function CanvasApp() {
   );
   const handleCanvasClick = useCallback(() => {
     setContextMenu(null);
-    if (isConnecting) cancelConnection();
-    else clearSelection();
-  }, [isConnecting, cancelConnection, clearSelection, setContextMenu]);
+    clearSelection();
+  }, [clearSelection, setContextMenu]);
   const handleNodeMove = useCallback(
     (nodeId: string, position: { x: number; y: number }) => moveNodeEnd(nodeId, position),
     [moveNodeEnd],
@@ -848,23 +848,11 @@ export function CanvasApp() {
     (nodeId: string, data: Record<string, unknown>) => updateNodeData(nodeId, data),
     [updateNodeData],
   );
-  const handleConnectionStart = useCallback(
-    (nodeId: string, handleId: string) => startConnection(nodeId, handleId),
-    [startConnection],
-  );
   const handleConnectionComplete = useCallback(
-    (
-      sourceNodeId: string,
-      sourceHandleId: string,
-      targetNodeId: string,
-      targetHandleId: string,
-    ) => {
-      startConnection(sourceNodeId, sourceHandleId);
-      completeConnection(targetNodeId, targetHandleId);
-    },
-    [startConnection, completeConnection],
+    (connection: Omit<CanvasConnection, 'id'>): CanvasConnectionMutationResult =>
+      useCanvasStore.getState().addConnection(connection),
+    [],
   );
-  const handleConnectionCancel = useCallback(() => cancelConnection(), [cancelConnection]);
   const handleMarqueeSelect = useCallback(
     (nodeIds: string[], additive: boolean) => {
       if (additive) {
@@ -1022,9 +1010,8 @@ export function CanvasApp() {
                   onNodeRotateEnd={handleNodeRotateEnd}
                   onNodeUpdateData={handleNodeUpdateData}
                   onConnectionSelect={handleConnectionSelect}
-                  onConnectionStart={handleConnectionStart}
                   onConnectionComplete={handleConnectionComplete}
-                  onConnectionCancel={handleConnectionCancel}
+                  onConnectionStateChange={setIsConnecting}
                   onCanvasClick={handleCanvasClick}
                   onMarqueeSelect={handleMarqueeSelect}
                   onDocumentOpen={handleDocumentOpen}

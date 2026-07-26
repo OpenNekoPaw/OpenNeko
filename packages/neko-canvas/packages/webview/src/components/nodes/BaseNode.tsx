@@ -22,6 +22,7 @@ import type { NodePresentation } from './nodeTypeDescriptor';
 import { getNodeLabel } from './nodeTypeDescriptor';
 import { createBuiltInNodeTypeDescriptors } from './nodeTypeDescriptors';
 import { t } from '../../i18n';
+import type { ConnectionDragTargetState } from '../../hooks/useConnectionDrag';
 
 // =============================================================================
 // Types
@@ -70,6 +71,8 @@ export interface BaseNodeProps {
   /** Called on mouseup when rotation ends */
   onRotateEnd?: (nodeId: string, rotation: number) => void;
   onConnectionStart?: (nodeId: string, handleId: string, e: React.MouseEvent) => void;
+  isConnecting?: boolean;
+  connectionTargetState?: ConnectionDragTargetState | null;
   children: ReactNode;
   className?: string;
   autoSizeContent?: boolean;
@@ -136,6 +139,8 @@ export function BaseNode({
   onResizeEnd,
   onRotateEnd,
   onConnectionStart,
+  isConnecting = false,
+  connectionTargetState,
   children,
   className,
   autoSizeContent = true,
@@ -218,6 +223,7 @@ export function BaseNode({
   // Resolve ports: explicit node.ports > default ports for type > empty
   const ports = node.ports ?? getDefaultPorts(node.type as CanvasNodeType);
   const hasPorts = ports.length > 0;
+  const targetState = connectionTargetState?.nodeId === node.id ? connectionTargetState : undefined;
 
   // Handle node click for selection
   const handleClick = useCallback(
@@ -328,6 +334,7 @@ export function BaseNode({
       data-node-presentation={presentation}
       data-node-selected={isSelected ? 'true' : 'false'}
       data-node-locked={node.locked ? 'true' : undefined}
+      data-connection-target-validity={targetState?.validity}
       {...getKeyboardBoundaryMetadata({
         scope: 'node',
         ownerId: node.id,
@@ -381,6 +388,8 @@ export function BaseNode({
           'transition-colors duration-150',
           isSelected && 'selected',
           (isDragging || isResizing) && 'shadow-2xl',
+          targetState?.validity === 'valid' && 'ring-2 ring-blue-500',
+          targetState?.validity === 'invalid' && 'ring-2 ring-red-500',
         )}
       >
         {children}
@@ -454,15 +463,20 @@ export function BaseNode({
               key={port.id}
               data-port-id={port.id}
               data-port-type={port.type}
+              data-endpoint-scope="port"
               data-node-id={node.id}
               data-connection-handle={port.id}
               style={getPortStyle(port, index, portsOnSide.length)}
-              onMouseDown={handleAnchorMouseDown(port.id)}
+              onMouseDown={port.type === 'output' ? handleAnchorMouseDown(port.id) : undefined}
               className={clsx(
                 'transition-all duration-150',
-                isSelected
-                  ? 'scale-110 opacity-100'
-                  : 'scale-75 opacity-60 hover:scale-110 hover:opacity-100',
+                isConnecting && port.type === 'input'
+                  ? targetState?.validity === 'invalid'
+                    ? 'scale-125 opacity-100 ring-2 ring-red-500'
+                    : 'scale-125 opacity-100 ring-2 ring-blue-500'
+                  : isSelected
+                    ? 'scale-110 opacity-100'
+                    : 'scale-75 opacity-60 hover:scale-110 hover:opacity-100',
               )}
               title={port.label ?? resolvePortTooltip(port)}
             >
@@ -480,13 +494,14 @@ export function BaseNode({
       {/* Node-level endpoint handles (only when selected) */}
       {!hasPorts &&
         isSelected &&
-        ANCHOR_POSITIONS.map((side) => (
+        ANCHOR_POSITIONS.filter((side) => side === 'left' || side === 'right').map((side) => (
           <div
             key={side}
             data-node-id={node.id}
             data-connection-handle={side}
+            data-port-type={side === 'left' ? 'input' : 'output'}
             style={getEndpointHandleStyle(side)}
-            onMouseDown={handleAnchorMouseDown(side)}
+            onMouseDown={side === 'right' ? handleAnchorMouseDown(side) : undefined}
             className="hover:bg-[var(--node-selected)] hover:scale-125 transition-all duration-150"
           />
         ))}

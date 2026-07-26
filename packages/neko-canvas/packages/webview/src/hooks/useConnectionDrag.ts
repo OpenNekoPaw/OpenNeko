@@ -5,7 +5,17 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type React from 'react';
-import type { CanvasViewport } from '@neko/shared';
+import type { CanvasConnection, CanvasNode, CanvasViewport } from '@neko/shared';
+import {
+  createNodeConnectionEndpoint,
+  createPortConnectionEndpoint,
+  getDefaultPorts,
+} from '@neko/shared';
+import type {
+  CanvasConnectionMutationResult,
+  CanvasConnectionRejectionReason,
+  CanvasConnectionValidationResult,
+} from '../utils/canvasConnectionAuthoring';
 
 // =============================================================================
 // Types
@@ -14,30 +24,54 @@ import type { CanvasViewport } from '@neko/shared';
 export interface UseConnectionDragOptions {
   viewport: CanvasViewport;
   containerRef: React.RefObject<HTMLElement>;
+  nodes: readonly CanvasNode[];
   onConnectionStart?: (nodeId: string, handleId: string) => void;
   onConnectionComplete?: (
-    sourceNodeId: string,
-    sourceHandleId: string,
-    targetNodeId: string,
-    targetHandleId: string,
-  ) => void;
+    connection: Omit<CanvasConnection, 'id'>,
+  ) => CanvasConnectionMutationResult;
+  validateConnection?: (
+    connection: Omit<CanvasConnection, 'id'>,
+  ) => CanvasConnectionValidationResult;
   onConnectionCancel?: () => void;
+  onConnectionStateChange?: (isConnecting: boolean) => void;
 }
 
 export interface PendingConnection {
   sourceNodeId: string;
   sourceHandleId: string;
+  sourceEndpoint: CanvasConnection['sourceEndpoint'];
   mousePosition: { x: number; y: number };
+}
+
+export interface ConnectionDragTargetState {
+  readonly nodeId: string;
+  readonly validity: 'valid' | 'invalid';
+  readonly reason?: CanvasConnectionRejectionReason;
 }
 
 export interface UseConnectionDragReturn {
   pendingConnection: PendingConnection | null;
   isConnecting: boolean;
+  targetState: ConnectionDragTargetState | null;
   startConnection: (nodeId: string, handleId: string, e: React.MouseEvent) => void;
   updateConnection: (e: MouseEvent) => void;
-  completeConnection: (targetNodeId: string, targetHandleId: string) => void;
   cancelConnection: () => void;
 }
+
+export type ConnectionDropTargetResolution =
+  | {
+      readonly ok: true;
+      readonly target: {
+        readonly nodeId: string;
+        readonly handleId: string;
+        readonly endpoint: CanvasConnection['targetEndpoint'];
+      };
+    }
+  | {
+      readonly ok: false;
+      readonly reason: 'missing-target' | 'self-connection' | 'target-direction';
+      readonly targetNodeId?: string;
+    };
 
 // =============================================================================
 // Hook
@@ -46,12 +80,16 @@ export interface UseConnectionDragReturn {
 export function useConnectionDrag({
   viewport,
   containerRef,
+  nodes,
   onConnectionStart,
   onConnectionComplete,
+  validateConnection,
   onConnectionCancel,
+  onConnectionStateChange,
 }: UseConnectionDragOptions): UseConnectionDragReturn {
   const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [targetState, setTargetState] = useState<ConnectionDragTargetState | null>(null);
 
   // Convert screen coordinates to canvas coordinates
   const screenToCanvas = useCallback(
@@ -75,16 +113,26 @@ export function useConnectionDrag({
       e.preventDefault();
 
       const canvasPos = screenToCanvas(e.clientX, e.clientY);
+      const node = nodes.find((candidate) => candidate.id === nodeId);
+      if (!node) throw new Error(`Canvas connection source node "${nodeId}" is missing`);
+      const port = (node.ports ?? getDefaultPorts(node.type)).find(
+        (candidate) => candidate.id === handleId,
+      );
+      if (port?.type === 'input') return;
 
       setPendingConnection({
         sourceNodeId: nodeId,
         sourceHandleId: handleId,
+        sourceEndpoint: port
+          ? createPortConnectionEndpoint(nodeId, handleId)
+          : createNodeConnectionEndpoint(nodeId),
         mousePosition: canvasPos,
       });
       setIsConnecting(true);
+      setTargetState(null);
       onConnectionStart?.(nodeId, handleId);
     },
-    [screenToCanvas, onConnectionStart],
+    [nodes, screenToCanvas, onConnectionStart],
   );
 
   // Update the pending connection position
@@ -93,6 +141,14 @@ export function useConnectionDrag({
       if (!isConnecting) return;
 
       const canvasPos = screenToCanvas(e.clientX, e.clientY);
+      const currentPending = pendingConnection;
+      if (currentPending) {
+        const element =
+          document.elementFromPoint(e.clientX, e.clientY) ??
+          (e.target instanceof Element ? e.target : null);
+        const resolution = resolveConnectionDropTarget(element, currentPending.sourceNodeId, nodes);
+        setTargetState(resolveTargetState(resolution, currentPending, validateConnection) ?? null);
+      }
 
       setPendingConnection((prev) => {
         if (!prev) return null;
@@ -102,39 +158,20 @@ export function useConnectionDrag({
         };
       });
     },
-    [isConnecting, screenToCanvas],
+    [isConnecting, nodes, pendingConnection, screenToCanvas, validateConnection],
   );
 
-  // Complete the connection to a target handle.
-  const completeConnection = useCallback(
-    (targetNodeId: string, targetHandleId: string) => {
-      if (!pendingConnection) return;
-
-      // Don't connect to self
-      if (pendingConnection.sourceNodeId === targetNodeId) {
-        cancelConnection();
-        return;
-      }
-
-      onConnectionComplete?.(
-        pendingConnection.sourceNodeId,
-        pendingConnection.sourceHandleId,
-        targetNodeId,
-        targetHandleId,
-      );
-
-      setPendingConnection(null);
-      setIsConnecting(false);
-    },
-    [pendingConnection, onConnectionComplete],
-  );
+  const clearConnection = useCallback(() => {
+    setPendingConnection(null);
+    setIsConnecting(false);
+    setTargetState(null);
+  }, []);
 
   // Cancel the pending connection
   const cancelConnection = useCallback(() => {
-    setPendingConnection(null);
-    setIsConnecting(false);
+    clearConnection();
     onConnectionCancel?.();
-  }, [onConnectionCancel]);
+  }, [clearConnection, onConnectionCancel]);
 
   // Handle mouse events for connection dragging
   useEffect(() => {
@@ -145,39 +182,141 @@ export function useConnectionDrag({
     };
 
     const handleMouseUp = (e: MouseEvent) => {
-      // Check if we're over a connection handle.
-      const target = e.target as HTMLElement;
-      const handleElement = target.closest('[data-connection-handle]');
-
-      if (handleElement) {
-        const nodeId = handleElement.getAttribute('data-node-id');
-        const handleId = handleElement.getAttribute('data-connection-handle');
-
-        if (nodeId && handleId) {
-          completeConnection(nodeId, handleId);
-          return;
+      if (!pendingConnection) return;
+      const element =
+        document.elementFromPoint(e.clientX, e.clientY) ??
+        (e.target instanceof Element ? e.target : null);
+      const resolution = resolveConnectionDropTarget(
+        element,
+        pendingConnection.sourceNodeId,
+        nodes,
+      );
+      if (resolution.ok) {
+        const connection = createSequenceConnectionDraft(pendingConnection, resolution.target);
+        const validation = validateConnection?.(connection) ?? { ok: true };
+        if (validation.ok) {
+          const result = onConnectionComplete?.(connection);
+          if (!result || result.ok) {
+            clearConnection();
+            return;
+          }
         }
       }
-
-      // Cancel if not dropped on an anchor
       cancelConnection();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') cancelConnection();
     };
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isConnecting, updateConnection, completeConnection, cancelConnection]);
+  }, [
+    cancelConnection,
+    clearConnection,
+    isConnecting,
+    nodes,
+    onConnectionComplete,
+    pendingConnection,
+    updateConnection,
+    validateConnection,
+  ]);
+
+  useEffect(() => {
+    onConnectionStateChange?.(isConnecting);
+  }, [isConnecting, onConnectionStateChange]);
 
   return {
     pendingConnection,
     isConnecting,
+    targetState,
     startConnection,
     updateConnection,
-    completeConnection,
     cancelConnection,
+  };
+}
+
+export function resolveConnectionDropTarget(
+  target: EventTarget | null,
+  sourceNodeId: string,
+  nodes: readonly CanvasNode[],
+): ConnectionDropTargetResolution {
+  if (!(target instanceof Element)) return { ok: false, reason: 'missing-target' };
+  const handleElement = target.closest<HTMLElement>('[data-connection-handle]');
+  const nodeElement = handleElement ?? target.closest<HTMLElement>('[data-node-id]');
+  const targetNodeId = nodeElement?.dataset.nodeId;
+  if (!targetNodeId || !nodes.some((node) => node.id === targetNodeId)) {
+    return { ok: false, reason: 'missing-target' };
+  }
+  if (targetNodeId === sourceNodeId) {
+    return { ok: false, targetNodeId, reason: 'self-connection' };
+  }
+  if (handleElement) {
+    if (handleElement.dataset.portType === 'output') {
+      return { ok: false, targetNodeId, reason: 'target-direction' };
+    }
+    const handleId = handleElement.dataset.connectionHandle;
+    if (!handleId) return { ok: false, targetNodeId, reason: 'missing-target' };
+    return {
+      ok: true,
+      target: {
+        nodeId: targetNodeId,
+        handleId,
+        endpoint:
+          handleElement.dataset.endpointScope === 'port'
+            ? createPortConnectionEndpoint(targetNodeId, handleId)
+            : createNodeConnectionEndpoint(targetNodeId),
+      },
+    };
+  }
+  return {
+    ok: true,
+    target: {
+      nodeId: targetNodeId,
+      handleId: 'in',
+      endpoint: createNodeConnectionEndpoint(targetNodeId),
+    },
+  };
+}
+
+function resolveTargetState(
+  resolution: ConnectionDropTargetResolution,
+  pending: PendingConnection,
+  validateConnection:
+    ((connection: Omit<CanvasConnection, 'id'>) => CanvasConnectionValidationResult) | undefined,
+): ConnectionDragTargetState | undefined {
+  if (!resolution.ok) {
+    return resolution.targetNodeId
+      ? { nodeId: resolution.targetNodeId, validity: 'invalid', reason: resolution.reason }
+      : undefined;
+  }
+  const validation = validateConnection?.(
+    createSequenceConnectionDraft(pending, resolution.target),
+  ) ?? { ok: true };
+  return validation.ok
+    ? { nodeId: resolution.target.nodeId, validity: 'valid' }
+    : {
+        nodeId: resolution.target.nodeId,
+        validity: 'invalid',
+        reason: validation.reason,
+      };
+}
+
+function createSequenceConnectionDraft(
+  pending: PendingConnection,
+  target: Extract<ConnectionDropTargetResolution, { readonly ok: true }>['target'],
+): Omit<CanvasConnection, 'id'> {
+  return {
+    sourceId: pending.sourceNodeId,
+    targetId: target.nodeId,
+    type: 'sequence',
+    sourceEndpoint: pending.sourceEndpoint,
+    targetEndpoint: target.endpoint,
   };
 }

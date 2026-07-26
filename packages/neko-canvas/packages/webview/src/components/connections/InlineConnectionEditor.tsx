@@ -1,4 +1,4 @@
-import type React from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { CanvasConnection, CanvasNode } from '@neko/shared';
 import { CANVAS_CONNECTION_TYPES, isCanvasConnectionType } from '@neko/shared';
 import { t } from '../../i18n';
@@ -7,6 +7,10 @@ import {
   resolveConnectionDirectionLabel,
   resolveConnectionTypeLabel,
 } from '../../i18n/connectionLabels';
+import type {
+  CanvasConnectionMutationResult,
+  CanvasConnectionRejectionReason,
+} from '../../utils/canvasConnectionAuthoring';
 
 const INLINE_CONNECTION_CONTROL_CLASS = 'w-full rounded px-2 py-1 text-xs outline-none';
 const INLINE_CONNECTION_CONTROL_STYLE: React.CSSProperties = {
@@ -18,7 +22,10 @@ const INLINE_CONNECTION_CONTROL_STYLE: React.CSSProperties = {
 export interface InlineConnectionEditorProps {
   connection: CanvasConnection | null;
   nodes: readonly CanvasNode[];
-  onUpdateConnection: (id: string, updates: Partial<CanvasConnection>) => void;
+  onUpdateConnection: (
+    id: string,
+    updates: Partial<CanvasConnection>,
+  ) => CanvasConnectionMutationResult;
 }
 
 export function InlineConnectionEditor({
@@ -26,6 +33,14 @@ export function InlineConnectionEditor({
   nodes,
   onUpdateConnection,
 }: InlineConnectionEditorProps) {
+  const [rejectionReason, setRejectionReason] = useState<CanvasConnectionRejectionReason | null>(
+    null,
+  );
+
+  useEffect(() => {
+    setRejectionReason(null);
+  }, [connection?.id]);
+
   if (!connection) return null;
 
   const sourceNode = nodes.find((node) => node.id === connection.sourceId);
@@ -36,7 +51,8 @@ export function InlineConnectionEditor({
   const connectionType = connection.type ?? 'reference';
 
   const update = (updates: Partial<CanvasConnection>) => {
-    onUpdateConnection(connection.id, updates);
+    const result = onUpdateConnection(connection.id, updates);
+    setRejectionReason(result.ok ? null : result.reason);
   };
 
   return (
@@ -89,16 +105,27 @@ export function InlineConnectionEditor({
             ))}
           </select>
         </Field>
+        {rejectionReason ? (
+          <p className="text-red-500" role="alert">
+            {t('connection.updateRejected', {
+              reason: resolveConnectionRejectionLabel(rejectionReason),
+            })}
+          </p>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="grid gap-1">
       <span style={{ color: 'var(--toolbar-fg-secondary)' }}>{label}</span>
       {children}
     </label>
   );
+}
+
+function resolveConnectionRejectionLabel(reason: CanvasConnectionRejectionReason): string {
+  return t(`connection.rejection.${reason}`);
 }

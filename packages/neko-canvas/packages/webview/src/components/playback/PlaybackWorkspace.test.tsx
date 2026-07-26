@@ -4,7 +4,7 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CanvasData, CanvasNode } from '@neko/shared';
+import { createCanvasPlaybackPlan, type CanvasData, type CanvasNode } from '@neko/shared';
 import { resetVSCodeApi } from '@neko/shared/vscode';
 import { PlaybackWorkspace } from './PlaybackWorkspace';
 import { useCanvasStore } from '../../stores/canvasStore';
@@ -91,8 +91,6 @@ describe('PlaybackWorkspace', () => {
     useCanvasStore.setState({
       canvasData: storyboardCanvas(),
       selection: { nodeIds: ['scene-a'], connectionIds: [] },
-      isConnecting: false,
-      pendingConnectionSource: null,
     });
     usePlaybackStore.setState({
       activePlayback: null,
@@ -580,6 +578,61 @@ describe('PlaybackWorkspace', () => {
     expect(host.querySelector('[data-testid="preview-surface"]')?.firstChild?.textContent).toBe(
       'playback:shot-host',
     );
+  });
+
+  it('drops a stale host Storyline plan immediately when Canvas topology changes', async () => {
+    vscodeApi = { postMessage: vi.fn() };
+    (window as unknown as { vscodeApi?: unknown }).vscodeApi = vscodeApi;
+    resetVSCodeApi();
+
+    await act(async () => {
+      useCanvasStore.setState({
+        canvasData: mediaRouteCanvas(),
+        selection: { nodeIds: ['media-a'], connectionIds: [] },
+      });
+      usePlaybackStore.getState().revealPlaybackWorkspace();
+      root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
+      await Promise.resolve();
+    });
+
+    const request = vscodeApi.postMessage.mock.calls.find(
+      ([message]) =>
+        typeof message === 'object' &&
+        message !== null &&
+        (message as { type?: unknown }).type === 'playback:getPreviewPlan',
+    )?.[0] as { requestId?: string } | undefined;
+
+    await act(async () => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'playback:previewPlanResult',
+            requestId: request?.requestId,
+            plan: createCanvasPlaybackPlan({
+              canvas: mediaRouteCanvas(),
+              selectedNodeId: 'media-a',
+              adapterId: 'auto',
+            }),
+          },
+        }),
+      );
+      await Promise.resolve();
+    });
+    expect(
+      host
+        .querySelector('[data-testid="canvas-playback-storyline-branch-graph"]')
+        ?.querySelectorAll('.canvas-playback-storyline-edge'),
+    ).toHaveLength(1);
+
+    act(() => {
+      useCanvasStore.getState().removeConnection('media-a-b');
+    });
+
+    expect(
+      host
+        .querySelector('[data-testid="canvas-playback-storyline-branch-graph"]')
+        ?.querySelectorAll('.canvas-playback-storyline-edge'),
+    ).toHaveLength(0);
   });
 
   it('selects multiple routes inside Storyline without opening another route surface', async () => {

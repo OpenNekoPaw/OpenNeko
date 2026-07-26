@@ -23,8 +23,6 @@ describe('runtime viewport store', () => {
     useCanvasStore.setState({
       canvasData: createCanvasData(),
       selection: { nodeIds: [], connectionIds: [] },
-      isConnecting: false,
-      pendingConnectionSource: null,
     });
     useRuntimeViewportStore.setState({
       viewport: DEFAULT_RUNTIME_VIEWPORT,

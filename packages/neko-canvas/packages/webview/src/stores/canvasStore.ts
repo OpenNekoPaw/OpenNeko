@@ -17,10 +17,7 @@ import type {
   PortDefinition,
 } from '@neko/shared';
 import {
-  getDefaultPorts,
-  arePortTypesCompatible,
   createNodeConnectionEndpoint,
-  createPortConnectionEndpoint,
   getContainerChildIds,
   getContainerPolicyName,
   getNodeParentId,
@@ -60,6 +57,10 @@ import {
   setSpatialGroupCollapsed,
   type SpatialGroupSort,
 } from '../utils/spatialGroupLayout';
+import {
+  type CanvasConnectionMutationResult,
+  validateCanvasConnectionDraft,
+} from '../utils/canvasConnectionAuthoring';
 
 // =============================================================================
 // Types
@@ -74,8 +75,6 @@ export interface CanvasStore {
   // ==================== State ====================
   canvasData: CanvasData | null;
   selection: CanvasSelection;
-  isConnecting: boolean;
-  pendingConnectionSource: { nodeId: string; handleId: string } | null;
   // ==================== Data Actions ====================
   setCanvasData: (data: CanvasData) => void;
   updateCanvasData: (updates: Partial<CanvasData>, options?: { dirty?: boolean }) => void;
@@ -123,12 +122,12 @@ export interface CanvasStore {
   setGroupCollapsed: (groupId: string, collapsed: boolean) => void;
 
   // ==================== Connection Actions ====================
-  addConnection: (connection: Omit<CanvasConnection, 'id'>) => string;
-  updateConnection: (id: string, updates: Partial<CanvasConnection>) => void;
+  addConnection: (connection: Omit<CanvasConnection, 'id'>) => CanvasConnectionMutationResult;
+  updateConnection: (
+    id: string,
+    updates: Partial<CanvasConnection>,
+  ) => CanvasConnectionMutationResult;
   removeConnection: (id: string) => void;
-  startConnection: (nodeId: string, handleId: string) => void;
-  completeConnection: (nodeId: string, handleId: string) => void;
-  cancelConnection: () => void;
 
   // ==================== Derive Actions ====================
   /** Create a successor node positioned to the right, auto-connected. Uses targetType if given, else same type as source. */
@@ -167,8 +166,9 @@ export function canCreateCanvasConnection(
   connection: Pick<CanvasConnection, 'sourceId' | 'targetId' | 'type'>,
   existingConnections: readonly CanvasConnection[] = [],
 ): boolean {
-  const sourceNode = nodes.find((node) => node.id === connection.sourceId);
-  const targetNode = nodes.find((node) => node.id === connection.targetId);
+  if (connection.sourceId === connection.targetId) return false;
+  const sourceNode = nodes.some((node) => node.id === connection.sourceId);
+  const targetNode = nodes.some((node) => node.id === connection.targetId);
   if (!sourceNode || !targetNode) return false;
   if (createsDisallowedConnectionCycle(nodes, existingConnections, connection)) return false;
   return true;
@@ -326,8 +326,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   // ==================== Initial State ====================
   canvasData: null,
   selection: { nodeIds: [], connectionIds: [] },
-  isConnecting: false,
-  pendingConnectionSource: null,
   // ==================== Data Actions ====================
   setCanvasData: (data) => {
     set({ canvasData: normalizeCanvasData(data) });
@@ -808,15 +806,13 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   // ==================== Connection Actions ====================
   addConnection: (connection) => {
     const { canvasData } = get();
-    if (!canvasData) return '';
-    const hasSource = canvasData.nodes.some((node) => node.id === connection.sourceId);
-    const hasTarget = canvasData.nodes.some((node) => node.id === connection.targetId);
-    if (!hasSource || !hasTarget) {
-      throw new Error('Connection source and target nodes must exist');
-    }
-    if (!canCreateCanvasConnection(canvasData.nodes, connection, canvasData.connections)) {
-      throw new Error('Connection violates Canvas connection constraints');
-    }
+    if (!canvasData) return { ok: false, reason: 'missing-canvas' };
+    const validation = validateCanvasConnectionDraft(
+      canvasData.nodes,
+      canvasData.connections,
+      connection,
+    );
+    if (!validation.ok) return validation;
 
     recordHistory(canvasData);
 
@@ -831,16 +827,25 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
 
     useCanvasOperationStore.getState().recordConnectionAdd(newConnection);
-    return id;
+    return { ok: true, connectionId: id };
   },
 
   updateConnection: (id, updates) => {
     const { canvasData } = get();
-    if (!canvasData) return;
+    if (!canvasData) return { ok: false, reason: 'missing-canvas' };
     const oldConnection = canvasData.connections.find((conn) => conn.id === id);
-    if (!oldConnection) return;
+    if (!oldConnection) return { ok: false, reason: 'missing-connection' };
     const nextConnection = { ...oldConnection, ...updates };
-    if (JSON.stringify(oldConnection) === JSON.stringify(nextConnection)) return;
+    if (JSON.stringify(oldConnection) === JSON.stringify(nextConnection)) {
+      return { ok: true, connectionId: id };
+    }
+    const validation = validateCanvasConnectionDraft(
+      canvasData.nodes,
+      canvasData.connections,
+      nextConnection,
+      { ignoreConnectionId: id },
+    );
+    if (!validation.ok) return validation;
 
     recordHistory(canvasData);
 
@@ -851,6 +856,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       },
     });
     recordCanvasDirty('Update connection');
+    return { ok: true, connectionId: id };
   },
 
   removeConnection: (id) => {
@@ -873,113 +879,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
 
     useCanvasOperationStore.getState().recordConnectionRemove(id, removedConnection);
-  },
-
-  startConnection: (nodeId, handleId) => {
-    set({
-      isConnecting: true,
-      pendingConnectionSource: { nodeId, handleId },
-    });
-  },
-
-  completeConnection: (nodeId, handleId) => {
-    const { pendingConnectionSource, canvasData } = get();
-    if (!pendingConnectionSource || !canvasData) {
-      set({ isConnecting: false, pendingConnectionSource: null });
-      return;
-    }
-
-    // Don't connect to self
-    if (pendingConnectionSource.nodeId === nodeId) {
-      set({ isConnecting: false, pendingConnectionSource: null });
-      return;
-    }
-
-    const sourceNode = canvasData.nodes.find((n) => n.id === pendingConnectionSource.nodeId);
-    const targetNode = canvasData.nodes.find((n) => n.id === nodeId);
-
-    if (!sourceNode || !targetNode) {
-      set({ isConnecting: false, pendingConnectionSource: null });
-      return;
-    }
-
-    // Resolve ports for validation
-    const sourcePorts = sourceNode.ports ?? getDefaultPorts(sourceNode.type);
-    const targetPorts = targetNode.ports ?? getDefaultPorts(targetNode.type);
-    const sourcePort = sourcePorts.find(
-      (p: PortDefinition) => p.id === pendingConnectionSource.handleId,
-    );
-    const targetPort = targetPorts.find((p: PortDefinition) => p.id === handleId);
-
-    // Port-based validation (when both nodes have ports)
-    if (sourcePort && targetPort) {
-      // Must connect output → input
-      if (sourcePort.type !== 'output' || targetPort.type !== 'input') {
-        set({ isConnecting: false, pendingConnectionSource: null });
-        return;
-      }
-
-      // Check data type compatibility
-      if (!arePortTypesCompatible(sourcePort.dataType, targetPort.dataType)) {
-        set({ isConnecting: false, pendingConnectionSource: null });
-        return;
-      }
-
-      // Check max connections on target input port
-      const maxConn = targetPort.maxConnections ?? 1;
-      const existingCount = canvasData.connections.filter(
-        (c) =>
-          c.targetId === nodeId &&
-          c.targetEndpoint.scope === 'port' &&
-          c.targetEndpoint.portId === handleId,
-      ).length;
-      if (existingCount >= maxConn) {
-        set({ isConnecting: false, pendingConnectionSource: null });
-        return;
-      }
-    }
-
-    // Check if exact connection already exists
-    const exists = canvasData.connections.some(
-      (conn) =>
-        conn.sourceId === pendingConnectionSource.nodeId &&
-        conn.targetId === nodeId &&
-        conn.sourceEndpoint.scope === (sourcePort ? 'port' : 'node') &&
-        conn.sourceEndpoint.portId ===
-          (sourcePort ? pendingConnectionSource.handleId : undefined) &&
-        conn.targetEndpoint.scope === (targetPort ? 'port' : 'node') &&
-        conn.targetEndpoint.portId === (targetPort ? handleId : undefined),
-    );
-
-    if (!exists) {
-      const connection: Omit<CanvasConnection, 'id'> = {
-        sourceId: pendingConnectionSource.nodeId,
-        targetId: nodeId,
-        type: 'reference',
-        sourceEndpoint: sourcePort
-          ? createPortConnectionEndpoint(
-              pendingConnectionSource.nodeId,
-              pendingConnectionSource.handleId,
-            )
-          : createNodeConnectionEndpoint(pendingConnectionSource.nodeId),
-        targetEndpoint: targetPort
-          ? createPortConnectionEndpoint(nodeId, handleId)
-          : createNodeConnectionEndpoint(nodeId),
-      };
-
-      if (!canCreateCanvasConnection(canvasData.nodes, connection, canvasData.connections)) {
-        set({ isConnecting: false, pendingConnectionSource: null });
-        return;
-      }
-
-      get().addConnection(connection);
-    }
-
-    set({ isConnecting: false, pendingConnectionSource: null });
-  },
-
-  cancelConnection: () => {
-    set({ isConnecting: false, pendingConnectionSource: null });
   },
 
   // ==================== Derive Actions ====================

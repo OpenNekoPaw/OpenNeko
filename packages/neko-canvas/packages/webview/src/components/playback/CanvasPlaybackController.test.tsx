@@ -33,8 +33,6 @@ describe('CanvasPlaybackController', () => {
     useCanvasStore.setState({
       canvasData: null,
       selection: { nodeIds: [], connectionIds: [] },
-      isConnecting: false,
-      pendingConnectionSource: null,
     });
   });
 

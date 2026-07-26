@@ -22,13 +22,11 @@ export interface UseKeyboardActionsOptions {
   selectedNodeIds: string[];
   selectedConnectionIds: string[];
   nodes: CanvasNode[];
-  isConnecting: boolean;
   contextMenu: unknown | null;
   setContextMenu: (menu: null) => void;
   selectNode: (id: string, multi?: boolean) => void;
   selectConnection: (id: string, multi?: boolean) => void;
   deleteSelected: () => void;
-  cancelConnection: () => void;
   clearSelection: () => void;
   resetViewport: () => void;
   undo: () => void;
@@ -57,13 +55,11 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
     selectedNodeIds,
     selectedConnectionIds,
     nodes,
-    isConnecting,
     contextMenu,
     setContextMenu,
     selectNode,
     selectConnection,
     deleteSelected,
-    cancelConnection,
     clearSelection,
     resetViewport,
     undo,
@@ -123,8 +119,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
             setContextMenu(null);
           } else if (closeTransientSurface?.()) {
             return;
-          } else if (isConnecting) {
-            cancelConnection();
           } else {
             clearSelection();
           }
@@ -173,8 +167,6 @@ export function useKeyboardActions(options: UseKeyboardActionsOptions): UseKeybo
       selectedNodeIds,
       selectedConnectionIds,
       deleteSelected,
-      isConnecting,
-      cancelConnection,
       clearSelection,
       nodes,
       contextMenu,

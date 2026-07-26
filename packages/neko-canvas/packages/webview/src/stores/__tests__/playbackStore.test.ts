@@ -8,8 +8,6 @@ describe('playbackStore storyline session state', () => {
     useCanvasStore.setState({
       canvasData: canvasData(),
       selection: { nodeIds: [], connectionIds: [] },
-      isConnecting: false,
-      pendingConnectionSource: null,
     });
     usePlaybackStore.setState({
       activePlayback: null,

@@ -26,6 +26,10 @@ import {
 import { SelectionContextToolbar } from './selection/SelectionContextToolbar';
 import { SelectionMaterialGenerationBar } from './selection/SelectionMaterialGenerationBar';
 import { resolveCanvasDropContainer } from '../utils/containerMembership';
+import {
+  validateCanvasConnectionDraft,
+  type CanvasConnectionMutationResult,
+} from '../utils/canvasConnectionAuthoring';
 
 // =============================================================================
 // Types
@@ -51,15 +55,15 @@ export interface InfiniteCanvasProps {
   /** Called on mouseup when node rotation ends */
   onNodeRotateEnd?: (nodeId: string, rotation: number) => void;
   onConnectionSelect?: (connectionId: string) => void;
-  onConnectionUpdate?: (connectionId: string, updates: Partial<CanvasConnection>) => void;
-  onConnectionStart?: (nodeId: string, handleId: string) => void;
+  onConnectionUpdate?: (
+    connectionId: string,
+    updates: Partial<CanvasConnection>,
+  ) => CanvasConnectionMutationResult;
   onConnectionComplete?: (
-    sourceNodeId: string,
-    sourceHandleId: string,
-    targetNodeId: string,
-    targetHandleId: string,
-  ) => void;
+    connection: Omit<CanvasConnection, 'id'>,
+  ) => CanvasConnectionMutationResult;
   onConnectionCancel?: () => void;
+  onConnectionStateChange?: (isConnecting: boolean) => void;
   onCanvasClick?: () => void;
   /** Called when marquee selection completes */
   onMarqueeSelect?: (nodeIds: string[], additive: boolean) => void;
@@ -96,9 +100,9 @@ export function InfiniteCanvas({
   onNodeRotateEnd,
   onConnectionSelect,
   onConnectionUpdate,
-  onConnectionStart,
   onConnectionComplete,
   onConnectionCancel,
+  onConnectionStateChange,
   onCanvasClick,
   onMarqueeSelect,
   enableCulling = true,
@@ -131,13 +135,17 @@ export function InfiniteCanvas({
   const {
     pendingConnection,
     isConnecting: isDraggingConnection,
+    targetState: connectionTargetState,
     startConnection: startDragConnection,
   } = useConnectionDrag({
     viewport,
     containerRef: containerRef as React.RefObject<HTMLElement>,
-    onConnectionStart,
+    nodes,
     onConnectionComplete,
+    validateConnection: (connection) =>
+      validateCanvasConnectionDraft(nodes, connections, connection),
     onConnectionCancel,
+    onConnectionStateChange,
   });
 
   // Marquee selection hook
@@ -372,7 +380,10 @@ export function InfiniteCanvas({
           }
           nodes={nodes}
           onUpdateConnection={(connectionId, updates) =>
-            onConnectionUpdate?.(connectionId, updates)
+            onConnectionUpdate?.(connectionId, updates) ?? {
+              ok: false,
+              reason: 'missing-connection',
+            }
           }
         />
 
@@ -407,6 +418,8 @@ export function InfiniteCanvas({
             onRotateEnd: handleNodeRotateEnd,
             onUpdateData: onNodeUpdateData,
             onConnectionStart: startDragConnection,
+            isConnecting: isDraggingConnection,
+            connectionTargetState,
             interactionRenderMode: renderRefreshDecision.shouldUseHeavyContentShell
               ? 'shell'
               : 'full',
