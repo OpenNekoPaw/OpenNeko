@@ -125,7 +125,7 @@ export async function authorizePanoramicImageSource(
   const sourceRef = createResourceRef({
     scope:
       input.workspaceRoot && isInsideRoot(sourcePath, input.workspaceRoot) ? 'project' : 'global',
-    provider: 'panoramic-preview-source',
+    provider: '3d-reference-panorama-source',
     kind: 'media',
     source: {
       kind: 'file',
@@ -183,7 +183,7 @@ function createPortablePath(input: AuthorizePanoramicImageSourceInput, sourcePat
     );
   }
   const rootId = createHash('sha256').update(path.resolve(root)).digest('hex').slice(0, 16);
-  return `panorama-preview://authorized/${rootId}/${encodeURI(path.relative(root, sourcePath).replaceAll('\\', '/'))}`;
+  return `panorama-environment://authorized/${rootId}/${encodeURI(path.relative(root, sourcePath).replaceAll('\\', '/'))}`;
 }
 
 function isInsideAnyRoot(filePath: string, roots: readonly string[]): boolean {

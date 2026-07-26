@@ -58,10 +58,6 @@ export class FileOperationHandler {
         await vscode.commands.executeCommand('vscode.openWith', uri, 'neko.videoPreview');
       } else if (plan.viewer === 'audio') {
         await vscode.commands.executeCommand('vscode.openWith', uri, 'neko.audioPreview');
-      } else if (plan.viewer === 'panoramic-image') {
-        await vscode.commands.executeCommand('vscode.openWith', uri, 'neko.preview.panoramicImage');
-      } else if (plan.viewer === 'panoramic-video') {
-        await vscode.commands.executeCommand('vscode.openWith', uri, 'neko.preview.panoramicVideo');
       } else {
         await vscode.commands.executeCommand('vscode.open', uri);
       }

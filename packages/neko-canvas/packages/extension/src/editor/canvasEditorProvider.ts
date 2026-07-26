@@ -34,7 +34,6 @@ import {
   type PreviewVariantResourceApi,
 } from '@neko/shared/vscode/extension';
 import {
-  getPanoramicPreviewRoute,
   inferCanvasDroppedAssetKind,
   inferCanvasMediaType,
   inferCanvasTextFileFormat,
@@ -2564,18 +2563,7 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
           const ext = fsPath.split('.').pop()?.toLowerCase() ?? '';
           const videoExts = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', 'ts', 'flv', 'wmv'];
           const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'opus'];
-          const panoramicRoute = getPanoramicPreviewRoute({
-            filePath: fsPath,
-            mediaType: mediaTypeHint,
-          });
-
-          if (panoramicRoute) {
-            await vscode.commands.executeCommand(
-              'vscode.openWith',
-              fileUri,
-              panoramicRoute.viewType,
-            );
-          } else if (videoExts.includes(ext) || mediaTypeHint === 'video') {
+          if (videoExts.includes(ext) || mediaTypeHint === 'video') {
             await vscode.commands.executeCommand('vscode.openWith', fileUri, 'neko.videoPreview');
           } else if (audioExts.includes(ext) || mediaTypeHint === 'audio') {
             await vscode.commands.executeCommand('vscode.openWith', fileUri, 'neko.audioPreview');
@@ -2633,16 +2621,17 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
         if (request.target === 'preview') {
           const fsPath = await this.resolveAssetPath(request.assetPath, document.uri);
           const fileUri = vscode.Uri.file(fsPath);
-          const panoramicRoute = getPanoramicPreviewRoute({
-            filePath: fsPath,
-            mediaType: request.mediaType,
-          });
-          if (panoramicRoute) {
-            await vscode.commands.executeCommand(
-              'vscode.openWith',
-              fileUri,
-              panoramicRoute.viewType,
-            );
+          const extension = path.extname(fsPath).slice(1).toLowerCase();
+          if (
+            request.mediaType === 'video' ||
+            ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v', 'ts', 'flv', 'wmv'].includes(extension)
+          ) {
+            await vscode.commands.executeCommand('vscode.openWith', fileUri, 'neko.videoPreview');
+          } else if (
+            request.mediaType === 'audio' ||
+            ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'opus'].includes(extension)
+          ) {
+            await vscode.commands.executeCommand('vscode.openWith', fileUri, 'neko.audioPreview');
           } else {
             await vscode.commands.executeCommand('vscode.open', fileUri);
           }
@@ -2772,61 +2761,6 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
             nodeId: message.nodeId,
             error: error instanceof Error ? error.message : 'Capture failed',
           });
-        }
-        break;
-      }
-
-      case 'media:requestPanoramicThumbnail': {
-        const assetPath = message.assetPath as string;
-        if (!assetPath) break;
-        let assetId: string | null = null;
-        try {
-          const filePath = await this.resolveCanvasMediaLocalFilePath(
-            assetPath,
-            document.uri,
-            'neko-canvas.media-panoramic-thumbnail',
-          );
-          const route = getPanoramicPreviewRoute({
-            filePath,
-            mediaType: message.mediaType as string | undefined,
-          });
-          if (!route) break;
-          const variantApi = await this.getPreviewVariantApi();
-          if (!variantApi) {
-            webviewPanel.webview.postMessage({
-              type: 'media:panoramicThumbnailResult',
-              nodeId: message.nodeId,
-              error: 'Preview variant API not available',
-            });
-            break;
-          }
-          const manifest = await variantApi.registerPreviewAsset({
-            source: filePath,
-            kind: route.kind,
-            expectedProjection: 'equirectangular',
-          });
-          assetId = manifest.assetId;
-          const variant = await variantApi.requestPreviewVariant(manifest.assetId, {
-            role: route.kind === 'image' ? 'proxy' : 'thumbnail',
-            width: 640,
-            height: 320,
-          });
-          webviewPanel.webview.postMessage({
-            type: 'media:panoramicThumbnailResult',
-            nodeId: message.nodeId,
-            url: variant.url ?? manifest.variants.find((item) => item.role === 'source')?.url,
-          });
-        } catch (error) {
-          webviewPanel.webview.postMessage({
-            type: 'media:panoramicThumbnailResult',
-            nodeId: message.nodeId,
-            error: error instanceof Error ? error.message : 'Panoramic thumbnail failed',
-          });
-        } finally {
-          if (assetId) {
-            const variantApi = await this.getPreviewVariantApi();
-            await variantApi?.unregisterPreviewAsset(assetId).catch(() => {});
-          }
         }
         break;
       }
@@ -3516,18 +3450,12 @@ export class CanvasEditorProvider implements vscode.CustomEditorProvider<vscode.
       }
       const variantApi = await this.getPreviewVariantApi();
       if (variantApi) {
-        const panoramicRoute = getPanoramicPreviewRoute({
-          filePath: fsPath,
-          mediaType: mediaTypeHint,
-        });
         const manifest = await variantApi.registerPreviewAsset({
           source: fsPath,
           kind:
-            panoramicRoute?.kind ??
-            (mediaTypeHint === 'image' || mediaTypeHint === 'video' || mediaTypeHint === 'audio'
+            mediaTypeHint === 'image' || mediaTypeHint === 'video' || mediaTypeHint === 'audio'
               ? mediaTypeHint
-              : 'unknown'),
-          expectedProjection: panoramicRoute ? 'equirectangular' : undefined,
+              : 'unknown',
         });
         const variant = await variantApi.requestPreviewVariant(manifest.assetId, {
           role:

@@ -20,7 +20,7 @@ import { getPreviewErrorHtml } from '../previewProviderHelper';
 import {
   authorizePanoramicImageSource,
   type AuthorizedPanoramicImageSource,
-} from '../panoramicSourceAuthorization';
+} from './PanoramicEnvironmentSourceAuthorization';
 import { ModelPreviewSourceSession } from './ModelPreviewSourceSession';
 import { ModelSourceInspectionError } from './modelSourceInspection';
 import { parseThreeReferenceWebviewMessage } from './threeReferenceProtocol';

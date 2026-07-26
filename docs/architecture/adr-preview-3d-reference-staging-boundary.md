@@ -102,7 +102,7 @@ OpenNeko 将用户可见的 3D Preview 定位提升为 **3D 参考布置台（3D
 - Three.js Webview、camera/light/transform、capture 和 GPU 生命周期；
 - 每面板独立 identity、revision、取消、消息和 dispose；
 - Agent context handoff；
-- 文档、媒体、全景和模型 Preview entry 的构建隔离。
+- 文档、媒体和模型 Preview entry 的构建隔离；不恢复已废弃的独立全景 viewer entry。
 
 Canvas 与 Agent 是用途化参考结果的消费者，不拥有 Preview renderer，也不得直接导入 Preview 内部实现。Canvas 继续拥有创作工作台和生成控制 UI；Agent 继续拥有意图理解、provider/model capability negotiation 和媒体任务决策。
 
@@ -226,7 +226,7 @@ Live Preview 可以从当前 source/preset/staging 重建 context；不迁移用
 
 ## 全景场景边界
 
-720° 场景参考指 equirectangular panoramic environment 及其方向/视角布置。3D Reference 应复用 Preview 已有 panorama detection、授权和 content-access 边界，但不在 `ModelPreviewProvider` 内实例化另一个 Custom Editor provider。
+720° 场景参考指 equirectangular panoramic environment 及其方向/视角布置。该能力由 `ModelPreviewProvider` 自己的 panorama environment source authorization 与 content-access 边界拥有；独立 panoramic image/video Custom Editor 已废弃，不得作为检测、路由或加载依赖恢复。
 
 Three runtime 只消费 Extension 精确授权的 panorama descriptor，临时拥有 environment texture、orientation 和 capture state。源资源保持只读；Webview URI、GPU texture 和 viewport projection 不成为持久事实。
 
@@ -246,7 +246,7 @@ Preview 继续复用共享 floating toolbar、TreeView shell、panel/section/pro
 
 每个 session 独立拥有 subject descriptor、pose、camera、environment、purposes、revision、renderer、loader、capture、message queue、abort scope 和 disposables。缺失、陈旧、跨 panel 或 disposed identity 必须失败；active editor 不构成 identity。
 
-内置 asset 只在选中后 lazy load。Audio、video、document、普通 panorama 和未进入 3D Reference 的 model entry 不得加载 preset binary。实施必须记录实际 per-asset/aggregate package size、load timing、支持宿主的 GPU/资源释放证据，再决定默认预算；ADR 不在没有测量前固定假精确阈值。
+内置 asset 只在选中后 lazy load。Audio、video、document、普通图片和未进入 3D Reference 的 model entry 不得加载 preset binary。实施必须记录实际 per-asset/aggregate package size、load timing、支持宿主的 GPU/资源释放证据，再决定默认预算；ADR 不在没有测量前固定假精确阈值。
 
 第三方资产必须完成 redistribution/license/provenance 审计。未知、冲突或缺失授权的模型不得以“测试素材”或“示例”名义进入 package。真实用户模型的运行验收继续使用外部授权 workspace；不得复制用户模型到仓库 fixture、截图报告或提交产物。
 

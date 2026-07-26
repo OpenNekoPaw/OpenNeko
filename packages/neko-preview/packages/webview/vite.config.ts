@@ -87,8 +87,6 @@ export default defineConfig({
       input: {
         video: path.resolve(__dirname, 'video.html'),
         audio: path.resolve(__dirname, 'audio.html'),
-        'panorama-image': path.resolve(__dirname, 'panorama-image.html'),
-        'panorama-video': path.resolve(__dirname, 'panorama-video.html'),
         pdf: path.resolve(__dirname, 'pdf.html'),
         cbz: path.resolve(__dirname, 'cbz.html'),
         epub: path.resolve(__dirname, 'epub.html'),

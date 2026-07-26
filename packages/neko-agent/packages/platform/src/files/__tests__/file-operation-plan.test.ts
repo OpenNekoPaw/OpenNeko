@@ -15,9 +15,9 @@ describe('file operation plan', () => {
       cleanPath: '/tmp/readme.md',
       viewer: 'default',
     });
-    expect(detectFileOpenViewer('/tmp/skybox.hdr')).toBe('panoramic-image');
-    expect(detectFileOpenViewer('/tmp/skybox_360.jpg')).toBe('panoramic-image');
-    expect(detectFileOpenViewer('/tmp/tour_360.mp4')).toBe('panoramic-video');
+    expect(detectFileOpenViewer('/tmp/skybox.hdr')).toBe('default');
+    expect(detectFileOpenViewer('/tmp/skybox_360.jpg')).toBe('default');
+    expect(detectFileOpenViewer('/tmp/tour_360.mp4')).toBe('video');
     expect(detectFileOpenViewer('/tmp/video.MP4')).toBe('video');
     expect(detectFileOpenViewer('/tmp/audio.wav')).toBe('audio');
     expect(createOpenFilePlan('')).toBeNull();

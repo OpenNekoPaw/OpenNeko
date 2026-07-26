@@ -10,20 +10,11 @@ import { injectLocaleAttribute } from '@neko/shared/vscode/extension';
 import { getNonce } from './nonce';
 
 /** Supported preview entry points */
-export type PreviewEntry =
-  | 'video'
-  | 'audio'
-  | 'panorama-image'
-  | 'panorama-video'
-  | 'pdf'
-  | 'cbz'
-  | 'epub'
-  | 'docx'
-  | 'model';
+export type PreviewEntry = 'video' | 'audio' | 'pdf' | 'cbz' | 'epub' | 'docx' | 'model';
 
 /** Document entries fetch tokenized data from the Preview Node loopback host. */
 const DOCUMENT_ENTRIES = new Set<PreviewEntry>(['pdf', 'cbz', 'epub', 'docx']);
-const MEDIA_ENTRIES = new Set<PreviewEntry>(['video', 'audio', 'panorama-image', 'panorama-video']);
+const MEDIA_ENTRIES = new Set<PreviewEntry>(['video', 'audio']);
 
 export interface WebviewHtmlOptions {
   /** Webview instance */
@@ -63,8 +54,6 @@ const ENTRY_TITLES: Record<PreviewEntry, string> = {
   cbz: 'CBZ Preview',
   epub: 'EPUB Preview',
   docx: 'DOCX Preview',
-  'panorama-image': 'Panoramic Image Preview',
-  'panorama-video': 'Panoramic Video Preview',
   model: '3D Reference',
 };
 

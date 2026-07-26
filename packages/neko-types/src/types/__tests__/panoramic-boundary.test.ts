@@ -4,6 +4,9 @@ import { join, relative } from 'node:path';
 
 const REPO_ROOT = join(__dirname, '../../../../../');
 const BOUNDARY_SOURCE_ROOTS = [
+  'packages/neko-preview/package.json',
+  'packages/neko-preview/packages/extension/src',
+  'packages/neko-preview/packages/webview/src',
   'packages/neko-canvas/packages/extension/src',
   'packages/neko-canvas/packages/webview/src',
   'packages/neko-agent/packages/extension/src',
@@ -14,6 +17,10 @@ const BOUNDARY_SOURCE_ROOTS = [
   'packages/neko-agent/packages/ai-sdk/src',
 ];
 const PROHIBITED_PATTERNS = [
+  /neko\.preview\.panoramic(?:Image|Video)/,
+  /neko\.preview\.open(?:Best)?Panoramic/,
+  /getPanoramicPreviewRoute/,
+  /panoramic-(?:image|video)/,
   /panorama-image\/PanoramicViewer/,
   /src\/panorama-image/,
   /PanoramicViewer/,
@@ -22,11 +29,12 @@ const PROHIBITED_PATTERNS = [
 ];
 
 describe('panoramic preview boundary', () => {
-  it('keeps Canvas and Agent from importing or mounting the panoramic WebGL viewer', () => {
+  it('keeps the retired panoramic Preview vertical slice absent', () => {
     const offenders: string[] = [];
 
     for (const root of BOUNDARY_SOURCE_ROOTS) {
-      for (const filePath of collectSourceFiles(join(REPO_ROOT, root))) {
+      const sourceRoot = join(REPO_ROOT, root);
+      for (const filePath of collectSourceFiles(sourceRoot)) {
         const content = readFileSync(filePath, 'utf8');
         if (PROHIBITED_PATTERNS.some((pattern) => pattern.test(content))) {
           offenders.push(relative(REPO_ROOT, filePath));
@@ -39,16 +47,24 @@ describe('panoramic preview boundary', () => {
 });
 
 function collectSourceFiles(dir: string): string[] {
+  if (statSync(dir).isFile()) return [dir];
   const entries = readdirSync(dir);
   const result: string[] = [];
 
   for (const entry of entries) {
-    if (entry === 'dist' || entry === 'node_modules') continue;
+    if (
+      entry === 'dist' ||
+      entry === 'node_modules' ||
+      entry === '__tests__' ||
+      /\.test\.(?:ts|tsx)$/u.test(entry)
+    ) {
+      continue;
+    }
     const filePath = join(dir, entry);
     const stat = statSync(filePath);
     if (stat.isDirectory()) {
       result.push(...collectSourceFiles(filePath));
-    } else if (/\.(ts|tsx)$/.test(entry)) {
+    } else if (/\.(ts|tsx|json)$/.test(entry)) {
       result.push(filePath);
     }
   }

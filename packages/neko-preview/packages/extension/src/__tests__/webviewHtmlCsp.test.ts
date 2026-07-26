@@ -46,20 +46,13 @@ function devHtml(entry: PreviewEntry): string {
 }
 
 describe('preview webview CSP', () => {
-  it.each<PreviewEntry>([
-    'video',
-    'audio',
-    'panorama-image',
-    'panorama-video',
-    'pdf',
-    'cbz',
-    'epub',
-    'docx',
-    'model',
-  ])('allows bundled data URL fonts for %s in production', (entry) => {
-    expect(prodHtml(entry)).toContain('font-src');
-    expect(prodHtml(entry)).toContain('data:;');
-  });
+  it.each<PreviewEntry>(['video', 'audio', 'pdf', 'cbz', 'epub', 'docx', 'model'])(
+    'allows bundled data URL fonts for %s in production',
+    (entry) => {
+      expect(prodHtml(entry)).toContain('font-src');
+      expect(prodHtml(entry)).toContain('data:;');
+    },
+  );
 
   it('allows data URL fonts for video/audio entries in dev mode too', () => {
     expect(devHtml('video')).toContain('font-src http://localhost:5174 data:;');

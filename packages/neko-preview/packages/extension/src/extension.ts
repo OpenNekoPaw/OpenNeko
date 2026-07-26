@@ -16,8 +16,6 @@
 import * as vscode from 'vscode';
 import { VideoPreviewProvider } from './providers/VideoPreviewProvider';
 import { AudioPreviewProvider } from './providers/AudioPreviewProvider';
-import { PanoramicImagePreviewProvider } from './providers/PanoramicImagePreviewProvider';
-import { PanoramicVideoPreviewProvider } from './providers/PanoramicVideoPreviewProvider';
 import { PdfPreviewProvider } from './providers/document/PdfPreviewProvider';
 import { CbzPreviewProvider } from './providers/document/CbzPreviewProvider';
 import {
@@ -34,17 +32,11 @@ import {
 } from './providers/model/threeReferenceCaptureMaterialization';
 import { registerOpenCommand } from './providers/document/documentProviderHelper';
 import { previewFileServer } from './providers/document/PreviewFileServer';
-import {
-  openBestPanoramicPreview,
-  openPanoramicImage,
-  openPanoramicVideo,
-} from './providers/panoramicRouting';
 import { EpubSymbolProvider } from './epub/EpubSymbolProvider';
 import { EpubOutlineProvider } from './providers/EpubOutlineProvider';
 import { PreviewService } from './services/PreviewService';
 import { StatusBarManager } from './ui/StatusBarManager';
 import type { NekoPreviewAPI } from './types/api';
-import { OPEN_PANORAMIC_IMAGE_COMMAND, OPEN_PANORAMIC_VIDEO_COMMAND } from './types/panoramic-api';
 import type { DocumentLocator, DocumentSourceRef } from '@neko/shared';
 import {
   createVSCodeLogger,
@@ -69,8 +61,6 @@ const logger = getLogger('Extension');
 
 let videoProvider: VideoPreviewProvider | null = null;
 let audioProvider: AudioPreviewProvider | null = null;
-let panoramicImageProvider: PanoramicImagePreviewProvider | null = null;
-let panoramicVideoProvider: PanoramicVideoPreviewProvider | null = null;
 let pdfProvider: PdfPreviewProvider | null = null;
 let cbzProvider: CbzPreviewProvider | null = null;
 let epubProvider: EpubPreviewProvider | null = null;
@@ -168,27 +158,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
     resolveSharedPreviewService,
     resolveWaveform,
   );
-  const panoramicEnabled = vscode.workspace
-    .getConfiguration('neko.preview')
-    .get<boolean>('viewer.panoramic.enabled', true);
-  const panoramicVideoEnabled = vscode.workspace
-    .getConfiguration('neko.preview')
-    .get<boolean>('viewer.panoramic.video', true);
-  if (panoramicEnabled) {
-    panoramicImageProvider = new PanoramicImagePreviewProvider(
-      context.extensionUri,
-      statusBarManager,
-      resolveSharedPreviewService,
-    );
-  }
-  if (panoramicVideoEnabled) {
-    panoramicVideoProvider = new PanoramicVideoPreviewProvider(
-      context.extensionUri,
-      statusBarManager,
-      resolveSharedPreviewService,
-    );
-  }
-
   const threeReferenceOutputs = new ThreeReferenceOutputCollector({
     materializeCapture: (request) =>
       materializeThreeReferenceCapture({
@@ -229,32 +198,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
       supportsMultipleEditorsPerDocument: false,
     }),
   );
-
-  if (panoramicImageProvider) {
-    context.subscriptions.push(
-      vscode.window.registerCustomEditorProvider(
-        PanoramicImagePreviewProvider.viewType,
-        panoramicImageProvider,
-        {
-          webviewOptions: { retainContextWhenHidden: true },
-          supportsMultipleEditorsPerDocument: false,
-        },
-      ),
-    );
-  }
-
-  if (panoramicVideoProvider) {
-    context.subscriptions.push(
-      vscode.window.registerCustomEditorProvider(
-        PanoramicVideoPreviewProvider.viewType,
-        panoramicVideoProvider,
-        {
-          webviewOptions: { retainContextWhenHidden: true },
-          supportsMultipleEditorsPerDocument: false,
-        },
-      ),
-    );
-  }
 
   // Register commands
   context.subscriptions.push(
@@ -319,76 +262,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoPr
     }),
   );
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand(OPEN_PANORAMIC_IMAGE_COMMAND, async (uri?: vscode.Uri) => {
-      if (!panoramicImageProvider) {
-        void vscode.window.showWarningMessage('Panoramic preview is disabled.');
-        return;
-      }
-
-      const fileUri =
-        uri ??
-        (
-          await vscode.window.showOpenDialog({
-            canSelectFiles: true,
-            canSelectMany: false,
-            filters: {
-              'Panoramic Images': ['jpg', 'jpeg', 'png', 'webp', 'hdr', 'exr'],
-            },
-            title: 'Open as Panorama',
-          })
-        )?.[0];
-
-      if (fileUri) {
-        await openPanoramicImage(fileUri);
-      }
-    }),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand(OPEN_PANORAMIC_VIDEO_COMMAND, async (uri?: vscode.Uri) => {
-      if (!panoramicVideoProvider) {
-        void vscode.window.showWarningMessage('Panoramic video preview is disabled.');
-        return;
-      }
-      const fileUri =
-        uri ??
-        (
-          await vscode.window.showOpenDialog({
-            canSelectFiles: true,
-            canSelectMany: false,
-            filters: {
-              'Panoramic Videos': ['mp4', 'mov', 'mkv', 'webm', 'm4v'],
-            },
-            title: 'Open as Panorama Video',
-          })
-        )?.[0];
-      if (fileUri) {
-        await openPanoramicVideo(fileUri);
-      }
-    }),
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('neko.preview.openBestPanoramic', async (uri?: vscode.Uri) => {
-      if (!uri) return;
-      const opened = await openBestPanoramicPreview(uri);
-      if (!opened) {
-        await vscode.commands.executeCommand('vscode.open', uri);
-      }
-    }),
-  );
-
   // Register providers for disposal
   context.subscriptions.push(videoProvider);
   context.subscriptions.push(audioProvider);
   context.subscriptions.push(modelProvider);
-  if (panoramicImageProvider) {
-    context.subscriptions.push(panoramicImageProvider);
-  }
-  if (panoramicVideoProvider) {
-    context.subscriptions.push(panoramicVideoProvider);
-  }
 
   // =========================================================================
   // Document Preview Providers (no engine dependency)
@@ -761,12 +638,6 @@ export function deactivate(): void {
 
   audioProvider?.dispose();
   audioProvider = null;
-
-  panoramicImageProvider?.dispose();
-  panoramicImageProvider = null;
-
-  panoramicVideoProvider?.dispose();
-  panoramicVideoProvider = null;
 
   pdfProvider?.dispose();
   pdfProvider = null;

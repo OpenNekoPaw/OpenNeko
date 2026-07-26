@@ -4,9 +4,9 @@ import {
   PanoramicSourceAuthorizationError,
   authorizePanoramicImageSource,
   requirePanoramicImageSourceFormat,
-} from './panoramicSourceAuthorization';
+} from './PanoramicEnvironmentSourceAuthorization';
 
-describe('panoramic source authorization', () => {
+describe('3D Reference panoramic environment source authorization', () => {
   it('rejects unsupported image formats before registration', () => {
     expect(() => requirePanoramicImageSourceFormat('/project/scene.txt')).toThrow(
       PanoramicSourceAuthorizationError,
