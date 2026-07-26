@@ -400,9 +400,9 @@ Cut SHALL expose a localized “Send to Agent” action for a current Clip or Tr
 
 ### Requirement: Export remains a Host-owned background workflow
 
-Cut SHALL retain an export configuration panel, progress display, cancellation and background-running interaction. The Extension Host SHALL own each export job's media validation, Engine execution, progress polling, staging output, cancellation and terminal state under explicit document/session/job identity. The Webview MUST NOT own the task lifetime, send a writable project snapshot for export or cancel a task merely because the panel, editor or Webview closes.
+Cut SHALL retain an export configuration panel, progress display, cancellation and background-running interaction. The Extension Host `ExportJobCoordinator` SHALL own each export Job's versioned snapshot, persistence, media validation, Engine execution, progress polling, staging output, cancellation, reconciliation and terminal state under explicit document/session/job identity. The Webview MUST NOT own the Job lifecycle, send a writable project snapshot for export or cancel a Job merely because the panel, editor or Webview closes. The implementation MUST NOT retain a generic TaskManager, compatibility adapter or parallel export registry.
 
-The Extension Host SHALL project background export state into a native VS Code status item. The projection MUST be derived from explicit task snapshots and its navigation action MUST open the owning `.otio` document rather than infer an active or recent editor. Playback time and media metadata SHALL remain Webview control-bar state and MUST NOT be duplicated as another writable status source.
+The Extension Host SHALL project background export state into a native VS Code status item. The projection MUST be derived from explicit versioned ExportJob snapshots and its navigation action MUST open the owning `.otio` document rather than infer an active or recent editor. Playback time and media metadata SHALL remain Webview control-bar state and MUST NOT be duplicated as another writable status source.
 
 The Extension Host MAY additionally project the currently visible Cut document's playback state, timeline time/FPS, Track/Clip counts and dirty/diagnostic summary into a separate native status item. That projection SHALL be keyed by explicit document/session identity. VS Code active-editor state MAY select which projection is visible but MUST NOT own, mutate or recover Cut session state. All status text, tooltips and command titles SHALL use Extension l10n.
 
@@ -432,22 +432,28 @@ The Host SHALL freeze the accepted in-memory `TimelineView` immediately when it 
 - **WHEN** a user starts an export and closes the progress panel or the Webview is reconstructed
 - **THEN** the same Host-owned job continues and reopening the same document can query its current progress or terminal result
 
-#### Scenario: Cancel an exact export job
+#### Scenario: Cancel an exact export Job
 
-- **WHEN** the user cancels an active or restored export task
+- **WHEN** the user cancels an active or restored export Job with its exact identity and expected revision
 - **THEN** the Host cancels the explicit `jobId`, cleans that job's staging output and preserves any previously completed destination
 - **AND** jobs owned by other documents remain unaffected
 
 #### Scenario: Export fails visibly
 
 - **WHEN** media validation, Engine execution, output validation or atomic replacement fails
-- **THEN** the task enters an explicit error state with a diagnostic and Cut does not publish a partial or empty output as success
+- **THEN** the ExportJob enters an explicit failed state with a diagnostic and Cut does not publish a partial or empty output as success
 
 #### Scenario: Follow a background export from the VS Code status bar
 
 - **WHEN** an export continues after its panel or editor becomes hidden and then reaches a running, completed or failed state
 - **THEN** a native VS Code status item reflects that Host-owned state
-- **AND** activating the item opens the exact `.otio` identified by the selected task snapshot, without consulting the active or most-recent Cut editor
+- **AND** activating the item opens the exact `.otio` identified by the selected ExportJob snapshot, without consulting the active or most-recent Cut editor
+
+#### Scenario: Reconcile after Host restart
+
+- **WHEN** the Host restores a persisted running ExportJob but cannot prove that its previous Engine execution can be reattached
+- **THEN** the coordinator commits `outcome-unknown` for that exact Job
+- **AND** it does not automatically submit another export or report terminal failure/success
 
 #### Scenario: Show the active Cut document status
 

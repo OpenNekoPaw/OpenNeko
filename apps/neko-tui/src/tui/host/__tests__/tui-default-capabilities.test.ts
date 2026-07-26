@@ -9,9 +9,7 @@ import {
   TOOL_NAMES_ENTITY,
   TOOL_NAMES_SEARCH,
   TOOL_NAMES_SYSTEM,
-  type GeneratedAsset,
 } from '@neko/shared';
-import { GeneratedAssetIndex } from '@neko/platform';
 import { createTuiCapabilityLoader } from '../../core/tui-capability-loader';
 import {
   createTuiDefaultCapabilityRuntime,
@@ -45,7 +43,7 @@ describe('TUI default capability providers', () => {
     createTuiCapabilityLoader({
       toolRegistry,
       providerCardRegistry: new ProviderCardRegistry(),
-    }).registerProviders(createTestRuntime(workDir, createMemoryGeneratedAssetIndex()).providers);
+    }).registerProviders(createTestRuntime(workDir).providers);
     const locator = {
       kind: 'workspace-file' as const,
       path: 'neko/assets/Reference/library-image.png',
@@ -80,42 +78,28 @@ describe('TUI default capability providers', () => {
     const lifecycle = createGeneratedAssetRevisionRef({
       assetId: 'generated-1',
       contentDigest: `sha256:${createHash('sha256').update(outputBytes).digest('hex')}`,
+      contentPath: 'neko/generated/image/generated-1.png',
       mediaKind: 'image',
       mimeType: 'image/png',
-      generation: { taskId: 'task-1' },
-    });
-    const generatedAssetIndex = createMemoryGeneratedAssetIndex();
-    await generatedAssetIndex.add({
-      type: 'generated-image',
-      id: 'generated-1',
-      path: outputPath,
-      lifecycle,
-      mimeType: 'image/png',
-      generatedAt: '2026-07-14T00:00:00.000Z',
-      width: 1,
-      height: 1,
-      ratio: '1:1',
+      generation: { operationId: 'operation-generated-1' },
     });
     const toolRegistry = new ToolRegistry();
     createTuiCapabilityLoader({
       toolRegistry,
       providerCardRegistry: new ProviderCardRegistry(),
-    }).registerProviders(createTestRuntime(workDir, generatedAssetIndex).providers);
-    const resourceRef = lifecycle.resourceRef;
-
-    expect(resourceRef.source).not.toHaveProperty('filePath');
-    expect(resourceRef.source.metadata).not.toHaveProperty('path');
+    }).registerProviders(createTestRuntime(workDir).providers);
+    const contentLocator = lifecycle.contentLocator;
 
     const result = await toolRegistry.execute(TOOL_NAMES_SYSTEM.READ_IMAGE, {
       mode: 'metadata',
-      images: [{ resourceRef }],
+      images: [{ contentLocator }],
     });
 
     expect(result).toMatchObject({
       success: true,
       data: {
         imageCount: 1,
-        images: [expect.objectContaining({ resourceRef })],
+        images: [expect.objectContaining({ contentLocator })],
       },
     });
   });
@@ -142,7 +126,7 @@ describe('TUI default capability providers', () => {
     createTuiCapabilityLoader({
       toolRegistry,
       providerCardRegistry: new ProviderCardRegistry(),
-    }).registerProviders(createTestRuntime(workDir, createMemoryGeneratedAssetIndex()).providers);
+    }).registerProviders(createTestRuntime(workDir).providers);
     const representation = {
       kind: 'generated-output' as const,
       outputId: 'generated-rin-portrait',
@@ -211,7 +195,7 @@ describe('TUI default capability providers', () => {
     createTuiCapabilityLoader({
       toolRegistry,
       providerCardRegistry: new ProviderCardRegistry(),
-    }).registerProviders(createTestRuntime(workDir, createMemoryGeneratedAssetIndex()).providers);
+    }).registerProviders(createTestRuntime(workDir).providers);
 
     const entities = await toolRegistry.execute(TOOL_NAMES_ENTITY.LIST_CREATIVE_ENTITIES, {
       query: '小橘',
@@ -273,24 +257,9 @@ function createTempDir(): string {
   return dir;
 }
 
-function createMemoryGeneratedAssetIndex(): GeneratedAssetIndex {
-  let assets: readonly GeneratedAsset[] = [];
-  return new GeneratedAssetIndex({
-    load: async () => assets,
-    update: async (operation) => {
-      assets = operation(assets);
-      return assets;
-    },
-  });
-}
-
-function createTestRuntime(
-  workDir: string,
-  generatedAssetIndex: GeneratedAssetIndex,
-): TuiDefaultCapabilityRuntime {
+function createTestRuntime(workDir: string): TuiDefaultCapabilityRuntime {
   const runtime = createTuiDefaultCapabilityRuntime({
     workDir,
-    generatedAssetIndex,
     derivedStorageHomedir: workDir,
   });
   runtimes.push(runtime);

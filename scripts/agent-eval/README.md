@@ -7,7 +7,7 @@ product capability, a runtime Skill, or a second `AgentSession` assembly.
 ## Ownership Boundary
 
 - `apps/neko-tui` owns the TUI App/session lifecycle, input queue, runtime
-  configuration, Pi Skill receipt projection, Tool/task execution, artifact projection, and
+  configuration, Pi Skill receipt projection, Tool execution, artifact projection, and
   evaluation-neutral debug facts.
 - `scripts/agent-eval` owns authoring decisions, suites, fixtures, controllers,
   hard assertions, artifact checks, Judges, comparisons, reports, and exit codes.
@@ -49,7 +49,7 @@ the TUI is spawned. Flat v1 manifests and `--manifest` execution are removed.
 Before writing prompts, record one decision for each changed Agent behavior:
 `reuse`, `update`, `create`, or `excluded`. Use
 `authoring/change-selector.mjs` to map changed Prompt, Skill, Tool, model,
-session, task/recovery, TUI fact, and evaluation-platform paths to the owning
+session, Tool lifecycle, TUI fact, and evaluation-platform paths to the owning
 suite. Unmapped behavior is a coverage error, not a reason to choose a default
 suite.
 
@@ -72,7 +72,7 @@ remains authoritative.
 Prefer the smallest evidence set that proves both the result and the path:
 
 - deterministic hard gates for Pi Skill receipts, model/config identity,
-  Tool/task/process state, structured output, artifacts, permissions, and
+  Tool/process state, structured output, artifacts, permissions, and
   no-fallback;
 - owning-domain validators for durable files and media quality;
 - an external Judge only for subjective quality after hard gates pass.
@@ -81,8 +81,8 @@ Keep three result planes separate:
 
 - **correctness**: deterministic path, configuration, Skill receipt, permission,
   format/schema, artifact, and no-fallback hard gates;
-- **execution efficiency**: latency, token, cost, iteration, Tool, retry, and
-  task metrics;
+- **execution efficiency**: latency, token, cost, iteration, Tool, and retry
+  metrics;
 - **output content quality**: relevance, semantic completeness, constraint
   satisfaction, reasoning, specificity, consistency, and applicable creative
   or aesthetic quality scored from real model output by a suite-owned rubric,
@@ -205,7 +205,7 @@ Each sample writes under
 
 Repeated aggregates include every sample, hard-gate totals, token/cost
 availability, mean/p50/p95 latency, iterations, Tool success/failure, retries,
-task terminal counts, and applicable real-output content-quality distribution.
+and applicable real-output content-quality distribution.
 The ablation delta records content quality as `not-evaluated`, `unavailable`, or
 `available` with its rubric reference. Correctness and infrastructure outcomes
 dominate efficiency and quality deltas. Missing effective config,

@@ -40,8 +40,7 @@ describe('Character Dialogue session handlers', () => {
       streamingMessageId: 'old-stream',
       queuedMessageCount: 0,
     });
-    expect(harness.context.conversationMessagesRef.current.has('conv-a')).toBe(false);
-    expect(harness.context.conversationStreamingRef.current.has('conv-a')).toBe(false);
+    expect(harness.context.conversationRenderCoordinator.read('conv-a')).toBeUndefined();
     expect(harness.openTabs()).toEqual([tab]);
     expect(harness.activeTabId()).toBe('tab-npc');
     expect(harness.reconciliations()).toEqual([
@@ -144,8 +143,6 @@ function createContextHarness(options: ContextHarnessOptions): ContextHarness {
   const activeConversationIdRef = ref<string | null>(options.activeConversationId);
   const streamingMessageIdRef = ref<string | null>(streaming.streamingMessageId);
   const isTablessConversationViewRef = ref(false);
-  const conversationMessagesRef = ref(new Map<string, Message[]>());
-  const conversationStreamingRef = ref(new Map<string, StreamingState>());
   const conversationRenderCoordinator = new ConversationRenderCoordinator();
   let workItems: AgentWorkItemStore = new Map();
   let pluginsAvailable: PluginsAvailable = {};
@@ -159,8 +156,6 @@ function createContextHarness(options: ContextHarnessOptions): ContextHarness {
     streamingMessageIdRef,
     activeConversationId,
     activeConversationIdRef,
-    conversationMessagesRef,
-    conversationStreamingRef,
     conversationRenderCoordinator,
     openTabs,
     activeTabId,

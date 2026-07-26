@@ -6,38 +6,20 @@ describe('media generation type resolution', () => {
     expect(resolveImageGenerationType({ prompt: 'paint a cat' })).toBe('text-to-image');
   });
 
-  it('uses image-to-image for URL, base64, or local URI reference inputs', () => {
+  it('uses image-to-image for a stable reference image locator', () => {
     expect(
       resolveImageGenerationType({
         prompt: 'edit',
-        referenceImageUrl: 'https://example.test/image.png',
-      }),
-    ).toBe('image-to-image');
-    expect(
-      resolveImageGenerationType({
-        prompt: 'edit',
-        referenceImageBase64: 'base64',
-      }),
-    ).toBe('image-to-image');
-    expect(
-      resolveImageGenerationType({
-        prompt: 'edit',
-        referenceImageUri: 'file:///tmp/image.png',
+        referenceImageLocator: { kind: 'workspace-file', path: 'references/image.png' },
       }),
     ).toBe('image-to-image');
   });
 
-  it('uses image-to-image for ControlNet base64 or local URI inputs', () => {
+  it('uses image-to-image for a stable ControlNet locator', () => {
     expect(
       resolveImageGenerationType({
         prompt: 'line art',
-        controlImageBase64: 'base64',
-      }),
-    ).toBe('image-to-image');
-    expect(
-      resolveImageGenerationType({
-        prompt: 'line art',
-        controlImageUri: 'file:///tmp/control.png',
+        controlImageLocator: { kind: 'workspace-file', path: 'controls/lineart.png' },
       }),
     ).toBe('image-to-image');
   });
@@ -46,44 +28,20 @@ describe('media generation type resolution', () => {
     expect(resolveVideoGenerationType({ prompt: 'animate a cat' })).toBe('text-to-video');
   });
 
-  it('uses image-to-video for URL, base64, local URI, or first-frame inputs', () => {
+  it('uses image-to-video for a stable first-frame locator', () => {
     expect(
       resolveVideoGenerationType({
         prompt: 'animate',
-        referenceImageUrl: 'https://example.test/image.png',
-      }),
-    ).toBe('image-to-video');
-    expect(
-      resolveVideoGenerationType({
-        prompt: 'animate',
-        referenceImageBase64: 'base64',
-      }),
-    ).toBe('image-to-video');
-    expect(
-      resolveVideoGenerationType({
-        prompt: 'animate',
-        referenceImageUri: 'file:///tmp/image.png',
-      }),
-    ).toBe('image-to-video');
-    expect(
-      resolveVideoGenerationType({
-        prompt: 'animate',
-        startFrameImageBase64: 'base64',
+        startFrameLocator: { kind: 'workspace-file', path: 'frames/start.png' },
       }),
     ).toBe('image-to-video');
   });
 
-  it('uses video-to-video for reference or source video inputs', () => {
+  it('uses video-to-video for a stable reference-video locator', () => {
     expect(
       resolveVideoGenerationType({
         prompt: 'edit',
-        referenceVideoUrl: 'https://example.test/video.mp4',
-      }),
-    ).toBe('video-to-video');
-    expect(
-      resolveVideoGenerationType({
-        prompt: 'edit',
-        sourceVideoUrl: 'https://example.test/source.mp4',
+        referenceVideoLocator: { kind: 'workspace-file', path: 'videos/source.mp4' },
       }),
     ).toBe('video-to-video');
   });

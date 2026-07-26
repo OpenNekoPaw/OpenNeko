@@ -7,7 +7,6 @@ export {
   bootstrapCoreServices,
   logServicesStatus,
   IPlatform,
-  ITaskManager,
   IAgentManager,
   IPiAgentRuntimeManager,
   IProductPurposeTextRuntime,

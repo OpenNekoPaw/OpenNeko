@@ -134,7 +134,6 @@ export type CommandAction =
   | 'showModelSelector'
   | 'showMCPServers'
   | 'showPermissions'
-  | 'showTasks'
   | 'updateExecutionMode'
   | 'initProject'
   | 'resumeConversation'
@@ -184,7 +183,6 @@ export interface CommandActionDataMap {
   showModelSelector: undefined;
   showMCPServers: undefined;
   showPermissions: undefined;
-  showTasks: undefined;
   updateExecutionMode: { executionMode: 'auto' | 'ask' | 'plan' };
   initProject: undefined;
   resumeConversation: { conversations: ConversationInfo[] };

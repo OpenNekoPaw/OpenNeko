@@ -1,5 +1,7 @@
 ## Why
 
+> 后续状态：`extract-neko-chara-domain-package` 已建立 `packages/neko-chara` 的第一阶段实现；本变更关于“不创建 package”的描述仅限定于本次历史设计范围。`neko-world` 与完整 CharacterProject/CharacterVersion 仍未实现。
+
 现有 Desktop Project Profile ADR 已经把角色 IP 和互动世界定义为两类闭合项目，但尚未冻结对应的顶级领域 owner。缺少这一层时，角色对话、记忆、形象、设备感知、Gameplay 和世界运行容易继续堆入 `neko-agent`、`neko-assets`、`neko-preview` 或应用宿主，也可能让角色项目与世界项目分别实现一套 Agent、NPC、记忆和 Gameplay 状态机。
 
 角色和世界都需要组合多个既有或未来能力，但组合能力不等于拥有所有底层实现。本变更需要明确 `neko-chara`、`neko-world` 的聚合根、依赖方向、运行身份和跨域 handoff，使后续实施可以复用唯一 Pi/Agent canonical path，同时保持角色版本、世界存档和表现/设备实现各有唯一 owner。

@@ -13,7 +13,6 @@ import type {
 } from '@neko-agent/types';
 import { ConversationRenderCoordinator } from '@/render-lifecycle/conversation-render-coordinator';
 import {
-  commitConversationSnapshotProjection,
   ingestConversationRenderSnapshot,
   type ConversationRenderStateUpdater as CanonicalConversationRenderStateUpdater,
   type ConversationRenderStreamingState,
@@ -49,8 +48,6 @@ export interface ConversationState {
 export interface ConversationStateRefs {
   activeConversationIdRef: MutableRefObject<string | null>;
   streamingMessageIdRef: MutableRefObject<string | null>;
-  conversationMessagesRef: MutableRefObject<Map<string, Message[]>>;
-  conversationStreamingRef: MutableRefObject<Map<string, StreamingState>>;
   conversationRenderCoordinator: ConversationRenderCoordinator;
 }
 
@@ -82,9 +79,6 @@ export interface UseConversationStateReturn
  * Hook for managing conversation state
  */
 export function useConversationState(): UseConversationStateReturn {
-  // Per-conversation state maps (preserve state when switching conversations)
-  const conversationMessagesRef = useRef<Map<string, Message[]>>(new Map());
-  const conversationStreamingRef = useRef<Map<string, StreamingState>>(new Map());
   const conversationRenderCoordinatorRef = useRef<ConversationRenderCoordinator | null>(null);
   conversationRenderCoordinatorRef.current ??= new ConversationRenderCoordinator();
   const conversationRenderCoordinator = conversationRenderCoordinatorRef.current;
@@ -111,8 +105,9 @@ export function useConversationState(): UseConversationStateReturn {
 
   const updateConversationRenderState = useCallback(
     (conversationId: string, updater: ConversationRenderStateUpdater): void => {
-      const currentMessages = conversationMessagesRef.current.get(conversationId) ?? [];
-      const currentStreaming = conversationStreamingRef.current.get(conversationId) ?? {
+      const current = conversationRenderCoordinator.read(conversationId);
+      const currentMessages = current?.messages ?? [];
+      const currentStreaming = current?.streaming ?? {
         streamingMessageId: null,
         isThinking: false,
         queuedMessageCount: 0,
@@ -125,20 +120,9 @@ export function useConversationState(): UseConversationStateReturn {
         messages: updated.messages,
         streaming: updated.streaming,
       });
-      commitConversationSnapshotProjection({
-        snapshot,
-        conversationMessagesRef,
-        conversationStreamingRef,
-      });
-
       if (conversationId !== activeConversationIdRef.current) return;
 
-      const projectedStreaming = conversationStreamingRef.current.get(conversationId);
-      if (!projectedStreaming) {
-        throw new Error(
-          `Missing committed streaming projection for conversation ${conversationId}.`,
-        );
-      }
+      const projectedStreaming = snapshot.streaming;
       setVisibleMessages([...snapshot.messages]);
       setVisibleIsThinking(projectedStreaming.isThinking);
       setVisibleStreamingMessageId(projectedStreaming.streamingMessageId);
@@ -185,8 +169,6 @@ export function useConversationState(): UseConversationStateReturn {
     // Refs
     activeConversationIdRef,
     streamingMessageIdRef,
-    conversationMessagesRef,
-    conversationStreamingRef,
     conversationRenderCoordinator,
     // Actions
     setConversations,

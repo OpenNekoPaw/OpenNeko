@@ -12,12 +12,25 @@ const VARIABLE_PACKAGE_IMPORT_PATTERN = /\bimport\(packageName\)/u;
 export function assertEmbeddedRuntimeClosure(stageRoot, target) {
   const featureRoot = join(stageRoot, 'dist', 'features');
   const summaries = [];
+  const applicationBundlePath = join(stageRoot, 'dist', 'extension.js');
+  if (!existsSync(applicationBundlePath)) {
+    throw new Error(`Embedded application bundle is missing: ${applicationBundlePath}`);
+  }
+  const applicationSource = readFileSync(applicationBundlePath, 'utf8');
+  assertNoProhibitedRuntimeImports(applicationSource, 'neko-suite');
+  const applicationModules = assertRuntimeManifest(stageRoot, applicationBundlePath, target);
+  summaries.push(
+    Object.freeze({
+      packageName: 'neko-suite',
+      runtimeModuleCount: applicationModules.length,
+    }),
+  );
 
   for (const packageName of OPENNEKO_FEATURE_PACKAGES) {
     const packageRoot = join(featureRoot, packageName);
     const bundlePath = join(packageRoot, 'dist', 'extension.js');
     if (!existsSync(bundlePath)) {
-      throw new Error(`Embedded feature bundle is missing: ${bundlePath}`);
+      throw new Error(`Embedded payload bundle is missing: ${bundlePath}`);
     }
 
     const bundleSource = readFileSync(bundlePath, 'utf8');
@@ -88,7 +101,7 @@ function assertRuntimeManifest(packageRoot, bundlePath, target) {
     const relativePath = relative(canonicalPackageRoot, resolvedPath);
     if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
       throw new Error(
-        `Embedded runtime module resolved outside feature ${packageRoot}: ${specifier} -> ${resolvedPath}.`,
+        `Embedded runtime module resolved outside payload ${packageRoot}: ${specifier} -> ${resolvedPath}.`,
       );
     }
   }

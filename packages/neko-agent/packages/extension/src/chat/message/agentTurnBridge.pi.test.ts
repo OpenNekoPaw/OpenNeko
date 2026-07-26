@@ -5,7 +5,7 @@ import type { PiProductEventSink } from '@neko/agent/pi';
 
 import type { IAgentManager } from '../../ai/agentManager';
 import { AgentTurnBridge, type ExecuteAgentTurnForWebviewInput } from './agentTurnBridge';
-import type { AgentStreamProcessor, StreamProcessingResult } from './agentStreamProcessor';
+import type { StreamProcessingResult } from './piAgentStreamProcessor';
 
 vi.mock('vscode', () => ({}));
 
@@ -67,7 +67,7 @@ describe('AgentTurnBridge Pi canonical path', () => {
     conversationId: string;
     content: string;
     createdAt: number;
-    source: 'composer' | 'task-result-continuation';
+    source: 'composer' | 'system-continuation' | 'subagent-result-continuation';
   }> = [];
   const executePiTurn = vi.fn();
   const legacyGetOrCreate = vi.fn(() => {
@@ -112,13 +112,42 @@ describe('AgentTurnBridge Pi canonical path', () => {
       }),
     );
     expect(createPiStream).toHaveBeenCalledWith(
-      expect.objectContaining({ postMessage }),
       'conversation-1',
       'message-1',
       expect.any(Function),
     );
     expect(legacyGetOrCreate).not.toHaveBeenCalled();
     expect(streamDispose).toHaveBeenCalledOnce();
+  });
+
+  it('forwards Pi phase changes through the conversation-scoped Webview protocol', async () => {
+    createPiStream.mockImplementationOnce((_conversationId, _messageId, onPhaseChange) => {
+      onPhaseChange('thinking');
+      onPhaseChange('idle');
+      return {
+        events: streamEvents,
+        result: () => streamResult,
+        dispose: streamDispose,
+      };
+    });
+    const bridge = createBridge();
+
+    await bridge.execute(createInput());
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conversation-1',
+        phase: 'thinking',
+      }),
+    );
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conversation-1',
+        phase: 'idle',
+      }),
+    );
   });
 
   it('submits one terminal artifact batch with the original Pi turn/run identity', async () => {
@@ -173,12 +202,56 @@ describe('AgentTurnBridge Pi canonical path', () => {
     );
   });
 
+  it('delivers locator-only generated media from the Pi Tool Timeline to the Board', async () => {
+    const contentLocator = {
+      kind: 'generated-output' as const,
+      outputId: 'generated-image',
+      revision: 'revision-1',
+      digest: 'a'.repeat(64),
+      path: 'neko/generated/image/generated-image.png',
+    };
+    createPiStream.mockReturnValueOnce({
+      events: streamEvents,
+      result: () => ({
+        ...streamResult,
+        collectedToolCalls: [
+          {
+            id: 'generate-image-1',
+            name: 'GenerateImage',
+            arguments: {},
+            result: {
+              success: true,
+              data: { status: 'completed' },
+              attachments: [{ type: 'image', contentLocator }],
+            },
+          },
+        ],
+      }),
+      dispose: streamDispose,
+    });
+
+    await createBridge().execute(createInput());
+
+    expect(deliverCreatorVisibleArtifacts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deliveryId: 'agent-turn:turn-1',
+        runId: 'run-1',
+        artifacts: [
+          expect.objectContaining({
+            role: 'output',
+            kind: 'image',
+            contentLocator,
+          }),
+        ],
+      }),
+    );
+  });
+
   it('delivers native ReadImage analysis with the exposed image as its source', async () => {
-    const documentResourceRef = {
+    const documentLocator = {
       kind: 'document-entry' as const,
-      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      source: { kind: 'workspace-file' as const, path: 'books/Blame.epub' },
       entryPath: 'OEBPS/images/page-01.jpg',
-      versionPolicy: 'read-only-source' as const,
     };
     createPiStream.mockReturnValueOnce({
       events: streamEvents,
@@ -195,7 +268,7 @@ describe('AgentTurnBridge Pi canonical path', () => {
               data: {
                 mode: 'metadata',
                 analysis: 'storyboard',
-                images: [{ resourceRef: documentResourceRef, width: 1200, height: 1800 }],
+                images: [{ contentLocator: documentLocator, width: 1200, height: 1800 }],
               },
               attachments: [
                 {
@@ -205,7 +278,7 @@ describe('AgentTurnBridge Pi canonical path', () => {
                     assetId: 'page-01',
                     uri: 'document-entry://page-01',
                     mimeType: 'image/jpeg',
-                    documentResourceRef,
+                    contentLocator: documentLocator,
                   },
                 },
               ],
@@ -390,7 +463,7 @@ describe('AgentTurnBridge Pi canonical path', () => {
         dequeuePendingMessage: vi.fn(() => pendingItems.shift() ?? null),
       } as unknown as IAgentManager,
       getSystemPrompt: () => 'system prompt',
-      streamProcessor: { createPiStream } as unknown as AgentStreamProcessor,
+      createPiStream,
       terminalArtifactDelivery: { deliverCreatorVisibleArtifacts },
       onPhaseChange: vi.fn(),
       generateMessageId: () => 'message-1',

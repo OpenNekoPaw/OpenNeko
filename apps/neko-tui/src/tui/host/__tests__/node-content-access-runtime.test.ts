@@ -6,7 +6,6 @@ import AdmZipModule from 'adm-zip';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createDocumentResourceRef,
-  createGeneratedAssetResourceRef,
 } from '@neko/shared/content-access';
 import {
   createNodeContentAccessRuntime,
@@ -66,7 +65,6 @@ describe('node content access runtime path variables', () => {
     const runtime = createTestContentAccessRuntime(workDir);
 
     const result = await runtime.loadProviderAsset({
-      caller: 'read-image',
       source: { kind: 'file', path: 'neko/assets/Assets/epub/sample.txt' },
     });
 
@@ -93,16 +91,13 @@ describe('node content access runtime path variables', () => {
     });
 
     const result = await runtime.loadProviderAsset({
-      caller: 'read-image',
       source: resourceRef,
-      variant: { role: 'document-entry', mimeType: 'image/png' },
     });
 
     expect(result.status).toBe('ready');
     expect(Buffer.from(result.bytes ?? []).toString('utf8')).toBe('direct-document-image');
 
     const attachmentResult = await runtime.loadProviderAsset({
-      caller: 'perception-asset-loader',
       source: resourceRef,
     });
 
@@ -112,33 +107,22 @@ describe('node content access runtime path variables', () => {
     );
   });
 
-  it('loads generated asset source bytes without materializing resource cache', async () => {
+  it('loads generated output bytes directly from its ContentLocator', async () => {
     const workDir = createTempDir();
     const generatedPath = path.join(workDir, 'neko/generated/image/asset-1.png');
     const imageBytes = Buffer.from('generated-image-bytes');
     fs.mkdirSync(path.dirname(generatedPath), { recursive: true });
     fs.writeFileSync(generatedPath, imageBytes);
     const runtime = createTestContentAccessRuntime(workDir);
-    const baseResourceRef = createGeneratedAssetResourceRef({
-      assetId: 'asset-1',
-      path: '${WORKSPACE}/neko/generated/image/asset-1.png',
-      mimeType: 'image/png',
-    });
-    const resourceRef = {
-      ...baseResourceRef,
-      source: {
-        ...baseResourceRef.source,
-        metadata: {
-          ...baseResourceRef.source.metadata,
-          revision: 'revision-1',
-          contentDigest: sha256(imageBytes),
-        },
+    const result = await runtime.loadContentAsset({
+      locator: {
+        kind: 'generated-output',
+        outputId: 'asset-1',
+        revision: 'revision-1',
+        digest: sha256(imageBytes),
+        path: 'neko/generated/image/asset-1.png',
       },
-    };
-
-    const result = await runtime.loadProviderAsset({
-      caller: 'read-image',
-      source: resourceRef,
+      maxBytes: 1024,
     });
 
     expect(result.status).toBe('ready');
@@ -146,7 +130,7 @@ describe('node content access runtime path variables', () => {
     expect(Buffer.from(result.bytes ?? []).toString('utf8')).toBe('generated-image-bytes');
   });
 
-  it('loads pathless generated ResourceRefs through the owning asset resolver', async () => {
+  it('rejects pathless generated ResourceRefs instead of inferring a locator', async () => {
     const workDir = createTempDir();
     const generatedPath = path.join(workDir, 'neko/generated/image/asset-2.png');
     const imageBytes = Buffer.from('indexed-generated-image-bytes');
@@ -155,10 +139,6 @@ describe('node content access runtime path variables', () => {
     const runtime = createNodeContentAccessRuntime({
       host: createNodeWorkspaceContentHostAdapter({ workDir }),
       derivedStorageHomedir: workDir,
-      resolveGeneratedAsset: async (ref) =>
-        ref.source.kind === 'generated-asset' && ref.source.generatedAssetId === 'asset-2'
-          ? { path: generatedPath, mimeType: 'image/png' }
-          : undefined,
     });
     runtimes.push(runtime);
     const resourceRef = {
@@ -180,13 +160,14 @@ describe('node content access runtime path variables', () => {
     };
 
     const result = await runtime.loadProviderAsset({
-      caller: 'perception-asset-loader',
       source: resourceRef,
     });
 
-    expect(result.status).toBe('ready');
-    expect(result.mimeType).toBe('image/png');
-    expect(Buffer.from(result.bytes ?? []).toString('utf8')).toBe('indexed-generated-image-bytes');
+    expect(result).toMatchObject({
+      status: 'unsupported-source',
+      diagnostics: [expect.objectContaining({ code: 'unsupported-source' })],
+    });
+    expect(result.bytes).toBeUndefined();
   });
 });
 

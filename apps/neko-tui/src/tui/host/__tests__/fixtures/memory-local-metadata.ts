@@ -1,4 +1,3 @@
-import { MemoryTaskRecoveryStorage, MemoryTaskStorage } from '@neko/agent';
 import type {
   CatalogItemRecord,
   CatalogProjectionRepository,
@@ -62,8 +61,6 @@ export async function createMemoryLocalMetadataBinding(
     },
     workspaceId,
     metadataStore,
-    taskStorage: new MemoryTaskStorage(),
-    taskRecoveryStorage: new MemoryTaskRecoveryStorage(),
     searchPartition,
     semanticPartition,
     entityAssetPartition,
@@ -168,9 +165,24 @@ function createMemorySemanticProjectionRepository(): SemanticProjectionRepositor
   let records: readonly SemanticProjectionRecord[] = [];
   return {
     list: async () => records,
+    get: async (_partition, sourceId) =>
+      records.find((record) => record.sourceId === sourceId) ?? null,
     replacePartition: async (request) => {
       records = request.sources;
     },
+    replaceSource: async (request) => {
+      records = [
+        ...records.filter((record) => record.sourceId !== request.source.sourceId),
+        request.source,
+      ];
+    },
+    deleteSource: async (_partition, sourceId) => {
+      const next = records.filter((record) => record.sourceId !== sourceId);
+      if (next.length === records.length) return false;
+      records = next;
+      return true;
+    },
+    clearBodyBearingSources: async () => [],
     insertMissing: async (request) => {
       const existingIds = new Set(records.map((record) => record.sourceId));
       const inserted = request.sources.filter((record) => !existingIds.has(record.sourceId));

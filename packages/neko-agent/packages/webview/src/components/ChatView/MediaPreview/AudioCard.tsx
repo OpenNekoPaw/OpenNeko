@@ -20,7 +20,7 @@ interface AudioPlayerProps {
   className?: string;
   /** Local file path for opening in neko-preview */
   localPath?: string;
-  /** Inline mode: native audio controls embedded (for use inside TaskCard) */
+  /** Inline mode: native audio controls embedded in Tool results. */
   inline?: boolean;
 }
 
@@ -38,7 +38,7 @@ function getFileName(src: string, title?: string): string {
 }
 
 /**
- * Compact inline audio card shown inside TaskCard (ADR-6 fix).
+ * Compact inline audio card shown inside Tool results.
  * Shows static waveform placeholder + filename + duration.
  * Clicking opens in neko-preview — consistent with VideoCard inline behaviour.
  * A hidden <audio preload="metadata"> is used only to extract duration.

@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useRef } from 'react';
+import { parseSendMessageWebviewMessage } from '@neko-agent/types';
 import { useChatActions } from '../useChatActions';
 
 const vscodeMocks = vi.hoisted(() => ({
@@ -381,16 +382,39 @@ describe('useChatActions', () => {
     const setStreamingMessageId = vi.fn();
 
     const { result } = renderHook(() => {
-      const activeConversationIdRef = useRef<string | null>('conv-video');
+      const activeConversationIdRef = useRef<string | null>('conv-image');
       return useChatActions({
-        inputValue: '生成一个镜头',
+        inputValue: '生成一张图片',
         isThinking: false,
-        selectedModel: 'model-a',
-        sessionMode: 'video',
-        understandingModels: {
-          video: { providerId: 'google', modelId: 'gemini-video', category: 'llm' },
+        selectedModel: 'openai:gpt-4.1',
+        availableModels: [
+          {
+            id: 'openai:gpt-4.1',
+            label: 'OpenAI / GPT 4.1',
+            providerId: 'openai',
+            modelId: 'gpt-4.1',
+            category: 'llm',
+          },
+          {
+            id: 'flux:flux-pro',
+            label: 'Flux / Flux Pro',
+            providerId: 'flux',
+            modelId: 'flux-pro',
+            category: 'image',
+            capabilities: ['image_generation'],
+          },
+        ],
+        sessionMode: 'image',
+        mediaProviderId: 'flux',
+        mediaModelId: 'flux-pro',
+        agentMediaModels: {
+          image: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
+          video: { providerId: 'runway', modelId: 'gen-4', category: 'video' },
         },
-        activeConversationId: 'conv-video',
+        understandingModels: {
+          image: { providerId: 'google', modelId: 'gemini-image', category: 'llm' },
+        },
+        activeConversationId: 'conv-image',
         activeConversationIdRef,
         streamingMessageIdRef: { current: null },
         messages: [],
@@ -409,12 +433,90 @@ describe('useChatActions', () => {
 
     expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        conversationId: 'conv-video',
-        message: '生成一个镜头',
-        sessionMode: 'video',
+        conversationId: 'conv-image',
+        message: '生成一张图片',
+        sessionMode: 'image',
       }),
     );
-    expect(vscodeMocks.sendMessage.mock.calls[0]?.[0]).not.toHaveProperty('purposeModels');
+    const payload = { type: 'sendMessage', ...vscodeMocks.sendMessage.mock.calls[0]?.[0] };
+    expect(payload).not.toHaveProperty('purposeModels');
+    expect(payload).not.toHaveProperty('chatModel');
+    expect(parseSendMessageWebviewMessage(payload)).toEqual(
+      expect.objectContaining({
+        sessionMode: 'image',
+        mediaModel: {
+          providerId: 'flux',
+          modelId: 'flux-pro',
+          category: 'image',
+        },
+      }),
+    );
+  });
+
+  it('sends a music-only audio selection with the music generation purpose', () => {
+    const { result } = renderHook(() => {
+      const activeConversationIdRef = useRef<string | null>('conv-music');
+      return useChatActions({
+        inputValue: '写一段轻快的配乐',
+        isThinking: false,
+        selectedModel: 'openai:gpt-4.1',
+        availableModels: [
+          {
+            id: 'openai:gpt-4.1',
+            label: 'OpenAI / GPT 4.1',
+            providerId: 'openai',
+            modelId: 'gpt-4.1',
+            category: 'llm',
+          },
+          {
+            id: 'nekoapi-media:suno_music',
+            label: 'NekoAPI / Suno Music',
+            providerId: 'nekoapi-media',
+            modelId: 'suno_music',
+            category: 'audio',
+            capabilities: ['text_to_music'],
+          },
+        ],
+        sessionMode: 'agent',
+        agentMediaModels: {
+          audio: {
+            providerId: 'nekoapi-media',
+            modelId: 'suno_music',
+            category: 'audio',
+          },
+        },
+        activeConversationId: 'conv-music',
+        activeConversationIdRef,
+        streamingMessageIdRef: { current: null },
+        messages: [],
+        setMessages: vi.fn(),
+        setIsThinking: vi.fn(),
+        setStreamingMessageId: vi.fn(),
+        setActiveTab: vi.fn(),
+        clearInput: vi.fn(),
+        setAttachedFiles: vi.fn(),
+      });
+    });
+
+    act(() => {
+      result.current.handleSend();
+    });
+
+    expect(vscodeMocks.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-music',
+        purposeModels: {
+          'audio.music.generate': {
+            providerId: 'nekoapi-media',
+            modelId: 'suno_music',
+            category: 'audio',
+          },
+        },
+      }),
+    );
+    expect(vscodeMocks.sendMessage.mock.calls[0]?.[0]?.purposeModels).not.toHaveProperty([
+      'audio.generate',
+    ]);
   });
 
   it('does not cache understanding model selections for new non-Agent conversations', () => {

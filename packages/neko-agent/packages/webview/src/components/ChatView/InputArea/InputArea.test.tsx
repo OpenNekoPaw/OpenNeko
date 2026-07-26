@@ -467,6 +467,31 @@ describe('InputArea composer controls', () => {
     expect(onSend).toHaveBeenCalledTimes(1);
   });
 
+  it('resets the textarea height when a sent draft is cleared programmatically', () => {
+    const props = {
+      isThinking: false,
+      onInputChange: vi.fn(),
+      onSend: vi.fn(),
+    };
+    const { rerender } = render(
+      <Harness>
+        <InputArea {...props} inputValue="line one" />
+      </Harness>,
+    );
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    Object.defineProperty(textarea, 'scrollHeight', { configurable: true, value: 180 });
+    fireEvent.change(textarea, { target: { value: 'line one\nline two\nline three' } });
+    expect(textarea.style.height).toBe('120px');
+
+    rerender(
+      <Harness>
+        <InputArea {...props} inputValue="" />
+      </Harness>,
+    );
+
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).style.height).toBe('auto');
+  });
+
   it('focuses only when the owning Tab focus request changes', () => {
     const { rerender } = render(
       <Harness>

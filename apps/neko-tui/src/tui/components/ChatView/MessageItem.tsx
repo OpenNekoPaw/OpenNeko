@@ -139,14 +139,6 @@ function TimelineRowLine({ row }: { readonly row: TerminalTimelineRow }): React.
       return (
         <TimelineProcessLine row={row} label={presentTimelineProcessLabel(row, presentation)} />
       );
-    case 'task':
-      return (
-        <TimelineProcessLine row={row} label={presentTimelineProcessLabel(row, presentation)} />
-      );
-    case 'media':
-      return (
-        <TimelineProcessLine row={row} label={presentTimelineProcessLabel(row, presentation)} />
-      );
     case 'error':
     case 'diagnostic':
       return (
@@ -209,7 +201,7 @@ function TimelineIdentity({
 }: {
   readonly row: TerminalTimelineRow;
 }): React.JSX.Element | null {
-  const id = row.toolCallId ?? row.taskId;
+  const id = row.toolCallId;
   if (!id) return null;
   return <Text dimColor> id={id}</Text>;
 }

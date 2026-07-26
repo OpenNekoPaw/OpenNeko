@@ -1,6 +1,8 @@
 # ADR: Agent 消息队列、任务队列与任务卡边界
 
-状态：Accepted
+状态：Superseded（通用 Task/TaskCard 部分已被取代）
+
+> 取代说明：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 已取消通用 Agent `Task`/`TaskManager`/`TaskCard` 作为后台工具、媒体和 subagent 的目标架构。消息队列与计划进度必须分离的原则继续有效；执行投影改为 Tool Execution、Agent/Subagent Activity 和具体 Domain Job。
 
 本文记录 Neko Agent 对输入消息队列、Agent 任务队列和任务卡展示面的边界决策。它补充 [`agent.md`](agent.md)、[`package-boundaries.md`](package-boundaries.md)、[`adr-agent-idc-skill-planmode-trigger-boundary.md`](adr-agent-idc-skill-planmode-trigger-boundary.md)、[`adr-agent-autonomous-filmmaking-creation-boundary.md`](adr-agent-autonomous-filmmaking-creation-boundary.md) 与 `normalize-agent-webview-turn-timeline` 变更结论，用于避免 pending prompt、复杂任务 checklist 和后台工具任务在同一个对话 transcript 中混杂。
 

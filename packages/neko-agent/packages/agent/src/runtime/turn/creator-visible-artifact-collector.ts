@@ -1,18 +1,13 @@
 import {
-  areResourceRefsContentCompatible,
-  compareResourceRefObservationStrength,
-  createResourceLogicalContentIdentity,
+  contentLocatorKey,
   hashStableValue,
-  isDocumentArchiveResourceRef,
-  isResourceRef,
+  isContentLocator,
   TOOL_NAMES_SYSTEM,
-  validateDurableResourceRef,
   validateCompositeArtifact,
   type CanvasWorkspaceArtifactDimensions,
   type CanvasWorkspaceProjectionKind,
-  type DocumentArchiveResourceRef,
+  type ContentLocator,
   type GeneratedAssetRevisionRef,
-  type ResourceRef,
   type ToolResultArtifactTransfer,
   type ToolResultAttachment,
 } from '@neko/shared';
@@ -27,8 +22,7 @@ export interface CreatorVisibleArtifactCandidate {
   readonly sourceId: string;
   readonly sourceArtifactIds?: readonly string[];
   readonly markdown?: string;
-  readonly resourceRef?: ResourceRef;
-  readonly documentResourceRef?: DocumentArchiveResourceRef;
+  readonly contentLocator?: ContentLocator;
   readonly intrinsicDimensions?: CanvasWorkspaceArtifactDimensions;
   readonly provenanceSource?: 'tool-result' | 'assistant-declared' | 'native-image-analysis';
 }
@@ -36,7 +30,7 @@ export interface CreatorVisibleArtifactCandidate {
 export interface CreatorVisibleArtifactCollectionInput {
   readonly toolResults: readonly CreatorVisibleToolResult[];
   readonly generatedLifecycles?: readonly GeneratedAssetRevisionRef[];
-  readonly consumedResourceIds?: ReadonlySet<string>;
+  readonly consumedContentSourceIds?: ReadonlySet<string>;
   readonly assistantMarkdown?: string;
 }
 
@@ -69,29 +63,35 @@ export function collectCreatorVisibleArtifacts(
       : undefined;
     if (nativeImageAnalysisKind) nativeImageAnalysisKinds.add(nativeImageAnalysisKind);
     for (const attachment of result.attachments ?? []) {
-      const resourceRef = attachment.assetRef?.resourceRef;
-      const documentResourceRef = attachment.assetRef?.documentResourceRef;
-      if (!resourceRef && !documentResourceRef) continue;
-      if (resourceRef && !validateDurableResourceRef(resourceRef).ok) continue;
-      const sourceId =
-        resourceRef?.id ??
-        (documentResourceRef
-          ? `document:${hashStableValue(documentResourceRef.source)}`
-          : undefined);
-      if (!sourceId) continue;
-      if (input.consumedResourceIds && !input.consumedResourceIds.has(sourceId)) continue;
-      const intrinsicDimensions = imageDimensions.get(
-        createImageResourceIdentity(resourceRef ?? documentResourceRef),
-      );
+      const contentLocator = attachment.contentLocator ?? attachment.assetRef?.contentLocator;
+      if (!contentLocator) {
+        if (
+          attachment.path !== undefined ||
+          attachment.assetRef?.resourceRef !== undefined ||
+          attachment.assetRef?.documentResourceRef !== undefined
+        ) {
+          throw new Error(
+            'creator-visible-artifact-migration-required: Tool attachment requires contentLocator.',
+          );
+        }
+        continue;
+      }
+      if (!isContentLocator(contentLocator)) {
+        throw new Error('Creator-visible Tool attachment contains an invalid contentLocator.');
+      }
+      const sourceId = createContentSourceId(contentLocator);
+      if (input.consumedContentSourceIds && !input.consumedContentSourceIds.has(sourceId)) {
+        continue;
+      }
+      const intrinsicDimensions = imageDimensions.get(contentLocatorKey(contentLocator));
       const candidate: CreatorVisibleArtifactCandidate = {
         artifactId: attachment.assetRef?.assetId ?? sourceId,
-        revision: resourceRevision(resourceRef) ?? `attachment:${hashStableValue(attachment)}`,
-        role: nativeImageAnalysisKind || input.consumedResourceIds ? 'source' : 'output',
+        revision: createContentRevision(contentLocator),
+        role: nativeImageAnalysisKind || input.consumedContentSourceIds ? 'source' : 'output',
         kind: attachment.type,
         title: attachment.assetRef?.label ?? `${attachment.type} result`,
         sourceId,
-        ...(resourceRef ? { resourceRef } : {}),
-        ...(documentResourceRef ? { documentResourceRef } : {}),
+        contentLocator,
         ...(intrinsicDimensions ? { intrinsicDimensions } : {}),
       };
       candidates.push(candidate);
@@ -109,8 +109,8 @@ export function collectCreatorVisibleArtifacts(
       role: 'output',
       kind: lifecycle.mediaKind,
       title: `Generated ${lifecycle.mediaKind}`,
-      sourceId: lifecycle.resourceRef.id,
-      resourceRef: lifecycle.resourceRef,
+      sourceId: createContentSourceId(lifecycle.contentLocator),
+      contentLocator: lifecycle.contentLocator,
     });
   }
   const fencedCandidates = extractCompositeContentFenceCandidates(input.assistantMarkdown ?? '');
@@ -207,12 +207,19 @@ function collectReadImageDimensions(
   const dimensions = new Map<string, CanvasWorkspaceArtifactDimensions>();
   for (const image of data['images']) {
     if (!isRecord(image)) continue;
-    const resourceRef = image['resourceRef'];
-    if (!isResourceRef(resourceRef) && !isDocumentArchiveResourceRef(resourceRef)) continue;
+    const contentLocator = image['contentLocator'];
+    if (!isContentLocator(contentLocator)) {
+      if (image['resourceRef'] !== undefined || image['documentResourceRef'] !== undefined) {
+        throw new Error(
+          'creator-visible-artifact-migration-required: ReadImage output requires contentLocator.',
+        );
+      }
+      continue;
+    }
     const width = readPositiveFiniteNumber(image['width']);
     const height = readPositiveFiniteNumber(image['height']);
     if (width === undefined || height === undefined) continue;
-    const identity = createImageResourceIdentity(resourceRef);
+    const identity = contentLocatorKey(contentLocator);
     const existing = dimensions.get(identity);
     if (existing && (existing.width !== width || existing.height !== height)) {
       throw new Error(`ReadImage returned conflicting dimensions for ${identity}.`);
@@ -220,15 +227,6 @@ function collectReadImageDimensions(
     dimensions.set(identity, { width, height });
   }
   return dimensions;
-}
-
-function createImageResourceIdentity(
-  resourceRef: ResourceRef | DocumentArchiveResourceRef | undefined,
-): string {
-  if (!resourceRef) return 'missing';
-  return isResourceRef(resourceRef)
-    ? `resource:${resourceRef.id}`
-    : `document:${hashStableValue(resourceRef)}`;
 }
 
 function readPositiveFiniteNumber(value: unknown): number | undefined {
@@ -320,24 +318,24 @@ function renderTable(table: Readonly<Record<string, unknown>>): string | undefin
 
 function collectReadDocumentSource(data: unknown): CreatorVisibleArtifactCandidate | undefined {
   if (!isRecord(data)) return undefined;
-  const resourceRef = data['resourceRef'];
-  if (!isResourceRef(resourceRef) || !validateDurableResourceRef(resourceRef).ok) return undefined;
-  const id = readNonEmptyString(resourceRef.id);
-  const fingerprint = readNonEmptyString(resourceRef.fingerprint.value);
-  if (!id || !fingerprint) return undefined;
-  const source = resourceRef.source;
-  const title =
-    readNonEmptyString(source.projectRelativePath) ??
-    readNonEmptyString(source.filePath) ??
-    'Document source';
+  const contentLocator = data['contentLocator'];
+  if (!isContentLocator(contentLocator)) {
+    if (data['resourceRef'] !== undefined || data['documentResourceRef'] !== undefined) {
+      throw new Error(
+        'creator-visible-artifact-migration-required: ReadDocument output requires contentLocator.',
+      );
+    }
+    return undefined;
+  }
+  const id = createContentSourceId(contentLocator);
   return {
     artifactId: id,
-    revision: fingerprint,
+    revision: createContentRevision(contentLocator),
     role: 'source',
     kind: 'file-reference',
-    title,
+    title: createContentTitle(contentLocator),
     sourceId: id,
-    resourceRef,
+    contentLocator,
   };
 }
 
@@ -353,13 +351,40 @@ function readNonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+function createContentSourceId(locator: ContentLocator): string {
+  return `content:${hashStableValue(contentLocatorKey(locator))}`;
 }
 
-function resourceRevision(resourceRef: ResourceRef | undefined): string | undefined {
-  if (!resourceRef) return undefined;
-  return resourceRef.fingerprint.strategy === 'hash' ? resourceRef.fingerprint.value : undefined;
+function createContentRevision(locator: ContentLocator): string {
+  switch (locator.kind) {
+    case 'generated-output':
+    case 'package-resource':
+      return locator.revision;
+    case 'workspace-file':
+      return locator.fingerprint?.value ?? `locator:${hashStableValue(contentLocatorKey(locator))}`;
+    case 'document-entry':
+      return (
+        locator.fingerprint?.value ??
+        locator.source.fingerprint?.value ??
+        `locator:${hashStableValue(contentLocatorKey(locator))}`
+      );
+  }
+}
+
+function createContentTitle(locator: ContentLocator): string {
+  switch (locator.kind) {
+    case 'workspace-file':
+    case 'generated-output':
+      return locator.path;
+    case 'document-entry':
+      return locator.entryPath;
+    case 'package-resource':
+      return locator.resourcePath;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function deduplicateCandidates(
@@ -367,38 +392,21 @@ function deduplicateCandidates(
 ): readonly CreatorVisibleArtifactCandidate[] {
   const retained: CreatorVisibleArtifactCandidate[] = [];
   const seen = new Set<string>();
-  const resourceIndexes = new Map<string, number[]>();
+  const contentIndexes = new Map<string, number>();
   const aliases = new Map<string, string>();
 
   for (const candidate of candidates) {
-    if (candidate.resourceRef) {
-      const resourceRef = candidate.resourceRef;
-      const logicalIdentity = createResourceLogicalContentIdentity(resourceRef);
-      const indexes = resourceIndexes.get(logicalIdentity) ?? [];
-      const compatibleIndex = indexes.find((index) => {
-        const existing = retained[index];
-        return (
-          existing?.resourceRef !== undefined &&
-          areResourceRefsContentCompatible(existing.resourceRef, resourceRef)
-        );
-      });
-      if (compatibleIndex !== undefined) {
-        const existing = retained[compatibleIndex];
+    if (candidate.contentLocator) {
+      const identity = contentLocatorKey(candidate.contentLocator);
+      const existingIndex = contentIndexes.get(identity);
+      if (existingIndex !== undefined) {
+        const existing = retained[existingIndex];
         if (!existing) throw new Error('Creator-visible artifact deduplication index is invalid.');
-        if (
-          existing.resourceRef &&
-          compareResourceRefObservationStrength(resourceRef, existing.resourceRef) > 0
-        ) {
-          retained[compatibleIndex] = mergeIntrinsicDimensions(candidate, existing);
-          aliases.set(existing.artifactId, candidate.artifactId);
-        } else {
-          retained[compatibleIndex] = mergeIntrinsicDimensions(existing, candidate);
-          aliases.set(candidate.artifactId, existing.artifactId);
-        }
+        retained[existingIndex] = mergeIntrinsicDimensions(existing, candidate);
+        aliases.set(candidate.artifactId, existing.artifactId);
         continue;
       }
-      indexes.push(retained.length);
-      resourceIndexes.set(logicalIdentity, indexes);
+      contentIndexes.set(identity, retained.length);
       retained.push(candidate);
       continue;
     }

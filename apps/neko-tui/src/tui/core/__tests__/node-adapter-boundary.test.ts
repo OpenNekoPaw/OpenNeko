@@ -40,7 +40,7 @@ describe('TUI Node adapter boundary', () => {
     expect(violations).toEqual([]);
   });
 
-  it('keeps config, tasks, skills, content access, and workspace state on Node/runtime services', () => {
+  it('keeps config, skills, content access, and workspace state on Node/runtime services', () => {
     const platformBootstrap = readFileSync(join(srcRoot, 'core', 'platform-bootstrap.ts'), 'utf8');
     const applicationRuntime = readFileSync(
       join(srcRoot, 'runtime', 'tui-application-runtime.ts'),
@@ -53,7 +53,6 @@ describe('TUI Node adapter boundary', () => {
     const nodeHostAdapter = readFileSync(join(srcRoot, 'host', 'node-host-adapter.ts'), 'utf8');
 
     expect(platformBootstrap).toContain('FileUserConfigManager');
-    expect(platformBootstrap).toContain('taskRecoveryStorage');
     expect(platformBootstrap).not.toContain('tasks.json');
     expect(applicationRuntime).toContain('createAgentTuiApplicationRuntime');
     expect(applicationRuntime).toContain('createConversationStore');
@@ -97,6 +96,7 @@ describe('TUI Node adapter boundary', () => {
     const buildConfig = readFileSync(join(packageRoot, 'tsup.config.ts'), 'utf8');
 
     expect(buildConfig).toMatch(/noExternal:\s*\[[\s\S]*'@neko-canvas\/domain'/u);
+    expect(buildConfig).toMatch(/noExternal:\s*\[[\s\S]*'@neko\/generation'/u);
   });
 });
 

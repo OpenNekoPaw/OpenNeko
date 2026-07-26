@@ -231,16 +231,22 @@
         "icon": "$(comment-add)"
       },
       {
-        "command": "neko.agent.debug.startStreamLifecycleReplay",
-        "title": "%neko.agent.debug.startStreamLifecycleReplay.title%",
+        "command": "neko.agent.debug.startTimelineProjectionAcceptance",
+        "title": "%neko.agent.debug.startTimelineProjectionAcceptance.title%",
         "category": "NekoAgent: Development",
-        "enablement": "neko.agent.streamLifecycleAcceptanceEnabled"
+        "enablement": "neko.agent.timelineProjectionAcceptanceEnabled"
       },
       {
-        "command": "neko.agent.debug.continueStreamLifecycleReplay",
-        "title": "%neko.agent.debug.continueStreamLifecycleReplay.title%",
+        "command": "neko.agent.debug.continueTimelineProjectionAcceptance",
+        "title": "%neko.agent.debug.continueTimelineProjectionAcceptance.title%",
         "category": "NekoAgent: Development",
-        "enablement": "neko.agent.streamLifecycleAcceptanceEnabled"
+        "enablement": "neko.agent.timelineProjectionAcceptanceEnabled"
+      },
+      {
+        "command": "neko.agent.debug.cancelTimelineProjectionAcceptance",
+        "title": "%neko.agent.debug.cancelTimelineProjectionAcceptance.title%",
+        "category": "NekoAgent: Development",
+        "enablement": "neko.agent.timelineProjectionAcceptanceEnabled"
       }
     ],
     "menus": {
@@ -419,13 +425,13 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "pnpm run compile && pnpm run stage:sharp-runtime",
-    "compile": "pnpm run compile:extension && pnpm run compile:webview && pnpm run copy:skills",
-    "compile:extension": "esbuild ./packages/extension/src/index.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --loader:.md=text",
+    "vscode:prepublish": "pnpm run compile",
+    "compile": "pnpm run compile:extension && pnpm run compile:webview && pnpm run copy:skills && pnpm run stage:sharp-runtime",
+    "compile:extension": "esbuild ./packages/extension/src/index.ts --bundle --outfile=dist/extension.js --external:vscode --external:sharp --format=cjs --platform=node --loader:.md=text",
     "compile:webview": "cd packages/webview && pnpm run build && cd ../.. && pnpm run copy:webview",
     "copy:skills": "node scripts/copy-builtin-skills.mjs",
     "copy:webview": "rm -rf dist/webview && mkdir -p dist/webview && cp -r packages/webview/dist/* dist/webview/",
-    "stage:sharp-runtime": "node scripts/stage-sharp-runtime.mjs",
+    "stage:sharp-runtime": "node ../../scripts/stage-sharp-runtime.mjs --output-root dist",
     "watch": "pnpm run compile:extension -- --watch",
     "lint": "eslint packages/extension/src packages/agent/src packages/platform/src packages/webview/src",
     "test": "vitest",

@@ -6,6 +6,8 @@
 
 本文记录 OpenNeko 对 Agent 沙箱、外部命令和用户处理器接口的稳定决策。它补充 [`agent.md`](agent.md)、[`cache-file-access-and-paths.md`](cache-file-access-and-paths.md)、[`webview-media-security.md`](webview-media-security.md) 与 [`marketplace.md`](marketplace.md)。
 
+> 2026-07-23：路径、资源、trust、approval、进程隔离和用户数据保护约束继续有效；五类来源、通用 package registry 和完整 processor extension framework 是否保留，改由 [`adr-agent-runtime-single-authority-and-simplification-boundary.md`](adr-agent-runtime-single-authority-and-simplification-boundary.md) 的真实消费者证明与迁移审计约束。缺少真实多来源消费者时，不得仅为 `developer-mode.one-shot-command` 维持完整通用框架；简化也不得静默删除已有 project/personal manifest。
+
 ## 背景
 
 OpenNeko 是本地 VS Code 创作工具，不是通用 coding agent。Agent 的核心任务是分析图片/文档、生成分镜、驱动 Canvas/Timeline/Asset/Engine typed tools，并把产物保存为可审计的资源引用。图片、视频、音频和脚本处理又确实需要接入 FFmpeg、ImageMagick、Blender、Python 脚本、ComfyUI、RIFE、Real-ESRGAN 等外部工具。

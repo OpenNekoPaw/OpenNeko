@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { parseSendMessageWebviewMessage, parseWebviewToExtensionMessage } from '@neko-agent/types';
-import type { TaskRunScope } from '@neko/shared';
 
 describe('parseSendMessageWebviewMessage', () => {
   it('accepts explicit conversation and model refs', () => {
@@ -150,16 +149,6 @@ describe('parseWebviewToExtensionMessage', () => {
         modelId: 'gpt-4.1',
       }),
     ).toBeNull();
-  });
-
-  it('accepts Task actions only with a complete run scope', () => {
-    const scope = taskScope('task-1');
-    expect(
-      parseWebviewToExtensionMessage({
-        type: 'cancelTask',
-        taskScope: scope,
-      }),
-    ).toEqual({ type: 'cancelTask', taskScope: scope });
   });
 
   it('accepts conversation-scoped message queue commands', () => {
@@ -530,15 +519,5 @@ function createCanonicalStoryboardHandoffFixture() {
         ],
       },
     ],
-  };
-}
-
-function taskScope(childRunId: string): TaskRunScope {
-  return {
-    conversationId: 'conv-1',
-    runId: 'run-1',
-    parentRunId: 'run-1',
-    childRunId,
-    childKind: 'task',
   };
 }

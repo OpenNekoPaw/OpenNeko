@@ -75,14 +75,8 @@ export * from './fountain-script';
 // AI Actions
 export * from './aiAction';
 
-// Task core types (TaskManager interfaces)
 export * from './agent-runtime-scope';
-export * from './task';
 
-// Task Views (Extension ↔ Webview DTO)
-export * from './task-view';
-
-export * from './task-projection';
 export * from './creative-entity-facade';
 export * from './npc-test-bench';
 export * from './media-library-drag';
@@ -119,8 +113,6 @@ export * from './reference-contributor';
 // Agent execution trace contracts
 export * from './agent-trace';
 export * from './agent-token-budget';
-export * from './agent-task-result-observation';
-
 // Memory types (for agent context management)
 export * from './memory';
 
@@ -181,11 +173,6 @@ export * from './context-persistence';
 // Project memory types (cross-session agent memory)
 export * from './project-memory';
 
-// Prompt types (prompt template management)
-export * from './prompt';
-
-// Agent message types (unified message types for Extension ↔ Webview ↔ CLI)
-export * from './agent-message';
 export * from './creative-ai-invocation';
 
 // Media engine types (progressive media processing architecture)
@@ -230,26 +217,6 @@ export * from './character-memory';
 export * from './media-semantic-index';
 export * from './semantic-source';
 export * from './comic-animation-indexing';
-export { QUALITY_ISSUE_CATEGORIES } from './quality';
-export type {
-  AudioTechnicalMetrics,
-  CharacterAppearance,
-  ConsistencyReport,
-  DiagnosticsReport,
-  EvalMediaType,
-  GatePreviewData,
-  IssueSeverity,
-  MediaEvaluation,
-  QualityIssue,
-  QualityIssueCategory,
-  RemediationAction,
-  RemediationActionType,
-  SceneDiagnostic,
-  SceneReviewCard,
-  SceneVerdict,
-  StyleDriftPair,
-  VideoTechnicalMetrics,
-} from './quality';
 export * from './reference-resolution';
 
 // Proxy protocol types (video proxy generation and management)
@@ -278,6 +245,7 @@ export * from './project-cache-search';
 
 // Resource cache contracts (stable refs, variants, manifests, quota)
 export * from './resource-cache';
+export * from './stable-value';
 
 // Intent-aware content access and ingest contracts
 export * from './content-access';
@@ -303,6 +271,7 @@ export * from './loading-tier';
 // Generated asset types (cross-plugin asset reference schema, ADR-4)
 export * from './generated-asset';
 export * from './generated-asset-lifecycle';
+export * from './generated-asset-quality-adapter';
 
 // Character registry types (git-tracked project identity source)
 export * from './character-registry';

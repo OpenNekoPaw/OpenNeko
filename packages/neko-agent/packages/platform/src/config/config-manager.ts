@@ -60,7 +60,11 @@ import {
   projectAssistantConfigReadResultDiagnostic,
   type AssistantConfigDiagnostic,
 } from './config-diagnostic';
-import { modelSupportsPurpose } from './model-purpose-registry';
+import {
+  isAgentModelPurpose,
+  modelSupportsPurpose,
+  type AgentModelPurpose,
+} from './model-purpose-registry';
 import {
   buildAssistantStatusBarPresentation,
   type AssistantStatusBarPresentation,
@@ -535,6 +539,52 @@ export class ConfigManager {
 
   resolveModelRefForPurpose(purpose: string): ModelRefConfig | undefined {
     return this.getDefaultModelPurposeRef(purpose);
+  }
+
+  async setDefaultModelPurposeRefs(
+    updates: Readonly<Partial<Record<AgentModelPurpose, ModelRefConfig>>>,
+  ): Promise<void> {
+    const entries = Object.entries(updates);
+    if (entries.length === 0) {
+      throw new Error('At least one explicit model purpose binding is required.');
+    }
+
+    this.ensureUserConfigManager();
+    this.ensureMerged();
+    for (const [purpose, ref] of entries) {
+      if (!isAgentModelPurpose(purpose)) {
+        throw new Error(`Unknown model purpose: ${purpose}.`);
+      }
+      if (!ref) {
+        throw new Error(`Model purpose ${purpose} requires an exact provider/model reference.`);
+      }
+      const provider = this.providers.get(ref.providerId);
+      const model = this.models.get(ref.modelId);
+      if (!provider || provider.enabled === false) {
+        throw new Error(`Provider ${ref.providerId} is unavailable for purpose ${purpose}.`);
+      }
+      if (!model || model.enabled === false) {
+        throw new Error(
+          `Model ${ref.providerId}/${ref.modelId} is unavailable for purpose ${purpose}.`,
+        );
+      }
+      if (model.providerId !== provider.id) {
+        throw new Error(
+          `Model ${model.id} belongs to provider ${model.providerId}, not ${provider.id}.`,
+        );
+      }
+      if (!modelSupportsPurpose(model, purpose)) {
+        throw new Error(`Model ${provider.id}/${model.id} does not support purpose ${purpose}.`);
+      }
+    }
+
+    await this.userConfigManager!.updateScalars({
+      defaultModelPurposes: {
+        ...(this.getScalar('defaultModelPurposes') ?? {}),
+        ...updates,
+      },
+    });
+    this.reloadConfig();
   }
 
   /**

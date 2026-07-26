@@ -81,7 +81,7 @@ describe('Workspace Board functional acceptance', () => {
     expect(competingEnqueue).toHaveBeenCalledOnce();
     expect(editorAcquire).toHaveBeenCalledOnce();
     expect(competingEnqueue.mock.calls[0]?.[0]).toMatchObject({
-      process: { sourceHost: 'tui', taskId: 'functional-workspace-board-task' },
+      process: { sourceHost: 'tui', operationId: 'functional-workspace-board-operation' },
       target: { workspaceId: 'workspace-id', workspaceUri: 'file:///workspace' },
     });
 
@@ -121,7 +121,7 @@ describe('Workspace Board functional acceptance', () => {
         action: 'project-editor-owner',
         sourceHost: 'vscode',
         assetId: 'functional-conflict-image',
-        taskId: 'functional-conflict-task',
+        operationId: 'functional-conflict-operation',
       }),
     ).resolves.toMatchObject({
       status: 'conflict',
@@ -159,7 +159,7 @@ describe('Workspace Board functional acceptance', () => {
     ]);
   });
 
-  it('can submit fallback and hashed observations of one fixture file', async () => {
+  it('can submit unversioned and fingerprinted locators for one fixture file', async () => {
     const project = vi.fn(async (request) => ({
       version: 2 as const,
       deliveryId: request.process.deliveryId,
@@ -178,16 +178,17 @@ describe('Workspace Board functional acceptance', () => {
     expect(request.artifacts.slice(0, 2)).toMatchObject([
       {
         kind: 'file-reference',
-        resourceRef: {
-          locator: { kind: 'file', path: 'neko/materials/source.epub' },
-          fingerprint: { strategy: 'none', value: 'neko/materials/source.epub' },
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/materials/source.epub',
         },
       },
       {
         kind: 'file-reference',
-        resourceRef: {
-          locator: { kind: 'file', path: 'neko/materials/source.epub' },
-          fingerprint: { strategy: 'hash', value: expect.stringMatching(/^sha256:/u) },
+        contentLocator: {
+          kind: 'workspace-file',
+          path: 'neko/materials/source.epub',
+          fingerprint: { strategy: 'sha256', value: expect.stringMatching(/^sha256:/u) },
         },
       },
     ]);
@@ -230,7 +231,7 @@ async function invoke(
     readonly action: string;
     readonly sourceHost: string;
     readonly assetId: string;
-    readonly taskId: string;
+    readonly operationId: string;
     readonly sourceTitle: string;
     readonly duplicateSourceFileRelativePath: string;
   }> = {},
@@ -244,7 +245,7 @@ async function invoke(
     relativePath: 'neko/generated/image/station.svg',
     title: 'Station concept',
     mimeType: 'image/svg+xml',
-    taskId: 'functional-workspace-board-task',
+    operationId: 'functional-workspace-board-operation',
     generatedAt: '2026-07-15T00:00:00.000Z',
     width: 320,
     height: 180,

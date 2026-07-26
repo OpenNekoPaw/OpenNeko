@@ -19,10 +19,12 @@ import {
   isCreativeEntityKind,
   isEntityFacadeCommandError,
   type AgentContextPayload,
-  type AgentTaskResultFollowUpRequest,
   type CreativeEntityKind,
+  type GeneratedAsset,
+  type GeneratedOutputContentLocator,
 } from '@neko/shared';
-import { buildGlobalErrorMessage, buildThinkingMessage } from '@neko-agent/types';
+import type { GenerationJobPort } from '@neko/generation';
+import { buildErrorMessage, buildGlobalErrorMessage } from '@neko-agent/types';
 import type { IAgentManager } from '../ai/agentManager';
 import { getCanvasSelection } from '../services/canvasAmbientContext';
 import type { IEditorRegistry } from '../editor/common/editorRegistry';
@@ -30,12 +32,8 @@ import { SettingsManager } from './settingsManager';
 import { ProviderManager } from './providerManager';
 import { ConversationBridge } from './conversationBridge';
 import { AttachmentProcessor } from './message/attachmentProcessor';
-import { AgentStreamProcessor } from './message/agentStreamProcessor';
+import { createPiAgentStreamSession } from './message/piAgentStreamProcessor';
 import { MediaPreprocessor } from './message/mediaPreprocessor';
-import type {
-  EntityMemoryContributionAutomationPort,
-  EntityMemoryContributionAutomationResult,
-} from './message/entityMemoryContributionAutomation';
 import {
   executeAgentProjectFileSearch,
   createAgentMessageId,
@@ -48,23 +46,15 @@ import {
   type AgentMessageRuntimeRequest,
   type WorkspaceInputProcessorRuntime,
 } from '@neko/agent/runtime';
-import {
-  createInputProcessor,
-  getConversationWorkDirHash,
-  type InputProcessor,
-  type IRuntimeTaskManager,
-} from '@neko/agent';
+import { createInputProcessor, getConversationWorkDirHash, type InputProcessor } from '@neko/agent';
 import { getLogger } from '../base';
 import {
   getEngineClientProvider,
   type IEngineClientProvider,
 } from '../services/engineClientProvider';
-import { MediaTaskDeliveryHost } from '../services/mediaTaskDeliveryHost';
 import { MediaTurnBridge } from '../services/mediaTurnBridge';
 import { WorkspaceBoardProjectionHost } from '../services/workspaceBoardProjectionHost';
-import type { AgentWorkItemProjectionSource } from '../services/workItemProjectionSource';
 import type { AgentLocalResourceAccess } from '../services/localResourceAccess';
-import type { GeneratedAssetIndex } from '@neko/platform/media/generated-asset-index';
 import { createVSCodeWorkspaceFileReader } from '../services/workspaceFileReader';
 import { searchVSCodeProjectFiles } from '../services/workspaceProjectSearch';
 import { searchProjectMentionCandidates } from '../services/projectMentionSearch';
@@ -78,8 +68,12 @@ import { getCapabilityRuntimeBindings } from '../bootstrap/capabilityBootstrap';
 const logger = getLogger('AgentMessageTurnHandler');
 
 export interface AgentMessageTurnHandlerOptions {
-  readonly generatedAssetIndex?: GeneratedAssetIndex;
   readonly workspaceId?: string;
+  readonly generationJobs?: GenerationJobPort;
+  readonly resolveGenerationResult?: (locator: GeneratedOutputContentLocator) => {
+    readonly path: string;
+    readonly asset: GeneratedAsset;
+  };
 }
 
 export class AgentMessageTurnHandler {
@@ -93,8 +87,6 @@ export class AgentMessageTurnHandler {
         }),
     });
   private readonly _attachmentProcessor: AttachmentProcessor;
-  private readonly _streamProcessor: AgentStreamProcessor;
-  private readonly _mediaDeliveryHost: MediaTaskDeliveryHost;
   private readonly _mediaTurnBridge: MediaTurnBridge;
   private readonly _workspaceBoardProjection: WorkspaceBoardProjectionHost;
   private readonly _agentTurnBridge: AgentTurnBridge;
@@ -112,9 +104,7 @@ export class AgentMessageTurnHandler {
       executionMode: 'auto' | 'ask' | 'plan',
     ) => string,
     private readonly _platform?: Platform,
-    private readonly _taskManager?: IRuntimeTaskManager,
     private readonly _engineClientProvider: IEngineClientProvider = getEngineClientProvider(),
-    private readonly _workItemProjections?: AgentWorkItemProjectionSource,
     private readonly _localResourceAccess?: AgentLocalResourceAccess,
     private readonly _options: AgentMessageTurnHandlerOptions = {},
   ) {
@@ -125,56 +115,39 @@ export class AgentMessageTurnHandler {
       contentAccessRuntime: getCapabilityRuntimeBindings().contentAccessRuntime,
     });
 
-    this._mediaDeliveryHost = new MediaTaskDeliveryHost({
-      platform: this._platform,
-      assetIndex: this._options.generatedAssetIndex,
-      transcodeFile: (inputPath, outputPath, mediaType) =>
-        this._engineClientProvider.transcodeFile(inputPath, outputPath, mediaType),
-      localResourceAccess: this._localResourceAccess,
-    });
     this._mediaTurnBridge = new MediaTurnBridge({
-      platform: this._platform,
-      mediaDeliveryHost: this._mediaDeliveryHost,
-      workItemProjections: this._workItemProjections,
-      localResourceAccess: this._localResourceAccess,
-      conversations: this._conversations,
+      generationJobs: this._options.generationJobs,
+      contentAccessRuntime: getCapabilityRuntimeBindings().contentAccessRuntime,
+      resolveGenerationResult: this._options.resolveGenerationResult,
+      getConversationProjection: (conversationId) => {
+        if (!this._agentManager) {
+          throw new Error('Direct media Timeline projection requires AgentManager.');
+        }
+        return this._agentManager.getOrCreateProjection(conversationId);
+      },
       workspaceBoardProjection: this._workspaceBoardProjection,
-      generateMessageId: () => createAgentMessageId(),
+      checkpointExternalTurn: (input) => this._conversations.checkpointExternalTurn(input),
       now: () => Date.now(),
     });
 
     const agentManager = this._agentManager;
-    this._streamProcessor = new AgentStreamProcessor({
-      platform: this._platform,
-      conversations: this._conversations,
-      transcodeFile: (inputPath, outputPath, mediaType) =>
-        this._engineClientProvider.transcodeFile(inputPath, outputPath, mediaType),
-      mediaDeliveryHost: this._mediaDeliveryHost,
-      workspaceBoardProjection: this._workspaceBoardProjection,
-      workItemProjections: this._workItemProjections,
-      localResourceAccess: this._localResourceAccess,
-      contentAccessRuntime: getCapabilityRuntimeBindings().contentAccessRuntime,
-      getConversationProjection: (conversationId) => {
+    this._agentTurnBridge = new AgentTurnBridge({
+      providers: this._providers,
+      agentManager: this._agentManager,
+      getSystemPrompt: this._getSystemPrompt,
+      createPiStream: (conversationId, messageId, onPhaseChange) => {
         if (!agentManager) {
           throw new Error(
             `Agent stream ${conversationId} requires a conversation runtime projection owner.`,
           );
         }
-        return agentManager.getOrCreateProjection(conversationId);
+        return createPiAgentStreamSession({
+          conversationId,
+          messageId,
+          projection: agentManager.getOrCreateProjection(conversationId),
+          onPhaseChange,
+        });
       },
-      ...(agentManager
-        ? {
-            getContextTokenCount: (conversationId) =>
-              agentManager.getContextTokenCount(conversationId),
-          }
-        : {}),
-      entityMemoryContributionAutomation: createVSCodeEntityMemoryContributionAutomation(),
-    });
-    this._agentTurnBridge = new AgentTurnBridge({
-      providers: this._providers,
-      agentManager: this._agentManager,
-      getSystemPrompt: this._getSystemPrompt,
-      streamProcessor: this._streamProcessor,
       terminalArtifactDelivery: this._workspaceBoardProjection,
       onPhaseChange: ({ conversationId, phase, toolName, timestamp }) =>
         this._updateAgentState(conversationId, phase, toolName, timestamp),
@@ -202,7 +175,6 @@ export class AgentMessageTurnHandler {
 
   clearAgentState(conversationId: string): void {
     this._agentStateRuntime.clear(conversationId);
-    this._streamProcessor.clearConversation(conversationId);
     this._agentTurnBridge.clearPendingTurns(conversationId);
   }
 
@@ -225,6 +197,9 @@ export class AgentMessageTurnHandler {
     }
     await runAgentMessageTurnRuntime({
       request: resolvedRequest,
+      beforePrepareAgentTurn: async ({ conversationId, userInput }) => {
+        await this._conversations.initializeTitleFromUserInput(conversationId, userInput);
+      },
       inputProcessor: this._getInputProcessor(),
       processAttachments: (attachments, options) =>
         this._attachmentProcessor.processAttachments(
@@ -264,23 +239,26 @@ export class AgentMessageTurnHandler {
       postMessage: (message) => {
         void webview.postMessage(message);
       },
-      executeMediaTurn: this._platform?.media
-        ? ({
-            conversationId,
-            prompt,
-            mediaModel,
-            threeReferenceControls,
-            selectedFileReferences,
-          }) =>
-            this._mediaTurnBridge.execute({
-              webview,
+      executeMediaTurn:
+        this._options.generationJobs && this._options.resolveGenerationResult
+          ? ({
               conversationId,
               prompt,
               mediaModel,
-              ...(threeReferenceControls ? { threeReferenceControls } : {}),
-              ...(selectedFileReferences ? { selectedFileReferences } : {}),
-            })
-        : undefined,
+              userMessage,
+              threeReferenceControls,
+              selectedFileReferences,
+            }) =>
+              this._mediaTurnBridge.execute({
+                webview,
+                conversationId,
+                prompt,
+                mediaModel,
+                userMessage,
+                ...(threeReferenceControls ? { threeReferenceControls } : {}),
+                ...(selectedFileReferences ? { selectedFileReferences } : {}),
+              })
+          : undefined,
       executeAgentTurn:
         this._agentManager && this._platform
           ? ({
@@ -330,42 +308,6 @@ export class AgentMessageTurnHandler {
     });
   }
 
-  async handleTaskResultContinuation(
-    webview: vscode.Webview,
-    request: AgentTaskResultFollowUpRequest,
-  ): Promise<void> {
-    if (!this._agentManager || !this._platform) {
-      throw new Error('Cannot dispatch task-result continuation without Agent runtime services');
-    }
-
-    const localizedRequest: AgentMessageRuntimeRequest = {
-      conversationId: request.conversationId,
-      messageText: request.prompt,
-      pendingMessageSource: 'task-result-continuation',
-      sessionMode: 'agent',
-      locale: vscode.env.language,
-    };
-    const turnSettings = this._settings.snapshotForConversation(localizedRequest.conversationId);
-    const resolvedRequest = this._resolveAgentTurnRequest(webview, localizedRequest, turnSettings);
-    if (!resolvedRequest) {
-      return;
-    }
-
-    void webview.postMessage(buildThinkingMessage(resolvedRequest.conversationId));
-    await this._agentTurnBridge.execute({
-      webview,
-      conversationId: resolvedRequest.conversationId,
-      message: resolvedRequest.messageText,
-      pendingMessageSource: 'task-result-continuation',
-      chatModel: resolvedRequest.chatModel,
-      llmRuntimeOptions: resolvedRequest.llmRuntimeOptions,
-      purposeModels: resolvedRequest.purposeModels,
-      executionOverrides: resolvedRequest.executionOverrides,
-      locale: resolvedRequest.locale,
-      settings: turnSettings,
-    });
-  }
-
   private _resolveAgentTurnRequest(
     webview: vscode.Webview,
     request: AgentMessageRuntimeRequest,
@@ -391,7 +333,14 @@ export class AgentMessageTurnHandler {
         conversationId: request.conversationId,
         diagnostics: resolved.diagnostics,
       });
-      void webview.postMessage(buildGlobalErrorMessage(message));
+      void webview.postMessage(
+        request.conversationId
+          ? buildErrorMessage({
+              conversationId: request.conversationId,
+              message,
+            })
+          : buildGlobalErrorMessage(message),
+      );
       return null;
     }
 
@@ -620,7 +569,6 @@ export class AgentMessageTurnHandler {
    * Dispose resources. Flushes asset index to disk.
    */
   dispose(): void {
-    this._streamProcessor.dispose();
     for (const disposable of this._disposables) {
       disposable.dispose();
     }
@@ -655,25 +603,6 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
 
 function readNonEmptyString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function createVSCodeEntityMemoryContributionAutomation(): EntityMemoryContributionAutomationPort {
-  return {
-    async processContribution({ contribution }) {
-      const projectRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-      return vscode.commands.executeCommand<EntityMemoryContributionAutomationResult | undefined>(
-        'neko.entity.processMemoryContribution',
-        {
-          ...(projectRoot ? { projectRoot } : {}),
-          contribution,
-          options: {
-            mode: 'match-only',
-            defaultKind: 'character',
-          },
-        },
-      );
-    },
-  };
 }
 
 function isPathInsideWorkspace(filePath: string, workspaceRoot: string): boolean {

@@ -54,7 +54,7 @@ const slashCommandDisplayGroupOrder: readonly SlashCommandDisplayGroup[] = [
   'command',
 ];
 
-const creationBuiltinCommands = new Set(['skills', 'tools', 'tasks']);
+const creationBuiltinCommands = new Set(['skills', 'tools']);
 
 export function SlashCommandMenu({
   isOpen,

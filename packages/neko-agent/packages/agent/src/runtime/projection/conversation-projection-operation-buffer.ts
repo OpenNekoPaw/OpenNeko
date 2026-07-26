@@ -16,7 +16,7 @@ export function createConversationProjectionOperationBuffer(): ConversationProje
 export function isCoalescibleConversationProjectionOperation(
   operation: AgentTurnTimelineOperation,
 ): boolean {
-  return operation.operation === 'append' || isLatestValueProgress(operation);
+  return operation.operation === 'append';
 }
 
 interface BufferedAppendOperation {
@@ -57,23 +57,7 @@ class DefaultConversationProjectionOperationBuffer implements ConversationProjec
   }
 
   push(operation: AgentTurnTimelineOperation): void {
-    if (isLatestValueProgress(operation)) {
-      const index = this.operations.findIndex(
-        (candidate) =>
-          candidate.kind === 'discrete' &&
-          isLatestValueProgress(candidate.operation) &&
-          candidate.operation.item.itemId === operation.item.itemId,
-      );
-      if (index >= 0) {
-        const existing = this.operations[index];
-        if (!existing || existing.kind !== 'discrete') {
-          throw new Error('Conversation projection operation buffer lost progress identity.');
-        }
-        existing.operation = operation;
-      } else {
-        this.operations.push({ kind: 'discrete', operation });
-      }
-    } else if (operation.operation === 'append') {
+    if (operation.operation === 'append') {
       const previous = this.operations.at(-1);
       if (previous?.kind === 'append' && areCompatibleAppends(previous.operation, operation)) {
         previous.operation = operation;
@@ -139,16 +123,6 @@ function materializeOperation(buffered: BufferedOperation): AgentTurnTimelineOpe
     };
   }
   throw new Error('Conversation projection append has an unsupported item kind.');
-}
-
-function isLatestValueProgress(
-  operation: AgentTurnTimelineOperation,
-): operation is Extract<AgentTurnTimelineOperation, { readonly operation: 'upsert' }> {
-  return (
-    operation.operation === 'upsert' &&
-    (operation.item.kind === 'task' || operation.item.kind === 'media') &&
-    operation.item.status === 'pending'
-  );
 }
 
 function areCompatibleAppends(

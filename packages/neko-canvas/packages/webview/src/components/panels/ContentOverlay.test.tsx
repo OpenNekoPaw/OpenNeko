@@ -1130,6 +1130,13 @@ describe('ContentOverlay', () => {
                 id: 'candidate-output-1',
                 generatedAssetId: 'image/shot-10.png',
                 mimeType: 'image/png',
+                contentLocator: {
+                  kind: 'generated-output',
+                  outputId: 'image/shot-10.png',
+                  revision: 'rev-shot-10',
+                  digest: 'sha256:shot-10',
+                  path: 'neko/generated/image/shot-10.png',
+                },
               },
             ],
             targetRevision: 'target-revision-1',
@@ -1173,7 +1180,7 @@ describe('ContentOverlay', () => {
     ).not.toBeNull();
     expect(host.textContent).toContain('Creative AI candidates');
     expect(host.textContent).toContain('Generate image');
-    expect(host.textContent).toContain('Resource: generated-assets/image/shot-10.png');
+    expect(host.textContent).toContain('Resource: neko/generated/image/shot-10.png');
 
     for (const action of ['accept', 'reject', 'retry', 'delete', 'inspect']) {
       const button = host.querySelector<HTMLButtonElement>(

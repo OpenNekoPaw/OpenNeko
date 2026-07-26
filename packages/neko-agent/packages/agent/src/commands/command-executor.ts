@@ -24,7 +24,6 @@ import {
   handleSkills,
   handleCommands,
   handleTools,
-  handleTasks,
   handleMcp,
 } from './handlers';
 
@@ -62,7 +61,6 @@ const COMMAND_HANDLERS: Record<BuiltinCommandName, CommandHandler> = {
   skills: handleSkills,
   commands: handleCommands,
   tools: handleTools,
-  tasks: handleTasks,
   mcp: handleMcp,
 };
 

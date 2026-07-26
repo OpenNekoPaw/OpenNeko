@@ -2213,9 +2213,6 @@ function createStoryboardActionIntent(
     ...(promptState?.referenceMedia ? { referenceMedia: promptState.referenceMedia } : {}),
     ...(promptState?.generationParams ? { generationParams: promptState.generationParams } : {}),
     expectedNextStateId: row.stateId,
-    ...(promptState?.nextCreativeState?.taskRef
-      ? { taskRef: promptState.nextCreativeState.taskRef }
-      : {}),
     ...(promptState?.nextCreativeState?.resultRef
       ? { resultRef: promptState.nextCreativeState.resultRef }
       : {}),

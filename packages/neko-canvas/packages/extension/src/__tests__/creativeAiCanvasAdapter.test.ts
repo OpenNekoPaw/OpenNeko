@@ -14,7 +14,6 @@ import {
   buildCanvasGeneratedImageTargetRef,
   CanvasCreativeAiApplyAdapter,
   CANVAS_GENERATED_ASSET_FIELD_PATH,
-  CANVAS_GENERATED_IMAGE_FIELD_PATH,
   CANVAS_GENERATED_VIDEO_ASSET_FIELD_PATH,
   createCanvasDocumentRevision,
   createCanvasTargetRevision,
@@ -56,6 +55,13 @@ function outputRef(overrides: Partial<CreativeAiOutputRef> = {}): CreativeAiOutp
     id: 'output-1',
     generatedAssetId: 'image/shot-1.png',
     mimeType: 'image/png',
+    contentLocator: {
+      kind: 'generated-output',
+      outputId: 'image/shot-1.png',
+      revision: 'rev-shot-1',
+      digest: 'sha256:shot-1',
+      path: 'neko/generated/image/shot-1.png',
+    },
     ...overrides,
   };
 }
@@ -207,7 +213,7 @@ describe('Canvas creative AI adapter', () => {
   it('applies stable generated asset outputs through the Canvas node update port', async () => {
     const node = shotNode('shot-1');
     const targetRef = buildCanvasGeneratedImageTargetRef({ documentRef, node });
-    const targetRevision = createCanvasTargetRevision(node, CANVAS_GENERATED_IMAGE_FIELD_PATH);
+    const targetRevision = createCanvasTargetRevision(node, CANVAS_GENERATED_ASSET_FIELD_PATH);
     const updateNode = vi.fn(async () => undefined);
     const adapter = new CanvasCreativeAiApplyAdapter({
       getNode: vi.fn(async () => node),
@@ -218,11 +224,14 @@ describe('Canvas creative AI adapter', () => {
 
     expect(result.ok).toBe(true);
     expect(updateNode).toHaveBeenCalledWith('shot-1', {
-      generatedImage: 'generated-assets/image/shot-1.png',
       generatedAsset: expect.objectContaining({
+        type: 'generated-image',
         id: 'image/shot-1.png',
-        path: 'generated-assets/image/shot-1.png',
         mimeType: 'image/png',
+        contentLocator: expect.objectContaining({
+          kind: 'generated-output',
+          path: 'neko/generated/image/shot-1.png',
+        }),
       }),
     });
   });
@@ -230,7 +239,7 @@ describe('Canvas creative AI adapter', () => {
   it('returns existing apply result for duplicate idempotency keys', async () => {
     const node = shotNode('shot-1');
     const targetRef = buildCanvasGeneratedImageTargetRef({ documentRef, node });
-    const targetRevision = createCanvasTargetRevision(node, CANVAS_GENERATED_IMAGE_FIELD_PATH);
+    const targetRevision = createCanvasTargetRevision(node, CANVAS_GENERATED_ASSET_FIELD_PATH);
     const updateNode = vi.fn(async () => undefined);
     const adapter = new CanvasCreativeAiApplyAdapter({
       getNode: vi.fn(async () => node),
@@ -245,10 +254,10 @@ describe('Canvas creative AI adapter', () => {
   });
 
   it('rejects stale target revisions without mutating Canvas state', async () => {
-    const node = shotNode('shot-1', { data: { generatedImage: 'newer.png' } });
-    const staleNode = shotNode('shot-1', { data: { generatedImage: 'old.png' } });
+    const node = shotNode('shot-1', { data: { generatedAsset: { id: 'newer' } } });
+    const staleNode = shotNode('shot-1', { data: { generatedAsset: { id: 'old' } } });
     const targetRef = buildCanvasGeneratedImageTargetRef({ documentRef, node: staleNode });
-    const staleRevision = createCanvasTargetRevision(staleNode, CANVAS_GENERATED_IMAGE_FIELD_PATH);
+    const staleRevision = createCanvasTargetRevision(staleNode, CANVAS_GENERATED_ASSET_FIELD_PATH);
     const updateNode = vi.fn(async () => undefined);
     const adapter = new CanvasCreativeAiApplyAdapter({
       getNode: vi.fn(async () => node),
@@ -278,7 +287,7 @@ describe('Canvas creative AI adapter', () => {
     const batch = await adapter.applyBatch([
       applyRequest(
         firstTarget,
-        createCanvasTargetRevision(node, CANVAS_GENERATED_IMAGE_FIELD_PATH),
+        createCanvasTargetRevision(node, CANVAS_GENERATED_ASSET_FIELD_PATH),
         {
           requestId: 'apply-1',
           idempotencyKey: 'apply-key-1',
@@ -286,7 +295,7 @@ describe('Canvas creative AI adapter', () => {
       ),
       applyRequest(
         secondTarget,
-        createCanvasTargetRevision(missing, CANVAS_GENERATED_IMAGE_FIELD_PATH),
+        createCanvasTargetRevision(missing, CANVAS_GENERATED_ASSET_FIELD_PATH),
         {
           requestId: 'apply-2',
           idempotencyKey: 'apply-key-2',
@@ -319,7 +328,7 @@ describe('Canvas creative AI adapter', () => {
     const batch = await adapter.applyBatch([
       applyRequest(
         missingTarget,
-        createCanvasTargetRevision(missing, CANVAS_GENERATED_IMAGE_FIELD_PATH),
+        createCanvasTargetRevision(missing, CANVAS_GENERATED_ASSET_FIELD_PATH),
         {
           requestId: 'apply-1',
           idempotencyKey: 'apply-key-1',
@@ -328,7 +337,7 @@ describe('Canvas creative AI adapter', () => {
       ),
       applyRequest(
         nextTarget,
-        createCanvasTargetRevision(next, CANVAS_GENERATED_IMAGE_FIELD_PATH),
+        createCanvasTargetRevision(next, CANVAS_GENERATED_ASSET_FIELD_PATH),
         {
           requestId: 'apply-2',
           idempotencyKey: 'apply-key-2',
@@ -381,7 +390,7 @@ describe('Canvas creative AI adapter', () => {
     const result = await adapter.apply({
       ...applyRequest(
         buildCanvasGeneratedImageTargetRef({ documentRef, node }),
-        createCanvasTargetRevision(node, CANVAS_GENERATED_IMAGE_FIELD_PATH),
+        createCanvasTargetRevision(node, CANVAS_GENERATED_ASSET_FIELD_PATH),
       ),
       targetRef: undefined,
       candidateTargetRef,
@@ -466,7 +475,7 @@ describe('Canvas creative AI adapter', () => {
       'shot-1',
       expect.objectContaining({
         generatedAsset: expect.objectContaining({
-          path: 'generated-assets/image/shot-1.png',
+          contentLocator: expect.objectContaining({ path: 'neko/generated/image/shot-1.png' }),
         }),
         creativeAiCandidates: expect.objectContaining({
           [candidateTargetRef.id]: expect.objectContaining({ status: 'promoted' }),
@@ -578,7 +587,9 @@ describe('Canvas creative AI adapter', () => {
     expect(updateNode).toHaveBeenLastCalledWith(
       'shot-1',
       expect.objectContaining({
-        generatedAsset: expect.objectContaining({ path: 'generated-assets/image/shot-1.png' }),
+        generatedAsset: expect.objectContaining({
+          contentLocator: expect.objectContaining({ path: 'neko/generated/image/shot-1.png' }),
+        }),
         creativeAiCandidates: expect.objectContaining({
           [candidateTargetRef.id]: expect.objectContaining({
             status: 'promoted',
@@ -665,7 +676,7 @@ describe('Canvas creative AI adapter', () => {
     });
 
     const result = await adapter.apply(
-      applyRequest(targetRef, createCanvasTargetRevision(node, CANVAS_GENERATED_IMAGE_FIELD_PATH), {
+      applyRequest(targetRef, createCanvasTargetRevision(node, CANVAS_GENERATED_ASSET_FIELD_PATH), {
         outputRefs: [
           outputRef({
             generatedAssetId: 'asset-1',

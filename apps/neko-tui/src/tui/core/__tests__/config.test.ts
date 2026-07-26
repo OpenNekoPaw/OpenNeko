@@ -108,9 +108,15 @@ vi.mock('@neko/platform', () => ({
         executionMode:
           state.workspaceConfig.executionMode ?? state.userConfig.executionMode ?? 'ask',
         defaultMediaModels: {
-          image: toOptionId(state.workspaceConfig.defaultModels?.image),
-          video: toOptionId(state.workspaceConfig.defaultModels?.video),
-          audio: toOptionId(state.workspaceConfig.defaultModels?.audio),
+          image: toOptionId(
+            state.workspaceConfig.defaultModels?.image ?? state.userConfig.defaultModels?.image,
+          ),
+          video: toOptionId(
+            state.workspaceConfig.defaultModels?.video ?? state.userConfig.defaultModels?.video,
+          ),
+          audio: toOptionId(
+            state.workspaceConfig.defaultModels?.audio ?? state.userConfig.defaultModels?.audio,
+          ),
         },
         mcpServers: this.getEnabledMCPServers(),
         diagnostics: [],
@@ -395,6 +401,22 @@ describe('loadConfig', () => {
           }
         : model,
     );
+    state.models.push(
+      {
+        id: 'local-image',
+        name: 'local-image',
+        providerId: 'local',
+        type: 'image',
+        capabilities: ['text_to_image'],
+      },
+      {
+        id: 'gateway-image',
+        name: 'gateway-image',
+        providerId: 'gateway',
+        type: 'image',
+        capabilities: ['text_to_image'],
+      },
+    );
 
     const config = loadConfig('/tmp/project');
 
@@ -428,6 +450,66 @@ describe('loadConfig', () => {
       contextWindow: 256000,
       maxOutputTokens: 128000,
     });
+    expect(config.purposeModels?.['image.generate']).toEqual({
+      purpose: 'image.generate',
+      providerId: 'local',
+      modelId: 'local-image',
+      apiModelId: 'local-image',
+      category: 'image',
+      capabilities: ['text_to_image'],
+      baseUrl: 'http://localhost:11434/api',
+      protocolProfile: 'ollama',
+      providerRequiresApiKey: false,
+      providerAuth: { type: 'provider-default' },
+    });
+  });
+
+  it('prefers an explicit generation purpose over the media category default', () => {
+    state.userConfig = {
+      defaultModels: {
+        llm: { providerId: 'local', modelId: 'local-chat' },
+        image: { providerId: 'local', modelId: 'local-image' },
+      },
+      defaultModelPurposes: {
+        'image.generate': { providerId: 'gateway', modelId: 'gateway-image' },
+      },
+    };
+    state.models.push({
+      id: 'gateway-image',
+      name: 'flux-pro',
+      providerId: 'gateway',
+      type: 'image',
+      capabilities: ['image.generate'],
+    });
+
+    const config = loadConfig('/tmp/project');
+
+    expect(config.purposeModels?.['image.generate']).toMatchObject({
+      providerId: 'gateway',
+      modelId: 'gateway-image',
+      apiModelId: 'flux-pro',
+    });
+  });
+
+  it('does not project an incompatible media category default as a generation purpose', () => {
+    state.userConfig = {
+      defaultModels: {
+        llm: { providerId: 'local', modelId: 'local-chat' },
+        audio: { providerId: 'gateway', modelId: 'music-model' },
+      },
+    };
+    state.models.push({
+      id: 'music-model',
+      name: 'music-model',
+      providerId: 'gateway',
+      type: 'audio',
+      capabilities: ['text_to_music'],
+    });
+
+    const config = loadConfig('/tmp/project');
+
+    expect(config.defaultMediaModels?.audio).toBe('gateway:music-model');
+    expect(config.purposeModels ?? {}).not.toHaveProperty('audio.generate');
   });
 
   it('projects a flat domain generation purpose without Pi token metadata', () => {

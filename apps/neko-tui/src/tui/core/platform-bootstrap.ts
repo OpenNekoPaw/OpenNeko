@@ -7,17 +7,14 @@
  */
 
 import {
+  createContentReadMediaRequestAssetMaterializer,
   createPlatform,
   FileUserConfigManager,
   type Platform,
 } from '@neko/platform';
-import { TaskManager, type IRuntimeTaskManager } from '@neko/agent';
-import type {
-  ITaskRecoveryStorage,
-  ITaskStorage,
-  IToolRegistry,
-} from '@neko/shared';
+import type { IToolRegistry } from '@neko/shared';
 import { getEnvKeyMap } from '@neko/shared';
+import { createNodeHostContentReadService } from '@neko/shared/content-access';
 
 // Shared env var mapping from @neko/shared/config/credential-resolver
 const ENV_KEY_MAP = getEnvKeyMap();
@@ -25,24 +22,10 @@ const ENV_KEY_MAP = getEnvKeyMap();
 export interface CLIPlatformOptions {
   workspacePath?: string;
   toolRegistry: IToolRegistry;
-  taskManager: IRuntimeTaskManager;
 }
 
 export interface CLIPlatformResult {
   platform: Platform;
-  taskManager: IRuntimeTaskManager;
-}
-
-export interface CLITaskManagerOptions {
-  readonly taskStorage: ITaskStorage;
-  readonly taskRecoveryStorage: ITaskRecoveryStorage;
-}
-
-export function createCLITaskManager(options: CLITaskManagerOptions): IRuntimeTaskManager {
-  return new TaskManager({
-    storage: options.taskStorage,
-    recoveryStorage: options.taskRecoveryStorage,
-  });
 }
 
 /**
@@ -74,13 +57,20 @@ function collectEnvApiKeys(): Record<string, string> {
 export function createCLIPlatform(options: CLIPlatformOptions): CLIPlatformResult {
   const userConfigManager = new FileUserConfigManager();
 
-  const taskManager = options.taskManager;
-
   const platform = createPlatform({
     userConfigManager,
     workspacePath: options.workspacePath,
     toolRegistry: options.toolRegistry,
-    taskManager,
+    ...(options.workspacePath
+      ? {
+          requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
+            contentRead: createNodeHostContentReadService({
+              workspaceRoot: options.workspacePath,
+            }),
+            encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
+          }),
+        }
+      : {}),
   });
 
   // Inject env var API keys at runtime (not persisted)
@@ -105,8 +95,5 @@ export function createCLIPlatform(options: CLIPlatformOptions): CLIPlatformResul
     }
   }
 
-  return {
-    platform,
-    taskManager,
-  };
+  return { platform };
 }

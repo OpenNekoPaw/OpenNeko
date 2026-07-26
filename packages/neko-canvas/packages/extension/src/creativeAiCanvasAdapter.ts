@@ -33,7 +33,6 @@ import {
 } from '@neko/shared';
 
 export const CANVAS_CREATIVE_AI_INVOKE_EXTERNAL_COMMAND = 'neko.canvas.creativeAi.invokeExternal';
-export const CANVAS_GENERATED_IMAGE_FIELD_PATH = '/generatedImage';
 export const CANVAS_GENERATED_ASSET_FIELD_PATH = '/generatedAsset';
 export const CANVAS_GENERATED_VIDEO_ASSET_FIELD_PATH = '/generatedVideoAsset';
 const CANVAS_IMAGE_PROMPT_DOCUMENT_FIELD_PATH =
@@ -286,7 +285,6 @@ export function buildCanvasCreativeActionExternalInvocation(
     targetRevision,
     routing: {
       associationKey,
-      allowCreateBackgroundConversation: true,
     },
     idempotencyKey,
     requestedAt,
@@ -636,13 +634,13 @@ function createCanvasCreativeActionIntent(actionId: CanvasCreativeAiActionId): s
     case 'optimize-video-prompt':
       return 'Optimize the Canvas shot video prompt, including dialogue, sound, motion, and camera instructions, and return a candidate prompt document.';
     case 'generate-image':
-      return 'Generate a stable image ResourceRef candidate for the Canvas shot.';
+      return 'Generate a stable image content locator candidate for the Canvas shot.';
     case 'edit-image':
-      return 'Edit the Canvas shot image using declared reference media and return a stable image ResourceRef candidate.';
+      return 'Edit the Canvas shot image using declared reference media and return a stable image content locator candidate.';
     case 'generate-video':
-      return 'Generate a stable video ResourceRef candidate for the Canvas shot.';
+      return 'Generate a stable video content locator candidate for the Canvas shot.';
     case 'edit-video':
-      return 'Edit the Canvas shot video using declared reference media and return a stable video ResourceRef candidate.';
+      return 'Edit the Canvas shot video using declared reference media and return a stable video content locator candidate.';
   }
 }
 
@@ -714,7 +712,7 @@ export function buildCanvasGeneratedImageTargetRef(input: {
   readonly childNodeId?: string;
   readonly fieldPath?: string;
 }): CreativeAiTargetRef {
-  const fieldPath = input.fieldPath ?? CANVAS_GENERATED_IMAGE_FIELD_PATH;
+  const fieldPath = input.fieldPath ?? CANVAS_GENERATED_ASSET_FIELD_PATH;
   const entityId = input.childNodeId ?? input.node.id;
   return {
     kind: 'canvas-field',
@@ -1416,7 +1414,7 @@ export class CanvasCreativeAiApplyAdapter {
         diagnostics: [
           diagnostic(
             'creative-ai-canvas-target-field-conflict',
-            'Canvas generated-image apply can only write /generatedImage.',
+            'Canvas generated-image apply can only write /generatedAsset.',
             'targetRef.fieldPath',
           ),
         ],
@@ -1546,8 +1544,8 @@ function readJsonPointer(
 }
 
 function normalizeCanvasGeneratedImageFieldPath(fieldPath: string | undefined): string | null {
-  if (!fieldPath || fieldPath === CANVAS_GENERATED_IMAGE_FIELD_PATH) {
-    return CANVAS_GENERATED_IMAGE_FIELD_PATH;
+  if (!fieldPath || fieldPath === CANVAS_GENERATED_ASSET_FIELD_PATH) {
+    return CANVAS_GENERATED_ASSET_FIELD_PATH;
   }
   return null;
 }
@@ -1572,26 +1570,14 @@ function projectCanvasGeneratedImageOutput(
     };
   }
 
-  const variantResource = outputRef.resourceVariantRef?.resource;
-  const variantPath =
-    variantResource?.source.projectRelativePath ??
-    (variantResource?.locator?.kind === 'file' ? variantResource.locator.path : undefined);
-  const resourcePath =
-    variantPath ??
-    outputRef.resourceRef?.source.projectRelativePath ??
-    (outputRef.resourceRef?.locator?.kind === 'file'
-      ? outputRef.resourceRef.locator.path
-      : undefined) ??
-    (outputRef.generatedAssetId ? `generated-assets/${outputRef.generatedAssetId}` : undefined);
-
-  if (!resourcePath || isRuntimeOnlyCreativeAiIdentityValue(resourcePath)) {
+  if (!outputRef.contentLocator) {
     return {
       ok: false,
       diagnostics: [
         diagnostic(
           'creative-ai-canvas-unstable-output-ref',
-          'Canvas generated-image apply requires a stable generated asset or resource path.',
-          'outputRefs',
+          'Canvas generated-image apply requires a stable contentLocator.',
+          'outputRefs.contentLocator',
         ),
       ],
     };
@@ -1600,16 +1586,12 @@ function projectCanvasGeneratedImageOutput(
   return {
     ok: true,
     data: {
-      generatedImage: resourcePath,
       generatedAsset: {
-        id: outputRef.generatedAssetId ?? outputRef.resourceRef?.id ?? outputRef.id,
-        path: resourcePath,
+        type: 'generated-image',
+        id: outputRef.generatedAssetId ?? outputRef.id,
         kind: outputRef.kind,
+        contentLocator: outputRef.contentLocator,
         ...(outputRef.mimeType ? { mimeType: outputRef.mimeType } : {}),
-        ...(outputRef.resourceRef ? { resourceRef: outputRef.resourceRef } : {}),
-        ...(outputRef.resourceVariantRef
-          ? { resourceVariantRef: outputRef.resourceVariantRef }
-          : {}),
       },
     },
   };
@@ -1633,8 +1615,6 @@ function projectCanvasOutputForTarget(
     };
   }
   switch (targetRef.fieldPath) {
-    case CANVAS_GENERATED_IMAGE_FIELD_PATH:
-      return projectCanvasGeneratedImageOutput(outputRef);
     case CANVAS_GENERATED_ASSET_FIELD_PATH:
       return projectCanvasGeneratedAssetOutput(outputRef, 'image');
     case CANVAS_GENERATED_VIDEO_ASSET_FIELD_PATH:
@@ -1677,26 +1657,24 @@ function projectCanvasGeneratedAssetOutput(
       ],
     };
   }
-  const resourcePath = resolveStableOutputResourcePath(outputRef);
-  if (!resourcePath || isRuntimeOnlyCreativeAiIdentityValue(resourcePath)) {
+  if (!outputRef.contentLocator) {
     return {
       ok: false,
       diagnostics: [
         diagnostic(
           'creative-ai-canvas-unstable-output-ref',
-          'Canvas media promotion requires a stable generated asset or resource path.',
-          'outputRefs',
+          'Canvas media promotion requires a stable contentLocator.',
+          'outputRefs.contentLocator',
         ),
       ],
     };
   }
   const asset = {
-    id: outputRef.generatedAssetId ?? outputRef.resourceRef?.id ?? outputRef.id,
-    path: resourcePath,
+    type: mediaKind === 'image' ? ('generated-image' as const) : ('generated-video' as const),
+    id: outputRef.generatedAssetId ?? outputRef.id,
     kind: outputRef.kind,
+    contentLocator: outputRef.contentLocator,
     ...(outputRef.mimeType ? { mimeType: outputRef.mimeType } : {}),
-    ...(outputRef.resourceRef ? { resourceRef: outputRef.resourceRef } : {}),
-    ...(outputRef.resourceVariantRef ? { resourceVariantRef: outputRef.resourceVariantRef } : {}),
   };
   return {
     ok: true,
@@ -1759,19 +1737,6 @@ function projectCanvasPromptDocumentOutput(
       },
     },
   };
-}
-
-function resolveStableOutputResourcePath(outputRef: CreativeAiOutputRef): string | undefined {
-  const variantResource = outputRef.resourceVariantRef?.resource;
-  return (
-    variantResource?.source.projectRelativePath ??
-    (variantResource?.locator?.kind === 'file' ? variantResource.locator.path : undefined) ??
-    outputRef.resourceRef?.source.projectRelativePath ??
-    (outputRef.resourceRef?.locator?.kind === 'file'
-      ? outputRef.resourceRef.locator.path
-      : undefined) ??
-    (outputRef.generatedAssetId ? `generated-assets/${outputRef.generatedAssetId}` : undefined)
-  );
 }
 
 function readCanvasCreativeAiCandidates(

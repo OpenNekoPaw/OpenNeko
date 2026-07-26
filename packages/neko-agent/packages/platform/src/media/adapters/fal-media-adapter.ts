@@ -16,10 +16,10 @@ import type { Model, Provider } from '../../types/provider';
 import type {
   MediaGenerationType,
   MediaAdapterResult,
-  MediaTaskStatus,
-  ImageGenerationRequest,
+  MediaOperationStatus,
+  MaterializedImageGenerationRequest,
   MediaOutput,
-} from '../types';
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 // =============================================================================
@@ -71,7 +71,7 @@ const FAL_QUEUE_BASE = 'https://queue.fal.run';
 export class FalMediaAdapter extends BaseMediaAdapter {
   readonly type = 'fal';
 
-  private static readonly STATUS_MAP: Record<string, MediaTaskStatus> = {
+  private static readonly STATUS_MAP: Record<string, MediaOperationStatus> = {
     IN_QUEUE: 'pending',
     IN_PROGRESS: 'processing',
     COMPLETED: 'completed',
@@ -104,8 +104,8 @@ export class FalMediaAdapter extends BaseMediaAdapter {
   // Image Generation
   // ===========================================================================
 
-  override async generateImage(
-    request: ImageGenerationRequest,
+  async generateImage(
+    request: MaterializedImageGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -137,10 +137,7 @@ export class FalMediaAdapter extends BaseMediaAdapter {
   // Task Status
   // ===========================================================================
 
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const [modelId, requestId] = this.parseTaskId(externalTaskId);
 
     // First check status
@@ -199,12 +196,12 @@ export class FalMediaAdapter extends BaseMediaAdapter {
   // Cancel
   // ===========================================================================
 
-  override async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
+  async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
     const [modelId, requestId] = this.parseTaskId(externalTaskId);
     // fal.ai uses PUT for cancel (not POST/DELETE)
-    await this.request(
+    await this.requestSimple<unknown>(
       `${FAL_QUEUE_BASE}/${modelId}/requests/${requestId}/cancel`,
-      { method: 'PUT' },
+      'PUT',
       provider,
     );
   }
@@ -217,7 +214,7 @@ export class FalMediaAdapter extends BaseMediaAdapter {
    * Select the fal.ai model endpoint based on request fields.
    * Priority: controlMode → ipAdapter → img2img → default model.
    */
-  private resolveModelId(request: ImageGenerationRequest, model: Model): string {
+  private resolveModelId(request: MaterializedImageGenerationRequest, model: Model): string {
     // ControlNet mode takes highest priority
     if (request.controlImageBase64 && request.controlMode) {
       return CONTROLNET_MODEL_MAP[request.controlMode] ?? 'fal-ai/flux-general/controlnet';
@@ -240,7 +237,7 @@ export class FalMediaAdapter extends BaseMediaAdapter {
   /**
    * Build the request body for fal.ai image generation.
    */
-  private buildImageBody(request: ImageGenerationRequest): Record<string, unknown> {
+  private buildImageBody(request: MaterializedImageGenerationRequest): Record<string, unknown> {
     const input: Record<string, unknown> = {
       prompt: request.prompt,
     };

@@ -10,6 +10,7 @@ function textItem(content: string, revision: number): AgentTurnTimelineAssistant
   return {
     conversationId: 'conversation-a',
     turnId: 'turn-a',
+    runId: 'run-a',
     messageId: 'message-a',
     itemId: 'text-a',
     sequence: 1,
@@ -73,6 +74,7 @@ describe('conversation projection patch application', () => {
       baseProjectionVersion: 0,
       projectionVersion: 1,
       turnId: 'turn-a',
+      runId: 'run-a',
       messageId: 'message-a',
       operations: [{ operation: 'append', item: textItem('first', 1) }],
     });
@@ -95,10 +97,54 @@ describe('conversation projection patch application', () => {
           baseProjectionVersion: 1,
           projectionVersion: 3,
           turnId: 'turn-a',
+          runId: 'run-a',
           messageId: 'message-a',
           operations: [{ operation: 'append', item: textItem('gap', 1) }],
         },
       ),
     ).toThrow(/patch base mismatch/);
+  });
+
+  it('rejects an empty or changed run owner before applying item operations', () => {
+    const snapshot = applyConversationProjectionPatch(
+      { conversationId: 'conversation-a', projectionVersion: 0, turns: [] },
+      {
+        type: 'conversationProjectionPatch',
+        conversationId: 'conversation-a',
+        baseProjectionVersion: 0,
+        projectionVersion: 1,
+        turnId: 'turn-a',
+        runId: 'run-a',
+        messageId: 'message-a',
+        operations: [{ operation: 'append', item: textItem('first', 1) }],
+      },
+    );
+
+    expect(() =>
+      applyConversationProjectionPatch(snapshot, {
+        type: 'conversationProjectionPatch',
+        conversationId: 'conversation-a',
+        baseProjectionVersion: 1,
+        projectionVersion: 2,
+        turnId: 'turn-a',
+        runId: '',
+        messageId: 'message-a',
+        operations: [],
+        completion: { status: 'completed', completedAt: 2 },
+      }),
+    ).toThrow(/runId is required/);
+    expect(() =>
+      applyConversationProjectionPatch(snapshot, {
+        type: 'conversationProjectionPatch',
+        conversationId: 'conversation-a',
+        baseProjectionVersion: 1,
+        projectionVersion: 2,
+        turnId: 'turn-a',
+        runId: 'run-b',
+        messageId: 'message-a',
+        operations: [],
+        completion: { status: 'completed', completedAt: 2 },
+      }),
+    ).toThrow(/owned by run-a\/message-a/);
   });
 });

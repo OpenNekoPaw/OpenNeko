@@ -22,9 +22,9 @@ describe('AgentConversationMessageQueue', () => {
 
     queue.enqueue({ content: ' first ', source: 'user', now: 10 });
     queue.enqueue({
-      content: 'continue task',
-      source: 'task-result-continuation',
-      metadata: { taskId: 'task-1', status: 'queued' },
+      content: 'continue system work',
+      source: 'system-continuation',
+      metadata: { runId: 'run-1', status: 'queued' },
       now: 11,
     });
 
@@ -41,9 +41,9 @@ describe('AgentConversationMessageQueue', () => {
         }),
         expect.objectContaining({
           id: 'queue-2',
-          source: 'task-result-continuation',
-          displayKind: 'task-continuation',
-          metadata: { taskId: 'task-1', status: 'queued' },
+          source: 'system-continuation',
+          displayKind: 'system-continuation',
+          metadata: { runId: 'run-1', status: 'queued' },
         }),
       ],
     });
@@ -57,7 +57,7 @@ describe('AgentConversationMessageQueue', () => {
       now: () => 1000,
     });
     queue.enqueue({ content: 'first user', source: 'user' });
-    queue.enqueue({ content: 'continue', source: 'task-result-continuation' });
+    queue.enqueue({ content: 'continue', source: 'system-continuation' });
     queue.enqueue({ content: 'promoted user', source: 'user' });
     queue.promote('user-2');
 

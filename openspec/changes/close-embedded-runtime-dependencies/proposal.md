@@ -7,7 +7,7 @@ The unified OpenNeko VSIX embeds feature payloads but excludes `node_modules`, w
 - Load the packaged Engine N-API module from the Engine feature's scoped absolute path instead of the unresolved `@neko-engine/host-napi` package name.
 - Materialize the complete macOS Engine Mach-O dependency closure and reject Homebrew or other host-local load paths in packaged artifacts.
 - Make `@neko/content` own a literal, statically bundled loader map for every parser/archive/network module used by its document runtime and route Agent/Assets through it.
-- Stage exactly the current platform's Sharp binding and libvips packages inside the Agent feature payload.
+- Keep Sharp outside CommonJS bundles and stage its JavaScript/runtime dependency closure plus exactly the current platform's binding and libvips packages inside every owning Extension Host payload.
 - Add a feature-owned runtime closure manifest and a generic application assembler check that rejects missing, cross-target, workspace-resolved, or internal bare runtime dependencies.
 - Add final payload and Extension Development Host acceptance so an installable VSIX, rather than source tests alone, proves closure completeness.
 - Remove stale Sharp externals/dependencies from Cut and Tools where no production caller exists.
@@ -24,6 +24,6 @@ None.
 
 ## Impact
 
-- Affects Engine extension loading, shared Content document-module ownership, Agent packaging, OpenNeko platform assembly, and release orchestration tests.
+- Affects Engine extension loading, shared Content document-module ownership, Agent and unified-host packaging, OpenNeko platform assembly, and release orchestration tests.
 - Does not change Engine N-API exports, document contracts, Agent tool schemas, project formats, or Webview protocols.
 - Release/install risk is L4 because missing runtime files can prevent activation or break core image/document workflows only after installation.

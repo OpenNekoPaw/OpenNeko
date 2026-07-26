@@ -50,11 +50,15 @@ describe('tab display presenter', () => {
     const projected = projectDisplayTabs({
       openTabs: tabs,
       conversations: [{ id: 'conv-2', title: 'Done', messageCount: 2, updatedAt: 2 }],
-      activeConversationId: 'conv-1',
-      activeMessages,
-      activeStreaming: { streamingMessageId: 'assistant-1', isThinking: false },
-      messagesByConversation: new Map(),
-      streamingByConversation: new Map(),
+      renderSnapshotsByConversation: new Map([
+        [
+          'conv-1',
+          {
+            messages: activeMessages,
+            streaming: { streamingMessageId: 'assistant-1', isThinking: false },
+          },
+        ],
+      ]),
       agentStateByConversation: new Map([['conv-3', agentState]]),
     });
 
@@ -62,19 +66,10 @@ describe('tab display presenter', () => {
     expect(tabs[0]).not.toHaveProperty('displayStatus');
   });
 
-  it('prefers canonical render snapshots for background tab status', () => {
+  it('uses canonical render snapshots for background tab status', () => {
     const projected = projectDisplayTabs({
       openTabs: [{ id: 'tab-1', title: 'Background', conversationId: 'conv-1' }],
       conversations: [],
-      activeConversationId: null,
-      activeMessages: [],
-      activeStreaming: { streamingMessageId: null, isThinking: false },
-      messagesByConversation: new Map([
-        ['conv-1', [{ id: 'legacy', role: 'assistant', content: 'done', timestamp: 1 }]],
-      ]),
-      streamingByConversation: new Map([
-        ['conv-1', { streamingMessageId: null, isThinking: false }],
-      ]),
       renderSnapshotsByConversation: new Map([
         [
           'conv-1',
@@ -103,11 +98,7 @@ describe('tab display presenter', () => {
     const projected = projectDisplayTabs({
       openTabs: tabs,
       conversations: [],
-      activeConversationId: null,
-      activeMessages: [],
-      activeStreaming: { streamingMessageId: null, isThinking: false },
-      messagesByConversation: new Map(),
-      streamingByConversation: new Map(),
+      renderSnapshotsByConversation: new Map(),
       agentStateByConversation: new Map(),
     });
 

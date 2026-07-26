@@ -2,11 +2,11 @@ import type { ChatModelOption } from '@neko/shared';
 import type { SessionMode } from '@neko-agent/types';
 import { MediaCategoryIcon } from './ComposerIcons';
 import { SESSION_MODE_COLORS } from './SessionModeSelector';
-import { getCategoryColor } from './ModelIcon';
 import type { EntryPromptMenu as EntryPromptMenuKind, GenCategory, MentionItem } from './types';
 import { useClickOutsideSingle } from './useClickOutside';
 import { useTranslation } from '@/i18n/I18nContext';
 import { useRef } from 'react';
+import { RoleplayEntityList } from '../RoleplayEntityList';
 
 interface EntryPromptMenuProps {
   isOpen: boolean;
@@ -36,7 +36,6 @@ export function EntryPromptMenu({
   if (!isOpen || !menu) return null;
 
   const generationOptions = projectGenerationOptions(availableMediaModels);
-  const roleplayItems = projectRoleplayItems(mentionItems);
 
   return (
     <div
@@ -99,51 +98,11 @@ export function EntryPromptMenu({
             <div className="agent-composer-popover-section">
               {t('chat.entryPrompt.roleplay.section')}
             </div>
-            {roleplayItems.length === 0 ? (
-              <div className="agent-composer-popover-empty">
-                {t('chat.entryPrompt.roleplay.empty')}
-              </div>
-            ) : (
-              roleplayItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onSelectRoleplayEntity(item)}
-                  className="agent-composer-popover-row agent-composer-entry-prompt-row"
-                  role="menuitem"
-                >
-                  {item.thumbnailUri ? (
-                    <img src={item.thumbnailUri} alt="" className="agent-composer-thumbnail" />
-                  ) : (
-                    <span
-                      aria-hidden="true"
-                      className="agent-composer-glyph"
-                      style={{
-                        color: getCategoryColor('llm'),
-                        borderColor: getCategoryColor('llm'),
-                      }}
-                    >
-                      RP
-                    </span>
-                  )}
-                  <span className="agent-composer-entry-prompt-main">
-                    <span className="agent-composer-popover-primary">{item.label}</span>
-                    {getRoleplayDescription(item) ? (
-                      <span className="agent-composer-popover-secondary">
-                        {getRoleplayDescription(item)}
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="agent-composer-popover-badge">
-                    {t(
-                      isRoleplayCandidateItem(item)
-                        ? 'chat.entryPrompt.roleplay.confirmBadge'
-                        : 'chat.entryPrompt.roleplay.badge',
-                    )}
-                  </span>
-                </button>
-              ))
-            )}
+            <RoleplayEntityList
+              items={mentionItems}
+              surface="composer"
+              onSelect={onSelectRoleplayEntity}
+            />
           </>
         )}
       </div>
@@ -156,31 +115,4 @@ function projectGenerationOptions(models: readonly ChatModelOption[]) {
     const count = models.filter((model) => model.category === mode).length;
     return count > 0 ? [{ mode, count }] : [];
   });
-}
-
-function projectRoleplayItems(items: readonly MentionItem[]): MentionItem[] {
-  return items.filter(isPlayableRoleplayItem).sort((a, b) => a.label.localeCompare(b.label));
-}
-
-function isPlayableRoleplayItem(item: MentionItem): boolean {
-  if (item.kind !== 'entity') return false;
-  if (!isCharacterEntityType(item.entityType)) return false;
-  return !item.navigationData?.candidateId || isRoleplayCandidateItem(item);
-}
-
-function isRoleplayCandidateItem(item: MentionItem): boolean {
-  return Boolean(item.navigationData?.candidateId && item.navigationData?.projectSearchItemId);
-}
-
-function isCharacterEntityType(entityType: string | undefined): boolean {
-  if (!entityType) return false;
-  return ['character', 'role', '角色'].includes(entityType.trim().toLowerCase());
-}
-
-function getRoleplayDescription(item: MentionItem): string | undefined {
-  if (item.description && item.description !== item.label) return item.description;
-  if (item.contextPayload?.summary && item.contextPayload.summary !== item.label) {
-    return item.contextPayload.summary;
-  }
-  return item.entityType;
 }

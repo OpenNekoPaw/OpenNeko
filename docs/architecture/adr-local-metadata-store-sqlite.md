@@ -74,6 +74,8 @@ SQLite 是本机结构化状态、账本和查询层，不是项目事实格式�
 
 ### Canvas Workspace Board delivery ledger
 
+> 后续决策：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 删除通用 Agent Task/TaskManager 后，Canvas Board delivery ledger 必须迁入 Canvas-owned table/store contract；不得仅靠保留通用 `tasks` 表继续成功。迁移完成前，下述内容只描述当前已接受实现及其隔离约束。
+
 Canvas Board delivery 是 `tasks` / `task_checkpoints` 的一个受限、Canvas-owned 使用者，不是第 19 张表、workspace DB、transcript outbox 或 Board 重建索引。delivery task 使用 `system:canvas-board-delivery:<deliveryId>`，writer lease 使用 `system:canvas-board-writer:<workspaceId>`；payload 只接受已验证的 typed batch、claim epoch、expiry、attempt、diagnostic 和 compact projected receipt。`system:` rows 按 workspace 分区，但必须从 Agent TaskManager listing、`/tasks`、work-item projection、task continuation 和 generic completed-task cleanup 排除。
 
 账本状态是 queued/claimed/projected/noop/blocked/conflict/discarded。它负责跨 Extension/TUI Host 的 pending、fenced claim、retry、discard 和 receipt ordering；`.nkc` 仍是节点、连接、位置、分组、标题、批注、删除和用户移动的唯一事实源。打开 Board 或 Host 启动只消费 pending rows，不能从全部历史 receipt 自动重建、覆盖或复活已编辑 Board；`.nkc` 缺失时仅允许对仍 pending 的 delivery 创建空 Board。

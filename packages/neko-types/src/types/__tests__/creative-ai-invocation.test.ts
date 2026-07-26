@@ -65,7 +65,6 @@ function validExternalInvocation() {
     targetRevision: 'target-rev-1',
     routing: {
       associationKey: 'neko-canvas:doc-1',
-      allowCreateBackgroundConversation: true,
     },
     idempotencyKey: 'neko-canvas:doc-1:node-1:prompt:edit:doc-rev-1',
   } as const;
@@ -122,6 +121,25 @@ describe('creative AI invocation contracts', () => {
     ]);
   });
 
+  it('rejects the retired background conversation routing field', () => {
+    const result = validateExternalCreativeAiInvocation({
+      ...validExternalInvocation(),
+      routing: {
+        associationKey: 'neko-canvas:doc-1',
+        allowCreateBackgroundConversation: true,
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        severity: 'error',
+        code: 'creative-ai-retired-background-conversation-routing',
+        target: 'routing.allowCreateBackgroundConversation',
+      }),
+    ]);
+  });
+
   it('rejects mutating invocations that lack target or candidate target refs', () => {
     const missingTarget = validateExternalCreativeAiInvocation({
       ...validExternalInvocation(),
@@ -161,11 +179,7 @@ describe('creative AI invocation contracts', () => {
       ...validExternalInvocation(),
       sourceRef: {
         ...sourceRef,
-        contentRef: {
-          kind: 'runtime',
-          runtimeKind: 'webview-uri',
-          value: 'vscode-webview://panel/generated.png',
-        },
+        contentLocator: { kind: 'workspace-file', path: 'vscode-webview://panel/generated.png' },
       },
     });
 
@@ -173,8 +187,8 @@ describe('creative AI invocation contracts', () => {
     expect(runtimeSource.diagnostics).toEqual([
       expect.objectContaining({
         severity: 'error',
-        code: 'creative-ai-runtime-only-identity',
-        target: 'sourceRef.contentRef',
+        code: 'creative-ai-invalid-content-locator',
+        target: 'sourceRef.contentLocator',
       }),
     ]);
 
@@ -333,6 +347,71 @@ describe('creative AI invocation contracts', () => {
         target: 'targetRevision',
       }),
     ]);
+  });
+
+  it('requires ContentLocator for media outputs and poisons legacy output references', () => {
+    const candidateTargetRef: CreativeAiTargetRef = {
+      ...targetRef,
+      kind: 'candidate-target',
+      id: 'canvas-node:node-1#/candidates/image-1',
+      candidateOnly: true,
+    };
+    const base = {
+      schemaVersion: CREATIVE_AI_INVOCATION_SCHEMA_VERSION,
+      requestId: 'candidate-image-1',
+      conversationId: 'conversation-1',
+      runId: 'run-1',
+      sourcePackage: 'neko-canvas',
+      candidateTargetRef,
+      writeback: { kind: 'candidate', requiresRevisionMatch: true },
+      targetRevision: 'target-rev-1',
+      idempotencyKey: 'candidate-image:run-1',
+    } as const;
+
+    expect(
+      validateCreativeAiCandidateApplyRequest({
+        ...base,
+        outputRefs: [
+          {
+            kind: 'generated-asset',
+            id: 'generated-image-1',
+            contentLocator: {
+              kind: 'generated-output',
+              outputId: 'generated-image-1',
+              revision: 'rev-generated-image-1',
+              digest: 'sha256:generated-image-1',
+              path: 'neko/generated/image/generated-image-1.png',
+            },
+          },
+        ],
+      }).valid,
+    ).toBe(true);
+
+    const legacy = validateCreativeAiCandidateApplyRequest({
+      ...base,
+      outputRefs: [
+        {
+          kind: 'generated-asset',
+          id: 'generated-image-1',
+          resourceRef: {
+            id: 'legacy-generated-image-1',
+            scope: 'project',
+            provider: 'legacy',
+            kind: 'generated',
+            source: { kind: 'generated-asset', generatedAssetId: 'generated-image-1' },
+            fingerprint: { strategy: 'none', value: 'legacy-generated-image-1' },
+          },
+        },
+      ],
+    });
+
+    expect(legacy.valid).toBe(false);
+    expect(legacy.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'creative-ai-output-locator-migration-required' }),
+        expect.objectContaining({ code: 'creative-ai-missing-content-locator' }),
+      ]),
+    );
   });
 
   it('validates lane and aggregate run snapshots', () => {

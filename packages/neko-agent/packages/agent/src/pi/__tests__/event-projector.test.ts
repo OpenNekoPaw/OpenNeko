@@ -81,7 +81,6 @@ describe('PiEventProjector', () => {
       toolName: 'write',
       summary: 'Write project',
     });
-    await projector.taskObserved('task:1', { status: 'running' });
     await projector.project({ type: 'message_end', message: final });
     await projector.project({ type: 'agent_end', messages: [final] });
 
@@ -93,7 +92,6 @@ describe('PiEventProjector', () => {
       'tool.updated',
       'tool.completed',
       'confirmation.required',
-      'task.observed',
       'assistant.message.completed',
       'usage',
       'turn.completed',

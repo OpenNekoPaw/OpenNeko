@@ -156,6 +156,40 @@ describe('canvas semantic storyboard contracts', () => {
     );
   });
 
+  it('rejects retired generic Task references instead of accepting a fallback path', () => {
+    const stateValidation = validateCanvasStoryboardPromptState({
+      version: CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
+      executionRefs: {
+        taskRefs: [{ source: 'agent', sourceTaskId: 'task-1' }],
+      },
+    });
+    const intentValidation = validateCanvasStoryboardActionIntent({
+      version: CANVAS_STORYBOARD_PROMPT_STATE_VERSION,
+      actionId: 'generate-image',
+      target: { nodeId: 'shot-1' },
+      taskRef: { source: 'agent', sourceTaskId: 'task-1' },
+    });
+
+    expect(stateValidation.valid).toBe(false);
+    expect(intentValidation.valid).toBe(false);
+    expect(stateValidation.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'retired-storyboard-task-contract',
+          target: 'executionRefs.taskRefs',
+        }),
+      ]),
+    );
+    expect(intentValidation.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'retired-storyboard-task-contract',
+          target: 'taskRef',
+        }),
+      ]),
+    );
+  });
+
   it('migrates safe legacy shot fields into prompt blocks with provenance', () => {
     const sourceRef = stableMediaRef('source-panel');
     const generatedRef = {

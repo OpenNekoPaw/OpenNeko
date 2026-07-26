@@ -7,12 +7,10 @@
 
 import type { Model, Provider } from '../../types/provider';
 import type {
-  ImageGenerationRequest,
-  VideoGenerationRequest,
-  AudioGenerationRequest,
+  MaterializedImageGenerationRequest,
   MediaAdapterResult,
   MediaGenerationType,
-} from '../types';
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 /**
@@ -43,8 +41,8 @@ export class MidjourneyMediaAdapter extends BaseMediaAdapter {
     return ['text-to-image', 'image-to-image'];
   }
 
-  override async generateImage(
-    request: ImageGenerationRequest,
+  async generateImage(
+    request: MaterializedImageGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -100,40 +98,7 @@ export class MidjourneyMediaAdapter extends BaseMediaAdapter {
     };
   }
 
-  override async generateVideo(
-    _request: VideoGenerationRequest,
-    _model: Model,
-    _provider: Provider,
-  ): Promise<MediaAdapterResult> {
-    return {
-      status: 'failed',
-      error: {
-        code: 'NOT_SUPPORTED',
-        message: 'Midjourney does not support video generation',
-        retryable: false,
-      },
-    };
-  }
-
-  override async generateAudio(
-    _request: AudioGenerationRequest,
-    _model: Model,
-    _provider: Provider,
-  ): Promise<MediaAdapterResult> {
-    return {
-      status: 'failed',
-      error: {
-        code: 'NOT_SUPPORTED',
-        message: 'Midjourney does not support audio generation',
-        retryable: false,
-      },
-    };
-  }
-
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const baseUrl = provider.apiUrl || 'https://api.midjourney-proxy.com';
     const endpoint = `${baseUrl}/mj/task/${externalTaskId}/fetch`;
 
@@ -190,10 +155,10 @@ export class MidjourneyMediaAdapter extends BaseMediaAdapter {
     }
   }
 
-  override async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
+  async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
     const baseUrl = provider.apiUrl || 'https://api.midjourney-proxy.com';
     const endpoint = `${baseUrl}/mj/task/${externalTaskId}/cancel`;
 
-    await this.request(endpoint, { method: 'POST' }, provider);
+    await this.requestSimple<unknown>(endpoint, 'POST', provider);
   }
 }

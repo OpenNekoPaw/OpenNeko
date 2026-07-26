@@ -8,34 +8,25 @@
 import * as vscode from 'vscode';
 import * as nodeOs from 'node:os';
 import { join } from 'node:path';
-import { Platform, createPlatform, FileUserConfigManager } from '@neko/platform';
 import {
-  MCPManager,
-  MemoryTaskRecoveryStorage,
-  MemoryTaskStorage,
-  TaskManager,
-  ToolRegistry,
-  DEFAULT_TASK_CLEANUP_INTERVAL_MS,
-  DEFAULT_TASK_RETENTION_PERIOD_MS,
-  connectMCPServersRuntime,
-  type IRuntimeTaskManager,
-} from '@neko/agent';
+  Platform,
+  createContentReadMediaRequestAssetMaterializer,
+  createPlatform,
+  FileUserConfigManager,
+} from '@neko/platform';
+import { MCPManager, ToolRegistry, connectMCPServersRuntime } from '@neko/agent';
 import type {
   AuthInteraction,
   OpenNekoCredentialStore,
   PiProviderAuthController,
 } from '@neko/agent/pi';
-import type {
-  ICapabilityPurposeTextRuntime,
-  ITaskRecoveryStorage,
-  ITaskStorage,
-} from '@neko/shared';
+import type { ICapabilityPurposeTextRuntime } from '@neko/shared';
+import { createNodeHostContentReadService } from '@neko/shared/content-access';
 import { ServiceCollection, createServiceId, getLogger } from '../base';
 
 const logger = getLogger('ServiceBootstrap');
 import { IEditorRegistry, EditorRegistry } from '../editor/common/editorRegistry';
 import { AgentManager, IAgentManager as IAgentManagerInterface } from '../ai/agentManager';
-import { TaskLifecycleCoordinator } from '../services/taskLifecycleCoordinator';
 import {
   createVSCodePiCredentialRuntime,
   defaultOpenNekoUserDataRoot,
@@ -52,7 +43,6 @@ import { createLocalPerceptionAssetLoader } from '../services/perceptionAssetLoa
 export const IPlatform = createServiceId<Platform>('platform');
 const IToolRegistry = createServiceId<ToolRegistry>('toolRegistry');
 const IMCPManager = createServiceId<MCPManager>('mcpManager');
-export const ITaskManager = createServiceId<IRuntimeTaskManager>('taskManager');
 export const IAgentManager = createServiceId<IAgentManagerInterface>('agentManager');
 const IPiCredentialStore = createServiceId<OpenNekoCredentialStore>('piCredentialStore');
 const IPiProviderAuthController = createServiceId<PiProviderAuthController>(
@@ -64,11 +54,7 @@ export const IPiAgentRuntimeManager =
 export const IProductPurposeTextRuntime = createServiceId<ICapabilityPurposeTextRuntime>(
   'productPurposeTextRuntime',
 );
-const ITaskLifecycleCoordinator = createServiceId<TaskLifecycleCoordinator>(
-  'taskLifecycleCoordinator',
-);
 
-// Re-export IEditorRegistry
 // =============================================================================
 // Service Bootstrap Result
 // =============================================================================
@@ -77,21 +63,22 @@ export interface IServiceBootstrapResult {
   platform: Platform;
   toolRegistry: ToolRegistry;
   mcpManager: MCPManager;
-  taskManager: IRuntimeTaskManager;
   agentManager: AgentManager;
   piCredentialStore: OpenNekoCredentialStore;
   piProviderAuthController: PiProviderAuthController;
   piAuthInteraction: AuthInteraction;
   piAgentRuntimeManager: VSCodePiRuntimeManager;
   productPurposeTextRuntime: ICapabilityPurposeTextRuntime;
-  taskLifecycleCoordinator: TaskLifecycleCoordinator;
   editorRegistry: EditorRegistry;
 }
 
-export interface ExtensionAgentTaskPersistence {
-  readonly taskStorage: ITaskStorage;
-  readonly taskRecoveryStorage: ITaskRecoveryStorage;
+export interface ExtensionAgentBootstrapMetadata {
   readonly workspaceId?: string;
+}
+
+export interface ExtensionAgentHostRuntime {
+  readonly platform: Platform;
+  readonly toolRegistry: ToolRegistry;
 }
 
 // =============================================================================
@@ -104,12 +91,10 @@ export interface ExtensionAgentTaskPersistence {
 export async function bootstrapCoreServices(
   services: ServiceCollection,
   context: vscode.ExtensionContext,
-  taskPersistence?: ExtensionAgentTaskPersistence,
+  metadata?: ExtensionAgentBootstrapMetadata,
+  hostRuntime?: ExtensionAgentHostRuntime,
 ): Promise<IServiceBootstrapResult> {
   const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (workspacePath && !taskPersistence) {
-    throw new Error('Workspace Agent bootstrap requires shared SQLite Task persistence.');
-  }
 
   const piCredentials = createVSCodePiCredentialRuntime(
     defaultOpenNekoUserDataRoot(nodeOs.homedir()),
@@ -119,41 +104,34 @@ export async function bootstrapCoreServices(
   services.set(IPiAuthInteraction, piCredentials.interaction);
 
   // ==========================================================================
-  // 1. Task Manager with Persistence
+  // 1. Tool Registry (from @neko/agent)
   // ==========================================================================
-  const taskStorage = taskPersistence?.taskStorage ?? new MemoryTaskStorage();
-  const recoveryStorage = taskPersistence?.taskRecoveryStorage ?? new MemoryTaskRecoveryStorage();
-  const taskManager = new TaskManager({
-    storage: taskStorage,
-    recoveryStorage,
-    cleanupIntervalMs: DEFAULT_TASK_CLEANUP_INTERVAL_MS,
-    retentionPeriodMs: DEFAULT_TASK_RETENTION_PERIOD_MS,
-  });
-  services.set(ITaskManager, taskManager);
-
-  // ==========================================================================
-  // 2. Tool Registry (from @neko/agent)
-  // ==========================================================================
-  const toolRegistry = new ToolRegistry();
+  const toolRegistry = hostRuntime?.toolRegistry ?? new ToolRegistry();
   services.set(IToolRegistry, toolRegistry);
 
   // ==========================================================================
-  // 3. Create Platform (with injected toolRegistry and file-based user config)
+  // 2. Create Platform (with injected toolRegistry and file-based user config)
   // ==========================================================================
-  const userConfigManager = new FileUserConfigManager();
-  context.subscriptions.push({ dispose: () => userConfigManager.dispose() });
-
-  const platform = createPlatform({
-    workspacePath,
-    taskManager,
-    toolRegistry,
-    userConfigManager,
-  });
+  const platform =
+    hostRuntime?.platform ??
+    createPlatform({
+      workspacePath,
+      toolRegistry,
+      userConfigManager: createOwnedUserConfigManager(context),
+      ...(workspacePath
+        ? {
+            requestAssetMaterializer: createContentReadMediaRequestAssetMaterializer({
+              contentRead: createNodeHostContentReadService({ workspaceRoot: workspacePath }),
+              encodeBase64: (bytes) => Buffer.from(bytes).toString('base64'),
+            }),
+          }
+        : {}),
+    });
   services.set(IPlatform, platform);
 
   const piAgentRuntimeManager = new VSCodePiRuntimeManager({
     userDataRoot: defaultOpenNekoUserDataRoot(nodeOs.homedir()),
-    workspaceId: taskPersistence?.workspaceId ?? 'vscode-empty-window',
+    workspaceId: metadata?.workspaceId ?? 'vscode-empty-window',
     hostId: `vscode:${process.pid}`,
     ...(workspacePath ? { workspaceRoot: workspacePath } : {}),
     builtinSkillRoot: join(context.extensionUri.fsPath, 'dist', 'skills'),
@@ -197,7 +175,7 @@ export async function bootstrapCoreServices(
   services.set(IProductPurposeTextRuntime, productPurposeTextRuntime);
 
   // ==========================================================================
-  // 4. MCP Manager
+  // 3. MCP Manager
   // ==========================================================================
   const mcpManager = new MCPManager();
 
@@ -220,24 +198,13 @@ export async function bootstrapCoreServices(
   });
 
   // ==========================================================================
-  // 5. Agent Manager
+  // 4. Agent Manager
   // ==========================================================================
   const agentManager = new AgentManager(piAgentRuntimeManager);
   services.set(IAgentManager, agentManager);
 
-  const taskLifecycleCoordinator = new TaskLifecycleCoordinator({
-    interruptions: agentManager,
-    tasks: {
-      list: () => taskManager.list(),
-    },
-    taskCancellation: {
-      cancel: (scope) => taskManager.cancel(scope),
-    },
-  });
-  services.set(ITaskLifecycleCoordinator, taskLifecycleCoordinator);
-
   // ==========================================================================
-  // 6. Editor Registry
+  // 5. Editor Registry
   // ==========================================================================
   const editorRegistry = new EditorRegistry();
   services.set(IEditorRegistry, editorRegistry);
@@ -246,16 +213,20 @@ export async function bootstrapCoreServices(
     platform,
     toolRegistry,
     mcpManager,
-    taskManager,
     agentManager,
     piCredentialStore: piCredentials.credentials,
     piProviderAuthController: piCredentials.auth,
     piAuthInteraction: piCredentials.interaction,
     piAgentRuntimeManager,
     productPurposeTextRuntime,
-    taskLifecycleCoordinator,
     editorRegistry,
   };
+}
+
+function createOwnedUserConfigManager(context: vscode.ExtensionContext): FileUserConfigManager {
+  const userConfigManager = new FileUserConfigManager();
+  context.subscriptions.push({ dispose: () => userConfigManager.dispose() });
+  return userConfigManager;
 }
 
 function isDirectProductTextPurpose(
@@ -277,7 +248,6 @@ export function logServicesStatus(result: IServiceBootstrapResult): void {
   logger.info('Services initialized:', {
     platform: !!result.platform,
     mcpManager: result.mcpManager.listServers().length + ' servers',
-    taskManager: !!result.taskManager,
     agentManager: !!result.agentManager,
     piCredentialStore: !!result.piCredentialStore,
   });

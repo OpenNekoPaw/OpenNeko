@@ -2451,18 +2451,21 @@ function formatCandidateOutputSummary(candidate: ShotPromptCreativeAiCandidate):
   const resourcePath = resolveCreativeAiOutputStablePath(output);
   if (resourcePath)
     return `${t('content.overlayShotPromptCandidateResourceOutput')}: ${resourcePath}`;
-  return `${output.kind}: ${output.generatedAssetId ?? output.resourceRef?.id ?? output.id}`;
+  return `${output.kind}: ${output.generatedAssetId ?? output.id}`;
 }
 
 function resolveCreativeAiOutputStablePath(output: CreativeAiOutputRef): string | undefined {
-  const variantResource = output.resourceVariantRef?.resource;
-  return (
-    variantResource?.source.projectRelativePath ??
-    (variantResource?.locator?.kind === 'file' ? variantResource.locator.path : undefined) ??
-    output.resourceRef?.source.projectRelativePath ??
-    (output.resourceRef?.locator?.kind === 'file' ? output.resourceRef.locator.path : undefined) ??
-    (output.generatedAssetId ? `generated-assets/${output.generatedAssetId}` : undefined)
-  );
+  const locator = output.contentLocator;
+  if (!locator) return undefined;
+  switch (locator.kind) {
+    case 'workspace-file':
+    case 'generated-output':
+      return locator.path;
+    case 'document-entry':
+      return `${locator.source.path}#${locator.entryPath}`;
+    case 'package-resource':
+      return `${locator.packageId}/${locator.resourcePath}`;
+  }
 }
 
 function ShotCreatorSummaryItem({

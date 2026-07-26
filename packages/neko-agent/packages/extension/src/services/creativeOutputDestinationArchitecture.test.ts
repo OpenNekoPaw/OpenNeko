@@ -1,16 +1,20 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const DEFAULT_AGENT_HOST_SOURCES = [
   '../chat/chatProvider.ts',
   '../chat/agentMessageTurnHandler.ts',
   '../chat/message/agentTurnBridge.ts',
-  '../chat/message/agentStreamProcessor.ts',
+  '../chat/message/piAgentStreamProcessor.ts',
   './mediaTurnBridge.ts',
+  './mediaGenerationDeliveryHost.ts',
 ] as const;
 
 describe('creative output destination architecture', () => {
   it('poisons the legacy multi-Board and runtime-draft path in default Agent assembly', () => {
+    expect(existsSync(new URL('../chat/message/agentStreamProcessor.ts', import.meta.url))).toBe(
+      false,
+    );
     const source = DEFAULT_AGENT_HOST_SOURCES.map((relativePath) =>
       readFileSync(new URL(relativePath, import.meta.url), 'utf8'),
     ).join('\n');
@@ -30,15 +34,17 @@ describe('creative output destination architecture', () => {
   });
 
   it('keeps ordinary media completion out of Cut projects', () => {
-    const agentDeliverySource = readFileSync(
-      new URL('./mediaTaskDeliveryHost.ts', import.meta.url),
-      'utf8',
-    );
-    const tuiDeliverySource = readFileSync(
-      new URL(
-        '../../../../../../apps/neko-tui/src/tui/host/node-media-task-delivery-host.ts',
-        import.meta.url,
+    expect(existsSync(new URL('./mediaTaskDeliveryHost.ts', import.meta.url))).toBe(false);
+    expect(
+      existsSync(
+        new URL(
+          '../../../../../../apps/neko-tui/src/tui/host/node-media-task-delivery-host.ts',
+          import.meta.url,
+        ),
       ),
+    ).toBe(false);
+    const agentDeliverySource = readFileSync(
+      new URL('./mediaGenerationDeliveryHost.ts', import.meta.url),
       'utf8',
     );
     const canvasEditorSource = readFileSync(
@@ -51,8 +57,6 @@ describe('creative output destination architecture', () => {
 
     expect(agentDeliverySource).not.toContain('neko.cut');
     expect(agentDeliverySource).not.toContain('.nkv');
-    expect(tuiDeliverySource).not.toContain('neko.cut');
-    expect(tuiDeliverySource).not.toContain('.nkv');
     expect(canvasEditorSource).not.toContain('pushGeneratedToCut');
     expect(canvasEditorSource).not.toContain('neko.cut.importGeneratedClip');
   });

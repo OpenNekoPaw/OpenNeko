@@ -21,14 +21,9 @@ describe('multimodal perception architecture boundary guard', () => {
   });
 
   it('keeps runtime perception services independent from Webview and Extension APIs', () => {
-    const files = [
-      ...listSourceFiles(join(REPO_ROOT, 'packages/neko-agent/packages/agent/src/perception')),
-      join(REPO_ROOT, 'packages/neko-agent/packages/agent/src/runtime/tool-result-backfill.ts'),
-      join(
-        REPO_ROOT,
-        'packages/neko-agent/packages/agent/src/runtime/stream/agent-stream-state.ts',
-      ),
-    ];
+    const files = listSourceFiles(
+      join(REPO_ROOT, 'packages/neko-agent/packages/agent/src/perception'),
+    );
 
     for (const file of files) {
       expect(readFileSync(file, 'utf-8'), relative(REPO_ROOT, file)).not.toMatch(

@@ -6,9 +6,9 @@
   "visibility": "public",
   "evidenceContract": {
     "userBehavior": "Cancel an active long Markdown stream and return the session to terminal idle.",
-    "canonicalPath": ["message.submit", "AgentSession stream", "message.cancel", "session.waitForIdle"],
-    "forbiddenFallback": ["wait for complete stream", "fabricated final answer", "second renderer"],
-    "observables": [{ "ref": "cancel-facts", "kind": "runtime-fact", "description": "Cancellation acceptance, runtime diagnostics, and terminal idle facts.", "required": true }],
+    "canonicalPath": ["message.submit", "Pi Agent event stream", "shared Pi Timeline projector", "conversation projection store", "message.cancel", "cancelled terminal projection", "session.waitForIdle"],
+    "forbiddenFallback": ["wait for complete stream", "legacy AgentEvent projector", "direct Pi conversation mutation", "post-terminal patch", "fabricated final answer", "second renderer"],
+    "observables": [{ "ref": "cancel-facts", "kind": "runtime-fact", "description": "Exact cancellation identity, monotonic projection revisions, frozen cancelled terminal version, zero accepted post-terminal patches, runtime diagnostics, and terminal idle facts.", "required": true }],
     "expectedResult": "The active stream cancellation is accepted and all runtime concerns become terminal idle.",
     "expectedFailure": "Rejected cancellation, remaining work, or runtime errors fail."
   },
@@ -22,8 +22,11 @@
   ],
   "assertions": [
     { "id": "runtime", "kind": "runtime-errors-empty", "evidenceRef": "cancel-facts" },
+    { "id": "pi-runtime", "kind": "pi-runtime", "implementation": "pi-agent-core", "transcriptAuthority": "pi-session", "productMetadataAuthority": "sqlite", "purpose": "agent.main", "workspaceLocatorKind": "virtual", "turnDurability": "durable", "evidenceRef": "cancel-facts" },
+    { "id": "projection", "kind": "timeline-projection", "terminalStatus": "cancelled", "evidenceRef": "cancel-facts" },
     { "id": "cancelled", "kind": "cancellation", "stepId": "cancel", "accepted": true, "evidenceRef": "cancel-facts" },
-    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "backgroundTasksIdle", "mediaDeliveryIdle", "taskResultObservationIdle", "continuationQueueIdle"], "evidenceRef": "cancel-facts" }
+    { "id": "terminal", "kind": "terminal-idle", "concerns": ["turnIdle", "continuationQueueIdle"], "evidenceRef": "cancel-facts" },
+    { "id": "no-legacy-projection", "kind": "no-fallback", "forbiddenRefs": ["legacy-agent-event-projector", "direct-pi-conversation-mutation", "terminal-tool-result-accumulator"], "evidenceRef": "cancel-facts" }
   ],
   "artifactChecks": [],
   "budget": { "timeoutMs": 120000, "repetitions": 1 }

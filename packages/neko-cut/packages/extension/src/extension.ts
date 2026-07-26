@@ -5,12 +5,30 @@ import {
   VSCodeErrorHandler,
   watchLogLevel,
 } from '@neko/shared/vscode/extension';
-import type { NekoCutAPI } from '@neko/shared';
+import type { LocalMetadataStore, NekoCutAPI } from '@neko/shared';
 import { getRootLogger, setErrorHandler, setRootLogger } from './base';
 import { CutOtioEditorProvider, createNewOtioProject } from './editor/CutOtioEditorProvider';
 import { OPEN_CUT_DOCUMENT_STATUS_COMMAND, OPEN_CUT_EXPORT_TASK_COMMAND, StatusBar } from './views';
+import {
+  createInMemoryExportJobStore,
+  createPersistentExportJobStore,
+  EXPORT_JOB_MIGRATIONS,
+  type ExportJobStore,
+} from './services/export-job';
 
-export async function activate(context: vscode.ExtensionContext): Promise<NekoCutAPI> {
+export interface NekoCutHostServices {
+  readonly localMetadata?: {
+    readonly metadataStore: LocalMetadataStore;
+    readonly workspaceId: string;
+  };
+}
+
+let activeEditorProvider: CutOtioEditorProvider | undefined;
+
+export async function activate(
+  context: vscode.ExtensionContext,
+  hostServices?: NekoCutHostServices,
+): Promise<NekoCutAPI> {
   const logger = createVSCodeLogger(
     'Neko Cut',
     'NekoCut',
@@ -22,12 +40,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCu
   watchLogLevel(logger, context);
 
   const exportStatusBar = new StatusBar();
-  const editorProvider = new CutOtioEditorProvider(context, {
-    onExportTaskUpdate: (task) => exportStatusBar.update(task),
-    onDocumentStatusUpdate: (snapshot) => exportStatusBar.updateDocument(snapshot),
-  });
+  const exportJobStore = await createCutExportJobStore(hostServices?.localMetadata);
+  const editorProvider = new CutOtioEditorProvider(
+    context,
+    {
+      onExportTaskUpdate: (task) => exportStatusBar.update(task),
+      onDocumentStatusUpdate: (snapshot) => exportStatusBar.updateDocument(snapshot),
+    },
+    {
+      store: exportJobStore,
+    },
+  );
+  activeEditorProvider = editorProvider;
+  await editorProvider.recoverExportJobs();
   context.subscriptions.push(
     exportStatusBar,
+    { dispose: () => void editorProvider.dispose() },
     vscode.window.registerCustomEditorProvider('neko.cut.otioEditor', editorProvider, {
       supportsMultipleEditorsPerDocument: true,
       webviewOptions: { retainContextWhenHidden: false },
@@ -61,6 +89,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoCu
   };
 }
 
-export function deactivate(): void {
+export async function deactivate(): Promise<void> {
   getRootLogger().info('Deactivating extension...');
+  const provider = activeEditorProvider;
+  activeEditorProvider = undefined;
+  await provider?.dispose();
+}
+
+async function createCutExportJobStore(
+  localMetadata: NekoCutHostServices['localMetadata'],
+): Promise<ExportJobStore> {
+  if (!localMetadata) return createInMemoryExportJobStore();
+  await localMetadata.metadataStore.migrateNamespace(EXPORT_JOB_MIGRATIONS);
+  return createPersistentExportJobStore(localMetadata);
 }

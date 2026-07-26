@@ -102,6 +102,17 @@ const config: KnipConfig = {
       entry: ['src/index.ts', 'src/document/index.ts'],
     },
     'packages/neko-client': {},
+    'packages/neko-chara': {
+      entry: [
+        'src/index.ts',
+        'src/application/index.ts',
+        'src/core/index.ts',
+        'src/host-vscode/index.ts',
+        'src/testing/index.ts',
+      ],
+    },
+    'packages/neko-generation': {},
+    'packages/neko-quality': {},
     'packages/neko-entity': {
       entry: [
         'src/index.ts',
@@ -160,7 +171,7 @@ const config: KnipConfig = {
     // ── Extension sub-packages ────────────────────────
     'packages/neko-cut/packages/extension': {},
     'packages/neko-cut/packages/webview': {
-      // Vite and package exports define the app and retained primitive entries.
+      entry: ['src/host-adapter/index.tsx', 'src/retained.ts'],
     },
     'packages/neko-agent/packages/extension': {},
     'apps/neko-tui': {

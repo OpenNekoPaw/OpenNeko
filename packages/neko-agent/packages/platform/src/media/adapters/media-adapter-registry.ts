@@ -5,7 +5,7 @@
  */
 
 import { BaseRegistry } from '../../core/base-registry';
-import type { MediaAdapter } from '../types';
+import type { MediaAdapter } from '@neko/generation';
 import type { ProviderType } from '../../types/provider';
 
 /**

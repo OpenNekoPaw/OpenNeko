@@ -6,14 +6,12 @@
  * - Static manifest in package.json `contributes.neko.agentCapabilities`
  * - Dynamic registration via `neko.agent.registerCapabilities` Command
  *
- * Platform services (media, config, embedFn) are injected into the capability
+ * Host services (config, bounded text, embedFn) are injected into the capability
  * context so sub-packages can use them without depending on @neko/platform.
  */
 
 import * as vscode from 'vscode';
 import type {
-  ICapabilityMediaService,
-  ICapabilityPurposeMediaService,
   ICapabilityPurposeTextRuntime,
   ICapabilityConfigManager,
   IArtifactProfileRegistry,
@@ -46,10 +44,6 @@ export interface CapabilityBootstrapOptions extends Omit<
   CapabilityDiscoveryDeps,
   'providerCardRegistry' | 'artifactProfileRegistry' | 'providerExpressionProfileRegistry'
 > {
-  /** Media generation service from Platform */
-  mediaService?: ICapabilityMediaService;
-  /** Purpose-bound media port for domain-owned creative execution. */
-  purposeMediaService?: ICapabilityPurposeMediaService;
   /** Purpose-bound bounded text port for domain-owned prompt/judge execution. */
   purposeTextRuntime?: ICapabilityPurposeTextRuntime;
   /** Config manager from Platform */
@@ -108,8 +102,6 @@ export function bootstrapCapabilities(
     providerExpressionProfileRegistry: options.providerExpressionProfileRegistry,
   });
   _instance.activate(context, {
-    mediaService: options.mediaService,
-    purposeMediaService: options.purposeMediaService,
     purposeTextRuntime: options.purposeTextRuntime,
     configManager: options.configManager,
     embedFn: options.embedFn,

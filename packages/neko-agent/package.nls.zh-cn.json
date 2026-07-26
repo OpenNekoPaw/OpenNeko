@@ -28,6 +28,7 @@
   "neko.agent.createFromFile.title": "从此文件创建视频",
   "neko.agent.retryCreation.title": "重试上次创作",
   "neko.agent.addToContext.title": "添加到 Neko Agent",
-  "neko.agent.debug.startStreamLifecycleReplay.title": "启动流式生命周期回放",
-  "neko.agent.debug.continueStreamLifecycleReplay.title": "继续流式生命周期回放"
+  "neko.agent.debug.startTimelineProjectionAcceptance.title": "启动 Timeline Projection 验收",
+  "neko.agent.debug.continueTimelineProjectionAcceptance.title": "继续 Timeline Projection 验收",
+  "neko.agent.debug.cancelTimelineProjectionAcceptance.title": "取消 Timeline Projection 验收 Turn"
 }

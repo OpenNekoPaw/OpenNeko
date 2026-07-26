@@ -1,4 +1,10 @@
-import type { CanvasLifecycleBlockData, CodeDiff, ContentBlock, ToolCall } from '@neko-agent/types';
+import type {
+  CanvasLifecycleBlockData,
+  CodeDiff,
+  ContentBlock,
+  ToolCall,
+  ToolCallProgress,
+} from '@neko-agent/types';
 import {
   projectCompositeBlockRichContent,
   type CompositeRichContentProjection,
@@ -53,6 +59,7 @@ export interface MarkdownContentBlockProjection extends ContentBlockProjectionBa
 export interface ToolContentBlockProjection extends ContentBlockProjectionBase {
   renderKind: 'tool';
   toolCall: ToolCall;
+  toolProgress?: ToolCallProgress;
 }
 
 export interface ToolGroupContentBlockProjection extends ContentBlockProjectionBase {
@@ -206,6 +213,7 @@ export function projectContentBlockUi(input: ProjectContentBlockUiInput): Conten
         ...base,
         renderKind: 'tool',
         toolCall: input.block.toolCall,
+        ...(input.block.toolProgress ? { toolProgress: input.block.toolProgress } : {}),
       };
     case 'code_diff':
       if (!input.block.codeDiff) {

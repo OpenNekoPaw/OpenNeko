@@ -522,7 +522,7 @@ describe('content access tools', () => {
 
     expect(result).toMatchObject({
       success: true,
-      data: { images: [{ contentLocator }] },
+      data: { images: [{ contentLocator, portableForTransfer: true }] },
     });
     expect(runtime.loadContentAsset).toHaveBeenCalledWith({
       locator: contentLocator,

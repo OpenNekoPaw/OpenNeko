@@ -11,6 +11,11 @@ import {
   createScopedExtensionContext,
   type ScopedExtensionContext,
 } from './scoped-extension-context';
+import {
+  createOpenNekoAiHostRuntime,
+  type OpenNekoAiHostRuntime,
+  type OpenNekoAiHostServices,
+} from './ai-host-runtime';
 
 const requireFeature = createRequire(__filename);
 
@@ -27,7 +32,10 @@ const FEATURE_ORDER = Object.freeze([
 const FEATURE_IDS = FEATURE_ORDER.map((packageName) => `neko.${packageName}`);
 
 interface EmbeddedFeatureModule {
-  activate(context: vscode.ExtensionContext): Promise<unknown> | unknown;
+  activate(
+    context: vscode.ExtensionContext,
+    hostServices?: OpenNekoAiHostServices,
+  ): Promise<unknown> | unknown;
   deactivate?(): Promise<void> | void;
 }
 
@@ -38,38 +46,56 @@ interface ActivatedFeature {
 }
 
 const activatedFeatures: ActivatedFeature[] = [];
+let aiHostRuntime: OpenNekoAiHostRuntime | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   await assertNoStandaloneFeatureConflicts();
 
   const registry = new EmbeddedFeatureRegistry();
   context.subscriptions.push(installEmbeddedFeatureRegistry(registry));
+  aiHostRuntime = await createOpenNekoAiHostRuntime();
 
-  for (const packageName of FEATURE_ORDER) {
-    const id = `neko.${packageName}`;
-    const featureUri = vscode.Uri.joinPath(context.extensionUri, 'dist', 'features', packageName);
-    const scopedContext = createScopedExtensionContext(context, {
-      featureId: id,
-      featureUri,
-      joinPath: vscode.Uri.joinPath,
-    });
-    const featureModule = loadFeatureModule(context, packageName);
-    const packageJSON = readFeatureManifest(context, packageName);
-    activatedFeatures.push({ id, module: featureModule, scopedContext });
-    context.subscriptions.push(
-      registry.register({
-        id,
-        extensionUri: featureUri,
-        packageJSON,
-        activate: () => featureModule.activate(scopedContext.context),
-      }),
-    );
+  try {
+    for (const packageName of FEATURE_ORDER) {
+      const id = `neko.${packageName}`;
+      const featureUri = vscode.Uri.joinPath(context.extensionUri, 'dist', 'features', packageName);
+      const scopedContext = createScopedExtensionContext(context, {
+        featureId: id,
+        featureUri,
+        joinPath: vscode.Uri.joinPath,
+      });
+      const featureModule = loadFeatureModule(context, packageName);
+      const packageJSON = readFeatureManifest(context, packageName);
+      activatedFeatures.push({ id, module: featureModule, scopedContext });
+      context.subscriptions.push(
+        registry.register({
+          id,
+          extensionUri: featureUri,
+          packageJSON,
+          activate: () => featureModule.activate(scopedContext.context, aiHostRuntime?.services),
+        }),
+      );
+    }
+
+    await registry.activateAll(FEATURE_IDS);
+  } catch (error) {
+    try {
+      await disposeActivationState();
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        'OpenNeko activation and rollback both failed.',
+      );
+    }
+    throw error;
   }
-
-  await registry.activateAll(FEATURE_IDS);
 }
 
 export async function deactivate(): Promise<void> {
+  await disposeActivationState();
+}
+
+async function disposeActivationState(): Promise<void> {
   const errors: unknown[] = [];
   for (const feature of [...activatedFeatures].reverse()) {
     try {
@@ -84,6 +110,12 @@ export async function deactivate(): Promise<void> {
     }
   }
   activatedFeatures.length = 0;
+  try {
+    await aiHostRuntime?.dispose();
+  } catch (error) {
+    errors.push(error);
+  }
+  aiHostRuntime = undefined;
   if (errors.length > 0) {
     throw new AggregateError(errors, 'OpenNeko embedded feature deactivation failed.');
   }

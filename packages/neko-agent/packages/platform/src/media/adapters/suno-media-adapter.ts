@@ -8,10 +8,10 @@ import type { Model, Provider } from '../../types/provider';
 import type {
   MediaGenerationType,
   MediaAdapterResult,
-  MediaTaskStatus,
+  MediaOperationStatus,
   AudioGenerationRequest,
   MediaOutput,
-} from '../types';
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 /**
@@ -53,7 +53,7 @@ interface SunoStatusResponse {
 export class SunoMediaAdapter extends BaseMediaAdapter {
   readonly type = 'suno';
 
-  private static readonly STATUS_MAP: Record<string, MediaTaskStatus> = {
+  private static readonly STATUS_MAP: Record<string, MediaOperationStatus> = {
     queued: 'pending',
     streaming: 'processing',
     complete: 'completed',
@@ -74,7 +74,7 @@ export class SunoMediaAdapter extends BaseMediaAdapter {
   /**
    * Generate audio/music using Suno API
    */
-  override async generateAudio(
+  async generateAudio(
     request: AudioGenerationRequest,
     model: Model,
     provider: Provider,
@@ -128,10 +128,7 @@ export class SunoMediaAdapter extends BaseMediaAdapter {
   /**
    * Get task status
    */
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const url = `${provider.apiUrl}/api/get?ids=${externalTaskId}`;
 
     const { data, error } = await this.request<SunoStatusResponse[]>(
@@ -191,12 +188,5 @@ export class SunoMediaAdapter extends BaseMediaAdapter {
       progress: this.estimateProgressFrom(task.status, SunoMediaAdapter.PROGRESS_MAP),
       outputs,
     };
-  }
-
-  /**
-   * Cancel a running task
-   */
-  override async cancelTask(_externalTaskId: string, _provider: Provider): Promise<void> {
-    // Suno does not support task cancellation
   }
 }

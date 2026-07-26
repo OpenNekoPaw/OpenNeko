@@ -11,7 +11,6 @@
  */
 
 import type { Tool, ToolCategory } from './tool';
-import type { TaskRunScope } from './task';
 import type { LoadingTier } from './loading-tier';
 import type { PromptFragment } from './prompt-fragment';
 import type { ProviderCard, ProviderExpressionProfileDescriptor } from './provider-card';
@@ -42,7 +41,7 @@ export interface AgentCapabilityHostRequirement {
 export interface AgentCapabilityRuntimeRequirements {
   readonly vscode?: boolean;
   readonly activeEditor?: boolean;
-  readonly mediaService?: boolean;
+  readonly generationJob?: boolean;
   readonly engineBridge?: boolean;
   readonly contentAccess?: boolean;
   readonly writableProject?: boolean;
@@ -179,76 +178,6 @@ export interface AgentArtifactFacetsContribution {
   readonly referenceContributors?: readonly ReferenceContributorManifest[];
 }
 
-// =============================================================================
-// Platform service interfaces for capability providers (minimal L0 contracts)
-// =============================================================================
-
-/**
- * Minimal media generation interface exposed to capability providers.
- * Subset of MediaGenerationService — avoids sub-packages depending on @neko/platform.
- */
-export interface ICapabilityMediaService {
-  /**
-   * Generate an image.
-   *
-   * Capability providers may pass base64 fields for legacy adapters, or
-   * `referenceImageUri` / `maskUri` / `controlImageUri` for extension-host
-   * file-backed inputs that the platform materializes before provider execution.
-   */
-  generateImage(request: {
-    prompt: string;
-    [key: string]: unknown;
-  }): Promise<{ id: string; scope: TaskRunScope }>;
-  generateVideo(request: {
-    prompt: string;
-    [key: string]: unknown;
-  }): Promise<{ id: string; scope: TaskRunScope }>;
-  generateMusic?(request: {
-    prompt: string;
-    duration?: number;
-    style?: string;
-  }): Promise<{ id: string; scope: TaskRunScope }>;
-  generateSFX?(request: {
-    prompt: string;
-    duration?: number;
-  }): Promise<{ id: string; scope: TaskRunScope }>;
-  generateVoice?(request: {
-    text: string;
-    voiceId?: string;
-  }): Promise<{ id: string; scope: TaskRunScope }>;
-  waitForTask(
-    taskScope: TaskRunScope,
-    timeout?: number,
-  ): Promise<{
-    status: string;
-    outputs?: Array<{ url: string; mimeType?: string }>;
-  }>;
-  /** Cancel a running media task when the underlying platform supports it. */
-  cancelTask?(taskScope: TaskRunScope): Promise<boolean>;
-}
-
-/**
- * Purpose-bound media submission exposed to domain capability providers.
- * Provider/model identity stays inside the application composition root.
- */
-export interface ICapabilityPurposeMediaService {
-  generateImage(
-    purpose: string,
-    request: { prompt: string; [key: string]: unknown },
-  ): Promise<{ id: string; scope: TaskRunScope }>;
-  generateVideo(
-    purpose: string,
-    request: { prompt: string; [key: string]: unknown },
-  ): Promise<{ id: string; scope: TaskRunScope }>;
-  waitForTask(
-    taskScope: TaskRunScope,
-    timeout?: number,
-  ): Promise<{
-    status: string;
-    outputs?: Array<{ url: string; mimeType?: string }>;
-  }>;
-}
-
 /** Pure bounded text completion. Domain code owns prompts and receives no LLM identity. */
 export interface ICapabilityPurposeTextRuntime {
   complete(input: {
@@ -275,21 +204,14 @@ export interface ICapabilityConfigManager {
  * Context passed to providers when requesting tools.
  * Keeps the provider decoupled from VSCode API and @neko/platform at the type level.
  *
- * Platform services are optional — providers that don't need them (e.g. neko-engine)
- * simply ignore them. Providers that need media generation (for example, neko-canvas)
- * use `mediaService` and `configManager`.
+ * Host services are optional. Domain media generation is injected through the
+ * owning domain's public Job port, not through this generic context.
  */
 export interface AgentCapabilityContext {
   /**
    * Extension context handle (opaque at L0; sub-packages cast to vscode.ExtensionContext at L1).
    */
   extensionContext: unknown;
-
-  /** Media generation service (image/video/music/TTS). Injected by neko-agent when available. */
-  mediaService?: ICapabilityMediaService;
-
-  /** Purpose-bound media submission without provider/model disclosure. */
-  purposeMediaService?: ICapabilityPurposeMediaService;
 
   /** Purpose-bound bounded text completion without Pi/provider/auth disclosure. */
   purposeTextRuntime?: ICapabilityPurposeTextRuntime;

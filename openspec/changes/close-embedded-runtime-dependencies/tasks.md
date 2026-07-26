@@ -5,6 +5,7 @@
 - [x] 1.3 Add Sharp staging tests for exact target packages, missing packages, cleanup, and closure manifest output
 - [x] 1.4 Add assembler tests for target mismatch, missing modules, repository-external resolution, and prohibited runtime imports
 - [x] 1.5 Add macOS Mach-O closure tests for recursion, load-path rewriting, missing sources, basename collisions, and system dependencies
+- [x] 1.6 Add a red-capable CJS bundle execution regression that exercises Sharp contact-sheet composition from an isolated staged closure
 
 ## 2. Canonical Runtime Owners
 
@@ -13,12 +14,14 @@
 - [x] 2.3 Stage Agent's target-specific Sharp binding/libvips pair and emit its runtime closure manifest
 - [x] 2.4 Remove unused Sharp dependencies and external flags from Cut and Tools
 - [x] 2.5 Recursively stage, rewrite, and sign the complete macOS Engine Mach-O runtime closure
+- [x] 2.6 Externalize Sharp from Agent and unified-host CommonJS bundles and stage the complete shared JavaScript plus target-native closure
 
 ## 3. Final Assembly
 
 - [x] 3.1 Implement generic embedded bundle and runtime manifest validation
 - [x] 3.2 Run validation against every staged feature before final VSIX creation
 - [x] 3.3 Inspect a built macOS VSIX for exact feature-owned runtime closure and no unresolved internal package imports
+- [x] 3.4 Copy and validate the unified host's runtime closure in development and release staging
 
 ## 4. Validation
 
@@ -29,6 +32,6 @@
 
 Validation blockers:
 
-- 4.2: `pnpm build`, `pnpm check:quality`, `pnpm check:unused`, `pnpm check:deps`, `pnpm check:legacy-debt`, and strict OpenSpec validation pass. Repository-wide `pnpm test` remains red in two concurrently modified Agent content-access tests; repository-wide format/lint also contain unrelated dirty-worktree failures.
-- 4.3: Not run because the user explicitly prohibited launching or invoking VS Code/`code`.
+- 4.2: Sharp's focused orchestration tests, Agent/application builds, focused Knip scan, `git diff --check`, and strict OpenSpec validation pass. Repository-wide test ownership remains blocked by the unowned `packages/neko-generation` workspace, while `pnpm check:legacy-debt` remains blocked by the existing `@neko/quality` `rejectLegacyMediaPathRequest` naming.
+- 4.3: The composed `Debug Dev (All)` stage activates as `neko.neko-suite` in the isolated `~/Git/neko-test` Extension Development Host. A rebuilt macOS VSIX also executes Sharp image conversion from both the unified-host and embedded Agent closures after isolated extraction. Final VSIX installation, Engine readiness, and the complete document workflow remain open.
 - 4.4: Requires the canonical Linux Merge Gate artifact and runner evidence before Release.

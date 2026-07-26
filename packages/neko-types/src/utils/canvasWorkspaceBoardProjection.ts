@@ -5,26 +5,16 @@ import {
   type CanvasWorkspaceProjectionArtifact,
   type CanvasWorkspaceProjectionRequest,
 } from '../types/canvas-workspace-board';
-import {
-  isDocumentArchiveResourceRef,
-  type DocumentArchiveResourceRef,
-} from '../types/document-reading';
 import type {
   CanvasConnection,
   CanvasData,
   CanvasNode,
   CanvasSerializableRecord,
+  GroupCanvasNode,
 } from '../types/canvas';
 import type { CanvasHeadlessAuthoringOperation } from '../types/canvas-headless-authoring';
-import {
-  areResourceRefsContentCompatible,
-  compareResourceRefObservationStrength,
-  createResourceContentIdentity,
-  createResourceLogicalContentIdentity,
-  hashStableValue,
-  isResourceRef,
-  type ResourceRef,
-} from '../types/resource-cache';
+import { contentLocatorKey, isContentLocator } from '../types/content-locator';
+import { hashStableValue } from '../types/stable-value';
 import {
   applyCanvasHeadlessAuthoringOperations,
   assertNoRuntimeResourceIdentity,
@@ -37,6 +27,10 @@ const CONTENT_ORIGIN = { x: 40, y: 40 } as const;
 const CONTENT_HORIZONTAL_GAP = 48;
 const CONTENT_VERTICAL_GAP = 24;
 const CONTENT_LANE_WIDTH = 316;
+const CONTENT_GRID_COLUMNS = 3;
+const GROUP_PADDING = 24;
+const GROUP_HEADER = 56;
+const GROUP_GAP = 20;
 
 export interface CanvasWorkspaceBoardProjectionPlan {
   readonly status: 'projected' | 'noop';
@@ -49,14 +43,13 @@ interface ResolvedProjectionArtifact {
   readonly node: CanvasNode;
 }
 
-interface ResolvedResourceArtifact {
-  resourceRef: ResourceRef;
-  readonly resolved: ResolvedProjectionArtifact;
-}
-
-interface IndexedResourceNode {
-  node: CanvasNode;
-  resourceRef: ResourceRef;
+interface GeneratedBatchGroupPlan {
+  readonly id: string;
+  readonly contentIdentities: ReadonlySet<string>;
+  readonly childIds: readonly string[];
+  readonly childOffsets: ReadonlyMap<string, CanvasNode['position']>;
+  readonly size: CanvasNode['size'];
+  readonly columns: number;
 }
 
 export function planCanvasWorkspaceBoardProjection(
@@ -71,13 +64,19 @@ export function planCanvasWorkspaceBoardProjection(
   const artifacts = sortArtifactsByDependencies(request.artifacts);
   const roleLanes = createRoleLanes(artifacts);
   const existingContentNodes = indexExistingContentNodes(canvasData.nodes);
-  const existingResourceNodes = indexExistingResourceNodes(canvasData.nodes);
   const occupiedNodeIds = new Map(canvasData.nodes.map((node) => [node.id, node]));
   const layoutNodes = [...canvasData.nodes];
+  const topLevelLayoutNodes = canvasData.nodes.filter((node) => node.parentId === undefined);
   const resolvedByArtifactId = new Map<string, ResolvedProjectionArtifact>();
   const resolvedByContentIdentity = new Map<string, ResolvedProjectionArtifact>();
-  const resolvedResourceArtifacts = new Map<string, ResolvedResourceArtifact[]>();
   const operations: CanvasHeadlessAuthoringOperation[] = [];
+  const generatedBatchGroup = planGeneratedBatchGroup(
+    request.process.deliveryId,
+    artifacts,
+    existingContentNodes,
+  );
+  let generatedBatchGroupNode: GroupCanvasNode | undefined;
+  let generatedBatchChildPositions: ReadonlyMap<string, CanvasNode['position']> | undefined;
 
   for (const artifact of artifacts) {
     const contentIdentity = createArtifactContentIdentity(artifact);
@@ -87,35 +86,12 @@ export function planCanvasWorkspaceBoardProjection(
       continue;
     }
 
-    const compatibleResolved = findCompatibleResolvedResource(artifact, resolvedResourceArtifacts);
-    if (compatibleResolved) {
-      resolvedByContentIdentity.set(contentIdentity, compatibleResolved.resolved);
-      resolvedByArtifactId.set(artifact.provenance.artifactId, compatibleResolved.resolved);
-      preferStrongerResourceObservation(compatibleResolved, readArtifactResourceRef(artifact));
-      continue;
-    }
-
     const exactExisting = existingContentNodes.get(contentIdentity)?.[0];
-    const compatibleExisting = exactExisting
-      ? undefined
-      : findCompatibleExistingResourceNode(artifact, existingResourceNodes);
-    let existing = exactExisting ?? compatibleExisting?.node;
+    const existing = exactExisting;
     if (existing) {
-      const resourceRef = readArtifactResourceRef(artifact);
-      if (
-        compatibleExisting &&
-        resourceRef &&
-        compareResourceRefObservationStrength(resourceRef, compatibleExisting.resourceRef) > 0
-      ) {
-        existing = replaceNodeResourceRef(existing, resourceRef);
-        compatibleExisting.node = existing;
-        compatibleExisting.resourceRef = resourceRef;
-        operations.push({ kind: 'node.replace', node: existing });
-      }
       const resolved = { node: existing } as const;
       resolvedByContentIdentity.set(contentIdentity, resolved);
       resolvedByArtifactId.set(artifact.provenance.artifactId, resolved);
-      registerResolvedResourceArtifact(artifact, resolved, resolvedResourceArtifacts);
       continue;
     }
 
@@ -135,18 +111,76 @@ export function planCanvasWorkspaceBoardProjection(
       }
       return source.node;
     });
-    const position = findAvailableContentPosition(
-      createPreferredPosition(artifact.provenance.role, sourceNodes, roleLanes),
-      artifactNodeSize(artifact),
-      layoutNodes,
+    const belongsToGeneratedBatchGroup =
+      generatedBatchGroup?.contentIdentities.has(contentIdentity) === true;
+    if (belongsToGeneratedBatchGroup && !generatedBatchGroupNode) {
+      const groupedSourceNodes = uniqueNodes(
+        artifacts
+          .filter((candidate) =>
+            generatedBatchGroup.contentIdentities.has(createArtifactContentIdentity(candidate)),
+          )
+          .flatMap((candidate) =>
+            (candidate.provenance.sourceArtifactIds ?? []).flatMap((sourceArtifactId) => {
+              const source = resolvedByArtifactId.get(sourceArtifactId);
+              return source ? [source.node] : [];
+            }),
+          ),
+      );
+      const groupPosition = findAvailableContentPosition(
+        createPreferredPosition('output', groupedSourceNodes, roleLanes),
+        generatedBatchGroup.size,
+        topLevelLayoutNodes,
+      );
+      generatedBatchGroupNode = createGeneratedBatchGroupNode(
+        request,
+        generatedBatchGroup,
+        groupPosition,
+        nextZIndex(layoutNodes),
+      );
+      generatedBatchChildPositions = new Map(
+        [...generatedBatchGroup.childOffsets].map(([nodeId, offset]) => [
+          nodeId,
+          {
+            x: groupPosition.x + offset.x,
+            y: groupPosition.y + offset.y,
+          },
+        ]),
+      );
+      const occupiedGroup = occupiedNodeIds.get(generatedBatchGroupNode.id);
+      if (occupiedGroup) {
+        throw new Error(
+          `projection-conflict: Canvas node ${generatedBatchGroupNode.id} is occupied by unrelated creative content.`,
+        );
+      }
+      occupiedNodeIds.set(generatedBatchGroupNode.id, generatedBatchGroupNode);
+      layoutNodes.push(generatedBatchGroupNode);
+      topLevelLayoutNodes.push(generatedBatchGroupNode);
+      operations.push({ kind: 'node.create', node: generatedBatchGroupNode });
+    }
+    const size = artifactNodeSize(artifact);
+    const position = belongsToGeneratedBatchGroup
+      ? generatedBatchChildPositions?.get(id)
+      : findAvailableContentPosition(
+          createPreferredPosition(artifact.provenance.role, sourceNodes, roleLanes),
+          size,
+          topLevelLayoutNodes,
+        );
+    if (!position) {
+      throw new Error(`Workspace Board batch layout is missing a position for ${id}.`);
+    }
+    const node = createArtifactNode(
+      artifact,
+      id,
+      position,
+      nextZIndex(layoutNodes),
+      belongsToGeneratedBatchGroup ? generatedBatchGroupNode?.id : undefined,
     );
-    const node = createArtifactNode(artifact, id, position, nextZIndex(layoutNodes));
     const resolved = { node } as const;
     resolvedByContentIdentity.set(contentIdentity, resolved);
     resolvedByArtifactId.set(artifact.provenance.artifactId, resolved);
-    registerResolvedResourceArtifact(artifact, resolved, resolvedResourceArtifacts);
     occupiedNodeIds.set(node.id, node);
     layoutNodes.push(node);
+    if (!node.parentId) topLevelLayoutNodes.push(node);
     operations.push({ kind: 'node.create', node });
   }
 
@@ -211,27 +245,9 @@ function comparePendingArtifacts(
   left: { readonly artifact: CanvasWorkspaceProjectionArtifact; readonly index: number },
   right: { readonly artifact: CanvasWorkspaceProjectionArtifact; readonly index: number },
 ): number {
-  const observationDifference = compareArtifactObservationStrength(right.artifact, left.artifact);
-  if (observationDifference !== 0) return observationDifference;
   const roleDifference =
     roleRank(left.artifact.provenance.role) - roleRank(right.artifact.provenance.role);
   return roleDifference === 0 ? left.index - right.index : roleDifference;
-}
-
-function compareArtifactObservationStrength(
-  left: CanvasWorkspaceProjectionArtifact,
-  right: CanvasWorkspaceProjectionArtifact,
-): number {
-  if (
-    left.kind === 'markdown' ||
-    right.kind === 'markdown' ||
-    !left.resourceRef ||
-    !right.resourceRef ||
-    !areResourceRefsContentCompatible(left.resourceRef, right.resourceRef)
-  ) {
-    return 0;
-  }
-  return compareResourceRefObservationStrength(left.resourceRef, right.resourceRef);
 }
 
 function createRoleLanes(
@@ -258,45 +274,25 @@ function indexExistingContentNodes(
   return index;
 }
 
-function indexExistingResourceNodes(
-  nodes: readonly CanvasNode[],
-): ReadonlyMap<string, readonly IndexedResourceNode[]> {
-  const index = new Map<string, IndexedResourceNode[]>();
-  for (const node of nodes) {
-    const resourceRef = readNodeResourceRef(node);
-    if (!resourceRef) continue;
-    const logicalIdentity = createResourceLogicalContentIdentity(resourceRef);
-    const matches = index.get(logicalIdentity) ?? [];
-    matches.push({ node, resourceRef });
-    matches.sort(
-      (left, right) =>
-        left.node.zIndex - right.node.zIndex || left.node.id.localeCompare(right.node.id),
-    );
-    index.set(logicalIdentity, matches);
-  }
-  return index;
-}
-
 function createArtifactContentIdentity(artifact: CanvasWorkspaceProjectionArtifact): string {
-  if (artifact.kind !== 'markdown' && artifact.resourceRef) {
-    return createResourceContentIdentity(artifact.resourceRef);
-  }
-  if (artifact.kind !== 'markdown' && artifact.documentResourceRef) {
-    return createDocumentContentIdentity(artifact.documentResourceRef);
-  }
-  return createPortableArtifactContentIdentity(
-    artifact.provenance.artifactId,
-    artifact.provenance.revision,
-  );
+  return artifact.kind === 'markdown'
+    ? createPortableArtifactContentIdentity(
+        artifact.provenance.artifactId,
+        artifact.provenance.revision,
+      )
+    : hashStableValue({
+        kind: 'content-locator',
+        locator: contentLocatorKey(artifact.contentLocator),
+      });
 }
 
 function readNodeContentIdentity(node: CanvasNode): string | undefined {
-  const resourceRef = readNodeResourceRef(node);
-  if (resourceRef) return createResourceContentIdentity(resourceRef);
-  const documentResourceRef =
-    'documentResourceRef' in node.data ? node.data.documentResourceRef : undefined;
-  if (isDocumentArchiveResourceRef(documentResourceRef)) {
-    return createDocumentContentIdentity(documentResourceRef);
+  const contentLocator = 'contentLocator' in node.data ? node.data.contentLocator : undefined;
+  if (isContentLocator(contentLocator)) {
+    return hashStableValue({
+      kind: 'content-locator',
+      locator: contentLocatorKey(contentLocator),
+    });
   }
   const provenance = 'provenance' in node.data ? node.data.provenance : undefined;
   if (!isSerializableRecord(provenance)) return undefined;
@@ -307,102 +303,136 @@ function readNodeContentIdentity(node: CanvasNode): string | undefined {
     : undefined;
 }
 
-function readNodeResourceRef(node: CanvasNode): ResourceRef | undefined {
-  const resourceRef = 'resourceRef' in node.data ? node.data.resourceRef : undefined;
-  return isResourceRef(resourceRef) ? resourceRef : undefined;
-}
-
-function readArtifactResourceRef(
-  artifact: CanvasWorkspaceProjectionArtifact,
-): ResourceRef | undefined {
-  return artifact.kind === 'markdown' ? undefined : artifact.resourceRef;
-}
-
-function findCompatibleResolvedResource(
-  artifact: CanvasWorkspaceProjectionArtifact,
-  index: ReadonlyMap<string, readonly ResolvedResourceArtifact[]>,
-): ResolvedResourceArtifact | undefined {
-  if (artifact.kind === 'markdown' || !artifact.resourceRef) return undefined;
-  const resourceRef = artifact.resourceRef;
-  const logicalIdentity = createResourceLogicalContentIdentity(resourceRef);
-  return index
-    .get(logicalIdentity)
-    ?.find((entry) => areResourceRefsContentCompatible(entry.resourceRef, resourceRef));
-}
-
-function findCompatibleExistingResourceNode(
-  artifact: CanvasWorkspaceProjectionArtifact,
-  index: ReadonlyMap<string, readonly IndexedResourceNode[]>,
-): IndexedResourceNode | undefined {
-  if (artifact.kind === 'markdown' || !artifact.resourceRef) return undefined;
-  const resourceRef = artifact.resourceRef;
-  const logicalIdentity = createResourceLogicalContentIdentity(resourceRef);
-  return index
-    .get(logicalIdentity)
-    ?.find((entry) => areResourceRefsContentCompatible(entry.resourceRef, resourceRef));
-}
-
-function replaceNodeResourceRef(node: CanvasNode, resourceRef: ResourceRef): CanvasNode {
-  switch (node.type) {
-    case 'document':
-      return { ...node, data: { ...node.data, resourceRef } };
-    case 'media':
-      return { ...node, data: { ...node.data, resourceRef } };
-    default:
-      throw new Error(
-        `Workspace Board resource node ${node.id} has unsupported type ${node.type}.`,
-      );
-  }
-}
-
-function registerResolvedResourceArtifact(
-  artifact: CanvasWorkspaceProjectionArtifact,
-  resolved: ResolvedProjectionArtifact,
-  index: Map<string, ResolvedResourceArtifact[]>,
-): void {
-  if (artifact.kind === 'markdown' || !artifact.resourceRef) return;
-  const logicalIdentity = createResourceLogicalContentIdentity(artifact.resourceRef);
-  const entries = index.get(logicalIdentity) ?? [];
-  const existing = entries.find((entry) => entry.resolved.node.id === resolved.node.id);
-  if (existing) {
-    preferStrongerResourceObservation(existing, artifact.resourceRef);
-  } else {
-    entries.push({ resourceRef: artifact.resourceRef, resolved });
-  }
-  index.set(logicalIdentity, entries);
-}
-
-function preferStrongerResourceObservation(
-  entry: ResolvedResourceArtifact,
-  candidate: ResourceRef | undefined,
-): void {
-  if (candidate && compareResourceRefObservationStrength(candidate, entry.resourceRef) > 0) {
-    entry.resourceRef = candidate;
-  }
-}
-
-function createDocumentContentIdentity(resourceRef: DocumentArchiveResourceRef): string {
-  const source = resourceRef.source;
-  return hashStableValue({
-    kind: 'document-entry',
-    source: {
-      format: source.format,
-      filePath: source.filePath,
-      ...(source.fileId ? { fileId: source.fileId } : {}),
-      ...(source.identity ? { identity: source.identity } : {}),
-      ...(source.uri ? { uri: source.uri } : {}),
-    },
-    ...(resourceRef.entryPath ? { entryPath: resourceRef.entryPath } : {}),
-    ...(resourceRef.locator ? { locator: resourceRef.locator } : {}),
-  });
-}
-
 function createPortableArtifactContentIdentity(artifactId: string, revision: string): string {
   return hashStableValue({ kind: 'artifact', artifactId, revision });
 }
 
 function createContentNodeId(contentIdentity: string): string {
   return `workspace-content-${contentIdentity.slice(0, 24)}`;
+}
+
+function planGeneratedBatchGroup(
+  deliveryId: string,
+  artifacts: readonly CanvasWorkspaceProjectionArtifact[],
+  existingContentNodes: ReadonlyMap<string, readonly CanvasNode[]>,
+): GeneratedBatchGroupPlan | undefined {
+  const groupedArtifacts: CanvasWorkspaceProjectionArtifact[] = [];
+  const contentIdentities = new Set<string>();
+  for (const artifact of artifacts) {
+    if (!isGeneratedOutputMediaArtifact(artifact)) continue;
+    const contentIdentity = createArtifactContentIdentity(artifact);
+    if (contentIdentities.has(contentIdentity) || existingContentNodes.has(contentIdentity))
+      continue;
+    contentIdentities.add(contentIdentity);
+    groupedArtifacts.push(artifact);
+  }
+  if (groupedArtifacts.length < 2) return undefined;
+
+  const columns = Math.ceil(Math.sqrt(groupedArtifacts.length));
+  const rows = Math.ceil(groupedArtifacts.length / columns);
+  const columnWidths = Array.from({ length: columns }, () => 0);
+  const rowHeights = Array.from({ length: rows }, () => 0);
+  const nodes = groupedArtifacts.map((artifact, index) => {
+    const size = artifactNodeSize(artifact);
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    columnWidths[column] = Math.max(columnWidths[column] ?? 0, size.width);
+    rowHeights[row] = Math.max(rowHeights[row] ?? 0, size.height);
+    const contentIdentity = createArtifactContentIdentity(artifact);
+    return { id: createContentNodeId(contentIdentity), column, row };
+  });
+  const columnOffsets = cumulativeOffsets(columnWidths, GROUP_PADDING, GROUP_GAP);
+  const rowOffsets = cumulativeOffsets(rowHeights, GROUP_HEADER, GROUP_GAP);
+  return {
+    id: `workspace-batch-${hashStableValue({
+      version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+      kind: 'generated-batch',
+      deliveryId,
+    }).slice(0, 24)}`,
+    contentIdentities,
+    childIds: nodes.map((node) => node.id),
+    childOffsets: new Map(
+      nodes.map((node) => [
+        node.id,
+        {
+          x: columnOffsets[node.column]!,
+          y: rowOffsets[node.row]!,
+        },
+      ]),
+    ),
+    size: {
+      width:
+        GROUP_PADDING * 2 +
+        columnWidths.reduce((total, width) => total + width, 0) +
+        GROUP_GAP * (columns - 1),
+      height:
+        GROUP_HEADER +
+        GROUP_PADDING +
+        rowHeights.reduce((total, height) => total + height, 0) +
+        GROUP_GAP * (rows - 1),
+    },
+    columns,
+  };
+}
+
+function isGeneratedOutputMediaArtifact(artifact: CanvasWorkspaceProjectionArtifact): boolean {
+  return (
+    artifact.kind !== 'markdown' &&
+    artifact.provenance.role === 'output' &&
+    (artifact.kind === 'image' || artifact.kind === 'audio' || artifact.kind === 'video') &&
+    artifact.contentLocator.kind === 'generated-output'
+  );
+}
+
+function cumulativeOffsets(
+  values: readonly number[],
+  start: number,
+  gap: number,
+): readonly number[] {
+  const offsets: number[] = [];
+  let offset = start;
+  for (const value of values) {
+    offsets.push(offset);
+    offset += value + gap;
+  }
+  return offsets;
+}
+
+function createGeneratedBatchGroupNode(
+  request: CanvasWorkspaceProjectionRequest,
+  plan: GeneratedBatchGroupPlan,
+  position: CanvasNode['position'],
+  zIndex: number,
+): GroupCanvasNode {
+  return {
+    id: plan.id,
+    type: 'group',
+    position,
+    size: plan.size,
+    zIndex,
+    preset: 'group.container',
+    container: {
+      policy: 'group',
+      childIds: [...plan.childIds],
+      layout: {
+        mode: 'grid',
+        columns: plan.columns,
+        spacing: GROUP_GAP,
+      },
+      deleteBehavior: 'release-children',
+    },
+    data: {
+      provenance: {
+        version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,
+        kind: 'generated-batch',
+        deliveryId: request.process.deliveryId,
+        sourceHost: request.process.sourceHost,
+        ...(request.process.taskId ? { taskId: request.process.taskId } : {}),
+        ...(request.process.runId ? { runId: request.process.runId } : {}),
+        createdAt: request.process.createdAt,
+      },
+    },
+  };
 }
 
 function createPreferredPosition(
@@ -430,13 +460,22 @@ function findAvailableContentPosition(
 ): CanvasNode['position'] {
   let y = preferred.y;
   while (true) {
-    const intersecting = existingNodes.filter((node) =>
-      rectanglesOverlap({ position: { x: preferred.x, y }, size }, node),
-    );
-    if (intersecting.length === 0) return { x: preferred.x, y };
-    y = Math.max(
-      ...intersecting.map((node) => node.position.y + node.size.height + CONTENT_VERTICAL_GAP),
-    );
+    let nextY = y;
+    for (let column = 0; column < CONTENT_GRID_COLUMNS; column += 1) {
+      const position = {
+        x: preferred.x + column * CONTENT_LANE_WIDTH,
+        y,
+      };
+      const intersecting = existingNodes.filter((node) =>
+        rectanglesOverlap({ position, size }, node),
+      );
+      if (intersecting.length === 0) return position;
+      nextY = Math.max(
+        nextY,
+        ...intersecting.map((node) => node.position.y + node.size.height + CONTENT_VERTICAL_GAP),
+      );
+    }
+    y = nextY > y ? nextY : y + size.height + CONTENT_VERTICAL_GAP;
   }
 }
 
@@ -457,8 +496,9 @@ function createArtifactNode(
   id: string,
   position: CanvasNode['position'],
   zIndex: number,
+  parentId?: string,
 ): CanvasNode {
-  const base = { id, position, zIndex };
+  const base = { id, position, zIndex, ...(parentId ? { parentId } : {}) };
   const provenance = createSerializableProvenance(artifact);
 
   if (artifact.kind === 'markdown') {
@@ -486,10 +526,7 @@ function createArtifactNode(
         assetPath: '',
         mediaType: artifact.kind,
         title: artifact.title,
-        ...(artifact.resourceRef ? { resourceRef: artifact.resourceRef } : {}),
-        ...(artifact.documentResourceRef
-          ? { documentResourceRef: artifact.documentResourceRef }
-          : {}),
+        contentLocator: artifact.contentLocator,
         ...(artifact.generationContext ? { generationContext: artifact.generationContext } : {}),
         provenance,
       },
@@ -506,10 +543,7 @@ function createArtifactNode(
       docType: inferDocumentType(artifact.title, artifact.mimeType),
       title: artifact.title,
       ...(artifact.mimeType ? { mimeType: artifact.mimeType } : {}),
-      ...(artifact.resourceRef ? { resourceRef: artifact.resourceRef } : {}),
-      ...(artifact.documentResourceRef
-        ? { documentResourceRef: artifact.documentResourceRef }
-        : {}),
+      contentLocator: artifact.contentLocator,
       provenance,
     },
   };
@@ -641,6 +675,10 @@ function isSerializableRecord(value: unknown): value is CanvasSerializableRecord
 
 function uniqueStrings<Value extends string>(values: readonly Value[]): Value[] {
   return [...new Set(values)];
+}
+
+function uniqueNodes(nodes: readonly CanvasNode[]): CanvasNode[] {
+  return [...new Map(nodes.map((node) => [node.id, node])).values()];
 }
 
 function roleRank(role: CanvasWorkspaceArtifactRole): number {

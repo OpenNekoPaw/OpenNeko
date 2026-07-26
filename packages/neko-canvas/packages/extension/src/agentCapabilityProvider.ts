@@ -19,8 +19,6 @@ import type {
   PromptFragment,
   NekoCanvasAPI,
   CanvasNodeType,
-  ICapabilityMediaService,
-  ICapabilityConfigManager,
   StoryScenePlan,
   JsonPointerPath,
   CanvasStoryboardExecutionSummaryRequest,
@@ -93,9 +91,10 @@ import {
 } from '@neko/shared';
 import { resolveCharacterBindingsForNames } from '@neko/shared/vscode/extension';
 import { getRootLogger } from './utils/logger';
-import { toCanvasStableMediaResourceRef } from './canvasMediaResourceAdapter';
+import { toCanvasStableMediaContentLocator } from './canvasMediaContentLocator';
 import {
   executeCanvasCreativeAi,
+  waitForTerminalGeneration,
   type CanvasCreativeAiRuntimeContext,
 } from './canvasCreativeAiExecutor';
 import type { CanvasCreativeAiHostInvocationResult } from './creativeAiCanvasAdapter';
@@ -113,28 +112,9 @@ export interface NekoCanvasCapabilityProvider extends AgentCapabilityProvider {
 
 export function createNekoCanvasCapabilityProvider(
   api: NekoCanvasAPI,
+  runtimeContext: CanvasCreativeAiRuntimeContext = {},
 ): NekoCanvasCapabilityProvider {
-  return new NekoCanvasCapabilityProviderImpl(api);
-}
-
-/**
- * Auto-resolve model from ConfigManager when workspace config has no model set.
- * Writes to workspace config so neko-canvas can read it on next generation.
- */
-async function ensureProjectModel(
-  configManager: ICapabilityConfigManager | undefined,
-  type: 'image' | 'video' | 'audio',
-): Promise<void> {
-  if (!configManager) return;
-  const key = `neko.project.models.${type}`;
-  const wsConfig = vscode.workspace.getConfiguration();
-  const current = wsConfig.get<string>(key, '');
-  if (current) return;
-  const model = configManager.getEnabledModels().find((m) => m.type === type);
-  if (model?.name) {
-    await wsConfig.update(key, model.name, vscode.ConfigurationTarget.Workspace);
-    getRootLogger().info(`Auto-resolved ${type} model from ConfigManager: ${model.name}`);
-  }
+  return new NekoCanvasCapabilityProviderImpl(api, runtimeContext);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1487,8 +1467,7 @@ const CANVAS_TOOL_ZH_LOCALIZATIONS = {
     },
   },
   [TOOL_NAMES_CANVAS.SET_PROJECT_GENERATION_CONFIG]: {
-    description:
-      '保存项目级生成参数和模型配置；它们会作为节点默认值。批量生成前应先调用，避免上下文压缩后丢失参数。',
+    description: '保存项目级生成参数；它们会作为节点默认值。模型绑定由 Host 配置统一管理。',
     parameters: {
       imageRatio: '图片画幅比例。',
       imageResolution: '图片分辨率。',
@@ -1496,9 +1475,6 @@ const CANVAS_TOOL_ZH_LOCALIZATIONS = {
       videoResolution: '视频分辨率。',
       videoDuration: '视频时长，单位秒。',
       videoFps: '视频帧率。',
-      imageModel: '图片生成模型 ID。',
-      videoModel: '视频生成模型 ID。',
-      audioModel: '音频生成模型 ID。',
     },
   },
   [TOOL_NAMES_CANVAS.EXPORT_STORYBOARD]: {
@@ -2528,9 +2504,14 @@ const AI_NATIVE_STORYBOARD_FIELD_PROFILE: CanvasAuthoringFieldProfileDescriptor 
 class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
   readonly id = 'neko-canvas';
   readonly version = '1.0.0';
-  private _runtimeContext?: CanvasCreativeAiRuntimeContext;
+  private _runtimeContext: CanvasCreativeAiRuntimeContext;
 
-  constructor(private readonly _api: NekoCanvasAPI) {}
+  constructor(
+    private readonly _api: NekoCanvasAPI,
+    runtimeContext: CanvasCreativeAiRuntimeContext,
+  ) {
+    this._runtimeContext = runtimeContext;
+  }
 
   async executeCanvasCreativeAiInvocation(
     invocation: ExternalCreativeAiInvocation,
@@ -2767,13 +2748,12 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
 
   getTools(context: AgentCapabilityContext): Tool[] {
     this._runtimeContext = {
-      purposeMediaService: context.purposeMediaService,
+      ...this._runtimeContext,
       purposeTextRuntime: context.purposeTextRuntime,
     };
     const api = this._api;
     const logger = getRootLogger();
-    const configManager = context.configManager;
-    const mediaService = context.mediaService;
+    const generationJobs = this._runtimeContext.generationJobs;
 
     const tools: Tool[] = [
       ...CANVAS_MARKDOWN_TOOL_DEFINITIONS.map((definition) =>
@@ -3946,7 +3926,6 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
         } satisfies ToolParameters,
         async execute(args) {
           try {
-            await ensureProjectModel(configManager, 'image');
             await api.nodes.generateImage(
               args.nodeId as string,
               args.childNodeId as string | undefined,
@@ -3993,7 +3972,6 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
         } satisfies ToolParameters,
         async execute(args) {
           try {
-            await ensureProjectModel(configManager, 'image');
             await api.nodes.generateBatch(args.nodeIds as string[]);
             return {
               success: true,
@@ -4020,7 +3998,7 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
       {
         name: TOOL_NAMES_CANVAS.SET_PROJECT_GENERATION_CONFIG,
         description:
-          'Persist project-level generation parameters and model configuration. ' +
+          'Persist project-level generation parameters. Model bindings remain Host-owned. ' +
           'These become the default for all nodes unless overridden per-node. ' +
           'Always call this before batch generation to ensure params survive context compression.',
         category: 'project',
@@ -4049,9 +4027,6 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
             },
             videoDuration: { type: 'number', description: 'Video duration in seconds' },
             videoFps: { type: 'number', enum: [24, 30], description: 'Video frame rate' },
-            imageModel: { type: 'string', description: 'Image generation model id' },
-            videoModel: { type: 'string', description: 'Video generation model id' },
-            audioModel: { type: 'string', description: 'Audio generation model id' },
           },
         } satisfies ToolParameters,
         async execute(args) {
@@ -4069,12 +4044,6 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
               configEntries['neko.project.generation.video.duration'] = args.videoDuration;
             if (args.videoFps !== undefined)
               configEntries['neko.project.generation.video.fps'] = args.videoFps;
-            if (args.imageModel !== undefined)
-              configEntries['neko.project.models.image'] = args.imageModel;
-            if (args.videoModel !== undefined)
-              configEntries['neko.project.models.video'] = args.videoModel;
-            if (args.audioModel !== undefined)
-              configEntries['neko.project.models.audio'] = args.audioModel;
 
             const wsConfig = vscode.workspace.getConfiguration();
             await Promise.all(
@@ -4361,11 +4330,11 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
     const localizedTools = tools.map((tool) => withCanvasToolMetadata(tool));
 
     // -----------------------------------------------------------------------
-    // Keyframe Video Generation (requires mediaService)
+    // Keyframe Video Generation
     // -----------------------------------------------------------------------
-    if (mediaService) {
+    if (generationJobs) {
       localizedTools.push(
-        withCanvasToolMetadata(createVideoKeyframeTool(api, mediaService, logger)),
+        withCanvasToolMetadata(createVideoKeyframeTool(api, generationJobs, logger)),
       );
     }
 
@@ -4374,11 +4343,11 @@ class NekoCanvasCapabilityProviderImpl implements NekoCanvasCapabilityProvider {
 }
 
 /**
- * Create the keyframe video generation tool (requires mediaService).
+ * Create the keyframe video generation tool.
  */
 function createVideoKeyframeTool(
   api: NekoCanvasAPI,
-  media: ICapabilityMediaService,
+  jobs: NonNullable<CanvasCreativeAiRuntimeContext['generationJobs']>,
   logger: ReturnType<typeof getRootLogger>,
 ): Tool {
   return {
@@ -4387,7 +4356,7 @@ function createVideoKeyframeTool(
       'Generate a video clip for a ShotNode using first-frame and last-frame images as keyframes. ' +
       'The first frame node and last frame node must already have generated images. ' +
       'Calls the configured video model with the keyframe references and stores the result ' +
-      "in the target node's generatedVideo field. Returns error if media service is unavailable.",
+      "in the target node's generatedVideo field. Returns an error if the Generation Job runtime is unavailable.",
     category: 'generation',
     parameters: {
       type: 'object',
@@ -4454,11 +4423,11 @@ function createVideoKeyframeTool(
           };
         }
 
-        let startFrameRef;
-        let endFrameRef;
+        let startFrameLocator;
+        let endFrameLocator;
         try {
-          startFrameRef = toCanvasStableMediaResourceRef(firstFrameMediaRef);
-          endFrameRef = toCanvasStableMediaResourceRef(lastFrameMediaRef);
+          startFrameLocator = toCanvasStableMediaContentLocator(firstFrameMediaRef);
+          endFrameLocator = toCanvasStableMediaContentLocator(lastFrameMediaRef);
         } catch (error) {
           return {
             success: false,
@@ -4482,49 +4451,69 @@ function createVideoKeyframeTool(
         // Mark node as generating
         await api.nodes.update(nodeId, { generationStatus: 'generating' });
 
-        let task;
+        let completed;
         try {
-          task = await media.generateVideo({
-            prompt,
-            operation: 'generate-from-keyframes',
-            startFrameRef,
-            endFrameRef,
-            aspectRatio,
-            duration,
-            metadata: withToolExecutionRunMetadata(options, metadata),
+          const submitted = await jobs.submitGeneration({
+            lifecycleMode: 'linked',
+            purpose: 'video.generate',
+            generationType: 'image-to-video',
+            request: {
+              prompt,
+              operation: 'generate-from-keyframes',
+              startFrameLocator,
+              endFrameLocator,
+              aspectRatio,
+              duration,
+              metadata: withToolExecutionRunMetadata(options, metadata),
+            },
+          });
+          completed = await waitForTerminalGeneration(jobs, submitted, {
+            ...(options?.signal ? { signal: options.signal } : {}),
+            onSnapshot: (snapshot) =>
+              options?.onProgress?.({
+                percent: snapshot.progress.percent,
+                stage: snapshot.progress.stage,
+              }),
           });
         } catch (err) {
           await api.nodes.update(nodeId, { generationStatus: 'error' });
-          return { success: false, error: `Video generation failed to start: ${String(err)}` };
+          return { success: false, error: `Video generation failed: ${String(err)}` };
         }
 
-        // Wait for completion (up to 5 minutes)
-        let completed;
-        try {
-          completed = await media.waitForTask(task.scope, 5 * 60 * 1000);
-        } catch (err) {
+        if (completed.phase !== 'succeeded') {
           await api.nodes.update(nodeId, { generationStatus: 'error' });
-          return { success: false, error: `Video generation timed out: ${String(err)}` };
+          return {
+            success: false,
+            error:
+              completed.failure?.message ??
+              `Video Generation Job ended in phase ${completed.phase}.`,
+          };
         }
-
-        if (completed.status !== 'completed' || !completed.outputs?.length) {
+        const output = completed.resultLocators?.[0];
+        if (!output) {
           await api.nodes.update(nodeId, { generationStatus: 'error' });
-          return { success: false, error: `Video generation ${completed.status}` };
+          return {
+            success: false,
+            error: 'Video Generation Job completed without a generated-output ContentLocator.',
+          };
         }
-
-        const output = completed.outputs[0]!;
         await api.nodes.update(nodeId, {
-          generatedVideo: output.url,
+          generatedVideoAsset: {
+            type: 'generated-video',
+            id: output.outputId,
+            kind: 'generated-asset',
+            contentLocator: output,
+          },
           generationStatus: 'done',
         });
 
-        logger.info(`canvas_generate_video_with_keyframes: nodeId=${nodeId} taskId=${task.id}`);
+        logger.info(`canvas_generate_video_with_keyframes: nodeId=${nodeId} completed`);
         return {
           success: true,
           data: {
             message: `Video generated for shot "${nodeId}"`,
-            videoUrl: output.url,
-            taskId: task.id,
+            generationJobId: completed.ref.jobId,
+            contentLocator: output,
             duration,
             aspectRatio,
           },

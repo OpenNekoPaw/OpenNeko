@@ -1,6 +1,10 @@
 import { promises as fsp } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import type { GeneratedAsset, GeneratedAssetType } from '@neko/shared';
+import {
+  validateGeneratedAssetRevisionRef,
+  type GeneratedAsset,
+  type GeneratedAssetType,
+} from '@neko/shared';
 
 export interface AssetFilter {
   readonly type?: GeneratedAssetType;
@@ -22,7 +26,12 @@ export interface GeneratedAssetIndexStore {
   ): Promise<readonly GeneratedAsset[]>;
 }
 
-export class GeneratedAssetIndex {
+export interface GeneratedAssetCatalog {
+  get(id: string): GeneratedAsset | undefined;
+  list(filter?: AssetFilter): GeneratedAsset[];
+}
+
+export class GeneratedAssetIndex implements GeneratedAssetCatalog {
   private readonly assets = new Map<string, GeneratedAsset>();
 
   constructor(private readonly store: GeneratedAssetIndexStore) {
@@ -32,8 +41,7 @@ export class GeneratedAssetIndex {
   }
 
   async load(): Promise<void> {
-    this.assets.clear();
-    this.replaceAssets(await this.store.load());
+    this.replaceAssets(assertGeneratedAssets(await this.store.load()));
   }
 
   dispose(): void {
@@ -41,8 +49,11 @@ export class GeneratedAssetIndex {
   }
 
   async add(asset: GeneratedAsset): Promise<void> {
-    const assets = await this.store.update((current) => mergeGeneratedAssets(current, [asset]));
-    this.replaceAssets(assets);
+    assertGeneratedAsset(asset);
+    const assets = await this.store.update((current) =>
+      mergeGeneratedAssets(assertGeneratedAssets(current), [asset]),
+    );
+    this.replaceAssets(assertGeneratedAssets(assets));
   }
 
   get(id: string): GeneratedAsset | undefined {
@@ -52,10 +63,11 @@ export class GeneratedAssetIndex {
   async remove(id: string): Promise<boolean> {
     let existed = false;
     const assets = await this.store.update((current) => {
-      existed = current.some((asset) => asset.id === id);
-      return current.filter((asset) => asset.id !== id);
+      const validated = assertGeneratedAssets(current);
+      existed = validated.some((asset) => asset.id === id);
+      return validated.filter((asset) => asset.id !== id);
     });
-    this.replaceAssets(assets);
+    this.replaceAssets(assertGeneratedAssets(assets));
     return existed;
   }
 
@@ -79,7 +91,7 @@ export class GeneratedAssetIndex {
   private replaceAssets(assets: readonly GeneratedAsset[]): void {
     this.assets.clear();
     for (const asset of assets) {
-      if (asset.id && asset.type) this.assets.set(asset.id, asset);
+      this.assets.set(asset.id, asset);
     }
   }
 }
@@ -198,7 +210,12 @@ function isGeneratedAssetIndexStore(value: unknown): value is GeneratedAssetInde
 }
 
 function isGeneratedAsset(value: unknown): value is GeneratedAsset {
-  return isRecord(value) && typeof value['path'] === 'string' && isPathlessGeneratedAsset(value);
+  return (
+    isRecord(value) &&
+    typeof value['path'] === 'string' &&
+    isPathlessGeneratedAsset(value) &&
+    isGeneratedAssetLifecycleConsistent(value)
+  );
 }
 
 function isPathlessGeneratedAsset(value: unknown): boolean {
@@ -244,6 +261,48 @@ function isPathlessGeneratedAsset(value: unknown): boolean {
       );
     default:
       return false;
+  }
+}
+
+function assertGeneratedAssets(assets: readonly GeneratedAsset[]): readonly GeneratedAsset[] {
+  for (const asset of assets) assertGeneratedAsset(asset);
+  return assets;
+}
+
+function assertGeneratedAsset(asset: unknown): asserts asset is GeneratedAsset {
+  if (!isGeneratedAsset(asset)) {
+    const assetId = isRecord(asset) && typeof asset['id'] === 'string' ? asset['id'] : '<unknown>';
+    throw new Error(
+      `generated-asset-index-migration-required: Generated asset ${assetId} contains invalid or legacy metadata.`,
+    );
+  }
+}
+
+function isGeneratedAssetLifecycleConsistent(asset: Record<string, unknown>): boolean {
+  if (asset['lifecycle'] === undefined) return true;
+  const validation = validateGeneratedAssetRevisionRef(asset['lifecycle']);
+  if (!validation.ok) return false;
+  return (
+    validation.lifecycle.assetId === asset['id'] &&
+    validation.lifecycle.mimeType === asset['mimeType'] &&
+    validation.lifecycle.mediaKind === generatedAssetMediaKind(asset['type'])
+  );
+}
+
+function generatedAssetMediaKind(
+  value: unknown,
+): 'image' | 'audio' | 'video' | 'storyboard' | undefined {
+  switch (value) {
+    case 'generated-image':
+      return 'image';
+    case 'generated-audio':
+      return 'audio';
+    case 'generated-video':
+      return 'video';
+    case 'generated-storyboard':
+      return 'storyboard';
+    default:
+      return undefined;
   }
 }
 

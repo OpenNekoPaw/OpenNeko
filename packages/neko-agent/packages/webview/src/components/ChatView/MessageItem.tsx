@@ -2,7 +2,6 @@ import { memo } from 'react';
 import type { Message } from '@neko-agent/types';
 import { ToolCallDisplay, ToolCallGroupDisplay } from '@/components/ChatView/ToolCallDisplay';
 import { DiffBlock } from '@/components/ChatView/DiffBlock';
-import { TaskCard, BatchTaskCard } from '@/components/ChatView/TaskCard';
 import { SubAgentCard } from '@/components/ChatView/SubAgentCard';
 import { ProcessRecordsGroup } from '@/components/ChatView/ProcessRecordsGroup';
 import { ContentBlockItem } from '@/components/ChatView/ContentBlockItem';
@@ -13,10 +12,7 @@ import { ImagePreview, AudioCard, VideoCard } from '@/components/ChatView/MediaP
 import { MessageAvatar } from '@/components/ChatView/MessageAvatar';
 import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
 import { useMessageActions } from '@/components/ChatView/MessageActionsContext';
-import {
-  selectMessageLevelSubAgentWorkItems,
-  selectMessageTaskWorkItems,
-} from '@/components/AgentWorkItem';
+import { selectMessageLevelSubAgentWorkItems } from '@/components/AgentWorkItem';
 import {
   deriveToolCallsFromContentBlocks,
   projectContentBlocksDisplay,
@@ -34,7 +30,6 @@ import {
 import { AgentHostMessages } from '@/messages';
 import { projectMarkdownResourceRendering } from '@/presenters/markdown-resource-rendering-presenter';
 import {
-  DEFAULT_MESSAGE_IDENTITIES,
   selectMessageIdentity,
   type MessageIdentityMap,
 } from '@/components/ChatView/message-identity';
@@ -46,7 +41,7 @@ type MessageContextReference = NonNullable<Message['contextReferences']>[number]
 interface MessageItemProps {
   message: Message;
   conversationId: string | null;
-  identities?: MessageIdentityMap;
+  identities: MessageIdentityMap;
   // P2: Message operations
   onEditMessage?: (messageId: string) => void;
   onResendFrom?: (messageId: string) => void;
@@ -343,23 +338,13 @@ export const MessageItem = memo(function MessageItem({
   onEditMessage,
   onResendFrom,
   onFeedback,
-  identities = DEFAULT_MESSAGE_IDENTITIES,
+  identities,
   showAvatar = true,
   isGrouped = false,
 }: MessageItemProps) {
-  const {
-    onCancelTask,
-    onRetryTask,
-    onViewTaskResult,
-    onAcceptDiff,
-    onRejectDiff,
-    pluginsAvailable,
-    contextChips,
-    ambientNodes,
-    workItems,
-  } = useMessageActions();
+  const { onAcceptDiff, onRejectDiff, pluginsAvailable, contextChips, ambientNodes, workItems } =
+    useMessageActions();
   // 找出与这条消息关联的工作项
-  const relatedTasks = selectMessageTaskWorkItems({ message, workItems }).map((item) => item.task);
   const relatedSubAgents = selectMessageLevelSubAgentWorkItems({ message, workItems });
 
   const isUser = message.role === 'user';
@@ -465,29 +450,6 @@ export const MessageItem = memo(function MessageItem({
             />
           )}
 
-          {/* Background task cards - TaskCard handles all tasks including completed
-              ToolCallDisplay skips media preview for backgroundMode tasks */}
-          {relatedTasks.length === 1 && (
-            <div className="mt-2 w-full">
-              <TaskCard
-                task={relatedTasks[0]}
-                onCancel={onCancelTask}
-                onRetry={onRetryTask}
-                onViewResult={onViewTaskResult}
-                plugins={pluginsAvailable}
-              />
-            </div>
-          )}
-          {relatedTasks.length > 1 && (
-            <div className="mt-2 w-full">
-              <BatchTaskCard
-                tasks={relatedTasks}
-                onCancel={onCancelTask}
-                onCancelAll={() => relatedTasks.forEach((task) => onCancelTask?.(task.scope))}
-                onViewResult={onViewTaskResult}
-              />
-            </div>
-          )}
           {relatedSubAgents.map((item) => (
             <div key={item.id} className="mt-2 w-full">
               <SubAgentCard item={item} />

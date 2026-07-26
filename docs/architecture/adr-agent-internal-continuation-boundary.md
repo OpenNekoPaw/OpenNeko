@@ -2,6 +2,8 @@
 
 状态：Proposed
 
+> 取代说明：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 已取代本文的通用 `task-result-continuation`、Task Group 和 TaskManager 续跑目标。用户消息与 runtime-authored input 不得混成用户 transcript，以及 Subagent 结构化回传的原则继续有效；普通 Tool Call 现在直接返回终态结果，不再通过 Task continuation 恢复主 Agent。
+
 本文记录 Neko Agent 在 TUI、eval、异步任务和 subagent 场景中，对内部续跑（Internal Continuation）、消息队列（Message Queue）和异步结果回传的边界决策。它补充 [`adr-agent-message-task-queue-boundary.md`](adr-agent-message-task-queue-boundary.md)、[`agent.md`](agent.md) 与 [`headless-project-authoring.md`](headless-project-authoring.md)。
 
 ## 背景

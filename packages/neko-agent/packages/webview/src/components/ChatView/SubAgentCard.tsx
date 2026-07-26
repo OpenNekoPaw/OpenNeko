@@ -13,7 +13,7 @@ import {
   ErrorIcon,
   ToolLoadingSpinner as LoadingSpinner,
 } from '@/components/ChatView/ToolCallDisplay';
-import { TaskSteps, ChevronIcon } from '@/components/ChatView/TaskCard/TaskSteps';
+import { AgentRunSteps, ChevronIcon } from '@/components/ChatView/AgentRunSteps';
 
 interface SubAgentCardProps {
   item: SubAgentWorkItem;
@@ -77,7 +77,7 @@ export function SubAgentCard({ item }: SubAgentCardProps) {
               </div>
             )}
             {projection.showSteps && item.steps && (
-              <TaskSteps steps={item.steps} currentStepId={item.currentStepId} />
+              <AgentRunSteps steps={item.steps} currentStepId={item.currentStepId} />
             )}
             {projection.showChildren && (
               <div className="mb-2 rounded-md border border-[var(--agent-divider)] px-2 py-1.5">

@@ -373,13 +373,6 @@ describe('agent evaluation v2 suite and scenario contracts', () => {
         evidenceRef: 'turn-facts',
       },
       {
-        id: 'task',
-        kind: 'task-terminal',
-        taskType: 'image-generation',
-        status: 'completed',
-        evidenceRef: 'turn-facts',
-      },
-      {
         id: 'artifact',
         kind: 'artifact',
         artifactRef: 'asset:scene-1',

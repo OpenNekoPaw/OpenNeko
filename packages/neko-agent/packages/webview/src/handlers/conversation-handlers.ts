@@ -31,10 +31,7 @@ import { findActiveTab, isCharacterRoleTab } from '@/presenters/character-role-s
 import { shouldActivateForegroundConversation } from './foreground-activation';
 import { projectQueuedMessagesCleared } from '@/presenters/message-queue-presenter';
 import { updateConversation } from './message-updater';
-import {
-  commitConversationSnapshotProjection,
-  ingestConversationRenderSnapshot,
-} from '@/render-lifecycle/conversation-render-state-adapter';
+import { ingestConversationRenderSnapshot } from '@/render-lifecycle/conversation-render-state-adapter';
 
 /**
  * Handle 'error' message - Error occurred
@@ -200,16 +197,11 @@ function cacheConversationProjection(
   if (!coordinator) {
     throw new Error('Conversation caching requires the canonical render coordinator.');
   }
-  const snapshot = ingestConversationRenderSnapshot({
+  ingestConversationRenderSnapshot({
     coordinator,
     conversationId,
     messages,
     streaming,
-  });
-  commitConversationSnapshotProjection({
-    snapshot,
-    conversationMessagesRef: context.conversationMessagesRef,
-    conversationStreamingRef: context.conversationStreamingRef,
   });
 }
 

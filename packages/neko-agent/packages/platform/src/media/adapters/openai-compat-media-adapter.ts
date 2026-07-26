@@ -8,11 +8,11 @@ import type { Model, Provider } from '../../types/provider';
 import type {
   MediaGenerationType,
   MediaAdapterResult,
-  MediaTaskStatus,
-  ImageGenerationRequest,
-  VideoGenerationRequest,
+  MediaOperationStatus,
+  MaterializedImageGenerationRequest,
+  MaterializedVideoGenerationRequest,
   MediaOutput,
-} from '../types';
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 /**
@@ -53,7 +53,7 @@ interface OpenAIVideoResponse {
 export class OpenAICompatMediaAdapter extends BaseMediaAdapter {
   readonly type = 'openai-compat';
 
-  private static readonly STATUS_MAP: Record<string, MediaTaskStatus> = {
+  private static readonly STATUS_MAP: Record<string, MediaOperationStatus> = {
     queued: 'pending',
     in_progress: 'processing',
     completed: 'completed',
@@ -114,8 +114,8 @@ export class OpenAICompatMediaAdapter extends BaseMediaAdapter {
   /**
    * Generate image using OpenAI DALL-E compatible API
    */
-  override async generateImage(
-    request: ImageGenerationRequest,
+  async generateImage(
+    request: MaterializedImageGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -164,8 +164,8 @@ export class OpenAICompatMediaAdapter extends BaseMediaAdapter {
   /**
    * Generate video using Sora-like API
    */
-  override async generateVideo(
-    request: VideoGenerationRequest,
+  async generateVideo(
+    request: MaterializedVideoGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -233,10 +233,7 @@ export class OpenAICompatMediaAdapter extends BaseMediaAdapter {
   /**
    * Get task status for async video generation
    */
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const url = this.getMediaEndpoint(provider, 'videoStatus', { taskId: externalTaskId });
 
     const { data, error } = await this.request<OpenAIVideoResponse>(
@@ -284,7 +281,7 @@ export class OpenAICompatMediaAdapter extends BaseMediaAdapter {
   /**
    * Cancel a running task
    */
-  override async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
+  async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
     await this.cancelViaEndpoint(
       this.getMediaEndpoint(provider, 'videoCancel', { taskId: externalTaskId }),
       provider,

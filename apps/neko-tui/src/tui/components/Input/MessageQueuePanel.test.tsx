@@ -138,11 +138,11 @@ describe('MessageQueuePanel', () => {
       version: 1,
       items: [
         {
-          id: 'task-1',
+          id: 'system-1',
           conversationId: 'conv-1',
-          content: 'Continue task',
+          content: 'Continue system work',
           createdAt: 1,
-          source: 'task-result-continuation',
+          source: 'system-continuation',
         },
       ],
     });
@@ -159,11 +159,11 @@ describe('MessageQueuePanel', () => {
       version: 1,
       items: [
         {
-          id: 'task-1',
+          id: 'system-1',
           conversationId: 'conv-1',
-          content: '继续处理任务结果',
+          content: '继续处理系统结果',
           createdAt: 1,
-          source: 'task-result-continuation',
+          source: 'system-continuation',
         },
         {
           id: 'queue-1',
@@ -185,7 +185,7 @@ describe('MessageQueuePanel', () => {
     const frame = renderWithPresentation(<MessageQueuePanel />, 'zh-cn').lastFrame()!;
     expect(frame).toContain('下一轮 · 3');
     expect(frame).toContain('内部续跑优先');
-    expect(frame).toContain('任务续跑: 继续处理任务结果');
+    expect(frame).toContain('系统续跑: 继续处理系统结果');
     expect(frame).toContain('+1 条');
   });
 

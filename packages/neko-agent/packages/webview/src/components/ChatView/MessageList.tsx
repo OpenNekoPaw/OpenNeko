@@ -14,10 +14,7 @@ import { ContentBlockItem } from '@/components/ChatView/ContentBlockItem';
 import { ProcessRecordsGroup } from '@/components/ChatView/ProcessRecordsGroup';
 import { MessageAvatar } from '@/components/ChatView/MessageAvatar';
 import type { ActivationProgressTimeline } from '@/presenters/activation-progress-presenter';
-import {
-  DEFAULT_MESSAGE_IDENTITIES,
-  type MessageIdentityMap,
-} from '@/components/ChatView/message-identity';
+import type { MessageIdentityMap } from '@/components/ChatView/message-identity';
 import { useMessageActions } from '@/components/ChatView/MessageActionsContext';
 import {
   estimateMessageListItemHeight,
@@ -29,7 +26,7 @@ interface MessageListProps {
   isThinking: boolean;
   streamingMessageId: string | null;
   activeConversationId: string | null;
-  identities?: MessageIdentityMap;
+  identities: MessageIdentityMap;
   activationProgress?: readonly ActivationProgressTimeline[];
   viewport?: TabViewportSnapshot;
   onViewportChange?: (viewport: TabViewportSnapshot) => void;
@@ -40,7 +37,7 @@ export function MessageList({
   isThinking,
   streamingMessageId,
   activeConversationId,
-  identities = DEFAULT_MESSAGE_IDENTITIES,
+  identities,
   activationProgress = [],
   viewport = { followMode: 'follow-tail' },
   onViewportChange,

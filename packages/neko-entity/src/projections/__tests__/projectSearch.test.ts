@@ -110,17 +110,16 @@ describe('Entity project search projections', () => {
       },
     });
 
-    await expect(
-      adapter.query(
-        {
-          text: '',
-          mode: 'entity-picker',
-          kinds: ['entity-candidate'],
-          partitions: ['creative-entities'],
-        },
-        { projectRoot: '/workspace' },
-      ),
-    ).resolves.toEqual([
+    const projected = await adapter.query(
+      {
+        text: '',
+        mode: 'entity-picker',
+        kinds: ['entity-candidate'],
+        partitions: ['creative-entities'],
+      },
+      { projectRoot: '/workspace' },
+    );
+    expect(projected).toEqual([
       expect.objectContaining({
         id: 'entity-projection:workspace:cases/test.fountain:candidate:candidate:auto:character:小橘',
         kind: 'entity-candidate',
@@ -132,5 +131,18 @@ describe('Entity project search projections', () => {
         metadata: expect.objectContaining({ status: 'open' }),
       }),
     ]);
+
+    await expect(
+      adapter.query(
+        {
+          text: projected[0]!.id,
+          mode: 'entity-picker',
+          limit: 1,
+          kinds: ['entity-candidate'],
+          partitions: ['creative-entities'],
+        },
+        { projectRoot: '/workspace' },
+      ),
+    ).resolves.toEqual(projected);
   });
 });

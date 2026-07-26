@@ -1,4 +1,3 @@
-import type { TaskRunScope } from '@neko/shared';
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 
 const { mockPostMessage, mockGetState, mockSetState, mockVSCodeApi } = vi.hoisted(() => {
@@ -279,46 +278,10 @@ describe('messages', () => {
       });
     });
 
-    describe('task management', () => {
-      it('should post getTasks', () => {
-        AgentHostMessages.getTasks('conv-1');
-        expect(mockPostMessage).toHaveBeenCalledWith({
-          type: 'getTasks',
-          conversationId: 'conv-1',
-        });
-      });
-
+    describe('agent state management', () => {
       it('should post getAgentStates', () => {
         AgentHostMessages.getAgentStates();
         expect(mockPostMessage).toHaveBeenCalledWith({ type: 'getAgentStates' });
-      });
-
-      it('should post cancelTask with complete owner scope', () => {
-        const taskScope = createTaskRunScope();
-        AgentHostMessages.cancelTask(taskScope);
-        expect(mockPostMessage).toHaveBeenCalledWith({
-          type: 'cancelTask',
-          taskScope,
-        });
-      });
-
-      it('should post viewTaskResult with complete owner scope', () => {
-        const taskScope = createTaskRunScope();
-        AgentHostMessages.viewTaskResult(taskScope, 'generated-assets/asset-1.png');
-        expect(mockPostMessage).toHaveBeenCalledWith({
-          type: 'viewTaskResult',
-          taskScope,
-          resultRef: 'generated-assets/asset-1.png',
-        });
-      });
-
-      it('should post retryTask with complete owner scope', () => {
-        const taskScope = createTaskRunScope();
-        AgentHostMessages.retryTask(taskScope);
-        expect(mockPostMessage).toHaveBeenCalledWith({
-          type: 'retryTask',
-          taskScope,
-        });
       });
     });
 
@@ -457,13 +420,3 @@ describe('messages', () => {
     });
   });
 });
-
-function createTaskRunScope(): TaskRunScope {
-  return {
-    conversationId: 'conv-1',
-    runId: 'run-1',
-    parentRunId: 'parent-run-1',
-    childRunId: 'task-123',
-    childKind: 'task',
-  };
-}

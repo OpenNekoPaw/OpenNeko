@@ -9,6 +9,14 @@ const extensionBaselines = [
     owner: 'Agent extension',
     path: 'packages/neko-agent/packages/extension/tsconfig.json',
   },
+  {
+    owner: 'Chara domain package',
+    path: 'packages/neko-chara/tsconfig.json',
+  },
+  {
+    owner: 'Quality domain package',
+    path: 'packages/neko-quality/tsconfig.json',
+  },
 ];
 
 let failed = false;

@@ -53,8 +53,8 @@ describe('embedded runtime dependency closure', () => {
       readFile('packages/neko-agent/.vscodeignore', 'utf8'),
     ]);
 
-    assert.match(manifest.scripts['vscode:prepublish'], /stage:sharp-runtime/u);
-    assert.match(manifest.scripts['stage:sharp-runtime'], /stage-sharp-runtime\.mjs/u);
+    assert.match(manifest.scripts.compile, /stage:sharp-runtime/u);
+    assert.match(manifest.scripts['stage:sharp-runtime'], /scripts\/stage-sharp-runtime\.mjs/u);
     assert.match(vscodeIgnore, /^scripts\/\*\*$/mu);
     assert.match(vscodeIgnore, /^!dist\/\*\*$/mu);
   });
@@ -62,6 +62,7 @@ describe('embedded runtime dependency closure', () => {
   it('validates every embedded runtime closure before final packaging', async () => {
     const assemblerSource = await readFile('scripts/package-openneko-platform.mjs', 'utf8');
 
+    assert.match(assemblerSource, /stageOpenNekoApplicationRuntime\(stageRoot\)/u);
     assert.match(assemblerSource, /assertEmbeddedRuntimeClosure\(stageRoot, target\)/u);
   });
 });

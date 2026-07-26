@@ -20,12 +20,7 @@ export interface TabRenderStatusSnapshot {
 export interface ProjectDisplayTabsInput {
   readonly openTabs: readonly OpenTab[];
   readonly conversations: readonly ConversationSummary[];
-  readonly activeConversationId: string | null;
-  readonly activeMessages: readonly Message[];
-  readonly activeStreaming: ConversationStreamingState;
-  readonly messagesByConversation: ReadonlyMap<string, readonly Message[]>;
-  readonly streamingByConversation: ReadonlyMap<string, ConversationStreamingState>;
-  readonly renderSnapshotsByConversation?: ReadonlyMap<string, TabRenderStatusSnapshot>;
+  readonly renderSnapshotsByConversation: ReadonlyMap<string, TabRenderStatusSnapshot>;
   readonly agentStateByConversation: ReadonlyMap<string, AgentState>;
 }
 
@@ -48,17 +43,9 @@ const TITLE_MAX_LENGTH = 50;
 export function projectDisplayTabs(input: ProjectDisplayTabsInput): DisplayTab[] {
   return input.openTabs.map((tab) => {
     const conversationId = tab.conversationId;
-    const renderSnapshot = input.renderSnapshotsByConversation?.get(conversationId);
-    const messages =
-      renderSnapshot?.messages ??
-      (conversationId === input.activeConversationId
-        ? input.activeMessages
-        : (input.messagesByConversation.get(conversationId) ?? []));
-    const streaming =
-      renderSnapshot?.streaming ??
-      (conversationId === input.activeConversationId
-        ? input.activeStreaming
-        : input.streamingByConversation.get(conversationId));
+    const renderSnapshot = input.renderSnapshotsByConversation.get(conversationId);
+    const messages = renderSnapshot?.messages ?? [];
+    const streaming = renderSnapshot?.streaming;
     const agentState = input.agentStateByConversation.get(conversationId);
     const summary = input.conversations.find((conversation) => conversation.id === conversationId);
     const displayStatus = resolveTabDisplayStatus({

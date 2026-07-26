@@ -11,7 +11,6 @@ import {
   type PendingForegroundConversationActivation,
   type QueuedMessageEditRequest,
   type ContextInjectionRequest,
-  type StreamingState,
   type ConversationRenderStateUpdater,
 } from '@/handlers';
 import { getLogger } from '../utils/logger';
@@ -88,8 +87,6 @@ export interface UseMessageHandlerProps {
   // Refs
   activeConversationIdRef: MutableRefObject<string | null>;
   streamingMessageIdRef: MutableRefObject<string | null>;
-  conversationMessagesRef: MutableRefObject<Map<string, Message[]>>;
-  conversationStreamingRef: MutableRefObject<Map<string, StreamingState>>;
   conversationRenderCoordinator: ConversationRenderCoordinator;
   updateConversationRenderState: (
     conversationId: string,
@@ -189,8 +186,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
     requestConfigSnapshot,
     activeConversationIdRef,
     streamingMessageIdRef,
-    conversationMessagesRef,
-    conversationStreamingRef,
     conversationRenderCoordinator,
     updateConversationRenderState,
     setConversations,
@@ -240,8 +235,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
     () => ({
       activeConversationId,
       activeConversationIdRef,
-      conversationMessagesRef,
-      conversationStreamingRef,
       messages,
       isThinking,
       streamingMessageId,
@@ -296,8 +289,6 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
     [
       activeConversationId,
       activeConversationIdRef,
-      conversationMessagesRef,
-      conversationStreamingRef,
       messages,
       isThinking,
       streamingMessageId,
@@ -355,6 +346,7 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
     (event: MessageEvent<ExtensionToWebviewMessage>): void => {
       const message = event.data;
       if (!message || !message.type) return;
+      rejectLegacyActiveContentMessage(message);
       if (isForeignFeatureHostMessage(message) || isProjectionHostMessage(message)) return;
 
       const handled = registry.handle(message, context);
@@ -369,6 +361,32 @@ export function useMessageHandler(props: UseMessageHandlerProps): UseMessageHand
     handleMessage,
     disposeConversationRendering: renderRuntime.disposeConversation,
   };
+}
+
+const LEGACY_ACTIVE_CONTENT_MESSAGE_TYPES = new Set([
+  'thinking',
+  'streamText',
+  'assistantTextReplacement',
+  'streamComplete',
+  'streamThinking',
+  'messageCancelled',
+  'toolCall',
+  'toolResult',
+  'toolResultBackfill',
+  'toolConfirmation',
+]);
+
+export function rejectLegacyActiveContentMessage(message: unknown): void {
+  if (!isRecord(message)) return;
+  const type = message['type'];
+  if (typeof type !== 'string' || !LEGACY_ACTIVE_CONTENT_MESSAGE_TYPES.has(type)) return;
+  const conversationId =
+    typeof message['conversationId'] === 'string'
+      ? message['conversationId']
+      : 'unknown-conversation';
+  throw new Error(
+    `Legacy active-content message ${type} is forbidden for ${conversationId}; install a conversation projection attachment.`,
+  );
 }
 
 export function isProjectionHostMessage(message: unknown): boolean {

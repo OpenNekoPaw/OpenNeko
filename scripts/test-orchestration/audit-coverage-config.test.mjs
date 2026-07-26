@@ -6,16 +6,14 @@ describe('coverage owner config audit', () => {
   it('requires every canonical test owner to use explicit shared coverage', async () => {
     const result = await auditCoverageConfigs();
     assert.equal(result.ok, true);
-    assert.equal(result.owners, 24);
+    assert.equal(result.owners, 27);
   });
 
   it('fails visibly for an unknown owner config', async () => {
     const result = await auditCoverageConfigs({
       throwOnError: false,
       ownership: {
-        workspaces: [
-          { path: 'packages/missing', owner: 'packages/missing', mode: 'self' },
-        ],
+        workspaces: [{ path: 'packages/missing', owner: 'packages/missing', mode: 'self' }],
       },
     });
     assert.equal(result.ok, false);

@@ -2182,6 +2182,94 @@ body {
   max-height: min(420px, 70vh);
 }
 
+.agent-roleplay-menu {
+  display: flex;
+  width: var(--agent-overlay-inline-size);
+  max-height: min(420px, 70vh);
+  flex-direction: column;
+}
+
+.agent-roleplay-menu-hint,
+.agent-roleplay-menu-section {
+  color: var(--agent-fg-secondary);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.agent-roleplay-menu-hint {
+  padding: 0 var(--agent-overlay-padding) var(--agent-overlay-padding);
+}
+
+.agent-roleplay-menu-section {
+  margin: var(--agent-menu-section-margin);
+  padding: var(--agent-menu-section-padding);
+}
+
+.agent-roleplay-menu-list {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.agent-roleplay-menu-item {
+  flex: 0 0 auto;
+}
+
+.agent-roleplay-menu-thumbnail,
+.agent-roleplay-menu-glyph {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  border-radius: 4px;
+}
+
+.agent-roleplay-menu-thumbnail {
+  object-fit: cover;
+}
+
+.agent-roleplay-menu-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid currentColor;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.agent-roleplay-menu-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.agent-roleplay-menu-label,
+.agent-roleplay-menu-description {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-roleplay-menu-description,
+.agent-roleplay-menu-empty {
+  color: var(--agent-fg-secondary);
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.agent-roleplay-menu-badge {
+  flex: 0 0 auto;
+  color: var(--agent-fg-secondary);
+  font-size: 9px;
+}
+
+.agent-roleplay-menu-badge.is-candidate {
+  color: var(--vscode-notificationsWarningIcon-foreground, var(--agent-warning-fg));
+}
+
+.agent-roleplay-menu-empty {
+  padding: 8px;
+  text-align: center;
+}
+
 .agent-history-menu-section {
   margin: var(--agent-menu-section-margin);
   padding: var(--agent-menu-section-padding);

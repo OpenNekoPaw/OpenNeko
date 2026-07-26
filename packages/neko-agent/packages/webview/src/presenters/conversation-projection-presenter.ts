@@ -4,10 +4,7 @@ import type {
   ConversationTurnProjection,
   Message,
 } from '@neko-agent/types';
-import {
-  projectTimelineItemsToWorkItems,
-  projectTimelineTurnToMessage,
-} from './timeline-projection-presenter';
+import { projectTimelineTurnToMessage } from './timeline-projection-presenter';
 
 export interface ConversationProjectionRenderInput {
   readonly messages: readonly Message[];
@@ -87,14 +84,12 @@ function projectTurnMessage(turn: ConversationTurnProjection): Message {
     messageId: turn.messageId,
     items: turn.items,
     completed: turn.completion !== undefined,
-    ...(turn.completion?.finalContentBlocks
-      ? { finalContentBlocks: turn.completion.finalContentBlocks }
-      : {}),
   });
 }
 
 function projectTurnWorkItems(turn: ConversationTurnProjection): AgentWorkItem[] {
-  return projectTimelineItemsToWorkItems(turn.items);
+  void turn;
+  return [];
 }
 
 function mergeProjectedMessage(messages: readonly Message[], projection: Message): Message[] {

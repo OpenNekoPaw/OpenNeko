@@ -5,7 +5,7 @@
   "target": {
     "kind": "workflow",
     "id": "tui-workflow-controller",
-    "contractHash": "sha256:1d6cce3ecd3f19858161359cc356db50c10fc269698f34d4e9d2e9727d279960"
+    "contractHash": "sha256:b7141edb3c222d471fefa4bdb61a4117eeb028c6a2e0f39d9b1e9d62ba0a6a55"
   },
   "repositoryRevision": "working-tree",
   "runtimeProfiles": [
@@ -40,8 +40,14 @@
       "visibility": "public"
     },
     {
-      "id": "task-continuation",
-      "file": "cases/task-continuation.json",
+      "id": "media-tool-terminal-result",
+      "file": "cases/media-tool-terminal-result.json",
+      "group": "workflow",
+      "visibility": "public"
+    },
+    {
+      "id": "detached-generation-job-observation",
+      "file": "cases/detached-generation-job-observation.json",
       "group": "workflow",
       "visibility": "public"
     },

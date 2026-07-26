@@ -1,6 +1,7 @@
 import {
   TOOL_NAMES_SYSTEM,
   type DocumentArchiveResourceRef,
+  type ContentLocator,
   createTool,
   isContentSourceRef,
   type ContentSourceRef,
@@ -171,6 +172,7 @@ export interface ReadDocumentContentAccessResult {
   readonly status: 'ready' | 'missing-source' | 'unsupported-source' | 'unauthorized' | 'failed';
   readonly source?: Exclude<ContentSourceRef, { readonly kind: 'runtime' }>;
   readonly diagnostics: readonly ReadDocumentDiagnostic[];
+  readonly contentLocator?: ContentLocator;
   readonly resourceRef?: ResourceRef;
   readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly text?: string;
@@ -198,6 +200,7 @@ export interface ReadDocumentDiagnostic {
 interface ReadDocumentToolData {
   readonly source: Exclude<ContentSourceRef, { readonly kind: 'runtime' }>;
   readonly mode: ReadDocumentMode;
+  readonly contentLocator?: ContentLocator;
   readonly resourceRef?: ResourceRef;
   readonly documentResourceRef?: DocumentArchiveResourceRef;
   readonly text?: string;
@@ -351,6 +354,7 @@ async function executeReadDocument(
     data: {
       source: result.source,
       mode,
+      ...(result.contentLocator ? { contentLocator: result.contentLocator } : {}),
       ...(result.resourceRef ? { resourceRef: result.resourceRef } : {}),
       ...(result.documentResourceRef ? { documentResourceRef: result.documentResourceRef } : {}),
       ...(truncatedText

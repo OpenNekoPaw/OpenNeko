@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MEDIA_QUALITY_CONTRACT_VERSION, TOOL_NAMES_QUALITY, type ResourceRef } from '@neko/shared';
 import { createCanonicalQualityCheckTools } from '../canonical-quality-tools';
-import * as qualityExports from '../index';
 
 const resourceRef: ResourceRef = {
   id: 'asset:image:cat',
@@ -23,13 +22,6 @@ function canonicalTarget() {
     expectedIntent: { prompt: 'A playful orange cat.' },
   };
 }
-
-describe('quality tool export surface', () => {
-  it('does not export path-only legacy Quality tool factories', () => {
-    expect(Reflect.has(qualityExports, 'createLegacyQualityCheckTools')).toBe(false);
-    expect(Reflect.has(qualityExports, 'createLegacyConsistencyCheckTools')).toBe(false);
-  });
-});
 
 describe('canonical quality tools', () => {
   it('invokes the canonical review handler with a stable revision-bound target', async () => {

@@ -1,4 +1,3 @@
-import { SqliteTaskRecoveryStorage, SqliteTaskStorage } from '@neko/agent';
 import {
   createLocalMetadataRevisionCursor,
   resolveGlobalStorageLayout,
@@ -8,6 +7,7 @@ import {
   type EntityAssetProjectionRepository,
   type LocalMetadataPartition,
   type LocalMetadataPartitionRevision,
+  type LocalMetadataStore,
   type SearchDocumentRepository,
   type SemanticProjectionRepository,
   type WorkspaceStorageInspectionReport,
@@ -32,8 +32,7 @@ import { join } from 'node:path';
 
 export interface ExtensionLocalMetadataBinding {
   readonly workspaceId: string;
-  readonly taskStorage: SqliteTaskStorage;
-  readonly taskRecoveryStorage: SqliteTaskRecoveryStorage;
+  readonly metadataStore: LocalMetadataStore;
   readonly searchPartition: LocalMetadataPartition;
   readonly semanticPartition: LocalMetadataPartition;
   readonly entityAssetPartition: LocalMetadataPartition;
@@ -72,18 +71,10 @@ export async function createExtensionLocalMetadata(options: {
         metadataStore,
       })
     ).identity;
-    const taskStorage = new SqliteTaskStorage({
-      workspaceId: workspaceIdentity.workspaceId,
-      metadataStore,
-    });
-    const taskRecoveryStorage = new SqliteTaskRecoveryStorage({
-      workspaceId: workspaceIdentity.workspaceId,
-      metadataStore,
-    });
     const revisionCursor = createLocalMetadataRevisionCursor({
       store: metadataStore,
       workspaceId: workspaceIdentity.workspaceId,
-      domains: ['tasks', 'catalog', 'entity-asset-projection'],
+      domains: ['catalog', 'entity-asset-projection'],
     });
     await revisionCursor.initialize();
     const storageLayout = resolveStorageLayout(options.workDir, options.homedir);
@@ -117,8 +108,7 @@ export async function createExtensionLocalMetadata(options: {
     });
     return {
       workspaceId: workspaceIdentity.workspaceId,
-      taskStorage,
-      taskRecoveryStorage,
+      metadataStore,
       searchPartition,
       semanticPartition,
       entityAssetPartition,

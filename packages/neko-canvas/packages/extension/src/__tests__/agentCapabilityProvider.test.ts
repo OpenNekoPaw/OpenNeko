@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import type { CanvasPlaybackPlan, ICapabilityMediaService, NekoCanvasAPI } from '@neko/shared';
+import type { CanvasPlaybackPlan, NekoCanvasAPI } from '@neko/shared';
 import {
   CANVAS_STORYBOARD_ACTION_INTENT_IDS,
   MEDIA_PRODUCTION_ANIMATION_PLAN_PROFILE_ID,
@@ -15,6 +15,7 @@ import {
   validateCanvasStoryboardActionIntent,
 } from '@neko/shared';
 import { createNekoCanvasCapabilityProvider } from '../agentCapabilityProvider';
+import type { PurposeGenerationJobPort } from '@neko/generation';
 
 const vscodeCommandState = vi.hoisted(() => ({
   executeCommand: vi.fn(
@@ -153,14 +154,14 @@ function createApi(): NekoCanvasAPI {
   } as unknown as NekoCanvasAPI;
 }
 
-function createMediaService(): ICapabilityMediaService {
+function createGenerationJobs(): PurposeGenerationJobPort {
   return {
-    generateImage: vi.fn(async () => ({ id: 'image-task-1' })),
-    generateVideo: vi.fn(async () => ({ id: 'video-task-1' })),
-    waitForTask: vi.fn(async () => ({
-      status: 'completed',
-      outputs: [{ url: 'file:///generated/video.mp4', mimeType: 'video/mp4' }],
-    })),
+    submitGeneration: vi.fn(),
+    describeGeneration: vi.fn(),
+    observeGeneration: vi.fn(),
+    cancelGeneration: vi.fn(),
+    retryGeneration: vi.fn(),
+    reconcileGeneration: vi.fn(),
   };
 }
 
@@ -183,11 +184,13 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
   });
 
   it('routes first/end frames through canonical stable keyframe identity', () => {
-    expect(providerSource).toContain('toCanvasStableMediaResourceRef(firstFrameMediaRef)');
-    expect(providerSource).toContain('toCanvasStableMediaResourceRef(lastFrameMediaRef)');
+    expect(providerSource).toContain('toCanvasStableMediaContentLocator(firstFrameMediaRef)');
+    expect(providerSource).toContain('toCanvasStableMediaContentLocator(lastFrameMediaRef)');
     expect(providerSource).toContain("operation: 'generate-from-keyframes'");
-    expect(providerSource).toContain('startFrameRef');
-    expect(providerSource).toContain('endFrameRef');
+    expect(providerSource).toContain('startFrameLocator');
+    expect(providerSource).toContain('endFrameLocator');
+    expect(providerSource).not.toContain('startFrameRef');
+    expect(providerSource).not.toContain('endFrameRef');
     expect(providerSource).not.toContain('referenceImageUrl: firstFrameData');
     expect(providerSource).not.toContain("metadata['lastFrameUrl']");
     expect(providerSource).not.toContain("metadata['referenceDescriptors'] = referenceDescriptors");
@@ -380,7 +383,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const facets = provider.getArtifactFacets({ extensionContext: {} });
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: createMediaService(),
       configManager: undefined,
       embedFn: undefined,
     });
@@ -481,7 +483,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(createApi());
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -673,7 +674,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(createApi());
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -798,7 +798,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -906,7 +905,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -973,7 +971,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1060,7 +1057,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1117,7 +1113,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1202,7 +1197,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1243,7 +1237,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1286,7 +1279,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1354,7 +1346,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1400,7 +1391,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1448,7 +1438,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1504,7 +1493,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1537,10 +1525,11 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
   });
 
   it('localizes Canvas-owned tool definitions in the Canvas provider', () => {
-    const provider = createNekoCanvasCapabilityProvider(createApi());
+    const provider = createNekoCanvasCapabilityProvider(createApi(), {
+      generationJobs: createGenerationJobs(),
+    });
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: createMediaService(),
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1603,7 +1592,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(createApi());
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: createMediaService(),
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1627,11 +1615,10 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     });
   });
 
-  it('declares numeric videoFps enum values for project generation config', () => {
+  it('keeps project generation parameters in Canvas while Host owns model bindings', () => {
     const provider = createNekoCanvasCapabilityProvider(createApi());
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1645,6 +1632,9 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
         enum: [24, 30],
       }),
     );
+    expect(configTool?.parameters.properties).not.toHaveProperty('imageModel');
+    expect(configTool?.parameters.properties).not.toHaveProperty('videoModel');
+    expect(configTool?.parameters.properties).not.toHaveProperty('audioModel');
   });
 
   it('projects Canvas Markdown lifecycle actions through capability definitions', async () => {
@@ -1665,7 +1655,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });
@@ -1720,7 +1709,6 @@ describe('agentCapabilityProvider storyboard export contracts', () => {
     const provider = createNekoCanvasCapabilityProvider(api);
     const tools = provider.getTools({
       extensionContext: {},
-      mediaService: undefined,
       configManager: undefined,
       embedFn: undefined,
     });

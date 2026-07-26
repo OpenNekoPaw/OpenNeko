@@ -603,7 +603,6 @@ export const chat = {
   'chat.commands.skills': 'List and manage available skills',
   'chat.commands.tools': 'List and search available tools',
   'chat.commands.todos': 'List current TODO items',
-  'chat.commands.tasks': 'List and manage background tasks',
   'chat.commands.plan': 'Enter plan mode',
   'chat.commands.mcp': 'Manage MCP server connections',
   'chat.commands.sections.agent': 'Agent',
@@ -623,7 +622,7 @@ export const chat = {
   'chat.commands.help.availableSkills': 'Available Skills',
 
   'chat.helpMessage':
-    '**Available Commands:**\n- `/clear` - Clear conversation history\n- `/new` - Start a new conversation\n- `/resume` - Resume a previous conversation\n- `/help` - Show this help message\n- `/compact` - Compress conversation to save context\n- `/status` - Show status information\n- `/model` - Select AI model\n- `/plan` - Enter plan mode\n- `/mcp` - Manage MCP servers\n- `/tasks` - Manage background tasks\n- `/settings` - Open settings\n\n**Skills:**\n- Use `$skill-name` to explicitly activate a Skill lifecycle record\n- Active records show slot, owner, clearability, locks, and expiry\n- Use `/skills` to list or inspect Skills; clear actions only remove records allowed by policy\n\n**Tips:**\n- Use `@` to reference files\n- Attach files using the 📎 button\n- Press Enter to send, Shift+Enter for new line',
+    '**Available Commands:**\n- `/clear` - Clear conversation history\n- `/new` - Start a new conversation\n- `/resume` - Resume a previous conversation\n- `/help` - Show this help message\n- `/compact` - Compress conversation to save context\n- `/status` - Show status information\n- `/model` - Select AI model\n- `/plan` - Enter plan mode\n- `/mcp` - Manage MCP servers\n- `/settings` - Open settings\n\n**Skills:**\n- Use `$skill-name` to explicitly activate a Skill lifecycle record\n- Active records show slot, owner, clearability, locks, and expiry\n- Use `/skills` to list or inspect Skills; clear actions only remove records allowed by policy\n\n**Tips:**\n- Use `@` to reference files\n- Attach files using the 📎 button\n- Press Enter to send, Shift+Enter for new line',
   'chat.conversation.loading': 'Loading conversation history...',
   'chat.attachFile': 'Attach file',
   'chat.referenceFile': 'Reference file with @',

@@ -1,186 +1,174 @@
-import { fileURLToPath } from 'node:url';
-import type { ResourceRef } from '@neko/shared';
-import type { ImageGenerationRequest, VideoGenerationRequest } from './types';
+import type { ContentLocator, ContentReadService } from '@neko/shared';
+import type {
+  ImageGenerationRequest,
+  MaterializedImageGenerationRequest,
+  MaterializedVideoGenerationRequest,
+  VideoGenerationRequest,
+} from '@neko/generation';
 
 export interface MediaRequestAssetMaterializer {
-  readAsBase64(uriOrPath: string): Promise<string>;
-  readResourceAsBase64?(resourceRef: ResourceRef): Promise<string>;
-  resolveResourceUrl?(resourceRef: ResourceRef): Promise<string>;
+  readAsBase64(locator: ContentLocator, signal?: AbortSignal): Promise<string>;
+  resolveAsUrl?(locator: ContentLocator, signal?: AbortSignal): Promise<string>;
+}
+
+export interface ContentReadMediaRequestAssetMaterializerOptions {
+  readonly contentRead: ContentReadService;
+  readonly encodeBase64: (bytes: Uint8Array) => string;
+  readonly maxBytes?: number;
+}
+
+export interface MediaRequestMaterializationOptions {
+  readonly signal?: AbortSignal;
+}
+
+const DEFAULT_MEDIA_REQUEST_ASSET_MAX_BYTES = 32 * 1024 * 1024;
+
+export function createContentReadMediaRequestAssetMaterializer(
+  options: ContentReadMediaRequestAssetMaterializerOptions,
+): MediaRequestAssetMaterializer {
+  const maxBytes = options.maxBytes ?? DEFAULT_MEDIA_REQUEST_ASSET_MAX_BYTES;
+  const load = async (locator: ContentLocator, signal?: AbortSignal) => {
+    const result = await options.contentRead.read(locator, {
+      maxBytes,
+      ...(signal ? { signal } : {}),
+    });
+    if (result.status === 'unavailable') {
+      throw new Error(
+        `Media request content materialization failed: ${result.diagnostic.code} (${locator.kind}).`,
+      );
+    }
+    return result;
+  };
+  return {
+    readAsBase64: async (locator, signal) =>
+      options.encodeBase64((await load(locator, signal)).bytes),
+    resolveAsUrl: async (locator, signal) => {
+      const loaded = await load(locator, signal);
+      const mimeType = loaded.mimeType ?? 'application/octet-stream';
+      return `data:${mimeType};base64,${options.encodeBase64(loaded.bytes)}`;
+    },
+  };
 }
 
 export async function materializeImageRequestFileUris(
   request: ImageGenerationRequest,
   materializer?: MediaRequestAssetMaterializer,
-): Promise<ImageGenerationRequest> {
-  assertUnambiguousStableImageRefs(request);
-  let next = request;
-
-  if (request.referenceImageUri && !request.referenceImageBase64) {
-    next = {
-      ...next,
-      referenceImageBase64: await readFileAsBase64(request.referenceImageUri, materializer),
-    };
-  }
-
-  if (request.maskUri && !request.maskBase64) {
-    next = {
-      ...next,
-      maskBase64: await readFileAsBase64(request.maskUri, materializer),
-    };
-  }
-
-  if (request.controlImageUri && !request.controlImageBase64) {
-    next = {
-      ...next,
-      controlImageBase64: await readFileAsBase64(request.controlImageUri, materializer),
-    };
-  }
-
-  if (request.controlImageRef) {
-    next = {
-      ...next,
-      controlImageBase64: await readResourceAsBase64(request.controlImageRef, materializer),
-    };
-    delete next.controlImageRef;
-  }
-
-  if (request.ipAdapterRefs?.some((reference) => reference.imageRef)) {
-    next = {
-      ...next,
-      ipAdapterRefs: await Promise.all(
-        request.ipAdapterRefs.map(async (reference) => {
-          if (!reference.imageRef) return reference;
-          const { imageRef, ...rest } = reference;
-          return {
-            ...rest,
-            imageBase64: await readResourceAsBase64(imageRef, materializer),
-          };
-        }),
-      ),
-    };
-  }
-
-  return next;
-}
-
-function assertUnambiguousStableImageRefs(request: ImageGenerationRequest): void {
-  if (request.controlImageRef && (request.controlImageBase64 || request.controlImageUri)) {
-    throw new Error('Stable controlImageRef cannot be combined with legacy control image inputs.');
-  }
-  for (const reference of request.ipAdapterRefs ?? []) {
-    if (reference.imageRef && reference.imageBase64) {
-      throw new Error(
-        'Stable IP-Adapter imageRef cannot be combined with materialized imageBase64.',
-      );
-    }
-    if (!reference.imageRef && !reference.imageBase64) {
-      throw new Error('IP-Adapter reference requires exactly one image identity.');
-    }
-  }
+  options: MediaRequestMaterializationOptions = {},
+): Promise<MaterializedImageGenerationRequest> {
+  const {
+    referenceImageLocator,
+    maskLocator,
+    controlImageLocator,
+    ipAdapterRefs,
+    panoramaReference,
+    ...stable
+  } = request;
+  return {
+    ...stable,
+    ...(referenceImageLocator
+      ? {
+          referenceImageBase64: await readAsBase64(
+            referenceImageLocator,
+            materializer,
+            options.signal,
+          ),
+        }
+      : {}),
+    ...(maskLocator
+      ? { maskBase64: await readAsBase64(maskLocator, materializer, options.signal) }
+      : {}),
+    ...(controlImageLocator
+      ? {
+          controlImageBase64: await readAsBase64(controlImageLocator, materializer, options.signal),
+        }
+      : {}),
+    ...(ipAdapterRefs
+      ? {
+          ipAdapterRefs: await Promise.all(
+            ipAdapterRefs.map(async ({ imageLocator, ...reference }) => ({
+              ...reference,
+              imageBase64: await readAsBase64(imageLocator, materializer, options.signal),
+            })),
+          ),
+        }
+      : {}),
+    ...(panoramaReference
+      ? {
+          panoramaReference: {
+            orientation: panoramaReference.orientation,
+            identity: panoramaReference.identity,
+            imageBase64: await readAsBase64(
+              panoramaReference.imageLocator,
+              materializer,
+              options.signal,
+            ),
+          },
+        }
+      : {}),
+  };
 }
 
 export async function materializeVideoRequestFileUris(
   request: VideoGenerationRequest,
   materializer?: MediaRequestAssetMaterializer,
-): Promise<VideoGenerationRequest> {
-  assertUnambiguousStableVideoRefs(request);
-  let next = request;
-
-  if (request.referenceImageUri && !request.referenceImageBase64) {
-    next = {
-      ...next,
-      referenceImageBase64: await readFileAsBase64(request.referenceImageUri, materializer),
-    };
-  }
-
-  if (request.startFrameRef) {
-    next = {
-      ...next,
-      startFrameImageBase64: await readResourceAsBase64(request.startFrameRef, materializer),
-    };
-  }
-
-  if (request.endFrameRef) {
-    next = {
-      ...next,
-      endFrameImageBase64: await readResourceAsBase64(request.endFrameRef, materializer),
-    };
-  }
-
-  if (request.referenceVideoRef) {
-    next = {
-      ...next,
-      sourceVideoUrl: await resolveResourceUrl(request.referenceVideoRef, materializer),
-    };
-  }
-
-  return next;
+  options: MediaRequestMaterializationOptions = {},
+): Promise<MaterializedVideoGenerationRequest> {
+  const { startFrameLocator, endFrameLocator, referenceVideoLocator, referenceImages, ...stable } =
+    request;
+  return {
+    ...stable,
+    ...(startFrameLocator
+      ? {
+          startFrameImageBase64: await readAsBase64(
+            startFrameLocator,
+            materializer,
+            options.signal,
+          ),
+        }
+      : {}),
+    ...(endFrameLocator
+      ? {
+          endFrameImageBase64: await readAsBase64(endFrameLocator, materializer, options.signal),
+        }
+      : {}),
+    ...(referenceVideoLocator
+      ? {
+          sourceVideoUrl: await resolveAsUrl(referenceVideoLocator, materializer, options.signal),
+        }
+      : {}),
+    ...(referenceImages
+      ? {
+          referenceImages: await Promise.all(
+            referenceImages.map(async ({ imageLocator, ...reference }) => ({
+              ...reference,
+              imageBase64: await readAsBase64(imageLocator, materializer, options.signal),
+            })),
+          ),
+        }
+      : {}),
+  };
 }
 
-function assertUnambiguousStableVideoRefs(request: VideoGenerationRequest): void {
-  if (
-    request.startFrameRef &&
-    (request.startFrameImageBase64 ||
-      request.referenceImageBase64 ||
-      request.referenceImageUri ||
-      request.referenceImageUrl)
-  ) {
-    throw new Error(
-      'Stable startFrameRef cannot be combined with legacy start/reference image inputs.',
-    );
-  }
-  if (request.endFrameRef && request.endFrameImageBase64) {
-    throw new Error('Stable endFrameRef cannot be combined with legacy end-frame bytes.');
-  }
-  if (request.referenceVideoRef && (request.referenceVideoUrl || request.sourceVideoUrl)) {
-    throw new Error(
-      'Stable referenceVideoRef cannot be combined with legacy reference video URLs.',
-    );
-  }
-}
-
-async function readResourceAsBase64(
-  resourceRef: ResourceRef,
+async function resolveAsUrl(
+  locator: ContentLocator,
   materializer: MediaRequestAssetMaterializer | undefined,
+  signal: AbortSignal | undefined,
 ): Promise<string> {
-  if (!materializer?.readResourceAsBase64) {
+  if (!materializer?.resolveAsUrl) {
     throw new Error(
-      `Media request ResourceRef requires authorized host materialization: ${resourceRef.id}`,
+      `Media request video locator requires authorized URL materialization: ${locator.kind}`,
     );
   }
-  return materializer.readResourceAsBase64(resourceRef);
+  return signal ? materializer.resolveAsUrl(locator, signal) : materializer.resolveAsUrl(locator);
 }
 
-async function resolveResourceUrl(
-  resourceRef: ResourceRef,
+async function readAsBase64(
+  locator: ContentLocator,
   materializer: MediaRequestAssetMaterializer | undefined,
-): Promise<string> {
-  if (!materializer?.resolveResourceUrl) {
-    throw new Error(
-      `Media request video ResourceRef requires authorized URL materialization: ${resourceRef.id}`,
-    );
-  }
-  return materializer.resolveResourceUrl(resourceRef);
-}
-
-async function readFileAsBase64(
-  uriOrPath: string,
-  materializer: MediaRequestAssetMaterializer | undefined,
+  signal: AbortSignal | undefined,
 ): Promise<string> {
   if (!materializer) {
-    throw new Error(
-      `Media request asset requires host content access materialization: ${uriOrPath}`,
-    );
+    throw new Error(`Media request locator requires host content access: ${locator.kind}`);
   }
-  return materializer.readAsBase64(toFilePath(uriOrPath));
-}
-
-function toFilePath(uriOrPath: string): string {
-  if (uriOrPath.startsWith('file:')) {
-    return fileURLToPath(uriOrPath);
-  }
-  if (uriOrPath.startsWith('/')) {
-    return uriOrPath;
-  }
-  throw new Error(`Only local file URIs are supported for media request assets: ${uriOrPath}`);
+  return signal ? materializer.readAsBase64(locator, signal) : materializer.readAsBase64(locator);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createResourceFingerprint, createResourceRef, type TaskRunScope } from '@neko/shared';
+import { createResourceFingerprint, createResourceRef } from '@neko/shared';
 import {
   AGENT_WEBVIEW_PROTOCOL_VERSION,
   buildInjectContextMessage,
@@ -404,21 +404,6 @@ describe('webview protocol parser', () => {
         },
       }),
     ).toThrow('queuedMessageEditRequested requires non-empty tabId');
-  });
-
-  it('requires the complete Task run scope and preserves optional displayed result refs', () => {
-    const scope = taskScope('task-1');
-    expect(
-      parseWebviewToExtensionMessage({
-        type: 'viewTaskResult',
-        taskScope: scope,
-        resultRef: 'generated-assets/asset-1.png',
-      }),
-    ).toEqual({
-      type: 'viewTaskResult',
-      taskScope: scope,
-      resultRef: 'generated-assets/asset-1.png',
-    });
   });
 
   it('rejects legacy Task action identities even when conversationId is present', () => {
@@ -1085,15 +1070,5 @@ function legacyModelPreviewContextData(): Record<string, unknown> {
       height: 1024,
       cameraId: camera.id,
     },
-  };
-}
-
-function taskScope(childRunId: string): TaskRunScope {
-  return {
-    conversationId: 'conv-1',
-    runId: 'run-1',
-    parentRunId: 'run-1',
-    childRunId,
-    childKind: 'task',
   };
 }

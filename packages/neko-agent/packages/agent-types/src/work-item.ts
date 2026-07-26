@@ -1,93 +1,35 @@
-import type { RenderableGeneratedAsset, ChildRunScope, TaskRunScope } from '@neko/shared';
-export type AgentWorkItemTaskStatus =
-  'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+import type { ChildRunScope } from '@neko/shared';
 
-export type AgentWorkItemTaskType = 'image' | 'video' | 'audio';
+export type AgentWorkItemStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
 
-export type AgentWorkItemTaskStepStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type AgentWorkItemStepStatus = 'pending' | 'running' | 'completed' | 'failed';
 
-export interface AgentWorkItemTaskStep {
+export interface AgentWorkItemStep {
   id: string;
   name: string;
-  status: AgentWorkItemTaskStepStatus;
+  status: AgentWorkItemStepStatus;
   startTime?: number;
   endTime?: number;
   message?: string;
 }
 
-export interface AgentBackgroundTask {
-  scope: TaskRunScope;
-  id: string;
-  type: AgentWorkItemTaskType;
-  name: string;
-  prompt: string;
-  providerId: string;
-  providerName: string;
-  status: AgentWorkItemTaskStatus;
-  progress: number;
-  createdAt: string;
-  updatedAt: string;
-  result?: {
-    urls: string[];
-    thumbnailUrl?: string;
-    width?: number;
-    height?: number;
-    duration?: number;
-    assets?: RenderableGeneratedAsset[];
-  };
-  error?: string;
-  /** Whether an explicit new submission is safe after failure. */
-  retryable?: boolean;
-  steps?: AgentWorkItemTaskStep[];
-  currentStepId?: string;
-  eta?: number;
-}
-
-export type AgentWorkItemKind = 'media-task' | 'tool-background-task' | 'subagent';
-
-/**
- * Derived, bounded near-term progress shown alongside a conversation.
- *
- * This is deliberately not a Task, plan, project, recovery, or completion
- * record. The owning AgentWorkItem and its Task/result remain authoritative.
- */
-export type AgentTodoProjectionStatus = 'pending' | 'in_progress' | 'completed' | 'blocked';
-
-export interface AgentTodoProjectionItem {
-  readonly id: string;
-  readonly content: string;
-  readonly status: AgentTodoProjectionStatus;
-  readonly sourceWorkItemId: string;
-  readonly sourceKind: AgentWorkItemKind;
-}
-
-export interface AgentWorkItemBase {
+export interface SubAgentWorkItem {
+  scope: ChildRunScope;
   id: string;
   conversationId: string;
-  kind: AgentWorkItemKind;
+  kind: 'subagent';
   parentMessageId: string | null;
   parentToolCallId: string | null;
   title: string;
   summary?: string;
-  status: AgentWorkItemTaskStatus;
+  status: AgentWorkItemStatus;
   progress: number;
-  steps?: AgentWorkItemTaskStep[];
+  steps?: AgentWorkItemStep[];
   currentStepId?: string;
-  result?: AgentBackgroundTask['result'];
   error?: string;
   children?: string[];
   createdAt: string;
   updatedAt: string;
-}
-
-export interface TaskWorkItem extends AgentWorkItemBase {
-  kind: 'media-task' | 'tool-background-task';
-  task: AgentBackgroundTask;
-}
-
-export interface SubAgentWorkItem extends AgentWorkItemBase {
-  kind: 'subagent';
-  scope: ChildRunScope;
   subAgent: {
     parentAgentId: string;
     type?: string;
@@ -97,43 +39,9 @@ export interface SubAgentWorkItem extends AgentWorkItemBase {
   };
 }
 
-export type AgentWorkItem = TaskWorkItem | SubAgentWorkItem;
+export type AgentWorkItem = SubAgentWorkItem;
 
 export type AgentWorkItemStore = Map<string, Map<string, AgentWorkItem>>;
-
-export interface AgentMediaTaskOutput {
-  url: string;
-  width?: number;
-  height?: number;
-  duration?: number;
-  thumbnailUrl?: string;
-}
-
-export interface AgentMediaTaskError {
-  code: string;
-  message: string;
-  retryable?: boolean;
-}
-
-export type AgentMediaTaskResult = NonNullable<AgentBackgroundTask['result']>;
-
-export interface AgentMediaTaskView {
-  scope: TaskRunScope;
-  id: string;
-  type: string;
-  status: string;
-  progress: number;
-  providerId: string;
-  modelId: string;
-  createdAt: string | Date;
-  updatedAt: string | Date;
-  outputs?: AgentMediaTaskOutput[];
-  result?: AgentMediaTaskResult;
-  error?: AgentMediaTaskError;
-  request: {
-    prompt: string;
-  };
-}
 
 export type SubAgentWorkItemEventType =
   'spawned' | 'started' | 'progress' | 'completed' | 'failed' | 'cancelled';

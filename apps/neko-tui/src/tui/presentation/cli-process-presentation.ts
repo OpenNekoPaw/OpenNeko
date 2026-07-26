@@ -164,6 +164,10 @@ export function presentConfigLoadDiagnostic(
       return context.t('agent.terminal.cli.configLoad.providerNotConfigured', {
         providerId: diagnostic.providerId,
       });
+    case 'provider-protocol-not-configured':
+      return context.t('agent.terminal.cli.configLoad.providerProtocolNotConfigured', {
+        providerId: diagnostic.providerId,
+      });
     case 'missing-provider-model':
       return context.t('agent.terminal.cli.configLoad.missingProviderModel', {
         providerId: diagnostic.providerId,
@@ -274,12 +278,6 @@ function presentPlatformConfigDiagnostic(
       });
     case 'unsupportedSkillSource':
       return context.t('agent.terminal.cli.configLoad.unsupportedSkillSource', { path: filePath });
-    case 'missingAccountCatalog':
-      return context.t('agent.terminal.cli.configLoad.missingAccountCatalog');
-    case 'accountCatalogUnavailable':
-      return context.t('agent.terminal.cli.configLoad.accountCatalogUnavailable');
-    case 'accountModelNotEntitled':
-      return context.t('agent.terminal.cli.configLoad.accountModelNotEntitled');
   }
 }
 

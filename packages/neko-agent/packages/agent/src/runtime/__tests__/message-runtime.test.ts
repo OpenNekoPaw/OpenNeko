@@ -34,7 +34,6 @@ import {
   runAgentMessageTurnRuntime,
   selectAgentTurnProvider,
   shouldPersistAgentAssistantStream,
-  summarizeAgentEventProgress,
   type AgentThreeReferenceImageResource,
 } from '../turn/message-runtime';
 
@@ -123,20 +122,6 @@ describe('message runtime helpers', () => {
       conversationId: 'conv-1',
       parentAgentId: 'agent-conv-1',
     });
-  });
-
-  it('summarizes agent events into subagent progress labels', () => {
-    expect(
-      summarizeAgentEventProgress({
-        type: 'tool_progress',
-        toolProgress: {
-          toolCallId: 'tool-1',
-          toolName: 'read_file',
-          percent: 42,
-          stage: 'Reading file',
-        },
-      }),
-    ).toBe('42% Reading file');
   });
 
   it('assembles enhanced user message from referenced files and attachments', () => {
@@ -619,6 +604,13 @@ describe('message runtime helpers', () => {
           understandingModels: {
             image: { providerId: 'google', modelId: 'gemini-2.5-flash', category: 'llm' },
           },
+          purposeModels: {
+            'image.generate': {
+              providerId: 'flux',
+              modelId: 'flux-pro-1.1',
+              category: 'image',
+            },
+          },
         },
         inputProcessor: {
           process: async () => ({
@@ -642,7 +634,7 @@ describe('message runtime helpers', () => {
       }),
     ).resolves.toEqual({ status: 'agent-dispatched' });
 
-    expect(events).toEqual(['persist:conv-1:user', 'post:thinking', 'execute-agent']);
+    expect(events).toEqual(['persist:conv-1:user', 'post:agentPhase', 'execute-agent']);
     expect(executeAgentTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         conversationId: 'conv-1',
@@ -662,6 +654,13 @@ describe('message runtime helpers', () => {
         },
         understandingModels: {
           image: { providerId: 'google', modelId: 'gemini-2.5-flash', category: 'llm' },
+        },
+        purposeModels: {
+          'image.generate': {
+            providerId: 'flux',
+            modelId: 'flux-pro-1.1',
+            category: 'image',
+          },
         },
         imageAttachments: [{ type: 'base64', media_type: 'image/png', data: 'image-1' }],
       }),
@@ -813,7 +812,7 @@ describe('message runtime helpers', () => {
       'preflight:conv-1:分析前10页，生成分镜表',
       'prepare-attachments',
       'persist-user',
-      'post:thinking',
+      'post:agentPhase',
       'execute-agent',
     ]);
   });
@@ -821,6 +820,7 @@ describe('message runtime helpers', () => {
   it('dispatches non-agent media turns when a media runtime is available', async () => {
     const executeMediaTurn = vi.fn(async () => undefined);
     const executeAgentTurn = vi.fn(async () => undefined);
+    const postMessage = vi.fn();
 
     await expect(
       runAgentMessageTurnRuntime({
@@ -832,7 +832,7 @@ describe('message runtime helpers', () => {
         },
         processAttachments: async () => ({ textContent: '', imageAttachments: [] }),
         persistUserMessage: vi.fn(),
-        postMessage: vi.fn(),
+        postMessage,
         executeMediaTurn,
         executeAgentTurn,
         generateMessageId: () => 'user-1',
@@ -843,8 +843,61 @@ describe('message runtime helpers', () => {
       conversationId: 'conv-1',
       prompt: 'render image',
       mediaModel: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
+      userMessage: {
+        id: 'user-1',
+        content: 'render image',
+        timestamp: expect.any(Number),
+      },
     });
     expect(executeAgentTurn).not.toHaveBeenCalled();
+    expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conv-1',
+        phase: 'thinking',
+      }),
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conv-1',
+        phase: 'idle',
+      }),
+    ]);
+  });
+
+  it('releases the direct media phase when generation fails', async () => {
+    const failure = new Error('provider failed');
+    const postMessage = vi.fn();
+
+    await expect(
+      runAgentMessageTurnRuntime({
+        request: {
+          conversationId: 'conv-1',
+          messageText: 'render image',
+          sessionMode: 'image',
+          mediaModel: { providerId: 'flux', modelId: 'flux-pro', category: 'image' },
+        },
+        processAttachments: async () => ({ textContent: '', imageAttachments: [] }),
+        persistUserMessage: vi.fn(),
+        postMessage,
+        executeMediaTurn: vi.fn(async () => {
+          throw failure;
+        }),
+        generateMessageId: () => 'user-1',
+      }),
+    ).rejects.toBe(failure);
+
+    expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conv-1',
+        phase: 'thinking',
+      }),
+      expect.objectContaining({
+        type: 'agentPhase',
+        conversationId: 'conv-1',
+        phase: 'idle',
+      }),
+    ]);
   });
 
   it('projects 3D reference roles into direct image media controls', async () => {
@@ -927,8 +980,10 @@ describe('message runtime helpers', () => {
       isError: true,
     });
     expect(postMessage).toHaveBeenNthCalledWith(1, {
-      type: 'thinking',
+      type: 'agentPhase',
       conversationId: 'conv-1',
+      phase: 'thinking',
+      timestamp: 123,
     });
     expect(postMessage).toHaveBeenNthCalledWith(
       2,

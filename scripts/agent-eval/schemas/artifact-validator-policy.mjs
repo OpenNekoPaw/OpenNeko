@@ -5,6 +5,7 @@ export const SUPPORTED_FILE_VALIDATOR_IDS = Object.freeze([
 ]);
 
 const SUPPORTED_RUNTIME_VALIDATOR_IDS = Object.freeze([
+  'content-locator',
   'durable-resource-ref',
   'composite-artifact-schema',
   'artifact-execution-summary',

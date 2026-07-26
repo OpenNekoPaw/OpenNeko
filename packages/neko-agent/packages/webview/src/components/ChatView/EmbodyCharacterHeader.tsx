@@ -1,11 +1,13 @@
 import type { EmbodyCharacterSessionProjection } from '@neko-agent/types';
 import { AgentHostMessages } from '@/messages';
+import { useTranslation } from '@/i18n/I18nContext';
 
 interface EmbodyCharacterHeaderProps {
   session: EmbodyCharacterSessionProjection;
 }
 
 export function EmbodyCharacterHeader({ session }: EmbodyCharacterHeaderProps) {
+  const { t } = useTranslation();
   const active = session.status === 'active';
 
   return (
@@ -17,14 +19,14 @@ export function EmbodyCharacterHeader({ session }: EmbodyCharacterHeaderProps) {
               {session.displayName}
             </span>
             <span className="rounded-sm border border-[var(--vscode-panel-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-normal text-[var(--vscode-descriptionForeground)]">
-              embody
+              {t('characterRole.embody.mode')}
             </span>
             <span className="rounded-sm border border-[var(--vscode-panel-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-normal text-[var(--vscode-descriptionForeground)]">
-              {session.status}
+              {t(`characterRole.embody.status.${session.status}`)}
             </span>
           </div>
           <div className="mt-0.5 truncate text-[11px] text-[var(--vscode-descriptionForeground)]">
-            User plays the character; Agent gives project knowledge feedback.
+            {t('characterRole.embody.description')}
           </div>
         </div>
         {active ? (
@@ -33,13 +35,19 @@ export function EmbodyCharacterHeader({ session }: EmbodyCharacterHeaderProps) {
             onClick={() => AgentHostMessages.exitEmbodyCharacterSession(session.sessionId)}
             className="rounded px-2 py-1 text-[11px] text-[var(--vscode-foreground)] hover:bg-[var(--vscode-toolbar-hoverBackground)]"
           >
-            Exit
+            {t('characterRole.action.exit')}
           </button>
         ) : null}
       </div>
       <div className="border-t border-[var(--vscode-panel-border)] px-3 py-2 text-[11px] text-[var(--vscode-descriptionForeground)]">
-        <div className="truncate">Scope: {session.scopeSummary.join('; ')}</div>
-        {session.prompt ? <div className="mt-1 truncate">Note: {session.prompt}</div> : null}
+        <div className="truncate">
+          {t('characterRole.embody.scope', { scope: session.scopeSummary.join('; ') })}
+        </div>
+        {session.prompt ? (
+          <div className="mt-1 truncate">
+            {t('characterRole.embody.note', { note: session.prompt })}
+          </div>
+        ) : null}
       </div>
     </div>
   );

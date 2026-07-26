@@ -1,36 +1,55 @@
 import { describe, expect, it } from 'vitest';
-import { projectMediaTaskToBackgroundTask } from '../work-item-projector';
+import type { ChildRunScope } from '@neko/shared';
+import { getAgentWorkItemRuntimeKey, projectSubAgentEventToWorkItem } from '../work-item-projector';
 
-describe('work item projector', () => {
-  it('preserves a non-retryable media failure policy', () => {
-    const task = projectMediaTaskToBackgroundTask({
-      scope: {
-        conversationId: 'conversation-1',
-        runId: 'run-1',
-        parentRunId: 'run-1',
-        childRunId: 'task-1',
-        childKind: 'task',
+describe('subagent work item projector', () => {
+  it('projects child-run ownership and terminal evidence without generic Task state', () => {
+    const scope = subAgentScope('conv-1', 'parent-1', 'sub-1');
+    const item = projectSubAgentEventToWorkItem({
+      type: 'completed',
+      scope,
+      subAgentId: 'sub-1',
+      parentAgentId: 'parent-1',
+      conversationId: 'conv-1',
+      data: {
+        result: {
+          id: 'sub-1',
+          status: 'completed',
+          response: 'review complete',
+        },
+        parentMessageId: 'message-1',
+        parentToolCallId: 'tool-1',
       },
-      id: 'task-1',
-      type: 'image',
-      status: 'failed',
+      timestamp: 1_000,
+    });
+
+    expect(item).toMatchObject({
+      kind: 'subagent',
+      scope,
+      status: 'completed',
       progress: 100,
-      providerId: 'newapi',
-      modelId: 'gpt-image-2',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:01.000Z',
-      error: {
-        code: 'NEWAPI_IMAGE_OUTCOME_UNKNOWN',
-        message: 'Provider outcome is unknown.',
-        retryable: false,
+      parentMessageId: 'message-1',
+      parentToolCallId: 'tool-1',
+      subAgent: {
+        parentAgentId: 'parent-1',
+        response: 'review complete',
       },
-      request: { prompt: 'cat' },
     });
-
-    expect(task).toMatchObject({
-      status: 'failed',
-      error: 'Provider outcome is unknown.',
-      retryable: false,
-    });
+    expect(getAgentWorkItemRuntimeKey(item)).toContain('sub-1');
+    expect(item).not.toHaveProperty('task');
   });
 });
+
+function subAgentScope(
+  conversationId: string,
+  parentRunId: string,
+  childRunId: string,
+): ChildRunScope {
+  return {
+    conversationId,
+    runId: parentRunId,
+    parentRunId,
+    childRunId,
+    childKind: 'subagent',
+  };
+}

@@ -5,7 +5,7 @@ OpenNeko's application root copies seven build-only feature VSIX payloads beneat
 - Engine externalizes `@neko-engine/host-napi` although the loader and native binary live at `packages/host-napi/` inside the Engine feature.
 - Engine's macOS packager copies only the seven FFmpeg libraries while the native binary and copied dylibs retain Homebrew load paths and transitive codec dependencies.
 - Content and Agent call `import(packageName)` for document parsers, which esbuild cannot discover or bundle.
-- Agent bundles Sharp's JavaScript but Sharp dynamically requires `@img/sharp-<platform>` and libvips packages that are absent from the payload.
+- Agent and the unified host bundle Sharp's ESM distribution into CommonJS output. esbuild replaces `import.meta` with an empty object, so Sharp calls `createRequire(undefined)` before it can resolve the target binding.
 - Final assembly validates only that at least one Engine runtime library exists; it does not validate Node runtime resolution from each embedded bundle.
 
 The product is an offline local VS Code client. Runtime dependencies must therefore be closed inside each feature payload without relying on the monorepo checkout, a global package installation, or a separately installed feature extension.
@@ -17,7 +17,7 @@ The product is an offline local VS Code client. Runtime dependencies must theref
 - Make Engine activation resolve its packaged CommonJS N-API loader from the feature-scoped context.
 - Make the macOS Engine payload recursively own every non-system Mach-O dependency and use only feature-relative load paths.
 - Make document parser dependencies statically discoverable and owned by `@neko/content`.
-- Package only the Sharp native binding and libvips pair for the current supported target.
+- Keep Sharp as one external Node runtime package and package its JavaScript dependencies plus only the native binding and libvips pair for the current supported target.
 - Let features declare runtime packages in a machine-readable payload manifest and let the application validate them generically.
 - Reject internal bare package imports, variable document package imports, target mismatches, missing files, and dependencies that resolve outside the feature payload.
 - Verify the installed macOS package in an isolated Extension Development Host; leave Linux runtime acceptance to its canonical runner.
@@ -52,17 +52,17 @@ The npm registry's final `xlsx` release is vulnerable when reading untrusted spr
 
 Alternative considered: retain arbitrary `import(packageName)` and copy parser packages. Rejected because the supported set is closed, literal imports let esbuild create one portable bundle, and arbitrary runtime package loading cannot be validated statically.
 
-### Agent stages a target-specific Sharp native closure
+### Extension Host owners stage one complete target-specific Sharp closure
 
-Agent's prepublish path copies exactly two already-installed optional packages into `dist/node_modules/@img`: `sharp-<target>` and `sharp-libvips-<target>`. It resolves their package export roots, copies real files rather than pnpm symlinks, removes any prior generated closure, and emits `dist/runtime-closure.json` with exact module specifiers and target identity.
+Agent and the unified host externalize `sharp` from their CommonJS bundles. Their compile paths invoke one shared staging implementation that copies `sharp`, `@img/colour`, `detect-libc`, `semver`, `sharp-<target>`, and `sharp-libvips-<target>` into each owning `dist/node_modules`. Staging resolves package roots from installed entry points, copies real files rather than pnpm symlinks, removes any prior generated Sharp closure, and emits `dist/runtime-closure.json` with exact module specifiers and target identity.
 
-The Sharp JavaScript remains bundled. Its existing dynamic native require then resolves from `dist/node_modules` beside `dist/extension.js`. The WASM package remains a development fallback dependency but is not the release runtime path.
+Sharp's own ESM/CJS files remain independent runtime modules, so `import.meta.url` and `createRequire` retain Node semantics. Its native require resolves from `dist/node_modules` beside the owning `dist/extension.js`. The WASM package remains a development dependency but is not the release runtime path.
 
-Alternative considered: package Sharp and all transitive JavaScript under `node_modules`. Rejected because the JS is already bundled and only the platform native pair is unresolved. Alternative considered: force WASM in all releases. Rejected because both supported targets have canonical native packages and image processing is a repeated local workflow.
+Alternative considered: keep Sharp bundled and patch its generated `import.meta` use. Rejected because that couples packaging to generated third-party code and leaves multiple Sharp call sites vulnerable to the same transform. Alternative considered: force WASM in all releases. Rejected because both supported targets have canonical native packages and image processing is a repeated local workflow.
 
 ### The assembler validates feature-owned manifests
 
-The application assembler scans every embedded feature bundle for internal bare runtime imports and prohibited variable package imports. For each optional `dist/runtime-closure.json`, it validates schema, target, unique specifiers, and resolves every specifier from that feature's `dist/extension.js`. A resolution is accepted only when the resulting real path remains within the feature root; resolving through the repository's own `node_modules` is a packaging failure.
+The application assembler scans the unified host and every embedded feature bundle for internal bare runtime imports and prohibited variable package imports. For each optional `dist/runtime-closure.json`, it validates schema, target, unique specifiers, and resolves every specifier from that owner's `dist/extension.js`. A resolution is accepted only when the resulting real path remains within the owning payload root; resolving through the repository's own `node_modules` is a packaging failure.
 
 This keeps package-specific staging in the owner while giving Release one generic offline-closure gate.
 
@@ -72,11 +72,11 @@ Cut and Tools have no production Sharp caller in source or compiled output. Thei
 
 ## Five-Layer Analysis
 
-- **Responsibility:** Engine owns N-API location and the platform-native Mach-O/ELF closure; Content owns parser modules; Agent owns Sharp files; the application owns final offline closure validation.
+- **Responsibility:** Engine owns N-API location and the platform-native Mach-O/ELF closure; Content owns parser modules; each Extension Host bundle that imports Sharp owns its staged closure; the application owns shared staging and final offline closure validation.
 - **Dependency:** feature packages do not import the application, Content remains host-neutral except its explicit Node entry, and Webviews receive no Node/native dependency.
 - **Interface:** scoped Engine path, exhaustive document module name union, and versioned runtime closure manifest are the only new contracts.
 - **Extension:** a future native feature adds a manifest through its own prepublish step; the assembler does not gain package-specific copy logic.
-- **Testing:** pure loaders, native dependency graph materialization, and staging get focused tests; orchestration tests inspect final staged payloads; VS Code Extension Host proves installed activation and Engine readiness.
+- **Testing:** pure loaders, native dependency graph materialization, and staging get focused tests; a CJS bundle regression executes Sharp contact-sheet composition from an isolated staged closure; orchestration tests inspect final staged payloads; VS Code Extension Host proves installed activation and Engine readiness.
 
 ## Risks / Trade-offs
 

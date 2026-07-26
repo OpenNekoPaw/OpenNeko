@@ -1,5 +1,9 @@
 import type { Platform } from '@neko/platform';
-import { projectLlmParameters, type LlmParameterDiagnostic } from '@neko/platform';
+import {
+  modelSupportsPurpose,
+  projectLlmParameters,
+  type LlmParameterDiagnostic,
+} from '@neko/platform';
 import type {
   AgentLlmConfig,
   AgentMediaModelSelections,
@@ -218,16 +222,48 @@ function projectFlatPurposeModels(
   input: ResolveAgentLlmConfigInput,
   understanding: MediaUnderstandingPrimaryResolution,
 ): { readonly purposeModels?: AgentFlatPurposeModelRefs } {
+  const image = projectCompatibleMediaDefault(input, 'image', 'image.generate');
+  const video = projectCompatibleMediaDefault(input, 'video', 'video.generate');
+  const audio = projectCompatibleMediaDefault(input, 'audio', 'audio.generate');
   const projected: AgentFlatPurposeModelRefs = {
-    ...(input.mediaModels?.image ? { 'image.generate': input.mediaModels.image } : {}),
-    ...(input.mediaModels?.video ? { 'video.generate': input.mediaModels.video } : {}),
-    ...(input.mediaModels?.audio ? { 'audio.generate': input.mediaModels.audio } : {}),
+    ...(image ? { 'image.generate': image } : {}),
+    ...(video ? { 'video.generate': video } : {}),
+    ...(audio ? { 'audio.generate': audio } : {}),
     ...input.purposeModels,
     ...(understanding.status === 'resolved'
       ? { [understanding.purpose]: understanding.model }
       : {}),
   };
   return Object.keys(projected).length === 0 ? {} : { purposeModels: projected };
+}
+
+function projectCompatibleMediaDefault(
+  input: ResolveAgentLlmConfigInput,
+  category: 'image',
+  purpose: 'image.generate',
+): ModelRef<'image'> | undefined;
+function projectCompatibleMediaDefault(
+  input: ResolveAgentLlmConfigInput,
+  category: 'video',
+  purpose: 'video.generate',
+): ModelRef<'video'> | undefined;
+function projectCompatibleMediaDefault(
+  input: ResolveAgentLlmConfigInput,
+  category: 'audio',
+  purpose: 'audio.generate',
+): ModelRef<'audio'> | undefined;
+function projectCompatibleMediaDefault(
+  input: ResolveAgentLlmConfigInput,
+  category: keyof AgentMediaModelSelections,
+  purpose: 'image.generate' | 'video.generate' | 'audio.generate',
+): ModelRef | undefined {
+  const ref = input.mediaModels?.[category];
+  if (!ref) return undefined;
+  const model = input.providers.getModel(ref.modelId);
+  if (!model || model.enabled === false || model.providerId !== ref.providerId) {
+    return ref;
+  }
+  return modelSupportsPurpose(model, purpose) ? ref : undefined;
 }
 
 function getRequestedMediaUnderstandingPurposes(

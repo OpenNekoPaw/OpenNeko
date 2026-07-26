@@ -9,12 +9,6 @@ export function presentTimelineProcessLabel(
   switch (row.kind) {
     case 'tool':
       return row.toolName ?? presentation.t('agent.terminal.timeline.fallback.tool');
-    case 'task':
-      return row.taskTitle ?? row.taskId ?? presentation.t('agent.terminal.timeline.fallback.task');
-    case 'media':
-      return (
-        row.taskTitle ?? row.taskId ?? presentation.t('agent.terminal.timeline.fallback.media')
-      );
     case 'assistant_text':
     case 'thinking':
     case 'error':

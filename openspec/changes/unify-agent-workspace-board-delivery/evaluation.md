@@ -16,7 +16,7 @@
   - `excluded` multi-Agent file race、stale epoch、crash-after-save-before-receipt、explicit Canvas no-mirror、SQLite corrupt/unsupported runtime；这些不依赖模型判断，由双 store/双 coordinator、poison adapter和revision tests确定性证明。
 - Evidence and coverage:
   - canonical: Tool/task/turn终态、stable ResourceRef/artifact snapshot、delivery ledger status、writer epoch、Canvas revision/node IDs、terminal idle。
-  - artifact: owning ResourceRef validator、Markdown artifact digest、`.nkc` codec/Canvas validator、canonical content node identity、connection identity及role/provenance路径断言；`workspace-inbox`/`workspace-process-*` 作为禁用路径。
+  - artifact: owning ResourceRef validator、Markdown artifact digest、`.nkc` codec/Canvas validator、canonical content node identity、connection identity及role/provenance路径断言；`workspace-inbox`/`workspace-process-*` 作为禁用路径。多生成素材的 `workspace-batch-*` 只属于 Canvas 展示结构，不进入 delivery receipt 的内容 node IDs；其布局由 deterministic planner、Canvas domain 和 Extension Development Host 场景验收，不由模型最终回答反推。
   - workflow: enqueue → claim → save → receipt顺序，以及restart/takeover后同一delivery identity。
   - boundary/failure: 未使用fixture素材不投影；无workspace、blocked ledger、stale epoch、active Canvas fallback、AssetLibrary/legacy writer参与均失败。
   - regression: current generated image delivery、task continuation、conversation persistence resume保持通过。

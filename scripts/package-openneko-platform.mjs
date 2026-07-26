@@ -145,12 +145,12 @@ function packageOpenNekoPlatform({ target, engineVsix }, command = runCommand) {
     cpSync(extensionRoot, join(stageRoot, 'dist', 'features', packageName), { recursive: true });
   }
 
+  stageOpenNekoApplicationRuntime(stageRoot);
   assertEmbeddedNativeClosure(
     listFiles(join(stageRoot, 'dist', 'features', 'neko-engine')),
     target,
   );
   assertEmbeddedRuntimeClosure(stageRoot, target);
-  cpSync(join(appRoot, 'dist', 'extension.js'), join(stageRoot, 'dist', 'extension.js'));
   cpSync(join(appRoot, 'README.md'), join(stageRoot, 'README.md'));
   cpSync(join(appRoot, 'LICENSE'), join(stageRoot, 'LICENSE'));
   writeJson(join(stageRoot, 'package.json'), manifest);
@@ -179,6 +179,22 @@ function packageOpenNekoPlatform({ target, engineVsix }, command = runCommand) {
   return Object.freeze({ artifactPath, target, version });
 }
 
+export function stageOpenNekoApplicationRuntime(stageRoot) {
+  const sourceDist = join(appRoot, 'dist');
+  const targetDist = join(stageRoot, 'dist');
+  const sourceBundle = join(sourceDist, 'extension.js');
+  const sourceManifest = join(sourceDist, 'runtime-closure.json');
+  const sourceNodeModules = join(sourceDist, 'node_modules');
+  assertFile(sourceBundle, 'OpenNeko application bundle is missing.');
+  assertFile(sourceManifest, 'OpenNeko application runtime closure manifest is missing.');
+  assertDirectory(sourceNodeModules, 'OpenNeko application runtime node_modules is missing.');
+  mkdirSync(targetDist, { recursive: true });
+  rmSync(join(targetDist, 'node_modules'), { recursive: true, force: true });
+  cpSync(sourceBundle, join(targetDist, 'extension.js'));
+  cpSync(sourceManifest, join(targetDist, 'runtime-closure.json'));
+  cpSync(sourceNodeModules, join(targetDist, 'node_modules'), { recursive: true });
+}
+
 function resolveEngineVsix(target, explicitPath) {
   if (explicitPath) {
     const path = resolve(repoRoot, explicitPath);
@@ -196,7 +212,7 @@ function resolveEngineVsix(target, explicitPath) {
   return matches[0];
 }
 
-function writeMergedLocalizations(stageRoot) {
+export function writeMergedLocalizations(stageRoot) {
   for (const fileName of ['package.nls.json', 'package.nls.zh-cn.json']) {
     const entries = [];
     for (const packageName of OPENNEKO_FEATURE_PACKAGES) {

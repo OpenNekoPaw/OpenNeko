@@ -5,9 +5,7 @@
 更新日期：2026-07-22
 范围：拟议中的 `apps/neko-desktop`、现有领域子包、Desktop Host bridge、Rust Engine，以及 OpenCode、Zed、Craft Agents、Goose、MiniMax Hub 等外部参考的采用边界。
 
-Cut 范围说明（2026-07-22）：当前 Cut 轻量化变更只处理 VS Code 的 OTIO 工程和 Engine adapter，不决定 Desktop Cut 的预览、音频或导出实现。Desktop Cut 媒体路径必须由后续独立 ADR/OpenSpec 定义，不得从 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 推断。本文其他 Desktop composition、Agent、项目壳和 host adapter 决策继续有效。
-
-部分取代说明（2026-07-22）：本文关于 Cut 保留 `.nkv`、OTIO 只作为交换格式或由 Desktop 复用既有 Cut 媒体实现的结论，已由 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 取代。Desktop Cut 格式和 media adapter 仍需未来独立 OpenSpec，不得从本文恢复 NKV 或推断宿主实现。
+Cut 媒体边界更新（2026-07-22）：VS Code Cut 的已实现 OTIO 工程和 Engine adapter 以 [`adr-cut-otio-vscode-media-runtime-boundary.md`](adr-cut-otio-vscode-media-runtime-boundary.md) 为准；Desktop Cut 不复用 Rust Engine，目标改用 WebCodecs/WebAudio、Host bounded file access 和打包 FFmpeg，并由 [`adr-cut-otio-vscode-desktop-media-runtime-boundary.md`](adr-cut-otio-vscode-desktop-media-runtime-boundary.md) 约束。不得从任一文档恢复 NKV 或推断未实现宿主能力。本文其他 Desktop composition、Agent、项目壳和 host adapter 决策继续有效。
 
 ## 背景
 

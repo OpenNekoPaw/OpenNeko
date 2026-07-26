@@ -57,7 +57,6 @@ export {
   handleSkills,
   handleCommands,
   handleTools,
-  handleTasks,
   handleMcp,
   generateExtensionStatusData,
 } from './handlers';

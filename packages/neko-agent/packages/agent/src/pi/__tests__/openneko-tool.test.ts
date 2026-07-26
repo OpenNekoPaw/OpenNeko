@@ -13,8 +13,11 @@ import {
   MAX_PI_TOOL_RESULT_IMAGE_TOTAL_BYTES,
   MAX_PI_TOOL_RESULT_SOURCE_IMAGES,
   projectOpenNekoTool,
+  projectOpenNekoTools,
   OpenNekoPiToolExecutionError,
+  resolveOpenNekoToolCallModelPurpose,
   resolveOpenNekoToolModelPurpose,
+  resolveOpenNekoToolModelPurposes,
 } from '../openneko-tool';
 
 function tool(overrides: Partial<Tool> = {}): Tool {
@@ -65,6 +68,47 @@ describe('OpenNeko tool projection to Pi', () => {
 
   it('does not invent a purpose for a tool without a configured model contract', () => {
     expect(resolveOpenNekoToolModelPurpose({ name: 'InspectAsset' })).toBeUndefined();
+  });
+
+  it('routes detached generation to one call-time purpose from a bounded candidate set', () => {
+    const detachedTool = tool({
+      name: 'SubmitGenerationJob',
+      parameters: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['image', 'video', 'audio'] },
+          prompt: { type: 'string' },
+        },
+        required: ['kind', 'prompt'],
+      },
+    });
+
+    expect(resolveOpenNekoToolModelPurposes(detachedTool)).toEqual([
+      'image.generate',
+      'video.generate',
+      'audio.generate',
+    ]);
+    expect(resolveOpenNekoToolCallModelPurpose(detachedTool, { kind: 'image' })).toBe(
+      'image.generate',
+    );
+    expect(resolveOpenNekoToolCallModelPurpose(detachedTool, { kind: 'video' })).toBe(
+      'video.generate',
+    );
+    expect(resolveOpenNekoToolCallModelPurpose(detachedTool, { kind: 'audio' })).toBe(
+      'audio.generate',
+    );
+    expect(() => resolveOpenNekoToolCallModelPurpose(detachedTool, { kind: 'document' })).toThrow(
+      'SubmitGenerationJob requires kind image, video, or audio.',
+    );
+
+    const [projected] = projectOpenNekoTools([detachedTool], {
+      purposesForTool: resolveOpenNekoToolModelPurposes,
+      purposeForToolCall: resolveOpenNekoToolCallModelPurpose,
+    });
+    expect(projected).toMatchObject({
+      modelPurposes: ['image.generate', 'video.generate', 'audio.generate'],
+    });
+    expect(projected?.resolveModelPurpose?.({ kind: 'video' })).toBe('video.generate');
   });
 
   it('preserves the strict JSON schema and localized description', () => {
@@ -296,6 +340,46 @@ describe('OpenNeko tool projection to Pi', () => {
       details: expect.objectContaining({ success: true, data: { imageCount: 1 } }),
     });
     expect(load).toHaveBeenCalledWith(assetRef);
+  });
+
+  it('projects generated-output image attachments through their canonical content locator', async () => {
+    const contentLocator = {
+      kind: 'generated-output' as const,
+      outputId: 'generated-cat',
+      revision: 'revision-1',
+      digest: `sha256:${'a'.repeat(64)}`,
+      path: 'neko/generated/image/generated-cat.png',
+    };
+    const load = vi.fn(async () => ({
+      kind: 'image' as const,
+      url: 'data:image/png;base64,aW1hZ2UtYnl0ZXM=',
+      mimeType: 'image/png',
+    }));
+    const projected = projectOpenNekoTool(
+      tool({
+        execute: async () => ({
+          success: true,
+          data: { imageCount: 1 },
+          attachments: [{ type: 'image', contentLocator }],
+        }),
+      }),
+      { assetLoader: { load } },
+    );
+
+    await expect(projected.execute({ args: {}, context })).resolves.toEqual({
+      content: [
+        { type: 'text', text: '{"imageCount":1}' },
+        { type: 'image', data: 'aW1hZ2UtYnl0ZXM=', mimeType: 'image/png' },
+      ],
+      details: expect.objectContaining({ success: true, data: { imageCount: 1 } }),
+    });
+    expect(load).toHaveBeenCalledWith({
+      assetId: 'generated-cat',
+      uri: 'neko/generated/image/generated-cat.png',
+      mimeType: 'image/png',
+      contentLocator,
+    });
+    expect(JSON.stringify(load.mock.calls)).not.toMatch(/resourceRef|assetRef/u);
   });
 
   it('uses one Host batch projection for multiple source images and preserves ordered coverage', async () => {

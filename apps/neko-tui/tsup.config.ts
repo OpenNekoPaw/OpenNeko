@@ -22,6 +22,7 @@ export default defineConfig({
     '@neko/ai-sdk',
     '@neko/content',
     '@neko/entity',
+    '@neko/generation',
     '@neko/host',
     '@neko/markdown',
     '@neko/platform',

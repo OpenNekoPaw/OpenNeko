@@ -5,7 +5,6 @@ import {
   type CanvasStoryboardPromptState,
   type ConversationRunScope,
   type ResourceRef,
-  type TaskRunScope,
   type ThreeReferenceCameraMediaReference,
   type ThreeReferenceContextData,
   type ThreeReferencePanoramaMediaReference,
@@ -39,8 +38,6 @@ export interface CanvasShotPromptData {
   readonly visualStyle?: string;
   readonly vfx?: readonly string[];
 }
-
-export type CanvasGenerationStatus = 'pending' | 'generating' | 'done' | 'error';
 
 export type CanvasControlMode =
   'canny' | 'depth' | 'pose' | 'normal' | 'segment' | 'lineart' | 'softedge' | 'scribble';
@@ -85,15 +82,6 @@ export interface CanvasGenerationInput {
   readonly threeReferenceContexts?: readonly ThreeReferenceContextData[];
 }
 
-export interface CanvasGenerationProgress {
-  readonly nodeId: string;
-  readonly taskId: string;
-  readonly cellId?: string;
-  readonly status: CanvasGenerationStatus;
-  readonly count?: number;
-  readonly total?: number;
-}
-
 export interface CanvasImageGenerationRequest {
   readonly prompt: string;
   readonly aspectRatio: string;
@@ -116,18 +104,6 @@ export interface CanvasImageGenerationRequest {
 export interface CanvasMediaOutput {
   readonly url: string;
   readonly mimeType?: string;
-}
-
-export interface CanvasMediaTask {
-  readonly scope: TaskRunScope;
-  readonly id: string;
-  readonly status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | string;
-  readonly outputs?: readonly CanvasMediaOutput[];
-}
-
-export interface CanvasMediaService {
-  generateImage(request: CanvasImageGenerationRequest): Promise<CanvasMediaTask>;
-  waitForTask(taskScope: TaskRunScope, timeoutMs?: number): Promise<CanvasMediaTask>;
 }
 
 export interface CanvasReferenceNode {
@@ -168,19 +144,11 @@ export interface CanvasGenerationRuntimeLogger {
 
 export interface CanvasGenerationRuntimeDeps {
   readonly promptGenerator?: CanvasPromptGenerator;
-  readonly media?: CanvasMediaService;
   readonly resolveCanvasNode?: (nodeId: string) => Promise<CanvasReferenceNode | null | undefined>;
   readonly resolveImageSource?: (source: string) => Promise<CanvasImageResolveResult | undefined>;
-  readonly fetchOutputAsDataUrl?: (output: CanvasMediaOutput) => Promise<string | undefined>;
-  readonly onProgress?: (progress: CanvasGenerationProgress) => void;
   readonly logger?: CanvasGenerationRuntimeLogger;
 }
 
-export interface CanvasGenerationResult {
-  readonly dataUrl: string;
-}
-
-const CANVAS_GENERATION_TIMEOUT_MS = 3 * 60 * 1000;
 const DEFAULT_ASPECT_RATIO = '16:9';
 const DEFAULT_GENERATION_COUNT = 1;
 const DEFAULT_CANVAS_IMAGE_MIME_TYPE = 'image/png';
@@ -246,52 +214,6 @@ export class CanvasGenerationRuntime {
       return '';
     }
     return (await this.deps.promptGenerator.generate(shotData)).trim();
-  }
-
-  async generateForNode(input: CanvasGenerationInput): Promise<CanvasGenerationResult | undefined> {
-    if (!this.deps.media) {
-      this.deps.logger?.warn('Canvas image generation skipped because no media service is set.');
-      return undefined;
-    }
-    if (!this.deps.fetchOutputAsDataUrl) {
-      this.deps.logger?.warn('Canvas image generation skipped because no output fetcher is set.');
-      return undefined;
-    }
-
-    const ipAdapterRefs = await resolveCanvasIpAdapterReferences(input, this.deps);
-    const request = buildCanvasImageGenerationRequest(input, ipAdapterRefs);
-    const task = await this.deps.media.generateImage(request);
-
-    this.emitProgress(input, task.id, 'generating');
-
-    const completed = await this.deps.media.waitForTask(task.scope, CANVAS_GENERATION_TIMEOUT_MS);
-    const firstOutput = completed.outputs?.[0];
-    if (completed.status !== 'completed' || !firstOutput) {
-      this.emitProgress(input, task.id, 'error');
-      return undefined;
-    }
-
-    const dataUrl = await this.deps.fetchOutputAsDataUrl(firstOutput);
-    if (!dataUrl) {
-      this.emitProgress(input, task.id, 'error');
-      return undefined;
-    }
-
-    this.emitProgress(input, task.id, 'done');
-    return { dataUrl };
-  }
-
-  private emitProgress(
-    input: CanvasGenerationInput,
-    taskId: string,
-    status: CanvasGenerationStatus,
-  ): void {
-    this.deps.onProgress?.({
-      nodeId: input.nodeId,
-      taskId,
-      ...(input.cellId ? { cellId: input.cellId } : {}),
-      status,
-    });
   }
 }
 

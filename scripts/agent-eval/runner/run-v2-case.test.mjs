@@ -73,8 +73,7 @@ function facts(overrides = {}) {
     ],
     usage: { inputTokens: 12, outputTokens: 4, totalTokens: 16, contextTokens: 120 },
     iteration: { current: 2, max: 100 },
-    tasks: [],
-    retries: { taskRetryCount: 1, tasksWithRetries: 1 },
+    retries: { count: 1 },
     evidenceCompleteness: {
       runtimeErrors: { limit: 256, droppedCount: 0 },
       turns: { limit: 512, droppedCount: 0 },
@@ -107,7 +106,7 @@ describe('v2 single-case orchestration', () => {
               ref: 'asset:scene-1',
               kind: 'generated-asset',
               digest: `sha256:${'a'.repeat(64)}`,
-              provenance: { source: 'generated-asset', taskId: 'task-1' },
+              provenance: { source: 'generated-asset', operationId: 'operation-1' },
               deliveryStatus: 'delivered',
               validator: { id: 'durable-resource-ref', status: 'valid' },
               diagnostics: [],
@@ -382,7 +381,6 @@ describe('v2 single-case orchestration', () => {
       iterations: { total: 6, mean: 2 },
       tools: { calls: 3, successes: 3, failures: 0 },
       retries: { count: 3 },
-      tasks: { total: 0, completed: 0, failed: 0, cancelled: 0 },
     });
     expect(new Set(run.aggregate.samples.map((sample) => sample.runId)).size).toBe(3);
     await expect(fs.readFile(run.files.aggregate, 'utf8')).resolves.toContain(

@@ -47,6 +47,7 @@ export {
 export {
   NodePiConversationAuthority,
   PiConversationAuthorityError,
+  type CheckpointPiExternalTurnInput,
   type CheckpointPiTurnInput,
   type AppendPiCompactionInput,
   type ConversationExecutionLease,
@@ -85,6 +86,11 @@ export {
   type PiProductEventSink,
 } from './event-projector';
 export {
+  createPiTimelineProjector,
+  type PiTimelineProjector,
+  type PiTimelineProjectorOptions,
+} from './timeline-projector';
+export {
   PiConversationRuntime,
   type ExecutePiConversationSkillInput,
   type ExecutePiConversationTurnInput,
@@ -122,7 +128,9 @@ export {
   OpenNekoPiToolExecutionError,
   projectOpenNekoTool,
   projectOpenNekoTools,
+  resolveOpenNekoToolCallModelPurpose,
   resolveOpenNekoToolModelPurpose,
+  resolveOpenNekoToolModelPurposes,
   type PiToolResultAssetLoader,
   type PiToolResultAssetPayload,
   type PiToolResultImageBatchItem,

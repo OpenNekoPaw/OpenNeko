@@ -10,7 +10,6 @@ import * as nodeOs from 'node:os';
 import {
   ServiceCollection,
   setGlobalServices,
-  getService,
   setRootLogger,
   setErrorHandler,
   getRootLogger,
@@ -24,17 +23,28 @@ import {
 import {
   formatLocalMetadataUserDiagnostic,
   LogLevel,
+  contentLocatorsEqual,
   projectLocalMetadataUserDiagnostic,
-  withTimeout,
   type NekoAgentAPI,
+  type GeneratedAsset,
+  type GeneratedOutputContentLocator,
   type SkillDef,
   type ProjectQualityFacade,
   type QualityProjectRef,
-  type ICapabilityPurposeMediaService,
 } from '@neko/shared';
 import { bootstrapCoreServices, logServicesStatus } from './bootstrap';
-import { ITaskManager } from './bootstrap';
-import { createGeneratedAssetResourceResolver, setPlatformRootLogger } from '@neko/platform';
+import {
+  registerMediaAgentTools,
+  setPlatformRootLogger,
+  type GeneratedAssetCatalog,
+  type GeneratedAssetIndex,
+} from '@neko/platform';
+import {
+  createPersistentGenerationJobStore,
+  GENERATION_JOB_MIGRATIONS,
+  GenerationJobCoordinator,
+  type GenerationJobPort,
+} from '@neko/generation';
 import { setRootLogger as setAgentRootLogger } from '@neko/agent';
 import { ChatViewProvider } from './chat';
 import {
@@ -76,6 +86,7 @@ import { ExternalProcessorRegistryService } from './services/externalProcessorRe
 import { getEngineClientProvider } from './services/engineClientProvider';
 import { createExtensionAgentContentAccessRuntime } from './services/agentContentAccessRuntime';
 import { createWorkspaceGeneratedAssetIndex } from './services/generatedAssetOpenResolver';
+import { MediaGenerationDeliveryHost } from './services/mediaGenerationDeliveryHost';
 import { cleanupLegacyCanvasBoardMetadata } from './services/legacyCanvasBoardMetadataCleanup';
 import { cleanupLegacyConversationWorkspaceState } from './services/legacyConversationWorkspaceStateCleanup';
 import {
@@ -83,9 +94,22 @@ import {
   getHostContentAuthorizedReadRoots,
 } from '@neko/shared/vscode/extension';
 import {
-  registerStreamLifecycleAcceptanceCommands,
-  StreamLifecycleAcceptanceController,
-} from './debug/streamLifecycleAcceptance';
+  registerTimelineProjectionAcceptanceCommands,
+  TimelineProjectionAcceptanceController,
+} from './debug/timelineProjectionAcceptance';
+import type { Platform } from '@neko/platform';
+import type { ToolRegistry } from '@neko/agent';
+
+export interface NekoAgentHostServices {
+  readonly platform: Platform;
+  readonly toolRegistry: ToolRegistry;
+  readonly generationJobs?: GenerationJobPort;
+  readonly generatedAssets?: GeneratedAssetCatalog;
+  readonly resolveGenerationResult?: (locator: GeneratedOutputContentLocator) => {
+    readonly path: string;
+    readonly asset: GeneratedAsset;
+  };
+}
 
 const LOG_LEVEL_NAMES: Record<LogLevel, string> = {
   [LogLevel.Debug]: 'debug',
@@ -97,6 +121,7 @@ const LOG_LEVEL_NAMES: Record<LogLevel, string> = {
 
 const SHOW_LOGS_COMMAND = 'neko.agent.showLogs';
 const LOCAL_METADATA_REVISION_POLL_MS = 2_000;
+let generationJobCoordinator: GenerationJobCoordinator | undefined;
 
 /**
  * Activate the extension
@@ -108,7 +133,10 @@ async function resolveOwningProjectQualityFacade(
   return undefined;
 }
 
-export async function activate(context: vscode.ExtensionContext): Promise<NekoAgentAPI> {
+export async function activate(
+  context: vscode.ExtensionContext,
+  hostServices?: NekoAgentHostServices,
+): Promise<NekoAgentAPI> {
   // Initialize logger
   const logLevelSetting = inspectLogLevelSetting(context.extensionMode);
   const resolvedLogLevel = logLevelSetting.level;
@@ -193,11 +221,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
     bootstrapResult = await bootstrapCoreServices(
       services,
       context,
-      localMetadata
+      localMetadata ? { workspaceId: localMetadata.workspaceId } : undefined,
+      hostServices
         ? {
-            taskStorage: localMetadata.taskStorage,
-            taskRecoveryStorage: localMetadata.taskRecoveryStorage,
-            workspaceId: localMetadata.workspaceId,
+            platform: hostServices.platform,
+            toolRegistry: hostServices.toolRegistry,
           }
         : undefined,
     );
@@ -212,14 +240,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
   // without depending on @neko/platform directly.
   const capabilityRegistries = createAgentCapabilityRuntimeRegistries();
   const generatedAssetIndexBinding =
-    localMetadata && workspaceRoot
+    !hostServices?.generatedAssets && localMetadata && workspaceRoot
       ? await createWorkspaceGeneratedAssetIndex({
           workspaceRoot,
           homedir: nodeOs.homedir(),
           logger,
         })
       : undefined;
-  const generatedAssetIndex = generatedAssetIndexBinding?.index;
+  const standaloneGeneratedAssetIndex = generatedAssetIndexBinding?.index;
+  const generatedAssetCatalog = hostServices?.generatedAssets ?? standaloneGeneratedAssetIndex;
   if (generatedAssetIndexBinding) {
     context.subscriptions.push({
       dispose: () => {
@@ -228,6 +257,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
           .catch((error) => logger.warn('Failed to dispose generated output index', { error }));
       },
     });
+  }
+  if (!hostServices?.generationJobs && localMetadata && standaloneGeneratedAssetIndex) {
+    await localMetadata.metadataStore.migrateNamespace(GENERATION_JOB_MIGRATIONS);
+    const generationDelivery = new MediaGenerationDeliveryHost({
+      assetIndex: standaloneGeneratedAssetIndex,
+    });
+    const coordinator = new GenerationJobCoordinator({
+      store: createPersistentGenerationJobStore({
+        metadataStore: localMetadata.metadataStore,
+        workspaceId: localMetadata.workspaceId,
+      }),
+      execution: bootstrapResult.platform.media,
+      resultCommitter: {
+        commit: async ({ ref, generation }) => {
+          const finalized = await generationDelivery.commitMediaGeneration({
+            operationId: ref.jobId,
+            result: generation,
+          });
+          return finalized.generatedAssets.map((asset) => {
+            if (!asset.lifecycle) {
+              throw new Error(
+                `Generated asset ${asset.id} is missing its durable ResourceRef lifecycle.`,
+              );
+            }
+            return asset.lifecycle.contentLocator;
+          });
+        },
+      },
+    });
+    generationJobCoordinator = coordinator;
+    await coordinator.recoverPersistedGenerationJobs();
+    registerMediaAgentTools(bootstrapResult.toolRegistry, coordinator);
   }
   const engineClientProvider = getEngineClientProvider();
   await engineClientProvider.setAuthorizedReadRoots?.(
@@ -240,9 +301,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
   const agentContentAccess = await createExtensionAgentContentAccessRuntime({
     context,
     workspaceRoot,
-    ...(generatedAssetIndex
-      ? { resolveGeneratedAsset: createGeneratedAssetResourceResolver(generatedAssetIndex) }
-      : {}),
     pathResolver: await createHostContentPathResolver({
       workspaceRoot,
       getExtension: vscode.extensions.getExtension,
@@ -262,25 +320,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
 
   // Register neko-agent host tools.
 
-  const purposeMediaService: ICapabilityPurposeMediaService | undefined = bootstrapResult.platform
-    .media
-    ? {
-        generateImage: (purpose: string, request: { prompt: string; [key: string]: unknown }) => {
-          const model = requirePurposeModelRef(bootstrapResult.platform, purpose);
-          return bootstrapResult.platform.media!.generateImage({ ...request, ...model });
-        },
-        generateVideo: (purpose: string, request: { prompt: string; [key: string]: unknown }) => {
-          const model = requirePurposeModelRef(bootstrapResult.platform, purpose);
-          return bootstrapResult.platform.media!.generateVideo({ ...request, ...model });
-        },
-        waitForTask: (taskScope, timeout) =>
-          bootstrapResult.platform.media!.waitForTask(taskScope, timeout),
-      }
-    : undefined;
   const agentOwnedCapabilityContext = {
     extensionContext: context,
-    mediaService: bootstrapResult.platform.media,
-    purposeMediaService,
     purposeTextRuntime: bootstrapResult.productPurposeTextRuntime,
     configManager: bootstrapResult.platform.config,
     embedFn: buildEmbedFn(bootstrapResult.platform.config, bootstrapResult.piCredentialStore),
@@ -290,8 +331,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
       toolRegistry: bootstrapResult.toolRegistry,
       artifactProfileRegistry: capabilityRegistries.artifactProfileRegistry,
       providerExpressionProfileRegistry: capabilityRegistries.providerExpressionProfileRegistry,
-      mediaService: agentOwnedCapabilityContext.mediaService,
-      purposeMediaService: agentOwnedCapabilityContext.purposeMediaService,
       purposeTextRuntime: agentOwnedCapabilityContext.purposeTextRuntime,
       configManager: agentOwnedCapabilityContext.configManager,
       embedFn: agentOwnedCapabilityContext.embedFn,
@@ -340,13 +379,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
   setCapabilityRuntimeExternalProcessorRuntime(externalProcessorRegistryService.runtime);
   context.subscriptions.push(externalProcessorRegistryService);
 
-  // Development acceptance traffic uses the canonical Timeline delivery path but
-  // is isolated from product capabilities and conversation persistence.
-  const streamLifecycleAcceptance =
-    context.extensionMode === vscode.ExtensionMode.Development
-      ? new StreamLifecycleAcceptanceController()
-      : undefined;
-
   // Create chat view provider
   const initialPiConversationCatalog =
     await bootstrapResult.piAgentRuntimeManager.listConversationPresentationCatalog();
@@ -356,7 +388,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
       initialCatalog: initialPiConversationCatalog,
     },
     ...(localMetadata ? { localMetadata } : {}),
-    ...(generatedAssetIndex ? { generatedAssetIndex } : {}),
+    ...(generatedAssetCatalog ? { generatedAssetCatalog } : {}),
+    ...((hostServices?.generationJobs ?? generationJobCoordinator)
+      ? {
+          generationJobs: hostServices?.generationJobs ?? generationJobCoordinator,
+        }
+      : {}),
+    ...(hostServices?.resolveGenerationResult
+      ? { resolveGenerationResult: hostServices.resolveGenerationResult }
+      : generatedAssetCatalog
+        ? {
+            resolveGenerationResult: (locator: GeneratedOutputContentLocator) =>
+              resolveGeneratedAssetResult(generatedAssetCatalog, locator),
+          }
+        : {}),
   });
   if (localMetadata) {
     const refreshSharedMetadata = (): void => {
@@ -373,14 +418,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
     );
   }
 
-  if (streamLifecycleAcceptance) {
-    await registerStreamLifecycleAcceptanceCommands({
-      context,
-      chatViewProvider,
-      controller: streamLifecycleAcceptance,
-    });
-  }
-
   // Register chat view
   context.subscriptions.push(
     chatViewProvider,
@@ -389,6 +426,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
 
   // Register commands
   registerAgentCoreCommands(context, chatViewProvider, services);
+  if (context.extensionMode === vscode.ExtensionMode.Development) {
+    await registerTimelineProjectionAcceptanceCommands({
+      context,
+      chatViewProvider,
+      controller: new TimelineProjectionAcceptanceController(bootstrapResult.agentManager),
+    });
+  }
 
   // Creation quick-start commands — surface QuickPick / right-click entries
   // that funnel user intent into the Agent chat. Agent then picks the right
@@ -404,7 +448,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
     logger: projectSearchLogger,
     adapters: createAgentProjectSearchAdapters({
       logger: projectSearchLogger,
-      ...(generatedAssetIndex ? { queryGeneratedAssets: () => generatedAssetIndex.list() } : {}),
+      ...(generatedAssetCatalog
+        ? { queryGeneratedAssets: () => generatedAssetCatalog.list() }
+        : {}),
       ...(localMetadata
         ? {
             searchProjection: {
@@ -486,18 +532,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
     getSkills() {
       return skillCatalog;
     },
-    async resolveGeneratedOutput(resourceRef) {
-      if (
-        resourceRef.kind !== 'generated' ||
-        resourceRef.source.kind !== 'generated-asset' ||
-        !resourceRef.source.generatedAssetId
-      ) {
+    async resolveGeneratedOutput(contentLocator) {
+      if (contentLocator.kind !== 'generated-output') {
         return {
           status: 'unavailable',
-          diagnostic: 'Generated output resolution requires generated-output ResourceRef identity.',
+          diagnostic: 'Generated output resolution requires a generated-output ContentLocator.',
         };
       }
-      const asset = generatedAssetIndex?.get(resourceRef.source.generatedAssetId);
+      const asset = generatedAssetCatalog?.get(contentLocator.outputId);
       const lifecycle = asset?.lifecycle;
       if (!asset || !lifecycle) {
         return {
@@ -505,13 +547,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
           diagnostic: 'Generated output lifecycle metadata is unavailable.',
         };
       }
-      if (
-        lifecycle.resourceRef.id !== resourceRef.id ||
-        lifecycle.contentDigest !== resourceRef.fingerprint.value
-      ) {
+      if (!contentLocatorsEqual(lifecycle.contentLocator, contentLocator)) {
         return {
           status: 'unavailable',
-          diagnostic: 'Generated output ResourceRef no longer matches its lifecycle revision.',
+          diagnostic: 'Generated output ContentLocator no longer matches its lifecycle revision.',
         };
       }
       return {
@@ -521,23 +560,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<NekoAg
         contentDigest: lifecycle.contentDigest,
         mediaKind: lifecycle.mediaKind,
         mimeType: lifecycle.mimeType,
-        taskId: lifecycle.generation.taskId,
+        operationId: lifecycle.generation.operationId,
         ...(lifecycle.generation.runId ? { runId: lifecycle.generation.runId } : {}),
         sourcePath: asset.path,
       };
     },
   };
-}
-
-function requirePurposeModelRef(
-  platform: Awaited<ReturnType<typeof bootstrapCoreServices>>['platform'],
-  purpose: string,
-): { readonly providerId: string; readonly modelId: string } {
-  const ref = platform.config.resolveModelRefForPurpose(purpose);
-  if (!ref) {
-    throw new Error(`No explicit model binding is configured for ${purpose}.`);
-  }
-  return ref;
 }
 
 /**
@@ -546,13 +574,20 @@ function requirePurposeModelRef(
 export async function deactivate(): Promise<void> {
   const logger = getRootLogger();
   logger.info('Deactivating extension...');
+  const coordinator = generationJobCoordinator;
+  generationJobCoordinator = undefined;
+  await coordinator?.dispose();
+}
 
-  const taskManager = getService(ITaskManager);
-  if (!taskManager) {
-    return;
+function resolveGeneratedAssetResult(
+  index: Pick<GeneratedAssetIndex, 'get'>,
+  locator: GeneratedOutputContentLocator,
+): { readonly path: string; readonly asset: GeneratedAsset } {
+  const asset = index.get(locator.outputId);
+  if (!asset?.lifecycle || !contentLocatorsEqual(asset.lifecycle.contentLocator, locator)) {
+    throw new Error(
+      `Generation result ${locator.outputId}/${locator.revision} does not match the generated asset index.`,
+    );
   }
-
-  await withTimeout(taskManager.dispose(), 3000).catch((error) => {
-    logger.warn('Timed out while disposing task manager during deactivate', { error });
-  });
+  return { path: asset.path, asset };
 }

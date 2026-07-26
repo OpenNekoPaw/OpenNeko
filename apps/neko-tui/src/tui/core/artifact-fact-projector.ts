@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 import {
-  isDocumentArchiveResourceRef,
+  contentLocatorKey,
   validateCompositeArtifact,
+  validateContentLocator,
   validateDurableResourceRef,
+  type ContentLocator,
   type GeneratedAssetRevisionRef,
-  isResourceRef,
   type ResourceRef,
-  type Task,
   type ToolResultArtifactTransfer,
   type ToolResultAttachment,
 } from '@neko/shared';
@@ -31,125 +31,37 @@ export function projectToolResultArtifactFacts(
   ];
 }
 
-export function projectTaskOutputArtifactFacts(
-  tasks: readonly Task[],
-): readonly TerminalArtifactFact[] {
-  return tasks.flatMap((task) => {
-    const assets = readTaskOutputAssets(task);
-    return assets.flatMap((asset) => {
-      const resource = asset['resourceRef'];
-      if (!isResourceRef(resource)) return [];
-      const validation = validateDurableResourceRef(resource);
-      const metadata = resource.source.metadata;
-      const digest =
-        readString(metadata, 'contentDigest') ??
-        (resource.fingerprint.strategy === 'hash' ? resource.fingerprint.value : undefined);
-      const revision = readString(metadata, 'revision');
-      return [
-        {
-          ref: resource.id,
-          kind: resource.source.kind === 'generated-asset' ? 'generated-asset' : 'resource-ref',
-          ...(digest ? { digest } : {}),
-          ...(revision ? { revision } : {}),
-          provenance: {
-            source: resource.source.kind,
-            taskId: task.id,
-            providerId: resource.provider,
-          },
-          deliveryStatus: task.status === 'completed' ? 'delivered' : 'failed',
-          validator: { id: 'durable-resource-ref', status: validation.ok ? 'valid' : 'invalid' },
-          diagnostics: validation.diagnostics.map((item) => ({
-            code: item.code,
-            severity: item.severity,
-            message: item.message,
-          })),
-        } satisfies TerminalArtifactFact,
-      ];
-    });
-  });
-}
-
 export function projectGeneratedOutputLifecycleArtifactFacts(
   lifecycles: readonly GeneratedAssetRevisionRef[],
 ): readonly TerminalArtifactFact[] {
-  return lifecycles.map((lifecycle) => {
-    const validation = validateDurableResourceRef(lifecycle.resourceRef);
-    return {
-      ref: lifecycle.resourceRef.id,
+  return lifecycles.map((lifecycle) =>
+    projectContentLocator(lifecycle.contentLocator, {
+      ref: lifecycle.assetId,
       kind: 'generated-asset',
-      digest: lifecycle.contentDigest,
-      revision: lifecycle.revision,
-      provenance: {
-        source: lifecycle.resourceRef.source.kind,
-        taskId: lifecycle.generation.taskId,
-        providerId: lifecycle.resourceRef.provider,
-      },
-      deliveryStatus: 'delivered',
-      validator: { id: 'durable-resource-ref', status: validation.ok ? 'valid' : 'invalid' },
-      diagnostics: validation.diagnostics.map((item) => ({
-        code: item.code,
-        severity: item.severity,
-        message: item.message,
-      })),
-    };
-  });
+      success: true,
+      operationId: lifecycle.generation.operationId,
+      providerId: lifecycle.generation.providerId,
+    }),
+  );
 }
 
 export function projectCreatorVisibleArtifactFacts(
   artifacts: readonly CreatorVisibleArtifactCandidate[],
 ): readonly TerminalArtifactFact[] {
   return artifacts.map((artifact) => {
-    if (artifact.resourceRef) {
-      const validation = validateDurableResourceRef(artifact.resourceRef);
-      return {
+    if (artifact.contentLocator) {
+      return projectContentLocator(artifact.contentLocator, {
         ref: artifact.artifactId,
-        kind: artifact.role === 'output' ? 'generated-asset' : 'resource-ref',
-        digest: hashStable({
-          artifactId: artifact.artifactId,
-          revision: artifact.revision,
-          resourceRef: artifact.resourceRef,
-        }),
+        kind: artifact.role === 'output' ? 'generated-asset' : 'content-locator',
+        success: true,
         revision: artifact.revision,
-        provenance: {
-          source: artifact.role === 'source' ? 'source-file' : artifact.resourceRef.source.kind,
-          providerId: artifact.resourceRef.provider,
-        },
-        deliveryStatus: 'delivered',
-        validator: { id: 'durable-resource-ref', status: validation.ok ? 'valid' : 'invalid' },
-        diagnostics: validation.diagnostics.map((item) => ({
-          code: item.code,
-          severity: item.severity,
-          message: item.message,
-        })),
-      };
+        provenanceSource: artifact.role === 'source' ? 'source-file' : undefined,
+      });
     }
-    if (artifact.documentResourceRef) {
-      const valid = isDocumentArchiveResourceRef(artifact.documentResourceRef);
-      return {
-        ref: artifact.artifactId,
-        kind: 'resource-ref',
-        digest: hashStable({
-          artifactId: artifact.artifactId,
-          revision: artifact.revision,
-          documentResourceRef: artifact.documentResourceRef,
-        }),
-        revision: artifact.revision,
-        provenance: { source: artifact.role === 'source' ? 'source-file' : 'document-entry' },
-        deliveryStatus: 'delivered',
-        validator: {
-          id: 'document-archive-resource-ref',
-          status: valid ? 'valid' : 'invalid',
-        },
-        diagnostics: valid
-          ? []
-          : [
-              {
-                code: 'invalid-document-archive-resource-ref',
-                severity: 'error',
-                message: 'Document archive resource reference is invalid.',
-              },
-            ],
-      };
+    if (artifact.kind !== 'markdown') {
+      throw new Error(
+        `creator-visible-artifact-migration-required: ${artifact.artifactId} has no contentLocator.`,
+      );
     }
     return {
       ref: artifact.artifactId,
@@ -168,23 +80,25 @@ export function projectCreatorVisibleArtifactFacts(
   });
 }
 
-function readTaskOutputAssets(task: Task): readonly Record<string, unknown>[] {
-  const data = task.output?.data;
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return [];
-  const assets = Object.entries(data).find(([key]) => key === 'assets')?.[1];
-  if (!Array.isArray(assets)) return [];
-  return assets.filter(
-    (asset): asset is Record<string, unknown> =>
-      typeof asset === 'object' && asset !== null && !Array.isArray(asset),
-  );
-}
-
 function projectAttachment(
   attachment: ToolResultAttachment,
   index: number,
   toolCallId: string,
   success: boolean,
 ): TerminalArtifactFact {
+  const contentLocator = attachment.contentLocator ?? attachment.assetRef?.contentLocator;
+  if (contentLocator) {
+    return projectContentLocator(contentLocator, {
+      ref:
+        attachment.assetRef?.assetId ??
+        (contentLocator.kind === 'generated-output'
+          ? contentLocator.outputId
+          : `content:${hashStable(contentLocatorKey(contentLocator))}`),
+      kind: contentLocator.kind === 'generated-output' ? 'generated-asset' : 'content-locator',
+      success,
+      toolCallId,
+    });
+  }
   const resource = attachment.assetRef?.resourceRef;
   if (resource)
     return projectResourceRef(resource, toolCallId, success, attachment.assetRef?.assetId);
@@ -217,6 +131,84 @@ function projectAttachment(
           },
         ],
   };
+}
+
+function projectContentLocator(
+  contentLocator: ContentLocator,
+  input: {
+    readonly ref: string;
+    readonly kind: Extract<TerminalArtifactFact['kind'], 'content-locator' | 'generated-asset'>;
+    readonly success: boolean;
+    readonly revision?: string;
+    readonly provenanceSource?: string;
+    readonly toolCallId?: string;
+    readonly operationId?: string;
+    readonly providerId?: string;
+  },
+): TerminalArtifactFact {
+  const validation = validateContentLocator(contentLocator);
+  const locatorRevision = readContentLocatorRevision(contentLocator);
+  const digest = readContentLocatorDigest(contentLocator);
+  const relativePath = readContentLocatorPath(contentLocator);
+  const revision = input.revision ?? locatorRevision;
+  return {
+    ref: input.ref,
+    kind: input.kind,
+    contentLocator,
+    ...(relativePath ? { relativePath } : {}),
+    ...(digest ? { digest } : {}),
+    ...(revision ? { revision } : {}),
+    provenance: {
+      source: input.provenanceSource ?? contentLocator.kind,
+      ...(input.toolCallId ? { toolCallId: input.toolCallId } : {}),
+      ...(input.operationId ? { operationId: input.operationId } : {}),
+      ...(input.providerId ? { providerId: input.providerId } : {}),
+    },
+    deliveryStatus: input.success ? 'delivered' : 'failed',
+    validator: { id: 'content-locator', status: validation.ok ? 'valid' : 'invalid' },
+    diagnostics: validation.ok
+      ? []
+      : validation.diagnostics.map((item) => ({
+          code: item.code,
+          severity: item.severity,
+          message: item.message,
+        })),
+  };
+}
+
+function readContentLocatorPath(locator: ContentLocator): string | undefined {
+  switch (locator.kind) {
+    case 'workspace-file':
+    case 'generated-output':
+      return locator.path;
+    case 'document-entry':
+      return locator.source.path;
+    case 'package-resource':
+      return undefined;
+  }
+}
+
+function readContentLocatorRevision(locator: ContentLocator): string | undefined {
+  switch (locator.kind) {
+    case 'generated-output':
+    case 'package-resource':
+      return locator.revision;
+    case 'workspace-file':
+      return locator.fingerprint?.value;
+    case 'document-entry':
+      return locator.fingerprint?.value ?? locator.source.fingerprint?.value;
+  }
+}
+
+function readContentLocatorDigest(locator: ContentLocator): string | undefined {
+  switch (locator.kind) {
+    case 'generated-output':
+      return locator.digest;
+    case 'workspace-file':
+    case 'document-entry':
+    case 'package-resource':
+      return undefined;
+  }
 }
 
 function projectResourceRef(

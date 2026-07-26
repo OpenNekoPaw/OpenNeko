@@ -6,6 +6,7 @@ import type {
 
 export interface ConversationTurnProjection {
   readonly turnId: string;
+  readonly runId: string;
   readonly messageId: string;
   readonly items: readonly AgentTurnTimelineItem[];
   readonly completion?: AgentTurnTimelineCompletion;
@@ -21,6 +22,7 @@ export interface ConversationProjectionUpdate {
   readonly type: 'agentTurnTimelineUpdate';
   readonly conversationId: string;
   readonly turnId: string;
+  readonly runId: string;
   readonly messageId: string;
   readonly operations: readonly AgentTurnTimelineOperation[];
   readonly completion?: AgentTurnTimelineCompletion;
@@ -32,6 +34,7 @@ export interface ConversationProjectionPatch {
   readonly baseProjectionVersion: number;
   readonly projectionVersion: number;
   readonly turnId: string;
+  readonly runId: string;
   readonly messageId: string;
   readonly operations: readonly AgentTurnTimelineOperation[];
   readonly completion?: AgentTurnTimelineCompletion;
@@ -74,6 +77,10 @@ export function applyConversationProjectionPatch(
   snapshot: ConversationProjectionSnapshot,
   patch: ConversationProjectionPatch,
 ): ConversationProjectionSnapshot {
+  assertRequiredIdentity('conversationId', patch.conversationId);
+  assertRequiredIdentity('turnId', patch.turnId);
+  assertRequiredIdentity('runId', patch.runId);
+  assertRequiredIdentity('messageId', patch.messageId);
   if (patch.conversationId !== snapshot.conversationId) {
     throw new Error(
       `Conversation projection patch owner mismatch: expected ${snapshot.conversationId}, received ${patch.conversationId}.`,
@@ -96,9 +103,9 @@ export function applyConversationProjectionPatch(
   const turns = snapshot.turns.map(cloneConversationTurnProjection);
   const turnIndex = turns.findIndex((turn) => turn.turnId === patch.turnId);
   const current = turnIndex >= 0 ? turns[turnIndex] : undefined;
-  if (current && current.messageId !== patch.messageId) {
+  if (current && (current.runId !== patch.runId || current.messageId !== patch.messageId)) {
     throw new Error(
-      `Conversation projection turn ${patch.turnId} is owned by message ${current.messageId}, received ${patch.messageId}.`,
+      `Conversation projection turn ${patch.turnId} is owned by ${current.runId}/${current.messageId}, received ${patch.runId}/${patch.messageId}.`,
     );
   }
   if (current?.completion) {
@@ -112,6 +119,7 @@ export function applyConversationProjectionPatch(
   applyAgentTurnProjectionOperations(items, patch.operations);
   const nextTurn: ConversationTurnProjection = {
     turnId: patch.turnId,
+    runId: patch.runId,
     messageId: patch.messageId,
     items: Array.from(items.values()).sort((left, right) => left.sequence - right.sequence),
     ...(patch.completion ? { completion: structuredClone(patch.completion) } : {}),
@@ -140,6 +148,7 @@ function cloneConversationTurnProjection(
 ): ConversationTurnProjection {
   return {
     turnId: turn.turnId,
+    runId: turn.runId,
     messageId: turn.messageId,
     items: turn.items.map(cloneAgentTurnProjectionItem),
     ...(turn.completion ? { completion: structuredClone(turn.completion) } : {}),
@@ -153,12 +162,19 @@ function assertProjectionOperationOwners(patch: ConversationProjectionPatch): vo
     if (
       item.conversationId !== patch.conversationId ||
       item.turnId !== patch.turnId ||
+      item.runId !== patch.runId ||
       item.messageId !== patch.messageId
     ) {
       throw new Error(
-        `Conversation projection operation ${item.itemId} does not belong to ${patch.conversationId}/${patch.turnId}/${patch.messageId}.`,
+        `Conversation projection operation ${item.itemId} does not belong to ${patch.conversationId}/${patch.turnId}/${patch.runId}/${patch.messageId}.`,
       );
     }
+  }
+}
+
+function assertRequiredIdentity(name: string, value: string): void {
+  if (value.trim().length === 0) {
+    throw new Error(`${name} is required for a conversation projection patch.`);
   }
 }
 
@@ -250,6 +266,7 @@ function assertStableItemIdentity(
     current.kind !== next.kind ||
     current.conversationId !== next.conversationId ||
     current.turnId !== next.turnId ||
+    current.runId !== next.runId ||
     current.messageId !== next.messageId ||
     current.sequence !== next.sequence
   ) {

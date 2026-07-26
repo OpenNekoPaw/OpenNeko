@@ -11,6 +11,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./path": "./src/path/index.ts",
+    "./job-lifecycle": "./src/job-lifecycle/index.ts",
     "./local-metadata": "./src/local-metadata/index.ts",
     "./local-metadata/node": "./src/local-metadata/node.ts",
     "./local-metadata/sqlite": "./src/local-metadata/sqlite/index.ts",
@@ -32,7 +33,6 @@
     "./i18n/react": "./src/i18n/react.tsx",
     "./vscode": "./src/vscode/index.ts",
     "./config/config-reader": "./src/config/config-reader.ts",
-    "./types/task-projection": "./src/types/task-projection.ts",
     "./types/creative-ai-invocation": "./src/types/creative-ai-invocation.ts",
     "./types/npc-test-bench": "./src/types/npc-test-bench.ts",
     "./types/agent-autoheal": "./src/types/agent-autoheal.ts",

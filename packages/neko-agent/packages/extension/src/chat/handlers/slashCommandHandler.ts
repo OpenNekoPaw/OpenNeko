@@ -21,10 +21,9 @@ import type { IAgentManager } from '../../ai/agentManager';
 import type { ConversationBridge } from '../conversationBridge';
 import type { SettingsManager } from '../settingsManager';
 import type { SkillHandler } from './skillHandler';
-import type { TaskHandler } from './taskHandler';
 import type { ContextHandler } from './contextHandler';
 import type { SettingsHandler } from './settingsHandler';
-import type { CharacterDialogueController } from '../characterDialogueController';
+import type { CharacterDialogueController } from '@neko/chara/host-vscode';
 import { getLogger } from '../../base';
 import {
   NPC_TEST_BENCH_AS_SLASH_COMMAND_NAME,
@@ -47,7 +46,6 @@ export interface SlashCommandHandlerDeps {
   agentManager?: IAgentManager;
   settings: SettingsManager;
   skillHandler: SkillHandler;
-  taskHandler: TaskHandler;
   contextHandler: ContextHandler;
   settingsHandler: SettingsHandler;
   characterDialogue?: CharacterDialogueController;
@@ -218,9 +216,6 @@ export class SlashCommandHandler {
         return;
       case 'refreshActiveConversation':
         this.deps.sendActiveConversation();
-        return;
-      case 'sendTasks':
-        this.deps.taskHandler.sendTasks(webview, effect.conversationId);
         return;
     }
   }

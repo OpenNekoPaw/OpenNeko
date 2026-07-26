@@ -9,19 +9,15 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { AgentWorkItem } from '@/components/AgentWorkItem';
 import type { PluginsAvailable } from '@/components/ChatView/SendToMenu';
 import type { AmbientCanvasNodeProjection } from '@/presenters/plugin-transfer-presenter';
-import type { AgentContextPayload, TaskRunScope } from '@neko/shared';
+import type { AgentContextPayload } from '@neko/shared';
 
 export interface MessageActionsContextValue {
   activeConversationId?: string | null;
-  // Unified work items (media tasks, tool background tasks, subagents)
+  // Unified Agent and subagent activity projections.
   workItems?: AgentWorkItem[];
   pluginsAvailable?: PluginsAvailable;
   contextChips?: readonly AgentContextPayload[];
   ambientNodes?: readonly AmbientCanvasNodeProjection[];
-  // Task actions
-  onCancelTask?: (taskScope: TaskRunScope) => void;
-  onRetryTask?: (taskScope: TaskRunScope) => void;
-  onViewTaskResult?: (taskScope: TaskRunScope, resultRef?: string) => void;
   // Diff actions
   onAcceptDiff?: (filePath: string) => void;
   onRejectDiff?: (filePath: string) => void;
@@ -40,9 +36,6 @@ export function MessageActionsProvider({
       pluginsAvailable: actions.pluginsAvailable,
       contextChips: actions.contextChips,
       ambientNodes: actions.ambientNodes,
-      onCancelTask: actions.onCancelTask,
-      onRetryTask: actions.onRetryTask,
-      onViewTaskResult: actions.onViewTaskResult,
       onAcceptDiff: actions.onAcceptDiff,
       onRejectDiff: actions.onRejectDiff,
     }),
@@ -52,9 +45,6 @@ export function MessageActionsProvider({
       actions.pluginsAvailable,
       actions.contextChips,
       actions.ambientNodes,
-      actions.onCancelTask,
-      actions.onRetryTask,
-      actions.onViewTaskResult,
       actions.onAcceptDiff,
       actions.onRejectDiff,
     ],

@@ -118,10 +118,15 @@ function createConnection(
 describe('canvasStore scene container actions', () => {
   let recordNodeUpdateSpy: ReturnType<typeof vi.spyOn>;
   let recordDirtySpy: ReturnType<typeof vi.spyOn>;
+  let recordContentNodeDeltaSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     recordNodeUpdateSpy = vi.spyOn(useCanvasOperationStore.getState(), 'recordNodeUpdate');
     recordDirtySpy = vi.spyOn(useCanvasOperationStore.getState(), 'recordDirty');
+    recordContentNodeDeltaSpy = vi.spyOn(
+      useCanvasOperationStore.getState(),
+      'recordContentNodeDelta',
+    );
     useCanvasStore.setState({
       canvasData: null,
       selection: { nodeIds: [], connectionIds: [] },
@@ -551,6 +556,7 @@ describe('canvasStore scene container actions', () => {
     expect(nodes.map((node) => node.id)).toEqual(['released']);
     expect(nodes[0]?.parentId).toBeUndefined();
     expect(useHistoryStore.getState().undoStack).toHaveLength(1);
+    expect(recordContentNodeDeltaSpy).toHaveBeenCalledWith(['group', 'gallery', 'deleted']);
   });
 
   it('releases a child from a non-gallery container without deleting child connections', () => {
@@ -613,6 +619,7 @@ describe('canvasStore scene container actions', () => {
     expect(state?.nodes.some((node) => node.id === 'media-1')).toBe(false);
     expect(state?.connections).toEqual([]);
     expect(recordDirtySpy).toHaveBeenCalledWith('Remove child from container');
+    expect(recordContentNodeDeltaSpy).toHaveBeenCalledWith(['media-1']);
   });
 
   it('marks connection metadata updates dirty without writing immediately', () => {
@@ -648,6 +655,7 @@ describe('canvasStore scene container actions', () => {
 
     expect(useCanvasStore.getState().canvasData?.nodes.map((node) => node.id)).toEqual(['shot-2']);
     expect(recordDirtySpy).toHaveBeenCalledWith('Delete selection');
+    expect(recordContentNodeDeltaSpy).toHaveBeenCalledWith(['shot-1']);
 
     useCanvasStore.getState().undo();
 
@@ -661,6 +669,8 @@ describe('canvasStore scene container actions', () => {
 
     expect(useCanvasStore.getState().canvasData?.nodes.map((node) => node.id)).toEqual(['shot-2']);
     expect(recordDirtySpy).toHaveBeenCalledWith('Redo canvas edit');
+    expect(recordContentNodeDeltaSpy).toHaveBeenNthCalledWith(2, [], ['shot-1']);
+    expect(recordContentNodeDeltaSpy).toHaveBeenLastCalledWith(['shot-1'], []);
   });
 
   it('does not mark missing connection removal dirty', () => {
@@ -705,6 +715,7 @@ describe('canvasStore scene container actions', () => {
     expect(state?.connections).toEqual([
       createConnection('child-link', 'shot-1', 'shot-2', 'reference'),
     ]);
+    expect(recordContentNodeDeltaSpy).toHaveBeenCalledWith(['group-1']);
   });
 
   it('removes Canvas Group organization without deleting Asset-backed child identity', () => {
@@ -783,6 +794,7 @@ describe('canvasStore scene container actions', () => {
     expect(state?.nodes.some((node) => node.id === 'gallery-1')).toBe(false);
     expect(state?.nodes.some((node) => node.id === 'media-1')).toBe(false);
     expect(state?.connections).toEqual([]);
+    expect(recordContentNodeDeltaSpy).toHaveBeenCalledWith(['gallery-1', 'media-1']);
   });
 
   it('refreshes migrated node previews after data and block updates', () => {

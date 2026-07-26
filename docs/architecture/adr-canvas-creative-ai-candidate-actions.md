@@ -1,5 +1,7 @@
 # ADR: Canvas 创作 AI 按钮的 Candidate-First Agent Run 边界
 
+> 后续决策：[`adr-agent-tool-call-domain-job-lifecycle-boundary.md`](adr-agent-tool-call-domain-job-lifecycle-boundary.md) 已取代本文中“所有 Canvas AI 按钮由 Agent 通用 run/workItem 统一管理”的部分。Candidate-first、ResourceRef 和 Canvas-owned apply 继续有效；Canvas 直接按钮由 Canvas operation + GenerationJob 拥有，开放式委派推理使用 SubagentRun，不存在独立 BackgroundAgentRun。
+
 状态：Accepted
 日期：2026-07-10
 范围：`neko-canvas` Shot/Scene AI 按钮、`neko-agent` 后台创作会话投影、run/workItem、candidate 写回、媒体并发和质量晋升边界。
@@ -100,9 +102,9 @@ Agent 负责：
 
 Canvas 不直接调用 provider SDK，不传 provider runtime handle，不复制 Agent 模型能力逻辑，也不把自然语言提示词当作参数校验替代品。
 
-### 6. 后台 Agent 会话可见，但执行权威是 run/workItem
+### 6. 直接创作动作可见，但执行权威属于领域
 
-Canvas 创作 AI 动作应投影到完整独立的后台 Agent 创作会话，用户可以从 Agent 会话列表打开查看。这一会话展示 run/workItem、进度、诊断、candidate、judge 结果、重试和继续创作入口。
+Canvas 直接创作动作由 Canvas operation 与具体 GenerationJob 拥有，并通过 versioned projection 展示进度、诊断、candidate、结果和重试入口。开放式委派推理使用 SubagentRun；不得为直接动作创建独立后台 Agent 会话。
 
 但 conversation 不是执行、并发、成本、幂等或写回权威。权威身份仍是 document/run/workItem/target/ref/revision。Project Memory 晋升必须显式发生，不从后台会话或 run 自动写入。
 

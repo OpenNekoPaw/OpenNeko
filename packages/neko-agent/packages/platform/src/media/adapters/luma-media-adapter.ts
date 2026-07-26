@@ -8,10 +8,10 @@ import type { Model, Provider } from '../../types/provider';
 import type {
   MediaGenerationType,
   MediaAdapterResult,
-  MediaTaskStatus,
-  VideoGenerationRequest,
+  MediaOperationStatus,
+  MaterializedVideoGenerationRequest,
   MediaOutput,
-} from '../types';
+} from '@neko/generation';
 import { BaseMediaAdapter } from './base-media-adapter';
 
 /**
@@ -40,7 +40,7 @@ interface LumaGenerationResponse {
 export class LumaMediaAdapter extends BaseMediaAdapter {
   readonly type = 'luma';
 
-  private static readonly STATUS_MAP: Record<string, MediaTaskStatus> = {
+  private static readonly STATUS_MAP: Record<string, MediaOperationStatus> = {
     queued: 'pending',
     dreaming: 'processing',
     completed: 'completed',
@@ -61,8 +61,8 @@ export class LumaMediaAdapter extends BaseMediaAdapter {
   /**
    * Generate video using Luma API
    */
-  override async generateVideo(
-    request: VideoGenerationRequest,
+  async generateVideo(
+    request: MaterializedVideoGenerationRequest,
     model: Model,
     provider: Provider,
   ): Promise<MediaAdapterResult> {
@@ -110,10 +110,7 @@ export class LumaMediaAdapter extends BaseMediaAdapter {
   /**
    * Get task status
    */
-  override async getTaskStatus(
-    externalTaskId: string,
-    provider: Provider,
-  ): Promise<MediaAdapterResult> {
+  async getTaskStatus(externalTaskId: string, provider: Provider): Promise<MediaAdapterResult> {
     const url = `${provider.apiUrl}/dream-machine/v1/generations/${externalTaskId}`;
 
     const { data, error } = await this.request<LumaGenerationResponse>(
@@ -159,7 +156,7 @@ export class LumaMediaAdapter extends BaseMediaAdapter {
   /**
    * Cancel a running task
    */
-  override async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
+  async cancelTask(externalTaskId: string, provider: Provider): Promise<void> {
     await this.cancelViaEndpoint(
       `${provider.apiUrl}/dream-machine/v1/generations/${externalTaskId}`,
       provider,

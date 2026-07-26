@@ -144,7 +144,7 @@ describe('message queue presenter', () => {
     ).toEqual([releasedMessage]);
   });
 
-  it('does not project released task-result observations into the visible transcript', () => {
+  it('does not project released runtime continuations into the visible transcript', () => {
     const messages = [
       message({ id: 'user-1', role: 'user', content: '生成图片' }),
       message({ id: 'assistant-1', role: 'assistant', content: '图片已生成' }),
@@ -154,11 +154,11 @@ describe('message queue presenter', () => {
       projectReleasedQueuedMessageIntoTranscript({
         messages,
         item: {
-          id: 'task-observation-1',
+          id: 'system-continuation-1',
           conversationId: 'conv-1',
-          content: 'Continue from the completed async task result.',
+          content: 'Continue from an internal runtime observation.',
           createdAt: 123,
-          source: 'task-result-continuation',
+          source: 'system-continuation',
         },
       }),
     ).toEqual(messages);

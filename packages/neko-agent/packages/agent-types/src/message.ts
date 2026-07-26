@@ -46,6 +46,11 @@ export interface ToolCall {
   };
 }
 
+export interface ToolCallProgress {
+  readonly summary: string;
+  readonly data?: unknown;
+}
+
 // ---------------------------------------------------------------------------
 // ContentBlock
 // ---------------------------------------------------------------------------
@@ -129,6 +134,8 @@ export interface ContentBlock {
   isStreaming?: boolean;
   /** For tool_call blocks */
   toolCall?: ToolCall;
+  /** Revisioned caller-owned progress projection for the Tool Call. */
+  toolProgress?: ToolCallProgress;
   /** For code_diff blocks */
   codeDiff?: CodeDiff;
   /** For composite blocks — structured multimodal presentation intent. */
@@ -185,7 +192,7 @@ export interface Message {
   attachments?: MessageAttachment[];
   /** Lightweight context references attached when the user sent this message */
   contextReferences?: MessageContextReference[];
-  /** Associated unified work item IDs (media tasks, tool background tasks, subagents) */
+  /** Associated subagent work item IDs. */
   workItemIds?: string[];
   /** Message feedback */
   feedback?: 'positive' | 'negative';

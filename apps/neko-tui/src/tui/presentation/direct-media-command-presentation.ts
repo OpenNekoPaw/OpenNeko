@@ -11,13 +11,20 @@ export function presentDirectMediaCommandResult(
   context: AgentTerminalPresentationContext<AgentTerminalMessageKey>,
 ): string {
   if (format === 'json') return JSON.stringify(result);
-  const taskScope = formatTaskScope(result.taskScope);
-  const summary = context.t('agent.terminal.directMedia.completed', {
+  const summary = context.t(
+    result.status === 'submitted'
+      ? 'agent.terminal.directMedia.submitted'
+      : 'agent.terminal.directMedia.completed',
+    {
     kind: result.kind,
-    taskScope,
+    operationId: result.operationId,
     model: `${result.providerId}:${result.modelId}`,
-  });
-  return result.assetRefs.length > 0 ? [summary, ...result.assetRefs].join('\n') : summary;
+      revision: result.jobRevision,
+    },
+  );
+  return result.resultLocators.length > 0
+    ? [summary, ...result.resultLocators.map((locator) => locator.path)].join('\n')
+    : summary;
 }
 
 export function presentDirectMediaCommandError(
@@ -26,10 +33,6 @@ export function presentDirectMediaCommandError(
 ): string {
   return context.t(`agent.terminal.directMedia.diagnostic.${error.code}`, {
     detail: error.message,
-    taskScope: error.taskScope ? formatTaskScope(error.taskScope) : '-',
+    operationId: error.operationId ?? '-',
   });
-}
-
-function formatTaskScope(scope: DirectMediaCommandResult['taskScope']): string {
-  return `${scope.conversationId}/${scope.runId}/${scope.parentRunId}/task:${scope.childRunId}`;
 }

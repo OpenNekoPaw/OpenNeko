@@ -82,12 +82,14 @@ export interface ToolValidationError {
  */
 export interface ToolResultAttachment {
   type: 'image' | 'audio' | 'video';
+  /** Stable portable content location for creator-visible Tool results. */
+  contentLocator?: import('./content-locator').ContentLocator;
   /**
    * Backward-compatible path/URI reference to the generated asset.
    * New persisted results should use stable relative paths or ${VAR}/path
    * values. Host-specific absolute paths are adapter-only compatibility data.
    */
-  path: string;
+  path?: string;
   /** Optional MIME type hint */
   mimeType?: string;
   /** Stable asset reference for generated or perceptual assets. */
@@ -136,6 +138,8 @@ export interface ToolProgress {
   stage: string;
   /** Optional preview path or data URI */
   preview?: string;
+  /** Optional caller-owned structured projection data. */
+  data?: unknown;
 }
 
 /**
@@ -209,7 +213,7 @@ export interface ToolTraits {
 export interface ToolRuntimeRequirements {
   readonly vscode?: boolean;
   readonly activeEditor?: boolean;
-  readonly mediaService?: boolean;
+  readonly generationJob?: boolean;
   readonly engineBridge?: boolean;
   readonly contentAccess?: boolean;
   readonly writableProject?: boolean;

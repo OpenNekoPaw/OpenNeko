@@ -7,8 +7,10 @@ import type {
 import type { AgentCapabilityLifecycleDescriptor } from '@neko/shared';
 import type { DragDropBroker } from '../../services/DragDropBroker';
 import type { AgentMessageTurnHandler } from '../agentMessageTurnHandler';
-import type { CharacterDialogueController } from '../characterDialogueController';
-import type { EmbodyCharacterController } from '../embodyCharacterController';
+import type {
+  CharacterDialogueController,
+  EmbodyCharacterController,
+} from '@neko/chara/host-vscode';
 import type { ConversationProjectionAttachmentServer } from '../projection/conversationProjectionAttachmentServer';
 import type {
   ContextHandler,
@@ -17,7 +19,6 @@ import type {
   SettingsHandler,
   SkillHandler,
   SlashCommandHandler,
-  TaskHandler,
 } from '../handlers';
 
 export interface ChatWebviewMessageRouterDeps {
@@ -28,7 +29,6 @@ export interface ChatWebviewMessageRouterDeps {
   readonly messages?: AgentMessageTurnHandler;
   readonly characterDialogue?: CharacterDialogueController;
   readonly embodyCharacter?: EmbodyCharacterController;
-  readonly taskHandler: TaskHandler;
   readonly skillHandler: SkillHandler;
   readonly fileOperationHandler: FileOperationHandler;
   readonly settingsHandler: SettingsHandler;

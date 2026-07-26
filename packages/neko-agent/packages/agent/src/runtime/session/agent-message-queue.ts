@@ -335,8 +335,6 @@ function defaultDisplayKindForSource(
   source: AgentQueuedMessageSource,
 ): AgentQueuedMessageDisplayKind {
   switch (source) {
-    case 'task-result-continuation':
-      return 'task-continuation';
     case 'subagent-result-continuation':
       return 'subagent-continuation';
     case 'system-continuation':

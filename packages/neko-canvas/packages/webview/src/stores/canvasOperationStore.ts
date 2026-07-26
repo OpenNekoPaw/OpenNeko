@@ -25,6 +25,20 @@ function syncOperationToExtension(op: EditOperation): void {
   postMessage({ type: 'operationApplied', operation: op });
 }
 
+function syncContentNodeDeltaToExtension(
+  removedNodeIds: readonly string[],
+  restoredNodeIds: readonly string[],
+): void {
+  const removed = [...new Set(removedNodeIds)];
+  const restored = [...new Set(restoredNodeIds)];
+  if (removed.length === 0 && restored.length === 0) return;
+  postMessage({
+    type: 'canvasContentNodeDeltaApplied',
+    removedNodeIds: removed,
+    restoredNodeIds: restored,
+  });
+}
+
 // =============================================================================
 // Meta Helper
 // =============================================================================
@@ -68,6 +82,10 @@ export interface CanvasOperationStore {
   recordNodeUngroup: (groupId: string, groupNode: CanvasNode, childIds: string[]) => void;
   recordConnectionAdd: (connection: CanvasConnection) => void;
   recordConnectionRemove: (connectionId: string, connection: CanvasConnection) => void;
+  recordContentNodeDelta: (
+    removedNodeIds: readonly string[],
+    restoredNodeIds?: readonly string[],
+  ) => void;
   recordDirty: (description: string) => void;
 }
 
@@ -166,6 +184,10 @@ export const useCanvasOperationStore = create<CanvasOperationStore>((set, get) =
       payload: { connectionId },
       before: { connection },
     });
+  },
+
+  recordContentNodeDelta: (removedNodeIds, restoredNodeIds = []) => {
+    syncContentNodeDeltaToExtension(removedNodeIds, restoredNodeIds);
   },
 
   recordDirty: (description) => {

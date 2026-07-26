@@ -1,5 +1,4 @@
 import type { AgentQueuedMessageItem, AgentMessageQueueSnapshot } from '@neko-agent/types';
-import type { TaskStatus } from '@neko/shared';
 import type { AgentTerminalPresentationContext } from './context';
 import type { AgentTerminalCommandProjection } from './model-family-presentation';
 import type { AgentTerminalMessageKey } from './terminal-messages';
@@ -31,27 +30,6 @@ export type QueueCommandSemanticResult =
       readonly operation?: 'promote' | 'cancel' | 'edit';
       readonly operationCode?: string;
       readonly detail?: string;
-    }>;
-
-export interface TaskCommandRow {
-  readonly id: string;
-  readonly status: TaskStatus;
-  readonly progress: number;
-  readonly runMode: string;
-  readonly title: string;
-  readonly error?: string;
-  readonly updatedAt: number;
-}
-
-export type TaskCommandSemanticResult =
-  | Readonly<{
-      readonly kind: 'list';
-      readonly status?: TaskStatus;
-      readonly rows: readonly TaskCommandRow[];
-    }>
-  | Readonly<{
-      readonly kind: 'diagnostic';
-      readonly code: 'unavailable' | 'usage';
     }>;
 
 type PresentationContext = AgentTerminalPresentationContext<AgentTerminalMessageKey>;
@@ -97,26 +75,6 @@ export function presentQueueCommand(
       };
     case 'diagnostic':
       return presentQueueDiagnostic(result, context);
-  }
-}
-
-export function presentTaskCommand(
-  result: TaskCommandSemanticResult,
-  context: PresentationContext,
-): AgentTerminalCommandProjection {
-  switch (result.kind) {
-    case 'list':
-      return { kind: 'output', output: presentTaskList(result, context) };
-    case 'diagnostic':
-      return {
-        kind: 'error',
-        diagnosticCode: result.code === 'unavailable' ? 'task.unavailable' : 'task.usage',
-        error: context.t(
-          result.code === 'unavailable'
-            ? 'agent.terminal.diagnostic.task.unavailable'
-            : 'agent.terminal.diagnostic.task.usage',
-        ),
-      };
   }
 }
 
@@ -204,59 +162,6 @@ function presentQueueDiagnostic(
           : context.t('agent.terminal.diagnostic.queue.operationFailed', { detail }),
       };
     }
-  }
-}
-
-function presentTaskList(
-  result: Extract<TaskCommandSemanticResult, { readonly kind: 'list' }>,
-  context: PresentationContext,
-): string {
-  if (result.rows.length === 0) {
-    return result.status
-      ? context.t('agent.terminal.task.emptyFiltered', {
-          status: presentTaskStatus(result.status, context),
-        })
-      : context.t('agent.terminal.task.empty');
-  }
-
-  const rows = [...result.rows].sort((left, right) => right.updatedAt - left.updatedAt);
-  return [
-    result.status
-      ? context.t('agent.terminal.task.headerFiltered', {
-          status: presentTaskStatus(result.status, context),
-        })
-      : context.t('agent.terminal.task.header'),
-    ...rows.map((row) => presentTaskRow(row, context)),
-    '',
-    context.t('agent.terminal.task.usage'),
-  ].join('\n');
-}
-
-function presentTaskRow(row: TaskCommandRow, context: PresentationContext): string {
-  const params = {
-    id: row.id,
-    status: presentTaskStatus(row.status, context),
-    progress: context.format.count(Math.round(row.progress)),
-    runMode: row.runMode,
-    title: row.title,
-  };
-  return row.error
-    ? context.t('agent.terminal.task.rowWithError', { ...params, error: row.error })
-    : context.t('agent.terminal.task.row', params);
-}
-
-function presentTaskStatus(status: TaskStatus, context: PresentationContext): string {
-  switch (status) {
-    case 'pending':
-      return context.t('agent.terminal.value.taskStatus.pending');
-    case 'running':
-      return context.t('agent.terminal.value.taskStatus.running');
-    case 'completed':
-      return context.t('agent.terminal.value.taskStatus.completed');
-    case 'failed':
-      return context.t('agent.terminal.value.taskStatus.failed');
-    case 'cancelled':
-      return context.t('agent.terminal.value.taskStatus.cancelled');
   }
 }
 

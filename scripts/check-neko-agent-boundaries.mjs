@@ -9,6 +9,7 @@ const packageRoots = {
   webview: 'packages/neko-agent/packages/webview/src',
   extension: 'packages/neko-agent/packages/extension/src',
   agent: 'packages/neko-agent/packages/agent/src',
+  generation: 'packages/neko-generation/src',
   platform: 'packages/neko-agent/packages/platform/src',
   'ai-sdk': 'packages/neko-agent/packages/ai-sdk/src',
   'agent-types': 'packages/neko-agent/packages/agent-types/src',
@@ -21,7 +22,7 @@ const packageDirs = {
   extension: 'packages/neko-agent/packages/extension',
 };
 
-const hostAgnosticScopes = new Set(['agent', 'platform', 'ai-sdk', 'agent-types']);
+const hostAgnosticScopes = new Set(['agent', 'generation', 'platform', 'ai-sdk', 'agent-types']);
 const agentContentAccessResidualScopes = new Set(['extension', 'agent', 'agent-types', 'webview']);
 
 const retiredTranscriptAuthorityFiles = [
@@ -73,6 +74,69 @@ const retiredLegacyChatSymbols = [
   'AI_SDK_LEGACY_BRIDGE',
   'legacy-bridge',
   'GeminiVideoUnderstandingClient',
+];
+
+const retiredTimelineProjectionAuthorityFiles = [
+  'packages/neko-types/src/types/agent-message.ts',
+  'packages/neko-agent/packages/agent/src/runtime/stream/agent-event-stream-runtime.ts',
+  'packages/neko-agent/packages/agent/src/runtime/stream/agent-stream-state.ts',
+  'packages/neko-agent/packages/agent/src/runtime/stream/agent-turn-timeline-accumulator.ts',
+  'packages/neko-agent/packages/extension/src/chat/message/agentStreamProcessor.ts',
+  'packages/neko-agent/packages/extension/src/debug/streamLifecycleAcceptance.ts',
+  'packages/neko-agent/packages/extension/src/debug/streamLifecycleAcceptance.test.ts',
+  'packages/neko-agent/packages/webview/src/handlers/legacy-active-content-handlers.ts',
+  'packages/neko-agent/packages/webview/src/presenters/message-presenter.ts',
+  'packages/neko-agent/packages/webview/src/presenters/tool-result-backfill-presenter.ts',
+];
+
+const retiredTimelineProjectionAuthoritySymbols = [
+  'finalContentBlocks',
+  'activeStreams',
+  'activePiStreams',
+  'getTerminalToolResults',
+  'processStream(',
+  'AgentEventStreamRuntimeProcessor',
+  'AgentStreamProjectionMessage',
+  'buildThinkingMessage',
+  'buildStreamTextMessage',
+  'buildAssistantTextReplacementMessage',
+  'buildStreamCompleteMessage',
+  'buildMessageCancelledMessage',
+  'buildToolConfirmationMessage',
+];
+
+const retiredTimelineProjectionAcceptanceCommands = [
+  'neko.agent.debug.startStreamLifecycleReplay',
+  'neko.agent.debug.continueStreamLifecycleReplay',
+];
+
+const retiredPromptFrameworkFiles = [
+  'packages/neko-types/src/types/prompt.ts',
+  'packages/neko-agent/packages/agent/src/prompt/prompt-manager.ts',
+  'packages/neko-agent/packages/agent/src/prompt/system-prompt-composer.ts',
+  'packages/neko-agent/packages/agent/src/prompt/system-prompt-composer-types.ts',
+  'packages/neko-agent/packages/agent/src/prompt/context.ts',
+  'packages/neko-agent/packages/agent/src/prompt/composer/module-orchestrator.ts',
+  'packages/neko-agent/packages/agent/src/prompt/registry/module-manifest.ts',
+  'packages/neko-agent/packages/agent/src/prompt/registry/module-registry.ts',
+  'packages/neko-agent/packages/agent/src/prompt/registry/section-cache.ts',
+  'packages/neko-agent/packages/agent/src/prompt/modules/environment/agents-md-module.ts',
+  'packages/neko-agent/packages/agent/src/prompt/modules/environment/subpackage-fragments-module.ts',
+  'packages/neko-agent/packages/agent/src/prompt/modules/ephemeral/creative-version-log-module.ts',
+  'packages/neko-agent/packages/agent/src/prompt/modules/ephemeral/validation-guidance-module.ts',
+  'packages/neko-agent/packages/agent/src/prompt/modules/memory/memory-project-module.ts',
+  'packages/neko-agent/packages/agent/src/prompt/modules/memory/memory-recall-module.ts',
+  'packages/neko-agent/packages/platform/src/service/prompt-manager.ts',
+];
+
+const retiredPromptFrameworkSymbols = [
+  'SystemPromptComposer',
+  'ModuleOrchestrator',
+  'PromptModuleRegistry',
+  'PromptSectionCache',
+  'createPromptManager',
+  'new PromptManager(',
+  'prompts: PromptManager',
 ];
 
 const compatibilityExceptions = [];
@@ -258,11 +322,16 @@ function runBoundaryCheck() {
       findings.push(...findPiAgentTurnBridgeLegacyViolations(scope, file, content));
       findings.push(...findRetiredTranscriptAuthorityViolations(scope, file, content));
       findings.push(...findRetiredLegacyChatViolations(scope, file, content));
+      findings.push(...findRetiredTimelineProjectionAuthorityViolations(scope, file, content));
+      findings.push(...findRetiredPromptFrameworkViolations(scope, file, content));
       findings.push(...findSkillLocatorBoundaryViolations(scope, file, content));
     }
   }
   findings.push(...findRetiredTranscriptAuthorityFileViolations());
   findings.push(...findRetiredLegacyChatFileViolations());
+  findings.push(...findRetiredTimelineProjectionAuthorityFileViolations());
+  findings.push(...findRetiredTimelineProjectionAcceptanceCommandViolations());
+  findings.push(...findRetiredPromptFrameworkFileViolations());
   findings.push(...findLegacyCentralizedToolRegistrationViolations());
 
   const compatibility = evaluateCompatibilityExceptions(compatibilityExceptions, {
@@ -420,7 +489,8 @@ function runSelfTest() {
         repoRoot,
         'packages/neko-agent/packages/extension/src/tools/qualityCapabilityProvider.ts',
       ),
-      content: 'const service = platform.createService();\nresolveModelForPurpose("image.understand");\n',
+      content:
+        'const service = platform.createService();\nresolveModelForPurpose("image.understand");\n',
       expectedRuleIds: ['extension-pi-perception-no-legacy-chat'],
     },
     {
@@ -484,6 +554,21 @@ function runSelfTest() {
       expectedRuleIds: ['pi-runtime-no-retired-legacy-chat'],
     },
     {
+      name: 'Extension cannot restore a parallel active stream authority',
+      scope: 'extension',
+      file: fakeFile('extension', 'src/chat/message/parallel-stream.ts'),
+      content:
+        'const activePiStreams = new Map();\nconst finalContentBlocks = [];\nprocessor.processStream(input);\n',
+      expectedRuleIds: ['agent-timeline-no-retired-parallel-authority'],
+    },
+    {
+      name: 'Platform cannot restore a generic PromptManager',
+      scope: 'platform',
+      file: fakeFile('platform', 'src/service/prompt-manager.ts'),
+      content: 'const prompts = new PromptManager();\n',
+      expectedRuleIds: ['agent-prompt-no-retired-parallel-framework'],
+    },
+    {
       name: 'non-designated content access cannot recognize Skill locators',
       scope: 'extension',
       file: fakeFile('extension', 'src/services/content-access.ts'),
@@ -493,10 +578,7 @@ function runSelfTest() {
     {
       name: 'designated Pi Skill boundary may recognize Skill locators',
       scope: 'agent',
-      file: resolve(
-        repoRoot,
-        'packages/neko-agent/packages/agent/src/pi/conversation-runtime.ts',
-      ),
+      file: resolve(repoRoot, 'packages/neko-agent/packages/agent/src/pi/conversation-runtime.ts'),
       content: "const namespace = '/__neko_skills/';\n",
       expectedRuleIds: [],
     },
@@ -514,6 +596,12 @@ function runSelfTest() {
       ...findPiAgentTurnBridgeLegacyViolations(testCase.scope, testCase.file, testCase.content),
       ...findRetiredTranscriptAuthorityViolations(testCase.scope, testCase.file, testCase.content),
       ...findRetiredLegacyChatViolations(testCase.scope, testCase.file, testCase.content),
+      ...findRetiredTimelineProjectionAuthorityViolations(
+        testCase.scope,
+        testCase.file,
+        testCase.content,
+      ),
+      ...findRetiredPromptFrameworkViolations(testCase.scope, testCase.file, testCase.content),
       ...findSkillLocatorBoundaryViolations(testCase.scope, testCase.file, testCase.content),
     ];
     const actualIds = [...new Set(violations.map((violation) => violation.ruleId))].sort();
@@ -1484,7 +1572,10 @@ function findPiAgentTurnBridgeLegacyViolations(scope, file, content) {
 function findRetiredTranscriptAuthorityViolations(scope, file, content) {
   if (!['agent', 'extension', 'tui'].includes(scope)) return [];
   const relativeFile = relative(repoRoot, file).replaceAll('\\', '/');
-  if (/\/(?:__tests__|test-utils)\//u.test(relativeFile) || /\.(?:test|spec)\.tsx?$/u.test(relativeFile)) {
+  if (
+    /\/(?:__tests__|test-utils)\//u.test(relativeFile) ||
+    /\.(?:test|spec)\.tsx?$/u.test(relativeFile)
+  ) {
     return [];
   }
 
@@ -1514,7 +1605,10 @@ function findRetiredTranscriptAuthorityFileViolations() {
 function findRetiredLegacyChatViolations(scope, file, content) {
   if (!['agent', 'extension', 'platform', 'ai-sdk', 'tui', 'assets'].includes(scope)) return [];
   const relativeFile = relative(repoRoot, file).replaceAll('\\', '/');
-  if (/\/(?:__tests__|test-utils)\//u.test(relativeFile) || /\.(?:test|spec)\.tsx?$/u.test(relativeFile)) {
+  if (
+    /\/(?:__tests__|test-utils)\//u.test(relativeFile) ||
+    /\.(?:test|spec)\.tsx?$/u.test(relativeFile)
+  ) {
     return [];
   }
   return retiredLegacyChatSymbols
@@ -1536,6 +1630,74 @@ function findRetiredLegacyChatFileViolations() {
       file,
       specifier: file,
       reason: 'Deleted legacy Platform chat entry points must remain absent.',
+    }));
+}
+
+function findRetiredTimelineProjectionAuthorityViolations(scope, file, content) {
+  if (!['agent', 'extension', 'tui', 'webview'].includes(scope)) return [];
+  const relativeFile = relative(repoRoot, file).replaceAll('\\', '/');
+  if (isTestOrFixtureFile(relativeFile)) return [];
+  return retiredTimelineProjectionAuthoritySymbols
+    .filter((symbol) => content.includes(symbol))
+    .map((symbol) => ({
+      ruleId: 'agent-timeline-no-retired-parallel-authority',
+      file: relativeFile,
+      specifier: symbol,
+      reason:
+        'Active Pi content must use the shared Timeline projector/store; retired mutable stream, terminal Tool accumulator, and finalContentBlocks authorities cannot return.',
+    }));
+}
+
+function findRetiredTimelineProjectionAuthorityFileViolations() {
+  return retiredTimelineProjectionAuthorityFiles
+    .filter((file) => existsSync(resolve(repoRoot, file)))
+    .map((file) => ({
+      ruleId: 'agent-timeline-retired-acceptance-file-removed',
+      file,
+      specifier: file,
+      reason:
+        'Retired AgentEvent stream, mutable Message projection, legacy Webview presenter/handler, and replay acceptance files must remain deleted after the canonical Pi Timeline replacement.',
+    }));
+}
+
+function findRetiredTimelineProjectionAcceptanceCommandViolations() {
+  const manifestPath = 'packages/neko-agent/package.json';
+  const manifest = readFileSync(resolve(repoRoot, manifestPath), 'utf8');
+  return retiredTimelineProjectionAcceptanceCommands
+    .filter((command) => manifest.includes(command))
+    .map((command) => ({
+      ruleId: 'agent-timeline-retired-acceptance-command-removed',
+      file: manifestPath,
+      specifier: command,
+      reason:
+        'The retired AgentEvent stream replay command cannot be contributed after the canonical Pi projection acceptance replacement.',
+    }));
+}
+
+function findRetiredPromptFrameworkViolations(scope, file, content) {
+  if (!['agent', 'platform', 'extension', 'tui'].includes(scope)) return [];
+  const relativeFile = relative(repoRoot, file).replaceAll('\\', '/');
+  if (isTestOrFixtureFile(relativeFile)) return [];
+  return retiredPromptFrameworkSymbols
+    .filter((symbol) => content.includes(symbol))
+    .map((symbol) => ({
+      ruleId: 'agent-prompt-no-retired-parallel-framework',
+      file: relativeFile,
+      specifier: symbol,
+      reason:
+        'Agent prompts use the SystemPromptBuilder and Pi Skill path; retired Composer/module/cache and generic PromptManager surfaces cannot return.',
+    }));
+}
+
+function findRetiredPromptFrameworkFileViolations() {
+  return retiredPromptFrameworkFiles
+    .filter((file) => existsSync(resolve(repoRoot, file)))
+    .map((file) => ({
+      ruleId: 'agent-prompt-retired-framework-file-removed',
+      file,
+      specifier: file,
+      reason:
+        'Deleted prompt framework, projection module, and generic PromptManager files must remain absent.',
     }));
 }
 

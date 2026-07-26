@@ -3,7 +3,6 @@ import type {
   AgentArtifactTransferPayload,
   CompositeBlockData,
   ContentBlock,
-  ExtensionToWebviewMessage,
   ToolCall,
 } from '../index';
 
@@ -51,42 +50,6 @@ describe('multimodal message contracts', () => {
     };
 
     expect(JSON.parse(JSON.stringify(toolCall))).toEqual(toolCall);
-  });
-
-  it('preserves tool result backfill protocol messages', () => {
-    const message: ExtensionToWebviewMessage = {
-      type: 'toolResultBackfill',
-      conversationId: 'conv-1',
-      messageId: 'msg-1',
-      toolCallId: 'call-1',
-      dataPatch: { status: 'completed' },
-      attachments: [
-        {
-          type: 'image',
-          path: '${WORKSPACE}/out.png',
-          mimeType: 'image/png',
-        },
-      ],
-      perceptionCards: [
-        {
-          version: 1,
-          assetId: 'asset-1',
-          modality: 'image',
-          createdAt: 1,
-          layerStatus: { layer0: 'complete', layer1: 'skipped', layer2: 'skipped' },
-          structural: { format: 'png', mimeType: 'image/png', byteSize: 10 },
-        },
-      ],
-      backfillDiagnostics: [],
-      artifacts: [makeArtifactSnapshot()],
-    };
-
-    expect(message).toMatchObject({
-      type: 'toolResultBackfill',
-      toolCallId: 'call-1',
-      dataPatch: { status: 'completed' },
-      artifacts: [{ type: 'artifactSnapshot' }],
-    });
   });
 
   it('preserves composite content blocks beside text/tool blocks', () => {

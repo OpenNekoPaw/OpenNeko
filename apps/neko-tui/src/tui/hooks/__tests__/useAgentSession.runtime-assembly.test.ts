@@ -11,7 +11,6 @@ import type {
   PiProductEventSink,
   PiToolPermissionPolicy,
 } from '@neko/agent/pi';
-import type { IService } from '@neko/shared';
 
 import {
   createTuiTestRuntime,
@@ -89,6 +88,7 @@ beforeEach(async () => {
     await emit(input.events, {
       type: 'assistant.text.delta',
       delta: 'Pi response',
+      sourceIndex: 0,
       identity,
       timestamp: 2,
     });
@@ -179,6 +179,64 @@ describe('useAgentSession Pi runtime assembly', () => {
     );
   });
 
+  it('augments the Pi base prompt with workspace AGENTS.md through the Builder path', async () => {
+    await fs.mkdir(path.join(tempRoot, '.neko'), { recursive: true });
+    await fs.writeFile(
+      path.join(tempRoot, '.neko', 'AGENTS.md'),
+      '# Fixture guidance\n\nENVIRONMENT_LAYER_OBSERVED',
+      'utf8',
+    );
+    let handle: AgentSessionHandle | undefined;
+    renderProbe(validConfig(), (session) => {
+      handle = session;
+    });
+
+    await waitFor(() => handle?.isReady === true);
+
+    expect(piMocks.open).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseSystemPrompt: expect.stringContaining('ENVIRONMENT_LAYER_OBSERVED'),
+      }),
+    );
+    await handle!.submit('Check environment guidance.');
+    expect(handle!.getPromptCompositionProjection()).toEqual([
+      expect.objectContaining({ id: 'base', source: 'base', order: 0 }),
+      expect.objectContaining({
+        id: 'agents-md:override',
+        source: 'agents-md',
+        order: 1,
+      }),
+    ]);
+  });
+
+  it('reports base and explicit Skill facts from the actual Pi turn inputs', async () => {
+    piMocks.executeSkill.mockResolvedValue(undefined);
+    let handle: AgentSessionHandle | undefined;
+    renderProbe(validConfig(), (session) => {
+      handle = session;
+    });
+    await waitFor(() => handle?.isReady === true);
+
+    await expect(handle!.executeSkill('storyboard', 'Create one shot.')).resolves.toBe(true);
+
+    expect(piMocks.executeSkill).toHaveBeenCalledOnce();
+    expect(handle!.getPromptCompositionProjection()).toEqual([
+      expect.objectContaining({
+        id: 'base',
+        source: 'base',
+        order: 0,
+        hash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      }),
+      expect.objectContaining({
+        id: 'skill:storyboard',
+        source: 'skill.injection',
+        order: 1,
+        version: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+        hash: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      }),
+    ]);
+  });
+
   it('routes the real hook submit path through Pi and projects product events into TUI stores', async () => {
     let handle: AgentSessionHandle | undefined;
     renderProbe(validConfig(), (session) => {
@@ -209,18 +267,94 @@ describe('useAgentSession Pi runtime assembly', () => {
     });
   });
 
+  it('preserves cancellation requested while the immutable turn snapshot is preparing', async () => {
+    let handle: AgentSessionHandle | undefined;
+    renderProbe(validConfig(), (session) => {
+      handle = session;
+    });
+    await waitFor(() => handle?.isReady === true);
+
+    const credentialReadStarted = deferred<void>();
+    const releaseCredentialRead = deferred<void>();
+    const originalCredentialRead = runtime!.application.credentials.read.bind(
+      runtime!.application.credentials,
+    );
+    vi.spyOn(runtime!.application.credentials, 'read').mockImplementationOnce(
+      async (providerId) => {
+        credentialReadStarted.resolve();
+        await releaseCredentialRead.promise;
+        return originalCredentialRead(providerId);
+      },
+    );
+
+    const releaseExecution = deferred<void>();
+    let cancelled = false;
+    piMocks.cancel.mockImplementation(() => {
+      cancelled = true;
+      releaseExecution.resolve();
+    });
+    piMocks.execute.mockImplementation(async (input: PiExecuteInput) => {
+      piMocks.busy = true;
+      const runtimeIdentity = createIdentity(input);
+      await emit(input.events, {
+        type: 'turn.started',
+        identity: runtimeIdentity,
+        timestamp: 1,
+      });
+      await releaseExecution.promise;
+      expect(cancelled).toBe(true);
+      await emit(input.events, {
+        type: 'turn.cancelled',
+        identity: runtimeIdentity,
+        reason: 'cancelled during preparation',
+        timestamp: 2,
+      });
+      piMocks.busy = false;
+    });
+
+    const submission = handle!.submit('Cancel during turn preparation');
+    await credentialReadStarted.promise;
+    expect(handle!.getPiRuntimeEvidence()?.lastTurn).toBeUndefined();
+
+    handle!.cancel();
+    expect(piMocks.cancel).not.toHaveBeenCalled();
+    releaseCredentialRead.resolve();
+    await submission;
+
+    expect(piMocks.cancel).toHaveBeenCalledOnce();
+    expect(piMocks.cancel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        turnId: expect.stringMatching(/^turn-/),
+        runId: expect.stringMatching(/^run-/),
+      }),
+    );
+    expect(handle!.getTimelineProjectionEvidence()).toMatchObject({
+      completionStatus: 'cancelled',
+      terminalProjectionVersion: 1,
+      projectionVersion: 1,
+      acceptedPostTerminalPatchCount: 0,
+    });
+  });
+
   it('submits native ReadImage analysis through the TUI terminal delivery path', async () => {
     const analysisMarkdown = '# 分镜分析\n\n第 1 页建立场景。';
-    const documentResourceRef = {
+    const documentLocator = {
       kind: 'document-entry' as const,
-      source: { filePath: '${A}/books/Blame.epub', format: 'epub' as const },
+      source: { kind: 'workspace-file' as const, path: 'books/Blame.epub' },
       entryPath: 'OEBPS/images/page-01.jpg',
-      versionPolicy: 'read-only-source' as const,
     };
     piMocks.execute.mockImplementationOnce(async (input: PiExecuteInput) => {
       piMocks.busy = true;
       const identity = createIdentity(input);
       await emit(input.events, { type: 'turn.started', identity, timestamp: 1 });
+      await emit(input.events, {
+        type: 'tool.started',
+        toolCallId: 'read-image-1',
+        toolName: 'ReadImage',
+        args: {},
+        identity,
+        timestamp: 2,
+      });
       await emit(input.events, {
         type: 'tool.completed',
         toolCallId: 'read-image-1',
@@ -231,7 +365,7 @@ describe('useAgentSession Pi runtime assembly', () => {
             data: {
               mode: 'metadata',
               analysis: 'storyboard',
-              images: [{ resourceRef: documentResourceRef, width: 1200, height: 1800 }],
+              images: [{ contentLocator: documentLocator, width: 1200, height: 1800 }],
             },
             attachments: [
               {
@@ -241,7 +375,7 @@ describe('useAgentSession Pi runtime assembly', () => {
                   assetId: 'page-01',
                   uri: 'document-entry://page-01',
                   mimeType: 'image/jpeg',
-                  documentResourceRef,
+                  contentLocator: documentLocator,
                 },
               },
             ],
@@ -249,13 +383,14 @@ describe('useAgentSession Pi runtime assembly', () => {
         },
         isError: false,
         identity,
-        timestamp: 2,
+        timestamp: 3,
       });
       await emit(input.events, {
         type: 'assistant.text.delta',
         delta: analysisMarkdown,
+        sourceIndex: 0,
         identity,
-        timestamp: 3,
+        timestamp: 4,
       });
       await emit(input.events, {
         type: 'assistant.message.completed',
@@ -277,7 +412,7 @@ describe('useAgentSession Pi runtime assembly', () => {
           timestamp: 3,
         },
         identity,
-        timestamp: 3,
+        timestamp: 4,
       } as PiProductAgentEvent);
       piMocks.messages = [
         {
@@ -285,7 +420,7 @@ describe('useAgentSession Pi runtime assembly', () => {
           content: [{ type: 'text', text: analysisMarkdown }],
         },
       ];
-      await emit(input.events, { type: 'turn.completed', identity, timestamp: 4 });
+      await emit(input.events, { type: 'turn.completed', identity, timestamp: 5 });
       piMocks.busy = false;
     });
     let handle: AgentSessionHandle | undefined;
@@ -592,6 +727,14 @@ async function emit(sink: PiProductEventSink, event: PiProductAgentEvent): Promi
   await sink.emit(event);
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
 function validConfig(): CLIConfig {
   return {
     ...DEFAULT_CLI_CONFIG,
@@ -635,7 +778,6 @@ function SessionProbe(props: {
     config: props.config,
     presentation: createTestAgentTerminalPresentation('en'),
     promptLocale: 'en',
-    service: createNoopService(),
     capabilityProviders: [],
     createLocalMetadata: createMemoryLocalMetadataBinding,
     localMetadataHome: props.config.workDir,
@@ -649,20 +791,6 @@ function SessionProbe(props: {
   }, [props, session]);
 
   return React.createElement(Text, null, 'pi-runtime-probe');
-}
-
-function createNoopService(): IService {
-  return {
-    async chat() {
-      throw new Error('Legacy IService chat must not be reached.');
-    },
-    async *chatStream() {
-      throw new Error('Legacy IService chatStream must not be reached.');
-    },
-    async embed(texts: string[]) {
-      return { embeddings: texts.map(() => []) };
-    },
-  };
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

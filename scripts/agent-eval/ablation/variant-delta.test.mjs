@@ -16,7 +16,6 @@ function aggregate(overrides = {}) {
     iterations: { total: 2, mean: 1 },
     tools: { calls: 0, successes: 0, failures: 0 },
     retries: { count: 0 },
-    tasks: { total: 0, completed: 0, failed: 0, cancelled: 0 },
     scoreDistribution: { samples: 0, passRate: 1 },
     ...overrides,
   };

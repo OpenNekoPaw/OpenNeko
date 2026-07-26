@@ -39,6 +39,8 @@ function appendPatch(
     baseProjectionVersion,
     projectionVersion,
     turnId: 'turn-a',
+
+    runId: 'run-a',
     messageId: 'message-a',
     operations: [{ operation: 'append', item }],
   };
@@ -52,6 +54,8 @@ function assistantTextItem(
   return {
     conversationId,
     turnId: 'turn-a',
+
+    runId: 'run-a',
     messageId: 'message-a',
     itemId: 'text-a',
     sequence: 1,

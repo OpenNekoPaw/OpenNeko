@@ -198,6 +198,9 @@ function resolveGroupLabelPresentation(node: GroupCanvasNode): GroupLabelPresent
       ? { label: authoredLabel, derived: false }
       : { label: t('node.group'), derived: false };
   }
+  if (provenance['kind'] === 'generated-batch' && !authoredLabel) {
+    return { label: t('workspaceBoard.generatedBatch'), derived: true };
+  }
 
   const taskId = readNonEmptyString(provenance['taskId']);
   const runId = readNonEmptyString(provenance['runId']);

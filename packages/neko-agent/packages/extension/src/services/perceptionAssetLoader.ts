@@ -65,6 +65,7 @@ async function loadPerceptionAsset(
   ref: PerceptualAssetRef,
   contentAccessRuntime: AgentContentAccessRuntime | undefined,
 ): Promise<ProviderReadyAssetPayload> {
+  assertNoGeneratedResourceRefFallback(ref);
   const mimeType = ref.mimeType || getMimeType(ref.uri);
   const hasStableResourceRef =
     ref.resourceRef !== undefined || ref.documentResourceRef !== undefined;
@@ -120,6 +121,7 @@ async function loadImageBytes(
   ref: PerceptualAssetRef,
   contentAccessRuntime: AgentContentAccessRuntime,
 ): Promise<{ readonly bytes: Buffer; readonly mimeType: string }> {
+  assertNoGeneratedResourceRefFallback(ref);
   const inline = /^data:(image\/[^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/u.exec(ref.uri);
   if (!ref.contentLocator && !ref.resourceRef && !ref.documentResourceRef && inline) {
     return { bytes: Buffer.from(inline[2]!, 'base64'), mimeType: inline[1]! };
@@ -177,6 +179,14 @@ function createPerceptionAssetSource(ref: PerceptualAssetRef): ContentSourceRef 
   if (ref.resourceRef) return ref.resourceRef;
   if (ref.documentResourceRef) return createDocumentEntrySource(ref.documentResourceRef);
   return { kind: 'file', path: ref.uri };
+}
+
+function assertNoGeneratedResourceRefFallback(ref: PerceptualAssetRef): void {
+  if (ref.resourceRef?.source.kind === 'generated-asset') {
+    throw new Error(
+      'generated-asset-content-locator-migration-required: Perception requires contentLocator.',
+    );
+  }
 }
 
 function createDocumentEntrySource(ref: DocumentArchiveResourceRef): ContentDocumentSourceRef {

@@ -18,7 +18,7 @@ interface VideoPlayerProps {
   className?: string;
   /** Local file path for opening in neko-preview */
   localPath?: string;
-  /** Inline mode: compact card without header (for use inside TaskCard) */
+  /** Inline mode: compact card without header for Tool results. */
   inline?: boolean;
 }
 

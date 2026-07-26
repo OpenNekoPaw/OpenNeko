@@ -748,7 +748,6 @@ describe('canvasAgentOperations', () => {
             },
           },
           executionRefs: {
-            taskRefs: [{ source: 'agent', sourceTaskId: 'task-1' }],
             resultRefs: [
               {
                 mediaRef: {
@@ -779,7 +778,6 @@ describe('canvasAgentOperations', () => {
         },
       },
       executionRefs: {
-        taskRefs: [expect.objectContaining({ sourceTaskId: 'task-1' })],
         resultRefs: [
           expect.objectContaining({
             mediaRef: expect.objectContaining({

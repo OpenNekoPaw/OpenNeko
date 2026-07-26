@@ -1076,6 +1076,49 @@ describe('canvasEditorProvider message contracts', () => {
       expect(providerSource).toContain("delete nodeData['runtimeThumbnailPath'];");
     });
 
+    it('projects a cloned Host-applied snapshot before sending it to the Canvas Webview', () => {
+      const hostAppliedDocument = readMethodBody(providerSource, 'applyHostCanvasData(');
+      const displayProjector = extractFunction(
+        providerSource,
+        'private async projectCanvasDataForDisplay',
+      );
+
+      expect(hostAppliedDocument).toContain('): Promise<void> {');
+      expect(hostAppliedDocument).toContain(
+        'await this.projectCanvasDataForDisplay(canvasData, uri, panel.webview);',
+      );
+      expect(hostAppliedDocument).toContain('data: displayData,');
+      expect(hostAppliedDocument).toContain(
+        'this.setAuthoritativeCanvasSnapshot(documentUri, canvasData);',
+      );
+      expect(hostAppliedDocument).not.toContain('data: canvasData,');
+      expect(displayProjector).toContain('const displayData = structuredClone(canvasData);');
+      expect(displayProjector).toContain('await this.normalizeCanvasPathsForLoad(');
+    });
+
+    it('keeps the initial open snapshot durable while projecting a cloned Webview document', () => {
+      const openSnapshot = readMethodBody(providerSource, 'getOpenCanvasDocumentSnapshot(');
+      const readyBranch = providerSource.slice(
+        providerSource.indexOf("case 'ready':"),
+        providerSource.indexOf("case 'canvasDataReady':"),
+      );
+
+      expect(openSnapshot).toContain(
+        'this.authoritativeCanvasSnapshotsByDocumentUri.get(documentUri)',
+      );
+      expect(openSnapshot).not.toContain('this.canvasSnapshotsByDocumentUri.get(documentUri)');
+      expect(readyBranch).toContain(
+        'this.setAuthoritativeCanvasSnapshot(document.uri.toString(), data);',
+      );
+      expect(readyBranch).toContain('const displayData = await this.projectCanvasDataForDisplay(');
+      expect(readyBranch).toContain(
+        "webviewPanel.webview.postMessage({ type: 'update', data: displayData });",
+      );
+      expect(readyBranch).not.toContain(
+        'await this.normalizeCanvasPathsForLoad(canvasRecord, document.uri, webviewPanel.webview);',
+      );
+    });
+
     it('does not reconfigure Canvas Webview roots while resolving add-source previews', () => {
       const addSource = extractFunction(providerSource, 'private async addCanvasProjectSource');
 

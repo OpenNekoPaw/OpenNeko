@@ -144,18 +144,12 @@ function request(
       {
         kind: 'image',
         title: 'Shot 1',
-        resourceRef: {
-          id: 'generated-output:shot-1',
-          scope: 'project',
-          provider: 'generated-output',
-          kind: 'generated',
-          source: {
-            kind: 'generated-asset',
-            generatedAssetId: 'shot-1',
-            projectRelativePath: 'neko/generated/image/shot-1.png',
-          },
-          locator: { kind: 'generated-asset', assetId: 'shot-1' },
-          fingerprint: { strategy: 'hash', value: 'sha256:shot-1' },
+        contentLocator: {
+          kind: 'generated-output',
+          outputId: 'shot-1',
+          revision: 'rev-shot-1',
+          digest: 'sha256:shot-1',
+          path: 'neko/generated/image/shot-1.png',
         },
         provenance: {
           version: CANVAS_WORKSPACE_BOARD_CONTRACT_VERSION,

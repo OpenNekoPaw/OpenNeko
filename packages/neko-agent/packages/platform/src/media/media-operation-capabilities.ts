@@ -7,7 +7,7 @@ import {
   type ImageOperationId,
   type VideoOperationId,
 } from '@neko/shared';
-import type { ImageGenerationRequest, VideoGenerationRequest } from './types';
+import type { ImageGenerationRequest, VideoGenerationRequest } from '@neko/generation';
 
 const PROMPT_VIDEO_CONTROLS = [
   'prompt',
@@ -118,17 +118,11 @@ export function getProviderVideoOperationSupport(
 
 export function resolveCanonicalVideoOperation(request: VideoGenerationRequest): VideoOperationId {
   if (request.operation) return request.operation;
-  if (request.referenceVideoRef || request.referenceVideoUrl || request.sourceVideoUrl) {
+  if (request.referenceVideoLocator) {
     return request.editInstruction ? 'transform' : 'restyle';
   }
-  if (request.endFrameRef || request.endFrameImageBase64) return 'generate-from-keyframes';
-  if (
-    request.startFrameRef ||
-    request.startFrameImageBase64 ||
-    request.referenceImageUrl ||
-    request.referenceImageBase64 ||
-    request.referenceImageUri
-  ) {
+  if (request.endFrameLocator) return 'generate-from-keyframes';
+  if (request.startFrameLocator) {
     return 'generate-from-image';
   }
   return 'generate-from-prompt';
@@ -180,36 +174,19 @@ export function validateProviderImageRequest(
   }
 
   const diagnostics: CreativeMediaOperationDiagnostic[] = [];
-  if (request.controlImageRef && (request.controlImageBase64 || request.controlImageUri)) {
-    diagnostics.push({
-      code: 'invalid-operation-request',
-      severity: 'error',
-      message: 'Stable controlImageRef cannot be combined with legacy control image inputs.',
-      details: { providerType, operationId, control: 'pose-control', owner: 'request' },
-    });
-  }
   if (
-    request.controlImageRef &&
+    request.controlImageLocator &&
     request.controlMode !== 'pose' &&
     request.controlMode !== 'depth'
   ) {
     diagnostics.push({
       code: 'unsupported-operation-control',
       severity: 'error',
-      message: 'Stable 3D controlImageRef requires an exact pose or depth control mode.',
+      message: 'Stable 3D controlImageLocator requires an exact pose or depth control mode.',
       details: { providerType, operationId, control: request.controlMode, owner: 'request' },
     });
   }
-  const stableAppearanceReferences =
-    request.ipAdapterRefs?.filter((reference) => reference.imageRef) ?? [];
-  if (stableAppearanceReferences.some((reference) => reference.imageBase64)) {
-    diagnostics.push({
-      code: 'invalid-operation-request',
-      severity: 'error',
-      message: 'Stable IP-Adapter imageRef cannot be combined with materialized imageBase64.',
-      details: { providerType, operationId, control: 'appearance-reference', owner: 'request' },
-    });
-  }
+  const stableAppearanceReferences = request.ipAdapterRefs ?? [];
   const adapterControls = providerThreeReferenceImageControls(providerType, modelCapabilities);
   for (const requirement of requestedThreeReferenceImageControls(request)) {
     if (!adapterControls.includes(requirement.control)) {
@@ -267,13 +244,13 @@ function requestedThreeReferenceImageControls(
   request: ImageGenerationRequest,
 ): readonly ThreeReferenceImageControlRequirement[] {
   const requirements: ThreeReferenceImageControlRequirement[] = [];
-  if (request.controlImageRef && request.controlMode === 'pose') {
+  if (request.controlImageLocator && request.controlMode === 'pose') {
     requirements.push({ control: 'pose-control', modelCapability: 'image.control.pose' });
   }
-  if (request.controlImageRef && request.controlMode === 'depth') {
+  if (request.controlImageLocator && request.controlMode === 'depth') {
     requirements.push({ control: 'depth-control', modelCapability: 'image.control.depth' });
   }
-  if (request.ipAdapterRefs?.some((reference) => reference.imageRef)) {
+  if (request.ipAdapterRefs?.some((reference) => reference.imageLocator)) {
     requirements.push({
       control: 'appearance-reference',
       modelCapability: 'image.reference.ip-adapter',
@@ -315,13 +292,8 @@ function providerThreeReferenceImageControls(
 
 export function resolveCanonicalImageOperation(request: ImageGenerationRequest): ImageOperationId {
   if (request.operation) return request.operation;
-  if (request.maskBase64 || request.maskUri) return 'inpaint';
-  if (
-    request.referenceImageUrl ||
-    request.referenceImageBase64 ||
-    request.referenceImageUri ||
-    request.editInstruction
-  ) {
+  if (request.maskLocator) return 'inpaint';
+  if (request.referenceImageLocator || request.editInstruction) {
     return 'edit';
   }
   return 'generate';
@@ -446,17 +418,11 @@ function requestedVideoControls(
 ): readonly CreativeMediaControlId[] {
   const controls: CreativeMediaControlId[] = [];
   if (request.prompt) controls.push('prompt');
-  if (
-    request.referenceImageUrl ||
-    request.referenceImageBase64 ||
-    request.referenceImageUri ||
-    request.startFrameRef ||
-    request.startFrameImageBase64
-  ) {
+  if (request.startFrameLocator) {
     controls.push('start-frame');
   }
-  if (request.endFrameRef || request.endFrameImageBase64) controls.push('end-frame');
-  if (request.referenceVideoRef || request.referenceVideoUrl || request.sourceVideoUrl) {
+  if (request.endFrameLocator) controls.push('end-frame');
+  if (request.referenceVideoLocator) {
     controls.push('reference-video');
   }
   if (request.editInstruction) controls.push('edit-instruction');
