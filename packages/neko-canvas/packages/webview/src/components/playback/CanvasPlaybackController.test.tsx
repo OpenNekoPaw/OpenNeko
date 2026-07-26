@@ -80,6 +80,28 @@ describe('CanvasPlaybackController', () => {
     expect(buildDefaultPlaybackPath(plan())).toEqual(['markdown-1', 'media-1']);
   });
 
+  it('centers transport controls without rendering time labels', () => {
+    act(() => {
+      root.render(
+        <CanvasPlaybackController
+          plan={plan()}
+          routeUnitIds={['markdown-1', 'media-1']}
+          activeUnitId="markdown-1"
+          currentTimeMs={600}
+          durationMs={1_200}
+          onSeek={() => undefined}
+        />,
+      );
+    });
+
+    const controller = host.querySelector('[data-testid="canvas-playback-controller"]');
+    expect(controller?.querySelector('.canvas-playback-controller-transport')).not.toBeNull();
+    expect(controller?.querySelector('.canvas-playback-controller-seek')).not.toBeNull();
+    expect(controller?.querySelector('.canvas-playback-controller-time')).toBeNull();
+    expect(controller?.textContent).not.toContain('0:00');
+    expect(controller?.textContent).not.toContain('0:01');
+  });
+
   it('advances through each timer-driven unit exactly once', () => {
     vi.useFakeTimers();
     const onActiveUnitChange = vi.fn();

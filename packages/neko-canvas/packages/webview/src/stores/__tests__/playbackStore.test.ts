@@ -3,7 +3,7 @@ import type { CanvasData } from '@neko/shared';
 import { useCanvasStore } from '../canvasStore';
 import { usePlaybackStore } from '../playbackStore';
 
-describe('playbackStore matrix runtime state', () => {
+describe('playbackStore storyline session state', () => {
   beforeEach(() => {
     useCanvasStore.setState({
       canvasData: canvasData(),
@@ -18,121 +18,89 @@ describe('playbackStore matrix runtime state', () => {
       playbacks: new Map(),
       playbackSession: {
         visible: false,
-        panes: { canvas: true, stage: false, route: false },
-        layout: { stageWidthPx: 520, routeHeightPx: 300 },
+        presentation: 'overlay',
         playheadMs: 0,
         focusOwner: 'canvas',
         playbackState: 'idle',
         stale: false,
-        matrix: {
-          routeViewMode: 'compact',
-          filters: {
-            routeIds: [],
-            containerIds: [],
-            highlightedNodeKinds: [],
-            generationStatuses: [],
-          },
-          foldedContainerIds: [],
-        },
       },
     });
   });
 
-  it('defaults to compact storyline mode and preserves it across matrix projection updates', () => {
-    expect(usePlaybackStore.getInitialState().playbackSession).toMatchObject({
-      layout: { routeHeightPx: 208 },
-      matrix: { routeViewMode: 'compact' },
+  it('defaults to one hidden playback Overlay without pane, layout or matrix state', () => {
+    const session = usePlaybackStore.getInitialState().playbackSession;
+    expect(session).toMatchObject({
+      visible: false,
+      presentation: 'overlay',
     });
-
-    usePlaybackStore.getState().setPlaybackMatrixFilters({
-      routeIds: ['route-a'],
-      highlightedNodeKinds: ['media'],
-    });
-    usePlaybackStore.getState().reconcilePlaybackMatrixState({
-      projectionKey: 'revision-1:storyboard',
-      routeFamilyIds: ['family:scene-a'],
-      routeIds: ['route-a'],
-      containerIds: ['container:scene-a'],
-      rowIds: ['row:route-a'],
-      columnIds: ['column:shot-a'],
-      cellIds: ['cell:route-a:shot-a'],
-    });
-
-    expect(usePlaybackStore.getState().playbackSession.matrix.routeViewMode).toBe('compact');
+    expect(session).not.toHaveProperty('preview');
+    expect(session).not.toHaveProperty('panes');
+    expect(session).not.toHaveProperty('layout');
+    expect(session.routeId).toBeUndefined();
+    expect(session.currentUnitId).toBeUndefined();
+    expect(session).not.toHaveProperty('matrix');
   });
 
-  it('stores matrix mode, route family, filters, focus, and folds as runtime-only state', () => {
+  it('reveals the unified Overlay with route focus by default', () => {
+    usePlaybackStore.getState().revealPlaybackWorkspace();
+
+    expect(usePlaybackStore.getState().playbackSession).toMatchObject({
+      visible: true,
+      presentation: 'overlay',
+      focusOwner: 'route',
+    });
+  });
+
+  it('changes the same Overlay presentation and resets it when hidden', () => {
+    usePlaybackStore.getState().revealPlaybackWorkspace({ focusOwner: 'preview' });
+    usePlaybackStore.getState().setPlaybackOverlayPresentation('fullscreen');
+
+    expect(usePlaybackStore.getState().playbackSession).toMatchObject({
+      visible: true,
+      presentation: 'fullscreen',
+      focusOwner: 'preview',
+    });
+
+    usePlaybackStore.getState().hidePlaybackWorkspace();
+
+    expect(usePlaybackStore.getState().playbackSession).toMatchObject({
+      visible: false,
+      presentation: 'overlay',
+      focusOwner: 'canvas',
+    });
+  });
+
+  it('stores route and current story node as runtime-only state', () => {
     const before = JSON.stringify(useCanvasStore.getState().canvasData);
 
-    usePlaybackStore.getState().setPlaybackRouteViewMode('matrix');
-    usePlaybackStore.getState().setPlaybackMatrixRouteFamily('family:scene-a');
-    usePlaybackStore.getState().setPlaybackMatrixFilters({
-      routeIds: ['route-b', 'route-a', 'route-a'],
-      containerIds: ['container:scene-a'],
-      highlightedNodeKinds: ['media', 'node', 'media'],
-      generationStatuses: ['ready'],
-    });
-    usePlaybackStore.getState().focusPlaybackMatrix({ kind: 'cell', id: 'cell:route-a:shot-a' });
-    usePlaybackStore.getState().togglePlaybackMatrixContainerFold('container:scene-a');
+    usePlaybackStore.getState().setPlaybackSessionRoute('route-a', 'story-node-a', 250);
 
-    expect(usePlaybackStore.getState().playbackSession.matrix).toMatchObject({
-      routeViewMode: 'matrix',
-      activeRouteFamilyId: 'family:scene-a',
-      filters: {
-        routeFamilyId: 'family:scene-a',
-        routeIds: ['route-a', 'route-b'],
-        containerIds: ['container:scene-a'],
-        highlightedNodeKinds: ['media', 'node'],
-        generationStatuses: ['ready'],
-      },
-      focus: { kind: 'cell', id: 'cell:route-a:shot-a' },
-      foldedContainerIds: ['container:scene-a'],
+    expect(usePlaybackStore.getState().playbackSession).toMatchObject({
+      routeId: 'route-a',
+      currentUnitId: 'story-node-a',
+      playheadMs: 250,
     });
     expect(JSON.stringify(useCanvasStore.getState().canvasData)).toBe(before);
     expect(JSON.stringify(useCanvasStore.getState().canvasData)).not.toContain('matrix');
     expect(JSON.stringify(useCanvasStore.getState().canvasData)).not.toContain('timelineOrder');
   });
 
-  it('reconciles matrix state when the active projection changes', () => {
-    usePlaybackStore.getState().setPlaybackMatrixRouteFamily('family:old');
-    usePlaybackStore.getState().setPlaybackMatrixFilters({
-      routeIds: ['route-old', 'route-keep'],
-      containerIds: ['container:old', 'container:keep'],
-      highlightedNodeKinds: ['media'],
-    });
-    usePlaybackStore.getState().focusPlaybackMatrix({ kind: 'cell', id: 'cell-old' });
-    usePlaybackStore.getState().togglePlaybackMatrixContainerFold('container:old');
-    usePlaybackStore.getState().togglePlaybackMatrixContainerFold('container:keep');
+  it('resets the story node playhead when the selected route changes', () => {
+    usePlaybackStore.getState().setPlaybackSessionRoute('route-a', 'story-node-a', 500);
+    usePlaybackStore.getState().setPlaybackSessionRoute('route-b', 'story-node-b');
 
-    usePlaybackStore.getState().reconcilePlaybackMatrixState({
-      projectionKey: 'revision-2:storyboard',
-      routeFamilyIds: ['family:next'],
-      routeIds: ['route-keep'],
-      containerIds: ['container:keep'],
-      rowIds: ['row:route-keep'],
-      columnIds: ['column:container:keep:shot-a'],
-      cellIds: ['cell:route-keep:shot-a'],
+    expect(usePlaybackStore.getState().playbackSession).toMatchObject({
+      routeId: 'route-b',
+      currentUnitId: 'story-node-b',
+      playheadMs: 0,
     });
-
-    expect(usePlaybackStore.getState().playbackSession.matrix).toMatchObject({
-      activeRouteFamilyId: 'family:next',
-      projectionKey: 'revision-2:storyboard',
-      filters: {
-        routeFamilyId: 'family:next',
-        routeIds: ['route-keep'],
-        containerIds: ['container:keep'],
-        highlightedNodeKinds: ['media'],
-      },
-      foldedContainerIds: ['container:keep'],
-    });
-    expect(usePlaybackStore.getState().playbackSession.matrix.focus).toBeUndefined();
   });
 });
 
 function canvasData(): CanvasData {
   return {
     version: '2.1',
-    name: 'Matrix Runtime State',
+    name: 'Storyline Session State',
     nodes: [],
     connections: [],
   };

@@ -29,7 +29,9 @@ describe('canonical Canvas host protocol', () => {
     expect(editorSource).toContain('createCanvasPlaybackPlan({');
     expect(editorSource).toContain("type: 'playback:previewPlanResult'");
     expect(playbackWorkspaceSource).toContain('createCanvasPlaybackPlan({');
-    expect(playbackWorkspaceSource).toContain('<RouteStoryboardMatrix');
+    expect(playbackWorkspaceSource).toContain('<StorylinePlaybackOverlay');
+    expect(playbackWorkspaceSource).not.toContain('<StorylineGraph');
+    expect(playbackWorkspaceSource).not.toContain('<PlaybackStage');
     expect(editorSource).toContain("case 'media:play'");
     expect(editorSource).toContain("case 'media:seek'");
   });

@@ -9,9 +9,7 @@ import { setLocale } from '../../i18n';
 vi.mock('@neko/ui/icons', () => ({
   toCodiconClassName: (name: string) => `codicon codicon-${name}`,
   DownloadIcon: ({ size = 16 }: { size?: number }) => <span data-icon="download">{size}</span>,
-  LayersIcon: ({ size = 16 }: { size?: number }) => <span data-icon="layers">{size}</span>,
   PackageIcon: ({ size = 16 }: { size?: number }) => <span data-icon="package">{size}</span>,
-  PlayIcon: ({ size = 16 }: { size?: number }) => <span data-icon="play">{size}</span>,
   PointerIcon: ({ size = 16 }: { size?: number }) => <span data-icon="pointer">{size}</span>,
   RedoIcon: ({ size = 16 }: { size?: number }) => <span data-icon="redo">{size}</span>,
   RightPanelIcon: ({ size = 16 }: { size?: number }) => <span data-icon="right-panel">{size}</span>,
@@ -19,6 +17,11 @@ vi.mock('@neko/ui/icons', () => ({
     <span data-icon="right-panel-off">{size}</span>
   ),
   UndoIcon: ({ size = 16 }: { size?: number }) => <span data-icon="undo">{size}</span>,
+}));
+
+vi.mock('@neko/shared/icons', () => ({
+  PlusIcon: ({ size = 16 }: { size?: number }) => <span data-icon="plus">{size}</span>,
+  StorylineIcon: ({ size = 16 }: { size?: number }) => <span data-icon="storyline">{size}</span>,
 }));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -177,16 +180,16 @@ describe('CanvasToolbar', () => {
     expect(onOpenPackage).toHaveBeenCalledTimes(1);
   });
 
-  it('controls playback workspace surfaces without exposing the main canvas pane', () => {
-    const onToggleWorkspaceSurface = vi.fn();
+  it('controls the unified Storyline Overlay with its dedicated icon', () => {
+    const onTogglePlaybackWorkspace = vi.fn();
 
     act(() => {
       root.render(
         <CanvasToolbar
           onUndo={() => undefined}
           onRedo={() => undefined}
-          workspaceSurfaceState={{ stage: false, route: true }}
-          onToggleWorkspaceSurface={onToggleWorkspaceSurface}
+          playbackWorkspaceVisible={false}
+          onTogglePlaybackWorkspace={onTogglePlaybackWorkspace}
         />,
       );
     });
@@ -195,21 +198,19 @@ describe('CanvasToolbar', () => {
       '[data-canvas-toolbar-action="toggle-playback-canvas-pane"]',
     );
     const stageButton = host.querySelector<HTMLButtonElement>(
-      '[data-canvas-toolbar-action="toggle-playback-stage-pane"]',
-    );
-    const routeButton = host.querySelector<HTMLButtonElement>(
-      '[data-canvas-toolbar-action="toggle-playback-route-pane"]',
+      '[data-canvas-toolbar-action="toggle-playback-panel"]',
     );
 
     expect(canvasButton).toBeNull();
-    expect(stageButton?.getAttribute('aria-controls')).toBe('canvas-playback-stage-pane');
+    expect(stageButton?.getAttribute('aria-controls')).toBe('canvas-playback-overlay');
     expect(stageButton?.getAttribute('aria-expanded')).toBe('false');
     expect(stageButton?.getAttribute('aria-pressed')).toBe('false');
-    expect(stageButton?.getAttribute('aria-label')).toBe('Show playback stage');
-    expect(routeButton?.getAttribute('aria-controls')).toBe('canvas-playback-route-pane');
-    expect(routeButton?.getAttribute('aria-expanded')).toBe('true');
-    expect(routeButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(routeButton?.getAttribute('aria-label')).toBe('Hide storyline');
+    expect(stageButton?.getAttribute('aria-label')).toBe('Open story playback');
+    expect(stageButton?.querySelector('[data-icon="storyline"]')?.textContent).toBe('18');
+    expect(stageButton?.querySelector('[data-icon="play"]')).toBeNull();
+    expect(
+      host.querySelector('[data-canvas-toolbar-action="toggle-playback-route-pane"]'),
+    ).toBeNull();
     expect(
       host.querySelector('[data-canvas-toolbar-action="reveal-playback-workspace"]'),
     ).toBeNull();
@@ -217,42 +218,36 @@ describe('CanvasToolbar', () => {
 
     act(() => {
       stageButton?.click();
-      routeButton?.click();
     });
 
-    expect(onToggleWorkspaceSurface.mock.calls).toEqual([['stage'], ['route']]);
+    expect(onTogglePlaybackWorkspace).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps surface buttons available before playback panes are visible', () => {
-    const onToggleWorkspaceSurface = vi.fn();
+  it('keeps the Storyline button available before the workspace is visible', () => {
+    const onTogglePlaybackWorkspace = vi.fn();
 
     act(() => {
       root.render(
         <CanvasToolbar
           onUndo={() => undefined}
           onRedo={() => undefined}
-          workspaceSurfaceState={{ stage: false, route: false }}
-          onToggleWorkspaceSurface={onToggleWorkspaceSurface}
+          playbackWorkspaceVisible={false}
+          onTogglePlaybackWorkspace={onTogglePlaybackWorkspace}
         />,
       );
     });
 
     const stageButton = host.querySelector<HTMLButtonElement>(
-      '[data-canvas-toolbar-action="toggle-playback-stage-pane"]',
-    );
-    const routeButton = host.querySelector<HTMLButtonElement>(
-      '[data-canvas-toolbar-action="toggle-playback-route-pane"]',
+      '[data-canvas-toolbar-action="toggle-playback-panel"]',
     );
 
     expect(stageButton).not.toBeNull();
-    expect(routeButton).not.toBeNull();
 
     act(() => {
       stageButton?.click();
-      routeButton?.click();
     });
 
-    expect(onToggleWorkspaceSurface.mock.calls).toEqual([['stage'], ['route']]);
+    expect(onTogglePlaybackWorkspace).toHaveBeenCalledTimes(1);
   });
 
   it('places frequent canvas actions in functional groups without a settings action', () => {
@@ -264,8 +259,8 @@ describe('CanvasToolbar', () => {
           isSelectMode={false}
           onSelectTool={() => undefined}
           onSelectAddAction={() => undefined}
-          workspaceSurfaceState={{ stage: false, route: false }}
-          onToggleWorkspaceSurface={() => undefined}
+          playbackWorkspaceVisible={false}
+          onTogglePlaybackWorkspace={() => undefined}
           onOpenExport={() => undefined}
           onOpenPackage={() => undefined}
           isPanMode={true}
@@ -284,8 +279,7 @@ describe('CanvasToolbar', () => {
       'open-add-node-popover',
       'undo',
       'redo',
-      'toggle-playback-stage-pane',
-      'toggle-playback-route-pane',
+      'toggle-playback-panel',
       'open-export',
       'open-package',
     ]);

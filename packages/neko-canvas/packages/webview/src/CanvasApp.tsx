@@ -17,7 +17,7 @@ import type {
 } from '@neko/shared';
 import { createCanvasAgentActiveContext } from './utils/canvasAgentOperations';
 import { useCanvasStore } from './stores/canvasStore';
-import { usePlaybackStore, type PlaybackWorkspacePane } from './stores/playbackStore';
+import { usePlaybackStore } from './stores/playbackStore';
 import { useRuntimeViewportStore } from './stores/runtimeViewportStore';
 import { InfiniteCanvas, ZoomControls, MiniMap } from './components';
 import { ContextMenu } from './components/common/ContextMenu';
@@ -134,13 +134,8 @@ export function CanvasApp() {
   const groupNodes = useCanvasStore((state) => state.groupNodes);
   const ungroupNodes = useCanvasStore((state) => state.ungroupNodes);
   const playbackWorkspaceVisible = usePlaybackStore((state) => state.playbackSession.visible);
-  const playbackPaneState = usePlaybackStore((state) => state.playbackSession.panes);
   const revealPlaybackWorkspace = usePlaybackStore((state) => state.revealPlaybackWorkspace);
   const hidePlaybackWorkspace = usePlaybackStore((state) => state.hidePlaybackWorkspace);
-  const setPlaybackPaneVisible = usePlaybackStore((state) => state.setPlaybackPaneVisible);
-  const setPlaybackWorkspaceFocusOwner = usePlaybackStore(
-    (state) => state.setPlaybackWorkspaceFocusOwner,
-  );
   const viewport = useRuntimeViewportStore((state) => state.viewport);
   const setViewport = useRuntimeViewportStore((state) => state.setViewport);
   const zoomCanvas = useRuntimeViewportStore((state) => state.zoomCanvas);
@@ -157,14 +152,6 @@ export function CanvasApp() {
   const selectedNodeIds = selection.nodeIds;
   const selectedConnectionIds = selection.connectionIds;
   const isPanMode = interactionTool === 'pan';
-  const workspaceSurfaceState = useMemo(
-    () => ({
-      canvas: !playbackWorkspaceVisible || playbackPaneState.canvas,
-      stage: playbackWorkspaceVisible && playbackPaneState.stage,
-      route: playbackWorkspaceVisible && playbackPaneState.route,
-    }),
-    [playbackPaneState, playbackWorkspaceVisible],
-  );
   const setCanvasContainerRef = useCallback((element: HTMLDivElement | null) => {
     canvasContainerRef.current = element;
     setCanvasContainerElement(element);
@@ -421,7 +408,11 @@ export function CanvasApp() {
     defaultCanvasData: DEFAULT_CANVAS_DATA,
     setCanvasData,
     onRevealPlaybackWorkspace: ({ routeId, currentUnitId }) => {
-      revealPlaybackWorkspace({ routeId, currentUnitId, focusOwner: 'stage' });
+      revealPlaybackWorkspace({
+        routeId,
+        currentUnitId,
+        focusOwner: 'preview',
+      });
     },
     onCanvasDataLoaded: (data) => {
       const documentKey = createCanvasViewportSnapshotKey(data);
@@ -937,49 +928,14 @@ export function CanvasApp() {
     resetViewport();
   }
 
-  const handleToggleWorkspaceSurface = useCallback(
-    (pane: PlaybackWorkspacePane) => {
-      const session = usePlaybackStore.getState().playbackSession;
-      if (pane === 'canvas' && !session.visible) {
-        setPlaybackWorkspaceFocusOwner('canvas');
-        reportAction('toggleWorkspaceSurface', pane);
-        return;
-      }
-
-      if (!session.visible) {
-        revealPlaybackWorkspace({
-          focusOwner: pane,
-          panes: {
-            canvas: true,
-            stage: pane === 'stage',
-            route: pane === 'route',
-          },
-        });
-      } else {
-        const nextVisible = !session.panes[pane];
-        const nextPanes = {
-          ...session.panes,
-          [pane]: nextVisible,
-        };
-        if (!nextPanes.stage && !nextPanes.route) {
-          hidePlaybackWorkspace();
-        } else {
-          setPlaybackPaneVisible(pane, nextVisible);
-          if (nextVisible) {
-            setPlaybackWorkspaceFocusOwner(pane);
-          }
-        }
-      }
-      reportAction('toggleWorkspaceSurface', pane);
-    },
-    [
-      hidePlaybackWorkspace,
-      reportAction,
-      revealPlaybackWorkspace,
-      setPlaybackPaneVisible,
-      setPlaybackWorkspaceFocusOwner,
-    ],
-  );
+  const handleTogglePlaybackWorkspace = useCallback(() => {
+    if (usePlaybackStore.getState().playbackSession.visible) {
+      hidePlaybackWorkspace();
+    } else {
+      revealPlaybackWorkspace({ focusOwner: 'route' });
+    }
+    reportAction('togglePlaybackWorkspace', 'overlay');
+  }, [hidePlaybackWorkspace, reportAction, revealPlaybackWorkspace]);
 
   // =========================================================================
   // Render
@@ -1086,8 +1042,8 @@ export function CanvasApp() {
                     isSelectMode={interactionTool === 'select'}
                     onSelectTool={selectInteractionTool}
                     onSelectAddAction={handleSelectAddAction}
-                    workspaceSurfaceState={workspaceSurfaceState}
-                    onToggleWorkspaceSurface={handleToggleWorkspaceSurface}
+                    playbackWorkspaceVisible={playbackWorkspaceVisible}
+                    onTogglePlaybackWorkspace={handleTogglePlaybackWorkspace}
                     onOpenExport={() => {
                       reportAction('openExport', t('toolbar.export'));
                     }}

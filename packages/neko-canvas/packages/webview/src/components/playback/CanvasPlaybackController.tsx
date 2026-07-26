@@ -239,10 +239,8 @@ export function CanvasPlaybackController(props: CanvasPlaybackControllerProps = 
 
 export function CanvasPlaybackControls({
   model,
-  presentation = 'default',
 }: {
   readonly model: CanvasPlaybackControllerModel;
-  readonly presentation?: 'default' | 'overlay';
 }) {
   const {
     currentTimeMs,
@@ -260,7 +258,6 @@ export function CanvasPlaybackControls({
       className="canvas-playback-controller"
       data-testid="canvas-playback-controller"
       data-playback-adapter={model.adapterId}
-      data-presentation={presentation}
     >
       <div className="canvas-playback-controller-row">
         <div className="canvas-playback-controller-transport">
@@ -286,16 +283,10 @@ export function CanvasPlaybackControls({
           >
             <SkipForwardIcon size={14} />
           </ToolbarIconButton>
-          <span className="canvas-playback-controller-count">
-            {Math.max(0, viewState.currentIndex) + 1}/{model.routeLength}
-          </span>
         </div>
-        {durationMs !== undefined ? (
-          <span className="canvas-playback-controller-time">
-            {formatControllerTime((currentTimeMs ?? 0) / 1000)} /{' '}
-            {formatControllerTime(durationMs / 1000)}
-          </span>
-        ) : null}
+        <span className="canvas-playback-controller-count">
+          {Math.max(0, viewState.currentIndex) + 1}/{model.routeLength}
+        </span>
       </div>
       {durationMs !== undefined && seek ? (
         <div className="canvas-playback-controller-seek">
@@ -304,7 +295,6 @@ export function CanvasPlaybackControls({
             duration={durationMs / 1000}
             onSeeking={(seconds) => seek(Math.round(seconds * 1000))}
             onSeekCommit={(seconds) => seek(Math.round(seconds * 1000))}
-            formatTooltip={formatControllerTime}
           />
         </div>
       ) : null}
@@ -377,11 +367,4 @@ function clearTimer(timerRef: React.MutableRefObject<number | undefined>): void 
   if (timerRef.current === undefined) return;
   window.clearTimeout(timerRef.current);
   timerRef.current = undefined;
-}
-
-function formatControllerTime(seconds: number): string {
-  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
-  const minutes = Math.floor(safeSeconds / 60);
-  const remainder = Math.floor(safeSeconds % 60);
-  return `${minutes}:${remainder.toString().padStart(2, '0')}`;
 }
