@@ -187,6 +187,9 @@ OpenNeko Webview 复用或演进现有 `AudioStreamClient`，并由 document-sco
 - PCM generation 在 seek、pause、document revision 和 session replacement 时显式更新；
 - 旧 generation 包必须丢弃；
 - 播放前同时满足视频目标片段可解码和 PCM 预缓冲；
+- 所有活动 PCM 轨道在首包 ready 后使用同一个未来 AudioContext 时间启动，
+  浏览器调度采用固定高/低水位背压，不能随素材时长无界排队；
+- 输入流 EOF 只有在最后一个已调度 source 实际结束后才成为播放 EOF；
 - PCM 欠载时暂停视频，不能让两个时钟独立继续；
 - 小漂移允许短期有界 `playbackRate` 修正，大漂移必须 rebase/seek；
 - Webview hidden、失焦或销毁时暂停并释放 session。
@@ -242,6 +245,8 @@ HDR proxy 必须明确转换 primaries、transfer、matrix、range、mastering d
 - AAC 5.1、AAC 和 MP3 均成功转为 48 kHz stereo `f32le`；
 - 4 秒 AAC 5.1 PCM 生成约 1.5 MiB；一次本机 HTTP 提取约 45 ms；
 - 2.5 秒同步采样中 A/V 平均绝对漂移约 9.2 ms，最大约 11.3 ms；
+- Canvas 的音频和视频节点均在显式用户 Play 手势后才创建 PCM client；
+  独立 PCM 预览从 0:00 推进到 0:01，视频 + PCM 预览推进到 0:02；
 - MP4/H.264、HEVC Main、HEVC Main10、AV1 8-bit 和 AV1 10-bit 实际 `<video>` 解码成功，但本 ADR 只选择 H.264/VP8 作为直接播放白名单；
 - 由 `Cut Basic Functional Fixture.mp4` 转出的 VP8 1080p fixture 通过 MSE WebM 实际 append/play：`readyState=4`、`currentTime` 推进、1920×1080、无媒体错误，因此当前 VS Code 基线启用 VP8 direct profile；
 - `4K HDR 5.1 IMAX … 2160p HDR.mp4` 的 AV1 Main 10-bit PQ/BT.2020 片段也通过 MSE 实际 append/play：`readyState=4`、3840×2160、无媒体错误；这只证明当前 runtime 可解码，不改变 H.264/VP8 白名单，也不证明 HDR 显示链正确；

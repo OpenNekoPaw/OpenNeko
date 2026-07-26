@@ -60,6 +60,7 @@ runFfmpeg([
 ]);
 
 writeJson(join(projectRoot, 'h264-pcm.otio'), createCutFixture());
+writeJson(join(projectRoot, 'canvas-media.nkc'), createCanvasFixture());
 writeFileSync(
   join(fixtureRoot, 'README.md'),
   [
@@ -106,6 +107,43 @@ function createCutFixture() {
         createTrack('Subtitle', 'Subtitle 1', 'fixture-subtitle-track', []),
       ],
     },
+  };
+}
+
+function createCanvasFixture() {
+  return {
+    version: '2.1',
+    name: 'Synthetic Canvas Media',
+    viewport: { pan: { x: 0, y: 0 }, zoom: 1 },
+    nodes: [
+      {
+        id: 'fixture-video-node',
+        type: 'media',
+        preset: 'media.basic',
+        position: { x: 80, y: 80 },
+        size: { width: 480, height: 320 },
+        zIndex: 1,
+        data: {
+          assetPath: '${WORKSPACE}/media/h264-aac.mp4',
+          mediaType: 'video',
+          name: 'H.264 + AAC fixture',
+        },
+      },
+      {
+        id: 'fixture-audio-node',
+        type: 'media',
+        preset: 'media.basic',
+        position: { x: 620, y: 80 },
+        size: { width: 420, height: 220 },
+        zIndex: 2,
+        data: {
+          assetPath: '${WORKSPACE}/media/audio.wav',
+          mediaType: 'audio',
+          name: 'PCM fixture',
+        },
+      },
+    ],
+    connections: [],
   };
 }
 

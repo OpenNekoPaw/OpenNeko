@@ -4,15 +4,23 @@ import { readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { NodeMediaRuntime } from '@neko/media/node';
 
+const arguments_ = process.argv.slice(2);
+const includeWebm = arguments_.includes('--include-webm');
 const mediaRoot = resolve(
-  process.argv[2] ?? '.tmp/vscode-test-workspaces/media-runtime/media',
+  arguments_.find((argument) => !argument.startsWith('--')) ??
+    '.tmp/vscode-test-workspaces/media-runtime/media',
 );
 const runtime = new NodeMediaRuntime();
 const rows: Array<Record<string, unknown>> = [];
+const skipped: string[] = [];
 
 try {
   for (const name of (await readdir(mediaRoot)).sort()) {
     if (name.startsWith('.')) continue;
+    if (!includeWebm && name.toLowerCase().endsWith('.webm')) {
+      skipped.push(name);
+      continue;
+    }
     const sourcePath = resolve(mediaRoot, name);
     const row: Record<string, unknown> = { name };
     try {
@@ -30,16 +38,18 @@ try {
 
       if (probe.video) {
         const times = sampleTimes(probe.durationSeconds);
-        const frames: Array<{ readonly time: number; readonly status: 'ok' | 'failed'; readonly error?: string }> = [];
-        for (const time of times) {
-          try {
-            await runtime.captureFrame(sourcePath, time, { width: 320, quality: 70 });
-            frames.push({ time, status: 'ok' });
-          } catch (error) {
-            frames.push({ time, status: 'failed', error: errorMessage(error) });
-          }
-        }
-        row['frames'] = frames;
+        row['frames'] = (
+          await runtime.captureFrames(sourcePath, times, { width: 320, quality: 70 })
+        ).map((frame) =>
+          frame.status === 'ok'
+            ? { time: frame.timeSeconds, status: frame.status }
+            : {
+                time: frame.timeSeconds,
+                status: frame.status,
+                scope: frame.scope,
+                error: frame.message,
+              },
+        );
         try {
           const prepared = await runtime.prepareVideo(sourcePath);
           row['preview'] = {
@@ -65,7 +75,8 @@ try {
           const first = await reader?.read();
           await reader?.cancel();
           row['pcm'] = {
-            status: response.ok && first && !first.done && first.value.byteLength > 0 ? 'ok' : 'failed',
+            status:
+              response.ok && first && !first.done && first.value.byteLength > 0 ? 'ok' : 'failed',
             statusCode: response.status,
             firstPacketBytes: first?.value?.byteLength ?? 0,
           };
@@ -82,12 +93,24 @@ try {
   await runtime.dispose();
 }
 
-process.stdout.write(`${JSON.stringify({ mediaRoot, rows }, null, 2)}\n`);
+process.stdout.write(
+  `${JSON.stringify(
+    {
+      mediaRoot,
+      rows,
+      skipped,
+      policy: includeWebm ? 'include-webm' : 'prefer-vscode-playback-formats',
+    },
+    null,
+    2,
+  )}\n`,
+);
 
 function sampleTimes(duration: number): number[] {
   if (duration <= 0) return [0];
-  return [...new Set([0, duration * 0.25, duration * 0.5, duration * 0.75, Math.max(0, duration - 1)])]
-    .map((time) => Math.round(time * 1000) / 1000);
+  return [
+    ...new Set([0, duration * 0.25, duration * 0.5, duration * 0.75, Math.max(0, duration - 1)]),
+  ].map((time) => Math.round(time * 1000) / 1000);
 }
 
 function errorMessage(error: unknown): string {

@@ -41,6 +41,20 @@ domain controller
 - AAC、MP3、FLAC、PCM 以及 FFmpeg 构建可解码的多声道音轨统一解码为
   48 kHz stereo float32 PCM。源 codec 和通道数仍由 probe 报告。
 
+PCM 浏览器调度采用显式 `prepare -> startAt` 两阶段：先取得首包，再由拥有
+timeline 的调用方选择未来 `AudioContext` 时间。调度超前量以 1 秒高水位、
+0.5 秒低水位限制，HTTP reader 通过背压停止继续拉取，因此内存和
+`AudioBufferSourceNode` 数量不随素材时长增长。输入 EOF 不等于播放 EOF；
+只有最后一个已调度 source 实际结束后才通知播放完成，stop/seek/dispose 则
+立即中止 fetch 并停止、断开全部 source。
+
+Cut 的所有活动 PCM 轨道先并发 prepare，再共享同一个 `startAt` barrier。
+音频时钟是有音频预览的主时钟，静音 `<video>` 按漂移阈值校正。轨道 gain
+和 fade 在 Web Audio 中实时应用，允许正增益；所有轨道进入 Cut-owned mix
+bus 和显式 peak limiter。FFmpeg 导出使用同一 gain/fade 事实，在
+`amix=normalize=0` 后使用 `alimiter`。这只提供峰值保护，不宣称 LUFS
+响度母带处理。
+
 本地 PATH 只用于开发发现；发布闭包必须提供或明确要求经资格验证的 FFmpeg/
 ffprobe，并单独审计 codec license。`NEKO_FFMPEG_PATH` 和
 `NEKO_FFPROBE_PATH` 是测试/打包注入点，不是运行时 fallback 链。

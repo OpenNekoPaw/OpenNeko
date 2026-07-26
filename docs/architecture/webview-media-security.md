@@ -68,7 +68,9 @@ loopback file endpoint 必须：
 
 PCM endpoint 必须先发送协议 header，再发送固定格式 frame。播放器在收到
 首个可调度 PCM frame 前不能宣称音频 clock ready；abort/seek/stop 是正常
-EOF，真实 FFmpeg stderr 或协议截断则是可见错误。
+EOF，真实 FFmpeg stderr 或协议截断则是可见错误。浏览器 consumer 必须有界
+调度并向 HTTP reader 施加背压；网络输入 EOF 后仍需等待最后一个已调度
+Web Audio source 结束，不能提前 dispose 截断尾音。
 
 ## 推荐链路
 
