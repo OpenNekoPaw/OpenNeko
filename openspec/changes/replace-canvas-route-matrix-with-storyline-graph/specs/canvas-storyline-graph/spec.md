@@ -187,3 +187,23 @@ The unified Overlay SHALL center the previous, play/pause and next transport con
 - **AND** no current-time or total-duration text is visible
 - **AND** the Seek bar does not reveal a formatted time tooltip
 - **AND** playback timing remains available internally for seeking and media synchronization
+
+### Requirement: Canvas audio layouts share one playback lifecycle
+
+Canvas audio nodes and the Storyline Preview SHALL use the same audio stream, clock, pause/resume, Seek, completion and cleanup implementation. The Canvas node SHALL use an explicit node-card layout with a title row, seekable waveform silhouette, elapsed/total time, centered play/pause and right-side volume control. The Storyline Preview SHALL use the compact horizontal transport. Both layouts MUST render directly inside their existing owning surface without a second bordered, filled, rounded or shadowed playback card.
+
+#### Scenario: Canvas audio node renders
+
+- **WHEN** Canvas renders an audio source as a node
+- **THEN** the node displays its audio title above a waveform silhouette
+- **AND** the waveform exposes the playback position and Seek interaction
+- **AND** elapsed/total time, centered play/pause and volume controls occupy one bottom control row
+- **AND** no second card or pill surrounds the waveform and controls
+
+#### Scenario: Storyline audio Preview renders
+
+- **WHEN** the expanded Storyline Preview renders an audio source
+- **THEN** it exposes play/pause, elapsed/total time, flexible Seek and mute controls in one horizontal row
+- **AND** it does not render the Canvas node title row or waveform silhouette
+- **AND** the Overlay footer owns the source title
+- **AND** it uses the same playback lifecycle as the Canvas node

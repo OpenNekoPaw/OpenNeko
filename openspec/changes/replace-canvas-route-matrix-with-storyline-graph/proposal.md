@@ -18,6 +18,7 @@ Canvas 路线浮层同时提供 Storyline 与 Matrix，但 Matrix 的路线族�
 - Storyline 使用类似横向 Git graph 的节点与分支线表达多路线拓扑；节点保持紧凑，仅显示序号和短标题，媒体状态与诊断进入视觉状态、tooltip 与 accessible label。
 - Canvas Toolbar 使用专用 Storyline 分支图标打开或关闭 Overlay，不再复用通用播放三角图标。
 - 播放按钮组始终水平居中；控制区不显示当前时间或总时长文本，Seek 仅保留无时间标签的进度反馈。
+- Canvas 音频节点采用面向画布创作的单卡片布局：文件标题、可 Seek 的波形轮廓、时间、居中播放/暂停与音量控制直接归属节点表面；Storyline Preview 继续使用紧凑横向 transport。两者共享同一播放生命周期，不嵌套第二层播放卡片。
 
 ## Capabilities
 

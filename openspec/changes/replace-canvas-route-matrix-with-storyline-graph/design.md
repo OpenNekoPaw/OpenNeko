@@ -101,6 +101,14 @@ Storyline node
 - 键盘使用横向 list/navigation 语义，不保留 row/column/grid focus。
 - 时长仅保留为播放运行时与授权节点详情数据，不在 Storyline 控制区或 Matrix duration range 中展示。
 
+### 7. Canvas 音频节点与 Storyline Preview 共享播放核心、区分 owning layout
+
+Canvas 音频节点和 Storyline Preview 都复用 `PreviewSurface`、`useMediaStream` 与 `InlineAudioPlayer` 的播放生命周期，但它们的 owning surface 职责不同：节点本身是可辨识的素材卡片，Storyline Preview 是统一 Overlay 中的媒体舞台。布局差异必须由显式 `audioLayout` 契约表达，不能再使用含义模糊的 `showWaveform` 布尔值。
+
+Canvas 音频节点使用单张 node card：标题行位于节点顶部；中部为可 Seek 的波形轮廓和播放头；底部按三列放置当前/总时长、居中播放/暂停和右侧音量控制。这里的波形轮廓只承担导航与音频类型识别，不声明为媒体幅值分析结果。标题、波形区和控制区都直接属于既有 `BaseNode` 表面，不再套入第二张带边框、背景、圆角或阴影的播放卡片。
+
+Storyline Preview 保持紧凑横向 transport：播放/暂停、当前/总时长、可伸缩 Seek 和静音依次排列；未开始播放时只显示启动按钮。Overlay footer 继续拥有标题。`audio-waveform` 仍是既有 preview source role，不修改共享 source contract。两个 layout 只分叉渲染结构，不分叉流、时钟、暂停、Seek、结束或资源释放逻辑。
+
 ## Risks / Trade-offs
 
 - [失去跨路线逐列审计] → 当前没有明确用户任务依赖该能力；未来若出现专业审阅需求，以独立 inspector 重新设计，不复活隐藏 Matrix。
@@ -109,6 +117,7 @@ Storyline node
 - [Overlay 遮挡 Canvas] → 每次打开时 Overlay 仅占用顶部紧凑带；Preview 经播放或 full-bleed 展开后，同一外壳会持续向下覆盖 Preview 所需区域，直到用户关闭整个 Overlay，但外层始终透明且不截获条外 pointer events。需要独占查看时由用户显式进入 full-bleed。
 - [Canvas 上下文工具穿透 Preview] → Overlay layer 的 stacking order 必须高于 Canvas selection/context toolbar 与 drop indicator，确保被 Overlay 实体区域覆盖的画布工具不会绘制在 Preview 上方。
 - [Storyline 失去 Matrix 的诊断细节] → 节点和路线级 diagnostic 必须在 Storyline 可见且可通过键盘读取。
+- [Canvas 节点波形可能被误解为真实幅值] → 明确将其限定为可 Seek 的音频轮廓，不向用户暴露幅值、采样或分析语义；真实播放时间和播放头仍来自 Engine stream。
 
 ## Migration Plan
 

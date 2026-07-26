@@ -51,6 +51,17 @@ Date: 2026-07-26
   assets are generic fullscreen/restore and Storyline branch icons in the
   existing shared icon package. The Canvas Toolbar now uses the Storyline icon
   instead of a generic play triangle.
+- Audio-node follow-up risk is L1 within the existing L4 change. The Canvas
+  node now selects an explicit `node-card` layout while Storyline keeps the
+  default compact transport. Both layouts reuse `PreviewSurface`,
+  `useMediaStream`, `InlineAudioPlayer`, the Engine audio lifecycle, theme
+  tokens, shared icons and shared `ProgressBar`; no message, Engine, path or
+  persisted Canvas contract changed.
+- The node card owns one title row, a seekable waveform silhouette and a
+  three-column time / centered play-pause / volume row. The waveform is an
+  audio/navigation silhouette rather than an asserted amplitude analysis.
+  Neither the node nor Storyline contains a nested playback card, and the node
+  intentionally exposes no download action.
 
 ## Automated checks
 
@@ -68,8 +79,13 @@ Date: 2026-07-26
   `pnpm exec vitest run src/components/playback/PlaybackWorkspace.test.tsx`
   - Confirmed red before implementation: 2 failed, 18 passed.
   - Passed after implementation: 1 file, 20 tests.
+- Audio layout focused run:
+  `pnpm --filter @neko-canvas/webview exec vitest run src/components/media/InlineMediaPlayer.test.tsx src/preview/PreviewRendererRegistry.test.tsx src/components/nodes/CanonicalContentNodes.test.ts src/CanvasApp.layout.test.ts`
+  - Red evidence: the new Canvas node waveform-card assertion failed before
+    the explicit layout was implemented.
+  - Passed after implementation: 4 files, 33 tests.
 - `pnpm test` in `packages/neko-canvas/packages/webview`
-  - Passed: 55 files, 307 tests.
+  - Passed: 56 files, 321 tests.
 - `pnpm test` in `packages/neko-canvas`
   - Passed: 19 files, 102 tests, including the Extension protocol path.
 - `pnpm test` in `packages/neko-types`
@@ -88,6 +104,10 @@ Date: 2026-07-26
     strict TypeScript, test-ownership and all OpenSpec boundaries.
 - `pnpm check:legacy-debt`
   - Passed with zero blocking findings.
+- `pnpm check:unused`
+  - Passed with configuration hints only.
+- `pnpm check:canvas-playback-boundary` and `pnpm check:webview-boundaries`
+  - Passed.
 - `pnpm lint` in `packages/neko-canvas`
   - Passed with zero errors. It reports 33 pre-existing warnings outside the
     changed Storyline production path; the three hook warnings in
@@ -145,6 +165,22 @@ packages; neither warning class failed a changed package.
   `local-network-access` warning and an autoplay-policy `AudioContext` warning
   while validating the audio fixture; neither represented a Canvas CSP,
   resource or runtime failure.
+- Audio-node runtime follow-up used the same isolated host after staging and
+  reloading only the development extension. The current Canvas iframe target
+  was `4817021C7235464C2CAC8792C3E472A3`.
+- Host UI exposed the Canvas audio title, disabled pre-stream Seek, `0:00 /
+--:--`, centered Play and disabled pre-stream Mute. After playback started,
+  the same controls became an enabled Seek slider, `0:00 / 3:05`, Pause and
+  Mute without opening node selection actions.
+- CDP measured the node player as `border-width: 0`, transparent background and
+  `box-shadow: none`, with `40` waveform bars, one accessible Seek slider,
+  three control columns, zero nested `.canvas-audio-transport` elements and
+  zero download controls.
+- Storyline route `Untitled 2` remained on the compact transport path. Its
+  expanded Preview contained zero node waveform/title elements, a transparent
+  borderless horizontal transport and only Pause/Mute media controls.
+- The audio-node and Storyline regression console contained only VS Code's
+  known `local-network-access` warning.
 - Evidence screenshot:
   `reports/webview-functional/canvas-storyline/in-place-playing-overlay.png`
   (gitignored raw runtime evidence).
@@ -160,6 +196,10 @@ packages; neither warning class failed a changed package.
 - The runtime scenario used the isolated synthetic `neko-test` workspace and
   its two-node fixture. Dense multi-route branch routing remains covered by
   deterministic component/layout tests rather than this visual fixture.
+- The Canvas waveform is currently a deterministic silhouette used for media
+  recognition and Seek position, not decoded per-file amplitude data. A real
+  waveform would require a separately specified Engine/preview-analysis
+  contract.
 - The isolated fixture's playback/session and viewport state changed during
   runtime validation; no project document, generated-output record, extension
   setting or normal VS Code user data was written.

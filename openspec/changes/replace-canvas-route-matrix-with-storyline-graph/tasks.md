@@ -96,3 +96,17 @@
 - [x] 14.3 Make full-bleed reveal Preview and preserve it after restoring the top-docked Overlay
 - [x] 14.4 Verify close/reopen resets Preview to collapsed without adding session/store state
 - [x] 14.5 Run affected tests, builds, quality checks, OpenSpec validation and isolated Extension Host verification; update evidence
+
+## 15. Flat Storyline audio Preview
+
+- [x] 15.1 Add regression coverage proving Storyline Preview audio omits the Canvas node waveform by default
+- [x] 15.2 Delete the ambiguous `showWaveform` boolean while retaining one `InlineAudioPlayer` lifecycle
+- [x] 15.3 Replace the stacked Storyline audio controls with one bounded responsive transport row directly on the existing owning surface
+- [x] 15.4 Run focused tests/build, quality checks and isolated Extension Host validation; update evidence
+
+## 16. Canvas audio node card
+
+- [x] 16.1 Add regression coverage for the Canvas-only title, waveform/Seek and three-column transport layout
+- [x] 16.2 Introduce an explicit node-card audio layout while preserving the Storyline Preview transport
+- [x] 16.3 Keep both layouts on one stream/clock lifecycle and remove nested card/pill styling
+- [x] 16.4 Run focused tests/build, quality checks and isolated Extension Host validation; update evidence
