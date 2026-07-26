@@ -149,8 +149,8 @@ describe('extension.ts -- entity integration boundary', () => {
     expect(extensionSource).toContain('contentRead,\n    new NodeAuthorizedWorkspaceWriter');
   });
 
-  it('activates when the Entity Inspector view is opened', () => {
-    expect(activationEvents).toContain('onView:neko.entityInspector');
+  it('relies on the contributed Entity Inspector view to infer activation', () => {
+    expect(activationEvents).not.toContain('onView:neko.entityInspector');
   });
 
   it('declares Entity Inspector as a Webview instead of a Tree View', () => {
