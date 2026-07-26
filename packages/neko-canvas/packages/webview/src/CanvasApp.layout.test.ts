@@ -215,7 +215,7 @@ describe('Canvas creative workbench layout boundary', () => {
     expect(playbackWorkspaceSource).not.toMatch(/<PlaybackStage/);
     expect(playbackWorkspaceSource).not.toMatch(/data-playback-action="open-preview"/);
     expect(playbackWorkspaceSource).toMatch(/data-playback-action="reveal-preview"/);
-    expect(playbackWorkspaceSource).not.toMatch(/data-playback-action="hide-preview"/);
+    expect(playbackWorkspaceSource).toMatch(/data-playback-action="hide-preview"/);
     expect(playbackWorkspaceSource).toMatch(/data-playback-action="toggle-overlay-fullscreen"/);
     expect(playbackWorkspaceSource).toMatch(/data-playback-action="close-overlay"/);
     expect(playbackWorkspaceSource.match(/<CanvasPlaybackControls/g)).toHaveLength(1);

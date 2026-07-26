@@ -162,7 +162,7 @@ describe('PlaybackWorkspace', () => {
     expect(host.textContent).toContain('Media 2');
   });
 
-  it('reveals Preview explicitly without starting playback or adding a hide action', () => {
+  it('keeps one Preview visibility toggle before and after explicit reveal', () => {
     act(() => {
       usePlaybackStore.getState().revealPlaybackWorkspace();
       root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
@@ -185,7 +185,60 @@ describe('PlaybackWorkspace', () => {
       playbackStateBeforeReveal,
     );
     expect(overlay?.querySelector('[data-playback-action="reveal-preview"]')).toBeNull();
+    const hidePreview = overlay?.querySelector<HTMLButtonElement>(
+      '[data-playback-action="hide-preview"]',
+    );
+    expect(hidePreview?.title).toBe('Hide preview');
+
+    act(() => {
+      hidePreview?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(overlay?.dataset.expanded).toBe('false');
+    expect(overlay?.querySelector('[data-testid="canvas-playback-stage"]')).toBeNull();
     expect(overlay?.querySelector('[data-playback-action="hide-preview"]')).toBeNull();
+    expect(overlay?.querySelector('[data-playback-action="reveal-preview"]')).not.toBeNull();
+    expect(usePlaybackStore.getState().playbackSession.playbackState).toBe(
+      playbackStateBeforeReveal,
+    );
+  });
+
+  it('allows manual Preview hiding without changing active playback state', () => {
+    act(() => {
+      usePlaybackStore.getState().revealPlaybackWorkspace();
+      root.render(<PlaybackWorkspace canvasPane={<div data-testid="canvas-pane">Canvas</div>} />);
+    });
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="canvas-playback-controller"] button[title="Play"]',
+        )
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    const overlay = host.querySelector<HTMLElement>('[data-testid="canvas-playback-overlay"]');
+    expect(overlay?.dataset.expanded).toBe('true');
+    expect(usePlaybackStore.getState().playbackSession.playbackState).toBe('playing');
+
+    act(() => {
+      overlay
+        ?.querySelector<HTMLButtonElement>('[data-playback-action="hide-preview"]')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(overlay?.dataset.expanded).toBe('false');
+    expect(overlay?.querySelector('[data-testid="canvas-playback-stage"]')).toBeNull();
+    expect(overlay?.querySelector('[data-playback-action="reveal-preview"]')).not.toBeNull();
+    expect(usePlaybackStore.getState().playbackSession.playbackState).toBe('playing');
+
+    act(() => {
+      host
+        .querySelector<HTMLButtonElement>(
+          '[data-testid="canvas-playback-controller"] button[title="Pause"]',
+        )
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
   });
 
   it('toggles the unified Overlay full-bleed presentation and closes everything with Escape', () => {

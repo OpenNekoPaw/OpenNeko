@@ -11,7 +11,7 @@ import {
   type ResourceRef,
 } from '@neko/shared';
 import { isResourceRef } from '@neko/shared';
-import { CloseIcon, EyeIcon, FullscreenIcon, RestoreIcon } from '@neko/shared/icons';
+import { CloseIcon, EyeIcon, EyeOffIcon, FullscreenIcon, RestoreIcon } from '@neko/shared/icons';
 import { PlayIcon } from '@neko/ui/icons';
 import { getKeyboardBoundaryMetadata } from '@neko/ui/keyboard';
 import { IconButton } from '@neko/ui/primitives';
@@ -491,7 +491,7 @@ function StorylinePlaybackOverlay({
 }: StorylinePlaybackOverlayProps) {
   const [previewRevealed, setPreviewRevealed] = useState(false);
   const revealRequested = isPlaying || presentation === 'fullscreen';
-  const expanded = previewRevealed || revealRequested;
+  const expanded = previewRevealed || presentation === 'fullscreen';
   const storylineGraph = useMemo(
     () => buildStorylineGraphLayout(routes, unitById),
     [routes, unitById],
@@ -558,15 +558,26 @@ function StorylinePlaybackOverlay({
               : t('playback.overlay.title')}
           </strong>
           <div className="canvas-playback-overlay-actions">
-            {!expanded ? (
-              <IconButton
-                className="canvas-playback-panel-icon-button"
-                data-playback-action="reveal-preview"
-                icon={<EyeIcon size={15} />}
-                label={t('playback.overlay.showPreview')}
-                title={t('playback.overlay.showPreview')}
-                onClick={() => setPreviewRevealed(true)}
-              />
+            {presentation !== 'fullscreen' ? (
+              expanded ? (
+                <IconButton
+                  className="canvas-playback-panel-icon-button"
+                  data-playback-action="hide-preview"
+                  icon={<EyeOffIcon size={15} />}
+                  label={t('playback.overlay.hidePreview')}
+                  title={t('playback.overlay.hidePreview')}
+                  onClick={() => setPreviewRevealed(false)}
+                />
+              ) : (
+                <IconButton
+                  className="canvas-playback-panel-icon-button"
+                  data-playback-action="reveal-preview"
+                  icon={<EyeIcon size={15} />}
+                  label={t('playback.overlay.showPreview')}
+                  title={t('playback.overlay.showPreview')}
+                  onClick={() => setPreviewRevealed(true)}
+                />
+              )
             ) : null}
             <IconButton
               className="canvas-playback-panel-icon-button"

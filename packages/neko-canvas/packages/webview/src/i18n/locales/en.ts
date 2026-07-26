@@ -39,6 +39,7 @@ export const en = {
   'playback.overlay.title': 'Story playback',
   'playback.overlay.close': 'Close story playback',
   'playback.overlay.showPreview': 'Show preview',
+  'playback.overlay.hidePreview': 'Hide preview',
   'playback.overlay.fullscreen': 'Fill canvas workspace',
   'playback.overlay.restore': 'Restore playback overlay',
   'playback.stage.noUnit': 'No playable unit',
