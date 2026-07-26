@@ -18,6 +18,22 @@ const AUDIO_PROBE = Buffer.from(
     format: { duration: '6' },
   }),
 );
+const VIDEO_PROBE = Buffer.from(
+  JSON.stringify({
+    streams: [
+      {
+        index: 0,
+        codec_type: 'video',
+        codec_name: 'h264',
+        pix_fmt: 'yuv420p',
+        width: 1920,
+        height: 1080,
+        avg_frame_rate: '30/1',
+      },
+    ],
+    format: { duration: '180' },
+  }),
+);
 
 describe('NodeMediaRuntime', () => {
   const runtimes: NodeMediaRuntime[] = [];
@@ -54,7 +70,7 @@ describe('NodeMediaRuntime', () => {
       ffprobeVersion: 'ffprobe version qualified',
       decoders: { h264: true, hevc: true, av1: true, vp8: true },
       encoders: { h264: true, aac: true },
-      filters: { zscale: false, tonemap: true },
+      filters: { zscale: false, tonemap: true, sidedata: false, alimiter: false },
     });
   });
 
@@ -72,6 +88,17 @@ describe('NodeMediaRuntime', () => {
       },
       expect.objectContaining({ status: 'ok', timeSeconds: 2 }),
     ]);
+  });
+
+  it('classifies a bounded early-EOF frame as interval corruption', async () => {
+    const runtime = new NodeMediaRuntime({ process: new EmptyFrameProcess() });
+    runtimes.push(runtime);
+
+    await expect(runtime.captureFrame('/fixture/truncated.mp4', 150)).rejects.toMatchObject({
+      name: 'MediaCorruptionError',
+      scope: 'interval',
+      operation: 'capture frame',
+    });
   });
 });
 
@@ -134,13 +161,30 @@ class QualificationProcess implements FfmpegProcessPort {
 
 class PartialFrameProcess implements FfmpegProcessPort {
   async run(executable: 'ffmpeg' | 'ffprobe', args: readonly string[]): Promise<FfmpegRunResult> {
-    if (executable !== 'ffmpeg') throw new Error('Unexpected ffprobe command.');
+    if (executable === 'ffprobe') return { stdout: VIDEO_PROBE, stderr: '' };
     const seekIndex = args.indexOf('-ss');
     const timestamp = args[seekIndex + 1];
     if (timestamp === '1') {
       throw new FfmpegCommandError('ffmpeg', args, 1, null, 'Invalid NAL unit size');
     }
     return { stdout: Buffer.from([0xff, 0xd8, 0xff, 0xd9]), stderr: '' };
+  }
+
+  streamFfmpeg(): RunningProcess {
+    throw new Error('Unexpected streaming command.');
+  }
+}
+
+class EmptyFrameProcess implements FfmpegProcessPort {
+  async run(executable: 'ffmpeg' | 'ffprobe', args: readonly string[]): Promise<FfmpegRunResult> {
+    if (executable === 'ffprobe') return { stdout: VIDEO_PROBE, stderr: '' };
+    throw new FfmpegCommandError(
+      'ffmpeg',
+      args,
+      1,
+      null,
+      'Output file is empty, nothing was encoded (check -ss / -t / -frames parameters if used)',
+    );
   }
 
   streamFfmpeg(): RunningProcess {

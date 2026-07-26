@@ -39,6 +39,25 @@ describe('advancePreviewPlayback', () => {
     });
   });
 
+  it('uses a longer preparation lead for transcoded preview segments', () => {
+    expect(
+      advancePreviewPlayback(
+        {
+          timelineStartSeconds: 0,
+          wallStartMilliseconds: 0,
+          segmentEndSeconds: 10,
+          timelineEndSeconds: 20,
+          preparationLeadSeconds: 5,
+        },
+        5_100,
+      ),
+    ).toEqual({
+      kind: 'prepare-next',
+      playheadSeconds: 5.1,
+      nextSegmentStartSeconds: 10,
+    });
+  });
+
   it('advances normally inside a segment and stops at the timeline end', () => {
     const segment = {
       timelineStartSeconds: 4,

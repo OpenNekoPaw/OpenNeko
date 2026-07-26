@@ -4,8 +4,17 @@ export interface PcmAudioClientOptions {
   readonly descriptor: PcmStreamDescriptor;
   readonly volume: number;
   readonly playbackRate: number;
+  readonly destination?: AudioNode;
+  readonly gainEnvelope?: PcmGainEnvelope;
   readonly onError?: (error: Error) => void;
-  readonly onStreamEnd?: () => void;
+  readonly onPlaybackEnd?: () => void;
+}
+
+export interface PcmGainEnvelope {
+  readonly positionSeconds: number;
+  readonly clipDurationSeconds: number;
+  readonly fadeInSeconds: number;
+  readonly fadeOutSeconds: number;
 }
 
 interface ParsedPcmPacket {
@@ -17,31 +26,58 @@ interface ParsedPcmPacket {
 
 const HEADER_BYTES = 22;
 const PREBUFFER_SECONDS = 0.1;
+const SCHEDULE_HIGH_WATER_SECONDS = 1;
+const SCHEDULE_LOW_WATER_SECONDS = 0.5;
+const CAPACITY_POLL_MILLISECONDS = 20;
 
 export class PcmAudioClient {
   private readonly abortController = new AbortController();
+  private readonly scheduledSources = new Set<AudioBufferSourceNode>();
   private audioContext: AudioContext | undefined;
   private gainNode: GainNode | undefined;
+  private envelopeGainNode: GainNode | undefined;
   private ownsAudioContext = false;
   private nextPlayTime = 0;
   private clockContextOrigin: number | undefined;
   private clockMediaOrigin: number | undefined;
-  private resolveFirstPacket: (() => void) | undefined;
-  private rejectFirstPacket: ((error: Error) => void) | undefined;
+  private resolvePrepared: (() => void) | undefined;
+  private rejectPrepared: ((error: Error) => void) | undefined;
+  private resolveStart: ((contextTime: number) => void) | undefined;
+  private rejectStart: ((error: Error) => void) | undefined;
+  private resolveFirstScheduled: (() => void) | undefined;
+  private rejectFirstScheduled: ((error: Error) => void) | undefined;
+  private state: 'idle' | 'preparing' | 'prepared' | 'started' = 'idle';
+  private inputEnded = false;
+  private playbackEndNotified = false;
   private disposed = false;
 
   constructor(private readonly options: PcmAudioClientOptions) {
     validateDescriptor(options.descriptor);
+    assertNonNegativeFinite(options.volume, 'PCM volume');
+    assertPositiveFinite(options.playbackRate, 'PCM playback rate');
+    if (options.gainEnvelope) validateGainEnvelope(options.gainEnvelope);
   }
 
   async connect(existingAudioContext?: AudioContext): Promise<void> {
+    await this.prepare(existingAudioContext);
+    const context = this.requireAudioContext();
+    await this.startAt(context.currentTime + PREBUFFER_SECONDS);
+  }
+
+  async prepare(existingAudioContext?: AudioContext): Promise<void> {
     if (this.disposed) throw new Error('PCM audio client is disposed.');
+    if (this.state !== 'idle') {
+      throw new Error(`PCM audio client cannot prepare from state ${this.state}.`);
+    }
+    this.state = 'preparing';
     this.audioContext =
       existingAudioContext ?? new AudioContext({ sampleRate: this.options.descriptor.sampleRate });
     this.ownsAudioContext = existingAudioContext === undefined;
     this.gainNode = this.audioContext.createGain();
-    this.gainNode.gain.value = clampVolume(this.options.volume);
-    this.gainNode.connect(this.audioContext.destination);
+    this.envelopeGainNode = this.audioContext.createGain();
+    this.gainNode.gain.value = this.options.volume;
+    this.envelopeGainNode.connect(this.gainNode);
+    this.gainNode.connect(this.options.destination ?? this.audioContext.destination);
     if (this.audioContext.state === 'suspended') await this.audioContext.resume();
     const response = await fetch(this.options.descriptor.streamUrl, {
       signal: this.abortController.signal,
@@ -49,28 +85,72 @@ export class PcmAudioClient {
     if (!response.ok || !response.body) {
       throw new Error(`PCM request failed with ${response.status}.`);
     }
-    const firstPacket = new Promise<void>((resolve, reject) => {
-      this.resolveFirstPacket = resolve;
-      this.rejectFirstPacket = reject;
+    const prepared = new Promise<void>((resolve, reject) => {
+      this.resolvePrepared = resolve;
+      this.rejectPrepared = reject;
     });
-    void this.consume(response.body).then(
+    const start = new Promise<number>((resolve, reject) => {
+      this.resolveStart = resolve;
+      this.rejectStart = reject;
+    });
+    const firstScheduled = new Promise<void>((resolve, reject) => {
+      this.resolveFirstScheduled = resolve;
+      this.rejectFirstScheduled = reject;
+    });
+    void this.consume(response.body, start).then(
       () => {
-        if (!this.isClockReady) {
-          this.rejectPendingConnection(
+        if (this.state === 'preparing') {
+          this.rejectPendingPreparation(
             new Error('PCM stream ended before its first complete packet.'),
           );
         }
       },
       (error: unknown) => {
         const failure = asError(error);
-        if (!this.isClockReady) {
-          this.rejectPendingConnection(failure);
+        if (this.state === 'preparing') {
+          this.rejectPendingPreparation(failure);
+        } else if (this.state === 'prepared') {
+          this.rejectPendingStart(failure);
+        } else if (!this.isClockReady) {
+          this.rejectPendingFirstScheduled(failure);
         } else if (!this.disposed) {
           this.options.onError?.(failure);
         }
       },
     );
-    await firstPacket;
+    await prepared;
+    if (this.state === 'preparing') this.state = 'prepared';
+    void firstScheduled.catch(() => undefined);
+  }
+
+  async startAt(contextTime: number): Promise<void> {
+    if (this.disposed) throw new Error('PCM audio client is disposed.');
+    if (this.state !== 'prepared') {
+      throw new Error(`PCM audio client cannot start from state ${this.state}.`);
+    }
+    const context = this.requireAudioContext();
+    if (!Number.isFinite(contextTime) || contextTime < context.currentTime) {
+      throw new Error('PCM start time must be a finite AudioContext time in the future.');
+    }
+    this.state = 'started';
+    this.applyGainEnvelope(contextTime);
+    const firstScheduled = new Promise<void>((resolve, reject) => {
+      const previousResolve = this.resolveFirstScheduled;
+      const previousReject = this.rejectFirstScheduled;
+      this.resolveFirstScheduled = () => {
+        previousResolve?.();
+        resolve();
+      };
+      this.rejectFirstScheduled = (error) => {
+        previousReject?.(error);
+        reject(error);
+      };
+    });
+    const resolve = this.resolveStart;
+    this.resolveStart = undefined;
+    this.rejectStart = undefined;
+    resolve?.(contextTime);
+    await firstScheduled;
   }
 
   get isClockReady(): boolean {
@@ -93,7 +173,8 @@ export class PcmAudioClient {
 
   setVolume(volume: number): void {
     if (!this.audioContext || !this.gainNode) return;
-    this.gainNode.gain.setValueAtTime(clampVolume(volume), this.audioContext.currentTime);
+    assertNonNegativeFinite(volume, 'PCM volume');
+    this.gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
   }
 
   pause(): Promise<void> {
@@ -118,20 +199,34 @@ export class PcmAudioClient {
     if (this.disposed) return;
     this.disposed = true;
     const stopped = new Error('PCM audio client was stopped.');
-    this.rejectPendingConnection(stopped);
+    this.rejectPendingPreparation(stopped);
+    this.rejectPendingStart(stopped);
+    this.rejectPendingFirstScheduled(stopped);
     this.abortController.abort(stopped);
+    for (const source of this.scheduledSources) {
+      try {
+        source.stop();
+      } catch {
+        // An already-ended Web Audio source has no remaining resource to stop.
+      }
+      source.disconnect();
+    }
+    this.scheduledSources.clear();
     this.gainNode?.disconnect();
+    this.envelopeGainNode?.disconnect();
     const audioContext = this.audioContext;
     if (this.ownsAudioContext && audioContext && audioContext.state !== 'closed') {
       void audioContext.close();
     }
     this.audioContext = undefined;
     this.gainNode = undefined;
+    this.envelopeGainNode = undefined;
   }
 
-  private async consume(stream: ReadableStream<Uint8Array>): Promise<void> {
+  private async consume(stream: ReadableStream<Uint8Array>, start: Promise<number>): Promise<void> {
     const reader = stream.getReader();
     let pending: Uint8Array<ArrayBufferLike> = new Uint8Array();
+    let firstPacket = true;
     try {
       for (;;) {
         const result = await reader.read();
@@ -141,13 +236,20 @@ export class PcmAudioClient {
           const parsed = parsePacket(pending);
           if (!parsed) break;
           pending = pending.subarray(parsed.consumedBytes);
+          if (firstPacket) {
+            firstPacket = false;
+            this.resolvePendingPreparation();
+            this.nextPlayTime = await start;
+          }
+          await this.waitForScheduleCapacity();
           this.schedule(parsed.packet);
         }
       }
       if (pending.byteLength !== 0) {
         throw new Error('PCM stream ended with an incomplete frame.');
       }
-      this.options.onStreamEnd?.();
+      this.inputEnded = true;
+      this.notifyPlaybackEndIfComplete();
     } finally {
       reader.releaseLock();
     }
@@ -156,7 +258,8 @@ export class PcmAudioClient {
   private schedule(packet: ParsedPcmPacket): void {
     const context = this.audioContext;
     const gainNode = this.gainNode;
-    if (!context || !gainNode || this.disposed) return;
+    const envelopeGainNode = this.envelopeGainNode;
+    if (!context || !gainNode || !envelopeGainNode || this.disposed) return;
     const frames = packet.samples.length / packet.channels;
     if (!Number.isInteger(frames) || frames <= 0) throw new Error('Invalid PCM sample count.');
     const audioBuffer = context.createBuffer(packet.channels, frames, packet.sampleRate);
@@ -167,30 +270,100 @@ export class PcmAudioClient {
       }
     }
     if (this.clockContextOrigin === undefined) {
-      this.nextPlayTime = context.currentTime + PREBUFFER_SECONDS;
       this.clockContextOrigin = this.nextPlayTime;
       this.clockMediaOrigin = packet.ptsSeconds;
     }
     const source = context.createBufferSource();
     source.buffer = audioBuffer;
-    source.connect(gainNode);
+    source.connect(envelopeGainNode);
+    source.onended = () => {
+      this.scheduledSources.delete(source);
+      source.disconnect();
+      this.notifyPlaybackEndIfComplete();
+    };
+    this.scheduledSources.add(source);
     source.start(this.nextPlayTime);
     this.nextPlayTime += audioBuffer.duration;
-    this.resolvePendingConnection();
+    this.resolvePendingFirstScheduled();
   }
 
-  private resolvePendingConnection(): void {
-    const resolve = this.resolveFirstPacket;
-    this.resolveFirstPacket = undefined;
-    this.rejectFirstPacket = undefined;
+  private resolvePendingPreparation(): void {
+    const resolve = this.resolvePrepared;
+    this.resolvePrepared = undefined;
+    this.rejectPrepared = undefined;
     resolve?.();
   }
 
-  private rejectPendingConnection(error: Error): void {
-    const reject = this.rejectFirstPacket;
-    this.resolveFirstPacket = undefined;
-    this.rejectFirstPacket = undefined;
+  private rejectPendingPreparation(error: Error): void {
+    const reject = this.rejectPrepared;
+    this.resolvePrepared = undefined;
+    this.rejectPrepared = undefined;
     reject?.(error);
+  }
+
+  private rejectPendingStart(error: Error): void {
+    const reject = this.rejectStart;
+    this.resolveStart = undefined;
+    this.rejectStart = undefined;
+    reject?.(error);
+  }
+
+  private resolvePendingFirstScheduled(): void {
+    const resolve = this.resolveFirstScheduled;
+    this.resolveFirstScheduled = undefined;
+    this.rejectFirstScheduled = undefined;
+    resolve?.();
+  }
+
+  private notifyPlaybackEndIfComplete(): void {
+    if (
+      this.disposed ||
+      this.playbackEndNotified ||
+      !this.inputEnded ||
+      this.scheduledSources.size !== 0
+    ) {
+      return;
+    }
+    this.playbackEndNotified = true;
+    this.options.onPlaybackEnd?.();
+  }
+
+  private rejectPendingFirstScheduled(error: Error): void {
+    const reject = this.rejectFirstScheduled;
+    this.resolveFirstScheduled = undefined;
+    this.rejectFirstScheduled = undefined;
+    reject?.(error);
+  }
+
+  private async waitForScheduleCapacity(): Promise<void> {
+    if (this.nextPlayTime - this.outputContextTime() <= SCHEDULE_HIGH_WATER_SECONDS) return;
+    while (
+      !this.disposed &&
+      this.nextPlayTime - this.outputContextTime() > SCHEDULE_LOW_WATER_SECONDS
+    ) {
+      await abortableDelay(CAPACITY_POLL_MILLISECONDS, this.abortController.signal);
+    }
+  }
+
+  private requireAudioContext(): AudioContext {
+    const context = this.audioContext;
+    if (!context) throw new Error('PCM audio client has no AudioContext.');
+    return context;
+  }
+
+  private applyGainEnvelope(contextTime: number): void {
+    const envelope = this.options.gainEnvelope;
+    const parameter = this.envelopeGainNode?.gain;
+    if (!envelope || !parameter) return;
+    const remainingSeconds = envelope.clipDurationSeconds - envelope.positionSeconds;
+    const pointCount = Math.max(2, Math.min(512, Math.ceil(remainingSeconds * 50) + 1));
+    const curve = new Float32Array(pointCount);
+    for (let index = 0; index < pointCount; index += 1) {
+      const progress = index / (pointCount - 1);
+      curve[index] = envelopeGain(envelope.positionSeconds + remainingSeconds * progress, envelope);
+    }
+    parameter.cancelScheduledValues(contextTime);
+    parameter.setValueCurveAtTime(curve, contextTime, remainingSeconds);
   }
 
   private outputContextTime(): number {
@@ -281,8 +454,54 @@ function concatenate(left: Uint8Array, right: Uint8Array): Uint8Array {
   return result;
 }
 
-function clampVolume(value: number): number {
-  return Math.max(0, Math.min(1, value));
+function assertNonNegativeFinite(value: number, label: string): void {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative finite number.`);
+  }
+}
+
+function assertPositiveFinite(value: number, label: string): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${label} must be a positive finite number.`);
+  }
+}
+
+function validateGainEnvelope(envelope: PcmGainEnvelope): void {
+  assertNonNegativeFinite(envelope.positionSeconds, 'PCM envelope position');
+  assertPositiveFinite(envelope.clipDurationSeconds, 'PCM envelope clip duration');
+  assertNonNegativeFinite(envelope.fadeInSeconds, 'PCM envelope fade-in');
+  assertNonNegativeFinite(envelope.fadeOutSeconds, 'PCM envelope fade-out');
+  if (
+    envelope.positionSeconds >= envelope.clipDurationSeconds ||
+    envelope.fadeInSeconds > envelope.clipDurationSeconds ||
+    envelope.fadeOutSeconds > envelope.clipDurationSeconds
+  ) {
+    throw new Error('PCM gain envelope is outside the Clip duration.');
+  }
+}
+
+function envelopeGain(positionSeconds: number, envelope: PcmGainEnvelope): number {
+  const fadeInGain =
+    envelope.fadeInSeconds > 0 ? Math.min(1, positionSeconds / envelope.fadeInSeconds) : 1;
+  const remainingSeconds = envelope.clipDurationSeconds - positionSeconds;
+  const fadeOutGain =
+    envelope.fadeOutSeconds > 0 ? Math.min(1, remainingSeconds / envelope.fadeOutSeconds) : 1;
+  return Math.max(0, Math.min(fadeInGain, fadeOutGain));
+}
+
+function abortableDelay(milliseconds: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      signal.removeEventListener('abort', abort);
+      resolve();
+    }, milliseconds);
+    const abort = (): void => {
+      window.clearTimeout(timeout);
+      reject(signal.reason);
+    };
+    signal.addEventListener('abort', abort, { once: true });
+  });
 }
 
 function asError(error: unknown): Error {

@@ -8,7 +8,7 @@ import {
   CutMediaRuntimeUnavailableError,
   type TimelineView,
 } from '@neko-cut/domain';
-import { NodeFfmpegCutMediaAdapter } from './NodeFfmpegCutMediaAdapter';
+import { NodeFfmpegCutMediaAdapter, buildCutPreviewVideoFilter } from './NodeFfmpegCutMediaAdapter';
 import {
   FfmpegCommandError,
   NodeFfmpegProcess,
@@ -296,6 +296,18 @@ describe('NodeFfmpegCutMediaAdapter', () => {
             stderr: '',
           };
         }
+        if (args.includes('-decoders')) {
+          return {
+            stdout: Buffer.from(' V..... av1 Alliance for Open Media AV1\\n'),
+            stderr: '',
+          };
+        }
+        if (args.includes('-encoders')) {
+          return {
+            stdout: Buffer.from(' V....D libx264 H.264 encoder\\n'),
+            stderr: '',
+          };
+        }
         if (args.includes('-filters')) {
           return {
             stdout: Buffer.from(' .. format V->V\\n .S tonemap V->V\\n'),
@@ -328,7 +340,31 @@ describe('NodeFfmpegCutMediaAdapter', () => {
       name: 'CutMediaRuntimeUnavailableError',
       capability: 'HDR preview filter zscale',
     });
-    expect(run).toHaveBeenCalledTimes(2);
+    expect(run).toHaveBeenCalledTimes(4);
+  });
+
+  it('downscales HDR in the first linear zscale stage for bounded preview cost', () => {
+    const filter = buildCutPreviewVideoFilter(
+      {
+        streamIndex: 0,
+        codecName: 'av1',
+        bitDepth: 10,
+        width: 3840,
+        height: 2160,
+        framesPerSecond: 24,
+        color: {
+          colorPrimaries: 'bt2020',
+          colorTransfer: 'smpte2084',
+          colorSpace: 'bt2020nc',
+        },
+      },
+      1280,
+      720,
+    );
+
+    expect(filter).toMatch(/^zscale=w=1280:h=720:t=linear/u);
+    expect(filter).toContain('tonemap=hable');
+    expect(filter).toContain('sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA');
   });
 
   it('uses the qualified VP8 WebM direct profile for the VS Code baseline', async () => {
@@ -381,7 +417,17 @@ describe('NodeFfmpegCutMediaAdapter', () => {
   });
 
   it('exports the lightweight single-video timeline and validates the staged output', async () => {
-    const adapter = createAdapter();
+    const delegate = new NodeFfmpegProcess();
+    let exportArgs: readonly string[] | undefined;
+    const process: FfmpegProcessPort = {
+      run: async (executable, args, signal) => {
+        if (executable === 'ffmpeg' && args.includes('-filter_complex')) exportArgs = args;
+        return delegate.run(executable, args, signal);
+      },
+      streamFfmpeg: (args, signal) => delegate.streamFfmpeg(args, signal),
+    };
+    const adapter = new NodeFfmpegCutMediaAdapter(root, { cacheRoot, process });
+    adapters.push(adapter);
     const timeline = createTimeline();
 
     const result = await adapter.export({
@@ -405,6 +451,8 @@ describe('NodeFfmpegCutMediaAdapter', () => {
     expect(probe.hasVideo).toBe(true);
     expect(probe.hasAudio).toBe(true);
     expect(probe.durationSeconds).toBeCloseTo(1, 1);
+    const filterGraph = exportArgs?.[exportArgs.indexOf('-filter_complex') + 1];
+    expect(filterGraph).toContain('alimiter=');
   }, 30_000);
 
   it('rejects workspace traversal before starting FFmpeg', async () => {

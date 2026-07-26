@@ -54,6 +54,8 @@ export function InlineVideoPlayer({
   const handledPlaybackRequestRef = useRef<string>();
   const handledPlaybackStateRef = useRef<'playing' | 'paused'>();
   const generationRef = useRef(0);
+  const streamsReadyRef = useRef(false);
+  const startingRef = useRef(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(startTime);
   const [isMuted, setIsMuted] = useState(false);
@@ -70,6 +72,8 @@ export function InlineVideoPlayer({
 
   const disposeStreams = useCallback(() => {
     generationRef.current += 1;
+    streamsReadyRef.current = false;
+    startingRef.current = false;
     audioClientRef.current?.dispose();
     audioClientRef.current = undefined;
     const element = videoRef.current;
@@ -81,41 +85,8 @@ export function InlineVideoPlayer({
   }, []);
 
   useEffect(() => {
-    if (!video) return;
-    const generation = generationRef.current;
-    const connect = async (): Promise<void> => {
-      const audioClient = audio
-        ? new PcmAudioClient({
-            descriptor: audio,
-            playbackRate,
-            volume: DEFAULT_VOLUME,
-            onError: (error) => logger.warn(`Canvas PCM error: ${error.message}`),
-          })
-        : undefined;
-      if (audioClient) await audioClient.connect(activateAudioContext());
-      if (generation !== generationRef.current) {
-        audioClient?.dispose();
-        return;
-      }
-      const element = videoRef.current;
-      if (!element) throw new Error('Canvas inline video element is unavailable.');
-      element.muted = true;
-      element.defaultMuted = true;
-      element.playsInline = true;
-      element.playbackRate = playbackRate;
-      element.src = video.url;
-      element.load();
-      await waitForVideoMetadata(element);
-      element.currentTime = startTime;
-      audioClientRef.current = audioClient;
-      await element.play();
-      setIsPlaying(true);
-    };
-    void connect().catch((error: unknown) =>
-      logger.error(`Inline video playback failed: ${error}`),
-    );
     return disposeStreams;
-  }, [activateAudioContext, audio, disposeStreams, playbackRate, startTime, video]);
+  }, [audio, disposeStreams, playbackRate, video]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -137,6 +108,7 @@ export function InlineVideoPlayer({
       onTimeUpdate?.(nextTime);
       if (nextTime >= duration) {
         setIsPlaying(false);
+        disposeStreams();
         onStop(duration);
         onEnded?.(duration);
         return;
@@ -145,7 +117,7 @@ export function InlineVideoPlayer({
     };
     animationFrameRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animationFrameRef.current);
-  }, [duration, isPlaying, onEnded, onStop, onTimeUpdate]);
+  }, [disposeStreams, duration, isPlaying, onEnded, onStop, onTimeUpdate]);
 
   useEffect(() => {
     return () => {
@@ -163,12 +135,63 @@ export function InlineVideoPlayer({
   }, [onPause]);
 
   const resume = useCallback(() => {
-    activateAudioContext();
-    void audioClientRef.current?.resume();
-    void videoRef.current?.play();
-    setIsPlaying(true);
-    onResume();
-  }, [activateAudioContext, onResume]);
+    const element = videoRef.current;
+    if (!element || !video) return;
+    if (streamsReadyRef.current) {
+      activateAudioContext();
+      void audioClientRef.current?.resume();
+      void element.play().then(() => {
+        setIsPlaying(true);
+        onResume();
+      });
+      return;
+    }
+    if (startingRef.current) return;
+    startingRef.current = true;
+    const generation = generationRef.current + 1;
+    generationRef.current = generation;
+    const audioContext = audio ? activateAudioContext() : undefined;
+    const audioClient = audio
+      ? new PcmAudioClient({
+          descriptor: audio,
+          playbackRate,
+          volume: DEFAULT_VOLUME,
+          onError: (error) => logger.warn(`Canvas PCM error: ${error.message}`),
+        })
+      : undefined;
+    audioClientRef.current = audioClient;
+    const start = async (): Promise<void> => {
+      if (audioClient && audioContext) await audioClient.prepare(audioContext);
+      if (generation !== generationRef.current) {
+        audioClient?.dispose();
+        return;
+      }
+      element.muted = true;
+      element.defaultMuted = true;
+      element.playsInline = true;
+      element.playbackRate = playbackRate;
+      element.src = video.url;
+      element.load();
+      await waitForVideoMetadata(element);
+      element.currentTime = startTime;
+      currentTimeRef.current = startTime;
+      if (audioClient && audioContext) {
+        await audioClient.startAt(audioContext.currentTime + 0.1);
+      }
+      await element.play();
+      if (generation !== generationRef.current) return;
+      streamsReadyRef.current = true;
+      startingRef.current = false;
+      setIsPlaying(true);
+      onResume();
+    };
+    void start().catch((error: unknown) => {
+      if (generation !== generationRef.current) return;
+      disposeStreams();
+      setIsPlaying(false);
+      logger.error(`Inline video playback failed: ${error}`);
+    });
+  }, [activateAudioContext, audio, disposeStreams, onResume, playbackRate, startTime, video]);
 
   useEffect(() => {
     const requestChanged =

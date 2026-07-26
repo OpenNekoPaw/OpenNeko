@@ -73,7 +73,7 @@ export function AudioPlayer() {
         playbackRate: message.payload.playbackRate,
         volume: volumeRef.current,
         onError: (failure) => setError(failure.message),
-        onStreamEnd: () => {
+        onPlaybackEnd: () => {
           setIsPlaying(false);
           postMessage({ type: 'preview:eof' });
         },

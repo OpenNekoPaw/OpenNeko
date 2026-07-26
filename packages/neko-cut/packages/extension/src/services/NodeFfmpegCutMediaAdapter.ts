@@ -82,6 +82,12 @@ interface ExportInput {
   readonly hasAudio: boolean;
 }
 
+interface CutFfmpegQualification {
+  readonly decoders: ReadonlySet<string>;
+  readonly encoders: ReadonlySet<string>;
+  readonly filters: ReadonlySet<string>;
+}
+
 const PCM_SAMPLE_RATE = 48_000;
 const PCM_CHANNELS = 2;
 
@@ -92,6 +98,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
   private readonly sessions = new Map<string, SessionRecord>();
   private readonly vp8WebmDirectQualified: boolean;
   private adapterRootPromise: Promise<string> | undefined;
+  private qualificationPromise: Promise<CutFfmpegQualification> | undefined;
   private nextSessionId = 0;
   private disposed = false;
 
@@ -158,6 +165,13 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     assertNonNegativeFinite(timeSeconds, 'frame time');
     assertPositiveInteger(options.width, 'frame width');
     assertPositiveInteger(options.height, 'frame height');
+    const probe = await this.probe(source, signal);
+    const video = probe.video;
+    if (!video) throw new Error('Frame source contains no video stream.');
+    if (isHdrVideo(video)) {
+      await this.assertPreviewRuntimeCapabilities(video, 'h264-sdr-transcode', signal);
+    }
+    const filters = [buildCutPreviewVideoFilter(video, options.width, options.height)];
     let result;
     try {
       result = await this.process.run(
@@ -174,7 +188,7 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
           '-frames:v',
           '1',
           '-vf',
-          `scale=${options.width}:${options.height}:force_original_aspect_ratio=decrease`,
+          filters.join(','),
           '-f',
           'image2pipe',
           '-c:v',
@@ -190,7 +204,13 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         `capture frame at ${decimal(timeSeconds)} seconds`,
       );
     }
-    if (result.stdout.byteLength === 0) throw new Error('FFmpeg returned no captured frame.');
+    if (result.stdout.byteLength === 0) {
+      throw new CutMediaCorruptionError(
+        'interval',
+        `capture frame at ${decimal(timeSeconds)} seconds`,
+        'FFmpeg returned no captured frame.',
+      );
+    }
     return { dataUrl: `data:image/jpeg;base64,${result.stdout.toString('base64')}` };
   }
 
@@ -640,10 +660,12 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
         audioLabels.push(`[${label}]`);
       }
       if (audioLabels.length === 1) {
-        filters.push(`${audioLabels[0]}atrim=duration=${decimal(playbackEnd)}[aout]`);
+        filters.push(
+          `${audioLabels[0]}atrim=duration=${decimal(playbackEnd)},${exportPeakLimiter()}[aout]`,
+        );
       } else if (audioLabels.length > 1) {
         filters.push(
-          `${audioLabels.join('')}amix=inputs=${audioLabels.length}:duration=longest:normalize=0,atrim=duration=${decimal(playbackEnd)}[aout]`,
+          `${audioLabels.join('')}amix=inputs=${audioLabels.length}:duration=longest:normalize=0,atrim=duration=${decimal(playbackEnd)},${exportPeakLimiter()}[aout]`,
         );
       }
     }
@@ -747,13 +769,37 @@ export class NodeFfmpegCutMediaAdapter implements CutMediaRuntimeAdapter {
     signal?: AbortSignal,
   ): Promise<void> {
     if (profile !== 'h264-sdr-transcode' || !isHdrVideo(video)) return;
-    const result = await this.process.run('ffmpeg', ['-hide_banner', '-filters'], signal);
-    const filters = parseFfmpegFilterNames(`${result.stdout.toString('utf8')}\n${result.stderr}`);
-    for (const required of ['zscale', 'tonemap']) {
-      if (!filters.has(required)) {
+    if (signal?.aborted) throw signal.reason;
+    this.qualificationPromise ??= this.qualifyFfmpeg();
+    const qualification = await this.qualificationPromise;
+    if (!qualification.decoders.has(video.codecName)) {
+      throw new CutMediaRuntimeUnavailableError(`${video.codecName} decoder`);
+    }
+    if (!qualification.encoders.has('libx264') && !qualification.encoders.has('h264')) {
+      throw new CutMediaRuntimeUnavailableError('H.264 preview encoder');
+    }
+    for (const required of ['zscale', 'tonemap', 'sidedata']) {
+      if (!qualification.filters.has(required)) {
         throw new CutMediaRuntimeUnavailableError(`HDR preview filter ${required}`);
       }
     }
+  }
+
+  private async qualifyFfmpeg(): Promise<CutFfmpegQualification> {
+    const [decoders, encoders, filters] = await Promise.all([
+      this.process.run('ffmpeg', ['-hide_banner', '-decoders']),
+      this.process.run('ffmpeg', ['-hide_banner', '-encoders']),
+      this.process.run('ffmpeg', ['-hide_banner', '-filters']),
+    ]);
+    return {
+      decoders: parseFfmpegCapabilityNames(
+        `${decoders.stdout.toString('utf8')}\n${decoders.stderr}`,
+      ),
+      encoders: parseFfmpegCapabilityNames(
+        `${encoders.stdout.toString('utf8')}\n${encoders.stderr}`,
+      ),
+      filters: parseFfmpegCapabilityNames(`${filters.stdout.toString('utf8')}\n${filters.stderr}`),
+    };
   }
 }
 
@@ -802,11 +848,11 @@ function buildPreviewArgs(
   return [
     ...base,
     '-vf',
-    previewVideoFilter(video),
+    buildCutPreviewVideoFilter(video),
     '-c:v',
     'libx264',
     '-preset',
-    'veryfast',
+    'ultrafast',
     '-profile:v',
     'high',
     '-level:v',
@@ -825,16 +871,42 @@ function buildPreviewArgs(
   ];
 }
 
-function previewVideoFilter(video: CutMediaVideoStream): string {
-  if (!isHdrVideo(video)) return 'format=yuv420p';
+export function buildCutPreviewVideoFilter(
+  video: CutMediaVideoStream,
+  maxWidth = 1280,
+  maxHeight = 720,
+): string {
+  const size = fitVideoWithin(video.width, video.height, maxWidth, maxHeight);
+  if (!isHdrVideo(video)) {
+    return `scale=${size.width}:${size.height}:flags=lanczos,format=yuv420p`;
+  }
   return [
-    'zscale=t=linear:npl=100',
+    `zscale=w=${size.width}:h=${size.height}:t=linear:npl=100`,
     'format=gbrpf32le',
     'zscale=p=bt709',
     'tonemap=hable:desat=0',
     'zscale=t=bt709:m=bt709:r=tv',
+    'sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA',
+    'sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL',
     'format=yuv420p',
   ].join(',');
+}
+
+function fitVideoWithin(
+  width: number,
+  height: number,
+  maxWidth: number,
+  maxHeight: number,
+): { readonly width: number; readonly height: number } {
+  const scale = Math.min(1, maxWidth / width, maxHeight / height);
+  return {
+    width: evenDimension(width * scale),
+    height: evenDimension(height * scale),
+  };
+}
+
+function evenDimension(value: number): number {
+  return Math.max(2, Math.floor(value / 2) * 2);
 }
 
 function isHdrVideo(video: CutMediaVideoStream): boolean {
@@ -845,13 +917,13 @@ function isHdrVideo(video: CutMediaVideoStream): boolean {
   );
 }
 
-function parseFfmpegFilterNames(output: string): ReadonlySet<string> {
+function parseFfmpegCapabilityNames(output: string): ReadonlySet<string> {
   const names = new Set<string>();
   for (const line of output.split(/\r?\n/u)) {
     const fields = line.trim().split(/\s+/u);
     const flags = fields[0];
     const name = fields[1];
-    if (flags && name && /^[TSC.]{2,3}$/u.test(flags)) names.add(name);
+    if (flags && name && /^[A-Z.]{1,6}$/u.test(flags)) names.add(name);
   }
   return names;
 }
@@ -868,7 +940,7 @@ function classifyMediaCommandError(
 }
 
 function isMediaCorruptionDiagnostic(stderr: string): boolean {
-  return /(?:invalid nal unit size|missing picture in access unit|packet corrupt|invalid data found when processing input|channel element \d+\.\d+ is not allocated|error while decoding stream)/iu.test(
+  return /(?:invalid nal unit size|missing picture in access unit|packet corrupt|invalid data found when processing input|channel element \d+\.\d+ is not allocated|error while decoding stream|output file is empty|nothing was encoded|nothing was written into output file|received no packets)/iu.test(
     stderr,
   );
 }
@@ -1029,6 +1101,10 @@ function toFloat32(buffer: Buffer): Float32Array {
 function atempoFilter(playbackRate: number): string | undefined {
   const filters = atempoFilterChain(playbackRate);
   return filters.length > 0 ? filters.join(',') : undefined;
+}
+
+function exportPeakLimiter(): string {
+  return 'alimiter=limit=0.891251:attack=5:release=50:level=0:latency=1';
 }
 
 function atempoFilterChain(playbackRate: number): string[] {

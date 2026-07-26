@@ -10,6 +10,11 @@ export interface PreviewVideoClock {
 
 export interface CutPreviewClockInput {
   readonly primaryAudio?: PreviewAudioClock;
+  readonly secondaryAudio?: readonly {
+    readonly clock: PreviewAudioClock;
+    readonly mediaOriginSeconds: number;
+    readonly playbackRate: number;
+  }[];
   readonly video?: PreviewVideoClock;
   readonly primaryMediaOriginSeconds?: number;
   readonly primaryPlaybackRate?: number;
@@ -19,6 +24,7 @@ export interface CutPreviewClockInput {
 export interface CutPreviewClockReading {
   readonly mediaTimeSeconds?: number;
   readonly videoDriftSeconds?: number;
+  readonly audioDriftSeconds?: number;
   readonly discontinuity: boolean;
 }
 
@@ -33,11 +39,15 @@ export class CutPreviewClock {
     const { primaryAudio, video } = this.input;
     if (primaryAudio?.isClockReady) {
       const mediaTimeSeconds = primaryAudio.getCurrentTime();
-      const drift = this.correctVideo(mediaTimeSeconds);
+      const videoDrift = this.correctVideo(mediaTimeSeconds);
+      const audioDrift = this.secondaryAudioDrift(mediaTimeSeconds);
       return {
         mediaTimeSeconds,
-        ...(drift !== undefined ? { videoDriftSeconds: drift } : {}),
-        discontinuity: drift !== undefined && Math.abs(drift) > DISCONTINUITY_THRESHOLD_SECONDS,
+        ...(videoDrift !== undefined ? { videoDriftSeconds: videoDrift } : {}),
+        ...(audioDrift !== undefined ? { audioDriftSeconds: audioDrift } : {}),
+        discontinuity:
+          (videoDrift !== undefined && Math.abs(videoDrift) > DISCONTINUITY_THRESHOLD_SECONDS) ||
+          (audioDrift !== undefined && Math.abs(audioDrift) > NUDGE_THRESHOLD_SECONDS),
       };
     }
     if (video) {
@@ -48,6 +58,31 @@ export class CutPreviewClock {
       };
     }
     return { discontinuity: false };
+  }
+
+  private secondaryAudioDrift(primaryMediaTimeSeconds: number): number | undefined {
+    const { primaryMediaOriginSeconds, primaryPlaybackRate, secondaryAudio } = this.input;
+    if (
+      primaryMediaOriginSeconds === undefined ||
+      primaryPlaybackRate === undefined ||
+      !secondaryAudio ||
+      secondaryAudio.length === 0
+    ) {
+      return undefined;
+    }
+    const primaryTimelineDelta =
+      (primaryMediaTimeSeconds - primaryMediaOriginSeconds) / primaryPlaybackRate;
+    let largestDrift: number | undefined;
+    for (const secondary of secondaryAudio) {
+      if (!secondary.clock.isClockReady) continue;
+      const secondaryTimelineDelta =
+        (secondary.clock.getCurrentTime() - secondary.mediaOriginSeconds) / secondary.playbackRate;
+      const drift = secondaryTimelineDelta - primaryTimelineDelta;
+      if (largestDrift === undefined || Math.abs(drift) > Math.abs(largestDrift)) {
+        largestDrift = drift;
+      }
+    }
+    return largestDrift;
   }
 
   private correctVideo(primaryMediaTimeSeconds: number): number | undefined {

@@ -110,6 +110,8 @@ export interface MediaRuntimeQualification {
   readonly filters: {
     readonly zscale: boolean;
     readonly tonemap: boolean;
+    readonly sidedata: boolean;
+    readonly alimiter: boolean;
   };
 }
 

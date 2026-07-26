@@ -13,23 +13,31 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const pcmMock = vi.hoisted(() => ({
   instances: [] as Array<{
-    options: { onStreamEnd?: () => void };
-    connect: ReturnType<typeof vi.fn>;
+    options: { onPlaybackEnd?: () => void };
+    prepare: ReturnType<typeof vi.fn>;
+    startAt: ReturnType<typeof vi.fn>;
     dispose: ReturnType<typeof vi.fn>;
   }>,
 }));
 
 vi.mock('@neko/media/browser', () => ({
   PcmAudioClient: class {
-    readonly isClockReady = false;
-    readonly connect = vi.fn().mockResolvedValue(undefined);
+    private started = false;
+    readonly prepare = vi.fn().mockResolvedValue(undefined);
+    readonly startAt = vi.fn().mockImplementation(async () => {
+      this.started = true;
+    });
     readonly dispose = vi.fn();
     readonly pause = vi.fn().mockResolvedValue(undefined);
     readonly resume = vi.fn().mockResolvedValue(undefined);
     readonly setVolume = vi.fn();
 
-    constructor(readonly options: { onStreamEnd?: () => void }) {
+    constructor(readonly options: { onPlaybackEnd?: () => void }) {
       pcmMock.instances.push(this);
+    }
+
+    get isClockReady(): boolean {
+      return this.started;
     }
 
     getCurrentTime(): number {
@@ -89,6 +97,7 @@ describe('Inline media players', () => {
       HTMLMediaElement.HAVE_METADATA,
     );
     class AudioContextMock {
+      readonly currentTime = 0;
       readonly state = 'running';
       readonly close = vi.fn().mockResolvedValue(undefined);
       readonly resume = vi.fn().mockResolvedValue(undefined);
@@ -102,7 +111,7 @@ describe('Inline media players', () => {
     vi.restoreAllMocks();
   });
 
-  it('uses the canonical PCM descriptor and completes audio playback at stream end', async () => {
+  it('waits for a user gesture before starting PCM and completes after playback ends', async () => {
     const onStop = vi.fn();
     const onEnded = vi.fn();
     await act(async () => {
@@ -120,13 +129,20 @@ describe('Inline media players', () => {
       await Promise.resolve();
     });
 
-    expect(pcmMock.instances[0]?.connect).toHaveBeenCalledTimes(1);
-    await act(async () => pcmMock.instances[0]?.options.onStreamEnd?.());
+    expect(pcmMock.instances).toHaveLength(0);
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[title="Play"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(pcmMock.instances[0]?.prepare).toHaveBeenCalledTimes(1);
+    expect(pcmMock.instances[0]?.startAt).toHaveBeenCalledWith(0.1);
+    await act(async () => pcmMock.instances[0]?.options.onPlaybackEnd?.());
     expect(onStop).toHaveBeenCalledWith(2);
     expect(onEnded).toHaveBeenCalledWith(2);
   });
 
-  it('loads the tokenized HTTP video in a native video element and keeps PCM as master clock', async () => {
+  it('starts tokenized video and its PCM master clock only after a user gesture', async () => {
     const onStop = vi.fn();
     const onEnded = vi.fn();
     await act(async () => {
@@ -149,9 +165,17 @@ describe('Inline media players', () => {
     });
 
     const video = host.querySelector('video');
+    expect(video?.getAttribute('src')).toBeNull();
+    expect(pcmMock.instances).toHaveLength(0);
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[title="Play"]')?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
     expect(video?.src).toBe(videoDescriptor.url);
     expect(video?.muted).toBe(true);
-    expect(pcmMock.instances[0]?.connect).toHaveBeenCalledTimes(1);
+    expect(pcmMock.instances[0]?.prepare).toHaveBeenCalledTimes(1);
+    expect(pcmMock.instances[0]?.startAt).toHaveBeenCalledWith(0.1);
     expect(scheduledFrame).toBeDefined();
     expect(onEnded).not.toHaveBeenCalled();
   });

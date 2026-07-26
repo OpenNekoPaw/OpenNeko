@@ -35,6 +35,7 @@ import {
   PcmAudioClient as CutPcmAudioClient,
 } from '@neko/media/browser';
 import { CutPreviewClock } from './media/CutPreviewClock';
+import type { CutPreviewAudioPlayback } from './controllers/CutOtioController';
 import { useCutOtioController } from './controllers/CutOtioControllerContext';
 import {
   useCutPresentationStore,
@@ -146,25 +147,40 @@ function App() {
         message.audioStreams.length > 0
           ? await previewAudioContextOwner.contextForConnection()
           : undefined;
-      const audioClients = message.audioStreams.map(
-        (descriptor, index) =>
-          new CutPcmAudioClient({
-            descriptor,
-            playbackRate: message.mediaPlaybackRate ?? 1,
-            volume: volumeRef.current * (audioGainMultipliersRef.current[index] ?? 1),
-            onError: () => {
-              if (previewGenerationRef.current === generation) {
-                presentationActions.setPlaying(false);
-                presentationActions.reportDiagnostic({ code: 'preview-failed' });
-              }
-            },
-          }),
-      );
+      const mixDestination = audioContext
+        ? await previewAudioContextOwner.mixDestinationForConnection()
+        : undefined;
+      const audioClients = message.audioStreams.map((descriptor, index) => {
+        const playback = message.audioPlayback[index];
+        if (!playback) throw new Error(`Cut preview audio playback ${index} is missing.`);
+        return new CutPcmAudioClient({
+          descriptor,
+          playbackRate: playback.playbackRate,
+          volume: volumeRef.current * (audioGainMultipliersRef.current[index] ?? 1),
+          ...(mixDestination ? { destination: mixDestination } : {}),
+          gainEnvelope: {
+            positionSeconds: playback.positionSeconds,
+            clipDurationSeconds: playback.clipDurationSeconds,
+            fadeInSeconds: playback.fadeInSeconds,
+            fadeOutSeconds: playback.fadeOutSeconds,
+          },
+          onError: () => {
+            if (previewGenerationRef.current === generation) {
+              presentationActions.setPlaying(false);
+              presentationActions.reportDiagnostic({ code: 'preview-failed' });
+            }
+          },
+        });
+      });
       try {
         await Promise.all([
           ...(videoClient ? [videoClient.connect()] : []),
-          ...audioClients.map((client) => client.connect(audioContext)),
+          ...audioClients.map((client) => client.prepare(audioContext)),
         ]);
+        if (audioContext) {
+          const sharedStartTime = audioContext.currentTime + 0.1;
+          await Promise.all(audioClients.map((client) => client.startAt(sharedStartTime)));
+        }
       } catch (error) {
         if (previewGenerationRef.current === generation) {
           videoClient?.dispose();
@@ -181,6 +197,21 @@ function App() {
       previewAudioClientsRef.current = audioClients;
       previewClockRef.current = new CutPreviewClock({
         ...(audioClients[0] ? { primaryAudio: audioClients[0] } : {}),
+        ...(audioClients.length > 1
+          ? {
+              secondaryAudio: audioClients.slice(1).map((clock, index) => {
+                const playback = message.audioPlayback[index + 1];
+                if (!playback) {
+                  throw new Error(`Cut preview secondary audio playback ${index + 1} is missing.`);
+                }
+                return {
+                  clock,
+                  mediaOriginSeconds: playback.mediaOriginSeconds,
+                  playbackRate: playback.playbackRate,
+                };
+              }),
+            }
+          : {}),
         ...(videoClient ? { video: videoClient } : {}),
         ...(message.mediaSourceTimeSeconds !== undefined
           ? { primaryMediaOriginSeconds: message.mediaSourceTimeSeconds }
@@ -340,6 +371,8 @@ function App() {
           wallStartMilliseconds: performance.now(),
           segmentEndSeconds: prepared.segmentEndSeconds,
           timelineEndSeconds: prepared.playbackEndSeconds,
+          preparationLeadSeconds:
+            prepared.video?.preparationProfile === 'h264-sdr-transcode' ? 5 : 0.5,
           ...(prepared.mediaSourceTimeSeconds !== undefined &&
           prepared.mediaPlaybackRate !== undefined
             ? {
@@ -718,6 +751,7 @@ interface PreviewStreamMessage extends Record<string, unknown> {
   readonly videoPlaybackRate?: number;
   readonly audioStreams: readonly CutPcmStreamDescriptor[];
   readonly audioGainsDb: readonly number[];
+  readonly audioPlayback: readonly CutPreviewAudioPlayback[];
 }
 
 function isPreviewStreamMessage(value: Record<string, unknown>): value is PreviewStreamMessage {
@@ -749,8 +783,34 @@ function isPreviewStreamMessage(value: Record<string, unknown>): value is Previe
     value['audioStreams'].every(isPcmStreamDescriptor) &&
     Array.isArray(value['audioGainsDb']) &&
     value['audioGainsDb'].length === value['audioStreams'].length &&
-    value['audioGainsDb'].every((gain) => typeof gain === 'number' && Number.isFinite(gain))
+    value['audioGainsDb'].every((gain) => typeof gain === 'number' && Number.isFinite(gain)) &&
+    Array.isArray(value['audioPlayback']) &&
+    value['audioPlayback'].length === value['audioStreams'].length &&
+    value['audioPlayback'].every(isPreviewAudioPlayback)
   );
+}
+
+function isPreviewAudioPlayback(value: unknown): value is CutPreviewAudioPlayback {
+  return (
+    isRecord(value) &&
+    isNonNegativeFinite(value['mediaOriginSeconds']) &&
+    isPositiveFinite(value['playbackRate']) &&
+    isNonNegativeFinite(value['positionSeconds']) &&
+    isPositiveFinite(value['clipDurationSeconds']) &&
+    value['positionSeconds'] < value['clipDurationSeconds'] &&
+    isNonNegativeFinite(value['fadeInSeconds']) &&
+    value['fadeInSeconds'] <= value['clipDurationSeconds'] &&
+    isNonNegativeFinite(value['fadeOutSeconds']) &&
+    value['fadeOutSeconds'] <= value['clipDurationSeconds']
+  );
+}
+
+function isNonNegativeFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function isPositiveFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
 function isMseVideoDescriptor(value: unknown): value is CutMseVideoDescriptor {

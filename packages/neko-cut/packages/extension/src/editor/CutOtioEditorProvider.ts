@@ -68,6 +68,14 @@ interface CutPreviewRecord {
     readonly videoPlaybackRate?: number;
     readonly audioStreams: readonly CutPcmStreamDescriptor[];
     readonly audioGainsDb: readonly number[];
+    readonly audioPlayback: readonly {
+      readonly mediaOriginSeconds: number;
+      readonly playbackRate: number;
+      readonly positionSeconds: number;
+      readonly clipDurationSeconds: number;
+      readonly fadeInSeconds: number;
+      readonly fadeOutSeconds: number;
+    }[];
   };
 }
 
@@ -1075,6 +1083,16 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
           ...(videoClip ? { videoPlaybackRate: videoClip.playbackRate } : {}),
           audioStreams: pcmSessions.map((session) => session.stream),
           audioGainsDb: pcmSessions.map((session) => session.clip.audio.gainDb),
+          audioPlayback: pcmSessions.map((session) => ({
+            mediaOriginSeconds:
+              session.clip.sourceStartSeconds +
+              Math.max(0, timelineTime - session.clip.startSeconds) * session.clip.playbackRate,
+            playbackRate: session.clip.playbackRate,
+            positionSeconds: Math.max(0, timelineTime - session.clip.startSeconds),
+            clipDurationSeconds: session.clip.durationSeconds,
+            fadeInSeconds: session.clip.audio.fadeInSeconds,
+            fadeOutSeconds: session.clip.audio.fadeOutSeconds,
+          })),
         },
       };
     } catch (error) {
@@ -1091,6 +1109,7 @@ export class CutOtioEditorProvider implements vscode.CustomEditorProvider<CutOti
           framesPerSecond: 0,
           audioStreams: [],
           audioGainsDb: [],
+          audioPlayback: [],
         },
       });
       throw error;

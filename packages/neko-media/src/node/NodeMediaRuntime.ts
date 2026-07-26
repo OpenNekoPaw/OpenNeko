@@ -83,6 +83,7 @@ export class NodeMediaRuntime {
   private readonly vp8WebmDirectQualified: boolean;
   private readonly sessions = new Map<string, Session>();
   private rootPromise: Promise<string> | undefined;
+  private qualificationPromise: Promise<MediaRuntimeQualification> | undefined;
   private disposed = false;
 
   constructor(options: NodeMediaRuntimeOptions = {}) {
@@ -94,39 +95,46 @@ export class NodeMediaRuntime {
 
   async qualify(signal?: AbortSignal): Promise<MediaRuntimeQualification> {
     this.assertUsable();
-    try {
-      const [ffmpegVersion, ffprobeVersion, decoders, encoders, filters] = await Promise.all([
-        this.process.run('ffmpeg', ['-hide_banner', '-version'], signal),
-        this.process.run('ffprobe', ['-hide_banner', '-version'], signal),
-        this.process.run('ffmpeg', ['-hide_banner', '-decoders'], signal),
-        this.process.run('ffmpeg', ['-hide_banner', '-encoders'], signal),
-        this.process.run('ffmpeg', ['-hide_banner', '-filters'], signal),
-      ]);
-      const decoderText = decoders.stdout.toString('utf8');
-      const encoderText = encoders.stdout.toString('utf8');
-      const filterText = filters.stdout.toString('utf8');
-      return {
-        ffmpegVersion: firstLine(ffmpegVersion.stdout),
-        ffprobeVersion: firstLine(ffprobeVersion.stdout),
-        decoders: {
-          h264: hasListedCapability(decoderText, 'h264'),
-          hevc: hasListedCapability(decoderText, 'hevc'),
-          av1: hasListedCapability(decoderText, 'av1'),
-          vp8: hasListedCapability(decoderText, 'vp8'),
-        },
-        encoders: {
-          h264:
-            hasListedCapability(encoderText, 'libx264') || hasListedCapability(encoderText, 'h264'),
-          aac: hasListedCapability(encoderText, 'aac'),
-        },
-        filters: {
-          zscale: hasListedCapability(filterText, 'zscale'),
-          tonemap: hasListedCapability(filterText, 'tonemap'),
-        },
-      };
-    } catch (error) {
-      throw classifyRuntimeCapabilityError(error, 'FFmpeg/ffprobe executables');
-    }
+    if (signal?.aborted) throw signal.reason;
+    this.qualificationPromise ??= (async () => {
+      try {
+        const [ffmpegVersion, ffprobeVersion, decoders, encoders, filters] = await Promise.all([
+          this.process.run('ffmpeg', ['-hide_banner', '-version']),
+          this.process.run('ffprobe', ['-hide_banner', '-version']),
+          this.process.run('ffmpeg', ['-hide_banner', '-decoders']),
+          this.process.run('ffmpeg', ['-hide_banner', '-encoders']),
+          this.process.run('ffmpeg', ['-hide_banner', '-filters']),
+        ]);
+        const decoderText = decoders.stdout.toString('utf8');
+        const encoderText = encoders.stdout.toString('utf8');
+        const filterText = filters.stdout.toString('utf8');
+        return {
+          ffmpegVersion: firstLine(ffmpegVersion.stdout),
+          ffprobeVersion: firstLine(ffprobeVersion.stdout),
+          decoders: {
+            h264: hasListedCapability(decoderText, 'h264'),
+            hevc: hasListedCapability(decoderText, 'hevc'),
+            av1: hasListedCapability(decoderText, 'av1'),
+            vp8: hasListedCapability(decoderText, 'vp8'),
+          },
+          encoders: {
+            h264:
+              hasListedCapability(encoderText, 'libx264') ||
+              hasListedCapability(encoderText, 'h264'),
+            aac: hasListedCapability(encoderText, 'aac'),
+          },
+          filters: {
+            zscale: hasListedCapability(filterText, 'zscale'),
+            tonemap: hasListedCapability(filterText, 'tonemap'),
+            sidedata: hasListedCapability(filterText, 'sidedata'),
+            alimiter: hasListedCapability(filterText, 'alimiter'),
+          },
+        };
+      } catch (error) {
+        throw classifyRuntimeCapabilityError(error, 'FFmpeg/ffprobe executables');
+      }
+    })();
+    return this.qualificationPromise;
   }
 
   async probe(sourcePath: string, signal?: AbortSignal): Promise<MediaProbe> {
@@ -152,12 +160,13 @@ export class NodeMediaRuntime {
   ): Promise<string> {
     this.assertUsable();
     assertNonNegative(timeSeconds, 'frame time');
-    const filters: string[] = [];
-    if (options.width || options.height) {
-      const width = options.width ?? -2;
-      const height = options.height ?? -2;
-      filters.push(`scale=${width}:${height}:force_original_aspect_ratio=decrease`);
-    }
+    const probe = await this.probe(sourcePath, signal);
+    const video = probe.video;
+    if (!video) throw new Error('Frame source contains no video stream.');
+    if (isHdr(video)) await this.assertHdrFilterCapabilities(signal);
+    const filters: string[] = [
+      videoFilter(video, options.width ?? video.width, options.height ?? video.height),
+    ];
     const quality = Math.max(2, Math.min(31, Math.round(31 - (options.quality ?? 80) * 0.29)));
     try {
       const output = await this.process.run(
@@ -331,9 +340,9 @@ export class NodeMediaRuntime {
                   '-c:v',
                   'libx264',
                   '-preset',
-                  'veryfast',
+                  'ultrafast',
                   '-crf',
-                  '18',
+                  '23',
                   '-pix_fmt',
                   'yuv420p',
                 ]),
@@ -587,10 +596,19 @@ export class NodeMediaRuntime {
       throw new MediaRuntimeUnavailableError(`${video.codecName} decoder`);
     }
     if (isHdr(video)) {
-      for (const required of ['zscale', 'tonemap'] as const) {
+      for (const required of ['zscale', 'tonemap', 'sidedata'] as const) {
         if (!qualification.filters[required]) {
           throw new MediaRuntimeUnavailableError(`HDR preview filter ${required}`);
         }
+      }
+    }
+  }
+
+  private async assertHdrFilterCapabilities(signal?: AbortSignal): Promise<void> {
+    const qualification = await this.qualify(signal);
+    for (const required of ['zscale', 'tonemap', 'sidedata'] as const) {
+      if (!qualification.filters[required]) {
+        throw new MediaRuntimeUnavailableError(`HDR frame filter ${required}`);
       }
     }
   }
@@ -710,7 +728,7 @@ function isUnavailableProcessError(error: unknown): error is Error {
 }
 
 function isCorruption(stderr: string): boolean {
-  return /(?:invalid nal unit size|missing picture in access unit|packet corrupt|invalid data found when processing input|channel element \d+\.\d+ is not allocated|error while decoding stream)/iu.test(
+  return /(?:invalid nal unit size|missing picture in access unit|packet corrupt|invalid data found when processing input|channel element \d+\.\d+ is not allocated|error while decoding stream|output file is empty|nothing was encoded|nothing was written into output file|received no packets)/iu.test(
     stderr,
   );
 }
@@ -719,15 +737,33 @@ function compactDiagnostic(stderr: string): string {
   return stderr.trim().split(/\r?\n/u).slice(-6).join('\n') || 'Media decode failed.';
 }
 
-function videoFilter(video: MediaVideoStream): string {
-  if (!isHdr(video)) return 'format=yuv420p';
+function videoFilter(video: MediaVideoStream, maxWidth = 1280, maxHeight = 720): string {
+  const size = fitVideoWithin(video.width, video.height, maxWidth, maxHeight);
+  if (!isHdr(video)) {
+    return `scale=${size.width}:${size.height}:flags=lanczos,format=yuv420p`;
+  }
   return [
-    'zscale=t=linear:npl=100',
+    `zscale=w=${size.width}:h=${size.height}:t=linear:npl=100`,
     'format=gbrpf32le',
     'tonemap=tonemap=hable:desat=0',
     'zscale=p=bt709:t=bt709:m=bt709:r=tv',
+    'sidedata=mode=delete:type=MASTERING_DISPLAY_METADATA',
+    'sidedata=mode=delete:type=CONTENT_LIGHT_LEVEL',
     'format=yuv420p',
   ].join(',');
+}
+
+function fitVideoWithin(
+  width: number,
+  height: number,
+  maxWidth: number,
+  maxHeight: number,
+): { readonly width: number; readonly height: number } {
+  const scale = Math.min(1, maxWidth / width, maxHeight / height);
+  return {
+    width: Math.max(2, Math.floor((width * scale) / 2) * 2),
+    height: Math.max(2, Math.floor((height * scale) / 2) * 2),
+  };
 }
 
 function isHdr(video: MediaVideoStream): boolean {

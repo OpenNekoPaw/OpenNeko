@@ -116,6 +116,16 @@ export interface CutPreviewReadyMessage extends Record<string, unknown> {
   readonly videoPlaybackRate?: number;
   readonly audioStreams: readonly CutPcmStreamDescriptor[];
   readonly audioGainsDb: readonly number[];
+  readonly audioPlayback: readonly CutPreviewAudioPlayback[];
+}
+
+export interface CutPreviewAudioPlayback {
+  readonly mediaOriginSeconds: number;
+  readonly playbackRate: number;
+  readonly positionSeconds: number;
+  readonly clipDurationSeconds: number;
+  readonly fadeInSeconds: number;
+  readonly fadeOutSeconds: number;
 }
 
 export class CutOtioController {
@@ -706,8 +716,34 @@ function isPreviewReadyMessage(value: Record<string, unknown>): value is CutPrev
     value['audioStreams'].every(isPcmStreamDescriptor) &&
     Array.isArray(value['audioGainsDb']) &&
     value['audioGainsDb'].length === value['audioStreams'].length &&
-    value['audioGainsDb'].every((item) => typeof item === 'number')
+    value['audioGainsDb'].every((item) => typeof item === 'number') &&
+    Array.isArray(value['audioPlayback']) &&
+    value['audioPlayback'].length === value['audioStreams'].length &&
+    value['audioPlayback'].every(isPreviewAudioPlayback)
   );
+}
+
+function isPreviewAudioPlayback(value: unknown): value is CutPreviewAudioPlayback {
+  return (
+    isRecord(value) &&
+    isNonNegativeFinite(value['mediaOriginSeconds']) &&
+    isPositiveFinite(value['playbackRate']) &&
+    isNonNegativeFinite(value['positionSeconds']) &&
+    isPositiveFinite(value['clipDurationSeconds']) &&
+    value['positionSeconds'] < value['clipDurationSeconds'] &&
+    isNonNegativeFinite(value['fadeInSeconds']) &&
+    value['fadeInSeconds'] <= value['clipDurationSeconds'] &&
+    isNonNegativeFinite(value['fadeOutSeconds']) &&
+    value['fadeOutSeconds'] <= value['clipDurationSeconds']
+  );
+}
+
+function isNonNegativeFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+function isPositiveFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }
 
 function isMseVideoDescriptor(value: unknown): value is CutMseVideoDescriptor {

@@ -51,6 +51,24 @@ describe('CutPreviewClock', () => {
 
     expect(reading).toEqual({ mediaTimeSeconds: 6.5, discontinuity: false });
   });
+
+  it('reports a secondary PCM track that diverges from the primary timeline clock', () => {
+    const reading = new CutPreviewClock({
+      primaryAudio: audioClock(11),
+      secondaryAudio: [
+        {
+          clock: audioClock(22.2),
+          mediaOriginSeconds: 20,
+          playbackRate: 2,
+        },
+      ],
+      primaryMediaOriginSeconds: 10,
+      primaryPlaybackRate: 1,
+    }).read();
+
+    expect(reading.audioDriftSeconds).toBeCloseTo(0.1);
+    expect(reading.discontinuity).toBe(true);
+  });
 });
 
 function audioClock(time: number): PreviewAudioClock {

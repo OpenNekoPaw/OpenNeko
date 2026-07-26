@@ -489,6 +489,16 @@ describe('CutOtioController', () => {
         },
       ],
       audioGainsDb: [0],
+      audioPlayback: [
+        {
+          mediaOriginSeconds: 2,
+          playbackRate: 1,
+          positionSeconds: 2,
+          clipDurationSeconds: 4,
+          fadeInSeconds: 0,
+          fadeOutSeconds: 0,
+        },
+      ],
     };
 
     expect(controller.acceptHostMessage(message)).toBe(true);

@@ -3,13 +3,14 @@ export interface PreviewPlaybackSegment {
   readonly wallStartMilliseconds: number;
   readonly segmentEndSeconds: number;
   readonly timelineEndSeconds: number;
+  readonly preparationLeadSeconds?: number;
   readonly mediaClock?: {
     readonly sourceStartSeconds: number;
     readonly playbackRate: number;
   };
 }
 
-const PREVIEW_PREPARE_LEAD_SECONDS = 0.5;
+const DEFAULT_PREVIEW_PREPARE_LEAD_SECONDS = 0.5;
 
 export type PreviewPlaybackAdvance =
   | { readonly kind: 'continue'; readonly playheadSeconds: number }
@@ -49,7 +50,9 @@ export function advancePreviewPlayback(
   }
   if (
     segment.segmentEndSeconds < segment.timelineEndSeconds &&
-    nextSeconds >= segment.segmentEndSeconds - PREVIEW_PREPARE_LEAD_SECONDS
+    nextSeconds >=
+      segment.segmentEndSeconds -
+        (segment.preparationLeadSeconds ?? DEFAULT_PREVIEW_PREPARE_LEAD_SECONDS)
   ) {
     return {
       kind: 'prepare-next',

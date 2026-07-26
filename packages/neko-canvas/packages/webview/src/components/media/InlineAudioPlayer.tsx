@@ -44,6 +44,7 @@ export function InlineAudioPlayer({
   const clientRef = useRef<PcmAudioClient>();
   const contextRef = useRef<AudioContext>();
   const currentTimeRef = useRef(startTime);
+  const startingRef = useRef(false);
   const handledRequestRef = useRef<string>();
   const handledStateRef = useRef<'playing' | 'paused'>();
   const [isPlaying, setIsPlaying] = useState(false);
@@ -61,27 +62,12 @@ export function InlineAudioPlayer({
   }, []);
 
   useEffect(() => {
-    const client = new PcmAudioClient({
-      descriptor: audio,
-      playbackRate,
-      volume: DEFAULT_VOLUME,
-      onError: (error) => logger.warn(`Canvas PCM error: ${error.message}`),
-      onStreamEnd: () => {
-        setIsPlaying(false);
-        onStop(duration);
-        onEnded?.(duration);
-      },
-    });
-    clientRef.current = client;
-    void client
-      .connect(activateContext())
-      .then(() => setIsPlaying(true))
-      .catch((error: unknown) => logger.warn(`Inline audio playback failed: ${error}`));
     return () => {
-      client.dispose();
-      if (clientRef.current === client) clientRef.current = undefined;
+      startingRef.current = false;
+      clientRef.current?.dispose();
+      clientRef.current = undefined;
     };
-  }, [activateContext, audio, duration, onEnded, onStop, playbackRate]);
+  }, [audio, playbackRate]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -113,11 +99,54 @@ export function InlineAudioPlayer({
   }, [onPause]);
 
   const resume = useCallback(() => {
-    activateContext();
-    void clientRef.current?.resume();
-    setIsPlaying(true);
-    onResume();
-  }, [activateContext, onResume]);
+    const context = activateContext();
+    const existingClient = clientRef.current;
+    if (existingClient?.isClockReady) {
+      void existingClient.resume().then(() => {
+        setIsPlaying(true);
+        onResume();
+      });
+      return;
+    }
+    if (startingRef.current) return;
+    startingRef.current = true;
+    currentTimeRef.current = startTime;
+    setCurrentTime(startTime);
+    const client = new PcmAudioClient({
+      descriptor: audio,
+      playbackRate,
+      volume: DEFAULT_VOLUME,
+      onError: (error) => logger.warn(`Canvas PCM error: ${error.message}`),
+      onPlaybackEnd: () => {
+        startingRef.current = false;
+        if (clientRef.current === client) {
+          client.dispose();
+          clientRef.current = undefined;
+        }
+        setIsPlaying(false);
+        onStop(duration);
+        onEnded?.(duration);
+      },
+    });
+    clientRef.current = client;
+    void client
+      .prepare(context)
+      .then(() => client.startAt(context.currentTime + 0.1))
+      .then(() => {
+        startingRef.current = false;
+        if (clientRef.current !== client) return;
+        setIsPlaying(true);
+        onResume();
+      })
+      .catch((error: unknown) => {
+        startingRef.current = false;
+        if (clientRef.current === client) {
+          client.dispose();
+          clientRef.current = undefined;
+        }
+        logger.warn(`Inline audio playback failed: ${error}`);
+      });
+  }, [activateContext, audio, duration, onEnded, onResume, onStop, playbackRate, startTime]);
 
   useEffect(() => {
     const requestChanged =
